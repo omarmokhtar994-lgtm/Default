@@ -269,5 +269,36 @@ class ReleaseIdentityIntegrity(unittest.TestCase):
             E.VERSION, "L6.3.2.5-RC9.2.1-PROTECTED-TIER-RESIDUAL-BALANCE-RC1")
 
 
+class SkeletonOnlyLeaderboardIsAuditable(unittest.TestCase):
+    """A skeleton-only leaderboard must explain its own champion selection.
+
+    The deficit and overage columns decide the champion once target, protected
+    tier, floor and gap quality tie.  They were previously omitted from
+    skeleton-only exports, so the artifact could not be audited after the fact -
+    which is exactly what a before-break proof run is for.
+    """
+
+    def _rows(self):
+        sk = E.SkeletonSolution("p1", "FEASIBLE", 0.0, 0.0, [], [], {})
+        sk.diagnostics["no_break_metrics"] = metrics(1.25, 1244.11)
+        sk.selected_shift_index = [[0]]
+        return E.before_break_leaderboard_rows([sk], sk)
+
+    def test_deficit_and_overage_columns_are_populated(self):
+        row = self._rows()[0]
+        for key in ("floor_deficit_sum", "target_deficit_sum",
+                    "before_avoidable_overage_fte_sum", "before_target_overage_fte_sum"):
+            self.assertIn(key, row, f"{key} missing from skeleton-only leaderboard row")
+            self.assertIsNotNone(row[key], f"{key} exported as blank")
+
+    def test_values_match_the_candidate_metrics(self):
+        row = self._rows()[0]
+        self.assertAlmostEqual(row["floor_deficit_sum"], 1.25, places=9)
+        self.assertAlmostEqual(row["before_avoidable_overage_fte_sum"], 1244.11, places=9)
+
+    def test_bucket_is_exported_for_traceability(self):
+        row = self._rows()[0]
+        self.assertEqual(row["floor_deficit_bucket"], E._deficit_bucket(1.25))
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

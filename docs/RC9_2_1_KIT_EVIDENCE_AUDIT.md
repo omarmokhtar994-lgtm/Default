@@ -145,3 +145,82 @@ Status of the fix on this evidence: **safe and correct, benefit unproven.**
 | Gate 8 independent-validation PASS | needs the 40-associate Cricut Voice input |
 
 **Release recommendation unchanged: NO-GO. RC9.1 remains the production engine.**
+
+---
+
+# GDI REAL28 24/7 A/B — first fresh CP-SAT evidence
+
+Input `edd1f1ec…`, skeleton-only, seed 9000, 900s budget, identical on both
+sides; only the engine differs (`56ec2eef…` baseline vs corrected).
+
+## Round 1 — 2 workers, both RC=0
+
+Five candidates tied at **exactly** 153 target / 156 floor / 153 100% / 153 90% /
+156 80%, with 0 severe gaps and 0 max floor run — the precise condition under
+which the deficit terms decide.
+
+| Metric | baseline | fixed | delta |
+|---|---|---|---|
+| before_target / _100 / _90 | 153 / 153 / 153 | 153 / 153 / 153 | — |
+| before_80 / before_floor | 156 / 156 | 156 / 156 | — |
+| champion profile | `floor_gate_hunter_before` | `target_locked_residual_balance_polish` | **changed** |
+| **avoidable_overage_fte_sum** | **260.20** | **246.88** | **−13.32** |
+| overage_peak_fte | 8.00 | 9.68 | +1.68 |
+| overage_stddev_fte | 1.6796 | 1.8064 | +0.1268 |
+
+Coverage identical at every tier; total avoidable overage down 13.32 FTE (−5.1%).
+That is the corrected ordering doing exactly what it was built to do.
+
+**Two honest caveats.**
+
+1. **The pools differ.** Rows 6–10 of the two leaderboards contain different
+   candidates with different metrics, so multi-worker CP-SAT nondeterminism is
+   confounded with the change. The 13.32 FTE cannot be attributed to the
+   selector alone from this run.
+2. **The fix also steers the search, not just the final pick.**
+   `select_stage1_hint_skeleton` ranks with the same tuple, so a different hint
+   changes the solver's trajectory and therefore which skeletons are found. The
+   correction is not purely post-hoc.
+
+## Round 2 — 1 worker (deterministic search), divergent outcomes
+
+| | baseline | fixed |
+|---|---|---|
+| return code | **2** | **0** |
+| status | `FAIL_NO_HARD_CLEAN_BEFORE_BREAK_SKELETON` | `SKELETON_ONLY_COMPLETE` |
+| before_target / _90 / _80 / floor | — | 145 / 148 / 156 / 156 |
+| avoidable overage | — | 265.60 |
+
+At single-worker the baseline found no hard-clean skeleton inside the budget
+while the corrected engine did. This is **not** evidence that the fix improves
+feasibility — it is the caveat-2 effect: a different Stage-1 hint sends the
+search down a different path in a budget-starved regime. Both single-worker
+results are weaker than the 2-worker run (145 vs 153 target) and neither is a
+controlled comparison.
+
+## Finding 8 — skeleton-only leaderboards could not explain their own selection
+
+**Severity:** medium — blocks after-the-fact audit of exactly this question
+**Status:** FIXED
+
+`before_break_leaderboard_rows` never populated `floor_deficit_sum`,
+`target_deficit_sum`, or any avoidable/target overage field. Confirmed on the
+real GDI exports: those columns are blank for all 10 candidates.
+
+Skeleton-only is the mode used for before-break proof runs — including the NMG
+EN 4H run. So the exported Candidate Leaderboard omitted precisely the terms
+that decide the champion once target, protected tier, floor and gap quality tie,
+and no overage regression could be diagnosed from the artifact afterwards. Had
+the 4H leaderboard arrived, it would have had the same blank columns.
+
+Now populated, plus `floor_deficit_bucket` for traceability. Three guards added.
+
+## How to attribute cleanly
+
+Both rounds are confounded because the selector steers search. The clean
+experiment is to **rank one fixed pool two ways offline**, with no solver in the
+loop. That is now possible: run once on the corrected engine so the leaderboard
+carries deficits and overage, then `tools/replay_candidate_ranking.py` re-ranks
+that single pool under both orderings. No re-solve, no nondeterminism.
+
+**Release recommendation unchanged: NO-GO. RC9.1 remains the production engine.**

@@ -8626,6 +8626,26 @@ def before_break_leaderboard_rows(
             "hard_floor_gaps": metrics.get("hard_floor_gap_count", 0),
             "severe_floor_gaps": metrics.get("severe_floor_gap_count", 0),
             "max_floor_run": metrics.get("max_consecutive_floor_gaps", 0),
+            # Deficit and overage columns.  These were omitted, so a
+            # skeleton-only run - the mode used for before-break proof runs -
+            # exported a Candidate Leaderboard whose Floor Deficit Sum and
+            # avoidable/target overage cells were all blank.  Those are exactly
+            # the terms that decide the champion once target, protected tier,
+            # floor and gap quality tie, so the leaderboard could not explain
+            # its own selection and no after-the-fact audit of an overage
+            # regression was possible from the exported artifact.
+            "floor_deficit_sum": _prefixed_metric(metrics, "before", "floor_deficit_sum"),
+            "target_deficit_sum": _prefixed_metric(metrics, "before", "target_deficit_sum"),
+            "floor_deficit_bucket": _deficit_bucket(
+                _prefixed_metric(metrics, "before", "floor_deficit_sum")),
+            "before_avoidable_overage_fte_sum": metrics.get("before_avoidable_overage_fte_sum", 0.0),
+            "after_avoidable_overage_fte_sum": metrics.get("before_avoidable_overage_fte_sum", 0.0),
+            "before_target_overage_fte_sum": metrics.get("before_target_overage_fte_sum", 0.0),
+            "after_target_overage_fte_sum": metrics.get("before_target_overage_fte_sum", 0.0),
+            "before_severe_overage_count": metrics.get("before_severe_overage_count", 0),
+            "after_severe_overage_count": metrics.get("before_severe_overage_count", 0),
+            "before_extreme_overage_count": metrics.get("before_extreme_overage_count", 0),
+            "after_extreme_overage_count": metrics.get("before_extreme_overage_count", 0),
             "target_losses_from_breaks": 0, "floor_losses_from_breaks": 0,
             "objective": skeleton.objective,
             "selected_role": "BEST_BEFORE_BREAKS" if skeleton is best_before_skeleton else "",

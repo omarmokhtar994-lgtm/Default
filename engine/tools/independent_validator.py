@@ -128,7 +128,13 @@ def validate(input_path: Path, output_path: Path, engine_path: Path) -> Dict[str
                 failures.append({"type":"HARD_OFF_VIOLATION","associate":assoc.name,"day":DAYS[d],"actual":value})
             if parsed.fixed_enabled and fixed_kind=="shift" and norm(value)!=norm(assoc.fixed_schedule[d]):
                 failures.append({"type":"FIXED_SHIFT_VIOLATION","associate":assoc.name,"day":DAYS[d],"expected":assoc.fixed_schedule[d],"actual":value})
-        long_mode=any(s.duration_min>=660 for _,s in shift_days)
+        # Contract constant shared with the engine, not an independent judgement.
+        # Independence means recomputing coverage from the exported workbook - it
+        # does not mean re-guessing what the contract says a long shift is.  This
+        # was a local 660 while the engine used 630, so a shift in [630, 660) was
+        # long to the engine and short to the validator, producing a false
+        # OFF_COUNT_VIOLATION that would block an otherwise valid release.
+        long_mode=any(s.duration_min>=eng.LONG_SHIFT_MIN_DURATION_MIN for _,s in shift_days)
         expected_off=3 if long_mode else 2
         if parsed.strict_off and len(off_days)!=expected_off:
             failures.append({"type":"OFF_COUNT_VIOLATION","associate":assoc.name,"expected":expected_off,"actual":len(off_days),"off_days":[DAYS[d] for d in off_days]})
@@ -230,7 +236,12 @@ def validate(input_path: Path, output_path: Path, engine_path: Path) -> Dict[str
             before_target+=bp+1e-9>=parsed.target_ratio; after_target+=ap+1e-9>=parsed.target_ratio
             before_floor+=bp+1e-9>=parsed.floor_ratio; after_floor+=ap+1e-9>=parsed.floor_ratio
             floor_flags.append(ap+1e-9<parsed.floor_ratio)
-            unavoidable=math.ceil(req*parsed.target_ratio/max(eff,1e-9))*eff
+            # Same ceil tolerance the engine applies.  Without it a requirement
+            # that is integral in exact arithmetic but marginally above integral
+            # in floating point rounds up by a whole associate, overstating
+            # unavoidable staffing and understating avoidable overage - a silent
+            # disagreement with the engine on the exact metric under review.
+            unavoidable=math.ceil(req*parsed.target_ratio/max(eff,1e-9)-eng.OVERAGE_CEIL_TOLERANCE)*eff
             avoid=max(0.0,ae-unavoidable)
             interval_rows.append({"day":DAYS[d],"interval":eng.hhmm(i*parsed.interval_minutes),"required":req,"before_effective":be,"after_effective":ae,"before_pct":bp,"after_pct":ap,"avoidable_overage_fte":avoid})
     active=len(interval_rows); severe_threshold=max(0,parsed.floor_ratio-.10)

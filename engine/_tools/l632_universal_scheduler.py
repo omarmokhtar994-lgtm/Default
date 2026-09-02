@@ -122,6 +122,25 @@ RC9_2_1_DEFICIT_QUANTIZED_SELECTION = True
 # balance terms discriminate.  Raw unrounded values remain in the metrics dict
 # and in all reports - this constant governs comparison only, never reporting.
 FLOOR_DEFICIT_COMPARISON_QUANTUM = 0.01
+
+# Shift duration at or above which an associate is in "long mode" and owes the
+# extended OFF count (3 rather than 2).  This is contract semantics, not a
+# derived quantity, so it must be identical everywhere it is applied: the CP-SAT
+# model, the engine's own validate_schedule, and the independent validator.
+# It previously existed as a bare 630 literal in three engine sites while
+# tools/independent_validator.py used 660, so a shift in [630, 660) was long to
+# the engine and short to the validator - the validator would raise a false
+# OFF_COUNT_VIOLATION against a schedule the engine had built correctly, and a
+# validator false positive blocks a valid release.
+LONG_SHIFT_MIN_DURATION_MIN = 630
+
+# Tolerance applied before ceil() when converting an effective-FTE requirement
+# into whole-associate staffing.  Without it, a requirement that lands exactly
+# on an integer in exact arithmetic but marginally above it in floating point
+# rounds up by a whole associate, overstating unavoidable staffing and therefore
+# understating avoidable overage.  Shared so the independent validator cannot
+# disagree with the engine on the metric the release is being judged by.
+OVERAGE_CEIL_TOLERANCE = 1e-9
 RC8_STRICT_BLANK_RULE_ALIAS = True
 RC8_CYCLIC_ACTIVE_WINDOW_AUDIT = True
 RC8_ARTIFACT_VERIFICATION_SEMANTICS = True
@@ -4049,8 +4068,8 @@ def build_skeleton(
     objective_terms: List[Any] = []
     language_break_reserve_requirements = language_break_reserve_requirements or {}
     minimum_tier_hits = {int(k): int(v) for k, v in (minimum_tier_hits or {}).items() if int(k) in {80, 90, 100}}
-    long_shifts = {s.index for s in parsed.shifts if s.duration_min >= 630}
-    short_shifts = {s.index for s in parsed.shifts if s.duration_min < 630}
+    long_shifts = {s.index for s in parsed.shifts if s.duration_min >= LONG_SHIFT_MIN_DURATION_MIN}
+    short_shifts = {s.index for s in parsed.shifts if s.duration_min < LONG_SHIFT_MIN_DURATION_MIN}
 
     for a in range(A):
         if long_shifts and short_shifts and parsed.use_11h_3off:
@@ -6478,7 +6497,7 @@ def fractional_safe_overage_metrics(
     staffing = max(0.0, float(effective_staffing or 0.0))
     eff = max(1e-9, float(effective_factor or 0.0))
     target = max(0.0, float(target_ratio or 0.0))
-    minimum_raw_target = int(math.ceil(req * target / eff - 1e-9)) if req > 0 else 0
+    minimum_raw_target = int(math.ceil(req * target / eff - OVERAGE_CEIL_TOLERANCE)) if req > 0 else 0
     unavoidable_effective = minimum_raw_target * eff
     target_overage = max(0.0, staffing - req * target)
     avoidable_overage = max(0.0, staffing - unavoidable_effective)
@@ -8038,7 +8057,7 @@ def validate_schedule(parsed: ParsedInput, skeleton: SkeletonSolution, breaks: B
     rest_rows: List[Dict[str, Any]] = []
     for a, assoc in enumerate(parsed.associates):
         off_count = sum(skeleton.assignment[a][d] == "OFF" for d in range(7))
-        long_mode = any((skeleton.selected_shift_index[a][d] is not None and parsed.shifts[skeleton.selected_shift_index[a][d]].duration_min >= 630) for d in range(7))
+        long_mode = any((skeleton.selected_shift_index[a][d] is not None and parsed.shifts[skeleton.selected_shift_index[a][d]].duration_min >= LONG_SHIFT_MIN_DURATION_MIN) for d in range(7))
         expected_off = 3 if long_mode else 2
         if parsed.strict_off and off_count != expected_off:
             failures.append({"type": "off_count", "associate": assoc.name, "expected": expected_off, "actual": off_count})
@@ -11764,8 +11783,8 @@ def solve_joint_shift_off_language_break_refinement(
     replay_breaks = strict_replay_candidate[1] if strict_replay_candidate is not None else None
     replay_pattern_by_id = pattern_map(replay_breaks.patterns) if replay_breaks is not None else {}
     replay_lineage_id = candidate_lineage_id(strict_replay_candidate) if strict_replay_candidate is not None else None
-    long_shifts = {shift.index for shift in parsed.shifts if shift.duration_min >= 630}
-    short_shifts = {shift.index for shift in parsed.shifts if shift.duration_min < 630}
+    long_shifts = {shift.index for shift in parsed.shifts if shift.duration_min >= LONG_SHIFT_MIN_DURATION_MIN}
+    short_shifts = {shift.index for shift in parsed.shifts if shift.duration_min < LONG_SHIFT_MIN_DURATION_MIN}
 
     for a in range(A):
         if long_shifts and short_shifts and parsed.use_11h_3off:

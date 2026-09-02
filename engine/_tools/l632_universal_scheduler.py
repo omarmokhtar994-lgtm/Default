@@ -6649,6 +6649,11 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
     floor_deficit_sum = 0.0
     before_target_deficit_sum = 0.0
     before_floor_deficit_sum = 0.0
+    # Overage forced by fixed previous-week carry-in, which the solver cannot
+    # alter, separated from the overage it can actually control.  See the
+    # accumulation site below for why this distinction matters.
+    carry_in_forced_overage_fte_sum = 0.0
+    carry_in_forced_overage_interval_count = 0
     before_target_overage_fte_sum = 0.0
     after_target_overage_fte_sum = 0.0
     before_overage_interval_count = 0
@@ -6681,10 +6686,12 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
             eff_factor = 1.0 - parsed.shrinkage[d][i]
             before_sum = after_sum = 0.0
             before_raw_min = after_raw_min = 999999
+            prior_sum = 0.0
             for q in range(qpi):
                 qslot = d * 96 + i * qpi + q
                 covering = scheduled_covering_qslot(parsed, skeleton, qslot)
                 prior = prior_covering_associates(parsed, qslot)
+                prior_sum += len(prior) * eff_factor
                 before_raw = len(covering) + len(prior)
                 break_count_actual = sum(1 for a, _, _ in covering if (a, qslot) in breaks)
                 after_raw = before_raw - break_count_actual
@@ -6773,6 +6780,21 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
             after_avoidable_overage_fte = float(after_overage["avoidable_overage_fte"])
             before_avoidable_overage_fte_sum += before_avoidable_overage_fte
             after_avoidable_overage_fte_sum += after_avoidable_overage_fte
+            # Previous-week carry-in is fixed workbook input, not a decision
+            # variable: the solver cannot remove those associates from the
+            # interval.  Where carry-in alone already exceeds the staffing the
+            # target needs, the excess is charged as "avoidable" overage that no
+            # schedule could have avoided.  On an overnight carry-in shift whose
+            # tail runs past the demand collapse this is substantial - a
+            # 23:00-08:00 carry-in against 0.9 FTE of 07:00 demand books 9.0 FTE
+            # of avoidable overage per interval, flagged severe and extreme,
+            # with indivisible_staffing_only False so nothing marks it
+            # structural.  Reported separately so an overage regression can be
+            # attributed to the optimizer rather than to the input contract.
+            # Ranking is deliberately unchanged; this is measurement only.
+            carry_in_forced_overage = max(0.0, prior_sum / qpi - unavoidable_effective)
+            carry_in_forced_overage_fte_sum += carry_in_forced_overage
+            carry_in_forced_overage_interval_count += int(carry_in_forced_overage > 1e-9)
             before_avoidable_overage_interval_count += int(before_avoidable_overage_fte > 1e-9)
             after_avoidable_overage_interval_count += int(after_avoidable_overage_fte > 1e-9)
             before_target_overage_fte_sum += before_target_overage_fte
@@ -7241,6 +7263,12 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
         "target_deficit_sum": round(target_deficit_sum, 8),
         "floor_deficit_sum": round(floor_deficit_sum, 8),
         "floor_deficit_max": round(floor_deficit_max, 8),
+        "carry_in_forced_overage_fte_sum": round(carry_in_forced_overage_fte_sum, 8),
+        "carry_in_forced_overage_interval_count": carry_in_forced_overage_interval_count,
+        "before_solver_controllable_avoidable_overage_fte_sum": round(
+            max(0.0, before_avoidable_overage_fte_sum - carry_in_forced_overage_fte_sum), 8),
+        "after_solver_controllable_avoidable_overage_fte_sum": round(
+            max(0.0, after_avoidable_overage_fte_sum - carry_in_forced_overage_fte_sum), 8),
         "before_target_deficit_sum": round(before_target_deficit_sum, 8),
         "before_floor_deficit_sum": round(before_floor_deficit_sum, 8),
         "before_floor_deficit_max": round(before_floor_deficit_max, 8),

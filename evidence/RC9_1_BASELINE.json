@@ -29,7 +29,8 @@
       "zero_staffed_quarters": 0,
       "evidence_status": "RC9.1 preserved candidate replay baseline",
       "input_sha256_prefix": "230179d964674219",
-      "comparable": true
+      "comparable": true,
+      "target_ratio": 0.9
     },
     "NMG SP": {
       "active_intervals": 126,
@@ -51,7 +52,8 @@
       "zero_staffed_quarters": 0,
       "evidence_status": "RC9.1 preserved candidate replay baseline; validator discrepancy separately noted",
       "input_sha256_prefix": "33f540ffa1df748d",
-      "comparable": true
+      "comparable": true,
+      "target_ratio": 0.9
     },
     "Cricut Chat Current 27": {
       "active_intervals": 242,
@@ -74,7 +76,8 @@
       "evidence_status": "RC9.1 preserved candidate replay baseline",
       "input_sha256_prefix": null,
       "comparable": false,
-      "not_comparable_reason": "no input workbook in this project is identified as the source of this baseline row"
+      "not_comparable_reason": "no input workbook in this project is identified as the source of this baseline row",
+      "target_ratio": 1.0
     },
     "Cricut Chat Historical 28": {
       "active_intervals": 242,
@@ -97,7 +100,8 @@
       "evidence_status": "RC9.1 preserved candidate replay baseline",
       "input_sha256_prefix": null,
       "comparable": false,
-      "not_comparable_reason": "no input workbook in this project is identified as the source of this baseline row"
+      "not_comparable_reason": "no input workbook in this project is identified as the source of this baseline row",
+      "target_ratio": 1.0
     },
     "AE AR B2B": {
       "active_intervals": 168,
@@ -119,7 +123,8 @@
       "zero_staffed_quarters": 0,
       "evidence_status": "RC9.1 preserved candidate replay baseline",
       "input_sha256_prefix": "b7dcbbffeb19e05f",
-      "comparable": true
+      "comparable": true,
+      "target_ratio": 1.0
     },
     "Cricut Voice": {
       "active_intervals": 264,
@@ -133,7 +138,9 @@
       "max_consecutive_floor_gaps": 0,
       "evidence_status": "RC9.1 preserved workbook leaderboard; exact final output separately validated",
       "input_sha256_prefix": "8e3833c9ef496b46",
-      "comparable": true
+      "comparable": true,
+      "target_ratio": 1.0
     }
-  }
+  },
+  "note_target_ratio": "Per-scenario RC9.1 contract target, from the supplier's Comparison Guide sheet. Comparing a 90%-target run's before_target against a 100%-target baseline compares different coverage tiers."
 }

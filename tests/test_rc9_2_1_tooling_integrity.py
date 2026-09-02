@@ -219,9 +219,13 @@ class RC9_1ComparisonRefusesMismatchedInputs(unittest.TestCase):
         root.mkdir(parents=True, exist_ok=True)
         (root / "UNIVERSAL_RUN_IDENTITY.json").write_text(
             json.dumps({"input_sha256": input_sha}), encoding="utf-8")
-        row = {"status": "PASS", "active_intervals": 252,
+        # target_ratio matters: without it the comparator holds the comparison
+        # back rather than assuming the tiers line up. NMG EN is a 90% contract.
+        row = {"status": "PASS", "active_intervals": 252, "target_ratio": 0.9,
                "before_target": 214, "before_floor": 218}
         row.update(fields)
+        if fields.get("target_ratio") == "":
+            del row["target_ratio"]
         path = root / "case.l6_3_2_3_summary.csv"
         with path.open("w", newline="", encoding="utf-8") as fh:
             writer = csv.DictWriter(fh, fieldnames=list(row))
@@ -267,6 +271,35 @@ class RC9_1ComparisonRefusesMismatchedInputs(unittest.TestCase):
             result = self._gate2(tmp, self.NMGEN_HISTORICAL)
         self.assertEqual(result["gate2_vs_rc9_1"], "PASS_AGAINST_CONSOLIDATED_BASELINE")
         self.assertNotEqual(result["gate2_vs_rc9_1"], "PASS")
+
+    def test_a_different_target_ratio_is_refused(self):
+        """before_target names a different tier under a different contract.
+
+        Cricut Voice and Cricut Chat carry a 100% RC9.1 target while NMG EN and
+        NMG SP carry 90%. Comparing a 90% run's before_target against a 100%
+        baseline silently compares before_90 against before_100. The ratios
+        happened to agree on every real case, which is luck, not a check.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._gate2(tmp, self.NMGEN_HISTORICAL, target_ratio=1.0)
+        self.assertEqual(result["gate2_vs_rc9_1"], "NOT_COMPARABLE_DIFFERENT_TARGET")
+        self.assertIn("different tier", result["gate2_detail"])
+
+    def test_a_matching_target_ratio_compares(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._gate2(tmp, self.NMGEN_HISTORICAL, target_ratio=0.9)
+        self.assertTrue(result["gate2_vs_rc9_1"].startswith("PASS"))
+
+    def test_an_unreported_target_ratio_is_held_back_not_assumed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._gate2(tmp, self.NMGEN_HISTORICAL, target_ratio="")
+        self.assertEqual(result["gate2_vs_rc9_1"], "NOT_COMPARABLE_TARGET_UNKNOWN")
+
+    def test_every_baseline_scenario_declares_its_target_ratio(self):
+        for name, row in self.baseline["scenarios"].items():
+            with self.subTest(scenario=name):
+                self.assertIn("target_ratio", row,
+                              "a baseline row without a target ratio cannot be compared safely")
 
     def test_gate9_tracks_gate2(self):
         with tempfile.TemporaryDirectory() as tmp:

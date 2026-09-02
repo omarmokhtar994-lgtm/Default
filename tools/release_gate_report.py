@@ -96,6 +96,23 @@ def compare_to_rc9_1(summary: dict, identity: dict, baseline: dict) -> tuple:
                 f"{name}: RC9.1 had {base_active:.0f} active intervals, this run has "
                 f"{run_active:.0f}")
 
+    # `before_target` means "intervals at the WORKBOOK TARGET", so it names a
+    # different coverage tier under a different target ratio. Cricut Voice and
+    # Cricut Chat carry a 100% RC9.1 target while NMG EN and NMG SP carry 90%;
+    # comparing a 90% run's before_target against a 100% baseline silently
+    # compares before_90 against before_100. The ratios happened to agree on
+    # every case here, which is luck, not a check.
+    base_ratio = num(row.get("target_ratio"))
+    run_ratio = num(summary.get("target_ratio"))
+    if base_ratio and run_ratio and abs(base_ratio - run_ratio) > 1e-6:
+        return ("NOT_COMPARABLE_DIFFERENT_TARGET",
+                f"{name}: RC9.1 baseline is a {base_ratio:.0%} target, this run is "
+                f"{run_ratio:.0%}; before_target names a different tier on each side")
+    if base_ratio and not run_ratio:
+        return ("NOT_COMPARABLE_TARGET_UNKNOWN",
+                f"{name}: run did not report target_ratio, so the coverage tier "
+                "behind before_target cannot be confirmed to match the baseline")
+
     base_t, base_f = num(row.get("before_target")), num(row.get("before_floor"))
     run_t, run_f = num(summary.get("before_target")), num(summary.get("before_floor"))
     if not run_t:
@@ -316,9 +333,16 @@ def main() -> int:
         print(f"    gate 8 {r['gate8_independent_validation']:22} {r['gate8_detail']}")
     print()
     print(f"written: {csv_path}")
-    print("gates 2 and 9 require RC9.1 per-scenario KPIs or the RC9.1 engine "
-          "source (sha da21c3ba…); every other column is populated so the "
-          "comparison becomes a diff when they arrive.")
+    if load_rc9_1_baseline():
+        print("gates 2 and 9 are decided against evidence/RC9_1_BASELINE.json "
+              "(consolidated RC9.1 metrics, before-break only). A case is only "
+              "compared when its input sha256, active-interval count and target "
+              "ratio all match the baseline row; otherwise it is reported as "
+              "NOT_COMPARABLE rather than compared.")
+    else:
+        print("gates 2 and 9 require evidence/RC9_1_BASELINE.json or the RC9.1 "
+              "engine source (sha da21c3ba…); every other column is populated so "
+              "the comparison becomes a diff when they arrive.")
     return 0
 
 

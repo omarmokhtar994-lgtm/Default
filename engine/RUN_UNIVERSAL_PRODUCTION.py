@@ -280,8 +280,22 @@ def main() -> int:
             '--input', str(input_path), '--output', str(validation_workbook),
             '--json-out', str(validation_json), '--csv-out', str(validation_csv),
         ])
+        # The validator exits 0 on PASS and 2 when it has evaluated the schedule
+        # and found hard-rule violations.  Any other code means it did not
+        # complete - a crash, a missing file, an unreadable sheet.  Collapsing
+        # every non-zero code to 'FAIL' reported a broken tool as a broken
+        # schedule, which is a materially different claim: one blocks release
+        # for a real defect, the other for a bug in the checker.  Both still
+        # block (an unvalidated schedule must never pass), but they are now
+        # distinguishable.
+        if vrc == 0:
+            validation_status = 'PASS'
+        elif vrc == 2:
+            validation_status = 'FAIL'
+        else:
+            validation_status = 'ERROR_VALIDATOR_DID_NOT_COMPLETE'
         independent_validation.update({
-            'status': 'PASS' if vrc == 0 else 'FAIL',
+            'status': validation_status,
             'return_code': int(vrc),
             'workbook': str(validation_workbook),
             'json': str(validation_json),

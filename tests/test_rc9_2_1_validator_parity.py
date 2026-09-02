@@ -203,5 +203,99 @@ class TierCountingFormulaParity(unittest.TestCase):
         self.assertIn("ifnotparsed.active[d][i]:", validator_src)
 
 
+class ValidatorReadsExportedScheduleLayouts(unittest.TestCase):
+    """The validator must read the layouts the engine actually exports.
+
+    Exported schedules put day NAMES on the banner row and calendar DATES on the
+    row carrying "SF Name".  The validator located its header by "SF Name" and
+    then looked for day columns on that same row, found dates, and raised
+    ValueError("Output schedule is missing name/day columns") - aborting before
+    it evaluated a single rule.  Every skeleton-only run therefore failed
+    independent validation for a parsing reason, not a scheduling one.
+    """
+
+    def _sheet(self, day_row_offset):
+        import openpyxl
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Schedule"
+        days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        if day_row_offset == -1:                      # names above, dates on header row
+            for i, d in enumerate(days):
+                ws.cell(1, 7 + i).value = d
+            ws.cell(2, 4).value = "SF Name"
+            for i in range(7):
+                ws.cell(2, 7 + i).value = f"2026-07-{12 + i}"
+        else:                                          # names on the header row
+            ws.cell(1, 4).value = "SF Name"
+            for i, d in enumerate(days):
+                ws.cell(1, 7 + i).value = d
+        row = 3 if day_row_offset == -1 else 2
+        ws.cell(row, 4).value = "Associate 001"
+        for i in range(7):
+            ws.cell(row, 7 + i).value = "OFF"
+        return wb
+
+    def _parse(self, wb):
+        import tempfile, os
+        module = load_validator()
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as fh:
+            path = fh.name
+        try:
+            wb.save(path)
+            return module.parse_output_schedule(Path(path), ["Associate 001"])
+        finally:
+            os.unlink(path)
+
+    def test_day_names_on_the_row_above_the_header(self):
+        assignments, _ = self._parse(self._sheet(-1))
+        self.assertIn("associate 001", assignments)
+        self.assertEqual(len(assignments["associate 001"]), 7)
+
+    def test_day_names_on_the_header_row_still_work(self):
+        assignments, _ = self._parse(self._sheet(0))
+        self.assertIn("associate 001", assignments)
+        self.assertEqual(len(assignments["associate 001"]), 7)
+
+    def test_error_message_names_the_rows_searched(self):
+        source = VALIDATOR_PATH.read_text(encoding="utf-8")
+        self.assertIn("searched rows", source,
+                      "a parse failure must say where it looked, not just that it failed")
+
+
+class ValidatorCrashIsNotAScheduleFailure(unittest.TestCase):
+    """A broken checker and a broken schedule are different claims.
+
+    The validator exits 0 on PASS and 2 when it evaluated the schedule and found
+    hard-rule violations.  Any other code means it did not complete.  Mapping
+    every non-zero code to 'FAIL' reported a crash as a schedule failure.
+    """
+
+    def _runner_source(self):
+        return (ROOT / "engine" / "RUN_UNIVERSAL_PRODUCTION.py").read_text(encoding="utf-8")
+
+    def test_runner_distinguishes_incomplete_from_failed(self):
+        source = self._runner_source()
+        self.assertIn("ERROR_VALIDATOR_DID_NOT_COMPLETE", source)
+        self.assertNotIn("'PASS' if vrc == 0 else 'FAIL'", source,
+                         "every non-zero code must not collapse to FAIL")
+
+    def test_only_exit_two_means_hard_rule_failure(self):
+        source = self._runner_source()
+        self.assertIn("vrc == 2", source,
+                      "exit code 2 is the validator's 'evaluated and failed' signal")
+
+    def test_validator_returns_two_on_hard_failure(self):
+        source = VALIDATOR_PATH.read_text(encoding="utf-8")
+        self.assertIn("return 0 if result['status']=='PASS' else 2", source.replace('"', "'"))
+
+    def test_incomplete_validation_still_blocks_release(self):
+        """Distinguishable, but not permissive - an unvalidated schedule blocks."""
+        source = self._runner_source()
+        marker = source.index("ERROR_VALIDATOR_DID_NOT_COMPLETE")
+        self.assertIn("rc = 4", source[marker:marker + 900],
+                      "a non-zero validator code must still set rc=4")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

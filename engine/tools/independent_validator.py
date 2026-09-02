@@ -51,9 +51,28 @@ def parse_output_schedule(path: Path, expected_names: List[str]) -> Tuple[Dict[s
     headers={norm(ws.cell(header,c).value):c for c in range(1,ws.max_column+1)}
     name_col=next((c for h,c in headers.items() if h in {"sf name","associate","associate name","name"}),None)
     lang_col=next((c for h,c in headers.items() if h=="language"),None)
-    day_cols={d:next((c for h,c in headers.items() if h==norm(d)),None) for d in DAYS}
-    if name_col is None or any(c is None for c in day_cols.values()):
-        raise ValueError("Output schedule is missing name/day columns")
+    # Day columns are not always labelled on the same row as the name column.
+    # Exported schedules carry the day NAMES on the banner row and the calendar
+    # DATES on the row holding "SF Name", so locking to the name row found no
+    # day columns and the validator raised, aborting before it evaluated a
+    # single rule.  Search the name row first, then its neighbours, accepting
+    # short or full day names - the same convention the engine's own
+    # _day_columns uses.
+    day_cols=None
+    for probe in (header, header-1, header+1, header-2):
+        if probe<1 or probe>ws.max_row: continue
+        probe_headers={norm(ws.cell(probe,c).value):c for c in range(1,ws.max_column+1)}
+        candidate={}
+        for d,full in zip(DAYS,("sunday","monday","tuesday","wednesday","thursday","friday","saturday")):
+            match=next((c for h,c in probe_headers.items()
+                        if h==norm(d) or h.startswith(norm(d)) or h.startswith(full)),None)
+            candidate[d]=match
+        if all(c is not None for c in candidate.values()):
+            day_cols=candidate; break
+    if name_col is None or day_cols is None:
+        raise ValueError(
+            "Output schedule is missing name/day columns "
+            f"(name_col={name_col}, searched rows {max(1,header-2)}-{header+1} of sheet {ws.title!r})")
     assignments={}; languages={}
     for r in range(header+1,ws.max_row+1):
         name=str(ws.cell(r,name_col).value or "").strip()

@@ -247,3 +247,150 @@ Engine SHA after all corrections: `9febb23f0cc75cbbc493c072696b01c7db6cb303a6911
 
 **Release recommendation unchanged: NO-GO. RC9.1 remains the production engine.**
 Break-stage regression, deep regression and Gate 8 remain unevidenced.
+
+---
+
+# Iteration 3 — corrected fixtures, and two validator defects they exposed
+
+## A hypothesis raised and disproved: no instruction-parser defect
+
+The SAKS workbook's "SAKS New Test Setup" sheet declares
+`11H / 3OFF Allowed = Yes`, and its Shift Library already contains 660-minute
+shifts, yet the engine parsed `use_11h_3off = False`. That looked like a parser
+defect — `norm()` collapses whitespace rather than removing it, so
+`'11h / 3off allowed'` never matches the alias `'11h/3off'` — and a tolerant
+lookup was written and tested.
+
+**It was wrong, and the change was reverted.** `parse_input` deliberately reads
+instructions only from **Engine Defaults** and **Instructions**, and those are
+unambiguous:
+
+| Sheet | Key | Value |
+|---|---|---|
+| Instructions | `use 11h/3off` | **No** |
+| Instructions | `allowed shift durations hours` | **9** |
+| Engine Defaults | `use 11h 3 off pattern` | **No** |
+
+The setup sheet is case-notes — it sits alongside `estimated 11h/3off net
+capacity` and `100% diagnostic deficit vs all-11h`. `use_11h_3off = False` was
+**correct**. Engine SHA returned to `9febb23f…`; a contract diff across all 23
+kit workbooks had shown the tolerant lookup was behaviour-neutral, but a
+behaviour change with a disproved premise does not belong in the release.
+
+Issue 9 stands: folder 15 genuinely cannot test 11H, because the contract
+genuinely disables it. The fix is a fixture, not a code change.
+
+## Corrected fixtures
+
+### `fixtures/SAKS_11H_3OFF_ENABLED.xlsx`
+
+Three Instructions cells changed; nothing else. The 660-minute shifts were
+already in the library.
+
+| Cell | Setting | Before | After |
+|---|---|---|---|
+| r14c3 | Allowed Shift Durations Hours | `9` | `9, 11` |
+| r15c3 | Use 11H/3OFF | `No` | `Yes` |
+| r27c3 | Short Break Count | `2` | `3` |
+
+Paired against the **unmodified** original as the prohibited case — same shift
+library, so the pair isolates the contract flag:
+
+| | prohibited (original) | enabled (fixture) |
+|---|---|---|
+| `use_11h_3off` | False | True |
+| shift durations | `[540]` | `[540, 660]` |
+| 11H shifts in library | 0 of 10 | **8 of 18** |
+| break contract | 15+30+15 = 60 min | **15+15+15+30 = 75 min** |
+
+sha256 `c636d4c7…`; source `8ce4d9e0…`.
+
+### `fixtures/NMG_EN_SP_DIRECTIONAL_BILINGUAL.xlsx`
+
+The Language Setup sheet **already encoded** the directional mapping — English
+covers `English`, Spanish covers `English,Spanish`. The English rule was dropped
+only because its `Minimum Per Interval` was `0`, and `_parse_language_rules`
+correctly skips zero-minimum rows. One cell changed: English minimum `0 → 1`.
+
+| | rules | eligibility |
+|---|---|---|
+| original | 1 | Spanish: required `{spanish}`, eligible `{spanish}` |
+| fixture | **2** | English: required `{english}`, eligible `{english, spanish}`; Spanish unchanged |
+
+Direction verified against the engine's own predicate:
+
+| Check | Result |
+|---|---|
+| Spanish speaker satisfies **English** requirement | **True** — assist allowed |
+| English speaker satisfies **Spanish** requirement | **False** — not symmetric |
+
+sha256 `891fc9d8…`; source `d318723a…`.
+
+## 11H/3OFF proven by solve — first time in this project
+
+Both sides solved (`SKELETON_ONLY_COMPLETE`), 600s, seed 9000:
+
+| | 11H ENABLED | 11H PROHIBITED |
+|---|---|---|
+| shift durations used | 540 ×140, **660 ×88** | 540 ×250 |
+| associates on 11H | **22** | **0** |
+| of those with exactly 3 OFF | **22** | — |
+| OFF violations | **none** | none |
+
+Independent validation of the enabled case: **PASS, 0 hard failures**,
+`artifact_role: BEST_BEFORE_BREAKS`, 246/252 target, 252/252 floor, zero
+language, opening and zero-staffed gaps.
+
+Closes M11, M12, and both 11H rows of the rule matrix — with real solves, not
+parse checks.
+
+## Issue 13 — the validator could not read a before-breaks export
+
+**Severity:** high — every skeleton-only run failed independent validation for a
+parsing reason
+**Status:** FIXED
+
+`parse_output_schedule` located its header by "SF Name" and then looked for day
+columns on that same row. Exported schedules put day **names** on the banner row
+and calendar **dates** on the "SF Name" row, so no day column was found and it
+raised `ValueError: Output schedule is missing name/day columns` — aborting
+before evaluating a single rule.
+
+Fixed by searching the header row and its neighbours, accepting short or full
+day names (the engine's own `_day_columns` convention). The error message now
+names the rows searched. After the fix the same artifact validates **PASS**.
+
+## Issue 14 — a validator crash was reported as a schedule failure
+
+**Severity:** high — destroys the meaning of the release gate
+**Status:** FIXED
+
+`RUN_UNIVERSAL_PRODUCTION.py` mapped the validator result as
+`'PASS' if vrc == 0 else 'FAIL'`. The validator exits **2** when it has evaluated
+the schedule and found hard-rule violations, and **1** when it crashed. Both were
+reported as `FAIL`.
+
+That is a materially different claim: one says the schedule is invalid, the other
+says the checker broke. The 11H runs surfaced it — they returned `rc=4` with
+`"status": "FAIL"` while the schedules were in fact valid.
+
+Now three-way: `PASS` / `FAIL` (exit 2, evaluated and failed) /
+`ERROR_VALIDATOR_DID_NOT_COMPLETE` (anything else). **All non-zero codes still
+set `rc=4`** — an unvalidated schedule must never pass — but they are no longer
+conflated.
+
+## Verification (iteration 3)
+
+| Check | Result |
+|---|---|
+| `py_compile` — engine, production, tools, tests | PASS |
+| rule semantics | **30/30** |
+| selector integrity | **28/28** |
+| validator parity | **23/23** (7 new) |
+| engine selfcheck | PASS, **byte-identical to the pre-change baseline** |
+| wrapper selfcheck | PASS |
+| contract diff, 23 kit workbooks | no unintended change |
+
+**Release recommendation unchanged: NO-GO. RC9.1 remains the production engine.**
+Break-stage regression, deep regression and Gate 8 (folder 12's real input)
+remain outstanding.

@@ -10,7 +10,7 @@ shell gate, fixtures, evidence and documentation.
 | Test suites | 9 (`tests/test_rc9_2_1_*.py`) — 4 at the start of this audit |
 | Gate | `run_tests.sh` |
 
-Findings from this audit are numbered **A1–A27**. Release-behaviour findings 1–16
+Findings from this audit are numbered **A1–A29**. Release-behaviour findings 1–16
 from the earlier remediation cycle are recorded in
 `docs/RC9_2_1_CONSOLIDATED_ISSUE_REGISTER.md` and are not repeated here.
 
@@ -259,7 +259,7 @@ is not re-investigated.
 | **File** | `engine/_tools/l632_universal_scheduler.py` · `_day_columns` |
 | **Category** | Latent robustness |
 | **Severity** | **Low** |
-| **Status** | **DEFERRED, with evidence** |
+| **Status** | **VERIFIED** (was DEFERRED; see the resolution below) |
 
 The engine matches day columns with the same `startswith(short name)` rule that
 caused A1. Applied to input workbooks rather than exports.
@@ -268,10 +268,16 @@ caused A1. Applied to input workbooks rather than exports.
 checked against a strict matcher — **zero mismatches**. So this is latent, not
 live.
 
-**Deferred deliberately.** Changing input parsing that 23 workbooks depend on,
-to fix a case that does not occur in any of them, is a speculative change to the
-release-critical path. Revisit if a workbook ever ships a "Monthly"/"Saturation"
-style column.
+**Resolved.** The deferral rested on not being able to prove the change safe. A
+broader equivalence run settled it: **57 workbooks, 1,507 header sheets, 7,288
+header cells** produce identical day bindings under the strict rule, and no
+sheet newly falls back to positional column guessing (which would have been
+worse than the defect). All 25 exported schedules still re-parse.
+
+Engine and validator now share one predicate, `_is_day_header`. The suffix
+clause admits only a DATE ("Sunday 12 Jul" - the suffix must contain a digit):
+accepting any suffix re-admits "Sunday Totals", and the header `"sunday shift"`
+that really does appear in `AE_FRENCH_RC8_6_1_INPUT_READY`.
 
 ---
 
@@ -696,6 +702,81 @@ became `NOT_EVALUATED` for the same reason.
 **Blast radius.** `gate_results` is reported, never compared, anywhere in the
 codebase. All four executed RC9.2.1 runs used `warn`, so none of them changes.
 Engine selfcheck output is unchanged.
+
+---
+
+### A28 — Stage 1 abandoned its skeleton portfolio silently
+
+| | |
+|---|---|
+| **File** | `engine/_tools/l632_universal_scheduler.py` (Stage-1 profile loop) |
+| **Category** | Truncated search reported as a completed one |
+| **Severity** | **High** |
+| **Status** | **VERIFIED** |
+
+Root-causing the Cricut Voice gate-2 FAIL found the run had requested **15**
+skeleton profiles and attempted **one**. `stage1_attempts` held a single row,
+the summary said nothing, and the run read as a completed search.
+
+The arithmetic is deterministic. The Stage-1 profile window is `stage1_search`
+minus `breakability_diagnostic_reserve_sec` (up to 55% of it); the loop breaks
+at `remaining < 45` while forcing a 45-second minimum slice, so the number of
+profiles that can run is `window / 45`:
+
+| budget | stage1 | reserve | window | profiles of 15 |
+|---|---|---|---|---|
+| 900 | 114 | 62 | 52 | **1** |
+| 1,800 | 228 | 125 | 103 | 2 |
+| 2,700 | 341 | 187 | 154 | 3 |
+| 5,400 | 682 | 375 | 307 | 6 |
+| 10,800 | 2,222 | 600 | 1,622 | 15 |
+
+**DEEP's design budget is 14,400s.** The evidence runs used `--time-limit 900`,
+six percent of it. So the Voice shortfall is very likely an artifact of
+under-budgeting rather than an engine quality regression — but nothing in the
+artifacts said so, and that is the actual defect.
+
+**Fix.** The engine records `stage1_profile_coverage` (requested, attempted,
+skipped-for-budget, the names skipped, seconds remaining at stop) and logs
+`STAGE1_PORTFOLIO_TRUNCATED`. The summary carries the counts plus `COMPLETE` or
+`TRUNCATED_INSUFFICIENT_STAGE1_BUDGET`. `release_gate_report.py` returns
+`NOT_COMPARABLE_SEARCH_TRUNCATED` rather than scoring a truncated search against
+RC9.1, which would blame the engine for a budget that never let it search.
+
+**Deliberately not done.** No threshold was retuned. Whether 55% of Stage 1 for
+a diagnostic reserve and a hard 45-second slice floor are the right values needs
+the re-run at the design budget to answer, not a guess.
+
+---
+
+### A29 — Gate 2/9 comparator would have compared incomparable runs
+
+| | |
+|---|---|
+| **File** | `tools/release_gate_report.py` |
+| **Category** | False comparison |
+| **Severity** | **High** |
+| **Status** | **VERIFIED** |
+
+An RC9.1 comparator arrived, so gates 2 and 9 became decidable. Building the
+comparison surfaced three ways it would have produced a confident wrong verdict:
+
+1. **Different input.** The RC9.2.1 NMG EN runs used a *repaired* fixture (sha
+   `ed90d630`, two associates added on 23:00–08:00 to cover early Sunday); the
+   RC9.1 baseline came from the unrepaired historical workbook (sha `230179d9`).
+   Comparing their 227 against RC9.1's 214 reads as a **+13 target win** and
+   means nothing — extra headcount trivially buys coverage.
+2. **Different target tier.** `before_target` means "intervals at the workbook
+   target", so it names a different tier under a different contract. Voice and
+   Chat carry a 100% RC9.1 target; NMG EN and NMG SP carry 90%. The ratios
+   happened to agree on every real case, which is luck, not a check.
+3. **Truncated search** — see A28.
+
+The comparator now matches on input sha256, active-interval count and target
+ratio, and reports `NOT_COMPARABLE_*` rather than comparing. A clean result is
+`PASS_AGAINST_CONSOLIDATED_BASELINE`, never a bare `PASS`: the evidence is
+consolidated historical metrics rather than raw RC9.1 artifacts, and it covers
+before-break quality only.
 
 ---
 

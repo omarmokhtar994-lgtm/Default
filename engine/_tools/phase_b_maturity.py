@@ -339,6 +339,34 @@ class AdaptiveBreakTask:
     priority: Tuple[Any, ...]
 
 
+def _skeleton_rank_key(record: Mapping[str, Any], skeleton_index: int) -> Tuple[int, Tuple[Any, ...]]:
+    """Return (exception_rank, ordering key) for one skeleton record.
+
+    This block was written out twice, verbatim, in
+    `adaptive_break_attempt_plan` - once to build the ranking and once to build
+    the task priorities. Two copies of an ordering rule are two chances for it
+    to drift.
+
+    The key ends in `skeleton_index`, which makes it a strict total order: no
+    two distinct skeletons can tie.
+    """
+    min_exc = record.get("minimum_exception_count")
+    upper_exc = record.get("minimum_exception_upper_bound")
+    exception_rank = int(min_exc) if isinstance(min_exc, int) else (
+        int(upper_exc) if isinstance(upper_exc, int) else 999999)
+    return exception_rank, (
+        exception_rank,
+        -int(record.get("before_target", 0) or 0),
+        -int(record.get("before_floor", 0) or 0),
+        -int(record.get("before_100", 0) or 0),
+        int(record.get("floor_gaps", 999999) or 999999),
+        int(record.get("severe_floor_gaps", 999999) or 999999),
+        int(record.get("max_floor_run", 999999) or 999999),
+        round(float(record.get("before_avoidable_overage_fte_sum", 0.0) or 0.0), 6),
+        skeleton_index,
+    )
+
+
 def adaptive_break_attempt_plan(
     skeleton_records: Sequence[Mapping[str, Any]],
     pattern_widths: Sequence[int],
@@ -393,42 +421,13 @@ def adaptive_break_attempt_plan(
 
     skeleton_rank_rows: List[Tuple[Tuple[Any, ...], int]] = []
     for skeleton_index, record in enumerate(skeleton_records):
-        min_exc = record.get("minimum_exception_count")
-        upper_exc = record.get("minimum_exception_upper_bound")
-        exception_rank = int(min_exc) if isinstance(min_exc, int) else (int(upper_exc) if isinstance(upper_exc, int) else 999999)
-        before_target = int(record.get("before_target", 0) or 0)
-        before_floor = int(record.get("before_floor", 0) or 0)
-        before_100 = int(record.get("before_100", 0) or 0)
-        floor_gaps = int(record.get("floor_gaps", 999999) or 999999)
-        severe_gaps = int(record.get("severe_floor_gaps", 999999) or 999999)
-        max_floor_run = int(record.get("max_floor_run", 999999) or 999999)
-        overage = float(record.get("before_avoidable_overage_fte_sum", 0.0) or 0.0)
-        skeleton_key = (
-            exception_rank,
-            -before_target,
-            -before_floor,
-            -before_100,
-            floor_gaps,
-            severe_gaps,
-            max_floor_run,
-            round(overage, 6),
-            skeleton_index,
-        )
+        exception_rank, skeleton_key = _skeleton_rank_key(record, skeleton_index)
         skeleton_rank_rows.append((skeleton_key, skeleton_index))
     rank_by_index = {idx: rank for rank, (_, idx) in enumerate(sorted(skeleton_rank_rows, key=lambda row: row[0]))}
 
     tasks: List[AdaptiveBreakTask] = []
     for skeleton_index, record in enumerate(skeleton_records):
-        min_exc = record.get("minimum_exception_count")
-        upper_exc = record.get("minimum_exception_upper_bound")
-        exception_rank = int(min_exc) if isinstance(min_exc, int) else (int(upper_exc) if isinstance(upper_exc, int) else 999999)
-        before_target = int(record.get("before_target", 0) or 0)
-        before_floor = int(record.get("before_floor", 0) or 0)
-        before_100 = int(record.get("before_100", 0) or 0)
-        floor_gaps = int(record.get("floor_gaps", 999999) or 999999)
-        severe_gaps = int(record.get("severe_floor_gaps", 999999) or 999999)
-        max_floor_run = int(record.get("max_floor_run", 999999) or 999999)
-        overage = float(record.get("before_avoidable_overage_fte_sum", 0.0) or 0.0)
+        exception_rank, _ = _skeleton_rank_key(record, skeleton_index)
         skeleton_rank = rank_by_index.get(skeleton_index, skeleton_index)
         for width in widths:
             width_rank = width_order.get(width, 999999)
@@ -441,19 +440,19 @@ def adaptive_break_attempt_plan(
                     skeleton_index=skeleton_index,
                     width=width,
                     objective_mode=mode,
+                    # `skeleton_rank` is a rank over `_skeleton_rank_key`, whose
+                    # final component is skeleton_index, so it is a STRICT total
+                    # order over skeletons. Two distinct tasks sharing
+                    # (exception_rank, width_rank, mode_rank, skeleton_rank)
+                    # would therefore have to be the same skeleton at the same
+                    # width in the same mode - the same task. The eight quality
+                    # terms that used to trail this tuple could never be reached
+                    # and were dropped; ordering is unchanged.
                     priority=(
                         exception_rank,
                         width_rank,
                         mode_rank,
                         skeleton_rank,
-                        -before_target,
-                        -before_floor,
-                        -before_100,
-                        floor_gaps,
-                        severe_gaps,
-                        max_floor_run,
-                        round(overage, 6),
-                        skeleton_index,
                     ),
                 ))
     return sorted(tasks, key=lambda task: task.priority)

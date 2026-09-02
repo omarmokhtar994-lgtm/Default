@@ -112,6 +112,50 @@ class AttemptPlanHonoursTheRequestedObjectiveModes(unittest.TestCase):
         self.assertEqual(len(tasks), 3 * 3 * 2)
 
 
+class SkeletonRankIsAStrictTotalOrder(unittest.TestCase):
+    """The task priority tuple used to carry eight terms after `skeleton_rank`.
+
+    They were unreachable: `_skeleton_rank_key` ends in `skeleton_index`, so no
+    two distinct skeletons tie on rank, and two tasks agreeing on
+    (exception_rank, width_rank, mode_rank, skeleton_rank) are the same task.
+    Dropping them removed the second verbatim copy of the ordering rule.
+    """
+
+    def test_distinct_skeletons_never_share_a_rank_key(self):
+        from phase_b_maturity import _skeleton_rank_key
+        identical = dict(SKELETON[0])
+        keys = [_skeleton_rank_key(dict(identical), i)[1] for i in range(8)]
+        self.assertEqual(len(set(keys)), 8, "index must break every tie")
+
+    def test_priority_is_four_terms(self):
+        tasks = adaptive_break_attempt_plan(SKELETON * 3, [24, 115], ["target_priority"])
+        for task in tasks:
+            self.assertEqual(len(task.priority), 4)
+
+    def test_ordering_is_total_even_for_identical_skeletons(self):
+        tasks = adaptive_break_attempt_plan(SKELETON * 6, [24, 115],
+                                            ["target_priority", "balanced"])
+        self.assertEqual(len(tasks), 6 * 2 * 2)
+        self.assertEqual(len({t.priority for t in tasks}), len(tasks),
+                         "every task must have a distinct priority")
+
+    def test_the_plan_is_deterministic(self):
+        for _ in range(5):
+            a = [(t.skeleton_index, t.width, t.objective_mode)
+                 for t in adaptive_break_attempt_plan(SKELETON * 4, [24, 60, 115],
+                                                      ["target_priority", "balanced"])]
+            b = [(t.skeleton_index, t.width, t.objective_mode)
+                 for t in adaptive_break_attempt_plan(SKELETON * 4, [24, 60, 115],
+                                                      ["target_priority", "balanced"])]
+            self.assertEqual(a, b)
+
+    def test_the_best_skeleton_still_leads_its_layer(self):
+        strong = dict(SKELETON[0], before_target=250, before_floor=252)
+        weak = dict(SKELETON[0], before_target=10, before_floor=20)
+        tasks = adaptive_break_attempt_plan([weak, strong], [115], ["target_priority"])
+        self.assertEqual(tasks[0].skeleton_index, 1, "the stronger skeleton leads")
+
+
 class BudgetPlanNeverExceedsOrUndercutsTheRun(unittest.TestCase):
     """At total=60 the per-phase floors sum to 110.
 

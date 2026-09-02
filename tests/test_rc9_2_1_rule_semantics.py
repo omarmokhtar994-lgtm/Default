@@ -245,5 +245,44 @@ class CarryInForcedOverageIsSeparated(unittest.TestCase):
         self.assertNotIn("solver_controllable", body)
 
 
+class ResumeIdentityIsHashBased(unittest.TestCase):
+    """Resume must key on content hashes, never on a filename or a bare label.
+
+    Executed against the shipped RC9.1 checkpoint bundle: resuming it with the
+    folder-13 workbook raises
+    "Resume refused: input/contract/engine/seed/parameters hash differs from the
+    existing run identity".  These guards pin the mechanism that makes that
+    refusal sound.
+    """
+
+    def test_run_id_is_derived_from_the_full_identity(self):
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text(
+            encoding="utf-8")
+        self.assertIn('run_identity["run_id"] = canonical_hash(run_identity)[:24]', source,
+                      "run_id must hash the identity, so run_id equality implies "
+                      "input/contract/engine/seed/parameter equality")
+
+    def test_resume_refuses_on_identity_mismatch(self):
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text(
+            encoding="utf-8")
+        self.assertIn("Resume refused:", source,
+                      "a mismatched resume must raise, not silently start fresh")
+
+    def test_identity_covers_every_input_that_can_change_results(self):
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text(
+            encoding="utf-8")
+        start = source.index("run_identity = {")
+        block = source[start:source.index("run_identity[\"run_id\"]", start)]
+        for key in ("input_sha256", "contract_sha256", "engine_sha256",
+                    "seed_sha256", "parameters_sha256"):
+            self.assertIn(key, block, f"{key} missing from run identity")
+
+    def test_checkpoint_loaders_gate_on_run_id(self):
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text(
+            encoding="utf-8")
+        self.assertIn('if payload.get("run_id") != run_id:', source,
+                      "checkpoint loaders must refuse a foreign run_id")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

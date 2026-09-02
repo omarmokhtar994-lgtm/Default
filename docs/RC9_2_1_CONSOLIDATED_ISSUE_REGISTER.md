@@ -132,3 +132,118 @@ Confirmed by parsing the shipped workbooks:
 directly — 26 guards covering language eligibility and direction, the long-shift
 OFF boundary, rest including carry-in, half-open carry-in coverage, and the
 9H/11H break patterns. Real fixtures are still required to close the matrix rows.
+
+---
+
+# Iteration 2 — execution results and the decisive attribution test
+
+## Issue 6 closed: NMG EN now runs
+
+First successful NMG EN run in the project. Both engines RC=0 on the repaired
+fixture, skeleton-only, seed 9000, 900s, 2 workers.
+
+| Metric | baseline `56ec2eef` | corrected |
+|---|---|---|
+| before_target / before_90 | 228 | 227 |
+| before_80 / before_floor | 231 / 232 | 231 / 232 |
+| before_100 | 216 | 215 |
+| avoidable overage | 1154.67 | 1150.07 |
+
+**The one-interval target drop is search divergence, not a selector regression.**
+`before_target` is tuple position 0, so the selector cannot prefer a lower-target
+candidate. Confirmed from the pools: the corrected run's leaderboard tops out at
+**227**, the baseline's contains a **228** — the corrected search never found one.
+The cause is that `select_stage1_hint_skeleton` ranks with the same tuple, so
+changing the ordering changes the solver's starting hint and therefore its
+trajectory. The correction is not purely post-hoc, and every A/B of it is
+confounded for that reason.
+
+## The decisive test — one pool, two orderings, no solver
+
+Run once on the corrected engine so the leaderboard carries deficits and overage
+(the issue-8 fix), then re-rank that single pool both ways offline:
+
+```
+candidates in pool : 12     contract: target 90%, floor 75%, 252 active
+pre-fix champion   : target_locked_residual_balance_polish  227/232  overage 1153.05
+post-fix champion  : target_locked_residual_balance_polish  227/232  overage 1153.05
+VERDICT: champion UNCHANGED
+```
+
+## Honest conclusion on the deficit-masking correction
+
+**The defect is real and provable; it does not bite on any real pool examined.**
+
+| Pool | Source | Champion changed? |
+|---|---|---|
+| Cricut candidate pool (7) | RC9.1 checkpoint `da21c3ba` | No |
+| Cricut skeletons (10) | RC9.1 checkpoint | No |
+| **NMG EN (12)** | **fresh run, isolated re-rank** | **No** |
+| GDI REAL28 (10) | fresh A/B | Changed — but pools differed, confounded |
+
+The reason is visible in the NMG EN leaderboard: floor deficits span 4.39 → 8.84
+and adjacent candidates differ by ~0.20 — **twenty quanta**. Real candidates are
+nowhere near floor-equivalent, so the comparison legitimately resolves on floor
+long before the balance block. The synthetic 78% figure in Correction Pass 01
+described a floor-equivalent regime that does not occur in this corpus.
+
+The correction remains **correct and safe** — it removes a genuine pathology in
+which an 8th-decimal difference outranks 141 FTE — but its practical benefit is
+**not demonstrated on real data**, and the single GDI observation is more likely
+search divergence than selector effect.
+
+## Overage sum vs peak ordering — deliberately NOT changed
+
+Round 1 on GDI traded overage sum down 13.32 FTE for peak up 1.68. The question
+was whether the tuple should rank peak or spread above sum.
+
+**No change made, on evidence.** The overage block is rarely reached at all on
+real pools, so reordering within it would be speculative — and within NMG EN's
+top group the entire overage spread is 1152.53 → 1153.05, i.e. **0.52 FTE**.
+Changing priority order on that basis would be exactly the stacked speculative
+patch the handoff forbids. Revisit only if a pool is found where the block
+actually decides.
+
+## Issue 11 validated end-to-end on a real run
+
+| | FTE |
+|---|---|
+| total avoidable overage | 1153.05 |
+| **carry-in forced** (solver cannot avoid) | **61.59** across 15 intervals |
+| solver-controllable | 1091.07 |
+
+5.3% of the headline number is structurally forced by fixed previous-week input.
+Part of that is introduced by the repair itself (10 added carry-in rows), but the
+mechanism is general and applies to any scenario with overnight carry-in.
+
+## M15 resume identity — PASSES
+
+Resuming the RC9.1 checkpoint (`run_id fd33cad8…`) with the folder-13 workbook
+raises:
+
+> `Resume refused: input/contract/engine/seed/parameters hash differs from the existing run identity`
+
+The gate is sound rather than nominal: `run_id = canonical_hash(run_identity)[:24]`
+over version, input, contract, engine, seed and parameter hashes, so run_id
+equality implies full identity equality. The message also correctly separates
+technical failure from staffing infeasibility. Four guards added.
+
+An initial attempt appeared to show only silent non-resume; that was a test
+error — the guard reads `work_dir/RUN_IDENTITY.json` (`<case>/debug`) and the
+checkpoint had been placed in the case root. Corrected, and the refusal fires.
+
+## Final verification
+
+| Check | Result |
+|---|---|
+| `py_compile` — engine, production, tools, tests | PASS |
+| `tests/test_rc9_2_1_rule_semantics.py` | **30/30** |
+| `tests/test_rc9_2_1_selector_integrity.py` | **28/28** |
+| `tests/test_rc9_2_1_validator_parity.py` | **16/16** |
+| engine selfcheck | PASS, **byte-identical to the pre-change baseline** |
+| wrapper selfcheck | PASS |
+
+Engine SHA after all corrections: `9febb23f0cc75cbbc493c072696b01c7db6cb303a691102f551c7b3b5b4f644f`
+
+**Release recommendation unchanged: NO-GO. RC9.1 remains the production engine.**
+Break-stage regression, deep regression and Gate 8 remain unevidenced.

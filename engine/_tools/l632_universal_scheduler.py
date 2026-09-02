@@ -628,6 +628,36 @@ class LanguageRule:
             return self.start_min <= minute < self.end_min
         return minute >= self.start_min or minute < self.end_min
 
+    def overlaps(self, minute: int, span: int = 15) -> bool:
+        """True when the slot [minute, minute+span) intersects the rule window.
+
+        Coverage is evaluated per quarter-hour, and every caller passes a
+        quarter's START minute. Asking `contains_minute(start)` means a window
+        that does not begin on a 15-minute boundary is enforced late: a
+        09:10-17:05 rule left the 09:00-09:15 quarter unstaffed even though five
+        minutes of it are inside the window, so required coverage was simply
+        missing for the first ten minutes of the rule.
+
+        A minimum-staffing requirement must err toward covering, so a slot now
+        counts when it overlaps the window at all.
+
+        For a window on a 15-minute boundary this is identical to the old
+        behaviour - the half-open ends line up exactly with the slot edges - so
+        every language rule in this project is unaffected.
+        """
+        if self.start_min == self.end_min:
+            return True
+        width = max(1, int(span))
+        start, end = self.start_min, self.end_min
+        if end < start:
+            end += 1440
+        slot_start = minute % 1440
+        slot_end = slot_start + width
+        # The window may run past midnight, so test the slot in this day and in
+        # the next one.
+        return ((slot_start < end and start < slot_end)
+                or (slot_start + 1440 < end and start < slot_end + 1440))
+
 
 @dataclass
 class ParsedInput:
@@ -1017,13 +1047,59 @@ def _instruction_get(m: Dict[str, Any], names: Sequence[str], default: Any = Non
     return default
 
 
+def _terms_in_distinct_cells(terms: Sequence[str], values: Sequence[str]) -> bool:
+    """True when every term can be matched to a DIFFERENT cell of the row.
+
+    A real header row spreads its labels across columns. One long sentence that
+    happens to contain every search term does not, and treating it as a header
+    binds every column by positional fallback instead of by name.
+    """
+    columns = list(range(len(values)))
+
+    def assign(index: int, used: Set[int]) -> bool:
+        if index >= len(terms):
+            return True
+        for c in columns:
+            if c not in used and terms[index] in values[c]:
+                if assign(index + 1, used | {c}):
+                    return True
+        return False
+
+    return assign(0, set())
+
+
 def _find_header_row(ws: Any, required_terms: Sequence[str], max_rows: int = 30) -> int:
+    """Locate the header row of a sheet by the terms it must carry.
+
+    The rule was "every term appears somewhere in the row", which one prose
+    banner can satisfy on its own. In
+    NMG13_RC8_13_CONDITIONAL_PRODUCTION_INPUT_READY the Language Setup sheet
+    carries the line
+
+        "General language/skill rules. Use Coverage Group and Minimum Per
+         Interval for language balancing."
+
+    on row 2, which contains both "language" and "minimum", so row 2 was chosen
+    as the header over the real one on row 4. Every column then resolved by
+    positional fallback, the minimum bound to the Language column, and the
+    declared English 14:00-08:00 rule was dropped without a word.
+
+    A row now qualifies only when the terms can be matched to DISTINCT cells.
+    If no row satisfies that, the first row that satisfies the old, looser rule
+    is still returned - so this can only ever move the answer to a better row,
+    never to a worse one or to the row-1 default.
+    """
     terms = [norm(x) for x in required_terms]
+    loose_match: Optional[int] = None
     for r in range(1, min(ws.max_row, max_rows) + 1):
         vals = [norm(ws.cell(r, c).value) for c in range(1, ws.max_column + 1)]
-        if all(any(term in value for value in vals) for term in terms):
+        if not all(any(term in value for value in vals) for term in terms):
+            continue
+        if _terms_in_distinct_cells(terms, vals):
             return r
-    return 1
+        if loose_match is None:
+            loose_match = r
+    return loose_match if loose_match is not None else 1
 
 
 def _is_day_header(header_text: str, short: str, full: str) -> bool:
@@ -2840,8 +2916,13 @@ def language_eligible(rule: LanguageRule, associate: Associate) -> bool:
     return norm(associate.language) in rule.eligible_languages
 
 
-def language_rules_at(parsed: ParsedInput, minute: int) -> List[LanguageRule]:
-    return [rule for rule in parsed.language_rules if rule.active and rule.contains_minute(minute)]
+def language_rules_at(parsed: ParsedInput, minute: int, span: int = 15) -> List[LanguageRule]:
+    """Rules in force for the quarter-hour slot beginning at `minute`.
+
+    Overlap, not start-minute containment: see `LanguageRule.overlaps`. Every
+    call site passes a quarter start, so the default span is 15.
+    """
+    return [rule for rule in parsed.language_rules if rule.active and rule.overlaps(minute, span)]
 
 
 def language_operational_reserve_target(parsed: ParsedInput, rule: LanguageRule) -> int:

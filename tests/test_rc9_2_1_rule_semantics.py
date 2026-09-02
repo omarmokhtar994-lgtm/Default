@@ -372,5 +372,128 @@ class DisablingAGateIsNotEvidenceThatItHeld(unittest.TestCase):
                         "an absent gate result must not default to PASS")
 
 
+class LanguageWindowsAreEnforcedOnTime(unittest.TestCase):
+    """Coverage is evaluated per quarter-hour on the quarter's START minute.
+
+    A window that does not begin on a 15-minute boundary was therefore enforced
+    LATE: a 09:10-17:05 rule left the 09:00-09:15 quarter unstaffed even though
+    five minutes of it fall inside the window, so required language coverage was
+    simply missing for the first ten minutes of the rule. A minimum-staffing
+    requirement must err toward covering.
+    """
+
+    @staticmethod
+    def rule(start, end, minimum=1):
+        return E.LanguageRule("x", "g", start, end, minimum, True, {"x"}, {"x"})
+
+    def slots(self, rule, use_overlap=True):
+        return [m for m in range(0, 1440, 15)
+                if (rule.overlaps(m, 15) if use_overlap else rule.contains_minute(m))]
+
+    def test_an_unaligned_window_is_covered_from_its_first_minute(self):
+        rule = self.rule(9 * 60 + 10, 17 * 60 + 5)
+        self.assertEqual(self.slots(rule)[0], 9 * 60,
+                         "the 09:00 quarter overlaps a 09:10 start and must be staffed")
+        self.assertEqual(self.slots(rule, use_overlap=False)[0], 9 * 60 + 15,
+                         "pins the old late-start behaviour this replaces")
+
+    def test_a_sub_quarter_window_is_still_covered(self):
+        rule = self.rule(9 * 60, 9 * 60 + 10)
+        self.assertEqual(self.slots(rule), [9 * 60])
+
+    def test_a_window_starting_mid_quarter_covers_that_quarter(self):
+        for offset in (1, 5, 10, 14):
+            with self.subTest(offset=offset):
+                rule = self.rule(9 * 60 + offset, 17 * 60)
+                self.assertEqual(self.slots(rule)[0], 9 * 60)
+
+    def test_aligned_windows_are_completely_unaffected(self):
+        """Every language rule shipped in this project is hour-aligned."""
+        for start in range(0, 1440, 15):
+            for end in range(0, 1440, 15):
+                rule = self.rule(start, end)
+                with self.subTest(start=start, end=end):
+                    self.assertEqual(self.slots(rule), self.slots(rule, use_overlap=False))
+
+    def test_overlap_matches_brute_force(self):
+        for start in range(0, 1440, 37):
+            for end in range(0, 1440, 53):
+                rule = self.rule(start, end)
+                for minute in range(0, 1440, 15):
+                    brute = any(rule.contains_minute((minute + o) % 1440) for o in range(15))
+                    with self.subTest(start=start, end=end, minute=minute):
+                        self.assertEqual(rule.overlaps(minute, 15), brute)
+
+    def test_an_overnight_window_still_wraps(self):
+        rule = self.rule(14 * 60, 8 * 60)
+        slots = self.slots(rule)
+        self.assertIn(23 * 60 + 45, slots)
+        self.assertIn(0, slots)
+        self.assertIn(7 * 60 + 45, slots)
+        self.assertNotIn(8 * 60, slots)
+        self.assertNotIn(13 * 60 + 45, slots)
+
+    def test_an_empty_window_still_means_all_day(self):
+        self.assertEqual(len(self.slots(self.rule(0, 0))), 96)
+
+
+class LanguageSetupHeaderIsNotAProseBanner(unittest.TestCase):
+    """`_find_header_row` accepted every term appearing anywhere in one row.
+
+    NMG13's Language Setup sheet carries a sentence on row 2 - "General
+    language/skill rules. Use Coverage Group and Minimum Per Interval for
+    language balancing." - which contains both "language" and "minimum". Row 2
+    won over the real header on row 4, every column then bound by positional
+    fallback, and the minimum bound to the Language column.
+    """
+
+    def _sheet(self, rows):
+        import openpyxl
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        for r, values in enumerate(rows, start=1):
+            for c, value in enumerate(values, start=1):
+                ws.cell(r, c).value = value
+        return ws
+
+    BANNER = "General language/skill rules. Use Coverage Group and Minimum Per Interval."
+    HEADER = ["Language", "Coverage Start", "Coverage End", "Minimum Per Interval"]
+
+    def test_a_prose_banner_does_not_win_over_the_real_header(self):
+        ws = self._sheet([["Language Setup"], [self.BANNER], [], self.HEADER,
+                          ["English", "14:00", "08:00", 2]])
+        self.assertEqual(E._find_header_row(ws, ["language", "minimum"]), 4)
+
+    def test_terms_must_land_in_distinct_cells(self):
+        self.assertFalse(E._terms_in_distinct_cells(
+            ["language", "minimum"], [E.norm(self.BANNER)]))
+        self.assertTrue(E._terms_in_distinct_cells(
+            ["language", "minimum"], ["language", "minimum per interval"]))
+
+    def test_one_cell_cannot_satisfy_two_terms(self):
+        self.assertFalse(E._terms_in_distinct_cells(
+            ["language", "minimum"], ["language minimum", ""]))
+
+    def test_a_single_term_still_matches_a_single_cell(self):
+        self.assertTrue(E._terms_in_distinct_cells(["name"], ["sf name"]))
+
+    def test_it_falls_back_rather_than_returning_row_one(self):
+        """No distinct-cell row exists: keep the old answer, never regress."""
+        ws = self._sheet([["unrelated"], [self.BANNER], ["also unrelated"]])
+        self.assertEqual(E._find_header_row(ws, ["language", "minimum"]), 2)
+
+    def test_the_real_workbook_now_resolves_correctly(self):
+        import openpyxl
+        path = (ROOT / "engine" / "regression_assets" / "ready_inputs"
+                / "NMG13_RC8_13_CONDITIONAL_PRODUCTION_INPUT_READY.xlsx")
+        if not path.exists():
+            self.skipTest("regression asset not present")
+        wb = openpyxl.load_workbook(path, data_only=False)
+        ws = E._sheet_by_alias(wb, ["Language Setup"])
+        self.assertEqual(E._find_header_row(ws, ["language", "minimum"]), 4)
+        self.assertEqual(E.norm(ws.cell(4, 1).value), "language")
+        self.assertEqual(E.norm(ws.cell(4, 2).value), "coverage start")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

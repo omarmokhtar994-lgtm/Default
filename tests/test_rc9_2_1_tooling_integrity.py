@@ -1,0 +1,199 @@
+#!/usr/bin/env python3
+"""Guards for the two release-evidence tools under tools/.
+
+Both tools produce evidence a release decision is made on, so a silent wrong
+answer from either is worse than a crash.  Each test here fails against the
+pre-fix code.
+
+Run:  python tests/test_rc9_2_1_tooling_integrity.py
+"""
+from __future__ import annotations
+
+import csv
+import importlib.util
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from types import SimpleNamespace
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "engine" / "_tools"))
+sys.path.insert(0, str(ROOT / "tools"))
+
+import l632_universal_scheduler as E  # noqa: E402
+
+
+def load(name, relative):
+    spec = importlib.util.spec_from_file_location(name, ROOT / relative)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+BASE_METRICS = {
+    "active_intervals": 252, "before_target": 100, "before_floor": 200,
+    "before_80": 150, "before_90": 120, "before_100": 90,
+    "before_floor_deficit_sum": 12.5, "before_floor_deficit_max": 3.25,
+    "before_max_consecutive_floor_gaps": 7, "before_severe_floor_gap_count": 5,
+}
+
+
+def parsed_for(target, floor):
+    return SimpleNamespace(target_ratio=target, floor_ratio=floor, active=[[True] * 252])
+
+
+class DeficitTermIndexIsDerivedNotHardcoded(unittest.TestCase):
+    """The replay tool reconstructed the pre-fix ranking at tuple slots 9 and 10.
+
+    Those slots hold the quantized deficit terms only when
+    `_protected_tier_counts` yields exactly one tier, which is true of the
+    90%/75% contract the tool was first used on and false of others.  Under
+    100%/75% slot 9 is `-max_consecutive_floor_gaps`; overwriting it with a raw
+    deficit float destroys a real safety term and the reported verdict is not
+    the pre-fix verdict at all.
+    """
+
+    def setUp(self):
+        self.replay = load("replay_candidate_ranking", "tools/replay_candidate_ranking.py")
+
+    def test_index_tracks_the_protected_tier_count(self):
+        for target, floor, expected in ((0.90, 0.75, 9), (1.00, 0.75, 10),
+                                        (0.80, 0.75, 8), (1.00, 0.80, 9)):
+            with self.subTest(target=target, floor=floor):
+                parsed = parsed_for(target, floor)
+                self.assertEqual(
+                    self.replay.deficit_term_index(parsed, BASE_METRICS, "before"), expected)
+
+    def test_hardcoded_nine_is_wrong_for_a_100_percent_contract(self):
+        """Pins the concrete damage, so the guard cannot pass vacuously."""
+        parsed = parsed_for(1.00, 0.75)
+        tup = E._candidate_quality_tuple(parsed, BASE_METRICS, "before")
+        want = -E._deficit_bucket(BASE_METRICS["before_floor_deficit_sum"])
+        self.assertNotEqual(tup[9], want, "slot 9 is not the deficit term here")
+        self.assertEqual(tup[10], want, "slot 10 is")
+        self.assertEqual(tup[9], -BASE_METRICS["before_max_consecutive_floor_gaps"],
+                         "slot 9 carries the consecutive-floor-gap safety term")
+
+    def test_masking_touches_only_the_deficit_terms(self):
+        for target, floor in ((0.90, 0.75), (1.00, 0.75), (0.80, 0.75)):
+            with self.subTest(target=target, floor=floor):
+                parsed = parsed_for(target, floor)
+                index = self.replay.deficit_term_index(parsed, BASE_METRICS, "before")
+                fixed = self.replay.prefix_ranking(parsed, BASE_METRICS, "before", False, index)
+                masked = self.replay.prefix_ranking(parsed, BASE_METRICS, "before", True, index)
+                differing = [i for i, (a, b) in enumerate(zip(fixed, masked)) if a != b]
+                self.assertEqual(differing, [index, index + 1])
+
+    def test_a_changed_tuple_shape_fails_loudly(self):
+        """A future edit to the quality tuple must stop the tool, not skew it.
+
+        Patching `_protected_tier_counts` alone proves nothing: the derivation
+        reads the same helper, so both move together and the index stays right.
+        The failure mode that matters is the tuple's LAYOUT changing under a
+        derivation that still looks correct, so that is what is simulated here.
+        """
+        parsed = parsed_for(0.90, 0.75)
+        original = E._candidate_quality_tuple
+        try:
+            E._candidate_quality_tuple = lambda *a, **k: tuple(original(*a, **k)[2:])
+            with self.assertRaises(SystemExit):
+                self.replay.deficit_term_index(parsed, BASE_METRICS, "before")
+        finally:
+            E._candidate_quality_tuple = original
+
+    def test_a_truncated_tuple_does_not_raise_indexerror(self):
+        parsed = parsed_for(0.90, 0.75)
+        original = E._candidate_quality_tuple
+        try:
+            E._candidate_quality_tuple = lambda *a, **k: (1, 2, 3)
+            with self.assertRaises(SystemExit):
+                self.replay.deficit_term_index(parsed, BASE_METRICS, "before")
+        finally:
+            E._candidate_quality_tuple = original
+
+
+class GateReportDoesNotReadAPassOutOfMissingEvidence(unittest.TestCase):
+
+    def setUp(self):
+        self.gate = load("release_gate_report", "tools/release_gate_report.py")
+
+    def _case(self, tmp, **fields):
+        root = Path(tmp) / "CASE"
+        root.mkdir(parents=True, exist_ok=True)
+        row = {"status": "PASS", "active_intervals": 252, "before_target": 200,
+               "after_target": 198, "before_floor": 240, "after_floor": 239,
+               "target_losses_from_breaks": 2, "floor_losses_from_breaks": 1,
+               "quality_benchmark_status": "PASS",
+               "protected_benchmark_status": "NOT_CONFIGURED"}
+        row.update(fields)
+        path = root / "case.l6_3_2_3_summary.csv"
+        with path.open("w", newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, fieldnames=list(row))
+            writer.writeheader()
+            writer.writerow(row)
+        return root
+
+    def test_unconfigured_protected_benchmark_is_not_reported_as_a_plain_pass(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.gate.evaluate(self._case(tmp))
+        self.assertEqual(result["gate4_quality_retention"], "PASS_PROTECTED_NOT_EVALUATED")
+        self.assertIn("never checked", result["gate4_detail"])
+
+    def test_a_blank_protected_status_is_treated_the_same_way(self):
+        """Artifacts produced before the engine fix leave the field empty."""
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.gate.evaluate(self._case(tmp, protected_benchmark_status=""))
+        self.assertEqual(result["gate4_quality_retention"], "PASS_PROTECTED_NOT_EVALUATED")
+
+    def test_an_actually_evaluated_protected_benchmark_still_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.gate.evaluate(self._case(tmp, protected_benchmark_status="PASS"))
+        self.assertEqual(result["gate4_quality_retention"], "PASS")
+
+    def test_a_failed_protected_benchmark_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.gate.evaluate(self._case(tmp, protected_benchmark_status="FAIL"))
+        self.assertEqual(result["gate4_quality_retention"], "FAIL")
+
+    def test_skeleton_only_detection_is_exact_not_a_substring(self):
+        """SKELETONS_AND_BREAK_DIAGNOSTICS_READY reached the break stage.
+
+        The old substring test excused gates 4 and 5 as NOT_APPLICABLE on it,
+        so a real break regression on such a run was never gated.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._case(tmp, status="SKELETONS_AND_BREAK_DIAGNOSTICS_READY",
+                              target_losses_from_breaks=200)
+            result = self.gate.evaluate(root)
+        self.assertNotEqual(result["gate5_break_regression"], "NOT_APPLICABLE")
+        self.assertEqual(result["gate5_break_regression"], "FAIL")
+
+    def test_the_genuine_skeleton_only_status_is_still_excused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.gate.evaluate(self._case(tmp, status="SKELETON_ONLY_COMPLETE"))
+        self.assertEqual(result["gate5_break_regression"], "NOT_APPLICABLE")
+        self.assertEqual(result["gate4_quality_retention"], "NOT_APPLICABLE")
+
+    def test_every_excused_status_is_one_the_engine_can_emit(self):
+        """The exact-match set must not drift from the engine's vocabulary.
+
+        Asserts on a bool, not with assertIn against the whole engine, so a
+        failure prints one line instead of 19,000.
+        """
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text(
+            encoding="utf-8")
+        for status in self.gate.SKELETON_ONLY_STATUSES:
+            with self.subTest(status=status):
+                self.assertTrue(
+                    f'"{status}"' in source or f"'{status}'" in source,
+                    f"{status} is excused from gates 4 and 5 but the engine "
+                    f"never emits it; an excuse for a status that cannot occur "
+                    f"is dead, and one for a status that can is a hole")
+
+    def test_the_engine_skeleton_only_status_is_in_the_set(self):
+        self.assertIn("SKELETON_ONLY_COMPLETE", self.gate.SKELETON_ONLY_STATUSES)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

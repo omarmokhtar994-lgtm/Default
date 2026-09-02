@@ -38,6 +38,10 @@ from pathlib import Path
 BREAK_TARGET_LOSS_WARN_RATIO = 0.05
 BREAK_FLOOR_LOSS_WARN_RATIO = 0.03
 
+# Engine statuses that mean the run stopped after stage 1 and never placed a
+# break. Anything else reached the break stage and must be gated on it.
+SKELETON_ONLY_STATUSES = {"SKELETON_ONLY_COMPLETE"}
+
 
 def read_summary(case: Path) -> dict:
     for pattern in ("*.l6_3_2_3_summary.csv", "*_SKELETON_ONLY_SUMMARY.csv"):
@@ -77,7 +81,13 @@ def evaluate(case: Path) -> dict:
 
     target_loss = num(summary.get("target_losses_from_breaks"))
     floor_loss = num(summary.get("floor_losses_from_breaks"))
-    skeleton_only = "SKELETON" in str(summary.get("status", "")).upper()
+    # Match the engine's skeleton-only statuses exactly. A substring test for
+    # "SKELETON" also matches statuses such as
+    # SKELETONS_AND_BREAK_DIAGNOSTICS_READY and
+    # SKELETON_EXCEPTION_LOWER_BOUND_EXCEEDS_CAP, which are NOT skeleton-only
+    # runs - excusing gates 4 and 5 as NOT_APPLICABLE on a run that did reach
+    # the break stage.
+    skeleton_only = str(summary.get("status", "")).strip().upper() in SKELETON_ONLY_STATUSES
 
     # Gate 5 - break-stage regression, measured within this run.
     if skeleton_only:
@@ -143,8 +153,26 @@ def evaluate(case: Path) -> dict:
             "skeleton-only run; release benchmark not evaluated" if skeleton_only
             else "benchmark not reported by this run")
     else:
-        gate4 = "PASS" if bench == "PASS" and protected in ("PASS", "") else "FAIL"
-        gate4_why = (f"quality_benchmark={bench or 'n/a'}, protected_benchmark={protected or 'n/a'}"
+        # An unevaluated protected benchmark is NOT a passed one. The engine used
+        # to publish protected_benchmark_status="PASS" unconditionally, including
+        # on runs where neither protected minimum was configured, so this gate
+        # read a pass out of a benchmark that never ran. It now reports
+        # NOT_CONFIGURED, and older artifacts leave the field blank; both are
+        # surfaced as PASS_PROTECTED_NOT_EVALUATED rather than folded into PASS.
+        protected_evaluated = protected == "PASS"
+        protected_unknown = protected in ("", "NOT_CONFIGURED")
+        if bench != "PASS":
+            gate4 = "FAIL"
+        elif not protected_evaluated and not protected_unknown:
+            gate4 = "FAIL"
+        elif protected_unknown:
+            gate4 = "PASS_PROTECTED_NOT_EVALUATED"
+        else:
+            gate4 = "PASS"
+        gate4_why = (f"quality_benchmark={bench or 'n/a'}, "
+                     f"protected_benchmark={protected or 'not reported'}"
+                     + ("; no protected minimum was configured, so the protected "
+                        "tier was never checked" if protected_unknown else "")
                      + (f", skeleton retention -{retention_loss:.0f} ({best_before:.0f} -> {final_before:.0f})"
                         if retention_loss else ""))
 

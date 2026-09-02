@@ -97,6 +97,19 @@ def main() -> int:
     review = collect(root, REVIEW_PATTERNS)
     debug = sorted(path for path in (root / "debug").rglob("*") if path.is_file()) if (root / "debug").exists() else []
 
+    # Check required roles BEFORE writing anything. This check used to run after
+    # the three ZIPs were already on disk, so a case missing a required schedule
+    # still produced a *_01_PRODUCTION_ONLY.zip - just with no manifest beside
+    # it. Anything downstream that globs for the production ZIP would collect an
+    # incomplete package with nothing to warn it.
+    required_roles = {
+        "BEST_BEFORE_BREAKS_SCHEDULE": any("BEST_BEFORE_BREAKS_SCHEDULE" in path.name for path in production),
+        "BEST_FINAL_AFTER_BREAKS_SCHEDULE": any("BEST_FINAL_AFTER_BREAKS_SCHEDULE" in path.name for path in production),
+    }
+    if not all(required_roles.values()):
+        missing = [role for role, present in required_roles.items() if not present]
+        raise RuntimeError(f"Missing required production artifact roles: {missing}")
+
     out = root / "packages"
     out.mkdir(exist_ok=True)
     records = {
@@ -119,14 +132,6 @@ def main() -> int:
             "files": oversized,
             "action": "Keep raw evidence inside 03_FULL_DEBUG.zip or split the debug artifact before portal upload.",
         })
-
-    required_roles = {
-        "BEST_BEFORE_BREAKS_SCHEDULE": any("BEST_BEFORE_BREAKS_SCHEDULE" in path.name for path in production),
-        "BEST_FINAL_AFTER_BREAKS_SCHEDULE": any("BEST_FINAL_AFTER_BREAKS_SCHEDULE" in path.name for path in production),
-    }
-    if not all(required_roles.values()):
-        missing = [role for role, present in required_roles.items() if not present]
-        raise RuntimeError(f"Missing required production artifact roles: {missing}")
 
     manifest = {
         "schema_version": SCHEMA_VERSION,

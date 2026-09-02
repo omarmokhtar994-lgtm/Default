@@ -1,12 +1,34 @@
 #!/usr/bin/env python3
 """Generate a compact Phase C operational-quality report from one scheduler audit."""
 from __future__ import annotations
-import argparse, csv, json
+import argparse, csv, json, re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
 
-RELEASE = "L6.3.2.3-RC9.0-UNIVERSAL-PRODUCTION-PLATFORM"
+ENGINE_PATH = Path(__file__).resolve().parent.parent / "_tools" / "l632_universal_scheduler.py"
+
+
+def _engine_release(default: str = "UNKNOWN_ENGINE_RELEASE") -> str:
+    """Fallback release name, read from the engine rather than a literal.
+
+    This module used to hardcode the RC9.0 universal-production-platform
+    release name, two releases behind the engine it reports on. It is a
+    fallback only, used for an
+    audit with no `version`, but a stale one still labels a report with the
+    wrong release. Unlike the wrapper this is a reporting path, so an
+    unreadable engine yields an explicit UNKNOWN rather than aborting the
+    report.
+    """
+    try:
+        text = ENGINE_PATH.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return default
+    match = re.search(r'^VERSION\s*=\s*["\'](.+?)["\']', text, re.MULTILINE)
+    return match.group(1) if match else default
+
+
+RELEASE = _engine_release()
 
 
 def _num(value: Any, default: float = 0.0) -> float:
@@ -36,13 +58,30 @@ def build_report(audit: Dict[str, Any]) -> Dict[str, Any]:
     extreme = int(_num(metrics.get("after_extreme_overage_count"), 0))
     max_pct = _num(metrics.get("after_overage_max_pct"), 0)
     concentration = _num(metrics.get("after_overage_top10_concentration"), 0)
-    hard_failures = int(_num((selected.get("output_validation") or {}).get("validation", {}).get("hard_fail_count"), 0))
-    if hard_failures == 0:
-        hard_failures = int(_num(audit.get("hard_fail_count"), 0))
+    # Track whether a hard-failure count was actually reported, not just whether
+    # it happened to be zero. An absent count is not a clean validation.
+    reported = (selected.get("output_validation") or {}).get("validation") or {}
+    raw_hard = reported.get("hard_fail_count")
+    validation_reported = raw_hard is not None
+    if not validation_reported:
+        raw_hard = audit.get("hard_fail_count")
+        validation_reported = raw_hard is not None
+    hard_failures = int(_num(raw_hard, 0))
     contract_status = _status(preflight.get("status"))
     feasibility_status = _status(feasibility.get("status"), _status(probe.get("cp_status")))
     schedule_present = bool(selected and metrics)
-    safety_status = "PASS" if schedule_present and hard_failures == 0 else ("NOT_RUN" if not schedule_present else "FAIL")
+    # A schedule that was never validated is NOT a safe schedule. Previously an
+    # audit carrying no hard_fail_count anywhere produced hard_failures == 0 and
+    # therefore safety PASS, so a run whose output validation never executed was
+    # published as having passed it.
+    if not schedule_present:
+        safety_status = "NOT_RUN"
+    elif not validation_reported:
+        safety_status = "NOT_VALIDATED"
+    elif hard_failures == 0:
+        safety_status = "PASS"
+    else:
+        safety_status = "FAIL"
     production_gate = audit.get("production_quality_gate") or {}
     business_outcome = audit.get("business_outcome") or {}
     production_gate_status = _status(production_gate.get("status"), "NOT_EVALUATED")
@@ -52,6 +91,12 @@ def build_report(audit: Dict[str, Any]) -> Dict[str, Any]:
         quality_status = "WARN_PRODUCTION_QUALITY_LIMITED"
     elif not schedule_present:
         quality_status = "DIAGNOSTICS_ONLY"
+    elif safety_status == "NOT_VALIDATED":
+        # The interpretation text below claims a failed production quality gate
+        # cannot be exported as PASS. That was true of a FAILED gate but not of
+        # an unevaluated one: with no gate result and no validation, the chain
+        # below fell through to PASS_CLEAN.
+        quality_status = "REVIEW_NOT_VALIDATED"
     elif hard_failures:
         quality_status = "FAIL_SAFETY"
     elif extreme > 0:
@@ -84,6 +129,7 @@ def build_report(audit: Dict[str, Any]) -> Dict[str, Any]:
         "safety": {
             "status": safety_status,
             "hard_fail_count": hard_failures,
+            "hard_fail_count_reported": validation_reported,
             "no_break_exception_count": int(_num(selected.get("no_break_exception_count"), 0)),
         },
         "coverage": {

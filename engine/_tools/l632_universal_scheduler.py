@@ -18629,7 +18629,16 @@ def run_case(
             "next_sunday_opening_gaps": chosen_breaks.metrics.get("week_boundary_opening_gap_count", 0),
             "next_sunday_blank_staffed_quarters": chosen_breaks.metrics.get("week_boundary_blank_staffed_quarters", 0),
             "protected_before80_min": protected_before80_min, "protected_after80_min": protected_after80_min,
-            "protected_benchmark_status": "PASS", "break_objective_mode": chosen_breaks.diagnostics.get("objective_mode"),
+            # NOT a constant. The protected-tier benchmark is enforced as a
+            # candidate filter above, and only when at least one minimum is
+            # configured; a run with neither configured never evaluates it.
+            # Publishing "PASS" unconditionally made every summary assert a
+            # benchmark that was never applied, and tools/release_gate_report.py
+            # reads exactly this field for gate 4.
+            "protected_benchmark_status": (
+                "PASS" if (protected_before80_min is not None or protected_after80_min is not None)
+                else "NOT_CONFIGURED"),
+            "break_objective_mode": chosen_breaks.diagnostics.get("objective_mode"),
             "target_losses_from_breaks": chosen_breaks.metrics.get("target_losses_from_breaks", 0),
             "floor_losses_from_breaks": chosen_breaks.metrics.get("floor_losses_from_breaks", 0),
             "severe_floor_gaps": chosen_breaks.metrics.get("severe_floor_gap_count", 0),

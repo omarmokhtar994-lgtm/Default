@@ -61,6 +61,21 @@ class GlobalBudgetManager:
             delta = self.total_seconds - allocated
             target = "break_search" if "break_search" in normalized else next(iter(normalized), "finalization")
             normalized[target] = max(0, normalized.get(target, 0) + delta)
+        if sum(normalized.values()) != self.total_seconds:
+            # The clamp above stops at zero, so a plan that overshoots the total
+            # by more than the target phase holds used to survive as an
+            # over-allocation. Cumulative phase deadlines then ran past
+            # final_deadline, and remaining_in_phase could exceed
+            # remaining_total - the run overrunning its own wall clock.
+            allocated = sum(normalized.values())
+            if allocated > 0:
+                scale = self.total_seconds / allocated
+                normalized = {name: max(0, int(seconds * scale))
+                              for name, seconds in normalized.items()}
+            residual = self.total_seconds - sum(normalized.values())
+            if residual and normalized:
+                largest = max(normalized, key=lambda name: normalized[name])
+                normalized[largest] = max(0, normalized[largest] + residual)
         self.phase_seconds = normalized
         self._ordered = list(normalized)
         cumulative = 0
@@ -229,8 +244,22 @@ def build_global_budget_plan(
         "target_lock_recovery": target,
         "finalization": finalization,
     }
-    delta = total - sum(plan.values())
-    plan["break_search"] += delta
+    # The per-phase floors can exceed a very small total. At total=60 the
+    # preflight/stage1/break/finalization floors already sum to 110, and
+    # `plan["break_search"] += total - sum(plan)` turned that into
+    # break_search = -20. GlobalBudgetManager then clamped it to zero and ran a
+    # 60-second budget as an 80-second allocation, putting every phase deadline
+    # past the run's own final deadline. Scale to fit instead of going negative.
+    allocated = sum(plan.values())
+    if allocated > total and allocated > 0:
+        scale = total / allocated
+        plan = {name: max(0, int(seconds * scale)) for name, seconds in plan.items()}
+    plan["break_search"] = max(0, plan["break_search"] + (total - sum(plan.values())))
+    residual = total - sum(plan.values())
+    if residual:
+        # Rounding remainder, or whatever the clamp above could not absorb.
+        largest = max(plan, key=lambda name: plan[name])
+        plan[largest] = max(0, plan[largest] + residual)
     return plan
 
 
@@ -335,14 +364,32 @@ def adaptive_break_attempt_plan(
         widths = [1]
     width_order = {width: index for index, width in enumerate(sorted(widths, reverse=True))}
     raw_modes = list(dict.fromkeys(str(mode) for mode in objective_modes))
+    # `preferred_modes` is a RANKING over the caller's modes, not a source of
+    # modes. It used to be concatenated ahead of `raw_modes`, so every plan ran
+    # all seven regardless of what was asked for:
+    #
+    #   objective_modes=["target_priority"]  -> 7 modes scheduled, 6 unrequested
+    #   engine default in quality_gate_mode="warn" (5 modes)
+    #                                        -> 7 modes scheduled, including the
+    #                                           two quality-guard modes that
+    #                                           default_break_objective_modes
+    #                                           deliberately omits outside "fail"
+    #
+    # That silently voided --break-objective-modes and diluted a fixed Stage-2
+    # budget across modes the caller excluded. The set now comes from the
+    # caller; the ranking below is unchanged, so the relative order of the modes
+    # that survive is exactly what it was.
     preferred_modes = [
         "target_priority", "release_quality_guard", "coverage_rebalance",
         "quality_convergence", "floor_protected", "balanced", "target_100",
     ]
-    modes: List[str] = []
-    for mode in preferred_modes + raw_modes:
-        if mode not in modes:
-            modes.append(mode)
+    if raw_modes:
+        modes = ([mode for mode in preferred_modes if mode in raw_modes]
+                 + [mode for mode in raw_modes if mode not in preferred_modes])
+    else:
+        # No modes supplied at all: fall back to the preferred list so a caller
+        # that passes nothing still gets a plan rather than zero attempts.
+        modes = list(preferred_modes)
 
     skeleton_rank_rows: List[Tuple[Tuple[Any, ...], int]] = []
     for skeleton_index, record in enumerate(skeleton_records):

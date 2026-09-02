@@ -130,14 +130,48 @@ def _to_metrics(record: dict):
     return label, metrics
 
 
-def prefix_ranking(parsed, metrics, prefix, masked: bool):
+def deficit_term_index(parsed, metrics, prefix) -> int:
+    """Locate the quantized floor-deficit terms inside the quality tuple.
+
+    The two deficit terms do NOT sit at a fixed offset.  `_candidate_quality_tuple`
+    splats `_protected_tier_counts` before them, and that helper returns a
+    variable number of tiers depending on the contract:
+
+        target 90%, floor 75%  -> 1 tier  (80)      -> deficit terms at 9, 10
+        target 100%, floor 75% -> 2 tiers (90, 80)  -> deficit terms at 10, 11
+        target 80%, floor 75%  -> 0 tiers           -> deficit terms at 8, 9
+
+    Hardcoding 9/10 was correct only for the 90/75 contract this tool was first
+    used on.  Under 100/75 it overwrote `-max_consecutive_floor_gaps` - a real
+    safety term - with a raw deficit float, and under 80/75 it overwrote both
+    gap terms, so the "pre-fix" ranking was not the pre-fix ranking at all and
+    the verdict was silently wrong.  The index is now derived and then verified
+    against the tuple's actual contents, so a future change to the tuple's shape
+    fails loudly here instead of producing bogus release evidence.
+    """
+    index = 8 + len(E._protected_tier_counts(parsed, metrics, prefix))
+    tup = E._candidate_quality_tuple(parsed, metrics, prefix)
+    expected = (
+        -E._deficit_bucket(E._prefixed_metric(metrics, prefix, "floor_deficit_sum")),
+        -E._deficit_bucket(E._prefixed_metric(metrics, prefix, "floor_deficit_max")),
+    )
+    if index + 1 >= len(tup) or (tup[index], tup[index + 1]) != expected:
+        raise SystemExit(
+            "Cannot locate the quantized deficit terms in the quality tuple "
+            f"(derived index {index}, found {tup[index:index + 2]}, "
+            f"expected {expected}). _candidate_quality_tuple has changed shape; "
+            "update deficit_term_index before trusting this replay.")
+    return index
+
+
+def prefix_ranking(parsed, metrics, prefix, masked: bool, index: int):
     """Fixed ordering, or the pre-fix ordering with raw floats restored."""
     tup = list(E._candidate_quality_tuple(parsed, metrics, prefix))
     if masked:
-        tup[9] = -float(metrics.get(f"{prefix}_floor_deficit_sum",
-                                    metrics.get("floor_deficit_sum", 0.0)) or 0.0)
-        tup[10] = -float(metrics.get(f"{prefix}_floor_deficit_max",
-                                     metrics.get("floor_deficit_max", 0.0)) or 0.0)
+        tup[index] = -float(metrics.get(f"{prefix}_floor_deficit_sum",
+                                        metrics.get("floor_deficit_sum", 0.0)) or 0.0)
+        tup[index + 1] = -float(metrics.get(f"{prefix}_floor_deficit_max",
+                                            metrics.get("floor_deficit_max", 0.0)) or 0.0)
     return tuple(tup)
 
 
@@ -166,8 +200,15 @@ def main() -> int:
     if not pool:
         raise SystemExit("Leaderboard contained no candidate rows.")
 
-    fixed = max(pool, key=lambda p: prefix_ranking(parsed, p[1], args.prefix, masked=False))
-    masked = max(pool, key=lambda p: prefix_ranking(parsed, p[1], args.prefix, masked=True))
+    # Derived once from the contract, then verified against every row: rows can
+    # carry different metric keys, and a row whose tuple has a different shape
+    # must not be ranked on the wrong terms.
+    index = deficit_term_index(parsed, pool[0][1], args.prefix)
+    for _, metrics in pool:
+        deficit_term_index(parsed, metrics, args.prefix)
+
+    fixed = max(pool, key=lambda p: prefix_ranking(parsed, p[1], args.prefix, False, index))
+    masked = max(pool, key=lambda p: prefix_ranking(parsed, p[1], args.prefix, True, index))
 
     ov = f"{args.prefix}_avoidable_overage_fte_sum"
     tgt, flr = f"{args.prefix}_target", f"{args.prefix}_floor"

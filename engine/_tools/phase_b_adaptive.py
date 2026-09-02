@@ -184,7 +184,7 @@ def objective_gap(*, value: Optional[float], bound: Optional[float], sense: str)
 
 def make_bound_certificate(stages: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
     normalized: List[Dict[str, Any]] = []
-    maximum_gap = 0.0
+    maximum_gap: Optional[float] = None
     proven = True
     for stage in stages:
         row = dict(stage)
@@ -197,14 +197,19 @@ def make_bound_certificate(stages: Sequence[Mapping[str, Any]]) -> Dict[str, Any
         if gap is None:
             proven = False
         else:
-            maximum_gap = max(maximum_gap, gap)
+            maximum_gap = gap if maximum_gap is None else max(maximum_gap, gap)
         if row.get("status") != "OPTIMAL":
             proven = False
         normalized.append(row)
     return {
         "stage_count": len(normalized),
         "all_stages_optimal": bool(proven),
-        "maximum_relative_gap": round(float(maximum_gap), 8),
+        # None, not 0.0, when no stage reported both an objective and a bound.
+        # A certificate that measured nothing used to publish a maximum relative
+        # gap of 0.0, which reads as a proven-tight bound; it is the absence of
+        # evidence, not evidence of tightness.
+        "maximum_relative_gap": None if maximum_gap is None else round(float(maximum_gap), 8),
+        "measured_stage_count": sum(1 for row in normalized if row.get("relative_gap") is not None),
         "stages": normalized,
     }
 

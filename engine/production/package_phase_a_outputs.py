@@ -40,6 +40,14 @@ def main() -> int:
     root=args.case_root.resolve(); case=root.name
     production=collect(root, PRODUCTION_PATTERNS)
     review=collect(root, REVIEW_PATTERNS)
+    # An empty production set produced a valid, empty 01_PRODUCTION_ONLY.zip
+    # whose record said file_count 0 and zip_test PASS. A package containing no
+    # schedule is not a package that passed; refuse it rather than ship it.
+    if not any(path.suffix.lower() == '.xlsx' for path in production):
+        raise RuntimeError(
+            f'No production schedule workbook under {root}; refusing to write an '
+            f'empty production package. Matched only: '
+            f'{[p.name for p in production] or "nothing"}')
     debug=sorted(p for p in (root/'debug').rglob('*') if p.is_file()) if (root/'debug').exists() else []
     out=root/'packages'; out.mkdir(exist_ok=True)
     records={

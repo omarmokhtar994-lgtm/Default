@@ -195,5 +195,89 @@ class GateReportDoesNotReadAPassOutOfMissingEvidence(unittest.TestCase):
         self.assertIn("SKELETON_ONLY_COMPLETE", self.gate.SKELETON_ONLY_STATUSES)
 
 
+class RC9_1ComparisonRefusesMismatchedInputs(unittest.TestCase):
+    """Gates 2 and 9 mean "not materially worse than RC9.1".
+
+    The RC9.2.1 NMG EN runs used a REPAIRED fixture - two associates added on
+    the 23:00-08:00 shift to cover early Sunday - while the RC9.1 baseline came
+    from the unrepaired historical workbook. Comparing 227 against 214 across
+    those rosters reads as a large RC9.2.1 win and means nothing: extra
+    headcount trivially buys coverage. A comparator that will compare anything
+    is worse than no comparator.
+    """
+
+    NMGEN_HISTORICAL = "230179d964674219" + "0" * 48
+    REPAIRED_FIXTURE = "ed90d630ebae2ca8" + "0" * 48
+
+    def setUp(self):
+        self.gate = load("release_gate_report", "tools/release_gate_report.py")
+        self.baseline = self.gate.load_rc9_1_baseline()
+
+    def _case(self, tmp, input_sha, **fields):
+        import json
+        root = Path(tmp) / "CASE"
+        root.mkdir(parents=True, exist_ok=True)
+        (root / "UNIVERSAL_RUN_IDENTITY.json").write_text(
+            json.dumps({"input_sha256": input_sha}), encoding="utf-8")
+        row = {"status": "PASS", "active_intervals": 252,
+               "before_target": 214, "before_floor": 218}
+        row.update(fields)
+        path = root / "case.l6_3_2_3_summary.csv"
+        with path.open("w", newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, fieldnames=list(row))
+            writer.writeheader()
+            writer.writerow(row)
+        return root
+
+    def _gate2(self, tmp, sha, **fields):
+        return self.gate.evaluate(self._case(tmp, sha, **fields), self.baseline)
+
+    def test_the_baseline_is_present_and_declares_its_evidence_class(self):
+        self.assertTrue(self.baseline, "evidence/RC9_1_BASELINE.json must ship")
+        self.assertIn("CONSOLIDATED", self.baseline["evidence_class"])
+        self.assertIn("NMG EN", self.baseline["scenarios"])
+
+    def test_a_different_input_is_refused_not_compared(self):
+        """The trap: this would otherwise report a flattering +13 target win."""
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._gate2(tmp, self.REPAIRED_FIXTURE,
+                                 before_target=227, before_floor=232)
+        self.assertEqual(result["gate2_vs_rc9_1"], "NOT_COMPARABLE_INPUT_NOT_IN_BASELINE")
+        self.assertIn("refusing to compare", result["gate2_detail"])
+
+    def test_a_different_contract_width_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._gate2(tmp, self.NMGEN_HISTORICAL, active_intervals=264)
+        self.assertEqual(result["gate2_vs_rc9_1"], "NOT_COMPARABLE_DIFFERENT_CONTRACT")
+
+    def test_a_material_regression_on_the_same_input_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._gate2(tmp, self.NMGEN_HISTORICAL, before_target=211)
+        self.assertEqual(result["gate2_vs_rc9_1"], "FAIL")
+        self.assertIn("-3", result["gate2_detail"])
+
+    def test_one_interval_of_noise_is_not_a_regression(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._gate2(tmp, self.NMGEN_HISTORICAL, before_target=213)
+        self.assertTrue(result["gate2_vs_rc9_1"].startswith("PASS"))
+
+    def test_a_pass_is_never_reported_as_a_bare_pass(self):
+        """The comparator is consolidated metrics, not raw RC9.1 artifacts."""
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._gate2(tmp, self.NMGEN_HISTORICAL)
+        self.assertEqual(result["gate2_vs_rc9_1"], "PASS_AGAINST_CONSOLIDATED_BASELINE")
+        self.assertNotEqual(result["gate2_vs_rc9_1"], "PASS")
+
+    def test_gate9_tracks_gate2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._gate2(tmp, self.NMGEN_HISTORICAL)
+        self.assertEqual(result["gate9_vs_rc9_1"], result["gate2_vs_rc9_1"])
+
+    def test_without_a_baseline_both_gates_say_so(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.gate.evaluate(self._case(tmp, self.NMGEN_HISTORICAL), {})
+        self.assertEqual(result["gate2_vs_rc9_1"], "REQUIRES_RC9_1_BASELINE")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

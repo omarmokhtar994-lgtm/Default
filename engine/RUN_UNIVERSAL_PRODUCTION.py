@@ -10,7 +10,30 @@ POLISHER = ROOT / "production" / "production_output_polisher.py"
 QUALITY_REPORTER = ROOT / "production" / "phase_c_quality_report.py"
 PACKAGER = ROOT / "production" / "package_phase_c_outputs.py"
 VALIDATOR = ROOT / "tools" / "independent_validator.py"
-RELEASE = "L6.3.2.4-RC9.2-PROTECTED-BALANCE-RC1"
+def _engine_release() -> str:
+    """Read the release identity from the engine itself.
+
+    This was previously a hardcoded literal in this wrapper, and it had drifted:
+    the wrapper stamped every run "L6.3.2.4-RC9.2-PROTECTED-BALANCE-RC1" while
+    the engine it invoked was "L6.3.2.5-RC9.2.1-...".  Because this value is
+    written into run identity and manifest output, RC9.2.1 runs were being
+    recorded under the RC9.2 release name, which defeats the exact-engine-
+    identity release gate.  Deriving it from the engine's own VERSION constant
+    makes that class of drift impossible rather than merely corrected once.
+
+    Fails loudly: a wrong-but-plausible release string is worse than no run.
+    """
+    text = ENGINE.read_text(encoding='utf-8', errors='replace')
+    match = re.search(r'^VERSION\s*=\s*["\'](.+?)["\']', text, re.MULTILINE)
+    if not match:
+        raise SystemExit(
+            f'Cannot determine engine release identity: no VERSION constant in {ENGINE}. '
+            'Refusing to stamp runs with an assumed release name.'
+        )
+    return match.group(1)
+
+
+RELEASE = _engine_release()
 
 DEFAULT_SKELETON_PROFILES = (
     "target90_restore_champion,target90_restore_productive,release_gate_floor_satisfaction,"

@@ -99,6 +99,29 @@ RC9_2_NATIVE_SKELETON_ONLY = True
 RC9_2_OVERAGE_DISTRIBUTION_METRICS = True
 RC9_2_1_PROTECTED_TIER_ORDERING = True
 RC9_2_1_TARGET_LOCKED_RESIDUAL_POLISH = True
+RC9_2_1_DEFICIT_QUANTIZED_SELECTION = True
+
+# Granularity at which aggregate coverage-deficit differences are treated as a
+# real quality difference during candidate ranking.
+#
+# Why this exists: ``floor_deficit_sum`` is a sum of real-valued ratio deficits
+# and sits ABOVE the balance/overage block in ``_candidate_quality_tuple``.
+# Because the ordering is lexicographic, any difference at all in that float -
+# including one part in 1e8, which is operationally meaningless - terminated the
+# comparison before the overage terms were ever consulted.  The documented
+# ordering (target -> protected tiers -> floor -> quality debt -> safety ->
+# balance/overage -> higher-tier upside) was therefore inoperative for every
+# scenario that misses the floor anywhere, which is precisely the scenario class
+# the balance work was meant to improve.
+#
+# The fix is to compare deficits at an operationally meaningful granularity
+# instead of at full float precision.  0.01 == one percentage point of summed
+# interval coverage deficit.  A materially worse floor deficit still outranks
+# every balance/overage term, exactly as the priority model requires; only
+# differences too small to matter operationally now fall through to let the
+# balance terms discriminate.  Raw unrounded values remain in the metrics dict
+# and in all reports - this constant governs comparison only, never reporting.
+FLOOR_DEFICIT_COMPARISON_QUANTUM = 0.01
 RC8_STRICT_BLANK_RULE_ALIAS = True
 RC8_CYCLIC_ACTIVE_WINDOW_AUDIT = True
 RC8_ARTIFACT_VERIFICATION_SEMANTICS = True
@@ -6605,6 +6628,8 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
     floor_losses_from_breaks = 0
     target_deficit_sum = 0.0
     floor_deficit_sum = 0.0
+    before_target_deficit_sum = 0.0
+    before_floor_deficit_sum = 0.0
     before_target_overage_fte_sum = 0.0
     after_target_overage_fte_sum = 0.0
     before_overage_interval_count = 0
@@ -6618,6 +6643,7 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
     before_avoidable_overage_fte_sum = after_avoidable_overage_fte_sum = 0.0
     before_avoidable_overage_interval_count = after_avoidable_overage_interval_count = 0
     floor_deficit_max = 0.0
+    before_floor_deficit_max = 0.0
     severe_floor_gap_count = 0
     before_severe_floor_gap_count = 0
     severe_threshold = max(0.0, parsed.floor_ratio - 0.10)
@@ -6751,6 +6777,17 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
             target_deficit_sum += target_def
             floor_deficit_sum += floor_def
             floor_deficit_max = max(floor_deficit_max, floor_def)
+            # Before-break counterparts.  Every other coverage metric in this loop
+            # is accumulated as a before/after pair; the deficit metrics were the
+            # sole exception, which forced the before-break selector to rank on an
+            # after-break quantity.  Stage-1 no-break evaluation happens to make
+            # the two numerically identical, so this is a latent-hazard fix rather
+            # than a live-defect fix, but it removes the asymmetry.
+            before_target_def = max(0.0, parsed.target_ratio - before_pct)
+            before_floor_def = max(0.0, parsed.floor_ratio - before_pct)
+            before_target_deficit_sum += before_target_def
+            before_floor_deficit_sum += before_floor_def
+            before_floor_deficit_max = max(before_floor_deficit_max, before_floor_def)
             severe_floor_gap_count += int(after_pct + 1e-9 < severe_threshold)
             before_severe_floor_gap_count += int(before_pct + 1e-9 < severe_threshold)
             floor_gap_flags[d].append(after_pct + 1e-9 < parsed.floor_ratio)
@@ -7185,6 +7222,12 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
         "target_deficit_sum": round(target_deficit_sum, 8),
         "floor_deficit_sum": round(floor_deficit_sum, 8),
         "floor_deficit_max": round(floor_deficit_max, 8),
+        "before_target_deficit_sum": round(before_target_deficit_sum, 8),
+        "before_floor_deficit_sum": round(before_floor_deficit_sum, 8),
+        "before_floor_deficit_max": round(before_floor_deficit_max, 8),
+        "after_target_deficit_sum": round(target_deficit_sum, 8),
+        "after_floor_deficit_sum": round(floor_deficit_sum, 8),
+        "after_floor_deficit_max": round(floor_deficit_max, 8),
         "before_target_overage_fte_sum": round(before_target_overage_fte_sum, 8),
         "after_target_overage_fte_sum": round(after_target_overage_fte_sum, 8),
         "before_avoidable_overage_fte_sum": round(before_avoidable_overage_fte_sum, 8),
@@ -8625,7 +8668,9 @@ def candidate_selection_breakdown(parsed: ParsedInput, metrics: Dict[str, Any], 
         "floor_gap_excess": floor_excess,
         "severe_gap_excess": severe_excess,
         "run_gap_excess": run_excess,
-        "floor_deficit_sum": float(metrics.get("floor_deficit_sum", 0.0) or 0.0),
+        "floor_deficit_sum": _prefixed_metric(metrics, prefix, "floor_deficit_sum"),
+        "floor_deficit_sum_bucket": _deficit_bucket(_prefixed_metric(metrics, prefix, "floor_deficit_sum")),
+        "floor_deficit_comparison_quantum": FLOOR_DEFICIT_COMPARISON_QUANTUM,
         "whole_week_overage_cap_violations": int(metrics.get("whole_week_overage_cap_violation_count", 0) or 0),
         "whole_week_imbalance_violations": int(metrics.get("whole_week_imbalance_violation_count", 0) or 0),
         "avoidable_overage_fte_sum": float(metrics.get(f"{prefix}_avoidable_overage_fte_sum", 0.0) or 0.0),
@@ -8634,6 +8679,33 @@ def candidate_selection_breakdown(parsed: ParsedInput, metrics: Dict[str, Any], 
         "overage_top10_concentration": float(metrics.get(f"{prefix}_overage_top10_concentration", 0.0) or 0.0),
         "secondary_tiers": list(_target_secondary_counts(metrics, prefix, parsed.target_ratio)),
     }
+
+
+def _deficit_bucket(value: float, quantum: float = FLOOR_DEFICIT_COMPARISON_QUANTUM) -> int:
+    """Quantize a coverage-deficit sum to an operationally meaningful bucket.
+
+    Returns an integer so lexicographic comparison is exact and never depends on
+    float representation.  Larger deficit -> larger bucket -> worse candidate, so
+    callers negate it like any other penalty term.
+    """
+    if quantum <= 0:
+        return 0
+    return int(math.floor(max(0.0, float(value or 0.0)) / quantum + 1e-9))
+
+
+def _prefixed_metric(metrics: Dict[str, Any], prefix: str, key: str, default: float = 0.0) -> float:
+    """Read ``{prefix}_{key}`` when present, else fall back to the bare key.
+
+    The deficit metrics historically existed only in their after-break form.
+    Prefixed variants are now emitted, but candidate pools carried in resumed
+    checkpoints or replayed from older evidence may still only carry the bare
+    key, so the fallback keeps those comparable instead of silently scoring them
+    as zero-deficit (which would rank stale candidates as perfect).
+    """
+    prefixed = metrics.get(f"{prefix}_{key}")
+    if prefixed is not None:
+        return float(prefixed or 0.0)
+    return float(metrics.get(key, default) or 0.0)
 
 
 def _candidate_quality_tuple(parsed: ParsedInput, metrics: Dict[str, Any], prefix: str) -> Tuple[Any, ...]:
@@ -8667,8 +8739,11 @@ def _candidate_quality_tuple(parsed: ParsedInput, metrics: Dict[str, Any], prefi
         quality_admissible,
         -floor_excess, -severe_excess, -run_excess,
         -severe_gaps, -run_gaps,
-        -float(metrics.get("floor_deficit_sum", 0.0) or 0.0),
-        -float(metrics.get("floor_deficit_max", 0.0) or 0.0),
+        # Quantized so that operationally meaningless deficit differences cannot
+        # absorb the comparison before the balance/overage block is reached.
+        # See FLOOR_DEFICIT_COMPARISON_QUANTUM.
+        -_deficit_bucket(_prefixed_metric(metrics, prefix, "floor_deficit_sum")),
+        -_deficit_bucket(_prefixed_metric(metrics, prefix, "floor_deficit_max")),
         int(metrics.get(f"week_boundary_{prefix}_target", 0) or 0),
         int(metrics.get(f"week_boundary_{prefix}_floor", 0) or 0),
         -int(metrics.get("week_boundary_hard_failure_count", 0) or 0),
@@ -8693,7 +8768,9 @@ def _candidate_quality_tuple(parsed: ParsedInput, metrics: Dict[str, Any], prefi
         *_target_secondary_counts(metrics, prefix, parsed.target_ratio),
         -float(metrics.get(f"{prefix}_target_overage_fte_sum", 0.0) or 0.0),
         -float(metrics.get(f"{prefix}_overage_max_pct", 0.0) or 0.0),
-        -float(metrics.get("target_deficit_sum", 0.0) or 0.0),
+        # Final term: nothing ranks below it, so it cannot mask anything and
+        # keeps full precision as a last-resort deterministic tie-break.
+        -_prefixed_metric(metrics, prefix, "target_deficit_sum"),
     )
 
 

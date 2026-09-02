@@ -113,6 +113,20 @@ def compare_to_rc9_1(summary: dict, identity: dict, baseline: dict) -> tuple:
                 f"{name}: run did not report target_ratio, so the coverage tier "
                 "behind before_target cannot be confirmed to match the baseline")
 
+    # A truncated search is not a fair comparison. Cricut Voice at a 900s budget
+    # explored 1 of 15 skeleton profiles against a DEEP design point of 14400s;
+    # reading its -14 target as an RC9.2.1 quality regression would blame the
+    # engine for a budget that never let it search.
+    requested = num(summary.get("stage1_profiles_requested"))
+    attempted = num(summary.get("stage1_profiles_attempted"))
+    coverage_status = str(summary.get("stage1_profile_coverage_status") or "")
+    if coverage_status == "TRUNCATED_INSUFFICIENT_STAGE1_BUDGET" or (
+            requested and attempted and attempted < requested):
+        return ("NOT_COMPARABLE_SEARCH_TRUNCATED",
+                f"{name}: the run explored {attempted:.0f} of {requested:.0f} skeleton "
+                "profiles before its Stage-1 budget ran out; re-run at the DEEP "
+                "design budget before comparing against RC9.1")
+
     base_t, base_f = num(row.get("before_target")), num(row.get("before_floor"))
     run_t, run_f = num(summary.get("before_target")), num(summary.get("before_floor"))
     if not run_t:

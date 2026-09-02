@@ -16314,6 +16314,28 @@ def run_case(
                 continue
             remaining = stage1_profile_deadline - time.time()
             if remaining < 45:
+                # The portfolio is abandoned here, and it used to be abandoned
+                # SILENTLY: `stage1_attempts` simply held fewer rows than
+                # profiles requested, and nothing downstream said the search had
+                # been cut short. On Cricut Voice at a 900s budget that meant 1
+                # of 15 profiles ran and the run still read as a completed
+                # search. Record what was never tried.
+                audit["stage1_profile_coverage"] = {
+                    "requested": len(profiles),
+                    "runnable_after_resume": len(profiles_to_run),
+                    "attempted": profile_index,
+                    "skipped_for_budget": len(profiles_to_run) - profile_index,
+                    "skipped_profiles": [row["name"] for row in profiles_to_run[profile_index:]],
+                    "remaining_sec_at_stop": round(max(0.0, remaining), 3),
+                    "minimum_slice_sec": 45.0,
+                    "status": "TRUNCATED_INSUFFICIENT_STAGE1_BUDGET",
+                }
+                print(
+                    f"STAGE1_PORTFOLIO_TRUNCATED attempted={profile_index} of "
+                    f"{len(profiles_to_run)} runnable ({len(profiles)} requested); "
+                    f"{max(0.0, remaining):.1f}s left, 45s needed per profile",
+                    file=log, flush=True,
+                )
                 break
             attempts_left = max(1, len(profiles_to_run) - profile_index)
             slice_sec = min(1800.0, max(45.0, remaining * 0.82 / attempts_left))
@@ -16338,6 +16360,16 @@ def run_case(
             write_json(registry_path, registry)
             audit["stage1_attempts"].append(record)
             write_json(audit_path, audit)
+        else:
+            # Loop ran to completion: the whole portfolio was explored.
+            audit["stage1_profile_coverage"] = {
+                "requested": len(profiles),
+                "runnable_after_resume": len(profiles_to_run),
+                "attempted": len(profiles_to_run),
+                "skipped_for_budget": 0,
+                "skipped_profiles": [],
+                "status": "COMPLETE",
+            }
 
         # RC9.2.1 target-locked residual OFF/day-balance polish.
         # Phase P1 locks the global target champion and aggressively searches the
@@ -18718,6 +18750,13 @@ def run_case(
             "after_extreme_overage_count": chosen_breaks.metrics.get("after_extreme_overage_count", 0),
             "break_spacing_compression_count": int(chosen_breaks.diagnostics.get("flexible_compression_count", 0) or 0),
             "break_spacing_extended_beyond_normal_count": int(chosen_breaks.diagnostics.get("extended_beyond_normal_count", 0) or 0),
+            # Search breadth actually achieved. A run that explored 1 of 15
+            # skeleton profiles is not the same evidence as one that explored
+            # all 15, and the summary previously could not tell them apart.
+            "stage1_profiles_requested": (audit.get("stage1_profile_coverage") or {}).get("requested"),
+            "stage1_profiles_attempted": (audit.get("stage1_profile_coverage") or {}).get("attempted"),
+            "stage1_profiles_skipped_for_budget": (audit.get("stage1_profile_coverage") or {}).get("skipped_for_budget"),
+            "stage1_profile_coverage_status": (audit.get("stage1_profile_coverage") or {}).get("status", "NOT_RECORDED"),
             "quality_benchmark_status": audit.get("quality_benchmark", {}).get("gate_status", "PASS"),
             "quality_benchmark_failures": " | ".join(audit.get("quality_benchmark", {}).get("failures", [])),
             "best_before_target_in_final_pool": selection.get("best_before_target_in_final_pool"),

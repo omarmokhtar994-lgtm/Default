@@ -301,6 +301,37 @@ class RC9_1ComparisonRefusesMismatchedInputs(unittest.TestCase):
                 self.assertIn("target_ratio", row,
                               "a baseline row without a target ratio cannot be compared safely")
 
+    def test_a_truncated_search_is_not_compared(self):
+        """Cricut Voice explored 1 of 15 skeleton profiles at a 900s budget.
+
+        DEEP's design budget is 14400s. Reading that run's -14 target as an
+        RC9.2.1 quality regression would blame the engine for a budget that
+        never let it search.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._gate2(
+                tmp, self.NMGEN_HISTORICAL, before_target=180,
+                stage1_profiles_requested=15, stage1_profiles_attempted=1,
+                stage1_profile_coverage_status="TRUNCATED_INSUFFICIENT_STAGE1_BUDGET")
+        self.assertEqual(result["gate2_vs_rc9_1"], "NOT_COMPARABLE_SEARCH_TRUNCATED")
+        self.assertIn("1 of 15", result["gate2_detail"])
+
+    def test_a_complete_search_is_compared(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._gate2(
+                tmp, self.NMGEN_HISTORICAL,
+                stage1_profiles_requested=15, stage1_profiles_attempted=15,
+                stage1_profile_coverage_status="COMPLETE")
+        self.assertTrue(result["gate2_vs_rc9_1"].startswith("PASS"))
+
+    def test_a_partial_count_alone_is_enough_to_hold_back(self):
+        """Older artifacts carry no coverage status, only the counts."""
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._gate2(tmp, self.NMGEN_HISTORICAL,
+                                 stage1_profiles_requested=15,
+                                 stage1_profiles_attempted=3)
+        self.assertEqual(result["gate2_vs_rc9_1"], "NOT_COMPARABLE_SEARCH_TRUNCATED")
+
     def test_gate9_tracks_gate2(self):
         with tempfile.TemporaryDirectory() as tmp:
             result = self._gate2(tmp, self.NMGEN_HISTORICAL)

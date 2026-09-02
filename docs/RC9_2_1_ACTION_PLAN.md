@@ -103,3 +103,52 @@ three self-generated pairs.
 
 The gate report is regenerated with one command over any results root, so every
 future run updates the release picture automatically.
+
+---
+
+## Update — RC9.1 comparator received; gates 2 and 9 are now decidable
+
+The RC9.1 baseline arrived as a **consolidated metrics** package (stored at
+`evidence/RC9_1_BASELINE.json`, with the supplier's provenance and caveats). It
+is explicitly not a byte-identical replacement for the original RC9.1 result
+artifacts, and it declines to assert GDI REAL28 and SAKS rather than inventing
+them. B1 is therefore **partially closed**: gates 2 and 9 can be evaluated, at a
+stated evidence class, on before-break quality only.
+
+### First results
+
+| Case | Gate 2 / 9 | Detail |
+|---|---|---|
+| NMG SP | **PASS_AGAINST_CONSOLIDATED_BASELINE** | target 126 vs 126, floor 126 vs 126 |
+| Cricut Voice | **NOT_COMPARABLE_SEARCH_TRUNCATED** | explored 1 of 15 skeleton profiles |
+| NMG EN historical | **NOT_COMPARABLE** | RC9.2.1 rejects the input; see below |
+| AE AR B2B | **NOT_COMPARABLE** | hard contract failure, no solve |
+
+### Two things the comparison surfaced
+
+**1. RC9.2.1 refuses the NMG EN historical input, and is right to.**
+`FIXED_CYCLIC_REST_CONFLICT`: Associate 003 carries Previous-Sat 23:00–08:00
+into a Sunday 14:00–23:00 shift (**6.0 h** rest) and Associate 009 carries
+20:00–05:00 into the same (**9.0 h**), against a 12 h minimum — both verified
+through the engine's own `shift_parts`. RC9.1's NMG EN figure of 214 was
+therefore obtained on an input that does not satisfy the current contract. No
+same-input NMG EN comparison is possible without disabling a safety rule, which
+is not something to do for a gate.
+
+**2. Every RC9.2.1 evidence run was executed at 900 s against a 14,400 s design
+point.** DEEP mode's default budget is 14,400 s. At 900 s the engine explores
+**one** of its fifteen skeleton profiles (see A28 in `CODE_AUDIT.md`). The
+Cricut Voice shortfall against RC9.1 — target −14, floor −13 — is very likely an
+artifact of that, not an engine regression, and the gate now says so rather than
+scoring it.
+
+### The ask has changed
+
+B1 is no longer "we have no comparator". It is now:
+
+- **Re-run the scenario set at DEEP's real budget** (14,400 s) before drawing any
+  RC9.1 comparison. Every published RC9.2.1 quality number so far is from a
+  six-percent-budget run.
+- The RC9.1 engine source (sha `da21c3ba…`) would still be worth having: it
+  would let the comparison be generated rather than transcribed, and would
+  settle whether RC9.1 enforced cyclic rest against fixed Sunday shifts at all.

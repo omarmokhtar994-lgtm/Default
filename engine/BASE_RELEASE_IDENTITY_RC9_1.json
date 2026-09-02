@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "release": "L6.3.2.3-RC9.1-UNIVERSAL-SEARCH-RECOVERY-PLATFORM",
+  "release_short": "RC9.1-UNIVERSAL-SEARCH-RECOVERY-PLATFORM",
+  "generated_utc": "2026-08-11T18:34:38.362009+00:00",
+  "architecture": "Universal workbook-driven production platform with breadth-first search recovery",
+  "case_branching": false,
+  "default_policy": {
+    "workbook_target_primary": true,
+    "target_dynamic_for_80_90_100": true,
+    "stage2_break_search": "breadth_first_expand_then_next_skeleton",
+    "deep_time_limit_seconds": 14400,
+    "full_time_limit_seconds": 21600,
+    "joint_budget_ceiling_ratio": 0.35,
+    "after_break_final_is_production_output": true,
+    "best_before_is_review_anchor_only": true,
+    "bundled_regression_fallbacks_default_enabled": false,
+    "no_break_exceptions_default": "workbook/CLI only; not client preset",
+    "quality_debt_approval": "manual approval required when production quality gate fails but hard-valid artifact exists"
+  },
+  "core_engine_lineage": "RC9.0 universal platform plus RC9.1 search recovery after GDI REAL28 diagnostic-only failure",
+  "engine_file_sha256": "da21c3bacf577e5a806dae0c75fbc70411d0747b2ef599d391ad9f276074e415",
+  "dependencies": [
+    "ortools==9.15.6755",
+    "openpyxl",
+    "pandas",
+    "numpy",
+    "scipy"
+  ]
+}

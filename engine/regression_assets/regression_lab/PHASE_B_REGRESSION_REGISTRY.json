@@ -1,0 +1,249 @@
+{
+  "schema_version": 4,
+  "release": "L6.3.2.3-R1.3.13-C-C4-RC8.13-TARGET90-JOINT-LOCK",
+  "fixtures": {
+    "GDI_28HC_NO247": {
+      "classification": "DIRECTIONAL_SKILL_AND_NON_247",
+      "input": "inputs_rc8_ready/GDI_28HC_NO247_RC8_6_INPUT_READY.xlsx",
+      "historical_alias": true,
+      "max_no_break_exceptions": 4,
+      "benchmark_authority": "HISTORICAL_COMPARISON_ONLY",
+      "release_gate_from_reference_kpi": false,
+      "reference_kpi_note": "Historical Phase B comparison only; not injected into RC8 solver/release gating without exact provenance.",
+      "historical_reference_kpi": {
+        "maximum_no_break_exceptions": 4,
+        "minimum_best_before100": 127,
+        "minimum_best_before90": 130,
+        "minimum_best_before80": 134,
+        "minimum_final_before100": 127,
+        "minimum_final_before90": 130,
+        "minimum_final_before80": 134,
+        "minimum_after100": 126,
+        "minimum_after90": 129,
+        "minimum_after80": 134,
+        "hard_fail_count": 0,
+        "minimum_final_after100": 126,
+        "minimum_final_after90": 129,
+        "minimum_final_after80": 134
+      },
+      "historical_seed_reference": "historical_seeds/GDI_NO247_RC442_CHAMPION_AFTER_126_129_134_4EX_SEED.xlsx",
+      "historical_benchmark_reference": "historical_seeds/GDI_NO247_RC442_CHAMPION_AFTER_126_129_134_4EX_SEED.xlsx",
+      "seed_authority": "HISTORICAL_REFERENCE_ONLY_DO_NOT_AUTO_LOAD",
+      "benchmark_use": "POST_RUN_COMPARISON_ONLY",
+      "reference_policy_note": "Historical KPI and workbook evidence may be reported after a run but cannot seed, fall back, or gate RC8.6 without exact current-contract provenance."
+    },
+    "GDI_REAL28": {
+      "classification": "DIRECTIONAL_SKILL_GUARDED_REJECTION_HISTORICAL",
+      "input": "inputs_rc8_ready/GDI_REAL28_RC8_6_INPUT_READY.xlsx",
+      "historical_alias": true,
+      "expected_outcome": "MUST_RETAIN_OR_BEAT_VALID_R1_1_1_FALLBACK",
+      "mandatory_success_gate": true,
+      "feasible_micro_equivalent": "FAST70_T44",
+      "max_no_break_exceptions": 3,
+      "current_c2_2_1_contract_status": "HISTORICAL_REFERENCE_ONLY_INVALID_CYCLIC_BOUNDARY",
+      "benchmark_authority": "HISTORICAL_COMPARISON_ONLY",
+      "release_gate_from_reference_kpi": false,
+      "reference_kpi_note": "Historical Phase B comparison only; not injected into RC8 solver/release gating without exact provenance.",
+      "historical_144_154_168_status": "PERMANENTLY_EXCLUDED_HARD_INVALID_CURRENT_CONTRACT",
+      "historical_seed_status": "INVALIDATED_BY_C2_2_1_CYCLIC_NEXT_SUNDAY_REVALIDATION",
+      "current_contract_invalidation_status": "HISTORICAL_144_154_168_3EX_EXCLUDED_BY_CURRENT_CYCLIC_AND_LANGUAGE_TRUTH",
+      "historical_reference_kpi": {
+        "maximum_no_break_exceptions": 3,
+        "minimum_best_before100": 162,
+        "minimum_best_before90": 164,
+        "minimum_best_before80": 168,
+        "minimum_final_before100": 147,
+        "minimum_final_before90": 165,
+        "minimum_final_before80": 168,
+        "minimum_after100": 144,
+        "minimum_after90": 154,
+        "minimum_after80": 168,
+        "hard_fail_count": 0,
+        "minimum_final_after100": 144,
+        "minimum_final_after90": 154,
+        "minimum_final_after80": 168
+      },
+      "seed_authority": "HISTORICAL_REFERENCE_ONLY_DO_NOT_AUTO_LOAD",
+      "benchmark_use": "POST_RUN_COMPARISON_ONLY",
+      "reference_policy_note": "Historical KPI and workbook evidence may be reported after a run but cannot seed, fall back, or gate RC8.6 without exact current-contract provenance."
+    },
+    "NMG12": {
+      "classification": "THIN_OVERNIGHT_QUALITY_AND_BREAK_RESILIENCE",
+      "input": "inputs_rc8_ready/NMG12_RC8_INPUT_READY.xlsx",
+      "historical_alias": true,
+      "benchmark_authority": "HISTORICAL_COMPARISON_ONLY",
+      "release_gate_from_reference_kpi": false,
+      "reference_kpi_note": "Historical Phase B comparison only; not injected into RC8 solver/release gating without exact provenance.",
+      "historical_reference_kpi": {
+        "zero_break_exceptions": true,
+        "minimum_best_before100": 170,
+        "minimum_best_before90": 205,
+        "minimum_best_before80": 211,
+        "minimum_final_before100": 170,
+        "minimum_final_before90": 205,
+        "minimum_final_before80": 211,
+        "minimum_after100": 92,
+        "minimum_after90": 201,
+        "minimum_after80": 205,
+        "hard_fail_count": 0,
+        "minimum_final_after100": 92,
+        "minimum_final_before_target": 199,
+        "minimum_final_after90": 201,
+        "max_final_before_target_loss": 0,
+        "quality_benchmark_tolerance": 0,
+        "minimum_final_after80": 205,
+        "minimum_best_before_target": 205
+      },
+      "historical_seed_reference": "historical_seeds/NMG12_RC442_TARGET_CHAMPION_AFTER_92_201_205_SEED.xlsx",
+      "historical_benchmark_reference": "historical_seeds/NMG12_RC442_TARGET_CHAMPION_AFTER_92_201_205_SEED.xlsx",
+      "seed_authority": "HISTORICAL_REFERENCE_ONLY_DO_NOT_AUTO_LOAD",
+      "benchmark_use": "POST_RUN_COMPARISON_ONLY",
+      "reference_policy_note": "Historical KPI and workbook evidence may be reported after a run but cannot seed, fall back, or gate RC8.6 without exact current-contract provenance."
+    },
+    "NMG12_BREAK_100": {
+      "classification": "THIN_OVERNIGHT_BREAK_RESILIENCE_100_TARGET",
+      "input": "inputs/NMG12_R1_1_2_RC2_BREAK_REGRESSION_100_TARGET.xlsx",
+      "historical_alias": true,
+      "benchmark_authority": "HISTORICAL_COMPARISON_ONLY",
+      "release_gate_from_reference_kpi": false,
+      "reference_kpi_note": "Historical Phase B comparison only; not injected into RC8 solver/release gating without exact provenance.",
+      "seed_authority": "HISTORICAL_REFERENCE_ONLY_DO_NOT_AUTO_LOAD",
+      "benchmark_use": "POST_RUN_COMPARISON_ONLY",
+      "reference_policy_note": "Historical KPI and workbook evidence may be reported after a run but cannot seed, fall back, or gate RC8.6 without exact current-contract provenance."
+    },
+    "NMG13": {
+      "classification": "THIN_OVERNIGHT_CAPACITY_VARIANT",
+      "input": "inputs_rc8_ready/NMG13_RC8_INPUT_READY.xlsx",
+      "historical_alias": true,
+      "benchmark_authority": "HISTORICAL_COMPARISON_ONLY",
+      "release_gate_from_reference_kpi": false,
+      "reference_kpi_note": "Historical Phase B comparison only; not injected into RC8 solver/release gating without exact provenance.",
+      "historical_reference_kpi": {
+        "zero_break_exceptions": true,
+        "minimum_after100": 135,
+        "minimum_after90": 201,
+        "minimum_after80": 208
+      },
+      "seed_authority": "HISTORICAL_REFERENCE_ONLY_DO_NOT_AUTO_LOAD",
+      "benchmark_use": "POST_RUN_COMPARISON_ONLY",
+      "reference_policy_note": "Historical KPI and workbook evidence may be reported after a run but cannot seed, fall back, or gate RC8.6 without exact current-contract provenance."
+    },
+    "SAKS_NEW": {
+      "classification": "FIXED_FLEXIBLE_GROUP_AND_HARD_FLOOR",
+      "input": "inputs_rc8_ready/SAKS_NEW_RC8_INPUT_READY.xlsx",
+      "historical_alias": true,
+      "benchmark_authority": "HISTORICAL_COMPARISON_ONLY",
+      "release_gate_from_reference_kpi": false,
+      "reference_kpi_note": "Historical Phase B comparison only; not injected into RC8 solver/release gating without exact provenance.",
+      "historical_reference_kpi": {
+        "zero_break_exceptions": true,
+        "minimum_best_before100": 200,
+        "minimum_best_before90": 247,
+        "minimum_best_before80": 252,
+        "minimum_final_before100": 200,
+        "minimum_final_before90": 247,
+        "minimum_final_before80": 252,
+        "minimum_after100": 123,
+        "minimum_after90": 198,
+        "minimum_after80": 252,
+        "hard_fail_count": 0,
+        "business_target_note": "90% remains the instruction target; 198/252 is the verified Phase B regression baseline after exhaustive focused recovery.",
+        "minimum_final_after100": 123,
+        "minimum_final_after90": 198,
+        "max_final_before_target_loss": 0,
+        "quality_benchmark_tolerance": 0,
+        "minimum_final_after80": 252
+      },
+      "historical_seed_reference": "historical_seeds/SAKS_NEW_RC446_DAILY_AFTER_123_198_252_SEED.xlsx",
+      "historical_benchmark_reference": "historical_seeds/SAKS_NEW_RC446_DAILY_AFTER_123_198_252_SEED.xlsx",
+      "seed_authority": "HISTORICAL_REFERENCE_ONLY_DO_NOT_AUTO_LOAD",
+      "benchmark_use": "POST_RUN_COMPARISON_ONLY",
+      "reference_policy_note": "Historical KPI and workbook evidence may be reported after a run but cannot seed, fall back, or gate RC8.6 without exact current-contract provenance."
+    },
+    "UNIVERSAL_30MIN_11H_SYNTHETIC": {
+      "classification": "INSUFFICIENT_SKILL_REDUNDANCY_11H_GUARD",
+      "input": "inputs/UNIVERSAL_30MIN_11H_SYNTHETIC_REGRESSION.xlsx",
+      "historical_alias": false,
+      "expected_outcome": "EXPECTED_PROVEN_BREAK_INFEASIBLE",
+      "expected_minimum_no_break_exceptions": 12,
+      "mandatory_success_gate": false,
+      "feasible_micro_equivalent": "FAST70_T42",
+      "benchmark_authority": "HISTORICAL_COMPARISON_ONLY",
+      "release_gate_from_reference_kpi": false,
+      "reference_kpi_note": "Historical Phase B comparison only; not injected into RC8 solver/release gating without exact provenance.",
+      "seed_authority": "HISTORICAL_REFERENCE_ONLY_DO_NOT_AUTO_LOAD",
+      "benchmark_use": "POST_RUN_COMPARISON_ONLY",
+      "reference_policy_note": "Historical KPI and workbook evidence may be reported after a run but cannot seed, fall back, or gate RC8.6 without exact current-contract provenance."
+    }
+  },
+  "closure_evidence": "qa/PHASE_A_CLOSURE_EVIDENCE.json",
+  "micro_evidence": {
+    "FAST70_T42": {
+      "classification": "FEASIBLE_11H_3OFF_FULL_BREAK",
+      "source": "closure_evidence/R1_2_0_A_RC1_4_FAST70_FULL_20260727_040757_RESULTS.zip",
+      "expected": "PASS"
+    },
+    "FAST70_T44": {
+      "classification": "FEASIBLE_DIRECTIONAL_SKILL_FULL_BREAK",
+      "source": "closure_evidence/R1_2_0_A_RC1_4_FAST70_FULL_20260727_040757_RESULTS.zip",
+      "expected": "PASS"
+    }
+  },
+  "phase_b_gates": {
+    "micro_focused_runner": "regression_lab/run_phase_b_micro.py",
+    "global_budget_seconds_deep": 14400,
+    "default_workers": 8,
+    "safe_incumbent_required": true,
+    "transaction_safe_repair_required": true,
+    "closure_quick_cases": [
+      "NMG12",
+      "NMG13",
+      "SAKS_NEW",
+      "GDI_REAL28",
+      "GDI_28HC_NO247"
+    ],
+    "fast70_settings": {
+      "time_limit_per_scenario": 15,
+      "workers": 4,
+      "required_pass_count": 70
+    },
+    "joint_cp_sat_refinement_required": true,
+    "validated_safe_incumbent_required": true,
+    "adaptive_decomposed_joint_required": true,
+    "lexicographic_bound_certificate_required": true,
+    "joint_anchor_hint_defined_before_use": true,
+    "remaining_closure_gates": [
+      "FRESH_FAST70_70_OF_70",
+      "ONE_UNSEEN_COMPATIBLE_WORKBOOK_PASS"
+    ]
+  },
+  "phase_c_validation_policy": {
+    "development_smoke": "Functional execution and auditable candidate generation only; quality debt is reported separately.",
+    "deep_validation": "Deferred to the end-of-Phase-C comprehensive matrix.",
+    "historical_kpis": "Reference benchmarks, not unconditional development-smoke pass criteria under a changed contract.",
+    "production_promotion": "Blocked until end-of-Phase-C deep matrix, repeatability, and production-quality gates pass."
+  },
+  "phase_c_development_status": "DEVELOPMENT_CLOSED_AWAITING_FINAL_DEEP_MATRIX",
+  "real28_status": "UNRESOLVED_EXCEPTION_CAP_FEASIBILITY_FINAL_MATRIX_REQUIRED",
+  "registry_role": "CURRENT_INPUT_CATALOG_WITH_QUARANTINED_HISTORICAL_COMPARISONS",
+  "benchmark_policy": {
+    "default_authority": "HISTORICAL_COMPARISON_ONLY",
+    "automatic_release_gating": false,
+    "automatic_seed_loading": false,
+    "release_authority_requirements": [
+      "same input SHA-256",
+      "same contract SHA-256",
+      "same evaluator version",
+      "same engine SHA-256",
+      "same parameter hash",
+      "reopened final-after-break artifact",
+      "zero hard failures",
+      "same approved exception policy"
+    ],
+    "explicit_user_seed": "Allowed only as a non-binding warm start and fully revalidated.",
+    "note": "Bare historical KPI numbers are never release gates in RC8.6."
+  },
+  "rc8_3_note": "Updated after smoke findings: GDI exception policy must be explicit/visible; UNKNOWN hard probe is search-incomplete; historical KPI gates remain non-authoritative.",
+  "rc8_5_note": "RC8.6 removes silent historical seed/benchmark injection and adds aggregate legal-pattern guidance plus named-associate CP-SAT quality convergence.",
+  "release_short": "R1.3.13-C-C4-RC8.13-TARGET90-JOINT-LOCK"
+}

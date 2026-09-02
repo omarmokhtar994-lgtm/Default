@@ -12,8 +12,16 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-ROOT=Path(__file__).resolve().parents[1]
-ENGINE_PATH=ROOT/'_tools'/'l632_universal_scheduler.py'
+# parents[1] is engine/regression_assets, which holds the regression ASSETS.
+# The engine itself lives one level up, in engine/_tools. ENGINE_PATH was built
+# from the assets root, so it resolved to
+# engine/regression_assets/_tools/l632_universal_scheduler.py - a path that has
+# never existed here - and this harness died on FileNotFoundError before it ran
+# a single scenario.
+ASSETS_ROOT=Path(__file__).resolve().parents[1]
+ENGINE_ROOT=Path(__file__).resolve().parents[2]
+ROOT=ASSETS_ROOT
+ENGINE_PATH=ENGINE_ROOT/'_tools'/'l632_universal_scheduler.py'
 CATALOG=Path(__file__).with_name('FAST70_MIGRATION_CATALOG.json')
 
 
@@ -474,12 +482,36 @@ def main():
     ap.add_argument('--resume',action='store_true')
     args=ap.parse_args()
     data=json.loads(CATALOG.read_text(encoding='utf-8'))
-    assert len(data)==70 and len({r['id'] for r in data})==70
+    # These were bare asserts. `python -O` strips assert, so a truncated or
+    # corrupted catalog produced a suite that evaluated almost nothing and
+    # still exited 0: with the catalog cut from 70 scenarios to 3, `-O` printed
+    # passed 0 / failed 0 and returned success. A regression suite that cannot
+    # fail is worse than no suite, so these now branch and return non-zero.
     required={'closed_day','fixed','nesting','language','overnight','cyclic_boundary','breaks','capacity','input_contract'}
-    assert required <= {r['category'] for r in data}
+    catalog_problems=[]
+    if len(data)!=70:
+        catalog_problems.append(f'catalog holds {len(data)} scenarios, expected 70')
+    if len({r['id'] for r in data})!=len(data):
+        catalog_problems.append('catalog contains duplicate scenario ids')
+    missing=sorted(required-{r['category'] for r in data})
+    if missing:
+        catalog_problems.append(f'catalog is missing required categories: {missing}')
+    if catalog_problems:
+        for problem in catalog_problems:
+            print(f'CATALOG INTEGRITY FAILURE: {problem}', file=sys.stderr)
+        return 2
     chosen=data[args.start_at-1:args.start_at-1+args.max_scenarios]
     if args.only_ids:
         allow={x.strip() for x in args.only_ids.split(',') if x.strip()}; chosen=[r for r in data if r['id'] in allow]
+        unknown=sorted(allow-{r['id'] for r in data})
+        if unknown:
+            print(f'Unknown scenario ids requested: {unknown}', file=sys.stderr)
+            return 2
+    if not chosen:
+        # Selecting nothing previously produced passed 0 / failed 0 and exit 0.
+        print('No scenarios selected; refusing to report success having run '
+              'nothing.', file=sys.stderr)
+        return 2
     args.output_dir.mkdir(parents=True,exist_ok=True)
     summary_json=args.output_dir/'FAST70_MIGRATED_RESULTS.json'; summary_csv=args.output_dir/'FAST70_MIGRATED_RESULTS.csv'
     existing={}

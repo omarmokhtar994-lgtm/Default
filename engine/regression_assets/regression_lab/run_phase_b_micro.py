@@ -18,10 +18,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[1]
-ENGINE_PATH = ROOT / "_tools" / "l632_universal_scheduler.py"
-WRAPPER = ROOT / "RUN_UNIVERSAL_WFM.py"
-FAST70 = ROOT / "regression_lab" / "run_fast70_migrated.py"
+# parents[1] holds the regression assets (regression_lab/, ready_inputs/);
+# the engine and the wrapper live one level up under engine/. Both were being
+# resolved against the assets root, so ENGINE_PATH pointed at a directory that
+# does not exist.
+ASSETS_ROOT = Path(__file__).resolve().parents[1]
+ENGINE_ROOT = Path(__file__).resolve().parents[2]
+ROOT = ASSETS_ROOT
+ENGINE_PATH = ENGINE_ROOT / "_tools" / "l632_universal_scheduler.py"
+WRAPPER = ENGINE_ROOT / "RUN_UNIVERSAL_WFM.py"
+FAST70 = ASSETS_ROOT / "regression_lab" / "run_fast70_migrated.py"
 
 
 def load_engine():

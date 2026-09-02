@@ -183,11 +183,25 @@ def validate(input_path: Path, output_path: Path, engine_path: Path) -> Dict[str
             start=d*96+shift.start_min//15
             for q in range(start,start+shift.duration_q):
                 if 0<=q<horizon: before[q].append(a)
-        # previous Saturday spill into current Sunday
-        pshift=shift_map.get(norm(assoc.previous_saturday))
-        if pshift:
-            start=-96+pshift.start_min//15
-            for q in range(start,start+pshift.duration_q):
+        # Previous Saturday spill into current Sunday.
+        #
+        # Parse the label directly rather than requiring it to appear in THIS
+        # week's shift library.  Carry-in is historical fact: the associate
+        # worked that shift last week.  The library constrains what may be
+        # ASSIGNED this week - it is filtered by the allowed durations and start
+        # window - so demanding membership silently discarded real coverage.
+        #
+        # On NMG SP the library holds a single label while two associates carry
+        # in "16:00 - 01:00" and "21:00 - 06:00"; both were dropped, and the
+        # validator under-counted Sunday coverage against the engine by exactly
+        # the observed margin.  The validator was also inconsistent with itself,
+        # since it already parses this same label directly for the rest check
+        # via eng.previous_saturday_compatible.
+        pparts=eng.shift_parts(assoc.previous_saturday)
+        if pparts:
+            pstart,_,pdur=pparts
+            start=-96+pstart//15
+            for q in range(start,start+pdur//15):
                 if 0<=q<96: before[q].append(a)
 
     break_qslots=defaultdict(set); break_fail=[]

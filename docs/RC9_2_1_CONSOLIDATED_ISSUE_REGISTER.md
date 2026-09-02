@@ -394,3 +394,109 @@ conflated.
 **Release recommendation unchanged: NO-GO. RC9.1 remains the production engine.**
 Break-stage regression, deep regression and Gate 8 (folder 12's real input)
 remain outstanding.
+
+---
+
+# Iteration 4 — NMG SP reconciled at root; Cricut narrowed to four associates
+
+## Issue 15 — NMG SP: engine and validator disagreed on carry-in coverage
+
+**Severity:** high — this is the long-open `Independent validator exact
+agreement across suite = FAIL` gate
+**Status:** ROOT-CAUSED AND FIXED
+
+A full NMG SP run (RC=0, with breaks, guaranteed-correct pairing since the
+output was produced from that exact input) reproduced the discrepancy:
+
+| metric | engine | validator | delta |
+|---|---|---|---|
+| before_target | 126 | 122 | **−4** |
+| after_target | 123 | 119 | **−4** |
+| before_floor | 126 | 124 | −2 |
+| after_floor | 124 | 122 | −2 |
+| max_consecutive_floor_gaps | 1 | 2 | +1 |
+
+Same magnitude of 4 as the historical record, and present in the **before**
+metrics — so breaks were never involved. It was coverage.
+
+**Root cause.** The validator resolved previous-Saturday carry-in by looking the
+label up in *this week's* shift library:
+`shift_map.get(norm(assoc.previous_saturday))`. The engine parses the label
+directly via `shift_parts`. The NMG SP library holds a **single** label (it is
+filtered by allowed durations and start window), while two associates carry in
+`16:00 - 01:00` and `21:00 - 06:00`. Neither is in the library, so the validator
+**silently dropped both**, under-counting Sunday coverage.
+
+The engine is correct. Carry-in is historical fact — the associate worked that
+shift last week. The library constrains what may be *assigned this week*, not
+what *was worked*. The validator was also inconsistent with itself: it already
+parses the same label directly for the rest check via
+`eng.previous_saturday_compatible`, then demanded library membership for
+coverage.
+
+**Result after the fix — every coverage metric reconciles exactly:**
+
+| metric | engine | validator before | validator after |
+|---|---|---|---|
+| before_target | 126 | 122 | **126** |
+| after_target | 123 | 119 | **123** |
+| before_floor | 126 | 124 | **126** |
+| after_floor | 124 | 122 | **124** |
+| severe_floor_gaps | 0 | 0 | **0** |
+| max_consecutive_floor_gaps | 1 | 2 | **1** |
+
+6 of 6 reconciled, 0 disagreements. Validator RC=0, PASS.
+
+Regression-checked: the roster-reconciled Cricut case is unchanged at 33
+failures, and SAKS 11H enabled still validates PASS/0.
+
+## Issue 7 revisited — Cricut roster reconciliation
+
+Building the 40-associate input was worth doing, and it narrows the problem
+sharply rather than solving it.
+
+`fixtures/Cricut_Voice_ROSTER_RECONCILED_40.xlsx` adds the eight associates the
+output names but the input lacks, with the languages the **output itself
+states** (all English) and no invented fixed/leave/OFF configuration. Demand and
+shift library verified identical; roster 33 → 41.
+
+**147 → 33 failures.** The 114 `UNKNOWN_BREAK_ASSOCIATE_OR_DAY` were pure roster
+membership and cleared legitimately.
+
+The surviving 33 are all on associates present in **both** files, and concentrate
+in just **four** people:
+
+| Associate | Contradiction |
+|---|---|
+| Abdullah Khashab | fixed `14:00 - 23:00`; output assigns five different shifts |
+| Maryam AbdulWahab | fixed `10:00 - 19:00`; output assigns evenings and an OFF |
+| Zyad Mahrous | fixed `00:00/01:00 - 09:00/10:00`; output assigns nights |
+| Mariem Mohamed | on **leave** all week in the input; scheduled all week in the output |
+
+Plus three Friday `HARD_OFF` violations, all `17:00 - 02:00`, and one associate
+(`Kamal Aboaly`) present in the input but absent from the output.
+
+That is not noise. The output was produced from a revision in which those four
+had no fixed/leave/hard-OFF constraints. **No roster patch can close this**, and
+the constraints were deliberately not stripped to force a PASS — deleting the
+expected behaviour is not a fix.
+
+**Still an external blocker**, but now a precise one: the required artifact is a
+Cricut Voice input with the same 40-name roster in which Khashab, AbdulWahab,
+Mahrous and Mohamed carry no fixed/leave/OFF configuration.
+
+## Verification (iteration 4)
+
+| Check | Result |
+|---|---|
+| `py_compile` | PASS |
+| rule semantics | **30/30** |
+| selector integrity | **28/28** |
+| validator parity | **28/28** (5 new) |
+| engine selfcheck | PASS, **byte-identical to the pre-change baseline** |
+| wrapper selfcheck | PASS |
+| Cricut regression after carry-in fix | 33, unchanged |
+| SAKS 11H regression after carry-in fix | PASS/0, unchanged |
+
+**Release recommendation unchanged: NO-GO.** Gate 8's exact-agreement failure is
+now closed, but break-stage regression and deep regression remain unevidenced.

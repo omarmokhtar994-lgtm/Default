@@ -297,5 +297,50 @@ class ValidatorCrashIsNotAScheduleFailure(unittest.TestCase):
                       "a non-zero validator code must still set rc=4")
 
 
+class CarryInCoverageIsParsedNotLookedUp(unittest.TestCase):
+    """Previous-Saturday carry-in must be parsed, not required in the library.
+
+    Carry-in is historical fact - the associate worked that shift last week.
+    The shift library constrains what may be ASSIGNED this week and is filtered
+    by allowed durations and start window, so requiring membership silently
+    discarded real coverage.
+
+    On NMG SP the library holds one label while two associates carry in
+    "16:00 - 01:00" and "21:00 - 06:00".  Both were dropped, and the validator
+    under-counted against the engine by 4 target and 2 floor intervals - the
+    long-open "independent validator exact agreement" gate failure.  Parsing the
+    label reconciled all six coverage metrics exactly.
+    """
+
+    def test_validator_parses_the_carry_in_label(self):
+        source = VALIDATOR_PATH.read_text(encoding="utf-8")
+        self.assertIn("eng.shift_parts(assoc.previous_saturday)", source,
+                      "carry-in must be parsed from the label")
+
+    def test_validator_does_not_require_library_membership(self):
+        source = VALIDATOR_PATH.read_text(encoding="utf-8").replace(" ", "")
+        self.assertNotIn("shift_map.get(norm(assoc.previous_saturday))", source,
+                         "requiring the carry-in label to be in this week's "
+                         "library silently discards real coverage")
+
+    def test_engine_also_parses_rather_than_looks_up(self):
+        """The engine's own carry-in predicate parses the label directly."""
+        self.assertTrue(E.previous_saturday_covers_qslot("21:00 - 06:00", 4))
+        self.assertTrue(E.previous_saturday_covers_qslot("16:00 - 01:00", 0))
+
+    def test_carry_in_labels_outside_the_library_still_cover(self):
+        """The exact NMG SP labels, neither of which is in its shift library."""
+        for label, qslot in (("16:00 - 01:00", 0), ("21:00 - 06:00", 8)):
+            with self.subTest(label=label):
+                self.assertIsNotNone(E.shift_parts(label))
+                self.assertTrue(E.previous_saturday_covers_qslot(label, qslot))
+
+    def test_non_shift_carry_in_values_are_ignored(self):
+        """OFF and blanks must not be treated as coverage."""
+        self.assertIsNone(E.shift_parts("OFF"))
+        self.assertIsNone(E.shift_parts(""))
+        self.assertFalse(E.previous_saturday_covers_qslot("OFF", 0))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

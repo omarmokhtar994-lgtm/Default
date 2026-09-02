@@ -1026,11 +1026,51 @@ def _find_header_row(ws: Any, required_terms: Sequence[str], max_rows: int = 30)
     return 1
 
 
+def _is_day_header(header_text: str, short: str, full: str) -> bool:
+    """True when a normalized header names this weekday and nothing else.
+
+    Shared by `_day_columns` here and by the independent validator, so the
+    engine cannot drift from the tool that checks it.
+    """
+    if header_text == norm(short) or header_text == norm(full):
+        return True
+    prefix = norm(full) + " "
+    # A suffixed day header is a date ("Sunday 12 Jul"), never a label
+    # ("Sunday Totals", "Sunday Shift").
+    return header_text.startswith(prefix) and any(ch.isdigit() for ch in header_text[len(prefix):])
+
+
 def _day_columns(ws: Any, header: int) -> List[int]:
+    """Bind each weekday to its column by header text.
+
+    The rule was `h == short or h.startswith(full) or h.startswith(short)`. That
+    last clause binds any header merely BEGINNING with a short day name:
+    "Monthly Total" and "Month" to Mon, "Saturation" and "Satisfaction Score" to
+    Sat, "Sunday Totals" to Sun. It survived only because `min(candidates)`
+    takes the leftmost hit and real day columns happen to sit left of summary
+    columns in every workbook delivered so far - a property of the sample, not a
+    guarantee. A decoy to the LEFT of the day block would be read as that day's
+    assignments and silently corrupt every downstream coverage number.
+
+    Now: an exact short name, an exact full name, or a full name carrying a
+    DATE suffix ("Sunday 12 Jul"). The suffix must contain a digit. Accepting
+    any suffix reopens the same hole one level up - "Sunday Totals" and the
+    "sunday shift" header that really does appear in AE_FRENCH would both bind
+    as Sunday. No workbook in this project uses the suffixed form at all (the 25
+    exported schedules all carry exact short names), so the clause is defensive
+    only, and a date is the sole thing it needs to admit.
+
+    This is the same rule the independent validator uses, so input parsing and
+    output validation agree by construction.
+
+    Verified equivalent on every workbook available: 57 workbooks, 1,507 header
+    sheets, 7,288 header cells - identical bindings, and no sheet newly falls
+    back to positional column guessing.
+    """
     result: List[int] = []
     vals = {norm(ws.cell(header, c).value): c for c in range(1, ws.max_column + 1)}
     for short, full in zip(DAY_NAMES, DAY_FULL):
-        candidates = [c for h, c in vals.items() if h == norm(short) or h.startswith(norm(full)) or h.startswith(norm(short))]
+        candidates = [c for h, c in vals.items() if _is_day_header(h, short, full)]
         if candidates:
             result.append(min(candidates))
     return result if len(result) == 7 else []

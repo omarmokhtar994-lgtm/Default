@@ -44,6 +44,20 @@ def find_header(ws, required=("sf name",)) -> int:
         if any(req in vals for req in required): return r
     raise ValueError(f"Could not find header in {ws.title}")
 
+def _is_day_header(header_text, short, full):
+    """True when a normalized header names this weekday and nothing else.
+
+    Mirrors `_is_day_header` in the engine so input parsing and output
+    validation cannot drift apart. A suffixed day header is a DATE
+    ("Sunday 12 Jul"); accepting any suffix would re-admit "Sunday Totals" and
+    the "sunday shift" header that really appears in one delivered workbook.
+    """
+    if header_text == short or header_text == full:
+        return True
+    prefix = full + " "
+    return header_text.startswith(prefix) and any(ch.isdigit() for ch in header_text[len(prefix):])
+
+
 def parse_output_schedule(path: Path, expected_names: List[str]) -> Tuple[Dict[str,List[str]], Dict[str,str]]:
     wb=load_workbook(path,data_only=False,read_only=False)
     ws=wb["Schedule"] if "Schedule" in wb.sheetnames else wb["Final Schedule"]
@@ -70,7 +84,7 @@ def parse_output_schedule(path: Path, expected_names: List[str]) -> Tuple[Dict[s
             # Sat and "Month" to Mon, silently reading a non-day column as a
             # day's assignments.
             match=next((c for h,c in probe_headers.items()
-                        if h==norm(d) or h==full or h.startswith(full+" ")),None)
+                        if _is_day_header(h,norm(d),full)),None)
             candidate[d]=match
         if all(c is not None for c in candidate.values()):
             day_cols=candidate; break

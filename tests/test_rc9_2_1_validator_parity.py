@@ -443,6 +443,62 @@ class DayColumnMatchingIsNotOverBroad(unittest.TestCase):
                 self.assertIsNotNone(assigned, f"{labels[0]!r} was not recognised")
                 self.assertEqual(len(assigned), 7)
 
+    def test_engine_and_validator_use_the_identical_day_rule(self):
+        """A9: input parsing and output validation must not drift apart.
+
+        The engine had the same over-broad `startswith(short)` rule that caused
+        A1 in the validator. It survived only because `min(candidates)` takes
+        the leftmost hit and real day columns happen to sit left of summary
+        columns in every delivered workbook - a property of the sample, not a
+        guarantee.
+        """
+        validator = load_validator()
+        cases = ["sun", "sunday", "sunday 12 jul", "sunday 2026-07-12",
+                 "sunday totals", "sunday shift", "monthly total", "month",
+                 "mon", "saturation", "satisfaction score", "sat", "suntotal",
+                 "friday", "frida", "weds", "summary"]
+        for text in cases:
+            for short, full in zip(E.DAY_NAMES, E.DAY_FULL):
+                with self.subTest(header=text, day=short):
+                    self.assertEqual(
+                        E._is_day_header(text, short, full),
+                        validator._is_day_header(text, E.norm(short), E.norm(full)),
+                        "engine and validator disagree on a day header")
+
+    def test_a_label_that_merely_starts_with_a_day_name_is_rejected(self):
+        for text in ("sunday totals", "sunday shift", "monthly total", "month",
+                     "saturation", "satisfaction score", "suntotal", "summary"):
+            with self.subTest(header=text):
+                matched = [s for s, f in zip(E.DAY_NAMES, E.DAY_FULL)
+                           if E._is_day_header(text, s, f)]
+                self.assertEqual(matched, [], f"{text!r} must not bind to a day")
+
+    def test_a_date_suffixed_day_header_is_still_accepted(self):
+        """The suffix clause exists for a dated banner; it must admit only that."""
+        for text, day in (("sunday 12 jul", "Sun"), ("sunday 2026-07-12", "Sun"),
+                          ("monday 13 jul", "Mon"), ("saturday 18 jul", "Sat")):
+            with self.subTest(header=text):
+                matched = [s for s, f in zip(E.DAY_NAMES, E.DAY_FULL)
+                           if E._is_day_header(text, s, f)]
+                self.assertEqual(matched, [day])
+
+    def test_the_engine_binds_the_real_column_not_a_decoy_to_its_left(self):
+        """min(candidates) picks the leftmost hit, so a left decoy is the hazard."""
+        import openpyxl
+        days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        for decoy in ("Monthly Total", "Month", "Saturation", "Sunday Totals",
+                      "Sunday Shift", "Satisfaction Score"):
+            with self.subTest(decoy=decoy):
+                wb = openpyxl.Workbook()
+                ws = wb.active
+                ws.cell(1, 1).value = "SF Name"
+                ws.cell(1, 2).value = "Language"
+                ws.cell(1, 3).value = decoy          # decoy sits LEFT of the days
+                for i, d in enumerate(days):
+                    ws.cell(1, 4 + i).value = d
+                self.assertEqual(E._day_columns(ws, 1), [4, 5, 6, 7, 8, 9, 10],
+                                 f"{decoy!r} was bound as a day column")
+
     def test_validator_source_does_not_use_short_prefix_matching(self):
         """Kept as a cheap tripwire, but it is not the real guard.
 

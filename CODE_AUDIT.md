@@ -672,6 +672,22 @@ Recorded so the absence of findings is evidence, not silence.
 | Division without a zero guard | 3 candidates, **all guarded** on inspection |
 | Set iteration feeding ordered output | 2 hits, both order-insensitive |
 | Undefined names (`ruff E9,F821`) | **2 hits → A26**; now a gate step |
+
+### Static sweep, every hit adjudicated
+
+`ruff --select F,B` over `engine/` and `tools/` returned 45 hits. Each was read
+rather than auto-fixed or dismissed; exactly one was a defect.
+
+| Rule | Hits | Verdict |
+|---|---|---|
+| `F821` undefined name | 2 | **Real → A26.** Both fixed. |
+| `B023` closure over a loop variable | 2 | **False positive.** `dynamic_pattern_key` is consumed by the `sort` on the very next line, inside the same iteration; the binding cannot change first. |
+| `B905` `zip()` without `strict=` | 13 | **All safe.** Eleven pair a sequence with itself (`zip(xs, xs[1:])`) or with a 7-element day constant. The two dominance checks (9216, 11472) build both operands from one literal tuple constructor in the same function, so the lengths are equal by construction. |
+| `F841` unused local | 6 | **All dead locals, no dropped enforcement.** `severity_ok`/`concentration_ok` are unused judgements, but the raw signals they derive from *are* emitted in the tradeoff row and *are* tie-breakers in the sort, so the adjacent comment holds. `preflight_probe_deadline` is unused because the phase deadline is enforced through `budget_manager.slice_seconds`. Left in place: deleting dead locals in a 19,696-line engine is churn with no gain. |
+| `F402` import shadowed by a loop variable | 1 | **False positive.** `field` is a local loop variable in a function; `dataclasses.field` is only used at module level, at import time. |
+| `F401` unused import | 14 | Cosmetic. Not touched. |
+| `B007` unused loop control variable | 8 | Cosmetic. Not touched. |
+| `B008` call in a default argument | 1 | `range(...)` in a regression-lab default; immutable, evaluated once. Harmless. |
 | `subprocess` without timeout | present throughout; deliberate for long solves |
 
 ## Checked and found correct

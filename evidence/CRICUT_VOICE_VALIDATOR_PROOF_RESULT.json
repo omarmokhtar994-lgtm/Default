@@ -1,0 +1,4518 @@
+{
+  "schema_version": 1,
+  "validator": "RC9.2_INDEPENDENT_VALIDATOR",
+  "input": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/kit/12_INDEPENDENT_VALIDATOR_PROOF/Cricut_Voice_RC9_1_READY_SKELETON.xlsx",
+  "output": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/kit/12_INDEPENDENT_VALIDATOR_PROOF/Cricut_Voice__4_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx",
+  "artifact_role": "FINAL_AFTER_BREAKS",
+  "status": "FAIL",
+  "hard_fail_count": 147,
+  "warning_count": 1,
+  "metrics": {
+    "active_intervals": 264,
+    "before100": 224,
+    "before90": 232,
+    "before80": 242,
+    "after100": 208,
+    "after90": 226,
+    "after80": 236,
+    "before_target": 224,
+    "after_target": 208,
+    "before_floor": 242,
+    "after_floor": 236,
+    "floor_gaps": 28,
+    "severe_floor_gaps": 22,
+    "max_consecutive_floor_gaps": 6,
+    "zero_staffed_active_quarters": 0,
+    "language_gap_count": 0,
+    "opening_gap_count": 0,
+    "avoidable_overage_fte_sum": 614.4240293040291,
+    "avoidable_overage_peak_fte": 8.228571428571428,
+    "avoidable_overage_variance_fte": 4.266244973151264,
+    "avoidable_overage_stddev_fte": 2.0654890397073675,
+    "next_sunday_target_hits": 40,
+    "next_sunday_floor_hits": 41
+  },
+  "failures": [
+    {
+      "type": "MISSING_ASSOCIATE",
+      "associate": "Kamal Aboaly"
+    },
+    {
+      "type": "UNKNOWN_OR_BLANK_ASSIGNMENT",
+      "associate": "Kamal Aboaly",
+      "day": "Sun",
+      "value": ""
+    },
+    {
+      "type": "UNKNOWN_OR_BLANK_ASSIGNMENT",
+      "associate": "Kamal Aboaly",
+      "day": "Mon",
+      "value": ""
+    },
+    {
+      "type": "UNKNOWN_OR_BLANK_ASSIGNMENT",
+      "associate": "Kamal Aboaly",
+      "day": "Tue",
+      "value": ""
+    },
+    {
+      "type": "UNKNOWN_OR_BLANK_ASSIGNMENT",
+      "associate": "Kamal Aboaly",
+      "day": "Wed",
+      "value": ""
+    },
+    {
+      "type": "UNKNOWN_OR_BLANK_ASSIGNMENT",
+      "associate": "Kamal Aboaly",
+      "day": "Thu",
+      "value": ""
+    },
+    {
+      "type": "UNKNOWN_OR_BLANK_ASSIGNMENT",
+      "associate": "Kamal Aboaly",
+      "day": "Fri",
+      "value": ""
+    },
+    {
+      "type": "UNKNOWN_OR_BLANK_ASSIGNMENT",
+      "associate": "Kamal Aboaly",
+      "day": "Sat",
+      "value": ""
+    },
+    {
+      "type": "OFF_COUNT_VIOLATION",
+      "associate": "Kamal Aboaly",
+      "expected": 2,
+      "actual": 0,
+      "off_days": []
+    },
+    {
+      "type": "LEAVE_VIOLATION",
+      "associate": "Mariem Mohamed",
+      "day": "Sun",
+      "actual": "18:00 - 03:00"
+    },
+    {
+      "type": "LEAVE_VIOLATION",
+      "associate": "Mariem Mohamed",
+      "day": "Mon",
+      "actual": "18:00 - 03:00"
+    },
+    {
+      "type": "LEAVE_VIOLATION",
+      "associate": "Mariem Mohamed",
+      "day": "Tue",
+      "actual": "15:00 - 00:00"
+    },
+    {
+      "type": "LEAVE_VIOLATION",
+      "associate": "Mariem Mohamed",
+      "day": "Wed",
+      "actual": "OFF"
+    },
+    {
+      "type": "LEAVE_VIOLATION",
+      "associate": "Mariem Mohamed",
+      "day": "Thu",
+      "actual": "18:00 - 03:00"
+    },
+    {
+      "type": "HARD_OFF_VIOLATION",
+      "associate": "Mariem Mohamed",
+      "day": "Fri",
+      "actual": "17:00 - 02:00"
+    },
+    {
+      "type": "HARD_OFF_VIOLATION",
+      "associate": "Omar Ali",
+      "day": "Wed",
+      "actual": "20:00 - 05:00"
+    },
+    {
+      "type": "FIXED_SHIFT_VIOLATION",
+      "associate": "Abdullah Khashab",
+      "day": "Sun",
+      "expected": "14:00 - 23:00",
+      "actual": "19:00 - 04:00"
+    },
+    {
+      "type": "FIXED_SHIFT_VIOLATION",
+      "associate": "Abdullah Khashab",
+      "day": "Mon",
+      "expected": "14:00 - 23:00",
+      "actual": "21:00 - 06:00"
+    },
+    {
+      "type": "FIXED_SHIFT_VIOLATION",
+      "associate": "Abdullah Khashab",
+      "day": "Tue",
+      "expected": "14:00 - 23:00",
+      "actual": "21:00 - 06:00"
+    },
+    {
+      "type": "FIXED_SHIFT_VIOLATION",
+      "associate": "Abdullah Khashab",
+      "day": "Wed",
+      "expected": "14:00 - 23:00",
+      "actual": "19:00 - 04:00"
+    },
+    {
+      "type": "FIXED_SHIFT_VIOLATION",
+      "associate": "Abdullah Khashab",
+      "day": "Thu",
+      "expected": "14:00 - 23:00",
+      "actual": "18:00 - 03:00"
+    },
+    {
+      "type": "FIXED_SHIFT_VIOLATION",
+      "associate": "Maryam AbdulWahab",
+      "day": "Sun",
+      "expected": "10:00 - 19:00",
+      "actual": "18:00 - 03:00"
+    },
+    {
+      "type": "FIXED_SHIFT_VIOLATION",
+      "associate": "Maryam AbdulWahab",
+      "day": "Mon",
+      "expected": "10:00 - 19:00",
+      "actual": "OFF"
+    },
+    {
+      "type": "FIXED_SHIFT_VIOLATION",
+      "associate": "Maryam AbdulWahab",
+      "day": "Tue",
+      "expected": "10:00 - 19:00",
+      "actual": "21:00 - 06:00"
+    },
+    {
+      "type": "FIXED_SHIFT_VIOLATION",
+      "associate": "Maryam AbdulWahab",
+      "day": "Wed",
+      "expected": "10:00 - 19:00",
+      "actual": "21:00 - 06:00"
+    },
+    {
+      "type": "FIXED_SHIFT_VIOLATION",
+      "associate": "Maryam AbdulWahab",
+      "day": "Thu",
+      "expected": "10:00 - 19:00",
+      "actual": "18:00 - 03:00"
+    },
+    {
+      "type": "HARD_OFF_VIOLATION",
+      "associate": "Maryam AbdulWahab",
+      "day": "Fri",
+      "actual": "17:00 - 02:00"
+    },
+    {
+      "type": "FIXED_SHIFT_VIOLATION",
+      "associate": "Zyad Mahrous",
+      "day": "Sun",
+      "expected": "00:00 - 09:00",
+      "actual": "20:00 - 05:00"
+    },
+    {
+      "type": "FIXED_SHIFT_VIOLATION",
+      "associate": "Zyad Mahrous",
+      "day": "Mon",
+      "expected": "01:00 - 10:00",
+      "actual": "20:00 - 05:00"
+    },
+    {
+      "type": "FIXED_SHIFT_VIOLATION",
+      "associate": "Zyad Mahrous",
+      "day": "Tue",
+      "expected": "01:00 - 10:00",
+      "actual": "OFF"
+    },
+    {
+      "type": "FIXED_SHIFT_VIOLATION",
+      "associate": "Zyad Mahrous",
+      "day": "Wed",
+      "expected": "01:00 - 10:00",
+      "actual": "02:00 - 11:00"
+    },
+    {
+      "type": "FIXED_SHIFT_VIOLATION",
+      "associate": "Zyad Mahrous",
+      "day": "Thu",
+      "expected": "01:00 - 10:00",
+      "actual": "02:00 - 11:00"
+    },
+    {
+      "type": "HARD_OFF_VIOLATION",
+      "associate": "Zyad Mahrous",
+      "day": "Fri",
+      "actual": "17:00 - 02:00"
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Abdelrahman Khaled",
+        "day": "Sun",
+        "shift": "00:00 - 09:00",
+        "type": "Break 1",
+        "start": "01:00",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Abdelrahman Khaled",
+        "day": "Sun",
+        "shift": "00:00 - 09:00",
+        "type": "Lunch",
+        "start": "03:30",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Abdelrahman Khaled",
+        "day": "Sun",
+        "shift": "00:00 - 09:00",
+        "type": "Break 2",
+        "start": "06:45",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Abdelrahman Khaled",
+        "day": "Mon",
+        "shift": "15:00 - 00:00",
+        "type": "Break 1",
+        "start": "15:45",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Abdelrahman Khaled",
+        "day": "Mon",
+        "shift": "15:00 - 00:00",
+        "type": "Lunch",
+        "start": "18:30",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Abdelrahman Khaled",
+        "day": "Mon",
+        "shift": "15:00 - 00:00",
+        "type": "Break 2",
+        "start": "22:00",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Abdelrahman Khaled",
+        "day": "Wed",
+        "shift": "00:00 - 09:00",
+        "type": "Break 1",
+        "start": "01:00",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Abdelrahman Khaled",
+        "day": "Wed",
+        "shift": "00:00 - 09:00",
+        "type": "Lunch",
+        "start": "04:15",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Abdelrahman Khaled",
+        "day": "Wed",
+        "shift": "00:00 - 09:00",
+        "type": "Break 2",
+        "start": "07:15",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Abdelrahman Khaled",
+        "day": "Thu",
+        "shift": "15:00 - 00:00",
+        "type": "Break 1",
+        "start": "17:00",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Abdelrahman Khaled",
+        "day": "Thu",
+        "shift": "15:00 - 00:00",
+        "type": "Lunch",
+        "start": "19:30",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Abdelrahman Khaled",
+        "day": "Thu",
+        "shift": "15:00 - 00:00",
+        "type": "Break 2",
+        "start": "22:30",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Abdelrahman Khaled",
+        "day": "Fri",
+        "shift": "17:00 - 02:00",
+        "type": "Break 1",
+        "start": "21:45",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Abdelrahman Khaled",
+        "day": "Fri",
+        "shift": "17:00 - 02:00",
+        "type": "Lunch",
+        "start": "23:00",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Abdelrahman Khaled",
+        "day": "Fri",
+        "shift": "17:00 - 02:00",
+        "type": "Break 2",
+        "start": "01:00",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Jana Sultan",
+        "day": "Sun",
+        "shift": "16:00 - 01:00",
+        "type": "Break 1",
+        "start": "18:00",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Jana Sultan",
+        "day": "Sun",
+        "shift": "16:00 - 01:00",
+        "type": "Lunch",
+        "start": "20:15",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Jana Sultan",
+        "day": "Sun",
+        "shift": "16:00 - 01:00",
+        "type": "Break 2",
+        "start": "23:15",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Jana Sultan",
+        "day": "Mon",
+        "shift": "16:00 - 01:00",
+        "type": "Break 1",
+        "start": "18:00",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Jana Sultan",
+        "day": "Mon",
+        "shift": "16:00 - 01:00",
+        "type": "Lunch",
+        "start": "20:30",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Jana Sultan",
+        "day": "Mon",
+        "shift": "16:00 - 01:00",
+        "type": "Break 2",
+        "start": "23:30",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Jana Sultan",
+        "day": "Tue",
+        "shift": "15:00 - 00:00",
+        "type": "Break 1",
+        "start": "17:00",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Jana Sultan",
+        "day": "Tue",
+        "shift": "15:00 - 00:00",
+        "type": "Lunch",
+        "start": "19:45",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Jana Sultan",
+        "day": "Tue",
+        "shift": "15:00 - 00:00",
+        "type": "Break 2",
+        "start": "22:30",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Jana Sultan",
+        "day": "Wed",
+        "shift": "14:00 - 23:00",
+        "type": "Break 1",
+        "start": "15:30",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Jana Sultan",
+        "day": "Wed",
+        "shift": "14:00 - 23:00",
+        "type": "Lunch",
+        "start": "18:15",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Jana Sultan",
+        "day": "Wed",
+        "shift": "14:00 - 23:00",
+        "type": "Break 2",
+        "start": "21:15",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Jana Sultan",
+        "day": "Thu",
+        "shift": "16:00 - 01:00",
+        "type": "Break 1",
+        "start": "17:30",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Jana Sultan",
+        "day": "Thu",
+        "shift": "16:00 - 01:00",
+        "type": "Lunch",
+        "start": "20:15",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Jana Sultan",
+        "day": "Thu",
+        "shift": "16:00 - 01:00",
+        "type": "Break 2",
+        "start": "23:15",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Zainab Elsaftey",
+        "day": "Sun",
+        "shift": "08:00 - 17:00",
+        "type": "Break 1",
+        "start": "08:45",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Zainab Elsaftey",
+        "day": "Sun",
+        "shift": "08:00 - 17:00",
+        "type": "Lunch",
+        "start": "11:45",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Zainab Elsaftey",
+        "day": "Sun",
+        "shift": "08:00 - 17:00",
+        "type": "Break 2",
+        "start": "14:30",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Zainab Elsaftey",
+        "day": "Mon",
+        "shift": "08:00 - 17:00",
+        "type": "Break 1",
+        "start": "09:00",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Zainab Elsaftey",
+        "day": "Mon",
+        "shift": "08:00 - 17:00",
+        "type": "Lunch",
+        "start": "11:45",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Zainab Elsaftey",
+        "day": "Mon",
+        "shift": "08:00 - 17:00",
+        "type": "Break 2",
+        "start": "14:45",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Zainab Elsaftey",
+        "day": "Tue",
+        "shift": "12:00 - 21:00",
+        "type": "Break 1",
+        "start": "14:15",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Zainab Elsaftey",
+        "day": "Tue",
+        "shift": "12:00 - 21:00",
+        "type": "Lunch",
+        "start": "17:00",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Zainab Elsaftey",
+        "day": "Tue",
+        "shift": "12:00 - 21:00",
+        "type": "Break 2",
+        "start": "20:00",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Zainab Elsaftey",
+        "day": "Wed",
+        "shift": "12:00 - 21:00",
+        "type": "Break 1",
+        "start": "13:30",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Zainab Elsaftey",
+        "day": "Wed",
+        "shift": "12:00 - 21:00",
+        "type": "Lunch",
+        "start": "16:15",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Zainab Elsaftey",
+        "day": "Wed",
+        "shift": "12:00 - 21:00",
+        "type": "Break 2",
+        "start": "19:15",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Zainab Elsaftey",
+        "day": "Thu",
+        "shift": "16:00 - 01:00",
+        "type": "Break 1",
+        "start": "17:45",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Zainab Elsaftey",
+        "day": "Thu",
+        "shift": "16:00 - 01:00",
+        "type": "Lunch",
+        "start": "20:30",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Zainab Elsaftey",
+        "day": "Thu",
+        "shift": "16:00 - 01:00",
+        "type": "Break 2",
+        "start": "23:30",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Menna Soliman",
+        "day": "Sun",
+        "shift": "19:00 - 04:00",
+        "type": "Break 1",
+        "start": "21:00",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Menna Soliman",
+        "day": "Sun",
+        "shift": "19:00 - 04:00",
+        "type": "Lunch",
+        "start": "23:45",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Menna Soliman",
+        "day": "Sun",
+        "shift": "19:00 - 04:00",
+        "type": "Break 2",
+        "start": "02:45",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Menna Soliman",
+        "day": "Mon",
+        "shift": "21:00 - 06:00",
+        "type": "Break 1",
+        "start": "01:45",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Menna Soliman",
+        "day": "Mon",
+        "shift": "21:00 - 06:00",
+        "type": "Lunch",
+        "start": "03:00",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Menna Soliman",
+        "day": "Mon",
+        "shift": "21:00 - 06:00",
+        "type": "Break 2",
+        "start": "05:00",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Menna Soliman",
+        "day": "Tue",
+        "shift": "21:00 - 06:00",
+        "type": "Break 1",
+        "start": "22:45",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Menna Soliman",
+        "day": "Tue",
+        "shift": "21:00 - 06:00",
+        "type": "Lunch",
+        "start": "01:30",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Menna Soliman",
+        "day": "Tue",
+        "shift": "21:00 - 06:00",
+        "type": "Break 2",
+        "start": "04:30",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Menna Soliman",
+        "day": "Wed",
+        "shift": "19:00 - 04:00",
+        "type": "Break 1",
+        "start": "20:45",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Menna Soliman",
+        "day": "Wed",
+        "shift": "19:00 - 04:00",
+        "type": "Lunch",
+        "start": "23:45",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Menna Soliman",
+        "day": "Wed",
+        "shift": "19:00 - 04:00",
+        "type": "Break 2",
+        "start": "03:00",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Menna Soliman",
+        "day": "Thu",
+        "shift": "18:00 - 03:00",
+        "type": "Break 1",
+        "start": "19:45",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Menna Soliman",
+        "day": "Thu",
+        "shift": "18:00 - 03:00",
+        "type": "Lunch",
+        "start": "22:30",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Menna Soliman",
+        "day": "Thu",
+        "shift": "18:00 - 03:00",
+        "type": "Break 2",
+        "start": "01:30",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Ezzelden Morgan",
+        "day": "Sun",
+        "shift": "14:00 - 23:00",
+        "type": "Break 1",
+        "start": "19:00",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Ezzelden Morgan",
+        "day": "Sun",
+        "shift": "14:00 - 23:00",
+        "type": "Lunch",
+        "start": "20:15",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Ezzelden Morgan",
+        "day": "Sun",
+        "shift": "14:00 - 23:00",
+        "type": "Break 2",
+        "start": "22:00",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Ezzelden Morgan",
+        "day": "Mon",
+        "shift": "12:00 - 21:00",
+        "type": "Break 1",
+        "start": "12:45",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Ezzelden Morgan",
+        "day": "Mon",
+        "shift": "12:00 - 21:00",
+        "type": "Lunch",
+        "start": "14:15",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Ezzelden Morgan",
+        "day": "Mon",
+        "shift": "12:00 - 21:00",
+        "type": "Break 2",
+        "start": "15:45",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Ezzelden Morgan",
+        "day": "Tue",
+        "shift": "12:00 - 21:00",
+        "type": "Break 1",
+        "start": "12:45",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Ezzelden Morgan",
+        "day": "Tue",
+        "shift": "12:00 - 21:00",
+        "type": "Lunch",
+        "start": "14:15",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Ezzelden Morgan",
+        "day": "Tue",
+        "shift": "12:00 - 21:00",
+        "type": "Break 2",
+        "start": "15:45",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Ezzelden Morgan",
+        "day": "Wed",
+        "shift": "14:00 - 23:00",
+        "type": "Break 1",
+        "start": "14:45",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Ezzelden Morgan",
+        "day": "Wed",
+        "shift": "14:00 - 23:00",
+        "type": "Lunch",
+        "start": "17:15",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Ezzelden Morgan",
+        "day": "Wed",
+        "shift": "14:00 - 23:00",
+        "type": "Break 2",
+        "start": "20:15",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Ezzelden Morgan",
+        "day": "Fri",
+        "shift": "17:00 - 02:00",
+        "type": "Break 1",
+        "start": "21:45",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Ezzelden Morgan",
+        "day": "Fri",
+        "shift": "17:00 - 02:00",
+        "type": "Lunch",
+        "start": "23:00",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Ezzelden Morgan",
+        "day": "Fri",
+        "shift": "17:00 - 02:00",
+        "type": "Break 2",
+        "start": "01:00",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Jana Alkhunaizi",
+        "day": "Sun",
+        "shift": "12:00 - 21:00",
+        "type": "Break 1",
+        "start": "12:45",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Jana Alkhunaizi",
+        "day": "Sun",
+        "shift": "12:00 - 21:00",
+        "type": "Lunch",
+        "start": "15:30",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Jana Alkhunaizi",
+        "day": "Sun",
+        "shift": "12:00 - 21:00",
+        "type": "Break 2",
+        "start": "18:45",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Jana Alkhunaizi",
+        "day": "Tue",
+        "shift": "12:00 - 21:00",
+        "type": "Break 1",
+        "start": "12:45",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Jana Alkhunaizi",
+        "day": "Tue",
+        "shift": "12:00 - 21:00",
+        "type": "Lunch",
+        "start": "14:00",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Jana Alkhunaizi",
+        "day": "Tue",
+        "shift": "12:00 - 21:00",
+        "type": "Break 2",
+        "start": "15:30",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Jana Alkhunaizi",
+        "day": "Thu",
+        "shift": "16:00 - 01:00",
+        "type": "Break 1",
+        "start": "18:15",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Jana Alkhunaizi",
+        "day": "Thu",
+        "shift": "16:00 - 01:00",
+        "type": "Lunch",
+        "start": "21:00",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Jana Alkhunaizi",
+        "day": "Thu",
+        "shift": "16:00 - 01:00",
+        "type": "Break 2",
+        "start": "00:00",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Jana Alkhunaizi",
+        "day": "Fri",
+        "shift": "17:00 - 02:00",
+        "type": "Break 1",
+        "start": "17:45",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Jana Alkhunaizi",
+        "day": "Fri",
+        "shift": "17:00 - 02:00",
+        "type": "Lunch",
+        "start": "20:30",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Jana Alkhunaizi",
+        "day": "Fri",
+        "shift": "17:00 - 02:00",
+        "type": "Break 2",
+        "start": "00:00",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Rahma Alsayed",
+        "day": "Sun",
+        "shift": "00:00 - 09:00",
+        "type": "Break 1",
+        "start": "05:15",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Rahma Alsayed",
+        "day": "Sun",
+        "shift": "00:00 - 09:00",
+        "type": "Lunch",
+        "start": "06:30",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Rahma Alsayed",
+        "day": "Sun",
+        "shift": "00:00 - 09:00",
+        "type": "Break 2",
+        "start": "08:00",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Rahma Alsayed",
+        "day": "Mon",
+        "shift": "15:00 - 00:00",
+        "type": "Break 1",
+        "start": "15:45",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Rahma Alsayed",
+        "day": "Mon",
+        "shift": "15:00 - 00:00",
+        "type": "Lunch",
+        "start": "18:15",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Rahma Alsayed",
+        "day": "Mon",
+        "shift": "15:00 - 00:00",
+        "type": "Break 2",
+        "start": "21:15",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Rahma Alsayed",
+        "day": "Wed",
+        "shift": "00:00 - 09:00",
+        "type": "Break 1",
+        "start": "04:45",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Rahma Alsayed",
+        "day": "Wed",
+        "shift": "00:00 - 09:00",
+        "type": "Lunch",
+        "start": "06:00",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Rahma Alsayed",
+        "day": "Wed",
+        "shift": "00:00 - 09:00",
+        "type": "Break 2",
+        "start": "08:00",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Rahma Alsayed",
+        "day": "Fri",
+        "shift": "17:00 - 02:00",
+        "type": "Break 1",
+        "start": "22:00",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Rahma Alsayed",
+        "day": "Fri",
+        "shift": "17:00 - 02:00",
+        "type": "Lunch",
+        "start": "23:15",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Rahma Alsayed",
+        "day": "Fri",
+        "shift": "17:00 - 02:00",
+        "type": "Break 2",
+        "start": "00:45",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Sherif Yusri",
+        "day": "Sun",
+        "shift": "18:00 - 03:00",
+        "type": "Break 1",
+        "start": "19:45",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Sherif Yusri",
+        "day": "Sun",
+        "shift": "18:00 - 03:00",
+        "type": "Lunch",
+        "start": "22:15",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Sherif Yusri",
+        "day": "Sun",
+        "shift": "18:00 - 03:00",
+        "type": "Break 2",
+        "start": "01:15",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Sherif Yusri",
+        "day": "Mon",
+        "shift": "18:00 - 03:00",
+        "type": "Break 1",
+        "start": "18:45",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Sherif Yusri",
+        "day": "Mon",
+        "shift": "18:00 - 03:00",
+        "type": "Lunch",
+        "start": "20:00",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Sherif Yusri",
+        "day": "Mon",
+        "shift": "18:00 - 03:00",
+        "type": "Break 2",
+        "start": "21:45",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Sherif Yusri",
+        "day": "Wed",
+        "shift": "20:00 - 05:00",
+        "type": "Break 1",
+        "start": "22:30",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Sherif Yusri",
+        "day": "Wed",
+        "shift": "20:00 - 05:00",
+        "type": "Lunch",
+        "start": "00:30",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Sherif Yusri",
+        "day": "Wed",
+        "shift": "20:00 - 05:00",
+        "type": "Break 2",
+        "start": "03:30",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Sherif Yusri",
+        "day": "Thu",
+        "shift": "18:00 - 03:00",
+        "type": "Break 1",
+        "start": "20:15",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Sherif Yusri",
+        "day": "Thu",
+        "shift": "18:00 - 03:00",
+        "type": "Lunch",
+        "start": "22:45",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Sherif Yusri",
+        "day": "Thu",
+        "shift": "18:00 - 03:00",
+        "type": "Break 2",
+        "start": "01:30",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Sherif Yusri",
+        "day": "Fri",
+        "shift": "17:00 - 02:00",
+        "type": "Break 1",
+        "start": "19:15",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Sherif Yusri",
+        "day": "Fri",
+        "shift": "17:00 - 02:00",
+        "type": "Lunch",
+        "start": "22:15",
+        "duration": 30,
+        "status": "Scheduled"
+      }
+    },
+    {
+      "type": "UNKNOWN_BREAK_ASSOCIATE_OR_DAY",
+      "row": {
+        "associate": "Sherif Yusri",
+        "day": "Fri",
+        "shift": "17:00 - 02:00",
+        "type": "Break 2",
+        "start": "01:00",
+        "duration": 15,
+        "status": "Scheduled"
+      }
+    }
+  ],
+  "warnings": [
+    {
+      "type": "EXTRA_OUTPUT_ASSOCIATES",
+      "count": 8,
+      "examples": [
+        "abdelrahman khaled",
+        "ezzelden morgan",
+        "jana alkhunaizi",
+        "jana sultan",
+        "menna soliman",
+        "rahma alsayed",
+        "sherif yusri",
+        "zainab elsaftey"
+      ]
+    }
+  ],
+  "interval_rows": [
+    {
+      "day": "Sun",
+      "interval": "00:00",
+      "required": 2.0,
+      "before_effective": 1.4,
+      "after_effective": 1.4,
+      "before_pct": 0.7,
+      "after_pct": 0.7,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Sun",
+      "interval": "00:30",
+      "required": 2.0,
+      "before_effective": 1.4,
+      "after_effective": 1.0499999999999998,
+      "before_pct": 0.7,
+      "after_pct": 0.5249999999999999,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Sun",
+      "interval": "01:00",
+      "required": 2.0,
+      "before_effective": 1.4,
+      "after_effective": 1.4,
+      "before_pct": 0.7,
+      "after_pct": 0.7,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Sun",
+      "interval": "01:30",
+      "required": 2.0,
+      "before_effective": 1.4,
+      "after_effective": 1.0499999999999998,
+      "before_pct": 0.7,
+      "after_pct": 0.5249999999999999,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Sun",
+      "interval": "02:00",
+      "required": 2.0,
+      "before_effective": 1.6,
+      "after_effective": 1.6,
+      "before_pct": 0.8,
+      "after_pct": 0.8,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Sun",
+      "interval": "02:30",
+      "required": 3.0,
+      "before_effective": 1.6,
+      "after_effective": 1.6,
+      "before_pct": 0.5333333333333333,
+      "after_pct": 0.5333333333333333,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Sun",
+      "interval": "03:00",
+      "required": 2.0,
+      "before_effective": 3.0,
+      "after_effective": 3.0,
+      "before_pct": 1.5,
+      "after_pct": 1.5,
+      "avoidable_overage_fte": 1.0
+    },
+    {
+      "day": "Sun",
+      "interval": "03:30",
+      "required": 2.0,
+      "before_effective": 3.0,
+      "after_effective": 3.0,
+      "before_pct": 1.5,
+      "after_pct": 1.5,
+      "avoidable_overage_fte": 1.0
+    },
+    {
+      "day": "Sun",
+      "interval": "04:00",
+      "required": 3.0,
+      "before_effective": 4.0,
+      "after_effective": 3.5,
+      "before_pct": 1.3333333333333333,
+      "after_pct": 1.1666666666666667,
+      "avoidable_overage_fte": 0.5
+    },
+    {
+      "day": "Sun",
+      "interval": "04:30",
+      "required": 2.0,
+      "before_effective": 4.0,
+      "after_effective": 2.5,
+      "before_pct": 2.0,
+      "after_pct": 1.25,
+      "avoidable_overage_fte": 0.5
+    },
+    {
+      "day": "Sun",
+      "interval": "05:00",
+      "required": 2.0,
+      "before_effective": 6.0,
+      "after_effective": 5.5,
+      "before_pct": 3.0,
+      "after_pct": 2.75,
+      "avoidable_overage_fte": 3.5
+    },
+    {
+      "day": "Sun",
+      "interval": "05:30",
+      "required": 2.0,
+      "before_effective": 6.0,
+      "after_effective": 5.0,
+      "before_pct": 3.0,
+      "after_pct": 2.5,
+      "avoidable_overage_fte": 3.0
+    },
+    {
+      "day": "Sun",
+      "interval": "06:00",
+      "required": 2.0,
+      "before_effective": 6.0,
+      "after_effective": 5.5,
+      "before_pct": 3.0,
+      "after_pct": 2.75,
+      "avoidable_overage_fte": 3.5
+    },
+    {
+      "day": "Sun",
+      "interval": "06:30",
+      "required": 2.0,
+      "before_effective": 6.0,
+      "after_effective": 5.5,
+      "before_pct": 3.0,
+      "after_pct": 2.75,
+      "avoidable_overage_fte": 3.5
+    },
+    {
+      "day": "Sun",
+      "interval": "07:00",
+      "required": 3.0,
+      "before_effective": 6.0,
+      "after_effective": 4.0,
+      "before_pct": 2.0,
+      "after_pct": 1.3333333333333333,
+      "avoidable_overage_fte": 1.0
+    },
+    {
+      "day": "Sun",
+      "interval": "07:30",
+      "required": 2.0,
+      "before_effective": 6.0,
+      "after_effective": 5.0,
+      "before_pct": 3.0,
+      "after_pct": 2.5,
+      "avoidable_overage_fte": 3.0
+    },
+    {
+      "day": "Sun",
+      "interval": "08:00",
+      "required": 2.0,
+      "before_effective": 7.0,
+      "after_effective": 6.0,
+      "before_pct": 3.5,
+      "after_pct": 3.0,
+      "avoidable_overage_fte": 4.0
+    },
+    {
+      "day": "Sun",
+      "interval": "08:30",
+      "required": 2.0,
+      "before_effective": 7.0,
+      "after_effective": 5.5,
+      "before_pct": 3.5,
+      "after_pct": 2.75,
+      "avoidable_overage_fte": 3.5
+    },
+    {
+      "day": "Sun",
+      "interval": "09:00",
+      "required": 2.0,
+      "before_effective": 5.0,
+      "after_effective": 4.5,
+      "before_pct": 2.5,
+      "after_pct": 2.25,
+      "avoidable_overage_fte": 2.5
+    },
+    {
+      "day": "Sun",
+      "interval": "09:30",
+      "required": 2.0,
+      "before_effective": 5.0,
+      "after_effective": 5.0,
+      "before_pct": 2.5,
+      "after_pct": 2.5,
+      "avoidable_overage_fte": 3.0
+    },
+    {
+      "day": "Sun",
+      "interval": "10:00",
+      "required": 3.0,
+      "before_effective": 6.0,
+      "after_effective": 5.5,
+      "before_pct": 2.0,
+      "after_pct": 1.8333333333333333,
+      "avoidable_overage_fte": 2.5
+    },
+    {
+      "day": "Sun",
+      "interval": "10:30",
+      "required": 2.0,
+      "before_effective": 6.0,
+      "after_effective": 5.5,
+      "before_pct": 3.0,
+      "after_pct": 2.75,
+      "avoidable_overage_fte": 3.5
+    },
+    {
+      "day": "Sun",
+      "interval": "11:00",
+      "required": 3.0,
+      "before_effective": 7.0,
+      "after_effective": 6.5,
+      "before_pct": 2.3333333333333335,
+      "after_pct": 2.1666666666666665,
+      "avoidable_overage_fte": 3.5
+    },
+    {
+      "day": "Sun",
+      "interval": "11:30",
+      "required": 3.0,
+      "before_effective": 7.0,
+      "after_effective": 6.5,
+      "before_pct": 2.3333333333333335,
+      "after_pct": 2.1666666666666665,
+      "avoidable_overage_fte": 3.5
+    },
+    {
+      "day": "Sun",
+      "interval": "12:00",
+      "required": 3.0,
+      "before_effective": 6.0,
+      "after_effective": 5.5,
+      "before_pct": 2.0,
+      "after_pct": 1.8333333333333333,
+      "avoidable_overage_fte": 2.5
+    },
+    {
+      "day": "Sun",
+      "interval": "12:30",
+      "required": 3.0,
+      "before_effective": 6.0,
+      "after_effective": 4.5,
+      "before_pct": 2.0,
+      "after_pct": 1.5,
+      "avoidable_overage_fte": 1.5
+    },
+    {
+      "day": "Sun",
+      "interval": "13:00",
+      "required": 3.0,
+      "before_effective": 5.0,
+      "after_effective": 5.0,
+      "before_pct": 1.6666666666666667,
+      "after_pct": 1.6666666666666667,
+      "avoidable_overage_fte": 2.0
+    },
+    {
+      "day": "Sun",
+      "interval": "13:30",
+      "required": 3.0,
+      "before_effective": 5.0,
+      "after_effective": 5.0,
+      "before_pct": 1.6666666666666667,
+      "after_pct": 1.6666666666666667,
+      "avoidable_overage_fte": 2.0
+    },
+    {
+      "day": "Sun",
+      "interval": "14:00",
+      "required": 2.0,
+      "before_effective": 3.0,
+      "after_effective": 2.5,
+      "before_pct": 1.5,
+      "after_pct": 1.25,
+      "avoidable_overage_fte": 0.5
+    },
+    {
+      "day": "Sun",
+      "interval": "14:30",
+      "required": 3.0,
+      "before_effective": 3.0,
+      "after_effective": 3.0,
+      "before_pct": 1.0,
+      "after_pct": 1.0,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Sun",
+      "interval": "15:00",
+      "required": 3.0,
+      "before_effective": 5.0,
+      "after_effective": 4.0,
+      "before_pct": 1.6666666666666667,
+      "after_pct": 1.3333333333333333,
+      "avoidable_overage_fte": 1.0
+    },
+    {
+      "day": "Sun",
+      "interval": "15:30",
+      "required": 3.0,
+      "before_effective": 5.0,
+      "after_effective": 4.0,
+      "before_pct": 1.6666666666666667,
+      "after_pct": 1.3333333333333333,
+      "avoidable_overage_fte": 1.0
+    },
+    {
+      "day": "Sun",
+      "interval": "16:00",
+      "required": 11.0,
+      "before_effective": 6.628571428571429,
+      "after_effective": 6.628571428571429,
+      "before_pct": 0.6025974025974027,
+      "after_pct": 0.6025974025974027,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Sun",
+      "interval": "16:30",
+      "required": 10.0,
+      "before_effective": 6.628571428571429,
+      "after_effective": 6.214285714285714,
+      "before_pct": 0.6628571428571429,
+      "after_pct": 0.6214285714285714,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Sun",
+      "interval": "17:00",
+      "required": 11.0,
+      "before_effective": 12.707692307692307,
+      "after_effective": 12.253846153846153,
+      "before_pct": 1.1552447552447551,
+      "after_pct": 1.1139860139860138,
+      "avoidable_overage_fte": 0.45384615384615223
+    },
+    {
+      "day": "Sun",
+      "interval": "17:30",
+      "required": 11.0,
+      "before_effective": 12.707692307692307,
+      "after_effective": 12.253846153846153,
+      "before_pct": 1.1552447552447551,
+      "after_pct": 1.1139860139860138,
+      "avoidable_overage_fte": 0.45384615384615223
+    },
+    {
+      "day": "Sun",
+      "interval": "18:00",
+      "required": 13.0,
+      "before_effective": 16.457142857142856,
+      "after_effective": 15.542857142857143,
+      "before_pct": 1.2659340659340659,
+      "after_pct": 1.1956043956043956,
+      "avoidable_overage_fte": 1.8285714285714292
+    },
+    {
+      "day": "Sun",
+      "interval": "18:30",
+      "required": 13.0,
+      "before_effective": 16.457142857142856,
+      "after_effective": 15.542857142857143,
+      "before_pct": 1.2659340659340659,
+      "after_pct": 1.1956043956043956,
+      "avoidable_overage_fte": 1.8285714285714292
+    },
+    {
+      "day": "Sun",
+      "interval": "19:00",
+      "required": 14.0,
+      "before_effective": 18.0,
+      "after_effective": 14.85,
+      "before_pct": 1.2857142857142858,
+      "after_pct": 1.0607142857142857,
+      "avoidable_overage_fte": 0.4499999999999993
+    },
+    {
+      "day": "Sun",
+      "interval": "19:30",
+      "required": 13.0,
+      "before_effective": 18.0,
+      "after_effective": 14.4,
+      "before_pct": 1.3846153846153846,
+      "after_pct": 1.1076923076923078,
+      "avoidable_overage_fte": 0.9000000000000004
+    },
+    {
+      "day": "Sun",
+      "interval": "20:00",
+      "required": 14.0,
+      "before_effective": 18.709090909090907,
+      "after_effective": 17.37272727272727,
+      "before_pct": 1.3363636363636362,
+      "after_pct": 1.2409090909090907,
+      "avoidable_overage_fte": 3.1181818181818173
+    },
+    {
+      "day": "Sun",
+      "interval": "20:30",
+      "required": 13.0,
+      "before_effective": 18.709090909090907,
+      "after_effective": 16.036363636363635,
+      "before_pct": 1.439160839160839,
+      "after_pct": 1.2335664335664336,
+      "avoidable_overage_fte": 2.672727272727272
+    },
+    {
+      "day": "Sun",
+      "interval": "21:00",
+      "required": 14.0,
+      "before_effective": 18.900000000000002,
+      "after_effective": 18.0,
+      "before_pct": 1.35,
+      "after_pct": 1.2857142857142858,
+      "avoidable_overage_fte": 3.5999999999999996
+    },
+    {
+      "day": "Sun",
+      "interval": "21:30",
+      "required": 13.0,
+      "before_effective": 18.900000000000002,
+      "after_effective": 15.3,
+      "before_pct": 1.453846153846154,
+      "after_pct": 1.176923076923077,
+      "avoidable_overage_fte": 1.8000000000000007
+    },
+    {
+      "day": "Sun",
+      "interval": "22:00",
+      "required": 13.0,
+      "before_effective": 18.900000000000002,
+      "after_effective": 15.3,
+      "before_pct": 1.453846153846154,
+      "after_pct": 1.176923076923077,
+      "avoidable_overage_fte": 1.8000000000000007
+    },
+    {
+      "day": "Sun",
+      "interval": "22:30",
+      "required": 12.0,
+      "before_effective": 18.900000000000002,
+      "after_effective": 14.85,
+      "before_pct": 1.5750000000000002,
+      "after_pct": 1.2375,
+      "avoidable_overage_fte": 2.25
+    },
+    {
+      "day": "Sun",
+      "interval": "23:00",
+      "required": 12.0,
+      "before_effective": 18.900000000000002,
+      "after_effective": 17.1,
+      "before_pct": 1.5750000000000002,
+      "after_pct": 1.425,
+      "avoidable_overage_fte": 4.500000000000002
+    },
+    {
+      "day": "Sun",
+      "interval": "23:30",
+      "required": 15.0,
+      "before_effective": 18.900000000000002,
+      "after_effective": 18.0,
+      "before_pct": 1.2600000000000002,
+      "after_pct": 1.2,
+      "avoidable_overage_fte": 2.6999999999999993
+    },
+    {
+      "day": "Mon",
+      "interval": "00:00",
+      "required": 13.0,
+      "before_effective": 17.37142857142857,
+      "after_effective": 15.085714285714285,
+      "before_pct": 1.3362637362637362,
+      "after_pct": 1.1604395604395603,
+      "avoidable_overage_fte": 1.3714285714285719
+    },
+    {
+      "day": "Mon",
+      "interval": "00:30",
+      "required": 13.0,
+      "before_effective": 17.37142857142857,
+      "after_effective": 13.714285714285714,
+      "before_pct": 1.3362637362637362,
+      "after_pct": 1.054945054945055,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Mon",
+      "interval": "01:00",
+      "required": 13.0,
+      "before_effective": 16.338461538461537,
+      "after_effective": 16.338461538461537,
+      "before_pct": 1.2568047337278105,
+      "after_pct": 1.2568047337278105,
+      "avoidable_overage_fte": 2.7230769230769223
+    },
+    {
+      "day": "Mon",
+      "interval": "01:30",
+      "required": 11.0,
+      "before_effective": 16.338461538461537,
+      "after_effective": 14.069230769230769,
+      "before_pct": 1.4853146853146852,
+      "after_pct": 1.279020979020979,
+      "avoidable_overage_fte": 2.2692307692307683
+    },
+    {
+      "day": "Mon",
+      "interval": "02:00",
+      "required": 14.0,
+      "before_effective": 9.35,
+      "after_effective": 9.35,
+      "before_pct": 0.6678571428571428,
+      "after_pct": 0.6678571428571428,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Mon",
+      "interval": "02:30",
+      "required": 10.0,
+      "before_effective": 9.35,
+      "after_effective": 8.924999999999999,
+      "before_pct": 0.9349999999999999,
+      "after_pct": 0.8924999999999998,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Mon",
+      "interval": "03:00",
+      "required": 2.0,
+      "before_effective": 8.0,
+      "after_effective": 6.5,
+      "before_pct": 4.0,
+      "after_pct": 3.25,
+      "avoidable_overage_fte": 4.5
+    },
+    {
+      "day": "Mon",
+      "interval": "03:30",
+      "required": 2.0,
+      "before_effective": 8.0,
+      "after_effective": 6.5,
+      "before_pct": 4.0,
+      "after_pct": 3.25,
+      "avoidable_overage_fte": 4.5
+    },
+    {
+      "day": "Mon",
+      "interval": "04:00",
+      "required": 1.0,
+      "before_effective": 6.0,
+      "after_effective": 6.0,
+      "before_pct": 6.0,
+      "after_pct": 6.0,
+      "avoidable_overage_fte": 5.0
+    },
+    {
+      "day": "Mon",
+      "interval": "04:30",
+      "required": 2.0,
+      "before_effective": 6.0,
+      "after_effective": 5.0,
+      "before_pct": 3.0,
+      "after_pct": 2.5,
+      "avoidable_overage_fte": 3.0
+    },
+    {
+      "day": "Mon",
+      "interval": "05:00",
+      "required": 3.0,
+      "before_effective": 6.0,
+      "after_effective": 5.0,
+      "before_pct": 2.0,
+      "after_pct": 1.6666666666666667,
+      "avoidable_overage_fte": 2.0
+    },
+    {
+      "day": "Mon",
+      "interval": "05:30",
+      "required": 2.0,
+      "before_effective": 6.0,
+      "after_effective": 4.0,
+      "before_pct": 3.0,
+      "after_pct": 2.0,
+      "avoidable_overage_fte": 2.0
+    },
+    {
+      "day": "Mon",
+      "interval": "06:00",
+      "required": 2.0,
+      "before_effective": 6.0,
+      "after_effective": 6.0,
+      "before_pct": 3.0,
+      "after_pct": 3.0,
+      "avoidable_overage_fte": 4.0
+    },
+    {
+      "day": "Mon",
+      "interval": "06:30",
+      "required": 2.0,
+      "before_effective": 6.0,
+      "after_effective": 5.0,
+      "before_pct": 3.0,
+      "after_pct": 2.5,
+      "avoidable_overage_fte": 3.0
+    },
+    {
+      "day": "Mon",
+      "interval": "07:00",
+      "required": 2.0,
+      "before_effective": 6.0,
+      "after_effective": 4.0,
+      "before_pct": 3.0,
+      "after_pct": 2.0,
+      "avoidable_overage_fte": 2.0
+    },
+    {
+      "day": "Mon",
+      "interval": "07:30",
+      "required": 2.0,
+      "before_effective": 6.0,
+      "after_effective": 5.5,
+      "before_pct": 3.0,
+      "after_pct": 2.75,
+      "avoidable_overage_fte": 3.5
+    },
+    {
+      "day": "Mon",
+      "interval": "08:00",
+      "required": 3.0,
+      "before_effective": 7.0,
+      "after_effective": 6.5,
+      "before_pct": 2.3333333333333335,
+      "after_pct": 2.1666666666666665,
+      "avoidable_overage_fte": 3.5
+    },
+    {
+      "day": "Mon",
+      "interval": "08:30",
+      "required": 2.0,
+      "before_effective": 7.0,
+      "after_effective": 5.5,
+      "before_pct": 3.5,
+      "after_pct": 2.75,
+      "avoidable_overage_fte": 3.5
+    },
+    {
+      "day": "Mon",
+      "interval": "09:00",
+      "required": 2.0,
+      "before_effective": 8.0,
+      "after_effective": 7.5,
+      "before_pct": 4.0,
+      "after_pct": 3.75,
+      "avoidable_overage_fte": 5.5
+    },
+    {
+      "day": "Mon",
+      "interval": "09:30",
+      "required": 2.0,
+      "before_effective": 8.0,
+      "after_effective": 8.0,
+      "before_pct": 4.0,
+      "after_pct": 4.0,
+      "avoidable_overage_fte": 6.0
+    },
+    {
+      "day": "Mon",
+      "interval": "10:00",
+      "required": 2.0,
+      "before_effective": 7.0,
+      "after_effective": 6.5,
+      "before_pct": 3.5,
+      "after_pct": 3.25,
+      "avoidable_overage_fte": 4.5
+    },
+    {
+      "day": "Mon",
+      "interval": "10:30",
+      "required": 2.0,
+      "before_effective": 7.0,
+      "after_effective": 6.0,
+      "before_pct": 3.5,
+      "after_pct": 3.0,
+      "avoidable_overage_fte": 4.0
+    },
+    {
+      "day": "Mon",
+      "interval": "11:00",
+      "required": 3.0,
+      "before_effective": 8.0,
+      "after_effective": 7.5,
+      "before_pct": 2.6666666666666665,
+      "after_pct": 2.5,
+      "avoidable_overage_fte": 4.5
+    },
+    {
+      "day": "Mon",
+      "interval": "11:30",
+      "required": 3.0,
+      "before_effective": 8.0,
+      "after_effective": 7.0,
+      "before_pct": 2.6666666666666665,
+      "after_pct": 2.3333333333333335,
+      "avoidable_overage_fte": 4.0
+    },
+    {
+      "day": "Mon",
+      "interval": "12:00",
+      "required": 3.0,
+      "before_effective": 7.0,
+      "after_effective": 6.0,
+      "before_pct": 2.3333333333333335,
+      "after_pct": 2.0,
+      "avoidable_overage_fte": 3.0
+    },
+    {
+      "day": "Mon",
+      "interval": "12:30",
+      "required": 2.0,
+      "before_effective": 7.0,
+      "after_effective": 7.0,
+      "before_pct": 3.5,
+      "after_pct": 3.5,
+      "avoidable_overage_fte": 5.0
+    },
+    {
+      "day": "Mon",
+      "interval": "13:00",
+      "required": 3.0,
+      "before_effective": 6.0,
+      "after_effective": 6.0,
+      "before_pct": 2.0,
+      "after_pct": 2.0,
+      "avoidable_overage_fte": 3.0
+    },
+    {
+      "day": "Mon",
+      "interval": "13:30",
+      "required": 2.0,
+      "before_effective": 6.0,
+      "after_effective": 4.0,
+      "before_pct": 3.0,
+      "after_pct": 2.0,
+      "avoidable_overage_fte": 2.0
+    },
+    {
+      "day": "Mon",
+      "interval": "14:00",
+      "required": 3.0,
+      "before_effective": 5.0,
+      "after_effective": 4.5,
+      "before_pct": 1.6666666666666667,
+      "after_pct": 1.5,
+      "avoidable_overage_fte": 1.5
+    },
+    {
+      "day": "Mon",
+      "interval": "14:30",
+      "required": 3.0,
+      "before_effective": 5.0,
+      "after_effective": 5.0,
+      "before_pct": 1.6666666666666667,
+      "after_pct": 1.6666666666666667,
+      "avoidable_overage_fte": 2.0
+    },
+    {
+      "day": "Mon",
+      "interval": "15:00",
+      "required": 2.0,
+      "before_effective": 6.0,
+      "after_effective": 5.5,
+      "before_pct": 3.0,
+      "after_pct": 2.75,
+      "avoidable_overage_fte": 3.5
+    },
+    {
+      "day": "Mon",
+      "interval": "15:30",
+      "required": 3.0,
+      "before_effective": 6.0,
+      "after_effective": 5.0,
+      "before_pct": 2.0,
+      "after_pct": 1.6666666666666667,
+      "avoidable_overage_fte": 2.0
+    },
+    {
+      "day": "Mon",
+      "interval": "16:00",
+      "required": 9.0,
+      "before_effective": 6.4,
+      "after_effective": 6.0,
+      "before_pct": 0.7111111111111111,
+      "after_pct": 0.6666666666666666,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Mon",
+      "interval": "16:30",
+      "required": 10.0,
+      "before_effective": 6.4,
+      "after_effective": 6.4,
+      "before_pct": 0.64,
+      "after_pct": 0.64,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Mon",
+      "interval": "17:00",
+      "required": 12.0,
+      "before_effective": 12.707692307692307,
+      "after_effective": 12.707692307692307,
+      "before_pct": 1.058974358974359,
+      "after_pct": 1.058974358974359,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Mon",
+      "interval": "17:30",
+      "required": 12.0,
+      "before_effective": 12.707692307692307,
+      "after_effective": 11.8,
+      "before_pct": 1.058974358974359,
+      "after_pct": 0.9833333333333334,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Mon",
+      "interval": "18:00",
+      "required": 11.0,
+      "before_effective": 14.523076923076923,
+      "after_effective": 12.253846153846153,
+      "before_pct": 1.3202797202797203,
+      "after_pct": 1.1139860139860138,
+      "avoidable_overage_fte": 0.45384615384615223
+    },
+    {
+      "day": "Mon",
+      "interval": "18:30",
+      "required": 11.0,
+      "before_effective": 14.523076923076923,
+      "after_effective": 12.707692307692307,
+      "before_pct": 1.3202797202797203,
+      "after_pct": 1.1552447552447551,
+      "avoidable_overage_fte": 0.9076923076923062
+    },
+    {
+      "day": "Mon",
+      "interval": "19:00",
+      "required": 15.0,
+      "before_effective": 14.4,
+      "after_effective": 14.4,
+      "before_pct": 0.9600000000000001,
+      "after_pct": 0.9600000000000001,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Mon",
+      "interval": "19:30",
+      "required": 12.0,
+      "before_effective": 14.4,
+      "after_effective": 11.700000000000001,
+      "before_pct": 1.2,
+      "after_pct": 0.9750000000000001,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Mon",
+      "interval": "20:00",
+      "required": 11.0,
+      "before_effective": 15.430769230769231,
+      "after_effective": 13.161538461538461,
+      "before_pct": 1.4027972027972029,
+      "after_pct": 1.1965034965034964,
+      "avoidable_overage_fte": 1.3615384615384603
+    },
+    {
+      "day": "Mon",
+      "interval": "20:30",
+      "required": 13.0,
+      "before_effective": 15.430769230769231,
+      "after_effective": 13.161538461538461,
+      "before_pct": 1.18698224852071,
+      "after_pct": 1.0124260355029586,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Mon",
+      "interval": "21:00",
+      "required": 13.0,
+      "before_effective": 17.1,
+      "after_effective": 13.950000000000001,
+      "before_pct": 1.3153846153846156,
+      "after_pct": 1.0730769230769233,
+      "avoidable_overage_fte": 0.45000000000000107
+    },
+    {
+      "day": "Mon",
+      "interval": "21:30",
+      "required": 14.0,
+      "before_effective": 17.1,
+      "after_effective": 15.75,
+      "before_pct": 1.2214285714285715,
+      "after_pct": 1.125,
+      "avoidable_overage_fte": 1.3499999999999996
+    },
+    {
+      "day": "Mon",
+      "interval": "22:00",
+      "required": 14.0,
+      "before_effective": 17.1,
+      "after_effective": 14.85,
+      "before_pct": 1.2214285714285715,
+      "after_pct": 1.0607142857142857,
+      "avoidable_overage_fte": 0.4499999999999993
+    },
+    {
+      "day": "Mon",
+      "interval": "22:30",
+      "required": 12.0,
+      "before_effective": 17.1,
+      "after_effective": 14.4,
+      "before_pct": 1.425,
+      "after_pct": 1.2,
+      "avoidable_overage_fte": 1.8000000000000007
+    },
+    {
+      "day": "Mon",
+      "interval": "23:00",
+      "required": 14.0,
+      "before_effective": 16.2,
+      "after_effective": 15.75,
+      "before_pct": 1.157142857142857,
+      "after_pct": 1.125,
+      "avoidable_overage_fte": 1.3499999999999996
+    },
+    {
+      "day": "Mon",
+      "interval": "23:30",
+      "required": 15.0,
+      "before_effective": 16.2,
+      "after_effective": 13.950000000000001,
+      "before_pct": 1.0799999999999998,
+      "after_pct": 0.93,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Tue",
+      "interval": "00:00",
+      "required": 13.0,
+      "before_effective": 15.542857142857143,
+      "after_effective": 15.085714285714285,
+      "before_pct": 1.1956043956043956,
+      "after_pct": 1.1604395604395603,
+      "avoidable_overage_fte": 1.3714285714285719
+    },
+    {
+      "day": "Tue",
+      "interval": "00:30",
+      "required": 10.0,
+      "before_effective": 15.542857142857143,
+      "after_effective": 11.885714285714286,
+      "before_pct": 1.5542857142857143,
+      "after_pct": 1.1885714285714286,
+      "avoidable_overage_fte": 1.8285714285714292
+    },
+    {
+      "day": "Tue",
+      "interval": "01:00",
+      "required": 12.0,
+      "before_effective": 14.523076923076923,
+      "after_effective": 14.069230769230769,
+      "before_pct": 1.2102564102564102,
+      "after_pct": 1.1724358974358975,
+      "avoidable_overage_fte": 1.361538461538462
+    },
+    {
+      "day": "Tue",
+      "interval": "01:30",
+      "required": 11.0,
+      "before_effective": 14.523076923076923,
+      "after_effective": 13.161538461538461,
+      "before_pct": 1.3202797202797203,
+      "after_pct": 1.1965034965034964,
+      "avoidable_overage_fte": 1.3615384615384603
+    },
+    {
+      "day": "Tue",
+      "interval": "02:00",
+      "required": 11.0,
+      "before_effective": 7.457142857142857,
+      "after_effective": 7.457142857142857,
+      "before_pct": 0.6779220779220779,
+      "after_pct": 0.6779220779220779,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Tue",
+      "interval": "02:30",
+      "required": 8.0,
+      "before_effective": 7.457142857142857,
+      "after_effective": 7.042857142857144,
+      "before_pct": 0.9321428571428572,
+      "after_pct": 0.880357142857143,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Tue",
+      "interval": "03:00",
+      "required": 2.0,
+      "before_effective": 7.0,
+      "after_effective": 5.0,
+      "before_pct": 3.5,
+      "after_pct": 2.5,
+      "avoidable_overage_fte": 3.0
+    },
+    {
+      "day": "Tue",
+      "interval": "03:30",
+      "required": 2.0,
+      "before_effective": 7.0,
+      "after_effective": 6.0,
+      "before_pct": 3.5,
+      "after_pct": 3.0,
+      "avoidable_overage_fte": 4.0
+    },
+    {
+      "day": "Tue",
+      "interval": "04:00",
+      "required": 2.0,
+      "before_effective": 7.0,
+      "after_effective": 6.5,
+      "before_pct": 3.5,
+      "after_pct": 3.25,
+      "avoidable_overage_fte": 4.5
+    },
+    {
+      "day": "Tue",
+      "interval": "04:30",
+      "required": 2.0,
+      "before_effective": 7.0,
+      "after_effective": 7.0,
+      "before_pct": 3.5,
+      "after_pct": 3.5,
+      "avoidable_overage_fte": 5.0
+    },
+    {
+      "day": "Tue",
+      "interval": "05:00",
+      "required": 2.0,
+      "before_effective": 7.0,
+      "after_effective": 5.5,
+      "before_pct": 3.5,
+      "after_pct": 2.75,
+      "avoidable_overage_fte": 3.5
+    },
+    {
+      "day": "Tue",
+      "interval": "05:30",
+      "required": 2.0,
+      "before_effective": 7.0,
+      "after_effective": 6.0,
+      "before_pct": 3.5,
+      "after_pct": 3.0,
+      "avoidable_overage_fte": 4.0
+    },
+    {
+      "day": "Tue",
+      "interval": "06:00",
+      "required": 2.0,
+      "before_effective": 5.0,
+      "after_effective": 4.0,
+      "before_pct": 2.5,
+      "after_pct": 2.0,
+      "avoidable_overage_fte": 2.0
+    },
+    {
+      "day": "Tue",
+      "interval": "06:30",
+      "required": 2.0,
+      "before_effective": 5.0,
+      "after_effective": 4.0,
+      "before_pct": 2.5,
+      "after_pct": 2.0,
+      "avoidable_overage_fte": 2.0
+    },
+    {
+      "day": "Tue",
+      "interval": "07:00",
+      "required": 2.0,
+      "before_effective": 5.0,
+      "after_effective": 3.5,
+      "before_pct": 2.5,
+      "after_pct": 1.75,
+      "avoidable_overage_fte": 1.5
+    },
+    {
+      "day": "Tue",
+      "interval": "07:30",
+      "required": 2.0,
+      "before_effective": 5.0,
+      "after_effective": 4.5,
+      "before_pct": 2.5,
+      "after_pct": 2.25,
+      "avoidable_overage_fte": 2.5
+    },
+    {
+      "day": "Tue",
+      "interval": "08:00",
+      "required": 2.0,
+      "before_effective": 7.0,
+      "after_effective": 7.0,
+      "before_pct": 3.5,
+      "after_pct": 3.5,
+      "avoidable_overage_fte": 5.0
+    },
+    {
+      "day": "Tue",
+      "interval": "08:30",
+      "required": 2.0,
+      "before_effective": 7.0,
+      "after_effective": 4.5,
+      "before_pct": 3.5,
+      "after_pct": 2.25,
+      "avoidable_overage_fte": 2.5
+    },
+    {
+      "day": "Tue",
+      "interval": "09:00",
+      "required": 2.0,
+      "before_effective": 7.0,
+      "after_effective": 6.0,
+      "before_pct": 3.5,
+      "after_pct": 3.0,
+      "avoidable_overage_fte": 4.0
+    },
+    {
+      "day": "Tue",
+      "interval": "09:30",
+      "required": 2.0,
+      "before_effective": 7.0,
+      "after_effective": 7.0,
+      "before_pct": 3.5,
+      "after_pct": 3.5,
+      "avoidable_overage_fte": 5.0
+    },
+    {
+      "day": "Tue",
+      "interval": "10:00",
+      "required": 2.0,
+      "before_effective": 7.0,
+      "after_effective": 6.0,
+      "before_pct": 3.5,
+      "after_pct": 3.0,
+      "avoidable_overage_fte": 4.0
+    },
+    {
+      "day": "Tue",
+      "interval": "10:30",
+      "required": 2.0,
+      "before_effective": 7.0,
+      "after_effective": 6.0,
+      "before_pct": 3.5,
+      "after_pct": 3.0,
+      "avoidable_overage_fte": 4.0
+    },
+    {
+      "day": "Tue",
+      "interval": "11:00",
+      "required": 3.0,
+      "before_effective": 8.0,
+      "after_effective": 7.5,
+      "before_pct": 2.6666666666666665,
+      "after_pct": 2.5,
+      "avoidable_overage_fte": 4.5
+    },
+    {
+      "day": "Tue",
+      "interval": "11:30",
+      "required": 3.0,
+      "before_effective": 8.0,
+      "after_effective": 7.0,
+      "before_pct": 2.6666666666666665,
+      "after_pct": 2.3333333333333335,
+      "avoidable_overage_fte": 4.0
+    },
+    {
+      "day": "Tue",
+      "interval": "12:00",
+      "required": 3.0,
+      "before_effective": 9.0,
+      "after_effective": 7.5,
+      "before_pct": 3.0,
+      "after_pct": 2.5,
+      "avoidable_overage_fte": 4.5
+    },
+    {
+      "day": "Tue",
+      "interval": "12:30",
+      "required": 3.0,
+      "before_effective": 9.0,
+      "after_effective": 8.5,
+      "before_pct": 3.0,
+      "after_pct": 2.8333333333333335,
+      "avoidable_overage_fte": 5.5
+    },
+    {
+      "day": "Tue",
+      "interval": "13:00",
+      "required": 3.0,
+      "before_effective": 8.0,
+      "after_effective": 7.5,
+      "before_pct": 2.6666666666666665,
+      "after_pct": 2.5,
+      "avoidable_overage_fte": 4.5
+    },
+    {
+      "day": "Tue",
+      "interval": "13:30",
+      "required": 3.0,
+      "before_effective": 8.0,
+      "after_effective": 6.5,
+      "before_pct": 2.6666666666666665,
+      "after_pct": 2.1666666666666665,
+      "avoidable_overage_fte": 3.5
+    },
+    {
+      "day": "Tue",
+      "interval": "14:00",
+      "required": 3.0,
+      "before_effective": 6.0,
+      "after_effective": 5.5,
+      "before_pct": 2.0,
+      "after_pct": 1.8333333333333333,
+      "avoidable_overage_fte": 2.5
+    },
+    {
+      "day": "Tue",
+      "interval": "14:30",
+      "required": 3.0,
+      "before_effective": 6.0,
+      "after_effective": 5.5,
+      "before_pct": 2.0,
+      "after_pct": 1.8333333333333333,
+      "avoidable_overage_fte": 2.5
+    },
+    {
+      "day": "Tue",
+      "interval": "15:00",
+      "required": 3.0,
+      "before_effective": 8.0,
+      "after_effective": 8.0,
+      "before_pct": 2.6666666666666665,
+      "after_pct": 2.6666666666666665,
+      "avoidable_overage_fte": 5.0
+    },
+    {
+      "day": "Tue",
+      "interval": "15:30",
+      "required": 2.0,
+      "before_effective": 8.0,
+      "after_effective": 8.0,
+      "before_pct": 4.0,
+      "after_pct": 4.0,
+      "avoidable_overage_fte": 6.0
+    },
+    {
+      "day": "Tue",
+      "interval": "16:00",
+      "required": 10.0,
+      "before_effective": 7.2,
+      "after_effective": 6.800000000000001,
+      "before_pct": 0.72,
+      "after_pct": 0.68,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Tue",
+      "interval": "16:30",
+      "required": 10.0,
+      "before_effective": 7.2,
+      "after_effective": 6.800000000000001,
+      "before_pct": 0.72,
+      "after_pct": 0.68,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Tue",
+      "interval": "17:00",
+      "required": 12.0,
+      "before_effective": 12.707692307692307,
+      "after_effective": 10.892307692307693,
+      "before_pct": 1.058974358974359,
+      "after_pct": 0.9076923076923077,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Tue",
+      "interval": "17:30",
+      "required": 11.0,
+      "before_effective": 12.707692307692307,
+      "after_effective": 11.346153846153847,
+      "before_pct": 1.1552447552447551,
+      "after_pct": 1.0314685314685315,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Tue",
+      "interval": "18:00",
+      "required": 14.0,
+      "before_effective": 14.523076923076923,
+      "after_effective": 13.615384615384615,
+      "before_pct": 1.0373626373626375,
+      "after_pct": 0.9725274725274725,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Tue",
+      "interval": "18:30",
+      "required": 12.0,
+      "before_effective": 14.523076923076923,
+      "after_effective": 14.069230769230769,
+      "before_pct": 1.2102564102564102,
+      "after_pct": 1.1724358974358975,
+      "avoidable_overage_fte": 1.361538461538462
+    },
+    {
+      "day": "Tue",
+      "interval": "19:00",
+      "required": 13.0,
+      "before_effective": 13.5,
+      "after_effective": 12.15,
+      "before_pct": 1.0384615384615385,
+      "after_pct": 0.9346153846153846,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Tue",
+      "interval": "19:30",
+      "required": 12.0,
+      "before_effective": 13.5,
+      "after_effective": 10.8,
+      "before_pct": 1.125,
+      "after_pct": 0.9,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Tue",
+      "interval": "20:00",
+      "required": 10.0,
+      "before_effective": 12.707692307692307,
+      "after_effective": 9.53076923076923,
+      "before_pct": 1.2707692307692307,
+      "after_pct": 0.953076923076923,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Tue",
+      "interval": "20:30",
+      "required": 14.0,
+      "before_effective": 12.707692307692307,
+      "after_effective": 10.438461538461539,
+      "before_pct": 0.9076923076923077,
+      "after_pct": 0.7456043956043956,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Tue",
+      "interval": "21:00",
+      "required": 14.0,
+      "before_effective": 14.4,
+      "after_effective": 14.4,
+      "before_pct": 1.0285714285714287,
+      "after_pct": 1.0285714285714287,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Tue",
+      "interval": "21:30",
+      "required": 12.0,
+      "before_effective": 14.4,
+      "after_effective": 12.6,
+      "before_pct": 1.2,
+      "after_pct": 1.05,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Tue",
+      "interval": "22:00",
+      "required": 14.0,
+      "before_effective": 14.4,
+      "after_effective": 13.950000000000001,
+      "before_pct": 1.0285714285714287,
+      "after_pct": 0.9964285714285716,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Tue",
+      "interval": "22:30",
+      "required": 12.0,
+      "before_effective": 14.4,
+      "after_effective": 11.25,
+      "before_pct": 1.2,
+      "after_pct": 0.9375,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Tue",
+      "interval": "23:00",
+      "required": 12.0,
+      "before_effective": 14.4,
+      "after_effective": 11.25,
+      "before_pct": 1.2,
+      "after_pct": 0.9375,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Tue",
+      "interval": "23:30",
+      "required": 13.0,
+      "before_effective": 14.4,
+      "after_effective": 14.4,
+      "before_pct": 1.1076923076923078,
+      "after_pct": 1.1076923076923078,
+      "avoidable_overage_fte": 0.9000000000000004
+    },
+    {
+      "day": "Wed",
+      "interval": "00:00",
+      "required": 11.0,
+      "before_effective": 12.799999999999999,
+      "after_effective": 12.342857142857142,
+      "before_pct": 1.1636363636363636,
+      "after_pct": 1.122077922077922,
+      "avoidable_overage_fte": 0.4571428571428555
+    },
+    {
+      "day": "Wed",
+      "interval": "00:30",
+      "required": 12.0,
+      "before_effective": 12.799999999999999,
+      "after_effective": 11.428571428571429,
+      "before_pct": 1.0666666666666667,
+      "after_pct": 0.9523809523809524,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Wed",
+      "interval": "01:00",
+      "required": 11.0,
+      "before_effective": 12.707692307692307,
+      "after_effective": 11.8,
+      "before_pct": 1.1552447552447551,
+      "after_pct": 1.0727272727272728,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Wed",
+      "interval": "01:30",
+      "required": 11.0,
+      "before_effective": 12.707692307692307,
+      "after_effective": 10.438461538461539,
+      "before_pct": 1.1552447552447551,
+      "after_pct": 0.948951048951049,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Wed",
+      "interval": "02:00",
+      "required": 11.0,
+      "before_effective": 6.8,
+      "after_effective": 6.375,
+      "before_pct": 0.6181818181818182,
+      "after_pct": 0.5795454545454546,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Wed",
+      "interval": "02:30",
+      "required": 9.0,
+      "before_effective": 6.8,
+      "after_effective": 6.8,
+      "before_pct": 0.7555555555555555,
+      "after_pct": 0.7555555555555555,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Wed",
+      "interval": "03:00",
+      "required": 1.0,
+      "before_effective": 7.0,
+      "after_effective": 5.5,
+      "before_pct": 7.0,
+      "after_pct": 5.5,
+      "avoidable_overage_fte": 4.5
+    },
+    {
+      "day": "Wed",
+      "interval": "03:30",
+      "required": 3.0,
+      "before_effective": 7.0,
+      "after_effective": 6.0,
+      "before_pct": 2.3333333333333335,
+      "after_pct": 2.0,
+      "avoidable_overage_fte": 3.0
+    },
+    {
+      "day": "Wed",
+      "interval": "04:00",
+      "required": 2.0,
+      "before_effective": 8.0,
+      "after_effective": 7.5,
+      "before_pct": 4.0,
+      "after_pct": 3.75,
+      "avoidable_overage_fte": 5.5
+    },
+    {
+      "day": "Wed",
+      "interval": "04:30",
+      "required": 1.0,
+      "before_effective": 8.0,
+      "after_effective": 6.5,
+      "before_pct": 8.0,
+      "after_pct": 6.5,
+      "avoidable_overage_fte": 5.5
+    },
+    {
+      "day": "Wed",
+      "interval": "05:00",
+      "required": 2.0,
+      "before_effective": 10.0,
+      "after_effective": 9.5,
+      "before_pct": 5.0,
+      "after_pct": 4.75,
+      "avoidable_overage_fte": 7.5
+    },
+    {
+      "day": "Wed",
+      "interval": "05:30",
+      "required": 2.0,
+      "before_effective": 10.0,
+      "after_effective": 8.0,
+      "before_pct": 5.0,
+      "after_pct": 4.0,
+      "avoidable_overage_fte": 6.0
+    },
+    {
+      "day": "Wed",
+      "interval": "06:00",
+      "required": 2.0,
+      "before_effective": 6.0,
+      "after_effective": 6.0,
+      "before_pct": 3.0,
+      "after_pct": 3.0,
+      "avoidable_overage_fte": 4.0
+    },
+    {
+      "day": "Wed",
+      "interval": "06:30",
+      "required": 2.0,
+      "before_effective": 6.0,
+      "after_effective": 5.0,
+      "before_pct": 3.0,
+      "after_pct": 2.5,
+      "avoidable_overage_fte": 3.0
+    },
+    {
+      "day": "Wed",
+      "interval": "07:00",
+      "required": 2.0,
+      "before_effective": 6.0,
+      "after_effective": 4.0,
+      "before_pct": 3.0,
+      "after_pct": 2.0,
+      "avoidable_overage_fte": 2.0
+    },
+    {
+      "day": "Wed",
+      "interval": "07:30",
+      "required": 2.0,
+      "before_effective": 6.0,
+      "after_effective": 4.0,
+      "before_pct": 3.0,
+      "after_pct": 2.0,
+      "avoidable_overage_fte": 2.0
+    },
+    {
+      "day": "Wed",
+      "interval": "08:00",
+      "required": 2.0,
+      "before_effective": 8.0,
+      "after_effective": 8.0,
+      "before_pct": 4.0,
+      "after_pct": 4.0,
+      "avoidable_overage_fte": 6.0
+    },
+    {
+      "day": "Wed",
+      "interval": "08:30",
+      "required": 1.0,
+      "before_effective": 8.0,
+      "after_effective": 5.5,
+      "before_pct": 8.0,
+      "after_pct": 5.5,
+      "avoidable_overage_fte": 4.5
+    },
+    {
+      "day": "Wed",
+      "interval": "09:00",
+      "required": 2.0,
+      "before_effective": 8.0,
+      "after_effective": 8.0,
+      "before_pct": 4.0,
+      "after_pct": 4.0,
+      "avoidable_overage_fte": 6.0
+    },
+    {
+      "day": "Wed",
+      "interval": "09:30",
+      "required": 3.0,
+      "before_effective": 8.0,
+      "after_effective": 7.5,
+      "before_pct": 2.6666666666666665,
+      "after_pct": 2.5,
+      "avoidable_overage_fte": 4.5
+    },
+    {
+      "day": "Wed",
+      "interval": "10:00",
+      "required": 1.0,
+      "before_effective": 8.0,
+      "after_effective": 6.5,
+      "before_pct": 8.0,
+      "after_pct": 6.5,
+      "avoidable_overage_fte": 5.5
+    },
+    {
+      "day": "Wed",
+      "interval": "10:30",
+      "required": 2.0,
+      "before_effective": 8.0,
+      "after_effective": 6.5,
+      "before_pct": 4.0,
+      "after_pct": 3.25,
+      "avoidable_overage_fte": 4.5
+    },
+    {
+      "day": "Wed",
+      "interval": "11:00",
+      "required": 3.0,
+      "before_effective": 8.0,
+      "after_effective": 7.5,
+      "before_pct": 2.6666666666666665,
+      "after_pct": 2.5,
+      "avoidable_overage_fte": 4.5
+    },
+    {
+      "day": "Wed",
+      "interval": "11:30",
+      "required": 2.0,
+      "before_effective": 8.0,
+      "after_effective": 6.5,
+      "before_pct": 4.0,
+      "after_pct": 3.25,
+      "avoidable_overage_fte": 4.5
+    },
+    {
+      "day": "Wed",
+      "interval": "12:00",
+      "required": 2.0,
+      "before_effective": 8.0,
+      "after_effective": 8.0,
+      "before_pct": 4.0,
+      "after_pct": 4.0,
+      "avoidable_overage_fte": 6.0
+    },
+    {
+      "day": "Wed",
+      "interval": "12:30",
+      "required": 2.0,
+      "before_effective": 8.0,
+      "after_effective": 7.0,
+      "before_pct": 4.0,
+      "after_pct": 3.5,
+      "avoidable_overage_fte": 5.0
+    },
+    {
+      "day": "Wed",
+      "interval": "13:00",
+      "required": 4.0,
+      "before_effective": 7.0,
+      "after_effective": 7.0,
+      "before_pct": 1.75,
+      "after_pct": 1.75,
+      "avoidable_overage_fte": 3.0
+    },
+    {
+      "day": "Wed",
+      "interval": "13:30",
+      "required": 2.0,
+      "before_effective": 7.0,
+      "after_effective": 6.0,
+      "before_pct": 3.5,
+      "after_pct": 3.0,
+      "avoidable_overage_fte": 4.0
+    },
+    {
+      "day": "Wed",
+      "interval": "14:00",
+      "required": 2.0,
+      "before_effective": 9.0,
+      "after_effective": 8.5,
+      "before_pct": 4.5,
+      "after_pct": 4.25,
+      "avoidable_overage_fte": 6.5
+    },
+    {
+      "day": "Wed",
+      "interval": "14:30",
+      "required": 2.0,
+      "before_effective": 9.0,
+      "after_effective": 7.5,
+      "before_pct": 4.5,
+      "after_pct": 3.75,
+      "avoidable_overage_fte": 5.5
+    },
+    {
+      "day": "Wed",
+      "interval": "15:00",
+      "required": 3.0,
+      "before_effective": 9.0,
+      "after_effective": 8.5,
+      "before_pct": 3.0,
+      "after_pct": 2.8333333333333335,
+      "avoidable_overage_fte": 5.5
+    },
+    {
+      "day": "Wed",
+      "interval": "15:30",
+      "required": 2.0,
+      "before_effective": 9.0,
+      "after_effective": 8.5,
+      "before_pct": 4.5,
+      "after_pct": 4.25,
+      "avoidable_overage_fte": 6.5
+    },
+    {
+      "day": "Wed",
+      "interval": "16:00",
+      "required": 11.0,
+      "before_effective": 7.2,
+      "after_effective": 6.800000000000001,
+      "before_pct": 0.6545454545454545,
+      "after_pct": 0.6181818181818183,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Wed",
+      "interval": "16:30",
+      "required": 9.0,
+      "before_effective": 7.2,
+      "after_effective": 7.2,
+      "before_pct": 0.8,
+      "after_pct": 0.8,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Wed",
+      "interval": "17:00",
+      "required": 9.0,
+      "before_effective": 12.707692307692307,
+      "after_effective": 11.8,
+      "before_pct": 1.4119658119658118,
+      "after_pct": 1.3111111111111111,
+      "avoidable_overage_fte": 2.723076923076924
+    },
+    {
+      "day": "Wed",
+      "interval": "17:30",
+      "required": 10.0,
+      "before_effective": 12.707692307692307,
+      "after_effective": 10.438461538461539,
+      "before_pct": 1.2707692307692307,
+      "after_pct": 1.0438461538461539,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Wed",
+      "interval": "18:00",
+      "required": 11.0,
+      "before_effective": 13.5,
+      "after_effective": 13.05,
+      "before_pct": 1.2272727272727273,
+      "after_pct": 1.1863636363636365,
+      "avoidable_overage_fte": 1.3499999999999996
+    },
+    {
+      "day": "Wed",
+      "interval": "18:30",
+      "required": 13.0,
+      "before_effective": 13.5,
+      "after_effective": 12.15,
+      "before_pct": 1.0384615384615385,
+      "after_pct": 0.9346153846153846,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Wed",
+      "interval": "19:00",
+      "required": 10.0,
+      "before_effective": 14.254545454545454,
+      "after_effective": 10.690909090909091,
+      "before_pct": 1.4254545454545453,
+      "after_pct": 1.069090909090909,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Wed",
+      "interval": "19:30",
+      "required": 12.0,
+      "before_effective": 14.254545454545454,
+      "after_effective": 12.472727272727273,
+      "before_pct": 1.1878787878787878,
+      "after_pct": 1.0393939393939393,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Wed",
+      "interval": "20:00",
+      "required": 10.0,
+      "before_effective": 14.254545454545454,
+      "after_effective": 12.918181818181818,
+      "before_pct": 1.4254545454545453,
+      "after_pct": 1.2918181818181818,
+      "avoidable_overage_fte": 2.2272727272727266
+    },
+    {
+      "day": "Wed",
+      "interval": "20:30",
+      "required": 13.0,
+      "before_effective": 14.254545454545454,
+      "after_effective": 13.363636363636363,
+      "before_pct": 1.0965034965034965,
+      "after_pct": 1.027972027972028,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Wed",
+      "interval": "21:00",
+      "required": 13.0,
+      "before_effective": 16.036363636363635,
+      "after_effective": 15.145454545454545,
+      "before_pct": 1.2335664335664336,
+      "after_pct": 1.165034965034965,
+      "avoidable_overage_fte": 1.7818181818181813
+    },
+    {
+      "day": "Wed",
+      "interval": "21:30",
+      "required": 14.0,
+      "before_effective": 16.036363636363635,
+      "after_effective": 14.254545454545454,
+      "before_pct": 1.1454545454545453,
+      "after_pct": 1.018181818181818,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Wed",
+      "interval": "22:00",
+      "required": 12.0,
+      "before_effective": 16.036363636363635,
+      "after_effective": 13.363636363636363,
+      "before_pct": 1.3363636363636362,
+      "after_pct": 1.1136363636363635,
+      "avoidable_overage_fte": 0.8909090909090907
+    },
+    {
+      "day": "Wed",
+      "interval": "22:30",
+      "required": 10.0,
+      "before_effective": 16.036363636363635,
+      "after_effective": 10.690909090909091,
+      "before_pct": 1.6036363636363635,
+      "after_pct": 1.069090909090909,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Wed",
+      "interval": "23:00",
+      "required": 13.0,
+      "before_effective": 13.363636363636363,
+      "after_effective": 13.363636363636363,
+      "before_pct": 1.027972027972028,
+      "after_pct": 1.027972027972028,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Wed",
+      "interval": "23:30",
+      "required": 11.0,
+      "before_effective": 13.363636363636363,
+      "after_effective": 13.363636363636363,
+      "before_pct": 1.2148760330578512,
+      "after_pct": 1.2148760330578512,
+      "avoidable_overage_fte": 1.7818181818181813
+    },
+    {
+      "day": "Thu",
+      "interval": "00:00",
+      "required": 13.0,
+      "before_effective": 13.8,
+      "after_effective": 13.8,
+      "before_pct": 1.0615384615384615,
+      "after_pct": 1.0615384615384615,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Thu",
+      "interval": "00:30",
+      "required": 11.0,
+      "before_effective": 13.8,
+      "after_effective": 11.96,
+      "before_pct": 1.2545454545454546,
+      "after_pct": 1.0872727272727274,
+      "avoidable_overage_fte": 0.9199999999999999
+    },
+    {
+      "day": "Thu",
+      "interval": "01:00",
+      "required": 11.0,
+      "before_effective": 14.628571428571428,
+      "after_effective": 10.971428571428572,
+      "before_pct": 1.3298701298701299,
+      "after_pct": 0.9974025974025974,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Thu",
+      "interval": "01:30",
+      "required": 13.0,
+      "before_effective": 14.628571428571428,
+      "after_effective": 13.257142857142856,
+      "before_pct": 1.1252747252747253,
+      "after_pct": 1.0197802197802197,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Thu",
+      "interval": "02:00",
+      "required": 12.0,
+      "before_effective": 8.5,
+      "after_effective": 8.5,
+      "before_pct": 0.7083333333333334,
+      "after_pct": 0.7083333333333334,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Thu",
+      "interval": "02:30",
+      "required": 10.0,
+      "before_effective": 8.5,
+      "after_effective": 8.5,
+      "before_pct": 0.85,
+      "after_pct": 0.85,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Thu",
+      "interval": "03:00",
+      "required": 2.0,
+      "before_effective": 10.0,
+      "after_effective": 10.0,
+      "before_pct": 5.0,
+      "after_pct": 5.0,
+      "avoidable_overage_fte": 8.0
+    },
+    {
+      "day": "Thu",
+      "interval": "03:30",
+      "required": 3.0,
+      "before_effective": 10.0,
+      "after_effective": 8.5,
+      "before_pct": 3.3333333333333335,
+      "after_pct": 2.8333333333333335,
+      "avoidable_overage_fte": 5.5
+    },
+    {
+      "day": "Thu",
+      "interval": "04:00",
+      "required": 2.0,
+      "before_effective": 9.0,
+      "after_effective": 7.0,
+      "before_pct": 4.5,
+      "after_pct": 3.5,
+      "avoidable_overage_fte": 5.0
+    },
+    {
+      "day": "Thu",
+      "interval": "04:30",
+      "required": 3.0,
+      "before_effective": 9.0,
+      "after_effective": 9.0,
+      "before_pct": 3.0,
+      "after_pct": 3.0,
+      "avoidable_overage_fte": 6.0
+    },
+    {
+      "day": "Thu",
+      "interval": "05:00",
+      "required": 2.0,
+      "before_effective": 10.0,
+      "after_effective": 9.5,
+      "before_pct": 5.0,
+      "after_pct": 4.75,
+      "avoidable_overage_fte": 7.5
+    },
+    {
+      "day": "Thu",
+      "interval": "05:30",
+      "required": 2.0,
+      "before_effective": 10.0,
+      "after_effective": 7.5,
+      "before_pct": 5.0,
+      "after_pct": 3.75,
+      "avoidable_overage_fte": 5.5
+    },
+    {
+      "day": "Thu",
+      "interval": "06:00",
+      "required": 2.0,
+      "before_effective": 7.0,
+      "after_effective": 6.0,
+      "before_pct": 3.5,
+      "after_pct": 3.0,
+      "avoidable_overage_fte": 4.0
+    },
+    {
+      "day": "Thu",
+      "interval": "06:30",
+      "required": 2.0,
+      "before_effective": 7.0,
+      "after_effective": 6.5,
+      "before_pct": 3.5,
+      "after_pct": 3.25,
+      "avoidable_overage_fte": 4.5
+    },
+    {
+      "day": "Thu",
+      "interval": "07:00",
+      "required": 2.0,
+      "before_effective": 7.0,
+      "after_effective": 4.5,
+      "before_pct": 3.5,
+      "after_pct": 2.25,
+      "avoidable_overage_fte": 2.5
+    },
+    {
+      "day": "Thu",
+      "interval": "07:30",
+      "required": 3.0,
+      "before_effective": 7.0,
+      "after_effective": 6.5,
+      "before_pct": 2.3333333333333335,
+      "after_pct": 2.1666666666666665,
+      "avoidable_overage_fte": 3.5
+    },
+    {
+      "day": "Thu",
+      "interval": "08:00",
+      "required": 2.0,
+      "before_effective": 7.0,
+      "after_effective": 7.0,
+      "before_pct": 3.5,
+      "after_pct": 3.5,
+      "avoidable_overage_fte": 5.0
+    },
+    {
+      "day": "Thu",
+      "interval": "08:30",
+      "required": 2.0,
+      "before_effective": 7.0,
+      "after_effective": 5.0,
+      "before_pct": 3.5,
+      "after_pct": 2.5,
+      "avoidable_overage_fte": 3.0
+    },
+    {
+      "day": "Thu",
+      "interval": "09:00",
+      "required": 2.0,
+      "before_effective": 8.0,
+      "after_effective": 7.5,
+      "before_pct": 4.0,
+      "after_pct": 3.75,
+      "avoidable_overage_fte": 5.5
+    },
+    {
+      "day": "Thu",
+      "interval": "09:30",
+      "required": 2.0,
+      "before_effective": 8.0,
+      "after_effective": 7.0,
+      "before_pct": 4.0,
+      "after_pct": 3.5,
+      "avoidable_overage_fte": 5.0
+    },
+    {
+      "day": "Thu",
+      "interval": "10:00",
+      "required": 2.0,
+      "before_effective": 8.0,
+      "after_effective": 8.0,
+      "before_pct": 4.0,
+      "after_pct": 4.0,
+      "avoidable_overage_fte": 6.0
+    },
+    {
+      "day": "Thu",
+      "interval": "10:30",
+      "required": 2.0,
+      "before_effective": 8.0,
+      "after_effective": 7.5,
+      "before_pct": 4.0,
+      "after_pct": 3.75,
+      "avoidable_overage_fte": 5.5
+    },
+    {
+      "day": "Thu",
+      "interval": "11:00",
+      "required": 3.0,
+      "before_effective": 8.0,
+      "after_effective": 7.0,
+      "before_pct": 2.6666666666666665,
+      "after_pct": 2.3333333333333335,
+      "avoidable_overage_fte": 4.0
+    },
+    {
+      "day": "Thu",
+      "interval": "11:30",
+      "required": 2.0,
+      "before_effective": 8.0,
+      "after_effective": 7.5,
+      "before_pct": 4.0,
+      "after_pct": 3.75,
+      "avoidable_overage_fte": 5.5
+    },
+    {
+      "day": "Thu",
+      "interval": "12:00",
+      "required": 3.0,
+      "before_effective": 7.0,
+      "after_effective": 6.0,
+      "before_pct": 2.3333333333333335,
+      "after_pct": 2.0,
+      "avoidable_overage_fte": 3.0
+    },
+    {
+      "day": "Thu",
+      "interval": "12:30",
+      "required": 2.0,
+      "before_effective": 7.0,
+      "after_effective": 6.5,
+      "before_pct": 3.5,
+      "after_pct": 3.25,
+      "avoidable_overage_fte": 4.5
+    },
+    {
+      "day": "Thu",
+      "interval": "13:00",
+      "required": 2.0,
+      "before_effective": 6.0,
+      "after_effective": 5.5,
+      "before_pct": 3.0,
+      "after_pct": 2.75,
+      "avoidable_overage_fte": 3.5
+    },
+    {
+      "day": "Thu",
+      "interval": "13:30",
+      "required": 2.0,
+      "before_effective": 6.0,
+      "after_effective": 5.0,
+      "before_pct": 3.0,
+      "after_pct": 2.5,
+      "avoidable_overage_fte": 3.0
+    },
+    {
+      "day": "Thu",
+      "interval": "14:00",
+      "required": 2.0,
+      "before_effective": 5.0,
+      "after_effective": 4.5,
+      "before_pct": 2.5,
+      "after_pct": 2.25,
+      "avoidable_overage_fte": 2.5
+    },
+    {
+      "day": "Thu",
+      "interval": "14:30",
+      "required": 2.0,
+      "before_effective": 5.0,
+      "after_effective": 4.0,
+      "before_pct": 2.5,
+      "after_pct": 2.0,
+      "avoidable_overage_fte": 2.0
+    },
+    {
+      "day": "Thu",
+      "interval": "15:00",
+      "required": 3.0,
+      "before_effective": 5.0,
+      "after_effective": 5.0,
+      "before_pct": 1.6666666666666667,
+      "after_pct": 1.6666666666666667,
+      "avoidable_overage_fte": 2.0
+    },
+    {
+      "day": "Thu",
+      "interval": "15:30",
+      "required": 3.0,
+      "before_effective": 5.0,
+      "after_effective": 4.5,
+      "before_pct": 1.6666666666666667,
+      "after_pct": 1.5,
+      "avoidable_overage_fte": 1.5
+    },
+    {
+      "day": "Thu",
+      "interval": "16:00",
+      "required": 10.0,
+      "before_effective": 6.08,
+      "after_effective": 5.7,
+      "before_pct": 0.608,
+      "after_pct": 0.5700000000000001,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Thu",
+      "interval": "16:30",
+      "required": 9.0,
+      "before_effective": 6.08,
+      "after_effective": 6.08,
+      "before_pct": 0.6755555555555556,
+      "after_pct": 0.6755555555555556,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Thu",
+      "interval": "17:00",
+      "required": 10.0,
+      "before_effective": 12.799999999999999,
+      "after_effective": 10.514285714285714,
+      "before_pct": 1.2799999999999998,
+      "after_pct": 1.0514285714285714,
+      "avoidable_overage_fte": 0.4571428571428573
+    },
+    {
+      "day": "Thu",
+      "interval": "17:30",
+      "required": 10.0,
+      "before_effective": 12.799999999999999,
+      "after_effective": 11.885714285714286,
+      "before_pct": 1.2799999999999998,
+      "after_pct": 1.1885714285714286,
+      "avoidable_overage_fte": 1.8285714285714292
+    },
+    {
+      "day": "Thu",
+      "interval": "18:00",
+      "required": 11.0,
+      "before_effective": 20.114285714285714,
+      "after_effective": 16.0,
+      "before_pct": 1.8285714285714285,
+      "after_pct": 1.4545454545454546,
+      "avoidable_overage_fte": 4.114285714285714
+    },
+    {
+      "day": "Thu",
+      "interval": "18:30",
+      "required": 10.0,
+      "before_effective": 20.114285714285714,
+      "after_effective": 18.285714285714285,
+      "before_pct": 2.0114285714285716,
+      "after_pct": 1.8285714285714285,
+      "avoidable_overage_fte": 8.228571428571428
+    },
+    {
+      "day": "Thu",
+      "interval": "19:00",
+      "required": 12.0,
+      "before_effective": 19.06153846153846,
+      "after_effective": 14.523076923076923,
+      "before_pct": 1.5884615384615384,
+      "after_pct": 1.2102564102564102,
+      "avoidable_overage_fte": 1.815384615384616
+    },
+    {
+      "day": "Thu",
+      "interval": "19:30",
+      "required": 10.0,
+      "before_effective": 19.06153846153846,
+      "after_effective": 14.069230769230769,
+      "before_pct": 1.906153846153846,
+      "after_pct": 1.406923076923077,
+      "avoidable_overage_fte": 3.1769230769230763
+    },
+    {
+      "day": "Thu",
+      "interval": "20:00",
+      "required": 11.0,
+      "before_effective": 18.0,
+      "after_effective": 16.2,
+      "before_pct": 1.6363636363636365,
+      "after_pct": 1.4727272727272727,
+      "avoidable_overage_fte": 4.499999999999998
+    },
+    {
+      "day": "Thu",
+      "interval": "20:30",
+      "required": 11.0,
+      "before_effective": 18.0,
+      "after_effective": 13.05,
+      "before_pct": 1.6363636363636365,
+      "after_pct": 1.1863636363636365,
+      "avoidable_overage_fte": 1.3499999999999996
+    },
+    {
+      "day": "Thu",
+      "interval": "21:00",
+      "required": 12.0,
+      "before_effective": 17.818181818181817,
+      "after_effective": 17.37272727272727,
+      "before_pct": 1.4848484848484846,
+      "after_pct": 1.4477272727272725,
+      "avoidable_overage_fte": 4.899999999999999
+    },
+    {
+      "day": "Thu",
+      "interval": "21:30",
+      "required": 12.0,
+      "before_effective": 17.818181818181817,
+      "after_effective": 16.48181818181818,
+      "before_pct": 1.4848484848484846,
+      "after_pct": 1.3734848484848483,
+      "avoidable_overage_fte": 4.009090909090908
+    },
+    {
+      "day": "Thu",
+      "interval": "22:00",
+      "required": 11.0,
+      "before_effective": 17.818181818181817,
+      "after_effective": 15.145454545454545,
+      "before_pct": 1.6198347107438016,
+      "after_pct": 1.3768595041322313,
+      "avoidable_overage_fte": 3.5636363636363626
+    },
+    {
+      "day": "Thu",
+      "interval": "22:30",
+      "required": 12.0,
+      "before_effective": 17.818181818181817,
+      "after_effective": 15.59090909090909,
+      "before_pct": 1.4848484848484846,
+      "after_pct": 1.299242424242424,
+      "avoidable_overage_fte": 3.1181818181818173
+    },
+    {
+      "day": "Thu",
+      "interval": "23:00",
+      "required": 10.0,
+      "before_effective": 16.927272727272726,
+      "after_effective": 15.59090909090909,
+      "before_pct": 1.6927272727272726,
+      "after_pct": 1.559090909090909,
+      "avoidable_overage_fte": 4.899999999999999
+    },
+    {
+      "day": "Thu",
+      "interval": "23:30",
+      "required": 13.0,
+      "before_effective": 16.927272727272726,
+      "after_effective": 16.48181818181818,
+      "before_pct": 1.302097902097902,
+      "after_pct": 1.2678321678321678,
+      "avoidable_overage_fte": 3.1181818181818173
+    },
+    {
+      "day": "Fri",
+      "interval": "00:00",
+      "required": 12.0,
+      "before_effective": 16.927272727272726,
+      "after_effective": 16.48181818181818,
+      "before_pct": 1.4106060606060604,
+      "after_pct": 1.3734848484848483,
+      "avoidable_overage_fte": 4.009090909090908
+    },
+    {
+      "day": "Fri",
+      "interval": "00:30",
+      "required": 12.0,
+      "before_effective": 16.927272727272726,
+      "after_effective": 15.59090909090909,
+      "before_pct": 1.4106060606060604,
+      "after_pct": 1.299242424242424,
+      "avoidable_overage_fte": 3.1181818181818173
+    },
+    {
+      "day": "Fri",
+      "interval": "01:00",
+      "required": 9.0,
+      "before_effective": 13.866666666666667,
+      "after_effective": 13.433333333333334,
+      "before_pct": 1.5407407407407407,
+      "after_pct": 1.4925925925925927,
+      "avoidable_overage_fte": 3.9000000000000004
+    },
+    {
+      "day": "Fri",
+      "interval": "01:30",
+      "required": 9.0,
+      "before_effective": 13.866666666666667,
+      "after_effective": 12.566666666666666,
+      "before_pct": 1.5407407407407407,
+      "after_pct": 1.3962962962962964,
+      "avoidable_overage_fte": 3.033333333333333
+    },
+    {
+      "day": "Fri",
+      "interval": "02:00",
+      "required": 9.0,
+      "before_effective": 7.800000000000001,
+      "after_effective": 7.366666666666667,
+      "before_pct": 0.8666666666666667,
+      "after_pct": 0.8185185185185185,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Fri",
+      "interval": "02:30",
+      "required": 8.0,
+      "before_effective": 7.800000000000001,
+      "after_effective": 7.800000000000001,
+      "before_pct": 0.9750000000000001,
+      "after_pct": 0.9750000000000001,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Fri",
+      "interval": "17:00",
+      "required": 8.0,
+      "before_effective": 8.228571428571428,
+      "after_effective": 8.228571428571428,
+      "before_pct": 1.0285714285714285,
+      "after_pct": 1.0285714285714285,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Fri",
+      "interval": "17:30",
+      "required": 8.0,
+      "before_effective": 8.228571428571428,
+      "after_effective": 5.485714285714286,
+      "before_pct": 1.0285714285714285,
+      "after_pct": 0.6857142857142857,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Fri",
+      "interval": "18:00",
+      "required": 8.0,
+      "before_effective": 8.228571428571428,
+      "after_effective": 8.228571428571428,
+      "before_pct": 1.0285714285714285,
+      "after_pct": 1.0285714285714285,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Fri",
+      "interval": "18:30",
+      "required": 10.0,
+      "before_effective": 8.228571428571428,
+      "after_effective": 8.228571428571428,
+      "before_pct": 0.8228571428571427,
+      "after_pct": 0.8228571428571427,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Fri",
+      "interval": "19:00",
+      "required": 9.0,
+      "before_effective": 8.169230769230769,
+      "after_effective": 8.169230769230769,
+      "before_pct": 0.9076923076923076,
+      "after_pct": 0.9076923076923076,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Fri",
+      "interval": "19:30",
+      "required": 9.0,
+      "before_effective": 8.169230769230769,
+      "after_effective": 3.6307692307692307,
+      "before_pct": 0.9076923076923076,
+      "after_pct": 0.40341880341880343,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Fri",
+      "interval": "20:00",
+      "required": 10.0,
+      "before_effective": 8.1,
+      "after_effective": 7.65,
+      "before_pct": 0.8099999999999999,
+      "after_pct": 0.765,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Fri",
+      "interval": "20:30",
+      "required": 11.0,
+      "before_effective": 8.1,
+      "after_effective": 7.65,
+      "before_pct": 0.7363636363636363,
+      "after_pct": 0.6954545454545454,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Fri",
+      "interval": "21:00",
+      "required": 10.0,
+      "before_effective": 8.018181818181818,
+      "after_effective": 5.790909090909091,
+      "before_pct": 0.8018181818181818,
+      "after_pct": 0.5790909090909091,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Fri",
+      "interval": "21:30",
+      "required": 12.0,
+      "before_effective": 8.018181818181818,
+      "after_effective": 7.127272727272727,
+      "before_pct": 0.6681818181818181,
+      "after_pct": 0.5939393939393939,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Fri",
+      "interval": "22:00",
+      "required": 11.0,
+      "before_effective": 8.018181818181818,
+      "after_effective": 7.572727272727272,
+      "before_pct": 0.7289256198347107,
+      "after_pct": 0.6884297520661157,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Fri",
+      "interval": "22:30",
+      "required": 9.0,
+      "before_effective": 8.018181818181818,
+      "after_effective": 8.018181818181818,
+      "before_pct": 0.8909090909090909,
+      "after_pct": 0.8909090909090909,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Fri",
+      "interval": "23:00",
+      "required": 9.0,
+      "before_effective": 8.018181818181818,
+      "after_effective": 5.345454545454546,
+      "before_pct": 0.8909090909090909,
+      "after_pct": 0.593939393939394,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Fri",
+      "interval": "23:30",
+      "required": 9.0,
+      "before_effective": 8.018181818181818,
+      "after_effective": 7.572727272727272,
+      "before_pct": 0.8909090909090909,
+      "after_pct": 0.8414141414141414,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Sat",
+      "interval": "00:00",
+      "required": 8.0,
+      "before_effective": 8.018181818181818,
+      "after_effective": 8.018181818181818,
+      "before_pct": 1.0022727272727272,
+      "after_pct": 1.0022727272727272,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Sat",
+      "interval": "00:30",
+      "required": 7.0,
+      "before_effective": 8.018181818181818,
+      "after_effective": 8.018181818181818,
+      "before_pct": 1.1454545454545453,
+      "after_pct": 1.1454545454545453,
+      "avoidable_overage_fte": 0.8909090909090907
+    },
+    {
+      "day": "Sat",
+      "interval": "01:00",
+      "required": 8.0,
+      "before_effective": 7.800000000000001,
+      "after_effective": 6.5,
+      "before_pct": 0.9750000000000001,
+      "after_pct": 0.8125,
+      "avoidable_overage_fte": 0.0
+    },
+    {
+      "day": "Sat",
+      "interval": "01:30",
+      "required": 6.0,
+      "before_effective": 7.800000000000001,
+      "after_effective": 7.800000000000001,
+      "before_pct": 1.3,
+      "after_pct": 1.3,
+      "avoidable_overage_fte": 1.7333333333333343
+    }
+  ],
+  "next_sunday_rows": [
+    {
+      "interval": "00:00",
+      "after_effective": 1.4,
+      "pct": 0.7
+    },
+    {
+      "interval": "00:30",
+      "after_effective": 1.4,
+      "pct": 0.7
+    },
+    {
+      "interval": "01:00",
+      "after_effective": 1.4,
+      "pct": 0.7
+    },
+    {
+      "interval": "01:30",
+      "after_effective": 1.4,
+      "pct": 0.7
+    },
+    {
+      "interval": "02:00",
+      "after_effective": 1.6,
+      "pct": 0.8
+    },
+    {
+      "interval": "02:30",
+      "after_effective": 1.6,
+      "pct": 0.5333333333333333
+    },
+    {
+      "interval": "03:00",
+      "after_effective": 3.0,
+      "pct": 1.5
+    },
+    {
+      "interval": "03:30",
+      "after_effective": 3.0,
+      "pct": 1.5
+    },
+    {
+      "interval": "04:00",
+      "after_effective": 4.0,
+      "pct": 1.3333333333333333
+    },
+    {
+      "interval": "04:30",
+      "after_effective": 4.0,
+      "pct": 2.0
+    },
+    {
+      "interval": "05:00",
+      "after_effective": 6.0,
+      "pct": 3.0
+    },
+    {
+      "interval": "05:30",
+      "after_effective": 6.0,
+      "pct": 3.0
+    },
+    {
+      "interval": "06:00",
+      "after_effective": 6.0,
+      "pct": 3.0
+    },
+    {
+      "interval": "06:30",
+      "after_effective": 6.0,
+      "pct": 3.0
+    },
+    {
+      "interval": "07:00",
+      "after_effective": 6.0,
+      "pct": 2.0
+    },
+    {
+      "interval": "07:30",
+      "after_effective": 6.0,
+      "pct": 3.0
+    },
+    {
+      "interval": "08:00",
+      "after_effective": 7.0,
+      "pct": 3.5
+    },
+    {
+      "interval": "08:30",
+      "after_effective": 7.0,
+      "pct": 3.5
+    },
+    {
+      "interval": "09:00",
+      "after_effective": 5.0,
+      "pct": 2.5
+    },
+    {
+      "interval": "09:30",
+      "after_effective": 5.0,
+      "pct": 2.5
+    },
+    {
+      "interval": "10:00",
+      "after_effective": 6.0,
+      "pct": 2.0
+    },
+    {
+      "interval": "10:30",
+      "after_effective": 6.0,
+      "pct": 3.0
+    },
+    {
+      "interval": "11:00",
+      "after_effective": 7.0,
+      "pct": 2.3333333333333335
+    },
+    {
+      "interval": "11:30",
+      "after_effective": 7.0,
+      "pct": 2.3333333333333335
+    },
+    {
+      "interval": "12:00",
+      "after_effective": 6.0,
+      "pct": 2.0
+    },
+    {
+      "interval": "12:30",
+      "after_effective": 6.0,
+      "pct": 2.0
+    },
+    {
+      "interval": "13:00",
+      "after_effective": 5.0,
+      "pct": 1.6666666666666667
+    },
+    {
+      "interval": "13:30",
+      "after_effective": 5.0,
+      "pct": 1.6666666666666667
+    },
+    {
+      "interval": "14:00",
+      "after_effective": 3.0,
+      "pct": 1.5
+    },
+    {
+      "interval": "14:30",
+      "after_effective": 3.0,
+      "pct": 1.0
+    },
+    {
+      "interval": "15:00",
+      "after_effective": 5.0,
+      "pct": 1.6666666666666667
+    },
+    {
+      "interval": "15:30",
+      "after_effective": 5.0,
+      "pct": 1.6666666666666667
+    },
+    {
+      "interval": "16:00",
+      "after_effective": 6.628571428571429,
+      "pct": 0.6025974025974027
+    },
+    {
+      "interval": "16:30",
+      "after_effective": 6.628571428571429,
+      "pct": 0.6628571428571429
+    },
+    {
+      "interval": "17:00",
+      "after_effective": 12.707692307692307,
+      "pct": 1.1552447552447551
+    },
+    {
+      "interval": "17:30",
+      "after_effective": 12.707692307692307,
+      "pct": 1.1552447552447551
+    },
+    {
+      "interval": "18:00",
+      "after_effective": 16.457142857142856,
+      "pct": 1.2659340659340659
+    },
+    {
+      "interval": "18:30",
+      "after_effective": 16.457142857142856,
+      "pct": 1.2659340659340659
+    },
+    {
+      "interval": "19:00",
+      "after_effective": 18.0,
+      "pct": 1.2857142857142858
+    },
+    {
+      "interval": "19:30",
+      "after_effective": 18.0,
+      "pct": 1.3846153846153846
+    },
+    {
+      "interval": "20:00",
+      "after_effective": 18.709090909090907,
+      "pct": 1.3363636363636362
+    },
+    {
+      "interval": "20:30",
+      "after_effective": 18.709090909090907,
+      "pct": 1.439160839160839
+    },
+    {
+      "interval": "21:00",
+      "after_effective": 18.900000000000002,
+      "pct": 1.35
+    },
+    {
+      "interval": "21:30",
+      "after_effective": 18.900000000000002,
+      "pct": 1.453846153846154
+    },
+    {
+      "interval": "22:00",
+      "after_effective": 18.900000000000002,
+      "pct": 1.453846153846154
+    },
+    {
+      "interval": "22:30",
+      "after_effective": 18.900000000000002,
+      "pct": 1.5750000000000002
+    },
+    {
+      "interval": "23:00",
+      "after_effective": 18.900000000000002,
+      "pct": 1.5750000000000002
+    },
+    {
+      "interval": "23:30",
+      "after_effective": 18.900000000000002,
+      "pct": 1.2600000000000002
+    }
+  ],
+  "evidence_note": "Metrics were recomputed from workbook schedule/break cells and input contract; optimizer audit values were not used."
+}

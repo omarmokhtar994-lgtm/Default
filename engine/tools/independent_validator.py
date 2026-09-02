@@ -64,8 +64,13 @@ def parse_output_schedule(path: Path, expected_names: List[str]) -> Tuple[Dict[s
         probe_headers={norm(ws.cell(probe,c).value):c for c in range(1,ws.max_column+1)}
         candidate={}
         for d,full in zip(DAYS,("sunday","monday","tuesday","wednesday","thursday","friday","saturday")):
+            # Exact short name, or a label that begins with the FULL day name
+            # ("Sunday 12 Jul").  Deliberately NOT startswith(short name): that
+            # binds "Monthly Total" to Mon, "Saturation"/"Satisfaction Score" to
+            # Sat and "Month" to Mon, silently reading a non-day column as a
+            # day's assignments.
             match=next((c for h,c in probe_headers.items()
-                        if h==norm(d) or h.startswith(norm(d)) or h.startswith(full)),None)
+                        if h==norm(d) or h==full or h.startswith(full+" ")),None)
             candidate[d]=match
         if all(c is not None for c in candidate.values()):
             day_cols=candidate; break
@@ -91,17 +96,42 @@ def parse_breaks(path: Path) -> Tuple[List[Dict[str,Any]], bool]:
     if not rows:
         wb.close(); return [],False
     headers={norm(v):i for i,v in enumerate(rows[0])}
+    # Column positions must come from the header row, never from a positional
+    # guess.  The previous defaults (associate=0, day=1, shift=2, ...) happened
+    # to match the current export order, so a missing or reordered header would
+    # have been read silently from the wrong column and could have produced a
+    # PASS built on the wrong data.  A validator that gates release must not
+    # guess at its own inputs.
+    required=("associate","day","duration minutes")
+    missing=[key for key in required if key not in headers]
+    if missing:
+        wb.close()
+        raise ValueError(
+            f"Break sheet {sheet.title!r} is missing required column(s) {missing}; "
+            f"found {sorted(headers)}")
     out=[]; before_only=False
+    def cell(rr, key):
+        idx=headers.get(key)
+        return rr[idx] if idx is not None and idx < len(rr) else None
     for rr in rows[1:]:
-        status=str(rr[headers.get("status",-1)] or "") if headers.get("status") is not None else ""
+        if not rr: continue
+        status=str(cell(rr,"status") or "")
         if "not assigned in before-break" in status.casefold(): before_only=True
-        name=str(rr[headers.get("associate",0)] or "").strip() if rr else ""
-        day=str(rr[headers.get("day",1)] or "").strip() if len(rr)>1 else ""
+        name=str(cell(rr,"associate") or "").strip()
+        day=str(cell(rr,"day") or "").strip()
         if not name or norm(day) not in {norm(d) for d in DAYS}: continue
+        raw_duration=cell(rr,"duration minutes")
+        try:
+            duration=int(float(raw_duration or 0))
+        except (TypeError, ValueError):
+            # Record it as a bad row rather than aborting the whole validation:
+            # one malformed cell must not stop every other rule from being
+            # checked.  A duration of 0 is rejected downstream as INVALID_BREAK_ROW.
+            duration=0
         out.append({
-            "associate":name,"day":day,"shift":str(rr[headers.get("shift",2)] or ""),
-            "type":str(rr[headers.get("break type",3)] or ""),"start":rr[headers.get("start",4)],
-            "duration":int(float(rr[headers.get("duration minutes",5)] or 0)),"status":status,
+            "associate":name,"day":day,"shift":str(cell(rr,"shift") or ""),
+            "type":str(cell(rr,"break type") or ""),"start":cell(rr,"start"),
+            "duration":duration,"status":status,
         })
     wb.close(); return out,before_only
 

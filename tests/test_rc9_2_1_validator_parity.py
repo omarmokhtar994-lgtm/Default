@@ -342,5 +342,186 @@ class CarryInCoverageIsParsedNotLookedUp(unittest.TestCase):
         self.assertFalse(E.previous_saturday_covers_qslot("OFF", 0))
 
 
+class DayColumnMatchingIsNotOverBroad(unittest.TestCase):
+    """Day-column detection must not bind a non-day column to a day.
+
+    The first version of the neighbouring-row search accepted any header
+    STARTING WITH a short day name.  That binds "Monthly Total" and "Month" to
+    Mon, and "Saturation" / "Satisfaction Score" to Sat - silently reading a
+    non-day column as that day's assignments, which corrupts every downstream
+    coverage number while still reporting a clean parse.
+    """
+
+    FALSE_MATCHES = ("Monthly Total", "Month", "Saturation", "Satisfaction Score",
+                     "Weds", "Frida", "Summary", "Suntotal")
+
+    def _accepts(self, header, day, full):
+        h = header.strip().casefold()
+        return h == day.casefold() or h == full or h.startswith(full + " ")
+
+    def test_short_day_prefixes_are_rejected(self):
+        pairs = list(zip(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+                         ("sunday", "monday", "tuesday", "wednesday",
+                          "thursday", "friday", "saturday")))
+        for header in self.FALSE_MATCHES:
+            for day, full in pairs:
+                with self.subTest(header=header, day=day):
+                    self.assertFalse(self._accepts(header, day, full),
+                                     f"{header!r} must not bind to {day}")
+
+    def test_genuine_day_headers_are_accepted(self):
+        pairs = list(zip(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+                         ("sunday", "monday", "tuesday", "wednesday",
+                          "thursday", "friday", "saturday")))
+        for day, full in pairs:
+            with self.subTest(day=day):
+                self.assertTrue(self._accepts(day, day, full))
+                self.assertTrue(self._accepts(full.capitalize(), day, full))
+                self.assertTrue(self._accepts(f"{full.capitalize()} 12 Jul", day, full))
+
+    def test_validator_source_does_not_use_short_prefix_matching(self):
+        source = VALIDATOR_PATH.read_text(encoding="utf-8").replace(" ", "")
+        self.assertNotIn("h.startswith(norm(d))", source,
+                         "short-day prefix matching re-introduced")
+
+
+class BreakSheetColumnsComeFromHeaders(unittest.TestCase):
+    """The validator must not guess its own input columns.
+
+    parse_breaks previously fell back to positional defaults (associate=0,
+    day=1, shift=2, ...).  Those happen to match the current export order, so a
+    missing or reordered header would have been read silently from the wrong
+    column - and this validator gates release, so a PASS built on the wrong
+    columns is worse than a crash.
+    """
+
+    def _sheet(self, header_row, data_rows):
+        import openpyxl
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Break Schedule"
+        for c, v in enumerate(header_row, start=1):
+            ws.cell(1, c).value = v
+        for r, row in enumerate(data_rows, start=2):
+            for c, v in enumerate(row, start=1):
+                ws.cell(r, c).value = v
+        return wb
+
+    def _parse(self, wb):
+        import tempfile, os
+        module = load_validator()
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as fh:
+            path = fh.name
+        try:
+            wb.save(path)
+            return module.parse_breaks(Path(path))
+        finally:
+            os.unlink(path)
+
+    FULL = ["Associate", "Day", "Shift", "Break Type", "Start", "Duration Minutes", "Status"]
+
+    def test_wellformed_sheet_parses(self):
+        wb = self._sheet(self.FULL,
+                         [["A", "Sun", "13:00 - 22:00", "Break 1", "15:15", 15, "Scheduled"]])
+        rows, before_only = self._parse(wb)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["associate"], "A")
+        self.assertEqual(rows[0]["duration"], 15)
+        self.assertFalse(before_only)
+
+    def test_reordered_columns_are_read_by_header_not_position(self):
+        reordered = ["Status", "Duration Minutes", "Day", "Associate", "Shift", "Break Type", "Start"]
+        wb = self._sheet(reordered,
+                         [["Scheduled", 30, "Mon", "B", "09:00 - 18:00", "Lunch", "12:00"]])
+        rows, _ = self._parse(wb)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["associate"], "B", "column order must follow headers")
+        self.assertEqual(rows[0]["day"], "Mon")
+        self.assertEqual(rows[0]["duration"], 30)
+
+    def test_missing_required_header_raises_rather_than_guessing(self):
+        without_day = ["Associate", "Shift", "Break Type", "Start", "Duration Minutes", "Status"]
+        wb = self._sheet(without_day, [["A", "13:00 - 22:00", "Break 1", "15:15", 15, "Scheduled"]])
+        with self.assertRaises(ValueError) as ctx:
+            self._parse(wb)
+        self.assertIn("day", str(ctx.exception).lower())
+
+    def test_non_numeric_duration_does_not_abort_validation(self):
+        """One malformed cell must not stop every other rule being checked."""
+        wb = self._sheet(self.FULL,
+                         [["A", "Sun", "13:00 - 22:00", "Break 1", "15:15", "n/a", "Scheduled"]])
+        rows, _ = self._parse(wb)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["duration"], 0,
+                         "unparseable duration becomes 0 and is rejected downstream")
+
+    def test_short_row_does_not_raise_index_error(self):
+        """A truncated row must not crash, and must not be silently dropped.
+
+        Associate and day are present and valid, so the row is real; the missing
+        duration becomes 0, which INVALID_BREAK_ROW rejects downstream. Dropping
+        it instead would hide a malformed break from the validation.
+        """
+        wb = self._sheet(self.FULL, [["A", "Sun"]])
+        rows, _ = self._parse(wb)
+        self.assertEqual(len(rows), 1, "a real row must not be silently dropped")
+        self.assertEqual(rows[0]["duration"], 0, "missing duration surfaces as 0")
+        self.assertIsNone(rows[0]["start"])
+
+    def test_row_without_a_valid_day_is_skipped(self):
+        wb = self._sheet(self.FULL,
+                         [["A", "NotADay", "13:00 - 22:00", "Break 1", "15:15", 15, "Scheduled"]])
+        rows, _ = self._parse(wb)
+        self.assertEqual(rows, [], "rows outside the seven days are not break rows")
+
+    def test_before_break_status_is_detected(self):
+        wb = self._sheet(self.FULL,
+                         [["A", "Sun", "13:00 - 22:00", "Break 1", "15:15", 15,
+                           "Not assigned in before-break artifact"]])
+        _, before_only = self._parse(wb)
+        self.assertTrue(before_only, "artifact role detection must still work")
+
+
+class CaseRootIdentityIsComplete(unittest.TestCase):
+    """The identity a reviewer reads must carry every axis the gate requires.
+
+    The release gate keys identity on input, contract and engine hash plus run
+    metadata. The wrapper can only know input and engine hashes up front; the
+    contract hash, parameters hash and run id are derived by the engine while
+    parsing, and were written only to work_dir/RUN_IDENTITY.json. The case-root
+    UNIVERSAL_RUN_IDENTITY.json therefore carried two of four axes, with
+    contract_sha256 and run_id absent - an artifact that cannot state its own
+    contract hash cannot satisfy the gate.
+    """
+
+    def _runner_source(self):
+        return (ROOT / "engine" / "RUN_UNIVERSAL_PRODUCTION.py").read_text(encoding="utf-8")
+
+    def test_runner_merges_engine_identity(self):
+        source = self._runner_source()
+        self.assertIn("RUN_IDENTITY.json", source)
+        for key in ("contract_sha256", "run_id", "parameters_sha256"):
+            self.assertIn(f"'{key}'", source, f"{key} must be carried into case-root identity")
+
+    def test_identity_is_rewritten_after_the_engine_runs(self):
+        """Merging before the engine runs would capture nothing."""
+        source = self._runner_source()
+        engine_call = source.index("engine_rc = subprocess.call(command)")
+        rewrite = source.index("UNIVERSAL_RUN_IDENTITY.json", engine_call)
+        self.assertGreater(rewrite, engine_call,
+                           "identity must be completed after the engine produces it")
+
+    def test_hash_disagreement_is_surfaced_not_merged(self):
+        source = self._runner_source()
+        self.assertIn("identity_mismatches", source,
+                      "a wrapper/engine hash disagreement must be recorded, not "
+                      "silently overwritten")
+
+    def test_missing_engine_identity_is_recorded(self):
+        source = self._runner_source()
+        self.assertIn("engine_identity_source", source,
+                      "provenance of the merged identity must be stated")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

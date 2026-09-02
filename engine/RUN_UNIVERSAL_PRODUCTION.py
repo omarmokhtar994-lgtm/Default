@@ -241,6 +241,42 @@ def main() -> int:
     engine_rc = subprocess.call(command)
     rc = engine_rc
 
+    # Complete the case-root identity from the engine's own run identity.
+    #
+    # The wrapper can only know the input and engine hashes before the run; the
+    # contract hash, parameters hash and run id are derived by the engine while
+    # parsing. They were therefore written only to work_dir/RUN_IDENTITY.json,
+    # leaving UNIVERSAL_RUN_IDENTITY.json - the file at case root that a
+    # reviewer or packager reads - carrying two of the four identity axes, with
+    # contract_sha256 and run_id absent. The release gate requires identity by
+    # input, contract and engine hash plus run metadata, so an artifact that
+    # cannot state its own contract hash cannot satisfy it.
+    engine_identity_path = work_dir / 'RUN_IDENTITY.json'
+    if engine_identity_path.exists():
+        try:
+            engine_identity = json.loads(engine_identity_path.read_text(encoding='utf-8'))
+        except (OSError, json.JSONDecodeError) as exc:
+            identity['engine_identity_error'] = f'{type(exc).__name__}: {exc}'
+        else:
+            for key in ('contract_sha256', 'run_id', 'parameters_sha256', 'seed_sha256',
+                        'canonical_coverage_evaluator', 'git_commit', 'git_describe', 'git_dirty'):
+                if engine_identity.get(key) is not None:
+                    identity[key] = engine_identity[key]
+            # Cross-check rather than trust: if the engine resolved a different
+            # input or engine hash than the wrapper stamped, the artifact is
+            # self-inconsistent and that must be visible, not silently merged.
+            for key in ('input_sha256', 'engine_sha256'):
+                engine_value = engine_identity.get(key)
+                if engine_value is not None and engine_value != identity.get(key):
+                    identity.setdefault('identity_mismatches', {})[key] = {
+                        'wrapper': identity.get(key), 'engine': engine_value,
+                    }
+        identity['engine_identity_source'] = str(engine_identity_path)
+    else:
+        identity['engine_identity_source'] = None
+    (case_root / 'UNIVERSAL_RUN_IDENTITY.json').write_text(
+        json.dumps(identity, indent=2), encoding='utf-8')
+
     if audit.exists():
         qrc = subprocess.call([sys.executable, '-u', str(QUALITY_REPORTER), '--audit-json', str(audit), '--case-root', str(case_root)])
         if qrc != 0 and rc == 0:

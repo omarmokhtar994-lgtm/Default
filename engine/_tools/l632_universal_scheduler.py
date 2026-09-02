@@ -11553,7 +11553,11 @@ def derive_adaptive_feedback_cuts(
     for row in list((solution.metrics or {}).get("language_gaps", []))[:max(1, maximum // 6)]:
         day = str(row.get("day", ""))
         d = DAY_NAMES.index(day) if day in DAY_NAMES else int(row.get("day_index", 0) or 0)
-        minute = parse_time_to_minute(row.get("time")) or 0
+        # `parse_time_to_minute` does not exist anywhere in this engine, so this
+        # raised NameError for any candidate carrying a language gap.
+        # calculate_metrics writes this field as hhmm(minute) and minute_of_day
+        # is its exact inverse.
+        minute = minute_of_day(row.get("time")) or 0
         i = int(minute // parsed.interval_minutes)
         cuts.append(FeedbackCut(
             kind="LANGUAGE_OVERLAP_RESERVE",
@@ -11615,7 +11619,8 @@ def adaptive_operator_focus_cells(
         for row in language_rows:
             day = str(row.get("day", ""))
             d = DAY_NAMES.index(day) if day in DAY_NAMES else int(row.get("day_index", 0) or 0)
-            minute = parse_time_to_minute(row.get("time")) or 0
+            # See derive_adaptive_feedback_cuts: same undefined name, same fix.
+            minute = minute_of_day(row.get("time")) or 0
             qslot = d * 96 + minute // 15
             rule_group = norm(row.get("group"))
             for a, sd, _ in scheduled_covering_qslot(parsed, skeleton, qslot):

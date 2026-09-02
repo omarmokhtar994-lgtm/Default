@@ -61,9 +61,27 @@ done
 run_check "engine selfcheck" "$PY" engine/_tools/l632_universal_scheduler.py --selfcheck
 run_check "wrapper selfcheck" "$PY" engine/RUN_UNIVERSAL_PRODUCTION.py --selfcheck
 
+# Static undefined-name sweep. This is how the parse_time_to_minute NameError was
+# found: neither the suites nor line-by-line reading caught a name that is called
+# but defined nowhere. Skipped with a visible notice when ruff is absent, never
+# silently.
+echo "── undefined-name sweep"
+if command -v ruff >/dev/null 2>&1; then
+  if ruff check --isolated --select E9,F821 engine/ tools/ tests/ >/dev/null 2>&1; then
+    echo "   undefined-name sweep OK"
+  else
+    echo "   undefined-name sweep FAILED"
+    ruff check --isolated --select E9,F821 engine/ tools/ tests/ 2>&1 | tail -30
+    fail=1
+  fi
+else
+  echo "   SKIPPED (ruff not installed) — tests/test_rc9_2_1_engine_name_resolution.py"
+  echo "   still runs an in-process cross-check"
+fi
+
 echo
 if [ "$fail" -eq 0 ]; then
-  echo "GATE PASS — $total suite(s) + 2 selfchecks"
+  echo "GATE PASS — $total suite(s) + 2 selfchecks + undefined-name sweep"
 else
   echo "GATE FAIL — see failures above"
 fi

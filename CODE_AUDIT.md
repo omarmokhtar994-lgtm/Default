@@ -7,10 +7,10 @@ shell gate, fixtures, evidence and documentation.
 |---|---|
 | Engine | `engine/_tools/l632_universal_scheduler.py` — 19,696 lines |
 | Everything else | ~4,200 lines across 18 modules |
-| Test suites | 8 (`tests/test_rc9_2_1_*.py`) — 4 at the start of this audit |
+| Test suites | 9 (`tests/test_rc9_2_1_*.py`) — 4 at the start of this audit |
 | Gate | `run_tests.sh` |
 
-Findings from this audit are numbered **A1–A25**. Release-behaviour findings 1–16
+Findings from this audit are numbered **A1–A26**. Release-behaviour findings 1–16
 from the earlier remediation cycle are recorded in
 `docs/RC9_2_1_CONSOLIDATED_ISSUE_REGISTER.md` and are not repeated here.
 
@@ -620,6 +620,41 @@ rule. The mutant is now caught by 7 assertions.
 
 ---
 
+### A26 — The engine calls a function that does not exist
+
+| | |
+|---|---|
+| **File** | `engine/_tools/l632_universal_scheduler.py` · `derive_adaptive_feedback_cuts` (11556), `adaptive_operator_focus_cells` (11618) |
+| **Category** | Undefined name → `NameError` at runtime |
+| **Severity** | **Critical** |
+| **Status** | **VERIFIED** |
+
+Both functions call `parse_time_to_minute(row.get("time"))`. That name is
+defined **nowhere** in the engine — the only similar symbol is
+`parse_time_window`, which returns a tuple.
+
+**When it fires.** Both call sites sit inside a loop over the candidate's
+`language_gaps`. `calculate_metrics` populates that list whenever a language
+minimum is unmet. So any candidate with an unmet language minimum that reaches
+adaptive feedback raises `NameError`. Six live call sites reach these two
+functions from the joint-refinement and descent paths (13075, 13331, 13334,
+13450, 13477, 13605). The exposed scenarios are exactly the bilingual and
+directional-skill ones.
+
+**Fix.** `minute_of_day`, which is the exact inverse of the `hhmm(minute)` that
+`calculate_metrics` writes into the field (round-trip verified at 0, 1, 555, 720
+and 1439 minutes).
+
+**How it was found — and why that matters.** Not by the test suites, and not by
+reading. A static undefined-name check found it. Neither the 188 guards nor the
+20-mutant campaign could have: mutation testing only measures whether the suite
+notices code that *changes*, and this code was broken in the baseline. A
+`ruff --select E9,F821` sweep is now **part of `run_tests.sh`**, verified to fail
+the gate on an injected undefined name, with an in-process AST cross-check in
+`tests/test_rc9_2_1_engine_name_resolution.py` for environments without ruff.
+
+---
+
 ## Sweeps — patterns checked across all 19 modules
 
 Recorded so the absence of findings is evidence, not silence.
@@ -633,9 +668,10 @@ Recorded so the absence of findings is evidence, not silence.
 | `TODO` / `FIXME` / `XXX` / `HACK` | **none** |
 | `== None` / `!= None` | **none** |
 | Mutable dataclass field defaults | none (2 hits were local variables) |
-| `assert` for runtime validation | 1 real hit → **A7**; others are test scripts |
+| `assert` for runtime validation | 1 real hit → **A7**; the regression-lab hits became **A23**, **A24** |
 | Division without a zero guard | 3 candidates, **all guarded** on inspection |
 | Set iteration feeding ordered output | 2 hits, both order-insensitive |
+| Undefined names (`ruff E9,F821`) | **2 hits → A26**; now a gate step |
 | `subprocess` without timeout | present throughout; deliberate for long solves |
 
 ## Checked and found correct
@@ -695,9 +731,11 @@ Two rounds were needed to get there, and both survivors were real:
 | Budget-plan invariants | 6,720 combinations, 0 violations |
 | Stage-2 plan on the production default | byte-identical over 300 skeleton sets |
 | Mutation testing | **20/20 caught** |
-| `run_tests.sh` | **GATE PASS — 8 suites + 2 selfchecks** |
+| `tests/test_rc9_2_1_engine_name_resolution.py` | **5/5** (new) |
+| `ruff check --select E9,F821` across engine, tools and tests | **clean** |
+| `run_tests.sh` | **GATE PASS — 9 suites + 2 selfchecks + undefined-name sweep** |
 
-**191 guards** across eight suites, up from 119 across four.
+**193 guards** across nine suites, up from 119 across four.
 
 Every new guard was run against the pre-fix code:
 
@@ -714,7 +752,9 @@ Every new guard was run against the pre-fix code:
 
 1. **The engine was not read line by line.** 19,696 lines. It was swept
    automatically and read closely around every release-critical path. Defects in
-   unreached engine code would not have been found.
+   unreached engine code would not have been found by reading — **A26** is the
+   proof that this limit is real, and the static sweep now added to the gate is
+   the partial compensation.
 2. **Gates 2 and 9 stay blocked.** They compare against RC9.1, which this
    project does not hold. Reported as `REQUIRES_RC9_1_BASELINE`, not as a pass.
 3. **Three regression-lab harnesses stay blocked** on `RUN_UNIVERSAL_WFM.py`

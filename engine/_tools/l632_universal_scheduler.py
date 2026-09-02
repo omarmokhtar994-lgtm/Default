@@ -10036,6 +10036,10 @@ def production_quality_gate(parsed: ParsedInput, metrics: Dict[str, Any]) -> Dic
     severe_ratio = severe_gaps / active
     failures: List[Dict[str, Any]] = []
     warnings: List[Dict[str, Any]] = []
+    # Issues a disabled gate detected but did not act on. Reported, never
+    # release-blocking: an operator who turns a gate off still gets to see what
+    # it would have flagged.
+    suppressed: List[Dict[str, Any]] = []
     gate_results: Dict[str, str] = {}
 
     def apply(mode: str, issues: Sequence[Dict[str, Any]], gate: str) -> None:
@@ -10045,6 +10049,17 @@ def production_quality_gate(parsed: ParsedInput, metrics: Dict[str, Any]) -> Dic
             failures.extend(rows); gate_results[gate] = "FAIL"
         elif rows and normalized == "warn":
             warnings.extend(rows); gate_results[gate] = "WARN"
+        elif normalized not in {"warn", "fail"}:
+            # Mode "off" (and the empty/unset default) means the gate was NOT
+            # ENFORCED. It previously fell into the same branch as "no issues
+            # found" and reported PASS, so a workbook that switched a gate off
+            # published a clean PASS for it while its detected violations were
+            # dropped from both `failures` and `warnings` - present negative
+            # evidence read as a pass. Turning a gate off must not create
+            # evidence that it held.
+            gate_results[gate] = "NOT_ENFORCED"
+            for row in rows:
+                suppressed.append({**row, "gate": gate, "gate_mode": normalized})
         else:
             gate_results[gate] = "PASS"
 
@@ -10119,9 +10134,13 @@ def production_quality_gate(parsed: ParsedInput, metrics: Dict[str, Any]) -> Dic
         "break_concurrency_gate_mode": getattr(parsed, "break_concurrency_gate_mode", "warn"),
         "next_sunday_balance_gate_mode": getattr(parsed, "next_sunday_balance_gate_mode", "warn"),
         "target_loss_gate_mode": getattr(parsed, "target_loss_gate_mode", "warn"),
-        "coverage_gate_status": gate_results.get("coverage", "PASS"),
-        "language_reserve_gate_status": gate_results.get("language_reserve", "PASS"),
+        # Every gate that runs writes its own result, so these defaults are only
+        # reached if a gate was skipped entirely - which is not a pass.
+        "coverage_gate_status": gate_results.get("coverage", "NOT_EVALUATED"),
+        "language_reserve_gate_status": gate_results.get("language_reserve", "NOT_EVALUATED"),
         "failures": failures, "warnings": warnings,
+        "suppressed_by_disabled_gates": suppressed,
+        "suppressed_issue_count": len(suppressed),
         "active_intervals": active, "floor_gap_ratio": round(floor_ratio, 8), "severe_gap_ratio": round(severe_ratio, 8),
         "language_minimum_only_ratio": round(language_minimum_only_ratio, 8), "language_maximum_minimum_only_ratio": parsed.language_max_minimum_only_ratio,
         "whole_week_overage_cap_violation_count": int(metrics.get("whole_week_overage_cap_violation_count", 0) or 0),

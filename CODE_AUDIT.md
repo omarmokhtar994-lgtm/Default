@@ -10,7 +10,7 @@ shell gate, fixtures, evidence and documentation.
 | Test suites | 9 (`tests/test_rc9_2_1_*.py`) — 4 at the start of this audit |
 | Gate | `run_tests.sh` |
 
-Findings from this audit are numbered **A1–A26**. Release-behaviour findings 1–16
+Findings from this audit are numbered **A1–A27**. Release-behaviour findings 1–16
 from the earlier remediation cycle are recorded in
 `docs/RC9_2_1_CONSOLIDATED_ISSUE_REGISTER.md` and are not repeated here.
 
@@ -655,6 +655,50 @@ the gate on an injected undefined name, with an in-process AST cross-check in
 
 ---
 
+### A27 — Switching a quality gate off published a PASS for it
+
+| | |
+|---|---|
+| **File** | `engine/_tools/l632_universal_scheduler.py` · `production_quality_gate.apply` |
+| **Category** | Present negative evidence read as a pass |
+| **Severity** | **High** |
+| **Status** | **VERIFIED** |
+
+`apply()` treated *"no issues found"* and *"gate switched off"* as the same
+case. Both fell into one `else` branch that wrote `gate_results[gate] = "PASS"`.
+
+All eight quality gates route through this helper — coverage, next-Sunday
+balance, break concurrency, target loss, whole-week balance, employee quality,
+language reserve, skill allocation — and all eight accept `off` as a documented
+workbook value (`… Gate Mode` instructions, validated against
+`{off, warn, fail}`).
+
+**Reproduced, not inferred.** With 17 detected break-concurrency violations and
+`Break Concurrency Gate Mode = off`:
+
+| Mode | Reported | failures | warnings |
+|---|---|---|---|
+| `fail` | FAIL | 1 | 0 |
+| `warn` | WARN | 0 | 1 |
+| `off` | **PASS** | 0 | 0 |
+
+The violations were dropped from both lists and the gate published a clean
+PASS. This is worse than the A12/A14/A16 family: not absent evidence read as a
+pass, but *present negative evidence* read as one.
+
+**Fix.** `off` now reports `NOT_ENFORCED`, and what it detected is preserved in
+a new `suppressed_by_disabled_gates` list with `suppressed_issue_count`.
+Turning a gate off still does not block release — `failures` and `warnings` stay
+empty and the overall status is still PASS — it just no longer manufactures
+evidence that the gate held. The two `gate_results.get(…, "PASS")` defaults
+became `NOT_EVALUATED` for the same reason.
+
+**Blast radius.** `gate_results` is reported, never compared, anywhere in the
+codebase. All four executed RC9.2.1 runs used `warn`, so none of them changes.
+Engine selfcheck output is unchanged.
+
+---
+
 ## Sweeps — patterns checked across all 19 modules
 
 Recorded so the absence of findings is evidence, not silence.
@@ -737,7 +781,7 @@ Two rounds were needed to get there, and both survivors were real:
 | `tests/test_rc9_2_1_phase_c_integrity.py` | **15/15** (new) |
 | `tests/test_rc9_2_1_production_identity.py` | 11/11 |
 | `tests/test_rc9_2_1_regression_lab_integrity.py` | **18/18** (new) |
-| `tests/test_rc9_2_1_rule_semantics.py` | 30/30 |
+| `tests/test_rc9_2_1_rule_semantics.py` | **37/37** (+7) |
 | `tests/test_rc9_2_1_selector_integrity.py` | 36/36 |
 | `tests/test_rc9_2_1_tooling_integrity.py` | **13/13** (new) |
 | `tests/test_rc9_2_1_validator_parity.py` | 42/42 |
@@ -751,7 +795,7 @@ Two rounds were needed to get there, and both survivors were real:
 | `ruff check --select E9,F821` across engine, tools and tests | **clean** |
 | `run_tests.sh` | **GATE PASS — 9 suites + 2 selfchecks + undefined-name sweep** |
 
-**193 guards** across nine suites, up from 119 across four.
+**200 guards** across nine suites, up from 119 across four.
 
 Every new guard was run against the pre-fix code:
 

@@ -284,5 +284,93 @@ class ResumeIdentityIsHashBased(unittest.TestCase):
                       "checkpoint loaders must refuse a foreign run_id")
 
 
+class DisablingAGateIsNotEvidenceThatItHeld(unittest.TestCase):
+    """`apply()` treated "no issues found" and "gate switched off" identically.
+
+    Both landed in the same `else` branch and wrote `gate_results[gate] =
+    "PASS"`, so a workbook that set any Gate Mode to `off` published a clean
+    PASS for that gate while the violations it had already detected were
+    dropped from both `failures` and `warnings`.  All eight gates route through
+    this helper and all eight accept `off` as a documented workbook value.
+    """
+
+    import dataclasses as _dc
+
+    def _parsed(self, **over):
+        import dataclasses
+        kwargs = {}
+        for f in dataclasses.fields(E.ParsedInput):
+            if f.default is not dataclasses.MISSING:
+                kwargs[f.name] = f.default
+            elif f.default_factory is not dataclasses.MISSING:  # type: ignore[misc]
+                kwargs[f.name] = f.default_factory()            # type: ignore[misc]
+            else:
+                kwargs[f.name] = None
+        kwargs.update(over)
+        return E.ParsedInput(**kwargs)
+
+    CLEAN = {"active_intervals": 100, "floor_gap_count": 0, "severe_floor_gap_count": 0}
+    VIOLATING = dict(CLEAN, break_concurrency_violation_count=17,
+                     max_concurrent_breaks_observed=9,
+                     max_concurrent_break_ratio_observed=0.9)
+
+    def test_a_disabled_gate_with_violations_does_not_report_pass(self):
+        gate = E.production_quality_gate(
+            self._parsed(break_concurrency_gate_mode="off"), self.VIOLATING)
+        self.assertEqual(gate["gate_results"]["break_concurrency"], "NOT_ENFORCED")
+        self.assertNotEqual(gate["gate_results"]["break_concurrency"], "PASS")
+
+    def test_the_suppressed_violation_is_still_reported(self):
+        gate = E.production_quality_gate(
+            self._parsed(break_concurrency_gate_mode="off"), self.VIOLATING)
+        self.assertEqual(gate["suppressed_issue_count"], 1)
+        row = gate["suppressed_by_disabled_gates"][0]
+        self.assertEqual(row["gate"], "break_concurrency")
+        self.assertEqual(row["gate_mode"], "off")
+
+    def test_a_disabled_gate_still_does_not_block_release(self):
+        """Turning a gate off must stop it blocking - only stop it lying."""
+        gate = E.production_quality_gate(
+            self._parsed(break_concurrency_gate_mode="off"), self.VIOLATING)
+        self.assertEqual(gate["failures"], [])
+        self.assertEqual(gate["warnings"], [])
+        self.assertEqual(gate["status"], "PASS")
+
+    def test_fail_and_warn_modes_are_unchanged(self):
+        for mode, expected, bucket in (("fail", "FAIL", "failures"),
+                                       ("warn", "WARN", "warnings")):
+            with self.subTest(mode=mode):
+                gate = E.production_quality_gate(
+                    self._parsed(break_concurrency_gate_mode=mode), self.VIOLATING)
+                self.assertEqual(gate["gate_results"]["break_concurrency"], expected)
+                self.assertEqual(len(gate[bucket]), 1)
+                self.assertEqual(gate["suppressed_issue_count"], 0)
+
+    def test_a_genuinely_clean_run_still_passes_every_gate(self):
+        gate = E.production_quality_gate(self._parsed(), self.CLEAN)
+        self.assertEqual(set(gate["gate_results"].values()), {"PASS"})
+        self.assertEqual(gate["status"], "PASS")
+        self.assertEqual(gate["suppressed_issue_count"], 0)
+
+    def test_every_gate_routes_through_the_same_helper(self):
+        """If a gate stops using apply(), this guard stops covering it."""
+        gate = E.production_quality_gate(self._parsed(), self.CLEAN)
+        self.assertEqual(sorted(gate["gate_results"]), [
+            "break_concurrency", "coverage", "employee_quality", "language_reserve",
+            "next_sunday_balance", "skill_allocation", "target_loss",
+            "whole_week_balance"])
+
+    def test_a_skipped_gate_is_not_reported_as_a_pass(self):
+        gate = E.production_quality_gate(self._parsed(), self.CLEAN)
+        for key in ("coverage_gate_status", "language_reserve_gate_status"):
+            with self.subTest(key=key):
+                self.assertEqual(gate[key], "PASS")
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text(
+            encoding="utf-8").replace(" ", "")
+        self.assertTrue('"coverage_gate_status":gate_results.get("coverage","NOT_EVALUATED")'
+                        in source,
+                        "an absent gate result must not default to PASS")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

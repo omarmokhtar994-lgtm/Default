@@ -355,33 +355,102 @@ class DayColumnMatchingIsNotOverBroad(unittest.TestCase):
     FALSE_MATCHES = ("Monthly Total", "Month", "Saturation", "Satisfaction Score",
                      "Weds", "Frida", "Summary", "Suntotal")
 
-    def _accepts(self, header, day, full):
-        h = header.strip().casefold()
-        return h == day.casefold() or h == full or h.startswith(full + " ")
+    DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
-    def test_short_day_prefixes_are_rejected(self):
-        pairs = list(zip(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
-                         ("sunday", "monday", "tuesday", "wednesday",
-                          "thursday", "friday", "saturday")))
-        for header in self.FALSE_MATCHES:
-            for day, full in pairs:
-                with self.subTest(header=header, day=day):
-                    self.assertFalse(self._accepts(header, day, full),
-                                     f"{header!r} must not bind to {day}")
+    def _sheet_with_decoy(self, decoy, decoy_first=True):
+        """A schedule carrying a non-day column alongside the real day columns.
+
+        `decoy_first` puts the decoy to the LEFT of the genuine columns. That
+        matters: matching scans headers in column order, so an over-broad rule
+        only misbinds when the decoy is seen first. A fixture that always puts
+        the real column first passes under a broken rule.
+        """
+        import openpyxl
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Schedule"
+        ws.cell(1, 1).value = "SF Name"
+        columns = ([(2, decoy)] + [(3 + i, d) for i, d in enumerate(self.DAYS)]
+                   if decoy_first else
+                   [(2 + i, d) for i, d in enumerate(self.DAYS)] + [(9, decoy)])
+        for column, label in columns:
+            ws.cell(1, column).value = label
+        ws.cell(2, 1).value = "Associate 001"
+        for column, label in columns:
+            # The decoy carries a value the validator must never read as a
+            # shift; the genuine day columns carry OFF.
+            ws.cell(2, column).value = "NOT-A-SHIFT" if label == decoy else "OFF"
+        return wb
+
+    def _day_columns(self, wb):
+        """Return the header text the validator bound to each day.
+
+        Goes through parse_output_schedule, so this exercises the real rule
+        rather than a copy of it.
+        """
+        import os
+        import tempfile
+        import openpyxl
+        module = load_validator()
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as fh:
+            path = fh.name
+        try:
+            wb.save(path)
+            assignments, _ = module.parse_output_schedule(Path(path), ["Associate 001"])
+            return assignments.get("associate 001")
+        finally:
+            os.unlink(path)
+
+    def test_a_decoy_column_is_never_read_as_a_day(self):
+        """This is the guard that matters, and it runs the validator.
+
+        The previous version of this test reimplemented the matching rule in
+        the test body and asserted against its own copy, so it passed for any
+        implementation - including a broken one. Mutation testing caught it:
+        swapping the validator to substring matching left every assertion
+        green.
+        """
+        for decoy in self.FALSE_MATCHES:
+            for decoy_first in (True, False):
+                with self.subTest(decoy=decoy, decoy_first=decoy_first):
+                    assigned = self._day_columns(
+                        self._sheet_with_decoy(decoy, decoy_first))
+                    self.assertIsNotNone(assigned, f"{decoy!r} broke parsing entirely")
+                    self.assertEqual(len(assigned), 7)
+                    self.assertNotIn(
+                        "NOT-A-SHIFT", [str(v) for v in assigned],
+                        f"{decoy!r} was bound to a day and read as that day's shift")
 
     def test_genuine_day_headers_are_accepted(self):
-        pairs = list(zip(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
-                         ("sunday", "monday", "tuesday", "wednesday",
-                          "thursday", "friday", "saturday")))
-        for day, full in pairs:
-            with self.subTest(day=day):
-                self.assertTrue(self._accepts(day, day, full))
-                self.assertTrue(self._accepts(full.capitalize(), day, full))
-                self.assertTrue(self._accepts(f"{full.capitalize()} 12 Jul", day, full))
+        import openpyxl
+        for labels in (self.DAYS,
+                       ["Sunday", "Monday", "Tuesday", "Wednesday",
+                        "Thursday", "Friday", "Saturday"],
+                       [f"{d} 12 Jul" for d in
+                        ("Sunday", "Monday", "Tuesday", "Wednesday",
+                         "Thursday", "Friday", "Saturday")]):
+            with self.subTest(labels=labels[0]):
+                wb = openpyxl.Workbook()
+                ws = wb.active
+                ws.title = "Schedule"
+                ws.cell(1, 1).value = "SF Name"
+                for i, label in enumerate(labels):
+                    ws.cell(1, 2 + i).value = label
+                ws.cell(2, 1).value = "Associate 001"
+                for i in range(7):
+                    ws.cell(2, 2 + i).value = "OFF"
+                assigned = self._day_columns(wb)
+                self.assertIsNotNone(assigned, f"{labels[0]!r} was not recognised")
+                self.assertEqual(len(assigned), 7)
 
     def test_validator_source_does_not_use_short_prefix_matching(self):
+        """Kept as a cheap tripwire, but it is not the real guard.
+
+        A grep only catches the one broken form it names; the behavioural test
+        above catches any of them.
+        """
         source = VALIDATOR_PATH.read_text(encoding="utf-8").replace(" ", "")
-        self.assertNotIn("h.startswith(norm(d))", source,
+        self.assertFalse("h.startswith(norm(d))" in source,
                          "short-day prefix matching re-introduced")
 
 

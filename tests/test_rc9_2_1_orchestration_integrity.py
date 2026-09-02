@@ -169,6 +169,28 @@ class BudgetPlanNeverExceedsOrUndercutsTheRun(unittest.TestCase):
         self.assertEqual(sum(manager.phase_seconds.values()), 100)
         self.assertTrue(all(v >= 0 for v in manager.phase_seconds.values()))
 
+    def test_the_two_primary_phases_are_never_starved(self):
+        """Non-negative and correctly-summed is not enough.
+
+        Mutation testing found that dropping the proportional scale-to-fit and
+        relying on the clamp alone still satisfies both of those, while handing
+        break_search zero seconds - a run that never places a break. The plan
+        reserves 30% of the run for the two primary optimization phases, so
+        neither may come out at zero.
+        """
+        for total, plan in self._plans():
+            with self.subTest(total=total):
+                self.assertGreater(plan["stage1_search"], 0)
+                self.assertGreater(plan["break_search"], 0)
+
+    def test_the_primary_phases_keep_a_meaningful_share(self):
+        for total, plan in self._plans():
+            effective = max(60, total)
+            primary = plan["stage1_search"] + plan["break_search"]
+            self.assertGreaterEqual(
+                primary / effective, 0.25,
+                f"total={total}: optimization got {primary}/{effective} of the run")
+
     def test_a_large_realistic_budget_is_untouched(self):
         plan = build_global_budget_plan(14400, allow_exceptions=True, coordinated_repair=True,
                                         target_lock_recovery=True)

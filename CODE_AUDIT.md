@@ -7,10 +7,10 @@ shell gate, fixtures, evidence and documentation.
 |---|---|
 | Engine | `engine/_tools/l632_universal_scheduler.py` — 19,696 lines |
 | Everything else | ~4,200 lines across 18 modules |
-| Test suites | 4 (`tests/test_rc9_2_1_*.py`) |
+| Test suites | 8 (`tests/test_rc9_2_1_*.py`) — 4 at the start of this audit |
 | Gate | `run_tests.sh` |
 
-Findings from this audit are numbered **A#**. Release-behaviour findings 1–16
+Findings from this audit are numbered **A1–A25**. Release-behaviour findings 1–16
 from the earlier remediation cycle are recorded in
 `docs/RC9_2_1_CONSOLIDATED_ISSUE_REGISTER.md` and are not repeated here.
 
@@ -282,7 +282,7 @@ style column.
 | **File** | `engine/_tools/phase_b_maturity.py` (~line 347) |
 | **Category** | Duplicated / conflicting logic |
 | **Severity** | **Low–Medium** |
-| **Status** | **OPEN** |
+| **Status** | **CLOSED — NOT A DEFECT** |
 
 `phase_b_maturity` builds its own skeleton ranking key (exception count, then
 target, floor, 100, floor gaps, severe gaps, max run, overage) rather than using
@@ -290,8 +290,333 @@ target, floor, 100, floor gaps, severe gaps, max run, overage) rather than using
 exception count first and does not apply the protected-tier logic. Two ranking
 implementations that can disagree is a maintenance and correctness hazard.
 
-Not yet consolidated: it feeds adaptive break-task ordering rather than release
-selection, so the blast radius of changing it needs establishing first.
+**Resolved as a documented divergence, not a defect.** The blast radius was
+established: this key orders Stage-2 *attempts*; the champion is still chosen
+solely by `_candidate_quality_tuple` via `select_export_candidates`. A different
+attempt order changes which candidates get produced under a time budget, not
+which one wins. Consolidating the two would change search behaviour with no
+correctness gain, so it is left alone and the relationship is now pinned by
+`test_the_production_default_plan_is_unchanged_by_the_fix`.
+
+Auditing it did surface a real defect in the same function — see **A19**.
+
+---
+
+### A11 — Replay tool read the pre-fix ranking from the wrong tuple slots
+
+| | |
+|---|---|
+| **File** | `tools/replay_candidate_ranking.py` · `prefix_ranking` |
+| **Category** | Logic defect / false release evidence |
+| **Severity** | **High** |
+| **Status** | **VERIFIED** |
+
+The tool reconstructed the pre-fix ordering by overwriting quality-tuple slots
+9 and 10. Those hold the quantized deficit terms only when
+`_protected_tier_counts` yields exactly one tier.
+
+| Contract | Protected tiers | Deficit terms at | Slot 9 actually holds |
+|---|---|---|---|
+| target 90%, floor 75% | 1 (80) | 9, 10 | the deficit sum — correct |
+| target 100%, floor 75% | 2 (90, 80) | 10, 11 | `-max_consecutive_floor_gaps` |
+| target 80%, floor 75% | 0 | 8, 9 | `-max_consecutive_floor_gaps` |
+
+Outside 90/75 the tool destroyed a real safety term and reported a "pre-fix"
+verdict that was never the pre-fix verdict. This tool produced release evidence
+about whether the deficit-masking defect cost the release.
+
+**Fix.** The index is derived from `_protected_tier_counts` and then verified
+against the tuple's actual contents; a shape change raises `SystemExit` instead
+of skewing the result.
+
+---
+
+### A12 — `protected_benchmark_status` was a hardcoded `"PASS"`
+
+| | |
+|---|---|
+| **File** | `engine/_tools/l632_universal_scheduler.py` (summary row) + `tools/release_gate_report.py` |
+| **Category** | False verdict — absent evidence read as a pass |
+| **Severity** | **High** |
+| **Status** | **VERIFIED** |
+
+The engine wrote `"protected_benchmark_status": "PASS"` as a literal on every
+successful run, including runs where neither protected minimum was configured
+and the benchmark was therefore never evaluated. Confirmed on all four executed
+RC9.2.1 runs: each carries `PASS` with `protected_before80_min` and
+`protected_after80_min` empty. `release_gate_report.py` reads exactly this field
+for gate 4 and treated `PASS` (and `""`) as a pass — so **gate 4 has been passing
+on a benchmark that never ran**.
+
+**Fix.** The engine reports `NOT_CONFIGURED` when neither minimum is supplied.
+The gate report reports `PASS_PROTECTED_NOT_EVALUATED` and says so in the detail
+column, rather than folding it into `PASS`.
+
+---
+
+### A13 — Skeleton-only detection was a substring test
+
+| | |
+|---|---|
+| **File** | `tools/release_gate_report.py` |
+| **Category** | Over-broad match → gates silently skipped |
+| **Severity** | **Medium** |
+| **Status** | **VERIFIED** |
+
+`"SKELETON" in status.upper()` also matches
+`SKELETONS_AND_BREAK_DIAGNOSTICS_READY` and
+`SKELETON_EXCEPTION_LOWER_BOUND_EXCEEDS_CAP`. Both reached the break stage, so
+excusing gates 4 and 5 as `NOT_APPLICABLE` on them hid real break regressions.
+
+**Fix.** Exact match against `SKELETON_ONLY_COMPLETE`, the one skeleton-only
+status the engine actually emits (verified against the engine source by a test).
+
+---
+
+### A14 — Phase C reported safety PASS without any validation
+
+| | |
+|---|---|
+| **File** | `engine/production/phase_c_quality_report.py` |
+| **Category** | False verdict — absent evidence read as a pass |
+| **Severity** | **High** |
+| **Status** | **VERIFIED** |
+
+`hard_failures` defaulted to `0` when no count existed in either the candidate's
+`output_validation` or the audit. A run whose output validation never executed
+therefore reported `safety.status = PASS` with `hard_fail_count = 0`.
+
+**Fix.** Absence is tracked separately from zero. No count anywhere yields
+`NOT_VALIDATED`, and the report now publishes `hard_fail_count_reported`.
+
+---
+
+### A15 — Phase C report carried a two-release-stale release literal
+
+| | |
+|---|---|
+| **File** | `engine/production/phase_c_quality_report.py` |
+| **Category** | Identity drift |
+| **Severity** | **Medium** |
+| **Status** | **VERIFIED** |
+
+The module hardcoded the RC9.0 universal-production-platform name as the release
+fallback. Same class as A5 and A7. Now derived from the engine's `VERSION`,
+returning an explicit `UNKNOWN_ENGINE_RELEASE` rather than aborting a report if
+the engine cannot be read.
+
+---
+
+### A16 — An unevaluated production quality gate could reach `PASS_CLEAN`
+
+| | |
+|---|---|
+| **File** | `engine/production/phase_c_quality_report.py` |
+| **Category** | False verdict |
+| **Severity** | **High** |
+| **Status** | **VERIFIED** |
+
+The report's own interpretation text states that a failed production quality
+gate cannot be exported as PASS. That held for a *failed* gate but not an
+*unevaluated* one: with no gate result and no validation the status chain fell
+through to `PASS_CLEAN`. Now `REVIEW_NOT_VALIDATED`.
+
+---
+
+### A17 — Phase C packager wrote ZIPs before checking required roles
+
+| | |
+|---|---|
+| **File** | `engine/production/package_phase_c_outputs.py` |
+| **Category** | Ordering defect / incomplete delivery |
+| **Severity** | **Medium** |
+| **Status** | **VERIFIED** |
+
+The required-artifact-role check ran *after* all three archives were written, so
+an incomplete case still produced a `*_01_PRODUCTION_ONLY.zip` — with no manifest
+beside it to warn anything downstream that globs for the production ZIP.
+
+**Fix.** The check runs first; a refused case leaves no archive on disk
+(verified).
+
+---
+
+### A18 — Phase A packager shipped an empty production archive as a pass
+
+| | |
+|---|---|
+| **File** | `engine/production/package_phase_a_outputs.py` |
+| **Category** | False verdict — empty result reported as success |
+| **Severity** | **Medium** |
+| **Status** | **VERIFIED** |
+
+No role check at all. A case with no schedule produced a valid empty archive
+whose record read `file_count: 0, zip_test: PASS`. Now refuses.
+
+---
+
+### A19 — Stage-2 attempt plan ignored the requested objective modes
+
+| | |
+|---|---|
+| **File** | `engine/_tools/phase_b_maturity.py` · `adaptive_break_attempt_plan` |
+| **Category** | Parameter silently overridden |
+| **Severity** | **High** |
+| **Status** | **VERIFIED** |
+
+`preferred_modes` was concatenated *ahead of* the caller's list, so every plan
+ran all seven preferred modes whatever was asked for.
+
+| Requested | Modes actually planned | Tasks scheduled |
+|---|---|---|
+| `["target_priority"]` | 7 | 112 (vs 16) |
+| engine default in `quality_gate_mode="warn"` (5) | 7 | +2 unrequested |
+
+This silently voided `--break-objective-modes` and spread a fixed Stage-2 budget
+across modes the caller had excluded — including the two quality-guard modes
+that `default_break_objective_modes` deliberately omits outside `fail` mode.
+
+**Fix.** `preferred_modes` is now a *ranking over* the caller's set, not a
+source of modes.
+
+**Blast radius, measured.** `RUN_UNIVERSAL_PRODUCTION.py` passes all seven modes
+explicitly as its default, so across 300 random skeleton sets at the wrapper's
+default pattern widths the production plan is **byte-identical**. No run made
+with defaults changes. The fix bites only on a request that restricts the
+modes — the case that was broken.
+
+---
+
+### A20 — Budget planner emitted a negative phase, then over-allocated the run
+
+| | |
+|---|---|
+| **File** | `engine/_tools/phase_b_maturity.py` · `build_global_budget_plan`, `GlobalBudgetManager` |
+| **Category** | Arithmetic defect / wall-clock overrun |
+| **Severity** | **Medium** |
+| **Status** | **VERIFIED** |
+
+At `total=60` the per-phase floors already sum to 110, and
+`plan["break_search"] += total - sum(plan)` turned that into `break_search = -20`.
+`GlobalBudgetManager` clamped it to zero and ran the 60-second budget as an
+**80-second allocation**, putting cumulative phase deadlines past the run's own
+`final_deadline`; `remaining_in_phase` could then exceed `remaining_total`.
+
+**Fix.** Both layers scale to fit. Verified across **6,720** budget
+combinations: no negative phase, every plan sums to its effective total, and no
+phase deadline lands past the final deadline.
+
+Mutation testing later showed non-negativity and correct sums were *not
+sufficient*: dropping the proportional scaling and relying on the clamp alone
+still satisfies both while handing `break_search` zero seconds — a run that never
+places a break. Two further guards now pin that the two primary optimization
+phases are never starved and keep at least 25% of the run.
+
+---
+
+### A21 — Bound certificate reported a tight bound when it measured nothing
+
+| | |
+|---|---|
+| **File** | `engine/_tools/phase_b_adaptive.py` · `make_bound_certificate` |
+| **Category** | Absent evidence presented as a good result |
+| **Severity** | **Medium** |
+| **Status** | **VERIFIED** |
+
+`maximum_gap` started at `0.0` and was only raised by measurable stages, so a
+certificate where no stage reported both an objective and a bound published
+`maximum_relative_gap: 0.0` — which reads as a proven-tight bound. This value
+reaches the summary CSV as `quality_certificate_max_relative_gap`.
+
+**Fix.** `None` when nothing was measured, plus a `measured_stage_count`.
+
+---
+
+### A22 — Regression-lab harnesses could not find the engine
+
+| | |
+|---|---|
+| **File** | `engine/regression_assets/regression_lab/run_fast70_migrated.py`, `run_phase_b_micro.py` |
+| **Category** | Path defect / dead gate |
+| **Severity** | **High** (a regression gate that never runs) |
+| **Status** | **VERIFIED** |
+
+Both resolved `ROOT` to `engine/regression_assets` and built `ENGINE_PATH` from
+it, giving `engine/regression_assets/_tools/l632_universal_scheduler.py` — a path
+that has never existed. Both died on `FileNotFoundError` before running a single
+scenario.
+
+**Fix.** The assets root and the engine root are now separate constants. The
+fast70 harness executes again.
+
+---
+
+### A23 — Fast70 catalog integrity was guarded by bare `assert`
+
+| | |
+|---|---|
+| **File** | `engine/regression_assets/regression_lab/run_fast70_migrated.py` |
+| **Category** | Gate that cannot fail |
+| **Severity** | **High** |
+| **Status** | **VERIFIED** |
+
+`python -O` strips `assert`. Demonstrated: with the catalog cut from 70
+scenarios to 3, `-O` printed `passed 0 / failed 0` and exited **0**.
+
+**Fix.** Catalog size, duplicate ids and required categories branch and return
+2. An unknown `--only-ids` value is an error rather than an empty run, and
+selecting no scenarios no longer reports success. All verified under `-O`.
+
+---
+
+### A24 — Phase A closure verifier was eight bare asserts
+
+| | |
+|---|---|
+| **File** | `engine/regression_assets/regression_lab/verify_phase_a_closure.py` |
+| **Category** | Gate that cannot fail |
+| **Severity** | **High** |
+| **Status** | **VERIFIED** |
+
+Its entire verification was `assert` statements, so under `-O` it printed its
+PASS line having checked nothing. An absent field also raised `KeyError` rather
+than reporting a failure.
+
+**Fix.** Rewritten to collect every failure and return 2. An absent field is now
+a failure, not a crash.
+
+**Not fixed, deliberately.** `qa/PHASE_A_CLOSURE_EVIDENCE.json` and
+`RUN_UNIVERSAL_WFM.py` are absent from this repository. They are **not
+regenerated** — a reconstructed baseline proves nothing. The verifier returns 3
+for absent evidence, distinct from both a pass and a verification failure, and
+says the file must be restored rather than rebuilt. `run_phase_a_closure`,
+`run_phase_a_focused` and `run_phase_b_micro` remain **BLOCKED** on those
+missing assets.
+
+---
+
+### A25 — A guard in this project's own suite tested a copy of the rule
+
+| | |
+|---|---|
+| **File** | `tests/test_rc9_2_1_validator_parity.py` · `DayColumnMatchingIsNotOverBroad` |
+| **Category** | Test that passes while the feature is broken |
+| **Severity** | **High** (it was the guard for A1) |
+| **Status** | **VERIFIED** |
+
+Found by mutation testing, not by reading. The class reimplemented the
+day-matching rule in the test body (`_accepts`) and asserted against its own
+copy, so it passed for *any* implementation. The only test touching real code
+grepped for one specific pre-fix string, which a differently-broken form evades.
+
+Proof: swapping the validator to `norm(d) in h` substring matching left every
+assertion in that class green.
+
+**Fix.** Rewritten to build a worksheet containing a decoy column and parse it
+with `parse_output_schedule`, asserting the decoy is never read as a day's
+shift. The decoy is placed both left and right of the genuine columns, because
+matching scans in column order and a decoy-last fixture passes under a broken
+rule. The mutant is now caught by 7 assertions.
 
 ---
 
@@ -326,18 +651,77 @@ Recorded so they are not re-investigated:
 
 ---
 
-## Verification after this batch
+## Mutation testing
+
+Reading a test suite cannot tell you whether it would catch a real defect.
+Twenty semantically meaningful defects were injected one at a time into the
+engine, the validator, the wrapper, the polisher, the Phase B and Phase C
+modules and both tools, and the full gate was run against each.
+
+| | |
+|---|---|
+| Mutants applied | **20** |
+| Caught | **20** |
+| Survived | **0** |
+
+Two rounds were needed to get there, and both survivors were real:
+
+- **M11** (budget plan can go negative) survived the first round. Investigation
+  showed the surviving code still satisfied non-negativity and correct sums but
+  starved `break_search` to zero seconds. Two guards were added; it is now
+  caught.
+- **M18** (validator day column back to substring matching) survived the first
+  round and exposed **A25** — the guard for A1 was testing a copy of the rule.
+  The test was rewritten behaviourally; it is now caught by 7 assertions.
+
+---
+
+## Verification after this audit
 
 | Check | Result |
 |---|---|
 | `python -m py_compile` — all modules | PASS |
-| `tests/test_rc9_2_1_production_identity.py` | **11/11** (new) |
+| `tests/test_rc9_2_1_orchestration_integrity.py` | **23/23** (new) |
+| `tests/test_rc9_2_1_phase_c_integrity.py` | **15/15** (new) |
+| `tests/test_rc9_2_1_production_identity.py` | 11/11 |
+| `tests/test_rc9_2_1_regression_lab_integrity.py` | **18/18** (new) |
 | `tests/test_rc9_2_1_rule_semantics.py` | 30/30 |
 | `tests/test_rc9_2_1_selector_integrity.py` | 36/36 |
-| `tests/test_rc9_2_1_validator_parity.py` | **42/42** (+13) |
+| `tests/test_rc9_2_1_tooling_integrity.py` | **13/13** (new) |
+| `tests/test_rc9_2_1_validator_parity.py` | 42/42 |
 | engine selfcheck | PASS, byte-identical to the pre-change baseline |
 | wrapper selfcheck | PASS |
-| Real-artifact revalidation (NMG SP / Voice / Chat2) | PASS, metrics unchanged |
-| `run_tests.sh` | **GATE PASS — 4 suites + 2 selfchecks** |
+| Real exported workbooks re-parsed by the validator | **25/25**, zero anomalies |
+| Budget-plan invariants | 6,720 combinations, 0 violations |
+| Stage-2 plan on the production default | byte-identical over 300 skeleton sets |
+| Mutation testing | **20/20 caught** |
+| `run_tests.sh` | **GATE PASS — 8 suites + 2 selfchecks** |
 
-**119 guards** across four suites.
+**191 guards** across eight suites, up from 119 across four.
+
+Every new guard was run against the pre-fix code:
+
+| Suite | Fail against pre-fix code |
+|---|---|
+| `tooling_integrity` | 11 of 13 |
+| `orchestration_integrity` | 17 of 21 |
+| `phase_c_integrity` | 8 of 15 |
+| `regression_lab_integrity` | 14 of 18 |
+
+---
+
+## Remaining risks
+
+1. **The engine was not read line by line.** 19,696 lines. It was swept
+   automatically and read closely around every release-critical path. Defects in
+   unreached engine code would not have been found.
+2. **Gates 2 and 9 stay blocked.** They compare against RC9.1, which this
+   project does not hold. Reported as `REQUIRES_RC9_1_BASELINE`, not as a pass.
+3. **Three regression-lab harnesses stay blocked** on `RUN_UNIVERSAL_WFM.py`
+   and `qa/PHASE_A_CLOSURE_EVIDENCE.json`, which are absent and must not be
+   fabricated.
+4. **A19 was not re-run end to end.** Its no-op on the production path is proven
+   combinatorially rather than by a full solve; a restricted-mode run will now
+   behave differently, which is the intended correction.
+5. **A9 stays deferred** with measured evidence: 638 header rows examined across
+   the real exported workbooks, zero mismatches.

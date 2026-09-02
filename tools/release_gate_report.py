@@ -120,7 +120,17 @@ def evaluate(case: Path) -> dict:
         gate8 = "FAIL"
         gate8_why = f"{validation.get('hard_fail_count')} hard failures on {validation.get('artifact_role')}"
 
-    # Gate 4 - the engine's own release benchmark, not an RC9.1 comparison.
+    # Skeleton retention: the best before-break skeleton found versus the one
+    # actually carried into the winning after-break pair. A large gap means the
+    # strongest skeleton had no production break solution.
+    best_before = num(summary.get("global_best_before_target") or summary.get("best_before_target"))
+    final_before = num(summary.get("before_target"))
+    retention_loss = max(0.0, best_before - final_before) if best_before else 0.0
+
+    # Gate 4 - the engine's own quality/retention benchmark, NOT an RC9.1
+    # comparison and NOT a supplied benchmark workbook (which is typically
+    # NOT_PROVIDED). It warns when skeleton retention exceeds the configured
+    # max_final_before_target_loss.
     bench = summary.get("quality_benchmark_status") or ""
     protected = summary.get("protected_benchmark_status") or ""
     if not summary:
@@ -134,7 +144,9 @@ def evaluate(case: Path) -> dict:
             else "benchmark not reported by this run")
     else:
         gate4 = "PASS" if bench == "PASS" and protected in ("PASS", "") else "FAIL"
-        gate4_why = f"quality_benchmark={bench or 'n/a'}, protected_benchmark={protected or 'n/a'}"
+        gate4_why = (f"quality_benchmark={bench or 'n/a'}, protected_benchmark={protected or 'n/a'}"
+                     + (f", skeleton retention -{retention_loss:.0f} ({best_before:.0f} -> {final_before:.0f})"
+                        if retention_loss else ""))
 
     return {
         "case": case.name,
@@ -148,7 +160,12 @@ def evaluate(case: Path) -> dict:
         "target_losses_from_breaks": f"{target_loss:.0f}",
         "floor_losses_from_breaks": f"{floor_loss:.0f}",
         "avoidable_overage_fte_sum": summary.get("avoidable_overage_fte_sum", ""),
-        "gate4_target_benchmark": gate4, "gate4_detail": gate4_why,
+        "best_before_target": f"{best_before:.0f}" if best_before else "",
+        "skeleton_retention_loss": f"{retention_loss:.0f}" if best_before else "",
+        "max_concurrent_breaks_observed": summary.get("max_concurrent_breaks_observed", ""),
+        "break_concurrency_violations": summary.get("break_concurrency_violations", ""),
+        "break_objective_mode": summary.get("break_objective_mode", ""),
+        "gate4_quality_retention": gate4, "gate4_detail": gate4_why,
         "gate5_break_regression": gate5, "gate5_detail": gate5_why,
         "gate8_independent_validation": gate8, "gate8_detail": gate8_why,
         "gate2_vs_rc9_1": "REQUIRES_RC9_1_BASELINE",
@@ -181,12 +198,12 @@ def main() -> int:
     print("-" * (width + 64))
     for r in rows:
         print(f"{r['case']:{width}} {r['status'][:26]:26} "
-              f"{r['gate4_target_benchmark'][:6]:6} {r['gate5_break_regression'][:15]:15} "
+              f"{r['gate4_quality_retention'][:6]:6} {r['gate5_break_regression'][:15]:15} "
               f"{r['gate8_independent_validation'][:12]:12}")
     print()
     for r in rows:
         print(f"{r['case']}:")
-        print(f"    gate 4 {r['gate4_target_benchmark']:22} {r['gate4_detail']}")
+        print(f"    gate 4 {r['gate4_quality_retention']:22} {r['gate4_detail']}")
         print(f"    gate 5 {r['gate5_break_regression']:22} {r['gate5_detail']}")
         print(f"    gate 8 {r['gate8_independent_validation']:22} {r['gate8_detail']}")
     print()

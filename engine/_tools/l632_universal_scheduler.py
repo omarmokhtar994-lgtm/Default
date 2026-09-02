@@ -9304,6 +9304,16 @@ def select_export_candidates(
     pool = list(candidates)
     if not pool:
         raise ValueError("No final candidates supplied")
+    # Drop diagnostic probes before any other filter.  Order matters: the
+    # minimum-exception filter below would otherwise be decided by a
+    # zero-exception probe, which achieves that count by construction while
+    # running without the break-concurrency term, and would evict every
+    # production candidate needing even one exception.  Preference, not
+    # prohibition - if every candidate is diagnostic the pool is left intact.
+    production_pool = [pair for pair in pool if not break_release_diagnostic_only(pair[1])]
+    diagnostic_excluded = len(pool) - len(production_pool)
+    if production_pool:
+        pool = production_pool
     min_exceptions = min(len(sol.no_break_cells) for _, sol in pool)
     pool = [(sk, sol) for sk, sol in pool if len(sol.no_break_cells) == min_exceptions]
 
@@ -9517,6 +9527,8 @@ def select_export_candidates(
         "tradeoff_rows": tradeoff_rows,
         "recommendation_rows": recommendation_rows,
         "primary_target_tolerance": tolerance,
+        "diagnostic_break_candidates_excluded": diagnostic_excluded,
+        "diagnostic_break_fallback_used": bool(diagnostic_excluded and not production_pool),
         "minimum_exception_count": min_exceptions,
         "best_before_target_in_final_pool": best_before_target_in_pool,
         "global_best_before_target": global_before_anchor,
@@ -9549,6 +9561,41 @@ def skeleton_release_diagnostic_only(skeleton: SkeletonSolution) -> bool:
     if bool((getattr(skeleton, "diagnostics", {}) or {}).get("stage1_hint_only")):
         return True
     return False
+
+
+def break_release_diagnostic_only(solution: BreakSolution) -> bool:
+    """Stage-2 counterpart of ``skeleton_release_diagnostic_only``.
+
+    RC8.9 separated solver bootstrap from production selection for skeletons but
+    never did so for break solutions, and the asymmetry was load-bearing.
+
+    A diagnostic break solve exists to answer "does a zero-exception placement
+    exist at all".  To make that question tractable it runs with
+    ``diagnostic_mode`` set, which drops the soft objective terms - including the
+    break-concurrency penalty.  Under the default ``warn`` gate the concurrency
+    cap is then neither a hard constraint nor a penalty, so the probe is free to
+    stack breaks arbitrarily.  That is legitimate for a probe and unacceptable
+    for a production schedule.
+
+    Cricut Chat is the worked example: the diagnostic fallback reached 8
+    concurrent breaks against a configured maximum of 4, violated the cap 68
+    times, and cost 55 target intervals (187 -> 132, 22.7% of active).  It was
+    nonetheless promoted, because ``select_export_candidates`` filters the pool
+    by minimum exception count first - and a zero-exception probe wins that
+    filter by construction, evicting every production candidate needing even one
+    exception.
+
+    As with skeletons, this is a preference and not a prohibition: when no
+    non-diagnostic candidate exists the diagnostic one is still used, so no
+    scenario loses its only solution.
+    """
+    mode = norm((solution.diagnostics or {}).get("objective_mode", ""))
+    if mode.startswith("diagnostic_"):
+        return True
+    # solve_breaks sets diagnostic_mode = (objective_mode == "min_exceptions").
+    if mode == "min exceptions" or mode == "min_exceptions":
+        return True
+    return "diagnostic" in norm(getattr(solution, "profile", ""))
 
 
 def ensure_before_break_metrics(parsed: ParsedInput, skeleton: SkeletonSolution) -> Optional[Dict[str, Any]]:

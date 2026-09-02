@@ -500,3 +500,124 @@ Mahrous and Mohamed carry no fixed/leave/OFF configuration.
 
 **Release recommendation unchanged: NO-GO.** Gate 8's exact-agreement failure is
 now closed, but break-stage regression and deep regression remain unevidenced.
+
+---
+
+# Iteration 5 — Stage 2 fixed
+
+## Issue 16 — diagnostic break probes were promoted as production schedules
+
+**Severity:** high — this is the Gate 5 failure
+**Status:** FIXED
+
+### Root cause
+
+Stage 1 has separated solver bootstrap from production selection since RC8.9,
+via `skeleton_release_diagnostic_only()`, whose docstring is explicit: *"when any
+non-diagnostic skeleton exists it cannot be selected as BEST_BEFORE, guard
+anchor, or final break-search anchor."*
+
+**Stage 2 had no counterpart**, and the asymmetry was load-bearing.
+
+A diagnostic break solve answers "does a zero-exception placement exist at all".
+To stay tractable it runs with `diagnostic_mode` set, which drops the soft
+objective terms. Among those is the break-concurrency penalty:
+
+```python
+if concurrency_mode == "fail":
+    add_break_family(model.Add(break_count <= concurrency_cap), "break_concurrency")
+elif concurrency_mode == "warn" and not diagnostic_mode:
+    ...soft penalty...
+```
+
+Under the default `warn` gate, a diagnostic solve therefore has the concurrency
+cap as **neither a hard constraint nor a penalty** — it is absent from the model.
+That is fine for a probe and unacceptable for a production schedule.
+
+It reached production because `select_export_candidates` filtered the pool by
+**minimum exception count first**, and a zero-exception probe wins that filter by
+construction, evicting every production candidate needing even one exception.
+
+### Correction
+
+`break_release_diagnostic_only()` — the Stage-2 mirror of the Stage-1 predicate —
+plus an exclusion in `select_export_candidates` placed **before** the
+minimum-exception filter, because ordering is what made the defect reachable.
+
+Preference, not prohibition: `if production_pool: pool = production_pool`, so a
+scenario whose only solution is diagnostic still produces it. The decision is
+reported as `diagnostic_break_candidates_excluded` and
+`diagnostic_break_fallback_used`.
+
+No change to the break model, the concurrency cap, the gate mode, or any
+objective weight.
+
+### Measured on Cricut Chat
+
+| metric | before | after |
+|---|---|---|
+| **after_target** (the production artifact) | 132 | **164** (+32) |
+| **after_floor** | 195 | **214** (+19) |
+| target lost to breaks | 55 (22.7%) | **8 (3.3%)** |
+| floor lost to breaks | 32 (13.2%) | **2 (0.8%)** |
+| break objective mode | `diagnostic_zero_exception_fallback` | **`target_priority`** |
+| max concurrent breaks (cap 4) | 8 | **5** |
+| concurrency violations | 68 | **25** |
+| language reserve quarters lost | 2 | **0** |
+| break exceptions | 0 | **0** |
+| **Gate 5** | **FAIL** | **PASS** |
+
+The gain was not bought with break exceptions — both runs have zero, minimum
+proven.
+
+### The trade, stated plainly
+
+Gate 4 moved PASS → FAIL on this scenario, and the reason is worth understanding
+rather than explaining away.
+
+`quality_benchmark.status` is `NOT_PROVIDED` on both runs — no benchmark workbook
+exists. The WARN is a **skeleton-retention** signal: the best before-break
+skeleton is 187, but the skeleton in the winning pair is 172, a 15-interval loss
+against a configured `max_final_before_target_loss` of 6.
+
+So excluding diagnostic candidates forced the pairing onto a weaker skeleton.
+**That is the finding, not a side effect:** Cricut Chat's strongest skeleton has
+no production break solution — only a diagnostic one. The previous behaviour hid
+that by shipping a degenerate break layout built on it.
+
+The net is clearly positive on the metric that ships. RC9.1 default policy sets
+`after_break_final_is_production_output: true` and
+`best_before_is_review_anchor_only: true`: we lose 15 intervals on a review
+anchor to gain 32 on the production artifact.
+
+The report was corrected alongside — Gate 4 was mislabelled "target benchmark"
+when it is a quality/retention check, and `skeleton_retention_loss`,
+`max_concurrent_breaks_observed` and `break_concurrency_violations` are now
+reported columns. Voice shows a retention loss of 5 and still passes, so the
+signal is not new; Chat's 15 is what exceeds the cap.
+
+### Residual, not fixed
+
+`break_concurrency_violations` fell 68 → 25 but is not zero, and
+`max_concurrent_breaks_observed` is 5 against a cap of 4. The gate mode is `warn`,
+so the cap is a penalty rather than a limit. Whether to set it to `fail` is a
+configuration decision for the owner, testable in one run — deliberately not
+taken unilaterally, since it can render some scenarios infeasible.
+
+## Gate status after iteration 5
+
+| Gate | Status |
+|---|---|
+| 1 Environment | ✅ PASS |
+| 2 NMG EN vs RC9.1 | ⛔ requires RC9.1 |
+| 3 NMG SP reconciliation | ✅ PASS |
+| 4 Quality / retention | ⚠️ PASS on NMG SP + Voice; Chat warns on retention |
+| 5 Break regression | ✅ **PASS on all three** (NMG SP, Voice, Chat) |
+| 6 11H/3OFF | ✅ PASS |
+| 7 Resume / timeout | 🔸 resume PASS, timeout untested |
+| 8 Independent validation | ✅ PASS on four self-generated pairs |
+| 9 Quality vs RC9.1 | ⛔ requires RC9.1 |
+
+**Release recommendation: NO-GO remains, but the reason has narrowed to the RC9.1
+comparator alone.** Every gate that can be decided without it is now green or has
+a named, owner-level configuration decision attached.

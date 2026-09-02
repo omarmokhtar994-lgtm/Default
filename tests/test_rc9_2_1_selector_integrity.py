@@ -300,5 +300,81 @@ class SkeletonOnlyLeaderboardIsAuditable(unittest.TestCase):
         row = self._rows()[0]
         self.assertEqual(row["floor_deficit_bucket"], E._deficit_bucket(1.25))
 
+class DiagnosticBreakSolutionsAreNotPromoted(unittest.TestCase):
+    """Stage 2 must separate solver bootstrap from production selection.
+
+    Stage 1 has done this since RC8.9 via skeleton_release_diagnostic_only.
+    Stage 2 had no counterpart, and the gap was load-bearing: a diagnostic break
+    solve runs with diagnostic_mode set, which drops the soft objective terms
+    including the break-concurrency penalty.  Under the default "warn" gate the
+    concurrency cap is then neither hard constraint nor penalty.
+
+    Measured on Cricut Chat: the diagnostic fallback reached 8 concurrent breaks
+    against a configured cap of 4, violated it 68 times, and cost 55 target
+    intervals (187 -> 132, 22.7% of active) - yet was promoted, because the pool
+    is filtered by minimum exception count first and a zero-exception probe wins
+    that filter by construction.
+    """
+
+    def _solution(self, objective_mode, exceptions=0, profile="p"):
+        return E.BreakSolution(
+            profile=profile, skeleton_profile="sk", cp_status="FEASIBLE",
+            elapsed_sec=0.0, objective=0.0, pattern_width=115, exception_mode=False,
+            selected_pattern={}, no_break_cells=set(range(exceptions)), patterns=[],
+            diagnostics={"objective_mode": objective_mode}, metrics={},
+        )
+
+    def test_diagnostic_fallback_is_recognised(self):
+        self.assertTrue(E.break_release_diagnostic_only(
+            self._solution("diagnostic_zero_exception_fallback")))
+
+    def test_diagnostic_assignment_is_recognised(self):
+        self.assertTrue(E.break_release_diagnostic_only(
+            self._solution("diagnostic_zero_exception_assignment")))
+
+    def test_min_exceptions_probe_is_recognised(self):
+        """solve_breaks sets diagnostic_mode = (objective_mode == 'min_exceptions')."""
+        self.assertTrue(E.break_release_diagnostic_only(self._solution("min_exceptions")))
+
+    def test_production_modes_are_not_flagged(self):
+        for mode in ("target_priority", "fallback_revalidation", "before_breaks_only"):
+            with self.subTest(mode=mode):
+                self.assertFalse(E.break_release_diagnostic_only(self._solution(mode)))
+
+    def test_diagnostic_profile_name_is_recognised(self):
+        self.assertTrue(E.break_release_diagnostic_only(
+            self._solution("target_priority", profile="fully_compliant_diagnostic_fallback")))
+
+    def test_exclusion_runs_before_the_minimum_exception_filter(self):
+        """The ordering that made the defect reachable.
+
+        A zero-exception diagnostic probe must not evict a production candidate
+        that needs one exception. If the min-exception filter ran first it would.
+        """
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text(
+            encoding="utf-8")
+        start = source.index("def select_export_candidates")
+        body = source[start:start + 3000]
+        exclusion = body.index("break_release_diagnostic_only")
+        min_filter = body.index("min_exceptions = min(")
+        self.assertLess(exclusion, min_filter,
+                        "diagnostic exclusion must precede the minimum-exception "
+                        "filter, or a zero-exception probe wins by construction")
+
+    def test_exclusion_is_a_preference_not_a_prohibition(self):
+        """If every candidate is diagnostic, the pool must survive."""
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text(
+            encoding="utf-8")
+        self.assertIn("if production_pool:", source,
+                      "a scenario whose only solution is diagnostic must still "
+                      "produce that solution")
+
+    def test_exclusion_is_reported(self):
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text(
+            encoding="utf-8")
+        self.assertIn("diagnostic_break_candidates_excluded", source)
+        self.assertIn("diagnostic_break_fallback_used", source)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -876,6 +876,105 @@ nothing.
 
 ---
 
+### A34 — Stage 1 was funded for width it could not pay for, so every attempt ran too shallow to converge
+
+| | |
+|---|---|
+| **File** | `engine/_tools/phase_b_maturity.py` (`build_global_budget_plan`), `engine/_tools/l632_universal_scheduler.py` (Stage-1 profile loop) |
+| **Category** | Wall-clock allocation starves the phase that decides the answer |
+| **Severity** | **Critical** — this is the whole RC9.2.1-vs-RC9.1 quality gap |
+| **Status** | **VERIFIED** |
+
+A28 recorded that Stage 1 abandoned its portfolio silently and deliberately did
+not retune any threshold, because *"whether 55% of Stage 1 for a diagnostic
+reserve and a hard 45-second slice floor are the right values needs the re-run
+at the design budget to answer, not a guess."* The Colab runs answered it.
+
+**Every Stage-1 attempt, in every scenario, in every recorded RC9.2.1 run, ran
+at exactly 45.0 seconds.** Not approximately — the audit rows read `45.0` for
+AE AR B2B (12 of 12), Cricut Voice (15 of 15), NMG EN+SP (17 of 17) and
+GDI REAL28. That is the `max(45.0, …)` minimum-slice floor, hit every time.
+
+The arithmetic, for the 2,400-second budget the runs actually used:
+
+| phase | allocated |
+|---|---|
+| `joint_refinement` | 840 |
+| `break_search` | 460 |
+| `stage1_search` | **332** |
+| `breakability_diagnostic_reserve` off Stage 1 | −182 |
+| **Stage-1 profile window** | **150 seconds, for a 15-profile portfolio** |
+
+`primary = total - fixed` left 792 seconds, of which Stage 1 took 42%. Stage 1
+chooses the skeleton; `joint_refinement`, `coordinated_repair` and
+`post_break_repair` can only polish the skeleton Stage 1 hands them, never
+replace it. The allocation had that backwards.
+
+**Measured consequence** (`evidence/STAGE1_SLICE_DEPTH_PROBE.md`, same workbook,
+same profile, same seed, only the time limit varies):
+
+| Scenario | Profile | 45s | 150s | 210s | 450s | RC9.1 |
+|---|---|---|---|---|---|---|
+| AE AR B2B | `target90_restore_champion` | UNKNOWN | 101 | — | **167** | 168 |
+| AE AR B2B | `before_target_champion` | UNKNOWN | UNKNOWN | **166** | **166** | 168 |
+| Cricut Voice | `target90_restore_champion` | 248 | 250 | — | 250 | — |
+| Cricut Voice | `floor_gate_hunter_before` | 238 | 238 | — | 236 | 256 |
+
+On AE AR B2B, 45 seconds is not a short attempt — it is **no** attempt. CP-SAT
+returned no feasible skeleton at all, twelve times. The 131/159 the run
+published did not come from Stage 1; a downstream fallback carried it. Given
+210 seconds the same engine reaches 166 against RC9.1's 168, and 450 seconds
+returns the same 166 — the cliff is narrow, and past it more time buys nothing.
+`STAGE1_MIN_MEANINGFUL_SLICE_SEC` is set to **240s** on that measurement.
+
+**Fix.** Two coordinated changes.
+
+1. `build_global_budget_plan` takes `stage1_minimum_seconds`. A stated Stage-1
+   need enlarges the protected primary block (capped at 70% of the run) so the
+   *downstream* reserves scale down, and wins the stage1/break split up to 75%
+   of that block. A caller that states no minimum gets the identical old plan.
+   The engine states `portfolio_size × STAGE1_MIN_MEANINGFUL_SLICE_SEC / 0.82`,
+   capped at 45% of the run.
+2. The Stage-1 slice comes from `stage1_slice_seconds(remaining, attempts_left)`:
+   the even split when it clears the meaningful minimum, otherwise the minimum
+   itself, never more than the window holds. The portfolio is **not** truncated
+   up front — a profile that proves OPTIMAL in 0.2s returns its slice unspent
+   (NMG SP does this seventeen times), so easy scenarios still explore
+   everything and only genuinely hard ones run out of window.
+
+Effect on the Stage-1 profile window, same flags as the recorded runs:
+
+| budget | window before | window after | break_search before → after |
+|---|---|---|---|
+| 1,800 | 113 | 540 | 345 → 453 |
+| 2,400 | 150 | 720 | 460 → 602 |
+| 2,700 | 169 | 810 | 519 → 678 |
+| 7,200 | 700 | 2,640 | 1,796 → 1,803 |
+| 14,400 | 3,104 | 3,790 | 5,116 → 5,693 |
+
+Break search is not the donor and does not lose time in any case — the
+reduction falls on `joint_refinement`.
+
+**Deliberately not done — a portfolio reordering.** The first reading of the
+AE AR B2B loss was that RC9.1's champion profile, `before_target_champion`, sat
+at catalog position 14 and was listed in `skipped_profiles` in every segment, so
+the winning strategy never ran. An evidence-ranked ordering was written and then
+**removed**: at equal depth the two profiles land within one interval of each
+other (167 and 166), so profile choice does not explain the loss, and on Cricut
+Voice promoting the RC9.1 champion would have made the result *worse*
+(`floor_gate_hunter_before` scores 236–238 where `target90_restore_champion`
+scores 250). Ordering by RC9.1's champions is evidence about RC9.1's engine, not
+this one.
+
+**Still open — Cricut Voice.** Depth funding is worth about +4 target intervals
+there, not the +10 that would reach the 256 in the baseline; both profiles
+plateau. That row is also the only one in `RC9_1_BASELINE.json` sourced from a
+*"preserved workbook leaderboard"* rather than a candidate replay, i.e. possibly
+a best-of-pool figure rather than one run's champion. Recorded as an open
+question, not resolved.
+
+---
+
 ## Sweeps — patterns checked across all 19 modules
 
 Recorded so the absence of findings is evidence, not silence.
@@ -954,12 +1053,12 @@ Two rounds were needed to get there, and both survivors were real:
 | Check | Result |
 |---|---|
 | `python -m py_compile` — all modules | PASS |
-| `tests/test_rc9_2_1_orchestration_integrity.py` | **23/23** (new) |
+| `tests/test_rc9_2_1_orchestration_integrity.py` | **33/33** (new; +5 for A34) |
 | `tests/test_rc9_2_1_phase_c_integrity.py` | **15/15** (new) |
 | `tests/test_rc9_2_1_production_identity.py` | 11/11 |
 | `tests/test_rc9_2_1_regression_lab_integrity.py` | **18/18** (new) |
 | `tests/test_rc9_2_1_rule_semantics.py` | **37/37** (+7) |
-| `tests/test_rc9_2_1_selector_integrity.py` | 36/36 |
+| `tests/test_rc9_2_1_selector_integrity.py` | **47/47** (+11 for A34) |
 | `tests/test_rc9_2_1_tooling_integrity.py` | **13/13** (new) |
 | `tests/test_rc9_2_1_validator_parity.py` | 42/42 |
 | engine selfcheck | PASS, byte-identical to the pre-change baseline |
@@ -972,7 +1071,7 @@ Two rounds were needed to get there, and both survivors were real:
 | `ruff check --select E9,F821` across engine, tools and tests | **clean** |
 | `run_tests.sh` | **GATE PASS — 9 suites + 2 selfchecks + undefined-name sweep** |
 
-**200 guards** across nine suites, up from 119 across four.
+**260 guards** across nine suites, up from 119 across four.
 
 Every new guard was run against the pre-fix code:
 
@@ -982,6 +1081,7 @@ Every new guard was run against the pre-fix code:
 | `orchestration_integrity` | 17 of 21 |
 | `phase_c_integrity` | 8 of 15 |
 | `regression_lab_integrity` | 14 of 18 |
+| `orchestration_integrity` (A34 batch) | 5 of 5 |
 
 ---
 

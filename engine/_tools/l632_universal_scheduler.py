@@ -3232,6 +3232,65 @@ def skeleton_profiles(requested_names: Optional[Sequence[str]] = None) -> List[D
     return selected or profiles
 
 
+# Shortest Stage-1 slice that is worth spending at all.
+#
+# Set from measurement, not judgement. evidence/STAGE1_SLICE_DEPTH_PROBE.md
+# records what build_skeleton returns for the same workbook, profile and seed
+# at a range of time limits. On AE AR B2B - the hardest scenario in the
+# regression set - the same profile returns UNKNOWN at 45s and at 150s (no
+# feasible skeleton at all) and 166 of 168 before-break target intervals at
+# 210s, against RC9.1's 168. Longer slices do not improve on that: 450s also
+# returns 166. The cliff sits between 150s and 210s, so 240s clears it with
+# margin without spending time the measurement shows is wasted.
+STAGE1_MIN_MEANINGFUL_SLICE_SEC = 240.0
+
+# Longest single Stage-1 solver slice. Unchanged from the pre-RC9.2.2 loop.
+STAGE1_MAX_SLICE_SEC = 1800.0
+
+# Fraction of the Stage-1 profile window that is actually handed to solver
+# slices; the remainder absorbs model build, metric calculation and checkpoint
+# writes between attempts.
+STAGE1_SLICE_UTILIZATION = 0.82
+
+
+def stage1_fundable_profile_count(window_sec: float) -> int:
+    """How many Stage-1 profiles a wall-clock window can pay for at full depth.
+
+    Reporting only: the loop does not truncate its portfolio up front, because
+    a profile that proves OPTIMAL in a fraction of a second returns its slice
+    unspent (NMG SP does exactly this, seventeen times). This is what the run
+    log states it can afford, so a truncated search is visible in the log
+    rather than only in the audit afterwards.
+    """
+    if STAGE1_MIN_MEANINGFUL_SLICE_SEC <= 0:
+        raise ValueError("STAGE1_MIN_MEANINGFUL_SLICE_SEC must be positive")
+    usable = max(0.0, float(window_sec)) * STAGE1_SLICE_UTILIZATION
+    return int(usable // STAGE1_MIN_MEANINGFUL_SLICE_SEC)
+
+
+def stage1_slice_seconds(remaining_sec: float, attempts_left: int) -> float:
+    """Per-profile Stage-1 solver slice: fund depth, not width.
+
+    The even split used to be clamped UP to a hard 45-second floor, with the
+    utilization factor applied first.  Clamping up does not create time - it
+    runs a portfolio the window cannot pay for, every profile too shallow to
+    converge.  Every recorded RC9.2.1 Stage-1 attempt in every scenario landed
+    on that floor.  Measured on AE AR B2B, the same profile and seed returns
+    UNKNOWN at 45s and at 150s - no skeleton at all - and 166/168 before-break
+    target intervals at 450s, against RC9.1's 168/168.
+
+    Take the even split when it clears the meaningful minimum, otherwise take
+    the minimum and let the caller's deadline check end the portfolio early.
+    A profile that solves fast returns long before its slice expires (NMG SP
+    proves OPTIMAL in 0.2s), so an easy scenario still explores everything.
+    The result never exceeds the usable part of the window it was given.
+    """
+    usable = max(0.0, float(remaining_sec)) * STAGE1_SLICE_UTILIZATION
+    attempts = max(1, int(attempts_left))
+    proposed = min(STAGE1_MAX_SLICE_SEC, max(STAGE1_MIN_MEANINGFUL_SLICE_SEC, usable / attempts))
+    return min(proposed, max(STAGE1_MIN_MEANINGFUL_SLICE_SEC, usable))
+
+
 def active_interval_segments(parsed: ParsedInput) -> Dict[int, List[List[int]]]:
     """Return contiguous active interval segments; blank periods reset runs."""
     result: Dict[int, List[List[int]]] = {d: [] for d in range(7)}
@@ -15817,8 +15876,18 @@ def run_case(
             if skeleton_hard_clean(parsed, seed_metrics):
                 fallback_seed_skeletons.append(fallback_seed)
 
+        # Tell the budget planner what a real Stage-1 portfolio costs, instead
+        # of letting Stage 1 take a fixed share of whatever the downstream
+        # reserves leave behind. Capped at 45% of the run so break search,
+        # joint refinement and finalization all remain funded.
+        stage1_portfolio_size = max(1, len(skeleton_profiles(skeleton_profile_names)))
+        stage1_minimum_seconds = int(min(
+            total_time_sec * 0.45,
+            stage1_portfolio_size * STAGE1_MIN_MEANINGFUL_SLICE_SEC / STAGE1_SLICE_UTILIZATION,
+        ))
         global_budget_plan = build_global_budget_plan(
             total_time_sec,
+            stage1_minimum_seconds=stage1_minimum_seconds,
             allow_exceptions=parsed.allow_no_break_exceptions,
             coordinated_repair=coordinated_repair,
             joint_refinement=joint_refinement,
@@ -16401,6 +16470,14 @@ def run_case(
         profiles = skeleton_profiles(skeleton_profile_names)
         restored_profile_names = {skeleton.profile for skeleton in successful_skeletons}
         profiles_to_run = [profile for profile in profiles if profile["name"] not in restored_profile_names]
+        stage1_window_sec = max(0.0, stage1_profile_deadline - time.time())
+        print(
+            f"STAGE1_PORTFOLIO window={stage1_window_sec:.0f}s "
+            f"runnable={len(profiles_to_run)} "
+            f"funds={stage1_fundable_profile_count(stage1_window_sec)} at "
+            f"{STAGE1_MIN_MEANINGFUL_SLICE_SEC:.0f}s minimum depth",
+            file=log, flush=True,
+        )
         for profile_index, profile in enumerate(profiles_to_run):
             stage1_key = canonical_hash({"phase": "stage1_profile", "profile": profile["name"]})[:32]
             prior_stage1 = registry.get("completed", {}).get(stage1_key, {})
@@ -16414,7 +16491,7 @@ def run_case(
                 })
                 continue
             remaining = stage1_profile_deadline - time.time()
-            if remaining < 45:
+            if remaining < STAGE1_MIN_MEANINGFUL_SLICE_SEC:
                 # The portfolio is abandoned here, and it used to be abandoned
                 # SILENTLY: `stage1_attempts` simply held fewer rows than
                 # profiles requested, and nothing downstream said the search had
@@ -16428,18 +16505,20 @@ def run_case(
                     "skipped_for_budget": len(profiles_to_run) - profile_index,
                     "skipped_profiles": [row["name"] for row in profiles_to_run[profile_index:]],
                     "remaining_sec_at_stop": round(max(0.0, remaining), 3),
-                    "minimum_slice_sec": 45.0,
+                    "minimum_slice_sec": STAGE1_MIN_MEANINGFUL_SLICE_SEC,
+                    "stage1_window_sec": round(stage1_window_sec, 3),
                     "status": "TRUNCATED_INSUFFICIENT_STAGE1_BUDGET",
                 }
                 print(
                     f"STAGE1_PORTFOLIO_TRUNCATED attempted={profile_index} of "
                     f"{len(profiles_to_run)} runnable ({len(profiles)} requested); "
-                    f"{max(0.0, remaining):.1f}s left, 45s needed per profile",
+                    f"{max(0.0, remaining):.1f}s left, "
+                    f"{STAGE1_MIN_MEANINGFUL_SLICE_SEC:.0f}s needed per profile",
                     file=log, flush=True,
                 )
                 break
             attempts_left = max(1, len(profiles_to_run) - profile_index)
-            slice_sec = min(1800.0, max(45.0, remaining * 0.82 / attempts_left))
+            slice_sec = stage1_slice_seconds(remaining, attempts_left)
             solution = build_skeleton(
                 parsed, profile, base_hard, slice_sec, workers, log,
                 random_seed=solver_random_seed,
@@ -16469,6 +16548,7 @@ def run_case(
                 "attempted": len(profiles_to_run),
                 "skipped_for_budget": 0,
                 "skipped_profiles": [],
+                "stage1_window_sec": round(stage1_window_sec, 3),
                 "status": "COMPLETE",
             }
 

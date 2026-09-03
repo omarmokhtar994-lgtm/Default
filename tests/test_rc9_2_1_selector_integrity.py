@@ -376,5 +376,88 @@ class DiagnosticBreakSolutionsAreNotPromoted(unittest.TestCase):
         self.assertIn("diagnostic_break_fallback_used", source)
 
 
+class Stage1FundsDepthBeforeWidth(unittest.TestCase):
+    """45 seconds is not a short attempt; on AE AR B2B it is no attempt.
+
+    The old `max(45.0, remaining * 0.82 / attempts_left)` clamped the slice up
+    rather than clamping the portfolio down, so a window that could not pay for
+    the portfolio ran it anyway at a depth that produced nothing.  Probe
+    evidence (evidence/STAGE1_SLICE_DEPTH_PROBE.md): AE AR B2B returns UNKNOWN
+    at 45s and FEASIBLE at 150s for the same profile and seed.
+    """
+
+    def test_the_minimum_slice_is_above_the_measured_no_solution_point(self):
+        self.assertGreater(
+            E.STAGE1_MIN_MEANINGFUL_SLICE_SEC, 45.0,
+            "45s is the slice every recorded RC9.2.1 run used and the slice at "
+            "which AE AR B2B produced no skeleton at all")
+
+    def test_a_window_that_funds_nothing_reports_zero(self):
+        self.assertEqual(E.stage1_fundable_profile_count(0), 0)
+        self.assertEqual(E.stage1_fundable_profile_count(-100), 0)
+        self.assertEqual(
+            E.stage1_fundable_profile_count(E.STAGE1_MIN_MEANINGFUL_SLICE_SEC * 0.5), 0)
+
+    def test_the_count_never_promises_more_depth_than_the_window_holds(self):
+        for window in (0, 30, 100, 240, 500, 1000, 3000, 14400):
+            count = E.stage1_fundable_profile_count(window)
+            with self.subTest(window=window):
+                self.assertLessEqual(
+                    count * E.STAGE1_MIN_MEANINGFUL_SLICE_SEC,
+                    window * E.STAGE1_SLICE_UTILIZATION + 1e-9,
+                    "the funded portfolio must fit inside the window")
+
+    def test_the_count_grows_with_the_window(self):
+        counts = [E.stage1_fundable_profile_count(w) for w in range(0, 4000, 50)]
+        self.assertEqual(counts, sorted(counts))
+        self.assertGreater(counts[-1], counts[0])
+
+    def test_the_real_regression_window_funds_almost_nothing(self):
+        """150s was the actual AE AR B2B Stage-1 window for 15 profiles."""
+        self.assertLessEqual(
+            E.stage1_fundable_profile_count(150), 1,
+            "a 150-second window cannot honestly fund a fifteen-profile portfolio")
+
+    def test_the_slice_never_drops_to_the_old_forty_five_second_floor(self):
+        """The exact call shape the recorded runs made, at every scenario size."""
+        for attempts_left in range(1, 18):
+            with self.subTest(attempts_left=attempts_left):
+                self.assertGreaterEqual(
+                    E.stage1_slice_seconds(150.0, attempts_left),
+                    E.STAGE1_MIN_MEANINGFUL_SLICE_SEC)
+
+    def test_the_slice_never_exceeds_the_window_it_was_given(self):
+        """A floor that overruns the deadline just moves the starvation later."""
+        for remaining in (0, 1, 45, 150, 400, 1000, 5000, 20000):
+            for attempts_left in (1, 3, 15, 40):
+                with self.subTest(remaining=remaining, attempts_left=attempts_left):
+                    proposed = E.stage1_slice_seconds(remaining, attempts_left)
+                    self.assertLessEqual(
+                        proposed,
+                        max(E.STAGE1_MIN_MEANINGFUL_SLICE_SEC,
+                            remaining * E.STAGE1_SLICE_UTILIZATION) + 1e-9)
+
+    def test_a_wide_window_still_shares_evenly(self):
+        """Depth-first must not become depth-only: a funded portfolio splits."""
+        wide = E.stage1_slice_seconds(9000.0, 15)
+        self.assertGreater(wide, E.STAGE1_MIN_MEANINGFUL_SLICE_SEC)
+        self.assertAlmostEqual(wide, 9000.0 * E.STAGE1_SLICE_UTILIZATION / 15, places=6)
+
+    def test_the_slice_is_capped(self):
+        self.assertLessEqual(E.stage1_slice_seconds(10 ** 6, 1), E.STAGE1_MAX_SLICE_SEC)
+
+    def test_the_forty_five_second_floor_is_gone_from_the_stage1_loop(self):
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        self.assertFalse(
+            "max(45.0, remaining * 0.82 / attempts_left)" in source,
+            "the Stage-1 slice must no longer clamp up to a 45-second floor")
+
+    def test_the_loop_uses_the_helper(self):
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        self.assertTrue(
+            "slice_sec = stage1_slice_seconds(remaining, attempts_left)" in source,
+            "the Stage-1 loop must take its slice from the guarded helper")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

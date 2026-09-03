@@ -305,5 +305,79 @@ class ProtectedBenchmarkStatusIsNotAConstant(unittest.TestCase):
             "protected minimum was supplied")
 
 
+class Stage1IsFundedBeforeTheDownstreamReserves(unittest.TestCase):
+    """RC9.2.1 lost 37 target intervals on AE AR B2B to a starved Stage 1.
+
+    `build_global_budget_plan` gave stage1_search 42% of whatever the fixed
+    reserves left over.  On a 2,400-second run those reserves took 1,608
+    seconds - joint_refinement alone took 840 - so Stage 1 received 332, and
+    the engine's breakability reserve cut that to 150 seconds for a fifteen
+    profile portfolio.  Every Stage-1 attempt in every recorded RC9.2.1 run
+    therefore ran at the 45-second minimum slice.  Direct probe evidence: at 45
+    seconds AE AR B2B returns UNKNOWN - no skeleton at all - while the same
+    profile at 150 seconds returns FEASIBLE.
+
+    Joint refinement, coordinated repair and post-break repair all polish a
+    skeleton they cannot replace, so a stated Stage-1 need must come out of
+    them, not out of Stage 1's depth.
+    """
+
+    KWARGS = dict(allow_exceptions=False, coordinated_repair=True,
+                  joint_refinement=True, post_break_repair=True,
+                  target_lock_recovery=True)
+
+    def test_the_unstated_case_is_unchanged(self):
+        """A caller that states no minimum must get exactly the old plan."""
+        for total in (600, 900, 2400, 3600, 14400):
+            with self.subTest(total=total):
+                self.assertEqual(
+                    build_global_budget_plan(total, **self.KWARGS),
+                    build_global_budget_plan(total, stage1_minimum_seconds=0, **self.KWARGS))
+
+    def test_the_regression_case_2400s_gets_a_real_stage1(self):
+        """The exact allocation that produced the AE AR B2B loss."""
+        before = build_global_budget_plan(2400, **self.KWARGS)
+        self.assertEqual(before["stage1_search"], 332,
+                         "the pre-fix allocation this test exists to move")
+        after = build_global_budget_plan(2400, stage1_minimum_seconds=1080, **self.KWARGS)
+        self.assertGreaterEqual(
+            after["stage1_search"], 1080,
+            "a stated Stage-1 minimum must be honoured, not averaged away")
+        self.assertLess(
+            after["joint_refinement"], before["joint_refinement"],
+            "the time has to come from the downstream reserves")
+
+    def test_a_stated_minimum_is_honoured_across_realistic_budgets(self):
+        for total in (900, 1800, 2400, 2700, 3600, 7200, 14400):
+            need = int(total * 0.40)
+            with self.subTest(total=total):
+                plan = build_global_budget_plan(total, stage1_minimum_seconds=need, **self.KWARGS)
+                self.assertGreaterEqual(plan["stage1_search"], need)
+
+    def test_break_search_and_finalization_survive_the_largest_request(self):
+        """Stage 1 may not eat the run. Breaks still have to be placed."""
+        for total in (600, 900, 2400, 14400, 43200):
+            with self.subTest(total=total):
+                plan = build_global_budget_plan(total, stage1_minimum_seconds=total * 10,
+                                                **self.KWARGS)
+                self.assertGreater(plan["break_search"], 0)
+                self.assertGreater(plan["finalization"], 0)
+                self.assertEqual(sum(plan.values()), max(60, total))
+                self.assertLessEqual(plan["stage1_search"], int(total * 0.75) + 1)
+
+    def test_the_plan_invariants_hold_with_a_minimum_set(self):
+        for total in (60, 120, 300, 600, 900, 2400, 14400):
+            for need in (0, 30, int(total * 0.2), int(total * 0.5), total, total * 5):
+                with self.subTest(total=total, need=need):
+                    plan = build_global_budget_plan(total, stage1_minimum_seconds=need,
+                                                    **self.KWARGS)
+                    self.assertFalse([s for s in plan.values() if s < 0])
+                    self.assertEqual(sum(plan.values()), max(60, total))
+                    manager = GlobalBudgetManager(total_seconds=total, phase_seconds=plan)
+                    for phase in plan:
+                        self.assertLessEqual(manager.deadline(phase),
+                                             manager.final_deadline + 1e-6)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

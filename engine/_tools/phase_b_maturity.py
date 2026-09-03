@@ -149,6 +149,11 @@ class GlobalBudgetManager:
         }
 
 
+# Share of the primary optimization block that goes to Stage-1 skeleton search
+# when the caller states no Stage-1 minimum.
+STAGE1_PRIMARY_SPLIT = 0.42
+
+
 def build_global_budget_plan(
     total_seconds: int,
     *,
@@ -162,6 +167,7 @@ def build_global_budget_plan(
     conflict_refinement_reserve_sec: int = 300,
     coordinated_repair_reserve_sec: int = 1200,
     joint_refinement_reserve_sec: int = 1800,
+    stage1_minimum_seconds: int = 0,
 ) -> Dict[str, int]:
     """Create a scenario-neutral, single-run budget plan.
 
@@ -199,6 +205,21 @@ def build_global_budget_plan(
     fixed = preflight_probe + conflict + safe + joint + coordinated + post + target + exception + finalization
     # Keep at least 30% of the run for the two primary optimization phases.
     primary_floor = max(60, int(total * 0.30))
+    # Stage 1 chooses the skeleton; every later phase can only polish the
+    # skeleton Stage 1 hands it, never replace it. Under the flat 30% floor a
+    # 2,400-second run gave stage1_search 332 seconds for a fifteen-profile
+    # portfolio, and the caller's breakability reserve cut that to 150 - so
+    # every Stage-1 attempt in every recorded RC9.2.1 run ran at the 45-second
+    # minimum slice, and on AE AR B2B 45 seconds never found a feasible
+    # skeleton at all. When the caller states what Stage 1 needs, take it from
+    # the downstream reserves rather than from Stage 1's depth. The 70% cap
+    # keeps break search and finalization funded.
+    stage1_need = max(0, int(stage1_minimum_seconds))
+    if stage1_need > 0:
+        primary_floor = min(
+            max(primary_floor, int(stage1_need / STAGE1_PRIMARY_SPLIT)),
+            int(total * 0.70),
+        )
     if fixed > total - primary_floor:
         scalable_names = ["conflict_refinement", "safe_incumbent", "joint_refinement", "coordinated_repair", "post_break_repair", "target_lock_recovery", "exception_search"]
         scalable = {
@@ -228,7 +249,12 @@ def build_global_budget_plan(
     primary = max(60, total - fixed)
     # Split primary optimization toward break search; break quality is the final
     # production objective, while before-break quality remains a protected input.
-    stage1 = max(30, int(primary * 0.42))
+    # "Protected input" only holds if Stage 1 is funded enough to produce one:
+    # a requested Stage-1 minimum wins over the default split, bounded so break
+    # search keeps a quarter of the primary block.
+    stage1 = max(30, int(primary * STAGE1_PRIMARY_SPLIT))
+    if stage1_need > stage1:
+        stage1 = max(stage1, min(stage1_need, int(primary * 0.75)))
     break_search = max(30, primary - stage1)
 
     plan = {

@@ -444,6 +444,53 @@ class Gate5CannotBeSatisfiedByShippingAWorseSkeleton(unittest.TestCase):
         self.assertEqual(result["gate5_break_regression"], "FAIL")
         self.assertIn("95.0%", result["gate5_detail"])
 
+    def test_the_standard_comes_from_the_schedule_not_a_global(self):
+        """Per schedule, from the workbook - different schedules differ.
+
+        An environment variable applies one number to every scenario scored in
+        the same report. Coverage owed after breaks is a per-contract
+        commitment, so it travels with the schedule the way target_ratio does.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._case(tmp, before_target=162,
+                                minimum_after_break_target_ratio=0.95)
+        self.assertEqual(result["gate5_break_regression"], "FAIL")
+        self.assertIn("workbook", result["gate5_detail"])
+
+    def test_a_schedule_that_states_its_own_standard_ignores_the_environment(self):
+        """A global must never override a contract that speaks for itself."""
+        os.environ[self.gate.MINIMUM_AFTER_TARGET_RATIO_ENV] = "0.99"
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._case(tmp, before_target=162,
+                                minimum_after_break_target_ratio=0.90)
+        self.assertEqual(result["gate5_break_regression"], "PASS")
+        self.assertIn("workbook", result["gate5_detail"])
+
+    def test_two_schedules_can_hold_different_standards(self):
+        """92.9% passes a 0.90 contract and fails a 0.95 one."""
+        verdicts = {}
+        for ratio in (0.90, 0.95):
+            with tempfile.TemporaryDirectory() as tmp:
+                verdicts[ratio] = self._case(
+                    tmp, before_target=162,
+                    minimum_after_break_target_ratio=ratio,
+                )["gate5_break_regression"]
+        self.assertEqual(verdicts[0.90], "PASS")
+        self.assertEqual(verdicts[0.95], "FAIL")
+
+    def test_a_percentage_in_the_workbook_is_accepted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._case(tmp, before_target=162,
+                                minimum_after_break_target_ratio=95)
+        self.assertEqual(result["gate5_break_regression"], "FAIL")
+
+    def test_the_environment_still_scores_artifacts_that_predate_the_row(self):
+        os.environ[self.gate.MINIMUM_AFTER_TARGET_RATIO_ENV] = "0.95"
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._case(tmp, before_target=162)
+        self.assertEqual(result["gate5_break_regression"], "FAIL")
+        self.assertIn("environment", result["gate5_detail"])
+
     def test_a_configured_standard_that_is_met_is_a_real_pass(self):
         os.environ[self.gate.MINIMUM_AFTER_TARGET_RATIO_ENV] = "0.90"
         with tempfile.TemporaryDirectory() as tmp:

@@ -1191,6 +1191,15 @@ unparseable value reporting delta-only rather than reading as satisfied.
 **What stays with the user.** The absolute standard itself is a business
 commitment and was not invented here.
 
+**Per schedule, not per report.** The standard was first held in an environment
+variable, which applies one number to every scenario scored in the same report.
+Coverage owed after breaks is a per-contract commitment - Cricut Voice and
+NMG SP do not owe the same thing - so it now parses from the workbook as
+`Minimum After Break Target Ratio` (ratio or percentage) and travels into the
+summary the way `target_ratio` already does. A schedule that states its own
+standard is never overridden by the environment variable, which remains only so
+that artifacts predating the row can still be scored.
+
 **Found while writing the guards.** An **absent** `target_losses_from_breaks`
 column read as **zero loss**, so an artifact predating the column scored a
 flawless break stage while carrying a 46-interval regression in its own

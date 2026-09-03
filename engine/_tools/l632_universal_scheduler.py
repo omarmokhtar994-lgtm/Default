@@ -735,6 +735,7 @@ class ParsedInput:
     # simply not configured, exactly as before.
     protected_before80_minimum: Optional[int] = None
     protected_after80_minimum: Optional[int] = None
+    minimum_after_break_target_ratio: Optional[float] = None
     allow_back_to_back_breaks: bool = False
     break_max_concurrent_ratio: float = 0.30
     break_max_concurrent_absolute: int = 4
@@ -1800,6 +1801,22 @@ def parse_input(
         None if protected_after80_minimum_raw in (None, "")
         else max(0, int(round(to_float(protected_after80_minimum_raw, 0))))
     )
+    # Release gate 5's absolute after-break standard. Per schedule, from the
+    # business contract - an environment variable would apply one number to
+    # every scenario scored in the same report, and different schedules do not
+    # owe the same coverage after breaks. Accepts a ratio (0.95) or a
+    # percentage (95). Absent means no absolute standard, which the gate
+    # reports rather than treating as satisfied.
+    minimum_after_break_target_ratio_raw = _instruction_get(
+        im, ["Minimum After Break Target Ratio", "Minimum After Break Target Percentage",
+             "After Break Target Minimum"], None
+    )
+    minimum_after_break_target_ratio = None
+    if minimum_after_break_target_ratio_raw not in (None, ""):
+        minimum_after_break_target_ratio = to_float(minimum_after_break_target_ratio_raw, 0.0)
+        if minimum_after_break_target_ratio > 1.5:
+            minimum_after_break_target_ratio /= 100.0
+        minimum_after_break_target_ratio = min(1.0, max(0.0, minimum_after_break_target_ratio))
     quality_benchmark_tolerance = max(0, int(round(to_float(_instruction_get(
         im, ["Quality Benchmark Tolerance Intervals", "Benchmark Tolerance Intervals"], 0
     ), 0))))
@@ -2100,6 +2117,7 @@ def parse_input(
         minimum_best_before_target=minimum_best_before_target,
         protected_before80_minimum=protected_before80_minimum,
         protected_after80_minimum=protected_after80_minimum,
+        minimum_after_break_target_ratio=minimum_after_break_target_ratio,
         quality_benchmark_tolerance=quality_benchmark_tolerance,
         hard_floor_ratio=hard_floor_ratio, hard_floor_tolerance=hard_floor_tolerance,
         hard_floor_source=hard_floor_source, use_11h_3off=use11,
@@ -18984,6 +19002,10 @@ def run_case(
             "max_floor_candidate_output": str(role_paths["MAX_FLOOR_CANDIDATE"]) if "MAX_FLOOR_CANDIDATE" in output_info_by_role else "",
             "candidate_leaderboard_csv": str(leaderboard_csv), "pareto_manifest": str(pareto_manifest), "audit": str(audit_path),
             "interval_minutes": parsed.interval_minutes, "target_ratio": parsed.target_ratio,
+            "minimum_after_break_target_ratio": (
+                "" if parsed.minimum_after_break_target_ratio is None
+                else parsed.minimum_after_break_target_ratio
+            ),
             "skeleton_profile": chosen_skeleton.profile, "break_profile": chosen_breaks.profile,
             "pattern_width": chosen_breaks.pattern_width,
             "minimum_no_break_exceptions": chosen_skeleton.diagnostics.get("minimum_exception_count"),

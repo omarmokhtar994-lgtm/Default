@@ -205,8 +205,30 @@ def _break_loss(summary, column, before, after):
     return reported, None
 
 
-def _configured_minimum_after_target_ratio():
-    """Absolute after-break coverage standard, or None when none is set.
+def _normalized_ratio(raw):
+    """Accept a ratio (0.95) or a percentage (95); None when unusable."""
+    if raw in (None, ""):
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if value > 1.5:
+        value /= 100.0
+    return min(1.0, max(0.0, value))
+
+
+def _configured_minimum_after_target_ratio(summary):
+    """Absolute after-break coverage standard for THIS schedule, or None.
+
+    Read from the run's own summary first, where it arrives from the workbook's
+    business contract - the same route target_ratio already takes. Different
+    schedules do not owe the same coverage after breaks, and an environment
+    variable would apply one number to every scenario in the report.
+
+    The environment variable remains as a fallback for scoring older artifacts
+    that predate the workbook row, and never overrides a schedule that states
+    its own standard.
 
     Deliberately not defaulted to a number. Gate 5's delta is gameable by a
     worse skeleton, so an absolute standard is what makes it meaningful - but
@@ -214,17 +236,14 @@ def _configured_minimum_after_target_ratio():
     PASS_DELTA_ONLY_NO_ABSOLUTE_STANDARD rather than a bare PASS, so the gap is
     visible in the report instead of being silently treated as satisfied.
     """
+    from_workbook = _normalized_ratio(summary.get("minimum_after_break_target_ratio"))
+    if from_workbook is not None:
+        return from_workbook, "workbook"
     import os
-    raw = os.environ.get(MINIMUM_AFTER_TARGET_RATIO_ENV, "").strip()
-    if not raw:
-        return None
-    try:
-        value = float(raw)
-    except ValueError:
-        return None
-    if value > 1.5:
-        value /= 100.0
-    return min(1.0, max(0.0, value))
+    from_env = _normalized_ratio(os.environ.get(MINIMUM_AFTER_TARGET_RATIO_ENV, "").strip())
+    if from_env is not None:
+        return from_env, "environment"
+    return None, "unset"
 
 
 def read_summary(case: Path) -> dict:
@@ -299,7 +318,7 @@ def evaluate(case: Path, baseline: dict | None = None) -> dict:
         target_ratio = target_loss / active if active else 0.0
         floor_ratio = floor_loss / active if active else 0.0
         after_target_ratio = after_target / active if active else 0.0
-        minimum_after_target_ratio = _configured_minimum_after_target_ratio()
+        minimum_after_target_ratio, minimum_source = _configured_minimum_after_target_ratio(summary)
         problems = []
         for note in (target_loss_note, floor_loss_note):
             if note and "but before/after give" in note:
@@ -318,7 +337,7 @@ def evaluate(case: Path, baseline: dict | None = None) -> dict:
         )
         if absolute_shortfall:
             problems.append(
-                f"below the configured after-break minimum "
+                f"below the {minimum_source} after-break minimum "
                 f"{minimum_after_target_ratio:.1%}")
         # The absolute result travels with the delta, always. Reading
         # "target -6" without "156/168 = 92.9%" beside it is what let a worse
@@ -335,15 +354,17 @@ def evaluate(case: Path, baseline: dict | None = None) -> dict:
                 f"{exceptions:.0f} exceptions"
                 + (" (minimum proven)" if proven else "")
                 + f"; {absolute}; no absolute after-break minimum is configured, "
-                f"so only the break-stage delta was checked - set "
-                f"{MINIMUM_AFTER_TARGET_RATIO_ENV} to hold an absolute standard")
+                f"so only the break-stage delta was checked - add a "
+                f"'Minimum After Break Target Ratio' row to the workbook's "
+                f"Engine Defaults sheet to hold an absolute standard")
         else:
             gate5 = "PASS"
             gate5_why = (
                 f"target -{target_loss:.0f}, floor -{floor_loss:.0f} of {active:.0f} active; "
                 f"{exceptions:.0f} exceptions"
                 + (" (minimum proven)" if proven else "")
-                + f"; {absolute} >= configured minimum {minimum_after_target_ratio:.1%}")
+                + f"; {absolute} >= {minimum_source} minimum "
+                  f"{minimum_after_target_ratio:.1%}")
 
     # Gate 8 - independent validation of the exported workbook.
     status = validation.get("status")

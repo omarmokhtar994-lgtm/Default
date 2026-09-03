@@ -3284,6 +3284,21 @@ STAGE1_MAX_SLICE_SEC = 1800.0
 STAGE1_SLICE_UTILIZATION = 0.82
 
 
+# Shortest adaptive break-search slice worth spending.
+#
+# Set from measurement, not judgement. evidence/BREAK_SLICE_DEPTH_PROBE.md
+# records solve_breaks on AE AR B2B from a 168/168 skeleton at width 115:
+#
+#     20s UNKNOWN | 60s UNKNOWN | 90s 160 | 120s 160 | 150s 160
+#     180s 162    | 450s 162
+#
+# The engine's own floor was 20 seconds, at which the break search returns no
+# schedule at all - the same shape as Stage 1's 45-second floor in A34.
+# Feasibility appears between 60s and 90s and the result plateaus at 180s, so
+# 180 is the point past which more time per attempt buys nothing and the
+# remaining budget is better spent on the next attempt.
+BREAK_MIN_MEANINGFUL_SLICE_SEC = 180.0
+
 # Bounds on the guaranteed Stage-2 anchor solve. The anchor exists to protect
 # ONE real break solve; it is not the break search.
 STAGE2_ANCHOR_MIN_SLICE_SEC = 45.0
@@ -17661,11 +17676,33 @@ def run_case(
             slice_sec = budget_manager.slice_seconds(
                 "break_search",
                 attempts_left=remaining_tasks,
-                minimum=20.0,
+                minimum=BREAK_MIN_MEANINGFUL_SLICE_SEC,
                 maximum=900.0,
                 share=0.86,
             )
-            if slice_sec < 10:
+            # `slice_seconds` clamps the even split UP to the minimum and then
+            # caps it at the time actually left, so a nearly-spent phase still
+            # returns a short slice. Running it is worse than stopping: at 20s
+            # - the old floor - this search returns no schedule at all, and the
+            # guaranteed anchor above has already secured a compliant
+            # candidate. Stop instead of burning the tail on attempts that
+            # cannot converge.
+            if slice_sec < BREAK_MIN_MEANINGFUL_SLICE_SEC:
+                budget_manager.record(
+                    "break_search", "ADAPTIVE_BREAK_SEARCH_STOPPED_INSUFFICIENT_DEPTH",
+                    attempts_completed=task_index,
+                    attempts_planned=len(tasks),
+                    proposed_slice_sec=round(slice_sec, 3),
+                    minimum_slice_sec=BREAK_MIN_MEANINGFUL_SLICE_SEC,
+                )
+                audit["stage2_attempts"].append({
+                    "phase": "adaptive_fully_compliant_break_search",
+                    "cp_status": "STOPPED_INSUFFICIENT_BREAK_SEARCH_DEPTH",
+                    "attempts_completed": task_index,
+                    "attempts_planned": len(tasks),
+                    "proposed_slice_sec": round(slice_sec, 3),
+                    "minimum_slice_sec": BREAK_MIN_MEANINGFUL_SLICE_SEC,
+                })
                 break
             fingerprint = skeleton_fingerprint(skeleton)
             hint_solution = hints_by_fingerprint.get(fingerprint)

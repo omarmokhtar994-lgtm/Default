@@ -1,0 +1,42 @@
+[
+  {
+    "stage": "breaks",
+    "slice_sec": 20.0,
+    "cp_status": "UNKNOWN",
+    "elapsed_sec": 21.9,
+    "before_target": null,
+    "after_target": null,
+    "after_floor": null,
+    "target_losses_from_breaks": null
+  },
+  {
+    "stage": "breaks",
+    "slice_sec": 60.0,
+    "cp_status": "UNKNOWN",
+    "elapsed_sec": 61.8,
+    "before_target": null,
+    "after_target": null,
+    "after_floor": null,
+    "target_losses_from_breaks": null
+  },
+  {
+    "stage": "breaks",
+    "slice_sec": 180.0,
+    "cp_status": "FEASIBLE",
+    "elapsed_sec": 181.9,
+    "before_target": 168,
+    "after_target": 162,
+    "after_floor": 168,
+    "target_losses_from_breaks": 6
+  },
+  {
+    "stage": "breaks",
+    "slice_sec": 450.0,
+    "cp_status": "FEASIBLE",
+    "elapsed_sec": 452.1,
+    "before_target": 168,
+    "after_target": 162,
+    "after_floor": 168,
+    "target_losses_from_breaks": 6
+  }
+]

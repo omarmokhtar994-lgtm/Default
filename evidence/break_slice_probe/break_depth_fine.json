@@ -1,0 +1,32 @@
+[
+  {
+    "stage": "breaks",
+    "slice_sec": 90.0,
+    "cp_status": "FEASIBLE",
+    "elapsed_sec": 91.7,
+    "before_target": 168,
+    "after_target": 160,
+    "after_floor": 168,
+    "target_losses_from_breaks": 8
+  },
+  {
+    "stage": "breaks",
+    "slice_sec": 120.0,
+    "cp_status": "FEASIBLE",
+    "elapsed_sec": 121.6,
+    "before_target": 168,
+    "after_target": 160,
+    "after_floor": 168,
+    "target_losses_from_breaks": 8
+  },
+  {
+    "stage": "breaks",
+    "slice_sec": 150.0,
+    "cp_status": "FEASIBLE",
+    "elapsed_sec": 151.7,
+    "before_target": 168,
+    "after_target": 160,
+    "after_floor": 168,
+    "target_losses_from_breaks": 8
+  }
+]

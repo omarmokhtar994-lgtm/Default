@@ -1073,6 +1073,108 @@ invented here.
 
 ---
 
+### A37 — The adaptive break search clamped every attempt to a floor that returns no schedule
+
+| | |
+|---|---|
+| **File** | `engine/_tools/l632_universal_scheduler.py` (adaptive fully-compliant break search) |
+| **Category** | Clamp-up slice floor, third instance |
+| **Severity** | **High** — six target intervals in the shipped schedule |
+| **Status** | **VERIFIED** |
+
+Found by not accepting A35's outcome. A35 fixed the anchor overrun and the
+break search went from 3 of 7 objective modes to 7 of 7, from 7 attempts to 25
+— and the shipped `after_target` did not move at all: **156 before, 156 after.**
+The freed 522 seconds bought breadth and nothing else, because every attempt
+still ran at exactly 20.0 seconds and ten of the twenty-five returned `UNKNOWN`.
+
+```python
+slice_sec = budget_manager.slice_seconds(
+    "break_search", attempts_left=remaining_tasks,
+    minimum=20.0, maximum=900.0, share=0.86,
+)
+if slice_sec < 10:
+    break
+```
+
+Same shape as A34's 45-second Stage-1 floor and A35's anchor: the even split
+clamped **up** to a minimum, producing a search run many times at a depth that
+cannot converge.
+
+**Measured** (`evidence/BREAK_SLICE_DEPTH_PROBE.md`, one 168/168 skeleton, same
+width, mode and seed, only the time limit varies):
+
+| slice | 20s | 60s | 90s | 120s | 150s | 180s | 450s |
+|---|---|---|---|---|---|---|---|
+| `after_target` | UNKNOWN | UNKNOWN | 160 | 160 | 160 | **162** | 162 |
+
+At the engine's own floor, break placement returns **no schedule at all**.
+Feasibility appears between 60s and 90s; quality steps once more between 150s
+and 180s and then stops — 450s returns exactly what 180s returns.
+
+**25 attempts at 20s ship 156. One attempt at 180s ships 162**, with
+`after_floor` at a full 168.
+
+**Fix.** `BREAK_MIN_MEANINGFUL_SLICE_SEC = 180.0`, set on the measured plateau.
+The loop now **stops** when the phase cannot fund an attempt of that length
+rather than spending the tail on attempts that return nothing — the guaranteed
+anchor has already secured a compliant candidate, so stopping is safe. The
+`< 10` guard that admitted 20-second attempts is gone. Stopping early is
+recorded as `STOPPED_INSUFFICIENT_BREAK_SEARCH_DEPTH` in the audit and as a
+budget event, so a short search is visible rather than silent — A28's lesson.
+
+**Limits.** One scenario, one skeleton, one objective mode. AE AR B2B is the
+hardest case in the regression set and the one whose gate 5 verdict was in
+question; whether 180s is the right boundary for the other scenarios needs the
+full re-run.
+
+---
+
+### A38 — Release gate 5 could be satisfied by shipping a worse skeleton
+
+| | |
+|---|---|
+| **File** | `tools/release_gate_report.py` |
+| **Category** | A gate whose verdict moves without the deliverable moving |
+| **Severity** | **High** — this gate decides break-stage acceptance |
+| **Status** | **VERIFIED** |
+
+Two AE AR B2B runs shipped the **identical** schedule — `after_target` 156 of
+168 active — and gate 5 disagreed with itself:
+
+| run | before | after | loss | verdict |
+|---|---|---|---|---|
+| A34 verification | 166 | 156 | 10/168 = 6.0% | **FAIL** |
+| A35 verification | 162 | 156 | 6/168 = 3.6% | **PASS** |
+
+Nothing about the delivered schedule changed. Stage 1 produced a worse skeleton
+the second time, the delta shrank, and the gate flipped. Gate 5 computed only
+`(before − after) / active` and never looked at the absolute result, so
+**degrading Stage 1 made it pass.** Taken at face value this would have shipped
+the release on a metric that does not mean what it says.
+
+**Fix.** The delta stays — "did the break stage regress the schedule" is a real
+question — but it can no longer be read alone. The absolute after-break
+coverage is always in `gate5_detail` and carried as an `after_target_ratio`
+column; with no absolute standard configured the gate reports
+`PASS_DELTA_ONLY_NO_ABSOLUTE_STANDARD` rather than a bare `PASS`, following the
+precedent gate 4 already sets with `PASS_PROTECTED_NOT_EVALUATED`; and
+`RC9_MINIMUM_AFTER_TARGET_RATIO` holds an absolute standard when one is set, an
+unparseable value reporting delta-only rather than reading as satisfied.
+
+**What stays with the user.** The absolute standard itself is a business
+commitment and was not invented here.
+
+**Found while writing the guards.** An **absent** `target_losses_from_breaks`
+column read as **zero loss**, so an artifact predating the column scored a
+flawless break stage while carrying a 46-interval regression in its own
+before/after pair — the same "missing field is a satisfied field" shape as A12
+and A27. The loss is now derived from before/after when the column is absent,
+and a summary whose reported loss contradicts its own before/after is refused
+rather than scored. Both real AE runs are self-consistent and stay clean.
+
+---
+
 ## Sweeps — patterns checked across all 19 modules
 
 Recorded so the absence of findings is evidence, not silence.
@@ -1156,8 +1258,8 @@ Two rounds were needed to get there, and both survivors were real:
 | `tests/test_rc9_2_1_production_identity.py` | 11/11 |
 | `tests/test_rc9_2_1_regression_lab_integrity.py` | **18/18** (new) |
 | `tests/test_rc9_2_1_rule_semantics.py` | **56/56** (+7, +6 for A36) |
-| `tests/test_rc9_2_1_selector_integrity.py` | **55/55** (+11 for A34, +8 for A35) |
-| `tests/test_rc9_2_1_tooling_integrity.py` | **13/13** (new) |
+| `tests/test_rc9_2_1_selector_integrity.py` | **61/61** (+11 A34, +8 A35, +6 A37) |
+| `tests/test_rc9_2_1_tooling_integrity.py` | **42/42** (new; +11 for A38) |
 | `tests/test_rc9_2_1_validator_parity.py` | 42/42 |
 | engine selfcheck | PASS, byte-identical to the pre-change baseline |
 | wrapper selfcheck | PASS |
@@ -1169,7 +1271,7 @@ Two rounds were needed to get there, and both survivors were real:
 | `ruff check --select E9,F821` across engine, tools and tests | **clean** |
 | `run_tests.sh` | **GATE PASS — 9 suites + 2 selfchecks + undefined-name sweep** |
 
-**274 guards** across nine suites, up from 119 across four.
+**291 guards** across nine suites, up from 119 across four.
 
 Every new guard was run against the pre-fix code:
 
@@ -1182,6 +1284,8 @@ Every new guard was run against the pre-fix code:
 | `orchestration_integrity` (A34 batch) | 5 of 5 |
 | `selector_integrity` (A35 batch) | 8 of 8 |
 | `rule_semantics` (A36 batch) | 4 of 6 |
+| `selector_integrity` (A37 batch) | 6 of 6 |
+| `tooling_integrity` (A38 batch) | 11 of 11 |
 
 ---
 

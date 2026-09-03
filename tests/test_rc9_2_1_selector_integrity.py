@@ -531,5 +531,71 @@ class Stage2AnchorStaysInsideItsReservation(unittest.TestCase):
         self.assertTrue('"granted_seconds": round(guard_slice, 3),' in source)
 
 
+class BreakSearchFundsDepthBeforeWidth(unittest.TestCase):
+    """20 seconds of break search produces no schedule at all.
+
+    Third instance of the clamp-up pattern, after A34's 45-second Stage-1 floor
+    and A35's anchor. `budget_manager.slice_seconds(..., minimum=20.0)` raised
+    the even split to 20s and ran it many times: the A35 verification run made
+    25 attempts at exactly 20.0s, ten of which returned UNKNOWN, and shipped
+    after_target 156.
+
+    Measured on AE AR B2B from a 168/168 skeleton (width 115, target_priority):
+
+        20s UNKNOWN | 60s UNKNOWN | 90s 160 | 120s 160 | 150s 160
+        180s 162    | 450s 162
+
+    One attempt at 180s ships 162 - six intervals better than 25 attempts at
+    20s, with after_floor at a full 168.
+    """
+
+    def test_the_minimum_is_above_the_measured_no_solution_point(self):
+        self.assertGreater(
+            E.BREAK_MIN_MEANINGFUL_SLICE_SEC, 60.0,
+            "60s is the longest slice measured to return no schedule at all")
+
+    def test_the_minimum_reaches_the_measured_plateau(self):
+        """90-150s all return 160; 180s is where 162 appears."""
+        self.assertGreaterEqual(E.BREAK_MIN_MEANINGFUL_SLICE_SEC, 180.0)
+
+    def test_the_old_twenty_second_floor_is_gone(self):
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        self.assertFalse(
+            "minimum=20.0," in source,
+            "the adaptive break search must not clamp attempts up to 20 seconds")
+        self.assertTrue(
+            "minimum=BREAK_MIN_MEANINGFUL_SLICE_SEC," in source,
+            "the break slice must come from the measured minimum")
+
+    def test_a_short_tail_stops_instead_of_running_attempts_that_cannot_converge(self):
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        self.assertFalse(
+            "if slice_sec < 10:" in source,
+            "a 10-second guard still admits attempts that return UNKNOWN")
+        self.assertTrue(
+            "if slice_sec < BREAK_MIN_MEANINGFUL_SLICE_SEC:" in source,
+            "the loop must stop when the phase cannot fund a real attempt")
+
+    def test_stopping_early_is_recorded_not_silent(self):
+        """A28's lesson: a search that stops short must say so in the audit."""
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        self.assertTrue(
+            '"cp_status": "STOPPED_INSUFFICIENT_BREAK_SEARCH_DEPTH",' in source)
+        self.assertTrue(
+            '"ADAPTIVE_BREAK_SEARCH_STOPPED_INSUFFICIENT_DEPTH",' in source)
+
+    def test_a_funded_phase_still_shares_across_attempts(self):
+        """Depth-first must not become one-attempt-only."""
+        from phase_b_maturity import GlobalBudgetManager
+        manager = GlobalBudgetManager(
+            total_seconds=7200, phase_seconds={"break_search": 7200})
+        wide = manager.slice_seconds(
+            "break_search", attempts_left=8,
+            minimum=E.BREAK_MIN_MEANINGFUL_SLICE_SEC, maximum=900.0, share=0.86)
+        self.assertGreater(wide, E.BREAK_MIN_MEANINGFUL_SLICE_SEC,
+                           "a large phase must still split, not floor out")
+        self.assertLessEqual(wide, 900.0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

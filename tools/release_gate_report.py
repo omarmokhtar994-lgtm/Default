@@ -38,6 +38,23 @@ from pathlib import Path
 BREAK_TARGET_LOSS_WARN_RATIO = 0.05
 BREAK_FLOOR_LOSS_WARN_RATIO = 0.03
 
+# Gate 5 measures a DELTA - how much the break stage costs. A delta alone can
+# always be satisfied by starting lower, and on AE AR B2B it was: two runs
+# shipped the identical schedule (after_target 156) and the gate said FAIL for
+# one and PASS for the other, purely because Stage 1 happened to produce 166 in
+# the first run and 162 in the second.
+#
+#     before 166 -> after 156   loss 10/168 = 6.0%   FAIL
+#     before 162 -> after 156   loss  6/168 = 3.6%   PASS
+#
+# A gate that rewards a worse skeleton is worse than no gate. The delta stays,
+# because "did breaks regress the schedule" is a real question - but the
+# absolute after-break coverage is now always reported beside it, and a run
+# that has no absolute standard configured says so in its status rather than
+# reporting a bare PASS. What that standard should be is a business number and
+# is not invented here.
+MINIMUM_AFTER_TARGET_RATIO_ENV = "RC9_MINIMUM_AFTER_TARGET_RATIO"
+
 # Engine statuses that mean the run stopped after stage 1 and never placed a
 # break. Anything else reached the break stage and must be gated on it.
 SKELETON_ONLY_STATUSES = {"SKELETON_ONLY_COMPLETE"}
@@ -170,6 +187,46 @@ def compare_to_rc9_1(summary: dict, identity: dict, baseline: dict) -> tuple:
     return "PASS_AGAINST_CONSOLIDATED_BASELINE", detail
 
 
+def _break_loss(summary, column, before, after):
+    """Break-stage loss for one tier, plus a note when it cannot be trusted.
+
+    Returns (loss, note). ``note`` is None when the value is sound.
+    """
+    derived = max(0.0, before - after)
+    raw = summary.get(column)
+    if raw in (None, ""):
+        if not summary.get("before_target") and not summary.get("after_target"):
+            return 0.0, None
+        return derived, f"{column} absent; derived {derived:.0f} from before/after"
+    reported = num(raw)
+    if abs(reported - derived) > 1e-9:
+        return max(reported, derived), (
+            f"{column} says {reported:.0f} but before/after give {derived:.0f}")
+    return reported, None
+
+
+def _configured_minimum_after_target_ratio():
+    """Absolute after-break coverage standard, or None when none is set.
+
+    Deliberately not defaulted to a number. Gate 5's delta is gameable by a
+    worse skeleton, so an absolute standard is what makes it meaningful - but
+    what that standard is, is a business commitment. An unset value reports
+    PASS_DELTA_ONLY_NO_ABSOLUTE_STANDARD rather than a bare PASS, so the gap is
+    visible in the report instead of being silently treated as satisfied.
+    """
+    import os
+    raw = os.environ.get(MINIMUM_AFTER_TARGET_RATIO_ENV, "").strip()
+    if not raw:
+        return None
+    try:
+        value = float(raw)
+    except ValueError:
+        return None
+    if value > 1.5:
+        value /= 100.0
+    return min(1.0, max(0.0, value))
+
+
 def read_summary(case: Path) -> dict:
     for pattern in ("*.l6_3_2_3_summary.csv", "*_SKELETON_ONLY_SUMMARY.csv"):
         for path in sorted(case.glob(pattern)):
@@ -208,8 +265,16 @@ def evaluate(case: Path, baseline: dict | None = None) -> dict:
     active = num(summary.get("active_intervals")) or num(
         (validation.get("metrics") or {}).get("active_intervals"))
 
-    target_loss = num(summary.get("target_losses_from_breaks"))
-    floor_loss = num(summary.get("floor_losses_from_breaks"))
+    # An ABSENT loss column used to read as zero loss, which is the same
+    # "missing field is a satisfied field" pattern A12 and A27 corrected
+    # elsewhere: an older artifact without the column scored as a flawless
+    # break stage. Derive it from the before/after pair the summary already
+    # carries, and when both are present and disagree, refuse to score rather
+    # than believe one of two contradictory numbers.
+    target_loss, target_loss_note = _break_loss(
+        summary, "target_losses_from_breaks", before_target, after_target)
+    floor_loss, floor_loss_note = _break_loss(
+        summary, "floor_losses_from_breaks", before_floor, after_floor)
     # Match the engine's skeleton-only statuses exactly. A substring test for
     # "SKELETON" also matches statuses such as
     # SKELETONS_AND_BREAK_DIAGNOSTICS_READY and
@@ -233,7 +298,12 @@ def evaluate(case: Path, baseline: dict | None = None) -> dict:
         lang_loss = num(summary.get("language_break_caused_reserve_loss_quarters"))
         target_ratio = target_loss / active if active else 0.0
         floor_ratio = floor_loss / active if active else 0.0
+        after_target_ratio = after_target / active if active else 0.0
+        minimum_after_target_ratio = _configured_minimum_after_target_ratio()
         problems = []
+        for note in (target_loss_note, floor_loss_note):
+            if note and "but before/after give" in note:
+                problems.append(f"inconsistent summary: {note}")
         if target_ratio > BREAK_TARGET_LOSS_WARN_RATIO:
             problems.append(f"target loss {target_loss:.0f}/{active:.0f} = {target_ratio:.1%}")
         if floor_ratio > BREAK_FLOOR_LOSS_WARN_RATIO:
@@ -242,11 +312,38 @@ def evaluate(case: Path, baseline: dict | None = None) -> dict:
             problems.append(f"{lang_loss:.0f} language reserve quarters lost to breaks")
         if exceptions > 0 and not proven:
             problems.append(f"{exceptions:.0f} break exceptions, minimum not proven")
-        gate5 = "FAIL" if problems else "PASS"
-        gate5_why = "; ".join(problems) or (
-            f"target -{target_loss:.0f}, floor -{floor_loss:.0f} of {active:.0f} active; "
-            f"{exceptions:.0f} exceptions"
-            + (" (minimum proven)" if proven else ""))
+        absolute_shortfall = (
+            minimum_after_target_ratio is not None
+            and after_target_ratio < minimum_after_target_ratio
+        )
+        if absolute_shortfall:
+            problems.append(
+                f"below the configured after-break minimum "
+                f"{minimum_after_target_ratio:.1%}")
+        # The absolute result travels with the delta, always. Reading
+        # "target -6" without "156/168 = 92.9%" beside it is what let a worse
+        # skeleton look like a better break stage.
+        absolute = (f"after-break target {after_target:.0f}/{active:.0f} = "
+                    f"{after_target_ratio:.1%}")
+        if problems:
+            gate5 = "FAIL"
+            gate5_why = "; ".join(problems) + f"; {absolute}"
+        elif minimum_after_target_ratio is None:
+            gate5 = "PASS_DELTA_ONLY_NO_ABSOLUTE_STANDARD"
+            gate5_why = (
+                f"target -{target_loss:.0f}, floor -{floor_loss:.0f} of {active:.0f} active; "
+                f"{exceptions:.0f} exceptions"
+                + (" (minimum proven)" if proven else "")
+                + f"; {absolute}; no absolute after-break minimum is configured, "
+                f"so only the break-stage delta was checked - set "
+                f"{MINIMUM_AFTER_TARGET_RATIO_ENV} to hold an absolute standard")
+        else:
+            gate5 = "PASS"
+            gate5_why = (
+                f"target -{target_loss:.0f}, floor -{floor_loss:.0f} of {active:.0f} active; "
+                f"{exceptions:.0f} exceptions"
+                + (" (minimum proven)" if proven else "")
+                + f"; {absolute} >= configured minimum {minimum_after_target_ratio:.1%}")
 
     # Gate 8 - independent validation of the exported workbook.
     status = validation.get("status")
@@ -318,6 +415,7 @@ def evaluate(case: Path, baseline: dict | None = None) -> dict:
         "active_intervals": f"{active:.0f}" if active else "",
         "before_target": f"{before_target:.0f}", "after_target": f"{after_target:.0f}",
         "before_floor": f"{before_floor:.0f}", "after_floor": f"{after_floor:.0f}",
+        "after_target_ratio": f"{(after_target / active):.4f}" if active else "",
         "target_losses_from_breaks": f"{target_loss:.0f}",
         "floor_losses_from_breaks": f"{floor_loss:.0f}",
         "avoidable_overage_fte_sum": summary.get("avoidable_overage_fte_sum", ""),

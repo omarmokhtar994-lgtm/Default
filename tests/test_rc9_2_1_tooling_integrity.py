@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import csv
 import importlib.util
+import os
 import sys
 import tempfile
 import unittest
@@ -367,6 +368,138 @@ class RC9_1ComparisonRefusesMismatchedInputs(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             result = self.gate.evaluate(self._case(tmp, self.NMGEN_HISTORICAL), {})
         self.assertEqual(result["gate2_vs_rc9_1"], "REQUIRES_RC9_1_BASELINE")
+
+
+class Gate5CannotBeSatisfiedByShippingAWorseSkeleton(unittest.TestCase):
+    """Gate 5 measured only a delta, and a delta is gameable by starting lower.
+
+    Two AE AR B2B runs shipped the IDENTICAL schedule - after_target 156 of 168
+    active - and the gate disagreed with itself:
+
+        before 166 -> after 156   loss 10/168 = 6.0%   FAIL
+        before 162 -> after 156   loss  6/168 = 3.6%   PASS
+
+    Nothing about the delivered schedule changed. Stage 1 simply produced a
+    worse skeleton the second time, which shrank the loss and flipped the gate.
+    """
+
+    def setUp(self):
+        self.gate = load("release_gate_report", "tools/release_gate_report.py")
+        self.baseline = self.gate.load_rc9_1_baseline()
+        self._saved = os.environ.pop(self.gate.MINIMUM_AFTER_TARGET_RATIO_ENV, None)
+
+    def tearDown(self):
+        os.environ.pop(self.gate.MINIMUM_AFTER_TARGET_RATIO_ENV, None)
+        if self._saved is not None:
+            os.environ[self.gate.MINIMUM_AFTER_TARGET_RATIO_ENV] = self._saved
+
+    def _case(self, tmp, **fields):
+        import json
+        root = Path(tmp) / "CASE"
+        root.mkdir(parents=True, exist_ok=True)
+        (root / "UNIVERSAL_RUN_IDENTITY.json").write_text(
+            json.dumps({"input_sha256": "0" * 64}), encoding="utf-8")
+        row = {"status": "PASS_WITH_QUALITY_WARNINGS", "active_intervals": 168,
+               "target_ratio": 1.0, "before_target": 166, "after_target": 156,
+               "before_floor": 168, "after_floor": 166,
+               "minimum_exception_proven": "true"}
+        row.update(fields)
+        path = root / "case.l6_3_2_3_summary.csv"
+        with path.open("w", newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, fieldnames=list(row))
+            writer.writeheader()
+            writer.writerow(row)
+        return self.gate.evaluate(root, self.baseline)
+
+    def test_the_absolute_result_is_always_reported(self):
+        """156/168 must travel with 'target -10'. Reading the delta alone is
+        what let a worse skeleton look like a better break stage."""
+        for before in (166, 162):
+            with tempfile.TemporaryDirectory() as tmp:
+                result = self._case(tmp, before_target=before)
+            with self.subTest(before_target=before):
+                self.assertIn("156/168", result["gate5_detail"])
+                self.assertIn("92.9%", result["gate5_detail"])
+
+    def test_the_absolute_ratio_is_a_column_not_only_prose(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._case(tmp)
+        self.assertEqual(result["after_target_ratio"], "0.9286")
+
+    def test_a_delta_only_pass_says_so_instead_of_reporting_pass(self):
+        """The two runs above must not both read as an unqualified PASS."""
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._case(tmp, before_target=162)
+        self.assertEqual(result["gate5_break_regression"],
+                         "PASS_DELTA_ONLY_NO_ABSOLUTE_STANDARD")
+        self.assertNotEqual(result["gate5_break_regression"], "PASS")
+        self.assertIn("no absolute after-break minimum is configured",
+                      result["gate5_detail"])
+
+    def test_an_absolute_standard_catches_what_the_delta_missed(self):
+        """The identical schedule that passed on delta fails on substance."""
+        os.environ[self.gate.MINIMUM_AFTER_TARGET_RATIO_ENV] = "0.95"
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._case(tmp, before_target=162)
+        self.assertEqual(result["gate5_break_regression"], "FAIL")
+        self.assertIn("95.0%", result["gate5_detail"])
+
+    def test_a_configured_standard_that_is_met_is_a_real_pass(self):
+        os.environ[self.gate.MINIMUM_AFTER_TARGET_RATIO_ENV] = "0.90"
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._case(tmp, before_target=162)
+        self.assertEqual(result["gate5_break_regression"], "PASS")
+
+    def test_a_percentage_is_accepted_as_well_as_a_ratio(self):
+        os.environ[self.gate.MINIMUM_AFTER_TARGET_RATIO_ENV] = "95"
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._case(tmp, before_target=162)
+        self.assertEqual(result["gate5_break_regression"], "FAIL")
+
+    def test_an_unparseable_standard_is_not_silently_a_pass(self):
+        """A typo must not read as 'configured and satisfied'."""
+        os.environ[self.gate.MINIMUM_AFTER_TARGET_RATIO_ENV] = "not-a-number"
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._case(tmp, before_target=162)
+        self.assertEqual(result["gate5_break_regression"],
+                         "PASS_DELTA_ONLY_NO_ABSOLUTE_STANDARD")
+
+    def test_a_real_delta_regression_still_fails(self):
+        """The original question - did breaks wreck the schedule - still holds."""
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._case(tmp, before_target=166, after_target=120,
+                                target_losses_from_breaks=46)
+        self.assertEqual(result["gate5_break_regression"], "FAIL")
+        self.assertIn("target loss", result["gate5_detail"])
+
+    def test_an_absent_loss_column_is_not_zero_loss(self):
+        """Found by this suite: a summary without the column scored as flawless.
+
+        Same shape as A12 and A27 - a missing field read as a satisfied one.
+        An older artifact that predates the column would have passed gate 5
+        with a 46-interval regression sitting in its own before/after pair.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._case(tmp, before_target=166, after_target=120)
+        self.assertEqual(result["gate5_break_regression"], "FAIL",
+                         "loss must be derived from before/after when absent")
+        self.assertIn("46", result["gate5_detail"])
+
+    def test_a_summary_that_contradicts_itself_is_refused_not_scored(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._case(tmp, before_target=166, after_target=120,
+                                target_losses_from_breaks=2)
+        self.assertEqual(result["gate5_break_regression"], "FAIL")
+        self.assertIn("inconsistent summary", result["gate5_detail"])
+
+    def test_a_consistent_summary_is_not_flagged(self):
+        """Both real AE AR B2B runs agree; they must stay clean."""
+        for before, after, loss in ((166, 156, 10), (162, 156, 6)):
+            with tempfile.TemporaryDirectory() as tmp:
+                result = self._case(tmp, before_target=before, after_target=after,
+                                    target_losses_from_breaks=loss)
+            with self.subTest(before=before):
+                self.assertNotIn("inconsistent", result["gate5_detail"])
 
 
 if __name__ == "__main__":

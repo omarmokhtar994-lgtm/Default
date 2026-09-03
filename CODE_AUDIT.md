@@ -1128,6 +1128,32 @@ hardest case in the regression set and the one whose gate 5 verdict was in
 question; whether 180s is the right boundary for the other scenarios needs the
 full re-run.
 
+**A follow-up was written, measured, and reverted.** The package smoke test
+showed NMG SP at a 240-second budget stopping before a single adaptive attempt
+(`break_search` gets 60 seconds there), and that looked like a regression
+against a remembered figure of 123. A "guarantee the first attempt" change was
+committed on the strength of it.
+
+The remembered 123 came from a **different, larger budget**. Measured properly
+— pre-A37 engine versus post-A37, same 240-second budget, same seed, same
+worker count, same input:
+
+| engine | adaptive attempts | `after_target` |
+|---|---|---|
+| pre-A37 (20s floor) | 6 × 20.0s, every one returning 114 | **118** |
+| A37, stop when depth is unfundable | 0 | **121** |
+| A37 + guaranteed first attempt | 1 × 141.0s, returning 113 | **119** |
+
+A37 did not regress NMG SP; it improved it by three intervals. The follow-up
+fixed a problem that did not exist and cost two of them, because the one
+shallow attempt it forced produced a worse result than the anchor already held
+*and* consumed time that joint refinement and post-break repair used better.
+"Some search beats none" was intuition; the measurement contradicts it.
+
+The follow-up is reverted. The unconditional stop stands. At 2,700s and
+14,400s the two variants are identical anyway — the first attempt clears 180
+seconds regardless — so this only ever governed short functional runs.
+
 ---
 
 ### A38 — Release gate 5 could be satisfied by shipping a worse skeleton

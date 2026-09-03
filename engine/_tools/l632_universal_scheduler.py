@@ -17682,35 +17682,12 @@ def run_case(
             )
             # `slice_seconds` clamps the even split UP to the minimum and then
             # caps it at the time actually left, so a nearly-spent phase still
-            # returns a short slice. Burning the tail on attempts that cannot
-            # converge is worse than stopping - at 20s, the old floor, this
-            # search returns no schedule at all on AE AR B2B.
-            #
-            # But stopping unconditionally throws away the search entirely on a
-            # small budget: a 240-second functional run allocates 60 seconds to
-            # break_search, and the first version of this guard stopped before
-            # a single adaptive attempt, costing NMG SP two target intervals
-            # against the old behaviour. So the first attempt always runs with
-            # whatever the phase holds - some search beats none, and the
-            # shallow slice is recorded - and the meaningful minimum is
-            # enforced only from the second attempt onward, which is where the
-            # "many attempts, none deep enough" pattern actually lives.
-            attempts_completed = sum(
-                1 for row in audit["stage2_attempts"]
-                if row.get("phase") == "adaptive_fully_compliant_break_search"
-                and row.get("cp_status") not in {
-                    "SKIPPED_COMPLETED_ON_RESUME",
-                    "STOPPED_INSUFFICIENT_BREAK_SEARCH_DEPTH",
-                }
-            )
-            if slice_sec < BREAK_MIN_MEANINGFUL_SLICE_SEC and attempts_completed == 0:
-                print(
-                    f"BREAK_SEARCH_SHALLOW_FIRST_ATTEMPT {slice_sec:.1f}s < "
-                    f"{BREAK_MIN_MEANINGFUL_SLICE_SEC:.0f}s minimum; running it "
-                    f"anyway rather than skipping the search entirely",
-                    file=log, flush=True,
-                )
-            elif slice_sec < BREAK_MIN_MEANINGFUL_SLICE_SEC:
+            # returns a short slice. Running it is worse than stopping: at 20s
+            # - the old floor - this search returns no schedule at all, and the
+            # guaranteed anchor above has already secured a compliant
+            # candidate. Stop instead of burning the tail on attempts that
+            # cannot converge.
+            if slice_sec < BREAK_MIN_MEANINGFUL_SLICE_SEC:
                 budget_manager.record(
                     "break_search", "ADAPTIVE_BREAK_SEARCH_STOPPED_INSUFFICIENT_DEPTH",
                     attempts_completed=task_index,
@@ -17725,10 +17702,7 @@ def run_case(
                     "attempts_planned": len(tasks),
                     "proposed_slice_sec": round(slice_sec, 3),
                     "minimum_slice_sec": BREAK_MIN_MEANINGFUL_SLICE_SEC,
-                    "attempts_completed_before_stop": attempts_completed,
                 })
-                break
-            if slice_sec < 10:
                 break
             fingerprint = skeleton_fingerprint(skeleton)
             hint_solution = hints_by_fingerprint.get(fingerprint)

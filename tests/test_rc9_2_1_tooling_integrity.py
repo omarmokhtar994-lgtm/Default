@@ -255,10 +255,11 @@ class RC9_1ComparisonRefusesMismatchedInputs(unittest.TestCase):
         self.assertEqual(result["gate2_vs_rc9_1"], "NOT_COMPARABLE_DIFFERENT_CONTRACT")
 
     def test_a_material_regression_on_the_same_input_fails(self):
+        """-14, the size of the real Cricut Voice gap, is well beyond the noise."""
         with tempfile.TemporaryDirectory() as tmp:
-            result = self._gate2(tmp, self.NMGEN_HISTORICAL, before_target=211)
+            result = self._gate2(tmp, self.NMGEN_HISTORICAL, before_target=200)
         self.assertEqual(result["gate2_vs_rc9_1"], "FAIL")
-        self.assertIn("-3", result["gate2_detail"])
+        self.assertIn("-14", result["gate2_detail"])
 
     def test_one_interval_of_noise_is_not_a_regression(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -331,6 +332,31 @@ class RC9_1ComparisonRefusesMismatchedInputs(unittest.TestCase):
                                  stage1_profiles_requested=15,
                                  stage1_profiles_attempted=3)
         self.assertEqual(result["gate2_vs_rc9_1"], "NOT_COMPARABLE_SEARCH_TRUNCATED")
+
+    def test_a_shortfall_inside_the_run_noise_is_inconclusive_not_a_fail(self):
+        """Coverage is not reproducible run to run at a fixed seed.
+
+        OR-Tools searching in parallel under a wall-clock limit is
+        non-deterministic: the seed fixes the RNG, not which worker reaches a
+        bound first. Measured on Cricut Voice at a fixed seed and 300s budget,
+        same host: before_target 248, 242, 243 - a spread of 6. A tolerance of 2
+        sits below that, so a single pair of runs can differ by more than the
+        gate's own threshold, and calling that a regression is not supportable.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._gate2(tmp, self.NMGEN_HISTORICAL, before_target=211)
+        self.assertEqual(result["gate2_vs_rc9_1"], "INCONCLUSIVE_WITHIN_RUN_NOISE")
+        self.assertIn("repeat the run", result["gate2_detail"])
+
+    def test_a_shortfall_beyond_the_noise_band_still_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._gate2(tmp, self.NMGEN_HISTORICAL, before_target=200)
+        self.assertEqual(result["gate2_vs_rc9_1"], "FAIL")
+
+    def test_the_noise_band_is_wider_than_the_tolerance(self):
+        """Otherwise the inconclusive branch is unreachable."""
+        self.assertGreater(self.gate.COMPARATOR_RUN_NOISE_BAND,
+                           self.gate.COMPARATOR_TARGET_TOLERANCE)
 
     def test_gate9_tracks_gate2(self):
         with tempfile.TemporaryDirectory() as tmp:

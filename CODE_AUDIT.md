@@ -10,7 +10,7 @@ shell gate, fixtures, evidence and documentation.
 | Test suites | 9 (`tests/test_rc9_2_1_*.py`) — 4 at the start of this audit |
 | Gate | `run_tests.sh` |
 
-Findings from this audit are numbered **A1–A32**. Release-behaviour findings 1–16
+Findings from this audit are numbered **A1–A33**. Release-behaviour findings 1–16
 from the earlier remediation cycle are recorded in
 `docs/RC9_2_1_CONSOLIDATED_ISSUE_REGISTER.md` and are not repeated here.
 
@@ -828,6 +828,51 @@ still reported, under `run_wall_clock` in the audit.
 
 **Verified.** Two identical runs now agree on `parameters_sha256` and `run_id`.
 A three-segment resumable run goes 0/0/0 where it previously went 0/3/3.
+
+---
+
+### A33 — Coverage is not reproducible run to run, and the gate tolerance sat below the noise
+
+| | |
+|---|---|
+| **File** | `tools/release_gate_report.py` + engine behaviour |
+| **Category** | Threshold below the measurement noise floor |
+| **Severity** | **High** |
+| **Status** | **VERIFIED** |
+
+Found while regression-checking the engine shipped in the Colab packages. Three
+runs of **Cricut Voice** — same input, same seed 9000, same 300 s budget, same
+host:
+
+| run | engine | `before_target` | `after_target` |
+|---|---|---|---|
+| A | pre-fix | 248 | 245 |
+| B | post-fix `880d6389` | 242 | 240 |
+| C | pre-fix (control) | 243 | 243 |
+
+Two things follow.
+
+**1. The A32/A30/A31 fixes did not regress anything.** B (242) against its own
+control C (243) differs by one interval. The apparent −6 against run A was A
+being the outlier.
+
+**2. Coverage varies by ~6 intervals at a fixed seed.** OR-Tools searching in
+parallel under a wall-clock limit is not deterministic: the seed fixes the RNG,
+not which worker reaches a bound first. `--solver-random-seed` therefore does not
+make a run reproducible, only its random draws.
+
+The gate 2/9 comparator used a tolerance of **2**, which sits *below* that noise
+floor. It could have declared a regression on nothing but scheduling jitter — in
+a tool built specifically to avoid confident wrong verdicts.
+
+**Fix.** A shortfall smaller than the measured spread now reports
+`INCONCLUSIVE_WITHIN_RUN_NOISE` and asks for a repeat run, rather than `FAIL`.
+The real Cricut Voice gap of −14 is well outside the band and still fails.
+
+**Consequence for reading any result.** A single run is weak evidence for
+anything within a few intervals. This applies directly to the Colab runs: two
+scenarios differing by a couple of intervals, on different Colab hardware, means
+nothing.
 
 ---
 

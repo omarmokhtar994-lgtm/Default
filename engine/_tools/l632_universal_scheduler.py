@@ -729,6 +729,12 @@ class ParsedInput:
     parser_warnings: List[str]
     requirement_sheet: str
     shrinkage_sheet: str
+    # Optional protected-tier minimums for release gate 4. Defaulted so every
+    # existing ParsedInput construction - the regression lab builds them
+    # directly - keeps working, and an absent workbook row means the tier is
+    # simply not configured, exactly as before.
+    protected_before80_minimum: Optional[int] = None
+    protected_after80_minimum: Optional[int] = None
     allow_back_to_back_breaks: bool = False
     break_max_concurrent_ratio: float = 0.30
     break_max_concurrent_absolute: int = 4
@@ -1771,6 +1777,29 @@ def parse_input(
         None if minimum_best_before_target_raw in (None, "")
         else max(0, int(round(to_float(minimum_best_before_target_raw, 0))))
     )
+    # Protected-tier minimums. Release gate 4 checks a "protected" 80% coverage
+    # tier, but the two values it needs existed only as CLI flags that
+    # RUN_UNIVERSAL_PRODUCTION.py never passed and no workbook row could set.
+    # The gate could therefore only ever report NOT_CONFIGURED - a check that
+    # was unreachable from the business contract that drives everything else.
+    # Absent rows still parse to None, so a workbook that does not set them
+    # behaves exactly as before.
+    protected_before80_minimum_raw = _instruction_get(
+        im, ["Protected Before80 Minimum Intervals", "Protected Before 80 Minimum Intervals",
+             "Protected Tier Before80 Minimum"], None
+    )
+    protected_after80_minimum_raw = _instruction_get(
+        im, ["Protected After80 Minimum Intervals", "Protected After 80 Minimum Intervals",
+             "Protected Tier After80 Minimum"], None
+    )
+    protected_before80_minimum = (
+        None if protected_before80_minimum_raw in (None, "")
+        else max(0, int(round(to_float(protected_before80_minimum_raw, 0))))
+    )
+    protected_after80_minimum = (
+        None if protected_after80_minimum_raw in (None, "")
+        else max(0, int(round(to_float(protected_after80_minimum_raw, 0))))
+    )
     quality_benchmark_tolerance = max(0, int(round(to_float(_instruction_get(
         im, ["Quality Benchmark Tolerance Intervals", "Benchmark Tolerance Intervals"], 0
     ), 0))))
@@ -2069,6 +2098,8 @@ def parse_input(
         overage_penalty_weight=overage_penalty_weight,
         minimum_final_before_target=minimum_final_before_target,
         minimum_best_before_target=minimum_best_before_target,
+        protected_before80_minimum=protected_before80_minimum,
+        protected_after80_minimum=protected_after80_minimum,
         quality_benchmark_tolerance=quality_benchmark_tolerance,
         hard_floor_ratio=hard_floor_ratio, hard_floor_tolerance=hard_floor_tolerance,
         hard_floor_source=hard_floor_source, use_11h_3off=use11,
@@ -3251,6 +3282,35 @@ STAGE1_MAX_SLICE_SEC = 1800.0
 # slices; the remainder absorbs model build, metric calculation and checkpoint
 # writes between attempts.
 STAGE1_SLICE_UTILIZATION = 0.82
+
+
+# Bounds on the guaranteed Stage-2 anchor solve. The anchor exists to protect
+# ONE real break solve; it is not the break search.
+STAGE2_ANCHOR_MIN_SLICE_SEC = 45.0
+STAGE2_ANCHOR_MAX_SLICE_SEC = 900.0
+STAGE2_ANCHOR_MAX_PHASE_SHARE = 0.80
+
+
+def stage2_anchor_slice_seconds(reserved_sec: float, remaining_sec: float) -> float:
+    """Time limit for the guaranteed Stage-2 anchor solve.
+
+    This used to ignore ``reserved_sec`` entirely and take 80% of whatever was
+    left of the whole break-search phase. The audit still reported the
+    reservation, so the record said 77 seconds while the code spent 599.7 of a
+    678-second phase - and the adaptive break search that follows, the part
+    that actually explores objective modes and skeletons, was left with 78
+    seconds: six attempts at 20s covering three of seven requested modes. The
+    anchor returned the same objective that a 20-second attempt on the same
+    skeleton, width and mode reached, so none of the 600 seconds bought
+    anything.
+
+    The reservation is what the anchor gets. The phase share is a ceiling on
+    top of it, not the allowance itself.
+    """
+    remaining = max(0.0, float(remaining_sec))
+    proposed = max(STAGE2_ANCHOR_MIN_SLICE_SEC, max(0.0, float(reserved_sec)))
+    ceiling = min(STAGE2_ANCHOR_MAX_SLICE_SEC, remaining * STAGE2_ANCHOR_MAX_PHASE_SHARE)
+    return max(0.0, min(proposed, ceiling))
 
 
 def stage1_fundable_profile_count(window_sec: float) -> int:
@@ -15727,6 +15787,20 @@ def run_case(
             if preflight.get("status") == "PASS":
                 preflight["status"] = "WARN"
 
+        # Protected-tier minimums follow the same contract-then-override rule as
+        # the benchmark minimums below: the workbook states the business value,
+        # an explicit CLI argument overrides it. Rebinding here means the audit
+        # and the run-identity hash record what was actually enforced rather
+        # than only what the command line happened to pass.
+        protected_before80_min = (
+            parsed.protected_before80_minimum
+            if protected_before80_min is None else max(0, int(protected_before80_min))
+        )
+        protected_after80_min = (
+            parsed.protected_after80_minimum
+            if protected_after80_min is None else max(0, int(protected_after80_min))
+        )
+
         effective_minimum_final_before_target = (
             parsed.minimum_final_before_target
             if minimum_final_before_target is None else max(0, int(minimum_final_before_target))
@@ -17437,13 +17511,15 @@ def run_case(
                         if skeleton_hard_clean(parsed, restored_br.metrics):
                             compliant.append((restored_sk, restored_br))
                 else:
-                    guard_slice = min(900.0, max(45.0, remaining * 0.80))
+                    guard_slice = stage2_anchor_slice_seconds(stage2_guard_reserve_sec, remaining)
                     guard_solution = solve_breaks(
                         parsed, guard_anchor, int(full_width), False, guard_slice, workers, log,
                         objective_mode=guard_mode, random_seed=solver_random_seed,
                     )
                     guard_record.update({
                         "status": guard_solution.cp_status,
+                        "granted_seconds": round(guard_slice, 3),
+                        "phase_remaining_at_start_sec": round(remaining, 3),
                         "elapsed_sec": guard_solution.elapsed_sec,
                         "objective": guard_solution.objective,
                         "hard_clean": bool(

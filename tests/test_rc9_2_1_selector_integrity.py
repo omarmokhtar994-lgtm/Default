@@ -459,5 +459,77 @@ class Stage1FundsDepthBeforeWidth(unittest.TestCase):
             "the Stage-1 loop must take its slice from the guarded helper")
 
 
+class Stage2AnchorStaysInsideItsReservation(unittest.TestCase):
+    """The anchor protects ONE break solve; it is not the break search.
+
+    `guard_slice = min(900.0, max(45.0, remaining * 0.80))` ignored the
+    reservation the audit reported. On the AE AR B2B verification run the
+    record said `reserved_seconds: 77` and the anchor spent **599.7** seconds
+    of a 678-second phase, leaving 78 seconds for the adaptive break search:
+    six attempts at 20s covering three of the seven requested objective modes.
+    Gate 5 failed at 6.0% target loss with the search effectively never run.
+
+    The 600 seconds bought nothing measurable: the anchor returned objective
+    156703574, the same value a 20-second attempt on the same skeleton, width
+    and objective mode reached.
+    """
+
+    def test_the_anchor_gets_its_reservation_not_the_phase(self):
+        """The exact numbers from the AE AR B2B verification run."""
+        granted = E.stage2_anchor_slice_seconds(77, 678)
+        self.assertEqual(granted, 77.0)
+        self.assertLess(granted, 599.7,
+                        "the anchor must no longer outspend its reservation")
+
+    def test_the_adaptive_search_keeps_the_rest_of_the_phase(self):
+        for remaining in (300, 678, 1200, 5000):
+            with self.subTest(remaining=remaining):
+                granted = E.stage2_anchor_slice_seconds(77, remaining)
+                self.assertGreaterEqual(
+                    remaining - granted, remaining * 0.20,
+                    "the break search that follows must keep the phase")
+
+    def test_the_phase_share_is_a_ceiling_not_the_allowance(self):
+        """A large reservation still cannot take the whole phase."""
+        for remaining in (100, 500, 2000):
+            with self.subTest(remaining=remaining):
+                granted = E.stage2_anchor_slice_seconds(10 ** 6, remaining)
+                self.assertLessEqual(granted, remaining * E.STAGE2_ANCHOR_MAX_PHASE_SHARE + 1e-9)
+                self.assertLessEqual(granted, E.STAGE2_ANCHOR_MAX_SLICE_SEC)
+
+    def test_it_never_exceeds_the_time_that_is_left(self):
+        for reserved in (0, 30, 77, 500, 5000):
+            for remaining in (0, 10, 46, 100, 900, 10000):
+                with self.subTest(reserved=reserved, remaining=remaining):
+                    self.assertLessEqual(
+                        E.stage2_anchor_slice_seconds(reserved, remaining), remaining + 1e-9)
+
+    def test_a_tiny_reservation_still_buys_a_real_solve(self):
+        """The reservation is a floor to protect, not a cap to shrink under."""
+        self.assertGreaterEqual(E.stage2_anchor_slice_seconds(5, 600),
+                                E.STAGE2_ANCHOR_MIN_SLICE_SEC)
+
+    def test_it_is_never_negative(self):
+        for reserved in (-100, 0, 77):
+            for remaining in (-50, 0, 1):
+                with self.subTest(reserved=reserved, remaining=remaining):
+                    self.assertGreaterEqual(
+                        E.stage2_anchor_slice_seconds(reserved, remaining), 0.0)
+
+    def test_the_phase_grab_is_gone_from_the_anchor(self):
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        self.assertFalse(
+            "guard_slice = min(900.0, max(45.0, remaining * 0.80))" in source,
+            "the anchor must not take 80% of the break-search phase")
+        self.assertTrue(
+            "guard_slice = stage2_anchor_slice_seconds(stage2_guard_reserve_sec, remaining)" in source,
+            "the anchor must take its slice from the guarded helper")
+
+    def test_the_audit_records_what_the_anchor_was_actually_granted(self):
+        """`reserved_seconds` alone hid a 7.8x overrun for a whole release."""
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        self.assertTrue('"granted_seconds": round(guard_slice, 3),' in source)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

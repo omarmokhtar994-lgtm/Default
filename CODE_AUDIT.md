@@ -979,6 +979,100 @@ question, not resolved.
 
 ---
 
+### A35 — The guaranteed Stage-2 anchor ignored its reservation and consumed the break-search phase
+
+| | |
+|---|---|
+| **File** | `engine/_tools/l632_universal_scheduler.py` (guaranteed Stage-2 anchor) |
+| **Category** | A phase spends 8x what its own audit record says it reserved |
+| **Severity** | **High** — this is release gate 5 |
+| **Status** | **VERIFIED** |
+
+Found by refusing to accept gate 5 as a policy trade-off and reading the
+Stage-2 attempt list of the A34 verification run.
+
+`bounded_stage2_guard_reserve_seconds` is documented as protecting *"at least
+one real break solve"* — a floor. The anchor did not use it:
+
+```python
+guard_slice = min(900.0, max(45.0, remaining * 0.80))
+```
+
+`remaining` is the whole `break_search` phase, so the anchor took 80% of it,
+while `guard_record["reserved_seconds"]` reported `stage2_guard_reserve_sec`.
+The audit therefore said **77 seconds** and the code spent **599.7** of a
+678-second phase — a 7.8x overrun that was invisible because the only number
+recorded was the one being ignored.
+
+What the adaptive break search got with the remaining 78 seconds:
+
+| | requested | actually run |
+|---|---|---|
+| objective modes | 7 | **3** (`target_priority`, `release_quality_guard`, `coverage_rebalance`) |
+| attempts | — | 6, at 20.0s each |
+
+`quality_convergence`, `floor_protected`, `balanced` and `target_100` never ran.
+Gate 5 failed at 10/168 = 6.0% target loss with the search that decides break
+placement effectively never executed.
+
+**The 600 seconds bought nothing measurable.** The anchor returned objective
+`156703574` — the identical value a **20-second** adaptive attempt reached on
+the same skeleton, pattern width and objective mode.
+
+**Fix.** `stage2_anchor_slice_seconds(reserved_sec, remaining_sec)`: the
+reservation is the allowance, the phase share is a ceiling on top of it, and
+the result never exceeds the time left. The audit now records
+`granted_seconds` and `phase_remaining_at_start_sec` alongside
+`reserved_seconds`, so a future overrun is visible in the artifact rather than
+only by reading the code.
+
+**Not yet claimed.** Whether this moves gate 5 off FAIL is a measurement, not a
+deduction — the freed ~600 seconds have to be shown to buy break placement. The
+end-to-end re-run is pending.
+
+---
+
+### A36 — Release gate 4's protected tier was unreachable from the business contract
+
+| | |
+|---|---|
+| **File** | `engine/_tools/l632_universal_scheduler.py` (`ParsedInput`, `parse_input`, run entry) |
+| **Category** | A release gate whose input has no route from the contract |
+| **Severity** | **Medium** — a gate that can only ever report NOT_CONFIGURED |
+| **Status** | **VERIFIED** |
+
+A12 corrected `protected_benchmark_status` so it stops publishing `PASS` for a
+check it never ran, and reports `NOT_CONFIGURED` instead. That was right, and it
+exposed the larger problem: **nothing could ever configure it.**
+
+`protected_before80_min` and `protected_after80_min` existed only as CLI flags.
+`RUN_UNIVERSAL_PRODUCTION.py` does not pass them. No workbook instruction alias
+set them — checked against the shipped `Instructions` and `Engine Defaults`
+sheets of AE AR B2B and Cricut Voice, neither of which carries any
+protected-tier row. Every other contract value in this engine is
+workbook-driven. So the protected half of gate 4 reported
+`PROTECTED_NOT_EVALUATED` on every run of the release, and there was no
+supported way for a business user to change that.
+
+**Fix.** `Protected Before80 Minimum Intervals` and `Protected After80 Minimum
+Intervals` (with aliases) parse from the workbook exactly as the existing
+optional benchmark minimums do, and an explicit CLI argument still overrides
+the workbook, matching `effective_minimum_final_before_target`. Both fields are
+**defaulted to `None`**, so an absent row leaves the tier unconfigured — the
+behaviour every current workbook already gets — and direct `ParsedInput`
+construction keeps working. The regression lab builds `ParsedInput` positionally
+and caught this immediately when the fields were first added as required.
+
+Verified against the real AE AR B2B workbook: unchanged → `None, None`; with the
+two rows added → `160, 150`; and `protected_benchmark_pass` then returns a real
+verdict (`after80 140 < protected minimum 150`) instead of nothing to check.
+
+**What stays with the user.** What the numbers should be. The engine now has a
+supported route for the value; the value itself is a business input and was not
+invented here.
+
+---
+
 ## Sweeps — patterns checked across all 19 modules
 
 Recorded so the absence of findings is evidence, not silence.
@@ -1061,8 +1155,8 @@ Two rounds were needed to get there, and both survivors were real:
 | `tests/test_rc9_2_1_phase_c_integrity.py` | **15/15** (new) |
 | `tests/test_rc9_2_1_production_identity.py` | 11/11 |
 | `tests/test_rc9_2_1_regression_lab_integrity.py` | **18/18** (new) |
-| `tests/test_rc9_2_1_rule_semantics.py` | **37/37** (+7) |
-| `tests/test_rc9_2_1_selector_integrity.py` | **47/47** (+11 for A34) |
+| `tests/test_rc9_2_1_rule_semantics.py` | **56/56** (+7, +6 for A36) |
+| `tests/test_rc9_2_1_selector_integrity.py` | **55/55** (+11 for A34, +8 for A35) |
 | `tests/test_rc9_2_1_tooling_integrity.py` | **13/13** (new) |
 | `tests/test_rc9_2_1_validator_parity.py` | 42/42 |
 | engine selfcheck | PASS, byte-identical to the pre-change baseline |
@@ -1075,7 +1169,7 @@ Two rounds were needed to get there, and both survivors were real:
 | `ruff check --select E9,F821` across engine, tools and tests | **clean** |
 | `run_tests.sh` | **GATE PASS — 9 suites + 2 selfchecks + undefined-name sweep** |
 
-**260 guards** across nine suites, up from 119 across four.
+**274 guards** across nine suites, up from 119 across four.
 
 Every new guard was run against the pre-fix code:
 
@@ -1086,6 +1180,8 @@ Every new guard was run against the pre-fix code:
 | `phase_c_integrity` | 8 of 15 |
 | `regression_lab_integrity` | 14 of 18 |
 | `orchestration_integrity` (A34 batch) | 5 of 5 |
+| `selector_integrity` (A35 batch) | 8 of 8 |
+| `rule_semantics` (A36 batch) | 4 of 6 |
 
 ---
 

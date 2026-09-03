@@ -495,5 +495,70 @@ class LanguageSetupHeaderIsNotAProseBanner(unittest.TestCase):
         self.assertEqual(E.norm(ws.cell(4, 2).value), "coverage start")
 
 
+class ProtectedTierIsReachableFromTheBusinessContract(unittest.TestCase):
+    """Release gate 4 could only ever report NOT_CONFIGURED.
+
+    `protected_before80_min` and `protected_after80_min` existed solely as CLI
+    flags. RUN_UNIVERSAL_PRODUCTION.py never passed them, no workbook
+    instruction alias set them, and every other contract value in this engine is
+    workbook-driven. So the protected half of gate 4 was unreachable from the
+    contract that drives everything else, and reported PROTECTED_NOT_EVALUATED
+    on every run of the release.
+    """
+
+    ALIASES = [
+        "Protected Before80 Minimum Intervals",
+        "Protected Before 80 Minimum Intervals",
+        "Protected Tier Before80 Minimum",
+        "Protected After80 Minimum Intervals",
+        "Protected After 80 Minimum Intervals",
+        "Protected Tier After80 Minimum",
+    ]
+
+    def test_the_parser_accepts_a_protected_tier_row(self):
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        for alias in self.ALIASES:
+            with self.subTest(alias=alias):
+                self.assertTrue(alias in source,
+                                f"no workbook route for {alias!r}")
+
+    def test_an_absent_row_leaves_the_tier_unconfigured(self):
+        """Existing workbooks must behave exactly as before."""
+        parsed = E.ParsedInput.__new__(E.ParsedInput)
+        self.assertIsNone(getattr(parsed, "protected_before80_minimum", None))
+
+    def test_the_fields_are_defaulted_so_direct_construction_still_works(self):
+        """The regression lab builds ParsedInput directly, positionally."""
+        import dataclasses
+        fields = {f.name: f for f in dataclasses.fields(E.ParsedInput)}
+        for name in ("protected_before80_minimum", "protected_after80_minimum"):
+            with self.subTest(name=name):
+                self.assertIn(name, fields)
+                self.assertIsNone(fields[name].default,
+                                  "a required field here breaks every direct construction")
+
+    def test_the_gate_evaluator_reports_a_real_verdict_once_configured(self):
+        """The point of the route: gate 4 can actually fail when it should."""
+        ok, failures = E.protected_benchmark_pass(
+            {"before_80": 168, "after_80": 140}, 160, 150)
+        self.assertFalse(ok)
+        self.assertEqual(failures, ["after80 140 < protected minimum 150"])
+
+    def test_an_unconfigured_tier_is_not_silently_a_pass(self):
+        ok, failures = E.protected_benchmark_pass(
+            {"before_80": 0, "after_80": 0}, None, None)
+        self.assertTrue(ok, "nothing configured means nothing checked")
+        self.assertEqual(failures, [])
+
+    def test_an_explicit_argument_still_overrides_the_workbook(self):
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        self.assertTrue(
+            "parsed.protected_before80_minimum\n"
+            "            if protected_before80_min is None else max(0, int(protected_before80_min))"
+            in source,
+            "the CLI argument must win over the workbook value, as it does for "
+            "the benchmark minimums")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

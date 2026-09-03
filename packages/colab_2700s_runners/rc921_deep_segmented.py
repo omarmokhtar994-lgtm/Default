@@ -107,6 +107,9 @@ def main() -> int:
     ap.add_argument("--continue-from", type=int, default=1,
                     help="restart at this segment number after a disconnect")
     ap.add_argument("--num-workers", type=int, default=0)
+    ap.add_argument("--i-understand-segments-do-not-accumulate-budget",
+                    action="store_true",
+                    help="override the refusal to segment; see the note in main()")
     args = ap.parse_args()
 
     root = args.package_root.resolve()
@@ -122,6 +125,33 @@ def main() -> int:
 
     seg_sec = args.segment_sec or row.get("segment_sec", 2400)
     segments = args.segments or row.get("segments", 6)
+
+    # Segmenting DOES NOT reach the target budget, and run 1 proved it. Each
+    # segment calls build_global_budget_plan(seg_sec), so it plans its phases
+    # for the SEGMENT, not the target: at 2400s Stage 1 gets ~332s, which fits
+    # two or three of the fifteen skeleton profiles. Resume carries the skeleton
+    # pool forward but not the budget, so N segments are N independent runs
+    # sharing a pool - roughly 15 hours of Colab compute produced no completed
+    # portfolio on any scenario.
+    #
+    # Run the full budget in ONE session instead. A running cell is not idle, so
+    # a four-hour run holds a Colab session; write results to Drive so a
+    # disconnect costs the run rather than the results.
+    if segments > 1 and not args.i_understand_segments_do_not_accumulate_budget:
+        print(
+            "\nREFUSING TO SEGMENT.\n\n"
+            f"  Asking for {segments} x {seg_sec}s does NOT give this scenario "
+            f"{row['time_limit_sec']}s of search.\n"
+            "  Every segment re-plans its phase budget for the segment length, so "
+            "Stage 1\n  gets the same small window each time and the skeleton "
+            "portfolio never completes.\n\n"
+            "  Run the whole budget in one session:\n\n"
+            f"      --segments 1 --segment-sec {row['time_limit_sec']}\n\n"
+            "  Keep the tab open and write results to Drive. If you genuinely want "
+            "segments\n  anyway, pass "
+            "--i-understand-segments-do-not-accumulate-budget.\n",
+            file=sys.stderr)
+        return 2
     workers = args.num_workers or os.cpu_count() or 4
 
     log(f"scenario : {wanted}")

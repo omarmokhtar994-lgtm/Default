@@ -15957,7 +15957,21 @@ def run_case(
             "global_budget_plan": dict(global_budget_plan),
             "guaranteed_stage2_reserve_sec": int(stage2_guard_reserve_sec),
             "breakability_diagnostic_reserve_sec": int(breakability_diagnostic_reserve_sec),
-            "stage1_profile_deadline_epoch": float(stage1_profile_deadline),
+            # `stage1_profile_deadline` is deliberately NOT hashed, in any form.
+            # It used to be here as float(stage1_profile_deadline) - an absolute
+            # wall-clock timestamp - and run_parameters is hashed into
+            # parameters_sha256, hence into run_id. The run identity therefore
+            # depended on the moment the run started, which meant:
+            #   * two runs of the same input with the same parameters produced
+            #     different run_ids, defeating the exact-identity release gate;
+            #   * `--resume` could NEVER match its own checkpoint and always
+            #     raised "Resume refused", so checkpoint/resume was inoperative.
+            # Expressing it relative to started_epoch is not enough either: the
+            # deadline has a `time.time() + 30` floor, so the value still
+            # carries milliseconds of scheduling jitter. It is a DERIVED runtime
+            # artifact, not an input. What determines it - global_budget_plan
+            # and breakability_diagnostic_reserve_sec - is already hashed above.
+            # The absolute value is reported in the audit under run_wall_clock.
             "adaptive_no_improvement_attempts": int(adaptive_no_improvement_attempts),
             "max_after80_tradeoff_intervals": max_after80_tradeoff_intervals,
             "min_after90_gain_per_after80_loss": float(min_after90_gain_per_after80_loss),
@@ -16021,7 +16035,13 @@ def run_case(
         audit: Dict[str, Any] = {
             "version": VERSION, "status": "STARTED", "input": str(input_path), "output": str(output_path),
             "started_at": datetime.now().isoformat(), "events": [], "stage1_attempts": [],
-            "run_identity": run_identity, "run_parameters": run_parameters, "pre_solver_contract_validation": preflight,
+            "run_identity": run_identity, "run_parameters": run_parameters,
+            # Wall-clock values are reported, never hashed.
+            "run_wall_clock": {
+                "started_epoch": float(budget_manager.started_epoch),
+                "stage1_profile_deadline_epoch": float(stage1_profile_deadline),
+            },
+            "pre_solver_contract_validation": preflight,
             "minimum_exception_diagnostics": [], "qualified_language_break_certificate_repair": {}, "cap_feasible_target_recovery": {}, "skill_break_overlap_repairs": [], "repair_attempts": [], "stage2_attempts": [],
             "constraint_isolation": [], "parser_warnings": parsed.parser_warnings,
             "quality_benchmark": benchmark_evidence,

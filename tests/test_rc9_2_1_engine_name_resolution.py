@@ -123,5 +123,87 @@ class EveryModuleLevelNameResolves(unittest.TestCase):
                 self.assertEqual(missing, [], f"{path.name} calls undefined name(s)")
 
 
+
+class RunIdentityIsReproducible(unittest.TestCase):
+    """`run_parameters` is hashed into parameters_sha256, hence into run_id.
+
+    It carried `"stage1_profile_deadline_epoch": float(stage1_profile_deadline)`
+    - an absolute wall-clock timestamp. The run identity therefore depended on
+    the moment the run started, which meant two runs of the same input with the
+    same parameters produced different run_ids (defeating the exact-identity
+    release gate), and `--resume` could NEVER match its own checkpoint, so
+    checkpoint/resume was inoperative and always raised "Resume refused".
+
+    Proven at the time: two identical 60s runs gave parameters_sha256
+    dc5d8541… vs d833ecb1…. After the fix they agree.
+
+    These guards are structural so they run in the fast gate. A wall-clock value
+    anywhere in the hashed parameters breaks reproducibility, whether absolute
+    or expressed relative to the start - a relative value still carries
+    scheduling jitter, which is how the first attempt at this fix still failed.
+    """
+
+    ENGINE = ROOT / "engine" / "_tools" / "l632_universal_scheduler.py"
+
+    def _run_parameters_node(self):
+        import ast
+        tree = ast.parse(self.ENGINE.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Assign) and node.targets
+                    and isinstance(node.targets[0], ast.Name)
+                    and node.targets[0].id == "run_parameters"
+                    and isinstance(node.value, ast.Dict)):
+                return node.value
+        self.fail("run_parameters dict literal not found")
+
+    def test_no_hashed_parameter_is_a_wall_clock_value(self):
+        import ast
+        node = self._run_parameters_node()
+        offenders = []
+        for key, value in zip(node.keys, node.values):
+            name = key.value if isinstance(key, ast.Constant) else "<dynamic>"
+            source = ast.dump(value)
+            if "deadline" in source or "time" == source or "'time'" in source:
+                if "deadline" in source:
+                    offenders.append(f"{name} references a deadline")
+            for sub in ast.walk(value):
+                if (isinstance(sub, ast.Attribute) and sub.attr == "time"
+                        and isinstance(sub.value, ast.Name) and sub.value.id == "time"):
+                    offenders.append(f"{name} calls time.time()")
+                if isinstance(sub, ast.Name) and sub.id.endswith("_epoch"):
+                    offenders.append(f"{name} uses {sub.id}")
+        self.assertEqual(offenders, [],
+                         "a wall-clock value in run_parameters makes run_id "
+                         "irreproducible and breaks --resume")
+
+    def test_no_hashed_parameter_key_is_named_like_a_timestamp(self):
+        import ast
+        node = self._run_parameters_node()
+        bad = [k.value for k in node.keys
+               if isinstance(k, ast.Constant) and isinstance(k.value, str)
+               and (k.value.endswith("_epoch") or k.value.endswith("_deadline"))]
+        self.assertEqual(bad, [])
+
+    def test_the_wall_clock_is_still_reported_just_not_hashed(self):
+        """Removing it from the identity must not lose the diagnostic."""
+        source = self.ENGINE.read_text(encoding="utf-8")
+        self.assertIn('"run_wall_clock"', source)
+        self.assertIn('"stage1_profile_deadline_epoch": float(stage1_profile_deadline)', source)
+
+    def test_resume_still_refuses_a_genuinely_different_run(self):
+        """The fix must not weaken the guard it broke.
+
+        Resume refusing everything is not the same as resume refusing the wrong
+        thing; input, contract, engine and parameters must all still be hashed.
+        """
+        source = self.ENGINE.read_text(encoding="utf-8").replace(" ", "")
+        for field in ('"input_sha256":sha256_file(input_path)',
+                      '"contract_sha256":canonical_hash(contract_payload)',
+                      '"engine_sha256":sha256_file(Path(__file__))',
+                      '"parameters_sha256":canonical_hash(run_parameters)'):
+            with self.subTest(field=field):
+                self.assertIn(field, source)
+        self.assertIn("Resumerefused:", source)
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

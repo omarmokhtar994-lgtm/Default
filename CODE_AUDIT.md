@@ -10,7 +10,7 @@ shell gate, fixtures, evidence and documentation.
 | Test suites | 9 (`tests/test_rc9_2_1_*.py`) — 4 at the start of this audit |
 | Gate | `run_tests.sh` |
 
-Findings from this audit are numbered **A1–A29**. Release-behaviour findings 1–16
+Findings from this audit are numbered **A1–A32**. Release-behaviour findings 1–16
 from the earlier remediation cycle are recorded in
 `docs/RC9_2_1_CONSOLIDATED_ISSUE_REGISTER.md` and are not repeated here.
 
@@ -777,6 +777,57 @@ ratio, and reports `NOT_COMPARABLE_*` rather than comparing. A clean result is
 `PASS_AGAINST_CONSOLIDATED_BASELINE`, never a bare `PASS`: the evidence is
 consolidated historical metrics rather than raw RC9.1 artifacts, and it covers
 before-break quality only.
+
+---
+
+### A32 — Run identity was not reproducible, and `--resume` never worked
+
+| | |
+|---|---|
+| **File** | `engine/_tools/l632_universal_scheduler.py` · run identity |
+| **Category** | Non-determinism in a release-gate identity |
+| **Severity** | **Critical** |
+| **Status** | **VERIFIED** |
+
+`run_parameters` is hashed into `parameters_sha256`, which is hashed into
+`run_id`. It carried:
+
+```python
+"stage1_profile_deadline_epoch": float(stage1_profile_deadline),
+```
+
+an **absolute wall-clock timestamp**. So the run identity depended on the second
+the run started.
+
+**Two consequences, both serious.**
+
+1. **Run identity was not reproducible.** Two runs of the same workbook with the
+   same engine and the same parameters produced different `run_id`s. Measured:
+   `parameters_sha256` `dc5d8541…` vs `d833ecb1…`, with `input_sha256`,
+   `contract_sha256` and `engine_sha256` all identical. The exact-engine-identity
+   release gate cannot mean anything if a rerun cannot reproduce the identity of
+   the run it is checking.
+2. **`--resume` was inoperative.** Resume compares the recomputed `run_id`
+   against the checkpoint's and raises `Resume refused` on a mismatch — which was
+   *always*. Checkpoint/resume has therefore never worked in this release.
+   Segment 2 of a segmented run exited 3 in 4.5 s with
+   `RuntimeError: Resume refused: input/contract/engine/seed/parameters hash
+   differs from the existing run identity`.
+
+**Why the earlier resume test did not catch it.** The resume-identity test was a
+*negative* test: it proved resume refuses a foreign checkpoint. It does — it
+refuses every checkpoint, including its own. Nothing tested the positive case.
+
+**Fix.** `stage1_profile_deadline` is not hashed in any form. Expressing it
+relative to `started_epoch` is not enough either: the deadline has a
+`time.time() + 30` floor, so a relative value still carries scheduling jitter —
+the first attempt at this fix still produced `30.355` vs `30.341`. It is a
+*derived runtime artifact*, and what determines it (`global_budget_plan`,
+`breakability_diagnostic_reserve_sec`) is already hashed. The absolute value is
+still reported, under `run_wall_clock` in the audit.
+
+**Verified.** Two identical runs now agree on `parameters_sha256` and `run_id`.
+A three-segment resumable run goes 0/0/0 where it previously went 0/3/3.
 
 ---
 

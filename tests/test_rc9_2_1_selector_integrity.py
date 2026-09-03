@@ -568,13 +568,24 @@ class BreakSearchFundsDepthBeforeWidth(unittest.TestCase):
             "the break slice must come from the measured minimum")
 
     def test_a_short_tail_stops_instead_of_running_attempts_that_cannot_converge(self):
+        """The tail is governed by the measured minimum, not by a 10s guard.
+
+        This test originally asserted the `< 10` line was gone outright. It is
+        back, deliberately, as the absolute floor on the guaranteed first
+        attempt - a zero-second slice must still not be attempted. What matters
+        is that `< 10` is no longer what decides whether the SEARCH continues:
+        that is the measured minimum, applied from the second attempt onward.
+        """
         source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
-        self.assertFalse(
-            "if slice_sec < 10:" in source,
-            "a 10-second guard still admits attempts that return UNKNOWN")
         self.assertTrue(
-            "if slice_sec < BREAK_MIN_MEANINGFUL_SLICE_SEC:" in source,
-            "the loop must stop when the phase cannot fund a real attempt")
+            "elif slice_sec < BREAK_MIN_MEANINGFUL_SLICE_SEC:" in source,
+            "the tail must stop on the measured minimum, not on a 10s guard")
+        stop_at = source.index("elif slice_sec < BREAK_MIN_MEANINGFUL_SLICE_SEC:")
+        ten_at = source.index("if slice_sec < 10:", stop_at)
+        self.assertGreater(
+            ten_at, stop_at,
+            "the 10s floor must sit after the depth stop, so it can only ever "
+            "guard the first attempt")
 
     def test_stopping_early_is_recorded_not_silent(self):
         """A28's lesson: a search that stops short must say so in the audit."""
@@ -583,6 +594,34 @@ class BreakSearchFundsDepthBeforeWidth(unittest.TestCase):
             '"cp_status": "STOPPED_INSUFFICIENT_BREAK_SEARCH_DEPTH",' in source)
         self.assertTrue(
             '"ADAPTIVE_BREAK_SEARCH_STOPPED_INSUFFICIENT_DEPTH",' in source)
+
+    def test_a_small_budget_still_gets_one_adaptive_attempt(self):
+        """Caught by this package's own smoke test, not by reasoning.
+
+        The first version of the depth guard stopped unconditionally. A 240s
+        functional run allocates 60 seconds to break_search, so the adaptive
+        search stopped before a single attempt - `attempts_completed: 0` - and
+        NMG SP shipped after_target 121 where the old 20-second behaviour
+        shipped 123. Stopping is right for the tail; it is wrong for the first
+        attempt, where some search beats none.
+        """
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        self.assertTrue(
+            "if slice_sec < BREAK_MIN_MEANINGFUL_SLICE_SEC and attempts_completed == 0:"
+            in source,
+            "the first adaptive attempt must run even on a small budget")
+        self.assertTrue(
+            "BREAK_SEARCH_SHALLOW_FIRST_ATTEMPT" in source,
+            "a shallow first attempt must be recorded, not silent")
+
+    def test_the_stop_still_applies_once_an_attempt_has_run(self):
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        self.assertTrue(
+            "elif slice_sec < BREAK_MIN_MEANINGFUL_SLICE_SEC:" in source,
+            "the tail must still stop rather than run attempts that cannot converge")
+        self.assertTrue(
+            '"attempts_completed_before_stop": attempts_completed,' in source,
+            "the audit must say how many attempts ran before the stop")
 
     def test_a_funded_phase_still_shares_across_attempts(self):
         """Depth-first must not become one-attempt-only."""

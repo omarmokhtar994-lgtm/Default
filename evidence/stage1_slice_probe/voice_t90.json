@@ -1,0 +1,32 @@
+[
+  {
+    "profile": "target90_restore_champion",
+    "slice_sec": 45.0,
+    "cp_status": "FEASIBLE",
+    "elapsed_sec": 49.7,
+    "objective": 58656035944.0,
+    "before_target": 248,
+    "before_floor": 252,
+    "severe_floor_gaps": null
+  },
+  {
+    "profile": "target90_restore_champion",
+    "slice_sec": 150.0,
+    "cp_status": "FEASIBLE",
+    "elapsed_sec": 154.4,
+    "objective": 55239932112.0,
+    "before_target": 250,
+    "before_floor": 252,
+    "severe_floor_gaps": null
+  },
+  {
+    "profile": "target90_restore_champion",
+    "slice_sec": 450.0,
+    "cp_status": "FEASIBLE",
+    "elapsed_sec": 454.2,
+    "objective": 55318969208.0,
+    "before_target": 250,
+    "before_floor": 252,
+    "severe_floor_gaps": null
+  }
+]

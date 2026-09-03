@@ -916,16 +916,19 @@ same profile, same seed, only the time limit varies):
 | Scenario | Profile | 45s | 150s | 210s | 450s | RC9.1 |
 |---|---|---|---|---|---|---|
 | AE AR B2B | `target90_restore_champion` | UNKNOWN | 101 | — | **167** | 168 |
-| AE AR B2B | `before_target_champion` | UNKNOWN | UNKNOWN | **166** | **166** | 168 |
+| AE AR B2B | `before_target_champion` | UNKNOWN | UNKNOWN | 166 | 166 | 168 |
+| AE AR B2B | `release_gate_floor_satisfaction` | — | — | — | **168** | 168 |
 | Cricut Voice | `target90_restore_champion` | 248 | 250 | — | 250 | — |
 | Cricut Voice | `floor_gate_hunter_before` | 238 | 238 | — | 236 | 256 |
 
 On AE AR B2B, 45 seconds is not a short attempt — it is **no** attempt. CP-SAT
 returned no feasible skeleton at all, twelve times. The 131/159 the run
 published did not come from Stage 1; a downstream fallback carried it. Given
-210 seconds the same engine reaches 166 against RC9.1's 168, and 450 seconds
-returns the same 166 — the cliff is narrow, and past it more time buys nothing.
-`STAGE1_MIN_MEANINGFUL_SLICE_SEC` is set to **240s** on that measurement.
+210 seconds the same engine reaches 166 against RC9.1's 168, and
+`release_gate_floor_satisfaction` at 450 seconds returns **168 of 168** — RC9.1
+exactly — at objective 408 against the 10^9-scale objectives of the unconverged
+attempts. The cliff is narrow and past it more time per profile buys nothing,
+so `STAGE1_MIN_MEANINGFUL_SLICE_SEC` is set to **240s** on that measurement.
 
 **Fix.** Two coordinated changes.
 
@@ -959,8 +962,9 @@ reduction falls on `joint_refinement`.
 AE AR B2B loss was that RC9.1's champion profile, `before_target_champion`, sat
 at catalog position 14 and was listed in `skipped_profiles` in every segment, so
 the winning strategy never ran. An evidence-ranked ordering was written and then
-**removed**: at equal depth the two profiles land within one interval of each
-other (167 and 166), so profile choice does not explain the loss, and on Cricut
+**removed**: at equal depth three profiles land at 166, 167 and 168, and the one
+that reaches RC9.1's 168 exactly is `release_gate_floor_satisfaction` — *not*
+RC9.1's champion here. Profile choice does not explain the loss, and on Cricut
 Voice promoting the RC9.1 champion would have made the result *worse*
 (`floor_gate_hunter_before` scores 236–238 where `target90_restore_champion`
 scores 250). Ordering by RC9.1's champions is evidence about RC9.1's engine, not

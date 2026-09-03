@@ -1,0 +1,26 @@
+[
+  {
+    "profile": "before_target_champion",
+    "slice_sec": 45.0,
+    "cp_status": "UNKNOWN",
+    "elapsed_sec": 51.7,
+    "objective": 0.0
+  },
+  {
+    "profile": "before_target_champion",
+    "slice_sec": 150.0,
+    "cp_status": "UNKNOWN",
+    "elapsed_sec": 156.2,
+    "objective": 0.0
+  },
+  {
+    "profile": "before_target_champion",
+    "slice_sec": 450.0,
+    "cp_status": "FEASIBLE",
+    "elapsed_sec": 456.1,
+    "objective": 1807712320.0,
+    "before_target": 166,
+    "before_floor": 168,
+    "severe_floor_gaps": null
+  }
+]

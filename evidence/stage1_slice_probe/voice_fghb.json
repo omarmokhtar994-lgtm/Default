@@ -1,0 +1,32 @@
+[
+  {
+    "profile": "floor_gate_hunter_before",
+    "slice_sec": 45.0,
+    "cp_status": "FEASIBLE",
+    "elapsed_sec": 55.0,
+    "objective": 57501536392.0,
+    "before_target": 238,
+    "before_floor": 258,
+    "severe_floor_gaps": null
+  },
+  {
+    "profile": "floor_gate_hunter_before",
+    "slice_sec": 150.0,
+    "cp_status": "FEASIBLE",
+    "elapsed_sec": 153.9,
+    "objective": 57501542392.0,
+    "before_target": 238,
+    "before_floor": 258,
+    "severe_floor_gaps": null
+  },
+  {
+    "profile": "floor_gate_hunter_before",
+    "slice_sec": 450.0,
+    "cp_status": "FEASIBLE",
+    "elapsed_sec": 453.8,
+    "objective": 52566210400.0,
+    "before_target": 236,
+    "before_floor": 258,
+    "severe_floor_gaps": null
+  }
+]

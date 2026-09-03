@@ -1,0 +1,29 @@
+[
+  {
+    "profile": "target90_restore_champion",
+    "slice_sec": 45.0,
+    "cp_status": "UNKNOWN",
+    "elapsed_sec": 51.7,
+    "objective": 0.0
+  },
+  {
+    "profile": "target90_restore_champion",
+    "slice_sec": 150.0,
+    "cp_status": "FEASIBLE",
+    "elapsed_sec": 156.1,
+    "objective": 268768743712.0,
+    "before_target": 101,
+    "before_floor": 130,
+    "severe_floor_gaps": null
+  },
+  {
+    "profile": "target90_restore_champion",
+    "slice_sec": 450.0,
+    "cp_status": "FEASIBLE",
+    "elapsed_sec": 455.9,
+    "objective": 3208094848.0,
+    "before_target": 167,
+    "before_floor": 168,
+    "severe_floor_gaps": null
+  }
+]

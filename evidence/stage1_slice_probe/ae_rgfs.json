@@ -1,0 +1,12 @@
+[
+  {
+    "profile": "release_gate_floor_satisfaction",
+    "slice_sec": 450.0,
+    "cp_status": "FEASIBLE",
+    "elapsed_sec": 455.6,
+    "objective": 408.0,
+    "before_target": 168,
+    "before_floor": 168,
+    "severe_floor_gaps": null
+  }
+]

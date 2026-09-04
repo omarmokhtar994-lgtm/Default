@@ -645,5 +645,48 @@ class ExceptionCapExclusionIsProvenOnly(unittest.TestCase):
         self.assertFalse(E.skeleton_exceeds_exception_cap(self.parsed, sk))
 
 
+class TheRunStageAndDepthDropdownsArriveWithAVisibleChoice(unittest.TestCase):
+    """A dropdown you have to discover is not a choice you were offered.
+
+    The template wrote both rows and attached their validation lists, and left
+    both cells blank. Blank parses as None and the engine falls back to
+    FULL_SCHEDULE / DEEP, so the behaviour was right and the sheet said
+    nothing. Seeding exactly those two fallbacks changes no run and makes the
+    setting legible.
+    """
+
+    SOURCE = (ROOT / "tools" / "build_input_template.py").read_text()
+
+    def test_the_two_rows_the_planner_drives_are_seeded(self):
+        self.assertIn('SEEDED_DEFAULTS = {"runstage": "Full Schedule", "rundepth": "Deep"}',
+                      self.SOURCE)
+
+    def test_the_seeds_are_the_engine_fallbacks_so_nothing_changes(self):
+        runner = (ROOT / "engine" / "RUN_UNIVERSAL_PRODUCTION.py").read_text()
+        self.assertIn("args.mode or contract_depth or 'DEEP'", runner)
+        self.assertIn("args.stage or contract_stage or 'FULL_SCHEDULE'", runner)
+
+    def test_the_seeded_text_is_what_the_dropdown_offers(self):
+        """A seeded value outside its own validation list would show as invalid."""
+        self.assertIn('("Run Stage", \'"Before Breaks Only,Full Schedule"\')', self.SOURCE)
+        self.assertIn('("Run Depth", \'"Quick,Deep,Overnight"\')', self.SOURCE)
+
+    def test_the_seeded_text_normalizes_to_the_engine_constants(self):
+        self.assertEqual(E.normalize_run_stage("Full Schedule"), "FULL_SCHEDULE")
+        self.assertEqual(E.normalize_run_depth("Deep"), "DEEP")
+        self.assertEqual(E.normalize_run_stage("Before Breaks Only"), "BEFORE_BREAKS_ONLY")
+        self.assertEqual(E.normalize_run_depth("Overnight"), "OVERNIGHT")
+
+    def test_a_value_already_in_the_workbook_still_wins(self):
+        """Seeding must never overwrite what the planner set."""
+        self.assertIn('if v in (None, "") and norm(key) in SEEDED_DEFAULTS:', self.SOURCE)
+
+    def test_no_other_row_is_silently_pre_filled(self):
+        """Freezing an engine default into the contract without anyone deciding
+        to is how a setting stops being a default."""
+        self.assertEqual(self.SOURCE.count("SEEDED_DEFAULTS = {"), 1)
+        self.assertNotIn('"target"', self.SOURCE.split("SEEDED_DEFAULTS = {")[1].split("}")[0])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

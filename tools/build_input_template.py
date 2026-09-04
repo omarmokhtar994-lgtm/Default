@@ -102,6 +102,14 @@ ADVANCED_LAYOUT = [
 ]
 DEAD_ROWS = {"rc9.1deepdefaultseconds", "rc9.1fulldefaultseconds",
              "rc9.1stage2searchorder", "rc9.1jointbudgetpolicy"}
+# Rows the planner was asked to drive from the sheet. Leaving them blank is
+# honest but useless: a dropdown you have to discover is not a choice you were
+# offered. These two are seeded with the exact value the engine falls back to
+# when the cell is empty, so pre-filling them changes no behaviour - it only
+# makes the setting visible. Nothing else is seeded, because pre-filling a row
+# whose default the engine may revise would freeze that default into the
+# contract without anyone deciding to.
+SEEDED_DEFAULTS = {"runstage": "Full Schedule", "rundepth": "Deep"}
 
 HDR = PatternFill("solid", fgColor="1F3864")
 SECTION = PatternFill("solid", fgColor="D9E2F3")
@@ -151,6 +159,8 @@ def write_sheet(wb, title, layout, values, blurb, start_note=None):
         first = True
         for key, choices in items:
             v = values.get(norm(key))
+            if v in (None, "") and norm(key) in SEEDED_DEFAULTS:
+                v = SEEDED_DEFAULTS[norm(key)]
             ws.cell(row, 1, section if first else "").fill = SECTION if first else PatternFill()
             if first: ws.cell(row, 1).font = Font(bold=True)
             ws.cell(row, 2, key)

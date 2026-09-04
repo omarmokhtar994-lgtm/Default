@@ -42,19 +42,45 @@ The Stage-2 candidate leaderboard's highest `before90` is **192**
 appear nowhere on it. Fourteen intervals are lost before break search is even
 scored.
 
-`successful_skeletons` *is* sorted by `skeleton_quality_key` immediately before
-Stage 2, so this is not a plain ordering bug. Two candidate explanations remain,
-**not yet distinguished**:
+**RESOLVED — this is not an engine defect.** I hypothesised a diagnostic-only
+filter defect; the artifact refutes it. Stage-2 outcomes per skeleton:
 
-* `skeleton_quality_key` opens with `diagnostic_rank`, and
-  `production_break_skeletons` then filters out anything
-  `skeleton_release_diagnostic_only`. A strong skeleton flagged diagnostic-only
-  would be excluded from break search entirely regardless of its coverage.
-* The top skeletons may have been carried in and produced no compliant break
-  solution.
+| before_target | profile | Stage-2 outcome |
+|---|---|---|
+| 206 | `before_target_champion` | `SKIPPED_PROVEN_MINIMUM_EXCEPTION_POSITIVE` ×28 |
+| 193 | `floor_gate_hunter_before` | INFEASIBLE ×19 |
+| **192** | `release_gate_floor_satisfaction` | **FEASIBLE ×19** |
+| 190 | `quality_convergence` | INFEASIBLE ×18 |
+| 189 | `target_priority_balanced` | INFEASIBLE ×18 |
+| 188 | `daily_floor_balanced` | INFEASIBLE ×18 |
 
-Distinguishing these is the next step; it decides whether this is a filter
-defect or a genuine breakability wall.
+The 206 skeleton has `minimum_exception_count = 1`, **proven**, against a
+workbook policy of `max_no_break_exceptions = 0` and
+`no_break_permission = False`. It provably cannot be broken without an
+exception the contract forbids, so it can never ship. Every other strong
+skeleton is break-INFEASIBLE. `release_gate_floor_satisfaction` at 192 is the
+only Stage-1 skeleton that admits a feasible break solution at all.
+
+**The 206 → 192 gap is a genuine breakability wall, not a lost candidate.** The
+engine behaved correctly.
+
+### Consequence — a reporting defect (A39)
+
+`best_before_target` reported **206**, so `skeleton_retention_loss` read
+**206 − 188 = 18**, and gate 4 FAILED partly on it. That is a loss against a
+schedule that cannot exist. `select_best_before_skeleton` filters on
+hard-clean and diagnostic-only but **not** on the exception cap.
+
+Measured against the best *shippable* skeleton the retention loss is **4**
+(192 → 188) — the selector defect below, and nothing more.
+
+**Fixed.** `skeleton_exceeds_exception_cap` excludes only skeletons whose
+minimum exception count is **proven** above the cap (an unproven bound may
+still come down with more search, and discarding it would throw away a
+candidate that is merely unmeasured). The engine emits
+`best_shippable_before_target`, the gate measures retention against it and
+names the basis in its detail, and artifacts predating the column still score
+against the old basis with that basis stated.
 
 ### Loss 2 — 192 → 188: the selector chose the weaker candidate
 
@@ -93,8 +119,10 @@ intervals, and 26% less avoidable overage — for three fewer intervals at the
 
 ## Status
 
-**CONFIRMED DEFECT — selector.** Evidence is the shipped leaderboard.
-Loss 1's mechanism is **UNVERIFIED** pending the diagnostic-only check.
+**Loss 1: NOT A DEFECT** — a proven breakability wall. The engine was right.
+**A39: CONFIRMED REPORTING DEFECT** — retention measured against an unshippable
+skeleton, failing gate 4 for a reason that does not exist. Fixed and guarded.
+**Loss 2: CONFIRMED DEFECT — selector.** Evidence is the shipped leaderboard.
 
 No fix is proposed here. Changing `_candidate_quality_tuple` alters candidate
 selection for every scenario, so it needs a controlled experiment across all

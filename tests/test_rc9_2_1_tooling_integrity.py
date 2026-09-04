@@ -549,5 +549,101 @@ class Gate5CannotBeSatisfiedByShippingAWorseSkeleton(unittest.TestCase):
                 self.assertNotIn("inconsistent", result["gate5_detail"])
 
 
+class RetentionIsMeasuredAgainstAShippableSkeleton(unittest.TestCase):
+    """Gate 4 failed NMG EN+SP on a loss against a schedule that cannot exist.
+
+    Stage 1 found a 206-interval skeleton proven to need one no-break
+    exception. The workbook sets max_no_break_exceptions = 0, so Stage 2 skipped
+    every attempt on it (SKIPPED_PROVEN_MINIMUM_EXCEPTION_POSITIVE x28). It can
+    never become a production schedule.
+
+    `best_before_target` still reported 206, so the retention loss read
+    206 - 188 = 18 and gate 4 failed on it. The best skeleton that could
+    actually ship was 192, making the real loss 4.
+    """
+
+    def setUp(self):
+        self.gate = load("release_gate_report", "tools/release_gate_report.py")
+        self.baseline = self.gate.load_rc9_1_baseline()
+
+    def _case(self, tmp, **fields):
+        import json
+        root = Path(tmp) / "CASE"
+        root.mkdir(parents=True, exist_ok=True)
+        (root / "UNIVERSAL_RUN_IDENTITY.json").write_text(
+            json.dumps({"input_sha256": "0" * 64}), encoding="utf-8")
+        row = {"status": "PASS", "active_intervals": 252, "target_ratio": 0.9,
+               "before_target": 188, "after_target": 153,
+               "before_floor": 225, "after_floor": 203,
+               "target_losses_from_breaks": 35, "floor_losses_from_breaks": 22,
+               "quality_benchmark_status": "WARN",
+               "best_before_target": 206}
+        row.update(fields)
+        path = root / "case.l6_3_2_3_summary.csv"
+        with path.open("w", newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, fieldnames=list(row))
+            writer.writeheader()
+            writer.writerow(row)
+        return self.gate.evaluate(root, self.baseline)
+
+    def test_the_real_numbers_from_the_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._case(tmp, best_shippable_before_target=192)
+        self.assertEqual(result["skeleton_retention_loss"], "4")
+        self.assertIn("192 -> 188", result["gate4_detail"])
+        self.assertIn("best shippable skeleton", result["gate4_detail"])
+
+    def test_without_the_shippable_figure_the_old_basis_is_used_and_named(self):
+        """Older artifacts have no such column; they must still score, and say so."""
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._case(tmp)
+        self.assertEqual(result["skeleton_retention_loss"], "18")
+        self.assertIn("best skeleton found", result["gate4_detail"])
+
+    def test_the_basis_is_always_stated(self):
+        for extra in ({"best_shippable_before_target": 192}, {}):
+            with tempfile.TemporaryDirectory() as tmp:
+                result = self._case(tmp, **extra)
+            with self.subTest(extra=bool(extra)):
+                self.assertIn("basis:", result["gate4_detail"],
+                              "a retention number without its basis is unreadable")
+
+    def test_a_shippable_figure_equal_to_the_shipped_schedule_is_no_loss(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._case(tmp, best_shippable_before_target=188)
+        self.assertEqual(result["skeleton_retention_loss"], "0")
+        self.assertNotIn("skeleton retention", result["gate4_detail"],
+                         "a zero loss must not be narrated as a retention event")
+
+
+class ExceptionCapExclusionIsProvenOnly(unittest.TestCase):
+    """An unmeasured skeleton is not an impossible one."""
+
+    def setUp(self):
+        self.parsed = SimpleNamespace(
+            allow_no_break_exceptions=False, max_no_break_exceptions=0)
+
+    def _sk(self, **diag):
+        return SimpleNamespace(diagnostics=diag)
+
+    def test_a_proven_breach_is_excluded(self):
+        sk = self._sk(minimum_exception_proven=True, minimum_exception_count=1)
+        self.assertTrue(E.skeleton_exceeds_exception_cap(self.parsed, sk))
+
+    def test_an_unproven_bound_is_kept(self):
+        """More search may still bring it down; discarding it loses a candidate."""
+        sk = self._sk(minimum_exception_proven=False, minimum_exception_count=1,
+                      minimum_exception_upper_bound=1)
+        self.assertFalse(E.skeleton_exceeds_exception_cap(self.parsed, sk))
+
+    def test_a_proven_zero_is_kept(self):
+        sk = self._sk(minimum_exception_proven=True, minimum_exception_count=0)
+        self.assertFalse(E.skeleton_exceeds_exception_cap(self.parsed, sk))
+
+    def test_a_missing_count_is_kept(self):
+        sk = self._sk(minimum_exception_proven=True)
+        self.assertFalse(E.skeleton_exceeds_exception_cap(self.parsed, sk))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

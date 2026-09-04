@@ -9953,6 +9953,50 @@ def ensure_before_break_metrics(parsed: ParsedInput, skeleton: SkeletonSolution)
     return metrics
 
 
+def skeleton_exceeds_exception_cap(parsed: ParsedInput, skeleton: SkeletonSolution) -> bool:
+    """True when this skeleton PROVABLY cannot ship under the workbook's policy.
+
+    A skeleton whose minimum no-break exception count is proven above the
+    workbook cap can never become a production schedule: Stage 2 skips every
+    attempt on it with SKIPPED_PROVEN_MINIMUM_EXCEPTION_POSITIVE. Only a proven
+    bound counts - an unproven upper bound may still come down with more
+    search, and excluding it would discard a candidate that is merely
+    unmeasured rather than impossible.
+    """
+    if not skeleton.diagnostics.get("minimum_exception_proven"):
+        return False
+    minimum = skeleton.diagnostics.get("minimum_exception_count")
+    if not isinstance(minimum, int):
+        return False
+    return minimum > operational_no_break_exception_cap(parsed)
+
+
+def select_best_shippable_before_skeleton(
+    parsed: ParsedInput, skeletons: Sequence[SkeletonSolution]
+) -> Optional[SkeletonSolution]:
+    """The strongest before-break skeleton that could actually be delivered.
+
+    `select_best_before_skeleton` answers "what did Stage 1 find", which is the
+    right question for seeding Stage 2. It is the wrong benchmark for retention:
+    on NMG EN+SP it returned a 206-interval skeleton proven to need one no-break
+    exception against a workbook cap of zero, so the reported
+    `skeleton_retention_loss` was 206 - 188 = 18 against a candidate that can
+    never ship. The best shippable skeleton was 192, making the real retention
+    loss 4. A gate that fails on the larger number fails for a reason that does
+    not exist.
+
+    Returns None when nothing is shippable, so the caller can say so rather
+    than substitute a number.
+    """
+    shippable = [sk for sk in skeletons if not skeleton_exceeds_exception_cap(parsed, sk)]
+    if not shippable:
+        return None
+    try:
+        return select_best_before_skeleton(parsed, shippable)
+    except ValueError:
+        return None
+
+
 def select_best_before_skeleton(parsed: ParsedInput, skeletons: Sequence[SkeletonSolution]) -> SkeletonSolution:
     """Select the independent hard-clean pre-break winner by workbook target."""
     valid: List[SkeletonSolution] = []
@@ -17310,6 +17354,8 @@ def run_case(
         successful_skeletons = dedupe_skeletons(successful_skeletons + repair_skeletons)
         # Select the independent global champion before any runtime-oriented truncation.
         best_before_skeleton = select_best_before_skeleton(parsed, successful_skeletons)
+        best_shippable_before_skeleton = select_best_shippable_before_skeleton(
+            parsed, successful_skeletons)
         successful_skeletons.sort(key=lambda sk: skeleton_breakability_priority_key(parsed, sk))
         retained_top = successful_skeletons[:10]
         if all(skeleton_fingerprint(sk) != skeleton_fingerprint(best_before_skeleton) for sk in retained_top):
@@ -19075,6 +19121,24 @@ def run_case(
             "best_before_skeleton_profile": best_before_skeleton.profile,
             "best_before_target": best_before_skeleton.diagnostics.get("no_break_metrics", {}).get("before_target", 0),
             "best_before_floor": best_before_skeleton.diagnostics.get("no_break_metrics", {}).get("before_floor", 0),
+            # Retention must be measured against a candidate that could actually
+            # be delivered. best_before_* answers "what did Stage 1 find" and can
+            # name a skeleton proven to need more no-break exceptions than the
+            # workbook permits - one that Stage 2 skips on every attempt. On
+            # NMG EN+SP that made the reported retention loss 18 (206 -> 188)
+            # against a skeleton that can never ship; the real loss was 4.
+            "best_shippable_before_skeleton_profile": (
+                best_shippable_before_skeleton.profile
+                if best_shippable_before_skeleton is not None else ""
+            ),
+            "best_shippable_before_target": (
+                best_shippable_before_skeleton.diagnostics.get("no_break_metrics", {}).get("before_target", 0)
+                if best_shippable_before_skeleton is not None else ""
+            ),
+            "best_shippable_before_floor": (
+                best_shippable_before_skeleton.diagnostics.get("no_break_metrics", {}).get("before_floor", 0)
+                if best_shippable_before_skeleton is not None else ""
+            ),
             "before_target": chosen_breaks.metrics.get("before_target", 0), "after_target": chosen_breaks.metrics.get("after_target", 0),
             "before_floor": chosen_breaks.metrics.get("before_floor", 0), "after_floor": chosen_breaks.metrics.get("after_floor", 0),
             "before100": chosen_breaks.metrics.get("before_100", 0), "before90": chosen_breaks.metrics.get("before_90", 0), "before80": chosen_breaks.metrics.get("before_80", 0),

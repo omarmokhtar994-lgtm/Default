@@ -380,7 +380,16 @@ def evaluate(case: Path, baseline: dict | None = None) -> dict:
     # Skeleton retention: the best before-break skeleton found versus the one
     # actually carried into the winning after-break pair. A large gap means the
     # strongest skeleton had no production break solution.
-    best_before = num(summary.get("global_best_before_target") or summary.get("best_before_target"))
+    # Retention is measured against the best SHIPPABLE skeleton. The raw
+    # best_before_target can name a candidate proven to need more no-break
+    # exceptions than the workbook permits, which Stage 2 skips on every
+    # attempt - on NMG EN+SP that reported a retention loss of 18 (206 -> 188)
+    # against a schedule that could never be delivered, and failed gate 4 on it.
+    # The real loss against the best deliverable skeleton was 4.
+    shippable = num(summary.get("best_shippable_before_target"))
+    best_before = shippable or num(
+        summary.get("global_best_before_target") or summary.get("best_before_target"))
+    retention_basis = "best shippable skeleton" if shippable else "best skeleton found"
     final_before = num(summary.get("before_target"))
     retention_loss = max(0.0, best_before - final_before) if best_before else 0.0
 
@@ -420,7 +429,8 @@ def evaluate(case: Path, baseline: dict | None = None) -> dict:
                      f"protected_benchmark={protected or 'not reported'}"
                      + ("; no protected minimum was configured, so the protected "
                         "tier was never checked" if protected_unknown else "")
-                     + (f", skeleton retention -{retention_loss:.0f} ({best_before:.0f} -> {final_before:.0f})"
+                     + (f", skeleton retention -{retention_loss:.0f} ({best_before:.0f} -> {final_before:.0f}"
+                        f", basis: {retention_basis})"
                         if retention_loss else ""))
 
     # Gates 2 and 9 both mean "not materially worse than RC9.1" and are decided

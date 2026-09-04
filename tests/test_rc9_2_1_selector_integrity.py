@@ -815,9 +815,22 @@ class HeadcountNeededForBreaksIsMeasuredNotAggregated(unittest.TestCase):
         self.assertLess(early, binding, "the pre-break measurement must not need Stage 2")
         self.assertLess(binding, late, "the final measurement must follow the selection")
 
-    def test_a_skeleton_only_run_still_gets_an_answer(self):
-        """BEFORE_BREAKS_ONLY never reaches the Stage-2 selection, and the
-        capacity answer is exactly what that mode is run to find out."""
+    def test_a_skeleton_only_run_gets_the_answer_before_it_returns(self):
+        """BEFORE_BREAKS_ONLY exists to answer whether a roster is worth taking
+        to Stage 2, and it returns long before the Stage-2 measurement runs.
+        Pinning only that the call exists would have missed exactly that: the
+        first wiring put the measurement after the branch had already returned.
+        """
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        branch = source.index("        if skeleton_only:\n            hard_clean_skeletons")
+        measure = source.index('measured_on="before_breaks_only_export"')
+        summary = source.index('"break_capacity_status": break_capacity["status"],', branch)
+        ret = source.index("            return 0\n", branch)
+        self.assertLess(branch, measure, "measured inside the skeleton-only branch")
+        self.assertLess(measure, summary, "and before its summary row is written")
+        self.assertLess(summary, ret, "and before the branch returns")
+
+    def test_the_full_run_measures_on_a_skeleton_that_could_actually_ship(self):
         source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
         self.assertIn("best_shippable_before_skeleton or best_before_skeleton", source)
 

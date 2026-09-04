@@ -17097,6 +17097,16 @@ def run_case(
                 return 2
             ranked = sorted(hard_clean_skeletons, key=lambda sk: skeleton_quality_key(parsed, sk))
             best_before_skeleton = ranked[0]
+            # BEFORE_BREAKS_ONLY exists to answer "is this roster worth taking to
+            # Stage 2". "Can it cover the contract and still take its breaks" is
+            # that question, so it has to be answered here - this branch returns
+            # long before the Stage-2 measurement runs.
+            break_capacity = break_capacity_headcount_requirement(
+                parsed, best_before_skeleton, measured_on="before_breaks_only_export")
+            audit["break_capacity_headcount"] = break_capacity
+            if break_capacity["break_capacity_deficit"]:
+                print(f"BREAK_CAPACITY_SHORT before-breaks-only {break_capacity['headline']}",
+                      file=log, flush=True)
             leaderboard_rows = before_break_leaderboard_rows(ranked, best_before_skeleton)
             output_prefix = normalized_output_prefix(output_path)
             before_output_path = output_path.with_name(output_prefix + "_BEST_BEFORE_BREAKS_SCHEDULE" + output_path.suffix)
@@ -17160,6 +17170,12 @@ def run_case(
                 "avoidable_overage_fte_sum": metrics.get("before_avoidable_overage_fte_sum", 0.0),
                 "overage_peak_fte": metrics.get("before_avoidable_overage_peak_fte", 0.0),
                 "overage_stddev_fte": metrics.get("before_avoidable_overage_stddev_fte", 0.0),
+                "break_capacity_status": break_capacity["status"],
+                "break_capacity_deficit_quarters": break_capacity["break_capacity_deficit"],
+                "zero_target_slack_ratio": break_capacity["zero_target_slack_ratio"],
+                "current_headcount": break_capacity["current_headcount"],
+                "headcount_needed_for_breaks": break_capacity["headcount_needed_for_breaks"],
+                "additional_headcount_for_breaks": break_capacity["estimated_additional_headcount_for_breaks"],
                 "output": str(before_output_path),
             }])
             save_skeleton_checkpoint(skeleton_checkpoint_path, run_identity["run_id"], ranked)

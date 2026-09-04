@@ -915,5 +915,52 @@ class TheOutputWorkbookOpensOnAnAnswerNotOnEvidence(unittest.TestCase):
         self.assertIn('["Where to look next",', self.block)
 
 
+class TheBeforeBreakLeaderboardSaysWhichSkeletonCanActuallyTakeItsBreaks(unittest.TestCase):
+    """The leaderboard ranks on coverage, which is right for a mode called
+    "best before breaks" and an incomplete basis for choosing one.
+
+    Measured on NMG13 in BEFORE_BREAKS_ONLY: the top skeleton scored 174
+    before-target and needed five more associates before its breaks could be
+    placed without dropping an interval below target. The skeleton the full run
+    shipped scored 161 and needed none. A planner reading only the coverage
+    column picks the first and finds the staffing gap after committing to it.
+    """
+
+    SOURCE = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+
+    def test_the_rows_carry_the_headcount_the_skeleton_would_need(self):
+        block = self.SOURCE[self.SOURCE.index("def before_break_leaderboard_rows("):]
+        block = block[:block.index("def _protected_tier_counts(")]
+        for field in ("break_capacity_status", "break_capacity_deficit",
+                      "headcount_needed_for_breaks", "additional_headcount_for_breaks"):
+            self.assertIn(f'"{field}":', block)
+
+    def test_the_columns_reach_the_exported_sheet(self):
+        for header in ("Break Capacity Status", "Headcount Needed Including Breaks",
+                       "Additional Headcount Needed"):
+            self.assertIn(f'"{header}"', self.SOURCE)
+
+    def test_the_measurement_is_bounded_to_the_rows_that_are_exported(self):
+        """It walks every quarter-slot of every skeleton handed to it, and the
+        skeleton pool is not bounded."""
+        self.assertIn("if parsed is not None and position < break_capacity_rows:", self.SOURCE)
+        self.assertIn("break_capacity_rows=max(1, int(export_top_skeletons))", self.SOURCE)
+
+    def test_callers_that_pass_no_contract_still_work(self):
+        """Two callers build this leaderboard for failure artifacts; adding a
+        required argument there would turn a reported failure into a crash."""
+        signature = self.SOURCE[self.SOURCE.index("def before_break_leaderboard_rows("):]
+        signature = signature[:signature.index('"""')]
+        self.assertIn("parsed: Optional[ParsedInput] = None", signature)
+        self.assertIn("break_capacity_rows: int = 0", signature)
+
+    def test_an_unmeasured_row_is_blank_not_a_confident_zero(self):
+        """A blank says "not measured". A zero says "needs nobody"."""
+        block = self.SOURCE[self.SOURCE.index("def before_break_leaderboard_rows("):]
+        block = block[:block.index("def _protected_tier_counts(")]
+        self.assertIn('capacity.get("status", "")', block)
+        self.assertIn('capacity.get("break_capacity_deficit", "")', block)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

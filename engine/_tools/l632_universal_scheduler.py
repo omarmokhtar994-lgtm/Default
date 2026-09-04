@@ -9001,11 +9001,29 @@ def hard_floor_failure_rows(parsed: ParsedInput, solution: BreakSolution) -> Lis
 def before_break_leaderboard_rows(
     successful_skeletons: Sequence[SkeletonSolution],
     best_before_skeleton: SkeletonSolution,
+    parsed: Optional[ParsedInput] = None,
+    break_capacity_rows: int = 0,
 ) -> List[Dict[str, Any]]:
-    """Build the canonical leaderboard rows used by success and failure artifacts."""
+    """Build the canonical leaderboard rows used by success and failure artifacts.
+
+    The leaderboard ranks on coverage, which is the right ranking for a mode
+    called "best before breaks" and an incomplete basis for choosing one.
+    Measured on NMG13: the top skeleton scored 174 before-target and needed 5
+    more associates before its breaks could be placed without dropping an
+    interval below target; the skeleton the full run shipped scored 161 and
+    needed none. A planner reading only the coverage column would pick the
+    first and discover the staffing gap after committing to it.
+
+    `break_capacity_rows` bounds the measurement to the rows actually exported,
+    because it walks every quarter-slot of every skeleton it is given.
+    """
     rows: List[Dict[str, Any]] = []
-    for skeleton in successful_skeletons:
+    for position, skeleton in enumerate(successful_skeletons):
         metrics = skeleton.diagnostics.get("no_break_metrics") or {}
+        capacity: Dict[str, Any] = {}
+        if parsed is not None and position < break_capacity_rows:
+            capacity = break_capacity_headcount_requirement(
+                parsed, skeleton, measured_on="before_break_leaderboard")
         rows.append({
             "skeleton_profile": skeleton.profile, "break_profile": "BEFORE_BREAKS_ONLY",
             "objective_mode": "before_breaks_only", "cp_status": skeleton.cp_status,
@@ -9046,6 +9064,11 @@ def before_break_leaderboard_rows(
             "objective": skeleton.objective,
             "selected_role": "BEST_BEFORE_BREAKS" if skeleton is best_before_skeleton else "",
             "selected": "YES" if skeleton is best_before_skeleton else "",
+            "break_capacity_status": capacity.get("status", ""),
+            "break_capacity_deficit": capacity.get("break_capacity_deficit", ""),
+            "headcount_needed_for_breaks": capacity.get("headcount_needed_for_breaks", ""),
+            "additional_headcount_for_breaks": capacity.get(
+                "estimated_additional_headcount_for_breaks", ""),
         })
     return rows
 
@@ -11222,8 +11245,14 @@ def write_output_workbook(
     )
 
     leader_ws = _replace_sheet(wb, "Candidate Leaderboard")
-    headers = ["Skeleton Profile", "Break Profile", "Objective Mode", "CP Status", "Pattern Width", "Exception Count", "After Target", "After Floor", "After Hard Floor", "After100", "After90", "After80", "Before Target", "Before Floor", "Before Hard Floor", "Before100", "Before90", "Before80", "Floor Gaps", "Hard Floor Gaps", "Next Sunday After Target", "Next Sunday After Floor", "Next Sunday Floor Gaps", "Next Sunday Zero Quarters", "Next Sunday Language Gaps", "Next Sunday Opening Gaps", "Next Sunday Blank Staffed Quarters", "Severe Floor Gaps", "Max Floor Run", "Floor Deficit Sum", "Target Deficit Sum", "Target Losses From Breaks", "Floor Losses From Breaks", "Before Target Overage", "After Target Overage", "Before Avoidable Overage", "After Avoidable Overage", "Before Severe Overage", "After Severe Overage", "Before Extreme Overage", "After Extreme Overage", "Objective", "Selected Role", "Selected"]
-    _write_records(leader_ws, headers, [[r.get("skeleton_profile"), r.get("break_profile"), r.get("objective_mode"), r.get("cp_status"), r.get("pattern_width"), r.get("exception_count"), r.get("after_target"), r.get("after_floor"), r.get("after_hard_floor"), r.get("after100"), r.get("after90"), r.get("after80"), r.get("before_target"), r.get("before_floor"), r.get("before_hard_floor"), r.get("before100"), r.get("before90"), r.get("before80"), r.get("floor_gaps"), r.get("hard_floor_gaps"), r.get("next_sunday_after_target"), r.get("next_sunday_after_floor"), r.get("next_sunday_floor_gaps"), r.get("next_sunday_zero_quarters"), r.get("next_sunday_language_gaps"), r.get("next_sunday_opening_gaps"), r.get("next_sunday_blank_staffed_quarters"), r.get("severe_floor_gaps"), r.get("max_floor_run"), r.get("floor_deficit_sum"), r.get("target_deficit_sum"), r.get("target_losses_from_breaks"), r.get("floor_losses_from_breaks"), r.get("before_target_overage_fte_sum"), r.get("after_target_overage_fte_sum"), r.get("before_avoidable_overage_fte_sum"), r.get("after_avoidable_overage_fte_sum"), r.get("before_severe_overage_count"), r.get("after_severe_overage_count"), r.get("before_extreme_overage_count"), r.get("after_extreme_overage_count"), r.get("objective"), r.get("selected_role"), r.get("selected")] for r in candidate_rows])
+    headers = ["Skeleton Profile", "Break Profile", "Objective Mode", "CP Status", "Pattern Width", "Exception Count", "After Target", "After Floor", "After Hard Floor", "After100", "After90", "After80", "Before Target", "Before Floor", "Before Hard Floor", "Before100", "Before90", "Before80", "Floor Gaps", "Hard Floor Gaps", "Next Sunday After Target", "Next Sunday After Floor", "Next Sunday Floor Gaps", "Next Sunday Zero Quarters", "Next Sunday Language Gaps", "Next Sunday Opening Gaps", "Next Sunday Blank Staffed Quarters", "Severe Floor Gaps", "Max Floor Run", "Floor Deficit Sum", "Target Deficit Sum", "Target Losses From Breaks", "Floor Losses From Breaks", "Before Target Overage", "After Target Overage", "Before Avoidable Overage", "After Avoidable Overage", "Before Severe Overage", "After Severe Overage", "Before Extreme Overage", "After Extreme Overage", "Objective", "Selected Role", "Selected",
+               "Break Capacity Status", "Break Quarters With Nowhere To Go",
+               "Headcount Needed Including Breaks", "Additional Headcount Needed"]
+    _write_records(leader_ws, headers, [[r.get("skeleton_profile"), r.get("break_profile"), r.get("objective_mode"), r.get("cp_status"), r.get("pattern_width"), r.get("exception_count"), r.get("after_target"), r.get("after_floor"), r.get("after_hard_floor"), r.get("after100"), r.get("after90"), r.get("after80"), r.get("before_target"), r.get("before_floor"), r.get("before_hard_floor"), r.get("before100"), r.get("before90"), r.get("before80"), r.get("floor_gaps"), r.get("hard_floor_gaps"), r.get("next_sunday_after_target"), r.get("next_sunday_after_floor"), r.get("next_sunday_floor_gaps"), r.get("next_sunday_zero_quarters"), r.get("next_sunday_language_gaps"), r.get("next_sunday_opening_gaps"), r.get("next_sunday_blank_staffed_quarters"), r.get("severe_floor_gaps"), r.get("max_floor_run"), r.get("floor_deficit_sum"), r.get("target_deficit_sum"), r.get("target_losses_from_breaks"), r.get("floor_losses_from_breaks"), r.get("before_target_overage_fte_sum"), r.get("after_target_overage_fte_sum"), r.get("before_avoidable_overage_fte_sum"), r.get("after_avoidable_overage_fte_sum"), r.get("before_severe_overage_count"), r.get("after_severe_overage_count"), r.get("before_extreme_overage_count"), r.get("after_extreme_overage_count"), r.get("objective"), r.get("selected_role"), r.get("selected"),
+                                        r.get("break_capacity_status", ""),
+                                        r.get("break_capacity_deficit", ""),
+                                        r.get("headcount_needed_for_breaks", ""),
+                                        r.get("additional_headcount_for_breaks", "")] for r in candidate_rows])
 
     trade_ws = _replace_sheet(wb, "Target Tradeoff Audit")
     trade_rows = audit.get("target_priority_selection", [])
@@ -17114,7 +17143,9 @@ def run_case(
             if break_capacity["break_capacity_deficit"]:
                 print(f"BREAK_CAPACITY_SHORT before-breaks-only {break_capacity['headline']}",
                       file=log, flush=True)
-            leaderboard_rows = before_break_leaderboard_rows(ranked, best_before_skeleton)
+            leaderboard_rows = before_break_leaderboard_rows(
+                ranked, best_before_skeleton, parsed,
+                break_capacity_rows=max(1, int(export_top_skeletons)))
             output_prefix = normalized_output_prefix(output_path)
             before_output_path = output_path.with_name(output_prefix + "_BEST_BEFORE_BREAKS_SCHEDULE" + output_path.suffix)
             explanation_rows: List[Dict[str, Any]] = []

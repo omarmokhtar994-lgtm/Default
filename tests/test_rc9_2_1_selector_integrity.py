@@ -840,5 +840,55 @@ class HeadcountNeededForBreaksIsMeasuredNotAggregated(unittest.TestCase):
             self.assertIn(f'"{field}":', source, f"{field} must reach the summary row")
 
 
+class TheOutputWorkbookOpensOnAnAnswerNotOnEvidence(unittest.TestCase):
+    """28 audit sheets and a 110-row Production Summary is the right amount of
+    evidence and the wrong amount of reading.
+
+    A planner opening the workbook has to decide one thing - publish this
+    roster or go ask for headcount - and every fact needed for that decision
+    was spread across three sheets and ninety rows of contract metadata. The
+    fix adds a sheet; it removes nothing, because the audit sheets are the
+    reason the schedule can be defended.
+    """
+
+    def setUp(self):
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        start = source.index('_replace_sheet(wb, "Read Me First")')
+        self.block = source[source.index("readme_rows: List[List[Any]] = ["):start + 600]
+        self.source = source
+
+    def test_it_is_the_first_sheet_the_workbook_opens_on(self):
+        self.assertIn("wb.move_sheet(readme_ws, offset=-wb.sheetnames.index(readme_ws.title))",
+                      self.source, "a summary buried at sheet 29 is not a summary")
+        self.assertIn("wb.active = 0", self.source)
+
+    def test_it_answers_the_publish_or_ask_for_headcount_question(self):
+        for label in ("Result", "Coverage at target, after breaks",
+                      "Intervals given up to place breaks",
+                      "Current headcount", "Headcount needed including breaks",
+                      "Intervals below floor", "Associates with no break"):
+            self.assertIn(f'["{label}"', self.block, f"a planner needs {label}")
+
+    def test_it_states_coverage_as_a_share_not_a_bare_count(self):
+        """`after_target 153` means nothing without the denominator."""
+        self.assertIn("f\"{hits} of {active_intervals} ({hits / active_intervals:.0%})\"",
+                      self.source)
+
+    def test_it_does_not_divide_by_zero_on_an_empty_contract(self):
+        self.assertIn("if not active_intervals:", self.source)
+
+    def test_no_audit_sheet_was_removed_to_make_room(self):
+        """Readability must not cost the evidence that defends the schedule."""
+        for sheet in ("Production Summary", "Feasibility Certificate",
+                      "Candidate Leaderboard", "Validation Log",
+                      "Coverage Before Breaks", "FT Wise After Breaks",
+                      "No-Break Exceptions", "Break Spacing Audit"):
+            self.assertIn(f'_replace_sheet(wb, "{sheet}")', self.source,
+                          f"{sheet} must still be written")
+
+    def test_it_points_at_where_the_detail_lives(self):
+        self.assertIn('["Where to look next",', self.block)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

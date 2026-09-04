@@ -11223,6 +11223,58 @@ def write_output_workbook(
     trade_headers = ["Skeleton", "Break Profile", "Objective Mode", "Width", "Target Ratio", "After Target", "After Floor", "After100", "After90", "After80", "Floor Loss vs Best", "Target Gain vs Floor Anchor", "Severe Floor Gaps", "Max Floor Run", "Maximum Floor Deficit", "Tradeoff Cap", "Risk OK", "Accepted"]
     _write_records(trade_ws, trade_headers, [[r.get("skeleton_profile"), r.get("break_profile"), r.get("objective_mode"), r.get("pattern_width"), r.get("target_ratio"), r.get("after_target"), r.get("after_floor"), r.get("after100"), r.get("after90"), r.get("after80"), r.get("floor_loss_vs_best"), r.get("target_gain_vs_floor_anchor"), r.get("severe_floor_gaps"), r.get("max_consecutive_floor_gaps"), r.get("floor_deficit_max"), r.get("tradeoff_cap"), r.get("risk_ok"), r.get("accepted_by_tradeoff_guard")] for r in trade_rows])
 
+    # The workbook carries 28 audit sheets and a ~110-row Production Summary.
+    # That is the right amount of evidence and the wrong amount of reading for
+    # the person deciding whether to publish the roster on Monday. Nothing is
+    # removed - the forensics stay where they were - but the dozen answers a
+    # planner acts on now open first.
+    active_intervals = int(m.get("active_intervals", 0) or 0)
+
+    def _coverage(hits: Any) -> str:
+        hits = int(hits or 0)
+        if not active_intervals:
+            return str(hits)
+        return f"{hits} of {active_intervals} ({hits / active_intervals:.0%})"
+
+    after_target_hits = int(m.get("after_target", 0) or 0)
+    before_target_hits = int(m.get("before_target", 0) or 0)
+    readme_rows: List[List[Any]] = [
+        ["Result", final_status],
+        ["What this workbook is", artifact_type.replace("_", " ").title()],
+        ["Release gate", quality_gate.get("status")],
+        ["Hard validation failures", hard_fail_count],
+        ["", ""],
+        ["Coverage at target, after breaks", _coverage(after_target_hits)],
+        ["Coverage at floor, after breaks", _coverage(m.get("after_floor", 0))],
+        ["Coverage at target, before breaks", _coverage(before_target_hits)],
+        ["Intervals given up to place breaks", max(0, before_target_hits - after_target_hits)],
+        ["", ""],
+    ]
+    if break_capacity:
+        readme_rows += [
+            ["Current headcount", break_capacity.get("current_headcount")],
+            ["Headcount needed including breaks", break_capacity.get("headcount_needed_for_breaks")],
+            ["Additional headcount needed", break_capacity.get("estimated_additional_headcount_for_breaks")],
+            ["Why", break_capacity.get("headline")],
+            ["", ""],
+        ]
+    readme_rows += [
+        ["Intervals below floor", m.get("floor_gap_count", 0)],
+        ["Quarters with nobody staffed", m.get("zero_staffed_active_quarters", 0)],
+        ["Associates with no break", len(solution.no_break_cells)],
+        ["", ""],
+        ["Where to look next",
+         "Coverage Before Breaks and FT Wise After Breaks hold the schedule itself. "
+         "Production Summary holds every metric. Feasibility Certificate holds the "
+         "headcount arithmetic. The remaining sheets are per-rule audit evidence."],
+    ]
+    readme_ws = _replace_sheet(wb, "Read Me First")
+    _write_records(readme_ws, ["Answer", "Value"], readme_rows)
+    readme_ws.column_dimensions["A"].width = 38
+    readme_ws.column_dimensions["B"].width = 110
+    wb.move_sheet(readme_ws, offset=-wb.sheetnames.index(readme_ws.title))
+    wb.active = 0
+
     if getattr(wb, "calculation", None) is None:
         from openpyxl.workbook.properties import CalcProperties
         wb.calculation = CalcProperties(calcMode="auto")

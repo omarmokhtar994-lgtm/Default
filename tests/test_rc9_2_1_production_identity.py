@@ -50,7 +50,7 @@ def case_root(tmp, universal=None, engine_identity=None):
     return root
 
 
-REAL_RELEASE = "L6.3.2.5-RC9.2.1-PROTECTED-TIER-RESIDUAL-BALANCE-RC1"
+REAL_RELEASE = "L6.3.2.6-RC9.2.2-BUDGETED-SEARCH-AND-BREAK-CONCURRENCY-RC1"
 
 
 class PublishedIdentityIsDerivedNotHardcoded(unittest.TestCase):

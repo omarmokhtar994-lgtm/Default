@@ -266,7 +266,7 @@ class ReleaseIdentityIntegrity(unittest.TestCase):
 
     def test_engine_version_is_rc9_2_1(self):
         self.assertEqual(
-            E.VERSION, "L6.3.2.5-RC9.2.1-PROTECTED-TIER-RESIDUAL-BALANCE-RC1")
+            E.VERSION, "L6.3.2.6-RC9.2.2-BUDGETED-SEARCH-AND-BREAK-CONCURRENCY-RC1")
 
 
 class SkeletonOnlyLeaderboardIsAuditable(unittest.TestCase):
@@ -595,6 +595,70 @@ class BreakSearchFundsDepthBeforeWidth(unittest.TestCase):
         self.assertGreater(wide, E.BREAK_MIN_MEANINGFUL_SLICE_SEC,
                            "a large phase must still split, not floor out")
         self.assertLessEqual(wide, 900.0)
+
+
+class BreakConcurrencyPenaltyCanActuallyInfluenceTheSolution(unittest.TestCase):
+    """The guard existed, was measured, was reported - and could not bite.
+
+    In warn mode the excess-concurrency penalty was a fixed 5,000 while break
+    objective `target_miss` weights run from 80,000,000 to 4,800,000,000. The
+    solver would therefore accept roughly 640,000 concurrency violations before
+    they cost as much as one missed target interval.
+
+    NMG EN+SP recorded 18 violations and lost 35 of 252 target intervals to
+    breaks - more than placing breaks blind would have cost (11.1% of a shift
+    is break time; it lost 13.9%). Cricut Voice, on the same engine, absorbed
+    97% of that structural cost. The machinery works; the penalty could not
+    steer it.
+    """
+
+    WEIGHTS = {"target_miss": 3_200_000_000, "floor_miss": 420_000_000}
+
+    def _parsed(self, explicit=None):
+        return SimpleNamespace(break_concurrency_penalty_weight=explicit)
+
+    def test_the_derived_weight_is_commensurate_with_a_missed_target(self):
+        w = E.break_concurrency_weight(self._parsed(), self.WEIGHTS)
+        self.assertGreaterEqual(w, self.WEIGHTS["target_miss"],
+                                "an excess break removes coverage; it must cost "
+                                "what that coverage costs")
+
+    def test_the_old_fixed_default_could_not_bite(self):
+        """Pins the arithmetic that made the guard inert."""
+        self.assertGreater(self.WEIGHTS["target_miss"] // 5000, 100_000,
+                           "5,000 against these weights is not a penalty")
+
+    def test_a_workbook_value_still_wins_outright(self):
+        w = E.break_concurrency_weight(self._parsed(explicit=250), self.WEIGHTS)
+        self.assertEqual(w, 250, "an explicit business setting is authoritative")
+
+    def test_a_workbook_value_is_never_below_one(self):
+        self.assertGreaterEqual(E.break_concurrency_weight(self._parsed(explicit=0), self.WEIGHTS), 1)
+
+    def test_a_weightless_objective_still_gets_a_real_penalty(self):
+        w = E.break_concurrency_weight(self._parsed(), {})
+        self.assertGreaterEqual(w, 5000, "never weaker than the old default")
+
+    def test_floor_led_objectives_scale_on_floor(self):
+        """Some break modes lead on floor_miss, not target_miss."""
+        w = E.break_concurrency_weight(self._parsed(), {"target_miss": 80_000_000,
+                                                        "floor_miss": 4_800_000_000})
+        self.assertEqual(w, 4_800_000_000)
+
+    def test_the_fixed_constant_is_gone_from_the_objective(self):
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        self.assertFalse(
+            'getattr(parsed, "break_concurrency_penalty_weight", 5000) * concurrency_excess' in source,
+            "the objective must not hardcode the inert 5,000 default")
+        self.assertEqual(
+            source.count("break_concurrency_weight(parsed, weights) * concurrency_excess"), 2,
+            "both concurrency penalty sites must use the derived weight")
+
+    def test_fail_mode_is_still_a_hard_constraint(self):
+        """Scaling the penalty must not weaken the enforced path."""
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        self.assertTrue(
+            'add_break_family(model.Add(break_count <= concurrency_cap), "break_concurrency")' in source)
 
 
 if __name__ == "__main__":

@@ -89,7 +89,7 @@ except ModuleNotFoundError:
         reward_from_quality_delta,
     )
 
-VERSION = "L6.3.2.5-RC9.2.1-PROTECTED-TIER-RESIDUAL-BALANCE-RC1"
+VERSION = "L6.3.2.6-RC9.2.2-BUDGETED-SEARCH-AND-BREAK-CONCURRENCY-RC1"
 RC9_1_UNIVERSAL_SEARCH_RECOVERY = True
 RC9_1_BREADTH_FIRST_STAGE2 = True
 RC9_1_EXTENDED_DEEP_FULL_BUDGETS = True
@@ -742,7 +742,7 @@ class ParsedInput:
     break_max_concurrent_ratio: float = 0.30
     break_max_concurrent_absolute: int = 4
     break_concurrency_gate_mode: str = "warn"
-    break_concurrency_penalty_weight: int = 5000
+    break_concurrency_penalty_weight: Optional[int] = None
     next_sunday_balance_enabled: bool = True
     next_sunday_overage_cap_ratio: float = 1.30
     next_sunday_max_adjacent_raw_change: int = 3
@@ -1927,9 +1927,20 @@ def parse_input(
     if break_concurrency_gate_mode not in {"off", "warn", "fail"}:
         break_concurrency_gate_mode = "warn"
         parser_warnings.append("Unknown Break Concurrency Gate Mode; RC7 defaulted it to WARN.")
-    break_concurrency_penalty_weight = max(1, int(round(to_float(_instruction_get(
-        im, ["Break Concurrency Penalty Weight", "Concurrent Break Penalty Weight"], 5000
-    ), 5000))))
+    # A workbook value is authoritative. When none is set the weight is left as
+    # None and derived at solve time from the break objective's own coverage
+    # weights - see break_concurrency_weight(). The old default of 5000 sat
+    # against target_miss weights of 80,000,000 to 4,800,000,000, so the solver
+    # would accept roughly 640,000 concurrency violations before they cost as
+    # much as one missed target interval. The guard was reported and measured
+    # but arithmetically incapable of changing the solution.
+    break_concurrency_penalty_weight_raw = _instruction_get(
+        im, ["Break Concurrency Penalty Weight", "Concurrent Break Penalty Weight"], None
+    )
+    break_concurrency_penalty_weight = (
+        None if break_concurrency_penalty_weight_raw in (None, "")
+        else max(1, int(round(to_float(break_concurrency_penalty_weight_raw, 5000))))
+    )
     next_sunday_balance_enabled = yes(_instruction_get(
         im, ["Next Sunday Balance Enabled", "Week Boundary Balance Enabled"], "Yes"
     ), True)
@@ -2691,6 +2702,30 @@ def previous_saturday_compatible(previous_label: str, sunday_shift: Shift, rest_
     previous_end = -1440 + st + dur
     rest = sunday_shift.start_min - previous_end
     return rest + 1e-9 >= rest_gap_hours * 60
+
+
+def break_concurrency_weight(parsed: ParsedInput, weights: Dict[str, Any]) -> int:
+    """Penalty for one interval of excess concurrent breaks.
+
+    An excess concurrent break removes an agent-quarter from coverage beyond
+    the configured cap, and that is precisely what costs a target interval - so
+    the penalty is scaled to the same order as the objective's own
+    `target_miss` weight rather than to a fixed constant.
+
+    The previous fixed default was 5,000 against target_miss weights of
+    80,000,000 to 4,800,000,000: a ratio of about 1:640,000, so clustering
+    breaks was effectively free. NMG EN+SP recorded 18 concurrency violations
+    and lost more target coverage to breaks than blind placement would have
+    cost.
+
+    A workbook `Break Concurrency Penalty Weight` still wins outright.
+    """
+    explicit = getattr(parsed, "break_concurrency_penalty_weight", None)
+    if explicit is not None:
+        return max(1, int(explicit))
+    target_miss = int(weights.get("target_miss", 0) or 0)
+    floor_miss = int(weights.get("floor_miss", 0) or 0)
+    return max(5_000, target_miss, floor_miss)
 
 
 def maximum_concurrent_breaks(parsed: ParsedInput, staffed_count: int) -> int:
@@ -6200,7 +6235,7 @@ def solve_breaks(
                     elif concurrency_mode == "warn" and not diagnostic_mode:
                         concurrency_excess = model.NewIntVar(0, len(break_vars), f"break_concurrency_excess_{qslot}")
                         model.Add(concurrency_excess >= break_count - concurrency_cap)
-                        objective_terms.append(max(1, getattr(parsed, "break_concurrency_penalty_weight", 5000)) * concurrency_excess)
+                        objective_terms.append(break_concurrency_weight(parsed, weights) * concurrency_excess)
                 after_raw_expr = len(covering) + len(prior) - break_count
                 whole_week_break_after_raw[qslot] = after_raw_expr
                 add_break_family(model.Add(after_raw_expr >= 1), "zero_coverage")
@@ -6368,7 +6403,7 @@ def solve_breaks(
                 elif concurrency_mode == "warn" and not diagnostic_mode:
                     concurrency_excess = model.NewIntVar(0, len(break_vars), f"next_sun_break_concurrency_excess_{qslot}")
                     model.Add(concurrency_excess >= break_count - concurrency_cap)
-                    objective_terms.append(max(1, getattr(parsed, "break_concurrency_penalty_weight", 5000)) * concurrency_excess)
+                    objective_terms.append(break_concurrency_weight(parsed, weights) * concurrency_excess)
             after_raw = len(covering) - break_count
             model.Add(after_raw >= 1)
             model.Add(eff_person * after_raw >= scaled_coverage_threshold(req, parsed.floor_ratio, 1))

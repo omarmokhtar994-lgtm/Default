@@ -11274,18 +11274,41 @@ def write_output_workbook(
 
     after_target_hits = int(m.get("after_target", 0) or 0)
     before_target_hits = int(m.get("before_target", 0) or 0)
-    readme_rows: List[List[Any]] = [
-        ["Result", final_status],
-        ["What this workbook is", artifact_type.replace("_", " ").title()],
-        ["Release gate", quality_gate.get("status")],
-        ["Hard validation failures", hard_fail_count],
-        ["", ""],
-        ["Coverage at target, after breaks", _coverage(after_target_hits)],
-        ["Coverage at floor, after breaks", _coverage(m.get("after_floor", 0))],
-        ["Coverage at target, before breaks", _coverage(before_target_hits)],
-        ["Intervals given up to place breaks", max(0, before_target_hits - after_target_hits)],
-        ["", ""],
-    ]
+    # The before-break artifact runs through this same writer against a
+    # placeholder break solution. Its "after breaks" columns therefore repeat
+    # the before-break numbers and its production quality gate is measured on a
+    # schedule with no breaks in it. Reporting either as if breaks had been
+    # placed - on the first sheet, where it is read first - would state
+    # something untrue about the artifact more prominently than anything else
+    # in the workbook.
+    before_breaks_only = artifact_type == "BEST_BEFORE_BREAKS_SCHEDULE"
+    if before_breaks_only:
+        readme_rows: List[List[Any]] = [
+            ["What this workbook is", "Best before-breaks schedule - breaks are NOT assigned"],
+            ["Use it for", "Reviewing shift and OFF coverage before committing to a break "
+                           "plan. This is not a production schedule."],
+            ["Hard validation failures", hard_fail_count],
+            ["Production quality gate",
+             f"{quality_gate.get('status')} - measured against a schedule with no breaks, "
+             f"so it does not decide this artifact"],
+            ["", ""],
+            ["Coverage at target, before breaks", _coverage(before_target_hits)],
+            ["Coverage at floor, before breaks", _coverage(m.get("before_floor", 0))],
+            ["", ""],
+        ]
+    else:
+        readme_rows = [
+            ["Result", final_status],
+            ["What this workbook is", artifact_type.replace("_", " ").title()],
+            ["Release gate", quality_gate.get("status")],
+            ["Hard validation failures", hard_fail_count],
+            ["", ""],
+            ["Coverage at target, after breaks", _coverage(after_target_hits)],
+            ["Coverage at floor, after breaks", _coverage(m.get("after_floor", 0))],
+            ["Coverage at target, before breaks", _coverage(before_target_hits)],
+            ["Intervals given up to place breaks", max(0, before_target_hits - after_target_hits)],
+            ["", ""],
+        ]
     if break_capacity:
         readme_rows += [
             ["Current headcount", break_capacity.get("current_headcount")],
@@ -11297,7 +11320,10 @@ def write_output_workbook(
     readme_rows += [
         ["Intervals below floor", m.get("floor_gap_count", 0)],
         ["Quarters with nobody staffed", m.get("zero_staffed_active_quarters", 0)],
-        ["Associates with no break", len(solution.no_break_cells)],
+    ]
+    if not before_breaks_only:
+        readme_rows.append(["Associates with no break", len(solution.no_break_cells)])
+    readme_rows += [
         ["", ""],
         ["Where to look next",
          "Coverage Before Breaks and FT Wise After Breaks hold the schedule itself. "

@@ -911,6 +911,32 @@ class TheOutputWorkbookOpensOnAnAnswerNotOnEvidence(unittest.TestCase):
             self.assertIn(f'_replace_sheet(wb, "{sheet}")', self.source,
                           f"{sheet} must still be written")
 
+    def test_the_before_breaks_artifact_does_not_claim_breaks_were_placed(self):
+        """That artifact runs through this same writer against a placeholder
+        break solution, so its "after breaks" columns repeat the before-break
+        numbers and its quality gate is measured on a schedule with no breaks.
+        The first draft printed 'Coverage at target, after breaks 174 of 252',
+        'Intervals given up to place breaks 0' and 'Release gate FAIL' at the
+        top of a workbook whose breaks were never assigned."""
+        head = self.source[self.source.index("before_breaks_only = artifact_type"):
+                           self.source.index('_replace_sheet(wb, "Read Me First")')]
+        branch = head[:head.index("    else:")]
+        self.assertIn("breaks are NOT assigned", branch)
+        self.assertIn("This is not a production schedule.", branch)
+        self.assertIn("Coverage at target, before breaks", branch)
+        self.assertNotIn("after breaks", branch)
+        self.assertNotIn("Intervals given up to place breaks", branch)
+
+    def test_the_gate_result_is_labelled_rather_than_hidden(self):
+        """A failing gate stays visible; what changes is the claim it makes."""
+        self.assertIn("so it does not decide this artifact", self.source)
+        self.assertIn("quality_gate.get('status')", self.source)
+
+    def test_the_no_break_count_is_omitted_where_it_would_read_as_good_news(self):
+        """Zero associates without a break, in a workbook where nobody has one."""
+        self.assertIn('if not before_breaks_only:\n        readme_rows.append(["Associates with no break"',
+                      self.source)
+
     def test_it_points_at_where_the_detail_lives(self):
         self.assertIn('["Where to look next",', self.block)
 

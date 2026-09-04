@@ -356,7 +356,7 @@ def evaluate(case: Path, baseline: dict | None = None) -> dict:
                 + f"; {absolute}; no absolute after-break minimum is configured, "
                 f"so only the break-stage delta was checked - add a "
                 f"'Minimum After Break Target Ratio' row to the workbook's "
-                f"Engine Defaults sheet to hold an absolute standard")
+                f"Instructions (Setup) sheet to hold an absolute standard")
         else:
             gate5 = "PASS"
             gate5_why = (

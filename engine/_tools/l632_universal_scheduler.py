@@ -736,6 +736,8 @@ class ParsedInput:
     protected_before80_minimum: Optional[int] = None
     protected_after80_minimum: Optional[int] = None
     minimum_after_break_target_ratio: Optional[float] = None
+    run_stage: Optional[str] = None
+    run_depth: Optional[str] = None
     allow_back_to_back_breaks: bool = False
     break_max_concurrent_ratio: float = 0.30
     break_max_concurrent_absolute: int = 4
@@ -1637,6 +1639,50 @@ def fallback_break_gap_diagnostics(parsed: ParsedInput, break_rows: Sequence[Dic
         "note": "Runtime fallback validation records exact associate/day gap rows when a fallback is rejected.",
     }
 
+# What the workbook may say, and what it means. Kept deliberately forgiving:
+# these are dropdown values a scheduler types, not machine tokens.
+RUN_STAGE_VALUES = {
+    "before breaks only": "BEFORE_BREAKS_ONLY",
+    "before breaks": "BEFORE_BREAKS_ONLY",
+    "skeleton only": "BEFORE_BREAKS_ONLY",
+    "shifts only": "BEFORE_BREAKS_ONLY",
+    "after breaks": "FULL_SCHEDULE",
+    "full schedule": "FULL_SCHEDULE",
+    "with breaks": "FULL_SCHEDULE",
+    "complete": "FULL_SCHEDULE",
+}
+
+RUN_DEPTH_VALUES = {
+    "quick": "QUICK",
+    "deep": "DEEP",
+    "overnight": "OVERNIGHT",
+    "full": "OVERNIGHT",
+}
+
+# Wall-clock seconds per depth. Quick is a working answer inside an hour; Deep
+# is the design point every quality number in this release is measured at;
+# Overnight is for cases that need more breadth than Deep can fund.
+RUN_DEPTH_SECONDS = {"QUICK": 3600, "DEEP": 14400, "OVERNIGHT": 21600}
+
+
+def normalize_run_stage(raw: Any) -> Optional[str]:
+    """Map a workbook Run Stage cell to a canonical stage, or None if unset.
+
+    An unrecognized value returns None rather than guessing: the caller then
+    falls back to its own default and the run is not silently reinterpreted.
+    """
+    if raw in (None, ""):
+        return None
+    return RUN_STAGE_VALUES.get(str(raw).strip().lower())
+
+
+def normalize_run_depth(raw: Any) -> Optional[str]:
+    """Map a workbook Run Depth cell to a canonical depth, or None if unset."""
+    if raw in (None, ""):
+        return None
+    return RUN_DEPTH_VALUES.get(str(raw).strip().lower())
+
+
 def parse_input(
     path: Path,
     allow_no_break_override: Optional[bool] = None,
@@ -1811,6 +1857,17 @@ def parse_input(
         im, ["Minimum After Break Target Ratio", "Minimum After Break Target Percentage",
              "After Break Target Minimum"], None
     )
+    # How the schedule is produced, stated in the business contract so it can be
+    # a dropdown rather than a command-line flag. Four rows in Engine Defaults
+    # used to LOOK like they controlled this - "RC9.1 Deep Default Seconds",
+    # "RC9.1 Full Default Seconds", "RC9.1 Stage2 Search Order", "RC9.1 Joint
+    # Budget Policy" - and none of them was read by anything. Changing them
+    # changed nothing, which is worse than not offering them.
+    run_stage = normalize_run_stage(_instruction_get(
+        im, ["Run Stage", "Schedule Stage", "Run Type"], None))
+    run_depth = normalize_run_depth(_instruction_get(
+        im, ["Run Depth", "Run Length", "Search Depth"], None))
+
     minimum_after_break_target_ratio = None
     if minimum_after_break_target_ratio_raw not in (None, ""):
         minimum_after_break_target_ratio = to_float(minimum_after_break_target_ratio_raw, 0.0)
@@ -2118,6 +2175,8 @@ def parse_input(
         protected_before80_minimum=protected_before80_minimum,
         protected_after80_minimum=protected_after80_minimum,
         minimum_after_break_target_ratio=minimum_after_break_target_ratio,
+        run_stage=run_stage,
+        run_depth=run_depth,
         quality_benchmark_tolerance=quality_benchmark_tolerance,
         hard_floor_ratio=hard_floor_ratio, hard_floor_tolerance=hard_floor_tolerance,
         hard_floor_source=hard_floor_source, use_11h_3off=use11,

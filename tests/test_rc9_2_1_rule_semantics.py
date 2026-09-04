@@ -560,5 +560,130 @@ class ProtectedTierIsReachableFromTheBusinessContract(unittest.TestCase):
             "the benchmark minimums")
 
 
+class RunStageAndDepthComeFromTheBusinessContract(unittest.TestCase):
+    """Four rows LOOKED like they controlled the run and controlled nothing.
+
+    `Engine Defaults` shipped `RC9.1 Deep Default Seconds`, `RC9.1 Full Default
+    Seconds`, `RC9.1 Stage2 Search Order` and `RC9.1 Joint Budget Policy`. Not
+    one of them is read by any code path - setting Deep Default Seconds to 7200
+    still produced a 14400-second run. Offering a setting that does nothing is
+    worse than not offering it.
+
+    Run Stage and Run Depth replace them with values the engine actually acts
+    on, so a scheduler picks from a dropdown in the contract instead of
+    remembering command-line flags.
+    """
+
+    DEAD_ROWS = ("RC9.1 Deep Default Seconds", "RC9.1 Full Default Seconds",
+                 "RC9.1 Stage2 Search Order", "RC9.1 Joint Budget Policy")
+
+    @staticmethod
+    def _code_only(path):
+        """Source with comment lines removed.
+
+        The first version of this test searched the whole file and matched the
+        comment that documents the finding - the same trap as the stale-literal
+        guard earlier in this audit. Prose about a dead setting is not the
+        engine reading it.
+        """
+        lines = [line for line in path.read_text().splitlines()
+                 if not line.lstrip().startswith("#")]
+        return "\n".join(lines)
+
+    def test_the_four_dead_rows_are_still_dead(self):
+        """Pins the finding. If one ever becomes live, this must be revisited."""
+        code = self._code_only(ROOT / "engine" / "_tools" / "l632_universal_scheduler.py")
+        for dead in self.DEAD_ROWS:
+            with self.subTest(row=dead):
+                self.assertFalse(
+                    dead in code,
+                    f"{dead!r} is now referenced in engine code; it was a row "
+                    f"that looked like a setting and did nothing")
+
+    def test_stage_values_a_scheduler_would_actually_type(self):
+        for text, expected in [
+            ("Before Breaks Only", "BEFORE_BREAKS_ONLY"),
+            ("before breaks", "BEFORE_BREAKS_ONLY"),
+            ("Skeleton Only", "BEFORE_BREAKS_ONLY"),
+            ("shifts only", "BEFORE_BREAKS_ONLY"),
+            ("After Breaks", "FULL_SCHEDULE"),
+            ("Full Schedule", "FULL_SCHEDULE"),
+            ("  With Breaks  ", "FULL_SCHEDULE"),
+        ]:
+            with self.subTest(text=text):
+                self.assertEqual(E.normalize_run_stage(text), expected)
+
+    def test_depth_values_map_to_the_three_offered_lengths(self):
+        for text, expected in [("Quick", "QUICK"), ("deep", "DEEP"),
+                               ("Overnight", "OVERNIGHT"), ("FULL", "OVERNIGHT")]:
+            with self.subTest(text=text):
+                self.assertEqual(E.normalize_run_depth(text), expected)
+
+    def test_an_unset_cell_is_not_a_choice(self):
+        for blank in (None, "", "   "):
+            with self.subTest(blank=repr(blank)):
+                self.assertIsNone(E.normalize_run_stage(blank))
+                self.assertIsNone(E.normalize_run_depth(blank))
+
+    def test_a_typo_falls_back_rather_than_guessing(self):
+        """A misread dropdown must not silently reinterpret the run."""
+        self.assertIsNone(E.normalize_run_stage("Before Break"))
+        self.assertIsNone(E.normalize_run_stage("half breaks"))
+        self.assertIsNone(E.normalize_run_depth("Deeep"))
+        self.assertIsNone(E.normalize_run_depth("overnite"))
+
+    def test_every_depth_has_a_wall_clock_budget(self):
+        for depth in set(E.RUN_DEPTH_VALUES.values()):
+            with self.subTest(depth=depth):
+                self.assertIn(depth, E.RUN_DEPTH_SECONDS)
+                self.assertGreater(E.RUN_DEPTH_SECONDS[depth], 0)
+
+    def test_the_depths_are_ordered_and_deep_is_the_design_point(self):
+        self.assertLess(E.RUN_DEPTH_SECONDS["QUICK"], E.RUN_DEPTH_SECONDS["DEEP"])
+        self.assertLess(E.RUN_DEPTH_SECONDS["DEEP"], E.RUN_DEPTH_SECONDS["OVERNIGHT"])
+        self.assertEqual(E.RUN_DEPTH_SECONDS["DEEP"], 14400,
+                         "every quality number in this release is measured at DEEP")
+
+    def _runner(self):
+        return (ROOT / "engine" / "RUN_UNIVERSAL_PRODUCTION.py").read_text()
+
+    def test_the_runner_takes_them_from_the_workbook_and_lets_the_cli_win(self):
+        runner = self._runner()
+        for fragment in ("contract_stage, contract_depth = _contract_run_settings(input_path)",
+                         "mode = args.mode or contract_depth or 'DEEP'",
+                         "stage = args.stage or contract_stage or 'FULL_SCHEDULE'"):
+            with self.subTest(fragment=fragment):
+                self.assertTrue(fragment in runner, f"missing: {fragment}")
+
+    def test_the_workbook_and_the_flag_feed_one_variable(self):
+        """Two ways to ask for the same run must not diverge downstream.
+
+        `--skeleton-only` already existed with full downstream handling. Adding
+        the workbook route without unifying them left every later guard reading
+        the flag only, so a workbook-driven before-breaks run still tried to
+        polish a break stage that never ran and died on a missing
+        PARETO_EXPORT_MANIFEST.
+        """
+        runner = self._runner()
+        self.assertTrue(
+            "skeleton_only = bool(args.skeleton_only) or stage == 'BEFORE_BREAKS_ONLY'" in runner,
+            "flag and workbook must resolve to one skeleton_only")
+        self.assertFalse(
+            "args.skeleton_only" in runner.split("skeleton_only = bool(args.skeleton_only)")[-1],
+            "no downstream guard may read the raw flag instead of the resolved value")
+
+    def test_the_break_stage_post_processing_is_skipped(self):
+        """Polisher and packager need artifacts only the break stage produces."""
+        runner = self._runner()
+        self.assertEqual(
+            runner.count("not diagnostics_only and not skeleton_only"), 2,
+            "both the polisher and the packager must be gated on skeleton_only")
+
+    def test_a_before_breaks_run_is_validated_against_its_own_output(self):
+        runner = self._runner()
+        self.assertTrue("'*_BEST_BEFORE_BREAKS_SCHEDULE.xlsx'" in runner,
+                        "skeleton-only runs must validate the before-break workbook")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

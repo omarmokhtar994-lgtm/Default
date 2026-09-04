@@ -45,6 +45,24 @@ DEFAULT_SKELETON_PROFILES = (
 DEFAULT_BREAK_OBJECTIVES = "target_priority,release_quality_guard,coverage_rebalance,quality_convergence,floor_protected,balanced,target_100"
 
 
+def _contract_run_settings(input_path):
+    """Read Run Stage and Run Depth from the workbook, or (None, None).
+
+    Never fatal. If the workbook cannot be parsed here the engine will fail on
+    it a moment later with a far better message, and a runner that dies while
+    reading a convenience setting would hide that.
+    """
+    try:
+        sys.path.insert(0, str(ENGINE.parent))
+        import l632_universal_scheduler as engine_module
+        parsed = engine_module.parse_input(Path(input_path))
+        return parsed.run_stage, parsed.run_depth
+    except Exception as exc:
+        print(f'[run] could not read Run Stage/Run Depth from the workbook '
+              f'({type(exc).__name__}); using defaults', flush=True)
+        return None, None
+
+
 def safe_id(value: str) -> str:
     cleaned = ''.join(ch if ch.isalnum() or ch in '_.-' else '_' for ch in str(value or 'schedule'))
     return cleaned.strip('_') or 'schedule'
@@ -84,7 +102,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--input', type=Path, required=False, help='Any supported Universal WFM input workbook (.xlsx)')
     p.add_argument('--output-root', type=Path, default=ROOT / 'results')
     p.add_argument('--schedule-id', help='Optional display/job ID. Defaults to input filename stem.')
-    p.add_argument('--mode', choices=['SMOKE','QUICK','DEEP','FULL'], default='DEEP')
+    p.add_argument('--mode', choices=['SMOKE','QUICK','DEEP','OVERNIGHT','FULL'], default=None,
+                   help='Run depth. Omit to take Run Depth from the workbook, '
+                        'falling back to DEEP. FULL is a legacy alias for OVERNIGHT.')
+    p.add_argument('--stage', choices=['BEFORE_BREAKS_ONLY','FULL_SCHEDULE'], default=None,
+                   help='Omit to take Run Stage from the workbook, falling back '
+                        'to FULL_SCHEDULE. BEFORE_BREAKS_ONLY runs Stage 1 and '
+                        'exports the before-break champion without placing breaks.')
     p.add_argument('--time-limit', type=int, help='Override total solver budget seconds')
     p.add_argument('--num-workers', type=int, default=max(1, min(8, os.cpu_count() or 4)))
     p.add_argument('--pattern-widths', default='24,44,60,115')
@@ -154,16 +178,40 @@ def main() -> int:
     audit = case_root / f'{schedule_id}.l6_3_2_3_solver_audit.json'
     summary = case_root / f'{schedule_id}.l6_3_2_3_summary.csv'
 
-    mode_defaults = {
+    # Run stage and depth come from the workbook unless the command line says
+    # otherwise, so a scheduler picks them from a dropdown in the business
+    # contract instead of remembering flags. An explicit flag always wins.
+    contract_stage, contract_depth = _contract_run_settings(input_path)
+    mode = args.mode or contract_depth or 'DEEP'
+    if mode == 'FULL':
+        mode = 'OVERNIGHT'
+    stage = args.stage or contract_stage or 'FULL_SCHEDULE'
+
+    all_mode_defaults = {
         'SMOKE': {'time_limit': 900, 'joint': 120, 'safe': 120, 'post': 60, 'target': 60, 'final': 60, 'adaptive': 6, 'joint_attempts': 4, 'joint_no_improve': 2},
         'QUICK': {'time_limit': 3600, 'joint': 900, 'safe': 180, 'post': 180, 'target': 180, 'final': 120, 'adaptive': 18, 'joint_attempts': 16, 'joint_no_improve': 6},
-        # RC9.1 production defaults: Deep may use four hours and Full may use six hours.
+        # RC9.1 production defaults: Deep may use four hours and Overnight six.
         # The engine remains workbook-driven; longer time only expands universal search breadth/depth.
         'DEEP': {'time_limit': 14400, 'joint': 5400, 'safe': 360, 'post': 600, 'target': 600, 'final': 240, 'adaptive': 48, 'joint_attempts': 48, 'joint_no_improve': 16},
-        'FULL': {'time_limit': 21600, 'joint': 8400, 'safe': 480, 'post': 900, 'target': 900, 'final': 300, 'adaptive': 72, 'joint_attempts': 72, 'joint_no_improve': 22},
-    }[args.mode]
+        'OVERNIGHT': {'time_limit': 21600, 'joint': 8400, 'safe': 480, 'post': 900, 'target': 900, 'final': 300, 'adaptive': 72, 'joint_attempts': 72, 'joint_no_improve': 22},
+    }
+    mode_defaults = all_mode_defaults[mode]
     time_limit = int(args.time_limit or mode_defaults['time_limit'])
-    diagnostics_only = bool(args.diagnostics_only or args.mode == 'SMOKE')
+    diagnostics_only = bool(args.diagnostics_only or mode == 'SMOKE')
+    # One source of truth. `--skeleton-only` already existed as a flag with full
+    # downstream handling; the workbook's Run Stage is a second way to ask for
+    # the same thing, so both feed one variable. Deriving the stage from the
+    # flag as well keeps the two from disagreeing in the run record.
+    skeleton_only = bool(args.skeleton_only) or stage == 'BEFORE_BREAKS_ONLY'
+    if skeleton_only:
+        stage = 'BEFORE_BREAKS_ONLY'
+    # The engine renames its own output in skeleton-only mode; renaming it here
+    # too produced a doubled ..._BEST_BEFORE_BREAKS_SCHEDULE_BEST_BEFORE_BREAKS
+    # _SCHEDULE.xlsx, so the path stays as-is and the engine decides the name.
+    print(f'[run] stage={stage} depth={mode} time_limit={time_limit}s '
+          f'(stage source: {"cli" if args.stage else ("workbook" if contract_stage else "default")}; '
+          f'depth source: {"cli" if args.mode else ("workbook" if contract_depth else "default")})',
+          flush=True)
 
     command = [
         sys.executable, '-u', str(ENGINE),
@@ -212,7 +260,7 @@ def main() -> int:
         command.append('--allow-headcount-mismatch')
     if diagnostics_only:
         command.append('--diagnostics-only')
-    if args.skeleton_only:
+    if skeleton_only:
         command += ['--skeleton-only', '--export-top-skeletons', str(max(0, args.export_top_skeletons))]
     if args.overwrite:
         command.append('--overwrite')
@@ -224,14 +272,14 @@ def main() -> int:
         'release': RELEASE,
         'created_utc': datetime.now(timezone.utc).isoformat(),
         'schedule_id': schedule_id,
-        'mode': args.mode,
+        'mode': mode, 'stage': stage,
         'input_path': str(input_path),
         'input_sha256': sha256_file(input_path),
         'engine_sha256': sha256_file(ENGINE),
         'case_branching': False,
         'rc9_1_search_recovery': True,
         'rc9_2_protected_balance': True,
-        'skeleton_only': bool(args.skeleton_only),
+        'skeleton_only': bool(skeleton_only),
         'stage2_strategy': 'breadth_first_expand_then_next_skeleton',
         'bundled_regression_fallbacks_enabled': bool(args.enable_bundled_regression_fallbacks),
         'command': command,
@@ -291,7 +339,7 @@ def main() -> int:
     }
     validation_workbook = None
     if not diagnostics_only and engine_rc == 0:
-        if args.skeleton_only:
+        if skeleton_only:
             before_candidates = sorted(case_root.glob('*_BEST_BEFORE_BREAKS_SCHEDULE.xlsx'))
             validation_workbook = before_candidates[0] if before_candidates else None
         else:
@@ -301,7 +349,7 @@ def main() -> int:
                 candidates = sorted(case_root.glob('*_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx'))
                 validation_workbook = candidates[0] if candidates else None
 
-    if not diagnostics_only and not args.skeleton_only and (engine_rc == 0 or hard_valid_artifact(audit)):
+    if not diagnostics_only and not skeleton_only and (engine_rc == 0 or hard_valid_artifact(audit)):
         prc = subprocess.call([sys.executable, '-u', str(POLISHER), '--case-root', str(case_root)])
         if prc != 0:
             return prc
@@ -346,7 +394,7 @@ def main() -> int:
         if not args.skip_independent_validation:
             rc = 4
 
-    if not diagnostics_only and not args.skeleton_only and (engine_rc == 0 or hard_valid_artifact(audit)) and rc != 4:
+    if not diagnostics_only and not skeleton_only and (engine_rc == 0 or hard_valid_artifact(audit)) and rc != 4:
         pkg_rc = subprocess.call([sys.executable, '-u', str(PACKAGER), '--case-root', str(case_root)])
         if pkg_rc != 0:
             return pkg_rc
@@ -355,7 +403,7 @@ def main() -> int:
         'schema_version': 1,
         'release': RELEASE,
         'schedule_id': schedule_id,
-        'mode': args.mode,
+        'mode': mode, 'stage': stage,
         'return_code': rc,
         'engine_return_code': engine_rc,
         'hard_valid_artifact': hard_valid_artifact(audit),

@@ -252,6 +252,7 @@ def cleanup_stale_run_outputs(
         output_path.with_name(prefix + "_RECOMMENDED_FINAL_AFTER_BREAKS_SCHEDULE" + output_path.suffix),
         output_path.with_name(prefix + "_MAX_TARGET_CANDIDATE" + output_path.suffix),
         output_path.with_name(prefix + "_MAX_FLOOR_CANDIDATE" + output_path.suffix),
+        output_path.with_name(prefix + "_BALANCED_CANDIDATE" + output_path.suffix),
         output_path.with_name(prefix + "_SAFER_BALANCED_CANDIDATE" + output_path.suffix),
         output_path.with_name(prefix + "_PARETO_EXPORT_MANIFEST.json"),
         output_path.with_name(output_path.stem + "_CANDIDATE_LEADERBOARD.csv"),
@@ -9848,6 +9849,28 @@ def select_export_candidates(
     recommended = max(safer_options, key=safety_key) if safer_options else recommendation_anchor
     max_floor = max(frontier, key=safety_key)
 
+    # The two ends of the frontier are exported, but not the middle, and the
+    # middle is usually the schedule a planner would actually pick. On
+    # NMG EN+SP the recommended candidate scored after_target 153 / after_floor
+    # 203, MAX_FLOOR scored 130 / 223 - twenty-three target intervals given up
+    # - and a candidate at 150 / 212 with 26% less avoidable overage and five
+    # fewer extreme-overage intervals sat between them, exported nowhere.
+    #
+    # "Balanced" is the greatest total covered intervals across both tiers:
+    # after_target + after_floor. No weighting to argue about, and it is the
+    # knee of the frontier rather than either extreme. On the NMG EN+SP
+    # leaderboard this selects 150/212 (362) over the recommended 153/203 (356)
+    # and MAX_FLOOR's 130/223 (353).
+    def coverage_sum_key(pair: Tuple[SkeletonSolution, BreakSolution]) -> Tuple[Any, ...]:
+        metrics = pair[1].metrics
+        return (
+            int(metrics.get("after_target", 0) or 0) + int(metrics.get("after_floor", 0) or 0),
+            int(metrics.get("after_floor", 0) or 0),
+            -float(metrics.get("after_avoidable_overage_fte_sum", 0.0) or 0.0),
+        )
+
+    balanced = max(frontier, key=coverage_sum_key) if frontier else recommended
+
     exports: List[Tuple[str, Tuple[SkeletonSolution, BreakSolution]]] = [
         ("RECOMMENDED_FINAL", recommended)
     ]
@@ -9857,6 +9880,8 @@ def select_export_candidates(
         exports.append(("MAX_FLOOR_CANDIDATE", max_floor))
     elif max_floor is not recommended and strict is recommended and len(exports) < 3:
         exports.append(("MAX_FLOOR_CANDIDATE", max_floor))
+    if balanced not in (recommended, strict, max_floor):
+        exports.append(("BALANCED_CANDIDATE", balanced))
 
     recommendation_rows = [{
         "role": role,
@@ -10030,6 +10055,16 @@ def select_best_shippable_before_skeleton(
         return select_best_before_skeleton(parsed, shippable)
     except ValueError:
         return None
+
+
+# Every schedule-workbook role the engine can export, in publication order.
+EXPORT_ROLE_ORDER: Tuple[str, ...] = (
+    "BEST_BEFORE_BREAKS",
+    "RECOMMENDED_FINAL",
+    "MAX_TARGET_CANDIDATE",
+    "MAX_FLOOR_CANDIDATE",
+    "BALANCED_CANDIDATE",
+)
 
 
 def select_best_before_skeleton(parsed: ParsedInput, skeletons: Sequence[SkeletonSolution]) -> SkeletonSolution:
@@ -18999,6 +19034,7 @@ def run_case(
             "RECOMMENDED_FINAL": output_path,
             "MAX_TARGET_CANDIDATE": output_path.with_name(prefix + "_MAX_TARGET_CANDIDATE" + output_path.suffix),
             "MAX_FLOOR_CANDIDATE": output_path.with_name(prefix + "_MAX_FLOOR_CANDIDATE" + output_path.suffix),
+            "BALANCED_CANDIDATE": output_path.with_name(prefix + "_BALANCED_CANDIDATE" + output_path.suffix),
         }
         selection_basis = {
             "RECOMMENDED_FINAL": (
@@ -19007,6 +19043,7 @@ def run_case(
             ),
             "MAX_TARGET_CANDIDATE": "Strict maximum attainment at the workbook-configured target after hard gates and minimum exceptions",
             "MAX_FLOOR_CANDIDATE": "Distinct nondominated candidate with the strongest configured floor attainment and safety depth",
+            "BALANCED_CANDIDATE": "Nondominated candidate with the greatest total covered intervals across both tiers (after_target + after_floor) - the knee of the frontier rather than either extreme",
         }
         export_records: List[Dict[str, Any]] = [{
             "role": "BEST_BEFORE_BREAKS", "path": str(before_output_path),
@@ -19019,6 +19056,7 @@ def run_case(
                 "RECOMMENDED_FINAL": "BEST_FINAL_AFTER_BREAKS_SCHEDULE",
                 "MAX_TARGET_CANDIDATE": "MAX_TARGET_CANDIDATE",
                 "MAX_FLOOR_CANDIDATE": "MAX_FLOOR_CANDIDATE",
+                "BALANCED_CANDIDATE": "BALANCED_CANDIDATE",
             }[role]
             role_path = role_paths[role]
             info = write_output_workbook(
@@ -19037,7 +19075,11 @@ def run_case(
         pareto_manifest = output_path.with_name(prefix + "_PARETO_EXPORT_MANIFEST.json")
         export_manifest = {
             "version": VERSION, "run_identity": run_identity,
-            "maximum_schedule_workbooks": 4, "actual_schedule_workbooks": len(export_records),
+            # Was a hardcoded 4 and is now 5 with BALANCED_CANDIDATE. Derive it
+            # from the roles that actually exist so the manifest cannot claim a
+            # cap the engine no longer has.
+            "maximum_schedule_workbooks": len(EXPORT_ROLE_ORDER),
+            "actual_schedule_workbooks": len(export_records),
             "exports": export_records, "candidate_leaderboard_csv": str(leaderboard_csv),
             "selection": selection["recommendation_rows"],
         }

@@ -661,5 +661,59 @@ class BreakConcurrencyPenaltyCanActuallyInfluenceTheSolution(unittest.TestCase):
             'add_break_family(model.Add(break_count <= concurrency_cap), "break_concurrency")' in source)
 
 
+class BalancedCandidateIsExportedNotOnlyTheExtremes(unittest.TestCase):
+    """The frontier's two ends were exported; the knee was not.
+
+    On NMG EN+SP the recommended candidate scored after_target 153 /
+    after_floor 203, MAX_FLOOR scored 130 / 223 - twenty-three target intervals
+    given up - and a candidate at 150 / 212, with 26% less avoidable overage and
+    five fewer extreme-overage intervals, sat between them and was exported
+    nowhere. A planner could not choose it because it was never written out.
+    """
+
+    # The real NMG EN+SP leaderboard, after_target / after_floor / overage.
+    LEADERBOARD = [
+        (153, 203, 29.96), (153, 205, 32.41), (150, 212, 22.07), (150, 211, 22.07),
+        (148, 213, 20.41), (148, 213, 21.20), (143, 214, 22.68), (140, 213, 18.89),
+        (138, 215, 20.88), (136, 217, 20.06), (130, 223, 18.86),
+    ]
+
+    def _key(self, row):
+        at, af, ov = row
+        return (at + af, af, -ov)
+
+    def test_it_selects_the_knee_not_an_end(self):
+        best = max(self.LEADERBOARD, key=self._key)
+        self.assertEqual(best[:2], (150, 212),
+                         "coverage-sum must pick the knee of the real frontier")
+
+    def test_the_knee_beats_both_extremes_on_total_coverage(self):
+        knee = max(self.LEADERBOARD, key=self._key)
+        recommended = self.LEADERBOARD[0]
+        max_floor = min(self.LEADERBOARD, key=lambda r: r[0])
+        self.assertGreater(knee[0] + knee[1], recommended[0] + recommended[1])
+        self.assertGreater(knee[0] + knee[1], max_floor[0] + max_floor[1])
+
+    def test_ties_break_toward_floor_then_lower_overage(self):
+        """148/213 at 20.41 must beat 148/213 at 21.20."""
+        tied = [(148, 213, 21.20), (148, 213, 20.41)]
+        self.assertEqual(max(tied, key=self._key)[2], 20.41)
+
+    def test_the_role_exists_and_is_ordered_last(self):
+        self.assertIn("BALANCED_CANDIDATE", E.EXPORT_ROLE_ORDER)
+        self.assertEqual(E.EXPORT_ROLE_ORDER[-1], "BALANCED_CANDIDATE")
+
+    def test_the_manifest_cap_is_derived_not_hardcoded(self):
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        self.assertFalse('"maximum_schedule_workbooks": 4,' in source,
+                         "the manifest must not claim a cap the engine no longer has")
+        self.assertTrue('"maximum_schedule_workbooks": len(EXPORT_ROLE_ORDER),' in source)
+
+    def test_it_is_not_exported_when_it_duplicates_another_role(self):
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        self.assertTrue("if balanced not in (recommended, strict, max_floor):" in source,
+                        "a duplicate export would just be noise")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

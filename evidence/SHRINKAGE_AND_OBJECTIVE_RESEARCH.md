@@ -3,7 +3,7 @@
 External research against the actual engine code and the real workbooks.
 Scheduling perspective only.
 
-## A. Shrinkage — a real risk, and one question only the business can settle
+## A. Shrinkage — RESOLVED: the engine is correct
 
 ### What the engine does
 
@@ -55,18 +55,46 @@ If Reading B holds for AE, the after-break effective factor should be about
 capacity understated after breaks**, which would inflate every after-break
 target loss the gates are currently failing on.
 
-### Conclusion
+### Conclusion — RESOLVED
 
-**UNRESOLVED, and not resolvable from the artifacts.** The engine is internally
-consistent under Reading A. It is wrong under Reading B. Nothing in the
-workbook states which definition the Shrinkage sheet uses.
+**The business states the Shrinkage sheet is out-of-office, not breaks.** That
+is Reading A. **The engine is correct and there is no double-count.** No change
+is needed, and the after-break losses in the gate reports are real coverage
+losses rather than measurement artifacts.
 
-**The single highest-value question to put to the business:**
-*"Does the Shrinkage sheet include breaks and lunch, or only absence, training
-and meetings?"*
+### The consequence that matters more
 
-No code change is proposed until that is answered. Changing it on the wrong
-reading would corrupt every coverage number in the product.
+Because shrinkage excludes breaks, the requirement gross-up budgets for
+out-of-office but **not** for break time. Break minutes must therefore be
+absorbed out of the same scheduled headcount. Break time is
+`60 min / 540 min = 11.1%` of a shift, so **about 11% of coverage is
+structurally at risk in every scenario**, and avoiding it is precisely the break
+stage's job — place breaks in troughs, stagger them, keep them off peaks.
+
+Measuring how much of that structural cost each run actually avoided:
+
+| Scenario | structural break cost | actual target loss | **absorbed by break placement** |
+|---|---|---|---|
+| CRICUT_VOICE | 11.1% | 1 / 264 = 0.4% | **97%** |
+| AE_AR_B2B | 11.1% | 6 / 168 = 3.6% | **68%** |
+| CRICUT_CHAT | 11.1% | 26 / 242 = 10.7% | **3%** |
+| NMG_EN_SP | 11.1% | 35 / 252 = 13.9% | **−25%** |
+
+This is the clearest quality signal in the whole batch.
+
+* Cricut Voice absorbs **97%** — the break stage is capable of doing this job
+  nearly perfectly on a real workbook.
+* Cricut Chat absorbs **3%** — break placement achieves essentially nothing.
+* NMG EN+SP is **−25%**: the loss is *larger* than placing breaks blind would
+  cost. Break placement is actively harming coverage there.
+
+Because Voice proves the machinery works, Chat and NMG EN+SP are **not** a
+capacity limit and **not** a measurement error. They are a break-placement
+failure on those two workbooks.
+
+NMG EN+SP also recorded **18 break-concurrency violations** — breaks clustering
+rather than staggering, which is exactly the "lunch problem" the industry
+literature names, and exactly what would produce a worse-than-blind result.
 
 ## B. Objective design — the selector behaviour is textbook, which is the problem
 
@@ -125,9 +153,14 @@ alongside its 35-interval target loss, so the guard is measuring the right
 thing but is configured as a **warn**, not a constraint
 (`Break Concurrency Gate Mode = Warn`).
 
-**That is a candidate P1**: on the scenario with the worst break damage, the
-concurrency rule that exists to prevent exactly this damage is not enforced.
-Cheap to test — flip the mode on NMG EN+SP alone and compare.
+**This is now the leading P1.** On the one scenario whose break placement is
+worse than blind (−25% absorbed), the concurrency rule that exists to prevent
+break clustering is set to warn rather than enforced, and it recorded 18
+violations. The mechanism, the measurement and the disabled guard all agree.
+
+Cheap to test: set `Break Concurrency Gate Mode` to fail on NMG EN+SP alone and
+compare absorbed-cost against the 24.6%-shrinkage baseline. No engine change
+required to run the experiment — it is a workbook cell.
 
 ## D. Where RC9.2.1 stands against common practice
 

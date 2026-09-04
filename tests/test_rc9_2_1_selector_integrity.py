@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import sys
 import unittest
+import unittest.mock
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -713,6 +714,130 @@ class BalancedCandidateIsExportedNotOnlyTheExtremes(unittest.TestCase):
         source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
         self.assertTrue("if balanced not in (recommended, strict, max_floor):" in source,
                         "a duplicate export would just be noise")
+
+
+class HeadcountNeededForBreaksIsMeasuredNotAggregated(unittest.TestCase):
+    """`capacity_diagnostics` answers a different question than the planner asks.
+
+    Its aggregate estimate is a necessary condition, not a sufficient one: a
+    roster can hold enough weekly productive hours and still have nowhere to
+    put a break, because coverage has a shape. On NMG EN+SP the aggregate said
+    "+2 associates" while the shipped schedule finished 99 target intervals
+    short; on Cricut Chat it said "+1" against 69 short. These pin the
+    shape-aware measurement that replaces that answer in the summary.
+    """
+
+    BREAK_Q = 4  # one 60-minute break per shift, 15-minute quarters
+
+    def _parsed(self, headcount=10, shrinkage=0.0, per_day_intervals=1,
+                concurrent_absolute=99):
+        return SimpleNamespace(
+            qslots_per_interval=1,
+            intervals_per_day=per_day_intervals,
+            active=[[True] * per_day_intervals for _ in range(7)],
+            requirements=[[10.0] * per_day_intervals for _ in range(7)],
+            shrinkage=[[shrinkage] * per_day_intervals for _ in range(7)],
+            target_ratio=1.0,
+            break_segments_q=[(self.BREAK_Q, None)],
+            break_max_concurrent_ratio=1.0,
+            break_max_concurrent_absolute=concurrent_absolute,
+            associates=[object()] * headcount,
+            shifts=[SimpleNamespace(duration_q=36)],
+        )
+
+    def _measure(self, parsed, staffed, worked_days):
+        """Run the metric with coverage pinned to a flat `staffed` count."""
+        skeleton = SimpleNamespace(
+            assignment=[["SHIFT"] * 1 for _ in range(worked_days)])
+        with unittest.mock.patch.object(
+            E, "scheduled_covering_qslot", lambda *a, **k: [None] * staffed
+        ), unittest.mock.patch.object(
+            E, "prior_covering_associates", lambda *a, **k: []
+        ):
+            return E.break_capacity_headcount_requirement(parsed, skeleton)
+
+    def test_a_schedule_with_slack_everywhere_needs_no_extra_headcount(self):
+        out = self._measure(self._parsed(), staffed=20, worked_days=5)
+        self.assertEqual(out["break_capacity_deficit"], 0)
+        self.assertEqual(out["status"], "BREAK_CAPACITY_SUFFICIENT")
+        self.assertEqual(out["estimated_additional_headcount_for_breaks"], 0)
+        self.assertEqual(out["headcount_needed_for_breaks"], out["current_headcount"])
+
+    def test_a_schedule_pinned_at_target_can_place_no_break_losslessly(self):
+        """The NMG EN+SP shape: staffed == requirement in every slot."""
+        out = self._measure(self._parsed(), staffed=10, worked_days=5)
+        self.assertEqual(out["lossless_break_capacity"], 0)
+        self.assertEqual(out["zero_target_slack_ratio"], 1.0)
+        self.assertEqual(out["break_capacity_deficit"], 5 * self.BREAK_Q)
+        self.assertEqual(out["status"], "BREAK_CAPACITY_SHORT")
+        self.assertGreater(out["estimated_additional_headcount_for_breaks"], 0)
+
+    def test_the_concurrency_cap_bounds_capacity_not_the_raw_slack(self):
+        """Ten spare bodies do not mean ten people may break at once."""
+        capped = self._measure(
+            self._parsed(concurrent_absolute=2), staffed=20, worked_days=5)
+        self.assertEqual(capped["lossless_break_capacity"], 2 * 7,
+                         "seven active slots, two lossless breaks each")
+
+    def test_shrinkage_grosses_the_requirement_up_before_slack_is_taken(self):
+        """Shrinkage is out-of-office time, so it raises what must be staffed."""
+        out = self._measure(self._parsed(shrinkage=0.5), staffed=15, worked_days=5)
+        self.assertEqual(out["zero_target_slack_ratio"], 1.0,
+                         "10 required at 50% shrinkage needs 20 staffed, not 10")
+
+    def test_the_needed_headcount_is_the_current_plus_the_shortfall(self):
+        out = self._measure(self._parsed(headcount=10), staffed=10, worked_days=5)
+        self.assertEqual(out["current_headcount"], 10)
+        self.assertEqual(
+            out["headcount_needed_for_breaks"],
+            out["current_headcount"] + out["estimated_additional_headcount_for_breaks"])
+
+    def test_the_estimate_is_published_as_a_lower_bound(self):
+        """Each added associate is assumed to land on the binding slots, which
+        is optimistic. Reporting it as exact would send a planner to their
+        finance partner with a number that cannot be defended."""
+        out = self._measure(self._parsed(), staffed=10, worked_days=5)
+        self.assertIn("lower bound", out["estimate_basis"])
+        self.assertIn("lower bound", out["headline"])
+
+    def test_the_headline_names_the_headcount_a_planner_has_to_act_on(self):
+        out = self._measure(self._parsed(headcount=10), staffed=10, worked_days=5)
+        total = out["headcount_needed_for_breaks"]
+        self.assertIn(str(total), out["headline"])
+
+    def test_it_is_measured_on_a_skeleton_that_exists_at_the_call_site(self):
+        """The first wiring called it with `chosen_skeleton` in the Stage-1
+        region, where that name is not bound until Stage 2 has selected."""
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        early = source.index("measured_on=\"best_shippable_before_breaks\"")
+        binding = source.index("chosen_skeleton, chosen_breaks = selection[\"recommended\"]")
+        late = source.index("measured_on=\"recommended_final_skeleton\"")
+        self.assertLess(early, binding, "the pre-break measurement must not need Stage 2")
+        self.assertLess(binding, late, "the final measurement must follow the selection")
+
+    def test_a_skeleton_only_run_still_gets_an_answer(self):
+        """BEFORE_BREAKS_ONLY never reaches the Stage-2 selection, and the
+        capacity answer is exactly what that mode is run to find out."""
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        self.assertIn("best_shippable_before_skeleton or best_before_skeleton", source)
+
+    def test_the_planner_sees_it_in_the_workbook_not_only_the_summary_csv(self):
+        """A planner asking finance for headcount reads the Feasibility
+        Certificate, not the run summary CSV."""
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        certificate = source[source.index('_replace_sheet(wb, "Feasibility Certificate")'):]
+        certificate = certificate[:certificate.index("leader_ws = ")]
+        for label in ("Current Headcount", "Headcount Needed Including Breaks",
+                      "Additional Headcount Needed For Breaks", "Headcount Verdict"):
+            self.assertIn(f'["{label}"', certificate,
+                          f"the certificate must state {label}")
+
+    def test_the_summary_publishes_the_headcount_fields(self):
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        for field in ("current_headcount", "headcount_needed_for_breaks",
+                      "additional_headcount_for_breaks", "break_capacity_status",
+                      "zero_target_slack_ratio"):
+            self.assertIn(f'"{field}":', source, f"{field} must reach the summary row")
 
 
 if __name__ == "__main__":

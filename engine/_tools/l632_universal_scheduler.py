@@ -10067,6 +10067,89 @@ EXPORT_ROLE_ORDER: Tuple[str, ...] = (
 )
 
 
+def break_capacity_headcount_requirement(
+    parsed: ParsedInput, skeleton: SkeletonSolution, measured_on: str = "skeleton"
+) -> Dict[str, Any]:
+    """How much headcount the schedule needs for breaks to have somewhere to go.
+
+    `capacity_diagnostics` already answers "are there enough productive hours in
+    the week", and it subtracts break hours correctly. That is an AGGREGATE
+    bound, and it is necessary but not sufficient: a roster can hold enough
+    total hours and still be unable to place breaks, because coverage has a
+    shape and breaks have to land somewhere the interval can spare a body.
+
+    Measured on real runs, the difference is large. NMG EN+SP's aggregate
+    estimate was +2 associates while the shipped schedule finished 99 target
+    intervals short, because 396 of its 504 quarter-slots ran at exactly target
+    with no spare body and 228 break-quarters had nowhere lossless to go.
+
+    This measures that directly, from the schedule the engine actually built:
+    per quarter-slot, how many people can step off without dropping the
+    interval below target (bounded by the concurrency cap), summed, against the
+    break-quarters that must be placed.
+
+    The headcount figure is a LOWER bound. It assumes each added associate's
+    shift lands where the binding slots are, which is optimistic; the real
+    requirement is at least this and possibly more.
+    """
+    qpi = parsed.qslots_per_interval
+    active_q = zero_slack_q = 0
+    lossless_capacity = 0
+    for d in range(7):
+        for i in range(parsed.intervals_per_day):
+            if not parsed.active[d][i]:
+                continue
+            req = float(parsed.requirements[d][i] or 0.0)
+            eff = max(1e-9, 1.0 - float(parsed.shrinkage[d][i] or 0.0))
+            need = math.ceil(req * parsed.target_ratio / eff - 1e-9) if req > 0 else 0
+            for q in range(qpi):
+                qslot = d * 96 + i * qpi + q
+                staffed = (len(scheduled_covering_qslot(parsed, skeleton, qslot))
+                           + len(prior_covering_associates(parsed, qslot)))
+                active_q += 1
+                slack = max(0, staffed - need)
+                if slack == 0:
+                    zero_slack_q += 1
+                lossless_capacity += min(slack, maximum_concurrent_breaks(parsed, staffed))
+
+    break_q_per_shift = sum(count for count, _ in parsed.break_segments_q)
+    worked_days = sum(1 for row in skeleton.assignment for value in row if value != "OFF")
+    break_demand = worked_days * break_q_per_shift
+    deficit = max(0, break_demand - lossless_capacity)
+
+    durations = sorted({shift.duration_q for shift in parsed.shifts}) or [0]
+    typical_shift_q = durations[len(durations) // 2]
+    # Net lossless capacity one more associate contributes: the quarters their
+    # shift covers, less the break quarters they themselves consume.
+    net_per_associate = max(1, typical_shift_q - break_q_per_shift)
+    additional_hc = int(math.ceil(deficit / net_per_associate)) if deficit else 0
+
+    return {
+        "measured_on": measured_on,
+        "active_quarter_slots": active_q,
+        "zero_target_slack_quarter_slots": zero_slack_q,
+        "zero_target_slack_ratio": round(zero_slack_q / active_q, 4) if active_q else 0.0,
+        "break_quarters_required": break_demand,
+        "lossless_break_capacity": lossless_capacity,
+        "break_capacity_deficit": deficit,
+        "current_headcount": len(parsed.associates),
+        "estimated_additional_headcount_for_breaks": additional_hc,
+        "headcount_needed_for_breaks": len(parsed.associates) + additional_hc,
+        "estimate_basis": "lower bound; assumes each added associate covers the binding intervals",
+        "status": "BREAK_CAPACITY_SUFFICIENT" if deficit == 0 else "BREAK_CAPACITY_SHORT",
+        "headline": (
+            f"Breaks fit: {lossless_capacity} lossless slots for "
+            f"{break_demand} break-quarters."
+            if deficit == 0 else
+            f"Headcount {len(parsed.associates)} cannot cover the contract and take breaks. "
+            f"{break_demand} break-quarters must be placed but only {lossless_capacity} "
+            f"can be taken without dropping an interval below target, leaving {deficit} "
+            f"with nowhere to go. About {additional_hc} more associate(s) would be needed "
+            f"(total {len(parsed.associates) + additional_hc}); this is a lower bound."
+        ),
+    }
+
+
 def select_best_before_skeleton(parsed: ParsedInput, skeletons: Sequence[SkeletonSolution]) -> SkeletonSolution:
     """Select the independent hard-clean pre-break winner by workbook target."""
     valid: List[SkeletonSolution] = []
@@ -11109,9 +11192,25 @@ def write_output_workbook(
         or [["", 0, "PASS", 0, 0, 0, 0, 0, 0, 0, 0, 1.0]],
     )
     feasibility_ws = _replace_sheet(wb, "Feasibility Certificate")
+    # The aggregate rows below answer "are there enough productive hours in the
+    # week". The break-capacity rows answer the question a planner actually
+    # asks - "can this headcount cover the contract AND take its breaks" - which
+    # the aggregate has been measured to under-report badly (NMG EN+SP: +2
+    # aggregate against a schedule 99 target intervals short).
+    break_capacity = audit.get("break_capacity_headcount") or {}
+    headcount_rows = [
+        ["Current Headcount", break_capacity.get("current_headcount")],
+        ["Headcount Needed Including Breaks", break_capacity.get("headcount_needed_for_breaks")],
+        ["Additional Headcount Needed For Breaks", break_capacity.get("estimated_additional_headcount_for_breaks")],
+        ["Break Capacity Status", break_capacity.get("status")],
+        ["Quarter Slots With No Spare Body", break_capacity.get("zero_target_slack_quarter_slots")],
+        ["Break Quarters With Nowhere To Go", break_capacity.get("break_capacity_deficit")],
+        ["Headcount Verdict", break_capacity.get("headline")],
+    ] if break_capacity else []
     _write_records(
         feasibility_ws,
         ["Metric", "Value"],
+        headcount_rows +
         [["Status", capacity.get("status")], ["Target Attainability", capacity.get("target_attainability_status")], ["Floor Attainability", capacity.get("floor_attainability_status")], ["Productive Hours Available", capacity.get("productive_hours_available")], ["Target Hours Lower Bound", capacity.get("target_hours_lower_bound")], ["Floor Hours Lower Bound", capacity.get("floor_hours_lower_bound")], ["Estimated Additional HC For Target", capacity.get("estimated_additional_hc_for_aggregate_target")], ["Estimated Additional HC For Floor", capacity.get("estimated_additional_hc_for_aggregate_floor")], ["Maximum Achievable Target Intervals Upper Bound", capacity.get("maximum_achievable_target_intervals_upper_bound")], ["Maximum Achievable Floor Intervals Upper Bound", capacity.get("maximum_achievable_floor_intervals_upper_bound")]],
     )
 
@@ -17426,6 +17525,18 @@ def run_case(
         best_before_skeleton = select_best_before_skeleton(parsed, successful_skeletons)
         best_shippable_before_skeleton = select_best_shippable_before_skeleton(
             parsed, successful_skeletons)
+        # Measured on the best skeleton that could actually ship, so a
+        # skeleton-only run still gets the answer. Recomputed below on the
+        # recommended final skeleton once Stage 2 has chosen one.
+        break_capacity = break_capacity_headcount_requirement(
+            parsed,
+            best_shippable_before_skeleton or best_before_skeleton,
+            measured_on="best_shippable_before_breaks",
+        )
+        audit["break_capacity_headcount"] = break_capacity
+        if break_capacity["break_capacity_deficit"]:
+            print(f"BREAK_CAPACITY_SHORT before-breaks {break_capacity['headline']}",
+                  file=log, flush=True)
         successful_skeletons.sort(key=lambda sk: skeleton_breakability_priority_key(parsed, sk))
         retained_top = successful_skeletons[:10]
         if all(skeleton_fingerprint(sk) != skeleton_fingerprint(best_before_skeleton) for sk in retained_top):
@@ -18894,6 +19005,12 @@ def run_case(
             ),
         )
         chosen_skeleton, chosen_breaks = selection["recommended"]
+        break_capacity = break_capacity_headcount_requirement(
+            parsed, chosen_skeleton, measured_on="recommended_final_skeleton")
+        audit["break_capacity_headcount"] = break_capacity
+        if break_capacity["break_capacity_deficit"]:
+            print(f"BREAK_CAPACITY_SHORT final {break_capacity['headline']}",
+                  file=log, flush=True)
         strict_skeleton, strict_breaks = selection["strict"]
         tradeoff_rows = selection["tradeoff_rows"]
         audit["target_priority_selection"] = tradeoff_rows
@@ -19204,6 +19321,15 @@ def run_case(
             # workbook permits - one that Stage 2 skips on every attempt. On
             # NMG EN+SP that made the reported retention loss 18 (206 -> 188)
             # against a skeleton that can never ship; the real loss was 4.
+            # Aggregate hours are necessary but not sufficient: a roster can hold
+            # enough total hours and still be unable to place breaks. This is the
+            # distributional answer, measured on the schedule actually built.
+            "break_capacity_status": break_capacity["status"],
+            "break_capacity_deficit_quarters": break_capacity["break_capacity_deficit"],
+            "zero_target_slack_ratio": break_capacity["zero_target_slack_ratio"],
+            "current_headcount": break_capacity["current_headcount"],
+            "headcount_needed_for_breaks": break_capacity["headcount_needed_for_breaks"],
+            "additional_headcount_for_breaks": break_capacity["estimated_additional_headcount_for_breaks"],
             "best_shippable_before_skeleton_profile": (
                 best_shippable_before_skeleton.profile
                 if best_shippable_before_skeleton is not None else ""

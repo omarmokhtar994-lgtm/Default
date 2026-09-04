@@ -736,6 +736,8 @@ class ParsedInput:
     protected_before80_minimum: Optional[int] = None
     protected_after80_minimum: Optional[int] = None
     minimum_after_break_target_ratio: Optional[float] = None
+    best_effort_under_capacity_shortfall: bool = False
+    capacity_relaxations: Dict[Tuple[int, int, str], int] = field(default_factory=dict)
     run_stage: Optional[str] = None
     run_depth: Optional[str] = None
     allow_back_to_back_breaks: bool = False
@@ -1863,6 +1865,18 @@ def parse_input(
     # "RC9.1 Full Default Seconds", "RC9.1 Stage2 Search Order", "RC9.1 Joint
     # Budget Policy" - and none of them was read by anything. Changing them
     # changed nothing, which is worse than not offering them.
+    # When the roster simply cannot cover the contract, producing the best
+    # achievable schedule with the shortfall stated is more useful to a planner
+    # than producing nothing. Contract errors still stop the run.
+    # Default OFF. Turning it on means the engine will cover a proven-impossible
+    # language window with whoever is available rather than stopping - a real
+    # business decision about whether a wrong-language body is better than no
+    # schedule, not a default an engine should pick on someone's behalf.
+    best_effort_under_capacity_shortfall = yes(_instruction_get(
+        im, ["Best Effort Under Capacity Shortfall", "Best Effort When Headcount Insufficient",
+             "Allow Best Effort Capacity Shortfall"], "No"
+    ), False)
+
     run_stage = normalize_run_stage(_instruction_get(
         im, ["Run Stage", "Schedule Stage", "Run Type"], None))
     run_depth = normalize_run_depth(_instruction_get(
@@ -2186,6 +2200,7 @@ def parse_input(
         protected_before80_minimum=protected_before80_minimum,
         protected_after80_minimum=protected_after80_minimum,
         minimum_after_break_target_ratio=minimum_after_break_target_ratio,
+        best_effort_under_capacity_shortfall=best_effort_under_capacity_shortfall,
         run_stage=run_stage,
         run_depth=run_depth,
         quality_benchmark_tolerance=quality_benchmark_tolerance,
@@ -4815,12 +4830,13 @@ def build_skeleton(
                             vars_lang = coverage_vars_at_qslot(parsed, x, qslot, rule)
                             prior_lang = len(prior_covering_associates(parsed, qslot, rule))
                             count = sum(vars_lang) + prior_lang if vars_lang else prior_lang
-                            model.Add(count >= rule.minimum)
+                            rule_minimum = effective_language_minimum(parsed, rule, d, minute_q)
+                            model.Add(count >= rule_minimum)
                             reserve_required = language_break_reserve_requirements.get(
                                 (d, i, language_rule_key(rule))
                             )
-                            if reserve_required is not None:
-                                model.Add(count >= max(rule.minimum, int(reserve_required)))
+                            if reserve_required is not None and rule_minimum >= int(rule.minimum):
+                                model.Add(count >= max(rule_minimum, int(reserve_required)))
                             if profile["language_reserve"]:
                                 reserve = model.NewIntVar(0, 20, f"language_reserve_{d}_{i}_{q}_{ri}")
                                 model.Add(reserve >= language_operational_reserve_target(parsed, rule) - count)
@@ -4965,10 +4981,11 @@ def build_skeleton(
                 for ri, rule in enumerate(language_rules_at(parsed, minute)):
                     lang_vars = cyclic_next_sunday_coverage_vars(parsed, x, qslot, rule)
                     lang_count = sum(lang_vars) if lang_vars else 0
-                    model.Add(lang_count >= rule.minimum)
+                    rule_minimum = effective_language_minimum(parsed, rule, 6, minute)
+                    model.Add(lang_count >= rule_minimum)
                     reserve_required = language_break_reserve_requirements.get((7, i, language_rule_key(rule)))
-                    if reserve_required is not None:
-                        model.Add(lang_count >= max(rule.minimum, int(reserve_required)))
+                    if reserve_required is not None and rule_minimum >= int(rule.minimum):
+                        model.Add(lang_count >= max(rule_minimum, int(reserve_required)))
                     if profile.get("language_reserve", 0):
                         reserve = model.NewIntVar(0, 20, f"next_sun_language_reserve_{i}_{q}_{ri}")
                         model.Add(reserve >= language_operational_reserve_target(parsed, rule) - lang_count)
@@ -10030,6 +10047,132 @@ def select_best_shippable_before_skeleton(
         return select_best_before_skeleton(parsed, shippable)
     except ValueError:
         return None
+
+
+# ZERO_ACTIVE_INTERVAL_PROVABLY_IMPOSSIBLE and its next-Sunday twin are
+# deliberately ABSENT from this set. "This interval cannot be staffed at all" is
+# the precise condition the zero-active rule exists to prevent, and it is hard
+# on purpose. Relaxing a language identity (cover the interval with whoever is
+# available) is a different decision from allowing an empty interval, and the
+# two must not be conflated.
+#
+# Preflight failures that mean "the workbook is coherent, there is simply not
+# enough eligible headcount". These are a business fact, not an input error, and
+# refusing to produce anything is strictly worse for the planner than producing
+# the best achievable schedule with the shortfall stated. Every other failure
+# code stays fatal: an invalid ratio, an unknown shift or a contradictory
+# nesting group means the contract itself cannot be trusted.
+CAPACITY_SHORTFALL_CODES = frozenset({
+    "AGGREGATE_TARGET_CAPACITY_SHORTAGE",
+    "AGGREGATE_CONFIGURED_FLOOR_CAPACITY_SHORTAGE",
+    "AGGREGATE_HARD_FLOOR_CAPACITY_SHORTAGE",
+    "HARD_FLOOR_PROVABLY_IMPOSSIBLE",
+    "LANGUAGE_MINIMUM_EXCEEDS_ELIGIBLE_ROSTER",
+    "LANGUAGE_WINDOW_AGGREGATE_CAPACITY_SHORTAGE",
+    "LANGUAGE_WINDOW_MAX_CAPACITY_BELOW_MINIMUM",
+    "OPENING_MINIMUM_EXCEEDS_ROSTER",
+    "OPENING_WINDOW_MAX_CAPACITY_BELOW_MINIMUM",
+    "NEXT_SUNDAY_FLOOR_PROVABLY_IMPOSSIBLE",
+    "NEXT_SUNDAY_LANGUAGE_PROVABLY_IMPOSSIBLE",
+    "NEXT_SUNDAY_OPENING_PROVABLY_IMPOSSIBLE",
+    "SKILL_WINDOW_PAID_CAPACITY_PROVABLY_INSUFFICIENT",
+    "WEEKLY_SKILL_BREAK_REDUNDANCY_SHORTAGE",
+})
+
+
+def build_capacity_relaxations(shortfalls: Sequence[Dict[str, Any]]) -> Dict[Tuple[int, int, str], int]:
+    """Map (day index, minute of day, language group) -> achievable maximum.
+
+    Downgrading a preflight failure to a warning does not make the CP model
+    satisfiable: `model.Add(count >= rule.minimum)` on an interval with zero
+    eligible associates is infeasible however the failure is reported, and
+    NMG EN went straight from FAIL_PRE_SOLVER_CONTRACT to
+    FAIL_HARD_CONTRACT_INFEASIBLE. Best effort therefore means asking for
+    everything that exists rather than everything the contract wants: the
+    minimum is clamped to the proven achievable maximum for exactly the cells
+    preflight proved impossible, and nowhere else.
+    """
+    relaxations: Dict[Tuple[int, int, str], int] = {}
+    day_index = {name: i for i, name in enumerate(DAY_NAMES)}
+    for failure in shortfalls:
+        group = failure.get("group")
+        possible = failure.get("maximum_possible")
+        day = day_index.get(str(failure.get("day")))
+        time_text = failure.get("time")
+        if group is None or not isinstance(possible, int) or day is None or not time_text:
+            continue
+        minute = minute_of_day(time_text)
+        if minute is None:
+            continue
+        key = (day, int(minute), str(group))
+        relaxations[key] = min(relaxations.get(key, possible), possible)
+    return relaxations
+
+
+def effective_language_minimum(parsed: ParsedInput, rule: "LanguageRule", day: int, minute: int) -> int:
+    """The language minimum this cell can actually be held to.
+
+    Returns `rule.minimum` everywhere except the cells preflight proved cannot
+    reach it, where it returns the achievable maximum. Never raises a minimum.
+    """
+    relaxations = getattr(parsed, "capacity_relaxations", None)
+    if not relaxations:
+        return int(rule.minimum)
+    relaxed = relaxations.get((int(day), int(minute), str(rule.group)))
+    if relaxed is None:
+        return int(rule.minimum)
+    return max(0, min(int(rule.minimum), int(relaxed)))
+
+
+def classify_preflight_failures(
+    failures: Sequence[Dict[str, Any]]
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Split preflight failures into (contract errors, capacity shortfalls)."""
+    contract_errors: List[Dict[str, Any]] = []
+    shortfalls: List[Dict[str, Any]] = []
+    for failure in failures or []:
+        code = str(failure.get("code") or "")
+        (shortfalls if code in CAPACITY_SHORTFALL_CODES else contract_errors).append(failure)
+    return contract_errors, shortfalls
+
+
+def summarize_capacity_shortfall(shortfalls: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    """A planner-readable account of what cannot be covered and where.
+
+    Deliberately concrete: which rule, how many intervals, the worst gap and a
+    sample of times. A best-effort schedule is only safe to hand over if the
+    shortfall travels with it in terms a person can act on - hire, extend a
+    window, or accept the gap.
+    """
+    by_code: Dict[str, Dict[str, Any]] = {}
+    for failure in shortfalls:
+        code = str(failure.get("code") or "UNKNOWN")
+        entry = by_code.setdefault(code, {"code": code, "interval_count": 0,
+                                          "groups": set(), "examples": [],
+                                          "largest_gap": 0})
+        entry["interval_count"] += 1
+        group = failure.get("group")
+        if group:
+            entry["groups"].add(str(group))
+        minimum = failure.get("minimum")
+        possible = failure.get("maximum_possible")
+        if isinstance(minimum, (int, float)) and isinstance(possible, (int, float)):
+            entry["largest_gap"] = max(entry["largest_gap"], int(minimum) - int(possible))
+        if len(entry["examples"]) < 5:
+            entry["examples"].append({k: failure.get(k) for k in ("day", "time", "group",
+                                                                  "minimum", "maximum_possible")
+                                      if failure.get(k) is not None})
+    rows = []
+    for entry in by_code.values():
+        entry["groups"] = sorted(entry["groups"])
+        rows.append(entry)
+    rows.sort(key=lambda row: (-row["interval_count"], row["code"]))
+    return {
+        "shortfall_kinds": len(rows),
+        "affected_interval_count": sum(row["interval_count"] for row in rows),
+        "largest_headcount_gap": max([row["largest_gap"] for row in rows], default=0),
+        "by_code": rows,
+    }
 
 
 def select_best_before_skeleton(parsed: ParsedInput, skeletons: Sequence[SkeletonSolution]) -> SkeletonSolution:
@@ -16480,6 +16623,63 @@ def run_case(
         audit["status"] = "INPUT_PARSED"
         write_json(audit_path, audit)
         print(json.dumps(audit["input_contract"], indent=2), file=log, flush=True)
+        # A failing contract and an under-staffed roster are different things.
+        # The first means the workbook cannot be trusted and the run must stop.
+        # The second means the business does not have the people; refusing to
+        # schedule at all helps nobody, so the engine produces the best
+        # achievable schedule and states the shortfall in terms a planner can
+        # act on. The result is never reported as a clean pass.
+        contract_errors, capacity_shortfalls = classify_preflight_failures(
+            preflight.get("failures") or [])
+        capacity_shortfall_mode = bool(
+            capacity_shortfalls and not contract_errors
+            and parsed.best_effort_under_capacity_shortfall
+        )
+        if capacity_shortfall_mode:
+            shortfall = summarize_capacity_shortfall(capacity_shortfalls)
+            audit["capacity_shortfall"] = {
+                "status": "BEST_EFFORT_UNDER_CAPACITY_SHORTFALL",
+                "headline": (
+                    f"Available headcount cannot cover the contract in "
+                    f"{shortfall['affected_interval_count']} interval(s). The engine "
+                    f"produced the best achievable schedule; the uncovered demand is "
+                    f"real and needs more staff, a wider window, or an accepted gap."
+                ),
+                **shortfall,
+                "failures": capacity_shortfalls,
+            }
+            preflight["status"] = "WARN_CAPACITY_SHORTFALL"
+            preflight["capacity_shortfalls_downgraded"] = len(capacity_shortfalls)
+            preflight["failures"] = contract_errors
+            parsed.capacity_relaxations = build_capacity_relaxations(capacity_shortfalls)
+            audit["capacity_shortfall"]["relaxed_language_cells"] = len(parsed.capacity_relaxations)
+            parsed.parser_warnings.append(audit["capacity_shortfall"]["headline"])
+            print(f"CAPACITY_SHORTFALL {audit['capacity_shortfall']['headline']}",
+                  file=log, flush=True)
+            audit["events"].append({
+                "event": "BEST_EFFORT_UNDER_CAPACITY_SHORTFALL",
+                "affected_interval_count": shortfall["affected_interval_count"],
+                "largest_headcount_gap": shortfall["largest_headcount_gap"],
+            })
+        elif capacity_shortfalls:
+            shortfall = summarize_capacity_shortfall(capacity_shortfalls)
+            audit["capacity_shortfall"] = {
+                "status": "STOPPED_CAPACITY_SHORTFALL_BEST_EFFORT_DISABLED"
+                if not parsed.best_effort_under_capacity_shortfall
+                else "STOPPED_ALONGSIDE_CONTRACT_ERRORS",
+                "headline": (
+                    f"Available headcount cannot cover the contract in "
+                    f"{shortfall['affected_interval_count']} interval(s); the largest "
+                    f"single gap is {shortfall['largest_headcount_gap']} associate(s). "
+                    f"This is a staffing shortfall, not a workbook error - the schedule "
+                    f"is impossible as specified until the roster, the window or the "
+                    f"requirement changes."
+                ),
+                **shortfall,
+                "failures": capacity_shortfalls,
+            }
+            print(f"CAPACITY_SHORTFALL {audit['capacity_shortfall']['headline']}",
+                  file=log, flush=True)
         if preflight.get("failures"):
             audit["status"] = "FAIL_PRE_SOLVER_CONTRACT"
             audit["elapsed_sec"] = time.time() - started_all
@@ -16487,6 +16687,8 @@ def run_case(
             write_csv(summary_csv, [{
                 "status": audit["status"], "input": str(input_path), "audit": str(audit_path),
                 "run_id": run_identity["run_id"], "preflight_failure_count": len(preflight.get("failures", [])),
+                "contract_error_count": len(contract_errors),
+                "capacity_shortfall_count": len(capacity_shortfalls),
             }])
             return 2
 
@@ -19119,6 +19321,12 @@ def run_case(
                     "FAIL_QUALITY_BENCHMARK" if quality_failures
                     else output_info_by_role["RECOMMENDED_FINAL"]["final_status"]
                 )
+        # A schedule built while the roster provably cannot cover the contract
+        # is a best-effort schedule, whatever else went right. Mark it at the
+        # status level so it cannot be read - or scored - as a clean result.
+        if (audit.get("capacity_shortfall") or {}).get("status") == "BEST_EFFORT_UNDER_CAPACITY_SHORTFALL":
+            if not str(audit["status"]).startswith("FAIL"):
+                audit["status"] = f"BEST_EFFORT_CAPACITY_SHORTFALL__{audit['status']}"
         budget_manager.record(
             "finalization", "FINAL_ARTIFACTS_PUBLISHED",
             status=audit["status"], exported_schedule_workbooks=len(export_records),
@@ -19162,6 +19370,10 @@ def run_case(
             # workbook permits - one that Stage 2 skips on every attempt. On
             # NMG EN+SP that made the reported retention loss 18 (206 -> 188)
             # against a skeleton that can never ship; the real loss was 4.
+            # A best-effort run must never read as a clean one.
+            "capacity_shortfall_status": (audit.get("capacity_shortfall") or {}).get("status", ""),
+            "capacity_shortfall_intervals": (audit.get("capacity_shortfall") or {}).get("affected_interval_count", ""),
+            "capacity_shortfall_largest_gap": (audit.get("capacity_shortfall") or {}).get("largest_headcount_gap", ""),
             "best_shippable_before_skeleton_profile": (
                 best_shippable_before_skeleton.profile
                 if best_shippable_before_skeleton is not None else ""

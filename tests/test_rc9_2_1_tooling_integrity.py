@@ -688,5 +688,45 @@ class TheRunStageAndDepthDropdownsArriveWithAVisibleChoice(unittest.TestCase):
         self.assertNotIn('"target"', self.SOURCE.split("SEEDED_DEFAULTS = {")[1].split("}")[0])
 
 
+class Gate5SaysWhetherTheBreakLossWasHeadcountOrSomethingElse(unittest.TestCase):
+    """Both RC9.2.1 Gate 5 failures were chased as optimiser defects for weeks
+    and turned out to be rosters with nowhere lossless to put a break.
+
+    The gate could not tell those apart, so every failure looked like the same
+    failure. The attribution never changes a verdict - a schedule short of
+    target is short of target - it changes what the team does next.
+    """
+
+    SOURCE = (ROOT / "tools" / "release_gate_report.py").read_text()
+
+    def test_a_measured_deficit_is_named_as_staffing(self):
+        self.assertIn('attribution = "STAFFING_LIMITED"', self.SOURCE)
+        self.assertIn('capacity_status == "BREAK_CAPACITY_SHORT"', self.SOURCE)
+
+    def test_a_surplus_is_not_called_an_engine_defect(self):
+        """NMG13 reported a 6-slot surplus and still lost 9 target intervals
+        to breaks, because the measurement counts room per slot and not whether
+        a legal placement can reach it. Naming that ENGINE would send someone
+        hunting a defect the evidence does not establish."""
+        self.assertNotIn('attribution = "ENGINE"', self.SOURCE)
+        self.assertIn('attribution = "NOT_STAFFING_LIMITED"', self.SOURCE)
+
+    def test_an_older_summary_without_the_measurement_says_so(self):
+        self.assertIn('attribution = "UNKNOWN"', self.SOURCE)
+        self.assertIn("summary carries no break-capacity measurement", self.SOURCE)
+
+    def test_the_attribution_never_turns_a_failure_into_a_pass(self):
+        """The only edit inside the failing branch appends to the reason."""
+        branch = self.SOURCE[self.SOURCE.index("if problems:"):]
+        branch = branch[:branch.index("elif minimum_after_target_ratio is None:")]
+        self.assertIn('gate5 = "FAIL"', branch)
+        self.assertIn("{attribution}: {attribution_note}", branch)
+        self.assertNotIn('gate5 = "PASS', branch)
+
+    def test_it_reaches_the_report_as_its_own_column(self):
+        self.assertIn('"break_loss_attribution": break_loss_attribution,', self.SOURCE)
+        self.assertIn('attribution = "NOT_MEASURED"', self.SOURCE)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

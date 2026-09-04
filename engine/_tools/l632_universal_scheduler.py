@@ -10091,6 +10091,12 @@ def break_capacity_headcount_requirement(
     The headcount figure is a LOWER bound. It assumes each added associate's
     shift lands where the binding slots are, which is optimistic; the real
     requirement is at least this and possibly more.
+
+    A deficit is therefore proof that headcount is short. The absence of one is
+    NOT proof that breaks will land for free: this counts room per slot, not
+    whether a legal placement can reach it, and break windows, spacing and
+    per-associate timing all constrain that. Measured on NMG13, which reported
+    a 6-slot surplus and still gave up 9 target intervals to breaks.
     """
     qpi = parsed.qslots_per_interval
     active_q = zero_slack_q = 0
@@ -10138,8 +10144,9 @@ def break_capacity_headcount_requirement(
         "estimate_basis": "lower bound; assumes each added associate covers the binding intervals",
         "status": "BREAK_CAPACITY_SUFFICIENT" if deficit == 0 else "BREAK_CAPACITY_SHORT",
         "headline": (
-            f"Breaks fit: {lossless_capacity} lossless slots for "
-            f"{break_demand} break-quarters."
+            f"Headcount is not the constraint: {lossless_capacity} lossless slots exist "
+            f"for {break_demand} break-quarters. Whether a placement can use only "
+            f"that room also depends on break windows and spacing."
             if deficit == 0 else
             f"Headcount {len(parsed.associates)} cannot cover the contract and take breaks. "
             f"{break_demand} break-quarters must be placed but only {lossless_capacity} "

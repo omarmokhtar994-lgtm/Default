@@ -792,6 +792,18 @@ class HeadcountNeededForBreaksIsMeasuredNotAggregated(unittest.TestCase):
             out["headcount_needed_for_breaks"],
             out["current_headcount"] + out["estimated_additional_headcount_for_breaks"])
 
+    def test_a_surplus_is_not_sold_as_a_guarantee_that_breaks_land_free(self):
+        """Measured on NMG13: reported a 6-slot surplus and still gave up 9
+        target intervals to breaks. The metric counts room per slot; it does
+        not know whether a legal placement can reach that room, because break
+        windows, spacing and per-associate timing constrain where a break may
+        go. A deficit proves headcount is short. A surplus proves only that
+        headcount is not the constraint."""
+        out = self._measure(self._parsed(), staffed=20, worked_days=5)
+        self.assertIn("Headcount is not the constraint", out["headline"])
+        self.assertNotIn("Breaks fit", out["headline"])
+        self.assertIn("windows and spacing", out["headline"])
+
     def test_the_estimate_is_published_as_a_lower_bound(self):
         """Each added associate is assumed to land on the binding slots, which
         is optimistic. Reporting it as exact would send a planner to their

@@ -303,6 +303,7 @@ def evaluate(case: Path, baseline: dict | None = None) -> dict:
     skeleton_only = str(summary.get("status", "")).strip().upper() in SKELETON_ONLY_STATUSES
 
     # Gate 5 - break-stage regression, measured within this run.
+    attribution = "NOT_MEASURED"
     if skeleton_only:
         gate5, gate5_why = "NOT_APPLICABLE", "skeleton-only run; break stage not executed"
     elif not summary:
@@ -344,9 +345,39 @@ def evaluate(case: Path, baseline: dict | None = None) -> dict:
         # skeleton look like a better break stage.
         absolute = (f"after-break target {after_target:.0f}/{active:.0f} = "
                     f"{after_target_ratio:.1%}")
+        # Why the break stage lost coverage, when the summary can say. Both
+        # RC9.2.1 Gate 5 failures - NMG EN+SP and Cricut Chat - were chased as
+        # optimiser defects for weeks and turned out to be rosters with nowhere
+        # lossless to put a break. This never changes a verdict: a FAIL stays a
+        # FAIL, because the schedule really is short of target. It changes what
+        # the team does next, which is the whole cost of getting it wrong.
+        capacity_status = str(summary.get("break_capacity_status", "")).strip().upper()
+        if capacity_status == "BREAK_CAPACITY_SHORT":
+            attribution = "STAFFING_LIMITED"
+            attribution_note = (
+                f"{num(summary.get('break_capacity_deficit_quarters')):.0f} break-quarters had "
+                f"nowhere to go without dropping an interval below target; "
+                f"about {num(summary.get('additional_headcount_for_breaks')):.0f} more "
+                f"associate(s) needed (lower bound)")
+        elif capacity_status == "BREAK_CAPACITY_SUFFICIENT" and target_loss > 0:
+            # Measured, not assumed: NMG13 reported SUFFICIENT with a 6-slot
+            # margin and still gave up 9 target intervals to breaks. The
+            # measurement counts lossless room per slot; it does not know
+            # whether a placement exists that uses only that room, because
+            # break windows, spacing and per-associate timing constrain where
+            # a break may actually go. Calling this "ENGINE" would send someone
+            # hunting an optimiser defect that the evidence does not establish.
+            attribution = "NOT_STAFFING_LIMITED"
+            attribution_note = ("lossless room existed for every break, so the loss is not "
+                                "headcount; it comes from where breaks are allowed to go "
+                                "(windows, spacing, concurrency) or from the optimiser - "
+                                "this measurement cannot tell those apart")
+        else:
+            attribution = "UNKNOWN"
+            attribution_note = "summary carries no break-capacity measurement"
         if problems:
             gate5 = "FAIL"
-            gate5_why = "; ".join(problems) + f"; {absolute}"
+            gate5_why = "; ".join(problems) + f"; {absolute}; {attribution}: {attribution_note}"
         elif minimum_after_target_ratio is None:
             gate5 = "PASS_DELTA_ONLY_NO_ABSOLUTE_STANDARD"
             gate5_why = (
@@ -365,6 +396,8 @@ def evaluate(case: Path, baseline: dict | None = None) -> dict:
                 + (" (minimum proven)" if proven else "")
                 + f"; {absolute} >= {minimum_source} minimum "
                   f"{minimum_after_target_ratio:.1%}")
+
+    break_loss_attribution = attribution
 
     # Gate 8 - independent validation of the exported workbook.
     status = validation.get("status")
@@ -447,6 +480,7 @@ def evaluate(case: Path, baseline: dict | None = None) -> dict:
         "before_target": f"{before_target:.0f}", "after_target": f"{after_target:.0f}",
         "before_floor": f"{before_floor:.0f}", "after_floor": f"{after_floor:.0f}",
         "after_target_ratio": f"{(after_target / active):.4f}" if active else "",
+        "break_loss_attribution": break_loss_attribution,
         "target_losses_from_breaks": f"{target_loss:.0f}",
         "floor_losses_from_breaks": f"{floor_loss:.0f}",
         "avoidable_overage_fte_sum": summary.get("avoidable_overage_fte_sum", ""),

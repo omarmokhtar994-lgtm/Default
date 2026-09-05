@@ -685,5 +685,111 @@ class RunStageAndDepthComeFromTheBusinessContract(unittest.TestCase):
                         "skeleton-only runs must validate the before-break workbook")
 
 
+class LanguageCoverageWindowsCanBoundWorkingHours(unittest.TestCase):
+    """Coverage Start/End answered only "when must this language be covered".
+
+    The sheet's author reads them as the max and min hours those associates may
+    work. Nothing in the engine enforced that: `language_eligible` is purely a
+    capability test, so on GDI a bilingual associate was scheduled 00:00-09:00
+    against a 16:00-07:00 window and stood on the floor at 08:00.
+    """
+
+    def _parsed(self, mode, windows=None):
+        return SimpleNamespace(
+            language_working_window_mode=mode,
+            language_windows=windows if windows is not None else {
+                "bilingual": (16 * 60, 7 * 60, True),
+                "english": (16 * 60, 7 * 60, False),
+            },
+        )
+
+    def _assoc(self, language):
+        return SimpleNamespace(name="x", language=language)
+
+    def _shift(self, start_h, hours):
+        return SimpleNamespace(start_min=start_h * 60, duration_min=hours * 60,
+                               label=f"{start_h:02d}h+{hours}")
+
+    # -- the default must not move any recorded result -------------------
+    def test_off_is_the_default_and_restricts_nothing(self):
+        """Turning this on is a contract change: NMG SP's Spanish row is
+        17:00-02:00, so an enforced run stops being comparable against an RC9.1
+        baseline measured without it - and the gate's input-hash check cannot
+        see that, because the workbook did not change."""
+        self.assertEqual(E.normalize_language_window_mode(None), "OFF")
+        self.assertEqual(E.normalize_language_window_mode(""), "OFF")
+        self.assertIsNone(E.associate_language_window(
+            self._parsed("OFF"), self._assoc("Bilingual")))
+
+    def test_a_row_with_a_minimum_binds_under_minimum_rows(self):
+        window = E.associate_language_window(
+            self._parsed("MINIMUM_ROWS"), self._assoc("Bilingual"))
+        self.assertEqual(window, (16 * 60, 7 * 60))
+
+    def test_a_row_without_a_minimum_is_left_alone_under_minimum_rows(self):
+        """GDI's English row carries Minimum Per Interval 0 and its own note
+        says so; it may be declaring capability rather than hours."""
+        self.assertIsNone(E.associate_language_window(
+            self._parsed("MINIMUM_ROWS"), self._assoc("English")))
+
+    def test_all_rows_binds_the_zero_minimum_row_too(self):
+        self.assertEqual(
+            E.associate_language_window(self._parsed("ALL_ROWS"), self._assoc("English")),
+            (16 * 60, 7 * 60))
+
+    def test_a_language_with_no_row_is_never_restricted(self):
+        self.assertIsNone(E.associate_language_window(
+            self._parsed("ALL_ROWS"), self._assoc("Klingon")))
+
+    # -- the window arithmetic -------------------------------------------
+    def test_a_shift_wholly_inside_an_overnight_window_is_legal(self):
+        self.assertTrue(E.shift_within_language_window(
+            self._shift(22, 8), (16 * 60, 7 * 60)))
+
+    def test_a_shift_that_runs_past_the_window_end_is_illegal(self):
+        """The real GDI cell: 00:00-09:00 against 16:00-07:00 put a bilingual
+        associate on the floor at 08:00."""
+        self.assertFalse(E.shift_within_language_window(
+            self._shift(0, 9), (16 * 60, 7 * 60)))
+
+    def test_a_shift_that_starts_before_the_window_opens_is_illegal(self):
+        self.assertFalse(E.shift_within_language_window(
+            self._shift(15, 9), (16 * 60, 7 * 60)))
+
+    def test_a_shift_exactly_filling_the_window_is_legal(self):
+        self.assertTrue(E.shift_within_language_window(
+            self._shift(16, 15), (16 * 60, 7 * 60)))
+
+    def test_one_minute_of_overrun_is_still_outside(self):
+        shift = SimpleNamespace(start_min=16 * 60, duration_min=15 * 60 + 1, label="over")
+        self.assertFalse(E.shift_within_language_window(shift, (16 * 60, 7 * 60)))
+
+    def test_a_daytime_window_behaves_the_same_way(self):
+        self.assertTrue(E.shift_within_language_window(
+            self._shift(7, 9), (7 * 60, 2 * 60)))
+        self.assertFalse(E.shift_within_language_window(
+            self._shift(6, 9), (7 * 60, 2 * 60)))
+
+    # -- a full-day window is not a restriction ---------------------------
+    def test_a_window_spanning_the_whole_day_is_not_stored(self):
+        """AE AR B2B and Cricut Chat both carry English 00:00-00:00. Reading
+        that as a zero-length working window would forbid every shift and make
+        two proven scenarios infeasible."""
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        self.assertIn("if int(row[\"start\"]) == int(row[\"end\"]):", source)
+        self.assertIn("a window that spans the whole day restricts nothing", source)
+
+    # -- visibility even when off ----------------------------------------
+    def test_violations_are_reported_even_when_enforcement_is_off(self):
+        """Off by default means the answer to "does my roster respect the
+        language hours" is invisible unless it is measured anyway."""
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        report = source[source.index("def language_working_window_violations("):]
+        report = report[:report.index("def normalize_run_stage(")]
+        self.assertIn("regardless of mode", report)
+        self.assertNotIn("language_working_window_mode\", \"OFF\") == \"OFF\"", report)
+        self.assertIn('"shifts_outside_language_window"', source)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

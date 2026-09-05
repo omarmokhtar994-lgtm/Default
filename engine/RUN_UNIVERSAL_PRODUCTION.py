@@ -120,6 +120,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--allow-no-break-exceptions', action='store_true')
     p.add_argument('--disable-no-break-exceptions', action='store_true')
     p.add_argument('--max-no-break-exceptions', type=int)
+    p.add_argument('--language-working-window',
+                   choices=['OFF', 'MINIMUM_ROWS', 'ALL_ROWS'], default=None,
+                   help="Override the workbook's Language Working Window setting. OFF keeps "
+                        "Coverage Start/End as a coverage minimum only (default). MINIMUM_ROWS "
+                        "also bounds working hours for language rows with a minimum >= 1. "
+                        "ALL_ROWS bounds every active row.")
     p.add_argument('--allow-headcount-mismatch', action='store_true')
     p.add_argument('--diagnostics-only', action='store_true')
     p.add_argument('--skeleton-only', action='store_true', help='Run Stage 1 only and export ranked before-break skeletons.')
@@ -256,6 +262,8 @@ def main() -> int:
         command.append('--disable-no-break-exceptions')
     if args.max_no_break_exceptions is not None:
         command += ['--max-no-break-exceptions', str(args.max_no_break_exceptions)]
+    if args.language_working_window is not None:
+        command += ['--language-working-window', args.language_working_window]
     if args.allow_headcount_mismatch:
         command.append('--allow-headcount-mismatch')
     if diagnostics_only:

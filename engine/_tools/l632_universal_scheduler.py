@@ -739,6 +739,8 @@ class ParsedInput:
     minimum_after_break_target_ratio: Optional[float] = None
     run_stage: Optional[str] = None
     run_depth: Optional[str] = None
+    language_windows: Dict[str, Tuple[int, int, bool]] = field(default_factory=dict)
+    language_working_window_mode: str = "OFF"
     allow_back_to_back_breaks: bool = False
     break_max_concurrent_ratio: float = 0.30
     break_max_concurrent_absolute: int = 4
@@ -1432,7 +1434,9 @@ def _split_languages(value: Any) -> Set[str]:
     return {norm(x) for x in re.split(r"[,;/|]+", str(value or "")) if norm(x)}
 
 
-def _parse_language_rules(wb: Any, associates: List[Associate]) -> Tuple[List[LanguageRule], Dict[str, Set[str]]]:
+def _parse_language_rules(
+    wb: Any, associates: List[Associate]
+) -> Tuple[List[LanguageRule], Dict[str, Set[str]], Dict[str, Tuple[int, int, bool]]]:
     ws = _sheet_by_alias(wb, ["Language Setup", "Skill Setup", "Skills Setup"])
     roster_languages = {norm(a.language) for a in associates if norm(a.language)}
     if ws is None:
@@ -1481,7 +1485,20 @@ def _parse_language_rules(wb: Any, associates: List[Associate]) -> Tuple[List[La
             start_min=start, end_min=end, minimum=minimum, active=True,
             required_languages=required, eligible_languages=eligible,
         ))
-    return rules, capabilities
+    # Coverage Start/End also bounds the hours the associates of that language
+    # may be scheduled, which is a different question from how many of them must
+    # be on duty. The rules above cannot answer it: rows with no minimum are
+    # dropped before a rule is built, and rows sharing a group and window are
+    # merged, so French with its own minimum disappears into Bilingual/French.
+    # Keep the per-language windows exactly as authored.
+    windows: Dict[str, Tuple[int, int, bool]] = {}
+    for row in rows:
+        if not row["active"] or row["start"] is None or row["end"] is None:
+            continue
+        if int(row["start"]) == int(row["end"]):
+            continue  # a window that spans the whole day restricts nothing
+        windows[row["source"]] = (int(row["start"]), int(row["end"]), int(row["minimum"]) > 0)
+    return rules, capabilities, windows
 
 
 def _parse_break_segments(im: Dict[str, Any]) -> Tuple[Tuple[int, str], ...]:
@@ -1666,6 +1683,102 @@ RUN_DEPTH_VALUES = {
 RUN_DEPTH_SECONDS = {"QUICK": 3600, "DEEP": 14400, "OVERNIGHT": 21600}
 
 
+LANGUAGE_WINDOW_MODES = ("OFF", "MINIMUM_ROWS", "ALL_ROWS")
+
+
+def normalize_language_window_mode(raw: Any) -> str:
+    """How the Language Setup Coverage Start/End bounds working hours.
+
+    OFF is the default and preserves the semantics every recorded result was
+    measured under. Turning this on is a real contract change: NMG SP's Spanish
+    row is 17:00-02:00, so an enforced run is no longer comparable against an
+    RC9.1 baseline produced without the constraint, and the gate's input-hash
+    check cannot catch that because the workbook did not change.
+    """
+    text = norm(raw)
+    if not text:
+        return "OFF"
+    if text in {"off", "no", "none", "disabled", "coverageonly", "minimumonly"}:
+        return "OFF"
+    if text in {"allrows", "all", "alllanguages", "everyrow", "allactiverows"}:
+        return "ALL_ROWS"
+    if text in {"rowswithaminimum", "minimumrows", "withminimum", "yes", "on", "enabled"}:
+        return "MINIMUM_ROWS"
+    return "OFF"
+
+
+def associate_language_window(
+    parsed: ParsedInput, associate: Associate
+) -> Optional[Tuple[int, int]]:
+    """The hours this associate may be scheduled, or None when unrestricted."""
+    mode = getattr(parsed, "language_working_window_mode", "OFF")
+    if mode == "OFF":
+        return None
+    entry = getattr(parsed, "language_windows", {}).get(norm(getattr(associate, "language", "")))
+    if entry is None:
+        return None
+    start, end, has_minimum = entry
+    if mode == "MINIMUM_ROWS" and not has_minimum:
+        return None
+    return start, end
+
+
+def shift_within_language_window(shift: Shift, window: Tuple[int, int]) -> bool:
+    """True when the whole shift lies inside the window.
+
+    The window is a max and a min, so a shift that starts inside it and runs
+    past the end is outside it for those minutes. Measured on GDI: one bilingual
+    shift ran 00:00-09:00 against a 16:00-07:00 window and put a bilingual
+    associate on the floor at 08:00.
+    """
+    start, end = window
+    span = (end - start) % 1440 or 1440
+    offset = (shift.start_min - start) % 1440
+    return offset + shift.duration_min <= span
+
+
+def language_working_window_violations(
+    parsed: ParsedInput, skeleton: SkeletonSolution
+) -> Dict[str, Any]:
+    """Shifts scheduled outside their language's window, reported either way.
+
+    Enforcement is off by default, so without this the answer to "does my
+    schedule respect the language hours" is invisible until someone reads the
+    roster by hand. Measured that way on GDI: 18 of 145 shifts sat outside
+    their window, one of which put a bilingual associate on the floor at 08:00
+    against a 16:00-07:00 window.
+
+    Evaluated against every authored window regardless of mode, so the count
+    answers "what would enforcement change", not "what did it enforce".
+    """
+    rows: List[Dict[str, Any]] = []
+    windows = getattr(parsed, "language_windows", {}) or {}
+    for a, d, si in scheduled_cells(skeleton):
+        assoc = parsed.associates[a]
+        entry = windows.get(norm(getattr(assoc, "language", "")))
+        if entry is None:
+            continue
+        start, end, has_minimum = entry
+        shift = parsed.shifts[si]
+        if shift_within_language_window(shift, (start, end)):
+            continue
+        rows.append({
+            "associate": assoc.name, "language": getattr(assoc, "language", ""),
+            "day": DAY_NAMES[d], "shift": shift.label,
+            "window": f"{hhmm(start)}-{hhmm(end)}",
+            "row_has_minimum": bool(has_minimum),
+        })
+    with_minimum = sum(1 for row in rows if row["row_has_minimum"])
+    return {
+        "mode": getattr(parsed, "language_working_window_mode", "OFF"),
+        "scheduled_cells": sum(1 for _ in scheduled_cells(skeleton)),
+        "outside_window_total": len(rows),
+        "outside_window_rows_with_a_minimum": with_minimum,
+        "outside_window_rows_without_a_minimum": len(rows) - with_minimum,
+        "rows": rows[:200],
+    }
+
+
 def normalize_run_stage(raw: Any) -> Optional[str]:
     """Map a workbook Run Stage cell to a canonical stage, or None if unset.
 
@@ -1732,7 +1845,7 @@ def parse_input(
     allowed_start_source = "Instructions" if allowed_start_min is not None and allowed_start_end is not None else "Unrestricted"
     shifts = _parse_shifts(wb, allowed_durations, allowed_start_min, allowed_start_end, start_step)
     requirements, shrinkage, active, req_dates, interval, req_sheet, shr_sheet = _parse_requirement_table(wb, im)
-    language_rules, capabilities = _parse_language_rules(wb, associates)
+    language_rules, capabilities, language_windows = _parse_language_rules(wb, associates)
 
     hard_off = yes(_instruction_get(im, ["Hard OFF Preferences", "Hard OFF", "OFF Preferences Hard"], "Yes"), True)
     strict_off = yes(_instruction_get(im, ["Strict 2 OFF", "Strict Two OFF", "Strict OFF Count"], "Yes"), True)
@@ -1868,6 +1981,9 @@ def parse_input(
         im, ["Run Stage", "Schedule Stage", "Run Type"], None))
     run_depth = normalize_run_depth(_instruction_get(
         im, ["Run Depth", "Run Length", "Search Depth"], None))
+    language_working_window_mode = normalize_language_window_mode(_instruction_get(
+        im, ["Language Working Window", "Language Working Hours",
+             "Language Window Enforcement"], None))
 
     minimum_after_break_target_ratio = None
     if minimum_after_break_target_ratio_raw not in (None, ""):
@@ -2189,6 +2305,8 @@ def parse_input(
         minimum_after_break_target_ratio=minimum_after_break_target_ratio,
         run_stage=run_stage,
         run_depth=run_depth,
+        language_windows=language_windows,
+        language_working_window_mode=language_working_window_mode,
         quality_benchmark_tolerance=quality_benchmark_tolerance,
         hard_floor_ratio=hard_floor_ratio, hard_floor_tolerance=hard_floor_tolerance,
         hard_floor_source=hard_floor_source, use_11h_3off=use11,
@@ -4577,7 +4695,19 @@ def build_skeleton(
             model.Add(sum(anchor_change_vars) <= max(0, int(max_changes)))
 
     fixed_group_members: Dict[str, List[int]] = {}
+    language_working_window_blocks = 0
     for a, assoc in enumerate(parsed.associates):
+        # Language Setup's Coverage Start/End read as the hours this associate
+        # may work, not only the hours their language must be covered. Off by
+        # default; see normalize_language_window_mode for why.
+        if hard.language:
+            window = associate_language_window(parsed, assoc)
+            if window is not None:
+                for shift in parsed.shifts:
+                    if not shift_within_language_window(shift, window):
+                        for d in range(D):
+                            model.Add(x[a, d, shift.index] == 0)
+                            language_working_window_blocks += 1
         if assoc.nesting_group:
             fixed_group_members.setdefault(norm(assoc.nesting_group), []).append(a)
         for d in range(D):
@@ -5180,6 +5310,8 @@ def build_skeleton(
         "anchor_focus_cell_count": len(focus_cells),
         "minimum_tier_hits": dict(applied_tier_locks),
         "anchor_changed_cells": sum(solver.Value(v) for v in anchor_change_vars) if status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else None,
+        "language_working_window_mode": getattr(parsed, "language_working_window_mode", "OFF"),
+        "language_working_window_blocked_cells": int(language_working_window_blocks),
         "language_break_reserve_constraint_count": len(language_break_reserve_requirements),
         "language_break_reserve_requirements": [
             {"day_scope": day_scope, "interval_index": interval_index, "rule_key": rule_key, "required_qualified": required}
@@ -16125,6 +16257,7 @@ def run_case(
     work_dir: Path, total_time_sec: int, workers: int,
     pattern_widths: Sequence[int], allow_no_break_override: Optional[bool],
     max_no_break_override: Optional[int], diagnostics_only: bool = False,
+    language_working_window_override: Optional[str] = None,
     skeleton_only: bool = False, export_top_skeletons: int = 5,
     seed_path: Optional[Path] = None, use_input_schedule_as_seed: bool = False,
     repair_change_limits: Sequence[int] = (2, 4, 6),
@@ -16198,6 +16331,12 @@ def run_case(
             input_path, allow_no_break_override, max_no_break_override,
             allow_headcount_mismatch_override=allow_headcount_mismatch_override,
         )
+        # Contract states the value, an explicit CLI argument overrides it -
+        # the same rule the protected-tier minimums follow below, so the audit
+        # and the run-identity hash record what was actually enforced.
+        if language_working_window_override is not None:
+            parsed.language_working_window_mode = normalize_language_window_mode(
+                language_working_window_override)
         capacity = capacity_diagnostics(parsed)
         preflight = validate_input_contract(parsed, capacity)
         identity_warnings = case_identity_warnings(parsed, input_path, output_path)
@@ -19140,6 +19279,13 @@ def run_case(
         break_capacity = break_capacity_headcount_requirement(
             parsed, chosen_skeleton, measured_on="recommended_final_skeleton")
         audit["break_capacity_headcount"] = break_capacity
+        language_window_report = language_working_window_violations(parsed, chosen_skeleton)
+        audit["language_working_window"] = language_window_report
+        if language_window_report["outside_window_total"]:
+            print(f"LANGUAGE_WINDOW_OUTSIDE {language_window_report['outside_window_total']} of "
+                  f"{language_window_report['scheduled_cells']} shifts sit outside their "
+                  f"language window (mode {language_window_report['mode']})",
+                  file=log, flush=True)
         if break_capacity["break_capacity_deficit"]:
             print(f"BREAK_CAPACITY_SHORT final {break_capacity['headline']}",
                   file=log, flush=True)
@@ -19456,6 +19602,8 @@ def run_case(
             # Aggregate hours are necessary but not sufficient: a roster can hold
             # enough total hours and still be unable to place breaks. This is the
             # distributional answer, measured on the schedule actually built.
+            "language_window_mode": language_window_report["mode"],
+            "shifts_outside_language_window": language_window_report["outside_window_total"],
             "break_capacity_status": break_capacity["status"],
             "break_capacity_deficit_quarters": break_capacity["break_capacity_deficit"],
             "zero_target_slack_ratio": break_capacity["zero_target_slack_ratio"],
@@ -19899,6 +20047,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--allow-no-break-exceptions", action="store_true", default=None)
     parser.add_argument("--disable-no-break-exceptions", action="store_true")
     parser.add_argument("--max-no-break-exceptions", type=int)
+    parser.add_argument("--language-working-window", choices=LANGUAGE_WINDOW_MODES, default=None,
+                        help="Override the workbook's Language Working Window setting. OFF keeps "
+                             "Coverage Start/End as a coverage minimum only (default). MINIMUM_ROWS "
+                             "also bounds working hours for language rows with a minimum >= 1. "
+                             "ALL_ROWS bounds every active row, including rows with no minimum.")
     parser.add_argument("--allow-headcount-mismatch", action="store_true", default=None)
     parser.add_argument("--disable-headcount-mismatch-override", action="store_true")
     parser.add_argument("--diagnostics-only", action="store_true")
@@ -20482,6 +20635,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             input_path, args.output, audit, summary, work_dir,
         args.time_limit, args.num_workers, widths,
         allow_override, args.max_no_break_exceptions, args.diagnostics_only,
+        language_working_window_override=args.language_working_window,
         skeleton_only=args.skeleton_only, export_top_skeletons=args.export_top_skeletons,
         seed_path=args.seed_workbook,
         use_input_schedule_as_seed=args.use_input_schedule_as_seed,

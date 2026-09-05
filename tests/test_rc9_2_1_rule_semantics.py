@@ -721,6 +721,31 @@ class LanguageCoverageWindowsCanBoundWorkingHours(unittest.TestCase):
         self.assertIsNone(E.associate_language_window(
             self._parsed("OFF"), self._assoc("Bilingual")))
 
+    def test_every_value_a_caller_can_actually_supply_maps_correctly(self):
+        """The guards below fed pre-normalized modes straight to the helper and
+        never went through the normalizer, so they all passed while the feature
+        was inert: `norm` collapses whitespace and casefolds but keeps spaces
+        and underscores, so every multi-word value fell through to OFF -
+        including this flag's own choices. A run launched with
+        --language-working-window MINIMUM_ROWS enforced nothing and reported
+        mode OFF, which looked like a legitimate result."""
+        for value in ("MINIMUM_ROWS", "Rows With A Minimum", "rows with a minimum",
+                      "minimum rows", "Yes"):
+            self.assertEqual(E.normalize_language_window_mode(value), "MINIMUM_ROWS",
+                             f"{value!r} must enable the minimum-row window")
+        for value in ("ALL_ROWS", "All Rows", "all rows", "All Languages"):
+            self.assertEqual(E.normalize_language_window_mode(value), "ALL_ROWS",
+                             f"{value!r} must enable every row's window")
+        for value in ("OFF", "Off", "No", "", None, "something unrecognised"):
+            self.assertEqual(E.normalize_language_window_mode(value), "OFF",
+                             f"{value!r} must leave the contract semantics alone")
+
+    def test_the_cli_choices_are_exactly_the_modes_the_normalizer_returns(self):
+        """argparse validates the string; the normalizer has to accept it."""
+        for choice in E.LANGUAGE_WINDOW_MODES:
+            self.assertEqual(E.normalize_language_window_mode(choice), choice,
+                             f"--language-working-window {choice} must survive normalization")
+
     def test_a_row_with_a_minimum_binds_under_minimum_rows(self):
         window = E.associate_language_window(
             self._parsed("MINIMUM_ROWS"), self._assoc("Bilingual"))

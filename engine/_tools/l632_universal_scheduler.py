@@ -1695,14 +1695,21 @@ def normalize_language_window_mode(raw: Any) -> str:
     RC9.1 baseline produced without the constraint, and the gate's input-hash
     check cannot catch that because the workbook did not change.
     """
-    text = norm(raw)
+    # `norm` only collapses whitespace and casefolds - it keeps spaces and
+    # underscores. Matching against squashed keys through it silently sent every
+    # multi-word value to OFF, including this flag's own choices: a run launched
+    # with --language-working-window MINIMUM_ROWS enforced nothing and reported
+    # mode OFF while looking like a legitimate result.
+    text = re.sub(r"[^a-z0-9]", "", norm(raw))
     if not text:
         return "OFF"
     if text in {"off", "no", "none", "disabled", "coverageonly", "minimumonly"}:
         return "OFF"
-    if text in {"allrows", "all", "alllanguages", "everyrow", "allactiverows"}:
+    if text in {"allrows", "all", "alllanguages", "everyrow", "allactiverows",
+                "everyactiverow", "allactivelanguagerows"}:
         return "ALL_ROWS"
-    if text in {"rowswithaminimum", "minimumrows", "withminimum", "yes", "on", "enabled"}:
+    if text in {"rowswithaminimum", "minimumrows", "withminimum", "yes", "on",
+                "enabled", "rowswithminimum"}:
         return "MINIMUM_ROWS"
     return "OFF"
 

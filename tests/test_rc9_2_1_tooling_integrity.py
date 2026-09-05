@@ -728,5 +728,53 @@ class Gate5SaysWhetherTheBreakLossWasHeadcountOrSomethingElse(unittest.TestCase)
         self.assertIn('attribution = "NOT_MEASURED"', self.SOURCE)
 
 
+class ThePackagedWorkbooksStillMatchTheRC9_1Baseline(unittest.TestCase):
+    """Gates 2 and 9 refuse to compare unless the run's input sha256 starts with
+    the prefix the baseline names, because comparing a repaired roster against
+    an unrepaired one reads as a large win and means nothing.
+
+    That check is silent when it fails - the gate reports NOT_COMPARABLE and the
+    report still prints. Regenerating the packaged workbooks through the
+    template builder changed all seven file hashes while leaving every
+    canonical contract hash identical, which would have turned AE AR B2B - the
+    one scenario proven to reach RC9.1 exactly - into "not comparable" with
+    nothing failing to say so.
+    """
+
+    INPUTS = ROOT / "packages" / "rc9_2_2_production" / "inputs"
+
+    def setUp(self):
+        if not self.INPUTS.is_dir():
+            self.skipTest("production package inputs not present in this checkout")
+        import hashlib
+        import json
+        self.baseline = json.loads((ROOT / "evidence" / "RC9_1_BASELINE.json").read_text())
+        self.hashes = {
+            path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in sorted(self.INPUTS.glob("*.xlsx"))
+        }
+
+    def _prefix(self, scenario):
+        return self.baseline["scenarios"][scenario].get("input_sha256_prefix")
+
+    def test_every_baseline_scenario_that_had_a_packaged_workbook_still_has_one(self):
+        """These three are the whole of the RC9.1 comparison evidence."""
+        for scenario in ("AE AR B2B", "Cricut Voice", "NMG SP"):
+            prefix = self._prefix(scenario)
+            self.assertTrue(prefix, f"{scenario} must name an input hash")
+            matches = [name for name, digest in self.hashes.items()
+                       if digest.startswith(prefix)]
+            self.assertEqual(len(matches), 1,
+                             f"no packaged workbook hashes to the RC9.1 baseline prefix for "
+                             f"{scenario}; gates 2 and 9 would silently report NOT_COMPARABLE")
+
+    def test_a_contract_hash_match_is_not_accepted_as_a_substitute(self):
+        """The rebuilt workbooks kept every one of 120 contract fields identical
+        and still broke the comparison, because the gate keys on the file."""
+        report = (ROOT / "tools" / "release_gate_report.py").read_text()
+        self.assertIn("run_sha.startswith(prefix)", report)
+        self.assertIn("NOT_COMPARABLE_INPUT_NOT_IN_BASELINE", report)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

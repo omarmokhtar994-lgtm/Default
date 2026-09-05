@@ -185,3 +185,80 @@ quality gate as measured on a schedule with no breaks rather than as a verdict.
 
 It refuses to produce a zip whose offline gate does not pass inside the staged
 package, and writes `MANIFEST.json` with the engine and input hashes.
+
+
+## Language hours: Coverage Start/End can bound when people work
+
+The Language Setup window answered one question — when must this language be
+covered — and it reads naturally as two: also the earliest and latest those
+associates may work. Nothing enforced the second. `language_eligible` is purely
+a capability test, so on GDI a bilingual associate was scheduled 00:00–09:00
+against a 16:00–07:00 window and stood on the floor at 08:00. Across that
+schedule, 18 of 145 shifts sat outside their language's window.
+
+Set **Language Working Window** on the Setup tab (or pass
+`--language-working-window`):
+
+| Mode | A shift must lie inside the window for |
+|---|---|
+| `Off` **(default)** | nothing — Coverage Start/End stays a coverage minimum only |
+| `Rows With A Minimum` | language rows with Minimum Per Interval ≥ 1 |
+| `All Rows` | every active row, including rows with no minimum |
+
+A `00:00–00:00` window spans the whole day and never restricts anything, in any
+mode. That is how AE AR B2B and Cricut Chat are written.
+
+**Measured on GDI, both runs at 3600s, 4 workers:**
+
+| | Off | Rows With A Minimum |
+|---|---|---|
+| bilingual/French hours outside 16:00–07:00 | 12 | **0** |
+| before-break target | 153 | 153 |
+| after-break target | 138 | 132 |
+| after-break floor | 156 | 152 |
+| floor gaps | 0 | 4 |
+| no-break exceptions | 1 | **0** |
+| avoidable overage, before / after | 265.96 / 165.69 | **251.60 / 157.14** |
+
+The −6 after-break target sits exactly on this project's documented 6-interval
+run-to-run noise band, so it is not claimed as a cost. The 4 floor gaps
+reproduced across two runs at different budgets, so those are real. Skeleton
+coverage is untouched, so the constraint bites at break placement, not shift/OFF
+quality.
+
+**Why the default is Off.** Turning it on is a contract change. NMG SP's Spanish
+row is 17:00–02:00, so an enforced run stops being comparable against an RC9.1
+baseline measured without it — and the gate's input-hash check cannot detect
+that, because the workbook does not change, only the engine's semantics. Enable
+it per workbook, deliberately.
+
+Violations are counted and reported on every run whatever the mode
+(`shifts_outside_language_window`), so the question is never invisible.
+
+## What this build is verified to be
+
+**The engine's scheduling behaviour is unchanged from the build whose results
+you scored.** Since that scoring the engine gained exactly one line that can
+affect the solver — the language-window constraint — and it is provably inert
+here: all seven packaged workbooks parse to `Language Working Window = Off`,
+which restricts zero associates. Everything else added is measurement, workbook
+output, or gate reporting. Verified, not assumed.
+
+| | |
+|---|---|
+| offline gate | 9 suites, 2 selfchecks, undefined-name sweep — run **inside** the built zip |
+| AE AR B2B | 168/168 before breaks, equal to RC9.1 |
+| GDI_REAL28 24/7 | production-eligible; 153/156 (98%) before breaks, 138/156 (88%) after |
+| package | built by `tools/build_production_package.py`, which refuses to write a zip whose gate fails |
+
+**Not yet verified, and the gap to a full sign-off:**
+
+* **NMG_SP has never been run.** Its archive never uploaded intact. Its workbook
+  is here and matches the RC9.1 baseline hash, so gates 2 and 9 will decide.
+* **Six of seven scenarios have not been re-run on this build.** Their scored
+  results still describe this engine by the argument above, but that is
+  inference from the diff, not seven fresh runs.
+* **Gate 5 and Gate 4 have no thresholds.** Both report "not configured" rather
+  than quietly passing. They decide nothing until you set them.
+* Cricut Voice's 244 vs 256 gap is unexplained; the selector's lexicographic
+  trade is real and its tolerance experiment was inconclusive.

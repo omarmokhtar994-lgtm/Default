@@ -105,8 +105,83 @@ Both gates report "not configured" rather than quietly passing.
 * **Gate 4** — add `Protected Before80 Minimum Intervals` and
   `Protected After80 Minimum Intervals`.
 
-## Still unverified
+## 24/7 is now verified
 
-`GDI_REAL28` was killed by Colab (rc −9) and `NMG_SP`'s archive never uploaded
-intact, so the 24/7 day-tail behaviour has **no** current evidence. Those two
-runs are the gap between this package and a full release sign-off.
+`GDI_REAL28` was killed by Colab with `rc −9`. That was an environment memory
+limit, not the engine: the same workbook runs to completion here with memory
+flat at 1 GB.
+
+**It produces a production-eligible schedule** — `production_eligible TRUE`,
+0 hard validation failures, 0 floor gaps, 1 approved no-break exception.
+
+| | before breaks | after breaks |
+|---|---|---|
+| at target | 153 / 156 (98%) | 138 / 156 (88%) |
+| at floor | 156 / 156 (100%) | 156 / 156 (100%) |
+
+**This is not a comparison against RC9.1.** The baseline file states GDI_REAL28
+and SAKS 11H/3OFF are *deliberately not asserted*, so there is no RC9.1 number
+to beat. The claim is only that RC9.2.2 handles a 24/7 contract correctly.
+
+`NMG_SP`'s archive never uploaded intact, so that scenario still has no run of
+its own. Its workbook is in `inputs/` and matches the RC9.1 baseline hash, so
+it is ready to run.
+
+
+## New since the package you scored: it tells you the headcount you need
+
+The engine already estimated additional headcount, from total productive hours
+in the week. That is a necessary condition and not a sufficient one — coverage
+has a shape, and a break has to land somewhere the interval can spare a body.
+The gap was large: NMG EN+SP's aggregate estimate was **+2 associates** while
+the shipped schedule finished **99 target intervals short**. Cricut Chat said
+**+1** against **69 short**.
+
+Every run now measures it directly from the schedule it built: per quarter-slot,
+how many people can step off without dropping below target, bounded by the
+concurrency cap, against the break-quarters that must be placed.
+
+| | reports |
+|---|---|
+| **Read Me First** sheet, first tab | current headcount, headcount needed, the gap, and why |
+| **Feasibility Certificate** | the same, beside the aggregate hours estimate |
+| **Candidate Leaderboard** | per skeleton, so you can see which one is completable |
+| run summary CSV | six columns, for scripted scoring |
+| **Gate 5** | `STAFFING_LIMITED` when a failure is headcount, not the optimiser |
+
+**Read the number as a lower bound.** A deficit *proves* headcount is short. A
+surplus proves only that headcount is not the constraint — it counts room per
+slot, not whether break windows and spacing let a placement reach that room.
+Measured: NMG13 reported a six-slot surplus and still gave up 9 target
+intervals to breaks.
+
+### Why this matters for the two Gate 5 failures
+
+Both were chased as optimiser defects for weeks. GDI_REAL28's regression twin,
+run here, reported `BREAK_CAPACITY_SHORT` — 560 break-quarters to place, 416
+placeable losslessly, **144 with nowhere to go, 28 → 33 associates** — and the
+run independently concluded it needed 4 no-break exceptions against a cap of 3.
+Two different mechanisms, same conclusion: that roster cannot take its breaks.
+
+## The output workbook opens on the decision
+
+28 audit sheets and a 110-row Production Summary is the right amount of evidence
+and the wrong amount of reading. A **Read Me First** tab now opens first with
+the result, coverage as a share of active intervals, what breaks cost, the
+headcount numbers, and a pointer to where the detail lives. **Nothing was
+removed** — the audit sheets are why a schedule can be defended when someone
+disputes it.
+
+The before-breaks artifact says what it is. It runs through the same writer
+against a placeholder break solution, so it used to report "after breaks"
+coverage, "intervals given up to place breaks: 0" and "associates with no
+break: 0" for a workbook where breaks were never assigned. It now states that
+breaks are not assigned, reports before-break coverage only, and labels its
+quality gate as measured on a schedule with no breaks rather than as a verdict.
+
+## Rebuilding this package
+
+    python3 tools/build_production_package.py
+
+It refuses to produce a zip whose offline gate does not pass inside the staged
+package, and writes `MANIFEST.json` with the engine and input hashes.

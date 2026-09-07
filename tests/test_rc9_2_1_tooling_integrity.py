@@ -728,6 +728,53 @@ class Gate5SaysWhetherTheBreakLossWasHeadcountOrSomethingElse(unittest.TestCase)
         self.assertIn('attribution = "NOT_MEASURED"', self.SOURCE)
 
 
+class NonBaselineWorkbooksCarryTheCurrentTemplateFixes(unittest.TestCase):
+    """A wildcard restore (`cp .../inputs/*.xlsx packages/.../inputs/`) meant to
+    protect only the three baseline-comparable workbooks silently reverted all
+    seven, undoing the Input Checks fix and the A45 Run Stage/Run Depth seeding
+    on the four workbooks that carried no baseline hash to protect in the first
+    place. A user asking "didn't u fix the input instructions sheet?" caught it;
+    nothing in the offline gate would have.
+    """
+
+    INPUTS = ROOT / "packages" / "rc9_2_2_production" / "inputs"
+    # These three are restored verbatim from the RC9.1-comparable build and must
+    # keep hashing to the baseline prefix - see
+    # ThePackagedWorkbooksStillMatchTheRC9_1Baseline. Every other packaged
+    # workbook has no baseline to protect and must carry the current fixes.
+    BASELINE_PROTECTED = {"AE_AR_B2B.xlsx", "Cricut_Voice_RC9_1_READY_SKELETON.xlsx",
+                          "NMG_SP_RC9_1_READY_FIXED.xlsx"}
+
+    def setUp(self):
+        if not self.INPUTS.is_dir():
+            self.skipTest("production package inputs not present in this checkout")
+
+    def test_every_non_baseline_workbook_has_the_input_checks_pointer(self):
+        from openpyxl import load_workbook
+        for path in sorted(self.INPUTS.glob("*.xlsx")):
+            if path.name in self.BASELINE_PROTECTED:
+                continue
+            wb = load_workbook(path, read_only=True)
+            self.assertIn("Input Checks", wb.sheetnames, f"{path.name} lost its Input Checks sheet")
+            ws = wb["Input Checks"]
+            first = next((row[0] for row in ws.iter_rows(values_only=True) if row and row[0]), "")
+            self.assertIn("performed by the engine", str(first),
+                         f"{path.name} still carries the old static-PASS Input Checks sheet")
+
+    def test_every_non_baseline_workbook_carries_run_stage_and_depth_rows(self):
+        import sys
+        sys.path.insert(0, str(ROOT / "engine" / "_tools"))
+        import l632_universal_scheduler as E
+        for path in sorted(self.INPUTS.glob("*.xlsx")):
+            if path.name in self.BASELINE_PROTECTED:
+                continue
+            parsed = E.parse_input(path)
+            self.assertEqual(parsed.run_stage, "FULL_SCHEDULE",
+                             f"{path.name} lost the A45 Run Stage seeding")
+            self.assertEqual(parsed.run_depth, "DEEP",
+                             f"{path.name} lost the A45 Run Depth seeding")
+
+
 class ThePackagedWorkbooksStillMatchTheRC9_1Baseline(unittest.TestCase):
     """Gates 2 and 9 refuse to compare unless the run's input sha256 starts with
     the prefix the baseline names, because comparing a repaired roster against

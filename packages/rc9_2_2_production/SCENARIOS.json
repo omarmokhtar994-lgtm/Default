@@ -8,7 +8,7 @@
     {
       "scenario_id": "AE_AR_B2B",
       "input": "AE_AR_B2B.xlsx",
-      "input_sha256": "b7dcbbffeb19e05f1af4e2ff6b55197b8f8fef5ac50ea266e5e0e825f1a01288",
+      "input_sha256": "321f1eff6e86c8c1b65e39a2c2ab9859e53bd58a6c0ae41425809e4ee4920c77",
       "mode": "DEEP",
       "time_limit_sec": 14400,
       "num_workers": 4,
@@ -33,7 +33,7 @@
     {
       "scenario_id": "CRICUT_VOICE",
       "input": "Cricut_Voice_RC9_1_READY_SKELETON.xlsx",
-      "input_sha256": "8e3833c9ef496b468503bf6f4a21f14a215f306173c68f41f2e35fb7cabe989f",
+      "input_sha256": "55b4ee899cfd38ad586962a16fe40c6d2f9ca41eee13f531eab2f04d1627d9f1",
       "mode": "DEEP",
       "time_limit_sec": 14400,
       "num_workers": 4,
@@ -82,7 +82,7 @@
     {
       "scenario_id": "NMG_SP",
       "input": "NMG_SP_RC9_1_READY_FIXED.xlsx",
-      "input_sha256": "33f540ffa1df748d5d8379ccbbbd3841c6285f17dee01d1ba66745ccb3b3b81a",
+      "input_sha256": "58aeb4ca5d1c1d5c163d5d3f938d4b9ba635a3daf38d1a0d6e3af2f30f4efa09",
       "mode": "DEEP",
       "time_limit_sec": 14400,
       "num_workers": 4,

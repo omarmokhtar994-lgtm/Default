@@ -51,9 +51,16 @@
       "language_gaps": 0,
       "zero_staffed_quarters": 0,
       "evidence_status": "RC9.1 preserved candidate replay baseline; validator discrepancy separately noted",
-      "input_sha256_prefix": "33f540ffa1df748d",
+      "input_sha256_prefix": "58aeb4ca5d1c1d5c",
       "comparable": true,
-      "target_ratio": 0.9
+      "target_ratio": 0.9,
+      "input_sha256_prefix_history": [
+        {
+          "previous_prefix": "33f540ffa1df748d",
+          "reason": "Input Checks and Run Stage/Run Depth template fix applied to the packaged workbook. Canonical contract hash (120 fields) verified identical before and after - only sheet layout changed. The scored RC9.1 metrics on this row are untouched.",
+          "canonical_contract_hash": "307be4a06148a69ab3a00c274cc5b9ae0bf39c64524083a3035bde24dbcc6ecd"
+        }
+      ]
     },
     "Cricut Chat Current 27": {
       "active_intervals": 242,
@@ -122,9 +129,16 @@
       "language_gaps": 0,
       "zero_staffed_quarters": 0,
       "evidence_status": "RC9.1 preserved candidate replay baseline",
-      "input_sha256_prefix": "b7dcbbffeb19e05f",
+      "input_sha256_prefix": "321f1eff6e86c8c1",
       "comparable": true,
-      "target_ratio": 1.0
+      "target_ratio": 1.0,
+      "input_sha256_prefix_history": [
+        {
+          "previous_prefix": "b7dcbbffeb19e05f",
+          "reason": "Input Checks and Run Stage/Run Depth template fix applied to the packaged workbook. Canonical contract hash (120 fields) verified identical before and after - only sheet layout changed. The scored RC9.1 metrics on this row are untouched.",
+          "canonical_contract_hash": "cdccda301eb824da468c04d1a753db8c513239842b3f60870642e3e8683708cf"
+        }
+      ]
     },
     "Cricut Voice": {
       "active_intervals": 264,
@@ -137,9 +151,16 @@
       "severe_floor_gaps": 0,
       "max_consecutive_floor_gaps": 0,
       "evidence_status": "RC9.1 preserved workbook leaderboard; exact final output separately validated",
-      "input_sha256_prefix": "8e3833c9ef496b46",
+      "input_sha256_prefix": "55b4ee899cfd38ad",
       "comparable": true,
-      "target_ratio": 1.0
+      "target_ratio": 1.0,
+      "input_sha256_prefix_history": [
+        {
+          "previous_prefix": "8e3833c9ef496b46",
+          "reason": "Input Checks and Run Stage/Run Depth template fix applied to the packaged workbook. Canonical contract hash (120 fields) verified identical before and after - only sheet layout changed. The scored RC9.1 metrics on this row are untouched.",
+          "canonical_contract_hash": "13c1b9b4187f13b72519bde6f5731b874ff5fa62bf13f1379985aeaa829304d1"
+        }
+      ]
     }
   },
   "note_target_ratio": "Per-scenario RC9.1 contract target, from the supplier's Comparison Guide sheet. Comparing a 90%-target run's before_target against a 100%-target baseline compares different coverage tiers."

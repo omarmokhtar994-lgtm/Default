@@ -1731,17 +1731,30 @@ def associate_language_window(
 
 
 def shift_within_language_window(shift: Shift, window: Tuple[int, int]) -> bool:
-    """True when the whole shift lies inside the window.
+    """True when the shift's START falls inside the window.
 
-    The window is a max and a min, so a shift that starts inside it and runs
-    past the end is outside it for those minutes. Measured on GDI: one bilingual
-    shift ran 00:00-09:00 against a 16:00-07:00 window and put a bilingual
-    associate on the floor at 08:00.
+    This is deliberately the same rule `shift_start_contract_allows` already
+    uses for the workbook's "Allowed Shift Start Window": the window says when
+    a shift may BEGIN, not that the whole shift must finish before it closes.
+    An overnight window naturally runs into hours after its nominal end - a
+    shift starting inside a 16:00-03:00 window and ending at 04:00 has not
+    left the window, it has simply run its length.
+
+    The first version of this required the entire shift to complete before the
+    window's end. On an 11-hour window with a roster of 9-hour shifts, that
+    left only 3 of 24 legal shift starts and made the whole roster's Stage 1
+    hard-infeasible - proven by the hard-feasibility probe, which found
+    relaxing this rule alone was the only relaxation that restored
+    feasibility. The person who set the window pushed back: "this is our
+    working window for those people, why am I forced to increase it - that
+    doesn't make any sense" - and was right. Matching the existing start-only
+    rule instead of inventing a stricter one raises the same window's legal
+    starts from 3 of 24 to 11.
     """
     start, end = window
     span = (end - start) % 1440 or 1440
     offset = (shift.start_min - start) % 1440
-    return offset + shift.duration_min <= span
+    return offset < span
 
 
 def language_working_window_violations(

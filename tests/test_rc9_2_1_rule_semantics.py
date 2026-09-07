@@ -771,29 +771,54 @@ class LanguageCoverageWindowsCanBoundWorkingHours(unittest.TestCase):
         self.assertTrue(E.shift_within_language_window(
             self._shift(22, 8), (16 * 60, 7 * 60)))
 
-    def test_a_shift_that_runs_past_the_window_end_is_illegal(self):
-        """The real GDI cell: 00:00-09:00 against 16:00-07:00 put a bilingual
-        associate on the floor at 08:00."""
-        self.assertFalse(E.shift_within_language_window(
+    def test_a_shift_starting_inside_an_overnight_window_may_run_past_its_end(self):
+        """A working window says when a shift may BEGIN, matching how
+        shift_start_contract_allows already treats "Allowed Shift Start
+        Window" elsewhere in this engine. The first version of this required
+        the whole shift to finish before the window closed - on Cricut Voice's
+        real 16:00-03:00 (11h) window against a roster of 9h shifts that left
+        3 of 24 legal starts and made Stage 1 hard-infeasible, and the person
+        who set the window pushed back that nothing about their business rule
+        had changed. The real GDI cell (00:00-09:00 against 16:00-07:00) is
+        exactly this case: the shift starts at 00:00, squarely inside the
+        window, and simply runs its 9 hours - it is not a violation."""
+        self.assertTrue(E.shift_within_language_window(
             self._shift(0, 9), (16 * 60, 7 * 60)))
 
-    def test_a_shift_that_starts_before_the_window_opens_is_illegal(self):
+    def test_a_shift_that_starts_before_the_window_opens_is_still_illegal(self):
+        """This is the real violation a working window exists to catch: a
+        shift beginning before the window is open at all."""
         self.assertFalse(E.shift_within_language_window(
             self._shift(15, 9), (16 * 60, 7 * 60)))
 
-    def test_a_shift_exactly_filling_the_window_is_legal(self):
+    def test_a_shift_starting_at_the_window_open_is_legal(self):
         self.assertTrue(E.shift_within_language_window(
             self._shift(16, 15), (16 * 60, 7 * 60)))
 
-    def test_one_minute_of_overrun_is_still_outside(self):
-        shift = SimpleNamespace(start_min=16 * 60, duration_min=15 * 60 + 1, label="over")
-        self.assertFalse(E.shift_within_language_window(shift, (16 * 60, 7 * 60)))
+    def test_a_shift_starting_one_minute_before_the_window_closes_is_legal(self):
+        """However long it then runs - the window bounds the start, not the
+        shift's duration."""
+        shift = SimpleNamespace(start_min=6 * 60 + 59, duration_min=15 * 60, label="edge")
+        self.assertTrue(E.shift_within_language_window(shift, (16 * 60, 7 * 60)))
+
+    def test_a_shift_starting_exactly_when_the_window_closes_is_illegal(self):
+        self.assertFalse(E.shift_within_language_window(
+            self._shift(7, 9), (16 * 60, 7 * 60)))
 
     def test_a_daytime_window_behaves_the_same_way(self):
         self.assertTrue(E.shift_within_language_window(
             self._shift(7, 9), (7 * 60, 2 * 60)))
         self.assertFalse(E.shift_within_language_window(
             self._shift(6, 9), (7 * 60, 2 * 60)))
+
+    def test_cricut_voices_real_window_now_admits_every_hour_inside_it(self):
+        """Measured on the actual roster that surfaced this: an 11-hour window
+        (16:00-03:00) against 24 nine-hour shifts went from 3 legal starts
+        under the old whole-shift rule to 11 under the corrected one - one for
+        every hour actually inside the window."""
+        window = (16 * 60, 3 * 60)
+        legal = [h for h in range(24) if E.shift_within_language_window(self._shift(h, 9), window)]
+        self.assertEqual(len(legal), 11)
 
     # -- a full-day window is not a restriction ---------------------------
     def test_a_window_spanning_the_whole_day_is_not_stored(self):

@@ -77,6 +77,37 @@ def build(output_dir: Path) -> Path:
         print(gate.stdout[-4000:], file=sys.stderr)
         raise SystemExit("refusing to package: the staged gate did not pass")
 
+    # The shipped SCENARIOS.json was stale for a whole release: it named a
+    # different package, a different engine, and seven input hashes that matched
+    # none of the workbooks beside it, so the Colab runner refused every
+    # scenario. The offline gate passed the whole time, because it never reads
+    # this file. Verify it against what is actually being shipped.
+    scen = json.loads((staging / "SCENARIOS.json").read_text())
+    staged_engine = hashlib.sha256(
+        (staging / "engine" / "_tools" / "l632_universal_scheduler.py").read_bytes()
+    ).hexdigest()
+    stale = []
+    if scen.get("engine_sha256") != staged_engine:
+        stale.append(f"engine_sha256 {str(scen.get('engine_sha256'))[:16]} != "
+                     f"packaged engine {staged_engine[:16]}")
+    for row in scen.get("scenarios", []):
+        path = staging / "inputs" / row["input"]
+        if not path.is_file():
+            stale.append(f"{row['scenario_id']}: {row['input']} is not in inputs/")
+            continue
+        actual = hashlib.sha256(path.read_bytes()).hexdigest()
+        if actual != row.get("input_sha256"):
+            stale.append(f"{row['scenario_id']}: manifest hash "
+                         f"{str(row.get('input_sha256'))[:16]} != packaged "
+                         f"workbook {actual[:16]}")
+    if stale:
+        for line in stale:
+            print(f"  STALE MANIFEST: {line}", file=sys.stderr)
+        raise SystemExit("refusing to package: SCENARIOS.json does not describe "
+                         "what is being shipped, so the runner would reject every scenario")
+    print(f"── SCENARIOS.json describes the packaged engine and all "
+          f"{len(scen.get('scenarios', []))} workbooks")
+
     manifest = {
         "package": NAME,
         "engine_sha256": hashlib.sha256(

@@ -73,6 +73,11 @@ def select(scenarios: list, only: str, shard: int, shards: int) -> list:
     return list(scenarios)
 
 
+def mode_default_budget(args) -> int:
+    return int(args.time_limit or {"SMOKE": 900, "QUICK": 3600,
+                                   "DEEP": 14400, "OVERNIGHT": 21600}[args.mode or "DEEP"])
+
+
 def run_one(root: Path, results_root: Path, row: dict, args) -> dict:
     scenario = row["scenario_id"]
     # The wrapper creates <output-root>/<schedule-id>/ itself, so output-root is
@@ -80,18 +85,31 @@ def run_one(root: Path, results_root: Path, row: dict, args) -> dict:
     # gives results/<id>/<id>/, which the gate report will not find - it looks
     # for case directories one level down.
     results_root.mkdir(parents=True, exist_ok=True)
-    budget = int(args.time_limit or row["time_limit_sec"])
+    # A mode override without a matching budget is the trap this exists to
+    # avoid: DEEP's 14400s budget under --mode QUICK, or QUICK's phase reserves
+    # under a 14400s one. An explicit --time-limit still wins over both.
+    mode_budgets = {"SMOKE": 900, "QUICK": 3600, "DEEP": 14400, "OVERNIGHT": 21600}
+    if args.time_limit:
+        budget = int(args.time_limit)
+    elif args.mode:
+        budget = mode_budgets[args.mode]
+    else:
+        budget = int(row["time_limit_sec"])
     command = [
         sys.executable, "-u", str(root / "engine" / "RUN_UNIVERSAL_PRODUCTION.py"),
-        "--input", str(root / "inputs" / row["input"]),
+        "--input", str(row.get("_input_path") or (root / "inputs" / row["input"])),
         "--output-root", str(results_root),
         "--schedule-id", scenario,
-        "--mode", row.get("mode", "DEEP"),
+        "--mode", args.mode or row.get("mode", "DEEP"),
         "--time-limit", str(budget),
         "--num-workers", str(args.num_workers or row.get("num_workers", 4)),
         "--solver-random-seed", str(row.get("solver_random_seed", 9000)),
         "--overwrite",
     ]
+    if args.stage:
+        command += ["--stage", args.stage]
+    if args.language_working_window:
+        command += ["--language-working-window", args.language_working_window]
     if args.resume:
         command.append("--resume")
     log(f"START {scenario}  budget={budget}s  workers={command[command.index('--num-workers')+1]}")
@@ -149,6 +167,20 @@ def main() -> int:
     ap.add_argument("--shard", type=int, default=0)
     ap.add_argument("--shards", type=int, default=1)
     ap.add_argument("--time-limit", type=int, default=0, help="override budget seconds")
+    ap.add_argument("--mode", choices=["SMOKE", "QUICK", "DEEP", "OVERNIGHT"], default=None,
+                    help="override the manifest depth. Setting --time-limit alone is NOT "
+                         "the same: mode also sets the phase reserves, and DEEP's joint "
+                         "reserve is 5400s, which on its own exceeds a 3600s budget.")
+    ap.add_argument("--stage", choices=["BEFORE_BREAKS_ONLY", "FULL_SCHEDULE"], default=None,
+                    help="BEFORE_BREAKS_ONLY runs Stage 1 and exports the before-break "
+                         "champion without placing breaks.")
+    ap.add_argument("--language-working-window",
+                    choices=["OFF", "MINIMUM_ROWS", "ALL_ROWS"], default=None,
+                    help="override the workbook's Language Working Window setting.")
+    ap.add_argument("--input", type=Path, default=None,
+                    help="run a workbook that is not in SCENARIOS.json - your own live "
+                         "scenario. Skips the manifest hash check for that file only; "
+                         "the manifest scenarios stay hash-verified.")
     ap.add_argument("--num-workers", type=int, default=0)
     ap.add_argument("--resume", action="store_true")
     ap.add_argument("--skip-guards", action="store_true")
@@ -172,6 +204,39 @@ def main() -> int:
         log("GUARD SUITE FAILED - refusing to run scenarios against an engine "
             "that does not match its own tests")
         return 2
+
+    if args.input is not None:
+        # Your own workbook. The hash check exists so a run against a silently
+        # different input is never compared against a baseline; a workbook that
+        # was never in the manifest is a different case, not a corrupted one.
+        # Gates 2 and 9 will report NOT_COMPARABLE for it, which is correct.
+        workbook = args.input.resolve()
+        if not workbook.is_file():
+            log(f"no such workbook: {workbook}")
+            return 2
+        scenario_id = args.only.strip().upper() or workbook.stem.upper()[:60]
+        log(f"ad-hoc scenario {scenario_id} from {workbook}")
+        log("this workbook is not in SCENARIOS.json, so gates 2 and 9 will report "
+            "NOT_COMPARABLE - there is no RC9.1 baseline to compare it against")
+        row = {
+            "scenario_id": scenario_id,
+            "input": workbook.name,
+            "time_limit_sec": mode_default_budget(args),
+            "mode": args.mode or "DEEP",
+            "num_workers": args.num_workers or 4,
+            "solver_random_seed": 9000,
+            "_input_path": workbook,
+        }
+        if not args.skip_guards and not run_guard_suite(root):
+            log("GUARD SUITE FAILED - refusing to run")
+            return 2
+        record = run_one(root, results_root, row, args)
+        (results_root / "RUN_LEDGER.json").write_text(json.dumps({
+            "generated_utc": datetime.now(timezone.utc).isoformat(),
+            "package": manifest["package"], "engine_sha256": manifest["engine_sha256"],
+            "ad_hoc_input": str(workbook), "runs": [record],
+        }, indent=2), encoding="utf-8")
+        return score_gates(root, results_root)
 
     problems = verify_inputs(root, manifest["scenarios"])
     if problems:

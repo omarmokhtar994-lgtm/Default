@@ -82,3 +82,33 @@ Enable it deliberately, per workbook, and re-measure.
 short. A surplus proves only that headcount is not the constraint — the measure
 counts room per slot, not whether break windows and spacing let a placement
 reach it.
+
+
+## Running from the Colab notebook
+
+Cell **5. Run the scenarios** now carries the controls directly:
+
+| Field | Use |
+|---|---|
+| **MODE** | `SMOKE` · `QUICK` · `DEEP` · `OVERNIGHT` — picks the depth **and** the matching budget |
+| **STAGE** | `FULL_SCHEDULE` or `BEFORE_BREAKS_ONLY` |
+| **MY_WORKBOOK** | path to your own `.xlsx` — upload it in the Files panel first |
+| **ONLY** | one or more scenario ids, comma separated |
+| **LANGUAGE_WORKING_WINDOW** | `workbook` (use the sheet's own setting) or force `OFF` / `MINIMUM_ROWS` / `ALL_ROWS` |
+| **TIME_LIMIT** | leave at `0` unless you want a budget that does not match MODE |
+
+**Leave TIME_LIMIT at 0 and change MODE instead.** Mode sets the phase reserves
+as well as the budget, and `DEEP`'s joint-refinement reserve alone is 5400s —
+larger than a 3600s budget. A `DEEP` mode squeezed into a `QUICK` budget starves
+Stage 1, which is what produced a Gate 5 failure and 87 concurrency violations
+on Cricut Voice that vanished at the proper budget.
+
+Run cells **1 → 2 → 3 → 4** before cell 5. Cell 3 defines `PACKAGE_ROOT`;
+running cell 4 on its own raises `NameError: PACKAGE_ROOT is not defined`.
+
+Your own workbook is run without the manifest hash check — that check exists so
+a *known* scenario is never compared against a silently different input, and a
+workbook that was never in the manifest is a different case. The seven packaged
+scenarios stay hash-verified. Gates 2 and 9 will report `NOT_COMPARABLE` for
+your data, which is correct: there is no RC9.1 baseline for it. Gates 4, 5 and 8
+still decide.

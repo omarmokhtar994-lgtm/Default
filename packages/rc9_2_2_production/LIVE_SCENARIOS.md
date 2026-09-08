@@ -30,6 +30,53 @@ On the **Language Setup** tab, `Coverage Start` / `Coverage End` and
 `Minimum Per Interval` define each language group. A `00:00–00:00` window spans
 the whole day and restricts nothing.
 
+## 2b. Coverage Split — which group *staffs* which hours
+
+`Minimum Per Interval` on Language Setup is a floor: "at least N of this group
+are present". It does not say who carries the requirement. If International owns
+the daytime and Domestic owns the evening, a minimum of 1 lets Domestic staff the
+daytime as long as one International is on the floor — which is not the split you
+described to the roster.
+
+The **Coverage Split** tab makes a group *responsible* for its hours:
+
+| Column | Meaning |
+|---|---|
+| **Coverage Group** | must match the `Coverage Group` column on Language Setup |
+| **Start** / **End** | the window it owns; may cross midnight (`16:00`–`03:00`) |
+| **Coverage Ratio** | share of the requirement that group must field. Blank = the workbook's `Minimum Per Interval`. `1.0` = the whole requirement |
+| **Exclusive?** | `Yes` = nobody outside the group may work those hours at all |
+| **Active?** | `No` or blank = the row is ignored |
+
+The tab ships empty and the feature is opt-in: a workbook with no rows behaves
+exactly as it did before. The requirement is grossed up for shrinkage like every
+other requirement, and it is enforced in **both** stages — Stage 1 rosters to it
+and the break stage may not hollow it out.
+
+**Overlapping windows pool.** If two windows cover the same hour, the groups
+cover it **together** against one requirement: their eligible people combine and
+the higher of the two Coverage Ratios applies. An hour needing 10 is 10 people
+between them, never 10 from each. Make the windows complementary only if you want
+one group solely responsible there. The run log records shared spans as
+`COVERAGE_SPLIT SHARED`; it is information, not a warning.
+
+**Read the `COVERAGE_SPLIT` lines at the top of the run log before you wait on a
+solve.** Each owning span is scored up front against the people who could staff
+it, allowing for OFF days *and* for the fact that someone on a break is not
+covering:
+
+* `OK` — fits, with the headroom stated.
+* `TIGHT` — it solves only if OFF days fall perfectly; expect no-break
+  exceptions. Lower that group's Coverage Ratio or add headcount.
+* `SHORT` — arithmetically impossible. The line names the peak interval and the
+  numbers. No scheduler setting fixes it; change the ratio, the window, or the
+  roster.
+
+This exists because the same shape of mistake previously returned a bare
+`INFEASIBLE` with nothing to act on. A group of 8 cannot hold 80% of a 13-hour
+daytime window through its own breaks, and that is a headcount fact, not a
+configuration one.
+
 ## 3. Run it
 
     python3 engine/RUN_UNIVERSAL_PRODUCTION.py \

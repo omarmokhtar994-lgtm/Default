@@ -741,6 +741,9 @@ class ParsedInput:
     run_depth: Optional[str] = None
     language_windows: Dict[str, Tuple[int, int, bool]] = field(default_factory=dict)
     language_working_window_mode: str = "OFF"
+    coverage_split_rules: List[CoverageSplitRule] = field(default_factory=list)
+    coverage_split_source: str = "ABSENT"
+    coverage_split_gate_mode: str = "hard"
     allow_back_to_back_breaks: bool = False
     break_max_concurrent_ratio: float = 0.30
     break_max_concurrent_absolute: int = 4
@@ -807,6 +810,44 @@ class HardConfig:
     max_shift_variety: bool = True
     hard_floor: bool = True
     week_boundary: bool = True
+    coverage_split: bool = True
+
+
+@dataclass
+class CoverageSplitRule:
+    """A window of the day one coverage group is responsible for STAFFING.
+
+    Language Setup's Coverage Start/End answers two weaker questions: how many
+    qualified people must be present at minimum (`Minimum Per Interval`), and -
+    since the language working window was added - which hours that group's own
+    people may be scheduled in. Neither says "this group carries the whole
+    requirement here, and the other group is not the fallback".
+
+    Cricut Voice needs exactly that: International staffs 03:00-16:00, Domestic
+    staffs 16:00-03:00. Under a minimum of 1, a single International associate
+    at 10:00 satisfied the contract while Domestic covered the rest - which is
+    not the operation, and is why removing International's daytime demand made
+    a Domestic-only roster look solvable.
+    """
+    group: str
+    start_min: int
+    end_min: int
+    coverage_ratio: float
+    exclusive: bool
+    active: bool
+    required_languages: Set[str]
+    eligible_languages: Set[str]
+
+    def overlaps(self, minute: int, span: int = 15) -> bool:
+        if self.start_min == self.end_min:
+            return True
+        for offset in range(0, max(1, span), 15):
+            m = (minute + offset) % 1440
+            inside = (self.start_min <= m < self.end_min) if self.start_min < self.end_min \
+                else (m >= self.start_min or m < self.end_min)
+            if inside:
+                return True
+        return False
 
 
 @dataclass
@@ -1501,6 +1542,154 @@ def _parse_language_rules(
     return rules, capabilities, windows
 
 
+COVERAGE_SPLIT_SHEET_ALIASES = ("coverage split", "coverage responsibility", "language coverage split")
+
+
+def coverage_split_required_headcount(
+    parsed: ParsedInput, day: int, interval: int, ratio: float
+) -> int:
+    """Grossed-up headcount one group must field for an interval it owns.
+
+    Same arithmetic the rest of the engine uses for a requirement: scale by the
+    coverage ratio, then divide by (1 - shrinkage), because shrinkage is
+    out-of-office time and a rostered person is not a present person.
+    """
+    req = float(parsed.requirements[day][interval] or 0.0)
+    if req <= 0:
+        return 0
+    eff = max(1e-9, 1.0 - float(parsed.shrinkage[day][interval] or 0.0))
+    return max(0, int(math.ceil(req * float(ratio) / eff - 1e-9)))
+
+
+def coverage_split_capacity_report(parsed: ParsedInput) -> Dict[str, Any]:
+    """Can each owning group actually field what its window demands?
+
+    The language working window taught this lesson expensively: a rule that is
+    arithmetically impossible returns a bare INFEASIBLE with no hint of which
+    number is wrong. This answers that up front, per group, with the peak
+    interval named - so a short group is a sentence, not an investigation.
+    """
+    rules = list(getattr(parsed, "coverage_split_rules", ()) or ())
+    if not rules:
+        return {"status": "NOT_CONFIGURED", "rows": []}
+    rows: List[Dict[str, Any]] = []
+    for split in rules:
+        pool = [a for a in parsed.associates if language_eligible(split, a)]
+        peak_need, peak_at = 0, None
+        for d in range(7):
+            for i in range(parsed.intervals_per_day):
+                if not parsed.active[d][i]:
+                    continue
+                minute = i * parsed.interval_minutes
+                if not split.overlaps(minute, parsed.interval_minutes):
+                    continue
+                need = coverage_split_required_headcount(parsed, d, i, split.coverage_ratio)
+                if need > peak_need:
+                    peak_need, peak_at = need, f"{DAY_NAMES[d]} {hhmm(minute)}"
+        # Everyone owes the roster its OFF days, so the pool that can be on the
+        # floor at one instant is smaller than the headcount on the sheet.
+        workdays = max(1, 7 - 2)
+        concurrent_ceiling = int(math.floor(len(pool) * workdays / 7.0)) if pool else 0
+        feasible = peak_need <= concurrent_ceiling
+        rows.append({
+            "group": split.group,
+            "window": f"{hhmm(split.start_min)}-{hhmm(split.end_min)}",
+            "coverage_ratio": round(float(split.coverage_ratio), 4),
+            "exclusive": bool(split.exclusive),
+            "eligible_headcount": len(pool),
+            "peak_required": peak_need,
+            "peak_interval": peak_at,
+            "approx_concurrent_ceiling": concurrent_ceiling,
+            "status": "OK" if feasible else "SHORT",
+            "headline": (
+                f"{split.group}: {len(pool)} eligible, peak need {peak_need}"
+                f"{' at ' + peak_at if peak_at else ''} - fits."
+                if feasible else
+                f"{split.group} cannot cover its own window: {len(pool)} eligible associates, "
+                f"but {peak_need} are required at {peak_at}. Allowing for 2 OFF days each, at "
+                f"most about {concurrent_ceiling} can be on the floor at once. Either add "
+                f"headcount to {split.group}, lower its Coverage Ratio, or narrow its window."
+            ),
+        })
+    short = [r for r in rows if r["status"] == "SHORT"]
+    return {
+        "status": "SHORT" if short else "OK",
+        "short_groups": [r["group"] for r in short],
+        "rows": rows,
+    }
+
+
+def coverage_split_rules_at(
+    parsed: ParsedInput, minute: int, span: int = 15
+) -> List[CoverageSplitRule]:
+    return [r for r in getattr(parsed, "coverage_split_rules", ()) if r.active and r.overlaps(minute, span)]
+
+
+def _parse_coverage_split(
+    wb: Any, capabilities: Dict[str, Set[str]], default_ratio: float
+) -> Tuple[List[CoverageSplitRule], str]:
+    """Read the optional Coverage Split sheet.
+
+    Absent sheet, or no active rows, means the feature is off and nothing about
+    the contract changes - that is deliberate. A rule that silently starts
+    binding on workbooks that never asked for it is how a release breaks every
+    scenario at once.
+    """
+    sheet = None
+    for name in wb.sheetnames:
+        if norm(name) in {norm(a) for a in COVERAGE_SPLIT_SHEET_ALIASES}:
+            sheet = wb[name]
+            break
+    if sheet is None:
+        return [], "ABSENT"
+
+    header = _find_header_row(sheet, ["coverage group", "start"])
+    headers = {norm(sheet.cell(header, c).value): c for c in range(1, sheet.max_column + 1)}
+
+    def find_col(needles: Sequence[str]) -> Optional[int]:
+        return next((c for h, c in headers.items() if any(n in h for n in needles)), None)
+
+    c_group = find_col(["coverage group", "group"])
+    c_start = find_col(["start"])
+    c_end = find_col(["end"])
+    c_ratio = find_col(["coverage ratio", "ratio"])
+    c_excl = find_col(["exclusive"])
+    c_active = find_col(["active", "enabled"])
+    if c_group is None or c_start is None or c_end is None:
+        return [], "MISSING_COLUMNS"
+
+    rules: List[CoverageSplitRule] = []
+    for r in range(header + 1, sheet.max_row + 1):
+        group = str(sheet.cell(r, c_group).value or "").strip()
+        if not group:
+            continue
+        if c_active is not None and not yes(sheet.cell(r, c_active).value, True):
+            continue
+        start = minute_of_day(sheet.cell(r, c_start).value)
+        end = minute_of_day(sheet.cell(r, c_end).value)
+        if start is None or end is None:
+            continue
+        ratio = to_float(sheet.cell(r, c_ratio).value, 0.0) if c_ratio is not None else 0.0
+        if ratio > 1.5:          # a percentage was typed, not a ratio
+            ratio = ratio / 100.0
+        if ratio <= 0:
+            ratio = float(default_ratio)
+        exclusive = yes(sheet.cell(r, c_excl).value, False) if c_excl is not None else False
+        # A coverage group is named by the Language Setup "Coverage Group"
+        # column; its members are every source language mapping onto it.
+        required = {norm(group)}
+        eligible = {src for src, targets in capabilities.items()
+                    if norm(group) in {norm(t) for t in targets} or norm(src) == norm(group)}
+        if not eligible:
+            eligible = {norm(group)}
+        rules.append(CoverageSplitRule(
+            group=group, start_min=int(start), end_min=int(end),
+            coverage_ratio=float(ratio), exclusive=bool(exclusive), active=True,
+            required_languages=required, eligible_languages=eligible,
+        ))
+    return rules, ("ACTIVE" if rules else "NO_ACTIVE_ROWS")
+
+
 def _parse_break_segments(im: Dict[str, Any]) -> Tuple[Tuple[int, str], ...]:
     short_count = int(round(to_float(_instruction_get(im, ["Short Break Count", "Count of Short Breaks", "Number of Short Breaks"], 2), 2)))
     short_min = int(round(to_float(_instruction_get(im, ["Short Break Duration Minutes", "Short Break Duration", "Break Duration Minutes"], 15), 15)))
@@ -1866,6 +2055,11 @@ def parse_input(
     shifts = _parse_shifts(wb, allowed_durations, allowed_start_min, allowed_start_end, start_step)
     requirements, shrinkage, active, req_dates, interval, req_sheet, shr_sheet = _parse_requirement_table(wb, im)
     language_rules, capabilities, language_windows = _parse_language_rules(wb, associates)
+    coverage_split_gate_mode = norm(_instruction_get(
+        im, ["Coverage Split Gate Mode", "Coverage Responsibility Gate Mode"], "fail"))
+    if coverage_split_gate_mode not in {"off", "warn", "fail"}:
+        coverage_split_gate_mode = "fail"
+        parser_warnings.append("Unknown Coverage Split Gate Mode; defaulted it to FAIL.")
 
     hard_off = yes(_instruction_get(im, ["Hard OFF Preferences", "Hard OFF", "OFF Preferences Hard"], "Yes"), True)
     strict_off = yes(_instruction_get(im, ["Strict 2 OFF", "Strict Two OFF", "Strict OFF Count"], "Yes"), True)
@@ -1885,6 +2079,11 @@ def parse_input(
     if floor_ratio > 1.5:
         floor_ratio /= 100.0
     floor_ratio = min(1.0, max(0.0, floor_ratio))
+    # Default a split row's coverage ratio to the workbook's own floor: the level
+    # the schedule is already required to reach, not a new number to invent.
+    coverage_split_rules, coverage_split_source = _parse_coverage_split(wb, capabilities, floor_ratio)
+    if coverage_split_gate_mode == "off":
+        coverage_split_rules = []
     hard_floor_flag_raw = _instruction_get(
         im, ["Hard Floor Solver Constraint Enabled", "Minimum Floor Enforcement Hard", "Coverage Floor Hard Constraint"], None
     )
@@ -2327,6 +2526,9 @@ def parse_input(
         run_depth=run_depth,
         language_windows=language_windows,
         language_working_window_mode=language_working_window_mode,
+        coverage_split_rules=coverage_split_rules,
+        coverage_split_source=coverage_split_source,
+        coverage_split_gate_mode=coverage_split_gate_mode,
         quality_benchmark_tolerance=quality_benchmark_tolerance,
         hard_floor_ratio=hard_floor_ratio, hard_floor_tolerance=hard_floor_tolerance,
         hard_floor_source=hard_floor_source, use_11h_3off=use11,
@@ -4716,6 +4918,7 @@ def build_skeleton(
 
     fixed_group_members: Dict[str, List[int]] = {}
     language_working_window_blocks = 0
+    coverage_split_constraint_count = 0
     for a, assoc in enumerate(parsed.associates):
         # Language Setup's Coverage Start/End read as the hours this associate
         # may work, not only the hours their language must be covered. Off by
@@ -4976,6 +5179,32 @@ def build_skeleton(
                                 reserve = model.NewIntVar(0, 20, f"language_reserve_{d}_{i}_{q}_{ri}")
                                 model.Add(reserve >= language_operational_reserve_target(parsed, rule) - count)
                                 objective_terms.append(profile["language_reserve"] * reserve)
+                if hard.coverage_split and parsed.coverage_split_rules:
+                    # The group that owns this window must field the whole
+                    # requirement, not a minimum-of-one token presence.
+                    for q in range(qpi):
+                        qslot = d * 96 + i * qpi + q
+                        minute_q = i * parsed.interval_minutes + q * 15
+                        for split in coverage_split_rules_at(parsed, minute_q):
+                            need = coverage_split_required_headcount(parsed, d, i, split.coverage_ratio)
+                            if need <= 0:
+                                continue
+                            vars_split = coverage_vars_at_qslot(parsed, x, qslot, split)
+                            prior_split = len(prior_covering_associates(parsed, qslot, split))
+                            owned = sum(vars_split) + prior_split if vars_split else prior_split
+                            model.Add(owned >= need)
+                            coverage_split_constraint_count += 1
+                            if split.exclusive:
+                                outside = [
+                                    x[a, sd, shift.index]
+                                    for a, assoc in enumerate(parsed.associates)
+                                    if not language_eligible(split, assoc)
+                                    for sd in range(7) for shift in parsed.shifts
+                                    if shift_covers_week_qslot(sd, shift, qslot)
+                                ]
+                                if outside:
+                                    model.Add(sum(outside) == 0)
+                                    coverage_split_constraint_count += 1
             else:
                 if parsed.blank_requirement_mode == "hard_no_current_week_staffing":
                     for q, vars_q in enumerate(interval_qslot_vars):
@@ -5330,6 +5559,8 @@ def build_skeleton(
         "anchor_focus_cell_count": len(focus_cells),
         "minimum_tier_hits": dict(applied_tier_locks),
         "anchor_changed_cells": sum(solver.Value(v) for v in anchor_change_vars) if status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else None,
+        "coverage_split_constraint_count": int(coverage_split_constraint_count),
+        "coverage_split_rule_count": len(getattr(parsed, "coverage_split_rules", ()) or ()),
         "language_working_window_mode": getattr(parsed, "language_working_window_mode", "OFF"),
         "language_working_window_blocked_cells": int(language_working_window_blocks),
         "language_break_reserve_constraint_count": len(language_break_reserve_requirements),
@@ -5389,6 +5620,8 @@ def run_constraint_isolation(parsed: ParsedInput, base_hard: HardConfig, time_li
     families = ["week_boundary", "language", "opening", "rest", "fixed", "hard_off", "leave", "strict_off", "max_shift_variety", "zero_active"]
     if parsed.floor_mode == "hard":
         families.append("hard_floor")
+    if getattr(parsed, "coverage_split_rules", None):
+        families.append("coverage_split")
     rows: List[Dict[str, Any]] = []
     each = max(15.0, min(90.0, time_limit / max(1, len(families))))
     for family in families:
@@ -5417,6 +5650,8 @@ def run_conflict_refinement(
         "week_boundary", "language", "opening", "rest", "fixed", "hard_off",
         "leave", "strict_off", "max_shift_variety", "zero_active",
     ]
+    if getattr(parsed, "coverage_split_rules", None):
+        families.append("coverage_split")
     if parsed.floor_mode == "hard":
         families.append("hard_floor")
     started = time.time()
@@ -6416,6 +6651,20 @@ def solve_breaks(
                         model.Add(reserve_shortfall >= reserve_target - language_after)
                         objective_terms.append(max(1, parsed.language_reserve_penalty_weight) * reserve_shortfall)
                         language_reserve_objective_count += 1
+                    quarter_constraints += 1
+                for split in coverage_split_rules_at(parsed, minute):
+                    # Breaks must not hollow out the owning group either: the
+                    # requirement is an after-break floor, not a before-break one.
+                    need_split = coverage_split_required_headcount(parsed, d, i, split.coverage_ratio)
+                    if need_split <= 0:
+                        continue
+                    eligible_split = [a for a, _, _ in covering if language_eligible(split, parsed.associates[a])]
+                    prior_split = prior_covering_associates(parsed, qslot, split)
+                    split_breaks: List[Any] = []
+                    for a in eligible_split:
+                        split_breaks.extend(break_vars_by_qslot_assoc.get((qslot, a), []))
+                    split_after = len(eligible_split) + len(prior_split) - (sum(split_breaks) if split_breaks else 0)
+                    add_break_family(model.Add(split_after >= need_split), "coverage_split")
                     quarter_constraints += 1
                 base_eff += (len(covering) + len(prior)) * eff_person
                 interval_break_loss.extend(eff_person * var for var in break_vars)
@@ -16358,7 +16607,16 @@ def run_case(
             parsed.language_working_window_mode = normalize_language_window_mode(
                 language_working_window_override)
         capacity = capacity_diagnostics(parsed)
+        coverage_split_capacity = coverage_split_capacity_report(parsed)
+        for row in coverage_split_capacity.get("rows", []):
+            print(f"COVERAGE_SPLIT {row['status']} {row['headline']}", file=log, flush=True)
         preflight = validate_input_contract(parsed, capacity)
+        if coverage_split_capacity.get("status") == "SHORT":
+            preflight.setdefault("warnings", []).extend(
+                row["headline"] for row in coverage_split_capacity["rows"] if row["status"] == "SHORT"
+            )
+            if preflight.get("status") == "PASS":
+                preflight["status"] = "WARN"
         identity_warnings = case_identity_warnings(parsed, input_path, output_path)
         if identity_warnings:
             preflight.setdefault("warnings", []).extend(identity_warnings)
@@ -16757,6 +17015,7 @@ def run_case(
             "version": VERSION, "status": "STARTED", "input": str(input_path), "output": str(output_path),
             "started_at": datetime.now().isoformat(), "events": [], "stage1_attempts": [],
             "run_identity": run_identity, "run_parameters": run_parameters,
+            "coverage_split_capacity": coverage_split_capacity,
             # Wall-clock values are reported, never hashed.
             "run_wall_clock": {
                 "started_epoch": float(budget_manager.started_epoch),

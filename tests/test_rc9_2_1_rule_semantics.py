@@ -841,5 +841,147 @@ class LanguageCoverageWindowsCanBoundWorkingHours(unittest.TestCase):
         self.assertIn('"shifts_outside_language_window"', source)
 
 
+class CoverageSplitMakesOneGroupResponsibleForAWholeWindow(unittest.TestCase):
+    """Language Setup could not express the operation it was being used for.
+
+    Cricut Voice runs two teams: International staffs 03:00-16:00, Domestic
+    staffs 16:00-03:00. The only tools available were a Minimum Per Interval of
+    1 - satisfied by a single International associate at 10:00 while Domestic
+    covered the rest - and a working window, which limits where a group's own
+    people may work but never says the other group is not the fallback. Neither
+    is the rule. That gap is why removing International's daytime demand made a
+    Domestic-only roster look solvable and sent this investigation in circles.
+    """
+
+    def _rule(self, group="International", start=3 * 60, end=16 * 60,
+              ratio=0.8, exclusive=False, eligible=("international",)):
+        return E.CoverageSplitRule(
+            group=group, start_min=start, end_min=end, coverage_ratio=ratio,
+            exclusive=exclusive, active=True,
+            required_languages={E.norm(group)}, eligible_languages=set(eligible),
+        )
+
+    # -- the feature is opt-in ------------------------------------------
+    def test_a_workbook_without_the_sheet_is_completely_unaffected(self):
+        """Every packaged scenario predates this feature. A rule that starts
+        binding on workbooks that never asked for it breaks a whole release."""
+        from pathlib import Path
+        inputs = ROOT / "packages" / "rc9_2_2_production" / "inputs"
+        if not inputs.is_dir():
+            self.skipTest("packaged inputs not present")
+        for path in sorted(inputs.glob("*.xlsx")):
+            parsed = E.parse_input(path)
+            self.assertEqual(parsed.coverage_split_source, "ABSENT",
+                             f"{path.name} unexpectedly has a Coverage Split sheet")
+            self.assertEqual(parsed.coverage_split_rules, [])
+
+    def test_an_off_gate_mode_discards_the_rules_entirely(self):
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        self.assertIn('if coverage_split_gate_mode == "off":\n        coverage_split_rules = []', source)
+
+    # -- the window arithmetic ------------------------------------------
+    def test_a_daytime_window_covers_its_own_hours_only(self):
+        rule = self._rule()
+        self.assertTrue(rule.overlaps(10 * 60))
+        self.assertTrue(rule.overlaps(3 * 60))
+        self.assertFalse(rule.overlaps(20 * 60))
+        self.assertFalse(rule.overlaps(16 * 60))
+
+    def test_an_overnight_window_wraps_past_midnight(self):
+        rule = self._rule(group="Domestic", start=16 * 60, end=3 * 60)
+        for minute in (16 * 60, 23 * 60, 0, 2 * 60 + 45):
+            self.assertTrue(rule.overlaps(minute), f"{minute} should be inside 16:00-03:00")
+        for minute in (3 * 60, 10 * 60, 15 * 60):
+            self.assertFalse(rule.overlaps(minute), f"{minute} should be outside 16:00-03:00")
+
+    def test_a_full_day_window_is_always_in_force(self):
+        self.assertTrue(self._rule(start=0, end=0).overlaps(13 * 60))
+
+    # -- the requirement is grossed up, like every other requirement ----
+    def test_the_requirement_is_grossed_up_for_shrinkage(self):
+        """Shrinkage is out-of-office time; a rostered person is not a present
+        person. 10 required at 50% shrinkage needs 20 rostered, not 10."""
+        parsed = SimpleNamespace(
+            requirements=[[10.0]], shrinkage=[[0.5]],
+        )
+        self.assertEqual(E.coverage_split_required_headcount(parsed, 0, 0, 1.0), 20)
+        self.assertEqual(E.coverage_split_required_headcount(parsed, 0, 0, 0.8), 16)
+
+    def test_an_interval_with_no_requirement_demands_nobody(self):
+        parsed = SimpleNamespace(requirements=[[0.0]], shrinkage=[[0.0]])
+        self.assertEqual(E.coverage_split_required_headcount(parsed, 0, 0, 1.0), 0)
+
+    # -- the capacity report is the thing that prevents a repeat --------
+    def test_a_group_too_small_for_its_window_is_named_before_the_solver_runs(self):
+        """The language working window returned a bare INFEASIBLE and cost days
+        of investigation. An impossible split must be a sentence with numbers."""
+        parsed = SimpleNamespace(
+            coverage_split_rules=[self._rule(ratio=1.0)],
+            associates=[SimpleNamespace(name=f"a{i}", language="International") for i in range(2)],
+            requirements=[[10.0] * 24 for _ in range(7)],
+            shrinkage=[[0.0] * 24 for _ in range(7)],
+            active=[[True] * 24 for _ in range(7)],
+            intervals_per_day=24, interval_minutes=60,
+        )
+        report = E.coverage_split_capacity_report(parsed)
+        self.assertEqual(report["status"], "SHORT")
+        self.assertIn("International", report["short_groups"])
+        row = report["rows"][0]
+        self.assertEqual(row["eligible_headcount"], 2)
+        self.assertEqual(row["peak_required"], 10)
+        self.assertIn("cannot cover its own window", row["headline"])
+        self.assertIn("10 are required", row["headline"])
+
+    def test_a_group_that_fits_says_so_without_alarm(self):
+        parsed = SimpleNamespace(
+            coverage_split_rules=[self._rule(ratio=1.0)],
+            associates=[SimpleNamespace(name=f"a{i}", language="International") for i in range(20)],
+            requirements=[[3.0] * 24 for _ in range(7)],
+            shrinkage=[[0.0] * 24 for _ in range(7)],
+            active=[[True] * 24 for _ in range(7)],
+            intervals_per_day=24, interval_minutes=60,
+        )
+        report = E.coverage_split_capacity_report(parsed)
+        self.assertEqual(report["status"], "OK")
+        self.assertIn("fits", report["rows"][0]["headline"])
+
+    def test_the_ceiling_accounts_for_off_days_not_just_headcount(self):
+        """8 people on a 7-day week with 2 OFF days each are never 8 on the
+        floor at once; reporting the raw headcount would clear a roster that
+        cannot actually staff the window."""
+        parsed = SimpleNamespace(
+            coverage_split_rules=[self._rule(ratio=1.0)],
+            associates=[SimpleNamespace(name=f"a{i}", language="International") for i in range(7)],
+            requirements=[[6.0] * 24 for _ in range(7)],
+            shrinkage=[[0.0] * 24 for _ in range(7)],
+            active=[[True] * 24 for _ in range(7)],
+            intervals_per_day=24, interval_minutes=60,
+        )
+        row = E.coverage_split_capacity_report(parsed)["rows"][0]
+        self.assertEqual(row["eligible_headcount"], 7)
+        self.assertLess(row["approx_concurrent_ceiling"], 7)
+        self.assertEqual(row["status"], "SHORT")
+
+    # -- it is enforced in both stages, and it is relaxable -------------
+    def test_it_is_enforced_in_stage_1_and_in_the_break_stage(self):
+        """A before-break split that breaks hollow out is not a split."""
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        self.assertIn("model.Add(owned >= need)", source)
+        self.assertIn('add_break_family(model.Add(split_after >= need_split), "coverage_split")', source)
+
+    def test_the_infeasibility_probe_can_relax_it(self):
+        """This is the diagnostic that names a blocking rule instead of leaving
+        someone to guess. The language window shipped without it and the cost
+        was days."""
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        self.assertEqual(source.count('families.append("coverage_split")'), 2)
+        self.assertIn("coverage_split: bool = True", source)
+
+    def test_exclusive_locks_other_groups_out_of_the_window(self):
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        self.assertIn("if split.exclusive:", source)
+        self.assertIn("model.Add(sum(outside) == 0)", source)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

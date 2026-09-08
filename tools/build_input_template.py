@@ -209,6 +209,52 @@ if "Input Checks" in wb.sheetnames:
     for r in (3, 4):
         ws[f"A{r}"].alignment = Alignment(wrap_text=True, vertical="top")
         ws.row_dimensions[r].height = 45
+# Coverage Split: which group STAFFS which window, as opposed to Language
+# Setup's weaker "at least N of them are present". Written empty on purpose -
+# rows here change the contract, so a workbook that never asked for the feature
+# must not acquire it just by being rebuilt through the template.
+if "Coverage Split" in wb.sheetnames:
+    del wb["Coverage Split"]
+ws = wb.create_sheet("Coverage Split")
+ws["A1"] = "Coverage Split - which coverage group is responsible for staffing which hours"
+ws["A1"].font = Font(bold=True, color="FFFFFF"); ws["A1"].fill = HDR
+ws.merge_cells("A1:G1")
+ws["A2"] = ("Optional. Leave empty and nothing changes. Add a row and that group must field the "
+            "WHOLE requirement in its window - not the 'Minimum Per Interval' floor from Language "
+            "Setup, which only guarantees one qualified person is present. Coverage Group must "
+            "match the Coverage Group column in Language Setup.")
+ws["A2"].fill = WARN
+ws["A2"].alignment = Alignment(wrap_text=True, vertical="center")
+ws.merge_cells("A2:G2"); ws.row_dimensions[2].height = 46
+heads = ["Coverage Group", "Start", "End", "Coverage Ratio", "Exclusive?", "Active?", "Notes"]
+for col, head in enumerate(heads, start=1):
+    c = ws.cell(4, col, head)
+    c.font = Font(bold=True, color="FFFFFF"); c.fill = HDR; c.border = THIN
+notes = [
+    "Name from Language Setup's Coverage Group column.",
+    "Window opens (e.g. 03:00).",
+    "Window closes; may cross midnight (e.g. 16:00).",
+    "Blank = the workbook's Minimum Per Interval. 1.0 = full requirement.",
+    "Yes = only this group may work these hours at all.",
+    "No or blank = row ignored.",
+    "",
+]
+for col, note in enumerate(notes, start=1):
+    c = ws.cell(5, col, note)
+    c.font = Font(italic=True, color="808080", size=9)
+    c.alignment = Alignment(wrap_text=True, vertical="top")
+ws.row_dimensions[5].height = 40
+for col, width in zip("ABCDEFG", (22, 12, 12, 16, 13, 11, 46)):
+    ws.column_dimensions[col].width = width
+dv_yesno = DataValidation(type="list", formula1=YES_NO, allow_blank=True)
+ws.add_data_validation(dv_yesno)
+for row in range(6, 26):
+    for col in range(1, 8):
+        ws.cell(row, col).border = THIN
+    dv_yesno.add(ws.cell(row, 5))
+    dv_yesno.add(ws.cell(row, 6))
+ws.freeze_panes = ws["A6"]
+
 order = ["Instructions", "Engine Defaults"] + [s for s in wb.sheetnames if s not in ("Instructions", "Engine Defaults")]
 wb._sheets = [wb[s] for s in order]
 wb.save(dst)

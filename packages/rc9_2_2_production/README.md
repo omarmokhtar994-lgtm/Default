@@ -2,7 +2,7 @@
 
 `L6.3.2.6-RC9.2.2-BUDGETED-SEARCH-AND-BREAK-CONCURRENCY-RC1`
 
-Self-contained: engine, inputs, 319 offline guards, gate scorer, evidence and
+Self-contained: engine, inputs, 419 offline guards, gate scorer, evidence and
 Colab runners. Nothing here needs the repository or any earlier run.
 
 ## What changed since the runs you scored
@@ -65,7 +65,7 @@ One scenario per Colab instance, seven instances, ~4 hours.
 `NMG_EN_SP` · `NMG_EN`
 
 The runner refuses any workbook whose sha256 does not match `SCENARIOS.json`,
-and runs the 319 guards first.
+and runs the 419 guards first.
 
 ## What the evidence says about quality
 
@@ -235,14 +235,53 @@ it per workbook, deliberately.
 Violations are counted and reported on every run whatever the mode
 (`shifts_outside_language_window`), so the question is never invisible.
 
+## Coverage Split: which group *staffs* which hours
+
+Language Setup's `Minimum Per Interval` is a floor — "at least N of this group
+are present". It never said who *carries* the requirement, which is why a
+Coverage Start/End of 03:00–16:00 with a minimum of 1 let another group staff
+the daytime as long as one qualified person stood on the floor. The window
+looked like a split and behaved like a presence check.
+
+The new **Coverage Split** tab states the split directly:
+
+| Column | Meaning |
+|---|---|
+| **Coverage Group** | matches the `Coverage Group` column on Language Setup |
+| **Start** / **End** | the window it owns; may cross midnight |
+| **Coverage Ratio** | share of the requirement it must field. Blank = `Minimum Per Interval`; `1.0` = all of it |
+| **Exclusive?** | `Yes` = nobody outside the group may work those hours at all |
+| **Active?** | `No` or blank = the row is ignored |
+
+The requirement is grossed up for shrinkage like every other requirement, it is
+enforced in **Stage 1 and the break stage** — so breaks cannot hollow it out —
+and the infeasibility probe can relax it by name rather than returning a bare
+`INFEASIBLE`.
+
+**Overlapping windows pool.** Two groups sharing an hour cover it *together*
+against one requirement: their eligible people combine and the higher of the two
+Coverage Ratios applies. An hour needing 10 is 10 people between them, never 10
+from each. Shared spans are logged as `COVERAGE_SPLIT SHARED` — information, not
+a warning.
+
+**Every span is scored before the solver starts.** The run log opens with one
+`COVERAGE_SPLIT OK` / `TIGHT` / `SHORT` line per owning span, measured against
+the people who could staff it, allowing for OFF days *and* for the fact that
+someone on a break is not covering. `SHORT` names the peak interval and the
+numbers; `TIGHT` means it solves only if OFF days fall perfectly. This exists
+because a group of 8 could not hold 80% of a 13-hour daytime window through its
+own breaks, and the engine's only answer was `INFEASIBLE` with nothing to act
+on. That is a headcount fact, and it now reads as one.
+
 ## What this build is verified to be
 
 **The engine's scheduling behaviour is unchanged from the build whose results
-you scored.** Since that scoring the engine gained exactly one line that can
-affect the solver — the language-window constraint — and it is provably inert
-here: all seven packaged workbooks parse to `Language Working Window = Off`,
-which restricts zero associates. Everything else added is measurement, workbook
-output, or gate reporting. Verified, not assumed.
+you scored.** Since that scoring the engine gained two constraints that can
+affect the solver — the language working window and Coverage Split — and both
+are provably inert here. All seven packaged workbooks parse to `Language Working
+Window = Off`, which restricts zero associates, and all seven have no Coverage
+Split rows, so no coverage-split constraint is ever built. Everything else added
+is measurement, workbook output, or gate reporting. Verified, not assumed.
 
 | | |
 |---|---|

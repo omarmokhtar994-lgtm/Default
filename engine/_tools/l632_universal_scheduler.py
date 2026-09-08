@@ -1590,7 +1590,26 @@ def coverage_split_capacity_report(parsed: ParsedInput) -> Dict[str, Any]:
         # floor at one instant is smaller than the headcount on the sheet.
         workdays = max(1, 7 - 2)
         concurrent_ceiling = int(math.floor(len(pool) * workdays / 7.0)) if pool else 0
-        feasible = peak_need <= concurrent_ceiling
+        # And a rostered person on a break is not covering. Sustaining `need`
+        # through the break window costs need / (1 - break fraction) bodies.
+        # Omitting this reported "8 eligible, peak need 4 - fits" on Cricut
+        # Voice and the run then failed for want of 3 no-break exceptions,
+        # naming International as the blocker: exactly the mystery this report
+        # exists to prevent.
+        shifts = list(getattr(parsed, "shifts", ()) or ())
+        durations = sorted(sh.duration_q for sh in shifts) or [36]
+        shift_q = max(1, durations[len(durations) // 2])
+        break_q = sum(count for count, _ in getattr(parsed, "break_segments_q", ()) or ())
+        productive = max(1, shift_q - break_q)
+        need_with_breaks = int(math.ceil(peak_need * shift_q / productive)) if peak_need else 0
+        margin = concurrent_ceiling - need_with_breaks
+        feasible = margin >= 0
+        # Zero margin is not a pass in practice. Cricut Voice's International
+        # row needed exactly its ceiling of 5 and the run still failed, for want
+        # of 3 no-break exceptions: the ceiling assumes OFF days land perfectly
+        # and every shift sits exactly where the demand peak is, and neither is
+        # true. Report the edge as an edge.
+        tight = feasible and margin <= max(1, int(round(need_with_breaks * 0.15)))
         rows.append({
             "group": split.group,
             "window": f"{hhmm(split.start_min)}-{hhmm(split.end_min)}",
@@ -1598,17 +1617,27 @@ def coverage_split_capacity_report(parsed: ParsedInput) -> Dict[str, Any]:
             "exclusive": bool(split.exclusive),
             "eligible_headcount": len(pool),
             "peak_required": peak_need,
+            "peak_required_with_breaks": need_with_breaks,
             "peak_interval": peak_at,
             "approx_concurrent_ceiling": concurrent_ceiling,
-            "status": "OK" if feasible else "SHORT",
+            "headroom": margin,
+            "status": ("SHORT" if not feasible else ("TIGHT" if tight else "OK")),
             "headline": (
-                f"{split.group}: {len(pool)} eligible, peak need {peak_need}"
-                f"{' at ' + peak_at if peak_at else ''} - fits."
+                (f"{split.group} is at its limit: {len(pool)} eligible, {need_with_breaks} needed "
+                 f"at the {peak_at} peak once breaks are covered, ceiling about "
+                 f"{concurrent_ceiling} - headroom {margin}. This solves only if OFF days fall "
+                 f"perfectly; expect no-break exceptions. Lower its Coverage Ratio or add "
+                 f"headcount for a schedule that holds."
+                 if tight else
+                 f"{split.group}: {len(pool)} eligible, peak need {peak_need}"
+                 f"{' at ' + peak_at if peak_at else ''}, {need_with_breaks} once breaks are "
+                 f"covered, ceiling about {concurrent_ceiling} - fits with {margin} to spare.")
                 if feasible else
                 f"{split.group} cannot cover its own window: {len(pool)} eligible associates, "
-                f"but {peak_need} are required at {peak_at}. Allowing for 2 OFF days each, at "
-                f"most about {concurrent_ceiling} can be on the floor at once. Either add "
-                f"headcount to {split.group}, lower its Coverage Ratio, or narrow its window."
+                f"{peak_need} required at {peak_at}, and {need_with_breaks} needed once their "
+                f"own breaks are covered. Allowing for 2 OFF days each, at most about "
+                f"{concurrent_ceiling} can be on the floor at once. Either add headcount to "
+                f"{split.group}, lower its Coverage Ratio, or narrow its window."
             ),
         })
     # Overlapping windows STACK: both rules bind, so each group must field the
@@ -1641,10 +1670,12 @@ def coverage_split_capacity_report(parsed: ParsedInput) -> Dict[str, Any]:
                 })
 
     short = [r for r in rows if r["status"] == "SHORT"]
-    status = "SHORT" if short else ("OVERLAP" if overlaps else "OK")
+    tight_rows = [r for r in rows if r["status"] == "TIGHT"]
+    status = "SHORT" if short else ("OVERLAP" if overlaps else ("TIGHT" if tight_rows else "OK"))
     return {
         "status": status,
         "short_groups": [r["group"] for r in short],
+        "tight_groups": [r["group"] for r in tight_rows],
         "overlaps": overlaps,
         "rows": rows,
     }
@@ -16650,9 +16681,10 @@ def run_case(
             )
             if preflight.get("status") == "PASS":
                 preflight["status"] = "WARN"
-        if coverage_split_capacity.get("status") == "SHORT":
+        if coverage_split_capacity.get("status") in {"SHORT", "TIGHT"}:
             preflight.setdefault("warnings", []).extend(
-                row["headline"] for row in coverage_split_capacity["rows"] if row["status"] == "SHORT"
+                row["headline"] for row in coverage_split_capacity["rows"]
+                if row["status"] in {"SHORT", "TIGHT"}
             )
             if preflight.get("status") == "PASS":
                 preflight["status"] = "WARN"

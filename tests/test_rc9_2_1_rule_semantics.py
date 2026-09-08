@@ -930,7 +930,8 @@ class CoverageSplitMakesOneGroupResponsibleForAWholeWindow(unittest.TestCase):
         self.assertEqual(row["eligible_headcount"], 2)
         self.assertEqual(row["peak_required"], 10)
         self.assertIn("cannot cover its own window", row["headline"])
-        self.assertIn("10 are required", row["headline"])
+        self.assertIn("10 required at", row["headline"])
+        self.assertIn("once their own breaks are covered", row["headline"])
 
     def test_a_group_that_fits_says_so_without_alarm(self):
         parsed = SimpleNamespace(
@@ -1032,6 +1033,47 @@ class CoverageSplitMakesOneGroupResponsibleForAWholeWindow(unittest.TestCase):
         )
         self.assertEqual(report["status"], "SHORT")
         self.assertTrue(report["overlaps"], "the overlap must still be reported")
+
+    def test_the_ceiling_accounts_for_break_time_not_just_rostering(self):
+        """The first version compared peak need against rostered headcount and
+        reported "8 eligible, peak need 4 - fits" for Cricut Voice. The run then
+        failed for want of 3 no-break exceptions, naming International as the
+        blocker: a rostered person on a break is not covering, so sustaining a
+        peak costs need / (1 - break fraction) bodies."""
+        parsed = SimpleNamespace(
+            coverage_split_rules=[self._rule(ratio=1.0)],
+            associates=[SimpleNamespace(name=f"a{i}", language="International") for i in range(20)],
+            requirements=[[9.0] * 24 for _ in range(7)],
+            shrinkage=[[0.0] * 24 for _ in range(7)],
+            active=[[True] * 24 for _ in range(7)],
+            intervals_per_day=24, interval_minutes=60,
+            shifts=[SimpleNamespace(duration_q=36)],
+            break_segments_q=[(4, None)],
+        )
+        row = E.coverage_split_capacity_report(parsed)["rows"][0]
+        self.assertEqual(row["peak_required"], 9)
+        self.assertGreater(row["peak_required_with_breaks"], row["peak_required"],
+                           "covering breaks must cost more bodies than the bare peak")
+
+    def test_zero_headroom_is_reported_as_tight_not_as_a_pass(self):
+        """Cricut Voice's International row needed exactly its ceiling of 5 and
+        the run still failed. A ceiling assumes OFF days land perfectly and every
+        shift sits on the demand peak; neither holds, so an edge is an edge."""
+        parsed = SimpleNamespace(
+            coverage_split_rules=[self._rule(ratio=1.0)],
+            associates=[SimpleNamespace(name=f"a{i}", language="International") for i in range(7)],
+            requirements=[[4.0] * 24 for _ in range(7)],
+            shrinkage=[[0.0] * 24 for _ in range(7)],
+            active=[[True] * 24 for _ in range(7)],
+            intervals_per_day=24, interval_minutes=60,
+            shifts=[SimpleNamespace(duration_q=36)],
+            break_segments_q=[(4, None)],
+        )
+        row = E.coverage_split_capacity_report(parsed)["rows"][0]
+        self.assertIn(row["status"], {"TIGHT", "SHORT"})
+        if row["status"] == "TIGHT":
+            self.assertIn("at its limit", row["headline"])
+            self.assertIn("expect no-break exceptions", row["headline"])
 
     def test_exclusive_locks_other_groups_out_of_the_window(self):
         source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()

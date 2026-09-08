@@ -7531,6 +7531,8 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
     opening = {d: set(opening_intervals_for_day(parsed, d)) for d in range(7)}
     rows: List[Dict[str, Any]] = []
     language_gaps: List[Dict[str, Any]] = []
+    coverage_split_gaps: List[Dict[str, Any]] = []
+    coverage_split_quarters = 0
     language_quarter_rows: List[Dict[str, Any]] = []
     opening_gaps: List[Dict[str, Any]] = []
     zero_qslots: List[Dict[str, Any]] = []
@@ -7656,6 +7658,33 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
                         "break_caused_reserve_loss": bool(before_actual >= reserve_target and actual < reserve_target),
                         "status": status,
                     })
+                # Coverage Split, measured on the schedule that will ship rather
+                # than trusted because the model carried the constraint. Every
+                # other hard family leaves audit evidence in the artifact; a rule
+                # that is only ever asserted is a rule nobody can check, which is
+                # how a flag that enforced nothing survived a whole release.
+                split_rule = merge_coverage_split_rules(coverage_split_rules_at(parsed, minute))
+                if split_rule is not None:
+                    split_need = coverage_split_required_headcount(
+                        parsed, d, i, split_rule.coverage_ratio)
+                    if split_need > 0:
+                        split_current = [a for a, _, _ in covering
+                                         if language_eligible(split_rule, parsed.associates[a])]
+                        split_prior = prior_covering_associates(parsed, qslot, split_rule)
+                        split_before = len(split_prior) + len(split_current)
+                        split_after = len(split_prior) + sum(
+                            1 for a in split_current if (a, qslot) not in breaks)
+                        coverage_split_quarters += 1
+                        if split_after < split_need:
+                            coverage_split_gaps.append({
+                                "day": DAY_NAMES[d], "time": hhmm(minute),
+                                "group": split_rule.group,
+                                "coverage_ratio": round(float(split_rule.coverage_ratio), 4),
+                                "required": int(split_need),
+                                "before_breaks": int(split_before),
+                                "after_breaks": int(split_after),
+                                "break_caused": bool(split_before >= split_need),
+                            })
             before = before_sum / qpi
             after = after_sum / qpi
             before_pct = before / req if req > 0 else 1.0
@@ -8244,6 +8273,11 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
         "employee_quality": employee_quality,
         "zero_staffed_active_quarters": len(zero_qslots), "zero_qslots": zero_qslots,
         "language_gap_count": len(language_gaps), "language_gaps": language_gaps,
+        "coverage_split_rule_quarters": int(coverage_split_quarters),
+        "coverage_split_gap_count": len(coverage_split_gaps),
+        "coverage_split_break_caused_gap_count": sum(
+            1 for row in coverage_split_gaps if row["break_caused"]),
+        "coverage_split_gaps": coverage_split_gaps,
         "language_reserve_enabled": bool(parsed.language_reserve_enabled),
         "language_reserve_extra": int(parsed.language_reserve_extra),
         "language_rule_quarters": int(current_language_total),
@@ -20063,6 +20097,12 @@ def run_case(
             "language_minimum_only_ratio": chosen_breaks.metrics.get("language_minimum_only_ratio", 0),
             "language_reserve_shortfall_quarters": chosen_breaks.metrics.get("language_reserve_shortfall_quarters", 0),
             "language_break_caused_reserve_loss_quarters": chosen_breaks.metrics.get("language_break_caused_reserve_loss_quarters", 0),
+            # Measured on the shipped schedule, not inferred from the model.
+            # 0 quarters means no Coverage Split rows; a non-zero gap count on a
+            # released schedule is a defect, not a quality warning.
+            "coverage_split_rule_quarters": chosen_breaks.metrics.get("coverage_split_rule_quarters", 0),
+            "coverage_split_gaps": chosen_breaks.metrics.get("coverage_split_gap_count", 0),
+            "coverage_split_break_caused_gaps": chosen_breaks.metrics.get("coverage_split_break_caused_gap_count", 0),
             "opening_gaps": chosen_breaks.metrics.get("opening_gap_count", 0),
             "next_sunday_active_intervals": chosen_breaks.metrics.get("week_boundary_active_intervals", 0),
             "next_sunday_after_target": chosen_breaks.metrics.get("week_boundary_after_target", 0),

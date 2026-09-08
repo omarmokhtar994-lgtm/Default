@@ -946,10 +946,36 @@ class CoverageSplitMakesOneGroupResponsibleForAWholeWindow(unittest.TestCase):
         ])
         self.assertTrue(merged.exclusive)
 
-    def test_the_merged_rule_is_enforced_in_both_stages(self):
-        """A merge the constraint builder does not use changes nothing."""
+    def test_the_merged_rule_is_used_at_every_site_that_reads_the_rules(self):
+        """A merge the constraint builder does not use changes nothing - and a
+        site that reads the raw rules instead would reintroduce stacking. Three
+        sites read them: Stage 1, the break stage, and the artifact audit."""
         source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
-        self.assertEqual(source.count("merge_coverage_split_rules(coverage_split_rules_at("), 2)
+        self.assertEqual(source.count("merge_coverage_split_rules(coverage_split_rules_at("), 3)
+        # coverage_split_rules_at is only ever consumed through the merge.
+        self.assertEqual(source.count("coverage_split_rules_at(parsed"),
+                         source.count("merge_coverage_split_rules(coverage_split_rules_at("))
+
+    # -- the shipped schedule is checked, not just the model ------------
+    def test_the_delivered_schedule_is_audited_against_the_split(self):
+        """Every other hard family leaves evidence in the artifact. A rule that
+        is only ever asserted into the model is a rule nobody can check - which
+        is exactly how a language-window flag that enforced nothing survived a
+        release. The audit measures the schedule that will ship."""
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        self.assertIn("coverage_split_gaps.append(", source)
+        self.assertIn('"coverage_split_gap_count": len(coverage_split_gaps)', source)
+        self.assertIn('"coverage_split_rule_quarters"', source)
+        # and it reaches the run summary, not just the audit JSON
+        self.assertIn('"coverage_split_gaps": chosen_breaks.metrics.get(', source)
+
+    def test_the_audit_separates_a_break_caused_gap_from_a_roster_one(self):
+        """The two have different owners: a roster gap is Stage 1's, a
+        break-caused gap means break placement hollowed out a span that was
+        covered before breaks. Reporting one number would hide which."""
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        self.assertIn('"break_caused": bool(split_before >= split_need)', source)
+        self.assertIn('"coverage_split_break_caused_gap_count"', source)
 
     # -- the requirement is grossed up, like every other requirement ----
     def test_the_requirement_is_grossed_up_for_shrinkage(self):

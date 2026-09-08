@@ -1569,23 +1569,61 @@ def coverage_split_capacity_report(parsed: ParsedInput) -> Dict[str, Any]:
     number is wrong. This answers that up front, per group, with the peak
     interval named - so a short group is a sentence, not an investigation.
     """
-    rules = list(getattr(parsed, "coverage_split_rules", ()) or ())
+    rules = [r for r in (getattr(parsed, "coverage_split_rules", ()) or ()) if r.active]
     if not rules:
         return {"status": "NOT_CONFIGURED", "rows": []}
+    # The engine merges every rule covering an interval into ONE pooled
+    # requirement, so the report has to analyse the same units it enforces.
+    # Quarters owned by the same SET of rules form one unit: a rule that
+    # partly overlaps another yields a solo unit for the hours it owns alone
+    # and a pooled unit for the hours it shares. Scoring each rule against the
+    # whole requirement on shared hours would invent a shortage the solver
+    # never sees.
+    units: Dict[Tuple[int, ...], Dict[str, Any]] = {}
+    for d in range(7):
+        for i in range(parsed.intervals_per_day):
+            if not parsed.active[d][i]:
+                continue
+            minute = i * parsed.interval_minutes
+            owners = tuple(
+                idx for idx, r in enumerate(rules)
+                if r.overlaps(minute, parsed.interval_minutes)
+            )
+            if not owners:
+                continue
+            unit = units.get(owners)
+            if unit is None:
+                merged = merge_coverage_split_rules([rules[k] for k in owners])
+                unit = units[owners] = {
+                    "split": merged,
+                    "window": " & ".join(
+                        f"{hhmm(rules[k].start_min)}-{hhmm(rules[k].end_min)}" for k in owners
+                    ),
+                    "peak_need": 0,
+                    "peak_at": None,
+                }
+            need = coverage_split_required_headcount(
+                parsed, d, i, unit["split"].coverage_ratio)
+            if need > unit["peak_need"]:
+                unit["peak_need"] = need
+                unit["peak_at"] = f"{DAY_NAMES[d]} {hhmm(minute)}"
+    # A rule whose window never lands on an active interval still deserves a
+    # row, otherwise a typo'd window reads as silence rather than as a group
+    # that owns nothing.
+    for idx, r in enumerate(rules):
+        if not any(idx in owners for owners in units):
+            units[(idx,)] = {
+                "split": r,
+                "window": f"{hhmm(r.start_min)}-{hhmm(r.end_min)}",
+                "peak_need": 0,
+                "peak_at": None,
+            }
     rows: List[Dict[str, Any]] = []
-    for split in rules:
+    for owners in sorted(units):
+        unit = units[owners]
+        split = unit["split"]
+        peak_need, peak_at = unit["peak_need"], unit["peak_at"]
         pool = [a for a in parsed.associates if language_eligible(split, a)]
-        peak_need, peak_at = 0, None
-        for d in range(7):
-            for i in range(parsed.intervals_per_day):
-                if not parsed.active[d][i]:
-                    continue
-                minute = i * parsed.interval_minutes
-                if not split.overlaps(minute, parsed.interval_minutes):
-                    continue
-                need = coverage_split_required_headcount(parsed, d, i, split.coverage_ratio)
-                if need > peak_need:
-                    peak_need, peak_at = need, f"{DAY_NAMES[d]} {hhmm(minute)}"
         # Everyone owes the roster its OFF days, so the pool that can be on the
         # floor at one instant is smaller than the headcount on the sheet.
         workdays = max(1, 7 - 2)
@@ -1612,7 +1650,8 @@ def coverage_split_capacity_report(parsed: ParsedInput) -> Dict[str, Any]:
         tight = feasible and margin <= max(1, int(round(need_with_breaks * 0.15)))
         rows.append({
             "group": split.group,
-            "window": f"{hhmm(split.start_min)}-{hhmm(split.end_min)}",
+            "window": unit["window"],
+            "pooled_groups": len(owners),
             "coverage_ratio": round(float(split.coverage_ratio), 4),
             "exclusive": bool(split.exclusive),
             "eligible_headcount": len(pool),
@@ -1640,12 +1679,11 @@ def coverage_split_capacity_report(parsed: ParsedInput) -> Dict[str, Any]:
                 f"{split.group}, lower its Coverage Ratio, or narrow its window."
             ),
         })
-    # Overlapping windows STACK: both rules bind, so each group must field the
-    # whole requirement on its own. Two groups overlapping on an interval that
-    # needs 10 demands 10 of each - 20 people - unless someone is eligible for
-    # both. That is almost never the intent, and on a small group it is
-    # instantly infeasible, so it is named here rather than discovered as a
-    # bare INFEASIBLE later.
+    # Overlapping windows are POOLED, not stacked: the groups that share an
+    # hour cover it together against one requirement, which is what a shared
+    # hour means to anyone running a floor. So an overlap is reported for
+    # visibility - it changes who may staff those hours - and never as a
+    # hazard. The capacity of a shared span is judged on its pooled row above.
     overlaps: List[Dict[str, Any]] = []
     for a_i in range(len(rules)):
         for b_i in range(a_i + 1, len(rules)):
@@ -1661,17 +1699,21 @@ def coverage_split_capacity_report(parsed: ParsedInput) -> Dict[str, Any]:
                     "first": clash[0], "last": clash[-1],
                     "headline": (
                         f"{ra.group} ({hhmm(ra.start_min)}-{hhmm(ra.end_min)}) and "
-                        f"{rb.group} ({hhmm(rb.start_min)}-{hhmm(rb.end_min)}) both own "
-                        f"{len(clash)} quarter-hours from {clash[0]} to {clash[-1]}. Each group "
-                        f"must field the WHOLE requirement there, so the two stack rather than "
-                        f"share. Make the windows complementary unless you really do want both "
-                        f"teams staffed to full requirement at the same time."
+                        f"{rb.group} ({hhmm(rb.start_min)}-{hhmm(rb.end_min)}) share "
+                        f"{len(clash)} quarter-hours from {clash[0]} to {clash[-1]}. Those hours "
+                        f"are covered by the two groups TOGETHER against one requirement - their "
+                        f"eligible people pool and the higher of the two Coverage Ratios applies. "
+                        f"Make the windows complementary only if you want one group solely "
+                        f"responsible there."
                     ),
                 })
 
     short = [r for r in rows if r["status"] == "SHORT"]
     tight_rows = [r for r in rows if r["status"] == "TIGHT"]
-    status = "SHORT" if short else ("OVERLAP" if overlaps else ("TIGHT" if tight_rows else "OK"))
+    # An overlap no longer escalates the status: pooling is the intended
+    # behaviour, and a shared span that is genuinely too small already shows up
+    # as SHORT on its own pooled row.
+    status = "SHORT" if short else ("TIGHT" if tight_rows else "OK")
     return {
         "status": status,
         "short_groups": [r["group"] for r in short],
@@ -1679,6 +1721,41 @@ def coverage_split_capacity_report(parsed: ParsedInput) -> Dict[str, Any]:
         "overlaps": overlaps,
         "rows": rows,
     }
+
+
+def merge_coverage_split_rules(
+    rules: Sequence[CoverageSplitRule],
+) -> Optional[CoverageSplitRule]:
+    """Groups whose windows overlap COVER THE INTERVAL TOGETHER.
+
+    The first version applied each rule independently, so two groups owning the
+    same hour each owed the whole requirement - an interval needing 10 demanded
+    10 of each. That is not what a shared hour means to anyone running a floor:
+    the teams pool their people and jointly meet the number.
+
+    Merging takes the union of the eligible pools and the strictest coverage
+    ratio, so satisfying the merged rule satisfies every rule that produced it.
+    """
+    rules = [r for r in rules if r.active]
+    if not rules:
+        return None
+    if len(rules) == 1:
+        return rules[0]
+    eligible: Set[str] = set()
+    required: Set[str] = set()
+    for r in rules:
+        eligible |= set(r.eligible_languages)
+        required |= set(r.required_languages)
+    return CoverageSplitRule(
+        group=" + ".join(r.group for r in rules),
+        start_min=rules[0].start_min,
+        end_min=rules[0].end_min,
+        coverage_ratio=max(r.coverage_ratio for r in rules),
+        exclusive=any(r.exclusive for r in rules),
+        active=True,
+        required_languages=required,
+        eligible_languages=eligible,
+    )
 
 
 def coverage_split_rules_at(
@@ -5247,7 +5324,8 @@ def build_skeleton(
                     for q in range(qpi):
                         qslot = d * 96 + i * qpi + q
                         minute_q = i * parsed.interval_minutes + q * 15
-                        for split in coverage_split_rules_at(parsed, minute_q):
+                        split = merge_coverage_split_rules(coverage_split_rules_at(parsed, minute_q))
+                        if split is not None:
                             need = coverage_split_required_headcount(parsed, d, i, split.coverage_ratio)
                             if need <= 0:
                                 continue
@@ -6714,12 +6792,16 @@ def solve_breaks(
                         objective_terms.append(max(1, parsed.language_reserve_penalty_weight) * reserve_shortfall)
                         language_reserve_objective_count += 1
                     quarter_constraints += 1
-                for split in coverage_split_rules_at(parsed, minute):
+                split = merge_coverage_split_rules(coverage_split_rules_at(parsed, minute))
+                # `continue` here would skip the coverage accounting below, not
+                # just this constraint, so the guard has to be a condition.
+                need_split = (
+                    coverage_split_required_headcount(parsed, d, i, split.coverage_ratio)
+                    if split is not None else 0
+                )
+                if split is not None and need_split > 0:
                     # Breaks must not hollow out the owning group either: the
                     # requirement is an after-break floor, not a before-break one.
-                    need_split = coverage_split_required_headcount(parsed, d, i, split.coverage_ratio)
-                    if need_split <= 0:
-                        continue
                     eligible_split = [a for a, _, _ in covering if language_eligible(split, parsed.associates[a])]
                     prior_split = prior_covering_associates(parsed, qslot, split)
                     split_breaks: List[Any] = []
@@ -16673,14 +16755,10 @@ def run_case(
         for row in coverage_split_capacity.get("rows", []):
             print(f"COVERAGE_SPLIT {row['status']} {row['headline']}", file=log, flush=True)
         for clash in coverage_split_capacity.get("overlaps", []):
-            print(f"COVERAGE_SPLIT OVERLAP {clash['headline']}", file=log, flush=True)
+            # Logged, not warned: shared hours are pooled on purpose, and a
+            # pooled span that is short is already a SHORT row above.
+            print(f"COVERAGE_SPLIT SHARED {clash['headline']}", file=log, flush=True)
         preflight = validate_input_contract(parsed, capacity)
-        if coverage_split_capacity.get("overlaps"):
-            preflight.setdefault("warnings", []).extend(
-                c["headline"] for c in coverage_split_capacity["overlaps"]
-            )
-            if preflight.get("status") == "PASS":
-                preflight["status"] = "WARN"
         if coverage_split_capacity.get("status") in {"SHORT", "TIGHT"}:
             preflight.setdefault("warnings", []).extend(
                 row["headline"] for row in coverage_split_capacity["rows"]

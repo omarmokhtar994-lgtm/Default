@@ -222,7 +222,9 @@ ws.merge_cells("A1:G1")
 ws["A2"] = ("Optional. Leave empty and nothing changes. Add a row and that group must field the "
             "WHOLE requirement in its window - not the 'Minimum Per Interval' floor from Language "
             "Setup, which only guarantees one qualified person is present. Coverage Group must "
-            "match the Coverage Group column in Language Setup.")
+            "match the Coverage Group column in Language Setup. If two windows overlap, the "
+            "groups cover those hours TOGETHER against one requirement - their people pool and "
+            "the higher Coverage Ratio applies; the requirement is never charged twice.")
 ws["A2"].fill = WARN
 ws["A2"].alignment = Alignment(wrap_text=True, vertical="center")
 ws.merge_cells("A2:G2"); ws.row_dimensions[2].height = 46

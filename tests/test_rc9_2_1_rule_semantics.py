@@ -897,6 +897,60 @@ class CoverageSplitMakesOneGroupResponsibleForAWholeWindow(unittest.TestCase):
     def test_a_full_day_window_is_always_in_force(self):
         self.assertTrue(self._rule(start=0, end=0).overlaps(13 * 60))
 
+    # -- rules that share an hour are merged into one pooled requirement ----
+    def test_a_single_rule_is_returned_untouched(self):
+        rule = self._rule()
+        self.assertIs(E.merge_coverage_split_rules([rule]), rule)
+
+    def test_no_rule_in_force_means_no_constraint(self):
+        self.assertIsNone(E.merge_coverage_split_rules([]))
+
+    def test_an_inactive_rule_is_dropped_before_merging(self):
+        live, dead = self._rule(), self._rule(group="Domestic")
+        dead.active = False
+        self.assertIs(E.merge_coverage_split_rules([live, dead]), live)
+
+    def test_two_rules_pool_their_eligible_people(self):
+        """The whole point of the change: groups sharing an hour cover it
+        TOGETHER. Anyone either group could have sent may staff it."""
+        merged = E.merge_coverage_split_rules([
+            self._rule(eligible=("international",)),
+            self._rule(group="Domestic", eligible=("domestic",)),
+        ])
+        self.assertEqual(merged.eligible_languages, {"international", "domestic"})
+        self.assertIn("International", merged.group)
+        self.assertIn("Domestic", merged.group)
+
+    def test_the_merged_requirement_is_the_strictest_of_the_two(self):
+        """One requirement, not two stacked. Taking the higher ratio keeps
+        every rule that produced the merge satisfied."""
+        merged = E.merge_coverage_split_rules([
+            self._rule(ratio=0.6), self._rule(group="Domestic", ratio=0.9),
+        ])
+        self.assertAlmostEqual(merged.coverage_ratio, 0.9)
+
+    def test_the_merged_requirement_is_not_the_sum_of_the_two(self):
+        """Stacking is exactly the behaviour this replaced: two groups owning
+        an hour that needs 10 must field 10 between them, never 10 each."""
+        merged = E.merge_coverage_split_rules([
+            self._rule(ratio=0.8), self._rule(group="Domestic", ratio=0.8),
+        ])
+        self.assertAlmostEqual(merged.coverage_ratio, 0.8)
+        self.assertLess(merged.coverage_ratio, 1.6)
+
+    def test_exclusivity_survives_the_merge(self):
+        """If either group locks outsiders out of the hour, the pooled rule
+        still locks them out - merging must not loosen a rule."""
+        merged = E.merge_coverage_split_rules([
+            self._rule(exclusive=True), self._rule(group="Domestic", exclusive=False),
+        ])
+        self.assertTrue(merged.exclusive)
+
+    def test_the_merged_rule_is_enforced_in_both_stages(self):
+        """A merge the constraint builder does not use changes nothing."""
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        self.assertEqual(source.count("merge_coverage_split_rules(coverage_split_rules_at("), 2)
+
     # -- the requirement is grossed up, like every other requirement ----
     def test_the_requirement_is_grossed_up_for_shrinkage(self):
         """Shrinkage is out-of-office time; a rostered person is not a present
@@ -978,7 +1032,7 @@ class CoverageSplitMakesOneGroupResponsibleForAWholeWindow(unittest.TestCase):
         self.assertEqual(source.count('families.append("coverage_split")'), 2)
         self.assertIn("coverage_split: bool = True", source)
 
-    # -- overlapping windows stack; that must be visible, not discovered ----
+    # -- overlapping windows are POOLED: the groups cover them together -----
     def _report(self, rules, languages, req=3.0):
         parsed = SimpleNamespace(
             coverage_split_rules=rules,
@@ -1004,10 +1058,10 @@ class CoverageSplitMakesOneGroupResponsibleForAWholeWindow(unittest.TestCase):
         self.assertEqual(report["overlaps"], [])
         self.assertEqual(report["status"], "OK")
 
-    def test_overlapping_windows_are_named_with_the_hours_they_clash_on(self):
-        """Both rules bind, so each group owes the WHOLE requirement there -
-        10 needed becomes 10 of each. Nobody would choose that on purpose, and
-        on a small group it is instantly infeasible."""
+    def test_overlapping_windows_are_named_with_the_hours_they_share(self):
+        """Shared hours are covered by both groups TOGETHER against one
+        requirement. That is the intended behaviour, so it is reported for
+        visibility and must not escalate the status."""
         report = self._report(
             [self._rule(start=3 * 60, end=17 * 60),
              self._rule(group="Domestic", start=16 * 60, end=3 * 60,
@@ -1019,12 +1073,47 @@ class CoverageSplitMakesOneGroupResponsibleForAWholeWindow(unittest.TestCase):
         self.assertEqual(sorted(clash["groups"]), ["Domestic", "International"])
         self.assertEqual(clash["first"], "16:00")
         self.assertEqual(clash["overlapping_quarters"], 4)
-        self.assertIn("stack rather than share", clash["headline"])
-        self.assertEqual(report["status"], "OVERLAP")
+        self.assertIn("TOGETHER against one requirement", clash["headline"])
+        self.assertNotIn("stack", clash["headline"])
+        self.assertEqual(report["status"], "OK")
 
-    def test_a_shortage_outranks_an_overlap_in_the_headline_status(self):
-        """Both are reported; a group that physically cannot staff its window is
-        the more urgent of the two."""
+    def test_a_shared_span_is_scored_once_on_a_pooled_row(self):
+        """The report must analyse the units the engine enforces. International
+        03:00-17:00 overlapping Domestic 16:00-03:00 is three units: the hours
+        each owns alone, and the shared hours the two cover together."""
+        report = self._report(
+            [self._rule(start=3 * 60, end=17 * 60),
+             self._rule(group="Domestic", start=16 * 60, end=3 * 60,
+                        eligible=("domestic", "international"))],
+            {"International": 20, "Domestic": 20},
+        )
+        pooled = [r for r in report["rows"] if r["pooled_groups"] > 1]
+        self.assertEqual(len(pooled), 1, "the shared hours are one pooled unit")
+        self.assertEqual(pooled[0]["pooled_groups"], 2)
+        # Pooled means the two eligible sets combine against one requirement,
+        # not that each group is measured against the whole of it.
+        self.assertEqual(pooled[0]["eligible_headcount"], 40)
+        solo = {r["group"] for r in report["rows"] if r["pooled_groups"] == 1}
+        self.assertEqual(solo, {"International", "Domestic"})
+
+    def test_a_shared_span_is_not_double_counted_into_a_false_shortage(self):
+        """Scoring each rule against the whole requirement on hours it shares
+        would invent a shortage the solver never sees. 4 International plus 4
+        Domestic pooling against a requirement of 4 is fine; charging each of
+        them 4 on their own is not."""
+        report = self._report(
+            [self._rule(start=0, end=1, ratio=1.0),
+             self._rule(group="Domestic", start=0, end=1, ratio=1.0,
+                        eligible=("domestic",))],
+            {"International": 4, "Domestic": 4}, req=4.0,
+        )
+        self.assertEqual(len(report["rows"]), 1, "one wholly shared span is one unit")
+        self.assertEqual(report["rows"][0]["eligible_headcount"], 8)
+        self.assertEqual(report["rows"][0]["peak_required"], 4)
+
+    def test_a_shortage_still_outranks_a_shared_span_in_the_status(self):
+        """A group that physically cannot staff the hours it owns alone is
+        still SHORT, sharing elsewhere or not."""
         report = self._report(
             [self._rule(start=3 * 60, end=17 * 60, ratio=1.0),
              self._rule(group="Domestic", start=16 * 60, end=3 * 60,
@@ -1032,7 +1121,7 @@ class CoverageSplitMakesOneGroupResponsibleForAWholeWindow(unittest.TestCase):
             {"International": 2, "Domestic": 2}, req=10.0,
         )
         self.assertEqual(report["status"], "SHORT")
-        self.assertTrue(report["overlaps"], "the overlap must still be reported")
+        self.assertTrue(report["overlaps"], "the shared span must still be reported")
 
     def test_the_ceiling_accounts_for_break_time_not_just_rostering(self):
         """The first version compared peak need against rostered headcount and

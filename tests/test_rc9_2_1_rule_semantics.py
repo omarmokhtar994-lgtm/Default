@@ -977,6 +977,62 @@ class CoverageSplitMakesOneGroupResponsibleForAWholeWindow(unittest.TestCase):
         self.assertEqual(source.count('families.append("coverage_split")'), 2)
         self.assertIn("coverage_split: bool = True", source)
 
+    # -- overlapping windows stack; that must be visible, not discovered ----
+    def _report(self, rules, languages, req=3.0):
+        parsed = SimpleNamespace(
+            coverage_split_rules=rules,
+            associates=[SimpleNamespace(name=f"a{i}", language=lang)
+                        for lang, n in languages.items() for i in range(n)],
+            requirements=[[req] * 24 for _ in range(7)],
+            shrinkage=[[0.0] * 24 for _ in range(7)],
+            active=[[True] * 24 for _ in range(7)],
+            intervals_per_day=24, interval_minutes=60,
+        )
+        return E.coverage_split_capacity_report(parsed)
+
+    def test_complementary_windows_report_no_overlap(self):
+        """International 03:00-16:00 and Domestic 16:00-03:00, the real Cricut
+        Voice split: every hour has exactly one owner and 16:00 belongs to
+        Domestic alone."""
+        report = self._report(
+            [self._rule(start=3 * 60, end=16 * 60),
+             self._rule(group="Domestic", start=16 * 60, end=3 * 60,
+                        eligible=("domestic", "international"))],
+            {"International": 20, "Domestic": 20},
+        )
+        self.assertEqual(report["overlaps"], [])
+        self.assertEqual(report["status"], "OK")
+
+    def test_overlapping_windows_are_named_with_the_hours_they_clash_on(self):
+        """Both rules bind, so each group owes the WHOLE requirement there -
+        10 needed becomes 10 of each. Nobody would choose that on purpose, and
+        on a small group it is instantly infeasible."""
+        report = self._report(
+            [self._rule(start=3 * 60, end=17 * 60),
+             self._rule(group="Domestic", start=16 * 60, end=3 * 60,
+                        eligible=("domestic", "international"))],
+            {"International": 20, "Domestic": 20},
+        )
+        self.assertEqual(len(report["overlaps"]), 1)
+        clash = report["overlaps"][0]
+        self.assertEqual(sorted(clash["groups"]), ["Domestic", "International"])
+        self.assertEqual(clash["first"], "16:00")
+        self.assertEqual(clash["overlapping_quarters"], 4)
+        self.assertIn("stack rather than share", clash["headline"])
+        self.assertEqual(report["status"], "OVERLAP")
+
+    def test_a_shortage_outranks_an_overlap_in_the_headline_status(self):
+        """Both are reported; a group that physically cannot staff its window is
+        the more urgent of the two."""
+        report = self._report(
+            [self._rule(start=3 * 60, end=17 * 60, ratio=1.0),
+             self._rule(group="Domestic", start=16 * 60, end=3 * 60,
+                        ratio=1.0, eligible=("domestic",))],
+            {"International": 2, "Domestic": 2}, req=10.0,
+        )
+        self.assertEqual(report["status"], "SHORT")
+        self.assertTrue(report["overlaps"], "the overlap must still be reported")
+
     def test_exclusive_locks_other_groups_out_of_the_window(self):
         source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
         self.assertIn("if split.exclusive:", source)

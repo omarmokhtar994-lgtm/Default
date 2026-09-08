@@ -1611,10 +1611,41 @@ def coverage_split_capacity_report(parsed: ParsedInput) -> Dict[str, Any]:
                 f"headcount to {split.group}, lower its Coverage Ratio, or narrow its window."
             ),
         })
+    # Overlapping windows STACK: both rules bind, so each group must field the
+    # whole requirement on its own. Two groups overlapping on an interval that
+    # needs 10 demands 10 of each - 20 people - unless someone is eligible for
+    # both. That is almost never the intent, and on a small group it is
+    # instantly infeasible, so it is named here rather than discovered as a
+    # bare INFEASIBLE later.
+    overlaps: List[Dict[str, Any]] = []
+    for a_i in range(len(rules)):
+        for b_i in range(a_i + 1, len(rules)):
+            ra, rb = rules[a_i], rules[b_i]
+            clash = sorted({
+                hhmm(m) for m in range(0, 1440, 15)
+                if ra.overlaps(m) and rb.overlaps(m)
+            })
+            if clash:
+                overlaps.append({
+                    "groups": [ra.group, rb.group],
+                    "overlapping_quarters": len(clash),
+                    "first": clash[0], "last": clash[-1],
+                    "headline": (
+                        f"{ra.group} ({hhmm(ra.start_min)}-{hhmm(ra.end_min)}) and "
+                        f"{rb.group} ({hhmm(rb.start_min)}-{hhmm(rb.end_min)}) both own "
+                        f"{len(clash)} quarter-hours from {clash[0]} to {clash[-1]}. Each group "
+                        f"must field the WHOLE requirement there, so the two stack rather than "
+                        f"share. Make the windows complementary unless you really do want both "
+                        f"teams staffed to full requirement at the same time."
+                    ),
+                })
+
     short = [r for r in rows if r["status"] == "SHORT"]
+    status = "SHORT" if short else ("OVERLAP" if overlaps else "OK")
     return {
-        "status": "SHORT" if short else "OK",
+        "status": status,
         "short_groups": [r["group"] for r in short],
+        "overlaps": overlaps,
         "rows": rows,
     }
 
@@ -16610,7 +16641,15 @@ def run_case(
         coverage_split_capacity = coverage_split_capacity_report(parsed)
         for row in coverage_split_capacity.get("rows", []):
             print(f"COVERAGE_SPLIT {row['status']} {row['headline']}", file=log, flush=True)
+        for clash in coverage_split_capacity.get("overlaps", []):
+            print(f"COVERAGE_SPLIT OVERLAP {clash['headline']}", file=log, flush=True)
         preflight = validate_input_contract(parsed, capacity)
+        if coverage_split_capacity.get("overlaps"):
+            preflight.setdefault("warnings", []).extend(
+                c["headline"] for c in coverage_split_capacity["overlaps"]
+            )
+            if preflight.get("status") == "PASS":
+                preflight["status"] = "WARN"
         if coverage_split_capacity.get("status") == "SHORT":
             preflight.setdefault("warnings", []).extend(
                 row["headline"] for row in coverage_split_capacity["rows"] if row["status"] == "SHORT"

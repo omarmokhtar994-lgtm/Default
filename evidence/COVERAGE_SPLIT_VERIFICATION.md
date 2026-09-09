@@ -103,9 +103,65 @@ Ratio sweep on the same roster, from the capacity report:
 | 0.45 | OK | 2 → 3 | 5 |
 | 0.40 | OK | 2 → 3 | 5 |
 
-## 4. Complementary windows at an achievable ratio
+## 4. Complementary windows at an achievable ratio — full pipeline
 
-<!-- FINAL_RUN_RESULT -->
+The real Cricut Voice shape, International at the 0.5 the report clears:
+
+| Coverage Group | Window | Ratio |
+|---|---|---|
+| International | 03:00–16:00 | 0.5 |
+| Domestic | 16:00–03:00 | 0.8 |
+
+Preflight: `OK` on both rows. Result:
+
+| | |
+|---|---|
+| return code | **0** |
+| `production_eligible` | **TRUE** |
+| independent validation | **PASS** |
+| hard validation failures | **0** |
+| no-break exceptions used | **0** |
+| before breaks | 257 / 264 at target, **264 / 264 at floor** |
+| after breaks | 231 / 264 at target, 261 / 264 at floor |
+| hard floor gaps | **0** |
+
+**Coverage Split held through break placement**, measured from the delivered
+workbook — shifts from `Final Schedule`, breaks from `Break Schedule`, at
+quarter-slot granularity:
+
+| Span | Owned quarter-slots with a requirement | Below the requirement after breaks |
+|---|---|---|
+| International 03:00–16:00 @0.5 | 260 | **0** |
+| Domestic 16:00–03:00 @0.8 | 268 | **0** |
+
+This is the Stage-2 half of the feature: the break stage may not hollow out a
+span the roster owns.
+
+**One caveat on the quality numbers.** This run reports
+`stage1_profile_coverage_status: TRUNCATED_INSUFFICIENT_STAGE1_BUDGET` — 2 of
+15 skeleton profiles ran inside the 2400s budget, and the run status is
+`FALLBACK_TO_QUICK`. The coverage figures above are therefore a shallow search,
+not a benchmark of what this workbook can reach. What is being claimed here is
+correctness of the constraint, not quality of the schedule.
+
+### A checker bug worth recording
+
+A first pass at this audit reported 2 Domestic quarter-slots short. It was
+wrong: the `Break Schedule` sheet lists a break under its **shift** day, so a
+break at 01:15 on an 18:00–03:00 shift is filed under the shift's day and
+belongs to the *next* calendar day. Anchoring each break to its shift start
+before mapping it to a quarter resolved it to zero. Recorded because the same
+mistake in any downstream consumer of that sheet would misread overnight
+coverage.
+
+### The audit is now in the engine
+
+Checking this by hand once is not a guarantee. The engine now recomputes the
+pooled requirement per quarter-slot from the schedule it is about to export and
+reports `coverage_split_rule_quarters`, `coverage_split_gaps` and
+`coverage_split_break_caused_gaps` in the run summary — the last separating a
+break-caused gap from a roster one, because they have different owners. A
+non-zero gap count on a released schedule is a defect, not a quality warning.
 
 ## 5. What is *not* claimed
 

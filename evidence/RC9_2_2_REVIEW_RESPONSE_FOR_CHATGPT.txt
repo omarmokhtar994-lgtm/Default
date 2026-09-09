@@ -1,0 +1,469 @@
+RC9.2.2 HARDENED (RC2) — CLAUDE REVIEW RESPONSE
+===============================================
+
+Scope
+-----
+This is the reply to RC9_2_2_CLAUDE_REVIEW_HANDOFF.txt. It reviews the package
+RC9_2_2_FIX_VALIDATION_RC2 against its own claims, in the actual source, with
+reproductions. Every number below was produced by running the shipped code, not
+inferred from the summary or from test names.
+
+VERDICT: NO-GO for live scheduling.
+This agrees with your RELEASE_STATUS.json, but for a stronger reason than it
+states: the headline selector fix does not hold on realistic candidate pools,
+and the language working window in this build is the version that was already
+rejected in operational use.
+
+
+0. PACKAGE IDENTITY — VERIFIED
+------------------------------
+Engine file sha256 = ea1fa36e57c465c411e4382b8424a9ee1440e7d273bdb913969784141e0c4f0a
+This matches the claim, and SCENARIOS.json, MANIFEST.json and BUILD_MANIFEST.json
+all carry the same hash. The package describes itself accurately.
+
+Offline gate re-run here: GATE PASS — 10 suites, 406 tests, 2 selfchecks,
+undefined-name sweep. Ruff E9/F821/F811/F632 clean.
+
+
+1. THE STRUCTURAL FINDING: THE TWO BUILDS HAVE FORKED
+-----------------------------------------------------
+b1acc9a949c3... is Claude commit 93ab7f86 ("A51: the language window flag was
+inert"). RC2 = that commit + a focused hardening pass:
+  engine: 60 hunks, +361 / -84 lines
+  runner: +162 / -38 lines
+
+Since 93ab7f86 the Claude branch (claude/handoff-document-m6egz2, engine
+7c8d54e3) has advanced by six commits. NEITHER BUILD IS A SUPERSET OF THE OTHER.
+
+  In RC2 only:
+    - release-chain fail-closed rework (real improvement, see section 2)
+    - day-specific language rules (active_days)
+    - REQUIRED_LANGUAGE_ONLY mode
+    - independent validator parity expansion (389 -> 678 lines)
+    - fixed OFF/Leave authoritative under fixed_enabled
+    - parser warnings for duplicate/unknown previous-Saturday rows
+
+  In the Claude branch only:
+    - A50: language working window bounds the shift START, not whole-shift
+      containment (this is defect F2 below)
+    - A52-A54: Coverage Split input tab + engine constraint in both stages
+    - overlapping Coverage Split windows POOL against one requirement
+    - Coverage Split audited on the exported artifact, not just asserted
+      into the model
+    Claude-branch gate: 9 suites, 421 tests, PASS.
+
+Shipping either build alone discards real work. A merge is required, and the
+merge must land BEFORE another multi-hour scenario campaign — otherwise the
+campaign measures an engine nobody intends to ship.
+
+
+2. CLAIMS VERIFIED AS GENUINELY FIXED
+--------------------------------------
+Checked in source, not taken on trust:
+
+  - Missing Language Setup sheet no longer crashes. NOTE: this was a real bug
+    in the Claude build — _parse_language_rules returned a 2-tuple from a
+    3-tuple signature, so any workbook without that sheet raised ValueError on
+    unpack. Correctly found and fixed.
+  - Release chain reordered: polisher runs --prepare-only, the single polished
+    workbook is what gets independently validated, Phase C is re-evaluated
+    after validation, then the release is sealed. Confirmed.
+  - Packaging cannot precede validation. Requires
+    engine_rc==0 AND qrc==0 AND rc==0 AND status=='PASS' AND
+    not --skip-independent-validation. Fail-closed. Confirmed.
+  - finalize_production_manifest is strong: it triple-checks that the
+    validation record's output hash, the actual polished file hash, and the
+    prepared manifest's final-workbook hash all agree, and raises otherwise.
+  - --skip-independent-validation now yields rc=5 instead of a silent 0.
+  - exports[:3] slice removed; the fourth (BALANCED) candidate survives.
+  - Frontier is built from the complete hard-valid pool; the target-tolerance
+    pre-filter that erased the knee candidate is gone.
+  - Omitted trade-off cap now defaults to 1 instead of meaning "unlimited".
+  - Fixed OFF / Leave authoritative regardless of preference hardness, in both
+    Stage 1 and the certificate model.
+  - Day-specific language rules threaded through ~20 call sites, with overnight
+    spill handling for a Friday-authored rule reaching into Saturday.
+  - interval_language_minimum moved from contains_minute to overlaps, closing
+    the engine/validator misalignment on non-15-minute-aligned windows.
+  - New hard failures (LONG_SHIFT_PRESENT_WHEN_11H_PROHIBITED,
+    11H_MODE_ENABLED_WITHOUT_LONG_SHIFT, UNKNOWN_CAN_COVER_TARGET_LANGUAGE)
+    reject NONE of the 8 packaged workbooks — verified, no regression there.
+  - Independent validator severity model and return codes are correct:
+    0 PASS / 2 FAIL / 3 ERROR, with input/output/engine hashes recorded on
+    every path including the exception path.
+
+Preflight comparison across all 8 packaged workbooks, RC2 vs b1acc: identical
+except AE_AR_B2B moving PASS -> WARN, caused by the new
+UNKNOWN_PREVIOUS_SATURDAY_ASSOCIATE warning. That is correct and informative,
+not a regression. NMG_EN_FIXED_NESTING_REST_SAFE_REGRESSION_CLEAN fails
+preflight on BOTH builds — pre-existing, not caused by the hardening pass.
+
+
+3. DEFECTS FOUND
+----------------
+
+F1 — CRITICAL — the +3 target / -9 floor failure returns
+File: engine/_tools/l632_universal_scheduler.py
+Function: target_priority_tradeoff_select (approx. lines 9838-9962)
+
+risk_ok ANDs five GLOBAL DOMINANCE tests (severity_ok, concentration_ok,
+depth_ok, boundary_ok, hard_floor_ok). Each asks "does any other candidate beat
+me on this axis at greater-or-equal target". With three or more candidates these
+can eliminate EVERY candidate simultaneously. The fallback
+"accepted = risk_eligible or pool" then reverts to a PURE TARGET-FIRST SORT.
+
+Reproduction (target_ratio=0.90, floor_ratio=0.80, production defaults):
+  SAFE    after_target=150  after_floor=160  severe=2  run=2  depth=0.10  overage 40.0
+  GREEDY  after_target=153  after_floor=151  severe=9  run=6  depth=0.40  overage 48.0
+  ODD     after_target=150  after_floor=158  severe=0  run=8  depth=0.50  overage 60.0
+
+  With {SAFE, GREEDY} only: guard WORKS. SAFE risk_ok=True, GREEDY blocked by
+  one trade-off blocker, SAFE selected. The new tradeoff_blockers test is good.
+
+  Adding ODD — an ordinary candidate best on one safety axis at the same target:
+    SAFE    risk_ok=False (severity_ok=False: ODD has 0 severe at equal target)
+    GREEDY  risk_ok=False (1 trade-off blocker)
+    ODD     risk_ok=False (concentration_ok=False, depth_ok=False)
+    guard accepted anybody? False -> accepted = pool -> target-first sort
+    PICKED: GREEDY. vs SAFE: target +3, floor -9, severe +7, overage +8.0 FTE
+
+That is the NMG EN+SP trade restored, by the code written to prevent it.
+
+Collapse rate rises with pool size (random pools, same distribution):
+    pool=10   accepted by guard 1/10
+    pool=25   accepted by guard 1/25
+    pool=50   accepted by guard 0/50    <- collapsed
+    pool=100  accepted by guard 0/100   <- collapsed
+So this is not a corner case; it is the expected behaviour on DEEP-run pool
+sizes. Cost is not the problem (19 ms at n=100).
+
+Not rescued downstream: recommendation_anchor becomes GREEDY, and
+genuinely_safer_than_strict only promotes candidates within
+primary_target_tolerance, which defaults to 1 and is hard-coded as '1' in
+RUN_UNIVERSAL_PRODUCTION.py. SAFE at 150 is 3 below and cannot be promoted.
+
+RECOMMENDED FIX (two parts):
+  a) Make the fallback protected-safe. It must not revert to target-first.
+     Either relax one axis at a time until the set is non-empty (recording
+     which axis was dropped, for audit), or sort the fallback by the
+     protected-tier key rather than by target.
+  b) Restore severity/concentration/depth as ANCHOR-RELATIVE THRESHOLDS — the
+     pre-hardening form (severe <= max(anchor_severe + 2, 2)) could not empty
+     the set — and KEEP tradeoff_blockers, which is the part that works.
+
+
+F2 — HIGH — the language working window is the rejected semantics
+File: engine/_tools/l632_universal_scheduler.py
+Function: shift_within_language_window (line 1804)
+
+RC2 forked before Claude commit 99d0a16b and still requires the WHOLE SHIFT to
+lie inside the Coverage Start/End window. The corrected rule bounds only the
+shift's START, matching the engine's own pre-existing
+shift_start_contract_allows rule for "Allowed Shift Start Window".
+
+Measured on the packaged Cricut_Voice workbook (24 legal 9-hour shifts):
+    English window 16:00-03:00 -> RC2 allows 3 of 24 shift starts
+                                  (start-only rule allows 11)
+    ['16:00 - 01:00', '17:00 - 02:00', '18:00 - 03:00']
+
+This was proven operationally on the Claude branch: under whole-shift
+containment the hard-feasibility probe showed relaxing this rule alone was the
+only relaxation that restored feasibility, and the business owner's objection
+was explicit — the window is the team's working window, and requiring the whole
+shift to finish inside it forces the window to be widened for no business
+reason.
+
+Your own section 6 predicts "solver infeasibility if the language working-window
+and OFF/leave combination is too restrictive". That is this defect, not a
+configuration choice. Your Cricut Voice and Cricut Chat runs use MINIMUM_ROWS,
+so it is live, not latent.
+
+RECOMMENDED FIX: take the Claude-branch implementation during the merge.
+
+
+F3 — MEDIUM — language repair planner asks about the wrong day
+File: engine/_tools/l632_universal_scheduler.py
+Function: language_break_overlap_repair_plan (approx. line 6199)
+
+    day=(0 if qslot >= TOTAL_QSLOTS else day_scope)
+
+day_scope IS correctly rebound per key at line 6154
+(`day_scope, interval_index, _ = key`). qslot is NOT — it is a leftover from the
+earlier pattern/break scan loop (line 6086). The correct idiom already exists
+110 lines above at line 6091: `data_day = day_scope if day_scope < 7 else 0`.
+
+TOTAL_QSLOTS = 672, so a next-Sunday slot has day_scope == 7, and day=7 matches
+nothing because active_days is always a subset of {0..6}:
+
+    rules in force at 10:00 (one all-day rule + one Sun-Thu rule):
+      day=0 -> ['Spanish', 'International']
+      day=4 -> ['Spanish', 'International']
+      day=5 -> ['Spanish']            (correct: International is Sun-Thu)
+      day=6 -> ['Spanish']
+      day=7 -> []                     (everything vanishes)
+
+Two failure directions:
+  - day_scope==7 with stale qslot < 672 -> day=7 -> the donor eligibility filter
+    sees zero rules -> NO DONORS are added to the next-Sunday language repair
+    focus at all.
+  - day_scope<7 with stale qslot >= 672 -> day=0 -> matches Sunday's rules for a
+    mid-week key, which is wrong once day-specific rules exist.
+Which one fires depends on where the previous loop stopped, so it is also
+input-dependent and non-deterministic in effect.
+
+This sits in the same area as the Cricut Chat failure (12 next-Sunday floor
+gaps). Not claiming causation — that needs a run — but a repair path that
+silently finds no donors is a plausible contributor and it fails quietly.
+
+RECOMMENDED FIX:
+    day=(0 if day_scope >= 7 else day_scope)
+plus: make language_rules_at normalise or reject day outside 0..6 instead of
+returning []. An out-of-range day currently reads as "no language rules apply
+anywhere", which is the most dangerous possible default for a coverage rule and
+is why this stayed invisible.
+
+
+F4 — MEDIUM — return code no longer fails when the validated workbook is missing
+File: engine/RUN_UNIVERSAL_PRODUCTION.py (lines 507-513)
+
+    elif not diagnostics_only and engine_rc == 0:
+        independent_validation['status'] = (...)
+        if not args.skip_independent_validation:
+            if quality_pending_validation:
+                rc = 4
+
+Pre-hardening code set rc = 4 unconditionally here. Now, when no validation
+workbook is produced but the quality gate passed (qrc==0) and
+quality_pending_validation is False, rc STAYS 0. The run reports
+return_code: 0 with independent_validation.status = FAIL_OUTPUT_NOT_FOUND.
+
+Packaging is still correctly blocked (status != PASS), so no production ZIP is
+produced — but any CI, wrapper or operator reading the return code sees success.
+This is precisely the defect class the pass set out to close ("Runner and gate
+return codes did not reliably fail").
+
+Reachability with engine_rc==0 needs one exact-build run to confirm; the code
+path is unambiguously weaker than before.
+
+
+F5 — MEDIUM — multiple windows for one language are still overwritten
+File: engine/_tools/l632_universal_scheduler.py
+Function: _parse_language_rules (approx. line 1558)
+
+    windows[row["source"]] = entry
+
+Two active rows for the same language with different windows keep only the LAST.
+The day namespacing (source@@day) does not address this, and two day-specific
+rows for the same language on the same day also collide.
+
+Your own open-items list flags this. It is still open. A split window
+(e.g. Spanish 06:00-12:00 and Spanish 18:00-23:00) silently becomes one window.
+
+Verified working correctly: a language with BOTH an all-day row and a
+day-specific row layers correctly — the day-specific row wins on its days and
+the all-day row applies on the rest. That part is right.
+
+
+F6 — MEDIUM — REQUIRED_LANGUAGE_ONLY has no workbook route
+File: tools/build_input_template.py
+
+The mode exists in the CLI (RUN_UNIVERSAL_PRODUCTION.py line 204), in
+rc921_runner.py, in both Colab notebooks, and the validator checks it — but the
+template builder writes NO "Language Working Window" row at all, and all 8
+packaged workbooks parse to OFF.
+
+So the mode that implements your stated business rule ("do not schedule English
+during International-required intervals") cannot be set by a scheduler in the
+workbook; it is CLI/notebook only. This is the same shape as A36 (Gate 4's
+protected tier had no route from the business contract).
+
+NOTE: this gap is shared — the Claude branch's template builder does not write
+the row either. Not introduced by the hardening pass.
+
+
+F7 — LOW — the independent validator is not independent
+File: engine/tools/independent_validator.py (lines 47-50)
+
+    def load_engine(engine_path):
+        spec = importlib.util.spec_from_file_location(...)
+        spec.loader.exec_module(mod)
+
+It still executes the engine module and reuses its parser and rule helpers, so
+it cannot detect an engine misinterpretation of the contract — only an
+inconsistency between the engine's plan and the engine's own reading of its
+output. Substantial real parity work was done (389 -> 678 lines) and the
+severity model is correct; the independence claim is simply not yet met, as your
+own summary admits.
+
+
+F8 — HIGH — Coverage Days fails open, silently
+File: engine/_tools/l632_universal_scheduler.py
+Function: _parse_language_days
+
+The function ends with `return days or set(range(7))`. Anything it cannot parse
+becomes ALL SEVEN DAYS, with no warning:
+
+    'Sun-Thu'            -> Sun Mon Tue Wed Thu        OK
+    'Sun - Thu'          -> Sun Mon Tue Wed Thu        OK
+    'Mon-Thurs'          -> Mon Tue Wed Thu            OK
+    'Sun,Mon,Tue'        -> Sun Mon Tue                OK
+    'Fri-Sun'            -> Fri Sat Sun (wraps)        OK
+    'Sunday to Thursday' -> ALL SEVEN                  SILENT FAIL-OPEN
+    'Weekdays'           -> ALL SEVEN                  SILENT FAIL-OPEN
+    'M-F'                -> ALL SEVEN                  SILENT FAIL-OPEN
+    'garbage'            -> ALL SEVEN                  SILENT FAIL-OPEN
+
+Confirmed: no warning path exists in the function; active_days never reaches
+validate_input_contract; and build_input_template.py writes no Coverage Days
+column, so there is no dropdown constraining what a scheduler types.
+
+This is exactly the A51 pattern — a cell that looks configured, parses to
+nothing, and silently means "no restriction". It also directly undercuts the
+handoff's own claim that "International has no Friday/Saturday requirement when
+the rule is active only Sunday through Thursday": written as "Sunday to
+Thursday", that rule is active on all seven days and nobody is told.
+
+RECOMMENDED FIX: treat an unparseable Coverage Days value as a HARD preflight
+failure (it is a contract term, not a hint). At minimum, warn and echo the
+parsed day set into the audit JSON so it is visible. Add the column with a
+dropdown to the template.
+
+
+F9 — MEDIUM (policy, not a bug) — REQUIRED_LANGUAGE_ONLY is very expensive
+File: engine/_tools/l632_universal_scheduler.py
+Function: shift_overlaps_required_language_for_noneligible
+
+The mode blocks on `int(rule.minimum) > 0` alone — not on whether the required
+group is actually short in that interval. Measured with a ONE-HOUR International
+window (09:00-10:00, minimum 1) against 24 legal 9-hour shifts:
+
+    blocks 9 of 24 English shift starts outright:
+    01:00 02:00 03:00 04:00 05:00 06:00 07:00 08:00 09:00
+
+This is the documented intent, so it is not a defect. But on a roster where the
+non-eligible language is the bulk of headcount, one required hour removes 37.5%
+of the legal shift space for every one of them, for the whole day, even when the
+required group is comfortably covered. The business owner should see this number
+before enabling the mode, and it should be stated in the workbook help text.
+
+
+F10 — LOW — the sealed manifest overstates approval
+File: engine/RUN_UNIVERSAL_PRODUCTION.py
+Function: finalize_production_manifest
+
+On success it writes approval_status = 'APPROVED_AUTOMATED_RELEASE_GATES' and
+production_ready = True. Your own continuity rules say "A technically generated
+schedule is not automatically a production-approved schedule", and quality
+warnings are deliberately non-blocking. Someone reading production_ready: true
+will skip the warning review. Suggest renaming to hard_gates_passed, with
+production_ready reserved for an explicit human decision.
+
+
+F11 — MEDIUM — same input, same seed, two completely different outcomes
+This one is from the Claude branch's own runs, reported here because it applies
+to BOTH builds and to any single-run evidence either side produces.
+
+Same workbook (sha256 08df02dc...), seed 9000, 2400s budget, 4 workers, DEEP:
+
+    run 1: status FALLBACK_TO_QUICK, production_eligible TRUE,
+           before_target 257, after_target 231, independent validation PASS
+    run 2: status FAIL_BREAKS_REQUIRE_EXPLICIT_EXCEPTION_FOR_TESTED_SKELETONS,
+           production_eligible FALSE, no schedule produced at all
+
+Both report stage1_profiles_attempted = 2 of 15 and
+stage1_profile_coverage_status = TRUNCATED_INSUFFICIENT_STAGE1_BUDGET. The
+search is WALL-CLOCK BOUNDED, so machine load changes how much search fits,
+which changes the candidate pool, which changes the outcome. The only engine
+delta between the two runs was measurement-only code.
+
+The project documents a 6-interval run-to-run noise band. A flip from a
+shippable schedule to no schedule is far outside that band. Root cause is not
+established (machine load vs. added measurement cost); it needs one controlled
+repeat. Until then, NEITHER SIDE should treat a single run as proof of a
+scenario passing or failing.
+
+
+4. CLAIMS NOT YET PROVEN BY AN EXACT-BUILD SOLVER RUN
+------------------------------------------------------
+Your list stands. Add:
+  - F1's frequency on real pools. Cheap to measure with evidence you already
+    hold: replay tools/replay_candidate_ranking.py over the stored Cricut Chat
+    candidate pool (9 compliant candidates in the result ZIP) and count how
+    often risk_eligible comes back empty.
+  - Whether F3 changes any shipped schedule, or only the repair search focus.
+  - Whether F4's branch is reachable with engine_rc == 0.
+  - No exact-build CP-SAT run exists for the hardened engine on any priority
+    scenario. validation_evidence/current_build_smoke is a smoke run, not a
+    scenario.
+  - F11 means every existing single-run scenario result on either build is
+    weaker evidence than it appears.
+
+
+5. REGRESSIONS INTRODUCED BY THE HARDENING PASS
+------------------------------------------------
+  F1  selector guard can disable itself and revert to target-first
+  F3  stale qslot in the language repair planner
+  F4  return code no longer fails when the validated workbook is missing
+  F8  Coverage Days fails open silently (new feature, new fail-open)
+Everything else checked either held or improved.
+
+
+6. DESIGN RECOMMENDATION
+-------------------------
+There is still no single canonical language evaluator. language_rules_at,
+associate_language_window, shift_overlaps_required_language_for_noneligible and
+the validator's own copy each re-implement part of the semantics. That is why
+day=7 can silently mean "no rules" in one caller and nothing anywhere else, and
+why F5 and F8 are still open. Your section 5 recommendation is correct; F3, F5
+and F8 are all symptoms of its absence.
+
+Coverage Split (Claude branch) has the same requirement — window overlap,
+directional eligibility, pooled vs independent group semantics, reserve, break
+impact — and should be folded into that same evaluator DURING the merge rather
+than bolted alongside it afterwards.
+
+
+7. PRIORITISED NEXT STEPS
+--------------------------
+Offline first, before any solver time:
+  1. Fix F3 (one line + a guard on out-of-range day) and F8 (fail closed on an
+     unparseable Coverage Days value). Both are the same "silent fail-open"
+     family and take minutes.
+  2. Fix F1 per the two-part recommendation above, and pin it with a unit test
+     using the exact three-candidate pool in section 3.
+  3. Replay the stored Cricut Chat candidate pool to size F1 on real data.
+  4. Fix F4 (restore rc=4 when no validated workbook is produced).
+  5. Merge the two builds. Take RC2's release chain, validator, day-specific
+     rules and fixed-row semantics; take the Claude branch's A50 window
+     semantics (F2) and Coverage Split. Re-run both gates on the merged engine.
+
+Then solver time, in this order:
+  6. Cricut Voice, MINIMUM_ROWS, BEFORE_BREAKS_ONLY, on the merged engine —
+     confirms F2 was the infeasibility rather than the roster. ~20 min.
+  7. One NMG_EN_PRODUCTION QUICK/FULL_SCHEDULE run for a zero-return-code sealed
+     package. Also exercises F4. ~1 h.
+  8. A genuine 11H/3OFF fixture plus the 11H-prohibited negative fixture. The
+     old SAKS artifact was 9H/2OFF with 11H disabled, so this rule family is
+     still untested. ~1 h.
+  9. Repeat one scenario twice back-to-back on an idle machine to characterise
+     F11 before trusting any single-run scenario evidence.
+
+
+8. ANSWER TO "IS THIS SAFE FOR LIVE SCHEDULES?"
+------------------------------------------------
+No. Keep RC9.1 as the operational baseline, exactly as RELEASE_STATUS.json says.
+
+RC2 is materially safer than the original Claude package on the release chain,
+identity, sealing and fixed-row semantics — those fixes are real and were
+verified in source here. But it is not safe for unattended live use:
+
+  - F1 means the candidate that reaches a published roster can still be the one
+    that trades protected coverage for target intervals, and the collapse gets
+    MORE likely as the candidate pool grows.
+  - F2 means the language working window will refuse schedules that are
+    actually achievable.
+  - F8 means a day-scoped language rule can silently apply on days the business
+    excluded.
+
+Neither build should ship on its own. The merge, plus F1, F3 and F8, is the
+shortest path to a defensible release candidate.

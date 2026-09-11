@@ -1,0 +1,234 @@
+RC9.2.2 RC4 — CLAUDE VERIFICATION RESULT
+========================================
+
+Scope: independent verification of RC9_2_2_RC4_COMPLETE_BUNDLE against the
+findings sent in RC9_2_2_REVIEW_RESPONSE_FOR_CHATGPT.txt. Every result below
+was produced by running the shipped RC4 code.
+
+VERDICT: still NO-GO for live, but for a different and narrower reason than
+last round. The code fixes are real and verified. The evidence is not.
+
+  - F3, F4, F5, F8: CONFIRMED FIXED in RC4 source, each re-tested here.
+  - F1, F2: confirmed unchanged, as agreed (frozen).
+  - The blocker is now evidentiary: THERE IS STILL NO EXACT-BUILD RUN.
+    All three shipped run artifacts were produced by the RC2 engine
+    (ea1fa36e...), not the RC4 engine (117b14d0...), and all three failed.
+
+
+1. IDENTITY
+-----------
+RC4 engine sha256 = 117b14d0dcd4883769b2dea0ce437aa910c3b005239011f04358ffde8f3d3937
+SCENARIOS.json, MANIFEST.json and BUILD_MANIFEST.json all carry that hash.
+Package is internally self-consistent. Confirmed.
+
+Offline gate re-run here: GATE PASS — 10 suites, 429 tests, 2 selfchecks,
+undefined-name sweep. Matches your claim exactly.
+
+Preflight sweep, all 8 packaged workbooks: unchanged from RC2 (5 PASS/WARN,
+AE_AR_B2B WARN on historical names, NMG_EN_FIXED_NESTING still FAIL —
+pre-existing on every build).
+
+ISSUE N3 (LOW): the engine's VERSION constant still reads
+"L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2" while the package, docs and
+manifests all say RC4. Every run artifact therefore self-reports as RC2. That
+is the same class of confusion the rc921_runner.py filename already causes.
+Bump VERSION to an RC4 string so a result file names the build that produced it.
+
+
+2. FIXES VERIFIED
+-----------------
+
+F3 — FIXED. `rule_day = 0 if day_scope >= 7 else day_scope`. The stale `qslot`
+is gone and the day now comes from the key. Exactly the recommended fix.
+
+  PARTIAL: the second half of the recommendation was not taken.
+  language_rules_at still returns [] silently for any day outside 0..6:
+      day=0 -> 1 rule   day=6 -> 1 rule
+      day=7 -> 0 rules  day=99 -> 0 rules  day=-1 -> 0 rules
+  The call site is fixed, so this is now latent rather than live, but "no
+  language rules apply anywhere" remains the default for an out-of-range day.
+  Recommend raising or clamping instead of returning an empty list.
+
+F4 — FIXED. RUN_UNIVERSAL_PRODUCTION.py now reads:
+      if rc == 0:
+          rc = 5 if args.skip_independent_validation else 4
+  It preserves an earlier nonzero gate code and fails explicitly when this is
+  the first blocking condition. Correct.
+
+F5 — FIXED, and done well. `windows` is now Dict[str, List[...]], multiple
+authored windows per language accumulate instead of overwriting, and
+enforcement uses
+      any(shift_within_language_window(shift, w) for w in entries)
+so a shift is legal if it fits ANY authored window. The legacy single-window
+tuple shape is preserved for older readers. Verified at all three call sites
+(2017, 5167, 8436).
+
+F8 — FIXED, and fails closed. Re-fuzzed:
+      'Sun-Thu'            -> Sun Mon Tue Wed Thu
+      'Sunday to Thursday' -> Sun Mon Tue Wed Thu     (was ALL SEVEN)
+      'Weekdays'           -> Mon Tue Wed Thu Fri     (was ALL SEVEN)
+      'Weekends'           -> Sun Sat
+      'M-F'                -> Mon Tue Wed Thu Fri     (was ALL SEVEN)
+      'Mon-Thurs'          -> Mon Tue Wed Thu
+      'garbage'            -> REJECTED                (was ALL SEVEN)
+  End to end through parse_input + validate_input_contract:
+      'garbage'   -> preflight FAIL ['INVALID_LANGUAGE_COVERAGE_DAYS']
+      'All'       -> preflight WARN (clean)
+      'Sun-Thu'   -> preflight WARN (clean)
+
+  The generic rule in validate_input_contract — any parser warning whose code
+  starts with HARD_ becomes a contract failure unless explicitly handled — is
+  good engineering. It makes future strict parsers fail closed by default.
+  That pattern is worth keeping and extending.
+
+F1, F2 — confirmed present and unchanged, as agreed:
+      shift_within_language_window still documents whole-shift containment
+      target_priority_tradeoff_select still has `accepted = risk_eligible or pool`
+
+F10 — NOT ADDRESSED (low, as filed). finalize_production_manifest still writes
+approval_status='APPROVED_AUTOMATED_RELEASE_GATES' and production_ready=True.
+
+F6, F7 — F6 is now partly closed: build_input_template.py writes a
+"Language Working Window" row with LANGUAGE_WINDOW_CHOICES. F7 unchanged: the
+independent validator still exec_modules the engine (line 50), now 692 lines.
+
+
+3. NEW ISSUE FOUND IN RC4
+--------------------------
+
+N1 — MEDIUM — the all-days aliases are unreachable; natural spellings hard-fail.
+
+_parse_language_days accepts an all-days value via:
+      norm(text) in {"all", "alldays", "daily", "everyday", "7days"}
+
+norm() does not strip spaces:
+      norm('All Days')  = 'all days'   -> NOT in the set
+      norm('Every Day') = 'every day'  -> NOT in the set
+      norm('7 Days')    = '7 days'     -> NOT in the set
+      norm('All')       = 'all'        -> matches
+      norm('Daily')     = 'daily'      -> matches
+
+So three of the five aliases can never match, and the two most natural things a
+scheduler types — "All Days" and "Every Day" — are now a HARD preflight failure:
+      'All Days'  -> preflight FAIL ['INVALID_LANGUAGE_COVERAGE_DAYS']
+      'Every Day' -> preflight FAIL ['INVALID_LANGUAGE_COVERAGE_DAYS']
+
+This is the THIRD recurrence of the A51 defect pattern: an alias list written
+against an assumption about norm() that does not hold. The work-around applied
+was to edit the Voice workbook ("Corrected the Voice Coverage Days list to use
+canonical All rather than All Days") rather than fix the normaliser.
+
+It now fails closed rather than open, so it is not a safety hole — but a live
+scheduler typing the most obvious value gets a blocked run with no hint that
+"All" would have worked.
+
+FIX (one line, and it retires the whole defect class):
+      key = re.sub(r"[^a-z0-9]", "", norm(text))
+      if not key or key in {"all", "alldays", "daily", "everyday", "7days"}:
+Apply the same collapse to the token aliases. Also add the accepted vocabulary
+to the Coverage Days cell's Excel dropdown so the value cannot be typed free-form.
+
+
+4. THE BLOCKER: THE RUN EVIDENCE IS FROM THE WRONG ENGINE, AND IT FAILED
+------------------------------------------------------------------------
+latest_run_artifacts/ contains three archives. Every one records
+      engine_sha256 = ea1fa36e57c465c411e4...   (RC2)
+not 117b14d0... (RC4). Results:
+
+  CRICUT_CHAT   return_code 4    engine_rc 0   hard_valid TRUE
+                independent_validation FAIL — 1 hard failure:
+                NEXT_SUNDAY_CARRY_OUT, floor_gap_count 5
+                elapsed 14148 s; stage1_profile_coverage_status =
+                TRUNCATED_INSUFFICIENT_STAGE1_BUDGET
+                NOTE: the engine's own metrics still say
+                production_eligible TRUE and status PASS_WITH_QUALITY_WARNINGS
+                while the independent validator says FAIL. The runner correctly
+                returned 4 and blocked publication — the release chain worked.
+                But the artifact's internal metrics assert eligibility the
+                validator denies; anyone reading the workbook rather than the
+                run status would draw the wrong conclusion. Worth reconciling.
+
+  CRICUT_VOICE  return_code 2    engine_rc 2   hard_valid FALSE
+                FAIL_BREAKS_REQUIRE_EXPLICIT_EXCEPTION_FOR_TESTED_SKELETONS
+                No schedule produced. This is the live Voice input running
+                MINIMUM_ROWS — i.e. F2 behaving exactly as predicted. F2 is
+                frozen by agreement, so this outcome is expected, not new.
+
+  NMG           return_code -9   engine_rc -9  hard_valid FALSE
+                Killed (memory). No schedule, no validation.
+
+So: zero of three produced a validated, sealed artifact, and none of them ran
+on the engine being reviewed.
+
+Your own continuity rule from the first handoff applies unchanged:
+"Do not use a result from the older b1acc package as proof that the hardened
+ea1fa package has passed." The same now holds for ea1fa results and 117b14d0.
+
+The offline evidence (429 tests, self-checks, compile, manifest preflight) is
+genuine and I reproduced it. It proves static and orchestration integrity. It
+does not prove any scenario can produce a releasable schedule on RC4.
+
+
+5. WHY RE-RUNNING CRICUT CHAT ON RC4 IS NOW THE HIGHEST-VALUE TEST
+-------------------------------------------------------------------
+The single hard failure blocking Chat is NEXT_SUNDAY_CARRY_OUT with 5 floor
+gaps. F3 — the bug fixed in RC4 — is precisely a next-Sunday defect: the repair
+planner was passing day=7 into language_rules_at, which returned no rules, so no
+donors were ever added to the next-Sunday language repair focus.
+
+That makes Chat-on-RC4 a directed test of the F3 fix against the exact failure
+it should improve, not a generic regression run. It is also the cheapest
+meaningful proof available, since the input and the prior result already exist.
+
+(Chat previously showed 12 next-Sunday floor gaps, now 5, both on RC2. Treat
+that delta cautiously — see section 6.)
+
+
+6. REPRODUCIBILITY CAVEAT STILL STANDS (F11)
+---------------------------------------------
+Both the Chat run above and my own runs report
+stage1_profile_coverage_status = TRUNCATED_INSUFFICIENT_STAGE1_BUDGET. The
+search is wall-clock bounded, so machine load changes how much search fits,
+which changes the candidate pool, which changes the outcome. I measured a flip
+from production_eligible TRUE to no schedule at all between two runs of the same
+workbook at the same seed and budget.
+
+Until that is characterised, no single run — passing or failing — should be
+treated as proof for either side. Run the decisive scenarios twice.
+
+
+7. RECOMMENDED NEXT STEPS, IN ORDER
+------------------------------------
+Offline, minutes:
+  1. Fix N1 (strip non-alphanumerics in the all-days comparison) and add the
+     Coverage Days dropdown to the template.
+  2. Make language_rules_at reject or clamp day outside 0..6 (F3 second half).
+  3. Bump VERSION to an RC4 string (N3).
+  4. Reconcile the Chat-style divergence: an artifact whose metrics say
+     production_eligible TRUE while independent validation says FAIL.
+
+Then solver time, on the RC4 engine, each run twice:
+  5. CRICUT_CHAT — directed test of the F3 fix against NEXT_SUNDAY_CARRY_OUT.
+  6. NMG — it was killed at -9; re-run with lower workers/memory headroom.
+  7. One NMG_EN_PRODUCTION QUICK/FULL_SCHEDULE for a zero-return-code sealed
+     package, exercising the F4 fix.
+  8. A genuine 11H/3OFF fixture plus the 11H-prohibited negative fixture. Still
+     the only wholly untested rule family.
+
+Not required, but it is what would change the verdict fastest: unfreeze F1.
+The guard collapse worsens with pool size (accepted 1/10, 1/25, 0/50, 0/100 on
+random pools), and a DEEP run produces large pools. Any RC4 scenario result is
+selected by that path.
+
+
+8. SUMMARY
+----------
+RC4 is a clean, verifiable improvement over RC2 on exactly the items raised:
+four defects fixed, each re-tested here, plus a fail-closed parser-warning rule
+that will prevent the next one. The code is in better shape than any build so
+far.
+
+It remains NO-GO for live only because nothing has yet been solved on it. Keep
+RC9.1 as the operational baseline. The path to a defensible release candidate is
+now short: four small offline fixes, then the Chat and NMG runs on the RC4
+engine, twice each.

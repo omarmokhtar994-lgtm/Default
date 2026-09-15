@@ -1,0 +1,264 @@
+--- /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5/prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/l632_universal_scheduler.py	2026-09-15 00:10:56.000000000 +0000
++++ /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/l632_universal_scheduler.py	2026-09-15 22:19:33.308312630 +0000
+@@ -1465,10 +1465,38 @@
+     raise ValueError("Requirement sheet with Sun-Sat interval columns was not found")
+ 
+ 
+-def _detect_interval_minutes(ws: Any, header: int, im: Dict[str, Any]) -> int:
+-    instructed = int(round(to_float(_instruction_get(im, ["Interval Granularity Minutes", "Interval Minutes", "Interval"], 0), 0)))
+-    if instructed in {15, 30, 60}:
+-        return instructed
++INTERVAL_MINUTE_CHOICES = (15, 30, 60)
++
++
++def _detect_interval_minutes(
++    ws: Any, header: int, im: Dict[str, Any],
++    parser_warnings: Optional[List[str]] = None,
++) -> int:
++    """Interval granularity: the workbook's value when it states one.
++
++    Absent and supplied-but-invalid used to be the same thing here - both fell
++    through to inference, and inference returns a plausible-looking 60. A
++    scheduler who typed 45 got a 60-minute schedule and every coverage
++    percentage in the release was computed against a granularity they did not
++    choose, with no warning anywhere.
++
++    Interval granularity is the denominator of every coverage number the
++    release reports, so a wrong one is not recoverable downstream. Absent still
++    infers from the demand sheet's own time column; supplied-and-invalid is now
++    a HARD_ parser warning that blocks the run.
++    """
++    raw = _instruction_get(im, ["Interval Granularity Minutes", "Interval Minutes", "Interval"], None)
++    if raw not in (None, ""):
++        value = strict_float(raw)
++        instructed = int(value) if value is not None and value == int(value) else None
++        if instructed in INTERVAL_MINUTE_CHOICES:
++            return instructed
++        if parser_warnings is not None:
++            parser_warnings.append(
++                f"HARD_INVALID_INTERVAL_MINUTES:value={raw!r}; "
++                f"use one of {', '.join(str(c) for c in INTERVAL_MINUTE_CHOICES)}, "
++                f"or leave the row blank to infer it from the demand sheet"
++            )
+     times: List[int] = []
+     for r in range(header + 1, ws.max_row + 1):
+         minute = next((minute_of_day(ws.cell(r, c).value) for c in range(1, min(4, ws.max_column) + 1) if minute_of_day(ws.cell(r, c).value) is not None), None)
+@@ -1503,7 +1531,7 @@
+     if len(day_cols) != 7:
+         raise ValueError(f"Could not identify seven day columns in {req_ws.title}")
+     time_col = _time_column(req_ws, header)
+-    interval = _detect_interval_minutes(req_ws, header, im)
++    interval = _detect_interval_minutes(req_ws, header, im, parser_warnings)
+     per_day = 1440 // interval
+     requirements: List[List[Optional[float]]] = [[None] * per_day for _ in range(7)]
+     dates = [req_ws.cell(header + 1, c).value for c in day_cols]
+@@ -1593,18 +1621,35 @@
+ }
+ 
+ 
++def _alias_key(value: Any) -> str:
++    """Normalise for alias matching: lowercase, alphanumerics only.
++
++    `norm()` keeps inner spaces and punctuation, so alias sets written as
++    single words ("alldays", "everyday") silently never match the spaced
++    spellings people type. Every alias comparison should go through this.
++    """
++    return re.sub(r"[^a-z0-9]", "", norm(value))
++
++
+ def _parse_language_days(value: Any) -> Set[int]:
+     """Parse Language Setup Coverage Days; invalid text must not mean all days."""
+     text = str(value or "").strip()
+-    if not text or norm(text) in {"all", "alldays", "daily", "everyday", "7days"}:
++    # `norm()` lowercases and trims but does NOT remove inner spaces, so the
++    # aliases "alldays", "everyday" and "7days" could never match the way a
++    # scheduler actually writes them - "All Days", "Every Day", "7 Days" - and
++    # those spellings were rejected as malformed. Collapsing to alphanumerics
++    # is what the alias list always assumed. This is the same mistaken
++    # assumption about `norm()` that made the language-window flag inert (A51),
++    # so it is fixed here rather than worked around in the workbook.
++    if not text or _alias_key(text) in {"all", "alldays", "daily", "everyday", "7days"}:
+         return set(range(7))
+     aliases = dict(_LANGUAGE_DAY_INDEX)
+     aliases.update({"m": 1, "w": 3, "f": 5})
+     lowered = text.lower().replace("–", "-").replace("—", "-")
+     tokens = [token.strip() for token in re.split(r"[,;/|&]+", lowered) if token.strip()]
+-    if len(tokens) == 1 and norm(tokens[0]) in {"weekday", "weekdays"}:
++    if len(tokens) == 1 and _alias_key(tokens[0]) in {"weekday", "weekdays"}:
+         return {1, 2, 3, 4, 5}
+-    if len(tokens) == 1 and norm(tokens[0]) in {"weekend", "weekends"}:
++    if len(tokens) == 1 and _alias_key(tokens[0]) in {"weekend", "weekends"}:
+         return {0, 6}
+     days: Set[int] = set()
+     invalid: List[str] = []
+@@ -1755,22 +1800,74 @@
+     return rules, capabilities, compact_windows
+ 
+ 
+-def _parse_break_segments(im: Dict[str, Any]) -> Tuple[Tuple[int, str], ...]:
+-    short_count = int(round(to_float(_instruction_get(im, ["Short Break Count", "Count of Short Breaks", "Number of Short Breaks"], 2), 2)))
+-    short_min = int(round(to_float(_instruction_get(im, ["Short Break Duration Minutes", "Short Break Duration", "Break Duration Minutes"], 15), 15)))
+-    lunch_count = int(round(to_float(_instruction_get(im, ["Lunch Count", "Meal Count", "Count of Lunch Breaks"], 1), 1)))
+-    lunch_min = int(round(to_float(_instruction_get(im, ["Lunch Duration Minutes", "Lunch Duration", "Meal Duration Minutes"], 30), 30)))
+-    if short_min not in {15, 30, 45, 60}:
+-        short_min = 15
+-    if lunch_min not in {15, 30, 45, 60}:
+-        lunch_min = 30
++BREAK_DURATION_CHOICES = (15, 30, 45, 60)
++
++
++def _parse_break_segments(
++    im: Dict[str, Any], parser_warnings: Optional[List[str]] = None
++) -> Tuple[Tuple[int, str], ...]:
++    """Break structure exactly as the workbook states it.
++
++    Three silent rewrites used to live here, and each one let the engine
++    schedule a break contract the business never asked for:
++
++    * an out-of-set duration was coerced (20-minute breaks became 15);
++    * a negative count was swallowed by ``max(0, ...)``;
++    * an empty result was backfilled with a hard-coded 15/30/15, so a
++      contract stating ZERO breaks received 60 minutes of them per associate.
++
++    Break minutes drive required headcount directly - the break-capacity
++    arithmetic is ``need * shift_q / (shift_q - break_q)`` - so a silently
++    rewritten break contract sizes the roster for a different business
++    agreement, with nothing in the audit trail to show it happened.
++
++    Absent is still absent: a workbook that never states these rows keeps the
++    historical 15/30/15 default. Supplied-and-invalid is now a HARD_ parser
++    warning, which `validate_input_contract` turns into a contract failure
++    before CP-SAT starts. Zero breaks is a legitimate contract and yields zero
++    segments.
++    """
++    def _count(names: Sequence[str], default: int, label: str) -> int:
++        raw = _instruction_get(im, names, None)
++        if raw in (None, ""):
++            return default
++        value = strict_float(raw)
++        if value is None or value != int(value) or int(value) < 0:
++            if parser_warnings is not None:
++                parser_warnings.append(
++                    f"HARD_INVALID_BREAK_CONTRACT:{label}={raw!r}; "
++                    f"use a whole number of zero or more"
++                )
++            return default
++        return int(value)
++
++    def _duration(names: Sequence[str], default: int, label: str) -> int:
++        raw = _instruction_get(im, names, None)
++        if raw in (None, ""):
++            return default
++        value = strict_float(raw)
++        minutes = int(value) if value is not None and value == int(value) else None
++        if minutes not in BREAK_DURATION_CHOICES:
++            if parser_warnings is not None:
++                parser_warnings.append(
++                    f"HARD_INVALID_BREAK_CONTRACT:{label}={raw!r}; "
++                    f"use one of {', '.join(str(c) for c in BREAK_DURATION_CHOICES)} minutes"
++                )
++            return default
++        return minutes
++
++    short_count = _count(["Short Break Count", "Count of Short Breaks", "Number of Short Breaks"], 2, "Short Break Count")
++    short_min = _duration(["Short Break Duration Minutes", "Short Break Duration", "Break Duration Minutes"], 15, "Short Break Duration Minutes")
++    lunch_count = _count(["Lunch Count", "Meal Count", "Count of Lunch Breaks"], 1, "Lunch Count")
++    lunch_min = _duration(["Lunch Duration Minutes", "Lunch Duration", "Meal Duration Minutes"], 30, "Lunch Duration Minutes")
++
+     segments: List[Tuple[int, str]] = []
+-    for i in range(max(0, short_count)):
++    for i in range(short_count):
+         segments.append((short_min // 15, f"Break {i + 1}"))
+-    for i in range(max(0, lunch_count)):
++    for i in range(lunch_count):
+         segments.append((lunch_min // 15, "Lunch" if lunch_count == 1 else f"Lunch {i + 1}"))
+-    if not segments:
+-        segments = [(1, "Break 1"), (2, "Lunch"), (1, "Break 2")]
++    # No backfill. An explicit zero-break contract returns zero segments; a
++    # workbook that states nothing at all has already taken the defaults above.
+     # Preserve operational order for the common 15/30/15 contract.
+     if len(segments) == 3 and sorted(length for length, _ in segments) == [1, 1, 2]:
+         return ((1, "Break 1"), (2, "Lunch"), (1, "Break 2"))
+@@ -2402,7 +2499,7 @@
+     if allow_no_break and max_no_break <= 0:
+         max_no_break = 8
+ 
+-    break_segments = _parse_break_segments(im)
++    break_segments = _parse_break_segments(im, parser_warnings)
+     (
+         break_window_rules, break_edge_margin_q, break_min_gap_q,
+         break_preferred_gap_q, break_normal_max_gap_q, break_window_source,
+@@ -3638,6 +3735,21 @@
+     Overlap, not start-minute containment: see `LanguageRule.overlaps`. Every
+     call site passes a quarter start, so the default span is 15.
+     """
++    # A day index outside 0..6 used to match nothing, so "no language rules
++    # apply anywhere" was the silent default for a caller that computed the day
++    # wrongly. That is the most dangerous possible default for a coverage rule,
++    # and it is exactly how a next-Sunday scope (day_scope == 7) once emptied
++    # the repair planner's donor set without a trace. Normalise the cyclic
++    # next-Sunday scope to Sunday and reject anything genuinely out of range.
++    if day is not None:
++        if day == 7:
++            day = 0
++        elif not 0 <= day <= 6:
++            raise ValueError(
++                f"language_rules_at: day must be 0..6 (or 7 for the cyclic "
++                f"next Sunday), got {day!r}"
++            )
++
+     def applies(rule: LanguageRule) -> bool:
+         if not rule.active or not rule.overlaps(minute, span):
+             return False
+@@ -3723,6 +3835,51 @@
+ 
+ 
+ def shift_day_demand_fit(parsed: ParsedInput, day: int, shift: Shift) -> Dict[str, Any]:
++    """Demand shape for one (day, shift) pair, memoised per parsed contract.
++
++    This is a pure function of `(day, shift.index)`: it reads only
++    `parsed.active`, `parsed.interval_minutes` and `parsed.intervals_per_day`
++    (through `cyclic_requirement_context`) plus the shift's own start and
++    duration, none of which is written after `parse_input` returns. There are
++    at most 7 x len(shifts) distinct answers - 168 on every packaged workbook -
++    yet the nested loops in `capacity_diagnostics` and
++    `associate_day_eligible_shifts` asked for them over 600,000 times per run,
++    and `solve_joint_shift_off_language_break_refinement` asks again inside the
++    search loop.
++
++    Measured on the unpatched engine: `capacity_diagnostics` took 16.34s on
++    AE_AR_B2B and 10.20s on GDI_REAL28, with 1,005,804 and 631,467 calls
++    collapsing to 168 distinct results. Stage 1 is wall-clock budgeted and
++    already reports TRUNCATED_INSUFFICIENT_STAGE1_BUDGET, so that time is
++    search that never happens.
++
++    The cache lives on the parsed contract, so it is scoped to one run and is
++    collected with it - no module-level state, and no `id()` reuse hazard.
++    Callers mutate the returned mapping (`demand_fit_blocked` writes
++    `blank_requirement_blocked` into it), so every hit returns a fresh copy.
++    """
++    cache = getattr(parsed, "_shift_day_demand_fit_cache", None)
++    if cache is None:
++        cache = {}
++        try:
++            object.__setattr__(parsed, "_shift_day_demand_fit_cache", cache)
++        except Exception:
++            # A contract object that refuses attributes still gets correct
++            # answers, just uncached.
++            return _shift_day_demand_fit_uncached(parsed, day, shift)
++    # The index alone identifies a shift in every packaged workbook, but the
++    # start and duration are what the computation actually reads, so they are
++    # in the key too. A synthetic Shift reusing an index can then never collide.
++    key = (int(day), int(getattr(shift, "index", -1)),
++           int(shift.start_min), int(shift.duration_q))
++    fit = cache.get(key)
++    if fit is None:
++        fit = _shift_day_demand_fit_uncached(parsed, day, shift)
++        cache[key] = fit
++    return dict(fit)
++
++
++def _shift_day_demand_fit_uncached(parsed: ParsedInput, day: int, shift: Shift) -> Dict[str, Any]:
+     horizon = CYCLIC_TOTAL_QSLOTS if day == 6 else TOTAL_QSLOTS
+     qslots = [
+         q for q in range(

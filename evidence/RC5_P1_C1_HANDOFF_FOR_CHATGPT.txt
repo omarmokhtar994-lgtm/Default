@@ -1,0 +1,267 @@
+RC5 + P-1 + C-1 — CLAUDE HANDOFF
+================================
+For the RC5 authors. Two patches applied on top of RC5, both proven inert on
+every workbook that exists today, plus the reviews behind them.
+
+CONTENTS
+--------
+packages/   the two rebuilt RC5 packages (drop-in replacements)
+patches/    the full engine diff and the two new test files, if you prefer to
+            apply the change to your own tree rather than take the packages
+reviews/    the reviews these came from
+
+
+IDENTITIES — all verified by recomputation
+------------------------------------------
+Engine lineage:
+  0e6f643552c5e59f284fefbabc74803c3450b2a1cd2de47fad44781f6408cc5c   RC5 as shipped
+  b005d6b6edd3000b79addb5f362acfc20dcfb12aaa1ab3d0ea274da5da703af4   + P-1
+  0b178297126c...                                                    + C-1  (current)
+
+Packages:
+  RC9_2_2_MAX_COVERAGE_RC5_P1_C1_RELEASE_CANDIDATE.zip
+     sha256 4df12d085c2a573f253c0778f1b140d58c686c755bddaaf9fe0f35db6277c39d
+  RC9_2_2_FIX_VALIDATION_RC5_P1_C1.zip
+     sha256 efaa739a2574ab3c6169ae5e72ec71d14106d7d52be5fa9544bf8b32c2fd3f6f
+
+Both packages carry the identical engine. All manifests (SCENARIOS.json,
+MANIFEST.json, BUILD_MANIFEST.json, engine/RELEASE_IDENTITY_RC9_2_2.json) were
+refreshed to match.
+
+Offline gate, re-run here:  13 suites, 475 tests, PASS
+  (RC5 as shipped was 11 suites / 453; P-1 added 6 tests, C-1 added 16)
+
+
+WHAT RC5 GOT RIGHT — verified, not taken on trust
+--------------------------------------------------
+Both previously frozen blockers are genuinely fixed, re-tested with the same
+reproductions that failed on RC2 and RC4:
+
+F1 selector guard. The three-candidate pool that made RC2/RC4 revert to a pure
+target-first sort now selects the protected-correct candidate. Collapse rate
+across pool sizes went from 1/10, 1/25, 0/50, 0/100 (collapsed) to
+6/10, 9/25, 17/50, 30/100 — acceptance now scales with pool size instead of
+inverting, and it never collapsed in any test.
+
+F2 language working window. Start-only semantics. Cricut Voice English
+16:00-03:00 goes from 3 to 11 of 24 legal shift starts.
+
+A-11 production_ready. Hard-coded False in all three writers and set True by no
+code path in the codebase, so the automated chain can package a review-only
+artifact but can never self-approve. This is the best release-safety decision in
+the project — keep it.
+
+Package identity was clean: all four claimed hashes verified exactly.
+
+
+PATCH P-1 — memoise shift_day_demand_fit (performance only)
+------------------------------------------------------------
+shift_day_demand_fit is pure in (day, shift.index, start, duration). It reads
+parsed.active, interval_minutes and intervals_per_day plus the shift's own start
+and duration — none written after parse_input returns. At most 7 x len(shifts)
+distinct answers exist (168 on every packaged workbook), and it was being
+recomputed over 600,000 times per run, with cyclic_requirement_context called
+22.8 million times.
+
+Measured, capacity_diagnostics + validate_input_contract, all 8 packaged
+workbooks, output compared as canonicalised JSON:
+
+  AE_AR_B2B              11.10s -> 1.48s   7.5x   IDENTICAL
+  Cricut_Chat             6.87s -> 0.80s   8.5x   IDENTICAL
+  Cricut_Voice            3.18s -> 0.87s   3.7x   IDENTICAL
+  GDI_REAL28              6.91s -> 0.85s   8.1x   IDENTICAL
+  NMG_EN_AND_SP           1.46s -> 0.21s   6.8x   IDENTICAL
+  NMG_EN_FIXED_NESTING    3.25s -> 1.22s   2.7x   IDENTICAL
+  NMG_SP                  0.06s -> 0.02s   2.6x   IDENTICAL
+  NMG_EN_PRODUCTION       3.23s -> 1.21s   2.7x   IDENTICAL
+  TOTAL                  36.07s -> 6.67s   5.4x
+
+Two hazards were handled explicitly rather than assumed away:
+  * demand_fit_blocked writes blank_requirement_blocked into the returned dict,
+    so every cache hit returns a fresh copy. Sharing the object would have
+    leaked that flag between unrelated shifts.
+  * The key carries start and duration alongside the index, so a synthetic Shift
+    reusing an index cannot read another shift's answer.
+
+The cache lives on the parsed contract: scoped to one run, collected with it, no
+module-level state, no id() reuse hazard. The original body is preserved verbatim
+as _shift_day_demand_fit_uncached.
+
+NOT claimed: the same function is also called inside
+solve_joint_shift_off_language_break_refinement's search loop (~line 13165).
+That gain is likely larger and is unmeasured. You will see it in the first real
+run.
+
+
+PATCH C-1 — input-contract fidelity (A-1, A-2, A-3, A-7)
+---------------------------------------------------------
+The rule enforced: ABSENT may take a default; SUPPLIED-AND-INVALID must fail
+closed. A value that was typed and then silently ignored is the dangerous case,
+because it produces a plausible result no gate can catch.
+
+A-1  _parse_break_segments
+     A contract stating zero breaks received a hard-coded 15/30/15 — 60 minutes
+     per associate — because an empty result was backfilled. Out-of-set
+     durations were coerced to 15; negative counts swallowed by max(0, ...).
+     Break minutes drive required headcount through
+     need * shift_q / (shift_q - break_q), so this sized the roster for a
+     business agreement nobody signed.
+     Now: zero means zero; invalid raises HARD_INVALID_BREAK_CONTRACT.
+
+A-2  _detect_interval_minutes
+     A value outside {15,30,60} was discarded in favour of inference, and
+     inference returns a plausible 60. Measured: 7, 45, 0 and "abc" all parsed
+     to 60 with no warning, while 15 and 30 took effect — so the parameter was
+     live and the failure invisible. Interval granularity is the denominator of
+     every coverage number in the release.
+     Now: absent still infers; invalid raises HARD_INVALID_INTERVAL_MINUTES.
+
+A-3  _parse_language_days
+     norm() lowercases and trims but keeps inner spaces, so the aliases
+     "alldays", "everyday" and "7days" could never match "All Days",
+     "Every Day" or "7 Days" — the spellings people actually write — and those
+     were rejected as malformed. This is the THIRD recurrence of the same
+     assumption about norm() (after A51 and the inert language-window flag), so
+     it is fixed at the root with a new _alias_key() helper rather than worked
+     around in the workbook again.
+
+A-7  language_rules_at
+     A day index outside 0..6 matched nothing, making "no language rules apply
+     anywhere" the silent default for a caller that computed the day wrongly —
+     which is how day_scope == 7 once emptied the repair planner's donor set.
+     Now: the cyclic next-Sunday scope maps to Sunday; out of range raises.
+
+Both patches use the HARD_ prefix deliberately: your generic rule in
+validate_input_contract already turns any HARD_ parser warning into a contract
+failure. That rule is good design and is what makes these fail closed.
+
+PROVEN INERT on every contract that exists today — all 8 packaged workbooks plus
+both live inputs (Cricut_Voice_New_DAY_SPECIFIC_LANGUAGE_RC4, NMG_RC4_CURRENT_42HC):
+
+  preflight status                       unchanged on all 10
+  break segments                         unchanged on all 10 (60 min each)
+  interval minutes                       unchanged on all 10
+  canonical contract hash (120 fields)   IDENTICAL on all 10
+
+22 new guards. Each defect is pinned from both sides: the invalid value is
+rejected, the valid value still works, and an absent value still takes its
+historical default.
+
+
+WHAT WAS DELIBERATELY NOT CHANGED
+----------------------------------
+RELEASE_STATUS.json is untouched — still
+NO_GO_PENDING_RC5_TARGETED_RUNTIME_REVIEW, production_ready: false. Neither
+patch changes the release decision.
+
+FINAL_VALIDATION_AND_READINESS_REPORT.md still records the base RC5 engine hash.
+That is deliberate: it is the evidence for the build as you validated it, and it
+was not rewritten to describe a build it did not test.
+
+Symmetry breaking, deterministic budgets and a decision strategy were NOT
+applied, even though they are the highest-value items found. They change solver
+behaviour, and changing the thing being measured before a baseline exists is the
+error this whole review has been warning about. They belong after the frozen-
+workbook A/B below.
+
+
+THE TWO THINGS STILL BLOCKING A RELEASE DECISION
+-------------------------------------------------
+1. NO RUN ARTIFACTS. Across RC2, RC4 and RC5 no scenario result has ever been
+   supplied. The RC5 packages contain a smoke run and nothing else. Every
+   solver-behaviour claim (items 1,2,3,10,11,13,14,16-22 of the RC4->RC5 change
+   list) and every scenario number in RC5_DEEP_COMPARISON remains unverified.
+   Send the result archives and most of that closes without a re-run.
+
+2. NO EXACT COMPARISON EXISTS. Every packaged input hash differs from the
+   RC9.1 baseline prefix — including the two the baseline itself marks
+   comparable: true.
+
+     NMG EN        baseline 230179d964674219   packaged ab85935a / 3cdc0b75 / f770c326
+     NMG SP        baseline 33f540ffa1df748d   packaged 05f1f7db
+     AE AR B2B     baseline b7dcbbffeb19e05f   packaged b7be7e0a   <- looks like a match at
+                                                                      four characters; is not
+     Cricut Voice  baseline 8e3833c9ef496b46   packaged 36ddb088
+
+   The baseline is also evidence_class =
+   CONSOLIDATED_HISTORICAL_METRICS_NOT_RAW_RUN_ARTIFACTS and before-break only.
+   So every RC9.1-vs-RC5 comparison is DIRECTIONAL, for every scenario, with
+   none exact.
+
+   On the claimed Cricut Voice regression (256/264 -> 243/250): it cannot be
+   called a regression on this evidence. The input differs, the baseline row is
+   a workbook leaderboard entry rather than a validated artifact, and the F2 fix
+   changed which shifts are legal on that workbook — the two runs may be solving
+   different problems. Settle that before reverting anything.
+
+3. REPRODUCIBILITY. Measured on an earlier build: identical workbook, identical
+   seed, identical budget produced production_eligible TRUE with a full schedule
+   on one run and NO SCHEDULE AT ALL on the next. Both reported
+   stage1_profiles_attempted = 2 of 15. The search is wall-clock bounded, so
+   machine load changes the result. Until that is characterised, run every
+   decisive scenario twice — this applies to both of us.
+
+
+THE LARGEST REMAINING OPPORTUNITY — measured, not theorised
+------------------------------------------------------------
+Full argument in reviews/RC5_ADVERSARIAL_ENGINEERING_REVIEW.md. Three numbers:
+
+  Largest Stage-1 model            5,880 binary variables
+  Objective weight spread          800,000,000 : 1  across 77 terms
+  Symmetry (Cricut Chat)           6.2 x 10^23 equivalent solutions, unbroken
+
+A 5,880-binary personnel model is SMALL. CP-SAT solves models two orders of
+magnitude larger to proven optimality. Four hours plus
+TRUNCATED_INSUFFICIENT_STAGE1_BUDGET is not a capacity, headcount or solver
+limit.
+
+The objective is one weighted sum of 77 terms: target_miss at 3,200,000,000
+against preference at 4. Terms below ~1e6 are arithmetically inert — this is the
+A40 defect generalised, since A40 fixed one weight and the pattern survives
+across roughly twenty more. It is also a fake lexicographic order nobody can
+verify by hand, and weighted-sum scalarization provably cannot reach unsupported
+Pareto points, so better schedules exist that no weight vector can return.
+
+Grouping associates by the attributes the model actually distinguishes, 24 of
+27 Cricut Chat associates are mutually interchangeable — 6.2e23 relabelled twins
+of every solution — with symmetry_level unset and no ordering constraints.
+AddDecisionStrategy is used zero times.
+
+These connect into one chain: the weight spread ruins the relaxation and the
+symmetry multiplies the search, so a tiny model cannot converge, so 17 weight
+profiles were built to sample the frontier, so the budget truncates at 2 of 15,
+so results depend on machine load. Fix the top two and the rest dissolve.
+
+Recommended, in order: lexicographic / epsilon-constraint objective (~1 week),
+symmetry breaking within interchangeable classes (~1 day), deterministic budgets
+(~1 day), decision strategy (~1 day).
+
+Recommended AGAINST: metaheuristics (would lose the hard-rule guarantees CP-SAT
+gives you), column generation (over-engineering at 5,880 variables), commercial
+solver migration (CP-SAT is not the bottleneck), and redesigning the
+architecture (the foundation is right — the objective is what needs rebuilding).
+
+
+SUGGESTED NEXT STEP
+--------------------
+Freeze one workbook. Run the current engine on it twice as a baseline. Then
+apply symmetry breaking and deterministic budgets — two days, low risk — and run
+it twice again. That single A/B answers "what is truncation costing us" with real
+numbers, and it is the same frozen-workbook setup the RC9.1 comparison has been
+missing all along.
+
+
+STILL OPEN, NOT ADDRESSED HERE
+-------------------------------
+45 of 98 engine instruction parameters have no route from any workbook,
+including all eight Employee fairness gates, all three skill-allocation
+controls, and two of the release-gate thresholds. Detail in
+reviews/RC9_2_2_RC4_DEEP_AUDIT.md (finding A-4).
+
+The independent validator still exec_modules the engine, so it cannot catch a
+misreading of the workbook — only a disagreement between the engine's plan and
+its own reading of its output.
+
+The engine VERSION constant still reads
+"L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2", so every RC5 artifact self-reports
+as RC2.

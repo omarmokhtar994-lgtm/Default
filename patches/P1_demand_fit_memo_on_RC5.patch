@@ -1,0 +1,54 @@
+--- /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5/prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/l632_universal_scheduler.py	2026-09-15 00:10:56.000000000 +0000
++++ /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/l632_universal_scheduler.py	2026-09-15 18:08:31.164148916 +0000
+@@ -3723,6 +3723,51 @@
+ 
+ 
+ def shift_day_demand_fit(parsed: ParsedInput, day: int, shift: Shift) -> Dict[str, Any]:
++    """Demand shape for one (day, shift) pair, memoised per parsed contract.
++
++    This is a pure function of `(day, shift.index)`: it reads only
++    `parsed.active`, `parsed.interval_minutes` and `parsed.intervals_per_day`
++    (through `cyclic_requirement_context`) plus the shift's own start and
++    duration, none of which is written after `parse_input` returns. There are
++    at most 7 x len(shifts) distinct answers - 168 on every packaged workbook -
++    yet the nested loops in `capacity_diagnostics` and
++    `associate_day_eligible_shifts` asked for them over 600,000 times per run,
++    and `solve_joint_shift_off_language_break_refinement` asks again inside the
++    search loop.
++
++    Measured on the unpatched engine: `capacity_diagnostics` took 16.34s on
++    AE_AR_B2B and 10.20s on GDI_REAL28, with 1,005,804 and 631,467 calls
++    collapsing to 168 distinct results. Stage 1 is wall-clock budgeted and
++    already reports TRUNCATED_INSUFFICIENT_STAGE1_BUDGET, so that time is
++    search that never happens.
++
++    The cache lives on the parsed contract, so it is scoped to one run and is
++    collected with it - no module-level state, and no `id()` reuse hazard.
++    Callers mutate the returned mapping (`demand_fit_blocked` writes
++    `blank_requirement_blocked` into it), so every hit returns a fresh copy.
++    """
++    cache = getattr(parsed, "_shift_day_demand_fit_cache", None)
++    if cache is None:
++        cache = {}
++        try:
++            object.__setattr__(parsed, "_shift_day_demand_fit_cache", cache)
++        except Exception:
++            # A contract object that refuses attributes still gets correct
++            # answers, just uncached.
++            return _shift_day_demand_fit_uncached(parsed, day, shift)
++    # The index alone identifies a shift in every packaged workbook, but the
++    # start and duration are what the computation actually reads, so they are
++    # in the key too. A synthetic Shift reusing an index can then never collide.
++    key = (int(day), int(getattr(shift, "index", -1)),
++           int(shift.start_min), int(shift.duration_q))
++    fit = cache.get(key)
++    if fit is None:
++        fit = _shift_day_demand_fit_uncached(parsed, day, shift)
++        cache[key] = fit
++    return dict(fit)
++
++
++def _shift_day_demand_fit_uncached(parsed: ParsedInput, day: int, shift: Shift) -> Dict[str, Any]:
+     horizon = CYCLIC_TOTAL_QSLOTS if day == 6 else TOTAL_QSLOTS
+     qslots = [
+         q for q in range(

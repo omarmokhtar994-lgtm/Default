@@ -210,3 +210,78 @@ The single coverage defect in this dataset is 6 intervals on AE_FR_Choice, in
 break placement, on a case where the engine's own accounting says it had the
 room. That is a small, specific, testable target — a far better position than
 "RC5 loses coverage after breaks," which was never actionable.
+
+---
+
+## 10. My four runs completed — two corrections, one of them to myself
+
+### Correction 1: RC5 is deterministic. My earlier non-determinism claim was wrong.
+
+Two identical `FULL_SCHEDULE` runs of AE_FR_Choice, same seed, same 900 s budget,
+on an idle machine:
+
+```
+metrics compared: 139     differing: 2
+  adaptive_feedback_cut_count   64 vs 62   (internal counter, no effect on outcome)
+  independent_validation_json   (path string)
+```
+
+**Every coverage, floor, gap, break and overage metric is identical.** Both runs:
+`before 105, after 101, loss 4, 851 s`. The before-breaks pair likewise: 112 and
+112.
+
+Earlier in this project I reported that the same workbook at the same seed
+produced a shippable schedule on one run and no schedule on the next, and I
+carried that forward as a standing reliability risk (F11/R-1). **That does not
+reproduce here.** The difference: those two runs were executing *concurrently on
+the same container*. On an idle machine at a fixed budget, RC5 reproduces
+exactly.
+
+So the mechanism is **machine load consuming a wall-clock budget**, not
+seed-dependence or solver non-determinism. The practical rule is narrower than I
+said: results are comparable only when the budget *and the machine* are held
+constant. Two runs in parallel are not two samples — they are one degraded
+sample each. Your sequential six-case runner is already doing the right thing.
+
+This makes your existing results more trustworthy than I previously claimed, and
+I was wrong to generalise from a contaminated measurement.
+
+### Correction 2: the budget split costs more than break placement
+
+The finding I did not expect. Same workbook, same seed, same 900 s:
+
+| Run | Stage-1 profiles | before | after | break loss |
+|---|---|---:|---:|---:|
+| `BEFORE_BREAKS_ONLY` | whole budget to Stage 1 | **112** | — | — |
+| `FULL_SCHEDULE` | **0 / 15** | **105** | 101 | 4 |
+| Your production run, 3468 s | 3 / 15 | 112 | 106 | 6 |
+
+At 900 s the full run completes **zero** skeleton profiles and settles on a
+skeleton worth 105. The same engine, same budget, given entirely to Stage 1,
+reaches **112**.
+
+**The budget split is worth 7 intervals. Break placement costs 4–6.**
+
+You have been hunting the break stage. On this evidence the larger single loss is
+upstream: Stage 1 does not get enough of the budget to finish even one profile at
+short budgets, and only 3 of 15 at production budgets. Both problems have the
+same fix — fewer, better-chosen profiles, or an objective that does not need a
+15-profile portfolio at all.
+
+### A dynamic worth naming
+
+Break loss *rises* with skeleton quality: the 105 skeleton lost 4 intervals to
+breaks, the 112 skeleton lost 6. A tighter skeleton has less slack for breaks to
+land in, so some of the gain is handed back. Net still favours the better
+skeleton — 112−6 = 106 beats 105−4 = 101 by five — but it means before-break
+coverage overstates the final gain, and a break-placement fix is worth *more* on
+a good skeleton than on a poor one.
+
+### What this changes about the plan
+
+1. **Give Stage 1 a guaranteed share of the budget** before tuning break
+   placement. Worth ~7 intervals on this case; break placement is worth 4–6.
+2. **Keep AE_FR_Choice as the regression test** — it now has two reference
+   points, 851 s and 3468 s, both reproducible.
+3. **Run benchmark cases sequentially on an idle machine.** Not a nicety: it is
+   the difference between comparable and contaminated results.

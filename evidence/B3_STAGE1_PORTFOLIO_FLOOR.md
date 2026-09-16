@@ -1,4 +1,4 @@
-# B-3: the Stage-1 portfolio refuses to start a profile it could finish
+# B-3: a slice floor measured cold, applied to warm-started solves
 
 What this file answers: why a 900-second `FULL_SCHEDULE` run attempts **zero**
 of its fifteen Stage-1 profiles, what that costs, and a correction to my own
@@ -40,108 +40,137 @@ if remaining < STAGE1_MIN_MEANINGFUL_SLICE_SEC:   # 171 < 240
 B-5 may still be worth addressing on its own merits. It is not the cause of
 B-3, and I should not have asserted the chain before measuring it.
 
-## 2. Why the floor fires when it should not
+## 2. The root cause: a constant measured cold, applied warm
 
-`STAGE1_MIN_MEANINGFUL_SLICE_SEC = 240.0` is evidence-based, and its evidence
-is sound — it is recorded in the constant's own comment. On **AE AR B2B, the
-hardest packaged scenario**, the same profile and seed returns UNKNOWN at 45s
-and at 150s, and 166 of 168 before-break target intervals at 210s. The
-feasibility cliff sits between 150s and 210s, so 240 clears it with margin.
+`STAGE1_MIN_MEANINGFUL_SLICE_SEC = 240.0` is evidence-based, and the evidence
+is recorded in the constant's own comment: on **AE AR B2B, the hardest packaged
+scenario**, the same profile and seed returns UNKNOWN at 45s and at 150s, and
+166 of 168 before-break target intervals at 210s.
 
-The defect is that a floor calibrated on the hardest workbook is applied as a
-**universal** precondition for attempting anything at all. On `AE_FR_Choice`:
+That measurement was taken by `tools/stage1_slice_depth_probe.py`, which calls:
 
-```
-STAGE1 target_locked_protected_tier_polish status=OPTIMAL elapsed=13.40s
+```python
+solution = E.build_skeleton(parsed, profile, hard, slice_sec, 2, sys.stderr, random_seed=0)
 ```
 
-Thirteen seconds to optimality. The run had **171 seconds** and spent **zero**,
-because 171 < 240.
+**No `hint_skeleton`. A cold start.**
 
-The helper's own docstring anticipates the easy case — *"A profile that solves
-fast returns long before its slice expires (NMG SP proves OPTIMAL in 0.2s), so
-an easy scenario still explores everything"* — but that reasoning only holds
-once a profile is **allowed to start**. The guard above decides before any
-profile runs, so an easy scenario with 171 seconds explores nothing.
+The Stage-1 portfolio loop never solves cold:
 
-## 3. What it costs — measured
+```python
+solution = build_skeleton(
+    parsed, profile, base_hard, slice_sec, workers, log,
+    random_seed=solver_random_seed,
+    hint_skeleton=select_stage1_hint_skeleton(parsed, successful_skeletons),
+    ...)
+```
 
-Same workbook, same seed, same 900s budget, same engine. The only difference is
-the Stage-1 floor, stated from the workbook via the B-7 route (no code
-difference between the two runs):
+By the time the portfolio runs, the hard-feasibility probe and the
+deterministic baseline have both produced feasible skeletons, and **every
+profile is warm-started from them**. The floor was calibrated on a scenario the
+loop never creates.
 
-| | floor 240 (default) | floor 30 (workbook) |
+The probe now supports a `warm` mode that rebuilds the anchor the run itself
+holds. Same workbook, same profile, same seed:
+
+| slice | COLD (set the constant) | **WARM (what the loop does)** |
 |---|---|---|
-| portfolio profiles attempted | **0 of 15** | **5 of 15** |
-| Stage-1 solves / seconds | 3 / 67s | 8 / 214s |
-| Stage-2 attempts / seconds | 16 / 760s | 19 / 601s |
-| **before_target** | 105 | **112** (+7) |
-| **after_target** | 101 | **109** (+8) |
+| 15s | — | UNKNOWN |
+| 30s | — | **FEASIBLE 168/168** |
+| 45s | **UNKNOWN** | **FEASIBLE 168/168** |
+| 60s | — | **FEASIBLE 168/168** |
+| 120s | — | FEASIBLE 168/168 |
+| 150s | **UNKNOWN** | — |
+| 210s | **166/168** | — |
+| 240s | — | FEASIBLE 168/168 |
+
+The cliff moves from 150–210s to 15–30s — an order of magnitude — and warm
+quality saturates immediately at **168 of 168**, which is RC9.1's recorded best
+and better than anything the cold curve reached.
+
+This is the whole of B-3. The engine was refusing a 171-second window for a
+solve that needed 30, on the strength of a number measured under conditions
+that never occur.
+
+## 3. The new default, and how it was chosen
+
+`STAGE1_MIN_MEANINGFUL_SLICE_SEC = 45.0`, by the same method that chose 240:
+clear the measured cliff with margin. The warm cliff is between 15s and 30s, so
+45s clears it by 50% and is itself measured FEASIBLE at full quality.
+
+The constant is also reachable now — workbook row `Stage 1 Minimum Slice
+Seconds`, flag `--stage1-minimum-slice-sec` — under the B-7 precedence, so it
+can be re-tuned per roster without a code change.
+
+## 4. What it costs — measured end to end
+
+Same workbook, same seed, same 900s budget, shipped default versus shipped
+default:
+
+**AE_FR_Choice**
+
+| | floor 240 | **floor 45** |
+|---|---|---|
+| portfolio profiles attempted | 0 of 15 | **3 of 15** |
+| before_target | 105 | **112** (+7) |
+| after_target | 101 | **109** (+8) |
 | before / after floor | 112 / 110 | **112 / 112** |
-| **floor gaps** | 2 | **0** |
-| runner return code | 0 | 0 |
-| independent validation | PASS | PASS |
-| metric parity | PASS | PASS |
+| floor gaps | 2 | **0** |
+| return code | 0 | 0 |
 
-Eight more intervals at target and the floor gaps eliminated, from spending 147
-more seconds in Stage 1 and 159 fewer in Stage 2. Stage 2 also ran *more*
-attempts (19 vs 16) on the smaller budget, because it was working from better
-skeletons.
+**AE_AR_B2B** — the workbook 240 was calibrated on
 
-`112` is exactly what the `BEFORE_BREAKS_ONLY` run reaches, so the +7 is not a
-lucky draw — it is the skeleton quality that was always available and never
-generated.
+| | floor 240 | **floor 45** |
+|---|---|---|
+| portfolio profiles attempted | 0 of 15 | **3 of 15** |
+| before_target | 166 | **168** (+2, the maximum) |
+| after_target | 161 | **164** (+3) |
+| before / after floor | 168 / 167 | **168 / 168** |
+| floor gaps | 1 | **0** |
+| return code | 4 | **0** |
 
-**This also shrinks B-4.** `target_losses_from_breaks` was 6 in the baseline;
-at 112 → 109 it is 3. Part of what looked like break-placement loss was break
-placement doing its best from a skeleton worth 105.
+The feared risk did not materialise. Every 45-second warm slice on the hard
+workbook returned FEASIBLE, not UNKNOWN, and the hard workbook gained more in
+return code terms than the easy one: it now reaches its maximum before-break
+coverage and closes its last floor gap.
 
-## 4. What has and has not been changed
+`112` and `168` are exactly what the `BEFORE_BREAKS_ONLY` runs reach, so these
+are not lucky draws — they are the skeleton quality that was always available
+and never generated.
 
-**Changed:** `STAGE1_MIN_MEANINGFUL_SLICE_SEC` is now reachable — as the
-workbook row `Stage 1 Minimum Slice Seconds` and the flag
-`--stage1-minimum-slice-sec`, through the same precedence B-7 established
-(explicit command line > workbook > engine default). `stage1_slice_seconds` and
-`stage1_fundable_profile_count` take the floor as a parameter and keep every
-guarantee they made, at any value.
+**One honest caveat.** An exploratory run at floor 30 reached `after_target`
+167 on AE_AR_B2B, above the 164 the shipped 45 reached. Both beat the baseline
+161. A single point either way is inside the run-to-run variation of a
+wall-clock-budgeted search, and I am not claiming 30 is better than 45 on that
+basis — but it is recorded rather than dropped, and it is a reason to re-tune
+per roster with the workbook control rather than treat 45 as settled.
 
-**Not changed: the default is still 240.** The A/B above is one workbook, and
-it is an *easy* one. The constant was calibrated on the hardest scenario
-precisely because a short slice there returns no skeleton at all — and on that
-workbook the time would be taken from a Stage 2 that used all of it. Lowering
-the default on this evidence alone would be the mistake this file exists to
-avoid.
+**This also shrinks B-4.** On AE_FR_Choice `target_losses_from_breaks` falls
+from 6 to 3: part of what looked like break-placement loss was break placement
+doing its best from a skeleton worth 105.
 
-The outstanding measurement is `AE_AR_B2B` at the same 900s budget, floor 240
-versus floor 30. Its baseline shows the identical shape —
+## 5. A defect found along the way
 
-```
-STAGE1_PORTFOLIO window=168s runnable=15 funds=0 at 240s minimum depth
-STAGE1_PORTFOLIO_TRUNCATED attempted=0 of 15 runnable
-```
-
-— so the hard workbook also attempts zero profiles at this budget, which means
-the floor is not currently protecting it from anything. Whether a 168-second
-slice helps or wastes time there is the open question, and it decides the
-default.
-
-## 5. The likely shape of the fix
-
-Not "lower the constant". The floor is right about *depth*; it is wrong about
-using depth as a precondition for *attempting*. The narrow rule that follows
-from the evidence is: **when the portfolio would otherwise attempt zero
-profiles, spend the remaining window on one.** Zero is categorically different
-from fewer — it means Stage 2 selects only from bootstrap artifacts — and the
-cost is bounded to a single slice. That rule will be measured on both
-workbooks before it becomes the default, not asserted.
+The AE_AR_B2B baseline failed its gate with `rc 4 / FAIL_METRIC_PARITY` — one
+field, `week_boundary_imbalance_violation_count`, engine 1 versus validator 0,
+with the other 40 agreeing. That turned out to be a defect in the independent
+validator, not in the schedule: it measured next-Sunday adjacency between whole
+intervals while the solver constrains adjacent quarter slots. Recorded and
+fixed separately as B-8 (`evidence/B8_NEXT_SUNDAY_ADJACENCY_GRANULARITY.md`);
+it is why the floor-45 AE_AR_B2B run returns 0 where its baseline returned 4.
 
 ## 6. What is *not* claimed
 
-* **No default changed.** A workbook with no `Stage 1 Minimum Slice Seconds`
-  row behaves exactly as before; the contract hash is unchanged on all 14
-  workbooks available.
-* **One workbook is not a result.** The +8 is `AE_FR_Choice` at 900s QUICK,
-  seed 9000, two workers. It is a real measurement on a real roster, and it is
-  one point.
-* **B-5 is not resolved.** It is decoupled from B-3, which is the only claim
-  this file makes about it.
+* **Two workbooks at one budget is not a full regression sweep.** Both are real
+  rosters measured end to end through the whole runner, and both improve on
+  every coverage measure. They are two points, at QUICK/900s, seed 9000, two
+  workers. The other five packaged scenarios have not been re-run at the new
+  default.
+* **The gain is budget-dependent by construction.** At DEEP the Stage-1 window
+  clears 240s anyway, so this changes little there. It matters most at the
+  shorter budgets, which is where the defect was doing its damage.
+* **B-5 is not resolved.** The 77-term weighted sum spanning 800,000,000 : 1 is
+  still there. It is simply not the cause of B-3, which is the only claim this
+  file makes about it.
+* **No contract changed.** The canonical contract hash is unchanged on all 14
+  workbooks; this is a search-budget constant, not a coverage rule.

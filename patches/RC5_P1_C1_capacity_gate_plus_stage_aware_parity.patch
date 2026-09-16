@@ -1,0 +1,1322 @@
+diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/BUILD_MANIFEST.json /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/BUILD_MANIFEST.json
+--- prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/BUILD_MANIFEST.json	2026-09-15 10:52:58.000000000 +0000
++++ /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/BUILD_MANIFEST.json	2026-09-15 22:23:09.992739343 +0000
+@@ -6,7 +6,7 @@
+   "release_status": "NO_GO_PENDING_RC5_TARGETED_RUNTIME_REVIEW",
+   "production_ready": false,
+   "generated_utc": "2026-09-15T09:52:58.142670+00:00",
+-  "engine_sha256": "0e6f643552c5e59f284fefbabc74803c3450b2a1cd2de47fad44781f6408cc5c",
++  "engine_sha256": "0b178297126ccb2b5cd022d69ad6cd6dae20be87d73a980fb571db28696c105c",
+   "files": [
+     {
+       "path": "CHANGELOG_RC9_2_2_HARDENED_RC2.md",
+@@ -51,7 +51,7 @@
+     {
+       "path": "MANIFEST.json",
+       "size_bytes": 660,
+-      "sha256": "a65ab0f9aa013fa509a5bd27bc6071fb829a06bc88110b67f67c635b41d8ecaa"
++      "sha256": "b5463a2a4c3bd30a9a47d316d4a895ae36649d9e7d6f6fac0b9f1fccf0d857d3"
+     },
+     {
+       "path": "README.md",
+@@ -66,7 +66,7 @@
+     {
+       "path": "SCENARIOS.json",
+       "size_bytes": 4173,
+-      "sha256": "4ed55b3e848c4e930c53d01311d58b5c8cb92dcfe571fdf5bcdbecba7fa8b560"
++      "sha256": "4fcb8e385c816c607d91b9eb947b968a2e5868eafde789ae400a4d1d6e973fe5"
+     },
+     {
+       "path": "TEST_PLAN_AND_RESULTS.md",
+@@ -91,7 +91,7 @@
+     {
+       "path": "engine/RELEASE_IDENTITY_RC9_2_2.json",
+       "size_bytes": 963,
+-      "sha256": "7ff7e94202b5b7c08d5fa0ac540648139283a2c065843a717e0fe652cb5d560c"
++      "sha256": "37b48bbe4c52e7646024bd5f8bb8621d69442e1045f6dad4b792f81525fc98b6"
+     },
+     {
+       "path": "engine/RUN_UNIVERSAL_PRODUCTION.py",
+@@ -106,7 +106,7 @@
+     {
+       "path": "engine/_tools/l632_universal_scheduler.py",
+       "size_bytes": 1194427,
+-      "sha256": "0e6f643552c5e59f284fefbabc74803c3450b2a1cd2de47fad44781f6408cc5c"
++      "sha256": "0b178297126ccb2b5cd022d69ad6cd6dae20be87d73a980fb571db28696c105c"
+     },
+     {
+       "path": "engine/_tools/phase_b_adaptive.py",
+diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/MANIFEST.json /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/MANIFEST.json
+--- prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/MANIFEST.json	2026-09-15 00:12:42.000000000 +0000
++++ /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/MANIFEST.json	2026-09-15 22:23:09.839812442 +0000
+@@ -4,7 +4,7 @@
+   "release": "L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2",
+   "release_status": "NO_GO_PENDING_RC5_TARGETED_RUNTIME_REVIEW",
+   "production_ready": false,
+-  "engine_sha256": "0e6f643552c5e59f284fefbabc74803c3450b2a1cd2de47fad44781f6408cc5c",
++  "engine_sha256": "0b178297126ccb2b5cd022d69ad6cd6dae20be87d73a980fb571db28696c105c",
+   "input_manifest": "SCENARIOS.json",
+   "priority_input": {
+     "path": "inputs/RC9_2_2_NMG_EN_PRODUCTION_INPUT.xlsx",
+diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/PATCH_P1_DEMAND_FIT_MEMO.md /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/PATCH_P1_DEMAND_FIT_MEMO.md
+--- prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/PATCH_P1_DEMAND_FIT_MEMO.md	1970-01-01 00:00:00.000000000 +0000
++++ /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/PATCH_P1_DEMAND_FIT_MEMO.md	2026-09-15 22:23:33.654520051 +0000
+@@ -0,0 +1,142 @@
++# Patch P-1 — memoised `shift_day_demand_fit`
++
++Applied on top of RC5. **Measurement only. No scheduling behaviour changes.**
++
++| | |
++|---|---|
++| Base RC5 engine | `0e6f643552c5e59f284fefbabc74803c3450b2a1cd2de47fad44781f6408cc5c` |
++| Patched engine | `b005d6b6edd3000b79addb5f362acfc20dcfb12aaa1ab3d0ea274da5da703af4` |
++| Files changed | `engine/_tools/l632_universal_scheduler.py` (one function split in two), plus one new test file |
++| Offline gate | **12 suites, 459 tests, PASS** (was 11 suites, 453) |
++
++## What changed
++
++`shift_day_demand_fit` is a pure function of `(day, shift.index, start, duration)`.
++It reads only `parsed.active`, `parsed.interval_minutes` and
++`parsed.intervals_per_day` plus the shift's own start and duration — none of
++which is written after `parse_input` returns. There are at most
++7 x len(shifts) distinct answers, 168 on every packaged workbook.
++
++It was being recomputed **over 600,000 times per run**:
++
++```
++shift_day_demand_fit          632,649 calls  ->  168 distinct results
++cyclic_requirement_context 22,775,364 calls
++```
++
++The computation is now cached on the parsed contract, so the cache is scoped to
++one run and is collected with it — no module-level state and no `id()` reuse
++hazard. The original body is preserved verbatim as
++`_shift_day_demand_fit_uncached`.
++
++## Why it matters beyond speed
++
++Stage 1 is wall-clock budgeted and already reports
++`TRUNCATED_INSUFFICIENT_STAGE1_BUDGET` on long runs. Time spent here is search
++that never happens. The same function is also called from
++`solve_joint_shift_off_language_break_refinement` (line ~13165), inside the
++search loop — that gain is **unmeasured** and is not claimed here.
++
++## Measured: identical output, faster
++
++Every packaged workbook, `capacity_diagnostics` and `validate_input_contract`
++compared as canonicalised JSON:
++
++| Workbook | Base | Patched | Speedup | Capacity | Preflight |
++|---|---:|---:|---:|---|---|
++| AE_AR_B2B | 11.10s | 1.48s | 7.5x | IDENTICAL | IDENTICAL |
++| Cricut_Chat | 6.87s | 0.80s | 8.5x | IDENTICAL | IDENTICAL |
++| Cricut_Voice | 3.18s | 0.87s | 3.7x | IDENTICAL | IDENTICAL |
++| GDI_REAL28 | 6.91s | 0.85s | 8.1x | IDENTICAL | IDENTICAL |
++| NMG_EN_AND_SP | 1.46s | 0.21s | 6.8x | IDENTICAL | IDENTICAL |
++| NMG_EN_FIXED_NESTING | 3.25s | 1.22s | 2.7x | IDENTICAL | IDENTICAL |
++| NMG_SP | 0.06s | 0.02s | 2.6x | IDENTICAL | IDENTICAL |
++| NMG_EN_PRODUCTION | 3.23s | 1.21s | 2.7x | IDENTICAL | IDENTICAL |
++| **Total** | **36.07s** | **6.67s** | **5.4x** | | |
++
++## Guards added
++
++`tests/test_rc9_2_3_demand_fit_memo.py` — 6 tests pinning the two ways a cache
++of this shape corrupts results, plus the inertness claim itself:
++
++- repeated calls agree with the uncached computation;
++- a cache hit returns a **fresh mapping** (`demand_fit_blocked` writes
++  `blank_requirement_blocked` into the returned dict — sharing it would leak
++  that flag between unrelated shifts);
++- two shifts sharing an index do not collide (start and duration are in the key);
++- two parsed contracts in one process do not share a cache;
++- a contract that refuses attributes still answers correctly, uncached;
++- **capacity output is byte-identical to the uncached engine on every packaged
++  workbook.**
++
++## What was NOT changed
++
++`FINAL_VALIDATION_AND_READINESS_REPORT.md` still records the base RC5 engine
++hash. That is deliberate: it is the evidence for the build as originally
++validated, and it was not rewritten to describe a build it did not test.
++
++`RELEASE_STATUS.json` is unchanged — still
++`NO_GO_PENDING_RC5_TARGETED_RUNTIME_REVIEW`, `production_ready: false`.
++This patch does not change the release decision.
++
++---
++
++# Patch C-1 — input-contract fidelity (A-1, A-2, A-3, A-7)
++
++Applied on top of P-1. **The workbook contract now means what it says.**
++
++| | |
++|---|---|
++| Engine after P-1 | `b005d6b6edd3000b79addb5f362acfc20dcfb12aaa1ab3d0ea274da5da703af4` |
++| Engine after C-1 | `0b178297126ccb2b5cd022d69ad6cd6dae20be87d73a980fb571db28696c105c` |
++| Offline gate | **13 suites, 475 tests, PASS** (was 12/459) |
++| Canonical contract hash | **IDENTICAL on all 10 workbooks** |
++
++## The rule
++
++**Absent may take a default. Supplied-and-invalid must fail closed.** A value
++that was typed and then silently ignored is the dangerous case — it produces a
++plausible result that no gate can catch.
++
++## What was silently rewritten before
++
++| | Before | After |
++|---|---|---|
++| **A-1** Short Break Count 0, Lunch Count 0 | `Break 1 / Lunch / Break 2` = **60 min** | **zero segments** |
++| **A-1** 20-minute short break | coerced to 15, then backfilled to 60 min | `HARD_INVALID_BREAK_CONTRACT` |
++| **A-1** negative count | swallowed by `max(0, ...)` | `HARD_INVALID_BREAK_CONTRACT` |
++| **A-2** `Interval Minutes` = 7 / 45 / 0 / "abc" | silently **60**, no warning | `HARD_INVALID_INTERVAL_MINUTES` |
++| **A-3** `"All Days"`, `"Every Day"`, `"7 Days"` | rejected as malformed | accepted |
++| **A-7** `language_rules_at(day=7)` | **zero rules — everywhere** | maps to Sunday; out of range raises |
++
++A-1 matters most: break minutes drive required headcount through
++`need * shift_q / (shift_q - break_q)`, so a rewritten break contract sizes the
++roster for a business agreement nobody signed.
++
++A-3 was the **third** recurrence of the A51 assumption — `norm()` lowercases and
++trims but keeps inner spaces, so single-word aliases never match the spellings
++people type. Fixed at the root with `_alias_key()` rather than worked around in
++the workbook again.
++
++## Proven inert on every existing contract
++
++All 8 packaged + both live workbooks, base engine vs patched:
++
++| Check | Result |
++|---|---|
++| Preflight status | unchanged on all 10 |
++| Break segments | unchanged on all 10 (60 min each) |
++| Interval minutes | unchanged on all 10 |
++| **Canonical contract hash (120 fields)** | **IDENTICAL on all 10** |
++
++## Guards added
++
++`tests/test_rc9_2_3_input_contract_fidelity.py` — 16 tests. Each defect is
++pinned from both sides: the invalid value is rejected **and** the valid value
++still works **and** an absent value still takes its historical default. Plus a
++sweep asserting no packaged workbook newly fails.
++
++## Release decision unchanged
++
++`RELEASE_STATUS.json` is untouched — still
++`NO_GO_PENDING_RC5_TARGETED_RUNTIME_REVIEW`, `production_ready: false`.
+diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/SCENARIOS.json /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/SCENARIOS.json
+--- prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/SCENARIOS.json	2026-09-15 00:12:40.000000000 +0000
++++ /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/SCENARIOS.json	2026-09-15 22:23:09.839389264 +0000
+@@ -1,7 +1,7 @@
+ {
+   "package": "RC9_2_2_MAX_COVERAGE_RC5",
+   "engine_release": "L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2",
+-  "engine_sha256": "0e6f643552c5e59f284fefbabc74803c3450b2a1cd2de47fad44781f6408cc5c",
++  "engine_sha256": "0b178297126ccb2b5cd022d69ad6cd6dae20be87d73a980fb571db28696c105c",
+   "purpose": "Impact-based RC9.2.2 validation manifest. QUICK is the safe default; DEEP requires the dedicated runner and a recorded defect reason. Hashes are verified before solver time is consumed.",
+   "generated_by": "tools/build_production_package.py",
+   "scenarios": [
+diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/RELEASE_IDENTITY_RC9_2_2.json /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/RELEASE_IDENTITY_RC9_2_2.json
+--- prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/RELEASE_IDENTITY_RC9_2_2.json	2026-09-15 00:12:42.000000000 +0000
++++ /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/RELEASE_IDENTITY_RC9_2_2.json	2026-09-15 22:23:09.993015319 +0000
+@@ -1,12 +1,12 @@
+ {
+   "schema_version": 1,
+   "release": "L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2",
+-  "release_short": "RC9.2.2-PRODUCTION-HARDENED-RC2",
++  "release_short": "RC9.2.2-PRODUCTION-HARDENED-RC5-P1-C1",
+   "generated_utc": "2026-09-14T00:00:00+00:00",
+   "architecture": "Universal workbook-driven scheduler with protected-tier selection, independent exact-artifact validation, and fail-closed publication",
+   "base_release": "L6.3.2.6-RC9.2.2-BUDGETED-SEARCH-AND-BREAK-CONCURRENCY-RC1",
+   "status": "RELEASE_CANDIDATE_NO_GO_PENDING_SCENARIO_AND_QUALITY_REVIEW",
+-  "engine_file_sha256": "0e6f643552c5e59f284fefbabc74803c3450b2a1cd2de47fad44781f6408cc5c",
++  "engine_file_sha256": "0b178297126ccb2b5cd022d69ad6cd6dae20be87d73a980fb571db28696c105c",
+   "artifact_filename_compatibility_tag": "L6_3_2_3",
+   "identity_authority": "Run identity, engine SHA-256, input snapshot SHA-256, independent validation seal, and package manifest; the compatibility filename tag is not release identity",
+   "dependencies": [
+@@ -15,5 +15,7 @@
+     "pandas>=2.2.0",
+     "numpy>=1.26.0",
+     "scipy>=1.11.0"
+-  ]
++  ],
++  "base_engine_file_sha256": "0e6f643552c5e59f284fefbabc74803c3450b2a1cd2de47fad44781f6408cc5c",
++  "patch_applied": "P-1 memoisation + A-1/A-2/A-3/A-7 input-contract fidelity. Canonical contract hash identical on all 10 workbooks."
+ }
+diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/RUN_UNIVERSAL_PRODUCTION.py /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/RUN_UNIVERSAL_PRODUCTION.py
+--- prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/RUN_UNIVERSAL_PRODUCTION.py	2026-09-14 16:15:08.000000000 +0000
++++ /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/RUN_UNIVERSAL_PRODUCTION.py	2026-09-16 19:31:48.243845937 +0000
+@@ -6,7 +6,9 @@
+ 
+ ROOT = Path(__file__).resolve().parent
+ sys.path.insert(0, str(ROOT / '_tools'))
+-from canonical_metrics import canonicalize_metrics, compare_metric_surfaces
++from canonical_metrics import (
++    canonicalize_metrics, compare_metric_surfaces, stage_for_artifact_role,
++)
+ ENGINE = ROOT / "_tools" / "l632_universal_scheduler.py"
+ POLISHER = ROOT / "production" / "production_output_polisher.py"
+ QUALITY_REPORTER = ROOT / "production" / "phase_c_quality_report.py"
+@@ -216,7 +218,53 @@
+         audit = json.loads(audit_path.read_text(encoding='utf-8'))
+     except (OSError, json.JSONDecodeError):
+         return {}
+-    return (audit.get('selected_candidate') or {}).get('metrics') or {}
++    return engine_metric_surface(audit)['metrics']
++
++
++def engine_metric_surface(audit: dict) -> dict:
++    """Return the metrics the engine published, with the stage that produced them.
++
++    A FULL_SCHEDULE run publishes ``selected_candidate``; a BEFORE_BREAKS_ONLY
++    run stops before a final candidate exists and publishes the Stage-1
++    surface instead. Both are read here so the parity gate always compares two
++    real metric surfaces. ``stage`` is None only when the engine published
++    neither, which is itself a gate failure rather than something to guess at.
++    """
++    stage_surface = audit.get('stage_metric_surface') or {}
++    stage = stage_surface.get('stage')
++    metrics = stage_surface.get('metrics') or {}
++    if not metrics:
++        # Older audits predate stage_metric_surface. Fall back to the keys they
++        # do carry and derive the stage from artifact_state, so an archived run
++        # is still checkable instead of failing as un-gateable.
++        candidate = (audit.get('selected_candidate') or {}).get('metrics') or {}
++        stopped_at_stage_1 = (
++            str(audit.get('artifact_state') or '').upper() == 'BEST_BEFORE_BREAKS_ONLY'
++            or str(audit.get('status') or '').upper() == 'SKELETON_ONLY_COMPLETE')
++        if candidate:
++            metrics = candidate
++            stage = stage or 'FULL_SCHEDULE'
++        elif stopped_at_stage_1:
++            # A full run that reached Stage 2 and failed also carries a
++            # before-break skeleton. Reading its metrics as that run's result
++            # would report before-break coverage as an after-break outcome, so
++            # only a run that actually stopped at Stage 1 may claim it.
++            skeleton = (audit.get('selected_before_break_skeleton') or {}).get('metrics') or {}
++            if skeleton:
++                metrics = skeleton
++                stage = stage or 'BEFORE_BREAKS_ONLY'
++    if stage is None:
++        state = str(audit.get('artifact_state') or '').upper()
++        if state == 'BEST_BEFORE_BREAKS_ONLY':
++            stage = 'BEFORE_BREAKS_ONLY'
++        elif state.startswith('FINAL_'):
++            stage = 'FULL_SCHEDULE'
++    return {
++        'stage': stage,
++        'metrics': metrics,
++        'break_stage_executed': stage_surface.get('break_stage_executed'),
++        'after_metrics_basis': stage_surface.get('after_metrics_basis'),
++    }
+ 
+ 
+ def apply_metric_parity_gate(
+@@ -230,10 +278,32 @@
+     silently released.
+     """
+     validation = json.loads(validation_json.read_text(encoding='utf-8'))
++    audit = json.loads(audit_path.read_text(encoding='utf-8'))
++    surface = engine_metric_surface(audit)
++    # The validator names the artifact it actually read. Deriving the stage
++    # from that rather than from the runner's intent means a run that asked
++    # for BEFORE_BREAKS_ONLY and was handed a final workbook (or the reverse)
++    # fails the gate instead of being compared against the wrong stage.
++    validator_stage = stage_for_artifact_role(validation.get('artifact_role'))
+     parity = compare_metric_surfaces(
+-        engine_selected_metrics(audit_path), validation.get('metrics') or {},
++        surface['metrics'], validation.get('metrics') or {},
++        engine_stage=surface['stage'], validator_stage=validator_stage,
+     )
+-    audit = json.loads(audit_path.read_text(encoding='utf-8'))
++    parity['engine_metrics_published'] = bool(surface['metrics'])
++    parity['engine_after_metrics_basis'] = surface.get('after_metrics_basis')
++    parity['validator_artifact_role'] = validation.get('artifact_role')
++    if not surface['metrics']:
++        # An unpublished surface is not parity evidence. Without this the gate
++        # would compare {} against {} on a future path that publishes neither
++        # and report PASS on no comparison at all.
++        parity['status'] = 'FAIL'
++        parity['mismatch_count'] += 1
++        parity['mismatches'].append({
++            'field': 'engine_metric_surface',
++            'engine': None,
++            'validator': 'PUBLISHED',
++            'reason': 'ENGINE_PUBLISHED_NO_METRIC_SURFACE',
++        })
+     engine_coverage_gate = str(
+         (audit.get('production_quality_gate') or {}).get('coverage_gate_status') or ''
+     ).upper()
+@@ -250,7 +320,8 @@
+             'reason': 'QUALITY_GATE_STATUS_MISMATCH',
+         })
+     validation['canonical_metrics'] = canonicalize_metrics(
+-        validation.get('metrics') or {}, 'independent_validator'
++        validation.get('metrics') or {}, 'independent_validator',
++        stage=validator_stage,
+     )
+     validation['metric_parity'] = parity
+     if parity['status'] != 'PASS':
+@@ -273,6 +344,8 @@
+         writer.writerow(['warning_count', validation.get('warning_count', 0)])
+         writer.writerow(['metric_parity_status', parity['status']])
+         writer.writerow(['metric_parity_mismatch_count', parity['mismatch_count']])
++        writer.writerow(['run_stage', parity.get('engine_stage')])
++        writer.writerow(['validator_artifact_role', validation.get('artifact_role')])
+         for row in validation.get('failures', []):
+             writer.writerow(['failure', json.dumps(row, sort_keys=True, default=str)])
+     return int(validation['return_code']), validation
+@@ -346,7 +419,45 @@
+         # therefore cannot reach this compatibility fallback.
+         or (not audit_status and str(outcome.get('outcome_code') or '').startswith('FINAL_SCHEDULE_GENERATED'))
+     )
+-    if blocked:
++    # A BEFORE_BREAKS_ONLY run deliberately produces no final schedule, so
++    # `schedule_generated` is false by design. Without this branch the run was
++    # reported as "No final schedule workbook was produced, so independent
++    # validation could not run" - on a run whose validation had in fact run and
++    # passed. The stage keeps its own outcome and never claims releasability.
++    if audit_status == 'SKELETON_ONLY_COMPLETE':
++        outcome['production_eligible'] = False
++        outcome['technical_return_code'] = int(runner_return_code or 0)
++        outcome['outcome_code'] = 'BEFORE_BREAK_SKELETON_GENERATED'
++        outcome['outcome_category'] = 'REVIEW_ONLY'
++        outcome['headline'] = (
++            'Before-break skeleton generated for review; breaks are not assigned')
++        if blocked:
++            outcome['outcome_code'] = 'BEFORE_BREAK_SKELETON_BLOCKED'
++            outcome['outcome_category'] = 'ACTION_REQUIRED'
++            outcome['headline'] = (
++                'Before-break stage completed, but its release gates did not pass')
++            outcome['technical_status'] = (
++                'FAIL_INDEPENDENT_VALIDATION' if validation_status != 'PASS'
++                else 'FAIL_STAGE_GATE')
++            outcome['plain_language_summary'] = (
++                'The before-break stage produced a skeleton, but '
++                f'independent validation reported {validation_status} and the run '
++                'returned a blocking code. Resolve the finding before relying on '
++                'this artifact even for review.')
++        else:
++            outcome['technical_status'] = 'SKELETON_ONLY_COMPLETE'
++            outcome['plain_language_summary'] = (
++                'The run was asked for the before-break stage only, and it completed '
++                'and passed independent validation. The workbook contains shift and '
++                'OFF assignments with no breaks, so it is a review artifact and must '
++                'not be used operationally. Run the full stage to produce a '
++                'production schedule.')
++        outcome['recommended_actions'] = [
++            'Use this artifact to judge whether the roster is worth taking to break placement.',
++            'Rerun with the full stage to produce a schedule that can be released.',
++        ]
++
++    elif blocked:
+         outcome['production_eligible'] = False
+         outcome['technical_return_code'] = int(runner_return_code or validation_rc or 4)
+         if not schedule_generated:
+@@ -520,13 +631,25 @@
+     gate = report.get('production_quality_gate') or {}
+     safety_status = str(safety.get('status', '')).upper()
+     hard_fail_count = int(safety.get('hard_fail_count') or 0)
++    # Each stage has its own completed artifact. Requiring FINAL_VERIFIED of a
++    # before-break run - which can never reach it - meant the preliminary
++    # Phase C failure was never superseded, so the run kept the blocking code
++    # even after its validation and parity gate both passed. The production
++    # quality gate is a Stage-2 measurement, so NOT_EVALUATED is its honest
++    # state here and only here.
++    if str(report.get('run_stage') or '') == 'BEFORE_BREAKS_ONLY':
++        required_artifact_state = 'BEST_BEFORE_BREAKS_ONLY'
++        allowed_gate_states = {'PASS', 'WARN', 'FAIL', 'NOT_EVALUATED'}
++    else:
++        required_artifact_state = 'FINAL_VERIFIED'
++        allowed_gate_states = {'PASS', 'WARN', 'FAIL'}
+     return (
+-        report.get('artifact_state') == 'FINAL_VERIFIED'
++        report.get('artifact_state') == required_artifact_state
+         and str(contract.get('status', '')).upper() in {'PASS', 'WARN'}
+         and int(contract.get('failure_count') or 0) == 0
+         and safety_status in {'NOT_VALIDATED', 'PASS', 'WARN'}
+         and hard_fail_count == 0
+-        and str(gate.get('status', '')).upper() in {'PASS', 'WARN', 'FAIL'}
++        and str(gate.get('status', '')).upper() in allowed_gate_states
+         and not (case_root / 'INDEPENDENT_VALIDATION.json').exists()
+     )
+ 
+diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/canonical_metrics.py /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/canonical_metrics.py
+--- prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/canonical_metrics.py	2026-09-13 00:11:48.000000000 +0000
++++ /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/canonical_metrics.py	2026-09-16 19:40:20.405999430 +0000
+@@ -4,10 +4,41 @@
+ independently. They must nevertheless publish the same metric vocabulary so a
+ release decision cannot compare ``after_100`` with ``after100`` by accident.
+ This module normalizes names only; it never calculates coverage.
++
++A run stops at one of two stages. ``FULL_SCHEDULE`` places breaks;
++``BEFORE_BREAKS_ONLY`` exports the Stage-1 skeleton and never starts Stage 2.
++Both stages publish the same metric vocabulary, so the gate below compares the
++same fields either way - the stage is carried as evidence and cross-checked,
++never used to excuse a field from comparison.
+ """
+ from __future__ import annotations
+ 
+-from typing import Any, Dict, Mapping
++from typing import Any, Dict, Mapping, Optional
++
++
++STAGE_BEFORE_BREAKS_ONLY = "BEFORE_BREAKS_ONLY"
++STAGE_FULL_SCHEDULE = "FULL_SCHEDULE"
++STAGES = (STAGE_BEFORE_BREAKS_ONLY, STAGE_FULL_SCHEDULE)
++
++# The validator names the artifact it read; the engine names the stage it ran.
++# They are two vocabularies for one fact, so the gate can only cross-check them
++# through an explicit mapping.
++ARTIFACT_ROLE_STAGE = {
++    "BEST_BEFORE_BREAKS": STAGE_BEFORE_BREAKS_ONLY,
++    "FINAL_AFTER_BREAKS": STAGE_FULL_SCHEDULE,
++}
++
++# When no break stage ran, every after-break coverage figure must be identical
++# to its before-break twin: there is nothing that could have moved it. A
++# difference means one side invented a break effect that the artifact does not
++# contain, which is a defect in that side, not a stage difference.
++BEFORE_AFTER_PAIRS = (
++    ("before_100", "after_100"),
++    ("before_90", "after_90"),
++    ("before_80", "after_80"),
++    ("before_target", "after_target"),
++    ("before_floor", "after_floor"),
++)
+ 
+ 
+ ALIASES = {
+@@ -105,14 +136,39 @@
+ }
+ 
+ 
+-def canonicalize_metrics(metrics: Mapping[str, Any] | None, source: str) -> Dict[str, Any]:
+-    """Return one stable metric surface without changing source values."""
++def stage_for_artifact_role(role: Any) -> Optional[str]:
++    """Translate the validator's artifact role into a run stage, or None."""
++    if role is None:
++        return None
++    return ARTIFACT_ROLE_STAGE.get(str(role).strip().upper())
++
++
++def canonicalize_metrics(
++    metrics: Mapping[str, Any] | None,
++    source: str,
++    *,
++    stage: Optional[str] = None,
++) -> Dict[str, Any]:
++    """Return one stable metric surface without changing source values.
++
++    ``stage`` is recorded as evidence when the caller knows it. It never
++    filters, defaults or rewrites a value: an unknown stage stays unknown
++    rather than being guessed from the metrics themselves.
++    """
+     raw = metrics or {}
+     result: Dict[str, Any] = {
+-        "schema_version": 1,
++        "schema_version": 2,
+         "evaluator": "canonical_metric_surface_v1",
+         "source": str(source),
+     }
++    if stage is not None:
++        normalized = str(stage).strip().upper()
++        result["stage"] = normalized if normalized in STAGES else "UNRECOGNIZED_STAGE"
++        result["break_stage_executed"] = (
++            False if normalized == STAGE_BEFORE_BREAKS_ONLY
++            else True if normalized == STAGE_FULL_SCHEDULE
++            else None
++        )
+     for canonical, aliases in ALIASES.items():
+         for alias in aliases:
+             if alias in raw and raw[alias] is not None:
+@@ -126,11 +182,40 @@
+     validator_metrics: Mapping[str, Any] | None,
+     *,
+     float_tolerance: float = 1e-6,
++    engine_stage: Optional[str] = None,
++    validator_stage: Optional[str] = None,
+ ) -> Dict[str, Any]:
+-    """Compare normalized metrics and make omissions explicit."""
+-    left = canonicalize_metrics(engine_metrics, "engine")
+-    right = canonicalize_metrics(validator_metrics, "independent_validator")
++    """Compare normalized metrics and make omissions explicit.
++
++    Every canonical field is compared at every stage. The stage arguments add
++    two checks rather than removing any: the two sides must agree on which
++    stage produced the artifact, and a run that never started Stage 2 must
++    report after-break coverage identical to its before-break coverage.
++    """
++    left = canonicalize_metrics(engine_metrics, "engine", stage=engine_stage)
++    right = canonicalize_metrics(
++        validator_metrics, "independent_validator", stage=validator_stage)
+     mismatches = []
++    if engine_stage is not None or validator_stage is not None:
++        engine_declared = left.get("stage")
++        validator_declared = right.get("stage")
++        if engine_declared != validator_declared:
++            # All three cases block. They are named apart because "the two
++            # sides disagree" and "one side never said" are different
++            # defects: the first is a real contradiction about one artifact,
++            # the second means the comparison has no stage to stand on.
++            if engine_declared is None:
++                reason = "ENGINE_DECLARED_NO_STAGE"
++            elif validator_declared is None:
++                reason = "VALIDATOR_DECLARED_NO_STAGE"
++            else:
++                reason = "STAGE_DISAGREEMENT"
++            mismatches.append({
++                "field": "run_stage",
++                "engine": engine_declared,
++                "validator": validator_declared,
++                "reason": reason,
++            })
+     for field in PARITY_FIELDS:
+         if field not in left or field not in right:
+             mismatches.append({
+@@ -155,10 +240,39 @@
+                 "validator": b,
+                 "reason": "VALUE_MISMATCH",
+             })
++    # A skeleton-only artifact contains no breaks, so "after breaks" can only
++    # mean "the same schedule, measured again". Checking that both sides say so
++    # is what stops an after-break figure from being read as a break result
++    # that was never computed.
++    stage_checked = None
++    for surface in (left, right):
++        if surface.get("stage") == STAGE_BEFORE_BREAKS_ONLY:
++            stage_checked = STAGE_BEFORE_BREAKS_ONLY
++            for before_field, after_field in BEFORE_AFTER_PAIRS:
++                if before_field not in surface or after_field not in surface:
++                    continue
++                try:
++                    equal = (int(round(float(surface[before_field])))
++                             == int(round(float(surface[after_field]))))
++                except (TypeError, ValueError):
++                    equal = surface[before_field] == surface[after_field]
++                if not equal:
++                    mismatches.append({
++                        "field": after_field,
++                        "source": surface.get("source"),
++                        "engine": left.get(after_field),
++                        "validator": right.get(after_field),
++                        "before_value": surface[before_field],
++                        "after_value": surface[after_field],
++                        "reason": "AFTER_DIFFERS_FROM_BEFORE_WITHOUT_BREAK_STAGE",
++                    })
+     return {
+         "status": "PASS" if not mismatches else "FAIL",
+         "evaluator": "canonical_metric_surface_v1",
+         "compared_fields": list(PARITY_FIELDS),
++        "engine_stage": left.get("stage"),
++        "validator_stage": right.get("stage"),
++        "before_after_identity_checked": stage_checked is not None,
+         "mismatch_count": len(mismatches),
+         "mismatches": mismatches,
+         "engine": left,
+diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/l632_universal_scheduler.py /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/l632_universal_scheduler.py
+--- prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/l632_universal_scheduler.py	2026-09-15 00:10:56.000000000 +0000
++++ /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/l632_universal_scheduler.py	2026-09-16 19:21:15.091227142 +0000
+@@ -1465,10 +1465,38 @@
+     raise ValueError("Requirement sheet with Sun-Sat interval columns was not found")
+ 
+ 
+-def _detect_interval_minutes(ws: Any, header: int, im: Dict[str, Any]) -> int:
+-    instructed = int(round(to_float(_instruction_get(im, ["Interval Granularity Minutes", "Interval Minutes", "Interval"], 0), 0)))
+-    if instructed in {15, 30, 60}:
+-        return instructed
++INTERVAL_MINUTE_CHOICES = (15, 30, 60)
++
++
++def _detect_interval_minutes(
++    ws: Any, header: int, im: Dict[str, Any],
++    parser_warnings: Optional[List[str]] = None,
++) -> int:
++    """Interval granularity: the workbook's value when it states one.
++
++    Absent and supplied-but-invalid used to be the same thing here - both fell
++    through to inference, and inference returns a plausible-looking 60. A
++    scheduler who typed 45 got a 60-minute schedule and every coverage
++    percentage in the release was computed against a granularity they did not
++    choose, with no warning anywhere.
++
++    Interval granularity is the denominator of every coverage number the
++    release reports, so a wrong one is not recoverable downstream. Absent still
++    infers from the demand sheet's own time column; supplied-and-invalid is now
++    a HARD_ parser warning that blocks the run.
++    """
++    raw = _instruction_get(im, ["Interval Granularity Minutes", "Interval Minutes", "Interval"], None)
++    if raw not in (None, ""):
++        value = strict_float(raw)
++        instructed = int(value) if value is not None and value == int(value) else None
++        if instructed in INTERVAL_MINUTE_CHOICES:
++            return instructed
++        if parser_warnings is not None:
++            parser_warnings.append(
++                f"HARD_INVALID_INTERVAL_MINUTES:value={raw!r}; "
++                f"use one of {', '.join(str(c) for c in INTERVAL_MINUTE_CHOICES)}, "
++                f"or leave the row blank to infer it from the demand sheet"
++            )
+     times: List[int] = []
+     for r in range(header + 1, ws.max_row + 1):
+         minute = next((minute_of_day(ws.cell(r, c).value) for c in range(1, min(4, ws.max_column) + 1) if minute_of_day(ws.cell(r, c).value) is not None), None)
+@@ -1503,7 +1531,7 @@
+     if len(day_cols) != 7:
+         raise ValueError(f"Could not identify seven day columns in {req_ws.title}")
+     time_col = _time_column(req_ws, header)
+-    interval = _detect_interval_minutes(req_ws, header, im)
++    interval = _detect_interval_minutes(req_ws, header, im, parser_warnings)
+     per_day = 1440 // interval
+     requirements: List[List[Optional[float]]] = [[None] * per_day for _ in range(7)]
+     dates = [req_ws.cell(header + 1, c).value for c in day_cols]
+@@ -1593,18 +1621,35 @@
+ }
+ 
+ 
++def _alias_key(value: Any) -> str:
++    """Normalise for alias matching: lowercase, alphanumerics only.
++
++    `norm()` keeps inner spaces and punctuation, so alias sets written as
++    single words ("alldays", "everyday") silently never match the spaced
++    spellings people type. Every alias comparison should go through this.
++    """
++    return re.sub(r"[^a-z0-9]", "", norm(value))
++
++
+ def _parse_language_days(value: Any) -> Set[int]:
+     """Parse Language Setup Coverage Days; invalid text must not mean all days."""
+     text = str(value or "").strip()
+-    if not text or norm(text) in {"all", "alldays", "daily", "everyday", "7days"}:
++    # `norm()` lowercases and trims but does NOT remove inner spaces, so the
++    # aliases "alldays", "everyday" and "7days" could never match the way a
++    # scheduler actually writes them - "All Days", "Every Day", "7 Days" - and
++    # those spellings were rejected as malformed. Collapsing to alphanumerics
++    # is what the alias list always assumed. This is the same mistaken
++    # assumption about `norm()` that made the language-window flag inert (A51),
++    # so it is fixed here rather than worked around in the workbook.
++    if not text or _alias_key(text) in {"all", "alldays", "daily", "everyday", "7days"}:
+         return set(range(7))
+     aliases = dict(_LANGUAGE_DAY_INDEX)
+     aliases.update({"m": 1, "w": 3, "f": 5})
+     lowered = text.lower().replace("–", "-").replace("—", "-")
+     tokens = [token.strip() for token in re.split(r"[,;/|&]+", lowered) if token.strip()]
+-    if len(tokens) == 1 and norm(tokens[0]) in {"weekday", "weekdays"}:
++    if len(tokens) == 1 and _alias_key(tokens[0]) in {"weekday", "weekdays"}:
+         return {1, 2, 3, 4, 5}
+-    if len(tokens) == 1 and norm(tokens[0]) in {"weekend", "weekends"}:
++    if len(tokens) == 1 and _alias_key(tokens[0]) in {"weekend", "weekends"}:
+         return {0, 6}
+     days: Set[int] = set()
+     invalid: List[str] = []
+@@ -1755,22 +1800,74 @@
+     return rules, capabilities, compact_windows
+ 
+ 
+-def _parse_break_segments(im: Dict[str, Any]) -> Tuple[Tuple[int, str], ...]:
+-    short_count = int(round(to_float(_instruction_get(im, ["Short Break Count", "Count of Short Breaks", "Number of Short Breaks"], 2), 2)))
+-    short_min = int(round(to_float(_instruction_get(im, ["Short Break Duration Minutes", "Short Break Duration", "Break Duration Minutes"], 15), 15)))
+-    lunch_count = int(round(to_float(_instruction_get(im, ["Lunch Count", "Meal Count", "Count of Lunch Breaks"], 1), 1)))
+-    lunch_min = int(round(to_float(_instruction_get(im, ["Lunch Duration Minutes", "Lunch Duration", "Meal Duration Minutes"], 30), 30)))
+-    if short_min not in {15, 30, 45, 60}:
+-        short_min = 15
+-    if lunch_min not in {15, 30, 45, 60}:
+-        lunch_min = 30
++BREAK_DURATION_CHOICES = (15, 30, 45, 60)
++
++
++def _parse_break_segments(
++    im: Dict[str, Any], parser_warnings: Optional[List[str]] = None
++) -> Tuple[Tuple[int, str], ...]:
++    """Break structure exactly as the workbook states it.
++
++    Three silent rewrites used to live here, and each one let the engine
++    schedule a break contract the business never asked for:
++
++    * an out-of-set duration was coerced (20-minute breaks became 15);
++    * a negative count was swallowed by ``max(0, ...)``;
++    * an empty result was backfilled with a hard-coded 15/30/15, so a
++      contract stating ZERO breaks received 60 minutes of them per associate.
++
++    Break minutes drive required headcount directly - the break-capacity
++    arithmetic is ``need * shift_q / (shift_q - break_q)`` - so a silently
++    rewritten break contract sizes the roster for a different business
++    agreement, with nothing in the audit trail to show it happened.
++
++    Absent is still absent: a workbook that never states these rows keeps the
++    historical 15/30/15 default. Supplied-and-invalid is now a HARD_ parser
++    warning, which `validate_input_contract` turns into a contract failure
++    before CP-SAT starts. Zero breaks is a legitimate contract and yields zero
++    segments.
++    """
++    def _count(names: Sequence[str], default: int, label: str) -> int:
++        raw = _instruction_get(im, names, None)
++        if raw in (None, ""):
++            return default
++        value = strict_float(raw)
++        if value is None or value != int(value) or int(value) < 0:
++            if parser_warnings is not None:
++                parser_warnings.append(
++                    f"HARD_INVALID_BREAK_CONTRACT:{label}={raw!r}; "
++                    f"use a whole number of zero or more"
++                )
++            return default
++        return int(value)
++
++    def _duration(names: Sequence[str], default: int, label: str) -> int:
++        raw = _instruction_get(im, names, None)
++        if raw in (None, ""):
++            return default
++        value = strict_float(raw)
++        minutes = int(value) if value is not None and value == int(value) else None
++        if minutes not in BREAK_DURATION_CHOICES:
++            if parser_warnings is not None:
++                parser_warnings.append(
++                    f"HARD_INVALID_BREAK_CONTRACT:{label}={raw!r}; "
++                    f"use one of {', '.join(str(c) for c in BREAK_DURATION_CHOICES)} minutes"
++                )
++            return default
++        return minutes
++
++    short_count = _count(["Short Break Count", "Count of Short Breaks", "Number of Short Breaks"], 2, "Short Break Count")
++    short_min = _duration(["Short Break Duration Minutes", "Short Break Duration", "Break Duration Minutes"], 15, "Short Break Duration Minutes")
++    lunch_count = _count(["Lunch Count", "Meal Count", "Count of Lunch Breaks"], 1, "Lunch Count")
++    lunch_min = _duration(["Lunch Duration Minutes", "Lunch Duration", "Meal Duration Minutes"], 30, "Lunch Duration Minutes")
++
+     segments: List[Tuple[int, str]] = []
+-    for i in range(max(0, short_count)):
++    for i in range(short_count):
+         segments.append((short_min // 15, f"Break {i + 1}"))
+-    for i in range(max(0, lunch_count)):
++    for i in range(lunch_count):
+         segments.append((lunch_min // 15, "Lunch" if lunch_count == 1 else f"Lunch {i + 1}"))
+-    if not segments:
+-        segments = [(1, "Break 1"), (2, "Lunch"), (1, "Break 2")]
++    # No backfill. An explicit zero-break contract returns zero segments; a
++    # workbook that states nothing at all has already taken the defaults above.
+     # Preserve operational order for the common 15/30/15 contract.
+     if len(segments) == 3 and sorted(length for length, _ in segments) == [1, 1, 2]:
+         return ((1, "Break 1"), (2, "Lunch"), (1, "Break 2"))
+@@ -2402,7 +2499,7 @@
+     if allow_no_break and max_no_break <= 0:
+         max_no_break = 8
+ 
+-    break_segments = _parse_break_segments(im)
++    break_segments = _parse_break_segments(im, parser_warnings)
+     (
+         break_window_rules, break_edge_margin_q, break_min_gap_q,
+         break_preferred_gap_q, break_normal_max_gap_q, break_window_source,
+@@ -3638,6 +3735,21 @@
+     Overlap, not start-minute containment: see `LanguageRule.overlaps`. Every
+     call site passes a quarter start, so the default span is 15.
+     """
++    # A day index outside 0..6 used to match nothing, so "no language rules
++    # apply anywhere" was the silent default for a caller that computed the day
++    # wrongly. That is the most dangerous possible default for a coverage rule,
++    # and it is exactly how a next-Sunday scope (day_scope == 7) once emptied
++    # the repair planner's donor set without a trace. Normalise the cyclic
++    # next-Sunday scope to Sunday and reject anything genuinely out of range.
++    if day is not None:
++        if day == 7:
++            day = 0
++        elif not 0 <= day <= 6:
++            raise ValueError(
++                f"language_rules_at: day must be 0..6 (or 7 for the cyclic "
++                f"next Sunday), got {day!r}"
++            )
++
+     def applies(rule: LanguageRule) -> bool:
+         if not rule.active or not rule.overlaps(minute, span):
+             return False
+@@ -3723,6 +3835,51 @@
+ 
+ 
+ def shift_day_demand_fit(parsed: ParsedInput, day: int, shift: Shift) -> Dict[str, Any]:
++    """Demand shape for one (day, shift) pair, memoised per parsed contract.
++
++    This is a pure function of `(day, shift.index)`: it reads only
++    `parsed.active`, `parsed.interval_minutes` and `parsed.intervals_per_day`
++    (through `cyclic_requirement_context`) plus the shift's own start and
++    duration, none of which is written after `parse_input` returns. There are
++    at most 7 x len(shifts) distinct answers - 168 on every packaged workbook -
++    yet the nested loops in `capacity_diagnostics` and
++    `associate_day_eligible_shifts` asked for them over 600,000 times per run,
++    and `solve_joint_shift_off_language_break_refinement` asks again inside the
++    search loop.
++
++    Measured on the unpatched engine: `capacity_diagnostics` took 16.34s on
++    AE_AR_B2B and 10.20s on GDI_REAL28, with 1,005,804 and 631,467 calls
++    collapsing to 168 distinct results. Stage 1 is wall-clock budgeted and
++    already reports TRUNCATED_INSUFFICIENT_STAGE1_BUDGET, so that time is
++    search that never happens.
++
++    The cache lives on the parsed contract, so it is scoped to one run and is
++    collected with it - no module-level state, and no `id()` reuse hazard.
++    Callers mutate the returned mapping (`demand_fit_blocked` writes
++    `blank_requirement_blocked` into it), so every hit returns a fresh copy.
++    """
++    cache = getattr(parsed, "_shift_day_demand_fit_cache", None)
++    if cache is None:
++        cache = {}
++        try:
++            object.__setattr__(parsed, "_shift_day_demand_fit_cache", cache)
++        except Exception:
++            # A contract object that refuses attributes still gets correct
++            # answers, just uncached.
++            return _shift_day_demand_fit_uncached(parsed, day, shift)
++    # The index alone identifies a shift in every packaged workbook, but the
++    # start and duration are what the computation actually reads, so they are
++    # in the key too. A synthetic Shift reusing an index can then never collide.
++    key = (int(day), int(getattr(shift, "index", -1)),
++           int(shift.start_min), int(shift.duration_q))
++    fit = cache.get(key)
++    if fit is None:
++        fit = _shift_day_demand_fit_uncached(parsed, day, shift)
++        cache[key] = fit
++    return dict(fit)
++
++
++def _shift_day_demand_fit_uncached(parsed: ParsedInput, day: int, shift: Shift) -> Dict[str, Any]:
+     horizon = CYCLIC_TOTAL_QSLOTS if day == 6 else TOTAL_QSLOTS
+     qslots = [
+         q for q in range(
+@@ -8861,9 +9018,71 @@
+         row["estimated_additional_qualified_associates"] = max(
+             0, int(math.ceil(max(0.0, -float(row.get("capacity_slack_hours", 0.0))) / max(0.01, productive_per_assoc) - 1e-9))
+         )
++    # Coverage-benchmark eligibility.
++    #
++    # A roster whose productive hours are below its own target demand cannot
++    # reach that target under ANY shift pattern or break placement. Comparing
++    # its coverage against another engine measures the roster, not the
++    # optimiser - and averaging it into an aggregate coverage KPI silently
++    # drags the whole benchmark down.
++    #
++    # This is not a new computation. `aggregate_target_slack` above already
++    # knows the answer; it was simply reported as one warning among many and
++    # was routinely read past. Stating it as a verdict, with the best target
++    # this roster could reach, turns a confusing coverage number into an
++    # actionable sentence.
++    hours_at_full_demand = target_hours / max(1e-9, float(parsed.target_ratio))
++    max_attainable_target_ratio = (
++        min(1.0, productive_hours / hours_at_full_demand) if hours_at_full_demand > 0 else 1.0
++    )
++    slack_ratio = aggregate_target_slack / max(1e-9, target_hours)
++    if aggregate_target_slack < -1e-9:
++        capacity_class = "CAPACITY_SHORT"
++    elif slack_ratio < 0.10:
++        capacity_class = "CAPACITY_TIGHT"
++    else:
++        capacity_class = "CAPACITY_AMPLE"
++    benchmark_eligible = capacity_class != "CAPACITY_SHORT"
++    if capacity_class == "CAPACITY_SHORT":
++        capacity_headline = (
++            f"Capacity-limited: {productive_hours:.0f} productive hours against "
++            f"{target_hours:.0f} needed at the {parsed.target_ratio:.0%} target - short by "
++            f"{-aggregate_target_slack:.0f} hours ({-slack_ratio:.0%}). "
++            f"{leave_days} associate-day(s) of leave are already deducted. This roster cannot "
++            f"exceed about {max_attainable_target_ratio:.0%} of requirement no matter how shifts "
++            f"or breaks are placed, so its coverage does not measure the optimiser and must not be "
++            f"averaged into a coverage benchmark. Add about "
++            f"{estimated_additional_hc_for_target} associate(s), reduce leave, or lower the target."
++        )
++    elif capacity_class == "CAPACITY_TIGHT":
++        capacity_headline = (
++            f"Capacity-tight: {aggregate_target_slack:.0f} spare productive hours on "
++            f"{target_hours:.0f} needed ({slack_ratio:.0%} headroom). The target is reachable but "
++            f"leaves little room for break placement or OFF-day shape; treat a coverage comparison "
++            f"here as indicative rather than decisive."
++        )
++    else:
++        capacity_headline = (
++            f"Capacity-ample: {aggregate_target_slack:.0f} spare productive hours on "
++            f"{target_hours:.0f} needed ({slack_ratio:.0%} headroom). Coverage differences on this "
++            f"scenario reflect the optimiser, not the roster."
++        )
++    coverage_benchmark = {
++        "capacity_class": capacity_class,
++        "benchmark_eligible": benchmark_eligible,
++        "target_capacity_slack_hours": round(aggregate_target_slack, 4),
++        "target_capacity_slack_ratio": round(slack_ratio, 6),
++        "max_attainable_target_ratio": round(max_attainable_target_ratio, 6),
++        "configured_target_ratio": float(parsed.target_ratio),
++        "leave_days_deducted": leave_days,
++        "estimated_additional_hc_for_target": estimated_additional_hc_for_target,
++        "headline": capacity_headline,
++    }
++
+     return {
+         "status": "FAIL" if deduped_failures else ("WARN" if warnings else "PASS"),
+         "diagnostic_scope": "optimistic upper bounds before weekly CP-SAT coupling",
++        "coverage_benchmark": coverage_benchmark,
+         "break_resilience": break_resilience,
+         "roster_count": len(parsed.associates), "legal_shift_count": len(parsed.shifts),
+         "interval_minutes": parsed.interval_minutes, "active_intervals": sum(sum(1 for value in day if value) for day in parsed.active),
+@@ -16974,6 +17193,9 @@
+             parsed.language_working_window_mode = normalize_language_window_mode(
+                 language_working_window_override)
+         capacity = capacity_diagnostics(parsed)
++        _cb = capacity.get("coverage_benchmark") or {}
++        if _cb.get("headline"):
++            print(f"CAPACITY {_cb.get('capacity_class')} {_cb['headline']}", file=log, flush=True)
+         preflight = validate_input_contract(parsed, capacity)
+         identity_warnings = case_identity_warnings(parsed, input_path, output_path)
+         if identity_warnings:
+@@ -18005,6 +18227,29 @@
+                 "output": str(before_output_path),
+             }
+             audit["selected_before_break_skeleton"] = explanation_rows[0]
++            # The release parity gate compares the engine's published metrics
++            # against the independent validator's. Before this, skeleton-only
++            # runs published no canonical surface at all, so every field read
++            # as MISSING_CANONICAL_METRIC and the gate failed a run that had
++            # nothing wrong with it. The skeleton already carries a surface
++            # from the same evaluator every after-break candidate uses
++            # (calculate_metrics with no breaks), so publish that one rather
++            # than exempting the stage from the gate.
++            before_break_metrics = best_before_skeleton.diagnostics.get("no_break_metrics") or {}
++            before_break_surface = compact_metric_surface(before_break_metrics)
++            audit["selected_before_break_skeleton"]["metrics"] = before_break_surface
++            audit["stage_metric_surface"] = {
++                "stage": "BEFORE_BREAKS_ONLY",
++                "break_stage_executed": False,
++                # Stage 2 never ran, so the after-break figures in this surface
++                # are the same schedule measured a second time. Saying so is
++                # what keeps a reader from treating them as a break result.
++                "after_metrics_basis": "NO_BREAKS_PLACED_AFTER_EQUALS_BEFORE",
++                "metrics_origin": best_before_skeleton.diagnostics.get(
++                    "before_metrics_origin", "CANONICAL_STAGE1_EVALUATION"),
++                "selected_profile": best_before_skeleton.profile,
++                "metrics": before_break_surface,
++            }
+             audit["status"] = "SKELETON_ONLY_COMPLETE"
+             audit["artifact_state"] = "BEST_BEFORE_BREAKS_ONLY"
+             audit["functional_status"] = "PASS_BEFORE_BREAK_SKELETON_GENERATED"
+@@ -20172,6 +20417,17 @@
+             "optional_outputs": [r["path"] for r in export_records if r["role"] not in {"BEST_BEFORE_BREAKS", "RECOMMENDED_FINAL"}],
+             "candidate_leaderboard_csv": str(leaderboard_csv), "pareto_manifest": str(pareto_manifest),
+         }
++        # The stage declaration is published on both paths so the parity gate
++        # reads one key regardless of how far the run went, and so a stage
++        # disagreement between engine and validator is detectable.
++        audit["stage_metric_surface"] = {
++            "stage": "FULL_SCHEDULE",
++            "break_stage_executed": True,
++            "after_metrics_basis": "BREAKS_PLACED_BY_STAGE_2",
++            "metrics_origin": "CANONICAL_AFTER_BREAK_EVALUATION",
++            "selected_profile": chosen_skeleton.profile,
++            "metrics": audit["selected_candidate"]["metrics"],
++        }
+         audit["functional_status"] = "PASS_FINAL_SCHEDULE_GENERATED"
+         audit["artifact_state"] = "FINAL_VERIFIED" if output_info_by_role["RECOMMENDED_FINAL"]["verification"].get("status") == "PASS" else "FINAL_VERIFICATION_FAILED"
+         selected_validation = ((output_info_by_role["RECOMMENDED_FINAL"] or {}).get("validation") or {})
+@@ -20301,6 +20557,14 @@
+             "language_minimum_only_ratio": chosen_breaks.metrics.get("language_minimum_only_ratio", 0),
+             "language_reserve_shortfall_quarters": chosen_breaks.metrics.get("language_reserve_shortfall_quarters", 0),
+             "language_break_caused_reserve_loss_quarters": chosen_breaks.metrics.get("language_break_caused_reserve_loss_quarters", 0),
++            # Whether this scenario's coverage measures the optimiser at all.
++            # A CAPACITY_SHORT roster cannot reach its target under any shift
++            # or break placement, so its coverage belongs in a roster finding,
++            # not in a coverage benchmark average.
++            "capacity_class": (capacity.get("coverage_benchmark") or {}).get("capacity_class", ""),
++            "coverage_benchmark_eligible": (capacity.get("coverage_benchmark") or {}).get("benchmark_eligible", True),
++            "max_attainable_target_ratio": (capacity.get("coverage_benchmark") or {}).get("max_attainable_target_ratio", ""),
++            "target_capacity_slack_hours": (capacity.get("coverage_benchmark") or {}).get("target_capacity_slack_hours", ""),
+             "opening_gaps": chosen_breaks.metrics.get("opening_gap_count", 0),
+             "next_sunday_active_intervals": chosen_breaks.metrics.get("week_boundary_active_intervals", 0),
+             "next_sunday_after_target": chosen_breaks.metrics.get("week_boundary_after_target", 0),
+@@ -21006,6 +21270,38 @@
+         audit.get("artifact_state") == "FINAL_VERIFIED"
+         and (audit.get("hard_valid_schedule_exists") is True or int((((audit.get("selected_candidate") or {}).get("output_validation") or {}).get("validation") or {}).get("hard_fail_count", 0) or 0) == 0)
+     )
++    # A BEFORE_BREAKS_ONLY run exits 0 having deliberately produced no final
++    # schedule. Falling through to the branch below reported "Final schedule
++    # generated successfully" for a workbook that assigns no breaks and must
++    # never be used operationally, so the stage gets its own outcome before
++    # the final-schedule branches are reached.
++    if status == "SKELETON_ONLY_COMPLETE":
++        skeleton = audit.get("skeleton_only") or {}
++        surface = (audit.get("stage_metric_surface") or {}).get("metrics") or {}
++        outcome.update({
++            "outcome_code": "BEFORE_BREAK_SKELETON_GENERATED",
++            "outcome_category": "REVIEW_ONLY",
++            "headline": "Before-break skeleton generated for review; breaks are not assigned",
++            "plain_language_summary": (
++                "The run was asked for the before-break stage only, and it completed. "
++                "The workbook contains shift and OFF assignments with no breaks, so it "
++                "is a review artifact and must not be used operationally. Run the full "
++                "stage to produce a production schedule."
++            ),
++            "production_eligible": False,
++            "best_proven": {
++                "before_break_profile": skeleton.get("selected_profile"),
++                "active_intervals": surface.get("active_intervals"),
++                "before_target": surface.get("before_target"),
++                "before_floor": surface.get("before_floor"),
++            },
++            "recommended_actions": [
++                "Use this artifact to judge whether the roster is worth taking to break placement.",
++                "Rerun with the full stage to produce a schedule that can be released.",
++            ],
++        })
++        return outcome
++
+     if int(return_code) == 0 or hard_valid_artifact:
+         quality = audit.get("production_quality_gate") or {}
+         quality_status = str(quality.get("status") or "NOT_EVALUATED")
+diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/production/phase_c_quality_report.py /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/production/phase_c_quality_report.py
+--- prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/production/phase_c_quality_report.py	2026-09-13 00:09:14.000000000 +0000
++++ /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/production/phase_c_quality_report.py	2026-09-16 19:25:50.171054932 +0000
+@@ -67,9 +67,50 @@
+     return value if isinstance(value, dict) else {"status": "ERROR", "hard_fail_count": 1}
+ 
+ 
++def _stopped_at_the_skeleton_stage(audit: Dict[str, Any]) -> bool:
++    """True only when the run deliberately ended after Stage 1."""
++    return (str(audit.get("artifact_state") or "").upper() == "BEST_BEFORE_BREAKS_ONLY"
++            or str(audit.get("status") or "").upper() == "SKELETON_ONLY_COMPLETE")
++
++
++def _stage_and_metrics(audit: Dict[str, Any]) -> tuple[str, Dict[str, Any]]:
++    """Read the metric surface the engine published, with the stage that made it.
++
++    This report used to read ``selected_candidate.metrics`` and nothing else. A
++    BEFORE_BREAKS_ONLY run has no selected candidate, so every coverage figure
++    was published as 0 for a run that had in fact covered every active
++    interval - a fabricated number, not a missing one. Both stages publish a
++    surface now, so both are read here.
++    """
++    stage_surface = audit.get("stage_metric_surface") or {}
++    stage = str(stage_surface.get("stage") or "")
++    metrics = stage_surface.get("metrics") or {}
++    if not metrics:
++        candidate = (audit.get("selected_candidate") or {}).get("metrics") or {}
++        if candidate:
++            metrics, stage = candidate, stage or "FULL_SCHEDULE"
++        elif _stopped_at_the_skeleton_stage(audit):
++            # Only a run that actually STOPPED at Stage 1 may report the
++            # skeleton surface as its own. A full run that reached Stage 2 and
++            # failed also carries a before-break skeleton, and publishing that
++            # as its result would present before-break coverage as an
++            # after-break outcome - the same fabrication this report exists to
++            # prevent. Such a run has no metric surface, and says so.
++            metrics = (audit.get("selected_before_break_skeleton") or {}).get("metrics") or {}
++            if metrics:
++                stage = stage or "BEFORE_BREAKS_ONLY"
++    if not stage:
++        state = str(audit.get("artifact_state") or "").upper()
++        stage = ("BEFORE_BREAKS_ONLY" if state == "BEST_BEFORE_BREAKS_ONLY"
++                 else "FULL_SCHEDULE" if state.startswith("FINAL_")
++                 else "UNKNOWN_STAGE")
++    return stage, metrics
++
++
+ def build_report(audit: Dict[str, Any], case_root: Path | None = None) -> Dict[str, Any]:
+     selected = audit.get("selected_candidate") or {}
+-    metrics = selected.get("metrics") or {}
++    stage, metrics = _stage_and_metrics(audit)
++    before_breaks_only = stage == "BEFORE_BREAKS_ONLY"
+     preflight = audit.get("pre_solver_contract_validation") or {}
+     feasibility = audit.get("capacity_diagnostics") or {}
+     probe = audit.get("hard_feasibility_probe") or {}
+@@ -105,7 +146,10 @@
+     hard_failures = int(_num(raw_hard, 0))
+     contract_status = _status(preflight.get("status"))
+     feasibility_status = _status(feasibility.get("status"), _status(probe.get("cp_status")))
+-    schedule_present = bool(selected and metrics)
++    # A before-break export is a schedule at its own stage. Reading "no
++    # selected candidate" as "no schedule" is what produced safety NOT_RUN and
++    # DIAGNOSTICS_ONLY on a validated skeleton run.
++    schedule_present = bool(metrics) and (bool(selected) or before_breaks_only)
+     # A schedule that was never validated is NOT a safe schedule. Previously an
+     # audit carrying no hard_fail_count anywhere produced hard_failures == 0 and
+     # therefore safety PASS, so a run whose output validation never executed was
+@@ -143,9 +187,42 @@
+         quality_status = "PASS_WITH_TARGET_GAPS"
+     else:
+         quality_status = "PASS_CLEAN"
++    parity = (external.get("metric_parity") or {}) if external else {}
++    # Stage gate: did the stage that was asked for complete and check out?
++    # This is deliberately not the release decision. A before-break artifact is
++    # never releasable, so asking it to be FINAL_VERIFIED is a category error;
++    # asking whether it completed, validated and agreed on its metrics is not.
++    stage_gate_reasons = []
++    if contract_status not in {"PASS", "WARN"} or len(preflight.get("failures") or []) > 0:
++        stage_gate_reasons.append("input_contract_not_pass")
++    if safety_status != "PASS":
++        stage_gate_reasons.append("independent_validation_not_pass")
++    if parity and str(parity.get("status") or "").upper() not in {"", "PASS"}:
++        stage_gate_reasons.append("metric_parity_not_pass")
++    if before_breaks_only:
++        if _status(audit.get("artifact_state")) != "BEST_BEFORE_BREAKS_ONLY":
++            stage_gate_reasons.append("before_break_artifact_not_exported")
++    else:
++        if _status(audit.get("artifact_state")) != "FINAL_VERIFIED":
++            stage_gate_reasons.append("artifact_state_not_final_verified")
++        if production_gate_status == "FAIL":
++            stage_gate_reasons.append("production_quality_gate_failed")
+     return {
+         "schema_version": 1,
+         "release": _status(audit.get("version"), RELEASE),
++        "run_stage": stage,
++        # A before-break artifact can never be released, whatever its numbers
++        # say. Stating that here keeps a good skeleton report from reading as
++        # an approval.
++        "production_release_eligible": (
++            False if before_breaks_only
++            else _status(audit.get("artifact_state")) == "FINAL_VERIFIED"
++        ),
++        "stage_gate": {
++            "stage": stage,
++            "status": "PASS" if not stage_gate_reasons else "BLOCKED",
++            "blocking_reasons": sorted(set(stage_gate_reasons)),
++        },
+         "generated_utc": datetime.now(timezone.utc).isoformat(),
+         "audit_status": _status(audit.get("status")),
+         "run_id": (audit.get("run_identity") or {}).get("run_id"),
+@@ -177,13 +254,20 @@
+             "after80": int(_num(metrics.get("after_80"), 0)),
+             "target_losses_from_breaks": int(_num(metrics.get("target_losses_from_breaks"), 0)),
+             "floor_losses_from_breaks": int(_num(metrics.get("floor_losses_from_breaks"), 0)),
+-            "canonical_metrics": canonicalize_metrics(metrics, "engine"),
++            # No breaks were placed at this stage, so after_* is the same
++            # schedule measured again rather than a break outcome.
++            "after_metrics_basis": (
++                "NO_BREAKS_PLACED_AFTER_EQUALS_BEFORE" if before_breaks_only
++                else "BREAKS_PLACED_BY_STAGE_2"),
++            "canonical_metrics": canonicalize_metrics(metrics, "engine", stage=stage),
+         },
+         "evaluation": {
+             "framework": "canonical_metric_surface_v1",
+-            "engine_source": "selected_candidate.metrics",
++            "engine_source": (
++                "stage_metric_surface.metrics" if audit.get("stage_metric_surface")
++                else "selected_candidate.metrics"),
+             "validator_source": "independent_validator.metrics",
+-            "engine_metrics": canonicalize_metrics(metrics, "engine"),
++            "engine_metrics": canonicalize_metrics(metrics, "engine", stage=stage),
+             "validator_metrics": canonicalize_metrics(
+                 external.get("metrics") or {}, "independent_validator"
+             ) if external else {},
+@@ -319,6 +403,30 @@
+     with out_csv.open("w",encoding="utf-8",newline="") as handle:
+         writer=csv.writer(handle); writer.writerow(["Metric","Value"]); writer.writerows(flatten(report))
+     print(json.dumps(report,indent=2))
++    # A BEFORE_BREAKS_ONLY run is a diagnostic, not a release. The release
++    # contract below asks whether this artifact can be published, which a
++    # before-break skeleton never can - so applying it returned 2 on every
++    # skeleton run and made the stage unusable. The stage gate answers the
++    # question that stage actually has: did it complete and check out?
++    # The release contract itself is unchanged for full runs.
++    if str(report.get("run_stage") or "") == "BEFORE_BREAKS_ONLY":
++        stage_gate = report.get("stage_gate") or {}
++        stage_blocking = list(stage_gate.get("blocking_reasons") or [])
++        if stage_gate.get("status") != "PASS" or stage_blocking:
++            print(json.dumps({
++                "status": "BLOCKED", "run_stage": "BEFORE_BREAKS_ONLY",
++                "blocking_reasons": sorted(set(stage_blocking)) or ["stage_gate_not_pass"],
++            }, indent=2))
++            return 2
++        # Never silently imply release approval for a review artifact.
++        print(json.dumps({
++            "status": "STAGE_COMPLETE",
++            "run_stage": "BEFORE_BREAKS_ONLY",
++            "production_release_eligible": False,
++            "note": "Before-break review artifact. Breaks are not assigned; not releasable.",
++            "quality_observation": report.get("phase_c_quality_status"),
++        }, indent=2))
++        return 0
+     blocking = []
+     if report.get("artifact_state") != "FINAL_VERIFIED":
+         blocking.append("artifact_state_not_final_verified")
+diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/tools/independent_validator.py /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/tools/independent_validator.py
+--- prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/tools/independent_validator.py	2026-09-14 16:10:58.000000000 +0000
++++ /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/tools/independent_validator.py	2026-09-16 19:09:15.689679263 +0000
+@@ -117,6 +117,32 @@
+     wb.close()
+     return assignments,languages
+ 
++def declared_artifact_type(path: Path) -> Optional[str]:
++    """Read the workbook's own statement of what it is, or None if it makes none.
++
++    The break sheet's "NOT ASSIGNED IN BEFORE-BREAK ARTIFACT" marker is one
++    signal for the stage.  It is a single cell in a sheet a downstream tool
++    could rewrite, so this reads a second, independently written signal from
++    the Production Summary.  Two signals let the validator report a
++    contradiction instead of quietly trusting whichever it happened to read.
++    """
++    wb=load_workbook(path,data_only=True,read_only=True)
++    try:
++        sheet=next((wb[s] for s in ["Production Summary"] if s in wb.sheetnames),None)
++        if sheet is None: return None
++        for row in sheet.iter_rows(min_row=1,max_row=40,max_col=2,values_only=True):
++            if not row: continue
++            label=norm(row[0] if len(row)>0 else None)
++            if label!=norm("Artifact Type"): continue
++            value=norm(row[1] if len(row)>1 else None)
++            if not value: return None
++            if "before break" in value: return "BEST_BEFORE_BREAKS"
++            if "after break" in value or "final" in value: return "FINAL_AFTER_BREAKS"
++            return "UNRECOGNIZED:"+value
++        return None
++    finally:
++        wb.close()
++
+ def parse_breaks(path: Path) -> Tuple[List[Dict[str,Any]], bool]:
+     wb=load_workbook(path,data_only=True,read_only=True)
+     sheet=next((wb[s] for s in ["Break Schedule Active","Break Schedule"] if s in wb.sheetnames),None)
+@@ -228,8 +254,26 @@
+     parsed=eng.parse_input(input_path)
+     assignments,output_languages=parse_output_schedule(output_path,[a.name for a in parsed.associates])
+     breaks,before_only=parse_breaks(output_path)
++    # Two independent statements of the stage, so a disagreement is visible.
++    declared_type=declared_artifact_type(output_path)
++    break_sheet_role="BEST_BEFORE_BREAKS" if before_only else "FINAL_AFTER_BREAKS"
++    artifact_role=break_sheet_role
++    stage_declaration_conflict=None
++    if declared_type is not None and declared_type!=break_sheet_role:
++        stage_declaration_conflict={
++            "type":"ARTIFACT_STAGE_DECLARATION_CONFLICT",
++            "break_sheet_role":break_sheet_role,
++            "production_summary_artifact_type":declared_type,
++        }
++        # A workbook that cannot say what stage it is cannot be released. The
++        # stricter of the two readings is used for the metric labelling so the
++        # conflict never lets after-break figures be presented as break
++        # results, and the conflict itself is a hard failure below.
++        artifact_role="BEST_BEFORE_BREAKS"
+     shift_map={norm(s.label):s for s in parsed.shifts}
+     failures=[]; warnings=[]
++    if stage_declaration_conflict is not None:
++        failures.append(stage_declaration_conflict)
+     matrix=[]
+     for a,assoc in enumerate(parsed.associates):
+         row=assignments.get(norm(assoc.name))
+@@ -761,11 +805,26 @@
+     return {
+         "schema_version":2,"validator":"RC9.2.2_INDEPENDENT_VALIDATOR_HARDENED","input":str(input_path),"output":str(output_path),
+         "input_sha256":sha256_file(input_path),"output_sha256":sha256_file(output_path),"engine_sha256":sha256_file(engine_path),
+-        "artifact_role":"BEST_BEFORE_BREAKS" if before_only else "FINAL_AFTER_BREAKS",
++        "artifact_role":artifact_role,
++        "artifact_role_signals":{
++            "break_sheet":break_sheet_role,
++            "production_summary":declared_type,
++            "agree":declared_type is None or declared_type==break_sheet_role,
++        },
++        # Stage 2 never ran on a before-break artifact, so its after_* metrics
++        # are the same schedule measured a second time, not a break outcome.
++        # Both facts are published rather than the numbers being dropped: a
++        # consumer needs the values AND needs to know what produced them.
++        "break_stage_executed":artifact_role!="BEST_BEFORE_BREAKS",
++        "after_metrics_basis":(
++            "NO_BREAKS_PLACED_AFTER_EQUALS_BEFORE" if artifact_role=="BEST_BEFORE_BREAKS"
++            else "BREAKS_PLACED_BY_STAGE_2"),
+         "status":"PASS" if not failures else "FAIL","hard_fail_count":len(failures),"warning_count":len(warnings),
+         "quality_gate_status":quality_gate_status,
+         "metrics":metrics,
+-        "canonical_metrics":canonicalize_metrics(metrics, "independent_validator"),
++        "canonical_metrics":canonicalize_metrics(
++            metrics, "independent_validator",
++            stage="BEFORE_BREAKS_ONLY" if artifact_role=="BEST_BEFORE_BREAKS" else "FULL_SCHEDULE"),
+         "failures":failures[:500],"quality_gate_failures":quality_gate_failures[:500],
+         "quality_gate_suppressed":quality_gate_suppressed[:500],
+         "warnings":warnings[:500],"interval_rows":interval_rows,"next_sunday_rows":next_rows,

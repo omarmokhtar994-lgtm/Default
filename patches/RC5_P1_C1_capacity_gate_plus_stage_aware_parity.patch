@@ -801,7 +801,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
          "engine": left,
 diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/l632_universal_scheduler.py /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/l632_universal_scheduler.py
 --- prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/l632_universal_scheduler.py	2026-09-15 00:10:56.000000000 +0000
-+++ /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/l632_universal_scheduler.py	2026-09-16 20:11:32.188203773 +0000
++++ /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/l632_universal_scheduler.py	2026-09-16 20:22:14.234682060 +0000
 @@ -775,6 +775,11 @@
      parser_warnings: List[str]
      requirement_sheet: str
@@ -814,7 +814,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
      # Optional protected-tier minimums for release gate 4. Defaulted so every
      # existing ParsedInput construction - the regression lab builds them
      # directly - keeps working, and an absent workbook row means the tier is
-@@ -1100,6 +1105,131 @@
+@@ -1100,6 +1105,133 @@
      return result
  
  
@@ -833,6 +833,8 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
 +# (engine parameter, workbook aliases, kind)
 +WORKBOOK_SEARCH_CONTROLS: Tuple[Tuple[str, Tuple[str, ...], str], ...] = (
 +    ("solver_random_seed", ("Solver Random Seed", "Random Seed"), "int"),
++    ("stage1_minimum_slice_sec",
++     ("Stage 1 Minimum Slice Seconds", "Stage-1 Minimum Slice Seconds"), "float"),
 +    ("workers", ("Solver Worker Count", "Solver Workers", "CP-SAT Workers"), "int"),
 +    ("pattern_widths", ("Break Pattern Widths", "Pattern Widths"), "int_list"),
 +    ("skeleton_profile_names", ("Skeleton Profiles", "Stage 1 Profiles"), "str_list"),
@@ -946,7 +948,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
  def _instruction_get(m: Dict[str, Any], names: Sequence[str], default: Any = None) -> Any:
      for name in names:
          if norm(name) in m:
-@@ -1465,10 +1595,38 @@
+@@ -1465,10 +1597,38 @@
      raise ValueError("Requirement sheet with Sun-Sat interval columns was not found")
  
  
@@ -989,7 +991,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
      times: List[int] = []
      for r in range(header + 1, ws.max_row + 1):
          minute = next((minute_of_day(ws.cell(r, c).value) for c in range(1, min(4, ws.max_column) + 1) if minute_of_day(ws.cell(r, c).value) is not None), None)
-@@ -1503,7 +1661,7 @@
+@@ -1503,7 +1663,7 @@
      if len(day_cols) != 7:
          raise ValueError(f"Could not identify seven day columns in {req_ws.title}")
      time_col = _time_column(req_ws, header)
@@ -998,7 +1000,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
      per_day = 1440 // interval
      requirements: List[List[Optional[float]]] = [[None] * per_day for _ in range(7)]
      dates = [req_ws.cell(header + 1, c).value for c in day_cols]
-@@ -1593,18 +1751,35 @@
+@@ -1593,18 +1753,35 @@
  }
  
  
@@ -1037,7 +1039,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
          return {0, 6}
      days: Set[int] = set()
      invalid: List[str] = []
-@@ -1755,22 +1930,74 @@
+@@ -1755,22 +1932,74 @@
      return rules, capabilities, compact_windows
  
  
@@ -1125,7 +1127,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
      # Preserve operational order for the common 15/30/15 contract.
      if len(segments) == 3 and sorted(length for length, _ in segments) == [1, 1, 2]:
          return ((1, "Break 1"), (2, "Lunch"), (1, "Break 2"))
-@@ -2402,7 +2629,7 @@
+@@ -2402,7 +2631,7 @@
      if allow_no_break and max_no_break <= 0:
          max_no_break = 8
  
@@ -1134,7 +1136,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
      (
          break_window_rules, break_edge_margin_q, break_min_gap_q,
          break_preferred_gap_q, break_normal_max_gap_q, break_window_source,
-@@ -2769,6 +2996,7 @@
+@@ -2769,6 +2998,7 @@
          demand_fit_min_active_ratio=min(1.0, max(0.0, demand_fit_min_active_ratio)),
          demand_fit_max_blank_minutes=max(0, demand_fit_max_blank_minutes),
          parser_warnings=parser_warnings,
@@ -1142,7 +1144,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
          requirement_sheet=req_sheet, shrinkage_sheet=shr_sheet,
      )
  
-@@ -3638,6 +3866,21 @@
+@@ -3638,6 +3868,21 @@
      Overlap, not start-minute containment: see `LanguageRule.overlaps`. Every
      call site passes a quarter start, so the default span is 15.
      """
@@ -1164,7 +1166,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
      def applies(rule: LanguageRule) -> bool:
          if not rule.active or not rule.overlaps(minute, span):
              return False
-@@ -3723,6 +3966,51 @@
+@@ -3723,6 +3968,51 @@
  
  
  def shift_day_demand_fit(parsed: ParsedInput, day: int, shift: Shift) -> Dict[str, Any]:
@@ -1216,7 +1218,50 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
      horizon = CYCLIC_TOTAL_QSLOTS if day == 6 else TOTAL_QSLOTS
      qslots = [
          q for q in range(
-@@ -8861,9 +9149,71 @@
+@@ -4030,7 +4320,9 @@
+     return max(0.0, min(proposed, ceiling))
+ 
+ 
+-def stage1_fundable_profile_count(window_sec: float) -> int:
++def stage1_fundable_profile_count(
++    window_sec: float, minimum_slice_sec: float = STAGE1_MIN_MEANINGFUL_SLICE_SEC
++) -> int:
+     """How many Stage-1 profiles a wall-clock window can pay for at full depth.
+ 
+     Reporting only: the loop does not truncate its portfolio up front, because
+@@ -4039,13 +4331,16 @@
+     log states it can afford, so a truncated search is visible in the log
+     rather than only in the audit afterwards.
+     """
+-    if STAGE1_MIN_MEANINGFUL_SLICE_SEC <= 0:
+-        raise ValueError("STAGE1_MIN_MEANINGFUL_SLICE_SEC must be positive")
++    if minimum_slice_sec <= 0:
++        raise ValueError("the Stage-1 minimum slice must be positive")
+     usable = max(0.0, float(window_sec)) * STAGE1_SLICE_UTILIZATION
+-    return int(usable // STAGE1_MIN_MEANINGFUL_SLICE_SEC)
++    return int(usable // minimum_slice_sec)
+ 
+ 
+-def stage1_slice_seconds(remaining_sec: float, attempts_left: int) -> float:
++def stage1_slice_seconds(
++    remaining_sec: float, attempts_left: int,
++    minimum_slice_sec: float = STAGE1_MIN_MEANINGFUL_SLICE_SEC,
++) -> float:
+     """Per-profile Stage-1 solver slice: fund depth, not width.
+ 
+     The even split used to be clamped UP to a hard 45-second floor, with the
+@@ -4064,8 +4359,8 @@
+     """
+     usable = max(0.0, float(remaining_sec)) * STAGE1_SLICE_UTILIZATION
+     attempts = max(1, int(attempts_left))
+-    proposed = min(STAGE1_MAX_SLICE_SEC, max(STAGE1_MIN_MEANINGFUL_SLICE_SEC, usable / attempts))
+-    return min(proposed, max(STAGE1_MIN_MEANINGFUL_SLICE_SEC, usable))
++    proposed = min(STAGE1_MAX_SLICE_SEC, max(minimum_slice_sec, usable / attempts))
++    return min(proposed, max(minimum_slice_sec, usable))
+ 
+ 
+ def active_interval_segments(parsed: ParsedInput) -> Dict[int, List[List[int]]]:
+@@ -8861,9 +9156,71 @@
          row["estimated_additional_qualified_associates"] = max(
              0, int(math.ceil(max(0.0, -float(row.get("capacity_slack_hours", 0.0))) / max(0.01, productive_per_assoc) - 1e-9))
          )
@@ -1288,15 +1333,16 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
          "break_resilience": break_resilience,
          "roster_count": len(parsed.associates), "legal_shift_count": len(parsed.shifts),
          "interval_minutes": parsed.interval_minutes, "active_intervals": sum(sum(1 for value in day if value) for day in parsed.active),
-@@ -16948,6 +17298,7 @@
+@@ -16948,6 +17305,8 @@
      overwrite: bool = False,
      resume: bool = False,
      allow_headcount_mismatch_override: Optional[bool] = None,
++    stage1_minimum_slice_sec: float = STAGE1_MIN_MEANINGFUL_SLICE_SEC,
 +    cli_search_controls: Optional[Mapping[str, Any]] = None,
  ) -> int:
      if output_path.exists() and not (overwrite or resume):
          raise FileExistsError(f"Refusing to overwrite existing final output without --overwrite or --resume: {output_path}")
-@@ -16960,13 +17311,95 @@
+@@ -16960,13 +17319,97 @@
      started_all = time.time()
      deadline = started_all + max(60, total_time_sec)
      log_path = work_dir / "scheduler.log"
@@ -1350,6 +1396,8 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
 +        coordinated_repair = bool(_resolved.get("coordinated_repair", coordinated_repair))
 +        joint_refinement = bool(_resolved.get("joint_refinement", joint_refinement))
 +        solver_random_seed = int(_resolved.get("solver_random_seed", solver_random_seed))
++        stage1_minimum_slice_sec = max(1.0, float(
++            _resolved.get("stage1_minimum_slice_sec", stage1_minimum_slice_sec)))
 +        exception_search_reserve_sec = int(
 +            _resolved.get("exception_search_reserve_sec", exception_search_reserve_sec))
 +        post_break_repair_reserve_sec = int(
@@ -1394,7 +1442,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
          # Contract states the value, an explicit CLI argument overrides it -
          # the same rule the protected-tier minimums follow below, so the audit
          # and the run-identity hash record what was actually enforced.
-@@ -16974,6 +17407,9 @@
+@@ -16974,6 +17417,9 @@
              parsed.language_working_window_mode = normalize_language_window_mode(
                  language_working_window_override)
          capacity = capacity_diagnostics(parsed)
@@ -1404,7 +1452,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
          preflight = validate_input_contract(parsed, capacity)
          identity_warnings = case_identity_warnings(parsed, input_path, output_path)
          if identity_warnings:
-@@ -17387,6 +17823,10 @@
+@@ -17387,6 +17833,10 @@
              "version": VERSION, "status": "STARTED", "input": str(input_path), "output": str(output_path),
              "started_at": datetime.now().isoformat(), "events": [], "stage1_attempts": [],
              "run_identity": run_identity, "run_parameters": run_parameters,
@@ -1415,7 +1463,51 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
              # Wall-clock values are reported, never hashed.
              "run_wall_clock": {
                  "started_epoch": float(budget_manager.started_epoch),
-@@ -18005,6 +18445,29 @@
+@@ -17756,8 +18206,8 @@
+         print(
+             f"STAGE1_PORTFOLIO window={stage1_window_sec:.0f}s "
+             f"runnable={len(profiles_to_run)} "
+-            f"funds={stage1_fundable_profile_count(stage1_window_sec)} at "
+-            f"{STAGE1_MIN_MEANINGFUL_SLICE_SEC:.0f}s minimum depth",
++            f"funds={stage1_fundable_profile_count(stage1_window_sec, stage1_minimum_slice_sec)} at "
++            f"{stage1_minimum_slice_sec:.0f}s minimum depth",
+             file=log, flush=True,
+         )
+         for profile_index, profile in enumerate(profiles_to_run):
+@@ -17773,7 +18223,7 @@
+                 })
+                 continue
+             remaining = stage1_profile_deadline - time.time()
+-            if remaining < STAGE1_MIN_MEANINGFUL_SLICE_SEC:
++            if remaining < stage1_minimum_slice_sec:
+                 # The portfolio is abandoned here, and it used to be abandoned
+                 # SILENTLY: `stage1_attempts` simply held fewer rows than
+                 # profiles requested, and nothing downstream said the search had
+@@ -17787,7 +18237,7 @@
+                     "skipped_for_budget": len(profiles_to_run) - profile_index,
+                     "skipped_profiles": [row["name"] for row in profiles_to_run[profile_index:]],
+                     "remaining_sec_at_stop": round(max(0.0, remaining), 3),
+-                    "minimum_slice_sec": STAGE1_MIN_MEANINGFUL_SLICE_SEC,
++                    "minimum_slice_sec": stage1_minimum_slice_sec,
+                     "stage1_window_sec": round(stage1_window_sec, 3),
+                     "status": "TRUNCATED_INSUFFICIENT_STAGE1_BUDGET",
+                 }
+@@ -17795,12 +18245,12 @@
+                     f"STAGE1_PORTFOLIO_TRUNCATED attempted={profile_index} of "
+                     f"{len(profiles_to_run)} runnable ({len(profiles)} requested); "
+                     f"{max(0.0, remaining):.1f}s left, "
+-                    f"{STAGE1_MIN_MEANINGFUL_SLICE_SEC:.0f}s needed per profile",
++                    f"{stage1_minimum_slice_sec:.0f}s needed per profile",
+                     file=log, flush=True,
+                 )
+                 break
+             attempts_left = max(1, len(profiles_to_run) - profile_index)
+-            slice_sec = stage1_slice_seconds(remaining, attempts_left)
++            slice_sec = stage1_slice_seconds(remaining, attempts_left, stage1_minimum_slice_sec)
+             solution = build_skeleton(
+                 parsed, profile, base_hard, slice_sec, workers, log,
+                 random_seed=solver_random_seed,
+@@ -18005,6 +18455,29 @@
                  "output": str(before_output_path),
              }
              audit["selected_before_break_skeleton"] = explanation_rows[0]
@@ -1445,7 +1537,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
              audit["status"] = "SKELETON_ONLY_COMPLETE"
              audit["artifact_state"] = "BEST_BEFORE_BREAKS_ONLY"
              audit["functional_status"] = "PASS_BEFORE_BREAK_SKELETON_GENERATED"
-@@ -20172,6 +20635,17 @@
+@@ -20172,6 +20645,17 @@
              "optional_outputs": [r["path"] for r in export_records if r["role"] not in {"BEST_BEFORE_BREAKS", "RECOMMENDED_FINAL"}],
              "candidate_leaderboard_csv": str(leaderboard_csv), "pareto_manifest": str(pareto_manifest),
          }
@@ -1463,7 +1555,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
          audit["functional_status"] = "PASS_FINAL_SCHEDULE_GENERATED"
          audit["artifact_state"] = "FINAL_VERIFIED" if output_info_by_role["RECOMMENDED_FINAL"]["verification"].get("status") == "PASS" else "FINAL_VERIFICATION_FAILED"
          selected_validation = ((output_info_by_role["RECOMMENDED_FINAL"] or {}).get("validation") or {})
-@@ -20301,6 +20775,14 @@
+@@ -20301,6 +20785,14 @@
              "language_minimum_only_ratio": chosen_breaks.metrics.get("language_minimum_only_ratio", 0),
              "language_reserve_shortfall_quarters": chosen_breaks.metrics.get("language_reserve_shortfall_quarters", 0),
              "language_break_caused_reserve_loss_quarters": chosen_breaks.metrics.get("language_break_caused_reserve_loss_quarters", 0),
@@ -1478,7 +1570,17 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
              "opening_gaps": chosen_breaks.metrics.get("opening_gap_count", 0),
              "next_sunday_active_intervals": chosen_breaks.metrics.get("week_boundary_active_intervals", 0),
              "next_sunday_after_target": chosen_breaks.metrics.get("week_boundary_after_target", 0),
-@@ -21006,6 +21488,38 @@
+@@ -20762,6 +21254,9 @@
+     parser.add_argument("--disable-target-lock-recovery", action="store_true")
+     parser.add_argument("--disable-deterministic-baseline", action="store_true")
+     parser.add_argument("--solver-random-seed", type=int, default=0)
++    parser.add_argument(
++        "--stage1-minimum-slice-sec", type=float, default=None,
++        help="Shortest Stage-1 solver slice worth starting. The default is measured on the hardest packaged scenario; an easier roster reaches OPTIMAL far below it and can afford a shorter one.")
+     parser.add_argument("--exception-search-reserve-sec", type=int, default=1200)
+     parser.add_argument("--post-break-repair-reserve-sec", type=int, default=600)
+     parser.add_argument("--target-lock-recovery-reserve-sec", type=int, default=600)
+@@ -21006,6 +21501,38 @@
          audit.get("artifact_state") == "FINAL_VERIFIED"
          and (audit.get("hard_valid_schedule_exists") is True or int((((audit.get("selected_candidate") or {}).get("output_validation") or {}).get("validation") or {}).get("hard_fail_count", 0) or 0) == 0)
      )
@@ -1517,7 +1619,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
      if int(return_code) == 0 or hard_valid_artifact:
          quality = audit.get("production_quality_gate") or {}
          quality_status = str(quality.get("status") or "NOT_EVALUATED")
-@@ -21272,8 +21786,107 @@
+@@ -21272,8 +21799,108 @@
          print(failure_traceback, file=log, flush=True)
  
  
@@ -1544,6 +1646,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
 +    ("disable_coordinated_repair", "coordinated_repair", True),
 +    ("disable_joint_refinement", "joint_refinement", True),
 +    ("solver_random_seed", "solver_random_seed", False),
++    ("stage1_minimum_slice_sec", "stage1_minimum_slice_sec", False),
 +    ("exception_search_reserve_sec", "exception_search_reserve_sec", False),
 +    ("post_break_repair_reserve_sec", "post_break_repair_reserve_sec", False),
 +    ("target_lock_recovery_reserve_sec", "target_lock_recovery_reserve_sec", False),
@@ -1626,7 +1729,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
      inputs = list(args.input or [])
      if args.selfcheck:
          payload = selfcheck(inputs)
-@@ -21300,6 +21913,11 @@
+@@ -21300,6 +21927,11 @@
      profile_names = [x.strip() for x in str(args.skeleton_profiles).split(",") if x.strip()]
      break_modes = [x.strip() for x in str(args.break_objective_modes).split(",") if x.strip()]
      joint_limits = [int(x) for x in str(args.joint_change_limits).split(",") if str(x).strip()]
@@ -1638,10 +1741,14 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
      terminal_started = time.time()
      return_code = 3
      terminal_exception: Optional[Exception] = None
-@@ -21361,6 +21979,7 @@
+@@ -21361,6 +21993,11 @@
          adaptive_joint_attempts=args.adaptive_joint_attempts,
          adaptive_joint_no_improvement_limit=args.adaptive_joint_no_improvement_limit,
          phase_c_development_smoke=args.phase_c_development_smoke,
++        stage1_minimum_slice_sec=(
++            args.stage1_minimum_slice_sec
++            if args.stage1_minimum_slice_sec is not None
++            else STAGE1_MIN_MEANINGFUL_SLICE_SEC),
 +        cli_search_controls=typed_controls,
              overwrite=args.overwrite, resume=args.resume,
              allow_headcount_mismatch_override=hc_override,

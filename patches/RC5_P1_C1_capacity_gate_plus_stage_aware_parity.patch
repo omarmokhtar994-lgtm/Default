@@ -1920,7 +1920,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
          blocking.append("artifact_state_not_final_verified")
 diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/tools/independent_validator.py /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/tools/independent_validator.py
 --- prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/tools/independent_validator.py	2026-09-14 16:10:58.000000000 +0000
-+++ /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/tools/independent_validator.py	2026-09-16 19:09:15.689679263 +0000
++++ /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/tools/independent_validator.py	2026-09-16 22:39:39.739494728 +0000
 @@ -117,6 +117,32 @@
      wb.close()
      return assignments,languages
@@ -1981,7 +1981,61 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
      matrix=[]
      for a,assoc in enumerate(parsed.associates):
          row=assignments.get(norm(assoc.name))
-@@ -761,11 +805,26 @@
+@@ -606,6 +650,17 @@
+     # Iterating over all 24 Sunday intervals here duplicated current-week
+     # floor gaps as false NEXT_SUNDAY_CARRY_OUT failures.
+     protected_next_sunday_intervals = set(eng.next_sunday_interval_indices(parsed))
++    # The solver constrains next-Sunday adjacency between neighbouring QUARTER
++    # slots, and the engine metric measures it the same way. Comparing whole
++    # intervals here (the interval maximum against the next interval's maximum)
++    # checked a weaker rule under the same name: on a 60-minute workbook it saw
++    # a quarter of the adjacent pairs, and an interval maximum hides a cliff
++    # inside the hour. That made this a check of something the engine does not
++    # enforce rather than an independent check of what it does.
++    protected_next_sunday_qslots = {
++        qslot for _interval, _quarter, qslot in eng.next_sunday_interval_quarters(parsed)
++    }
++    next_quarter_raw = []
+     next_rows=[]; next_zero=[]; next_language=[]; next_opening=[]; next_blank=[]
+     next_openings=set(eng.opening_intervals_for_day(parsed,0))
+     for i in range(parsed.intervals_per_day):
+@@ -627,6 +682,8 @@
+             remaining=[(a,source_q) for a,source_q in occurrences if source_q not in break_qslots_all[a]]
+             before_raw=len(occurrences); after_raw=len(remaining)
+             before_vals.append(before_raw); after_vals.append(after_raw)
++            if pseudo in protected_next_sunday_qslots:
++                next_quarter_raw.append((pseudo, i, after_raw))
+             boundary_on_break = sum(
+                 source_q in break_qslots_all[a] for a, source_q in occurrences
+             )
+@@ -673,10 +730,22 @@
+         i=int(row['interval_index'])
+         cap=eng.next_sunday_raw_cap(parsed,i)
+         if int(row.get('after_raw_max',0))>cap: next_overage_cap_violations.append({"interval":row['interval'],"actual":row.get('after_raw_max'),"cap":cap})
+-    for previous,current in zip(next_rows,next_rows[1:]):
+-        delta=abs(int(current.get('after_raw_max',0))-int(previous.get('after_raw_max',0)))
+-        allowed=eng.next_sunday_adjacent_raw_limit(parsed,int(previous['interval_index']),int(current['interval_index']))
+-        if delta>allowed: next_imbalance.append({"from":previous['interval'],"to":current['interval'],"change":delta,"maximum":allowed})
++    ordered_quarter_raw=sorted(next_quarter_raw)
++    for (previous_q,previous_i,previous_raw),(current_q,current_i,current_raw) in zip(
++            ordered_quarter_raw, ordered_quarter_raw[1:]):
++        # Only genuinely neighbouring quarters: a gap in the protected horizon
++        # is not an adjacency, exactly as the solver treats it.
++        if current_q != previous_q + 1: continue
++        delta=abs(int(current_raw)-int(previous_raw))
++        allowed=eng.next_sunday_adjacent_raw_limit(parsed,int(previous_i),int(current_i))
++        if delta>allowed:
++            next_imbalance.append({
++                "from":eng.hhmm(previous_i*parsed.interval_minutes
++                                +(previous_q-eng.TOTAL_QSLOTS-previous_i*parsed.qslots_per_interval)*15),
++                "to":eng.hhmm(current_i*parsed.interval_minutes
++                              +(current_q-eng.TOTAL_QSLOTS-current_i*parsed.qslots_per_interval)*15),
++                "change":delta,"maximum":allowed,
++                "previous_raw":int(previous_raw),"current_raw":int(current_raw)})
+     boundary_issue={"type":"NEXT_SUNDAY_BALANCE","overage_cap_violations":len(next_overage_cap_violations),"imbalance_violations":len(next_imbalance),"examples":(next_overage_cap_violations+next_imbalance)[:20]}
+     if next_overage_cap_violations or next_imbalance:
+         boundary_mode=norm(parsed.next_sunday_balance_gate_mode)
+@@ -761,11 +830,26 @@
      return {
          "schema_version":2,"validator":"RC9.2.2_INDEPENDENT_VALIDATOR_HARDENED","input":str(input_path),"output":str(output_path),
          "input_sha256":sha256_file(input_path),"output_sha256":sha256_file(output_path),"engine_sha256":sha256_file(engine_path),
@@ -2010,3 +2064,76 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
          "failures":failures[:500],"quality_gate_failures":quality_gate_failures[:500],
          "quality_gate_suppressed":quality_gate_suppressed[:500],
          "warnings":warnings[:500],"interval_rows":interval_rows,"next_sunday_rows":next_rows,
+diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/tools/stage1_slice_depth_probe.py /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/tools/stage1_slice_depth_probe.py
+--- prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/tools/stage1_slice_depth_probe.py	2026-09-03 19:00:22.000000000 +0000
++++ /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/tools/stage1_slice_depth_probe.py	2026-09-16 22:43:21.566754151 +0000
+@@ -5,6 +5,18 @@
+ when it is actually given time, so the slice floor cannot be chosen from
+ evidence. This probe calls build_skeleton directly at a range of time limits
+ and records before-break target/floor coverage for each.
++
++COLD vs WARM. The first version of this probe called build_skeleton with no
++hint, and STAGE1_MIN_MEANINGFUL_SLICE_SEC was set from those numbers. The
++Stage-1 portfolio loop never solves that way: it always passes
++hint_skeleton=select_stage1_hint_skeleton(...), so by the time the portfolio
++runs, every profile is warm-started from the skeletons already found. A floor
++measured cold and applied warm measures the wrong thing, which is how a 900s
++run came to attempt zero of fifteen profiles with 171 seconds in hand.
++
++Pass `warm` as the fifth argument to reproduce the loop's own conditions: the
++probe first builds the anchor the run has in hand (the hard-feasibility probe,
++then the profile itself) and hints every timed solve from it.
+ """
+ import json
+ import sys
+@@ -14,23 +26,47 @@
+ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "engine" / "_tools"))
+ import l632_universal_scheduler as E
+ 
+-if len(sys.argv) != 5:
++if len(sys.argv) not in (5, 6):
+     raise SystemExit(
+         "usage: stage1_slice_depth_probe.py <workbook.xlsx> <profile> "
+-        "<out.json> <comma-separated slice seconds>")
++        "<out.json> <comma-separated slice seconds> [cold|warm]")
+ workbook, profile_name, out_path = sys.argv[1], sys.argv[2], sys.argv[3]
+ slices = [float(x) for x in sys.argv[4].split(",")]
++mode = (sys.argv[5] if len(sys.argv) == 6 else "cold").strip().lower()
++if mode not in {"cold", "warm"}:
++    raise SystemExit("mode must be 'cold' or 'warm'")
+ 
+ parsed = E.parse_input(Path(workbook))
+ profile = next(p for p in E.skeleton_profiles() if p["name"] == profile_name)
+ hard = E.HardConfig(hard_floor=(parsed.floor_mode == "hard"))
+ 
++anchors = []
++if mode == "warm":
++    # profile=None is the hard-feasibility probe: build_skeleton substitutes
++    # the all-zero-weight profile, which is what run_case solves first.
++    for anchor_profile, anchor_sec in ((None, 60.0), (profile, 60.0)):
++        hint = E.select_stage1_hint_skeleton(parsed, anchors) if anchors else None
++        anchor = E.build_skeleton(parsed, anchor_profile, hard, anchor_sec, 2,
++                                  sys.stderr, random_seed=0, hint_skeleton=hint)
++        print(json.dumps({
++            "anchor": (anchor_profile or {}).get("name", "hard_feasibility_probe"),
++            "cp_status": anchor.cp_status,
++            "elapsed_sec": round(anchor.elapsed_sec, 2)}), flush=True)
++        if anchor.cp_status in {"OPTIMAL", "FEASIBLE"}:
++            E.ensure_before_break_metrics(parsed, anchor)
++            anchors.append(anchor)
++    if not anchors:
++        raise SystemExit("warm mode needs a feasible anchor and found none")
++
+ records = []
+ for slice_sec in slices:
+     started = time.time()
+-    solution = E.build_skeleton(parsed, profile, hard, slice_sec, 2, sys.stderr, random_seed=0)
++    hint = E.select_stage1_hint_skeleton(parsed, anchors) if anchors else None
++    solution = E.build_skeleton(parsed, profile, hard, slice_sec, 2, sys.stderr,
++                                random_seed=0, hint_skeleton=hint)
+     row = {
+         "profile": profile_name,
++        "mode": mode,
+         "slice_sec": slice_sec,
+         "cp_status": solution.cp_status,
+         "elapsed_sec": round(time.time() - started, 1),

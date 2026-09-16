@@ -853,5 +853,88 @@ class PreliminaryQualityGateWaitsForValidation(unittest.TestCase):
         self.assertFalse(self.check(self.full_report(), validation_exists=True))
 
 
+class NextSundayAdjacencyIsMeasuredWhereItIsEnforced(unittest.TestCase):
+    """B-8: the validator was checking a weaker rule under the same name.
+
+    Found by the parity gate on AE_AR_B2B: engine 1, validator 0, all other 40
+    fields agreeing. The solver penalises adjacency between neighbouring
+    QUARTER slots; the validator compared whole intervals using each interval's
+    maximum, which on a 60-minute workbook is a quarter of the adjacent pairs
+    and hides a staffing cliff inside the hour. An independent checker that
+    recomputes a different metric is not an independent check.
+    """
+
+    def setUp(self):
+        self.engine_source = ENGINE.read_text(encoding="utf-8")
+        self.validator_source = VALIDATOR.read_text(encoding="utf-8")
+
+    def test_the_solver_constrains_adjacent_quarter_slots(self):
+        # The rule this is all measuring, read from the model that enforces it.
+        constraint = self.engine_source[
+            self.engine_source.index("ordered_boundary = sorted(next_sunday_raw_sequence_vars"):]
+        constraint = constraint[:constraint.index(
+            "objective_terms.append(parsed.whole_week_balance_penalty_weight")]
+        self.assertIn("previous_qslot", constraint)
+        self.assertIn("if current_qslot != previous_qslot + 1:", constraint)
+        self.assertIn("next_sunday_adjacent_raw_limit(parsed, previous_interval, current_interval)",
+                      constraint)
+
+    def test_the_engine_metric_measures_the_same_thing_the_solver_penalises(self):
+        metric = self.engine_source[
+            self.engine_source.index("ordered_boundary_rows = sorted(week_boundary_raw_sequence)"):]
+        metric = metric[:metric.index("week_boundary_imbalance_violation_count = sum(")]
+        self.assertIn("if current_qslot != previous_qslot + 1:", metric)
+
+    def test_the_validator_walks_quarter_slots_not_intervals(self):
+        self.assertIn("next_sunday_interval_quarters(parsed)", self.validator_source)
+        self.assertIn("if current_q != previous_q + 1: continue", self.validator_source)
+
+    def test_the_validator_no_longer_compares_interval_maxima_for_imbalance(self):
+        imbalance = self.validator_source[
+            self.validator_source.index("ordered_quarter_raw=sorted(next_quarter_raw)"):]
+        imbalance = imbalance[:imbalance.index("boundary_issue=")]
+        self.assertNotIn("after_raw_max", imbalance,
+                         "an interval maximum cannot see a cliff inside the interval")
+
+    def test_the_validator_still_computes_the_raw_counts_itself(self):
+        # Sharing which quarters are protected is contract. Sharing the
+        # measurement would make the parity gate compare the engine to itself.
+        self.assertIn("before_raw=len(occurrences); after_raw=len(remaining)",
+                      self.validator_source)
+        self.assertIn("next_quarter_raw.append((pseudo, i, after_raw))",
+                      self.validator_source)
+
+    def test_both_sides_agree_on_a_real_artifact_that_has_a_violation(self):
+        # The regression that started this: a workbook where the count is
+        # non-zero, so a checker that under-reports is visible.
+        roots = sorted(Path(
+            "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a"
+            "/scratchpad/verify_b3").glob("*")) if Path(
+            "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a"
+            "/scratchpad/verify_b3").is_dir() else []
+        checked = 0
+        validator = load("rc924_validator_b8", VALIDATOR)
+        for root in roots:
+            audits = list(root.glob("*solver_audit.json"))
+            books = (list((root / "production").glob("*_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"))
+                     or list(root.glob("*_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx")))
+            inputs = list(root.glob("input_snapshot/*.xlsx"))
+            if not (audits and books and inputs):
+                continue
+            audit = json.loads(audits[0].read_text())
+            engine_value = ((audit.get("stage_metric_surface") or {}).get("metrics")
+                            or {}).get("week_boundary_imbalance_violation_count")
+            if engine_value is None:
+                continue
+            result = validator.validate(inputs[0], books[0], ENGINE)
+            with self.subTest(case=root.name):
+                self.assertEqual(
+                    int(result["metrics"]["next_sunday_imbalance_violation_count"]),
+                    int(engine_value))
+            checked += 1
+        if not checked:
+            self.skipTest("no full-schedule artifacts present in this environment")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

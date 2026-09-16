@@ -245,7 +245,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
  }
 diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/RUN_UNIVERSAL_PRODUCTION.py /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/RUN_UNIVERSAL_PRODUCTION.py
 --- prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/RUN_UNIVERSAL_PRODUCTION.py	2026-09-14 16:15:08.000000000 +0000
-+++ /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/RUN_UNIVERSAL_PRODUCTION.py	2026-09-16 19:31:48.243845937 +0000
++++ /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/RUN_UNIVERSAL_PRODUCTION.py	2026-09-16 20:11:32.188772872 +0000
 @@ -6,7 +6,9 @@
  
  ROOT = Path(__file__).resolve().parent
@@ -257,7 +257,135 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
  ENGINE = ROOT / "_tools" / "l632_universal_scheduler.py"
  POLISHER = ROOT / "production" / "production_output_polisher.py"
  QUALITY_REPORTER = ROOT / "production" / "phase_c_quality_report.py"
-@@ -216,7 +218,53 @@
+@@ -53,7 +55,7 @@
+ 
+ 
+ def _contract_run_settings(input_path):
+-    """Read Run Stage and Run Depth from the workbook, or (None, None).
++    """Read Run Stage, Run Depth and the workbook's search controls, or blanks.
+ 
+     Never fatal. If the workbook cannot be parsed here the engine will fail on
+     it a moment later with a far better message, and a runner that dies while
+@@ -63,11 +65,116 @@
+         sys.path.insert(0, str(ENGINE.parent))
+         import l632_universal_scheduler as engine_module
+         parsed = engine_module.parse_input(Path(input_path))
+-        return parsed.run_stage, parsed.run_depth
++        return parsed.run_stage, parsed.run_depth, set(parsed.search_controls)
+     except Exception as exc:
+         print(f'[run] could not read Run Stage/Run Depth from the workbook '
+               f'({type(exc).__name__}); using defaults', flush=True)
+-        return None, None
++        return None, None, set()
++
++
++def engine_flags_for_run(
++    args, mode_defaults, runner_parser, workbook_controls
++) -> list:
++    """Build the engine flags this runner supplies, minus the ones it must not.
++
++    The runner passes a value for nearly every search control, taken from its
++    own defaults or from the depth it picked. Those are the runner's opinion,
++    not the scheduler's, and on the command line they are indistinguishable
++    from a typed argument - so they used to outrank a workbook that had
++    explicitly stated the parameter, which made the workbook route useless.
++
++    A flag is therefore dropped when the workbook states that parameter, unless
++    the operator typed it on this runner's own command line. Nothing changes
++    for a workbook that states none of them.
++    """
++    keep_all = False
++    typed: set = set()
++    try:
++        sys.path.insert(0, str(ENGINE.parent))
++        import l632_universal_scheduler as engine_module
++        typed = engine_module.explicitly_supplied_options(runner_parser, None)
++    except (Exception, SystemExit):
++        # Without a reliable read of what was typed, keep every flag: the
++        # previous behavior. Silently letting the workbook win here could
++        # change a run the operator thought they had pinned.
++        keep_all = True
++    flags = []
++    for dest, parameter, flag, value in _runner_search_flag_values(args, mode_defaults):
++        stated_by_workbook = parameter in workbook_controls
++        typed_by_operator = dest is not None and dest in typed
++        if stated_by_workbook and not typed_by_operator and not keep_all:
++            continue
++        flags.extend([flag, value])
++    return flags
++
++
++# (argparse dest on THIS runner or None, engine flag, engine parameter name)
++_RUNNER_SEARCH_FLAGS = (
++    ('num_workers', '--num-workers', 'workers'),
++    ('pattern_widths', '--pattern-widths', 'pattern_widths'),
++    ('repair_change_limits', '--repair-change-limits', 'repair_change_limits'),
++    ('skeleton_profiles', '--skeleton-profiles', 'skeleton_profile_names'),
++    ('break_objective_modes', '--break-objective-modes', 'break_objective_modes'),
++    (None, '--min-after90-gain-per-after80-loss', 'min_after90_gain_per_after80_loss'),
++    (None, '--max-after80-tradeoff-intervals', 'max_after80_tradeoff_intervals'),
++    (None, '--adaptive-no-improvement-attempts', 'adaptive_no_improvement_attempts'),
++    (None, '--primary-target-tolerance', 'primary_target_tolerance'),
++    (None, '--exception-search-reserve-sec', 'exception_search_reserve_sec'),
++    (None, '--post-break-repair-reserve-sec', 'post_break_repair_reserve_sec'),
++    (None, '--target-lock-recovery-reserve-sec', 'target_lock_recovery_reserve_sec'),
++    (None, '--finalization-reserve-sec', 'finalization_reserve_sec'),
++    (None, '--safe-incumbent-reserve-sec', 'safe_incumbent_reserve_sec'),
++    (None, '--conflict-refinement-reserve-sec', 'conflict_refinement_reserve_sec'),
++    (None, '--coordinated-repair-reserve-sec', 'coordinated_repair_reserve_sec'),
++    (None, '--coordinated-repair-cycles', 'coordinated_repair_cycles'),
++    (None, '--joint-refinement-reserve-sec', 'joint_refinement_reserve_sec'),
++    (None, '--joint-change-limits', 'joint_change_limits'),
++    (None, '--joint-shift-options-per-cell', 'joint_shift_options_per_cell'),
++    (None, '--joint-patterns-per-shift', 'joint_patterns_per_shift'),
++    (None, '--adaptive-joint-attempts', 'adaptive_joint_attempts'),
++    (None, '--adaptive-joint-no-improvement-limit', 'adaptive_joint_no_improvement_limit'),
++    ('solver_random_seed', '--solver-random-seed', 'solver_random_seed'),
++)
++
++
++def _runner_search_flag_values(args, mode_defaults):
++    """Yield (runner dest, engine parameter, flag, value) for each flag set here.
++
++    The runner dest is None when this runner exposes no option of its own for
++    that parameter - those values are purely its depth arithmetic, so the
++    workbook always outranks them.
++    """
++    literal = {
++        '--min-after90-gain-per-after80-loss': '1.0',
++        '--max-after80-tradeoff-intervals': '1',
++        '--adaptive-no-improvement-attempts': str(mode_defaults['adaptive']),
++        '--primary-target-tolerance': '1',
++        '--exception-search-reserve-sec': '180',
++        '--post-break-repair-reserve-sec': str(mode_defaults['post']),
++        '--target-lock-recovery-reserve-sec': str(mode_defaults['target']),
++        '--finalization-reserve-sec': str(mode_defaults['final']),
++        '--safe-incumbent-reserve-sec': str(mode_defaults['safe']),
++        '--conflict-refinement-reserve-sec': '120',
++        '--coordinated-repair-reserve-sec': '300',
++        '--coordinated-repair-cycles': '1',
++        '--joint-refinement-reserve-sec': str(mode_defaults['joint']),
++        '--joint-change-limits': '8,16,24,36,54',
++        '--joint-shift-options-per-cell': '10',
++        '--joint-patterns-per-shift': '64',
++        '--adaptive-joint-attempts': str(mode_defaults['joint_attempts']),
++        '--adaptive-joint-no-improvement-limit': str(mode_defaults['joint_no_improve']),
++    }
++    from_args = {
++        '--num-workers': lambda: str(args.num_workers),
++        '--pattern-widths': lambda: args.pattern_widths,
++        '--repair-change-limits': lambda: args.repair_change_limits,
++        '--skeleton-profiles': lambda: args.skeleton_profiles,
++        '--break-objective-modes': lambda: args.break_objective_modes,
++        '--solver-random-seed': lambda: str(args.solver_random_seed),
++    }
++    for dest, flag, parameter in _RUNNER_SEARCH_FLAGS:
++        value = literal[flag] if flag in literal else from_args[flag]()
++        yield dest, parameter, flag, value
+ 
+ 
+ def safe_id(value: str) -> str:
+@@ -216,7 +323,53 @@
          audit = json.loads(audit_path.read_text(encoding='utf-8'))
      except (OSError, json.JSONDecodeError):
          return {}
@@ -312,7 +440,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
  
  
  def apply_metric_parity_gate(
-@@ -230,10 +278,32 @@
+@@ -230,10 +383,32 @@
      silently released.
      """
      validation = json.loads(validation_json.read_text(encoding='utf-8'))
@@ -347,7 +475,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
      engine_coverage_gate = str(
          (audit.get('production_quality_gate') or {}).get('coverage_gate_status') or ''
      ).upper()
-@@ -250,7 +320,8 @@
+@@ -250,7 +425,8 @@
              'reason': 'QUALITY_GATE_STATUS_MISMATCH',
          })
      validation['canonical_metrics'] = canonicalize_metrics(
@@ -357,7 +485,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
      )
      validation['metric_parity'] = parity
      if parity['status'] != 'PASS':
-@@ -273,6 +344,8 @@
+@@ -273,6 +449,8 @@
          writer.writerow(['warning_count', validation.get('warning_count', 0)])
          writer.writerow(['metric_parity_status', parity['status']])
          writer.writerow(['metric_parity_mismatch_count', parity['mismatch_count']])
@@ -366,7 +494,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
          for row in validation.get('failures', []):
              writer.writerow(['failure', json.dumps(row, sort_keys=True, default=str)])
      return int(validation['return_code']), validation
-@@ -346,7 +419,45 @@
+@@ -346,7 +524,45 @@
          # therefore cannot reach this compatibility fallback.
          or (not audit_status and str(outcome.get('outcome_code') or '').startswith('FINAL_SCHEDULE_GENERATED'))
      )
@@ -413,7 +541,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
          outcome['production_eligible'] = False
          outcome['technical_return_code'] = int(runner_return_code or validation_rc or 4)
          if not schedule_generated:
-@@ -520,13 +631,25 @@
+@@ -520,13 +736,25 @@
      gate = report.get('production_quality_gate') or {}
      safety_status = str(safety.get('status', '')).upper()
      hard_fail_count = int(safety.get('hard_fail_count') or 0)
@@ -441,6 +569,63 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
          and not (case_root / 'INDEPENDENT_VALIDATION.json').exists()
      )
  
+@@ -678,7 +906,8 @@
+ 
+ 
+ def main() -> int:
+-    args = build_parser().parse_args()
++    runner_parser = build_parser()
++    args = runner_parser.parse_args()
+     if args.selfcheck:
+         return selfcheck()
+     if args.input is None:
+@@ -702,7 +931,7 @@
+     # Run stage and depth come from the workbook unless the command line says
+     # otherwise, so a scheduler picks them from a dropdown in the business
+     # contract instead of remembering flags. An explicit flag always wins.
+-    contract_stage, contract_depth = _contract_run_settings(input_path)
++    contract_stage, contract_depth, workbook_search_controls = _contract_run_settings(input_path)
+     mode = args.mode or contract_depth or 'QUICK'
+     if mode == 'FULL':
+         mode = 'OVERNIGHT'
+@@ -742,32 +971,12 @@
+         '--summary-csv', str(summary),
+         '--work-dir', str(work_dir),
+         '--time-limit', str(time_limit),
+-        '--num-workers', str(args.num_workers),
+-        '--pattern-widths', args.pattern_widths,
+-        '--repair-change-limits', args.repair_change_limits,
+-        '--skeleton-profiles', args.skeleton_profiles,
+-        '--break-objective-modes', args.break_objective_modes,
+-        '--min-after90-gain-per-after80-loss', '1.0',
+-        '--max-after80-tradeoff-intervals', '1',
+-        '--adaptive-no-improvement-attempts', str(mode_defaults['adaptive']),
+-        '--primary-target-tolerance', '1',
+         '--max-final-before-target-loss', '6',
+-        '--solver-random-seed', str(args.solver_random_seed),
+-        '--exception-search-reserve-sec', '180',
+-        '--post-break-repair-reserve-sec', str(mode_defaults['post']),
+-        '--target-lock-recovery-reserve-sec', str(mode_defaults['target']),
+-        '--finalization-reserve-sec', str(mode_defaults['final']),
+-        '--safe-incumbent-reserve-sec', str(mode_defaults['safe']),
+-        '--conflict-refinement-reserve-sec', '120',
+-        '--coordinated-repair-reserve-sec', '300',
+-        '--coordinated-repair-cycles', '1',
+-        '--joint-refinement-reserve-sec', str(mode_defaults['joint']),
+-        '--joint-change-limits', '8,16,24,36,54',
+-        '--joint-shift-options-per-cell', '10',
+-        '--joint-patterns-per-shift', '64',
+-        '--adaptive-joint-attempts', str(mode_defaults['joint_attempts']),
+-        '--adaptive-joint-no-improvement-limit', str(mode_defaults['joint_no_improve']),
+-    ]
++    ] + engine_flags_for_run(
++        args, mode_defaults, runner_parser, workbook_search_controls)
++    if workbook_search_controls:
++        print(f'[run] workbook states {len(workbook_search_controls)} search control(s): '
++              f'{", ".join(sorted(workbook_search_controls))}', flush=True)
+     if not args.enable_bundled_regression_fallbacks:
+         command.append('--disable-bundled-fallbacks')
+     if args.use_input_schedule_as_seed and not args.disable_input_schedule_seed:
 diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/canonical_metrics.py /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/canonical_metrics.py
 --- prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/canonical_metrics.py	2026-09-13 00:11:48.000000000 +0000
 +++ /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/canonical_metrics.py	2026-09-16 19:40:20.405999430 +0000
@@ -616,8 +801,152 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
          "engine": left,
 diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/l632_universal_scheduler.py /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/l632_universal_scheduler.py
 --- prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/l632_universal_scheduler.py	2026-09-15 00:10:56.000000000 +0000
-+++ /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/l632_universal_scheduler.py	2026-09-16 19:21:15.091227142 +0000
-@@ -1465,10 +1465,38 @@
++++ /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/l632_universal_scheduler.py	2026-09-16 20:11:32.188203773 +0000
+@@ -775,6 +775,11 @@
+     parser_warnings: List[str]
+     requirement_sheet: str
+     shrinkage_sheet: str
++    # Search-shape, reserve-budget and quality-minimum controls this workbook
++    # states, and only those. A parameter absent from this mapping was not
++    # mentioned by the workbook, which is what lets the engine tell "the
++    # contract said nothing" from "the contract said the default".
++    search_controls: Dict[str, Any] = field(default_factory=dict)
+     # Optional protected-tier minimums for release gate 4. Defaulted so every
+     # existing ParsedInput construction - the regression lab builds them
+     # directly - keeps working, and an absent workbook row means the tier is
+@@ -1100,6 +1105,131 @@
+     return result
+ 
+ 
++# Search-shape, reserve-budget and quality-minimum controls that previously
++# existed only as command-line flags. The engine is meant to be workbook-driven,
++# but ~40 parameters had no workbook route at all, and the production runner
++# passes its own value for nearly all of them - so a scheduler working from the
++# workbook could not reach them and was locked to the runner's opinion of how
++# the search should be shaped.
++#
++# Precedence is the rule the protected-tier minimums already follow: the
++# workbook states the business value and an explicit command-line argument
++# overrides it. A parameter absent from both keeps the engine default, so a
++# workbook with none of these rows behaves exactly as before.
++#
++# (engine parameter, workbook aliases, kind)
++WORKBOOK_SEARCH_CONTROLS: Tuple[Tuple[str, Tuple[str, ...], str], ...] = (
++    ("solver_random_seed", ("Solver Random Seed", "Random Seed"), "int"),
++    ("workers", ("Solver Worker Count", "Solver Workers", "CP-SAT Workers"), "int"),
++    ("pattern_widths", ("Break Pattern Widths", "Pattern Widths"), "int_list"),
++    ("skeleton_profile_names", ("Skeleton Profiles", "Stage 1 Profiles"), "str_list"),
++    ("break_objective_modes", ("Break Objective Modes", "Stage 2 Objective Modes"), "str_list"),
++    ("repair_change_limits", ("Repair Change Limits",), "int_list"),
++    ("export_top_skeletons", ("Export Top Skeletons", "Before-Break Exports"), "int"),
++    ("use_input_schedule_as_seed", ("Use Input Schedule As Seed", "Seed From Input Schedule"), "bool"),
++    ("include_bundled_fallbacks", ("Bundled Fallbacks Enabled", "Use Bundled Fallbacks"), "bool"),
++    ("adaptive_no_improvement_attempts", ("Adaptive No-Improvement Attempts",), "int"),
++    ("primary_target_tolerance", ("Primary Target Tolerance",), "int"),
++    ("max_after80_tradeoff_intervals", ("Maximum After80 Tradeoff Intervals",), "int"),
++    ("min_after90_gain_per_after80_loss", ("Minimum After90 Gain Per After80 Loss",), "float"),
++    ("post_break_repair", ("Post-Break Repair Enabled",), "bool"),
++    ("target_lock_recovery", ("Target Lock Recovery Enabled",), "bool"),
++    ("deterministic_baseline", ("Deterministic Baseline Enabled",), "bool"),
++    ("safe_incumbent", ("Safe Incumbent Enabled",), "bool"),
++    ("conflict_refinement", ("Conflict Refinement Enabled",), "bool"),
++    ("coordinated_repair", ("Coordinated Repair Enabled",), "bool"),
++    ("joint_refinement", ("Joint Refinement Enabled",), "bool"),
++    ("exception_search_reserve_sec", ("Exception Search Reserve Seconds",), "int"),
++    ("post_break_repair_reserve_sec", ("Post-Break Repair Reserve Seconds",), "int"),
++    ("target_lock_recovery_reserve_sec", ("Target Lock Recovery Reserve Seconds",), "int"),
++    ("finalization_reserve_sec", ("Finalization Reserve Seconds",), "int"),
++    ("safe_incumbent_reserve_sec", ("Safe Incumbent Reserve Seconds",), "int"),
++    ("conflict_refinement_reserve_sec", ("Conflict Refinement Reserve Seconds",), "int"),
++    ("coordinated_repair_reserve_sec", ("Coordinated Repair Reserve Seconds",), "int"),
++    ("coordinated_repair_cycles", ("Coordinated Repair Cycles",), "int"),
++    ("joint_refinement_reserve_sec", ("Joint Refinement Reserve Seconds",), "int"),
++    ("joint_change_limits", ("Joint Change Limits",), "int_list"),
++    ("joint_shift_options_per_cell", ("Joint Shift Options Per Cell",), "int"),
++    ("joint_patterns_per_shift", ("Joint Patterns Per Shift",), "int"),
++    ("adaptive_joint_attempts", ("Adaptive Joint Attempts",), "int"),
++    ("adaptive_joint_no_improvement_limit", ("Adaptive Joint No-Improvement Limit",), "int"),
++    ("minimum_final_before_100", ("Minimum Final Before100 Intervals",), "int"),
++    ("minimum_final_before_90", ("Minimum Final Before90 Intervals",), "int"),
++    ("minimum_final_before_80", ("Minimum Final Before80 Intervals",), "int"),
++    ("minimum_final_after_100", ("Minimum Final After100 Intervals",), "int"),
++    ("minimum_final_after_90", ("Minimum Final After90 Intervals",), "int"),
++    ("minimum_final_after_80", ("Minimum Final After80 Intervals",), "int"),
++    ("minimum_best_before_100", ("Minimum Best Before100 Intervals",), "int"),
++    ("minimum_best_before_90", ("Minimum Best Before90 Intervals",), "int"),
++    ("minimum_best_before_80", ("Minimum Best Before80 Intervals",), "int"),
++)
++
++SEARCH_CONTROL_ALIASES: Tuple[str, ...] = tuple(
++    alias for _, aliases, _ in WORKBOOK_SEARCH_CONTROLS for alias in aliases
++)
++
++
++def _parse_search_controls(
++    im: Dict[str, Any], parser_warnings: Optional[List[str]] = None
++) -> Dict[str, Any]:
++    """Read the search controls a workbook actually states, and only those.
++
++    A parameter the workbook does not mention is absent from the result, which
++    is what keeps "the workbook said nothing" distinguishable from "the
++    workbook said the default". A row that IS present but unreadable is a
++    contract failure rather than a silent fallback: a scheduler who typed a
++    value into the business contract must not have it discarded without being
++    told. ``HARD_`` makes ``validate_input_contract`` fail the run.
++    """
++    # `yes()` is deliberately permissive and reads anything unrecognized as
++    # False. That is right for a legacy contract row and wrong here: a typo
++    # would silently disable a search phase. This one has to be able to say
++    # "that is not a boolean at all".
++    def strict_bool(text: str) -> Optional[bool]:
++        token = norm(text)
++        if token in {"yes", "y", "true", "1", "enabled", "on"}:
++            return True
++        if token in {"no", "n", "false", "0", "disabled", "off"}:
++            return False
++        return None
++
++    controls: Dict[str, Any] = {}
++    for name, aliases, kind in WORKBOOK_SEARCH_CONTROLS:
++        raw = _instruction_get(im, aliases)
++        if raw is None or str(raw).strip() == "":
++            continue
++        text = str(raw).strip()
++        value: Any = None
++        if kind == "int":
++            number = strict_float(text)
++            if number is not None and float(number).is_integer():
++                value = int(number)
++        elif kind == "float":
++            number = strict_float(text)
++            if number is not None:
++                value = float(number)
++        elif kind == "bool":
++            value = strict_bool(text)
++        elif kind == "int_list":
++            parts = [part.strip() for part in text.replace(";", ",").split(",") if part.strip()]
++            numbers = [strict_float(part) for part in parts]
++            if parts and all(n is not None and float(n).is_integer() for n in numbers):
++                value = [int(n) for n in numbers]
++        elif kind == "str_list":
++            parts = [part.strip() for part in text.replace(";", ",").split(",") if part.strip()]
++            if parts:
++                value = parts
++        if value is None:
++            if parser_warnings is not None:
++                parser_warnings.append(
++                    f"HARD_INVALID_SEARCH_CONTROL: {aliases[0]!r} is set to {raw!r}, "
++                    f"which is not a valid {kind.replace('_', ' ')}. Correct the value "
++                    f"or remove the row to use the engine default.")
++            continue
++        controls[name] = value
++    return controls
++
++
+ def _instruction_get(m: Dict[str, Any], names: Sequence[str], default: Any = None) -> Any:
+     for name in names:
+         if norm(name) in m:
+@@ -1465,10 +1595,38 @@
      raise ValueError("Requirement sheet with Sun-Sat interval columns was not found")
  
  
@@ -660,7 +989,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
      times: List[int] = []
      for r in range(header + 1, ws.max_row + 1):
          minute = next((minute_of_day(ws.cell(r, c).value) for c in range(1, min(4, ws.max_column) + 1) if minute_of_day(ws.cell(r, c).value) is not None), None)
-@@ -1503,7 +1531,7 @@
+@@ -1503,7 +1661,7 @@
      if len(day_cols) != 7:
          raise ValueError(f"Could not identify seven day columns in {req_ws.title}")
      time_col = _time_column(req_ws, header)
@@ -669,7 +998,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
      per_day = 1440 // interval
      requirements: List[List[Optional[float]]] = [[None] * per_day for _ in range(7)]
      dates = [req_ws.cell(header + 1, c).value for c in day_cols]
-@@ -1593,18 +1621,35 @@
+@@ -1593,18 +1751,35 @@
  }
  
  
@@ -708,7 +1037,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
          return {0, 6}
      days: Set[int] = set()
      invalid: List[str] = []
-@@ -1755,22 +1800,74 @@
+@@ -1755,22 +1930,74 @@
      return rules, capabilities, compact_windows
  
  
@@ -796,7 +1125,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
      # Preserve operational order for the common 15/30/15 contract.
      if len(segments) == 3 and sorted(length for length, _ in segments) == [1, 1, 2]:
          return ((1, "Break 1"), (2, "Lunch"), (1, "Break 2"))
-@@ -2402,7 +2499,7 @@
+@@ -2402,7 +2629,7 @@
      if allow_no_break and max_no_break <= 0:
          max_no_break = 8
  
@@ -805,7 +1134,15 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
      (
          break_window_rules, break_edge_margin_q, break_min_gap_q,
          break_preferred_gap_q, break_normal_max_gap_q, break_window_source,
-@@ -3638,6 +3735,21 @@
+@@ -2769,6 +2996,7 @@
+         demand_fit_min_active_ratio=min(1.0, max(0.0, demand_fit_min_active_ratio)),
+         demand_fit_max_blank_minutes=max(0, demand_fit_max_blank_minutes),
+         parser_warnings=parser_warnings,
++        search_controls=_parse_search_controls(im, parser_warnings),
+         requirement_sheet=req_sheet, shrinkage_sheet=shr_sheet,
+     )
+ 
+@@ -3638,6 +3866,21 @@
      Overlap, not start-minute containment: see `LanguageRule.overlaps`. Every
      call site passes a quarter start, so the default span is 15.
      """
@@ -827,7 +1164,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
      def applies(rule: LanguageRule) -> bool:
          if not rule.active or not rule.overlaps(minute, span):
              return False
-@@ -3723,6 +3835,51 @@
+@@ -3723,6 +3966,51 @@
  
  
  def shift_day_demand_fit(parsed: ParsedInput, day: int, shift: Shift) -> Dict[str, Any]:
@@ -879,7 +1216,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
      horizon = CYCLIC_TOTAL_QSLOTS if day == 6 else TOTAL_QSLOTS
      qslots = [
          q for q in range(
-@@ -8861,9 +9018,71 @@
+@@ -8861,9 +9149,71 @@
          row["estimated_additional_qualified_associates"] = max(
              0, int(math.ceil(max(0.0, -float(row.get("capacity_slack_hours", 0.0))) / max(0.01, productive_per_assoc) - 1e-9))
          )
@@ -951,7 +1288,113 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
          "break_resilience": break_resilience,
          "roster_count": len(parsed.associates), "legal_shift_count": len(parsed.shifts),
          "interval_minutes": parsed.interval_minutes, "active_intervals": sum(sum(1 for value in day if value) for day in parsed.active),
-@@ -16974,6 +17193,9 @@
+@@ -16948,6 +17298,7 @@
+     overwrite: bool = False,
+     resume: bool = False,
+     allow_headcount_mismatch_override: Optional[bool] = None,
++    cli_search_controls: Optional[Mapping[str, Any]] = None,
+ ) -> int:
+     if output_path.exists() and not (overwrite or resume):
+         raise FileExistsError(f"Refusing to overwrite existing final output without --overwrite or --resume: {output_path}")
+@@ -16960,13 +17311,95 @@
+     started_all = time.time()
+     deadline = started_all + max(60, total_time_sec)
+     log_path = work_dir / "scheduler.log"
+-    pattern_widths = sorted({max(1, int(x)) for x in pattern_widths}) or [24, 60, 115]
+-    full_width = max(pattern_widths)
+     with log_path.open("a" if resume else "w", encoding="utf-8", buffering=1) as log:
+         parsed = parse_input(
+             input_path, allow_no_break_override, max_no_break_override,
+             allow_headcount_mismatch_override=allow_headcount_mismatch_override,
+         )
++        # Search shape, reserve budgets and quality minimums follow the same
++        # contract-then-override rule as the protected-tier minimums below: the
++        # workbook states the business value and an explicit command-line
++        # argument overrides it. A parameter neither side sets keeps the value
++        # this function was called with, which is why a workbook carrying none
++        # of these rows runs exactly as it did before the route existed.
++        _typed = dict(cli_search_controls or {})
++        _resolved: Dict[str, Any] = dict(parsed.search_controls)
++        _resolved.update(_typed)
++        search_control_decisions = {
++            name: {
++                "value": value,
++                "source": "command_line" if name in _typed else "workbook",
++            }
++            for name, value in _resolved.items()
++        }
++        workers = int(_resolved.get("workers", workers))
++        pattern_widths = _resolved.get("pattern_widths", pattern_widths)
++        skeleton_profile_names = _resolved.get("skeleton_profile_names", skeleton_profile_names)
++        break_objective_modes = _resolved.get("break_objective_modes", break_objective_modes)
++        repair_change_limits = _resolved.get("repair_change_limits", repair_change_limits)
++        export_top_skeletons = int(_resolved.get("export_top_skeletons", export_top_skeletons))
++        use_input_schedule_as_seed = bool(
++            _resolved.get("use_input_schedule_as_seed", use_input_schedule_as_seed))
++        include_bundled_fallbacks = bool(
++            _resolved.get("include_bundled_fallbacks", include_bundled_fallbacks))
++        adaptive_no_improvement_attempts = int(
++            _resolved.get("adaptive_no_improvement_attempts", adaptive_no_improvement_attempts))
++        primary_target_tolerance = int(
++            _resolved.get("primary_target_tolerance", primary_target_tolerance))
++        max_after80_tradeoff_intervals = _resolved.get(
++            "max_after80_tradeoff_intervals", max_after80_tradeoff_intervals)
++        min_after90_gain_per_after80_loss = float(_resolved.get(
++            "min_after90_gain_per_after80_loss", min_after90_gain_per_after80_loss))
++        post_break_repair = bool(_resolved.get("post_break_repair", post_break_repair))
++        target_lock_recovery = bool(_resolved.get("target_lock_recovery", target_lock_recovery))
++        deterministic_baseline = bool(
++            _resolved.get("deterministic_baseline", deterministic_baseline))
++        safe_incumbent = bool(_resolved.get("safe_incumbent", safe_incumbent))
++        conflict_refinement = bool(_resolved.get("conflict_refinement", conflict_refinement))
++        coordinated_repair = bool(_resolved.get("coordinated_repair", coordinated_repair))
++        joint_refinement = bool(_resolved.get("joint_refinement", joint_refinement))
++        solver_random_seed = int(_resolved.get("solver_random_seed", solver_random_seed))
++        exception_search_reserve_sec = int(
++            _resolved.get("exception_search_reserve_sec", exception_search_reserve_sec))
++        post_break_repair_reserve_sec = int(
++            _resolved.get("post_break_repair_reserve_sec", post_break_repair_reserve_sec))
++        target_lock_recovery_reserve_sec = int(
++            _resolved.get("target_lock_recovery_reserve_sec", target_lock_recovery_reserve_sec))
++        finalization_reserve_sec = int(
++            _resolved.get("finalization_reserve_sec", finalization_reserve_sec))
++        safe_incumbent_reserve_sec = int(
++            _resolved.get("safe_incumbent_reserve_sec", safe_incumbent_reserve_sec))
++        conflict_refinement_reserve_sec = int(
++            _resolved.get("conflict_refinement_reserve_sec", conflict_refinement_reserve_sec))
++        coordinated_repair_reserve_sec = int(
++            _resolved.get("coordinated_repair_reserve_sec", coordinated_repair_reserve_sec))
++        coordinated_repair_cycles = int(
++            _resolved.get("coordinated_repair_cycles", coordinated_repair_cycles))
++        joint_refinement_reserve_sec = int(
++            _resolved.get("joint_refinement_reserve_sec", joint_refinement_reserve_sec))
++        joint_change_limits = _resolved.get("joint_change_limits", joint_change_limits)
++        joint_shift_options_per_cell = int(
++            _resolved.get("joint_shift_options_per_cell", joint_shift_options_per_cell))
++        joint_patterns_per_shift = int(
++            _resolved.get("joint_patterns_per_shift", joint_patterns_per_shift))
++        adaptive_joint_attempts = int(
++            _resolved.get("adaptive_joint_attempts", adaptive_joint_attempts))
++        adaptive_joint_no_improvement_limit = int(
++            _resolved.get("adaptive_joint_no_improvement_limit", adaptive_joint_no_improvement_limit))
++        minimum_final_before_100 = _resolved.get("minimum_final_before_100", minimum_final_before_100)
++        minimum_final_before_90 = _resolved.get("minimum_final_before_90", minimum_final_before_90)
++        minimum_final_before_80 = _resolved.get("minimum_final_before_80", minimum_final_before_80)
++        minimum_final_after_100 = _resolved.get("minimum_final_after_100", minimum_final_after_100)
++        minimum_final_after_90 = _resolved.get("minimum_final_after_90", minimum_final_after_90)
++        minimum_final_after_80 = _resolved.get("minimum_final_after_80", minimum_final_after_80)
++        minimum_best_before_100 = _resolved.get("minimum_best_before_100", minimum_best_before_100)
++        minimum_best_before_90 = _resolved.get("minimum_best_before_90", minimum_best_before_90)
++        minimum_best_before_80 = _resolved.get("minimum_best_before_80", minimum_best_before_80)
++        # Normalized here rather than before the workbook was read, so a
++        # workbook-stated width list gets the same guard a CLI one does.
++        pattern_widths = sorted({max(1, int(x)) for x in pattern_widths}) or [24, 60, 115]
++        full_width = max(pattern_widths)
++
+         # Contract states the value, an explicit CLI argument overrides it -
+         # the same rule the protected-tier minimums follow below, so the audit
+         # and the run-identity hash record what was actually enforced.
+@@ -16974,6 +17407,9 @@
              parsed.language_working_window_mode = normalize_language_window_mode(
                  language_working_window_override)
          capacity = capacity_diagnostics(parsed)
@@ -961,7 +1404,18 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
          preflight = validate_input_contract(parsed, capacity)
          identity_warnings = case_identity_warnings(parsed, input_path, output_path)
          if identity_warnings:
-@@ -18005,6 +18227,29 @@
+@@ -17387,6 +17823,10 @@
+             "version": VERSION, "status": "STARTED", "input": str(input_path), "output": str(output_path),
+             "started_at": datetime.now().isoformat(), "events": [], "stage1_attempts": [],
+             "run_identity": run_identity, "run_parameters": run_parameters,
++            # Which search controls the workbook or the command line actually
++            # set, and which of the two won. A run that behaves unexpectedly is
++            # otherwise indistinguishable from one configured unexpectedly.
++            "search_control_decisions": search_control_decisions,
+             # Wall-clock values are reported, never hashed.
+             "run_wall_clock": {
+                 "started_epoch": float(budget_manager.started_epoch),
+@@ -18005,6 +18445,29 @@
                  "output": str(before_output_path),
              }
              audit["selected_before_break_skeleton"] = explanation_rows[0]
@@ -991,7 +1445,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
              audit["status"] = "SKELETON_ONLY_COMPLETE"
              audit["artifact_state"] = "BEST_BEFORE_BREAKS_ONLY"
              audit["functional_status"] = "PASS_BEFORE_BREAK_SKELETON_GENERATED"
-@@ -20172,6 +20417,17 @@
+@@ -20172,6 +20635,17 @@
              "optional_outputs": [r["path"] for r in export_records if r["role"] not in {"BEST_BEFORE_BREAKS", "RECOMMENDED_FINAL"}],
              "candidate_leaderboard_csv": str(leaderboard_csv), "pareto_manifest": str(pareto_manifest),
          }
@@ -1009,7 +1463,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
          audit["functional_status"] = "PASS_FINAL_SCHEDULE_GENERATED"
          audit["artifact_state"] = "FINAL_VERIFIED" if output_info_by_role["RECOMMENDED_FINAL"]["verification"].get("status") == "PASS" else "FINAL_VERIFICATION_FAILED"
          selected_validation = ((output_info_by_role["RECOMMENDED_FINAL"] or {}).get("validation") or {})
-@@ -20301,6 +20557,14 @@
+@@ -20301,6 +20775,14 @@
              "language_minimum_only_ratio": chosen_breaks.metrics.get("language_minimum_only_ratio", 0),
              "language_reserve_shortfall_quarters": chosen_breaks.metrics.get("language_reserve_shortfall_quarters", 0),
              "language_break_caused_reserve_loss_quarters": chosen_breaks.metrics.get("language_break_caused_reserve_loss_quarters", 0),
@@ -1024,7 +1478,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
              "opening_gaps": chosen_breaks.metrics.get("opening_gap_count", 0),
              "next_sunday_active_intervals": chosen_breaks.metrics.get("week_boundary_active_intervals", 0),
              "next_sunday_after_target": chosen_breaks.metrics.get("week_boundary_after_target", 0),
-@@ -21006,6 +21270,38 @@
+@@ -21006,6 +21488,38 @@
          audit.get("artifact_state") == "FINAL_VERIFIED"
          and (audit.get("hard_valid_schedule_exists") is True or int((((audit.get("selected_candidate") or {}).get("output_validation") or {}).get("validation") or {}).get("hard_fail_count", 0) or 0) == 0)
      )
@@ -1063,6 +1517,135 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
      if int(return_code) == 0 or hard_valid_artifact:
          quality = audit.get("production_quality_gate") or {}
          quality_status = str(quality.get("status") or "NOT_EVALUATED")
+@@ -21272,8 +21786,107 @@
+         print(failure_traceback, file=log, flush=True)
+ 
+ 
++# argparse destination -> engine parameter. ``negate`` marks a --disable-X flag
++# whose engine parameter is the positive capability, so "supplied" means False.
++CLI_SEARCH_CONTROL_DESTS: Tuple[Tuple[str, str, bool], ...] = (
++    ("num_workers", "workers", False),
++    ("pattern_widths", "pattern_widths", False),
++    ("skeleton_profiles", "skeleton_profile_names", False),
++    ("break_objective_modes", "break_objective_modes", False),
++    ("repair_change_limits", "repair_change_limits", False),
++    ("export_top_skeletons", "export_top_skeletons", False),
++    ("use_input_schedule_as_seed", "use_input_schedule_as_seed", False),
++    ("disable_bundled_fallbacks", "include_bundled_fallbacks", True),
++    ("adaptive_no_improvement_attempts", "adaptive_no_improvement_attempts", False),
++    ("primary_target_tolerance", "primary_target_tolerance", False),
++    ("max_after80_tradeoff_intervals", "max_after80_tradeoff_intervals", False),
++    ("min_after90_gain_per_after80_loss", "min_after90_gain_per_after80_loss", False),
++    ("disable_post_break_repair", "post_break_repair", True),
++    ("disable_target_lock_recovery", "target_lock_recovery", True),
++    ("disable_deterministic_baseline", "deterministic_baseline", True),
++    ("disable_safe_incumbent", "safe_incumbent", True),
++    ("disable_conflict_refinement", "conflict_refinement", True),
++    ("disable_coordinated_repair", "coordinated_repair", True),
++    ("disable_joint_refinement", "joint_refinement", True),
++    ("solver_random_seed", "solver_random_seed", False),
++    ("exception_search_reserve_sec", "exception_search_reserve_sec", False),
++    ("post_break_repair_reserve_sec", "post_break_repair_reserve_sec", False),
++    ("target_lock_recovery_reserve_sec", "target_lock_recovery_reserve_sec", False),
++    ("finalization_reserve_sec", "finalization_reserve_sec", False),
++    ("safe_incumbent_reserve_sec", "safe_incumbent_reserve_sec", False),
++    ("conflict_refinement_reserve_sec", "conflict_refinement_reserve_sec", False),
++    ("coordinated_repair_reserve_sec", "coordinated_repair_reserve_sec", False),
++    ("coordinated_repair_cycles", "coordinated_repair_cycles", False),
++    ("joint_refinement_reserve_sec", "joint_refinement_reserve_sec", False),
++    ("joint_change_limits", "joint_change_limits", False),
++    ("joint_shift_options_per_cell", "joint_shift_options_per_cell", False),
++    ("joint_patterns_per_shift", "joint_patterns_per_shift", False),
++    ("adaptive_joint_attempts", "adaptive_joint_attempts", False),
++    ("adaptive_joint_no_improvement_limit", "adaptive_joint_no_improvement_limit", False),
++    ("minimum_final_before100", "minimum_final_before_100", False),
++    ("minimum_final_before90", "minimum_final_before_90", False),
++    ("minimum_final_before80", "minimum_final_before_80", False),
++    ("minimum_final_after100", "minimum_final_after_100", False),
++    ("minimum_final_after90", "minimum_final_after_90", False),
++    ("minimum_final_after80", "minimum_final_after_80", False),
++    ("minimum_best_before100", "minimum_best_before_100", False),
++    ("minimum_best_before90", "minimum_best_before_90", False),
++    ("minimum_best_before80", "minimum_best_before_80", False),
++)
++
++_LIST_SEARCH_CONTROLS = {
++    "pattern_widths": int, "repair_change_limits": int, "joint_change_limits": int,
++    "skeleton_profile_names": str, "break_objective_modes": str,
++}
++
++
++def explicitly_supplied_options(parser: Any, argv: Optional[Sequence[str]]) -> Set[str]:
++    """Return the argparse destinations the caller actually typed.
++
++    A flag left off the command line and a flag typed at its default value are
++    indistinguishable from the parsed namespace, and the difference is exactly
++    what decides whether the workbook gets to speak. argparse skips a default
++    for any attribute already present on the namespace it is given, so
++    pre-seeding every destination with None makes an unset option stay None.
++
++    ``parser._actions`` is argparse-internal but stable, and it is the only way
++    to enumerate destinations without restating them here - a second list that
++    could drift out of step with the parser is the worse risk.
++    """
++    probe = argparse.Namespace()
++    for action in parser._actions:
++        setattr(probe, action.dest, None)
++    # parse_known_args, not parse_args: this only asks which options appeared,
++    # and a probe must never be the thing that terminates the process. The real
++    # parse has already run and reported any genuine command-line error.
++    parser.parse_known_args(list(argv) if argv is not None else None, namespace=probe)
++    return {dest for dest, value in vars(probe).items() if value is not None}
++
++
++def cli_search_controls(args: Any, supplied: Set[str]) -> Dict[str, Any]:
++    """Translate the options the caller typed into engine parameter values."""
++    controls: Dict[str, Any] = {}
++    for dest, name, negate in CLI_SEARCH_CONTROL_DESTS:
++        if dest not in supplied:
++            continue
++        value = getattr(args, dest, None)
++        if negate:
++            controls[name] = not bool(value)
++            continue
++        element = _LIST_SEARCH_CONTROLS.get(name)
++        if element is not None:
++            parts = [part.strip() for part in str(value).split(",") if part.strip()]
++            if not parts:
++                continue
++            controls[name] = [element(part) for part in parts]
++        else:
++            controls[name] = value
++    return controls
++
++
+ def main(argv: Optional[Sequence[str]] = None) -> int:
+-    args = build_arg_parser().parse_args(argv)
++    parser = build_arg_parser()
++    args = parser.parse_args(argv)
+     inputs = list(args.input or [])
+     if args.selfcheck:
+         payload = selfcheck(inputs)
+@@ -21300,6 +21913,11 @@
+     profile_names = [x.strip() for x in str(args.skeleton_profiles).split(",") if x.strip()]
+     break_modes = [x.strip() for x in str(args.break_objective_modes).split(",") if x.strip()]
+     joint_limits = [int(x) for x in str(args.joint_change_limits).split(",") if str(x).strip()]
++    # Everything the caller actually typed outranks the workbook; everything
++    # else leaves the workbook free to state the value. The defaults below are
++    # still passed positionally, so a parameter neither side sets keeps exactly
++    # the value it had before this route existed.
++    typed_controls = cli_search_controls(args, explicitly_supplied_options(parser, argv))
+     terminal_started = time.time()
+     return_code = 3
+     terminal_exception: Optional[Exception] = None
+@@ -21361,6 +21979,7 @@
+         adaptive_joint_attempts=args.adaptive_joint_attempts,
+         adaptive_joint_no_improvement_limit=args.adaptive_joint_no_improvement_limit,
+         phase_c_development_smoke=args.phase_c_development_smoke,
++        cli_search_controls=typed_controls,
+             overwrite=args.overwrite, resume=args.resume,
+             allow_headcount_mismatch_override=hc_override,
+         )
 diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/production/phase_c_quality_report.py /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/production/phase_c_quality_report.py
 --- prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/production/phase_c_quality_report.py	2026-09-13 00:09:14.000000000 +0000
 +++ /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/production/phase_c_quality_report.py	2026-09-16 19:25:50.171054932 +0000

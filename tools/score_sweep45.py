@@ -4,12 +4,34 @@
 Reads only; writes nothing. Baseline dir is the authors' recorded result set and
 is never regenerated -- if a case is missing there it is reported as missing.
 """
-import json, os, sys
+import json, os, re, sys
 
 SP = os.path.dirname(os.path.abspath(__file__))
 NEW  = os.path.join(SP, "sweep45")
 BASE = os.path.join(SP, "res", "AE_REAL_RC5_QUICK_RESULTS")
 CASES = ["AE_AR_B2B","AE_AR_Choice","AE_FR_B2B","AE_FR_Choice","AE_IT_B2B","AE_IT_Choice"]
+
+def capacity_class(root, case):
+    """Read the engine's own capacity verdict for the case.
+
+    The engine prints this as the first line of its scheduler log. When it says
+    CAPACITY_SHORT it also says, in those words, that the roster "cannot exceed
+    about N% of requirement no matter how shifts or breaks are placed, so its
+    coverage does not measure the optimiser and must not be averaged into a
+    coverage benchmark". This scorer takes that at its word: a short case is
+    reported but kept out of the headline net.
+    """
+    p = os.path.join(root, case, "debug", "scheduler.log")
+    if not os.path.exists(p):
+        return None, None
+    with open(p, errors="replace") as fh:
+        first = fh.readline()
+    m = re.match(r"CAPACITY (CAPACITY_[A-Z]+)", first)
+    if not m:
+        return None, None
+    ceil = re.search(r"cannot exceed about (\d+)%", first)
+    return m.group(1), (ceil.group(1) + "%" if ceil else None)
+
 
 def load(root, case):
     p = os.path.join(root, case, "BUSINESS_OUTCOME.json")
@@ -54,11 +76,13 @@ for c in CASES:
         missing.append((c, "new run not present")); continue
     if b is None:
         missing.append((c, "no recorded baseline"))
+    cap, ceil = capacity_class(NEW, c)
+    n["cap"], n["ceil"] = cap, ceil
     rows.append((c, n, b))
 
 print("case            target b->a        floor b->a         t_loss f_loss  val  gate parity")
 print("-" * 92)
-net_t = net_f = 0
+net_t = net_f = short_t = short_f = 0
 for c, n, b in rows:
     if n.get("blocked") or (b and b.get("blocked")):
         nd = "BLOCKED(%s)" % n.get("code", n.get("tech")) if n.get("blocked") else \
@@ -75,8 +99,12 @@ for c, n, b in rows:
         bf = "(%s->%s)" % (b["before_floor"],  b["after_floor"])
         dt = (n["after_target"] or 0) - (b["after_target"] or 0)
         df = (n["after_floor"]  or 0) - (b["after_floor"]  or 0)
-        net_t += dt; net_f += df
-        dmark = " %+d/%+d" % (dt, df)
+        if n.get("cap") == "CAPACITY_SHORT":
+            short_t += dt; short_f += df
+        else:
+            net_t += dt; net_f += df
+        dmark = " %+d/%+d%s" % (dt, df, "  [capacity-short: excluded]"
+                                if n.get("cap") == "CAPACITY_SHORT" else "")
     else:
         bt = bf = "(no baseline)"; dmark = "   n/a"
     print("%-15s %3s->%-3s %-12s %3s->%-3s %-12s %4d %5d   %-4s %-4s %s %d/%d%s" % (
@@ -85,7 +113,17 @@ for c, n, b in rows:
         tl, fl, n["val"], n["gate"], n["parity"], n["nfields"] - (n["mismatch"] or 0), n["nfields"],
         dmark))
 print("-" * 92)
-print("cases scored: %d/%d (%d blocked, excluded from the net)   net vs baseline: after_target %+d, after_floor %+d"
-      % (len(rows) - len(blocked_rows), len(CASES), len(blocked_rows), net_t, net_f))
+n_short = sum(1 for _, n, _ in rows if n.get("cap") == "CAPACITY_SHORT" and not n.get("blocked"))
+n_meas  = len(rows) - len(blocked_rows) - n_short
+print("MEASURABLE net over %d case(s) (capacity ample or tight): after_target %+d, after_floor %+d"
+      % (n_meas, net_t, net_f))
+print("capacity-short, reported but NOT averaged (%d case(s)): after_target %+d, after_floor %+d"
+      % (n_short, short_t, short_f))
+print("blocked, no comparable surface (%d case(s))" % len(blocked_rows))
+print()
+print("capacity verdict per case (engine's own, first line of its scheduler log):")
+for c, n, _ in rows:
+    print("   %-15s %-17s %s" % (c, n.get("cap") or "(unknown)",
+                                 ("ceiling ~" + n["ceil"]) if n.get("ceil") else ""))
 for c, why in missing:
     print("MISSING: %s -- %s" % (c, why))

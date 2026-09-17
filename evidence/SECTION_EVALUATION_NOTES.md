@@ -685,3 +685,48 @@ to the AE corpus and missed the project fixtures; B-9 was verified against my
 own suite and not the gate. Here I read a number out of a summary CSV without
 checking the run status that gives it meaning. In each case the reading was
 defensible in its own frame and wrong once the frame was widened.
+
+---
+
+## Correction: the sweep's "+10 target" averaged in a roster the engine says not to
+
+Every case's scheduler log opens with the engine's own capacity verdict. Across
+the six AE cases:
+
+    AE_AR_B2B       CAPACITY_AMPLE
+    AE_AR_Choice    CAPACITY_TIGHT
+    AE_FR_B2B       CAPACITY_AMPLE
+    AE_FR_Choice    CAPACITY_AMPLE
+    AE_IT_B2B       CAPACITY_SHORT   short by 28 hours (5%),  ceiling ~95%
+    AE_IT_Choice    CAPACITY_SHORT   short by 47 hours (17%), ceiling ~71%
+
+On a short roster the engine says, in these words:
+
+    "This roster cannot exceed about 71% of requirement no matter how shifts
+     or breaks are placed, so its coverage does not measure the optimiser and
+     must not be averaged into a coverage benchmark."
+
+I averaged it anyway. The reported "net after_target +10" included **+4 from
+AE_IT_B2B**, a CAPACITY_SHORT case whose coverage is bounded by roster size
+rather than by the optimiser. Four of the ten points were not measuring the
+change under test.
+
+Corrected scoring, with the short cases reported but held out of the headline:
+
+    MEASURABLE (ample or tight, 4 cases)   after_target  +6   after_floor  +1
+    capacity-short (1 case, not averaged)  after_target  +4   after_floor  +0
+    blocked (no comparable surface)        AE_IT_Choice
+
+`tools/score_sweep45.py` now reads the capacity verdict from the first line of
+each scheduler log and partitions the net structurally, so the distinction
+cannot be lost again by whoever reads the table next.
+
+Two things worth keeping separate here. The corrected number is still a gain:
++6 target and +1 floor over four cases where coverage does measure the
+optimiser. And the engine was not wrong about anything -- it printed the
+warning prominently and I read past it. This is a defect in my measurement,
+not in the engine.
+
+That said, the direction of the error is the uncomfortable part: the case I
+wrongly included was the one that flattered the result. Nothing about how I
+built the table would have caught the reverse.

@@ -8,7 +8,7 @@ independent validator parses the same contract.
 
 ---
 
-## C-2 (HIGH): an affirmative-looking cell silently disables a hard constraint
+## C-2 (MEDIUM — downgraded, see "What the dropdown actually covers"): an affirmative-looking cell silently disables a hard constraint
 
 ### The defect
 
@@ -72,8 +72,50 @@ The remaining three (`use11`, `allow_no_break`, `demand_fit_mode`) default off,
 so a typo fails to *add* a feature rather than removing a guard — still a
 silent misread, lower severity.
 
-This is strictly worse in reach than B-11: B-11 loses one person's leave, C-2
-loses everyone's from a single cell.
+In reach this is wider than B-11 — B-11 loses one person's leave, this would
+lose everyone's from a single cell — but B-11 is reachable today and this is
+not, which is why B-11 ranks above it.
+
+### What the dropdown actually covers — correction to my first assessment
+
+I first rated this HIGH. That was wrong, and the reason matters.
+
+`tools/build_input_template.py` puts a `"Yes,No"` data validation with
+`errorStyle="stop"` on every one of these flags, and the shipped workbooks
+carry it. Verified on AE_AR_B2B and GDI_REAL28:
+
+| flag | on Instructions | dropdown |
+|---|---|---|
+| Use 11H/3OFF, Strict OFF Count, Separate OFF Days | yes | **YES** |
+| Fixed Request Use, Opening Guard Enabled | yes | **YES** |
+| Hard OFF Preferences, Leave Enabled, Use Preferences | yes | **YES** |
+
+`GDI_REAL28` also has a `Legacy Instructions` sheet carrying `Leave Days`,
+`Hard OFF Preferences` and `Opening Guard Enabled` as free text with no
+dropdown — but that sheet is **never read**. The instruction map is built from
+exactly two sheets:
+
+```python
+engine_defaults      = _instruction_map(... "Engine Defaults" ...)
+visible_instructions = _instruction_map(... "Instructions" ...)
+im = dict(engine_defaults); im.update(visible_instructions)
+```
+
+so `Legacy Instructions` is inert, and `Instructions` overrides
+`Engine Defaults` for every flag that appears on both.
+
+So a planner typing into Excel **cannot** produce the failure. What remains:
+
+* Excel data validation is not enforced **on paste**, which is how a value most
+  often arrives in a filled-in sheet.
+* It is not enforced at all when a workbook is written **programmatically** —
+  which is how every regression asset in this project is produced.
+* LibreOffice and Google Sheets do not enforce it identically on import.
+
+That makes C-2 a **defence-in-depth gap rather than a live hole**: the
+dropdown is currently the only thing between a mistyped cell and a silently
+removed hard constraint, and the parser underneath it has no opinion at all.
+It is worth closing on that basis, not on the basis of an imminent failure.
 
 ### Root cause
 
@@ -184,3 +226,94 @@ partial object, that should be explicit, not implied by a permissive fallback.
   including for `target_ratio`, `floor_ratio` and every overage cap ratio, while
   `strict_float` (11 sites) exists precisely to avoid that and says so in its
   docstring. The same contract layer uses both conventions.
+
+---
+
+## C-3 (HIGH): the preference vocabulary is two exact words, and everything else means "no constraint"
+
+Found in S5 (domain rule predicates). Unlike C-2, this one has **no dropdown
+and no mitigation at all**.
+
+### The defect
+
+`preference_kind` recognises exactly:
+
+* blank: `""`, `none`, `planned`, `plan`, `blank`
+* off: the single word `off`
+* leave: the single word `leave`
+* shift: any text containing two `HH:MM` tokens
+* **other: everything else**
+
+and `associate_day_eligible_shifts` — the hard availability gate — blocks on
+`"off"` and `"leave"` only:
+
+```python
+if fixed_kind in {"off", "leave"}:                          return []
+if parsed.leave_enabled and preference_kind_value == "leave":  return []
+if parsed.hard_off and preference_kind_value == "off":         return []
+```
+
+`"other"` falls through all three. The person is schedulable.
+
+### Measured
+
+| preference cell | kind | blocks the day? |
+|---|---|---|
+| `Leave`, `leave`, ` LEAVE ` | leave | yes |
+| `OFF`, `off` | off | yes |
+| `Annual Leave` | other | **NO** |
+| `Leave Day` | other | **NO** |
+| `A/L`, `AL` | other | **NO** |
+| `Vacation` | other | **NO** |
+| `Sick` | other | **NO** |
+| `Leave - approved` | other | **NO** |
+| `Leve` (typo) | other | **NO** |
+| `OFF (approved)` | other | **NO** |
+| `Off Day` | other | **NO** |
+| `Rest`, `RD`, `X` | other | **NO** |
+
+No warning is emitted for any of them.
+
+### Why there is no mitigation
+
+The Preference sheet carries **zero data validations** in every shipped
+workbook — checked across the AE inputs and the ready_inputs. Its own banner
+invites free text:
+
+> "Optional: enter Leave/OFF/shift preference by day."
+
+So the cell is a human free-text field, the accepted vocabulary is two exact
+words, and anything else is silently discarded.
+
+### Live or latent?
+
+**Latent today.** Scanned all 15 workbooks: **0** unrecognised preference or
+fixed-schedule values. These sheets are machine-generated and write exactly
+`Leave` / `OFF`.
+
+It becomes live the first time a human types into the sheet the engine asks
+them to type into — which is the sheet's entire purpose.
+
+### Why parity cannot catch it
+
+Same blindness as B-11 and C-2: the independent validator calls the engine's
+own `preference_kind` on the same cell, agrees it is not leave, and correctly
+reports that no rule was broken. Both sides are consistently wrong about the
+same thing.
+
+### Fix direction
+
+Two parts, and the second matters more than the first:
+
+1. Widen the vocabulary to the forms a planner actually writes (`annual
+   leave`, `a/l`, `al`, `vacation`, `holiday`, `sick`, `off day`, `rest day`,
+   `rd`, and the `X` marker), matched on normalized text.
+2. **Stop treating `"other"` as silence.** An unrecognised, non-blank
+   preference cell is a value the planner meant something by. It should raise
+   a `HARD_` contract code the same way an unmatched name does under B-11, so
+   the run stops and a human reconciles it. Widening the vocabulary alone just
+   moves the cliff; it is step 2 that removes it.
+
+Note the ordering interaction: B-11 makes an unmatched *name* fail closed.
+C-3 is the same defect one level down — a matched name whose *value* is not
+understood. Fixing B-11 without C-3 leaves the cheaper half of the hole open.

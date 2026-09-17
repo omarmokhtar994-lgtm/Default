@@ -121,3 +121,42 @@ two CAPACITY_SHORT ones) -> keep or revert on the measured result.
                       difficulty rather than being a fixed 45s. Grounded in one
                       case so far. Wants reproduction on a clean run before any
                       code is written.
+
+---
+
+# Cleanup pass: progress
+
+    DONE  W1 bound revert   removed the harmful constraint from the release tree
+    DONE  RC-B              49 divergent shadow defaults aligned to declared policy
+    DONE  RC-A              18 silent cross-metric fallbacks now fail by name
+    DONE  CM-1              the one field that was not its own alias
+    n/a   C-2               unreachable through Excel; all ten flags carry dropdowns
+    n/a   S6-3              corpus-coverage gap, not code
+    TODO  S9-1              7 unprefixed after-terms in the before-break ranking
+    TODO  S6-1              nesting group + mixed leave is silently UNSAT
+    TODO  S6-2              the nesting-group contract check is unreachable
+    TODO  S13-2             213 dead lines across 6 functions
+
+Release tree after the four applied: GATE PASS 18 suites, and four real
+workbooks solve clean -- validation PASS, parity 48/48, no MissingMetricError.
+
+## RC-A was measured before it was written
+
+The eighteen sites have the shape `metrics.get("after_floor",
+metrics.get("after_80", 0))`. When the floor is not 0.80 those are different
+numbers -- 86 against 72 on the FLOOR_NOT_80 fixture -- so a missing key made
+every downstream gate score the wrong quantity silently.
+
+Before changing anything, an instrumented build counted how often the fallback
+actually fires across four full solves:
+
+    NO CROSS-METRIC FALLBACK EVER FIRED
+
+That is the argument for fixing them cheaply, and explicitly NOT the argument
+for deleting them. RC-B had looked equally dead by inspection and its shadows
+fired on the first gate run, through duck-typed callers. So RC-A converts the
+fallback into a named failure rather than removing it: a metric that is always
+present loses nothing, and one that ever goes missing now raises at the point
+of loss instead of producing a plausible wrong number several layers later.
+
+Verified on four real solves after the change: no error raised, parity 48/48.

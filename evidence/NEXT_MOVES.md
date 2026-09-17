@@ -160,3 +160,60 @@ present loses nothing, and one that ever goes missing now raises at the point
 of loss instead of producing a plausible wrong number several layers later.
 
 Verified on four real solves after the change: no error raised, parity 48/48.
+
+## S6-1 + S6-2 closed together -- they were one defect from two sides
+
+The model forces every nesting-group member onto the leader, per day:
+
+    model.Add(off[member, d]   == off[leader, d])
+    model.Add(leave[member, d] == leave[leader, d])
+    model.Add(x[member, d, s]  == x[leader, d, s])
+
+`leave[a, d]` is PINNED from the contract -- approved leave is an input, not a
+decision. Two members of one group with different approved leave therefore give
+`1 == 0`, and the model is INFEASIBLE in about 0.04s with nothing naming why.
+The user sees "no schedule" and no reason. That is S6-1.
+
+The existing contract check could never catch it:
+
+    if associate.nesting_group and any(associate.fixed_schedule):
+
+It compares `fixed_schedule` only, and only for associates that have one, while
+the model groups on `nesting_group` alone. That gap is S6-2.
+
+The fix mirrors what the model actually enforces, under the same
+`fixed_enabled` guard, and emits `CONFLICTING_LEAVE_OR_OFF_IN_NESTING_GROUP`.
+
+Verified on the fixture built for exactly this case:
+
+    before the fix   contract failures: NONE        (then a bare INFEASIBLE)
+    after the fix    contract failures: ['CONFLICTING_LEAVE_OR_OFF_IN_NESTING_GROUP']
+
+And on the 15-workbook corpus: no workbook fails on the new code, no overall
+verdict changes. Gate PASS at 18 suites.
+
+## S9-1 reclassified: real, but not a cleanup
+
+S9-1 was logged as "seven after-break terms read without a prefix inside the
+before-break ranking", implying the fix was to add the prefix. It is not.
+
+The convention in `calculate_metrics` is that an UNPREFIXED key is the
+after-break value, which the neighbouring pairs make explicit:
+
+    "severe_floor_gap_count":         ...   <- after
+    "before_severe_floor_gap_count":  ...   <- before
+
+Measured: eight terms read unprefixed inside `_candidate_quality_tuple` have NO
+`before_` variant anywhere in the engine --
+`week_boundary_hard_failure_count`, `language_reserve_shortfall_quarters`,
+`language_minimum_only_quarters`, `language_break_caused_reserve_loss_quarters`,
+`skill_allocation_gap_quarters`, and the three `whole_week_*` counts.
+
+So the before-break ranking IS scored partly on after-break quantities, which
+is a real defect. But there is no prefixed value to switch to: fixing it means
+computing new before-break variants of eight metrics and changing how
+candidates rank. That is a behavioural change needing its own A/B, not an inert
+cleanup.
+
+Moved out of the cleanup batch and into the behavioural group, which is now
+four items rather than three.

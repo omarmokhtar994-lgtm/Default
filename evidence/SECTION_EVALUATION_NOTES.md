@@ -774,3 +774,89 @@ the work done per second of budget. The effect should be small and, where it
 exists, conservative -- it would understate the change under test, not flatter
 it -- but the runs are not from a quiescent machine and should not be quoted as
 if they were.
+
+---
+
+## APPLIED to the release tree
+
+The staged stack is now applied to `RC9_2_2_FIX_VALIDATION_RC5`, in fix-plan
+order, with the full gate run after every step:
+
+    baseline                                GATE PASS  17 suites
+    W1   floor losses get a cap and a gate  GATE PASS  17 suites
+    W2a  B-12 header row vs prose banner    GATE PASS  17 suites
+    W2b  B-11 name-matched sheets close     GATE PASS  17 suites
+    W2c  C-3 preference vocabulary closes   GATE PASS  17 suites
+    W7a  B-9 seven independent checks       GATE PASS  17 suites
+    W10  staged tests wired into the gate   GATE PASS  18 suites + 2 selfchecks
+                                                       + undefined-name sweep
+
+Change set, verified by diff to be exactly this and nothing else:
+
+    engine/_tools/l632_universal_scheduler.py      +242  -33
+    engine/_tools/canonical_metrics.py              +12   -0
+    engine/tools/independent_validator.py           +31   -1
+    tests/test_rc9_2_1_rule_semantics.py             +3   -3
+    tests/test_rc9_2_3_max_coverage_hardening.py    +17   -1
+    tests/test_engine_logic_checks.py               new, 450 lines
+    tests/test_rc9_2_4_b9_metric_coverage.py        new, 205 lines
+
+The applied tree is byte-identical to the dry-run tree that had already been
+proven green, so what shipped is exactly what was tested.
+
+    scheduler.py   f5f997890bfc3f53 -> 681b6588001aeccd
+    canonical      1cde409009c8d946 -> 04f3a933d1a6497a
+    validator      28008488de032086 -> a9a436427fed6f32
+
+Rollback is `tar xzf scratchpad/rc5p/PRE_FIXPLAN_SNAPSHOT.tgz`.
+
+### What is now live
+
+**Parity surface 41 -> 48.** The seven metrics that gained an independent
+recomputation, confirmed by diffing the module against the pre-apply snapshot:
+
+    target_losses_from_breaks
+    floor_losses_from_breaks
+    before_severe_floor_gap_count
+    hard_floor_gap_count
+    week_boundary_hard_failure_count
+    week_boundary_max_adjacent_raw_change
+    week_boundary_max_coverage_ratio
+
+Nothing was removed. Future runs report 48/48 where the AE sweep reported 41/41.
+
+**New fail-closed behaviour in the engine**, all present in the live file:
+
+    UNRECOGNISED_PREFERENCE_VALUE     C-3, a typed preference cell no longer
+                                      silently reads as neither leave nor OFF
+    floor_loss / floor_loss_gate_mode W1, floor losses now have a cap, a gate
+                                      and a reported metric
+    prefer_day_columns                B-12, a single-term header lookup can no
+                                      longer match a prose banner
+    Known Departed Associates         B-11, name-matched sheets fail closed
+                                      with one named escape hatch
+
+### Two decisions still open for the authors
+
+1. **W1's default floor-loss cap** mirrors the target cap,
+   `max(3, ceil(active * 0.05))`. On AE_AR_Choice that evaluates to 8, so the
+   3 floor losses observed in the sweep are now *reported* but do not trip the
+   gate. Making the loss visible is the fix; choosing a tighter budget is a
+   scheduling-policy call that needs more evidence than one observation.
+
+2. **The joint-refinement bound at 14310 is now unconditional**, matching the
+   target bound beside it. This is the one part of the applied stack that can
+   change a produced schedule, so it still needs its own A/B with repeats --
+   multi-worker CP-SAT is nondeterministic and the effect size is around one
+   interval. Until that A/B exists, the applied stack is proven safe by the
+   gate but not yet proven neutral on schedule output.
+
+### Still to do by hand, each needing a decision or a measurement
+
+    W4   delete the 90 permissive shadow defaults
+    W5   the 18 cross-metric fallbacks            (FX1 can prove this one)
+    W6   enforce PHASE_MINIMUM_VIABLE_SECONDS     (needs A/B with repeats)
+    W7b  the three unmodelled subsystems          (authors' scoping call)
+    W8   derive the 11 orderings from one definition
+    W9   B-10 break-slice floor vs cap            (needs A/B with repeats)
+    W11  break up run_case, delete 213 dead lines

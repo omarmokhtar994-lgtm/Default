@@ -224,3 +224,87 @@ concurrency.
 soft objective terms rather than hard constraints.
 
 **New engine defects found across both rounds: zero.**
+
+---
+
+# Round 3 — closing the break-concurrency gap
+
+Two more constructions failed the same way before a valid one worked, which is
+worth recording alongside the result.
+
+**Attempt: pin every break segment to one legal quarter** so all associates must
+break simultaneously. The pinning worked — `generate_break_patterns` returned
+exactly **1** legal pattern, `((6,1,'Break 1'), (14,2,'Lunch'), (22,1,'Break 2'))`
+— but the model was `INFEASIBLE` even at a cap of 99 in `warn` mode. With
+everyone breaking at the same quarter, coverage at that quarter falls to zero
+and `model.Add(after_raw_expr >= 1)` fails. Confounded, like the others.
+
+## What did work — two complementary proofs
+
+### 1. `warn` demonstrably permits, and the cap demonstrably binds the outcome
+
+Free break windows; only the cap and the mode change. Note that
+`break_max_concurrent_ratio = 0.01` drives the **effective** cap to 1 via
+`ratio_cap = max(1, floor(staffed * ratio))`, so "cap 99" in these rows is still
+an effective cap of 1:
+
+| configuration | status | violations | max concurrent |
+|---|---|---|---|
+| effective cap 1, `warn` | `FEASIBLE` | **23** | 3 |
+| effective cap 1, `fail` | `UNKNOWN` | — | — |
+| generous cap, `warn` | `FEASIBLE` | **1** | 4 |
+
+`warn` mode produced a schedule that **violates the cap 23 times** and records
+every one. That is the designed semantics — penalise, never forbid — proven
+directly. Tightening the cap raises recorded violations from 1 to 23, so the
+configured cap genuinely drives the measurement.
+
+`fail` mode returned `UNKNOWN`: at a 20-second limit the solver proved neither
+feasibility nor infeasibility. Not a defect, and not a pass either.
+
+### 2. The hard constraint is provably *built* in `fail` mode
+
+Rather than spend solver time the running sweep needs, count what the model
+contains. Same skeleton, same cap, 1-second limit — we are measuring what gets
+built, not solving it:
+
+| configuration | variables | constraints |
+|---|---|---|
+| cap 1, `warn` (soft penalty) | **7,304** | 5,073 |
+| cap 1, `fail` (hard constraint) | **6,917** | 5,073 |
+| generous cap, `fail` | 6,917 | 5,073 |
+
+**387 fewer variables in `fail` mode, with the constraint count unchanged.**
+
+That is exactly the expected signature. `warn` creates one
+`concurrency_excess` IntVar per quarter-slot carrying break variables, plus the
+`excess >= break_count - cap` constraint that defines it. `fail` adds
+`break_count <= cap` for the same slots — same number of constraints, no slack
+variable. The 387-variable difference is the penalty machinery that `fail` does
+not need because it forbids outright.
+
+## Verdict on break concurrency
+
+* **Present:** proven structurally — `fail` builds 387 hard per-slot constraints
+  with no slack variable.
+* **`warn` semantics:** proven behaviourally — permits and records violations,
+  and the recorded count tracks the configured cap.
+* **`fail` semantics:** *not* proven to the `INFEASIBLE` standard the other
+  twelve rules met. Recorded as partially verified rather than claimed.
+
+## Final standing
+
+| verification level | rules |
+|---|---|
+| **fully proven** (binds, and its switch releases it) | 12 — leave, hard OFF, strict OFF count, max shift variety, rest gap, language minimum, opening minimum, fixed-shift legality, language minimum surviving breaks, nesting-group equality, hard floor, minimum tier lock |
+| **binds, release indicated not proven** | week-boundary carry-out |
+| **present and one mode proven** | break concurrency |
+| **needs a purpose-built fixture** | blank-interval staffing |
+| **not probeable — soft objective terms** | coverage floor / target |
+
+**New engine defects found across all three rounds: zero.**
+
+Seven of my probe constructions were invalid. Every one failed the same way —
+mutating a parsed contract in a way that makes the model infeasible for a reason
+other than the rule under test — which is the strongest argument yet for
+fix-plan **W3**, purpose-built fixtures.

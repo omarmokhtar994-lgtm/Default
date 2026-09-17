@@ -45,8 +45,27 @@ INFEASIBLE at 112 is a *proof*, returned in under two seconds, not a timeout:
 zero loss is impossible on this skeleton. FEASIBLE at 111 is a *witness*: one
 loss is achievable, hard-clean, with no exceptions.
 
-**The provable minimum is 1. The engine shipped 3. Two intervals were left on
-the table.**
+**The provable minimum is 1. The engine shipped 3.**
+
+### How much is really on the table — a correction from a second run
+
+A repeat of that exact configuration (same workbook, same seed 9000, same 900s,
+byte-identical budget plan, same 3 Stage-1 profiles attempted) returned
+`after_target` **110**, not 109 — two losses rather than three.
+
+These runs are budgeted by wall clock, so how much search completes moves with
+machine load. The two runs differ only in `after_target` (109 vs 110) and two
+overage metrics; `before_target`, `before_floor`, `after_floor` and
+`floor_gaps` are identical, and so is every phase allocation.
+
+So the honest figure is **1 to 2 intervals of headroom, not a firm 2**: the
+proven floor is 1 loss, and the engine delivers 2 or 3 depending on the run.
+The defect is unchanged — the recovery phase never runs — but the size of the
+prize is a range, and a single run cannot measure it.
+
+**This matters for how the remediation is measured.** An A/B over a quantity
+whose run-to-run variance is +/-1 interval cannot be decided by one run per
+arm; it needs repeats. Recorded here so the follow-up is not designed badly.
 
 ### Why they were left
 
@@ -214,9 +233,15 @@ made, and none warranted.**
 
 | | verdict | evidence |
 |---|---|---|
-| **B-4** | **real defect** | zero loss proved INFEASIBLE in 1.6s; one loss proved FEASIBLE and hard-clean; engine shipped three; the recovery phase attempted 0 of 14 with a 19s allocation against a 65s guard it cannot reach at QUICK |
+| **B-4** | **real defect** | zero loss proved INFEASIBLE in 1.6s; one loss proved FEASIBLE and hard-clean; engine shipped three on one run and two on a byte-identical repeat, so the headroom is 1-2 intervals; the recovery phase attempted 0 of 14 with a 19s allocation against a 65s guard it cannot reach at QUICK |
 | **B-5** | measured, no symptom | 400,000,000:1 over 14 tiers, 13 non-separating; ~600,000× int64 headroom; priority is enforced by lexicographic selection and hard constraints, not by the weights |
 | **B-6** | **not a defect** | symmetry real (6.2e23) but `symmetry_level` already defaults to 2 and presolve installs a 137×24 orbitope |
 
 One change to shipped behaviour: none. One diagnostic added. One fix written
 and reverted because my own data disproved its premise.
+
+The diagnostic was itself regression-checked on a full run: the budget plan is
+byte-identical to the run before it, phase for phase, and the gate pins that
+asking for diagnostics cannot change the plan. The coverage difference between
+those two runs is wall-clock search variance, which is what prompted the
+correction above.

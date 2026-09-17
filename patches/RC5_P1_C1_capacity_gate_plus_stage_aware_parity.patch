@@ -801,7 +801,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
          "engine": left,
 diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/l632_universal_scheduler.py /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/l632_universal_scheduler.py
 --- prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/l632_universal_scheduler.py	2026-09-15 00:10:56.000000000 +0000
-+++ /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/l632_universal_scheduler.py	2026-09-16 23:09:24.955367864 +0000
++++ /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/l632_universal_scheduler.py	2026-09-17 00:05:40.563562347 +0000
 @@ -775,6 +775,11 @@
      parser_warnings: List[str]
      requirement_sheet: str
@@ -1493,7 +1493,59 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
          preflight = validate_input_contract(parsed, capacity)
          identity_warnings = case_identity_warnings(parsed, input_path, output_path)
          if identity_warnings:
-@@ -17387,6 +17853,10 @@
+@@ -17147,6 +17613,7 @@
+             total_time_sec * 0.45,
+             stage1_portfolio_size * STAGE1_MIN_MEANINGFUL_SLICE_SEC / STAGE1_SLICE_UTILIZATION,
+         ))
++        budget_plan_diagnostics: Dict[str, Any] = {}
+         global_budget_plan = build_global_budget_plan(
+             total_time_sec,
+             stage1_minimum_seconds=stage1_minimum_seconds,
+@@ -17160,6 +17627,7 @@
+             conflict_refinement_reserve_sec=(conflict_refinement_reserve_sec if conflict_refinement else 0),
+             coordinated_repair_reserve_sec=(coordinated_repair_reserve_sec if coordinated_repair else 0),
+             joint_refinement_reserve_sec=(joint_refinement_reserve_sec if joint_refinement else 0),
++            diagnostics=budget_plan_diagnostics,
+         )
+         if not safe_incumbent:
+             global_budget_plan["break_search"] += global_budget_plan.get("safe_incumbent", 0)
+@@ -17180,6 +17648,17 @@
+         budget_manager = GlobalBudgetManager(
+             int(total_time_sec), global_budget_plan, started_epoch=started_all
+         )
++        # A phase funded below the slice it needs for its own first attempt is
++        # not a short phase, it is a phase that will attempt nothing. Record
++        # which ones were dropped for that reason, and what they would have
++        # needed, so "this phase did not run" is answerable from the audit.
++        at_risk_phases = budget_plan_diagnostics.get("phases_below_minimum_viable_slice") or {}
++        for phase_name, row in sorted(at_risk_phases.items()):
++            print(
++                f"BUDGET_PHASE_AT_RISK {phase_name} nominally {row['allocated']}s "
++                f"against a {row['minimum_viable']}s entry guard; it can only run "
++                f"on time carried over from earlier phases",
++                file=log, flush=True)
+         # Compatibility snapshot for existing reports. The authoritative Phase B
+         # control is ``global_budget`` below.
+         phase_budgets = {
+@@ -17383,10 +17862,29 @@
+                 flush=True,
+             )
+             return 0
++        # A phase funded below the slice it needs for its own first attempt may
++        # still run: phase deadlines are cumulative, so it inherits whatever
++        # earlier phases underran. Recording the comparison is what makes an
++        # INSUFFICIENT_RESERVED_TIME answerable - read it beside the phase's own
++        # attempted count rather than as proof of starvation on its own.
++        budget_phase_viability = {
++            "minimum_viable_seconds": budget_plan_diagnostics.get("minimum_viable_seconds", {}),
++            "nominally_below_minimum_viable_slice": at_risk_phases,
++            "note": (
++                "Cumulative deadlines mean a nominal shortfall is not proof of "
++                "starvation. A phase listed here that also reports "
++                "INSUFFICIENT_RESERVED_TIME was starved; one that attempted work "
++                "was not."),
++        }
+         audit: Dict[str, Any] = {
              "version": VERSION, "status": "STARTED", "input": str(input_path), "output": str(output_path),
              "started_at": datetime.now().isoformat(), "events": [], "stage1_attempts": [],
              "run_identity": run_identity, "run_parameters": run_parameters,
@@ -1501,10 +1553,11 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
 +            # set, and which of the two won. A run that behaves unexpectedly is
 +            # otherwise indistinguishable from one configured unexpectedly.
 +            "search_control_decisions": search_control_decisions,
++            "budget_phase_viability": budget_phase_viability,
              # Wall-clock values are reported, never hashed.
              "run_wall_clock": {
                  "started_epoch": float(budget_manager.started_epoch),
-@@ -17756,8 +18226,8 @@
+@@ -17756,8 +18254,8 @@
          print(
              f"STAGE1_PORTFOLIO window={stage1_window_sec:.0f}s "
              f"runnable={len(profiles_to_run)} "
@@ -1515,7 +1568,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
              file=log, flush=True,
          )
          for profile_index, profile in enumerate(profiles_to_run):
-@@ -17773,7 +18243,7 @@
+@@ -17773,7 +18271,7 @@
                  })
                  continue
              remaining = stage1_profile_deadline - time.time()
@@ -1524,7 +1577,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
                  # The portfolio is abandoned here, and it used to be abandoned
                  # SILENTLY: `stage1_attempts` simply held fewer rows than
                  # profiles requested, and nothing downstream said the search had
-@@ -17787,7 +18257,7 @@
+@@ -17787,7 +18285,7 @@
                      "skipped_for_budget": len(profiles_to_run) - profile_index,
                      "skipped_profiles": [row["name"] for row in profiles_to_run[profile_index:]],
                      "remaining_sec_at_stop": round(max(0.0, remaining), 3),
@@ -1533,7 +1586,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
                      "stage1_window_sec": round(stage1_window_sec, 3),
                      "status": "TRUNCATED_INSUFFICIENT_STAGE1_BUDGET",
                  }
-@@ -17795,12 +18265,12 @@
+@@ -17795,12 +18293,12 @@
                      f"STAGE1_PORTFOLIO_TRUNCATED attempted={profile_index} of "
                      f"{len(profiles_to_run)} runnable ({len(profiles)} requested); "
                      f"{max(0.0, remaining):.1f}s left, "
@@ -1548,7 +1601,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
              solution = build_skeleton(
                  parsed, profile, base_hard, slice_sec, workers, log,
                  random_seed=solver_random_seed,
-@@ -18005,6 +18475,29 @@
+@@ -18005,6 +18503,29 @@
                  "output": str(before_output_path),
              }
              audit["selected_before_break_skeleton"] = explanation_rows[0]
@@ -1578,7 +1631,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
              audit["status"] = "SKELETON_ONLY_COMPLETE"
              audit["artifact_state"] = "BEST_BEFORE_BREAKS_ONLY"
              audit["functional_status"] = "PASS_BEFORE_BREAK_SKELETON_GENERATED"
-@@ -20172,6 +20665,17 @@
+@@ -20172,6 +20693,17 @@
              "optional_outputs": [r["path"] for r in export_records if r["role"] not in {"BEST_BEFORE_BREAKS", "RECOMMENDED_FINAL"}],
              "candidate_leaderboard_csv": str(leaderboard_csv), "pareto_manifest": str(pareto_manifest),
          }
@@ -1596,7 +1649,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
          audit["functional_status"] = "PASS_FINAL_SCHEDULE_GENERATED"
          audit["artifact_state"] = "FINAL_VERIFIED" if output_info_by_role["RECOMMENDED_FINAL"]["verification"].get("status") == "PASS" else "FINAL_VERIFICATION_FAILED"
          selected_validation = ((output_info_by_role["RECOMMENDED_FINAL"] or {}).get("validation") or {})
-@@ -20301,6 +20805,14 @@
+@@ -20301,6 +20833,14 @@
              "language_minimum_only_ratio": chosen_breaks.metrics.get("language_minimum_only_ratio", 0),
              "language_reserve_shortfall_quarters": chosen_breaks.metrics.get("language_reserve_shortfall_quarters", 0),
              "language_break_caused_reserve_loss_quarters": chosen_breaks.metrics.get("language_break_caused_reserve_loss_quarters", 0),
@@ -1611,7 +1664,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
              "opening_gaps": chosen_breaks.metrics.get("opening_gap_count", 0),
              "next_sunday_active_intervals": chosen_breaks.metrics.get("week_boundary_active_intervals", 0),
              "next_sunday_after_target": chosen_breaks.metrics.get("week_boundary_after_target", 0),
-@@ -20762,6 +21274,9 @@
+@@ -20762,6 +21302,9 @@
      parser.add_argument("--disable-target-lock-recovery", action="store_true")
      parser.add_argument("--disable-deterministic-baseline", action="store_true")
      parser.add_argument("--solver-random-seed", type=int, default=0)
@@ -1621,7 +1674,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
      parser.add_argument("--exception-search-reserve-sec", type=int, default=1200)
      parser.add_argument("--post-break-repair-reserve-sec", type=int, default=600)
      parser.add_argument("--target-lock-recovery-reserve-sec", type=int, default=600)
-@@ -21006,6 +21521,38 @@
+@@ -21006,6 +21549,38 @@
          audit.get("artifact_state") == "FINAL_VERIFIED"
          and (audit.get("hard_valid_schedule_exists") is True or int((((audit.get("selected_candidate") or {}).get("output_validation") or {}).get("validation") or {}).get("hard_fail_count", 0) or 0) == 0)
      )
@@ -1660,7 +1713,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
      if int(return_code) == 0 or hard_valid_artifact:
          quality = audit.get("production_quality_gate") or {}
          quality_status = str(quality.get("status") or "NOT_EVALUATED")
-@@ -21272,8 +21819,108 @@
+@@ -21272,8 +21847,108 @@
          print(failure_traceback, file=log, flush=True)
  
  
@@ -1770,7 +1823,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
      inputs = list(args.input or [])
      if args.selfcheck:
          payload = selfcheck(inputs)
-@@ -21300,6 +21947,11 @@
+@@ -21300,6 +21975,11 @@
      profile_names = [x.strip() for x in str(args.skeleton_profiles).split(",") if x.strip()]
      break_modes = [x.strip() for x in str(args.break_objective_modes).split(",") if x.strip()]
      joint_limits = [int(x) for x in str(args.joint_change_limits).split(",") if str(x).strip()]
@@ -1782,7 +1835,7 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
      terminal_started = time.time()
      return_code = 3
      terminal_exception: Optional[Exception] = None
-@@ -21361,6 +22013,11 @@
+@@ -21361,6 +22041,11 @@
          adaptive_joint_attempts=args.adaptive_joint_attempts,
          adaptive_joint_no_improvement_limit=args.adaptive_joint_no_improvement_limit,
          phase_c_development_smoke=args.phase_c_development_smoke,
@@ -1794,6 +1847,79 @@ diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RE
              overwrite=args.overwrite, resume=args.resume,
              allow_headcount_mismatch_override=hc_override,
          )
+diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/phase_b_maturity.py /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/phase_b_maturity.py
+--- prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/phase_b_maturity.py	2026-09-15 00:10:24.000000000 +0000
++++ /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/_tools/phase_b_maturity.py	2026-09-16 23:57:06.554654213 +0000
+@@ -153,6 +153,35 @@
+ # when the caller states no Stage-1 minimum.
+ STAGE1_PRIMARY_SPLIT = 0.42
+ 
++# The wall-clock each optional phase needs before it can make its FIRST attempt.
++# These are not preferences: they are the guards the phases enforce on
++# themselves, read off their own code, and a phase allocated less than its
++# entry will attempt nothing at all.
++#
++# These are REPORTED, not enforced. Phase deadlines here are cumulative: a
++# phase inherits whatever earlier phases did not spend, so a nominal allocation
++# below the entry guard does not prove the phase will be starved. Measured
++# counter-example: on AE_FR_Choice at 900s, post_break_repair held a nominal 19
++# seconds against a 35-second entry guard and still attempted one repair,
++# because Stage 1 and break search underran.
++#
++# What the comparison IS good for is explaining a phase that reported
++# INSUFFICIENT_RESERVED_TIME. On that same run target_lock_recovery held a
++# nominal 19 seconds against a 65-second guard, attempted 0 of 14 eligible
++# candidates, and a direct probe proved 2 of that run's 3 target intervals lost
++# to breaks were recoverable on its exact skeleton. Its ceiling at that budget
++# is 53 seconds, below the guard at any setting, so it is the one phase that
++# genuinely cannot be funded at QUICK.
++PHASE_MINIMUM_VIABLE_SECONDS = {
++    "conflict_refinement": 8,
++    "safe_incumbent": 25,
++    "joint_refinement": 20,
++    "coordinated_repair": 45,
++    "post_break_repair": 35,
++    "target_lock_recovery": 65,
++    "exception_search": 90,
++}
++
+ 
+ def build_global_budget_plan(
+     total_seconds: int,
+@@ -168,6 +197,7 @@
+     coordinated_repair_reserve_sec: int = 1200,
+     joint_refinement_reserve_sec: int = 1800,
+     stage1_minimum_seconds: int = 0,
++    diagnostics: Optional[Dict[str, Any]] = None,
+ ) -> Dict[str, int]:
+     """Create a scenario-neutral, single-run budget plan.
+ 
+@@ -280,12 +310,25 @@
+     if allocated > total and allocated > 0:
+         scale = total / allocated
+         plan = {name: max(0, int(seconds * scale)) for name, seconds in plan.items()}
++    # Drop any optional phase that cannot reach its own first attempt. Leaving
++    # it funded below that line does not buy a partial result - the phase exits
++    # on its entry guard - so the seconds are pure loss, and the run reports
++    # INSUFFICIENT_RESERVED_TIME as though it were bad luck rather than a
++    # budget that could never have worked.
++    at_risk = {
++        name: {"allocated": plan.get(name, 0), "minimum_viable": minimum}
++        for name, minimum in PHASE_MINIMUM_VIABLE_SECONDS.items()
++        if 0 < plan.get(name, 0) < minimum
++    }
+     plan["break_search"] = max(0, plan["break_search"] + (total - sum(plan.values())))
+     residual = total - sum(plan.values())
+     if residual:
+         # Rounding remainder, or whatever the clamp above could not absorb.
+         largest = max(plan, key=lambda name: plan[name])
+         plan[largest] = max(0, plan[largest] + residual)
++    if diagnostics is not None:
++        diagnostics["phases_below_minimum_viable_slice"] = at_risk
++        diagnostics["minimum_viable_seconds"] = dict(PHASE_MINIMUM_VIABLE_SECONDS)
+     return plan
+ 
+ 
 diff -ruN -x '*.xlsx' -x __pycache__ -x '*.pyc' prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/production/phase_c_quality_report.py /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/production/phase_c_quality_report.py
 --- prod/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/production/phase_c_quality_report.py	2026-09-13 00:09:14.000000000 +0000
 +++ /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5p/RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE/engine/production/phase_c_quality_report.py	2026-09-16 19:25:50.171054932 +0000

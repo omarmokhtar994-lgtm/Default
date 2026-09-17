@@ -107,14 +107,57 @@ detectable from the contract alone and is instead left to die in the solver.
 
 ---
 
-## Coverage these four restore
+## Correction — two of these four were largely redundant
 
-| dimension | shipped corpus | with fixtures |
-|---|---|---|
-| floor ratio ≠ 0.80 | 1 of 15 | covered, and separating |
-| nesting groups | **0 of 15** | covered |
-| multiple shift durations | **0 of 15** | covered |
-| fixed requests enabled | 1 of 15 | covered |
+My corpus-diversity measurement was scoped to the 15-workbook AE corpus
+(`ae/.../inputs/` plus `ready_inputs/`). It did **not** include this directory,
+which already held four fixtures from earlier work in this project. Checking
+them afterwards:
+
+| pre-existing fixture | floor | durations | nesting | fixed |
+|---|---|---|---|---|
+| `Cricut_Voice_ROSTER_RECONCILED_40` | 0.80 | [540] | no | yes |
+| `NMG_EN_REST_SAFE_REGRESSION_…` | 0.75 | [540] | no | yes |
+| `NMG_EN_SP_DIRECTIONAL_BILINGUAL` | 0.75 | [540] | no | no |
+| `SAKS_11H_3OFF_ENABLED` | 0.80 | **[540, 660]** | no | no |
+
+So "multiple shift durations: 0 of 15, never exercised" was true of the AE
+corpus and **wrong about what the project already had** — `SAKS_11H_3OFF_ENABLED`
+covers it. Likewise fixed requests were already covered twice.
+
+### What actually survives as necessary
+
+**FX2 (nesting group) — unique.** Nesting groups are at **zero** across the 15
+workbooks *and* all four pre-existing fixtures. Nothing else reproduces S6-1 or
+S6-2.
+
+**FX1 (floor 0.60) — necessary, and the existing 0.75 fixtures do not replace
+it.** Measured:
+
+```
+NMG_EN_REST_SAFE… (floor 0.75)   before_floor=225  before_80=225   identical
+SYNTHETIC_FIXTURE_FLOOR_NOT_80   before_floor=86   before_80=72    SEPARATES (+14)
+```
+
+A floor of 0.75 sits inside the same coverage cluster as 0.80, so it proves
+nothing — the exact trap I fell into on my own first attempt. FX1 is the only
+fixture in the project that can catch the ten `*_floor → *_80` fallbacks.
+
+**FX3 (multi-duration) — largely redundant** with `SAKS_11H_3OFF_ENABLED`. It
+keeps a narrow advantage: 8 associates against SAKS's 50, so it is fast enough
+for a per-commit gate where SAKS is not.
+
+**FX4 (fixed exact days) — largely redundant** with the two pre-existing
+fixtures that enable fixed requests. Retained only because it demonstrates
+S6-2's root cause in one line (`nesting_group` cleared by the parser) and
+because building it surfaced the fixed-request-on-a-leave-day gap.
+
+### The lesson
+
+I measured a corpus without first checking what the project already had. That
+is the same scoping error that made my first C-2 assessment wrong: I checked the
+parser but not the workbooks. Measure the thing, then check whether someone has
+already measured it.
 
 ## Once the findings are fixed
 

@@ -52,8 +52,17 @@ finding into a failing test:
 | a workbook with **multiple shift durations** | the 11H/3OFF path and `rest_compatible` across durations, both at 0/15 coverage |
 | a workbook with **fixed requests enabled** | the fixed/nesting subsystem (#16), at 1/15 |
 
-**Effort:** small–medium. **Unlocks:** this is the cheapest way to convert four
-latent findings into caught ones, and it is why they stayed invisible.
+**Effort:** small–medium. **Unlocks:** this is the cheapest way to convert
+latent findings into caught ones.
+
+**Update after building them:** only **two** of the four were actually needed.
+The project already had `SAKS_11H_3OFF_ENABLED` (multi-duration) and two
+fixtures enabling fixed requests — my corpus measurement was scoped to the AE
+corpus and missed this directory. What survives as necessary is **FX2**
+(nesting groups: zero coverage anywhere, and the only reproduction of S6-1/S6-2)
+and **FX1** (floor 0.60: the pre-existing floor-0.75 fixtures sit inside the
+same coverage cluster as 0.80 and measure `before_floor == before_80`, so they
+cannot catch the ten `*_floor → *_80` fallbacks; FX1 separates by 14).
 
 ## W4 — One source of truth for defaults *(fixes #6, RC-B / C-1 / S10-1)*
 

@@ -16,10 +16,10 @@ cross-cutting automated scans.
 | S6 | Stage-1 skeleton search | 3970–6168 | **read** |
 | S7 | Stage-2 break search | 6171–7657 | **read** (high-risk paths) |
 | S8 | metrics & diagnostics | 7661–9541 | **read** (high-risk paths) |
-| S9 | candidate selection & Pareto | 9550–11429 | scanned |
-| S10 | output & release gates | 11432–12493 | scanned |
-| S11 | joint / adaptive refinement | 12496–15755 | scanned |
-| S12 | recovery phases | 15759–17265 | scanned |
+| S9 | candidate selection & Pareto | 9550–11429 | **read** (decision paths) |
+| S10 | output & release gates | 11432–12493 | **read** (gate paths) |
+| S11 | joint / adaptive refinement | 12496–15755 | scanned + hits read |
+| S12 | recovery phases | 15759–17265 | scanned + hits read |
 | S13 | orchestration (`run_case`) | 17268–20933 | scanned |
 | S14 | CLI, selfcheck, business outcome | 20935–22090 | scanned |
 | S15–17 | runner, validator, satellites | 2,136 | **read** |
@@ -256,3 +256,170 @@ Two things make it worth fixing anyway:
    (pessimistic). One missing input produces a picture that cannot be true.
 
 Same family as C-1: a fallback default that is not the declared value.
+
+---
+
+## S9 — candidate selection and Pareto
+
+Coverage note: read the decision-critical functions (`_candidate_quality_tuple`,
+`candidate_dominates`, `nondominated_candidates`, `select_export_candidates`
+entry/exit, the prefix helpers), not all 1,880 lines.
+
+### S9-0 (positive): the quality tuple handles the S8-1 trap correctly
+
+Where seven other sites fall back from a before-name to an after-name,
+`_candidate_quality_tuple` **branches** instead:
+
+```python
+severe_gaps = int((metrics.get("before_severe_floor_gap_count", 0) if prefix == "before"
+                   else metrics.get("severe_floor_gap_count", 0)) or 0)
+```
+
+The most decision-critical function in the engine gets this right.
+
+### S9-1 (fragile, currently correct): seven unprefixed after-terms in a before ranking
+
+Seven terms are read unprefixed and are after-break quantities:
+`week_boundary_hard_failure_count`, `language_reserve_shortfall_quarters`,
+`language_minimum_only_quarters`, the two `week_boundary_language_*` variants,
+`language_break_caused_reserve_loss_quarters`, `skill_allocation_gap_quarters`,
+plus the three `whole_week_*` terms — while `week_boundary_{prefix}_target` and
+`week_boundary_{prefix}_floor` next to them **are** prefixed.
+
+Correct today: all four `prefix="before"` call sites (11343, 11371, 12498,
+18485) pass `no_break_metrics`, where after == before because no breaks are
+placed. Nothing states that invariant — no assertion, no docstring line — and
+the function's signature accepts any metrics dict with any prefix.
+
+### S9-2 (MEDIUM-LOW): Pareto dominance and the lexicographic order disagree
+
+`candidate_dominates` compares **15 dimensions**; `_candidate_quality_tuple`
+has ~31 terms. About 15 of the lexicographic terms are not dominance
+dimensions, among them `floor_deficit_max`, every `language_*` term,
+`skill_allocation_gap_quarters`, the `whole_week_*` trio, `before_floor`, and
+most of the overage-distribution block.
+
+So B can rank **above** A lexicographically while A dominates B:
+
+* A and B tie on every dominance dimension that appears early in the tuple.
+* The first tuple term where they differ is a non-dominance term where B wins.
+* A is strictly better on some *later* dominance dimension.
+* → A dominates B → `nondominated_candidates` discards B, the lexicographic
+  winner.
+
+`week_boundary_hard_failure_count` cannot trigger this — it is hard-gated
+through `validate_schedule`, so compliant candidates all carry 0. The ~15 soft
+terms can.
+
+**Severity is limited by where the frontier is used.** The release
+recommendation comes from `target_priority_tradeoff_select(selection_pool, …)`
+— the full pool, not the frontier. The frontier only drives the *alternative*
+exports: `SAFER_BALANCED_CANDIDATE` (11019), `MAX_FLOOR_CANDIDATE` (11021),
+`BALANCED_CANDIDATE` (11043) and the Pareto manifest. So the shipped schedule
+is unaffected; the menu of alternatives offered to the planner can omit the
+best option on those soft dimensions.
+
+### S9-3 (structural): eleven different candidate orderings
+
+`protected_floor_anchor_key`, `target_anchor_key`, `repair_candidate_key`,
+`_candidate_quality_tuple`, `break_solution_key`, `protected_safe_fallback_key`,
+`candidate_dominates`, `safety_key`, `coverage_sum_key`,
+`skeleton_quality_key`, `skeleton_breakability_priority_key`.
+
+Eleven orderings over the same candidates, at least one pair provably
+inconsistent (S9-2). Each is individually reasonable; there is no single place
+that states how they relate.
+
+---
+
+## S10 — output and release gates
+
+### S10-0 (positive): a disabled gate does not manufacture evidence
+
+```python
+# ... evidence read as a pass. Turning a gate off must not create
+# evidence that it held.
+gate_results[gate] = "NOT_ENFORCED"
+```
+
+Three distinct states — PASS, NOT_ENFORCED, FAIL — with suppressed rows kept.
+This is the right design and it is worth saying so.
+
+### S10-1: C-1's shadow defaults sit inside the production release gate
+
+`production_quality_gate` reads its limits through the same permissive
+`getattr` pattern:
+
+| line | read | declared |
+|---|---|---|
+| 11790, 11851 | `quality_max_target_losses_from_breaks`, **999999** | 6 |
+| 11795 | `whole_week_max_overage_cap_violations`, **999999** | 0 |
+| 11797 | `whole_week_max_imbalance_violations`, **999999** | 0 |
+| 11796 | `whole_week_overage_cap_ratio`, **2.0** | 1.35 |
+
+Still latent, but this raises C-1 from internal plumbing to the release gate
+itself, and strengthens the case for removing the defaults rather than
+documenting them.
+
+Also confirms B-9's relevance: `transferable_overstaffing_pair_count` is used
+here as a hard `> 0` gate condition and has no independent check.
+
+---
+
+## S11 — joint / adaptive refinement
+
+Coverage note: 3,260 lines, the largest section after `run_case`. Covered by
+targeted defect-class scans plus reads of the hits. Not read end to end.
+
+Scan results: 19 silent `except` handlers, 9 `getattr(parsed, …)` shadow
+defaults, 1 permissive `metrics.get` default, 0 before/after name fallbacks,
+4 ordering key functions.
+
+### S11-1 (MEDIUM): floor losses borrow the target loss cap, and are never gated
+
+```python
+if before_target_hits and target_hits:
+    model.Add(sum(target_hits) >= sum(before_target_hits)
+              - getattr(parsed, "quality_max_target_losses_from_breaks", 999999))       # 14308
+if getattr(parsed, "target_loss_gate_mode", "warn") == "fail" and floor_hits and before_floor_hits:
+    model.Add(sum(floor_hits) >= sum(before_floor_hits)
+              - getattr(parsed, "quality_max_target_losses_from_breaks", 999999))       # 14310
+```
+
+Three separate problems in two lines:
+
+1. **The floor constraint uses the target cap.** There is no
+   `quality_max_floor_losses_from_breaks` anywhere in the contract — grep
+   confirms it does not exist. The declared 6 was authored as a *target* budget.
+2. **The two are asymmetrically gated.** The target constraint applies
+   unconditionally; the floor constraint applies only when
+   `target_loss_gate_mode == "fail"`. That field's declared default is
+   `"warn"`, so **by default floor losses are unconstrained in joint
+   refinement while target losses are hard-capped.**
+3. **`floor_losses_from_breaks` is never gated at all.**
+   `production_quality_gate` checks only `target_losses_from_breaks` (11790).
+   The floor metric is computed (8074), exported to the leaderboard (12394) and
+   used in a near-feasible test (9986) and a business-outcome branch (11895) —
+   but no release gate ever looks at it.
+
+Floor is the safety threshold, below target. Losing floor coverage to break
+placement is the more serious of the two losses, and it is the one with no cap
+of its own and no gate.
+
+---
+
+## S12 — recovery phases
+
+Scan results: 15 silent `except` handlers, 0 shadow defaults, 0 permissive
+metric defaults, 1 before/after fallback, 0 ordering functions.
+
+### S12-1 (low): one more fallback-to-a-different-metric
+
+```python
+raw = source.get("before_raw_min", source.get("before_raw", 1))      # 16126
+```
+
+Falls back from a *minimum* to a plain value, then to a literal `1`. Same
+family as S8-1 and C-1: the fallback is a different quantity, not a default.
+
+No other findings in S12 from the scans.

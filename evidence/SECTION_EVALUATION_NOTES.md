@@ -628,3 +628,60 @@ and its seconds given to a phase that can use them, rather than burning the
 budget on a search that cannot finish. That is a contained change to the
 planner, and it needs the A/B with repeats noted under B-4 because the effect
 size is one interval.
+
+---
+
+## Correction: the AE_IT_Choice baseline is a blocked run, not a result
+
+An earlier note in this work recorded the AE_IT_Choice baseline as
+"76 -> 76 target". That is wrong and is corrected here.
+
+The authors' recorded baseline for that case
+(`res/AE_REAL_RC5_QUICK_RESULTS/AE_IT_Choice/`) is:
+
+    technical_status          FAIL_NO_FINAL_SCHEDULE
+    outcome_code              NO_FINAL_SCHEDULE_GENERATED_VALIDATION_NOT_RUN
+    status                    FAIL_BREAKS_REQUIRE_EXPLICIT_EXCEPTION_FOR_TESTED_SKELETONS
+    artifact_state            FINAL_DIAGNOSTIC_NO_RELEASE_SCHEDULE
+    independent_validation    NOT_RUN
+
+There is no `after_target` and no `after_floor` for this case, because no
+final schedule workbook was produced and independent validation never ran.
+The 76 I quoted is `best_before_target` -- a Stage-1 figure from the
+summary CSV. Reading it as a before/after pair silently invented an
+after-break number the baseline does not contain.
+
+**Why the baseline blocked** (and this is the engine behaving correctly):
+
+    requested maximum_no_break_associate_days   0
+    break_exceptions_allowed                    False
+    best_proven minimum_no_break_exceptions     1   (lower==upper==1, proven)
+    gap                                         1 associate-day above the cap
+
+Every skeleton the search tested needs at least one associate-day with no
+legal break. The workbook permits zero such exceptions. The engine proved
+the bound (lower == upper == 1) rather than guessing, refused to emit a
+schedule that violates a hard rule, and named the bottleneck:
+
+    Samia Mohamed Hassan El Gaml Mohamed, Fri 08:00-17:00,
+    window Fri 08:00-14:00, blocking families LANGUAGE + ZERO_STAFF
+    English group: 1 affected associate-day across 25 critical quarters
+
+and its recommended actions end with "Change the exception cap only through
+an explicit business decision; the engine will not raise it automatically."
+That is the correct posture: a hard rule is not relaxed to manufacture an
+answer.
+
+**Consequence for scoring the sweep.** AE_IT_Choice cannot contribute a
+target/floor delta, because there is nothing on the baseline side to
+subtract. It is scored only on blocked-vs-unblocked status. `score_sweep45.py`
+now detects `independent_validation.status == NOT_RUN` and reports such a
+case as BLOCKED with its outcome code, excluded from the net, instead of
+coercing it to zeros or to its Stage-1 figures.
+
+**This is the same scope error a third time.** C-2 was rated from the parser
+without opening the workbooks; the fixture-redundancy measurement was scoped
+to the AE corpus and missed the project fixtures; B-9 was verified against my
+own suite and not the gate. Here I read a number out of a summary CSV without
+checking the run status that gives it meaning. In each case the reading was
+defensible in its own frame and wrong once the frame was widened.

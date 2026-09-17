@@ -217,3 +217,57 @@ cleanup.
 
 Moved out of the cleanup batch and into the behavioural group, which is now
 four items rather than three.
+
+## S13-2 done: 213 dead lines deleted
+
+Six top-level functions, 213 lines, proven unreachable three independent ways
+before anything was removed:
+
+    1. AST        the name appears as no Name load and no Attribute anywhere in
+                  the engine, its satellites, or the test suites
+    2. strings    the name appears in no string literal, so getattr and dispatch
+                  tables cannot reach it
+    3. textual    grep across EVERY file type in the tree, not only .py
+
+    fallback_break_gap_diagnostics             16 lines
+    next_sunday_qslot                           2
+    next_sunday_same_day_shift_can_cover       15
+    merge_compliant_with_safe_incumbent        38
+    optimization_phase_budgets                 37
+    run_joint_cp_sat_refinement_phase         105
+
+Two of them were worse than unused -- they read as live policy.
+`run_joint_cp_sat_refinement_phase` is a complete superseded joint-refinement
+phase; anyone reading it would reasonably believe it is what runs.
+`optimization_phase_budgets` is a budget planner whose numbers look
+authoritative and are allocated nowhere. Those two are the reason this was
+worth doing at all: dead code that looks like policy misleads the next reader,
+including me -- I spent time earlier today reading the real budget planner to
+root-cause the AE_IT_B2B Stage-1 drop.
+
+The near-miss that justified check three: `next_sunday_qslot` shows three
+textual hits, but two are `protected_next_sunday_qslots` in the validator -- a
+different identifier containing the substring. An AST-only or a grep-only check
+would each have been fine here, but only together do they say so confidently.
+
+The applier refuses to delete anything still referenced, and asserts no
+function outside the target list disappeared.
+
+Verified: gate PASS 18 suites, and four real workbooks solve clean with
+validation PASS and parity 48/48.
+
+---
+
+# Cleanup pass complete
+
+    DONE  W1 bound revert   the harmful constraint, removed
+    DONE  RC-B              49 divergent shadow defaults aligned
+    DONE  RC-A              18 silent cross-metric fallbacks now fail by name
+    DONE  CM-1              the one field that was not its own alias
+    DONE  S6-1 + S6-2       nesting-group leave conflict is now named
+    DONE  S13-2             213 dead lines deleted
+    n/a   C-2               unreachable through Excel
+    n/a   S6-3              corpus-coverage gap, not code
+    MOVED S9-1              reclassified as behavioural
+
+Release tree: GATE PASS 18 suites; four real workbooks PASS at parity 48/48.

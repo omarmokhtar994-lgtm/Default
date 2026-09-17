@@ -134,6 +134,20 @@ whose docstring reads as current policy.
 
 ---
 
+## How to apply it
+
+`tools/apply_fix_plan.sh <tree>` applies the staged steps in the order below and
+**runs the full gate after every one**, stopping at the first failure so the
+tree is left at the last good state and the failure is readable rather than
+buried under the next change. `--dry-run` does the whole thing against a copy.
+
+It covers W1, W2 (B-12 → B-11 → C-3, in that order because B-11 false-positives
+without the header fix), the first half of W7 (B-9), and W10. W3's fixtures are
+inputs and need no application.
+
+The steps it deliberately does **not** automate, because each needs a decision
+or a measurement rather than a patch: W4, W5, W6, W7b, W8, W9, W11.
+
 ## Order, and why
 
 **W1 → W2 → W3 → W4 → W5 → W6 → W7 → W8 → W9 → W10 → W11**

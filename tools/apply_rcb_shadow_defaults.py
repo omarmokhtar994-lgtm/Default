@@ -1,9 +1,39 @@
 #!/usr/bin/env python3
-"""RC-B: delete the permissive shadow defaults on ParsedInput field reads.
+"""RC-B: align the shadow defaults with the declared ones.
 
-`getattr(parsed, "x", <shadow>)` where `x` is a declared dataclass field is
-dead code: the attribute always exists, so the shadow never fires. Collapsing
-it to `parsed.x` is therefore a behaviour-preserving refactor.
+FIRST ATTEMPT, AND WHY IT WAS WRONG. This applier originally collapsed
+`getattr(parsed, "x", <shadow>)` to `parsed.x`, on the reasoning that a
+declared dataclass field always exists so the shadow is dead. The gate
+disproved it immediately:
+
+    AttributeError: 'types.SimpleNamespace' object has no attribute
+                    'quality_max_floor_gap_ratio'
+    FAILED: tests/test_rc9_2_1_selector_integrity.py (11 errors)
+
+Callers pass duck-typed stand-ins, not only real ParsedInput instances, so the
+shadow genuinely fires. The defensive read has to stay.
+
+WHAT THE DEFECT ACTUALLY IS. Not that a default exists -- that its VALUE
+disagrees with the policy the dataclass declares, and in two cases with
+itself. A stand-in missing the field silently gets the permissive answer:
+
+    whole_week_max_adjacent_raw_change      declared 3      shadow 999999
+    whole_week_max_imbalance_violations     declared 0      shadow 999999
+    whole_week_max_overage_cap_violations   declared 0      shadow 999999
+    whole_week_overage_cap_ratio            declared 1.35   shadow 2.0
+    employee_max_weekend_load_delta         declared 3      shadow 999999
+    employee_max_overnight_load_delta       declared 3      shadow 999999
+    employee_max_late_shift_load_delta      declared 3      shadow 999999
+    employee_min_preference_satisfaction    declared 0.5    shadow 0.0
+    skill_allocation_audit_enabled          declared True   shadow False
+    quality_gate_mode                       declared 'fail' shadow 'off'
+    employee_quality_gate_mode              declared 'warn' shadows 'off' AND 'warn'
+    whole_week_gate_mode                    declared 'warn' shadows 'off' AND 'warn'
+
+So this applier now REWRITES THE SHADOW to the declared default rather than
+removing it. The defensive read survives; the permissiveness and the
+self-disagreement do not. A stand-in missing a field now inherits the real
+policy instead of an unlimited one.
 
 It is worth doing because the shadows are not neutral. They are systematically
 MORE PERMISSIVE than the declared defaults:
@@ -50,6 +80,21 @@ def declared_fields(tree):
     return out
 
 
+# A dataclasses field(default_factory=X) declares the value X() builds. The
+# literal a call site writes for it is therefore EQUIVALENT, not divergent --
+# treating it as divergent made the applier try to write the Field sentinel
+# itself into the source.
+FACTORY_EQUIV = {
+    "field(default_factory=dict)": "{}",
+    "field(default_factory=list)": "[]",
+    "field(default_factory=set)": "set()",
+}
+
+
+def equivalent(shadow, decl):
+    return shadow == decl or FACTORY_EQUIV.get(decl) == shadow
+
+
 def targets(tree, declared):
     """Every collapsible getattr(parsed, "<declared field>", <shadow>) call."""
     found = []
@@ -93,19 +138,34 @@ def main():
     out = src
     divergent = 0
     for lineno, col, end_lineno, end_col, field, shadow, decl in edits:
-        if shadow != decl:
+        if not equivalent(shadow, decl):
             divergent += 1
+        if equivalent(shadow, decl):
+            continue                      # already agrees; leave it untouched
+        if decl == "<required>":
+            continue                      # no declared default to align to
+        if decl.startswith("field("):
+            # A dataclasses.field(...) sentinel is not a usable literal: writing
+            # it as the shadow would hand the caller a Field object instead of
+            # the value the factory builds. Caught by reading the first rewrite
+            # rather than by the gate, which does not exercise these paths with
+            # the attribute absent.
+            continue
         a, b = pos(lineno, col), pos(end_lineno, end_col)
-        out = out[:a] + "parsed." + field + out[b:]
+        out = (out[:a] + 'getattr(parsed, "%s", %s)' % (field, decl) + out[b:])
 
     # the rewrite must not change how the file parses beyond these calls
     ast.parse(out)
-    remaining = targets(ast.parse(out), declared)
-    assert not remaining, "collapse incomplete: %d site(s) left" % len(remaining)
+    # every remaining site must now agree with the declared default
+    still = [(f, s_, d) for _, f, s_, d in
+             ((h[0], h[4], h[5], h[6]) for h in targets(ast.parse(out), declared))
+             if not equivalent(s_, d) and d != "<required>"
+             and not d.startswith("field(")]
+    assert not still, "still divergent after rewrite: %r" % (still[:5],)
 
-    print("collapsed %d getattr-with-shadow site(s) across %d field(s)"
+    print("aligned %d divergent shadow default(s) to the declared value" % divergent)
+    print("  inspected %d site(s) across %d field(s)"
           % (len(hits), len({h[4] for h in hits})))
-    print("  of those, %d had a shadow DIFFERENT from the declared default" % divergent)
     print("  left alone (shadow is load-bearing): %s" % ", ".join(sorted(LEAVE_ALONE)))
     if dry:
         print("  --dry-run: nothing written")

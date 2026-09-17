@@ -20,8 +20,8 @@ cross-cutting automated scans.
 | S10 | output & release gates | 11432–12493 | **read** (gate paths) |
 | S11 | joint / adaptive refinement | 12496–15755 | scanned + hits read |
 | S12 | recovery phases | 15759–17265 | scanned + hits read |
-| S13 | orchestration (`run_case`) | 17268–20933 | scanned |
-| S14 | CLI, selfcheck, business outcome | 20935–22090 | scanned |
+| S13 | orchestration (`run_case`) | 17268–20933 | structural + hits read |
+| S14 | CLI, selfcheck, business outcome | 20935–22090 | **read** (defaults surface) |
 | S15–17 | runner, validator, satellites | 2,136 | **read** |
 
 ---
@@ -423,3 +423,110 @@ Falls back from a *minimum* to a plain value, then to a literal `1`. Same
 family as S8-1 and C-1: the fallback is a different quantity, not a default.
 
 No other findings in S12 from the scans.
+
+---
+
+## S13 — orchestration (`run_case`, 3,666 lines)
+
+Coverage note: covered by structural analysis (phase map, dead-code analysis,
+audit-key analysis, defect-class scans) plus reads of every hit. Not read end
+to end — this is the least completely reviewed section.
+
+Scan results: 23 silent `except` handlers, 0 `getattr(parsed, …)` shadow
+defaults, 3 before/after name fallbacks, 181 `audit[...]` assignments,
+14 phase functions invoked.
+
+### S13-1 (MEDIUM): a fallback substitutes the 80% tier for the configured floor
+
+```python
+before_floor = int(metrics.get("before_floor", metrics.get("before_80", 0)) or 0)   # 19370
+```
+
+`before_floor` counts intervals meeting the **configured** floor ratio;
+`before_80` counts intervals meeting a hardcoded **80%**. They are the same
+number only when `floor_ratio == 0.80`.
+
+Measured across the corpus: 14 of 15 workbooks use floor 0.80, so the two
+coincide — but **NMG12 uses floor 0.85**, where the fallback would substitute a
+strictly looser tier and overstate floor attainment.
+
+Worse than the S8-1 family: that one substitutes the wrong *stage* of the same
+metric, this one substitutes a *different metric*. Latent, because
+`before_floor` is always emitted.
+
+### S13-2: 213 lines of dead code, including a whole phase and a whole budget planner
+
+Dead-function analysis across the package — defined, and referenced nowhere
+in any `.py` file:
+
+| lines | at | name |
+|---|---|---|
+| 105 | 14603 | `run_joint_cp_sat_refinement_phase` |
+| 38 | 10309 | `merge_compliant_with_safe_incumbent` |
+| 37 | 12803 | `optimization_phase_budgets` |
+| 16 | 2126 | `fallback_break_gap_diagnostics` |
+| 15 | 3642 | `next_sunday_same_day_shift_can_cover` |
+| 2 | 3638 | `next_sunday_qslot` |
+
+289 top-level functions, 6 dead, 213 lines.
+
+Two are actively misleading rather than merely unused:
+
+* **`run_joint_cp_sat_refinement_phase`** is a complete refinement phase,
+  superseded by `run_adaptive_decomposed_joint_optimizer` (called at 16726,
+  19706, 20046). A reader tracing the joint phase finds two implementations
+  and no marker saying which one runs.
+* **`optimization_phase_budgets`** is a complete *budget planner*, superseded
+  by `build_global_budget_plan` from `phase_b_maturity`. Its docstring
+  describes exactly the failure B-3 investigated — "L6.3.2.1 allowed Stage 1
+  and early searches to consume the full deadline, which silently starved
+  post-break repair and target-lock recovery" — so anyone investigating budget
+  starvation would find it and read it as the governing policy. It is dead.
+
+### S13-3 (noted, not a defect): audit keys are rewritten progressively
+
+`status` is assigned 12 times, `stage2_attempts` 11, `global_budget` 11,
+`elapsed_sec` 8. This is a progress-reporting audit where the last write is
+authoritative, so it is expected — recorded only so it is not mistaken for
+lost diagnostics later.
+
+---
+
+## S14 — CLI, selfcheck, business outcome
+
+### S14-0 (checked, sound): CLI defaults do not contradict the contract
+
+Compared all 72 CLI flag defaults against the 117 `ParsedInput` fields
+carrying a default. Five share a name, and all five are `CLI=None` against a
+field with no dataclass default — the deliberate "not supplied, fall through
+to the workbook" idiom introduced by B-7.
+
+So unlike C-1, the **third** defaults surface (CLI) does not contradict the
+other two. Clean.
+
+---
+
+## Live confirmation of S11-1, from the sweep
+
+Sweep case 2 finished while this section was being written and produced the
+defect directly:
+
+```
+AE_AR_Choice   rc=0  hard_valid=True
+   before_target 141  (baseline 139)   after_target 141  (baseline 139)
+   before_floor  162  (baseline 162)   after_floor  159  (baseline 160)
+   target_losses_from_breaks=0   floor_losses_from_breaks=3
+   validator=PASS   parity=PASS (41 compared, 0 mismatches)   gate=PASS
+```
+
+**Three floor intervals were lost to break placement and the quality gate
+returned PASS.** That is S11-1 exactly:
+
+* `floor_losses_from_breaks = 3` is computed, exported — and gated nowhere.
+* The only constraint that touched it is the joint-refinement bound at 14310,
+  which borrows `quality_max_target_losses_from_breaks` (declared 6), so 3
+  passes a budget authored for a different metric.
+* `target_losses_from_breaks = 0`, so the gate that *does* exist saw nothing.
+
+This is not a hypothetical. It is the difference between the recorded baseline
+floor of 160 and this run's 159.

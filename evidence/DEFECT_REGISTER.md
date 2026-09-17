@@ -106,3 +106,79 @@ Recorded so the register is not read as if it were right first time.
    has the problem.
 6. **B-4 variance** — attributed to wall clock; the precise cause is
    multi-worker nondeterminism, which the engine documents at 17975.
+
+---
+
+# Status as of the post-apply state
+
+The bands above are the register as first written. This section supersedes
+their status columns.
+
+## Tally (distinct findings; the "investigated — no defect" ten are excluded)
+
+    total real findings                     22
+      fixed and verified before today        4   B-1/B-2 group, B-3, B-7, B-8
+      fixed and applied today                4   S11-1, B-11, B-12, C-3
+      partially fixed today                  1   B-9  (W7a landed, W7b open)
+      still open                            13
+
+**All three Band-1 HIGH findings are now closed.** Nothing open is rated HIGH.
+
+## Closed today, with what proves it
+
+    S11-1  floor losses now have a metric, a cap and a gate     gate 18 suites
+    B-11   name-matched sheets fail closed                      TRUE POSITIVE on
+                                                                SAKS_NEW real data
+    B-12   header lookup cannot match a prose banner            0 of 15 contract
+                                                                hashes change
+    C-3    preference vocabulary fails closed                   0 false positives
+                                                                across 15 workbooks
+    B-9    7 metrics independently recomputed, parity 41 -> 48  W7b still open
+
+## Still open — 13
+
+    B-10    break-slice constant is a cap used as a floor        MED   behavioural
+    RC-A    18 cross-metric fallbacks                            MED   inert
+    RC-B    90 permissive shadow defaults                        MED   inert
+    S15-3   phases run below their declared minimum              MED   behavioural
+    S6-1    nesting group + mixed leave silently UNSAT           MED   inert
+    B-9b    3 subsystems the validator does not model            MED   scoping call
+    S9-2    Pareto dominance vs lexicographic order disagree     LOW-MED behavioural
+    C-2     instruction booleans have no unrecognised state      LOW-MED not reachable
+    CM-1    one canonical field is not its own alias             LOW   inert
+    S9-1    unprefixed after-terms in the before-break ranking   LOW   inert
+    S6-2    the nesting-group contract check is unreachable      LOW   inert
+    S13-2   213 dead lines across 6 functions                    LOW   inert
+    S6-3    the fixed/nesting subsystem is unexercised           LOW   structural
+            (plus the misc bundle: minute_of_day, to_float/strict_float, 3 dead
+             determinism sites -- carried as one low item)
+
+## How to sequence the remaining work
+
+The distinction that matters is **not** severity, it is whether a change can
+alter a produced schedule.
+
+**Inert changes** -- parsing, reporting, validation, dead code. The gate can
+prove these. Group them freely and gate after every step. That is exactly what
+`tools/apply_fix_plan.sh` did today: five changes in one session, gate green at
+every step, then a contract smoke across 15 workbooks confirming zero false
+positives. Total cost, one session.
+
+Grouping without per-step gating is the thing to avoid. The B-9 applier was
+incomplete and the per-step gate caught it immediately; batched to the end, that
+failure would have surfaced underneath four later changes and been far harder to
+attribute.
+
+**Behavioural changes** -- anything that alters what the solver produces. These
+cannot be grouped, because if two land together and the sweep moves, the move
+cannot be attributed to either. Each needs its own A/B with repeats, since
+multi-worker CP-SAT is nondeterministic and the effect sizes here are around one
+interval.
+
+Exactly one behavioural change went in today (the now-unconditional
+joint-refinement bound), which is why #48 exists and why it is the one item
+blocking a clean claim about this release.
+
+Of the 13 open findings, **9 are inert and 3 are behavioural** (B-10, S15-3,
+S9-2); B-9b needs a scoping decision before it is either. So the bulk can go in
+one more grouped, per-step-gated pass, and only three need individual A/B runs.

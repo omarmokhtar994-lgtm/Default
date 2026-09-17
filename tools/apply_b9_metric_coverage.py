@@ -109,6 +109,45 @@ VAL_METRIC_REPLACEMENT = """        # B-9: independently derived counterparts fo
         "quality_gate_issue_count":len(quality_issues),"""
 
 
+# ---------------------------------------------------------------------------
+# test_rc9_2_3_max_coverage_hardening builds a synthetic engine/validator pair
+# enumerating the WHOLE parity surface and asserts it compares equal. Adding
+# seven fields to that surface means the fixture must carry them on both sides
+# or every one reports MISSING_CANONICAL_METRIC. The test's intent -- that the
+# engine and validator spellings of the same metric compare equal -- is
+# preserved exactly; the fixture is simply extended to the new surface.
+TEST_ENGINE_ANCHOR = """            "week_boundary_overage_cap_violation_count": 0,
+            "week_boundary_imbalance_violation_count": 0,
+        }
+"""
+TEST_ENGINE_NEW = """            "week_boundary_overage_cap_violation_count": 0,
+            "week_boundary_imbalance_violation_count": 0,
+            # B-9: the seven newly compared fields, engine spellings
+            "target_losses_from_breaks": 2,
+            "floor_losses_from_breaks": 1,
+            "before_severe_floor_gap_count": 0,
+            "hard_floor_gap_count": 0,
+            "week_boundary_hard_failure_count": 1,
+            "week_boundary_max_adjacent_raw_change": 2,
+            "week_boundary_max_coverage_ratio": 1.25,
+        }
+"""
+
+TEST_VALIDATOR_ANCHOR = """                     "next_sunday_overage_cap_violation_count": 0,
+                     "next_sunday_imbalance_violation_count": 0}
+"""
+TEST_VALIDATOR_NEW = """                     "next_sunday_overage_cap_violation_count": 0,
+                     "next_sunday_imbalance_violation_count": 0,
+                     # B-9: the same seven, validator spellings
+                     "target_losses_from_breaks": 2,
+                     "floor_losses_from_breaks": 1,
+                     "before_severe_floor_gap_count": 0,
+                     "hard_floor_gap_count": 0,
+                     "next_sunday_hard_failure_count": 1,
+                     "next_sunday_max_adjacent_raw_change": 2,
+                     "next_sunday_max_coverage_ratio": 1.25}
+"""
+
 def patch(path: Path, pairs) -> None:
     text = path.read_text()
     for anchor, replacement in pairs:
@@ -134,6 +173,10 @@ def main() -> int:
           [(VAL_ADJ_INIT_ANCHOR, VAL_ADJ_INIT_REPLACEMENT),
            (VAL_ADJ_ANCHOR, VAL_ADJ_REPLACEMENT),
            (VAL_METRIC_ANCHOR, VAL_METRIC_REPLACEMENT)])
+    tests = engine.parent / "tests" / "test_rc9_2_3_max_coverage_hardening.py"
+    if tests.exists():
+        patch(tests, [(TEST_ENGINE_ANCHOR, TEST_ENGINE_NEW),
+                      (TEST_VALIDATOR_ANCHOR, TEST_VALIDATOR_NEW)])
     return 0
 
 

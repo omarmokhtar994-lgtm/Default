@@ -730,3 +730,47 @@ not in the engine.
 That said, the direction of the error is the uncomfortable part: the case I
 wrongly included was the one that flattered the result. Nothing about how I
 built the table would have caught the reverse.
+
+---
+
+## Final AE sweep result (6 cases, 45s slice, 3600s budget, seed 9000)
+
+    case            capacity   target b->a (base)   floor b->a (base)   delta      val/gate/parity
+    AE_AR_B2B       ample      168->168 (167->167)  168->168 (168->168)  +1 / +0   PASS/WARN/41-41
+    AE_AR_Choice    tight      141->141 (139->139)  162->159 (162->160)  +2 / -1   PASS/PASS/41-41
+    AE_FR_B2B       ample      112->112 (112->112)  112->112 (112->112)  +0 / +0   PASS/WARN/41-41
+    AE_FR_Choice    ample      112->109 (112->106)  112->112 (112->110)  +3 / +2   PASS/WARN/41-41
+    AE_IT_B2B       SHORT ~95% 78->72   (83->68)    91->88   (93->88)    +4 / +0   PASS/WARN/41-41  (not averaged)
+    AE_IT_Choice    SHORT ~71% BLOCKED               BLOCKED             n/a       baseline also blocked
+
+    MEASURABLE net (4 cases): after_target +6, after_floor +1
+
+**AE_IT_Choice blocked identically to its baseline.** Same outcome code, same
+proven bound, same blocking families:
+
+    requested cap        0 no-break associate-days, exceptions not allowed
+    best proven          minimum 1 (lower == upper == 1)
+    gap                  1 associate-day above the cap
+    blocking families    LANGUAGE + ZERO_STAFF, 25 critical quarters
+
+Only the identity moved -- baseline named Samia on Fri, this run names Abdullah
+on Sun, both on an 08:00-17:00 shift with an 08:00-14:00 unbreakable window.
+That is the signature of a structural bottleneck ("some single English speaker
+must hold this window") rather than a fact about one person, and it is the
+correct answer for a roster short by 47 hours against a hard zero-exception cap.
+No regression.
+
+**Two live S11-1 instances are visible in this data.** AE_AR_Choice gives up 3
+floor intervals with quality gate PASS; AE_IT_B2B gives up 3 with gate WARN.
+Floor losses today have neither a cap nor a gate, so neither case is stopped or
+even flagged as a floor regression. That is precisely the hole W1 closes, and
+these two rows are the evidence that it is reachable on shipped workbooks
+rather than only on fixtures.
+
+**Caveat on measurement conditions.** These six cases ran on a 4-core box with
+the solver on 2 workers, and short unit-test gate runs executed concurrently
+during some cases. The engine is wall-clock budgeted, so CPU contention reduces
+the work done per second of budget. The effect should be small and, where it
+exists, conservative -- it would understate the change under test, not flatter
+it -- but the runs are not from a quiescent machine and should not be quoted as
+if they were.

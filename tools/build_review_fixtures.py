@@ -113,6 +113,61 @@ def main() -> int:
                            for v in next(x for x in p2.associates if x.name == n).preferences)
                      for n in names}) > 1 for names in groups.values())
     print("    group members hold DIFFERENT leave: %s" % mixed)
+
+    # ---- FX3: more than one shift duration (the 11H/3OFF path) -----------
+    fx3 = a.out_dir / "SYNTHETIC_FIXTURE_MULTI_SHIFT_DURATION.xlsx"
+    shutil.copy(a.source, fx3)
+    wb = openpyxl.load_workbook(fx3)
+    set_instruction(wb["Instructions"], "Use 11H/3OFF", "Yes", E)
+    set_instruction(wb["Instructions"], "Allowed Shift Durations Hours", "9, 11", E)
+    lib = wb["Shift Library"]
+    row = lib.max_row + 1
+    for start_h in (8, 10, 12, 14):
+        label = "%02d:00 - %02d:00" % (start_h, (start_h + 11) % 24)
+        lib.cell(row, 1).value = label
+        lib.cell(row, 2).value = "%02d:00" % start_h
+        lib.cell(row, 3).value = "%02d:00" % ((start_h + 11) % 24)
+        lib.cell(row, 4).value = 11
+        lib.cell(row, 5).value = "11H"
+        lib.cell(row, 6).value = "Synthetic fixture: exercises the 11H/3OFF path."
+        row += 1
+    wb.save(fx3)
+    p3 = E.parse_input(fx3)
+    durations = sorted({s.duration_min for s in p3.shifts})
+    print("FX3 %s" % fx3.name)
+    print("    shifts=%d  distinct durations (minutes)=%s  use_11h=%s"
+          % (len(p3.shifts), durations, len(durations) > 1))
+
+    # ---- FX4: fixed requests carrying exact day values -------------------
+    fx4 = a.out_dir / "SYNTHETIC_FIXTURE_FIXED_EXACT_DAYS.xlsx"
+    shutil.copy(a.source, fx4)
+    wb = openpyxl.load_workbook(fx4)
+    set_instruction(wb["Instructions"], "Fixed Request Use", "Yes", E)
+    fr = E._sheet_by_alias(wb, ["Fixed Request", "Fixed Requests", "Nesting", "Fixed/Nesting"])
+    h = E._find_header_row(fr, ["name"])
+    hdr = {E.norm(fr.cell(h, c).value): c for c in range(1, fr.max_column + 1)}
+    c_active = next((c for k, c in hdr.items() if "active" in k), 1)
+    c_name = next(c for k, c in hdr.items() if "name" in k)
+    days = E._day_columns(fr, h)
+    label = base.shifts[0].label
+    # Pick someone with NO leave and no hard OFF. My first attempt used
+    # associates[0], who is on approved leave Sun/Mon/Thu, so the fixture
+    # demanded a fixed shift on leave days and was infeasible by construction.
+    free = next((x for x in base.associates
+                 if not any(E.preference_kind(v) in ("leave", "off") for v in x.preferences)),
+                base.associates[0])
+    r = h + 1
+    fr.cell(r, c_active).value = "Yes"
+    fr.cell(r, c_name).value = free.name
+    for idx, dc in enumerate(days):
+        fr.cell(r, dc).value = label if idx < 5 else "OFF"
+    wb.save(fx4)
+    p4 = E.parse_input(fx4)
+    who = next(x for x in p4.associates if x.name == free.name)
+    print("FX4 %s" % fx4.name)
+    print("    associate=%s (no leave, no hard OFF)" % free.name)
+    print("    fixed_enabled=%s  exact schedule=%s" % (p4.fixed_enabled, who.fixed_schedule))
+    print("    nesting_group cleared by the parser (exact days win): %r" % who.nesting_group)
     return 0
 
 

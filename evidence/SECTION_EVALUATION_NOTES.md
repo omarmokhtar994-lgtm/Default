@@ -22,7 +22,7 @@ cross-cutting automated scans.
 | S12 | recovery phases | 15759–17265 | scanned + hits read |
 | S13 | orchestration (`run_case`) | 17268–20933 | structural + hits read |
 | S14 | CLI, selfcheck, business outcome | 20935–22090 | **read** (defaults surface) |
-| S15–17 | runner, validator, satellites | 2,136 | **read** |
+| S15–17 | runner, validator, satellites | 3,322 | **read** |
 
 ---
 
@@ -530,3 +530,101 @@ returned PASS.** That is S11-1 exactly:
 
 This is not a hypothetical. It is the difference between the recorded baseline
 floor of 160 and this run's 159.
+
+---
+
+## S15–S17 — runner, validator, satellite modules
+
+Correction to my earlier status table: I had marked these "read" on the
+strength of having worked in the validator and `canonical_metrics`. That was
+overstated — `production_output_polisher`, `package_phase_c_outputs` and
+`phase_b_adaptive` had not been read. They have now.
+
+Scan results across all nine modules (3,322 lines):
+
+| file | lines | silent except | getattr | permissive `.get` | before/after fb |
+|---|---|---|---|---|---|
+| RUN_UNIVERSAL_PRODUCTION.py | 1241 | 25 | 0 | 0 | 0 |
+| independent_validator.py | 895 | 11 | 0 | 0 | 0 |
+| canonical_metrics.py | 280 | 2 | 0 | 0 | 0 |
+| phase_b_maturity.py | 589 | 1 | 0 | 4 | 0 |
+| phase_b_adaptive.py | 245 | 0 | 0 | 0 | 0 |
+| phase_c_quality_report.py | 455 | 3 | 0 | 0 | 0 |
+| production_output_polisher.py | 340 | 0 | 0 | 0 | 0 |
+| package_phase_c_outputs.py | 253 | 0 | 0 | 0 | 0 |
+| package_phase_a_outputs.py | 24 | 0 | 0 | 0 | 0 |
+
+**No instance of C-1's shadow-default pattern anywhere in the satellites** —
+zero `getattr(obj, "field", default)` calls across 3,322 lines. That pattern is
+confined to the engine file.
+
+### S15-1 (checked, sound): the polisher runs before validation and changes no parsed value
+
+`production_output_polisher` mutates the artifact, so the ordering matters. It
+is correct: the runner calls the polisher with `--prepare-only` (line 1092),
+then the validator (line 1102), so the validator reads the polished artifact —
+which is what its own docstring promises ("Prepare … workbooks **for**
+independent validation").
+
+Its mutations were checked cell by cell. Everything is presentation — fills,
+fonts, borders, alignment, number formats — plus two new sheets it authors
+itself (`Read Me First`, `Production Summary`). The only value rewrite touching
+existing sheets is:
+
+```python
+for ws in wb.worksheets:
+ for row in ws.iter_rows():
+  for cell in row:
+   if isinstance(cell.value,str):
+    cell.value=cell.value.replace('Dynamic Schedule - V10 …','Universal WFM Production Schedule')…
+    cell.value=re.sub(r'\bPrefrence\b','Preference',cell.value,flags=re.I)
+```
+
+That loop does cover `Schedule` and the break sheet, but the three patterns are
+two engine-title strings and a `Prefrence`→`Preference` spelling fix. None can
+match an associate name, a shift label, a break time or a status value, so no
+quantity the validator recomputes can be altered.
+
+The fallback identity constant is also right:
+`ENGINE='FALLBACK_ENGINE_IDENTITY_REJECTED'`, with a comment recording that
+published workbooks once asserted a fabricated engine hash. An unknown identity
+is refused rather than guessed.
+
+### S15-2 (checked, sound): the live budget planner allocates exactly
+
+`build_global_budget_plan` was tested across 300/600/1800/3600/7200 seconds and
+both a full and a minimal phase configuration. **The phase sum equals the total
+in every case** — disabled phases are redistributed, never dropped or
+double-counted. The four permissive `.get(…, 999999)` defaults in this file are
+all sort keys where a missing record must rank *last*, so they fail closed.
+
+### S15-3 (MEDIUM — this resolves task #37 / B-4): phases run below their own declared minimum
+
+`PHASE_MINIMUM_VIABLE_SECONDS` is **reporting only, never enforced**. Measured
+against the live allocation:
+
+| total | phases allocated below their declared minimum |
+|---|---|
+| 120–450s | `conflict_refinement`, `coordinated_repair`, `exception_search`, `joint_refinement`, `post_break_repair`, `target_lock_recovery` — **all at 0s** |
+| 600s | `exception_search` 0<90, `target_lock_recovery` **43<65** |
+| 900s | `exception_search` 70<90, `target_lock_recovery` **46<65** |
+| 1200s | `exception_search` 79<90, `target_lock_recovery` **53<65** |
+| 1800s | `exception_search` 87<90 |
+| 2700s+ | none |
+
+This replaces the vague framing I had been carrying for task #37 ("decide
+whether to fund target_lock_recovery at QUICK") with a measured boundary:
+
+* **At ≥1800s the phase is adequately funded** — at 3600s it gets 139s against
+  a 65s minimum, over twice its declared floor. The AE sweep runs at 3600s, so
+  B-4's starvation does not apply there at all.
+* **Below ~1200s the phase is allocated time it has itself declared too short
+  to be useful**, and spends it anyway. Between 120s and 450s six phases are
+  allocated literally zero.
+
+The decision is therefore not "fund it or not" but: **enforce the declared
+minimum**. A phase whose allocation is below its own minimum should be skipped
+and its seconds given to a phase that can use them, rather than burning the
+budget on a search that cannot finish. That is a contained change to the
+planner, and it needs the A/B with repeats noted under B-4 because the effect
+size is one interval.

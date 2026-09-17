@@ -14,8 +14,8 @@ cross-cutting automated scans.
 | S4 | contract validation | 3006–3461 | partial |
 | S5 | domain rule predicates | 3464–3967 | **read** |
 | S6 | Stage-1 skeleton search | 3970–6168 | **read** |
-| S7 | Stage-2 break search | 6171–7657 | scanned |
-| S8 | metrics & diagnostics | 7661–9541 | scanned |
+| S7 | Stage-2 break search | 6171–7657 | **read** (high-risk paths) |
+| S8 | metrics & diagnostics | 7661–9541 | **read** (high-risk paths) |
 | S9 | candidate selection & Pareto | 9550–11429 | scanned |
 | S10 | output & release gates | 11432–12493 | scanned |
 | S11 | joint / adaptive refinement | 12496–15755 | scanned |
@@ -159,3 +159,100 @@ Low severity, no action proposed:
   in the same contract layer;
 * quality-gate thresholds compare with `1e-12` while coverage comparisons use
   `1e-9` — deliberate, not a defect.
+
+---
+
+## S7 — Stage-2 break search: no new defects found
+
+Coverage note: S7 is 1,490 lines. I read the high-risk paths — objective
+construction, pattern generation, exception accounting and the admission
+guards — not every line.
+
+### S7-0 (positive): the break objective is also a genuine weighted sum
+
+Same separation test as S6-0, applied to all 8 break objective modes with real
+bounds from AE_AR_B2B (273 cells, 168 active intervals, 115 patterns, max
+pattern score 321), including `exception_penalty`, the pattern penalty,
+concurrency, whole-week balance, language reserve and the stacking term.
+
+**152 terms across 8 modes; 152 can change an optimum (100%).**
+
+### S7-1 (checked, sound): an unbreakable shift duration is a contract failure
+
+`_generic_break_patterns` returns `[]` when `duration_q <= total_break_q + 2`,
+which would silently force every cell on that shift into a no-break exception.
+It does not, because `validate_input_contract` probes **per shift duration**
+with `limit=1` and raises `BREAK_WINDOW_CONTRACT_INFEASIBLE` before any solve.
+
+### S7-2 (checked, sound): the minimum-exception proof is correctly lexicographic
+
+`exception_lower_bound = floor((BestObjectiveBound + 1e-6) / exception_penalty)`
+is only valid if `exception_penalty` exceeds everything else in the objective.
+It does, by construction — `max(1e9, diagnostic_pattern_upper + 1)` — and every
+other objective term is gated off in diagnostic mode. I checked the one branch
+that is not obviously gated: at 7177 concurrency in `"fail"` mode adds a **hard
+constraint**, not an objective term, and the `"warn"` branch carries
+`and not diagnostic_mode`. So no term leaks in and the proven minimum is sound.
+
+### S7-3 (checked, unreachable): `float("inf")` on a MODEL_INVALID solution
+
+The early return at 7111 builds a `BreakSolution` with `objective=inf`. That
+objective is negated into a sort key at 10993 (`-float(pair[1].objective)`),
+where `-inf` would rank **best**. It cannot happen: `candidate_pool_class`
+gates on `cp_status in {"OPTIMAL", "FEASIBLE"}` (9858) and pool admission does
+the same (18309), so a MODEL_INVALID solution never reaches the ranking.
+
+---
+
+## S8 — metrics and diagnostics
+
+Coverage note: S8 is 1,880 lines, `calculate_metrics` alone is 831. I checked
+the arithmetic hazards and the before/after contract, not every line.
+
+### S8-0 (checked, sound): division guards and metric symmetry
+
+* Every division in `calculate_metrics` is guarded. The two that looked unsafe
+  are not: `top10_concentration` divides by `sum(values)` under an `if values`
+  test, but values are only appended when `> 0`, so a non-empty list always
+  sums positive; `divisor = len(protected_quarters)` is guarded by an early
+  `continue` at 8190.
+* **252 emitted keys, 39 symmetric before/after pairs, 0 `after_*` without a
+  `before_*`.** The asymmetry the code fixed once at 8136 has not reappeared.
+
+### S8-1 (latent): a before/after name fallback substitutes the wrong stage
+
+Two metrics break the naming convention. Every other pair is explicitly
+`before_`/`after_` prefixed; these two emit the **after** value unprefixed:
+
+```python
+severe_floor_gap_count        += int(after_pct  + 1e-9 < severe_threshold)   # after
+before_severe_floor_gap_count += int(before_pct + 1e-9 < severe_threshold)   # before
+```
+
+Seven call sites then fall back from the before-name to the after-name:
+
+```python
+metrics.get("before_severe_floor_gap_count", metrics.get("severe_floor_gap_count", 0))
+```
+at 7444, 9563, 9564, 9692, 9693, 19379, 19380.
+
+If the before-key were ever absent, these would use the **after-break** count
+as the **before-break** count. That is semantically wrong, not merely
+permissive — and 7444 is the break-loss guard, which exists precisely to
+compare before against after.
+
+Latent: `ensure_before_break_metrics` guarantees `no_break_metrics` is a full
+`calculate_metrics` output, so the key is always present.
+
+Two things make it worth fixing anyway:
+
+1. **The same key is read two ways in the same file.** Lines 11343, 11364 and
+   11371 use `skeleton.diagnostics["no_break_metrics"]` with direct indexing —
+   fail loud. The seven sites above fail silent, into the wrong value.
+2. **The empty-dict defaults at 7441–7444 contradict each other.** With
+   `no_break_metrics` missing, `before_target` and `before_floor` default to
+   "every interval hit" (optimistic) while `before_severe_gaps` defaults to
+   `active_for_loss_guard`, i.e. "every interval is a severe gap"
+   (pessimistic). One missing input produces a picture that cannot be true.
+
+Same family as C-1: a fallback default that is not the declared value.

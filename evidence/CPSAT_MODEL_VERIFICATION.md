@@ -122,3 +122,105 @@ encodes the business rules."* That limit is now narrower:
 
 **Zero new engine defects were found by this exercise.** Everything that looked
 like one was a flaw in how I constructed the probe.
+
+---
+
+# Round 2 — the rules the first pass could not reach
+
+## Result: 12 rules proven enforced, 1 directionally confirmed, 2 not provable this way
+
+### Newly proven enforced
+
+| rule | rule ON | rule OFF | released by |
+|---|---|---|---|
+| nesting group shares OFF/leave | `INFEASIBLE` | `FEASIBLE` | `hard.fixed` |
+| hard floor solver constraint | `INFEASIBLE` | `FEASIBLE` | `hard.hard_floor` |
+| minimum tier lock binds | `INFEASIBLE` | `FEASIBLE` | `minimum_tier_hits=None` |
+
+The nesting result independently confirms **S6-1** from the section pass: a
+group whose members carry different approved leave is infeasible, and it is the
+`hard.fixed` switch that gates it.
+
+### Week-boundary carry-out — enforced, release not proven
+
+My first attempt ran on `AE_IT_Choice`, which has **0 next-Sunday protected
+quarters** and no shift spilling past midnight — so no carry-out constraint is
+built at all and the probe was vacuous. Re-run on `AE_AR_B2B`, which has 32:
+
+```
+base AE_AR_B2B                                        UNKNOWN   (12s, 39 associates)
+next-Sunday floor made impossible, week_boundary ON   INFEASIBLE
+same, hard.week_boundary=False                        UNKNOWN
+```
+
+`ON → INFEASIBLE` proves the constraint binds. `OFF → UNKNOWN` means the
+infeasibility proof disappeared when the switch was thrown, which is the right
+direction, but `UNKNOWN` is not `FEASIBLE` — at this time limit the release is
+indicated, not proven.
+
+### Tier locks clamp, as intended
+
+Asking for 100× more 100%-tier hits than there are intervals still returns
+`INFEASIBLE`. My probe reported that as "NOT clamped", which was a wrong label:
+line 6068 clamps to `min(requested, len(tier_vars))`, and that clamped value —
+every active interval at 100% — is itself unachievable for this contract. **The
+clamp works; the clamped target is simply impossible.**
+
+## Two rules this method cannot reach, stated as gaps
+
+**Blank-interval staffing.** On `GDI_28HC_NO247` (34 blanks a shift can
+actually reach) the probe gives `INFEASIBLE` in `hard` mode — but *also*
+`INFEASIBLE` in `allow` mode, so the result cannot be attributed to the blank
+rule. Forcing an associate onto a shift that covers a zero-demand interval
+trips the demand-fit guard independently.
+
+Worth recording separately: **202 of 818 blank intervals across the corpus are
+coverable by some shift**; the other 616 are hours no shift reaches, where the
+constraint is trivially satisfied. So the rule only ever binds on three
+workbooks.
+
+**Break concurrency.** A cap of 1 in `fail` mode was satisfiable — the solver
+simply spreads breaks out. Not a binding probe. A real one needs a contract
+where the legal cap is forced to bind, e.g. by narrowing the break window so
+placements must collide.
+
+## The methodological limit — five invalid probes, one cause
+
+Five of my probe constructions were wrong, and they share a cause worth naming:
+
+| probe | why it was invalid |
+|---|---|
+| malformed fixed shift | bypassed `validate_input_contract`, which catches it |
+| concurrency = 0 | the cap floors at 1 by design |
+| week boundary on `AE_IT_Choice` | that contract has no carry-out horizon |
+| blank interval via `active` flags | mutating `active` post-parse leaves derived structures stale |
+| blank interval via a forced shift | confounded by the demand-fit guard |
+
+**Mutating a parsed contract after parsing is unreliable.** `parse_input`
+derives interdependent structures — demand-fit eligibility, opening intervals,
+cyclic windows, coverage variable maps — and a mutation that changes `active`
+flags or forces a shift leaves those inconsistent, so the model becomes
+infeasible for a reason other than the rule under test.
+
+The probes that *were* valid all mutated things the model reads directly:
+preference cells, scalar contract settings, and `HardConfig` switches. That is
+the boundary of what this technique can prove without purpose-built fixtures —
+which is the same conclusion as fix-plan item **W3**, reached from a different
+direction.
+
+## Standing tally
+
+**Proven enforced, with the switch releasing exactly that rule — 12 rules:**
+leave, hard OFF, strict OFF count, max shift variety, rest gap, language
+minimum per interval, opening minimum FTE, fixed shift legality, language
+minimum surviving breaks, nesting group equality, hard floor, minimum tier lock.
+
+**Enforced, release indicated but not proven:** week-boundary carry-out.
+
+**Not provable without purpose-built fixtures:** blank-interval staffing, break
+concurrency.
+
+**Not probeable by construction:** the coverage floor/target terms, which are
+soft objective terms rather than hard constraints.
+
+**New engine defects found across both rounds: zero.**

@@ -860,3 +860,63 @@ Nothing was removed. Future runs report 48/48 where the AE sweep reported 41/41.
     W8   derive the 11 orderings from one definition
     W9   B-10 break-slice floor vs cap            (needs A/B with repeats)
     W11  break up run_case, delete 213 dead lines
+
+---
+
+## Post-apply contract smoke: zero false positives, one true positive
+
+The applied stack had never been run against a real workbook -- only unit
+tests. Three of its changes (B-11, B-12, C-3) are fail-closed parsing changes,
+so a false positive would block every run on a shipped workbook. Contract
+validation needs no solver, so this was ruled out in minutes rather than by
+committing hours of solver time.
+
+Method: parse + `validate_input_contract` on all 15 corpus workbooks against
+both trees -- the pre-apply snapshot and the applied tree -- comparing
+verdicts. Script is `scratchpad/contract_probe.py`; it writes nothing and
+solves nothing.
+
+    workbooks probed              15
+    unchanged verdict             15
+    NEW failures (was ok, now blocked)   0
+    other verdict changes                0
+
+**Zero false positives.** The 3 workbooks that fail on the applied tree
+(GDI_28HC, GDI_REAL28, SAKS_NEW) were already failing before, on pre-existing
+`HARD_INVALID_REQUIREMENT_TIME` / `HARD_INVALID_SHRINKAGE_TIME` codes that
+have nothing to do with this work.
+
+**One new finding, and it is real.** B-11 raised
+`HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE` on SAKS_NEW:
+
+    'Associate 051' on the Previous week scheduled sheet is not in the
+    Schedule roster. Correct the spelling, or list the name under
+    'Known Departed Associates' in Instructions to confirm the row
+    should be dropped.
+
+Verified directly against the workbook:
+
+    Schedule roster (SF Name)    50 names, Associate 001..050
+    Previous week scheduled      51 names, Associate 001..051
+    in Previous but not roster   ['Associate 051']
+    in roster but not Previous   []
+
+So the previous-Saturday row for Associate 051 was being silently discarded,
+removing that associate's prior-week shift from rest-gap and week-boundary
+reasoning with no signal to anyone. That is precisely the fail-open behaviour
+B-11 was written to close, found in a shipped regression asset rather than in
+a synthetic fixture.
+
+The workbook's verdict does not change -- it was already failing on the
+requirement/shrinkage time codes -- so this costs nothing operationally and
+gains a real signal.
+
+### What this does and does not establish
+
+It establishes that the parsing changes do not false-positive on the corpus,
+and that B-11 catches a real defect in real data.
+
+It does **not** establish anything about schedule output. The applied stack
+contains one behavioural change (the now-unconditional joint-refinement bound),
+and no solver has run on the applied tree. The six-case AE sweep reported
+earlier ran on the pre-apply tree and validates none of this.

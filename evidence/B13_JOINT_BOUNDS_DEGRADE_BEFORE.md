@@ -257,3 +257,27 @@ B-13 itself remains proven by the structural probe and by the three paired seeds
 measured earlier. What cannot be produced here is the end-to-end confirmation
 that its FIX is neutral-or-better on real schedules, and that is the only thing
 blocking its application.
+
+## Fourth attempt: shrinking the work does not advance the clock
+
+If phases finished early and handed back unspent time, cutting the work ahead of
+joint refinement would let it start sooner. Tested with one skeleton profile
+instead of fifteen and one break-objective mode instead of seven, both arms,
+3600-second plan:
+
+    JOINT_CP_SAT lines = 0, both arms, again
+
+The phase schedule is DEADLINE-driven, not work-driven. `stage1_search` holds
+its window to offset 1169 and `break_search` to 2307 whether or not there is
+work left to do, so reducing the work changes what happens inside those windows
+and not when the next phase begins.
+
+That closes the last idea. Four techniques tried and measured, not assumed:
+
+    background + supervisor   reaped minutes after each turn ends
+    foreground in-call        works, reliable to ~600s, below the 2307s needed
+    chunked --resume          resumes work, but the phase schedule restarts at 0
+    reduced workload          phases are deadline-driven, so the clock is unmoved
+
+All four fail for one reason: joint refinement begins at offset 2307 seconds and
+nothing here survives that long in a single process.

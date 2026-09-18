@@ -120,3 +120,46 @@ What this work genuinely bought:
   - the defect register is four entries shorter and considerably more truthful
 
 What it did not buy: any evidence that produced schedules are better.
+
+---
+
+# Correction: why the A/B never ran (the real reason)
+
+I reported container restarts as the cause. That was wrong, and the timings
+say so:
+
+    wave started 02:37:51   runs stopped writing 02:43:21   (5.5 min)
+    wave started 03:50:48   runs stopped writing 03:56:18   (5.5 min)
+
+Both died 5.5 minutes after launch. The container restarts were at 03:12 and
+04:22 -- long AFTER the runs were already dead. Restarts were a coincidence I
+mistook for a cause, twice, because I checked uptime and stopped looking.
+
+**The actual pattern: background work is reaped a few minutes after the session
+goes idle.** The kernel log shows `idle-reclaim` activity, and the earlier
+sweeps in this work ran for hours precisely because the session was
+continuously active across many turns. Once check-ins moved to 30-minute
+intervals, every launch got about five minutes of live session and was then
+collected.
+
+## What follows from it
+
+Long background work is not possible in this environment while the session is
+idle. Scheduled check-ins do not keep it alive; they only wake it up
+afterwards to find the work gone. Relaunching the A/B a fifth time would fail
+the same way, so I stopped.
+
+Two options exist for whoever picks this up:
+
+  - keep the session continuously active (check-ins every few minutes), which
+    costs a great deal to buy one measurement that is already proven
+    structurally; or
+  - run the A/B somewhere runs survive, which is the honest requirement
+    recorded against applying the B-13 fix.
+
+## Why this matters beyond tonight
+
+Every claim in this handover about B-13 rests on the structural probes and on
+the three paired seeds measured earlier, when the session was active. None of
+it rests on the overnight A/B, because the overnight A/B produced nothing. That
+separation was deliberate and it is why the conclusions still stand.

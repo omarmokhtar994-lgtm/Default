@@ -21,16 +21,36 @@ parsed = eng.parse_input(book)
 payload = json.loads(ckpt.read_text())
 skel, brk = eng.deserialize_break_candidate(parsed, payload)
 
+# The PRODUCTION bounds, derived exactly as the engine derives them at its own
+# call site (l632_universal_scheduler.py ~15376):
+#
+#     min_after_target = max(0, incumbent.after_target - protected_target_tolerance)
+#     min_after_floor  = incumbent.after_floor
+#     lexicographic=True, lexicographic_target_tolerance=protected_target_tolerance
+#
+# These CONSTRAIN the model, which is what makes it tractable. Omitting them --
+# as the first version of this harness did -- leaves the search unbounded and
+# every attempt returns UNKNOWN.
+TOLERANCE = 1          # the sweep's --primary-target-tolerance
+min_after_target = max(0, int(brk.metrics.get("after_target", 0) or 0) - TOLERANCE)
+min_after_floor = int(brk.metrics.get("after_floor", 0) or 0)
+
 log = io.StringIO()
 out = eng.solve_joint_shift_off_language_break_refinement(
     parsed, [(skel, brk)], skel,
     pattern_width=115, time_limit=float(sys.argv[5]), workers=2, log=log,
     random_seed=seed, max_changed_cells=int(sys.argv[6]),
     max_shift_options_per_cell=10, max_patterns_per_shift=64,
-    exception_cap=0, operator_name="b13_direct_probe",
+    exception_cap=0,
+    min_after_target=min_after_target,
+    min_after_floor=min_after_floor,
+    lexicographic=True,
+    lexicographic_target_tolerance=TOLERANCE,
+    operator_name="b13_direct_probe",
 )
 
-res = {"tree": tree.split("/")[-1], "seed": seed,
+res = {"min_after_target": min_after_target, "min_after_floor": min_after_floor,
+       "tree": tree.split("/")[-1], "seed": seed,
        "anchor_before_floor": int(brk.metrics.get("before_floor", 0) or 0),
        "anchor_after_floor": int(brk.metrics.get("after_floor", 0) or 0),
        "anchor_before_target": int(brk.metrics.get("before_target", 0) or 0),

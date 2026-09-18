@@ -326,3 +326,61 @@ direct-call harness that is one parameter set short of settling it.
 Anyone continuing should start from `tools/b13_joint_direct_ab.py` and supply
 the production bounds, rather than fighting the phase scheduler as I did for six
 attempts before writing it.
+
+## Attempt eight: production bounds added to the harness
+
+The bounds were derived from the engine's own call site rather than guessed:
+
+    min_after_target = max(0, incumbent.after_target - protected_target_tolerance)
+    min_after_floor  = incumbent.after_floor
+    lexicographic    = True, tolerance = protected_target_tolerance (CLI: 1)
+
+They compute correctly -- `min_after_target=64, min_after_floor=87` on
+AE_IT_B2B, `166/168` on AE_AR_B2B -- and are now in
+`tools/b13_joint_direct_ab.py`.
+
+**It still does not converge.** Both trees, both a capacity-short and a
+capacity-ample case, change budgets of 8 and 4, limits to 250 seconds:
+`status=UNKNOWN`, no solution, every time.
+
+### One observation worth keeping
+
+At the larger limit the two arms reached DIFFERENT stages on AE_IT_B2B:
+
+    CONTROL   stage=MAXIMIZE_AFTER_SEVERE   elapsed 56.06s
+    B-13      stage=MAXIMIZE_AFTER_FLOOR    elapsed 49.22s
+
+Different stages means the bound is changing the search path in the real engine,
+not merely in the structural probe. It is weak evidence -- one case, one seed,
+and neither arm produced a solution -- but it is consistent with the mechanism
+and worth re-testing in an environment that can finish.
+
+### What is still missing, precisely
+
+Production passes three things this harness does not:
+
+    adaptive_nondominated_anchor_pool(parsed, anchors + added, maximum=12)
+                       -- a POOL of up to twelve anchors, not the single one
+                          restored from a checkpoint here
+    explicit_focus_cells
+                       -- the cells earlier attempts identified as worth changing
+    feedback_cuts
+                       -- constraints accumulated from previous failed attempts
+
+All three come from state built up across a long run. A cold single call has
+none of it, and that -- not the bounds -- is why the model stays open. Joint
+refinement in production gets 734 seconds across many operators that feed each
+other; reproducing that outside the run means reproducing the run.
+
+## Final status after eight techniques
+
+The end-to-end confirmation was not obtained here, and I no longer think it can
+be without a host that runs the full 3600-second pipeline.
+
+Standing evidence for B-13: the structural probe (gameable bound == no bound),
+three paired seeds showing before_floor pinned at 91 with the bound active
+against 91/98/97 without it, a safety probe showing the fix does not
+over-constrain, and now a stage divergence between arms in the real engine.
+
+Standing gap: no completed real-engine run comparing the two trees through joint
+refinement.

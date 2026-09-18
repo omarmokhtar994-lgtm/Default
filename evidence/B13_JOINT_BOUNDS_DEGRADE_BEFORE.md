@@ -384,3 +384,60 @@ over-constrain, and now a stage divergence between arms in the real engine.
 
 Standing gap: no completed real-engine run comparing the two trees through joint
 refinement.
+
+## Attempt nine: the full production call, and a result that sharpens B-13
+
+`tools/b13_joint_direct_ab.py` now reproduces all four things the production
+call site supplies, each reconstructed from a completed sweep rather than
+invented:
+
+    bounds          min_after_target = incumbent.after_target - tolerance
+                    min_after_floor  = incumbent.after_floor
+    anchor pool     every checkpointed candidate, through the engine's own
+                    adaptive_nondominated_anchor_pool(..., maximum=12)
+    feedback cuts   derive_adaptive_feedback_cuts over each anchor, maximum=24
+    ordering        lexicographic with the workbook target tolerance
+
+On AE_IT_B2B that yields 4 anchors and 52 cuts, and the model now reaches a
+DEFINITE answer instead of timing out:
+
+    CONTROL   status=INFEASIBLE  elapsed 34.39s
+    B-13      status=INFEASIBLE  elapsed 34.55s
+
+Identical. And the arithmetic says why:
+
+    min_after_floor (production, a CONSTANT)     = 88
+    gameable bound: before_floor_hits - cap      = 91 - 6 = 85
+
+**85 is below 88, so the gameable bound is SLACKER than the constant bound
+production already passes.** It never binds, and replacing it changes nothing.
+
+## What this actually establishes
+
+B-13 is real -- the structural probe stands, and the bound genuinely protects
+nothing on its own. But its REACHABILITY is narrower than the original writeup
+implied.
+
+Wherever production passes `min_after_floor`, the correct constant bound is
+already present and the gameable one is dead weight. The defect is only live in
+the call sites that pass `None`:
+
+    line 14998-14999   min_after_target=replay_target_min     <- protected
+    line 15119-15120   min_after_target=None                  <- EXPOSED
+    line 15227-15228   min_after_target=None                  <- EXPOSED
+    line 15407-15408   min_after_target=min_after_target      <- protected
+
+Two of four call sites. That is a real gap worth closing, and it is a smaller
+gap than "an unconditional bound live in production" suggested.
+
+The three paired seeds remain the evidence that it bites somewhere in a real
+run -- AE_IT_B2B's before_floor pinned at 91 with the bound active against
+91/98/97 without it. That damage presumably came through one of the two exposed
+call sites, which is now a specific, testable claim rather than a general one.
+
+## Revised recommendation
+
+The fix is still correct and should still land, but the case for urgency is
+weaker than I first wrote. It closes two of four call sites that are currently
+unprotected; the other two already do the right thing. A reviewer should weigh
+it as a consistency fix with measured backing, not as a live production fire.

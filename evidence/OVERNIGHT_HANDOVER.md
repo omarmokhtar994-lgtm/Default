@@ -163,3 +163,62 @@ Every claim in this handover about B-13 rests on the structural probes and on
 the three paired seeds measured earlier, when the session was active. None of
 it rests on the overnight A/B, because the overnight A/B produced nothing. That
 separation was deliberate and it is why the conclusions still stand.
+
+---
+
+# Second correction: "the session being warm" does not help either
+
+I told the user the A/B failed because background work is reaped when the
+session goes idle, and therefore that it did not need a different environment --
+it just needed them present. That was wrong too, and this run disproves it.
+
+    05:11:36   wave launched, 4 solvers confirmed running, user actively present
+    05:12:36   my turn ended
+    05:16:36   all four heartbeats stop
+
+Four minutes after the TURN ended, not after the user went away. The user was
+here throughout; they sent messages at 05:11, 05:12 and 05:25.
+
+## The actual rule
+
+Background processes are collected roughly four to five minutes after the last
+assistant turn completes. What keeps them alive is TURN ACTIVITY, not a human
+being present and not a scheduled check-in every 30 or 45 minutes.
+
+That is consistent with every observation now, including the two long sweeps
+earlier in this work: those ran for about six hours each during stretches where
+turns were happening continuously, a few minutes apart, as the work was being
+driven.
+
+## What follows
+
+A 58-minute wave would need roughly fifteen turns spaced under five minutes
+apart. The full seven-wave A/B would need well over a hundred. That is not a
+reasonable use of anyone's budget to buy one measurement of a defect that is
+already proven structurally.
+
+**So: long end-to-end runs are not achievable in this environment.** Not
+"needs the user around" -- that was my second wrong answer. The requirement is
+an environment where a process survives without being driven, which this is
+not.
+
+## What this does not change
+
+B-13 remains proven. `tools/b13_structural_probe.py` runs in seconds and shows
+the gameable bound gives exactly the answer that having no bound gives. The
+three paired seeds that corroborate it on the real engine were measured earlier,
+during continuous work, and are unaffected.
+
+The B-13 fix stays unapplied, and the reason is now sharper: the A/B it needs
+cannot be run here at all, by me or by the user. It needs CI, a workstation, or
+any host that does not collect idle processes.
+
+## On my own reasoning
+
+I gave three explanations for the same failure. First container restarts, which
+the timings disproved. Then session idling, which this run disproved. The
+pattern in both wrong answers is the same: I had a plausible mechanism and one
+or two consistent data points, and I reported it as the cause instead of as a
+hypothesis with a test attached. The third explanation is better supported --
+it accounts for the successful sweeps as well as the failures -- but it deserves
+the same scepticism until something tests it directly.

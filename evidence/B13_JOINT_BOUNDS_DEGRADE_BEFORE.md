@@ -281,3 +281,48 @@ That closes the last idea. Four techniques tried and measured, not assumed:
 
 All four fail for one reason: joint refinement begins at offset 2307 seconds and
 nothing here survives that long in a single process.
+
+## Attempts five to seven, and where it actually stands
+
+**Five: target the joint phase by budget.** The 2307-second figure is specific to
+a 3600-second plan; offsets scale. The engine's own audit at a 700-second budget
+puts joint refinement at 542-611s, so a smaller budget should place it inside
+the tool window. Tested at 700s cut at 520s, and 640s cut at 585s: zero
+JOINT_CP_SAT lines both times.
+
+**Why that failed:** phases overrun their deadlines. At 640s joint was scheduled
+498-557s, yet the log shows the run still in STAGE2 at 575s. Attempts run to
+completion rather than being cut at a phase boundary, so the offset cannot be
+targeted arithmetically. That is the same carryover behaviour documented
+elsewhere in the engine, working as designed.
+
+**Six: call the function directly.** `tools/b13_joint_direct_ab.py` bypasses the
+scheduler entirely. It parses the workbook, restores a REAL skeleton and break
+solution from a completed sweep's `break_checkpoints`, and calls
+`solve_joint_shift_off_language_break_refinement` on each tree in turn -- same
+contract, same anchor, same seed, only the module differs.
+
+**The harness works.** Both trees loaded, built the model and ran it in about 15
+seconds each. This is the right technique and it is committed.
+
+**Seven: find a tractable instance.** Ten configurations were tried -- four
+anchors on AE_IT_B2B and two on AE_AR_B2B, at change budgets of 24, 8 and 4,
+with limits to 120 seconds. Every one returned `status=UNKNOWN`, no solution.
+
+The likely reason is that the direct call omits what the production path
+supplies: `min_after_target`, `min_after_floor`, `strict_replay_candidate` and
+the feedback cuts. Those CONSTRAIN the model, and a constrained model is easier.
+Reconstructing them faithfully is the remaining work.
+
+## Honest status
+
+Seven techniques, each measured rather than assumed. The end-to-end confirmation
+that B-13's fix is neutral-or-better on real schedules was not obtained here.
+
+What exists instead: the defect proven structurally, corroborated by three
+paired seeds, a safety probe showing the fix does not over-constrain, and a
+direct-call harness that is one parameter set short of settling it.
+
+Anyone continuing should start from `tools/b13_joint_direct_ab.py` and supply
+the production bounds, rather than fighting the phase scheduler as I did for six
+attempts before writing it.

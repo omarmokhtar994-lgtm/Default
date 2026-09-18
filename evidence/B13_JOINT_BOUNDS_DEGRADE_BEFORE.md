@@ -86,3 +86,64 @@ guard. It is active on every joint refinement, in every run, today.
 
 Whether it actually degrades production schedules is unmeasured. The mechanism
 is proven; the magnitude is not. That is the run to do next.
+
+---
+
+# Structural probe: the gameable bound is equivalent to no bound
+
+## Why the method changed
+
+The end-to-end A/B could not be completed. Container restarts in this session
+moved from roughly hourly to every 10-30 minutes (01:19, 02:33, 02:43, 03:12),
+killing four runs simultaneously 5.5 minutes into a wave. Not memory -- 15 GB
+free; the kernel log shows `idle-reclaim` recycling the container. At that
+cadence no multi-minute solve is reliable.
+
+B-13's claim is structural rather than statistical: it is about what the
+constraint PERMITS, which is a property of the formulation and does not depend
+on budget, seed or workbook. That can be asked of CP-SAT directly, in seconds.
+
+## The probe and its result
+
+`tools/b13_structural_probe.py` rebuilds the engine's exact shape -- before and
+after coverage bools tied to a threshold, breaks only removing staff -- and
+compares three cases:
+
+    no bound at all             before_hits =  0   after_hits =  0
+    GAMEABLE  after >= before-cap  before_hits =  0   after_hits =  0
+    CONSTANT  after >= 10-cap      before_hits =  8   after_hits =  8
+
+**The gameable form produces exactly the same answer as having no constraint.**
+It is not a weak protection; it is no protection. Whenever anything would lower
+the before-state, the bound moves with it and never binds. The constant form,
+whose right-hand side the solver cannot move, holds after_hits at 8.
+
+## What this does and does not establish
+
+It establishes that the constraint cannot protect the after-state, because a
+solution that degrades before satisfies it for free. That is a property of the
+formulation and is now demonstrated rather than argued.
+
+It does **not** establish that the engine's full objective always chooses to
+degrade. The probe's objective pushes staffing down; the engine's rewards
+coverage, so it will not drive before to zero. What the probe proves is that
+the bound contributes nothing when the objective does lean that way.
+
+For whether it leans that way in practice, the real-engine evidence already
+exists from the three paired seeds run earlier:
+
+    AE_IT_B2B    with the bound active     before_floor pinned at 91, 91, 91
+                 with the bound inactive   before_floor 91, 98, 97
+
+Pinned whenever the constraint was on, free to range when it was off, with a
+worse after-floor every time. Mechanism proven structurally here; occurrence
+observed there.
+
+## Status
+
+The fix (`tools/apply_b13_constant_joint_bounds.py`, gate PASS at 18 suites)
+replaces both bounds with the engine's own constant-bound pattern. It is NOT
+applied to the release tree: it changes search behaviour, and the evidence for
+the defect is now strong while the evidence that the fix is neutral-or-better on
+real schedules is not. That still wants an end-to-end A/B in an environment
+where runs survive.

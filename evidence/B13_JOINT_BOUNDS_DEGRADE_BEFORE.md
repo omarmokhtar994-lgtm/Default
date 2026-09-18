@@ -147,3 +147,60 @@ applied to the release tree: it changes search behaviour, and the evidence for
 the defect is now strong while the evidence that the fix is neutral-or-better on
 real schedules is not. That still wants an end-to-end A/B in an environment
 where runs survive.
+
+---
+
+# The end-to-end A/B was attempted properly, and cannot work here
+
+## A technique that does work
+
+Background processes are collected a few minutes after the assistant's turn
+ends. But a process running in the FOREGROUND of a tool call survives, because
+the turn stays alive for its duration. The ceiling is the 600-second tool
+timeout.
+
+Measured: a pair of runs at a 360-second budget, both arms concurrent,
+completed in 351 seconds wall with `rc=0` on both. A pair at 600 seconds
+completed in 551 seconds. **Runs of up to about 600 seconds are reliable here.**
+That is worth knowing for any future work in this environment.
+
+## Why it still does not settle B-13
+
+B-13 lives in joint refinement, and joint refinement is hard-gated off below a
+600-second total budget:
+
+     total   stage1  break   joint_refinement
+       360     111    154       0
+       480     111    154       0
+       540     136    189       0
+       600      76    107     151
+
+Lowering `joint_refinement_reserve_sec` does not move the gate -- tested at 900,
+400, 200, 120 and 60, all zero below 600.
+
+At exactly 600 seconds the real run allocated joint refinement 53 seconds, and
+both arms produced:
+
+    JOINT_CP_SAT operator=incumbent_replay  status=INFEASIBLE  elapsed=0.62s
+    JOINT_CP_SAT operator=skill_guard       status=UNKNOWN     elapsed=5.47s
+
+No solution in either arm. The bound cannot influence an outcome that does not
+exist, so the comparison is vacuous -- identical results in both arms, for a
+reason that has nothing to do with the fix.
+
+The 3600-second runs earlier in this work allocated joint refinement 734 seconds
+and exercised many operators. That is the regime where B-13 manifests, and a
+3600-second run needs six times the tool ceiling.
+
+## Conclusion
+
+The requirement for applying the B-13 fix is now precise rather than vague. It
+is not "more evidence" and not "a warm session". It is **a host that can run a
+3600-second solve**, because below that the phase under test is either unfunded
+or infeasible. CI, a workstation, or the Colab setup the authors' own baseline
+used would all do.
+
+Two identical-result pairs were produced along the way (360s and 600s budgets).
+They are recorded here as showing nothing, deliberately: reporting them as
+"no regression from B-13" would be false, because the phase B-13 changes never
+ran.

@@ -112,8 +112,13 @@ parity surface, taking the compared-field count from 46 to 53:
 
 `target_losses_from_breaks`, `floor_losses_from_breaks`,
 `before_severe_floor_gap_count`, `hard_floor_gap_count`,
-`next_sunday_hard_failure_count`, `next_sunday_max_adjacent_raw_change`,
-`next_sunday_max_coverage_ratio`
+`week_boundary_hard_failure_count`, `week_boundary_max_adjacent_raw_change`,
+`week_boundary_max_coverage_ratio`
+
+Naming note: the last three appear on the canonical metric surface as
+`week_boundary_*` but are written into `INDEPENDENT_VALIDATION.csv` as
+`next_sunday_*`. Same three metrics, two names, two artifacts. Not a defect
+in the numbers, but anyone grepping one name will miss the other.
 
 All seven cross-check PASS against the independent validator on both cases.
 `metric_parity_status` stays PASS, `metric_parity_mismatch_count` stays 0 —
@@ -158,3 +163,28 @@ Unchanged: **keep RC9.1 as production.** RC9.2.2 is now better instrumented
 and has fewer fail-open paths, but it delivers no measured schedule improvement
 on the two cases tested. There is no coverage case for promoting it, and the
 instrumentation case is not urgent.
+
+### Extended to the remaining AE cases
+
+Same protocol, `AE_FR_B2B` and `AE_FR_Choice`:
+
+| case | orig outcome | new outcome | shared fields | differing |
+|---|---|---|---|---|
+| `AE_FR_B2B` | `FINAL_SCHEDULE_GENERATED_WITH_DECLARED_QUALITY_DEBT` | same | 46 | **0** |
+| `AE_FR_Choice` | `FINAL_SCHEDULE_GENERATED_WITH_DECLARED_QUALITY_DEBT` | same | 46 | **0** |
+
+Both arms `production_eligible: true`, `independent_validation: PASS`,
+`metric_parity: PASS`, surface 46 -> 53.
+
+### Final tally across all four AE cases
+
+| case | shared fields identical | new fields added | schedule changed |
+|---|---|---|---|
+| `AE_AR_B2B` | 46 / 46 | 7 | no |
+| `AE_IT_B2B` | 46 / 46 | 7 | no (one non-selected candidate differs) |
+| `AE_FR_B2B` | 46 / 46 | 7 | no |
+| `AE_FR_Choice` | 46 / 46 | 7 | no |
+
+184 of 184 pre-existing metric comparisons identical. The nine-fix stack is
+coverage-neutral on the entire AE corpus, and the parity gate now checks
+seven more metrics on every case.

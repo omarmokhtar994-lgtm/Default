@@ -271,3 +271,49 @@ validation PASS and parity 48/48.
     MOVED S9-1              reclassified as behavioural
 
 Release tree: GATE PASS 18 suites; four real workbooks PASS at parity 48/48.
+
+---
+
+# Overnight B-13 measurement: how it is set up, and why at 900s
+
+## The constraint that forced a design change
+
+Container restarts in this session are roughly hourly -- observed at 10:25,
+01:19 and 02:33. Two separate 58-minute waves died at about 75 minutes with
+nothing on disk. At a 3600-second budget a wave cannot reliably survive the
+interval, so the measurement would have produced nothing by morning.
+
+The budget is therefore **900 seconds, not the production 3600**. A wave
+completes in about 16 minutes, which survives the restart cadence.
+
+**What that costs.** Magnitudes do not transfer to production: a 900s run does
+a quarter of the search. What it preserves is the question B-13 actually asks,
+which is structural rather than budgetary -- does the control arm pin
+`before_floor` while the treatment arm lets it range? A constraint that permits
+the solver to degrade the before-state to buy slack does so at any budget. Both
+arms use the identical budget, so the comparison itself stays sound.
+
+## Two failures fixed to get here
+
+**Stale case locks.** A restart kills the solver without letting it release
+`RUN_LOCK.json`, and the engine then correctly refuses to start because the lock
+names a running case. Four runs failed instantly with
+`RuntimeError: Case is already running (pid=402)`. The driver now reaps a lock
+only when the pid it names is verifiably gone, so a genuinely concurrent run is
+still protected.
+
+**A supervisor watching the wrong thing.** The first supervisor relaunched the
+driver whenever no solver process was running. A single orphaned run therefore
+looked like healthy work, the driver never started, and three supervisors
+accumulated. It now watches for the DRIVER process, and takes a directory lock
+so only one can exist.
+
+## What is running
+
+    tools/overnight_b13_ab.sh    7 waves, 28 runs, 4 concurrent, 900s each
+    tools/overnight_supervisor.sh  relaunches the driver after a restart
+
+Every run carries a SKIP guard, so a restart costs at most the wave in flight
+and the driver can simply be relaunched. Scheduled check-ins survive container
+restarts and are the real recovery mechanism; the supervisor only shortens the
+gap.

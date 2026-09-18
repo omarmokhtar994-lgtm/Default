@@ -204,3 +204,56 @@ Two identical-result pairs were produced along the way (360s and 600s budgets).
 They are recorded here as showing nothing, deliberately: reporting them as
 "no regression from B-13" would be false, because the phase B-13 changes never
 ran.
+
+## Chunked resume was tried too, and cannot work either
+
+The engine supports `--resume` against a registry of completed work, so a
+3600-second plan was attempted in 540-second chunks. Five chunks, 45 minutes of
+real solving, both arms in every chunk.
+
+**Resume genuinely works.** Stage-1 profiles carried across chunks:
+
+    chunk 1   runnable=15
+    chunk 2   runnable=12
+    chunk 3   runnable=7
+    chunk 4   runnable=2
+    chunk 5   runnable=1
+
+and the budget plan was the full 3600-second one -- `joint_refinement` allocated
+734 seconds, not the 0 it gets below a 600-second total.
+
+**But joint refinement was never reached: `JOINT_CP_SAT` lines = 0 in all five
+chunks, in both arms.** The phase schedule explains why:
+
+    phase                  allocated   starts at offset from PROCESS START
+    preflight_probe             126s          0s
+    conflict_refinement          73s        126s
+    safe_incumbent              146s        199s
+    stage1_search               824s        345s
+    break_search               1138s       1169s
+    joint_refinement            734s       2307s   <-- B-13 lives here
+    coordinated_repair          205s       3041s
+    finalization                120s       3480s
+
+Resume preserves the WORK done, through the registry. It does not preserve the
+PHASE SCHEDULE, which restarts at t=0 in every chunk. A 540-second chunk
+therefore always dies inside `stage1_search`, and no number of chunks advances
+the clock past offset 2307.
+
+## Final answer on measuring B-13 end to end
+
+It requires a single process that lives past 2307 seconds. This environment
+caps a foreground process at the 600-second tool timeout and collects
+background processes a few minutes after a turn ends. Both limits are below the
+requirement, and neither is worked around by chunking, by resume, by session
+activity, or by any scheduling of check-ins.
+
+Three techniques were tried and measured rather than assumed: background with a
+supervisor, foreground within the tool timeout, and chunked resume. The
+foreground technique is the useful survivor -- it makes any run up to about 600
+seconds reliable here -- and it is recorded above for future work.
+
+B-13 itself remains proven by the structural probe and by the three paired seeds
+measured earlier. What cannot be produced here is the end-to-end confirmation
+that its FIX is neutral-or-better on real schedules, and that is the only thing
+blocking its application.

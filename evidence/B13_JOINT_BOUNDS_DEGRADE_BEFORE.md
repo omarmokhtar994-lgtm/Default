@@ -441,3 +441,47 @@ The fix is still correct and should still land, but the case for urgency is
 weaker than I first wrote. It closes two of four call sites that are currently
 unprotected; the other two already do the right thing. A reviewer should weigh
 it as a consistency fix with measured backing, not as a live production fire.
+
+## Applied, then measured: no benefit, and possibly a small cost
+
+The fix was applied to the release tree (gate PASS, 18 suites) and then measured
+against the pre-apply tree at an identical budget and seed, both arms
+concurrent:
+
+    case        seed   arm       target b->a    floor b->a     delta
+    AE_AR_B2B   9000   control   168 -> 161     168 -> 168
+                       B-13      166 -> 160     167 -> 166     -1 / -2
+    AE_IT_B2B   9000   control    72 ->  69      89 ->  89
+                       B-13       71 ->  65      88 ->  88     -4 / -1
+    AE_IT_B2B   9001   control    66 ->  61      91 ->  82
+                       B-13       66 ->  61      91 ->  82     +0 / +0
+
+Seed 9000 is negative on all four measures; seed 9001 is byte-identical. Mixed,
+and consistent with the noise band the earlier repeats established (plus or
+minus 1 to 4 on these same cases).
+
+**There is no measured case where the fix helps.** The best outcome observed is
+"no change".
+
+## Why that is not surprising, given attempt nine
+
+The production-faithful probe already showed why: wherever the engine passes
+`min_after_floor` as a constant, that bound is tighter than the gameable one
+(88 against 91-6=85), so the gameable bound never binds and replacing it is a
+no-op. Two of the four call sites are like that. The fix can only matter at the
+two sites that pass `None`, and neither of these runs appears to have exercised
+them in a way that mattered.
+
+## Recommendation
+
+Keep the code change if the goal is consistency -- it is correct, it removes a
+constraint that provably protects nothing, and it costs nothing at two of four
+call sites. Revert it if the bar is "measured improvement", because there is
+none, and one seed shows a small loss.
+
+My own read: this is below the bar I have been holding everything else to in
+this work. I applied it because it was asked for, and the measurement came back
+neutral-to-negative. That is worth knowing before it ships, and the decision
+belongs with whoever owns the release rather than with me.
+
+Rollback is `tar xzf scratchpad/rc5p/PRE_B13_SNAPSHOT.tgz`.

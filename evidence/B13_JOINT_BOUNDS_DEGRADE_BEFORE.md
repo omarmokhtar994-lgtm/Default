@@ -485,3 +485,41 @@ neutral-to-negative. That is worth knowing before it ships, and the decision
 belongs with whoever owns the release rather than with me.
 
 Rollback is `tar xzf scratchpad/rc5p/PRE_B13_SNAPSHOT.tgz`.
+
+## Reverted, and the finding kept as a guard instead
+
+The fix is reverted. The release tree is back to `172d771001193ea0` -- all nine
+cleanups intact, B-13's code change gone, gate PASS.
+
+Reverting the CODE should not throw away the KNOWLEDGE, so the finding is now a
+test: `tests/test_rc9_2_5_joint_bound_shape.py`, three assertions, 0.018
+seconds, picked up automatically by the suite glob. Gate is 19 suites.
+
+    test_the_variable_bound_protects_nothing
+        asserts that `after >= before - cap` with both sides solver-controlled
+        gives the identical answer to having no bound at all
+
+    test_a_constant_bound_does_protect
+        asserts that bounding against a measured integer holds the after-state,
+        because nothing on the right-hand side can be moved
+
+    test_the_engine_still_passes_a_constant_bound_somewhere
+        asserts `min_after_floor` and `min_after_target` are still passed --
+        those are the bounds that actually work, and if they ever disappear the
+        only remaining protection is the one that protects nothing
+
+Verified non-vacuous by mutation: changing the variable bound to a constant one
+inside the probe makes the first test fail, and restoring it makes it pass.
+
+## Why a test rather than a fix
+
+Two attempts at changing this code have now been measured and reverted -- W1's
+unconditional bound, which actively degraded the floor, and B-13's constant
+bound, which showed no benefit and one seed of small loss. The third option is
+the one that survives measurement: change nothing, and make the reasoning
+permanent so the next person does not repeat either mistake.
+
+The docstring carries the whole history, including the arithmetic that explains
+why replacing the variable bound is a no-op wherever `min_after_floor` is
+passed (88 against 91-6=85). Anyone who reads it before touching these lines
+will know both what was tried and what it cost.

@@ -70,3 +70,91 @@ still left B-13 ambiguous. The deterministic pair cost ten minutes and settled
 it. Any future engine change should be measured this way first, and only taken
 to multi-worker multi-seed runs if the deterministic comparison shows a
 difference worth characterising.
+
+---
+
+## Result: what the nine-fix stack actually did to schedules
+
+Measured 2026-09-18 at `--num-workers 1 --solver-random-seed 9000 --time-limit 300`,
+one run per arm (deterministic, so one run is the whole answer).
+
+| | ORIGINAL | NINE FIXES |
+|---|---|---|
+| Engine SHA256 | `f5f997890bfc3f53` | `172d771001193ea0` |
+| Input SHA256 (AR) | `5c15a9bc363a36a2` | `5c15a9bc363a36a2` — SAME |
+| Input SHA256 (IT) | `83080efc496cb7ca` | `83080efc496cb7ca` — SAME |
+
+A/B validity holds: the input is bit-identical in both arms, the engine is not.
+`Contract SHA256` differs because B-9 added seven fields to the contract — that is
+the change under test, not a confound.
+
+### Headline
+
+**The nine fixes changed no schedule.** On both `AE_AR_B2B` and `AE_IT_B2B`,
+every one of the 46 pre-existing canonical metric fields is identical between
+arms. Coverage numbers, break placement, candidate selection: unchanged.
+
+Sheet-by-sheet content comparison of the final workbook (53 sheets) confirms it.
+The only sheets that differ are:
+
+- `Production Summary` — Run ID, Contract SHA256, Engine SHA256, input path
+- `Optimization Audit` — Run ID, input/output paths
+- `Candidate Leaderboard` — one row, see below
+
+Every scheduling sheet is byte-identical: `Final Schedule`, `Break Schedule`,
+`Interval Coverage Audit`, `Coverage Before Breaks`, `Overage Audit`,
+`Whole Week Balance Audit`, `Rest Gap Audit`, all FT-wise sheets.
+
+### What the fixes did add
+
+Seven metrics that were previously computed but never checked are now on the
+parity surface, taking the compared-field count from 46 to 53:
+
+`target_losses_from_breaks`, `floor_losses_from_breaks`,
+`before_severe_floor_gap_count`, `hard_floor_gap_count`,
+`next_sunday_hard_failure_count`, `next_sunday_max_adjacent_raw_change`,
+`next_sunday_max_coverage_ratio`
+
+All seven cross-check PASS against the independent validator on both cases.
+`metric_parity_status` stays PASS, `metric_parity_mismatch_count` stays 0 —
+so the seven newly-checked metrics agree between engine and validator, which
+is the first time that has been established.
+
+### The one behavioural delta
+
+`AE_IT_B2B`, candidate leaderboard row 2 (`skeleton_profile=target90_restore_champion`),
+**not selected** in either arm:
+
+| field | orig | new |
+|---|---|---|
+| `after_severe_overage_count` | 14 | 13 |
+| `floor_deficit_sum` | 6.71625 | 6.705 |
+| `whole_week_imbalance_violations` | 2 | 1 |
+| `transferable_overstaffing_pairs` | 4 | 5 |
+| `objective` | 1417534190.0 | 1417536836.0 |
+
+The new tree produced a marginally better candidate here. It did not win
+selection, so it reached no output. This is the only evidence in the whole
+comparison that the fixes touch search behaviour at all, and it is one
+non-selected candidate on one case.
+
+### Interpretation
+
+The nine fixes are **diagnostic and safety work, not coverage work**. They
+close fail-open paths (B-11), remove dead code (S13-2), align shadow defaults
+(RC-B), convert silent cross-metric fallbacks into loud failures (RC-A), and
+widen the parity gate (B-9). None of that was ever going to move a coverage
+number, and measurement now confirms it did not.
+
+This does not argue against the fixes — a fail-open parser that silently drops
+a roster row is worth fixing whether or not it changes today's numbers. It
+argues against claiming a coverage improvement. The earlier
+**"+0.15% target, 0.00% floor"** figure came from multi-worker runs and was
+solver noise; the honest figure is **0.00% / 0.00%**.
+
+### Consequence for the release decision
+
+Unchanged: **keep RC9.1 as production.** RC9.2.2 is now better instrumented
+and has fewer fail-open paths, but it delivers no measured schedule improvement
+on the two cases tested. There is no coverage case for promoting it, and the
+instrumentation case is not urgent.

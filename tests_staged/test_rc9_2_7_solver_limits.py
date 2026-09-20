@@ -29,18 +29,22 @@ class SolverLimitsTest(unittest.TestCase):
 
     def test_defaults_are_inert(self):
         """Shipping this must not change a single solve until opted into."""
-        self.assertIsNone(E.SOLVER_MAX_MEMORY_MB)
+        self.assertEqual(E.SOLVER_MAX_MEMORY_MB, 6000)
         self.assertEqual(E.SOLVER_RELATIVE_GAP_LIMIT, 0.0)
 
         solver = cp_model.CpSolver()
-        before_mem = solver.parameters.max_memory_in_mb
         before_gap = solver.parameters.relative_gap_limit
         applied = E.configure_solver_limits(solver)
 
-        self.assertEqual(solver.parameters.max_memory_in_mb, before_mem)
+        # The gap limit is what must stay inert: it can trade away coverage on
+        # this objective. The memory ceiling is protective and IS applied.
         self.assertEqual(solver.parameters.relative_gap_limit, before_gap)
-        self.assertIsNone(applied["max_memory_in_mb"])
         self.assertIsNone(applied["relative_gap_limit"])
+        self.assertEqual(applied["max_memory_in_mb"], 6000)
+        self.assertLess(
+            E.SOLVER_MAX_MEMORY_MB, 7760,
+            "ceiling must bind before the cgroup OOM killer did",
+        )
 
     def test_memory_limit_is_applied_when_set(self):
         E.SOLVER_MAX_MEMORY_MB = 2048

@@ -78,3 +78,61 @@ downward, the way B-4 established its headroom. That separates "breaks cannot
 be placed on this skeleton" from "the break search did not find the placement",
 and the answer decides whether the fix belongs in Stage-1's objective or in
 Stage-2's search.
+
+---
+
+# CORRECTION: the skeleton is NOT the blocker. Stage-2 is.
+
+The conclusion above -- that Stage-1 packs coverage too tightly for breaks to
+fit -- is **wrong**, and the B-4-style probe disproves it.
+
+## The probe
+
+Rebuilt `target_floor_pareto_master` on Cricut Chat (4 workers, 180s), giving
+`before_target 193 / before_floor 238` -- the same tightly-packed skeleton whose
+run delivered `after_target 130`. Then asked `solve_breaks` directly whether
+higher after-break coverage is reachable on it:
+
+| `min_target_hits` | status | time |
+|---|---|---|
+| **159** | **FEASIBLE** | 121s |
+| 145 | FEASIBLE | 121s |
+| 130 | FEASIBLE | 121s |
+
+**159 is achievable on this skeleton.** The production run delivered **130**.
+
+So the high-coverage skeleton can hold its breaks at least as well as the weak
+skeleton did (169 -> 159). It was never break-incompatible. **Stage-2's break
+search left at least 29 target intervals unclaimed.**
+
+## What this changes
+
+The routing decision flips:
+
+* **NOT** Stage-1's objective. The skeleton is fine; teaching Stage-1 about
+  break compatibility would be solving a problem that does not exist.
+* **Stage-2's break search** is the defect. Given a demanding skeleton it
+  settles far below what is provably reachable.
+
+The earlier reasoning confused *"the selected candidate had a big before/after
+drop"* with *"that drop was forced"*. It was not forced. The selector picked
+the 169-skeleton because it scored best **as produced**, not because the
+194-skeleton was incapable.
+
+## Honest limit on the probe
+
+`min_target_hits` is a hard constraint, so it converts optimisation into
+feasibility and steers the solver. Production Stage-2 runs unguided. This
+proves **a placement exists at 159**; it does not prove an unguided search
+should have found it in its slice. The gap is nonetheless 29+ intervals with
+45s+ slices available, which is large.
+
+## Where this leaves the ranking
+
+This makes Stage-2 break search the top engineering item, ahead of anything in
+Stage-1. It also re-frames B-4, which found the same shape on AE_FR_Choice --
+break placement giving up coverage it had room to keep, proven by exactly this
+method. B-4 measured 1-2 intervals there. Here it is at least 29.
+
+Joint refinement remains relevant but demoted: the phase exists to co-optimise
+shifts and breaks, and the evidence now says breaks alone have the headroom.

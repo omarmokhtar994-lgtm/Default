@@ -185,3 +185,23 @@ The coverage claim is the solid one: no measured cost across 69 attempts on
   cannot place breaks without explicit exceptions, and
   NMG_EN_FIXED_NESTING fails pre-solver contract validation. Neither is a
   regression from this work.
+
+---
+
+## Default applied and verified end to end (2026-09-20)
+
+`tools/apply_joint_default_off.py`, gate PASS at 22 suites, then a full
+AE_AR_B2B run at 1800s through the runner with the new default:
+
+| | ON (jr3 A/B) | new default OFF |
+|---|---|---|
+| joint status | attempted 2, improved 0 | `DISABLED_BY_RUN_PARAMETER` |
+| peak RSS | 8197 MB | **798 MB** (-90%) |
+| stage1 / stage2 attempts | 9 / 2 | 9 / 2 (identical) |
+| before_target / after_target | 166 / 165 | 166 / 165 |
+| before_floor / after_floor | 167 / 167 | **168** / 167 |
+| independent validation / parity | — | PASS / PASS |
+| production_eligible | — | true |
+
+No coverage lost, floor marginally better, memory down 90%. The change stands;
+no revert required. DEEP and OVERNIGHT remain ON and untested.

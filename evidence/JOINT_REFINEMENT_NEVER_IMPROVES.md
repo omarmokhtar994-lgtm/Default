@@ -107,3 +107,61 @@ coverage** — the floor was marginally better.
 
 This confirms the mechanism behind the 3600s OOM. It does **not** license a
 default change on its own: one workbook, one budget.
+
+---
+
+## Corpus extension (2026-09-20) — scope concern resolved
+
+The earlier caveat was that AE_AR_B2B dominated the sample. Six further
+workbooks were run at 1800s to settle it.
+
+| workbook | runs | jr ran | attempts | improved |
+|---|---|---|---|---|
+| AE_AR_B2B | 22 | 17 | 26 | **0** |
+| AE_FR_B2B | 15 | 2 | 13 | **0** |
+| AE_IT_Choice | 1 | 1 | 12 | **0** |
+| NMG_EN_AND_SP | 1 | 1 | 10 | **0** |
+| GDI_REAL28 | 1 | 1 | 4 | **0** |
+| AE_IT_B2B | 6 | 1 | 2 | **0** |
+| AE_FR_Choice | 6 | 1 | 2 | **0** |
+| Cricut_Voice | 1 | 0 | 0 | — |
+| Cricut_Chat | 1 | 0 | 0 | — |
+| **TOTAL** | **55** | **24** | **69** | **0** |
+
+**69 attempts across 7 distinct workbooks. Zero improvements.**
+
+AE_AR_B2B is now 26 of 69 attempts rather than the bulk, and the four newly
+covered workbooks (AE_IT_Choice, NMG_EN_AND_SP, GDI_REAL28, plus the existing
+AE set) agree.
+
+## Memory correlation holds across the corpus
+
+| workbook | jr attempts | peak RSS |
+|---|---|---|
+| GDI_REAL28 | 4 | **5254 MB** |
+| NMG_EN_AND_SP | 10 | **3389 MB** |
+| AE_IT_Choice | 12 | **2017 MB** |
+| Cricut_Chat | **0** | **609 MB** |
+| Cricut_Voice | **0** | **600 MB** |
+
+Every workbook where the phase ran shows GB-scale peak memory; both where it
+did not stay under 610 MB. Together with the isolated A/B on AE_AR_B2B
+(8197 MB -> 820 MB with `--disable-joint-refinement`, identical coverage), the
+mechanism is established on more than one case.
+
+## Recommendation, now corpus-backed
+
+**Default joint refinement OFF at QUICK.** It recovers a 900s reserve (25% of
+the 3600s budget) and the GB-scale memory that caused the 3600s OOM, at no
+measured coverage cost across 69 attempts on 7 workbooks.
+
+## Still untested, stated plainly
+
+* **DEEP.** The phase gets 5400s there and has never been measured. The
+  recommendation above is scoped to QUICK.
+* **Cricut_Chat and Cricut_Voice** never reached the phase at 1800s, so they
+  contribute nothing either way.
+* Two corpus runs failed for unrelated, pre-existing reasons: NMG_EN_AND_SP
+  cannot place breaks without explicit exceptions, and
+  NMG_EN_FIXED_NESTING fails pre-solver contract validation. Neither is a
+  regression from this work.

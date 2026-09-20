@@ -1,4 +1,13 @@
-# The phase that eats 7.6 GB has never improved a schedule
+# Joint refinement: 90% of peak memory, no measured quality on 4 of ~15 workbooks
+
+SCOPE FIRST, because the headline below oversells its coverage. Joint
+refinement executed in 20 runs across **4 distinct workbooks**, but
+AE_AR_B2B accounts for 16 of those runs and 24 of 41 attempts. The other
+three contributed 1-2 runs each. Eleven packaged workbooks -- Cricut_Chat,
+Cricut_Voice, NMG_EN, NMG_SP, GDI_REAL28, SAKS_NEW and others -- were never
+tested, and every run was QUICK at 300-1800s. DEEP allots the phase 5400s
+and is untested. `improved: 0` holding across all four is a real signal; it
+is NOT grounds to change a shipped default corpus-wide.
 
 Scanned **44 solver audits** — every run produced in this session: the 16-run
 budget sweep, the 18-run worker test, the deterministic A/B pairs, and the
@@ -69,3 +78,32 @@ they constrain nothing. A structurally inert bound is consistent with a phase
 that cannot steer itself toward a better solution, though 26 of 37 attempts
 returning `NO_FEASIBLE_SOLUTION` points at the joint model being too hard to
 solve in its slice rather than at the bound alone.
+
+---
+
+## Isolated A/B (third attempt, correct flag) — AE_AR_B2B, 1800s
+
+Two earlier attempts were void: the first passed a flag the runner does not
+accept, the second used `--joint-refinement-reserve-sec 0`, which only shrank
+the allocation from 241s to 87s and left the phase enabled in both arms. The
+correct switch is `--disable-joint-refinement`.
+
+| | ON | OFF | delta |
+|---|---|---|---|
+| **peak RSS** | 8197 MB | **820 MB** | **-7377 MB (-90%)** |
+| wall | 1811s | 1726s | -85s |
+| stage1 / stage2 attempts | 9 / 2 | 9 / 2 | identical |
+| before_target | 166 | 166 | 0 |
+| after_target | 165 | 165 | 0 |
+| before_floor | 167 | **168** | **+1** |
+| after_floor | 167 | 167 | 0 |
+
+`OFF` reports `joint status=DISABLED_BY_RUN_PARAMETER`; `ON` reports
+`attempted 2, accepted 0, improved 0`.
+
+Search work is identical in both arms, so the variable is isolated. **Joint
+refinement is 90% of peak memory on this case, and removing it cost no
+coverage** — the floor was marginally better.
+
+This confirms the mechanism behind the 3600s OOM. It does **not** license a
+default change on its own: one workbook, one budget.

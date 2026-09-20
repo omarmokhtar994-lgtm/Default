@@ -151,9 +151,29 @@ mechanism is established on more than one case.
 
 ## Recommendation, now corpus-backed
 
-**Default joint refinement OFF at QUICK.** It recovers a 900s reserve (25% of
-the 3600s budget) and the GB-scale memory that caused the 3600s OOM, at no
-measured coverage cost across 69 attempts on 7 workbooks.
+**Default joint refinement OFF at QUICK** -- on the memory evidence alone.
+
+MEASURED: peak RSS 8197 MB -> 820 MB on the isolated A/B, and GB-scale peaks on
+every corpus workbook where the phase ran versus under 610 MB where it did not.
+That is what fixes the 3600s OOM, and it is sufficient on its own.
+
+NOT MEASURED, and an earlier draft of this file wrongly claimed it: that
+disabling the phase "recovers 15 minutes per run". The 900s figure is the
+phase's *reserve* at a 3600s budget, not an observed saving. The only A/B run
+was at 1800s, where the phase is allocated 241s, and it showed:
+
+    wall clock   1811s -> 1726s   (85s saved, not 900)
+    stage1 attempts  9 -> 9       (NO additional Stage-1 work)
+    stage2 attempts  2 -> 2
+
+Phase deadlines are absolute offsets from process start, so removing a late
+phase does not hand its slot back to an earlier phase that has already
+finished -- the run simply ends sooner. Whether the 900s reserve at a 3600s
+budget would flow to Stage-1 (valuable, since Stage-1 starvation is where
+coverage is actually lost) or merely shorten the run is **untested**.
+
+The coverage claim is the solid one: no measured cost across 69 attempts on
+7 workbooks.
 
 ## Still untested, stated plainly
 

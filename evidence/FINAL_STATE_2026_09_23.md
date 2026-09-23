@@ -1,48 +1,58 @@
-# Final state — what is closed, what is open, and what it costs
+# Final state
 
-## Verified this session
+## The headline
 
-| item | result | evidence |
+The two engine lineages are **merged**. `engine/` now carries both the
+L6.3.2.6 Coverage Split work and the L6.3.2.7 RC5 hardening, verified by
+marker count on both sides and by a real end-to-end run. The gate went from
+**9 suites to 17**, plus a new static check that catches the exact class of
+defect the merge introduced.
+
+## Every item that was open, and where it landed
+
+| # | item | outcome |
 |---|---|---|
-| Are #49 (floor cap 0.05→0.03) and #38a (employee-quality validator) a regression? | **No.** Deterministic 1-worker rerun gives 166/165/168/167, byte-identical to the pre-change run. The earlier 4-worker −2 was portfolio nondeterminism. **Both kept, nothing reverted.** | `DETERM_AR` vs `VERIFY_JOINTOFF` |
-| Is Stage-2's shortfall a bad objective or a starved search? | **Starved search.** Objective is monotone in coverage (164→1.96e9, 135→3.54e9, 131→3.91e9). | NIGHT_08, NIGHT_09 |
-| Why does Stage-2 leave coverage on the table? | The adaptive break search **plans 168 attempts and runs 0** at the production QUICK budget. 15 of 22 runs at 1800s never run it at all. | NIGHT_09, `tools/stage2_attempt_census.py` |
-| Gate | **PASS — 16 suites**, up from 9. Verified to exit 1 in both new failure modes. | `run_tests.sh` |
+| 1 | **Merge `candidates/` into `engine/`** | **DONE.** Real 3-way merge against ancestor `93ab7f8`. 6 conflicts in the scheduler resolved by hand, 5 further files merged clean after a real run exposed that I had under-scoped the first pass. Both lineages verified present at full marker count. |
+| 2 | **Stage-2 never searches** | **FIXED (partially, measured).** The anchor may no longer eat the last fundable attempt. On the recorded Chat case 135s → 97s, leaving exactly 180 = one real attempt instead of none. Inert where the phase is roomy or too small. |
+| 3 | `min_target_hits` vs `after_target` | **CLOSED.** Measured across all 242 demanded intervals: the model threshold is stricter on 242, looser on 0. A lock at N *does* force `after_target ≥ N`. NIGHT_06's proof stands; my retraction of it was the error. Pinned by test. |
+| 4 | `language_reserve` validator | **BUILT.** Independent recomputation of the reserve tier, reusing the after-break eligible count and the engine's own tier helpers. 10 tests, mutation-checked twice (the first version passed under mutation and was strengthened to an AST check). |
+| 5 | Non-monotonicity | **NOT A DEFECT, as far as the data goes.** Raw corpus says 287/1469 pairs, but those mix workers, seeds and builds. Controlled: Chat +5, GDI +9, Voice −1. The single −1 is the size of known multi-worker noise. |
+| 6 | Never-executed skeleton strategies | **MEASURED: five, not six, for two different reasons.** 2 are never requested by the runner (dead by configuration), 3 are requested but lose to the Stage-1 budget tail. Neither fixed, with reasons. |
+| 7 | Joint refinement at DEEP | **CLOSED.** `VOICE_DEEP` allocates 5040s, records `enabled: true`, `status: PENDING`, 0 attempts. Across 54 runs ≥3600s: 0 attempts, 0 improvements. It is not merely ineffective at DEEP — it never runs. |
+| 8 | `skill_allocation` validator | **DELIBERATELY NOT BUILT.** 0 of 9 corpus workbooks configure it; there is nothing to validate against. |
 
-## The two things that were quietly wrong
+## Two defects found *because* of this work
 
-1. **The engine work was not in the repo.** Everything measured all session
-   lives in `L6.3.2.7-...-RC2`; the repo held `L6.3.2.6-...-RC1` from
-   2026-09-08. Scratchpad dies with the container. Now preserved and pushed
-   under `candidates/RC9_2_2_HARDENED_RC5/`.
-2. **The gate passed over tests it never ran.** 7 suites in `tests_staged/`
-   were outside the glob. Now wired in; running them exposed two stale pins
-   that asserted already-fixed defects were still present.
+1. **The merge shipped a caller and callee from different lineages.**
+   `build_global_budget_plan(diagnostics=...)` against a definition without
+   that parameter. Every suite and both selfchecks passed — none enter
+   `run_case` — and ruff cannot see it because the *name* resolves. A real
+   1800s run died on the first call. Now caught statically in under a second
+   by `tools/check_cross_module_calls.py`, verified against the real bug.
 
-## Open, with honest cost
+2. **The gate was passing over tests it never ran.** `run_tests.sh` globbed
+   one filename pattern, so 7 suites sat unexecuted. Wiring them in exposed
+   two stale pins that asserted already-fixed defects were still present.
 
-| # | item | why it is not done | cost to close |
-|---|---|---|---|
-| 1 | **Merge `candidates/` into `engine/`** | The trees diverged. The candidate has 0 `coverage_split` references; the repo has 61. A copy would delete the A50–A54 Coverage Split work. 994 lines repo-only, 2082 candidate-only. | A deliberate 3-file merge + full corpus A/B. Not safe to rush: silent corruption of a scheduling engine is worse than delay. |
-| 2 | **Fund Stage-2's break search at QUICK** | Reaching DEEP-quality needs ~540s of `break_search`; QUICK allocates 452s nominal and ~277s real. One recovered attempt is *not* automatically better — on Chat the first planned task scores 135, below the 159 that shipped; the +27 came from the second. | Budget-ladder change + per-workbook A/B, ~30 min per arm. |
-| 3 | **`min_target_hits` vs `after_target` disagree** | Model uses `ceil_units(req*ratio)*qpi`; metric uses a percentage compare. A lock set to 159 reported 157. Used only by `target_lock_recovery`, which the census shows barely executes — not on the production path. | Reconcile the two definitions + regression test. |
-| 4 | `language_reserve` validator (4/9 workbooks exposed) | Scoped, not built. | — |
-| 5 | Non-monotonicity: more budget sometimes gives a worse result | Observed, not root-caused. | — |
-| 6 | 6 skeleton strategies never executed | Unmeasured. | — |
-| 7 | Joint refinement at DEEP (5400s reserve) | Untested. OFF at SMOKE/QUICK on measured evidence (69 attempts, 7 workbooks, 0 improvements). | — |
+## Corrections made to my own earlier claims
 
-## Retracted this session, so it is not carried forward as fact
+* The probe's printed `VERDICT: WEIGHTING DEFECT` — **void**. Neither arm
+  proved optimality and arm A's answer was feasible for arm B.
+* My retraction of NIGHT_06 — **itself retracted**, on measurement.
+* A joint-refinement scan using the wrong audit key — **discarded, not
+  published**.
+* "Six never-executed strategies" — **five**, with two distinct causes.
 
-* The probe's printed `VERDICT: WEIGHTING DEFECT` — void. Neither arm proved
-  optimality, and A's own answer was feasible for B. See NIGHT_08.
-* NIGHT_06's "159 FEASIBLE" — proves a model-counter bound, not `after_target`.
-  Its conclusion survives on independent evidence; the proof did not.
+## Verification
 
-## Straight answer on readiness
+* Gate: **PASS — 17 suites + 2 selfchecks + cross-module call signatures +
+  undefined-name sweep.**
+* Every behavioural change mutation-checked, with the source restored
+  byte-identical afterwards and that restoration verified by `diff`.
+* No assertion was weakened to obtain a pass. Where a test failed because the
+  engine had improved, the pin was moved to the *new* contract and a negative
+  test added alongside it.
 
-The engine is **not** shippable-as-merged today. Item 1 is a real merge of two
-diverged lineages and item 2 is an unvalidated budget change; both need
-measurement runs, and doing either blind risks a silently worse scheduler.
-What *is* true today: the hardened engine is preserved and pushed, the gate
-genuinely tests it, the two applied fixes are proven inert, and the largest
-quality defect is root-caused with a reproducible census.
+## End-to-end A/B
+
+_Filled in below from the paired AE_AR_B2B runs at 1800s, 1 worker, seed 9000._

@@ -1,0 +1,2963 @@
+[
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "require_metric",
+  "line": 59,
+  "end": 78,
+  "arith_ops": 1,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "H_caps_gates",
+   "C_coverage"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "cleanup_stale_run_outputs",
+  "line": 274,
+  "end": 308,
+  "arith_ops": 17,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "C_coverage"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "to_float",
+  "line": 311,
+  "end": 319,
+  "arith_ops": 1,
+  "sections": [
+   "D_break"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "strict_float",
+  "line": 322,
+  "end": 350,
+  "arith_ops": 1,
+  "sections": [
+   "B_demand_shrinkage"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "parse_time_window",
+  "line": 369,
+  "end": 379,
+  "arith_ops": 4,
+  "sections": [
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "I_rest_shift"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "shift_start_contract_allows",
+  "line": 391,
+  "end": 398,
+  "arith_ops": 2,
+  "sections": [
+   "I_rest_shift"
+  ],
+  "primary": "I_rest_shift"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "minute_of_day",
+  "line": 412,
+  "end": 431,
+  "arith_ops": 9,
+  "sections": [
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "I_rest_shift"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "hhmm",
+  "line": 434,
+  "end": 436,
+  "arith_ops": 2,
+  "sections": [
+   "I_rest_shift"
+  ],
+  "primary": "I_rest_shift"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "cyclic_active_window",
+  "line": 439,
+  "end": 482,
+  "arith_ops": 13,
+  "sections": [
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "I_rest_shift"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "shift_parts",
+  "line": 485,
+  "end": 496,
+  "arith_ops": 6,
+  "sections": [
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "I_rest_shift"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "ceil_units",
+  "line": 499,
+  "end": 500,
+  "arith_ops": 2,
+  "sections": [
+   "B_demand_shrinkage",
+   "F_objective"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "scaled_effective_factor",
+  "line": 506,
+  "end": 515,
+  "arith_ops": 2,
+  "sections": [
+   "B_demand_shrinkage",
+   "E_overage",
+   "F_objective",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "scaled_coverage_threshold",
+  "line": 518,
+  "end": 525,
+  "arith_ops": 4,
+  "sections": [
+   "B_demand_shrinkage",
+   "E_overage",
+   "F_objective",
+   "H_caps_gates",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "write_json",
+  "line": 565,
+  "end": 569,
+  "arith_ops": 1,
+  "sections": [],
+  "primary": "Z_unclassified"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "write_csv",
+  "line": 572,
+  "end": 583,
+  "arith_ops": 1,
+  "sections": [],
+  "primary": "Z_unclassified"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "sha256_file",
+  "line": 586,
+  "end": 591,
+  "arith_ops": 1,
+  "sections": [],
+  "primary": "Z_unclassified"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "verify_xlsx",
+  "line": 599,
+  "end": 624,
+  "arith_ops": 1,
+  "sections": [
+   "B_demand_shrinkage"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "atomic_save_workbook",
+  "line": 627,
+  "end": 637,
+  "arith_ops": 2,
+  "sections": [],
+  "primary": "Z_unclassified"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_instruction_map",
+  "line": 1167,
+  "end": 1177,
+  "arith_ops": 1,
+  "sections": [],
+  "primary": "Z_unclassified"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_terms_in_distinct_cells",
+  "line": 1336,
+  "end": 1354,
+  "arith_ops": 1,
+  "sections": [],
+  "primary": "Z_unclassified"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_find_header_row",
+  "line": 1357,
+  "end": 1408,
+  "arith_ops": 2,
+  "sections": [
+   "B_demand_shrinkage",
+   "E_overage",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_is_day_header",
+  "line": 1411,
+  "end": 1422,
+  "arith_ops": 1,
+  "sections": [
+   "A_time_index"
+  ],
+  "primary": "A_time_index"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_day_columns",
+  "line": 1425,
+  "end": 1458,
+  "arith_ops": 1,
+  "sections": [
+   "E_overage",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "E_overage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_parse_roster",
+  "line": 1461,
+  "end": 1523,
+  "arith_ops": 5,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "C_coverage"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_parse_preferences",
+  "line": 1587,
+  "end": 1645,
+  "arith_ops": 8,
+  "sections": [
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "C_coverage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_parse_fixed_nesting",
+  "line": 1648,
+  "end": 1700,
+  "arith_ops": 3,
+  "sections": [
+   "A_time_index"
+  ],
+  "primary": "A_time_index"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_parse_duration_set",
+  "line": 1703,
+  "end": 1715,
+  "arith_ops": 1,
+  "sections": [
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "I_rest_shift"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_parse_shifts",
+  "line": 1718,
+  "end": 1756,
+  "arith_ops": 3,
+  "sections": [
+   "D_break",
+   "I_rest_shift"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_discover_requirement_sheet",
+  "line": 1759,
+  "end": 1782,
+  "arith_ops": 4,
+  "sections": [
+   "B_demand_shrinkage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_detect_interval_minutes",
+  "line": 1788,
+  "end": 1825,
+  "arith_ops": 5,
+  "sections": [
+   "E_overage",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "E_overage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_time_column",
+  "line": 1828,
+  "end": 1837,
+  "arith_ops": 5,
+  "sections": [
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "I_rest_shift"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_parse_requirement_table",
+  "line": 1840,
+  "end": 1926,
+  "arith_ops": 12,
+  "sections": [
+   "B_demand_shrinkage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_parse_language_days",
+  "line": 1951,
+  "end": 2000,
+  "arith_ops": 2,
+  "sections": [
+   "D_break",
+   "E_overage",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_parse_language_rules",
+  "line": 2003,
+  "end": 2117,
+  "arith_ops": 3,
+  "sections": [
+   "B_demand_shrinkage",
+   "E_overage",
+   "G_budget",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "coverage_split_required_headcount",
+  "line": 2123,
+  "end": 2136,
+  "arith_ops": 4,
+  "sections": [
+   "B_demand_shrinkage",
+   "E_overage",
+   "F_objective",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "coverage_split_capacity_report",
+  "line": 2139,
+  "end": 2298,
+  "arith_ops": 12,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_parse_coverage_split",
+  "line": 2342,
+  "end": 2404,
+  "arith_ops": 4,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_parse_break_segments",
+  "line": 2410,
+  "end": 2478,
+  "arith_ops": 4,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "G_budget",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_parse_break_window_controls",
+  "line": 2489,
+  "end": 2595,
+  "arith_ops": 11,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "shift_within_language_window",
+  "line": 2709,
+  "end": 2733,
+  "arith_ops": 4,
+  "sections": [
+   "B_demand_shrinkage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "shift_overlaps_required_language_for_noneligible",
+  "line": 2736,
+  "end": 2758,
+  "arith_ops": 6,
+  "sections": [
+   "B_demand_shrinkage",
+   "E_overage",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "language_working_window_violations",
+  "line": 2761,
+  "end": 2799,
+  "arith_ops": 1,
+  "sections": [
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "C_coverage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "parse_input",
+  "line": 2820,
+  "end": 3494,
+  "arith_ops": 10,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "validate_input_contract",
+  "line": 3668,
+  "end": 3993,
+  "arith_ops": 13,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "capture_solver_telemetry",
+  "line": 4085,
+  "end": 4183,
+  "arith_ops": 3,
+  "sections": [
+   "D_break",
+   "F_objective",
+   "G_budget",
+   "C_coverage",
+   "I_rest_shift"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "circular_minute_distance",
+  "line": 4218,
+  "end": 4220,
+  "arith_ops": 3,
+  "sections": [
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "I_rest_shift"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "rest_compatible",
+  "line": 4223,
+  "end": 4225,
+  "arith_ops": 5,
+  "sections": [
+   "C_coverage",
+   "I_rest_shift"
+  ],
+  "primary": "C_coverage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "previous_saturday_compatible",
+  "line": 4228,
+  "end": 4235,
+  "arith_ops": 5,
+  "sections": [
+   "C_coverage",
+   "I_rest_shift"
+  ],
+  "primary": "C_coverage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "maximum_concurrent_breaks",
+  "line": 4262,
+  "end": 4269,
+  "arith_ops": 3,
+  "sections": [
+   "D_break",
+   "H_caps_gates",
+   "C_coverage"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "next_sunday_raw_cap",
+  "line": 4272,
+  "end": 4291,
+  "arith_ops": 8,
+  "sections": [
+   "B_demand_shrinkage",
+   "E_overage",
+   "H_caps_gates",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "next_sunday_raw_requirement",
+  "line": 4294,
+  "end": 4301,
+  "arith_ops": 4,
+  "sections": [
+   "B_demand_shrinkage",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "next_sunday_adjacent_raw_limit",
+  "line": 4304,
+  "end": 4319,
+  "arith_ops": 1,
+  "sections": [
+   "B_demand_shrinkage",
+   "E_overage",
+   "H_caps_gates",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "whole_week_raw_requirement",
+  "line": 4322,
+  "end": 4327,
+  "arith_ops": 4,
+  "sections": [
+   "B_demand_shrinkage",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "whole_week_raw_cap",
+  "line": 4330,
+  "end": 4342,
+  "arith_ops": 5,
+  "sections": [
+   "B_demand_shrinkage",
+   "E_overage",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "whole_week_adjacent_raw_limit",
+  "line": 4345,
+  "end": 4349,
+  "arith_ops": 1,
+  "sections": [
+   "B_demand_shrinkage",
+   "H_caps_gates",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "shift_covers_week_qslot",
+  "line": 4352,
+  "end": 4354,
+  "arith_ops": 4,
+  "sections": [
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "I_rest_shift"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "next_sunday_spill_quarters",
+  "line": 4357,
+  "end": 4365,
+  "arith_ops": 4,
+  "sections": [
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "I_rest_shift"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "next_sunday_interval_quarters",
+  "line": 4368,
+  "end": 4389,
+  "arith_ops": 3,
+  "sections": [
+   "E_overage",
+   "A_time_index"
+  ],
+  "primary": "E_overage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "next_sunday_own_qslot",
+  "line": 4392,
+  "end": 4394,
+  "arith_ops": 1,
+  "sections": [
+   "A_time_index"
+  ],
+  "primary": "A_time_index"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "cyclic_requirement_context",
+  "line": 4401,
+  "end": 4415,
+  "arith_ops": 5,
+  "sections": [
+   "B_demand_shrinkage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "next_sunday_capacity_preflight",
+  "line": 4418,
+  "end": 4536,
+  "arith_ops": 8,
+  "sections": [
+   "B_demand_shrinkage",
+   "E_overage",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "previous_saturday_covers_qslot",
+  "line": 4539,
+  "end": 4545,
+  "arith_ops": 4,
+  "sections": [
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "I_rest_shift"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "opening_intervals_for_day",
+  "line": 4548,
+  "end": 4565,
+  "arith_ops": 1,
+  "sections": [
+   "A_time_index"
+  ],
+  "primary": "A_time_index"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "language_rules_at",
+  "line": 4572,
+  "end": 4608,
+  "arith_ops": 5,
+  "sections": [
+   "E_overage",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "E_overage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "language_operational_reserve_target",
+  "line": 4611,
+  "end": 4620,
+  "arith_ops": 1,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "F_objective",
+   "G_budget",
+   "C_coverage"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "prior_constant_cover",
+  "line": 4631,
+  "end": 4641,
+  "arith_ops": 1,
+  "sections": [
+   "E_overage",
+   "A_time_index"
+  ],
+  "primary": "E_overage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "coverage_vars",
+  "line": 4661,
+  "end": 4663,
+  "arith_ops": 3,
+  "sections": [
+   "E_overage",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "E_overage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "cyclic_next_sunday_coverage_vars",
+  "line": 4666,
+  "end": 4676,
+  "arith_ops": 1,
+  "sections": [
+   "E_overage",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "E_overage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_shift_day_demand_fit_uncached",
+  "line": 4724,
+  "end": 4751,
+  "arith_ops": 11,
+  "sections": [
+   "B_demand_shrinkage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "demand_fit_blocked",
+  "line": 4754,
+  "end": 4766,
+  "arith_ops": 1,
+  "sections": [
+   "B_demand_shrinkage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "stage2_anchor_slice_seconds",
+  "line": 5030,
+  "end": 5066,
+  "arith_ops": 3,
+  "sections": [
+   "D_break",
+   "F_objective",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "stage1_fundable_profile_count",
+  "line": 5069,
+  "end": 5083,
+  "arith_ops": 2,
+  "sections": [
+   "B_demand_shrinkage",
+   "G_budget"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "stage1_slice_seconds",
+  "line": 5086,
+  "end": 5109,
+  "arith_ops": 2,
+  "sections": [
+   "D_break",
+   "G_budget",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "coverage_quality_limits",
+  "line": 5128,
+  "end": 5144,
+  "arith_ops": 4,
+  "sections": [
+   "E_overage",
+   "H_caps_gates",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "E_overage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "aggregate_pattern_mix_guidance",
+  "line": 5157,
+  "end": 5513,
+  "arith_ops": 54,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "load_seed_skeleton",
+  "line": 5531,
+  "end": 5583,
+  "arith_ops": 2,
+  "sections": [
+   "F_objective",
+   "A_time_index"
+  ],
+  "primary": "F_objective"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_fallback_no_break_evidence",
+  "line": 5588,
+  "end": 5724,
+  "arith_ops": 8,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "load_validated_fallback_candidate",
+  "line": 5726,
+  "end": 5908,
+  "arith_ops": 18,
+  "sections": [
+   "D_break",
+   "F_objective",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "bundled_schedule_candidate_inventory",
+  "line": 5912,
+  "end": 5995,
+  "arith_ops": 6,
+  "sections": [
+   "D_break"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "build_skeleton",
+  "line": 6044,
+  "end": 6926,
+  "arith_ops": 210,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "run_constraint_isolation",
+  "line": 6929,
+  "end": 6946,
+  "arith_ops": 1,
+  "sections": [
+   "E_overage",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift"
+  ],
+  "primary": "E_overage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "run_conflict_refinement",
+  "line": 6949,
+  "end": 7011,
+  "arith_ops": 6,
+  "sections": [
+   "E_overage",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift"
+  ],
+  "primary": "E_overage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "cyclic_next_sunday_covering_occurrences",
+  "line": 7031,
+  "end": 7039,
+  "arith_ops": 1,
+  "sections": [
+   "E_overage",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "E_overage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_generic_break_patterns",
+  "line": 7057,
+  "end": 7150,
+  "arith_ops": 36,
+  "sections": [
+   "D_break",
+   "E_overage",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "selected_break_spacing_rows",
+  "line": 7169,
+  "end": 7213,
+  "arith_ops": 9,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "build_break_constraint_isolation_report",
+  "line": 7258,
+  "end": 7316,
+  "arith_ops": 6,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "critical_exception_cells",
+  "line": 7318,
+  "end": 7398,
+  "arith_ops": 38,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "language_break_overlap_repair_plan",
+  "line": 7414,
+  "end": 7603,
+  "arith_ops": 24,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "qualified_language_break_certificate_targets",
+  "line": 7605,
+  "end": 7659,
+  "arith_ops": 3,
+  "sections": [
+   "D_break",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "run_qualified_language_break_certificate_repairs",
+  "line": 7662,
+  "end": 7795,
+  "arith_ops": 6,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "F_objective",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "solve_breaks",
+  "line": 7798,
+  "end": 8372,
+  "arith_ops": 173,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "prove_selected_exceptions",
+  "line": 8391,
+  "end": 8421,
+  "arith_ops": 1,
+  "sections": [
+   "D_break",
+   "F_objective",
+   "G_budget",
+   "H_caps_gates",
+   "A_time_index"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "break_qslots",
+  "line": 8427,
+  "end": 8439,
+  "arith_ops": 4,
+  "sections": [
+   "D_break",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "distinct_skill_allocation_audit",
+  "line": 8443,
+  "end": 8558,
+  "arith_ops": 10,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "G_budget",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "fractional_safe_overage_metrics",
+  "line": 8561,
+  "end": 8603,
+  "arith_ops": 14,
+  "sections": [
+   "B_demand_shrinkage",
+   "E_overage",
+   "H_caps_gates",
+   "C_coverage"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "employee_operational_quality",
+  "line": 8606,
+  "end": 8687,
+  "arith_ops": 20,
+  "sections": [
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "I_rest_shift"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "calculate_metrics",
+  "line": 8690,
+  "end": 9554,
+  "arith_ops": 162,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_max_possible_raw_at_qslot",
+  "line": 9604,
+  "end": 9626,
+  "arith_ops": 3,
+  "sections": [
+   "E_overage",
+   "A_time_index"
+  ],
+  "primary": "E_overage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_rule_active_qslots_for_day",
+  "line": 9630,
+  "end": 9640,
+  "arith_ops": 7,
+  "sections": [
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "I_rest_shift"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "break_resilience_diagnostics",
+  "line": 9647,
+  "end": 9813,
+  "arith_ops": 15,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "capacity_diagnostics",
+  "line": 9815,
+  "end": 10093,
+  "arith_ops": 64,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "structural_schedule_audit",
+  "line": 10096,
+  "end": 10291,
+  "arith_ops": 18,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "validate_schedule",
+  "line": 10294,
+  "end": 10357,
+  "arith_ops": 7,
+  "sections": [
+   "D_break",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "protected_floor_anchor_key",
+  "line": 10366,
+  "end": 10398,
+  "arith_ops": 4,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "H_caps_gates",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "run_protected_floor_break_guard",
+  "line": 10426,
+  "end": 10493,
+  "arith_ops": 6,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "target_anchor_key",
+  "line": 10496,
+  "end": 10523,
+  "arith_ops": 1,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "H_caps_gates",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "run_protected_target_champion_break_proof",
+  "line": 10545,
+  "end": 10644,
+  "arith_ops": 9,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "repair_candidate_key",
+  "line": 10696,
+  "end": 10733,
+  "arith_ops": 14,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "C_coverage"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "hard_floor_failure_rows",
+  "line": 10827,
+  "end": 10841,
+  "arith_ops": 4,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "H_caps_gates",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_protected_tier_counts",
+  "line": 10919,
+  "end": 10937,
+  "arith_ops": 2,
+  "sections": [
+   "E_overage",
+   "C_coverage"
+  ],
+  "primary": "E_overage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "candidate_selection_breakdown",
+  "line": 10950,
+  "end": 10982,
+  "arith_ops": 4,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "H_caps_gates",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_deficit_bucket",
+  "line": 10985,
+  "end": 10994,
+  "arith_ops": 2,
+  "sections": [
+   "E_overage",
+   "F_objective",
+   "H_caps_gates",
+   "C_coverage"
+  ],
+  "primary": "E_overage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_candidate_quality_tuple",
+  "line": 11012,
+  "end": 11075,
+  "arith_ops": 4,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "merge_candidate_pools_with_safe_incumbent",
+  "line": 11125,
+  "end": 11185,
+  "arith_ops": 3,
+  "sections": [
+   "D_break",
+   "A_time_index"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "break_damage_focus_cells",
+  "line": 11188,
+  "end": 11226,
+  "arith_ops": 12,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "coverage_rebalance_focus_cells",
+  "line": 11229,
+  "end": 11265,
+  "arith_ops": 10,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "target_priority_tradeoff_select",
+  "line": 11268,
+  "end": 11477,
+  "arith_ops": 16,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "H_caps_gates",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_tier_minimum_failures",
+  "line": 11551,
+  "end": 11568,
+  "arith_ops": 1,
+  "sections": [
+   "H_caps_gates",
+   "C_coverage"
+  ],
+  "primary": "H_caps_gates"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "select_export_candidates",
+  "line": 11584,
+  "end": 11883,
+  "arith_ops": 11,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "break_capacity_headcount_requirement",
+  "line": 12015,
+  "end": 12102,
+  "arith_ops": 18,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_autosize",
+  "line": 12222,
+  "end": 12230,
+  "arith_ops": 3,
+  "sections": [],
+  "primary": "Z_unclassified"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "synchronize_contract_metadata",
+  "line": 12352,
+  "end": 12407,
+  "arith_ops": 8,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "write_before_break_workbook",
+  "line": 12410,
+  "end": 12500,
+  "arith_ops": 3,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "F_objective",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "production_quality_gate",
+  "line": 12503,
+  "end": 12644,
+  "arith_ops": 6,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "write_output_workbook",
+  "line": 12646,
+  "end": 13281,
+  "arith_ops": 16,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "exception_cap_descent_targets",
+  "line": 13456,
+  "end": 13470,
+  "arith_ops": 2,
+  "sections": [
+   "D_break",
+   "H_caps_gates",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "guaranteed_stage2_reserve_seconds",
+  "line": 13548,
+  "end": 13556,
+  "arith_ops": 1,
+  "sections": [
+   "D_break",
+   "F_objective",
+   "G_budget"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "bounded_stage2_guard_reserve_seconds",
+  "line": 13559,
+  "end": 13573,
+  "arith_ops": 2,
+  "sections": [
+   "D_break",
+   "G_budget",
+   "C_coverage",
+   "I_rest_shift"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "acquire_early_safe_incumbent",
+  "line": 13601,
+  "end": 13673,
+  "arith_ops": 6,
+  "sections": [
+   "D_break",
+   "F_objective",
+   "G_budget",
+   "H_caps_gates",
+   "A_time_index"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_shift_interval_cover_fraction",
+  "line": 13676,
+  "end": 13683,
+  "arith_ops": 5,
+  "sections": [
+   "A_time_index"
+  ],
+  "primary": "A_time_index"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "donor_receiver_shift_plan",
+  "line": 13686,
+  "end": 13864,
+  "arith_ops": 43,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "H_caps_gates",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "phase_c_c2_overage_transaction_gate",
+  "line": 13867,
+  "end": 13911,
+  "arith_ops": 2,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "H_caps_gates",
+   "C_coverage"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_quality_delta",
+  "line": 13913,
+  "end": 13928,
+  "arith_ops": 1,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "C_coverage"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "adaptive_nondominated_anchor_pool",
+  "line": 14029,
+  "end": 14106,
+  "arith_ops": 2,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "G_budget",
+   "C_coverage"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "derive_adaptive_feedback_cuts",
+  "line": 14109,
+  "end": 14194,
+  "arith_ops": 16,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "G_budget",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "adaptive_operator_focus_cells",
+  "line": 14197,
+  "end": 14277,
+  "arith_ops": 12,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "G_budget",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_joint_candidate_shift_indices",
+  "line": 14280,
+  "end": 14331,
+  "arith_ops": 1,
+  "sections": [
+   "D_break",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "solve_joint_shift_off_language_break_refinement",
+  "line": 14334,
+  "end": 15357,
+  "arith_ops": 190,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "bootstrap_exception_anchors_for_joint",
+  "line": 15360,
+  "end": 15498,
+  "arith_ops": 15,
+  "sections": [
+   "D_break",
+   "F_objective",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "run_adaptive_decomposed_joint_optimizer",
+  "line": 15500,
+  "end": 16134,
+  "arith_ops": 63,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "run_coordinated_shift_off_break_loop",
+  "line": 16137,
+  "end": 16403,
+  "arith_ops": 18,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "run_logic_based_break_cut_feedback",
+  "line": 16489,
+  "end": 16668,
+  "arith_ops": 26,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "global_zero_exception_break_reserve_requirements",
+  "line": 16670,
+  "end": 16709,
+  "arith_ops": 10,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "G_budget",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "zero_exception_break_reserve_plan",
+  "line": 16712,
+  "end": 16855,
+  "arith_ops": 20,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "run_zero_exception_recovery_phase",
+  "line": 16858,
+  "end": 17039,
+  "arith_ops": 6,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "run_post_break_repair_phase",
+  "line": 17041,
+  "end": 17231,
+  "arith_ops": 10,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "run_cap_feasible_target_recovery_phase",
+  "line": 17324,
+  "end": 17411,
+  "arith_ops": 2,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "derive_dynamic_before_search_locks",
+  "line": 17413,
+  "end": 17440,
+  "arith_ops": 6,
+  "sections": [
+   "D_break",
+   "C_coverage"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "run_rc8_best_before_break_recovery",
+  "line": 17443,
+  "end": 17557,
+  "arith_ops": 8,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "run_target_lock_recovery_phase",
+  "line": 17560,
+  "end": 17669,
+  "arith_ops": 4,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "publish_recovery_checkpoint",
+  "line": 17746,
+  "end": 17814,
+  "arith_ops": 2,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "G_budget"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "run_case",
+  "line": 17916,
+  "end": 21602,
+  "arith_ops": 244,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "selfcheck",
+  "line": 21604,
+  "end": 21916,
+  "arith_ops": 6,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_business_exception_rows",
+  "line": 22027,
+  "end": 22058,
+  "arith_ops": 2,
+  "sections": [
+   "D_break",
+   "C_coverage"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_business_reason_window",
+  "line": 22061,
+  "end": 22070,
+  "arith_ops": 1,
+  "sections": [],
+  "primary": "Z_unclassified"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_business_break_blockers",
+  "line": 22073,
+  "end": 22121,
+  "arith_ops": 1,
+  "sections": [
+   "D_break",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_business_contract_message",
+  "line": 22124,
+  "end": 22192,
+  "arith_ops": 3,
+  "sections": [
+   "B_demand_shrinkage",
+   "E_overage",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "build_business_outcome",
+  "line": 22195,
+  "end": 22416,
+  "arith_ops": 2,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "format_business_outcome",
+  "line": 22419,
+  "end": 22439,
+  "arith_ops": 3,
+  "sections": [
+   "B_demand_shrinkage",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "publish_business_outcome",
+  "line": 22461,
+  "end": 22480,
+  "arith_ops": 2,
+  "sections": [
+   "D_break"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "record_unexpected_run_failure",
+  "line": 22483,
+  "end": 22516,
+  "arith_ops": 1,
+  "sections": [
+   "D_break"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "main",
+  "line": 22618,
+  "end": 22759,
+  "arith_ops": 6,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "F_objective",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "start_hour",
+  "line": 665,
+  "end": 666,
+  "arith_ops": 1,
+  "sections": [
+   "I_rest_shift"
+  ],
+  "primary": "I_rest_shift"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "duration_q",
+  "line": 669,
+  "end": 670,
+  "arith_ops": 1,
+  "sections": [
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "I_rest_shift"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "end_abs_min",
+  "line": 673,
+  "end": 680,
+  "arith_ops": 1,
+  "sections": [
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "I_rest_shift"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "overlaps",
+  "line": 704,
+  "end": 732,
+  "arith_ops": 4,
+  "sections": [
+   "B_demand_shrinkage",
+   "E_overage",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "qslots_per_interval",
+  "line": 880,
+  "end": 881,
+  "arith_ops": 1,
+  "sections": [
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "I_rest_shift"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "overlaps",
+  "line": 925,
+  "end": 934,
+  "arith_ops": 2,
+  "sections": [
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "I_rest_shift"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "broken_offsets",
+  "line": 956,
+  "end": 960,
+  "arith_ops": 1,
+  "sections": [
+   "D_break"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "assign",
+  "line": 1345,
+  "end": 1352,
+  "arith_ops": 1,
+  "sections": [],
+  "primary": "Z_unclassified"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "applies",
+  "line": 4595,
+  "end": 4607,
+  "arith_ops": 5,
+  "sections": [
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "I_rest_shift"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "rec",
+  "line": 7085,
+  "end": 7109,
+  "arith_ops": 25,
+  "sections": [
+   "G_budget",
+   "C_coverage",
+   "I_rest_shift"
+  ],
+  "primary": "G_budget"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "maximum_gap_run",
+  "line": 9248,
+  "end": 9258,
+  "arith_ops": 1,
+  "sections": [
+   "C_coverage"
+  ],
+  "primary": "C_coverage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "overage_distribution_stats",
+  "line": 9345,
+  "end": 9373,
+  "arith_ops": 5,
+  "sections": [
+   "B_demand_shrinkage",
+   "E_overage",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "protected_safe_fallback_key",
+  "line": 11427,
+  "end": 11452,
+  "arith_ops": 1,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "C_coverage"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "genuinely_safer_than_strict",
+  "line": 11772,
+  "end": 11793,
+  "arith_ops": 3,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "H_caps_gates",
+   "C_coverage"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "coverage_sum_key",
+  "line": 11811,
+  "end": 11817,
+  "arith_ops": 1,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "C_coverage"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_coverage",
+  "line": 13200,
+  "end": 13204,
+  "arith_ops": 1,
+  "sections": [
+   "E_overage",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "E_overage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "synthetic_pair",
+  "line": 21845,
+  "end": 21864,
+  "arith_ops": 3,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "F_objective",
+   "C_coverage"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "location",
+  "line": 22065,
+  "end": 22067,
+  "arith_ops": 1,
+  "sections": [],
+  "primary": "Z_unclassified"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "_rc811_gate_pass",
+  "line": 11711,
+  "end": 11722,
+  "arith_ops": 1,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "H_caps_gates",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/l632_universal_scheduler.py",
+  "function": "dynamic_pattern_key",
+  "line": 14527,
+  "end": 14530,
+  "arith_ops": 4,
+  "sections": [
+   "D_break",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/phase_b_maturity.py",
+  "function": "build_global_budget_plan",
+  "line": 186,
+  "end": 332,
+  "arith_ops": 44,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "G_budget",
+   "C_coverage"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/phase_b_maturity.py",
+  "function": "adaptive_break_attempt_plan",
+  "line": 444,
+  "end": 532,
+  "arith_ops": 2,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/_tools/phase_b_maturity.py",
+  "function": "__post_init__",
+  "line": 56,
+  "end": 85,
+  "arith_ops": 7,
+  "sections": [
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "G_budget",
+   "C_coverage"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/_tools/phase_b_maturity.py",
+  "function": "final_deadline",
+  "line": 88,
+  "end": 89,
+  "arith_ops": 1,
+  "sections": [
+   "G_budget"
+  ],
+  "primary": "G_budget"
+ },
+ {
+  "file": "engine/_tools/phase_b_maturity.py",
+  "function": "elapsed",
+  "line": 91,
+  "end": 92,
+  "arith_ops": 1,
+  "sections": [],
+  "primary": "Z_unclassified"
+ },
+ {
+  "file": "engine/_tools/phase_b_maturity.py",
+  "function": "remaining_total",
+  "line": 94,
+  "end": 95,
+  "arith_ops": 1,
+  "sections": [
+   "G_budget"
+  ],
+  "primary": "G_budget"
+ },
+ {
+  "file": "engine/_tools/phase_b_maturity.py",
+  "function": "remaining_in_phase",
+  "line": 100,
+  "end": 101,
+  "arith_ops": 1,
+  "sections": [
+   "G_budget"
+  ],
+  "primary": "G_budget"
+ },
+ {
+  "file": "engine/_tools/phase_b_maturity.py",
+  "function": "slice_seconds",
+  "line": 103,
+  "end": 120,
+  "arith_ops": 2,
+  "sections": [
+   "G_budget"
+  ],
+  "primary": "G_budget"
+ },
+ {
+  "file": "engine/_tools/phase_b_maturity.py",
+  "function": "flush",
+  "line": 385,
+  "end": 391,
+  "arith_ops": 1,
+  "sections": [],
+  "primary": "Z_unclassified"
+ },
+ {
+  "file": "engine/_tools/phase_b_maturity.py",
+  "function": "stagnant",
+  "line": 552,
+  "end": 556,
+  "arith_ops": 1,
+  "sections": [
+   "H_caps_gates"
+  ],
+  "primary": "H_caps_gates"
+ },
+ {
+  "file": "engine/_tools/canonical_metrics.py",
+  "function": "compare_metric_surfaces",
+  "line": 193,
+  "end": 293,
+  "arith_ops": 1,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "H_caps_gates",
+   "C_coverage"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/tools/independent_validator.py",
+  "function": "sha256_file",
+  "line": 24,
+  "end": 28,
+  "arith_ops": 1,
+  "sections": [],
+  "primary": "Z_unclassified"
+ },
+ {
+  "file": "engine/tools/independent_validator.py",
+  "function": "hhmm_to_min",
+  "line": 33,
+  "end": 45,
+  "arith_ops": 4,
+  "sections": [
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "I_rest_shift"
+ },
+ {
+  "file": "engine/tools/independent_validator.py",
+  "function": "find_header",
+  "line": 53,
+  "end": 57,
+  "arith_ops": 2,
+  "sections": [
+   "B_demand_shrinkage"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/tools/independent_validator.py",
+  "function": "_is_day_header",
+  "line": 59,
+  "end": 70,
+  "arith_ops": 1,
+  "sections": [
+   "A_time_index"
+  ],
+  "primary": "A_time_index"
+ },
+ {
+  "file": "engine/tools/independent_validator.py",
+  "function": "parse_output_schedule",
+  "line": 73,
+  "end": 118,
+  "arith_ops": 9,
+  "sections": [
+   "D_break",
+   "A_time_index"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/tools/independent_validator.py",
+  "function": "declared_artifact_type",
+  "line": 120,
+  "end": 144,
+  "arith_ops": 1,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "C_coverage"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/tools/independent_validator.py",
+  "function": "parse_breaks",
+  "line": 146,
+  "end": 239,
+  "arith_ops": 2,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/tools/independent_validator.py",
+  "function": "independent_employee_quality",
+  "line": 241,
+  "end": 289,
+  "arith_ops": 8,
+  "sections": [
+   "B_demand_shrinkage",
+   "H_caps_gates",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/tools/independent_validator.py",
+  "function": "max_gap_run",
+  "line": 291,
+  "end": 299,
+  "arith_ops": 3,
+  "sections": [
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "C_coverage"
+ },
+ {
+  "file": "engine/tools/independent_validator.py",
+  "function": "validate",
+  "line": 301,
+  "end": 980,
+  "arith_ops": 172,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/tools/independent_validator.py",
+  "function": "main",
+  "line": 982,
+  "end": 1017,
+  "arith_ops": 3,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "H_caps_gates"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/tools/independent_validator.py",
+  "function": "spread",
+  "line": 280,
+  "end": 281,
+  "arith_ops": 1,
+  "sections": [],
+  "primary": "Z_unclassified"
+ },
+ {
+  "file": "engine/RUN_UNIVERSAL_PRODUCTION.py",
+  "function": "acquire_case_lock",
+  "line": 232,
+  "end": 275,
+  "arith_ops": 2,
+  "sections": [
+   "D_break",
+   "C_coverage"
+  ],
+  "primary": "D_break"
+ },
+ {
+  "file": "engine/RUN_UNIVERSAL_PRODUCTION.py",
+  "function": "sha256_file",
+  "line": 291,
+  "end": 296,
+  "arith_ops": 1,
+  "sections": [],
+  "primary": "Z_unclassified"
+ },
+ {
+  "file": "engine/RUN_UNIVERSAL_PRODUCTION.py",
+  "function": "reconcile_business_outcome_after_validation",
+  "line": 459,
+  "end": 714,
+  "arith_ops": 4,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "A_time_index"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/RUN_UNIVERSAL_PRODUCTION.py",
+  "function": "quality_allows_validation",
+  "line": 717,
+  "end": 759,
+  "arith_ops": 2,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "H_caps_gates",
+   "C_coverage"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/RUN_UNIVERSAL_PRODUCTION.py",
+  "function": "stage_input_snapshot",
+  "line": 762,
+  "end": 780,
+  "arith_ops": 2,
+  "sections": [
+   "B_demand_shrinkage",
+   "C_coverage"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/RUN_UNIVERSAL_PRODUCTION.py",
+  "function": "finalize_production_manifest",
+  "line": 783,
+  "end": 836,
+  "arith_ops": 3,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "H_caps_gates",
+   "C_coverage"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/RUN_UNIVERSAL_PRODUCTION.py",
+  "function": "build_parser",
+  "line": 839,
+  "end": 884,
+  "arith_ops": 1,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "F_objective",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift"
+  ],
+  "primary": "B_demand_shrinkage"
+ },
+ {
+  "file": "engine/RUN_UNIVERSAL_PRODUCTION.py",
+  "function": "main",
+  "line": 912,
+  "end": 1249,
+  "arith_ops": 13,
+  "sections": [
+   "B_demand_shrinkage",
+   "D_break",
+   "E_overage",
+   "G_budget",
+   "H_caps_gates",
+   "C_coverage",
+   "I_rest_shift"
+  ],
+  "primary": "B_demand_shrinkage"
+ }
+]

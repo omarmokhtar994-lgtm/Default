@@ -597,7 +597,7 @@ def validate(input_path: Path, output_path: Path, engine_path: Path) -> Dict[str
     # Independent recomputation of the language_reserve gate. The hard minimum
     # is already checked below; the gate the engine scores is the operational
     # RESERVE on top of it (minimum + language_reserve_extra), which nothing
-    # here re-derived. Mirrors eng.language_reserve_target/_status, and reads
+    # here re-derived. Mirrors eng.language_operational_reserve_target and eng.language_reserve_status, and reads
     # after[slot] so break placement is accounted for.
     language_reserve_rows=[]; language_reserve_counts={"GAP":0,"MINIMUM_ONLY":0,"RESERVE_PROTECTED":0}
     before100=before90=before80=after100=after90=after80=before_target=after_target=before_floor=after_floor=0

@@ -76,7 +76,42 @@ grant never exceeds the phase.
   one recovered attempt is not automatically a better final number.
 * The 175s that `break_search` loses before it starts is untouched.
 
-## A/B
+## Result: the cap as written does NOT achieve its goal
 
-_Result recorded below once the paired 1800s / 1 worker / seed 9000 runs on
-AE_AR_B2B finish. Reverted if it regresses._
+**AE_AR_B2B** (1800s, 1 worker, seed 9000) — the cap never bound. The phase had
+~400s left, so `min(135, 401 - 180)` is still 135. Both arms granted 135.0s,
+ran 1 adaptive attempt, and produced 166/165/168/167. Safe, and uninformative.
+
+**Cricut Chat** (1800s, 4 workers, seed 9000) — the case it was built for:
+
+| | before the cap | with the cap |
+|---|---|---|
+| phase remaining at the anchor | 277.0s | 307.4s |
+| anchor granted | 135.0s | **127.4s** (capped) |
+| slice the adaptive loop was offered | 139.9s | **177.0s** |
+| real adaptive attempts | 0 of 168 | **0 of 168** |
+
+The cap bound exactly as coded and left 180.0s on paper. The loop saw 177.0s.
+**Still zero attempts.** It left exactly the floor with no margin, and the
+seconds between the anchor finishing and the loop sizing its slice were not
+free. (Coverage is not comparable across these two runs: four workers are
+nondeterministic and picked a different skeleton, 196 vs 169 before-target.
+That is why this was judged on attempts, not on a coverage number.)
+
+**Measuring the hand-off gap.** In every run where the loop stopped at zero
+attempts straight after the anchor, the loop's proposed slice *is* the time
+left, so the gap can be measured exactly. Across 61 runs: anchor overrun of its
+own grant 0.054s here; the rest is bookkeeping — scoring the anchor, checkpoint
+and audit writes, planning the attempts.
+
+| | seconds |
+|---|---|
+| minimum | 0.62 |
+| median | 1.77 |
+| 90th percentile | 2.58 |
+| maximum | 9.82 |
+
+**What happens next.** The zero-margin cap is withdrawn. A margin version —
+leaving `180 + 30` seconds, three times the worst observed gap — is being tested
+deterministically against the uncapped engine in the same batch as F-1 (see
+`evidence/formula_audit/FINDINGS.md`). It ships only if it helps.

@@ -55,6 +55,72 @@ def accepts(fn: ast.FunctionDef, keywords: set[str], positional: int) -> list[st
     return problems
 
 
+# Modules that bind another module dynamically, which static import resolution
+# cannot see. The validator loads the engine with load_engine(path) and calls
+# it through `eng`, so a renamed engine function would pass every import check
+# and crash only when the validator runs.
+DYNAMIC_BINDINGS = {
+    "independent_validator": {"eng": "l632_universal_scheduler"},
+}
+
+
+def module_level_names(tree: ast.AST) -> set[str]:
+    names: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names.add(node.name)
+        elif isinstance(node, ast.Assign):
+            for t in node.targets:
+                if isinstance(t, ast.Name):
+                    names.add(t.id)
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            names.add(node.target.id)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            for alias in node.names:
+                names.add((alias.asname or alias.name).split(".")[0])
+    return names
+
+
+def check_dynamic(modules: dict) -> int:
+    failures = 0
+    for stem, bindings in DYNAMIC_BINDINGS.items():
+        if stem not in modules:
+            continue
+        path, tree = modules[stem]
+        for alias, target in bindings.items():
+            if target not in modules:
+                print(f"{path}: dynamic binding {alias} -> {target}: target module not found")
+                failures += 1
+                continue
+            ttree = modules[target][1]
+            names = module_level_names(ttree)
+            defs = function_defs(ttree)
+            for node in ast.walk(tree):
+                if (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
+                        and node.value.id == alias):
+                    if node.attr not in names:
+                        failures += 1
+                        print(f"{path}:{node.lineno}: {alias}.{node.attr} -> "
+                              f"{target} has no such name")
+            for node in ast.walk(tree):
+                if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                        and isinstance(node.func.value, ast.Name)
+                        and node.func.value.id == alias):
+                    fn = defs.get(node.func.attr)
+                    if fn is None:
+                        continue
+                    if any(k.arg is None for k in node.keywords):
+                        continue
+                    if any(isinstance(a, ast.Starred) for a in node.args):
+                        continue
+                    keywords = {k.arg for k in node.keywords if k.arg}
+                    for problem in accepts(fn, keywords, len(node.args)):
+                        failures += 1
+                        print(f"{path}:{node.lineno}: {alias}.{node.func.attr}() -> "
+                              f"{target}.{fn.name}(): {problem}")
+    return failures
+
+
 def check(root: Path) -> int:
     modules: dict[str, tuple[Path, ast.AST]] = {}
     for path in sorted(root.rglob("*.py")):
@@ -90,6 +156,7 @@ def check(root: Path) -> int:
                 failures += 1
                 print(f"{path}:{node.lineno}: {node.func.id}() -> "
                       f"{target}.{fn.name}(): {problem}")
+    failures += check_dynamic(modules)
     return 1 if failures else 0
 
 

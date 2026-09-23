@@ -1,0 +1,482 @@
+[
+ [
+  "l632_universal_scheduler.py",
+  472,
+  "n",
+  "bridge_end_index = (start + length) % n"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  1852,
+  "interval",
+  "per_day = 1440 // interval"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  4412,
+  "parsed.interval_minutes",
+  "interval = minute // parsed.interval_minutes"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  12513,
+  "active",
+  "floor_ratio = floor_gaps / active"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  12514,
+  "active",
+  "severe_ratio = severe_gaps / active"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  75,
+  "(key, alt_that_was_substituted)",
+  "\"required metric %r is missing; refusing to substitute %r, which is a \""
+ ],
+ [
+  "l632_universal_scheduler.py",
+  398,
+  "step",
+  "return (minute - anchor) % step == 0"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  1866,
+  "interval",
+  "index = minute // interval"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  5083,
+  "minimum_slice_sec",
+  "return int(usable // minimum_slice_sec)"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  5968,
+  "str(sidecar.get('file') or '')",
+  "sidecar_path = package_root / str(sidecar.get(\"file\") or \"\")"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  9085,
+  "divisor",
+  "before = before_sum / divisor"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  9086,
+  "divisor",
+  "after = after_sum / divisor"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  3394,
+  "interval",
+  "interval_minutes=interval, intervals_per_day=1440 // interval,"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  4173,
+  "float(conflicts)",
+  "telemetry[\"branches_per_conflict\"] = round(float(branches) / float(conflicts), 1)"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  5108,
+  "attempts",
+  "proposed = min(STAGE1_MAX_SLICE_SEC, max(minimum_slice_sec, usable / attempts))"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  8865,
+  "qpi",
+  "before = before_sum / qpi"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  8866,
+  "qpi",
+  "after = after_sum / qpi"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  9311,
+  "qpi",
+  "previous_interval = (qslot - d * 96) // qpi"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  9312,
+  "qpi",
+  "current_interval = (qslot + 1 - d * 96) // qpi"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  9846,
+  "factor",
+  "target_need = req * parsed.target_ratio * interval_hours / factor"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  9847,
+  "factor",
+  "floor_need = req * parsed.floor_ratio * interval_hours / factor"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  14159,
+  "parsed.interval_minutes",
+  "i = int(minute // parsed.interval_minutes)"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  1911,
+  "interval",
+  "index = minute // interval"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  4179,
+  "float(granted_seconds)",
+  "telemetry[\"slice_utilisation\"] = round(float(wall) / float(granted_seconds), 3)"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  5945,
+  "str(row.get('file') or '')",
+  "file_path = package_root / str(row.get(\"file\") or \"\")"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  5946,
+  "str(row.get('source') or '')",
+  "source_path = package_root / str(row.get(\"source\") or \"\")"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  6274,
+  "D",
+  "nd = (d + 1) % D"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  6984,
+  "attempts_left",
+  "each = min(90.0, max(8.0, remaining * 0.80 / attempts_left))"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  7082,
+  "len(segments) + 1",
+  "ideals = [int(round((idx + 1) * duration_q / (len(segments) + 1))) for idx in range(len(segments))]"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  8205,
+  "qpi",
+  "previous_interval = (qslot - d * 96) // qpi"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  8206,
+  "qpi",
+  "current_interval = (qslot + 1 - d * 96) // qpi"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  9423,
+  "sum(before_overage_values)",
+  "(sum(sorted(before_overage_values, reverse=True)[:10]) / sum(before_overage_values))"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  9427,
+  "sum(after_overage_values)",
+  "(sum(sorted(after_overage_values, reverse=True)[:10]) / sum(after_overage_values))"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  9849,
+  "factor",
+  "req * parsed.hard_floor_ratio * interval_hours / factor"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  10994,
+  "quantum",
+  "return int(math.floor(max(0.0, float(value or 0.0)) / quantum + 1e-9))"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  12076,
+  "net_per_associate",
+  "additional_hc = int(math.ceil(deficit / net_per_associate)) if deficit else 0"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  13204,
+  "active_intervals",
+  "return f\"{hits} of {active_intervals} ({hits / active_intervals:.0%})\""
+ ],
+ [
+  "l632_universal_scheduler.py",
+  14674,
+  "D",
+  "nd = (d + 1) % D"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  15011,
+  "qpi",
+  "previous_interval = (qslot - d * 96) // qpi"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  15012,
+  "qpi",
+  "current_interval = (qslot + 1 - d * 96) // qpi"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  15427,
+  "attempts_left",
+  "min_time = min(300.0, max(30.0, remaining_bootstrap * 0.45 / attempts_left))"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  15982,
+  "attempts_left",
+  "slice_seconds = min(1200.0, max(25.0, remaining * 0.82 / attempts_left))"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  18276,
+  "STAGE1_SLICE_UTILIZATION",
+  "stage1_portfolio_size * STAGE1_MIN_MEANINGFUL_SLICE_SEC / STAGE1_SLICE_UTILIZATION,"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  2136,
+  "eff",
+  "return max(0, int(math.ceil(req * float(ratio) / eff - 1e-9)))"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  2217,
+  "productive",
+  "need_with_breaks = int(math.ceil(peak_need * shift_q / productive)) if peak_need else 0"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  4276,
+  "eff_factor",
+  "demand_cap = max(1, int(math.ceil(req * parsed.next_sunday_overage_cap_ratio / eff_factor - 1e-9)))"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  4301,
+  "effective_factor",
+  "return max(1, int(math.ceil(req * protected_ratio / effective_factor - 1e-9)))"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  4327,
+  "eff",
+  "return max(1, int(math.ceil(req * float(parsed.target_ratio if ratio is None else ratio) / eff - 1e-9)))"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  4336,
+  "eff",
+  "percentage_cap = max(1, int(math.ceil(req * getattr(parsed, \"whole_week_overage_cap_ratio\", 1.35) / eff - 1e-9)))"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  7475,
+  "parsed.interval_minutes",
+  "interval_index = minute // parsed.interval_minutes"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  8581,
+  "eff",
+  "minimum_raw_target = int(math.ceil(req * target / eff - OVERAGE_CEIL_TOLERANCE)) if req > 0 else 0"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  8914,
+  "qpi",
+  "carry_in_forced_overage = max(0.0, prior_sum / qpi - unavoidable_effective)"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  9989,
+  "productive_per_associate_week",
+  "estimated_additional_hc_for_target = max(0, int(math.ceil(max(0.0, -aggregate_target_slack) / productive_per_associate_w"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  9990,
+  "productive_per_associate_week",
+  "estimated_additional_hc_for_floor = max(0, int(math.ceil(max(0.0, -aggregate_floor_slack) / productive_per_associate_wee"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  10463,
+  "attempts_left",
+  "slice_sec = min(420.0, max(35.0, remaining * 0.70 / attempts_left))"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  14137,
+  "effective",
+  "required_floor = int(math.ceil(req * parsed.floor_ratio / effective - 1e-9))"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  14138,
+  "effective",
+  "required_target = int(math.ceil(req * parsed.target_ratio / effective - 1e-9))"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  15827,
+  "targets_left",
+  "slice_seconds = min(240.0, max(30.0, remaining * 0.86 / targets_left))"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  19265,
+  "attempts_left",
+  "slice_sec = min(120.0, max(30.0, remaining * 0.32 / attempts_left))"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  20172,
+  "f'{attempt_key}.json'",
+  "checkpoint_path = checkpoint_dir / f\"{attempt_key}.json\""
+ ],
+ [
+  "l632_universal_scheduler.py",
+  8306,
+  "exception_penalty",
+  "exception_lower_bound = max(0, int(math.floor((best_objective_bound + 1e-6) / exception_penalty)))"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  9882,
+  "factor",
+  "target_raw_needed = int(math.ceil(req * parsed.target_ratio / factor - 1e-9))"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  9883,
+  "factor",
+  "floor_raw_needed = int(math.ceil(req * parsed.floor_ratio / factor - 1e-9))"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  10593,
+  "attempts_left",
+  "slice_sec = min(600.0, max(35.0, remaining * 0.78 / attempts_left))"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  12055,
+  "eff",
+  "need = math.ceil(req * parsed.target_ratio / eff - 1e-9) if req > 0 else 0"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  19985,
+  "f'{guard_key}.json'",
+  "checkpoint_path = checkpoint_dir / f\"{guard_key}.json\""
+ ],
+ [
+  "l632_universal_scheduler.py",
+  9885,
+  "factor",
+  "int(math.ceil(req * parsed.hard_floor_ratio / factor - 1e-9))"
+ ],
+ [
+  "l632_universal_scheduler.py",
+  10144,
+  "len(total_after_values)",
+  "\"total_after_raw_average\": round(sum(total_after_values) / len(total_after_values), 4),"
+ ],
+ [
+  "phase_b_maturity.py",
+  116,
+  "attempts",
+  "proposed = remaining * max(0.05, min(1.0, float(share))) / attempts"
+ ],
+ [
+  "phase_b_maturity.py",
+  250,
+  "STAGE1_PRIMARY_SPLIT",
+  "max(primary_floor, int(stage1_need / STAGE1_PRIMARY_SPLIT)),"
+ ],
+ [
+  "independent_validator.py",
+  678,
+  "sum(positive_overages)",
+  "top10_concentration=(sum(sorted(positive_overages,reverse=True)[:10])/sum(positive_overages)) if positive_overages else "
+ ],
+ [
+  "independent_validator.py",
+  644,
+  "qpi",
+  "be=sum(bvals)*eff/qpi; ae=sum(avals)*eff/qpi"
+ ],
+ [
+  "independent_validator.py",
+  644,
+  "qpi",
+  "be=sum(bvals)*eff/qpi; ae=sum(avals)*eff/qpi"
+ ],
+ [
+  "independent_validator.py",
+  705,
+  "parsed.qslots_per_interval",
+  "previous_interval=(qslot-d*96)//parsed.qslots_per_interval"
+ ],
+ [
+  "independent_validator.py",
+  706,
+  "parsed.qslots_per_interval",
+  "current_interval=(qslot+1-d*96)//parsed.qslots_per_interval"
+ ],
+ [
+  "RUN_UNIVERSAL_PRODUCTION.py",
+  766,
+  "source.name",
+  "target = target_dir / source.name"
+ ],
+ [
+  "RUN_UNIVERSAL_PRODUCTION.py",
+  931,
+  "f'{schedule_id}_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx'",
+  "output = case_root / f'{schedule_id}_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx'"
+ ],
+ [
+  "RUN_UNIVERSAL_PRODUCTION.py",
+  932,
+  "f'{schedule_id}.l6_3_2_3_solver_audit.json'",
+  "audit = case_root / f'{schedule_id}.l6_3_2_3_solver_audit.json'"
+ ],
+ [
+  "RUN_UNIVERSAL_PRODUCTION.py",
+  933,
+  "f'{schedule_id}.l6_3_2_3_summary.csv'",
+  "summary = case_root / f'{schedule_id}.l6_3_2_3_summary.csv'"
+ ],
+ [
+  "RUN_UNIVERSAL_PRODUCTION.py",
+  926,
+  "schedule_id",
+  "case_root = (args.output_root / schedule_id).resolve()"
+ ]
+]

@@ -110,6 +110,21 @@ done
 run_check "engine selfcheck" "$PY" engine/_tools/l632_universal_scheduler.py --selfcheck
 run_check "wrapper selfcheck" "$PY" engine/RUN_UNIVERSAL_PRODUCTION.py --selfcheck
 
+# Cross-module call-signature check. This is how the merge's
+# build_global_budget_plan(diagnostics=...) TypeError got through: every suite
+# and both selfchecks passed, because neither enters run_case, and ruff's F821
+# does not see it -- the NAME resolves, only the keyword was wrong. A full
+# 1800s run died on the first call. This catches it statically in under a
+# second, and is verified to do so by removing the parameter again.
+echo "── cross-module call signatures"
+if "$PY" tools/check_cross_module_calls.py engine >/tmp/xmod.out 2>&1; then
+  echo "   cross-module call signatures OK"
+else
+  echo "   cross-module call signatures FAILED"
+  cat /tmp/xmod.out
+  fail=1
+fi
+
 # Static undefined-name sweep. This is how the parse_time_to_minute NameError was
 # found: neither the suites nor line-by-line reading caught a name that is called
 # but defined nowhere. Skipped with a visible notice when ruff is absent, never
@@ -130,7 +145,7 @@ fi
 
 echo
 if [ "$fail" -eq 0 ]; then
-  echo "GATE PASS — $total suite(s) + 2 selfchecks + undefined-name sweep"
+  echo "GATE PASS — $total suite(s) + 2 selfchecks + cross-module call signatures + undefined-name sweep"
 else
   echo "GATE FAIL — see failures above"
 fi

@@ -4049,6 +4049,33 @@ def status_name(cp_model: Any, solver: Any, status: int) -> str:
 
 
 SOLVER_MAX_MEMORY_MB: Optional[int] = 6000
+JOINT_MIN_AVAILABLE_MEMORY_MB = 2048
+JOINT_MIN_AVAILABLE_MEMORY_SHARE = 0.15
+
+
+def joint_memory_headroom() -> Dict[str, Any]:
+    """Whether the machine can afford another joint shift+break model.
+
+    SOLVER_MAX_MEMORY_MB bounds CP-SAT's search, not the Python-side model
+    build or presolve. SYNTH_X1 (120 associates, 15-minute grid) reached the
+    joint endgame with no release candidate and was SIGKILLed by the cgroup OOM
+    killer at 13.9 GB resident -- no schedule, no audit, no validation. A stop
+    recorded in the audit is strictly better than that. Reads MemAvailable;
+    if it cannot be read, it does not block (returns ok=True).
+    """
+    try:
+        info: Dict[str, int] = {}
+        with open("/proc/meminfo", "r", encoding="utf-8") as handle:
+            for line in handle:
+                key, _, rest = line.partition(":")
+                if key in {"MemTotal", "MemAvailable"}:
+                    info[key] = int(rest.strip().split()[0]) // 1024
+        total = info["MemTotal"]
+        available = info["MemAvailable"]
+    except Exception:
+        return {"ok": True, "available_mb": None, "required_mb": None, "source": "UNAVAILABLE"}
+    required = max(JOINT_MIN_AVAILABLE_MEMORY_MB, int(total * JOINT_MIN_AVAILABLE_MEMORY_SHARE))
+    return {"ok": available >= required, "available_mb": available, "required_mb": required, "source": "/proc/meminfo"}
 SOLVER_RELATIVE_GAP_LIMIT: float = 0.0
 
 
@@ -5086,6 +5113,55 @@ def stage2_anchor_slice_seconds(reserved_sec: float, remaining_sec: float) -> fl
     if remaining >= STAGE2_ANCHOR_MIN_SLICE_SEC + reserve_for_search:
         granted = min(granted, remaining - reserve_for_search)
     return max(0.0, granted)
+
+
+STAGE1_STARVED_BASIS_MIN_SEC = 5.0
+
+
+def stage1_starved_basis_profile(
+    profiles_to_run: Sequence[Dict[str, Any]], attempted: int,
+    successful: Sequence["SkeletonSolution"], remaining_sec: float,
+) -> Optional[Dict[str, Any]]:
+    """The one profile to run when the portfolio cannot fund even its first.
+
+    Stage-1 profiles score coverage on one of two bases. "productive" credits
+    each person with (1 - shrinkage) x (paid - break) / paid in every interval,
+    as if break loss were spread evenly; "before" counts heads. The
+    deterministic baseline is a productive profile, so on a budget-starved run
+    it can be the ONLY skeleton, and the even-spread assumption can make it
+    prefer an unbalanced week: on SYNTH_E2 (14 associates, one shift) it stacked
+    11 on two days and 7 on two others, 45 of 63 target, while a before-basis
+    profile found 10 every day, 63 of 63, OPTIMAL in 0.2s. The portfolio's
+    45s-per-profile floor then refused the 19s that were left.
+
+    So when nothing from the portfolio ran and no before-basis skeleton exists,
+    run the first before-basis profile with whatever is left (at least 5s): a
+    profile that proves optimal returns its unspent time. Inert whenever any
+    portfolio profile ran.
+    """
+    if attempted > 0 or remaining_sec < STAGE1_STARVED_BASIS_MIN_SEC:
+        return None
+    before_names = {p["name"] for p in profiles_to_run if p.get("coverage_basis") == "before"}
+    if any(s.profile in before_names for s in successful):
+        return None
+    return next((p for p in profiles_to_run if p.get("coverage_basis") == "before"), None)
+
+
+PREFLIGHT_PROBE_RETRY_SHARE = 0.5
+PREFLIGHT_PROBE_RETRY_MAX_SEC = 600.0
+PREFLIGHT_PROBE_RETRY_MIN_SEC = 30.0
+
+
+def preflight_probe_retry_seconds(stage1_window_sec: float) -> float:
+    """Seconds for a second hard-feasibility probe after an UNKNOWN first one.
+
+    Half of what is left until the Stage-1 deadline, capped at 600s, and zero
+    when that would be under 30s (the first probe's own floor): a retry that
+    short cannot do better than the attempt that just failed. Taking half
+    leaves Stage-1 search the other half if the retry finds a skeleton.
+    """
+    proposed = min(PREFLIGHT_PROBE_RETRY_MAX_SEC, max(0.0, float(stage1_window_sec)) * PREFLIGHT_PROBE_RETRY_SHARE)
+    return proposed if proposed >= PREFLIGHT_PROBE_RETRY_MIN_SEC else 0.0
 
 
 def stage1_fundable_profile_count(
@@ -12079,9 +12155,10 @@ def break_capacity_headcount_requirement(
     with no spare body and 228 break-quarters had nowhere lossless to go.
 
     This measures that directly, from the schedule the engine actually built:
-    per quarter-slot, how many people can step off without dropping the
-    interval below target (bounded by the concurrency cap), summed, against the
-    break-quarters that must be placed.
+    per interval, how many break-quarters can be taken without dropping the
+    interval's average below target (the metric's own averaging), with each
+    quarter bounded by the concurrency cap, summed, against the break-quarters
+    that must be placed.
 
     The headcount figure is a LOWER bound. It assumes each added associate's
     shift lands where the binding slots are, which is optimistic; the real
@@ -12102,16 +12179,28 @@ def break_capacity_headcount_requirement(
                 continue
             req = float(parsed.requirements[d][i] or 0.0)
             eff = max(1e-9, 1.0 - float(parsed.shrinkage[d][i] or 0.0))
-            need = math.ceil(req * parsed.target_ratio / eff - 1e-9) if req > 0 else 0
+            need_exact = req * parsed.target_ratio / eff if req > 0 else 0.0
+            need = math.ceil(need_exact - 1e-9) if req > 0 else 0
+            staffed_total = 0
+            concurrency_room = 0
             for q in range(qpi):
                 qslot = d * 96 + i * qpi + q
                 staffed = (len(scheduled_covering_qslot(parsed, skeleton, qslot))
                            + len(prior_covering_associates(parsed, qslot)))
                 active_q += 1
-                slack = max(0, staffed - need)
-                if slack == 0:
+                if staffed - need <= 0:
                     zero_slack_q += 1
-                lossless_capacity += min(slack, maximum_concurrent_breaks(parsed, staffed))
+                staffed_total += staffed
+                concurrency_room += maximum_concurrent_breaks(parsed, staffed)
+            # The metric averages the interval's quarters: the interval stays at
+            # target while the SUM of on-floor quarter heads is >= qpi x need.
+            # Counting room per quarter against ceil(need) -- as this did --
+            # is right only at 15 minutes; at 30/60 it reported room that is
+            # not needed as missing (SYNTH_E2, 60-minute: "1 more associate"
+            # for a 14-person roster that met target in 63/63 intervals with
+            # zero break losses). Concurrency still caps each quarter.
+            interval_room = int(math.floor(staffed_total - qpi * need_exact + 1e-9))
+            lossless_capacity += max(0, min(interval_room, concurrency_room))
 
     break_q_per_shift = sum(count for count, _ in parsed.break_segments_q)
     worked_days = sum(1 for row in skeleton.assignment for value in row if value != "OFF")
@@ -15973,10 +16062,17 @@ def run_adaptive_decomposed_joint_optimizer(
         return (operator_attempts.get(operator_name, 0), break_solution_key(parsed, solution))
 
     portfolio_attempt_budget = max(0, int(maximum_attempts) - attempted)
+    memory_stop: Optional[Dict[str, Any]] = None
     for attempt_index in range(portfolio_attempt_budget):
         remaining = deadline - time.time()
         if remaining < 25:
             truncated = True
+            break
+        headroom = joint_memory_headroom()
+        if not headroom["ok"]:
+            memory_stop = headroom
+            truncated = True
+            print("JOINT_CP_SAT stopped: low memory headroom " + json.dumps(headroom), file=log, flush=True)
             break
         if stagnant >= max(2, int(no_improvement_limit)) and attempt_index >= len(operator_names):
             break
@@ -16169,6 +16265,7 @@ def run_adaptive_decomposed_joint_optimizer(
         "accepted": accepted,
         "improved": improved_count,
         "truncated": truncated,
+        "memory_headroom_stop": memory_stop,
         "stagnation_count": stagnant,
         "protected_incumbent_profile": protected[1].profile,
         "protected_incumbent_lineage_id": candidate_lineage_id(protected),
@@ -18779,6 +18876,29 @@ def run_case(
             parsed, None, base_hard, probe_time, workers, log,
             random_seed=solver_random_seed, hint_skeleton=seed or benchmark_seed,
         )
+        # UNKNOWN is not INFEASIBLE. The probe phase is a small share of the
+        # run (42s of 1200), and a large contract can need longer than that to
+        # find its first hard-clean skeleton: a 120-associate 15-minute 24/7
+        # case with a known feasible schedule ended UNKNOWN at 30s and the run
+        # stopped with 1,123s unspent. Stage-1 search cannot start without a
+        # feasible skeleton, so its window is the right place to borrow from;
+        # later phases keep their reserved deadlines.
+        probe_retry = None
+        if not resumed_skeletons and probe.cp_status == "UNKNOWN":
+            retry_time = preflight_probe_retry_seconds(budget_manager.remaining_in_phase("stage1_search"))
+            if retry_time > 0:
+                retry = build_skeleton(
+                    parsed, None, base_hard, retry_time, workers, log,
+                    random_seed=solver_random_seed, hint_skeleton=seed or benchmark_seed,
+                )
+                probe_retry = {
+                    "first_status": probe.cp_status, "first_elapsed_sec": probe.elapsed_sec,
+                    "retry_granted_sec": retry_time, "retry_status": retry.cp_status,
+                    "retry_elapsed_sec": retry.elapsed_sec,
+                }
+                print("Hard-feasibility probe retry: " + json.dumps(probe_retry, default=str), file=log, flush=True)
+                if retry.cp_status != "UNKNOWN":
+                    probe = retry
         # RC8.4 smoke-final fix: a short smoke hard-feasibility probe may end
         # UNKNOWN on large GDI-style contracts even when a current-contract
         # hard-clean bundled seed exists.  Do not falsely classify that as a
@@ -18817,6 +18937,8 @@ def run_case(
             fallback_seed_recovery=bool(fallback_probe_recovery),
         )
         audit["hard_feasibility_probe"] = {"cp_status": probe.cp_status, "elapsed_sec": probe.elapsed_sec, "diagnostics": probe.diagnostics}
+        if probe_retry:
+            audit["hard_feasibility_probe"]["retry"] = probe_retry
         if fallback_probe_recovery:
             audit["hard_feasibility_probe"]["fallback_seed_recovery"] = fallback_probe_recovery
         write_json(audit_path, audit)
@@ -19015,6 +19137,28 @@ def run_case(
                     f"{stage1_minimum_slice_sec:.0f}s needed per profile",
                     file=log, flush=True,
                 )
+                starved = stage1_starved_basis_profile(profiles_to_run, profile_index, successful_skeletons, remaining)
+                if starved is not None:
+                    solution = build_skeleton(
+                        parsed, starved, base_hard, remaining, workers, log,
+                        random_seed=solver_random_seed,
+                        hint_skeleton=select_stage1_hint_skeleton(parsed, successful_skeletons),
+                        aggregate_guidance=aggregate_guidance,
+                    )
+                    record = {"profile": solution.profile, "cp_status": solution.cp_status,
+                              "objective": solution.objective, "elapsed_sec": solution.elapsed_sec,
+                              "budget_starved_basis_diversity": True, "diagnostics": solution.diagnostics}
+                    if solution.cp_status in {"OPTIMAL", "FEASIBLE"}:
+                        metrics = calculate_metrics(parsed, solution, {(a, d): None for a, d, _ in scheduled_cells(solution)}, [])
+                        solution.diagnostics["no_break_metrics"] = metrics
+                        record["no_break_before_metrics"] = compact_metric_surface(metrics)
+                        successful_skeletons.append(solution)
+                        save_skeleton_checkpoint(skeleton_checkpoint_path, run_identity["run_id"], dedupe_skeletons(successful_skeletons))
+                    audit["stage1_attempts"].append(record)
+                    audit["stage1_profile_coverage"]["budget_starved_basis_diversity"] = {
+                        "profile": starved["name"], "granted_sec": round(remaining, 3), "cp_status": solution.cp_status,
+                    }
+                    write_json(audit_path, audit)
                 break
             attempts_left = max(1, len(profiles_to_run) - profile_index)
             slice_sec = stage1_slice_seconds(remaining, attempts_left, stage1_minimum_slice_sec)
@@ -20757,6 +20901,11 @@ def run_case(
             and endgame_deadline - time.time() >= 90.0
             and endgame_round < 6
         ):
+            headroom = joint_memory_headroom()
+            if not headroom["ok"]:
+                endgame_records.append({"round": endgame_round + 1, "status": "STOPPED_LOW_MEMORY_HEADROOM", **headroom})
+                print("ENDGAME stopped: low memory headroom " + json.dumps(headroom), file=log, flush=True)
+                break
             endgame_round += 1
             shift_options = min(18, max(9, int(joint_shift_options_per_cell) + endgame_round * 2))
             pattern_options = min(96, max(36, int(joint_patterns_per_shift) + endgame_round * 12))

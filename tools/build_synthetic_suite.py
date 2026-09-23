@@ -444,7 +444,7 @@ def main() -> int:
         m = E.calculate_metrics(parsed, skeleton, selected, patterns)
         active = sum(1 for d in range(7) for i in range(per_day) if parsed.active[d][i])
         sunday_active = sum(1 for i in range(per_day) if parsed.active[0][i])
-        cert = {k: m.get(k) for k in ("active_count", "before_target", "after_target",
+        cert = {k: m.get(k) for k in ("active_intervals", "before_target", "after_target",
                                         "before_floor", "after_floor")}
         for k in ("break_concurrency_violation_count", "language_gap_count", "zero_staffed_active_quarters",
                   "blank_staffed_quarters", "whole_week_imbalance_violation_count"):

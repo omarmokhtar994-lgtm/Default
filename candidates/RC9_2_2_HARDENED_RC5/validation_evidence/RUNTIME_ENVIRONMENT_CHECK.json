@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "generated_utc": "2026-09-08T18:21:46.299885+00:00",
+  "status": "FAIL",
+  "python": "3.12.13",
+  "platform": "Linux-6.18.35-x86_64-with-glibc2.39",
+  "packages": [
+    {
+      "package": "ortools",
+      "required": "9.15.6755",
+      "actual": null,
+      "exact": true,
+      "status": "MISSING_OR_BROKEN"
+    },
+    {
+      "package": "openpyxl",
+      "required": "3.1.2",
+      "actual": "3.1.5",
+      "exact": false,
+      "status": "PASS"
+    },
+    {
+      "package": "pandas",
+      "required": "2.2.0",
+      "actual": "2.2.3",
+      "exact": false,
+      "status": "PASS"
+    },
+    {
+      "package": "numpy",
+      "required": "1.26.0",
+      "actual": "2.3.5",
+      "exact": false,
+      "status": "PASS"
+    },
+    {
+      "package": "scipy",
+      "required": "1.11.0",
+      "actual": "1.17.0",
+      "exact": false,
+      "status": "PASS"
+    }
+  ],
+  "cp_sat_smoke": "NOT_RUN",
+  "failures": [
+    {
+      "package": "ortools",
+      "required": "9.15.6755",
+      "error": "PackageNotFoundError: No package metadata was found for ortools"
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "version": "L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2",
+  "terminal": true,
+  "return_code": 3,
+  "started_at": "2026-09-08T19:17:40.842380",
+  "completed_at": "2026-09-08T19:17:44.728839",
+  "elapsed_sec": 3.886463,
+  "input": "/workspace/scratch/720bc11e6247/rc922_hardened/executed_results/NMG_EN_HARDENED_SMOKE/input_snapshot/RC9_2_2_NMG_EN_PRODUCTION_INPUT.xlsx",
+  "output": "/workspace/scratch/720bc11e6247/rc922_hardened/executed_results/NMG_EN_HARDENED_SMOKE/NMG_EN_HARDENED_SMOKE_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx",
+  "audit": "/workspace/scratch/720bc11e6247/rc922_hardened/executed_results/NMG_EN_HARDENED_SMOKE/NMG_EN_HARDENED_SMOKE.l6_3_2_3_solver_audit.json",
+  "summary": "/workspace/scratch/720bc11e6247/rc922_hardened/executed_results/NMG_EN_HARDENED_SMOKE/NMG_EN_HARDENED_SMOKE.l6_3_2_3_summary.csv",
+  "exception_type": "RuntimeError",
+  "exception_message": "OR-Tools is required. In Colab run: pip install -q ortools",
+  "business_outcome": {
+    "schema_version": 1,
+    "engine_release": "L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2",
+    "technical_status": "FAIL_UNEXPECTED_ENGINE_EXCEPTION",
+    "technical_return_code": 3,
+    "production_eligible": false,
+    "outcome_code": "ENGINE_EXECUTION_ERROR",
+    "outcome_category": "TECHNICAL_FAILURE",
+    "headline": "The engine stopped because of an unexpected technical error",
+    "plain_language_summary": "OR-Tools is required. In Colab run: pip install -q ortools",
+    "requested": {},
+    "best_proven": {},
+    "gap": {},
+    "resource_findings": [],
+    "affected_examples": [],
+    "recommended_actions": [
+      "Use the exception type, traceback, and run identity for technical investigation; do not interpret this as staffing infeasibility."
+    ],
+    "technical_reference": {
+      "return_code_meaning": "The numeric return code is retained for automation only. Use this business outcome as the primary user-facing result."
+    }
+  },
+  "business_outcome_error": null,
+  "business_outcome_json": "/workspace/scratch/720bc11e6247/rc922_hardened/executed_results/NMG_EN_HARDENED_SMOKE/BUSINESS_OUTCOME.json",
+  "business_outcome_text": "/workspace/scratch/720bc11e6247/rc922_hardened/executed_results/NMG_EN_HARDENED_SMOKE/BUSINESS_OUTCOME.txt",
+  "engine_status": "FAIL_UNEXPECTED_ENGINE_EXCEPTION",
+  "status": "FAIL_UNEXPECTED_ENGINE_EXCEPTION"
+}

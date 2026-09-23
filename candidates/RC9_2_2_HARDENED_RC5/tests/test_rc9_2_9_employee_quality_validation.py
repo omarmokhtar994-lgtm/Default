@@ -11,7 +11,6 @@ than the engine's own object, and is not stricter than the policy it audits.
 """
 from __future__ import annotations
 
-import os
 import importlib.util
 import inspect
 import sys
@@ -19,12 +18,7 @@ import types
 import unittest
 from pathlib import Path
 
-# The engine under test is selected by RC9_ENGINE_DIR, the same knob the
-# sibling staged suites use, so this suite can be pointed at a candidate
-# tree instead of the repo's production engine. Assertions are unchanged.
-ROOT = (Path(os.environ["RC9_ENGINE_DIR"]).resolve().parent.parent
-        if os.environ.get("RC9_ENGINE_DIR")
-        else Path(__file__).resolve().parent.parent)
+ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "engine" / "_tools"))
 
 VALIDATOR_PATH = ROOT / "engine" / "tools" / "independent_validator.py"

@@ -1,0 +1,42 @@
+RC9.1 BASELINE PACKAGE FOR RC9.2.1 COMPARISON
+Generated: 2026-09-02
+
+PURPOSE
+This package gives Claude a consolidated, verified RC9.1 quantitative baseline for comparing RC9.2.1. It does not replace any original historical workbook that is unavailable as a byte-identical binary.
+
+RC9.1 NMG EN BASELINE
+Profile: break_safe_reserve
+Active intervals: 252
+Before100: 210
+Before90: 214
+Before80: 217
+Before floor: 218
+Severe floor gaps: 33
+Max consecutive floor gaps: 14
+Floor deficit sum: 12.53969249
+Avoidable overage FTE: 1103.08
+Overage cap violations: 88
+Imbalance violations: 19
+Max adjacent raw change: 15
+Language gaps: 0
+Zero staffed quarters: 0
+
+OTHER RC9.1 BASELINES
+NMG SP: 125 / 126 / 126; before floor 126; severe gaps 0; max run 0; avoidable overage 122.47.
+Cricut Chat Current 27: 201 / 214 / 239; before floor 239; severe gaps 0; max run 1; avoidable overage 180.39344655.
+Cricut Chat Historical 28: 220 / 240 / 242; before floor 242; severe gaps 0; max run 0; avoidable overage 483.33808192.
+AE AR B2B: 168 / 168 / 168; before floor 168; severe gaps 0; max run 0; avoidable overage 178.45.
+Cricut Voice: RC9.1 workbook leaderboard shows target/floor evidence at 256/264. Historical final output independent validation showed Before 256/259/263 and After 253/256/263.
+
+IMPORTANT CAVEATS
+1. These are consolidated values from preserved engineering-review evidence. They are not presented as reconstructed original result workbooks.
+2. NMG SP has an unresolved historical validator discrepancy: engine replay summary 125/126/126 versus independent validation 121/122/122. This must be reconciled using exact input/output hashes.
+3. Exact quantitative RC9.1 baselines for GDI REAL28 and SAKS 11H/3OFF are not asserted here because the currently accessible evidence is not strong enough to guarantee exact-build comparability.
+4. Do not use the 1103.08 NMG EN figure as the absolute lowest possible RC9.1 overage. It is the preserved break_safe_reserve champion. Another RC9.1 candidate had 1093.68 overage but different candidate-quality characteristics.
+
+RECOMMENDED CLAUDE USE
+- Treat the RC9.1 NMG EN 1103.08 result as the primary champion baseline.
+- Compare RC9.2.1 target/floor/quality against the same scenario and contract.
+- Investigate the latest RC9.2.1 NMG EN recovered candidate overage of ~1244.11 versus 1103.08.
+- Reuse exact-build evidence where input/contract/engine hashes match.
+- Do not manufacture missing GDI or SAKS baseline numbers.

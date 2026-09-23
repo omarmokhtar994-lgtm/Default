@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "release": "L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2",
+  "status": "NO_GO_PENDING_RC5_TARGETED_RUNTIME_REVIEW",
+  "production_ready": false,
+  "decision_utc": "2026-09-12T00:00:00+00:00",
+  "blocking_gate": "RC5 now retains the maximum hard-valid candidate, searches target-first under quality debt, validates exact artifacts, and exposes metric parity. The exact RC5 CP-SAT matrix and focused NMG/GDI quality review are still required before replacing RC9.1.",
+  "required_to_close": [
+    "Run NMG_EN_PRODUCTION in QUICK/FULL_SCHEDULE mode and review the generated schedule even when the quality gate blocks sealing.",
+    "Run a genuine 11H/3OFF fixture plus the 11H-prohibited negative fixture.",
+    "Run bounded affected regressions for bilingual/next-Sunday, fixed/nesting, and GDI 24/7 behavior.",
+    "Review independent-validator JSON and release-gate CSV; do not rely on optimizer PASS alone.",
+    "Confirm that a hard-valid quality-blocked run retains its final workbook and independent-validation result as review-only evidence without publishing a production-ready seal.",
+    "Review Cricut Voice quality warnings: break concurrency, overage distribution, whole-week balance, and employee fairness."
+  ],
+  "live_baseline": "Keep RC9.1 as the operational baseline until all required-to-close items pass."
+}

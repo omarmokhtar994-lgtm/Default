@@ -1,0 +1,411 @@
+#!/usr/bin/env python3
+"""Guards for Stage-2 attempt planning, wall-clock budgeting and bound certificates.
+
+Three defects, one theme: the orchestration layer quietly reported or assumed
+more than it had.  The attempt plan ran objective modes nobody asked for, the
+budget planner emitted a negative phase that became an over-allocation, and a
+bound certificate that measured nothing published a relative gap of 0.0.
+
+Run:  python tests/test_rc9_2_1_orchestration_integrity.py
+"""
+from __future__ import annotations
+
+import itertools
+import sys
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "engine" / "_tools"))
+
+from phase_b_adaptive import make_bound_certificate  # noqa: E402
+from phase_b_maturity import (  # noqa: E402
+    GlobalBudgetManager,
+    adaptive_break_attempt_plan,
+    build_global_budget_plan,
+)
+
+SKELETON = [{
+    "before_target": 200, "before_floor": 240, "before_100": 100,
+    "floor_gaps": 12, "severe_floor_gaps": 1, "max_floor_run": 2,
+    "before_avoidable_overage_fte_sum": 10.0, "minimum_exception_count": 0,
+}]
+
+# What default_break_objective_modes returns outside quality_gate_mode="fail".
+ENGINE_DEFAULT_WARN_MODES = [
+    "target_priority", "coverage_rebalance", "balanced", "floor_protected", "target_100",
+]
+
+
+def modes_in(tasks):
+    return list(dict.fromkeys(task.objective_mode for task in tasks))
+
+
+class AttemptPlanHonoursTheRequestedObjectiveModes(unittest.TestCase):
+    """`preferred_modes` was concatenated ahead of the caller's list.
+
+    Every plan therefore ran all seven preferred modes whatever was asked for,
+    which silently voided --break-objective-modes and spread a fixed Stage-2
+    budget over modes the caller had excluded.
+    """
+
+    def test_a_single_requested_mode_yields_a_single_mode(self):
+        tasks = adaptive_break_attempt_plan(SKELETON, [3], ["target_priority"])
+        self.assertEqual(modes_in(tasks), ["target_priority"])
+        self.assertEqual(len(tasks), 1, "one skeleton, one width, one mode")
+
+    def test_the_engine_default_does_not_gain_the_quality_guard_modes(self):
+        """In warn mode the engine deliberately omits those two modes."""
+        tasks = adaptive_break_attempt_plan(SKELETON, [3], ENGINE_DEFAULT_WARN_MODES)
+        got = modes_in(tasks)
+        self.assertNotIn("release_quality_guard", got)
+        self.assertNotIn("quality_convergence", got)
+        self.assertEqual(sorted(got), sorted(ENGINE_DEFAULT_WARN_MODES))
+
+    def test_no_plan_ever_schedules_an_unrequested_mode(self):
+        for size in range(1, len(ENGINE_DEFAULT_WARN_MODES) + 1):
+            for asked in itertools.combinations(ENGINE_DEFAULT_WARN_MODES, size):
+                with self.subTest(asked=asked):
+                    got = modes_in(adaptive_break_attempt_plan(SKELETON, [2, 3], list(asked)))
+                    self.assertEqual(set(got), set(asked))
+
+    def test_a_caller_specific_mode_is_kept_and_ranked_last(self):
+        tasks = adaptive_break_attempt_plan(SKELETON, [3], ["custom_mode", "target_priority"])
+        self.assertEqual(modes_in(tasks), ["target_priority", "custom_mode"])
+
+    def test_relative_order_of_surviving_modes_is_unchanged(self):
+        """The fix narrows the set; it must not reorder what remains."""
+        tasks = adaptive_break_attempt_plan(SKELETON, [3], ENGINE_DEFAULT_WARN_MODES)
+        self.assertEqual(
+            modes_in(tasks),
+            ["target_priority", "coverage_rebalance", "floor_protected", "balanced", "target_100"])
+
+    def test_an_empty_request_still_produces_a_plan(self):
+        self.assertTrue(adaptive_break_attempt_plan(SKELETON, [3], []))
+
+    def test_the_production_default_plan_is_unchanged_by_the_fix(self):
+        """The wrapper passes all seven modes explicitly, so nothing moves there.
+
+        This is what bounds the blast radius: every run made through
+        RUN_UNIVERSAL_PRODUCTION.py with default --break-objective-modes gets
+        exactly the plan it got before. The fix only changes a request that
+        actually restricts the modes - the case that was broken.
+        """
+        wrapper = (ROOT / "engine" / "RUN_UNIVERSAL_PRODUCTION.py").read_text(encoding="utf-8")
+        line = next(l for l in wrapper.splitlines() if l.startswith("DEFAULT_BREAK_OBJECTIVES"))
+        production_modes = line.split("=", 1)[1].strip().strip('"').split(",")
+        self.assertEqual(len(production_modes), 7)
+
+        widths = [24, 44, 60, 115]          # wrapper default --pattern-widths
+        skeletons = SKELETON * 6
+        tasks = adaptive_break_attempt_plan(skeletons, widths, production_modes)
+        self.assertEqual(len(tasks), len(skeletons) * len(widths) * len(production_modes))
+        self.assertEqual(set(modes_in(tasks)), set(production_modes))
+        # Ranking order for the full set is the preferred order verbatim.
+        self.assertEqual(modes_in(tasks), [
+            "target_priority", "release_quality_guard", "coverage_rebalance",
+            "quality_convergence", "floor_protected", "balanced", "target_100"])
+
+    def test_task_count_is_skeletons_times_widths_times_modes(self):
+        skeletons = SKELETON * 3
+        tasks = adaptive_break_attempt_plan(skeletons, [1, 2, 3], ["target_priority", "balanced"])
+        self.assertEqual(len(tasks), 3 * 3 * 2)
+
+
+class SkeletonRankIsAStrictTotalOrder(unittest.TestCase):
+    """The task priority tuple used to carry eight terms after `skeleton_rank`.
+
+    They were unreachable: `_skeleton_rank_key` ends in `skeleton_index`, so no
+    two distinct skeletons tie on rank, and two tasks agreeing on
+    (exception_rank, width_rank, mode_rank, skeleton_rank) are the same task.
+    Dropping them removed the second verbatim copy of the ordering rule.
+    """
+
+    def test_distinct_skeletons_never_share_a_rank_key(self):
+        from phase_b_maturity import _skeleton_rank_key
+        identical = dict(SKELETON[0])
+        keys = [_skeleton_rank_key(dict(identical), i)[1] for i in range(8)]
+        self.assertEqual(len(set(keys)), 8, "index must break every tie")
+
+    def test_priority_is_four_terms(self):
+        tasks = adaptive_break_attempt_plan(SKELETON * 3, [24, 115], ["target_priority"])
+        for task in tasks:
+            self.assertEqual(len(task.priority), 4)
+
+    def test_ordering_is_total_even_for_identical_skeletons(self):
+        tasks = adaptive_break_attempt_plan(SKELETON * 6, [24, 115],
+                                            ["target_priority", "balanced"])
+        self.assertEqual(len(tasks), 6 * 2 * 2)
+        self.assertEqual(len({t.priority for t in tasks}), len(tasks),
+                         "every task must have a distinct priority")
+
+    def test_the_plan_is_deterministic(self):
+        for _ in range(5):
+            a = [(t.skeleton_index, t.width, t.objective_mode)
+                 for t in adaptive_break_attempt_plan(SKELETON * 4, [24, 60, 115],
+                                                      ["target_priority", "balanced"])]
+            b = [(t.skeleton_index, t.width, t.objective_mode)
+                 for t in adaptive_break_attempt_plan(SKELETON * 4, [24, 60, 115],
+                                                      ["target_priority", "balanced"])]
+            self.assertEqual(a, b)
+
+    def test_the_best_skeleton_still_leads_its_layer(self):
+        strong = dict(SKELETON[0], before_target=250, before_floor=252)
+        weak = dict(SKELETON[0], before_target=10, before_floor=20)
+        tasks = adaptive_break_attempt_plan([weak, strong], [115], ["target_priority"])
+        self.assertEqual(tasks[0].skeleton_index, 1, "the stronger skeleton leads")
+
+    def test_unknown_breakability_does_not_lose_to_proven_zero(self):
+        """Coverage must not be discarded just because its diagnostic is unfinished."""
+        strong_unknown = dict(
+            SKELETON[0], before_target=227, before_floor=240,
+            minimum_exception_count=None, minimum_exception_upper_bound=None,
+        )
+        weaker_proven_zero = dict(
+            SKELETON[0], before_target=226, before_floor=241,
+            minimum_exception_count=0, minimum_exception_upper_bound=0,
+        )
+        tasks = adaptive_break_attempt_plan(
+            [strong_unknown, weaker_proven_zero], [115], ["target_priority"]
+        )
+        self.assertEqual(tasks[0].skeleton_index, 0)
+
+    def test_proven_positive_exception_minimum_is_deferred(self):
+        proven_positive = dict(
+            SKELETON[0], before_target=250, minimum_exception_count=1,
+        )
+        unproven = dict(
+            SKELETON[0], before_target=200, minimum_exception_count=None,
+            minimum_exception_upper_bound=None,
+        )
+        tasks = adaptive_break_attempt_plan(
+            [proven_positive, unproven], [115], ["target_priority"]
+        )
+        self.assertEqual(tasks[0].skeleton_index, 1)
+
+
+class BudgetPlanNeverExceedsOrUndercutsTheRun(unittest.TestCase):
+    """At total=60 the per-phase floors sum to 110.
+
+    `plan["break_search"] += total - sum(plan)` turned that into -20;
+    GlobalBudgetManager clamped it to zero and ran a 60-second budget as an
+    80-second allocation, so cumulative phase deadlines sat past the run's own
+    final deadline.
+    """
+
+    def _plans(self):
+        totals = list(range(1, 130)) + [180, 300, 480, 600, 900, 1800, 3600, 14400, 43200]
+        for total in totals:
+            for flags in itertools.product((True, False), repeat=5):
+                allow, coord, joint, post, lock = flags
+                yield total, build_global_budget_plan(
+                    total, allow_exceptions=allow, coordinated_repair=coord,
+                    joint_refinement=joint, post_break_repair=post,
+                    target_lock_recovery=lock)
+
+    def test_no_phase_is_ever_negative(self):
+        for total, plan in self._plans():
+            negative = {name: sec for name, sec in plan.items() if sec < 0}
+            self.assertFalse(negative, f"total={total} produced {negative}")
+
+    def test_every_plan_sums_to_the_effective_total(self):
+        for total, plan in self._plans():
+            self.assertEqual(sum(plan.values()), max(60, total), f"total={total}")
+
+    def test_the_manager_never_over_allocates(self):
+        for total, plan in self._plans():
+            manager = GlobalBudgetManager(total_seconds=total, phase_seconds=plan)
+            self.assertEqual(sum(manager.phase_seconds.values()), manager.total_seconds,
+                             f"total={total}")
+
+    def test_the_sixty_second_case_specifically(self):
+        plan = build_global_budget_plan(60, allow_exceptions=True, coordinated_repair=True,
+                                        target_lock_recovery=True)
+        self.assertGreaterEqual(plan["break_search"], 0)
+        self.assertEqual(sum(plan.values()), 60)
+        manager = GlobalBudgetManager(total_seconds=60, phase_seconds=plan)
+        self.assertEqual(sum(manager.phase_seconds.values()), 60)
+
+    def test_no_phase_deadline_runs_past_the_final_deadline(self):
+        for total, plan in self._plans():
+            manager = GlobalBudgetManager(total_seconds=total, phase_seconds=plan)
+            for phase in plan:
+                self.assertLessEqual(
+                    manager.deadline(phase), manager.final_deadline + 1e-6,
+                    f"total={total} phase={phase} ends after the run does")
+
+    def test_a_manager_given_an_oversized_plan_rescales_it(self):
+        manager = GlobalBudgetManager(
+            total_seconds=100,
+            phase_seconds={"stage1_search": 400, "break_search": 400, "finalization": 400})
+        self.assertEqual(sum(manager.phase_seconds.values()), 100)
+        self.assertTrue(all(v >= 0 for v in manager.phase_seconds.values()))
+
+    def test_the_two_primary_phases_are_never_starved(self):
+        """Non-negative and correctly-summed is not enough.
+
+        Mutation testing found that dropping the proportional scale-to-fit and
+        relying on the clamp alone still satisfies both of those, while handing
+        break_search zero seconds - a run that never places a break. The plan
+        reserves 30% of the run for the two primary optimization phases, so
+        neither may come out at zero.
+        """
+        for total, plan in self._plans():
+            with self.subTest(total=total):
+                self.assertGreater(plan["stage1_search"], 0)
+                self.assertGreater(plan["break_search"], 0)
+
+    def test_the_primary_phases_keep_a_meaningful_share(self):
+        for total, plan in self._plans():
+            effective = max(60, total)
+            primary = plan["stage1_search"] + plan["break_search"]
+            self.assertGreaterEqual(
+                primary / effective, 0.25,
+                f"total={total}: optimization got {primary}/{effective} of the run")
+
+    def test_a_large_realistic_budget_is_untouched(self):
+        plan = build_global_budget_plan(14400, allow_exceptions=True, coordinated_repair=True,
+                                        target_lock_recovery=True)
+        self.assertEqual(sum(plan.values()), 14400)
+        self.assertGreater(plan["stage1_search"], 0)
+        self.assertGreater(plan["break_search"], 0)
+        self.assertGreater(plan["finalization"], 0)
+
+
+class BoundCertificateDistinguishesUnmeasuredFromTight(unittest.TestCase):
+
+    def test_nothing_measured_reports_none_not_zero(self):
+        cert = make_bound_certificate([
+            {"status": "FEASIBLE", "sense": "maximize",
+             "objective_value": None, "best_objective_bound": None}])
+        self.assertIsNone(cert["maximum_relative_gap"],
+                          "0.0 reads as a proven-tight bound; nothing was measured")
+        self.assertEqual(cert["measured_stage_count"], 0)
+        self.assertFalse(cert["all_stages_optimal"])
+
+    def test_a_genuinely_tight_bound_still_reports_zero(self):
+        cert = make_bound_certificate([
+            {"status": "OPTIMAL", "sense": "maximize",
+             "objective_value": 100.0, "best_objective_bound": 100.0}])
+        self.assertEqual(cert["maximum_relative_gap"], 0.0)
+        self.assertEqual(cert["measured_stage_count"], 1)
+        self.assertTrue(cert["all_stages_optimal"])
+
+    def test_a_mixed_certificate_reports_the_measured_maximum(self):
+        cert = make_bound_certificate([
+            {"status": "OPTIMAL", "sense": "maximize",
+             "objective_value": 90.0, "best_objective_bound": 100.0},
+            {"status": "FEASIBLE", "sense": "maximize",
+             "objective_value": None, "best_objective_bound": None}])
+        self.assertEqual(cert["maximum_relative_gap"], 0.1)
+        self.assertEqual(cert["measured_stage_count"], 1)
+        self.assertFalse(cert["all_stages_optimal"])
+
+    def test_an_empty_certificate_measures_nothing(self):
+        cert = make_bound_certificate([])
+        self.assertIsNone(cert["maximum_relative_gap"])
+        self.assertEqual(cert["stage_count"], 0)
+
+
+class ProtectedBenchmarkStatusIsNotAConstant(unittest.TestCase):
+    """The engine published protected_benchmark_status="PASS" unconditionally.
+
+    All four executed RC9.2.1 runs carry that value with both protected
+    minimums empty, and tools/release_gate_report.py reads exactly this field
+    for gate 4 - so gate 4 passed on a benchmark that never ran.
+    """
+
+    def test_the_literal_pass_is_gone_from_the_summary_row(self):
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text(
+            encoding="utf-8")
+        self.assertFalse(
+            '"protected_benchmark_status": "PASS",' in source,
+            "the summary row must derive this from whether a minimum was configured")
+
+    def test_it_is_conditioned_on_a_configured_minimum(self):
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text(
+            encoding="utf-8")
+        compact = " ".join(source.split())
+        self.assertTrue(
+            '"protected_benchmark_status": ( "PASS" if (protected_before80_min is not None '
+            'or protected_after80_min is not None) else "NOT_CONFIGURED")' in compact,
+            "protected_benchmark_status must report NOT_CONFIGURED when neither "
+            "protected minimum was supplied")
+
+
+class Stage1IsFundedBeforeTheDownstreamReserves(unittest.TestCase):
+    """RC9.2.1 lost 37 target intervals on AE AR B2B to a starved Stage 1.
+
+    `build_global_budget_plan` gave stage1_search 42% of whatever the fixed
+    reserves left over.  On a 2,400-second run those reserves took 1,608
+    seconds - joint_refinement alone took 840 - so Stage 1 received 332, and
+    the engine's breakability reserve cut that to 150 seconds for a fifteen
+    profile portfolio.  Every Stage-1 attempt in every recorded RC9.2.1 run
+    therefore ran at the 45-second minimum slice.  Direct probe evidence: at 45
+    seconds AE AR B2B returns UNKNOWN - no skeleton at all - while the same
+    profile at 150 seconds returns FEASIBLE.
+
+    Joint refinement, coordinated repair and post-break repair all polish a
+    skeleton they cannot replace, so a stated Stage-1 need must come out of
+    them, not out of Stage 1's depth.
+    """
+
+    KWARGS = dict(allow_exceptions=False, coordinated_repair=True,
+                  joint_refinement=True, post_break_repair=True,
+                  target_lock_recovery=True)
+
+    def test_the_unstated_case_is_unchanged(self):
+        """A caller that states no minimum must get exactly the old plan."""
+        for total in (600, 900, 2400, 3600, 14400):
+            with self.subTest(total=total):
+                self.assertEqual(
+                    build_global_budget_plan(total, **self.KWARGS),
+                    build_global_budget_plan(total, stage1_minimum_seconds=0, **self.KWARGS))
+
+    def test_the_regression_case_2400s_gets_a_real_stage1(self):
+        """The exact allocation that produced the AE AR B2B loss."""
+        before = build_global_budget_plan(2400, **self.KWARGS)
+        self.assertEqual(before["stage1_search"], 332,
+                         "the pre-fix allocation this test exists to move")
+        after = build_global_budget_plan(2400, stage1_minimum_seconds=1080, **self.KWARGS)
+        self.assertGreaterEqual(
+            after["stage1_search"], 1080,
+            "a stated Stage-1 minimum must be honoured, not averaged away")
+        self.assertLess(
+            after["joint_refinement"], before["joint_refinement"],
+            "the time has to come from the downstream reserves")
+
+    def test_a_stated_minimum_is_honoured_across_realistic_budgets(self):
+        for total in (900, 1800, 2400, 2700, 3600, 7200, 14400):
+            need = int(total * 0.40)
+            with self.subTest(total=total):
+                plan = build_global_budget_plan(total, stage1_minimum_seconds=need, **self.KWARGS)
+                self.assertGreaterEqual(plan["stage1_search"], need)
+
+    def test_break_search_and_finalization_survive_the_largest_request(self):
+        """Stage 1 may not eat the run. Breaks still have to be placed."""
+        for total in (600, 900, 2400, 14400, 43200):
+            with self.subTest(total=total):
+                plan = build_global_budget_plan(total, stage1_minimum_seconds=total * 10,
+                                                **self.KWARGS)
+                self.assertGreater(plan["break_search"], 0)
+                self.assertGreater(plan["finalization"], 0)
+                self.assertEqual(sum(plan.values()), max(60, total))
+                self.assertLessEqual(plan["stage1_search"], int(total * 0.75) + 1)
+
+    def test_the_plan_invariants_hold_with_a_minimum_set(self):
+        for total in (60, 120, 300, 600, 900, 2400, 14400):
+            for need in (0, 30, int(total * 0.2), int(total * 0.5), total, total * 5):
+                with self.subTest(total=total, need=need):
+                    plan = build_global_budget_plan(total, stage1_minimum_seconds=need,
+                                                    **self.KWARGS)
+                    self.assertFalse([s for s in plan.values() if s < 0])
+                    self.assertEqual(sum(plan.values()), max(60, total))
+                    manager = GlobalBudgetManager(total_seconds=total, phase_seconds=plan)
+                    for phase in plan:
+                        self.assertLessEqual(manager.deadline(phase),
+                                             manager.final_deadline + 1e-6)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

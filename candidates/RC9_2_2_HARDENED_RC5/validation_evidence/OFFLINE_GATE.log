@@ -1,0 +1,49 @@
+── tests/test_rc9_2_1_engine_name_resolution.py
+Ran 9 tests in 1.354s
+
+OK (skipped=1)
+── tests/test_rc9_2_1_orchestration_integrity.py
+Ran 33 tests in 0.180s
+
+OK
+── tests/test_rc9_2_1_phase_c_integrity.py
+Ran 15 tests in 0.215s
+
+OK
+── tests/test_rc9_2_1_production_identity.py
+Ran 11 tests in 0.184s
+
+OK
+── tests/test_rc9_2_1_regression_lab_integrity.py
+Ran 18 tests in 1.288s
+
+OK
+── tests/test_rc9_2_1_rule_semantics.py
+Ran 82 tests in 1.242s
+
+OK
+── tests/test_rc9_2_1_selector_integrity.py
+Ran 102 tests in 0.022s
+
+OK
+── tests/test_rc9_2_1_tooling_integrity.py
+Ran 70 tests in 0.040s
+
+OK (skipped=4)
+── tests/test_rc9_2_1_validator_parity.py
+Ran 46 tests in 0.855s
+
+OK
+── tests/test_rc9_2_2_production_hardening.py
+Ran 13 tests in 0.265s
+
+OK
+── engine selfcheck
+   engine selfcheck OK
+── wrapper selfcheck
+   wrapper selfcheck OK
+── undefined-name sweep
+   SKIPPED (ruff not installed) — tests/test_rc9_2_1_engine_name_resolution.py
+   still runs an in-process cross-check
+
+GATE PASS — 10 suite(s) + 2 selfchecks + undefined-name sweep

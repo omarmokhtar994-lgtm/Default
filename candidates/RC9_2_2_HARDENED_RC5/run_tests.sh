@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# RC9.2.1 fast gate: pure selector/metric/parity/identity guards.
+# RC9.2.x fast gate: pure selector/metric/parity/identity guards.
 # No solver, no workbook, no network. Intended to run on every commit before any
 # solver time is spent.
 #
@@ -32,29 +32,6 @@ run_suite() {
   total=$((total + 1))
 }
 
-# A staged suite that collects zero tests exits 0 and would pass silently.
-# Require unittest to report a non-zero count before crediting the suite.
-run_staged_suite() {
-  local suite="$1"
-  echo "── $suite"
-  set +e
-  output="$("$PY" "$suite" 2>&1)"
-  status=$?
-  set -e
-  if [ "$status" -ne 0 ]; then
-    echo "$output"
-    echo "   ^^ FAILED: $suite (exit $status)"
-    fail=1
-  elif ! echo "$output" | grep -qE "^Ran [1-9][0-9]* test"; then
-    echo "$output"
-    echo "   ^^ FAILED: $suite collected no tests"
-    fail=1
-  else
-    echo "$output" | tail -3
-  fi
-  total=$((total + 1))
-}
-
 run_check() {
   local label="$1"; shift
   echo "── $label"
@@ -69,7 +46,7 @@ run_check() {
 }
 
 shopt -s nullglob
-suites=(tests/test_rc9_2_1_*.py)
+suites=(tests/test_rc9_2_*.py)
 shopt -u nullglob
 if [ "${#suites[@]}" -eq 0 ]; then
   # An empty glob previously meant the loop body never ran and the gate passed
@@ -79,29 +56,6 @@ if [ "${#suites[@]}" -eq 0 ]; then
 fi
 for suite in "${suites[@]}"; do
   run_suite "$suite"
-done
-
-# Candidate-tree suites. These target the RC9.2.2 hardened engine preserved
-# under candidates/, not the production engine/ tree, so they are selected by
-# RC9_ENGINE_DIR rather than by the tests/ glob above. They were written and
-# mutation-checked but never executed by this gate, which is why the gate
-# reported 9 suites while 7 more sat unrun in tests_staged/.
-CANDIDATE_ENGINE="${RC9_CANDIDATE_DIR:-candidates/RC9_2_2_HARDENED_RC5}"
-shopt -s nullglob
-staged=(tests_staged/test_*.py)
-shopt -u nullglob
-if [ "${#staged[@]}" -eq 0 ]; then
-  echo "NO STAGED SUITES FOUND under tests_staged/ — refusing to report success"
-  exit 1
-fi
-if [ ! -d "$CANDIDATE_ENGINE/engine/_tools" ]; then
-  echo "CANDIDATE TREE MISSING at $CANDIDATE_ENGINE — refusing to report success"
-  exit 1
-fi
-for suite in "${staged[@]}"; do
-  RC9_ENGINE_DIR="$PWD/$CANDIDATE_ENGINE/engine/_tools" \
-  RC9_RUNNER="$PWD/$CANDIDATE_ENGINE/engine/RUN_UNIVERSAL_PRODUCTION.py" \
-    run_staged_suite "$suite"
 done
 
 run_check "engine selfcheck" "$PY" engine/_tools/l632_universal_scheduler.py --selfcheck

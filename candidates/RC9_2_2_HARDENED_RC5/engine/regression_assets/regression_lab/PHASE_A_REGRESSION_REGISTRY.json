@@ -1,0 +1,67 @@
+{
+  "schema_version": 2,
+  "release": "L6.3.2.3-R1.2.0-A-CANONICAL-CONSOLIDATION-FROZEN-CHECKPOINT",
+  "fixtures": {
+    "GDI_28HC_NO247": {
+      "classification": "DIRECTIONAL_SKILL_AND_NON_247",
+      "input": "inputs/GDI_28HC_No24_7_Input.xlsx",
+      "historical_alias": true
+    },
+    "GDI_REAL28": {
+      "classification": "DIRECTIONAL_SKILL_GUARDED_REJECTION_HISTORICAL",
+      "input": "inputs/GDI_REAL_28HC_12JUL_INSTRUCTION_DRIVEN_Input.xlsx",
+      "historical_alias": true,
+      "expected_outcome": "EXPECTED_GUARDED_REJECTION_FOR_TESTED_SKELETONS",
+      "mandatory_success_gate": false,
+      "feasible_micro_equivalent": "FAST70_T44"
+    },
+    "NMG12": {
+      "classification": "THIN_OVERNIGHT_QUALITY_AND_BREAK_RESILIENCE",
+      "input": "inputs/NMG_EN_12HC_NO11H_NOFIXED_WFM_INPUT.xlsx",
+      "historical_alias": true,
+      "seed_workbook": "historical_seeds/NMG12_R1_1_1_BEST_BEFORE_191_AT_90_BENCHMARK.xlsx",
+      "benchmark_workbook": "historical_seeds/NMG12_R1_1_1_BEST_BEFORE_191_AT_90_BENCHMARK.xlsx",
+      "minimum_best_before_target": 170,
+      "minimum_final_before_target": 170,
+      "quality_benchmark_tolerance": 0,
+      "max_final_before_target_loss": 6
+    },
+    "NMG12_BREAK_100": {
+      "classification": "THIN_OVERNIGHT_BREAK_RESILIENCE_100_TARGET",
+      "input": "inputs/NMG12_R1_1_2_RC2_BREAK_REGRESSION_100_TARGET.xlsx",
+      "historical_alias": true
+    },
+    "NMG13": {
+      "classification": "THIN_OVERNIGHT_CAPACITY_VARIANT",
+      "input": "inputs/NMG_EN_13HC_WFM_INPUT.xlsx",
+      "historical_alias": true
+    },
+    "SAKS_NEW": {
+      "classification": "FIXED_FLEXIBLE_GROUP_AND_HARD_FLOOR",
+      "input": "inputs/SAKS_New_50HC_90Interval_KPI_Test_Input_CLEAN_NO_TABLES_NEWREQ_SATPREV_NOFIXED.xlsx",
+      "historical_alias": true
+    },
+    "UNIVERSAL_30MIN_11H_SYNTHETIC": {
+      "classification": "INSUFFICIENT_SKILL_REDUNDANCY_11H_GUARD",
+      "input": "inputs/UNIVERSAL_30MIN_11H_SYNTHETIC_REGRESSION.xlsx",
+      "historical_alias": false,
+      "expected_outcome": "EXPECTED_PROVEN_BREAK_INFEASIBLE",
+      "expected_minimum_no_break_exceptions": 12,
+      "mandatory_success_gate": false,
+      "feasible_micro_equivalent": "FAST70_T42"
+    }
+  },
+  "closure_evidence": "qa/PHASE_A_CLOSURE_EVIDENCE.json",
+  "micro_evidence": {
+    "FAST70_T42": {
+      "classification": "FEASIBLE_11H_3OFF_FULL_BREAK",
+      "source": "closure_evidence/R1_2_0_A_RC1_4_FAST70_FULL_20260727_040757_RESULTS.zip",
+      "expected": "PASS"
+    },
+    "FAST70_T44": {
+      "classification": "FEASIBLE_DIRECTIONAL_SKILL_FULL_BREAK",
+      "source": "closure_evidence/R1_2_0_A_RC1_4_FAST70_FULL_20260727_040757_RESULTS.zip",
+      "expected": "PASS"
+    }
+  }
+}

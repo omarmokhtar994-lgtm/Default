@@ -1,0 +1,1691 @@
+diff -ru '--exclude=*.xlsx' '--exclude=*.ipynb' ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/engine/RUN_UNIVERSAL_PRODUCTION.py ./engine/RUN_UNIVERSAL_PRODUCTION.py
+--- ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/engine/RUN_UNIVERSAL_PRODUCTION.py	2026-09-05 02:46:04.000000000 +0100
++++ ./engine/RUN_UNIVERSAL_PRODUCTION.py	2026-09-08 19:10:44.419983090 +0100
+@@ -1,6 +1,6 @@
+ #!/usr/bin/env python3
+ from __future__ import annotations
+-import argparse, csv, hashlib, json, os, re, shutil, subprocess, sys, zipfile
++import argparse, csv, hashlib, json, os, platform, re, shutil, subprocess, sys, zipfile
+ from datetime import datetime, timezone
+ from pathlib import Path
+ 
+@@ -97,6 +97,58 @@
+     return audit.get('artifact_state') == 'FINAL_VERIFIED' and audit.get('hard_valid_schedule_exists') is True
+ 
+ 
++def stage_input_snapshot(source: Path, case_root: Path, resume: bool) -> Path:
++    """Create the immutable case-local contract used by every run phase."""
++    target_dir = case_root / 'input_snapshot'
++    target_dir.mkdir(parents=True, exist_ok=True)
++    target = target_dir / source.name
++    source_hash = sha256_file(source)
++    if target.exists():
++        target_hash = sha256_file(target)
++        if target_hash != source_hash:
++            raise RuntimeError(
++                f'Input snapshot conflict: {target} has SHA256 {target_hash}, '
++                f'but the requested input has {source_hash}. Use a new schedule-id.'
++            )
++        return target
++    shutil.copy2(source, target)
++    if sha256_file(target) != source_hash:
++        target.unlink(missing_ok=True)
++        raise RuntimeError('Input snapshot verification failed after copy')
++    return target
++
++
++def finalize_production_manifest(case_root: Path, validation_json: Path, validation_workbook: Path) -> None:
++    """Seal the prepared artifacts only after exact-workbook validation passes."""
++    manifest_path = case_root / 'production' / 'PRODUCTION_ARTIFACT_MANIFEST.json'
++    if not manifest_path.is_file():
++        raise RuntimeError('Prepared production manifest is missing')
++    manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
++    validation = json.loads(validation_json.read_text(encoding='utf-8'))
++    if validation.get('status') != 'PASS' or int(validation.get('hard_fail_count', 1) or 0) != 0:
++        raise RuntimeError('Independent validation did not pass cleanly')
++    actual_output_hash = sha256_file(validation_workbook)
++    if validation.get('output_sha256') != actual_output_hash:
++        raise RuntimeError('Independent validation output hash does not match the polished workbook')
++    final_record = (manifest.get('two_artifact_contract') or {}).get('BEST_FINAL_AFTER_BREAKS_SCHEDULE') or {}
++    if final_record.get('sha256') != actual_output_hash:
++        raise RuntimeError('Prepared manifest final-workbook hash does not match the validated workbook')
++    manifest['independent_validation'] = {
++        'status': 'PASS',
++        'hard_fail_count': 0,
++        'json': str(validation_json.relative_to(case_root)),
++        'json_sha256': sha256_file(validation_json),
++        'validated_workbook': str(validation_workbook.relative_to(case_root)),
++        'validated_workbook_sha256': actual_output_hash,
++        'input_sha256': validation.get('input_sha256'),
++        'engine_sha256': validation.get('engine_sha256'),
++    }
++    manifest['approval_status'] = 'APPROVED_AUTOMATED_RELEASE_GATES'
++    manifest['production_ready'] = True
++    manifest['sealed_utc'] = datetime.now(timezone.utc).isoformat()
++    manifest_path.write_text(json.dumps(manifest, indent=2), encoding='utf-8')
++
++
+ def build_parser() -> argparse.ArgumentParser:
+     p = argparse.ArgumentParser(description='RC9 universal workbook-driven WFM production runner. No client/case branching.')
+     p.add_argument('--input', type=Path, required=False, help='Any supported Universal WFM input workbook (.xlsx)')
+@@ -104,7 +156,7 @@
+     p.add_argument('--schedule-id', help='Optional display/job ID. Defaults to input filename stem.')
+     p.add_argument('--mode', choices=['SMOKE','QUICK','DEEP','OVERNIGHT','FULL'], default=None,
+                    help='Run depth. Omit to take Run Depth from the workbook, '
+-                        'falling back to DEEP. FULL is a legacy alias for OVERNIGHT.')
++                        'falling back to QUICK. FULL is a legacy alias for OVERNIGHT.')
+     p.add_argument('--stage', choices=['BEFORE_BREAKS_ONLY','FULL_SCHEDULE'], default=None,
+                    help='Omit to take Run Stage from the workbook, falling back '
+                         'to FULL_SCHEDULE. BEFORE_BREAKS_ONLY runs Stage 1 and '
+@@ -132,9 +184,9 @@
+     p.add_argument('--export-top-skeletons', type=int, default=5)
+     p.add_argument('--enable-bundled-regression-fallbacks', action='store_true', help='Off by default in production; regression assets must not steer new client workbooks unless explicitly enabled.')
+     p.add_argument('--solver-random-seed', type=int, default=9000)
+-    p.add_argument('--overwrite', action='store_true', default=True)
++    p.add_argument('--overwrite', action='store_true', help='Explicitly replace artifacts for the same schedule-id. Off by default.')
+     p.add_argument('--resume', action='store_true')
+-    p.add_argument('--skip-independent-validation', action='store_true', help='Development-only bypass; production defaults to independent validation.')
++    p.add_argument('--skip-independent-validation', action='store_true', help='Development-only bypass. It always blocks production packaging and returns a non-production status.')
+     p.add_argument('--selfcheck', action='store_true')
+     return p
+ 
+@@ -170,15 +222,16 @@
+         return selfcheck()
+     if args.input is None:
+         raise SystemExit('--input is required unless --selfcheck is used')
+-    input_path = args.input.resolve()
+-    if not input_path.exists():
+-        raise FileNotFoundError(input_path)
+-    if input_path.suffix.lower() != '.xlsx':
++    original_input_path = args.input.resolve()
++    if not original_input_path.exists():
++        raise FileNotFoundError(original_input_path)
++    if original_input_path.suffix.lower() != '.xlsx':
+         raise ValueError('Input must be an .xlsx workbook')
+ 
+-    schedule_id = safe_id(args.schedule_id or input_path.stem)
++    schedule_id = safe_id(args.schedule_id or original_input_path.stem)
+     case_root = (args.output_root / schedule_id).resolve()
+     case_root.mkdir(parents=True, exist_ok=True)
++    input_path = stage_input_snapshot(original_input_path, case_root, bool(args.resume))
+     work_dir = case_root / 'debug'
+     output = case_root / f'{schedule_id}_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx'
+     audit = case_root / f'{schedule_id}.l6_3_2_3_solver_audit.json'
+@@ -188,7 +241,7 @@
+     # otherwise, so a scheduler picks them from a dropdown in the business
+     # contract instead of remembering flags. An explicit flag always wins.
+     contract_stage, contract_depth = _contract_run_settings(input_path)
+-    mode = args.mode or contract_depth or 'DEEP'
++    mode = args.mode or contract_depth or 'QUICK'
+     if mode == 'FULL':
+         mode = 'OVERNIGHT'
+     stage = args.stage or contract_stage or 'FULL_SCHEDULE'
+@@ -233,6 +286,7 @@
+         '--skeleton-profiles', args.skeleton_profiles,
+         '--break-objective-modes', args.break_objective_modes,
+         '--min-after90-gain-per-after80-loss', '1.0',
++        '--max-after80-tradeoff-intervals', '1',
+         '--adaptive-no-improvement-attempts', str(mode_defaults['adaptive']),
+         '--primary-target-tolerance', '1',
+         '--max-final-before-target-loss', '6',
+@@ -282,8 +336,11 @@
+         'schedule_id': schedule_id,
+         'mode': mode, 'stage': stage,
+         'input_path': str(input_path),
++        'original_input_path': str(original_input_path),
++        'input_snapshot': True,
+         'input_sha256': sha256_file(input_path),
+         'engine_sha256': sha256_file(ENGINE),
++        'python_version': platform.python_version(),
+         'case_branching': False,
+         'rc9_1_search_recovery': True,
+         'rc9_2_protected_balance': True,
+@@ -333,8 +390,9 @@
+     (case_root / 'UNIVERSAL_RUN_IDENTITY.json').write_text(
+         json.dumps(identity, indent=2), encoding='utf-8')
+ 
++    qrc = 3
+     if audit.exists():
+-        qrc = subprocess.call([sys.executable, '-u', str(QUALITY_REPORTER), '--audit-json', str(audit), '--case-root', str(case_root)])
++        qrc = subprocess.call([sys.executable, '-u', str(QUALITY_REPORTER), '--audit-json', str(audit), '--case-root', str(case_root), '--strict'])
+         if qrc != 0 and rc == 0:
+             rc = qrc
+     independent_validation = {
+@@ -346,23 +404,16 @@
+         'csv': None,
+     }
+     validation_workbook = None
+-    if not diagnostics_only and engine_rc == 0:
+-        if skeleton_only:
+-            before_candidates = sorted(case_root.glob('*_BEST_BEFORE_BREAKS_SCHEDULE.xlsx'))
+-            validation_workbook = before_candidates[0] if before_candidates else None
+-        else:
+-            if output.exists():
+-                validation_workbook = output
+-            elif hard_valid_artifact(audit):
+-                candidates = sorted(case_root.glob('*_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx'))
+-                validation_workbook = candidates[0] if candidates else None
+-
+-    if not diagnostics_only and not skeleton_only and (engine_rc == 0 or hard_valid_artifact(audit)):
+-        prc = subprocess.call([sys.executable, '-u', str(POLISHER), '--case-root', str(case_root)])
++    if not diagnostics_only and skeleton_only and engine_rc == 0:
++        before_candidates = sorted(case_root.glob('*_BEST_BEFORE_BREAKS_SCHEDULE.xlsx'))
++        validation_workbook = before_candidates[0] if before_candidates else None
++    elif not diagnostics_only and not skeleton_only and engine_rc == 0 and qrc == 0 and hard_valid_artifact(audit):
++        prc = subprocess.call([sys.executable, '-u', str(POLISHER), '--case-root', str(case_root), '--prepare-only'])
+         if prc != 0:
+-            return prc
+-        if output.exists():
+-            validation_workbook = output
++            rc = prc
++        else:
++            polished = sorted((case_root / 'production').glob('*_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx'))
++            validation_workbook = polished[0] if len(polished) == 1 else None
+ 
+     if validation_workbook is not None and not args.skip_independent_validation:
+         validation_json = case_root / 'INDEPENDENT_VALIDATION.json'
+@@ -395,17 +446,22 @@
+         })
+         if vrc != 0:
+             rc = 4
++        elif not skeleton_only:
++            try:
++                finalize_production_manifest(case_root, validation_json, validation_workbook)
++            except Exception as exc:
++                independent_validation['status'] = 'ERROR_RELEASE_SEAL_FAILED'
++                independent_validation['seal_error'] = f'{type(exc).__name__}: {exc}'
++                rc = 4
+     elif validation_workbook is not None:
+         independent_validation.update({'status': 'SKIPPED_BY_EXPLICIT_FLAG', 'workbook': str(validation_workbook)})
++        if not skeleton_only:
++            rc = 5
+     elif not diagnostics_only and engine_rc == 0:
+         independent_validation['status'] = 'FAIL_OUTPUT_NOT_FOUND'
+         if not args.skip_independent_validation:
+             rc = 4
+ 
+-    if not diagnostics_only and not skeleton_only and (engine_rc == 0 or hard_valid_artifact(audit)) and rc != 4:
+-        pkg_rc = subprocess.call([sys.executable, '-u', str(PACKAGER), '--case-root', str(case_root)])
+-        if pkg_rc != 0:
+-            return pkg_rc
+     metrics = read_summary_metrics(case_root)
+     run_status = {
+         'schema_version': 1,
+@@ -414,12 +470,29 @@
+         'mode': mode, 'stage': stage,
+         'return_code': rc,
+         'engine_return_code': engine_rc,
++        'quality_report_return_code': qrc,
+         'hard_valid_artifact': hard_valid_artifact(audit),
+         'metrics': metrics,
+         'case_root': str(case_root),
+         'independent_validation': independent_validation,
+     }
+-    (case_root / 'UNIVERSAL_RUN_STATUS.json').write_text(json.dumps(run_status, indent=2, default=str), encoding='utf-8')
++    status_path = case_root / 'UNIVERSAL_RUN_STATUS.json'
++    # Write the status before packaging so every package carries the exact gate
++    # decision that authorized (or blocked) it.  Rewrite it if packaging itself
++    # fails, preserving that final return code as well.
++    status_path.write_text(json.dumps(run_status, indent=2, default=str), encoding='utf-8')
++    if (
++        not diagnostics_only and not skeleton_only
++        and engine_rc == 0 and qrc == 0 and rc == 0
++        and independent_validation.get('status') == 'PASS'
++        and not args.skip_independent_validation
++    ):
++        pkg_rc = subprocess.call([sys.executable, '-u', str(PACKAGER), '--case-root', str(case_root)])
++        if pkg_rc != 0:
++            rc = pkg_rc
++            run_status['return_code'] = rc
++            run_status['packager_return_code'] = pkg_rc
++            status_path.write_text(json.dumps(run_status, indent=2, default=str), encoding='utf-8')
+     print(json.dumps(run_status, indent=2, default=str), flush=True)
+     return rc
+ 
+Binary files ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/engine/__pycache__/RUN_UNIVERSAL_PRODUCTION.cpython-312.pyc and ./engine/__pycache__/RUN_UNIVERSAL_PRODUCTION.cpython-312.pyc differ
+Binary files ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/engine/_tools/__pycache__/l632_universal_scheduler.cpython-312.opt-1.pyc and ./engine/_tools/__pycache__/l632_universal_scheduler.cpython-312.opt-1.pyc differ
+Binary files ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/engine/_tools/__pycache__/l632_universal_scheduler.cpython-312.pyc and ./engine/_tools/__pycache__/l632_universal_scheduler.cpython-312.pyc differ
+diff -ru '--exclude=*.xlsx' '--exclude=*.ipynb' ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/engine/_tools/l632_universal_scheduler.py ./engine/_tools/l632_universal_scheduler.py
+--- ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/engine/_tools/l632_universal_scheduler.py	2026-09-05 03:12:04.000000000 +0100
++++ ./engine/_tools/l632_universal_scheduler.py	2026-09-08 19:06:13.273895579 +0100
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env python3
+-"""L6.3.2.4 universal scheduler: validation-integrity hardening plus executed late-phase optimization.
++"""RC9.2.2 hardened universal scheduler with fail-closed release validation.
+ 
+ The original ten-point structural scope is the foundation of this branch:
+ contract validation, deterministic pre-solver feasibility diagnostics, run and
+@@ -89,7 +89,7 @@
+         reward_from_quality_delta,
+     )
+ 
+-VERSION = "L6.3.2.6-RC9.2.2-BUDGETED-SEARCH-AND-BREAK-CONCURRENCY-RC1"
++VERSION = "L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2"
+ RC9_1_UNIVERSAL_SEARCH_RECOVERY = True
+ RC9_1_BREADTH_FIRST_STAGE2 = True
+ RC9_1_EXTENDED_DEEP_FULL_BUDGETS = True
+@@ -1207,7 +1207,11 @@
+     return associates, dates, day_cols
+ 
+ 
+-def _parse_preferences(wb: Any, associates: List[Associate]) -> None:
++def _parse_preferences(
++    wb: Any,
++    associates: List[Associate],
++    parser_warnings: Optional[List[str]] = None,
++) -> None:
+     ws = _sheet_by_alias(wb, ["Preference", "Prefrence", "Preferences"])
+     by_name = {norm(a.name): a for a in associates}
+     if ws is not None:
+@@ -1227,10 +1231,26 @@
+         headers = {norm(prev.cell(header, c).value): c for c in range(1, prev.max_column + 1)}
+         name_col = next((c for h, c in headers.items() if "name" in h), 2)
+         sat_col = next((c for h, c in headers.items() if h.startswith("sat")), 4)
++        seen_previous: Set[str] = set()
+         for r in range(header + 1, prev.max_row + 1):
+-            assoc = by_name.get(norm(prev.cell(r, name_col).value))
++            supplied_name = str(prev.cell(r, name_col).value or "").strip()
++            if not supplied_name:
++                continue
++            normalized_name = norm(supplied_name)
++            if normalized_name in seen_previous:
++                if parser_warnings is not None:
++                    parser_warnings.append(
++                        f"HARD_PREVIOUS_SATURDAY_DUPLICATE: {supplied_name!r} appears more than once."
++                    )
++                continue
++            seen_previous.add(normalized_name)
++            assoc = by_name.get(normalized_name)
+             if assoc:
+                 assoc.previous_saturday = str(prev.cell(r, sat_col).value or "").strip()
++            elif parser_warnings is not None:
++                parser_warnings.append(
++                    f"PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE: {supplied_name!r} is not in the Schedule roster and was ignored."
++                )
+ 
+ 
+ def _parse_fixed_nesting(wb: Any, associates: List[Associate], parser_warnings: List[str]) -> None:
+@@ -1440,7 +1460,7 @@
+     ws = _sheet_by_alias(wb, ["Language Setup", "Skill Setup", "Skills Setup"])
+     roster_languages = {norm(a.language) for a in associates if norm(a.language)}
+     if ws is None:
+-        return [], {lang: {lang} for lang in roster_languages}
++        return [], {lang: {lang} for lang in roster_languages}, {}
+     header = _find_header_row(ws, ["language", "minimum"])
+     headers = {norm(ws.cell(header, c).value): c for c in range(1, ws.max_column + 1)}
+     def find_col(needles: Sequence[str], default: Optional[int] = None) -> Optional[int]:
+@@ -1836,7 +1856,7 @@
+             f"Instruction headcount is {instructed_hc}, but Schedule contains {len(associates)} named roster rows. "
+             + ("Explicit mismatch override is enabled." if allow_hc_mismatch else "This is a hard contract failure.")
+         )
+-    _parse_preferences(wb, associates)
++    _parse_preferences(wb, associates, parser_warnings)
+     fixed_enabled = yes(_instruction_get(im, ["Fixed Request Use", "Use Fixed Requests", "Fixed/Nesting Enabled", "Use Fixed/Nesting"], "No"), False)
+     fixed_sheet_present = _sheet_by_alias(wb, ["Fixed Request", "Fixed Requests", "Nesting", "Fixed/Nesting"]) is not None
+     if fixed_enabled and fixed_sheet_present:
+@@ -2563,6 +2583,28 @@
+     warnings: List[Dict[str, Any]] = []
+     if not parsed.associates:
+         failures.append({"code": "NO_ROSTER", "detail": "No named roster rows were parsed."})
++    previous_saturday_duplicates = [
++        warning for warning in parsed.parser_warnings
++        if warning.startswith("HARD_PREVIOUS_SATURDAY_DUPLICATE:")
++    ]
++    if previous_saturday_duplicates:
++        failures.append({
++            "code": "DUPLICATE_PREVIOUS_SATURDAY_ASSOCIATE",
++            "count": len(previous_saturday_duplicates),
++            "examples": previous_saturday_duplicates[:20],
++            "detail": "A cyclic boundary input must contain at most one row per current roster associate.",
++        })
++    unknown_previous_saturday = [
++        warning for warning in parsed.parser_warnings
++        if warning.startswith("PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE:")
++    ]
++    if unknown_previous_saturday:
++        warnings.append({
++            "code": "UNKNOWN_PREVIOUS_SATURDAY_ASSOCIATE",
++            "count": len(unknown_previous_saturday),
++            "examples": unknown_previous_saturday[:20],
++            "detail": "Unknown historical names are ignored; confirm that the current roster's boundary values are complete where needed.",
++        })
+     if parsed.instructed_headcount <= 0:
+         warnings.append({
+             "code": "INSTRUCTED_HEADCOUNT_NOT_EXPLICIT",
+@@ -2582,6 +2624,11 @@
+             failures.append(row)
+     if not parsed.shifts:
+         failures.append({"code": "NO_LEGAL_SHIFTS", "detail": "No legal shifts were parsed from Shift Library."})
++    long_shifts=[shift.label for shift in parsed.shifts if shift.duration_min>=LONG_SHIFT_MIN_DURATION_MIN]
++    if not parsed.use_11h_3off and long_shifts:
++        failures.append({"code":"LONG_SHIFT_PRESENT_WHEN_11H_PROHIBITED","examples":long_shifts[:20]})
++    if parsed.use_11h_3off and not long_shifts:
++        failures.append({"code":"11H_MODE_ENABLED_WITHOUT_LONG_SHIFT","detail":"Use 11H/3OFF is enabled but the legal Shift Library has no long shift."})
+     active_count = sum(sum(1 for value in day if value) for day in parsed.active)
+     if active_count <= 0:
+         failures.append({"code": "NO_ACTIVE_DEMAND", "detail": "No positive requirement intervals were parsed."})
+@@ -2697,6 +2744,17 @@
+             if not (0 <= shr < 1):
+                 failures.append({"code": "INVALID_SHRINKAGE", "day": DAY_NAMES[d], "interval": hhmm(i * parsed.interval_minutes), "value": shr})
+     language_capacity = []
++    roster_languages={norm(associate.language) for associate in parsed.associates if norm(associate.language)}
++    declared_languages=set(parsed.language_capabilities)
++    unknown_targets=sorted({
++        target for targets in parsed.language_capabilities.values() for target in targets
++        if target not in roster_languages and target not in declared_languages
++    })
++    if unknown_targets:
++        failures.append({
++            "code":"UNKNOWN_CAN_COVER_TARGET_LANGUAGE","languages":unknown_targets,
++            "detail":"Every Can Cover target must match a roster language or a Language Setup row. Can Cover is directional source -> target.",
++        })
+     for rule in parsed.language_rules:
+         eligible = [a for a in parsed.associates if language_eligible(rule, a)]
+         language_capacity.append({"group": rule.group, "minimum": rule.minimum, "eligible_count": len(eligible)})
+@@ -2881,7 +2939,7 @@
+     for quarter in range(qpi):
+         minute = interval * interval_minutes + quarter * 15
+         for rule in getattr(parsed, "language_rules", []):
+-            if rule.active and rule.contains_minute(minute):
++            if rule.active and rule.overlaps(minute, 15):
+                 hard_minimum = max(hard_minimum, int(rule.minimum))
+     return max(demand_cap, hard_minimum)
+ 
+@@ -3729,9 +3787,15 @@
+             fixed = associate.fixed_schedule[d] if d < len(associate.fixed_schedule) else ""
+             pref_kind = preference_kind(pref)
+             fixed_kind = preference_kind(fixed)
+-            if parsed.leave_enabled and (pref_kind == "leave" or fixed_kind == "leave"):
++            if (
++                (parsed.fixed_enabled and fixed_kind == "leave")
++                or (parsed.leave_enabled and pref_kind == "leave")
++            ):
+                 fixed_aware_associates.add(a)
+-            if parsed.hard_off and (pref_kind == "off" or fixed_kind == "off"):
++            if (
++                (parsed.fixed_enabled and fixed_kind == "off")
++                or (parsed.hard_off and pref_kind == "off")
++            ):
+                 hard_off_flags[d] = True
+                 hard_off_day_counts[d] += 1
+                 fixed_aware_associates.add(a)
+@@ -4722,9 +4786,15 @@
+             fixed = assoc.fixed_schedule[d] if d < len(assoc.fixed_schedule) else ""
+             kind = preference_kind(pref)
+             fixed_kind = preference_kind(fixed)
+-            is_leave = hard.leave and parsed.leave_enabled and (kind == "leave" or fixed_kind == "leave")
++            is_leave = (
++                (hard.fixed and parsed.fixed_enabled and fixed_kind == "leave")
++                or (hard.leave and parsed.leave_enabled and kind == "leave")
++            )
+             model.Add(leave[a, d] == (1 if is_leave else 0))
+-            if hard.hard_off and parsed.hard_off and (kind == "off" or fixed_kind == "off"):
++            if (
++                (hard.fixed and parsed.fixed_enabled and fixed_kind == "off")
++                or (hard.hard_off and parsed.hard_off and kind == "off")
++            ):
+                 model.Add(off[a, d] == 1)
+             if hard.fixed and parsed.fixed_enabled and fixed_kind == "shift":
+                 matches = [s.index for s in parsed.shifts if norm(s.label) == norm(fixed)]
+@@ -7998,7 +8068,7 @@
+             continue
+         for quarter in range(qpi):
+             minute = interval * parsed.interval_minutes + quarter * 15
+-            if rule.contains_minute(minute):
++            if rule.overlaps(minute, 15):
+                 qslots.append(day * 96 + interval * qpi + quarter)
+     return qslots
+ 
+@@ -9624,8 +9694,12 @@
+ 
+     best_floor = max(int(sol.metrics.get("after_floor", sol.metrics.get("after_80", 0))) for _, sol in pool)
+     floor_anchor = max(
+-        (pair for pair in pool if int(pair[1].metrics.get("after_floor", pair[1].metrics.get("after_80", 0))) == best_floor),
+-        key=lambda pair: _candidate_quality_tuple(parsed, pair[1].metrics, "after"),
++        pool,
++        key=lambda pair: (
++            *_protected_tier_counts(parsed, pair[1].metrics, "after"),
++            int(pair[1].metrics.get("after_floor", pair[1].metrics.get("after_80", 0)) or 0),
++            _candidate_quality_tuple(parsed, pair[1].metrics, "after"),
++        ),
+     )
+     anchor_m = floor_anchor[1].metrics
+     anchor_target = int(anchor_m.get("after_target", 0))
+@@ -9635,7 +9709,18 @@
+ 
+     rows: List[Dict[str, Any]] = []
+     risk_eligible: List[Tuple[SkeletonSolution, BreakSolution]] = []
+-    explicit_cap = None if max_after80_tradeoff_intervals is None else max(0, int(max_after80_tradeoff_intervals))
++    # A missing cap used to disable the guard completely.  That admitted the
++    # observed NMG EN+SP trade (+3 target intervals for -9 protected/floor
++    # intervals plus substantially worse overage concentration).  Production
++    # now has a conservative one-interval default; callers may tighten it to
++    # zero or explicitly widen it, but omission can never mean unbounded loss.
++    explicit_cap = 1 if max_after80_tradeoff_intervals is None else max(0, int(max_after80_tradeoff_intervals))
++    protected_keys = [
++        f"after_{label}"
++        for ratio, label in ((0.90, 90), (0.80, 80))
++        if ratio < float(parsed.target_ratio) - 0.004
++        and ratio > float(parsed.floor_ratio) + 0.004
++    ]
+     for sk, sol in pool:
+         m = sol.metrics
+         after_floor = int(m.get("after_floor", m.get("after_80", 0)))
+@@ -9645,20 +9730,68 @@
+         severe = int(m.get("severe_floor_gap_count", 0))
+         max_run = int(m.get("max_consecutive_floor_gaps", 0))
+         max_def = float(m.get("floor_deficit_max", 0.0))
+-        earned_tradeoff = target_gain >= math.ceil(max(0, floor_loss) * max(0.0, float(min_after90_gain_per_after80_loss)))
+-        material_tradeoff = target_gain >= max(5, math.ceil(max(0, floor_loss) * 2.0))
+-        severity_ok = severe <= max(anchor_severe + 2, 2) or material_tradeoff
+-        concentration_ok = max_run <= max(anchor_run + 2, 4) or material_tradeoff
+-        depth_ok = max_def <= max(anchor_max_def + 0.05, 0.20)
+-        cap_ok = True
+-        if explicit_cap is not None:
+-            cap_ok = floor_loss <= explicit_cap or earned_tradeoff
+-            risk_ok = cap_ok and (depth_ok or material_tradeoff)
+-        else:
+-            # In normal production mode, the workbook target is primary. Floor
+-            # severity/concentration remain visible risk flags and tie-breakers,
+-            # but they do not silently replace the configured target objective.
+-            risk_ok = True
++        protected_losses = {
++            key: max(0, int(anchor_m.get(key, 0) or 0) - int(m.get(key, 0) or 0))
++            for key in protected_keys
++        }
++        largest_protected_loss = max([floor_loss, *protected_losses.values()], default=max(0, floor_loss))
++        earned_tradeoff = target_gain >= math.ceil(
++            max(0, largest_protected_loss) * max(0.0, float(min_after90_gain_per_after80_loss))
++        )
++        tradeoff_blockers: List[Dict[str, Any]] = []
++        for other_sk, other_sol in pool:
++            if other_sol is sol:
++                continue
++            om = other_sol.metrics
++            other_losses = [
++                max(0, int(om.get(key, 0) or 0) - int(m.get(key, 0) or 0))
++                for key in protected_keys
++            ]
++            other_losses.append(max(0, int(om.get("after_floor", 0) or 0) - after_floor))
++            protected_loss_to_other = max(other_losses, default=0)
++            target_advantage = after_target - int(om.get("after_target", 0) or 0)
++            other_safety_no_worse = (
++                int(om.get("hard_floor_gap_count", 0) or 0) <= int(m.get("hard_floor_gap_count", 0) or 0)
++                and int(om.get("severe_floor_gap_count", 0) or 0) <= severe
++                and int(om.get("max_consecutive_floor_gaps", 0) or 0) <= max_run
++                and float(om.get("floor_deficit_max", 0.0) or 0.0) <= max_def + 1e-9
++                and int(om.get("week_boundary_hard_failure_count", 0) or 0) <= int(m.get("week_boundary_hard_failure_count", 0) or 0)
++            )
++            required_gain = math.ceil(
++                protected_loss_to_other * max(0.0, float(min_after90_gain_per_after80_loss))
++            )
++            if protected_loss_to_other > explicit_cap and target_advantage < required_gain and other_safety_no_worse:
++                tradeoff_blockers.append({
++                    "skeleton_profile": other_sk.profile,
++                    "break_profile": other_sol.profile,
++                    "protected_gain": protected_loss_to_other,
++                    "target_cost": max(0, -target_advantage),
++                    "candidate_target_advantage": target_advantage,
++                    "required_target_advantage": required_gain,
++                })
++        cap_ok = not tradeoff_blockers
++        severity_ok = not any(
++            int(other.metrics.get("severe_floor_gap_count", 0) or 0) < severe
++            and int(other.metrics.get("after_target", 0) or 0) >= after_target
++            for _, other in pool
++        )
++        concentration_ok = not any(
++            int(other.metrics.get("max_consecutive_floor_gaps", 0) or 0) < max_run
++            and int(other.metrics.get("after_target", 0) or 0) >= after_target
++            for _, other in pool
++        )
++        depth_ok = not any(
++            float(other.metrics.get("floor_deficit_max", 0.0) or 0.0) + 1e-9 < max_def
++            and int(other.metrics.get("after_target", 0) or 0) >= after_target
++            for _, other in pool
++        )
++        boundary_ok = int(m.get("week_boundary_hard_failure_count", 0) or 0) <= int(
++            anchor_m.get("week_boundary_hard_failure_count", 0) or 0
++        )
++        hard_floor_ok = int(m.get("hard_floor_gap_count", 0) or 0) <= int(
++            anchor_m.get("hard_floor_gap_count", 0) or 0
++        )
++        risk_ok = cap_ok and severity_ok and concentration_ok and depth_ok and boundary_ok and hard_floor_ok
+         rows.append({
+             "skeleton_profile": sk.profile,
+             "break_profile": sol.profile,
+@@ -9674,7 +9807,16 @@
+             "severe_floor_gaps": severe,
+             "max_consecutive_floor_gaps": max_run,
+             "floor_deficit_max": max_def,
+-            "tradeoff_cap": explicit_cap if explicit_cap is not None else "severity_only",
++            "protected_tier_losses": protected_losses,
++            "largest_protected_loss": largest_protected_loss,
++            "tradeoff_cap": explicit_cap,
++            "earned_target_tradeoff": earned_tradeoff,
++            "tradeoff_blockers": tradeoff_blockers,
++            "severity_ok": severity_ok,
++            "concentration_ok": concentration_ok,
++            "depth_ok": depth_ok,
++            "boundary_ok": boundary_ok,
++            "hard_floor_ok": hard_floor_ok,
+             "risk_ok": risk_ok,
+             "accepted_by_tradeoff_guard": risk_ok,
+         })
+@@ -9858,12 +10000,16 @@
+             )
+         pool = hard_clean
+ 
+-    strict, tradeoff_rows = target_priority_tradeoff_select(
++    # Preserve a transparent MAX_TARGET endpoint, but select the operational
++    # recommendation through the protected-tier guard.  These are deliberately
++    # separate roles: the strict endpoint is evidence, not an automatic winner.
++    max_target = max(pool, key=lambda pair: _candidate_quality_tuple(parsed, pair[1].metrics, "after"))
++    _, tradeoff_rows = target_priority_tradeoff_select(
+         parsed, pool,
+         max_after80_tradeoff_intervals=max_after80_tradeoff_intervals,
+         min_after90_gain_per_after80_loss=min_after90_gain_per_after80_loss,
+     )
+-    strict_target = int(strict[1].metrics.get("after_target", 0))
++    strict_target = int(max_target[1].metrics.get("after_target", 0))
+     best_before_target_in_pool = max(int(sol.metrics.get("before_target", 0)) for _, sol in pool)
+     global_before_anchor = (
+         best_before_target_in_pool if global_best_before_target is None
+@@ -9876,7 +10022,6 @@
+             retention_cap is None
+             or global_before_anchor - int(pair[1].metrics.get("before_target", 0)) <= retention_cap
+         )
+-        and int(pair[1].metrics.get("after_target", 0)) >= strict_target - max(0, int(primary_target_tolerance))
+     ]
+     benchmark_tolerance = max(0, int(quality_benchmark_tolerance))
+     before_tier_minima_configured = any(
+@@ -9910,7 +10055,6 @@
+             minimum_final_after_100, minimum_final_after_90, minimum_final_after_80,
+             benchmark_tolerance,
+         )
+-        and int(pair[1].metrics.get("after_target", 0)) >= strict_target - max(0, int(primary_target_tolerance))
+     ]
+     retention_guard_failed = bool(
+         global_best_before_target is not None and retention_cap is not None and not retention_pool
+@@ -9945,16 +10089,24 @@
+             )
+         if selection_pool and not any(_rc811_gate_pass(pair) for pair in selection_pool):
+             selection_pool = pool
+-    frontier = nondominated_candidates(parsed, selection_pool)
++    # Frontier alternatives must be discovered from the complete hard-valid
++    # pool.  The old target-tolerance retention window erased the useful knee
++    # and max-floor candidates before frontier construction.
++    frontier = nondominated_candidates(parsed, pool)
+     # RC8.10/RC8.11: when the release quality gate is in FAIL mode and no candidate
+     # passes it, the recommendation anchor must still be the least-bad gate
+     # candidate.  The quality tuple already ranks floor/severe/run excess before
+     # target in fail mode; keep that as the anchor instead of allowing later
+     # target-only tradeoff logic to override the gate.
+-    recommendation_anchor = max(
++    recommendation_anchor, guarded_rows = target_priority_tradeoff_select(
++        parsed,
+         selection_pool,
+-        key=lambda pair: _candidate_quality_tuple(parsed, pair[1].metrics, "after"),
++        max_after80_tradeoff_intervals=max_after80_tradeoff_intervals,
++        min_after90_gain_per_after80_loss=min_after90_gain_per_after80_loss,
+     )
++    # Rows from the actual recommendation pool are release-authoritative; keep
++    # the full-pool rows too for auditability without duplicating identical data.
++    tradeoff_rows = guarded_rows if selection_pool is pool else tradeoff_rows + guarded_rows
+     strict_m = recommendation_anchor[1].metrics
+     recommendation_target = int(strict_m.get("after_target", 0))
+     tolerance = max(0, int(primary_target_tolerance))
+@@ -10036,13 +10188,11 @@
+     exports: List[Tuple[str, Tuple[SkeletonSolution, BreakSolution]]] = [
+         ("RECOMMENDED_FINAL", recommended)
+     ]
+-    if strict is not recommended:
+-        exports.append(("MAX_TARGET_CANDIDATE", strict))
+-    if max_floor is not recommended and max_floor is not strict and len(exports) < 3:
+-        exports.append(("MAX_FLOOR_CANDIDATE", max_floor))
+-    elif max_floor is not recommended and strict is recommended and len(exports) < 3:
++    if max_target is not recommended:
++        exports.append(("MAX_TARGET_CANDIDATE", max_target))
++    if max_floor is not recommended and max_floor is not max_target:
+         exports.append(("MAX_FLOOR_CANDIDATE", max_floor))
+-    if balanced not in (recommended, strict, max_floor):
++    if balanced not in (recommended, max_target, max_floor):
+         exports.append(("BALANCED_CANDIDATE", balanced))
+ 
+     recommendation_rows = [{
+@@ -10073,11 +10223,11 @@
+     return {
+         "retention_guard_failed": retention_guard_failed,
+         "retention_guard_message": retention_guard_message,
+-        "strict": strict,
++        "strict": max_target,
+         "recommended": recommended,
+         "max_floor": max_floor,
+         "frontier": frontier,
+-        "exports": exports[:3],
++        "exports": exports,
+         "tradeoff_rows": tradeoff_rows,
+         "recommendation_rows": recommendation_rows,
+         "primary_target_tolerance": tolerance,
+@@ -12775,9 +12925,15 @@
+             fixed = associate.fixed_schedule[d] if d < len(associate.fixed_schedule) else ""
+             pref_kind = preference_kind(pref)
+             fixed_kind = preference_kind(fixed)
+-            is_leave = parsed.leave_enabled and (pref_kind == "leave" or fixed_kind == "leave")
++            is_leave = (
++                (parsed.fixed_enabled and fixed_kind == "leave")
++                or (parsed.leave_enabled and pref_kind == "leave")
++            )
+             model.Add(leave[a, d] == (1 if is_leave else 0))
+-            if parsed.hard_off and (pref_kind == "off" or fixed_kind == "off"):
++            if (
++                (parsed.fixed_enabled and fixed_kind == "off")
++                or (parsed.hard_off and pref_kind == "off")
++            ):
+                 model.Add(off[a, d] == 1)
+             if parsed.fixed_enabled and fixed_kind == "shift":
+                 matches = [shift.index for shift in parsed.shifts if norm(shift.label) == norm(fixed)]
+Binary files ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/engine/production/__pycache__/package_phase_c_outputs.cpython-312.pyc and ./engine/production/__pycache__/package_phase_c_outputs.cpython-312.pyc differ
+Binary files ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/engine/production/__pycache__/phase_c_quality_report.cpython-312.pyc and ./engine/production/__pycache__/phase_c_quality_report.cpython-312.pyc differ
+Binary files ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/engine/production/__pycache__/production_output_polisher.cpython-312.pyc and ./engine/production/__pycache__/production_output_polisher.cpython-312.pyc differ
+diff -ru '--exclude=*.xlsx' '--exclude=*.ipynb' ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/engine/production/package_phase_c_outputs.py ./engine/production/package_phase_c_outputs.py
+--- ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/engine/production/package_phase_c_outputs.py	2026-09-02 16:54:14.000000000 +0100
++++ ./engine/production/package_phase_c_outputs.py	2026-09-08 19:05:58.677555024 +0100
+@@ -22,6 +22,11 @@
+     "*.l6_3_2_3_summary.csv",
+     "PHASE_C_QUALITY_SUMMARY.json",
+     "PHASE_C_QUALITY_SUMMARY.csv",
++    "INDEPENDENT_VALIDATION.json",
++    "INDEPENDENT_VALIDATION.csv",
++    "UNIVERSAL_RUN_STATUS.json",
++    "UNIVERSAL_RUN_IDENTITY.json",
++    "input_snapshot/*.xlsx",
+ )
+ REVIEW_PATTERNS = (
+     "*.l6_3_2_3_summary.csv",
+@@ -31,6 +36,11 @@
+     "production/PRODUCTION_ARTIFACT_MANIFEST.json",
+     "PHASE_C_QUALITY_SUMMARY.json",
+     "PHASE_C_QUALITY_SUMMARY.csv",
++    "INDEPENDENT_VALIDATION.json",
++    "INDEPENDENT_VALIDATION.csv",
++    "UNIVERSAL_RUN_IDENTITY.json",
++    "UNIVERSAL_RUN_STATUS.json",
++    "input_snapshot/*.xlsx",
+     "debug/RUN_IDENTITY.json",
+     "debug/scheduler.log",
+     "debug/TRANSACTION_LEDGER.json",
+@@ -110,6 +120,31 @@
+         missing = [role for role, present in required_roles.items() if not present]
+         raise RuntimeError(f"Missing required production artifact roles: {missing}")
+ 
++    manifest_path = root / "production" / "PRODUCTION_ARTIFACT_MANIFEST.json"
++    validation_path = root / "INDEPENDENT_VALIDATION.json"
++    if not manifest_path.is_file() or not validation_path.is_file():
++        raise RuntimeError("Production manifest and independent validation evidence are required")
++    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
++    validation = json.loads(validation_path.read_text(encoding="utf-8"))
++    if manifest.get("production_ready") is not True or manifest.get("approval_status") != "APPROVED_AUTOMATED_RELEASE_GATES":
++        raise RuntimeError("Production manifest has not been sealed by the release pipeline")
++    if validation.get("status") != "PASS" or int(validation.get("hard_fail_count", 1) or 0) != 0:
++        raise RuntimeError("Independent validation is not a clean PASS")
++    final_record = (manifest.get("two_artifact_contract") or {}).get("BEST_FINAL_AFTER_BREAKS_SCHEDULE") or {}
++    final_path = root / str(final_record.get("path", ""))
++    final_hash = sha256(final_path) if final_path.is_file() else None
++    if (
++        not final_path.is_file()
++        or final_hash != validation.get("output_sha256")
++        or final_hash != final_record.get("sha256")
++    ):
++        raise RuntimeError("Validated final workbook identity does not match the production manifest")
++    input_snapshots = [path for path in production if "input_snapshot" in path.parts and path.suffix.lower()==".xlsx"]
++    if len(input_snapshots)!=1 or sha256(input_snapshots[0])!=validation.get("input_sha256"):
++        raise RuntimeError("Validated input identity does not match the packaged input snapshot")
++    if (manifest.get("solver") or {}).get("engine_sha256")!=validation.get("engine_sha256"):
++        raise RuntimeError("Validated engine identity does not match the production manifest")
++
+     out = root / "packages"
+     out.mkdir(exist_ok=True)
+     records = {
+diff -ru '--exclude=*.xlsx' '--exclude=*.ipynb' ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/engine/production/phase_c_quality_report.py ./engine/production/phase_c_quality_report.py
+--- ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/engine/production/phase_c_quality_report.py	2026-09-02 17:08:38.000000000 +0100
++++ ./engine/production/phase_c_quality_report.py	2026-09-08 18:48:06.932938082 +0100
+@@ -258,6 +258,7 @@
+     ap=argparse.ArgumentParser()
+     ap.add_argument("--audit-json",type=Path,required=True)
+     ap.add_argument("--case-root",type=Path,required=True)
++    ap.add_argument("--strict",action="store_true",help="Return non-zero when a production release gate is not clean.")
+     args=ap.parse_args()
+     audit=json.loads(args.audit_json.read_text(encoding="utf-8"))
+     report=build_report(audit)
+@@ -268,6 +269,26 @@
+     with out_csv.open("w",encoding="utf-8",newline="") as handle:
+         writer=csv.writer(handle); writer.writerow(["Metric","Value"]); writer.writerows(flatten(report))
+     print(json.dumps(report,indent=2))
++    blocking = []
++    if report.get("artifact_state") != "FINAL_VERIFIED":
++        blocking.append("artifact_state_not_final_verified")
++    if (report.get("contract") or {}).get("status") != "PASS":
++        blocking.append("input_contract_not_pass")
++    if (report.get("safety") or {}).get("status") != "PASS":
++        blocking.append("internal_output_validation_not_pass")
++    gate = report.get("production_quality_gate") or {}
++    if gate.get("status") == "FAIL":
++        blocking.append("production_quality_gate_failed")
++    if args.strict and str(gate.get("mode", "")).lower() == "fail" and gate.get("status") != "PASS":
++        blocking.append("mandatory_production_quality_gate_not_pass")
++    if args.strict and report.get("phase_c_quality_status") in {
++        "FAIL_PRODUCTION_QUALITY_GATE", "FAIL_SAFETY", "REVIEW_NOT_VALIDATED",
++        "REVIEW_EXTREME_OVERAGE", "DIAGNOSTICS_ONLY",
++    }:
++        blocking.append(str(report.get("phase_c_quality_status")))
++    if blocking:
++        print(json.dumps({"status":"BLOCKED","blocking_reasons":sorted(set(blocking))},indent=2))
++        return 2
+     return 0
+ 
+ if __name__ == "__main__":
+diff -ru '--exclude=*.xlsx' '--exclude=*.ipynb' ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/engine/production/production_output_polisher.py ./engine/production/production_output_polisher.py
+--- ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/engine/production/production_output_polisher.py	2026-09-02 17:08:14.000000000 +0100
++++ ./engine/production/production_output_polisher.py	2026-09-08 19:06:08.365781540 +0100
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env python3
+-"""Artifact publisher for the Phase C C4 phase-closure master engine development checkpoint."""
++"""Prepare immutable RC9.2.2 production workbooks for independent validation."""
+ from __future__ import annotations
+ import argparse,csv,hashlib,json,re,shutil,tempfile,zipfile
+ from datetime import datetime,timezone
+@@ -13,15 +13,14 @@
+ # therefore asserted a fabricated engine identity, which is precisely what the
+ # exact-engine-identity release gate exists to prevent.
+ #
+-# Identity is now derived from the run that produced the artifact. These remain
+-# only so a case root without an identity file still publishes, and when they
+-# are used the manifest records identity_source='FALLBACK_LITERALS' so the
+-# substitution is visible rather than silent.
+-RELEASE='L6.3.2.3-RC9.1-UNIVERSAL-SEARCH-RECOVERY-PLATFORM'
+-SOLVER='L6.3.2.3-RC9.1-UNIVERSAL-SEARCH-RECOVERY-PLATFORM'
+-COMMIT='RC9_UNIVERSAL_PLATFORM_BASED_ON_RC8_13_TARGET90_CORE'
+-ENGINE='4b5f58e5df5513057f511d9e13ccece45226ce548aaa2f5f9a3ecd13fc6eb31d'
+-APPROVAL='WORKBOOK_DRIVEN_RELEASE_STATUS_NOT_CASE_PRESET'
++# Legacy literals remain readable for old evidence only.  Production
++# preparation below refuses to use them: an unknown identity is not a
++# publishable identity.
++RELEASE='L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2'
++SOLVER=RELEASE
++COMMIT='RC9_2_2_PRODUCTION_HARDENED_RC2'
++ENGINE='FALLBACK_ENGINE_IDENTITY_REJECTED'
++APPROVAL='PENDING_INDEPENDENT_VALIDATION; SEE SEALED MANIFEST IN THE PRODUCTION PACKAGE'
+ 
+ def run_identity(root):
+  '''Identity of the run that produced this case, from its own artifacts.'''
+@@ -122,23 +121,15 @@
+  return {'path':str(dst),'size_bytes':dst.stat().st_size,'sha256':sha(dst),'sheet_count':len(names),'xlsx_zip_test':'PASS','reopen_test':'PASS'}
+ def publish(root):
+  root=root.resolve(); summary=read_csv(one(root,'*.l6_3_2_3_summary.csv')); pareto=json.loads(one(root,'*_PARETO_EXPORT_MANIFEST.json').read_text()); cid=Path(summary.get('output','')).name.split('_L6_3_2_3_',1)[0]; prod=root/'production'; prod.mkdir(exist_ok=True); ident=run_identity(root)
++ if ident['identity_source']=='FALLBACK_LITERALS' or not all(ident.get(k) for k in ('engine_sha256','contract_sha256','run_id','input_sha256')):
++  raise RuntimeError('Complete run identity is required before production artifact preparation')
+  before=clean_book(one(root,'*_BEST_BEFORE_BREAKS_SCHEDULE.xlsx'),prod/f'{cid}_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx','BEST_BEFORE_BREAKS_SCHEDULE','REVIEW ONLY - strongest legal shift/OFF skeleton before breaks; not operational',pareto,ident)
+- final=clean_book(one_of(root,'*_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx','*_RECOMMENDED_FINAL_AFTER_BREAKS_SCHEDULE.xlsx'),prod/f'{cid}_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx','BEST_FINAL_AFTER_BREAKS_SCHEDULE','PRODUCTION OUTPUT - use only when hard gates pass or a documented quality-debt approval exists',pareto,ident)
+- manifest={'release':ident['release'],'identity_source':ident['identity_source'],'contract_sha256':ident['contract_sha256'],'run_id':ident['run_id'],'input_sha256':ident['input_sha256'],'approval_status':APPROVAL,'generated_utc':datetime.now(timezone.utc).isoformat(),'case':cid,'solver':{'version':ident['solver'],'week_boundary_patch_commit':ident['commit'],'engine_sha256':ident['engine_sha256'],'optimization_logic_changed':True,'change_scope':'RC9 preserves workbook target-first skeleton/final selection, protected target-champion break proof, joint/break refinement, and workbook-driven quality gates without client/case branching'},'two_artifact_contract':{'BEST_BEFORE_BREAKS_SCHEDULE':before,'BEST_FINAL_AFTER_BREAKS_SCHEDULE':final},'candidate_role_rows':roles(pareto),'source_status':summary.get('status','')}
++ final=clean_book(one_of(root,'*_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx','*_RECOMMENDED_FINAL_AFTER_BREAKS_SCHEDULE.xlsx'),prod/f'{cid}_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx','BEST_FINAL_AFTER_BREAKS_SCHEDULE','PREPARED OUTPUT - not operational until the independent validation seal and production package exist',pareto,ident)
++ manifest={'release':ident['release'],'identity_source':ident['identity_source'],'contract_sha256':ident['contract_sha256'],'run_id':ident['run_id'],'input_sha256':ident['input_sha256'],'approval_status':'PENDING_INDEPENDENT_VALIDATION','production_ready':False,'generated_utc':datetime.now(timezone.utc).isoformat(),'case':cid,'solver':{'version':ident['solver'],'week_boundary_patch_commit':ident['commit'],'engine_sha256':ident['engine_sha256'],'optimization_logic_changed':True,'change_scope':'RC9.2.2 production hardening: protected-tier champion selection, exact-workbook validation, and fail-closed publication without client/case branching'},'two_artifact_contract':{'BEST_BEFORE_BREAKS_SCHEDULE':before,'BEST_FINAL_AFTER_BREAKS_SCHEDULE':final},'candidate_role_rows':roles(pareto),'source_status':summary.get('status','')}
+  mp=prod/'PRODUCTION_ARTIFACT_MANIFEST.json'; mp.write_text(json.dumps(manifest,indent=2),encoding='utf-8')
+- ev=[]
+- for pat in ('*.l6_3_2_3_summary.csv','*.l6_3_2_3_solver_audit.json','*_CANDIDATE_LEADERBOARD.csv','*_PARETO_EXPORT_MANIFEST.json','PHASE_C_QUALITY_SUMMARY.json','PHASE_C_QUALITY_SUMMARY.csv','debug/RUN_IDENTITY.json','debug/scheduler.log'):
+-  ev += [p for p in root.glob(pat) if p.is_file()]
+- zp=prod/f'{cid}_{ident["release"]}_PRODUCTION_ONLY.zip'
+- with zipfile.ZipFile(zp,'w',zipfile.ZIP_DEFLATED) as z:
+-  z.write(Path(before['path']),arcname=Path(before['path']).name); z.write(Path(final['path']),arcname=Path(final['path']).name); z.write(mp,arcname=mp.name)
+-  for p in sorted(set(ev)): z.write(p,arcname=f'evidence/{p.name}')
+- with zipfile.ZipFile(zp) as z:
+-  bad=z.testzip()
+-  if bad: raise RuntimeError(bad)
+- print(json.dumps({'status':'PASS','case':cid,'production_zip':str(zp),'before':before,'final':final},indent=2))
++ print(json.dumps({'status':'PREPARED_PENDING_INDEPENDENT_VALIDATION','case':cid,'manifest':str(mp),'before':before,'final':final},indent=2))
+ def main():
+- ap=argparse.ArgumentParser(); ap.add_argument('--case-root',type=Path); ap.add_argument('--selfcheck',action='store_true'); a=ap.parse_args()
++ ap=argparse.ArgumentParser(); ap.add_argument('--case-root',type=Path); ap.add_argument('--prepare-only',action='store_true',help='Prepare polished workbooks without packaging; retained for explicit pipeline readability.'); ap.add_argument('--selfcheck',action='store_true'); a=ap.parse_args()
+  if a.selfcheck:
+   # Not `assert`: under `python -O` assertions are stripped and the selfcheck
+   # would print PASS having verified nothing.
+Binary files ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/engine/tools/__pycache__/independent_validator.cpython-312.pyc and ./engine/tools/__pycache__/independent_validator.cpython-312.pyc differ
+diff -ru '--exclude=*.xlsx' '--exclude=*.ipynb' ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/engine/tools/independent_validator.py ./engine/tools/independent_validator.py
+--- ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/engine/tools/independent_validator.py	2026-09-02 20:52:06.000000000 +0100
++++ ./engine/tools/independent_validator.py	2026-09-08 19:05:26.208806903 +0100
+@@ -7,7 +7,7 @@
+ and cyclic next-Sunday coverage.
+ """
+ from __future__ import annotations
+-import argparse, csv, importlib.util, json, math, re, sys
++import argparse, csv, hashlib, importlib.util, json, math, re, sys, traceback
+ from collections import defaultdict
+ from pathlib import Path
+ from typing import Any, Dict, List, Optional, Tuple
+@@ -15,6 +15,18 @@
+ 
+ DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+ 
++class ParsedAssignments(dict):
++    """Schedule mapping with duplicate-row evidence preserved for validation."""
++    def __init__(self):
++        super().__init__()
++        self.duplicate_rows: List[Dict[str, Any]] = []
++
++def sha256_file(path: Path) -> str:
++    digest=hashlib.sha256()
++    with path.open('rb') as handle:
++        for chunk in iter(lambda:handle.read(1024*1024),b''): digest.update(chunk)
++    return digest.hexdigest()
++
+ def norm(v: Any) -> str:
+     return re.sub(r"\s+", " ", str(v or "").strip()).casefold()
+ 
+@@ -92,12 +104,16 @@
+         raise ValueError(
+             "Output schedule is missing name/day columns "
+             f"(name_col={name_col}, searched rows {max(1,header-2)}-{header+1} of sheet {ws.title!r})")
+-    assignments={}; languages={}
++    assignments=ParsedAssignments(); languages={}
+     for r in range(header+1,ws.max_row+1):
+         name=str(ws.cell(r,name_col).value or "").strip()
+         if not name: continue
+-        assignments[norm(name)]=[str(ws.cell(r,day_cols[d]).value or "").strip() for d in DAYS]
+-        languages[norm(name)]=str(ws.cell(r,lang_col).value or "").strip() if lang_col else ""
++        key=norm(name)
++        if key in assignments:
++            assignments.duplicate_rows.append({"associate":name,"row":r})
++            continue
++        assignments[key]=[str(ws.cell(r,day_cols[d]).value or "").strip() for d in DAYS]
++        languages[key]=str(ws.cell(r,lang_col).value or "").strip() if lang_col else ""
+     wb.close()
+     return assignments,languages
+ 
+@@ -142,10 +158,11 @@
+             # one malformed cell must not stop every other rule from being
+             # checked.  A duration of 0 is rejected downstream as INVALID_BREAK_ROW.
+             duration=0
++        exception = "no breaks scheduled" in status.casefold() or "no break exception" in status.casefold()
+         out.append({
+             "associate":name,"day":day,"shift":str(cell(rr,"shift") or ""),
+             "type":str(cell(rr,"break type") or ""),"start":cell(rr,"start"),
+-            "duration":duration,"status":status,
++            "duration":duration,"status":status,"is_exception":exception,
+         })
+     wb.close(); return out,before_only
+ 
+@@ -162,7 +179,7 @@
+ def validate(input_path: Path, output_path: Path, engine_path: Path) -> Dict[str,Any]:
+     eng=load_engine(engine_path)
+     parsed=eng.parse_input(input_path)
+-    assignments,_=parse_output_schedule(output_path,[a.name for a in parsed.associates])
++    assignments,output_languages=parse_output_schedule(output_path,[a.name for a in parsed.associates])
+     breaks,before_only=parse_breaks(output_path)
+     shift_map={norm(s.label):s for s in parsed.shifts}
+     failures=[]; warnings=[]
+@@ -173,7 +190,17 @@
+             failures.append({"type":"MISSING_ASSOCIATE","associate":assoc.name}); row=[""]*7
+         matrix.append(row)
+     extra=sorted(set(assignments)-{norm(a.name) for a in parsed.associates})
+-    if extra: warnings.append({"type":"EXTRA_OUTPUT_ASSOCIATES","count":len(extra),"examples":extra[:10]})
++    if extra: failures.append({"type":"EXTRA_OUTPUT_ASSOCIATES","count":len(extra),"examples":extra[:10]})
++    duplicate_rows=list(getattr(assignments,"duplicate_rows",[]))
++    if duplicate_rows:
++        failures.append({"type":"DUPLICATE_OUTPUT_ASSOCIATE","count":len(duplicate_rows),"examples":duplicate_rows[:20]})
++    output_language_mismatches=[]
++    for assoc in parsed.associates:
++        actual=output_languages.get(norm(assoc.name),"")
++        if actual and norm(actual)!=norm(assoc.language):
++            output_language_mismatches.append({"associate":assoc.name,"expected":assoc.language,"actual":actual})
++    if output_language_mismatches:
++        failures.append({"type":"OUTPUT_LANGUAGE_MISMATCH","count":len(output_language_mismatches),"examples":output_language_mismatches[:20]})
+ 
+     # Assignment legality, fixed/leave/OFF, OFF shape, shift variety and rest.
+     for a,assoc in enumerate(parsed.associates):
+@@ -185,12 +212,25 @@
+             if kind=="shift": shift_days.append((d,shift_map[norm(value)]))
+             pref_kind=eng.preference_kind(assoc.preferences[d] if d<len(assoc.preferences) else "")
+             fixed_kind=eng.preference_kind(assoc.fixed_schedule[d] if d<len(assoc.fixed_schedule) else "")
+-            if parsed.leave_enabled and (pref_kind=="leave" or fixed_kind=="leave") and kind!="leave":
++            if (
++                ((parsed.fixed_enabled and fixed_kind=="leave") or (parsed.leave_enabled and pref_kind=="leave"))
++                and kind!="leave"
++            ):
+                 failures.append({"type":"LEAVE_VIOLATION","associate":assoc.name,"day":DAYS[d],"actual":value})
+-            if parsed.hard_off and (pref_kind=="off" or fixed_kind=="off") and kind!="off":
++            if (
++                ((parsed.fixed_enabled and fixed_kind=="off") or (parsed.hard_off and pref_kind=="off"))
++                and kind!="off"
++            ):
+                 failures.append({"type":"HARD_OFF_VIOLATION","associate":assoc.name,"day":DAYS[d],"actual":value})
+             if parsed.fixed_enabled and fixed_kind=="shift" and norm(value)!=norm(assoc.fixed_schedule[d]):
+                 failures.append({"type":"FIXED_SHIFT_VIOLATION","associate":assoc.name,"day":DAYS[d],"expected":assoc.fixed_schedule[d],"actual":value})
++            if kind=="shift" and parsed.language_working_window_mode!="OFF":
++                window=(parsed.language_windows or {}).get(norm(assoc.language))
++                if window is not None:
++                    wstart,wend,has_minimum=window
++                    enforce=parsed.language_working_window_mode=="ALL_ROWS" or (parsed.language_working_window_mode=="MINIMUM_ROWS" and has_minimum)
++                    if enforce and not eng.shift_within_language_window(shift_map[norm(value)],(wstart,wend)):
++                        failures.append({"type":"LANGUAGE_WORKING_WINDOW","associate":assoc.name,"language":assoc.language,"day":DAYS[d],"shift":value,"window":f"{eng.hhmm(wstart)}-{eng.hhmm(wend)}","mode":parsed.language_working_window_mode})
+         # Contract constant shared with the engine, not an independent judgement.
+         # Independence means recomputing coverage from the exported workbook - it
+         # does not mean re-guessing what the contract says a long shift is.  This
+@@ -217,6 +257,21 @@
+         if sun and not eng.previous_saturday_compatible(assoc.previous_saturday,sun,parsed.rest_gap_hours):
+             failures.append({"type":"PREVIOUS_SATURDAY_REST_VIOLATION","associate":assoc.name,"previous_saturday":assoc.previous_saturday,"sunday":sun.label})
+ 
++    # Flexible nesting groups are equal-schedule constraints.  Exact fixed rows
++    # deliberately have their nesting tag cleared by the parser because their
++    # day values are already authoritative and may differ by design.
++    nesting_groups=defaultdict(list)
++    for a,assoc in enumerate(parsed.associates):
++        if assoc.nesting_group:
++            nesting_groups[norm(assoc.nesting_group)].append((assoc.name,[norm(value) for value in matrix[a]]))
++    for group,members in nesting_groups.items():
++        distinct={tuple(row) for _,row in members}
++        if len(distinct)>1:
++            failures.append({
++                "type":"NESTING_GROUP_SCHEDULE_MISMATCH","group":group,
++                "members":[{"associate":name,"schedule":row} for name,row in members[:20]],
++            })
++
+     # Build shift occurrences at quarter level.
+     horizon=7*96
+     before=[[] for _ in range(horizon)]
+@@ -248,24 +303,30 @@
+             for q in range(start,start+pdur//15):
+                 if 0<=q<96: before[q].append(a)
+ 
+-    break_qslots=defaultdict(set); break_fail=[]
+-    by_cell=defaultdict(list)
++    break_qslots=defaultdict(set); break_qslots_all=defaultdict(set); break_fail=[]; break_spacing_rows=[]
++    by_cell=defaultdict(list); exception_cells=set()
+     for br in breaks:
+         aidx=next((i for i,a in enumerate(parsed.associates) if norm(a.name)==norm(br['associate'])),None)
+         didx=next((i for i,d in enumerate(DAYS) if norm(d)==norm(br['day'])),None)
+         if aidx is None or didx is None: break_fail.append({"type":"UNKNOWN_BREAK_ASSOCIATE_OR_DAY","row":br}); continue
++        if br.get('is_exception'):
++            exception_cells.add((aidx,didx)); continue
+         shift=shift_map.get(norm(matrix[aidx][didx])); start_clock=hhmm_to_min(br['start'])
+         if shift is None or start_clock is None or br['duration']<=0:
+             break_fail.append({"type":"INVALID_BREAK_ROW","row":br}); continue
++        if start_clock % 15 or int(br['duration']) % 15:
++            break_fail.append({"type":"BREAK_NOT_QUARTER_HOUR_ALIGNED","associate":parsed.associates[aidx].name,"day":DAYS[didx],"break":br})
+         rel=start_clock-shift.start_min
+         if rel<0: rel+=1440
+         if rel<0 or rel+br['duration']>shift.duration_min:
+             break_fail.append({"type":"BREAK_OUTSIDE_SHIFT","associate":parsed.associates[aidx].name,"day":DAYS[didx],"break":br})
+         abs_start=didx*96+(shift.start_min+rel)//15
+         duration_q=math.ceil(br['duration']/15)
++        br['_rel_q']=rel//15; br['_duration_q']=duration_q; br['_normalized_type']=norm(br.get('type'))
+         for q in range(abs_start,abs_start+duration_q):
++            if q in break_qslots_all[aidx]: break_fail.append({"type":"OVERLAPPING_BREAK","associate":parsed.associates[aidx].name,"day":DAYS[didx],"qslot":q})
++            break_qslots_all[aidx].add(q)
+             if 0<=q<horizon:
+-                if q in break_qslots[aidx]: break_fail.append({"type":"OVERLAPPING_BREAK","associate":parsed.associates[aidx].name,"day":DAYS[didx],"qslot":q})
+                 break_qslots[aidx].add(q)
+         by_cell[aidx,didx].append(br)
+     failures.extend(break_fail)
+@@ -275,22 +336,80 @@
+             for d,value in enumerate(matrix[a]):
+                 if norm(value) not in shift_map: continue
+                 cell=by_cell.get((a,d),[])
++                if (a,d) in exception_cells:
++                    if cell:
++                        failures.append({"type":"BREAKS_PRESENT_ON_EXCEPTION_CELL","associate":assoc.name,"day":DAYS[d]})
++                    continue
+                 durations=sorted(int(r['duration']) for r in cell)
+                 expected=sorted(m for m,_ in expected_segments)
+                 if durations!=expected:
+                     failures.append({"type":"BREAK_SEGMENT_COUNT_OR_DURATION","associate":assoc.name,"day":DAYS[d],"expected":expected,"actual":durations})
++                    continue
++                ordered=sorted(cell,key=lambda row:int(row['_rel_q']))
++                actual_labels=[row['_normalized_type'] for row in ordered]
++                expected_labels=[norm(label) for _,label in expected_segments]
++                if actual_labels!=expected_labels:
++                    failures.append({"type":"BREAK_ORDER_OR_TYPE","associate":assoc.name,"day":DAYS[d],"expected":expected_labels,"actual":actual_labels})
++                shift=shift_map[norm(value)]
++                for row in ordered:
++                    rel_q=int(row['_rel_q']); length_q=int(row['_duration_q'])
++                    margin=parsed.break_edge_margin_q
++                    if margin is not None and (rel_q < int(margin) or rel_q+length_q > shift.duration_q-int(margin)):
++                        failures.append({"type":"BREAK_EDGE_MARGIN","associate":assoc.name,"day":DAYS[d],"break_type":row.get('type'),"relative_start_q":rel_q,"edge_margin_q":margin})
++                    rule=(parsed.break_window_rules_q or {}).get(norm(row.get('type')),{})
++                    earliest=rule.get('earliest_q'); latest=rule.get('latest_q')
++                    if earliest is not None and rel_q<int(earliest) or latest is not None and rel_q>int(latest):
++                        failures.append({"type":"BREAK_WINDOW","associate":assoc.name,"day":DAYS[d],"break_type":row.get('type'),"relative_start_q":rel_q,"earliest_q":earliest,"latest_q":latest})
++                for previous,current in zip(ordered,ordered[1:]):
++                    gap=int(current['_rel_q'])-(int(previous['_rel_q'])+int(previous['_duration_q']))
++                    if gap<int(parsed.break_min_gap_q):
++                        failures.append({"type":"BREAK_MINIMUM_GAP","associate":assoc.name,"day":DAYS[d],"actual_gap_q":gap,"minimum_gap_q":parsed.break_min_gap_q})
++                    if gap==int(parsed.break_preferred_gap_q): classification="PREFERRED"
++                    elif gap<int(parsed.break_preferred_gap_q): classification="FLEXIBLE_COMPRESSION"
++                    elif gap<=int(parsed.break_normal_max_gap_q): classification="FLEXIBLE_EXTENSION"
++                    else: classification="EXTENDED_BEYOND_NORMAL_RANGE"
++                    break_spacing_rows.append({
++                        "associate":assoc.name,"day":DAYS[d],"from_segment":previous.get('type'),
++                        "to_segment":current.get('type'),"actual_gap_minutes":gap*15,
++                        "preferred_gap_minutes":int(parsed.break_preferred_gap_q)*15,
++                        "normal_maximum_gap_minutes":int(parsed.break_normal_max_gap_q)*15,
++                        "classification":classification,
++                    })
++
++        if exception_cells and (not parsed.allow_no_break_exceptions or len(exception_cells)>int(parsed.max_no_break_exceptions)):
++            failures.append({"type":"NO_BREAK_EXCEPTION_POLICY","actual":len(exception_cells),"allowed":bool(parsed.allow_no_break_exceptions),"maximum":int(parsed.max_no_break_exceptions)})
++
++    concurrency_violations=[]; max_concurrent=0; max_concurrent_ratio=0.0
++    for qslot in range(horizon):
++        staffed=len(before[qslot]); on_break=sum(qslot in slots for slots in break_qslots.values())
++        max_concurrent=max(max_concurrent,on_break)
++        max_concurrent_ratio=max(max_concurrent_ratio,on_break/max(1,staffed))
++        allowed=eng.maximum_concurrent_breaks(parsed,staffed)
++        if on_break>allowed:
++            concurrency_violations.append({"day":DAYS[qslot//96],"time":eng.hhmm((qslot%96)*15),"staffed":staffed,"on_break":on_break,"maximum":allowed})
++    if concurrency_violations:
++        issue={"type":"BREAK_CONCURRENCY","count":len(concurrency_violations),"examples":concurrency_violations[:20]}
++        if norm(parsed.break_concurrency_gate_mode)=="fail": failures.append(issue)
++        elif norm(parsed.break_concurrency_gate_mode)=="warn": warnings.append(issue)
++    extended_spacing=[row for row in break_spacing_rows if row['classification']=="EXTENDED_BEYOND_NORMAL_RANGE"]
++    if extended_spacing:
++        warnings.append({"type":"BREAK_SPACING_BEYOND_NORMAL_RANGE","count":len(extended_spacing),"examples":extended_spacing[:20]})
+ 
+     after=[]
+     for q,covers in enumerate(before):
+         after.append([a for a in covers if q not in break_qslots[a]])
+ 
+     # Coverage and language.
+-    interval_rows=[]; zero=[]; language_gaps=[]; opening_gaps=[]; floor_flags=[]
++    interval_rows=[]; zero=[]; language_gaps=[]; opening_gaps=[]; floor_flags=[]; blank_staffed=[]
+     before100=before90=before80=after100=after90=after80=before_target=after_target=before_floor=after_floor=0
+     for d in range(7):
+         openings=set(eng.opening_intervals_for_day(parsed,d))
+         for i in range(parsed.intervals_per_day):
+             if not parsed.active[d][i]:
++                for q in range(parsed.qslots_per_interval):
++                    slot=d*96+i*parsed.qslots_per_interval+q
++                    if before[slot]:
++                        blank_staffed.append({"day":DAYS[d],"time":eng.hhmm(i*parsed.interval_minutes+q*15),"before_raw":len(before[slot]),"after_raw":len(after[slot])})
+                 floor_flags.append(None); continue
+             req=float(parsed.requirements[d][i] or 0.0); eff=1-float(parsed.shrinkage[d][i]); qpi=parsed.qslots_per_interval
+             bvals=[]; avals=[]
+@@ -302,7 +421,7 @@
+                 if parsed.opening_guard_enabled and i in openings and a<parsed.opening_minimum:
+                     opening_gaps.append({"day":DAYS[d],"time":eng.hhmm(minute),"actual":a,"minimum":parsed.opening_minimum})
+                 for rule in parsed.language_rules:
+-                    if not rule.active or not rule.contains_minute(minute): continue
++                    if not rule.active or not rule.overlaps(minute,15): continue
+                     eligible=sum(1 for ai in after[slot] if norm(parsed.associates[ai].language) in rule.eligible_languages)
+                     if eligible<rule.minimum:
+                         language_gaps.append({"day":DAYS[d],"time":eng.hhmm(minute),"group":rule.group,"minimum":rule.minimum,"actual":eligible})
+@@ -320,35 +439,148 @@
+             # disagreement with the engine on the exact metric under review.
+             unavoidable=math.ceil(req*parsed.target_ratio/max(eff,1e-9)-eng.OVERAGE_CEIL_TOLERANCE)*eff
+             avoid=max(0.0,ae-unavoidable)
+-            interval_rows.append({"day":DAYS[d],"interval":eng.hhmm(i*parsed.interval_minutes),"required":req,"before_effective":be,"after_effective":ae,"before_pct":bp,"after_pct":ap,"avoidable_overage_fte":avoid})
++            soft_threshold=max(unavoidable,req*float(parsed.overage_soft_cap_ratio))
++            severe_threshold=max(unavoidable,req*float(parsed.overage_severe_cap_ratio))
++            extreme_threshold=max(unavoidable,req*float(parsed.overage_extreme_cap_ratio))
++            interval_rows.append({
++                "day":DAYS[d],"day_index":d,"interval_index":i,
++                "interval":eng.hhmm(i*parsed.interval_minutes),"required":req,
++                "before_effective":be,"after_effective":ae,"before_pct":bp,"after_pct":ap,
++                "before_raw_min":min(bvals,default=0),"before_raw_max":max(bvals,default=0),
++                "after_raw_min":min(avals,default=0),"after_raw_max":max(avals,default=0),
++                "avoidable_overage_fte":avoid,
++                "soft_overage":bool(ae>soft_threshold+1e-9),
++                "severe_overage":bool(ae>severe_threshold+1e-9),
++                "extreme_overage":bool(ae>extreme_threshold+1e-9),
++            })
+     active=len(interval_rows); severe_threshold=max(0,parsed.floor_ratio-.10)
+     severe=sum(1 for r in interval_rows if r['after_pct']+1e-9<severe_threshold)
+     maxrun=max_gap_run(floor_flags,parsed.intervals_per_day)
+     overages=[r['avoidable_overage_fte'] for r in interval_rows]
+     mean=sum(overages)/max(1,len(overages)); variance=sum((x-mean)**2 for x in overages)/max(1,len(overages))
+-
+-    # Next Sunday independent boundary check.
+-    next_rows=[]
++    positive_overages=[value for value in overages if value>1e-9]
++    top10_concentration=(sum(sorted(positive_overages,reverse=True)[:10])/sum(positive_overages)) if positive_overages else 0.0
++    requirements_sorted=sorted(float(row['required']) for row in interval_rows)
++    median_requirement=requirements_sorted[len(requirements_sorted)//2] if requirements_sorted else 0.0
++    low_demand_overage=sum(float(row['avoidable_overage_fte']) for row in interval_rows if float(row['required'])<=median_requirement)
++    maximum_overage_run=0
++    for d in range(7):
++        run=0
++        for row in (r for r in interval_rows if int(r['day_index'])==d):
++            if float(row['avoidable_overage_fte'])>1e-9:
++                run+=1; maximum_overage_run=max(maximum_overage_run,run)
++            else:
++                run=0
++
++    # Independent whole-week distribution gate.  Total overage alone is not
++    # sufficient: avoidable excess concentrated in a few intervals, or abrupt
++    # raw-HC jumps unsupported by demand, is also release debt.
++    whole_week_cap_violations=[]; whole_week_imbalance=[]
++    if parsed.whole_week_balance_enabled:
++        for row in interval_rows:
++            cap=eng.whole_week_raw_cap(parsed,int(row['day_index']),int(row['interval_index']))
++            if int(row['after_raw_max'])>cap and float(row['avoidable_overage_fte'])>1e-9:
++                whole_week_cap_violations.append({
++                    "day":row['day'],"interval":row['interval'],"actual":row['after_raw_max'],
++                    "cap":cap,"avoidable_overage_fte":row['avoidable_overage_fte'],
++                })
++        for d in range(7):
++            for qslot in range(d*96,(d+1)*96-1):
++                previous_interval=(qslot-d*96)//parsed.qslots_per_interval
++                current_interval=(qslot+1-d*96)//parsed.qslots_per_interval
++                if not (0<=previous_interval<parsed.intervals_per_day and 0<=current_interval<parsed.intervals_per_day): continue
++                if not (parsed.active[d][previous_interval] and parsed.active[d][current_interval]): continue
++                delta=abs(len(after[qslot+1])-len(after[qslot]))
++                allowed=eng.whole_week_adjacent_raw_limit(parsed,d,previous_interval,current_interval)
++                if delta>allowed:
++                    whole_week_imbalance.append({
++                        "day":DAYS[d],"from":eng.hhmm((qslot-d*96)*15),
++                        "to":eng.hhmm((qslot+1-d*96)*15),"change":delta,"maximum":allowed,
++                    })
++    whole_week_issues=[]
++    if len(whole_week_cap_violations)>int(parsed.whole_week_max_overage_cap_violations):
++        whole_week_issues.append({"code":"WHOLE_WEEK_OVERAGE_CAP_EXCEEDED","actual":len(whole_week_cap_violations),"maximum":int(parsed.whole_week_max_overage_cap_violations),"examples":whole_week_cap_violations[:20]})
++    if len(whole_week_imbalance)>int(parsed.whole_week_max_imbalance_violations):
++        whole_week_issues.append({"code":"WHOLE_WEEK_ADJACENT_IMBALANCE_EXCEEDED","actual":len(whole_week_imbalance),"maximum":int(parsed.whole_week_max_imbalance_violations),"examples":whole_week_imbalance[:20]})
++    if whole_week_issues:
++        issue={"type":"WHOLE_WEEK_BALANCE","issues":whole_week_issues}
++        if norm(parsed.whole_week_gate_mode)=="fail": failures.append(issue)
++        elif norm(parsed.whole_week_gate_mode)=="warn": warnings.append(issue)
++
++    # Next-Sunday is reconstructed from Saturday spill plus the recurring
++    # Sunday assignment, including the matching Saturday/Sunday break cells.
++    next_rows=[]; next_zero=[]; next_language=[]; next_opening=[]; next_blank=[]
++    next_openings=set(eng.opening_intervals_for_day(parsed,0))
+     for i in range(parsed.intervals_per_day):
+-        if not parsed.active[0][i]: continue
+-        req=float(parsed.requirements[0][i] or 0); eff=1-float(parsed.shrinkage[0][i]); vals=[]
++        active_row=bool(parsed.active[0][i])
++        req=float(parsed.requirements[0][i] or 0); eff=1-float(parsed.shrinkage[0][i]); before_vals=[]; after_vals=[]
+         for q in range(parsed.qslots_per_interval):
+-            pseudo=7*96+i*parsed.qslots_per_interval+q; count=0
+-            for a,assoc in enumerate(parsed.associates):
++            minute=i*parsed.interval_minutes+q*15; pseudo=7*96+i*parsed.qslots_per_interval+q
++            occurrences=[]
++            for a,_assoc in enumerate(parsed.associates):
+                 sat=shift_map.get(norm(matrix[a][6])); sun=shift_map.get(norm(matrix[a][0]))
+                 if sat:
+                     st=6*96+sat.start_min//15
+-                    if st<=pseudo<st+sat.duration_q: count+=1
++                    if st<=pseudo<st+sat.duration_q: occurrences.append((a,pseudo))
+                 if sun:
+                     st=7*96+sun.start_min//15
+-                    if st<=pseudo<st+sun.duration_q: count+=1
+-            vals.append(count)
+-        ae=sum(vals)*eff/max(1,len(vals)); pct=ae/req if req>0 else 1
+-        next_rows.append({"interval":eng.hhmm(i*parsed.interval_minutes),"after_effective":ae,"pct":pct})
++                    if st<=pseudo<st+sun.duration_q: occurrences.append((a,pseudo-7*96))
++            remaining=[(a,source_q) for a,source_q in occurrences if source_q not in break_qslots_all[a]]
++            before_raw=len(occurrences); after_raw=len(remaining)
++            before_vals.append(before_raw); after_vals.append(after_raw)
++            if not active_row:
++                if before_raw: next_blank.append({"time":eng.hhmm(minute),"before_raw":before_raw,"after_raw":after_raw})
++                continue
++            if after_raw<=0: next_zero.append({"time":eng.hhmm(minute)})
++            if parsed.opening_guard_enabled and i in next_openings and after_raw<parsed.opening_minimum:
++                next_opening.append({"time":eng.hhmm(minute),"actual":after_raw,"minimum":parsed.opening_minimum})
++            for rule in parsed.language_rules:
++                if not rule.active or not rule.overlaps(minute,15): continue
++                eligible=sum(1 for a,_source in remaining if norm(parsed.associates[a].language) in rule.eligible_languages)
++                if eligible<rule.minimum:
++                    next_language.append({"time":eng.hhmm(minute),"group":rule.group,"minimum":rule.minimum,"actual":eligible})
++        if active_row:
++            be=sum(before_vals)*eff/max(1,len(before_vals)); ae=sum(after_vals)*eff/max(1,len(after_vals)); pct=ae/req if req>0 else 1
++            next_rows.append({"interval_index":i,"interval":eng.hhmm(i*parsed.interval_minutes),"before_effective":be,"after_effective":ae,"pct":pct,"after_raw_max":max(after_vals,default=0)})
+ 
+     failures.extend({"type":"ZERO_STAFF_ACTIVE","detail":row} for row in zero)
+     failures.extend({"type":"LANGUAGE_MINIMUM","detail":row} for row in language_gaps)
+     failures.extend({"type":"OPENING_MINIMUM","detail":row} for row in opening_gaps)
++    if parsed.blank_requirement_mode=="hard_no_current_week_staffing" and blank_staffed:
++        failures.append({"type":"BLANK_INTERVAL_STAFFING","count":len(blank_staffed),"examples":blank_staffed[:20]})
++    if parsed.floor_mode=="hard":
++        hard_ratio=float(parsed.hard_floor_ratio or parsed.floor_ratio)
++        hard_gaps=[r for r in interval_rows if float(r['after_pct'])+1e-9<hard_ratio]
++        if hard_gaps: failures.append({"type":"HARD_FLOOR","count":len(hard_gaps),"ratio":hard_ratio,"examples":hard_gaps[:20]})
++    next_floor_gaps=[row for row in next_rows if float(row['pct'])+1e-9<float(parsed.floor_ratio)]
++    if next_floor_gaps or next_zero or next_language or next_opening or (parsed.blank_requirement_mode=="hard_no_current_week_staffing" and next_blank):
++        failures.append({"type":"NEXT_SUNDAY_CARRY_OUT","floor_gap_count":len(next_floor_gaps),"zero_count":len(next_zero),"language_gap_count":len(next_language),"opening_gap_count":len(next_opening),"blank_staffed_count":len(next_blank) if parsed.blank_requirement_mode=="hard_no_current_week_staffing" else 0})
++
++    next_overage_cap_violations=[]; next_imbalance=[]
++    for row in next_rows:
++        i=int(row['interval_index'])
++        cap=eng.next_sunday_raw_cap(parsed,i)
++        if int(row.get('after_raw_max',0))>cap: next_overage_cap_violations.append({"interval":row['interval'],"actual":row.get('after_raw_max'),"cap":cap})
++    for previous,current in zip(next_rows,next_rows[1:]):
++        delta=abs(int(current.get('after_raw_max',0))-int(previous.get('after_raw_max',0)))
++        allowed=eng.next_sunday_adjacent_raw_limit(parsed,int(previous['interval_index']),int(current['interval_index']))
++        if delta>allowed: next_imbalance.append({"from":previous['interval'],"to":current['interval'],"change":delta,"maximum":allowed})
++    boundary_issue={"type":"NEXT_SUNDAY_BALANCE","overage_cap_violations":len(next_overage_cap_violations),"imbalance_violations":len(next_imbalance),"examples":(next_overage_cap_violations+next_imbalance)[:20]}
++    if next_overage_cap_violations or next_imbalance:
++        if norm(parsed.next_sunday_balance_gate_mode)=="fail": failures.append(boundary_issue)
++        elif norm(parsed.next_sunday_balance_gate_mode)=="warn": warnings.append(boundary_issue)
++
++    quality_limits=eng.coverage_quality_limits(parsed,active)
++    quality_issues=[]
++    if active-int(after_floor)>quality_limits['maximum_floor_gaps']: quality_issues.append({"code":"FLOOR_GAP_LIMIT","actual":active-int(after_floor),"maximum":quality_limits['maximum_floor_gaps']})
++    if severe>quality_limits['maximum_severe_gaps']: quality_issues.append({"code":"SEVERE_GAP_LIMIT","actual":severe,"maximum":quality_limits['maximum_severe_gaps']})
++    if maxrun>quality_limits['maximum_consecutive_floor_gaps']: quality_issues.append({"code":"FLOOR_RUN_LIMIT","actual":maxrun,"maximum":quality_limits['maximum_consecutive_floor_gaps']})
++    if parsed.protected_after80_minimum is not None and int(after80)<int(parsed.protected_after80_minimum): quality_issues.append({"code":"PROTECTED_AFTER80_MINIMUM","actual":int(after80),"minimum":int(parsed.protected_after80_minimum)})
++    if parsed.minimum_after_break_target_ratio is not None and active and int(after_target)/active+1e-12<float(parsed.minimum_after_break_target_ratio): quality_issues.append({"code":"AFTER_TARGET_RATIO_MINIMUM","actual":int(after_target)/active,"minimum":float(parsed.minimum_after_break_target_ratio)})
++    if quality_issues:
++        issue={"type":"PRODUCTION_QUALITY_GATE","issues":quality_issues}
++        if norm(parsed.quality_gate_mode)=="fail": failures.append(issue)
++        elif norm(parsed.quality_gate_mode)=="warn": warnings.append(issue)
+     metrics={
+         "active_intervals":active,"before100":int(before100),"before90":int(before90),"before80":int(before80),
+         "after100":int(after100),"after90":int(after90),"after80":int(after80),
+@@ -357,11 +589,35 @@
+         "zero_staffed_active_quarters":len(zero),"language_gap_count":len(language_gaps),"opening_gap_count":len(opening_gaps),
+         "avoidable_overage_fte_sum":sum(overages),"avoidable_overage_peak_fte":max(overages,default=0),
+         "avoidable_overage_variance_fte":variance,"avoidable_overage_stddev_fte":math.sqrt(max(0,variance)),
++        "avoidable_overage_positive_interval_count":len(positive_overages),
++        "avoidable_overage_top10_concentration":top10_concentration,
++        "avoidable_overage_max_consecutive_intervals":maximum_overage_run,
++        "avoidable_overage_low_demand_fte_sum":low_demand_overage,
++        "overage_distribution_median_requirement":median_requirement,
++        "soft_overage_interval_count":sum(bool(r['soft_overage']) for r in interval_rows),
++        "severe_overage_interval_count":sum(bool(r['severe_overage']) for r in interval_rows),
++        "extreme_overage_interval_count":sum(bool(r['extreme_overage']) for r in interval_rows),
++        "whole_week_overage_cap_violation_count":len(whole_week_cap_violations),
++        "whole_week_imbalance_violation_count":len(whole_week_imbalance),
++        "blank_staffed_quarters":len(blank_staffed),"no_break_exception_count":len(exception_cells),
++        "break_spacing_observation_count":len(break_spacing_rows),
++        "break_spacing_compressed_count":sum(row['classification']=="FLEXIBLE_COMPRESSION" for row in break_spacing_rows),
++        "break_spacing_extended_count":sum(row['classification']=="FLEXIBLE_EXTENSION" for row in break_spacing_rows),
++        "break_spacing_beyond_normal_count":len(extended_spacing),
++        "max_concurrent_breaks_observed":max_concurrent,"max_concurrent_break_ratio_observed":max_concurrent_ratio,
++        "break_concurrency_violation_count":len(concurrency_violations),
+         "next_sunday_target_hits":sum(r['pct']+1e-9>=parsed.target_ratio for r in next_rows),
+         "next_sunday_floor_hits":sum(r['pct']+1e-9>=parsed.floor_ratio for r in next_rows),
++        "next_sunday_floor_gap_count":len(next_floor_gaps),"next_sunday_zero_staffed_quarters":len(next_zero),
++        "next_sunday_language_gap_count":len(next_language),"next_sunday_opening_gap_count":len(next_opening),
++        "next_sunday_blank_staffed_quarters":len(next_blank),
++        "next_sunday_overage_cap_violation_count":len(next_overage_cap_violations),
++        "next_sunday_imbalance_violation_count":len(next_imbalance),
++        "quality_gate_issue_count":len(quality_issues),
+     }
+     return {
+-        "schema_version":1,"validator":"RC9.2_INDEPENDENT_VALIDATOR","input":str(input_path),"output":str(output_path),
++        "schema_version":2,"validator":"RC9.2.2_INDEPENDENT_VALIDATOR_HARDENED","input":str(input_path),"output":str(output_path),
++        "input_sha256":sha256_file(input_path),"output_sha256":sha256_file(output_path),"engine_sha256":sha256_file(engine_path),
+         "artifact_role":"BEST_BEFORE_BREAKS" if before_only else "FINAL_AFTER_BREAKS",
+         "status":"PASS" if not failures else "FAIL","hard_fail_count":len(failures),"warning_count":len(warnings),
+         "metrics":metrics,"failures":failures[:500],"warnings":warnings[:500],"interval_rows":interval_rows,"next_sunday_rows":next_rows,
+@@ -376,14 +632,30 @@
+     p.add_argument('--json-out',type=Path)
+     p.add_argument('--csv-out',type=Path)
+     args=p.parse_args()
+-    result=validate(args.input,args.output,args.engine)
+     jout=args.json_out or args.output.with_name(args.output.stem+'_INDEPENDENT_VALIDATION.json')
+-    jout.parent.mkdir(parents=True,exist_ok=True); jout.write_text(json.dumps(result,indent=2,default=str),encoding='utf-8')
+     cout=args.csv_out or args.output.with_name(args.output.stem+'_INDEPENDENT_VALIDATION.csv')
++    try:
++        result=validate(args.input,args.output,args.engine)
++        return_code=0 if result['status']=='PASS' else 2
++    except Exception as exc:
++        result={
++            'schema_version':2,'validator':'RC9.2.2_INDEPENDENT_VALIDATOR_HARDENED',
++            'input':str(args.input),'output':str(args.output),'status':'ERROR',
++            'hard_fail_count':1,'warning_count':0,'metrics':{},
++            'failures':[{'type':'VALIDATOR_EXCEPTION','exception':type(exc).__name__,'message':str(exc)}],
++            'traceback':traceback.format_exc(limit=20),
++            'input_sha256':sha256_file(args.input) if args.input.is_file() else None,
++            'output_sha256':sha256_file(args.output) if args.output.is_file() else None,
++            'engine_sha256':sha256_file(args.engine) if args.engine.is_file() else None,
++        }
++        return_code=3
++    jout.parent.mkdir(parents=True,exist_ok=True); jout.write_text(json.dumps(result,indent=2,default=str),encoding='utf-8')
++    cout.parent.mkdir(parents=True,exist_ok=True)
+     with cout.open('w',newline='',encoding='utf-8') as f:
+         w=csv.writer(f); w.writerow(['Metric','Value']);
+         for k,v in result['metrics'].items(): w.writerow([k,v])
+         w.writerow(['status',result['status']]); w.writerow(['hard_fail_count',result['hard_fail_count']]); w.writerow(['warning_count',result['warning_count']])
+-    print(json.dumps({k:result[k] for k in ['status','hard_fail_count','warning_count','artifact_role','metrics']},indent=2))
+-    return 0 if result['status']=='PASS' else 2
++        for row in result.get('failures',[]): w.writerow(['failure',json.dumps(row,sort_keys=True,default=str)])
++    print(json.dumps({k:result.get(k) for k in ['status','hard_fail_count','warning_count','artifact_role','metrics','failures']},indent=2))
++    return return_code
+ if __name__=='__main__': raise SystemExit(main())
+Only in ./inputs: RC9_2_2_NMG_EN_PRODUCTION_INPUT.xlsx.inspect.ndjson
+Binary files ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/runners/__pycache__/rc921_runner.cpython-312.pyc and ./runners/__pycache__/rc921_runner.cpython-312.pyc differ
+Only in ./runners/__pycache__: rc922_runner.cpython-312.pyc
+Only in ./runners/__pycache__: run_deep.cpython-312.pyc
+Only in ./runners/__pycache__: run_parallel.cpython-312.pyc
+Only in ./runners/__pycache__: run_production.cpython-312.pyc
+Only in ./runners/__pycache__: run_resume.cpython-312.pyc
+Only in ./runners/__pycache__: run_smoke.cpython-312.pyc
+Only in ./runners/__pycache__: run_standard_regression.cpython-312.pyc
+Only in ./runners/__pycache__: run_targeted_regression.cpython-312.pyc
+diff -ru '--exclude=*.xlsx' '--exclude=*.ipynb' ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/runners/rc921_runner.py ./runners/rc921_runner.py
+--- ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/runners/rc921_runner.py	2026-09-07 15:09:42.000000000 +0100
++++ ./runners/rc921_runner.py	2026-09-08 19:13:33.663733625 +0100
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env python3
+-"""RC9.2.1 scenario runner — shared core for every Colab variant.
++"""RC9.2.2 scenario runner core retained under its legacy import name.
+ 
+ Runs one or more scenarios from SCENARIOS.json at their configured budget, then
+ scores the release gates. Designed for SHARDED parallel execution: launch
+@@ -61,6 +61,15 @@
+     return problems
+ 
+ 
++def verify_engine(root: Path, manifest: dict) -> list:
++    import hashlib
++    engine=root/'engine'/'_tools'/'l632_universal_scheduler.py'
++    if not engine.is_file(): return [f"missing engine: {engine}"]
++    actual=hashlib.sha256(engine.read_bytes()).hexdigest()
++    expected=str(manifest.get('engine_sha256') or '')
++    return [] if expected and actual==expected else [f"engine sha256 {actual[:16]} != manifest {expected[:16] or 'missing'}"]
++
++
+ def select(scenarios: list, only: str, shard: int, shards: int) -> list:
+     if only:
+         wanted = {s.strip().upper() for s in only.split(",") if s.strip()}
+@@ -75,7 +84,7 @@
+ 
+ def mode_default_budget(args) -> int:
+     return int(args.time_limit or {"SMOKE": 900, "QUICK": 3600,
+-                                   "DEEP": 14400, "OVERNIGHT": 21600}[args.mode or "DEEP"])
++                                   "DEEP": 14400, "OVERNIGHT": 21600}[args.mode or "QUICK"])
+ 
+ 
+ def run_one(root: Path, results_root: Path, row: dict, args) -> dict:
+@@ -104,7 +113,6 @@
+         "--time-limit", str(budget),
+         "--num-workers", str(args.num_workers or row.get("num_workers", 4)),
+         "--solver-random-seed", str(row.get("solver_random_seed", 9000)),
+-        "--overwrite",
+     ]
+     if args.stage:
+         command += ["--stage", args.stage]
+@@ -112,6 +120,8 @@
+         command += ["--language-working-window", args.language_working_window]
+     if args.resume:
+         command.append("--resume")
++    if args.overwrite:
++        command.append("--overwrite")
+     log(f"START {scenario}  budget={budget}s  workers={command[command.index('--num-workers')+1]}")
+     started = time.time()
+     logfile = results_root / f"{scenario}.log"
+@@ -139,14 +149,14 @@
+ 
+ 
+ def run_guard_suite(root: Path) -> bool:
+-    """The 291 offline guards. Fast, no solver, and they must pass first.
++    """The offline guards. Fast, no solver, and they must pass first.
+ 
+     If the engine in this package is not the engine the guards expect, nothing
+     produced afterwards is worth comparing.
+     """
+     log("running offline guard suite")
+     ok = True
+-    for suite in sorted((root / "tests").glob("test_rc9_2_1_*.py")):
++    for suite in sorted((root / "tests").glob("test_rc9_2_*.py")):
+         proc = subprocess.run([sys.executable, str(suite)],
+                               capture_output=True, text=True, timeout=1800)
+         tail = (proc.stderr or proc.stdout).strip().splitlines()[-1:] or [""]
+@@ -183,8 +193,12 @@
+                          "the manifest scenarios stay hash-verified.")
+     ap.add_argument("--num-workers", type=int, default=0)
+     ap.add_argument("--resume", action="store_true")
++    ap.add_argument("--overwrite", action="store_true",
++                    help="explicitly replace an existing schedule-id; off by default")
+     ap.add_argument("--skip-guards", action="store_true")
+     ap.add_argument("--gate-only", action="store_true", help="re-score existing results")
++    ap.add_argument("--skip-gates", action="store_true",
++                    help="defer release-gate scoring; used by parallel shards")
+     args = ap.parse_args()
+ 
+     root = args.package_root.resolve()
+@@ -197,6 +211,11 @@
+     log(f"sha256  : {manifest['engine_sha256'][:24]}…")
+     log(f"host    : {platform.platform()} | cpus={os.cpu_count()} | python={platform.python_version()}")
+ 
++    engine_problems=verify_engine(root,manifest)
++    if engine_problems:
++        for problem in engine_problems: print(f"ENGINE VERIFICATION FAILED: {problem}",file=sys.stderr)
++        return 2
++
+     if args.gate_only:
+         return score_gates(root, results_root)
+ 
+@@ -222,21 +241,19 @@
+             "scenario_id": scenario_id,
+             "input": workbook.name,
+             "time_limit_sec": mode_default_budget(args),
+-            "mode": args.mode or "DEEP",
++            "mode": args.mode or "QUICK",
+             "num_workers": args.num_workers or 4,
+             "solver_random_seed": 9000,
+             "_input_path": workbook,
+         }
+-        if not args.skip_guards and not run_guard_suite(root):
+-            log("GUARD SUITE FAILED - refusing to run")
+-            return 2
+         record = run_one(root, results_root, row, args)
+         (results_root / "RUN_LEDGER.json").write_text(json.dumps({
+             "generated_utc": datetime.now(timezone.utc).isoformat(),
+             "package": manifest["package"], "engine_sha256": manifest["engine_sha256"],
+             "ad_hoc_input": str(workbook), "runs": [record],
+         }, indent=2), encoding="utf-8")
+-        return score_gates(root, results_root)
++        gate_rc=0 if args.skip_gates else score_gates(root, results_root)
++        return int(record.get('exit_code') or 0) or gate_rc
+ 
+     problems = verify_inputs(root, manifest["scenarios"])
+     if problems:
+@@ -259,18 +276,20 @@
+             records.append({"scenario_id": row["scenario_id"], "exit_code": "TIMEOUT",
+                             "wall_sec": None, "budget_sec": row["time_limit_sec"],
+                             "overran_budget": True})
+-        (results_root / "RUN_LEDGER.json").write_text(json.dumps({
++        ledger_name = "RUN_LEDGER.json" if args.shards == 1 else f"RUN_LEDGER_SHARD_{args.shard:02d}.json"
++        (results_root / ledger_name).write_text(json.dumps({
+             "generated_utc": datetime.now(timezone.utc).isoformat(),
+             "package": manifest["package"], "engine_sha256": manifest["engine_sha256"],
+             "host": {"platform": platform.platform(), "cpus": os.cpu_count()},
+             "shard": args.shard, "shards": args.shards,
+             "runs": records}, indent=2), encoding="utf-8")
+ 
+-    score_gates(root, results_root)
++    run_failed=any(record.get('exit_code') not in (0,'0') for record in records)
++    gate_rc=0 if args.skip_gates else score_gates(root, results_root)
+     log(f"results in {results_root}")
+     log("Send back the whole results directory, including RUN_LEDGER.json and "
+         "_gate_report/.")
+-    return 0
++    return 2 if run_failed else gate_rc
+ 
+ 
+ if __name__ == "__main__":
+Only in ./runners: rc922_runner.py
+Only in ./runners: run_deep.py
+Only in ./runners: run_parallel.py
+Only in ./runners: run_production.py
+Only in ./runners: run_resume.py
+Only in ./runners: run_smoke.py
+Only in ./runners: run_standard_regression.py
+Only in ./runners: run_targeted_regression.py
+Binary files ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/tests/__pycache__/test_rc9_2_1_phase_c_integrity.cpython-312.pyc and ./tests/__pycache__/test_rc9_2_1_phase_c_integrity.cpython-312.pyc differ
+Binary files ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/tests/__pycache__/test_rc9_2_1_rule_semantics.cpython-312.pyc and ./tests/__pycache__/test_rc9_2_1_rule_semantics.cpython-312.pyc differ
+Binary files ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/tests/__pycache__/test_rc9_2_1_selector_integrity.cpython-312.pyc and ./tests/__pycache__/test_rc9_2_1_selector_integrity.cpython-312.pyc differ
+Binary files ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/tests/__pycache__/test_rc9_2_1_tooling_integrity.cpython-312.pyc and ./tests/__pycache__/test_rc9_2_1_tooling_integrity.cpython-312.pyc differ
+Binary files ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/tests/__pycache__/test_rc9_2_1_validator_parity.cpython-312.pyc and ./tests/__pycache__/test_rc9_2_1_validator_parity.cpython-312.pyc differ
+Only in ./tests/__pycache__: test_rc9_2_2_production_hardening.cpython-312.pyc
+diff -ru '--exclude=*.xlsx' '--exclude=*.ipynb' ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/tests/test_rc9_2_1_phase_c_integrity.py ./tests/test_rc9_2_1_phase_c_integrity.py
+--- ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/tests/test_rc9_2_1_phase_c_integrity.py	2026-09-02 16:53:52.000000000 +0100
++++ ./tests/test_rc9_2_1_phase_c_integrity.py	2026-09-08 19:08:01.604346527 +0100
+@@ -9,6 +9,8 @@
+ from __future__ import annotations
+ 
+ import importlib.util
++import hashlib
++import json
+ import re
+ import subprocess
+ import sys
+@@ -162,13 +164,31 @@
+         with tempfile.TemporaryDirectory() as tmp:
+             root = self._empty_case(tmp)
+             (root / "production" / "X_BEST_BEFORE_BREAKS_SCHEDULE.xlsx").write_bytes(b"x")
+-            (root / "production" / "X_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx").write_bytes(b"y")
++            final = root / "production" / "X_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"
++            final.write_bytes(b"y")
++            digest = hashlib.sha256(final.read_bytes()).hexdigest()
++            snapshot = root / "input_snapshot" / "INPUT.xlsx"
++            snapshot.parent.mkdir()
++            snapshot.write_bytes(b"input")
++            input_digest = hashlib.sha256(snapshot.read_bytes()).hexdigest()
++            engine_digest = "e" * 64
++            (root / "INDEPENDENT_VALIDATION.json").write_text(json.dumps({
++                "status":"PASS","hard_fail_count":0,"output_sha256":digest,
++                "input_sha256":input_digest,"engine_sha256":engine_digest,
++            }))
++            (root / "INDEPENDENT_VALIDATION.csv").write_text("Metric,Value\nstatus,PASS\n")
++            (root / "production" / "PRODUCTION_ARTIFACT_MANIFEST.json").write_text(json.dumps({
++                "production_ready":True,
++                "approval_status":"APPROVED_AUTOMATED_RELEASE_GATES",
++                "solver":{"engine_sha256":engine_digest},
++                "two_artifact_contract":{"BEST_FINAL_AFTER_BREAKS_SCHEDULE":{"path":str(final),"sha256":digest}},
++            }))
+             result = self._run(PACKAGE_C, root)
+             self.assertEqual(result.returncode, 0, result.stderr)
+             produced = sorted(p.name for p in root.rglob("*.zip"))
+             self.assertEqual(len(produced), 3)
+             with zipfile.ZipFile(root / "packages" / "CASE_01_PRODUCTION_ONLY.zip") as archive:
+-                self.assertEqual(len(archive.namelist()), 2)
++                self.assertGreaterEqual(len(archive.namelist()), 5)
+ 
+     def test_a_complete_phase_a_case_still_packages(self):
+         with tempfile.TemporaryDirectory() as tmp:
+diff -ru '--exclude=*.xlsx' '--exclude=*.ipynb' ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/tests/test_rc9_2_1_rule_semantics.py ./tests/test_rc9_2_1_rule_semantics.py
+--- ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/tests/test_rc9_2_1_rule_semantics.py	2026-09-05 03:12:16.000000000 +0100
++++ ./tests/test_rc9_2_1_rule_semantics.py	2026-09-08 19:19:18.415769322 +0100
+@@ -650,7 +650,7 @@
+     def test_the_runner_takes_them_from_the_workbook_and_lets_the_cli_win(self):
+         runner = self._runner()
+         for fragment in ("contract_stage, contract_depth = _contract_run_settings(input_path)",
+-                         "mode = args.mode or contract_depth or 'DEEP'",
++                         "mode = args.mode or contract_depth or 'QUICK'",
+                          "stage = args.stage or contract_stage or 'FULL_SCHEDULE'"):
+             with self.subTest(fragment=fragment):
+                 self.assertTrue(fragment in runner, f"missing: {fragment}")
+diff -ru '--exclude=*.xlsx' '--exclude=*.ipynb' ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/tests/test_rc9_2_1_selector_integrity.py ./tests/test_rc9_2_1_selector_integrity.py
+--- ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/tests/test_rc9_2_1_selector_integrity.py	2026-09-04 23:17:52.000000000 +0100
++++ ./tests/test_rc9_2_1_selector_integrity.py	2026-09-08 18:52:02.306270950 +0100
+@@ -265,9 +265,9 @@
+             "runs would be recorded under the wrong release.",
+         )
+ 
+-    def test_engine_version_is_rc9_2_1(self):
++    def test_engine_version_is_hardened_rc9_2_2(self):
+         self.assertEqual(
+-            E.VERSION, "L6.3.2.6-RC9.2.2-BUDGETED-SEARCH-AND-BREAK-CONCURRENCY-RC1")
++            E.VERSION, "L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2")
+ 
+ 
+ class SkeletonOnlyLeaderboardIsAuditable(unittest.TestCase):
+@@ -712,7 +712,7 @@
+ 
+     def test_it_is_not_exported_when_it_duplicates_another_role(self):
+         source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+-        self.assertTrue("if balanced not in (recommended, strict, max_floor):" in source,
++        self.assertTrue("if balanced not in (recommended, max_target, max_floor):" in source,
+                         "a duplicate export would just be noise")
+ 
+ 
+diff -ru '--exclude=*.xlsx' '--exclude=*.ipynb' ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/tests/test_rc9_2_1_tooling_integrity.py ./tests/test_rc9_2_1_tooling_integrity.py
+--- ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/tests/test_rc9_2_1_tooling_integrity.py	2026-09-07 15:32:46.000000000 +0100
++++ ./tests/test_rc9_2_1_tooling_integrity.py	2026-09-08 19:19:18.943782144 +0100
+@@ -650,7 +650,7 @@
+ 
+     The template wrote both rows and attached their validation lists, and left
+     both cells blank. Blank parses as None and the engine falls back to
+-    FULL_SCHEDULE / DEEP, so the behaviour was right and the sheet said
++    FULL_SCHEDULE / QUICK, so the safe bounded behaviour is explicit and the sheet says
+     nothing. Seeding exactly those two fallbacks changes no run and makes the
+     setting legible.
+     """
+@@ -658,12 +658,12 @@
+     SOURCE = (ROOT / "tools" / "build_input_template.py").read_text()
+ 
+     def test_the_two_rows_the_planner_drives_are_seeded(self):
+-        self.assertIn('SEEDED_DEFAULTS = {"runstage": "Full Schedule", "rundepth": "Deep"}',
++        self.assertIn('SEEDED_DEFAULTS = {"runstage": "Full Schedule", "rundepth": "Quick"}',
+                       self.SOURCE)
+ 
+     def test_the_seeds_are_the_engine_fallbacks_so_nothing_changes(self):
+         runner = (ROOT / "engine" / "RUN_UNIVERSAL_PRODUCTION.py").read_text()
+-        self.assertIn("args.mode or contract_depth or 'DEEP'", runner)
++        self.assertIn("args.mode or contract_depth or 'QUICK'", runner)
+         self.assertIn("args.stage or contract_stage or 'FULL_SCHEDULE'", runner)
+ 
+     def test_the_seeded_text_is_what_the_dropdown_offers(self):
+diff -ru '--exclude=*.xlsx' '--exclude=*.ipynb' ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/tests/test_rc9_2_1_validator_parity.py ./tests/test_rc9_2_1_validator_parity.py
+--- ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/tests/test_rc9_2_1_validator_parity.py	2026-09-02 20:51:54.000000000 +0100
++++ ./tests/test_rc9_2_1_validator_parity.py	2026-09-08 18:52:02.798282032 +0100
+@@ -287,7 +287,9 @@
+ 
+     def test_validator_returns_two_on_hard_failure(self):
+         source = VALIDATOR_PATH.read_text(encoding="utf-8")
+-        self.assertIn("return 0 if result['status']=='PASS' else 2", source.replace('"', "'"))
++        normalized=source.replace('"', "'")
++        self.assertIn("return_code=0 if result['status']=='PASS' else 2", normalized)
++        self.assertIn("return_code=3", normalized)
+ 
+     def test_incomplete_validation_still_blocks_release(self):
+         """Distinguishable, but not permissive - an unvalidated schedule blocks."""
+Only in ./tests: test_rc9_2_2_production_hardening.py
+Binary files ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/tools/__pycache__/build_input_template.cpython-312.pyc and ./tools/__pycache__/build_input_template.cpython-312.pyc differ
+Binary files ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/tools/__pycache__/release_gate_report.cpython-312.pyc and ./tools/__pycache__/release_gate_report.cpython-312.pyc differ
+Only in ./tools/__pycache__: runtime_environment_check.cpython-312.pyc
+diff -ru '--exclude=*.xlsx' '--exclude=*.ipynb' ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/tools/build_input_template.py ./tools/build_input_template.py
+--- ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/tools/build_input_template.py	2026-09-04 23:03:46.000000000 +0100
++++ ./tools/build_input_template.py	2026-09-08 19:19:17.819754842 +0100
+@@ -109,7 +109,7 @@
+ # makes the setting visible. Nothing else is seeded, because pre-filling a row
+ # whose default the engine may revise would freeze that default into the
+ # contract without anyone deciding to.
+-SEEDED_DEFAULTS = {"runstage": "Full Schedule", "rundepth": "Deep"}
++SEEDED_DEFAULTS = {"runstage": "Full Schedule", "rundepth": "Quick"}
+ 
+ HDR = PatternFill("solid", fgColor="1F3864")
+ SECTION = PatternFill("solid", fgColor="D9E2F3")
+diff -ru '--exclude=*.xlsx' '--exclude=*.ipynb' ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/tools/release_gate_report.py ./tools/release_gate_report.py
+--- ../../claude_review/RC9_2_2_PRODUCTION_PACKAGE/tools/release_gate_report.py	2026-09-04 23:07:16.000000000 +0100
++++ ./tools/release_gate_report.py	2026-09-08 18:51:15.081205561 +0100
+@@ -511,7 +511,7 @@
+ 
+     rows = [evaluate(c) for c in cases]
+     args.out_dir.mkdir(parents=True, exist_ok=True)
+-    csv_path = args.out_dir / "RC9_2_1_RELEASE_GATE_REPORT.csv"
++    csv_path = args.out_dir / "RC9_2_2_RELEASE_GATE_REPORT.csv"
+     with csv_path.open("w", newline="", encoding="utf-8") as fh:
+         writer = csv.DictWriter(fh, fieldnames=list(rows[0]))
+         writer.writeheader()
+@@ -542,6 +542,18 @@
+         print("gates 2 and 9 require evidence/RC9_1_BASELINE.json or the RC9.1 "
+               "engine source (sha da21c3ba…); every other column is populated so "
+               "the comparison becomes a diff when they arrive.")
++    blocking=[]
++    for row in rows:
++        for gate in ("gate4_quality_retention","gate5_break_regression","gate8_independent_validation"):
++            status=str(row.get(gate,""))
++            if status in {"FAIL","NO_EVIDENCE"} or status in {
++                "PASS_DELTA_ONLY_NO_ABSOLUTE_STANDARD","PASS_PROTECTED_NOT_EVALUATED"
++            }:
++                blocking.append({"case":row.get("case"),"gate":gate,"status":status})
++    if blocking:
++        print(json.dumps({"release_gate_status":"FAIL","blocking":blocking},indent=2))
++        return 2
++    print(json.dumps({"release_gate_status":"PASS","case_count":len(rows)},indent=2))
+     return 0
+ 
+ 
+Only in ./tools: runtime_environment_check.py

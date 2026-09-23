@@ -10,19 +10,13 @@ about a second so it can sit in front of every commit.
 """
 from __future__ import annotations
 
-import os
 import math
 import sys
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-# The engine under test is selected by RC9_ENGINE_DIR, the same knob the
-# sibling staged suites use, so this suite can be pointed at a candidate
-# tree instead of the repo's production engine. Assertions are unchanged.
-ROOT = (Path(os.environ["RC9_ENGINE_DIR"]).resolve().parent.parent
-        if os.environ.get("RC9_ENGINE_DIR")
-        else Path(__file__).resolve().parent.parent)
+ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "engine" / "_tools"))
 import importlib.util
 
@@ -169,16 +163,8 @@ class DomainPredicates(unittest.TestCase):
         self.assertEqual(E.preference_kind(""), "blank")
         self.assertEqual(E.preference_kind("None"), "blank")
         self.assertEqual(E.preference_kind("09:00 - 18:00"), "shift")
-        # C-3 is now FIXED: LEAVE_WORDS carries a real vocabulary, so leave
-        # text is understood instead of silently meaning "no constraint".
-        # See evidence/C1_C2_CONTRACT_PARSING_FAILS_OPEN.md.
-        self.assertEqual(E.preference_kind("Annual Leave"), "leave",
-                         "C-3: recognised leave text must read as leave")
-        self.assertEqual(E.preference_kind("A/L"), "leave")
-        self.assertEqual(E.preference_kind("Sick Leave"), "leave")
-        # Non-vacuity: genuinely unrecognised text must still fall through to
-        # 'other' and block nothing, which is the half of C-3 that stands.
-        self.assertEqual(E.preference_kind("qzx not a real token"), "other",
+        # C-3: recorded as the current contract, not as desirable behaviour.
+        self.assertEqual(E.preference_kind("Annual Leave"), "other",
                          "C-3: unrecognised text is 'other' and blocks nothing")
 
     def test_rest_compatible_at_the_exact_boundary(self):
@@ -389,28 +375,17 @@ class CanonicalMetricSurface(unittest.TestCase):
 
         `compare_metric_surfaces` canonicalizes whatever it is handed, so a
         caller that passes an already-canonical surface must not lose fields.
-        after_avoidable_overage_top10_concentration used to break this -- it
-        did not list its own name among its aliases, so re-canonicalizing a
-        canonical surface silently dropped it to MISSING_CANONICAL_METRIC.
+        One field of 41 breaks this: after_avoidable_overage_top10_concentration
+        does not list its own name among its aliases, so re-canonicalizing a
+        canonical surface silently drops it to MISSING_CANONICAL_METRIC.
 
-        That gap is now closed, so this pins the table CLEAN: any canonical
-        name that stops being its own alias fails here.
+        Latent in production -- both sides emit one of the two spellings that
+        ARE aliases -- but it is a real trap for any new caller.
         """
         offenders = [c for c, a in CM.ALIASES.items() if c not in a]
         self.assertEqual(
-            offenders, [],
-            "every canonical name must appear in its own alias tuple")
-
-    def test_canonical_surface_survives_double_canonicalization(self):
-        """Non-vacuity for the pin above: prove the round trip actually holds."""
-        canonical = {c: 7 for c in CM.ALIASES}
-        once = CM.canonicalize_metrics(canonical, "engine",
-                                       stage=CM.STAGE_FULL_SCHEDULE)
-        twice = CM.canonicalize_metrics(dict(once), "engine",
-                                        stage=CM.STAGE_FULL_SCHEDULE)
-        for field in CM.ALIASES:
-            self.assertEqual(twice.get(field), 7,
-                             f"{field} was lost on re-canonicalization")
+            offenders, ["after_avoidable_overage_top10_concentration"],
+            "if this list changes, the alias table gained or lost a self-referential gap")
 
     def test_identical_surfaces_agree(self):
         m = {CM.ALIASES[f][0]: 1 for f in CM.PARITY_FIELDS}

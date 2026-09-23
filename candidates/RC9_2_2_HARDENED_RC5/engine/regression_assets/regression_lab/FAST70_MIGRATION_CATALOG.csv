@@ -1,0 +1,71 @@
+id,name,category,interval_minutes,expected_outcome,rules_covered,migration_note,builder_kind,fresh_solve_required,evidence_class
+T01,SAKS 30-min reference contract,reference,30,PASS,roster|30min|target90|breaks,known historical mapping,base30,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T02,SAKS Copy 60-min reference contract,reference,60,PASS,roster|60min|target90|breaks,known historical mapping,base60,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T03,GDI language-window reference,language,60,EXPECTED_INFEASIBLE,language|tight_capacity,Migrated language roster cannot cover both non-overlapping window edges; expected infeasible validates diagnostics.,language_tight,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T04,NMG no-language reference,reference,30,PASS,30min|no_language,migrated synthetic equivalent,base30,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T05,Overnight demand and shift,overnight,60,PASS,overnight|day_tail,migrated synthetic equivalent,overnight,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T06,Cyclic Sunday previous-Saturday carryover,cyclic_boundary,60,PASS,cyclic_sunday|previous_saturday,migrated synthetic equivalent,cyclic,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T07,Weekend-only operation,closed_day,60,PASS,closed_days|weekend_only,migrated synthetic equivalent,weekend_only,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T08,Low-demand overstaff risk,overage,60,PASS,overage|low_demand,known historical mapping,low_demand,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T09,Capacity infeasible 60-min,capacity,60,EXPECTED_INFEASIBLE,capacity|hard_floor,known historical mapping,capacity_infeasible,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T10,Midday single peak,demand_shape,60,PASS,midday_peak,migrated synthetic equivalent,midday_peak,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T11,Two separated peaks,demand_shape,60,PASS,two_peaks|overage,migrated synthetic equivalent,two_peaks,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T12,Sparse demand islands,blank_bridge,60,PASS,sparse|blank_bridge,migrated synthetic equivalent,sparse,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T13,High late tail,day_tail,60,PASS,late_tail|overnight,migrated synthetic equivalent,late_tail,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T14,Early opening demand,opening,60,PASS,opening_guard,migrated synthetic equivalent,opening_valid,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T15,Single closed weekday,closed_day,60,PASS,closed_day,migrated synthetic equivalent,closed_day,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T16,Closed all week,closed_day,60,EXPECTED_CONTRACT_FAIL,no_active_demand,known historical mapping,closed_all_week,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T17,Alternating day/night demand,demand_shape,60,PASS,shift_variety|rest,migrated synthetic equivalent,alternating,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T18,Weekday day and weekend night,overnight,60,PASS,overnight|weekend|rest,known historical mapping,weekday_weekend_night,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T19,Break-sensitive lunch peak,breaks,60,PASS,breaks|lunch_peak,known historical mapping,break_sensitive,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T20,Narrow spike overstaff risk,overage,60,PASS,narrow_peak|overage,known historical mapping,narrow_spike,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T21,Exact fixed shift valid,fixed,60,PASS,fixed_exact,migrated synthetic equivalent,fixed_valid,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T22,Flexible nesting group,nesting,60,PASS,nesting_flexible,migrated synthetic equivalent,nesting,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T23,Language has no matching skill,language,60,EXPECTED_CONTRACT_FAIL,language|no_match,known historical mapping,language_no_match,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T24,Language minimum exactly at roster capacity,language,60,EXPECTED_INFEASIBLE,language|tight_capacity,Migrated language roster cannot cover both non-overlapping window edges; expected infeasible validates diagnostics.,language_exact,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T25,Leave plus language coverage,leave,60,PASS,leave|language,migrated synthetic equivalent,leave_language,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T26,Hard OFF preference,off_pattern,60,PASS,hard_off,migrated synthetic equivalent,hard_off,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T27,Soft OFF preference,off_pattern,60,PASS,soft_off|preference,migrated synthetic equivalent,soft_off,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T28,Consecutive OFF required,off_pattern,60,PASS,consecutive_off,migrated synthetic equivalent,consecutive_off,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T29,Separate OFF allowed,off_pattern,60,PASS,separate_off,migrated synthetic equivalent,separate_off,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T30,Maximum one different shift,shift_variety,60,PASS,max_shift_variety,migrated synthetic equivalent,max_one_shift,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T31,Preference-neighborhood shift start,preferences,60,PASS,preference|shift_start,migrated synthetic equivalent,preference,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T32,Twelve-hour rest boundary valid,rest,60,PASS,rest_gap,migrated synthetic equivalent,rest_valid,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T33,Previous Saturday rest boundary invalidates early Sunday,rest,60,PASS,previous_saturday|rest,migrated synthetic equivalent,previous_rest,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T34,Blank demand bridge guard,blank_bridge,60,PASS,demand_fit|blank_bridge,migrated synthetic equivalent,blank_guard,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T35,Overnight baseline,overnight,60,PASS,overnight,known architecture coverage family,overnight,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T36,Week-boundary carryover,cyclic_boundary,60,PASS,week_boundary|cyclic_sunday,known architecture coverage family,cyclic,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T37,Weekend-only schedule,closed_day,60,PASS,weekend_only,known architecture coverage family,weekend_only,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T38,Midday spike,demand_shape,60,PASS,midday_peak,known architecture coverage family,midday_peak,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T39,High tail demand,day_tail,60,PASS,high_tail,known architecture coverage family,late_tail,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T40,Low-waste sparse schedule,blank_bridge,60,PASS,low_waste|sparse,known architecture coverage family,sparse,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T41,30-min capacity infeasible,capacity,30,EXPECTED_INFEASIBLE,30min|capacity|hard_floor,known historical mapping,capacity_infeasible30,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T42,11-hour 3-OFF enabled,shift_pattern,30,PASS,11h|3off,known architecture coverage family,long_shift,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T43,Closed Tuesday late period,closed_day,30,PASS,closed_day|late_tail,known architecture coverage family,closed_tuesday_late,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T44,30-min evening language minimum,language,30,PASS,30min|language|evening,known historical mapping,language_evening,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T45,Exact fixed schedule 30-min,fixed,30,PASS,30min|fixed_exact,known architecture coverage family,fixed_valid30,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T46,Blank fixed group flexible choice,nesting,30,PASS,30min|nesting_flexible,known architecture coverage family,nesting30,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T47,30-min overnight blank bridge,blank_bridge,30,PASS,30min|overnight|blank_bridge,migrated synthetic equivalent,overnight30,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T48,Friday late tail,day_tail,60,PASS,friday|late_tail,known historical mapping,friday_late,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T49,Opening guard valid reopening,opening,30,PASS,opening|reopening,migrated synthetic equivalent,reopening_valid,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T50,Opening guard impossible,opening,30,EXPECTED_INFEASIBLE,opening|capacity,migrated synthetic equivalent,opening_impossible,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T51,Instruction HC mismatch rejected,input_contract,60,EXPECTED_CONTRACT_FAIL,headcount_integrity,new validation-integrity coverage,hc_mismatch,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T52,Instruction HC mismatch explicit override,input_contract,60,EXPECTED_WARNING,headcount_integrity|override,new validation-integrity coverage,hc_override,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T53,Saturday-to-Sunday cyclic overnight,cyclic_boundary,60,PASS,saturday|sunday|overnight,known cyclic regression family,cyclic,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T54,Sunday opening protected from prior Saturday,cyclic_boundary,30,PASS,sunday|opening|previous_saturday,known cyclic regression family,cyclic30,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T55,Invalid target ratio,input_contract,60,EXPECTED_CONTRACT_FAIL,target_ratio,migrated synthetic equivalent,invalid_target,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T56,Invalid floor above target,input_contract,60,EXPECTED_CONTRACT_FAIL,floor_ratio,migrated synthetic equivalent,invalid_floor,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T57,Leave causes language gap guard,language,60,EXPECTED_INFEASIBLE,leave|language|capacity,known historical mapping,leave_language_gap,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T58,Boundary low-demand overnight,overnight,60,PASS,boundary|low_demand|overnight,known historical mapping,boundary_low_overnight,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T59,Invalid shrinkage,input_contract,60,EXPECTED_CONTRACT_FAIL,shrinkage,migrated synthetic equivalent,invalid_shrinkage,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T60,Unknown exact fixed shift,fixed,60,EXPECTED_CONTRACT_FAIL,fixed_exact|unknown_shift,migrated synthetic equivalent,unknown_fixed,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T61,SAKS staff-count integrity 30-min,staff_integrity,30,PASS,staff_count|30min,known historical mapping,base30,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T62,Fixed-control staff integrity 30-min,staff_integrity,30,PASS,staff_count|fixed_exact,known historical mapping,fixed_valid30,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T63,SAKS2 blank-fixed flexible group 30-min,staff_integrity,30,PASS,staff_count|nesting,known historical mapping,nesting30,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T64,30-min HC shortage multi-peak balance,capacity,30,EXPECTED_WARNING,shortage|multi_peak|30min,known historical mapping,shortage_warning30,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T65,60-min overage balance two peaks,overage,60,PASS,overage|two_peaks,known historical mapping,two_peaks,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T66,30-min blank fixed shortage overnight,nesting,30,EXPECTED_WARNING,nesting|shortage|overnight,known historical mapping,blank_fixed_shortage30,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T67,60-min exact fixed overage pressure,fixed,60,PASS,fixed_exact|overage,known historical mapping,fixed_overage,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T68,30-min 11h break-shortage balance,breaks,30,EXPECTED_WARNING,11h|breaks|shortage,known historical mapping,long_break_shortage,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T69,60-min closed-day early-tail shortage,day_tail,60,EXPECTED_INFEASIBLE,closed_day|early_tail|zero_active,known historical mapping,closed_early_shortage,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT
+T70,30-min moving peak balance,demand_shape,30,PASS,moving_peak|30min,known historical mapping,moving_peak30,Yes,MIGRATED_SYNTHETIC_INTEGRATION_FRESH_CP_SAT

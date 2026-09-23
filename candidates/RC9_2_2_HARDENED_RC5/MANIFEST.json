@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "package": "RC9_2_2_MAX_COVERAGE_RC5",
+  "release": "L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2",
+  "release_status": "NO_GO_PENDING_RC5_TARGETED_RUNTIME_REVIEW",
+  "production_ready": false,
+  "engine_sha256": "0b178297126ccb2b5cd022d69ad6cd6dae20be87d73a980fb571db28696c105c",
+  "input_manifest": "SCENARIOS.json",
+  "priority_input": {
+    "path": "inputs/RC9_2_2_NMG_EN_PRODUCTION_INPUT.xlsx",
+    "sha256": "f770c32610931be35936c267a066291e930a70eaab40a8cb4d1cda9406c4fc52"
+  },
+  "release_gate": "RELEASE_STATUS.json",
+  "report": "FINAL_VALIDATION_AND_READINESS_REPORT.md",
+  "build_tool": "tools/build_production_package.py"
+}

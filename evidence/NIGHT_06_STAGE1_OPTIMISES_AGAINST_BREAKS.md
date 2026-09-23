@@ -136,3 +136,25 @@ method. B-4 measured 1-2 intervals there. Here it is at least 29.
 
 Joint refinement remains relevant but demoted: the phase exists to co-optimise
 shifts and breaks, and the evidence now says breaks alone have the headroom.
+
+
+---
+
+# ANNOTATION (later): the `min_target_hits` probe above is weaker than stated
+
+The "159 FEASIBLE" table proves `sum(target_hit_vars) >= 159` is satisfiable.
+It does **not** prove `after_target >= 159`, because the model counter and the
+`after_target` metric use different arithmetic -- integer `ceil_units`
+thresholds versus a percentage compare (see NIGHT_08, "Open defect"). A later
+run locked at 159 reported `after_target` 157, reproducing the gap.
+
+The conclusion of the CORRECTION section is nevertheless **upheld**, on
+evidence that does not use `min_target_hits` at all:
+
+* an unguided `solve_breaks` on the same tightly-packed skeleton reached
+  `after_target` **163** in 121s, against the 130 production recorded;
+* at 3600s the same skeleton yielded **137** through the coverage-blind
+  diagnostic fallback and **164** through a real 180s break solve.
+
+Stage-2 is the defect, and NIGHT_09 names the mechanism: at the production
+QUICK budget the break search runs zero of its planned attempts.

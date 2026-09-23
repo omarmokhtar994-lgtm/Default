@@ -4,3 +4,5 @@ venv/
 results/
 *.egg-info/
 dist/
+candidates/*/engine/**/debug/
+candidates/*/**/__pycache__/

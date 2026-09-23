@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "release": "L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2",
+  "schedule_id": "NMG_EN_HARDENED_SMOKE",
+  "mode": "SMOKE",
+  "stage": "FULL_SCHEDULE",
+  "return_code": 3,
+  "engine_return_code": 3,
+  "quality_report_return_code": 2,
+  "hard_valid_artifact": false,
+  "metrics": {
+    "audit": "/workspace/scratch/720bc11e6247/rc922_hardened/executed_results/NMG_EN_HARDENED_SMOKE/NMG_EN_HARDENED_SMOKE.l6_3_2_3_solver_audit.json",
+    "business_headline": "The engine stopped because of an unexpected technical error",
+    "business_message": "OR-Tools is required. In Colab run: pip install -q ortools",
+    "business_outcome_category": "TECHNICAL_FAILURE",
+    "business_outcome_code": "ENGINE_EXECUTION_ERROR",
+    "exception_message": "OR-Tools is required. In Colab run: pip install -q ortools",
+    "exception_type": "RuntimeError",
+    "production_eligible": "FALSE",
+    "status": "FAIL_UNEXPECTED_ENGINE_EXCEPTION"
+  },
+  "case_root": "/workspace/scratch/720bc11e6247/rc922_hardened/executed_results/NMG_EN_HARDENED_SMOKE",
+  "independent_validation": {
+    "enabled": true,
+    "status": "NOT_RUN",
+    "return_code": null,
+    "workbook": null,
+    "json": null,
+    "csv": null
+  }
+}

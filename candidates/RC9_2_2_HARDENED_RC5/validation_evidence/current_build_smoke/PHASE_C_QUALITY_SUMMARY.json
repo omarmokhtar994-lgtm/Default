@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "release": "L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2",
+  "generated_utc": "2026-09-08T18:17:44.861405+00:00",
+  "audit_status": "FAIL_UNEXPECTED_ENGINE_EXCEPTION",
+  "run_id": "14f9d910c987e07ad52afd04",
+  "input": "/workspace/scratch/720bc11e6247/rc922_hardened/executed_results/NMG_EN_HARDENED_SMOKE/input_snapshot/RC9_2_2_NMG_EN_PRODUCTION_INPUT.xlsx",
+  "contract": {
+    "status": "PASS",
+    "failure_count": 0,
+    "warning_count": 0
+  },
+  "feasibility": {
+    "status": "PASS",
+    "hard_failure_count": 0,
+    "probe_status": "UNKNOWN"
+  },
+  "safety": {
+    "status": "NOT_RUN",
+    "hard_fail_count": 0,
+    "hard_fail_count_reported": false,
+    "no_break_exception_count": 0
+  },
+  "coverage": {
+    "active_intervals": 0,
+    "after_target": 0,
+    "after_floor": 0,
+    "after100": 0,
+    "after90": 0,
+    "after80": 0,
+    "target_losses_from_breaks": 0,
+    "floor_losses_from_breaks": 0
+  },
+  "production_quality_gate": {
+    "status": "NOT_EVALUATED",
+    "mode": "NOT_EVALUATED",
+    "failure_count": 0,
+    "failures": []
+  },
+  "next_sunday": {
+    "active_intervals": 0,
+    "after_target": 0,
+    "after_floor": 0,
+    "floor_gap_count": 0,
+    "avoidable_overage_fte_sum": 0,
+    "maximum_coverage_ratio": 0,
+    "overage_cap_violations": 0,
+    "maximum_adjacent_raw_change": 0,
+    "imbalance_violations": 0
+  },
+  "break_concurrency": {
+    "maximum_observed": 0,
+    "maximum_ratio_observed": 0,
+    "violation_count": 0
+  },
+  "overage": {
+    "target_overage_fte_sum": 0,
+    "avoidable_overage_fte_sum": 0,
+    "avoidable_overage_interval_count": 0,
+    "severe_overage_interval_count": 0,
+    "extreme_overage_interval_count": 0,
+    "indivisible_staffing_only_interval_count": 0,
+    "maximum_coverage_ratio": 0,
+    "top10_concentration": 0,
+    "classification": "CONTROLLED"
+  },
+  "whole_week_balance": {
+    "overage_cap_violation_count": 0,
+    "adjacent_imbalance_violation_count": 0,
+    "maximum_adjacent_raw_change": 0,
+    "transferable_overstaffing_pair_count": 0
+  },
+  "language_resilience": {
+    "required_quarters": 0,
+    "minimum_only_quarters": 0,
+    "minimum_only_ratio": 0,
+    "reserve_shortfall_quarters": 0,
+    "break_caused_reserve_loss_quarters": 0
+  },
+  "skill_allocation": {
+    "protected_quarters": 0,
+    "gap_quarters": 0,
+    "maximum_slot_gap": 0,
+    "status": "NOT_EVALUATED"
+  },
+  "break_feasibility_feedback": {
+    "status": "NOT_RUN",
+    "attempted": 0,
+    "improved": 0,
+    "within_cap": 0,
+    "workbook_exception_cap": null
+  },
+  "employee_quality": {},
+  "feasibility_certificate": {
+    "target_attainability_status": "PROVABLY_UNREACHABLE_BY_INTERVAL_CAPACITY",
+    "floor_attainability_status": "PROVABLY_UNREACHABLE_BY_INTERVAL_CAPACITY",
+    "maximum_achievable_target_intervals_upper_bound": 233,
+    "maximum_achievable_floor_intervals_upper_bound": 240,
+    "provably_unreachable_target_interval_count": 19,
+    "estimated_additional_hc_for_aggregate_target": 0,
+    "language_capacity_shortages": []
+  },
+  "artifact_state": "RUNNING_NOT_FINAL",
+  "functional_status": "UNKNOWN",
+  "phase_c_promotion_status": "NOT_EVALUATED",
+  "phase_c_quality_status": "DIAGNOSTICS_ONLY",
+  "business_outcome": {
+    "outcome_code": "ENGINE_EXECUTION_ERROR",
+    "outcome_category": "TECHNICAL_FAILURE",
+    "headline": "The engine stopped because of an unexpected technical error",
+    "plain_language_summary": "OR-Tools is required. In Colab run: pip install -q ortools",
+    "requested": {},
+    "best_proven": {},
+    "gap": {},
+    "recommended_actions": [
+      "Use the exception type, traceback, and run identity for technical investigation; do not interpret this as staffing infeasibility."
+    ],
+    "technical_return_code": 3
+  },
+  "interpretation": "The production quality gate is release-authoritative in the current Phase C engine: a failed gate cannot be exported as PASS. The separate overage classification remains diagnostic and excludes minimum whole-associate staffing required for fractional demand. Hard rules, workbook target/floor priorities, global champion retention, Next-Sunday protection, whole-week balance, language resilience, distinct skill allocation, logic-based break-feasibility feedback, employee quality, and break-concurrency limits remain authoritative."
+}

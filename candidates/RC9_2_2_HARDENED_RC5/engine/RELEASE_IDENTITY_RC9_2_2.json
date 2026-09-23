@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "release": "L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2",
+  "release_short": "RC9.2.2-PRODUCTION-HARDENED-RC5-P1-C1",
+  "generated_utc": "2026-09-14T00:00:00+00:00",
+  "architecture": "Universal workbook-driven scheduler with protected-tier selection, independent exact-artifact validation, and fail-closed publication",
+  "base_release": "L6.3.2.6-RC9.2.2-BUDGETED-SEARCH-AND-BREAK-CONCURRENCY-RC1",
+  "status": "RELEASE_CANDIDATE_NO_GO_PENDING_SCENARIO_AND_QUALITY_REVIEW",
+  "engine_file_sha256": "0b178297126ccb2b5cd022d69ad6cd6dae20be87d73a980fb571db28696c105c",
+  "artifact_filename_compatibility_tag": "L6_3_2_3",
+  "identity_authority": "Run identity, engine SHA-256, input snapshot SHA-256, independent validation seal, and package manifest; the compatibility filename tag is not release identity",
+  "dependencies": [
+    "ortools==9.15.6755",
+    "openpyxl>=3.1.2",
+    "pandas>=2.2.0",
+    "numpy>=1.26.0",
+    "scipy>=1.11.0"
+  ],
+  "base_engine_file_sha256": "0e6f643552c5e59f284fefbabc74803c3450b2a1cd2de47fad44781f6408cc5c",
+  "patch_applied": "P-1 memoisation + A-1/A-2/A-3/A-7 input-contract fidelity. Canonical contract hash identical on all 10 workbooks."
+}

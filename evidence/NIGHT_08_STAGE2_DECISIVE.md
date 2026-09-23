@@ -60,7 +60,60 @@ coverage counts, so they normally move together, not against each other at
 **Pre-registered prediction: SEARCH DEFECT** (`obj(159) < obj(130)`). Recorded
 before running the probe.
 
-## Result
+## Result: the probe's printed verdict is VOID. Do not use it.
 
-_pending -- probe is `scratchpad/stage2_decisive.py`, runs once the
-deterministic regression check releases the cores._
+The probe ran and printed `VERDICT: WEIGHTING DEFECT`. **That verdict is not
+supported by its own data and is retracted here rather than reported.**
+
+| arm | status | after_target | objective | bound |
+|---|---|---|---|---|
+| A unguided | FEASIBLE | **163** | 1,439,497,988 | none |
+| B `min_target_hits=159` | FEASIBLE | 157 | 1,607,699,492 | none |
+
+Three independent reasons the comparison decides nothing:
+
+1. **Neither arm proved optimality.** Both returned `FEASIBLE` with no
+   objective bound in 121s. The decision rule assumed two converged optima;
+   comparing two unconverged incumbents measures search luck, not preference.
+2. **B's region contains A's answer.** A scored 163, which satisfies `>= 159`,
+   so A's solution is feasible for B. B's true optimum can therefore only be
+   better than or equal to A's. B returning a *worse* objective is proof that
+   B's search underperformed -- which points at search, not weighting.
+3. **B violated its own constraint in the reported metric.** It was locked to
+   `>= 159` and reports `after_target 157`. The lock and the metric are not
+   counting the same thing (see the open defect below).
+
+## What the probe DID establish
+
+Arm A is an unguided `solve_breaks` -- exactly what production Stage-2 runs --
+on the tightly-packed skeleton. In **121 seconds** it reached
+**`after_target` 163**. The production run scored that skeleton at **130**.
+
+That is measured on the metric itself, with no constraint involved, and it
+confirms NIGHT_09 independently: the coverage was always reachable, and
+production never ran the search that finds it.
+
+Together with the 3600s natural experiment (same skeleton: 137 via the
+coverage-blind fallback, 164 via a real 180s solve, objective monotone in
+coverage), the pre-registered prediction holds:
+
+**SEARCH DEFECT. The objective ranks coverage correctly; the search is starved.**
+
+## Open defect found along the way: the target lock and the metric disagree
+
+The hard constraint and the reported metric use different arithmetic:
+
+* model (`l632:7583`, `:7604`) -- `target_hit` iff
+  `after_eff >= ceil_units(req * target_ratio) * qpi`, integer units rounded up
+* metric (`l632:8433`) -- `after_target += int(after_pct + 1e-9 >= target_ratio)`,
+  a percentage compare
+
+`target_lock_recovery` sets `min_target_hits` from the *metric* and applies it
+to the *model* counter, so a "lock" meant to hold achieved coverage may not
+hold it. Arm B is a live reproduction: locked at 159, reported 157.
+
+Not fixed, and deliberately not fixed blind -- `min_target_hits` is used only
+by `target_lock_recovery`, which the NIGHT_09 census shows barely executes, so
+this is not on the production path. It does mean **NIGHT_06's "159 FEASIBLE"
+proof is weaker than stated**: it proves the model counter can reach 159, not
+that `after_target` does. NIGHT_06 has been annotated accordingly.

@@ -86,7 +86,10 @@ done
 # RC9_ENGINE_DIR rather than by the tests/ glob above. They were written and
 # mutation-checked but never executed by this gate, which is why the gate
 # reported 9 suites while 7 more sat unrun in tests_staged/.
-CANDIDATE_ENGINE="${RC9_CANDIDATE_DIR:-candidates/RC9_2_2_HARDENED_RC5}"
+# The RC5 hardening line has been merged into engine/, so these suites now
+# test the SHIPPING engine. candidates/RC9_2_2_HARDENED_RC5 remains as the
+# pre-merge snapshot for provenance and is no longer what the gate exercises.
+CANDIDATE_ENGINE="${RC9_CANDIDATE_DIR:-.}"
 shopt -s nullglob
 staged=(tests_staged/test_*.py)
 shopt -u nullglob

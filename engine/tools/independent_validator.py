@@ -594,6 +594,12 @@ def validate(input_path: Path, output_path: Path, engine_path: Path) -> Dict[str
 
     # Coverage and language.
     interval_rows=[]; zero=[]; language_gaps=[]; opening_gaps=[]; floor_flags=[]; blank_staffed=[]
+    # Independent recomputation of the language_reserve gate. The hard minimum
+    # is already checked below; the gate the engine scores is the operational
+    # RESERVE on top of it (minimum + language_reserve_extra), which nothing
+    # here re-derived. Mirrors eng.language_reserve_target/_status, and reads
+    # after[slot] so break placement is accounted for.
+    language_reserve_rows=[]; language_reserve_counts={"GAP":0,"MINIMUM_ONLY":0,"RESERVE_PROTECTED":0}
     before100=before90=before80=after100=after90=after80=before_target=after_target=before_floor=after_floor=0
     for d in range(7):
         openings=set(eng.opening_intervals_for_day(parsed,d))
@@ -627,6 +633,14 @@ def validate(input_path: Path, output_path: Path, engine_path: Path) -> Dict[str
                     eligible=sum(1 for ai in after[slot] if norm(parsed.associates[ai].language) in rule.eligible_languages)
                     if eligible<rule.minimum:
                         language_gaps.append({"day":DAYS[d],"time":eng.hhmm(minute),"group":rule.group,"minimum":rule.minimum,"actual":eligible})
+                    reserve_target=eng.language_operational_reserve_target(parsed, rule)
+                    reserve_status=eng.language_reserve_status(eligible, int(rule.minimum), int(reserve_target))
+                    language_reserve_counts[reserve_status]=language_reserve_counts.get(reserve_status,0)+1
+                    if reserve_status!="RESERVE_PROTECTED" and len(language_reserve_rows)<500:
+                        language_reserve_rows.append({
+                            "day":DAYS[d],"time":eng.hhmm(minute),"group":rule.group,
+                            "minimum":int(rule.minimum),"reserve_target":int(reserve_target),
+                            "actual":eligible,"status":reserve_status})
             be=sum(bvals)*eff/qpi; ae=sum(avals)*eff/qpi
             bp=be/req if req>0 else 1.0; ap=ae/req if req>0 else 1.0
             before100+=bp>=1-1e-9; before90+=bp>=.9-1e-9; before80+=bp>=.8-1e-9
@@ -947,6 +961,15 @@ def validate(input_path: Path, output_path: Path, engine_path: Path) -> Dict[str
         "quality_gate_status":quality_gate_status,
         "metrics":metrics,
         "employee_quality_independent":employee_quality_independent,
+        "language_reserve_independent":{
+            "enabled":bool(parsed.language_reserve_enabled),
+            "extra_qualified_fte":int(parsed.language_reserve_extra),
+            "gate_mode":str(parsed.language_reserve_gate_mode),
+            "reserve_gap_count":int(language_reserve_counts.get("GAP",0)),
+            "reserve_minimum_only_count":int(language_reserve_counts.get("MINIMUM_ONLY",0)),
+            "reserve_protected_count":int(language_reserve_counts.get("RESERVE_PROTECTED",0)),
+            "examples":language_reserve_rows[:20],
+        },
         "canonical_metrics":canonicalize_metrics(
             metrics, "independent_validator",
             stage="BEFORE_BREAKS_ONLY" if artifact_role=="BEST_BEFORE_BREAKS" else "FULL_SCHEDULE"),

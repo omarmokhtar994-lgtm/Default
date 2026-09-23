@@ -284,6 +284,46 @@ class ResumeIdentityIsHashBased(unittest.TestCase):
                       "checkpoint loaders must refuse a foreign run_id")
 
 
+class TheTargetLockBindsWhatTheMetricReports(unittest.TestCase):
+    """min_target_hits must never be satisfiable below the after_target it names.
+
+    target_lock_recovery reads after_target (a percentage compare, l632:8433)
+    and feeds it to min_target_hits, which constrains target_hit (an integer
+    unit threshold, l632:7583/:7604). Two different arithmetics. If the model
+    threshold were ever LOOSER than the metric's, a "lock" at N could be
+    honoured by a schedule the metric scores below N, and the phase meant to
+    hold achieved coverage would quietly fail to hold it.
+
+    ceil_units rounds the requirement UP to whole units, so the model is the
+    stricter of the two -- this pins that, per interval, on a real workbook.
+    """
+
+    BOOK = (ROOT / "packages" / "rc9_2_2_production" / "inputs" / "AE_AR_B2B.xlsx")
+
+    def test_the_model_threshold_is_never_looser_than_the_metric(self):
+        if not self.BOOK.is_file():
+            self.skipTest("packaged workbook not present in this environment")
+        parsed = E.parse_input(self.BOOK)
+        qpi = parsed.qslots_per_interval
+        ratio = parsed.target_ratio
+        looser, checked = [], 0
+        for day in range(7):
+            for interval in range(parsed.intervals_per_day):
+                req = float(parsed.requirements[day][interval] or 0.0)
+                if req <= 0:
+                    continue
+                checked += 1
+                model_threshold = E.ceil_units(req * ratio) * qpi
+                metric_threshold = (ratio - 1e-9) * qpi * req
+                if model_threshold < metric_threshold - 1e-9:
+                    looser.append((day, interval, req))
+        self.assertGreater(checked, 0, "expected real demand to check")
+        self.assertEqual(
+            looser, [],
+            "these intervals would let a target lock be honoured by a schedule "
+            "the after_target metric scores below the lock")
+
+
 class DisablingAGateIsNotEvidenceThatItHeld(unittest.TestCase):
     """`apply()` treated "no issues found" and "gate switched off" identically.
 

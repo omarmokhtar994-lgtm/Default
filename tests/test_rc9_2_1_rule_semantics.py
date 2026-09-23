@@ -356,9 +356,9 @@ class DisablingAGateIsNotEvidenceThatItHeld(unittest.TestCase):
         """If a gate stops using apply(), this guard stops covering it."""
         gate = E.production_quality_gate(self._parsed(), self.CLEAN)
         self.assertEqual(sorted(gate["gate_results"]), [
-            "break_concurrency", "coverage", "employee_quality", "language_reserve",
-            "next_sunday_balance", "skill_allocation", "target_loss",
-            "whole_week_balance"])
+            "break_concurrency", "coverage", "employee_quality", "floor_loss",
+            "language_reserve", "next_sunday_balance", "skill_allocation",
+            "target_loss", "whole_week_balance"])
 
     def test_a_skipped_gate_is_not_reported_as_a_pass(self):
         gate = E.production_quality_gate(self._parsed(), self.CLEAN)
@@ -649,8 +649,8 @@ class RunStageAndDepthComeFromTheBusinessContract(unittest.TestCase):
 
     def test_the_runner_takes_them_from_the_workbook_and_lets_the_cli_win(self):
         runner = self._runner()
-        for fragment in ("contract_stage, contract_depth = _contract_run_settings(input_path)",
-                         "mode = args.mode or contract_depth or 'DEEP'",
+        for fragment in ("contract_stage, contract_depth, workbook_search_controls = _contract_run_settings(input_path)",
+                         "mode = args.mode or contract_depth or 'QUICK'",
                          "stage = args.stage or contract_stage or 'FULL_SCHEDULE'"):
             with self.subTest(fragment=fragment):
                 self.assertTrue(fragment in runner, f"missing: {fragment}")

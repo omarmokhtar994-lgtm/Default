@@ -265,9 +265,15 @@ class ReleaseIdentityIntegrity(unittest.TestCase):
             "runs would be recorded under the wrong release.",
         )
 
-    def test_engine_version_is_rc9_2_1(self):
+    def test_engine_version_is_the_merged_hardened_build(self):
+        """Pins the identity of the tree the RC5 hardening merged into.
+
+        The L6.3.2.6 line and the L6.3.2.7 hardening line diverged and were
+        merged back together; this is the resulting identity. It must be
+        updated deliberately, never drift.
+        """
         self.assertEqual(
-            E.VERSION, "L6.3.2.6-RC9.2.2-BUDGETED-SEARCH-AND-BREAK-CONCURRENCY-RC1")
+            E.VERSION, "L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2")
 
 
 class SkeletonOnlyLeaderboardIsAuditable(unittest.TestCase):
@@ -387,11 +393,28 @@ class Stage1FundsDepthBeforeWidth(unittest.TestCase):
     at 45s and FEASIBLE at 150s for the same profile and seed.
     """
 
-    def test_the_minimum_slice_is_above_the_measured_no_solution_point(self):
+    def test_the_minimum_slice_matches_the_warm_start_curve(self):
+        """B-3 correction: 240s was measured COLD, production solves run WARM.
+
+        The 240s floor came from a cold probe (UNKNOWN at 45s and 150s, 166/168
+        at 210s). Stage-1 solves are warm-started, and the warm curve in
+        evidence/B3_STAGE1_WARM_SLICE_CURVE.json reaches FEASIBLE 168/168 at
+        30s and holds it at 45s, 60s and 120s. Applied to warm solves the 240s
+        floor made a 900s run attempt ZERO of its fifteen profiles
+        (evidence/B3_STAGE1_PORTFOLIO_FLOOR.md), because the portfolio was
+        clamped down to nothing rather than the slice clamped up.
+
+        The floor must therefore sit at the warm knee, not the cold one: high
+        enough to beat the 15s UNKNOWN point, not so high it defunds the
+        portfolio.
+        """
         self.assertGreater(
-            E.STAGE1_MIN_MEANINGFUL_SLICE_SEC, 45.0,
-            "45s is the slice every recorded RC9.2.1 run used and the slice at "
-            "which AE AR B2B produced no skeleton at all")
+            E.STAGE1_MIN_MEANINGFUL_SLICE_SEC, 15.0,
+            "15s returns UNKNOWN even warm-started")
+        self.assertLessEqual(
+            E.STAGE1_MIN_MEANINGFUL_SLICE_SEC, 60.0,
+            "above the warm knee the floor defunds the portfolio instead of "
+            "deepening it -- the B-3 starvation")
 
     def test_a_window_that_funds_nothing_reports_zero(self):
         self.assertEqual(E.stage1_fundable_profile_count(0), 0)
@@ -413,11 +436,17 @@ class Stage1FundsDepthBeforeWidth(unittest.TestCase):
         self.assertEqual(counts, sorted(counts))
         self.assertGreater(counts[-1], counts[0])
 
-    def test_the_real_regression_window_funds_almost_nothing(self):
-        """150s was the actual AE AR B2B Stage-1 window for 15 profiles."""
-        self.assertLessEqual(
-            E.stage1_fundable_profile_count(150), 1,
-            "a 150-second window cannot honestly fund a fifteen-profile portfolio")
+    def test_the_real_regression_window_funds_a_few_not_fifteen(self):
+        """150s was the actual AE AR B2B Stage-1 window for 15 profiles.
+
+        It must fund several warm attempts rather than the whole portfolio --
+        and, per B-3, more than zero, which is what the cold 240s floor gave.
+        """
+        funded = E.stage1_fundable_profile_count(150)
+        self.assertGreaterEqual(funded, 1, "a 150s window must fund real work")
+        self.assertLess(funded, 15,
+                        "a 150-second window cannot honestly fund a "
+                        "fifteen-profile portfolio")
 
     def test_the_slice_never_drops_to_the_old_forty_five_second_floor(self):
         """The exact call shape the recorded runs made, at every scenario size."""
@@ -456,8 +485,9 @@ class Stage1FundsDepthBeforeWidth(unittest.TestCase):
     def test_the_loop_uses_the_helper(self):
         source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
         self.assertTrue(
-            "slice_sec = stage1_slice_seconds(remaining, attempts_left)" in source,
-            "the Stage-1 loop must take its slice from the guarded helper")
+            "slice_sec = stage1_slice_seconds(remaining, attempts_left" in source,
+            "the Stage-1 loop must take its slice from the guarded helper "
+            "(B-7 added a workbook-overridable minimum as a third argument)")
 
 
 class Stage2AnchorStaysInsideItsReservation(unittest.TestCase):
@@ -712,7 +742,7 @@ class BalancedCandidateIsExportedNotOnlyTheExtremes(unittest.TestCase):
 
     def test_it_is_not_exported_when_it_duplicates_another_role(self):
         source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
-        self.assertTrue("if balanced not in (recommended, strict, max_floor):" in source,
+        self.assertTrue("if balanced not in (recommended, max_target, max_floor):" in source,
                         "a duplicate export would just be noise")
 
 

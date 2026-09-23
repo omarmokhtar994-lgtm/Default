@@ -59,6 +59,13 @@
           "previous_prefix": "33f540ffa1df748d",
           "reason": "Input Checks and Run Stage/Run Depth template fix applied to the packaged workbook. Canonical contract hash (120 fields) verified identical before and after - only sheet layout changed. The scored RC9.1 metrics on this row are untouched.",
           "canonical_contract_hash": "307be4a06148a69ab3a00c274cc5b9ae0bf39c64524083a3035bde24dbcc6ecd"
+        },
+        {
+          "previous_prefix": "33f540ffa1df748d",
+          "previous_canonical_contract_hash": "307be4a06148a69ab3a00c274cc5b9ae0bf39c64524083a3035bde24dbcc6ecd",
+          "reason": "Engine merged: the L6.3.2.6 Coverage Split line and the L6.3.2.7 RC5 hardening line were reunited. The WORKBOOKS ARE BYTE-IDENTICAL (git shows no .xlsx modified); the canonical contract hash moved only because canonical_contract_snapshot now records two additional settings: language_rules gained active_days (all seven days here, so semantics are unchanged) and whole_week_balance gained floor_loss_gate_mode plus maximum_floor_losses_from_breaks (the W1 floor-loss cap). No pre-existing contract value changed, so the RC9.1 comparison on this row remains justified. The scored RC9.1 metrics are untouched. file_sha256 is pinned from here on because it is immune to engine-side snapshot changes.",
+          "canonical_contract_hash": "a9d418a3d6b1d3b8b7d9948cd91802916c040f448a7cf4097f6b7b29ad11d521",
+          "file_sha256": "58aeb4ca5d1c1d5c163d5d3f938d4b9ba635a3daf38d1a0d6e3af2f30f4efa09"
         }
       ]
     },
@@ -137,6 +144,13 @@
           "previous_prefix": "b7dcbbffeb19e05f",
           "reason": "Input Checks and Run Stage/Run Depth template fix applied to the packaged workbook. Canonical contract hash (120 fields) verified identical before and after - only sheet layout changed. The scored RC9.1 metrics on this row are untouched.",
           "canonical_contract_hash": "cdccda301eb824da468c04d1a753db8c513239842b3f60870642e3e8683708cf"
+        },
+        {
+          "previous_prefix": "b7dcbbffeb19e05f",
+          "previous_canonical_contract_hash": "cdccda301eb824da468c04d1a753db8c513239842b3f60870642e3e8683708cf",
+          "reason": "Engine merged: the L6.3.2.6 Coverage Split line and the L6.3.2.7 RC5 hardening line were reunited. The WORKBOOKS ARE BYTE-IDENTICAL (git shows no .xlsx modified); the canonical contract hash moved only because canonical_contract_snapshot now records two additional settings: language_rules gained active_days (all seven days here, so semantics are unchanged) and whole_week_balance gained floor_loss_gate_mode plus maximum_floor_losses_from_breaks (the W1 floor-loss cap). No pre-existing contract value changed, so the RC9.1 comparison on this row remains justified. The scored RC9.1 metrics are untouched. file_sha256 is pinned from here on because it is immune to engine-side snapshot changes.",
+          "canonical_contract_hash": "70a0ef7ea8297931299c30ca34178011d289ed97752068adf7e0c45d0d90756e",
+          "file_sha256": "321f1eff6e86c8c1b65e39a2c2ab9859e53bd58a6c0ae41425809e4ee4920c77"
         }
       ]
     },
@@ -159,6 +173,13 @@
           "previous_prefix": "8e3833c9ef496b46",
           "reason": "Input Checks and Run Stage/Run Depth template fix applied to the packaged workbook. Canonical contract hash (120 fields) verified identical before and after - only sheet layout changed. The scored RC9.1 metrics on this row are untouched.",
           "canonical_contract_hash": "13c1b9b4187f13b72519bde6f5731b874ff5fa62bf13f1379985aeaa829304d1"
+        },
+        {
+          "previous_prefix": "8e3833c9ef496b46",
+          "previous_canonical_contract_hash": "13c1b9b4187f13b72519bde6f5731b874ff5fa62bf13f1379985aeaa829304d1",
+          "reason": "Engine merged: the L6.3.2.6 Coverage Split line and the L6.3.2.7 RC5 hardening line were reunited. The WORKBOOKS ARE BYTE-IDENTICAL (git shows no .xlsx modified); the canonical contract hash moved only because canonical_contract_snapshot now records two additional settings: language_rules gained active_days (all seven days here, so semantics are unchanged) and whole_week_balance gained floor_loss_gate_mode plus maximum_floor_losses_from_breaks (the W1 floor-loss cap). No pre-existing contract value changed, so the RC9.1 comparison on this row remains justified. The scored RC9.1 metrics are untouched. file_sha256 is pinned from here on because it is immune to engine-side snapshot changes.",
+          "canonical_contract_hash": "fe5f5944ffc8b7204bb576ef657252bc18001579fe75f427c04b7774eeabaaff",
+          "file_sha256": "55b4ee899cfd38ad586962a16fe40c6d2f9ca41eee13f531eab2f04d1627d9f1"
         }
       ]
     }

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""L6.3.2.4 universal scheduler: validation-integrity hardening plus executed late-phase optimization.
+"""RC9.2.2 hardened universal scheduler with fail-closed release validation.
 
 The original ten-point structural scope is the foundation of this branch:
 contract validation, deterministic pre-solver feasibility diagnostics, run and
-contract identity hashes, stale-output protection, one canonical evaluator,
+contract identity hashes, stale-output protection, one canonical metric surface,
 checkpoint/resume with tested-combination skipping, atomic verified publication,
 instruction-driven break windows, transaction-safe repairs, and structural
 blank/day-tail/overnight/cyclic audits. Result-driven selector, Pareto export,
@@ -49,7 +49,34 @@ import zipfile
 from dataclasses import dataclass, field
 from datetime import datetime, time as dtime
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple
+
+
+class MissingMetricError(KeyError):
+    """A decision metric was absent where the engine required it."""
+
+
+def require_metric(metrics, key, alt_that_was_substituted=None):
+    """Read a decision metric, failing loudly when it is absent.
+
+    This replaces `metrics.get(key, metrics.get(other, 0))`. That shape reported
+    a DIFFERENT quantity under the name of the missing one -- `after_80` as
+    `after_floor`, an unprefixed gap count as a before-break one -- and every
+    gate downstream then scored the wrong number with no signal.
+
+    Measured across four real workbooks, the substitution never fired, so this
+    costs nothing on known inputs. It exists so that an input which DOES drop a
+    metric produces a named error here rather than a plausible wrong answer
+    somewhere further on.
+    """
+    if key in metrics:
+        return metrics[key]
+    raise MissingMetricError(
+        "required metric %r is missing; refusing to substitute %r, which is a "
+        "different quantity whenever the coverage floor is not 0.80"
+        % (key, alt_that_was_substituted)
+    )
+
 
 try:
     from phase_b_maturity import (
@@ -89,7 +116,7 @@ except ModuleNotFoundError:
         reward_from_quality_delta,
     )
 
-VERSION = "L6.3.2.6-RC9.2.2-BUDGETED-SEARCH-AND-BREAK-CONCURRENCY-RC1"
+VERSION = "L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2"
 RC9_1_UNIVERSAL_SEARCH_RECOVERY = True
 RC9_1_BREADTH_FIRST_STAGE2 = True
 RC9_1_EXTENDED_DEEP_FULL_BUDGETS = True
@@ -141,6 +168,10 @@ LONG_SHIFT_MIN_DURATION_MIN = 630
 # understating avoidable overage.  Shared so the independent validator cannot
 # disagree with the engine on the metric the release is being judged by.
 OVERAGE_CEIL_TOLERANCE = 1e-9
+# This is a deliberate runtime guard, not evidence of a global optimum. Keep
+# it named and publish whether it truncated the candidate pool so coverage
+# claims remain honest.
+MAX_RETAINED_STAGE1_SKELETONS = 16
 RC8_STRICT_BLANK_RULE_ALIAS = True
 RC8_CYCLIC_ACTIVE_WINDOW_AUDIT = True
 RC8_ARTIFACT_VERIFICATION_SEMANTICS = True
@@ -288,6 +319,37 @@ def to_float(v: Any, default: float = 0.0) -> float:
         return default
 
 
+def strict_float(v: Any, *, allow_percent: bool = False) -> Optional[float]:
+    """Parse a numeric workbook value without converting bad text to zero.
+
+    The solver cannot calculate Excel formulas or infer the user's intent from
+    malformed cells.  Returning ``None`` lets the caller emit a hard contract
+    warning instead of silently changing demand, shrinkage, or a rule minimum.
+    """
+    if v in (None, "") or isinstance(v, bool):
+        return None
+    if isinstance(v, str):
+        text = v.strip()
+        if not text or text.startswith("="):
+            return None
+        if text.endswith("%"):
+            if not allow_percent:
+                return None
+            text = text[:-1].strip()
+            try:
+                return float(text) / 100.0
+            except (TypeError, ValueError):
+                return None
+        try:
+            return float(text)
+        except (TypeError, ValueError):
+            return None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
 def yes(v: Any, default: bool = False) -> bool:
     s = norm(v)
     if not s:
@@ -310,8 +372,10 @@ def parse_time_window(value: Any) -> Tuple[Optional[int], Optional[int]]:
     values = re.findall(r"(?<!\d)(\d{1,2}):?(\d{2})(?!\d)", str(value))
     if len(values) < 2:
         return None, None
-    start = (int(values[0][0]) % 24) * 60 + int(values[0][1])
-    end = (int(values[1][0]) % 24) * 60 + int(values[1][1])
+    if any(int(hour) > 23 or int(minute) > 59 for hour, minute in values[:2]):
+        return None, None
+    start = int(values[0][0]) * 60 + int(values[0][1])
+    end = int(values[1][0]) * 60 + int(values[1][1])
     return start, end
 
 
@@ -358,9 +422,12 @@ def minute_of_day(v: Any) -> Optional[int]:
             return int(round(x * 1440)) % 1440
         if 0 <= x < 1440:
             return int(round(x)) % 1440
-    m = re.search(r"(?<!\d)(\d{1,2}):(\d{2})(?!\d)", str(v).strip())
+    m = re.fullmatch(r"\s*(\d{1,2}):(\d{2})\s*", str(v).strip())
     if m:
-        return (int(m.group(1)) % 24) * 60 + int(m.group(2))
+        hour, minute = int(m.group(1)), int(m.group(2))
+        if hour > 23 or minute > 59:
+            return None
+        return hour * 60 + minute
     return None
 
 
@@ -419,8 +486,10 @@ def shift_parts(label: Any) -> Optional[Tuple[int, int, int]]:
     vals = re.findall(r"(\d{1,2}):(\d{2})", str(label or "").strip())
     if len(vals) < 2:
         return None
-    st = (int(vals[0][0]) % 24) * 60 + int(vals[0][1])
-    en = (int(vals[1][0]) % 24) * 60 + int(vals[1][1])
+    if any(int(hour) > 23 or int(minute) > 59 for hour, minute in vals[:2]):
+        return None
+    st = int(vals[0][0]) * 60 + int(vals[0][1])
+    en = int(vals[1][0]) * 60 + int(vals[1][1])
     dur = (en - st) % 1440
     if dur == 0:
         dur = 1440
@@ -621,6 +690,9 @@ class LanguageRule:
     active: bool
     required_languages: Set[str]
     eligible_languages: Set[str]
+    # Weekday(s) on which this window begins.  An omitted/legacy column maps
+    # to all seven days, preserving the pre-RC9.2.2 recurring-window contract.
+    active_days: Set[int] = field(default_factory=lambda: set(range(7)))
 
     def contains_minute(self, minute: int) -> bool:
         if self.start_min == self.end_min:
@@ -730,6 +802,11 @@ class ParsedInput:
     parser_warnings: List[str]
     requirement_sheet: str
     shrinkage_sheet: str
+    # Search-shape, reserve-budget and quality-minimum controls this workbook
+    # states, and only those. A parameter absent from this mapping was not
+    # mentioned by the workbook, which is what lets the engine tell "the
+    # contract said nothing" from "the contract said the default".
+    search_controls: Dict[str, Any] = field(default_factory=dict)
     # Optional protected-tier minimums for release gate 4. Defaulted so every
     # existing ParsedInput construction - the regression lab builds them
     # directly - keeps working, and an absent workbook row means the tier is
@@ -739,7 +816,10 @@ class ParsedInput:
     minimum_after_break_target_ratio: Optional[float] = None
     run_stage: Optional[str] = None
     run_depth: Optional[str] = None
-    language_windows: Dict[str, Tuple[int, int, bool]] = field(default_factory=dict)
+    # Values are normally lists of (start_minute, end_minute, has_minimum)
+    # entries. Tuple values remain accepted for regression-lab compatibility
+    # with older ParsedInput fixtures.
+    language_windows: Dict[str, Any] = field(default_factory=dict)
     language_working_window_mode: str = "OFF"
     coverage_split_rules: List[CoverageSplitRule] = field(default_factory=list)
     coverage_split_source: str = "ABSENT"
@@ -776,6 +856,10 @@ class ParsedInput:
     whole_week_max_imbalance_violations: int = 0
     quality_max_target_losses_from_breaks: int = 6
     target_loss_gate_mode: str = "warn"
+    # W1: floor losses get their own budget. Borrowing the target budget made
+    # a limit authored for one metric silently govern another.
+    quality_max_floor_losses_from_breaks: int = 6
+    floor_loss_gate_mode: str = "warn"
     employee_quality_gate_mode: str = "warn"
     employee_max_start_swing_minutes: int = 360
     employee_max_isolated_workdays: int = 1
@@ -1093,11 +1177,160 @@ def _instruction_map(ws: Any) -> Dict[str, Any]:
     return result
 
 
+# Search-shape, reserve-budget and quality-minimum controls that previously
+# existed only as command-line flags. The engine is meant to be workbook-driven,
+# but ~40 parameters had no workbook route at all, and the production runner
+# passes its own value for nearly all of them - so a scheduler working from the
+# workbook could not reach them and was locked to the runner's opinion of how
+# the search should be shaped.
+#
+# Precedence is the rule the protected-tier minimums already follow: the
+# workbook states the business value and an explicit command-line argument
+# overrides it. A parameter absent from both keeps the engine default, so a
+# workbook with none of these rows behaves exactly as before.
+#
+# (engine parameter, workbook aliases, kind)
+WORKBOOK_SEARCH_CONTROLS: Tuple[Tuple[str, Tuple[str, ...], str], ...] = (
+    ("solver_random_seed", ("Solver Random Seed", "Random Seed"), "int"),
+    ("stage1_minimum_slice_sec",
+     ("Stage 1 Minimum Slice Seconds", "Stage-1 Minimum Slice Seconds"), "float"),
+    ("workers", ("Solver Worker Count", "Solver Workers", "CP-SAT Workers"), "int"),
+    ("pattern_widths", ("Break Pattern Widths", "Pattern Widths"), "int_list"),
+    ("skeleton_profile_names", ("Skeleton Profiles", "Stage 1 Profiles"), "str_list"),
+    ("break_objective_modes", ("Break Objective Modes", "Stage 2 Objective Modes"), "str_list"),
+    ("repair_change_limits", ("Repair Change Limits",), "int_list"),
+    ("export_top_skeletons", ("Export Top Skeletons", "Before-Break Exports"), "int"),
+    ("use_input_schedule_as_seed", ("Use Input Schedule As Seed", "Seed From Input Schedule"), "bool"),
+    ("include_bundled_fallbacks", ("Bundled Fallbacks Enabled", "Use Bundled Fallbacks"), "bool"),
+    ("adaptive_no_improvement_attempts", ("Adaptive No-Improvement Attempts",), "int"),
+    ("primary_target_tolerance", ("Primary Target Tolerance",), "int"),
+    ("max_after80_tradeoff_intervals", ("Maximum After80 Tradeoff Intervals",), "int"),
+    ("min_after90_gain_per_after80_loss", ("Minimum After90 Gain Per After80 Loss",), "float"),
+    ("post_break_repair", ("Post-Break Repair Enabled",), "bool"),
+    ("target_lock_recovery", ("Target Lock Recovery Enabled",), "bool"),
+    ("deterministic_baseline", ("Deterministic Baseline Enabled",), "bool"),
+    ("safe_incumbent", ("Safe Incumbent Enabled",), "bool"),
+    ("conflict_refinement", ("Conflict Refinement Enabled",), "bool"),
+    ("coordinated_repair", ("Coordinated Repair Enabled",), "bool"),
+    ("joint_refinement", ("Joint Refinement Enabled",), "bool"),
+    ("exception_search_reserve_sec", ("Exception Search Reserve Seconds",), "int"),
+    ("post_break_repair_reserve_sec", ("Post-Break Repair Reserve Seconds",), "int"),
+    ("target_lock_recovery_reserve_sec", ("Target Lock Recovery Reserve Seconds",), "int"),
+    ("finalization_reserve_sec", ("Finalization Reserve Seconds",), "int"),
+    ("safe_incumbent_reserve_sec", ("Safe Incumbent Reserve Seconds",), "int"),
+    ("conflict_refinement_reserve_sec", ("Conflict Refinement Reserve Seconds",), "int"),
+    ("coordinated_repair_reserve_sec", ("Coordinated Repair Reserve Seconds",), "int"),
+    ("coordinated_repair_cycles", ("Coordinated Repair Cycles",), "int"),
+    ("joint_refinement_reserve_sec", ("Joint Refinement Reserve Seconds",), "int"),
+    ("joint_change_limits", ("Joint Change Limits",), "int_list"),
+    ("joint_shift_options_per_cell", ("Joint Shift Options Per Cell",), "int"),
+    ("joint_patterns_per_shift", ("Joint Patterns Per Shift",), "int"),
+    ("adaptive_joint_attempts", ("Adaptive Joint Attempts",), "int"),
+    ("adaptive_joint_no_improvement_limit", ("Adaptive Joint No-Improvement Limit",), "int"),
+    ("minimum_final_before_100", ("Minimum Final Before100 Intervals",), "int"),
+    ("minimum_final_before_90", ("Minimum Final Before90 Intervals",), "int"),
+    ("minimum_final_before_80", ("Minimum Final Before80 Intervals",), "int"),
+    ("minimum_final_after_100", ("Minimum Final After100 Intervals",), "int"),
+    ("minimum_final_after_90", ("Minimum Final After90 Intervals",), "int"),
+    ("minimum_final_after_80", ("Minimum Final After80 Intervals",), "int"),
+    ("minimum_best_before_100", ("Minimum Best Before100 Intervals",), "int"),
+    ("minimum_best_before_90", ("Minimum Best Before90 Intervals",), "int"),
+    ("minimum_best_before_80", ("Minimum Best Before80 Intervals",), "int"),
+)
+
+SEARCH_CONTROL_ALIASES: Tuple[str, ...] = tuple(
+    alias for _, aliases, _ in WORKBOOK_SEARCH_CONTROLS for alias in aliases
+)
+
+
+def _parse_search_controls(
+    im: Dict[str, Any], parser_warnings: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    """Read the search controls a workbook actually states, and only those.
+
+    A parameter the workbook does not mention is absent from the result, which
+    is what keeps "the workbook said nothing" distinguishable from "the
+    workbook said the default". A row that IS present but unreadable is a
+    contract failure rather than a silent fallback: a scheduler who typed a
+    value into the business contract must not have it discarded without being
+    told. ``HARD_`` makes ``validate_input_contract`` fail the run.
+    """
+    # `yes()` is deliberately permissive and reads anything unrecognized as
+    # False. That is right for a legacy contract row and wrong here: a typo
+    # would silently disable a search phase. This one has to be able to say
+    # "that is not a boolean at all".
+    def strict_bool(text: str) -> Optional[bool]:
+        token = norm(text)
+        if token in {"yes", "y", "true", "1", "enabled", "on"}:
+            return True
+        if token in {"no", "n", "false", "0", "disabled", "off"}:
+            return False
+        return None
+
+    controls: Dict[str, Any] = {}
+    for name, aliases, kind in WORKBOOK_SEARCH_CONTROLS:
+        raw = _instruction_get(im, aliases)
+        if raw is None or str(raw).strip() == "":
+            continue
+        text = str(raw).strip()
+        value: Any = None
+        if kind == "int":
+            number = strict_float(text)
+            if number is not None and float(number).is_integer():
+                value = int(number)
+        elif kind == "float":
+            number = strict_float(text)
+            if number is not None:
+                value = float(number)
+        elif kind == "bool":
+            value = strict_bool(text)
+        elif kind == "int_list":
+            parts = [part.strip() for part in text.replace(";", ",").split(",") if part.strip()]
+            numbers = [strict_float(part) for part in parts]
+            if parts and all(n is not None and float(n).is_integer() for n in numbers):
+                value = [int(n) for n in numbers]
+        elif kind == "str_list":
+            parts = [part.strip() for part in text.replace(";", ",").split(",") if part.strip()]
+            if parts:
+                value = parts
+        if value is None:
+            if parser_warnings is not None:
+                parser_warnings.append(
+                    f"HARD_INVALID_SEARCH_CONTROL: {aliases[0]!r} is set to {raw!r}, "
+                    f"which is not a valid {kind.replace('_', ' ')}. Correct the value "
+                    f"or remove the row to use the engine default.")
+            continue
+        controls[name] = value
+    return controls
+
+
 def _instruction_get(m: Dict[str, Any], names: Sequence[str], default: Any = None) -> Any:
     for name in names:
         if norm(name) in m:
             return m[norm(name)]
     return default
+
+
+def _validate_numeric_instruction(
+    im: Dict[str, Any],
+    names: Sequence[str],
+    parser_warnings: List[str],
+    *,
+    allow_percent: bool = False,
+) -> None:
+    """Flag malformed numeric controls before permissive legacy coercion runs."""
+    for name in names:
+        key = norm(name)
+        if key not in im:
+            continue
+        raw = im[key]
+        if raw in (None, ""):
+            continue
+        if strict_float(raw, allow_percent=allow_percent) is None:
+            parser_warnings.append(
+                f"HARD_INVALID_INSTRUCTION_NUMBER:key={name!r};value={raw!r};"
+                "use a numeric value"
+            )
 
 
 def _terms_in_distinct_cells(terms: Sequence[str], values: Sequence[str]) -> bool:
@@ -1121,7 +1354,12 @@ def _terms_in_distinct_cells(terms: Sequence[str], values: Sequence[str]) -> boo
     return assign(0, set())
 
 
-def _find_header_row(ws: Any, required_terms: Sequence[str], max_rows: int = 30) -> int:
+def _find_header_row(
+    ws: Any,
+    required_terms: Sequence[str],
+    max_rows: int = 30,
+    prefer_day_columns: bool = False,
+) -> int:
     """Locate the header row of a sheet by the terms it must carry.
 
     The rule was "every term appears somewhere in the row", which one prose
@@ -1144,14 +1382,29 @@ def _find_header_row(ws: Any, required_terms: Sequence[str], max_rows: int = 30)
     """
     terms = [norm(x) for x in required_terms]
     loose_match: Optional[int] = None
+    strict_match: Optional[int] = None
+    day_anchored: Optional[int] = None
     for r in range(1, min(ws.max_row, max_rows) + 1):
         vals = [norm(ws.cell(r, c).value) for c in range(1, ws.max_column + 1)]
         if not all(any(term in value for value in vals) for term in terms):
             continue
+        # B-12: requiring DISTINCT cells does nothing for a single term, so a
+        # one-word lookup like ["name"] is still satisfied by a prose banner.
+        # A row that binds all seven weekdays is a header; a banner is not.
+        if prefer_day_columns and day_anchored is None:
+            if len(_day_columns(ws, r)) == 7:
+                day_anchored = r
         if _terms_in_distinct_cells(terms, vals):
-            return r
-        if loose_match is None:
+            if strict_match is None:
+                strict_match = r
+            if not prefer_day_columns:
+                return r
+        elif loose_match is None:
             loose_match = r
+    if day_anchored is not None:
+        return day_anchored
+    if strict_match is not None:
+        return strict_match
     return loose_match if loose_match is not None else 1
 
 
@@ -1205,7 +1458,11 @@ def _day_columns(ws: Any, header: int) -> List[int]:
     return result if len(result) == 7 else []
 
 
-def _parse_roster(wb: Any, prefer_final: bool = False) -> Tuple[List[Associate], List[Any], List[int]]:
+def _parse_roster(
+    wb: Any,
+    prefer_final: bool = False,
+    parser_warnings: Optional[List[str]] = None,
+) -> Tuple[List[Associate], List[Any], List[int]]:
     aliases = ["Final Schedule", "Schedule"] if prefer_final else ["Schedule", "Final Schedule"]
     ws = _sheet_by_alias(wb, aliases)
     if ws is None:
@@ -1223,6 +1480,8 @@ def _parse_roster(wb: Any, prefer_final: bool = False) -> Tuple[List[Associate],
         day_cols = list(range(7, 14))
     dates = [ws.cell(header, c).value for c in day_cols]
     associates: List[Associate] = []
+    seen_names: Dict[str, int] = {}
+    seen_emp_ids: Dict[str, int] = {}
     blank_run = 0
     for r in range(header + 1, ws.max_row + 1):
         name = str(ws.cell(r, name_col).value or "").strip()
@@ -1234,6 +1493,22 @@ def _parse_roster(wb: Any, prefer_final: bool = False) -> Tuple[List[Associate],
         blank_run = 0
         if norm(name) in {"total", "staffed hc", "required hc"}:
             continue
+        normalized_name = norm(name)
+        if normalized_name in seen_names and parser_warnings is not None:
+            parser_warnings.append(
+                f"HARD_DUPLICATE_ROSTER_NAME:duplicate={name!r};"
+                f"first_row={seen_names[normalized_name]};row={r}"
+            )
+        else:
+            seen_names[normalized_name] = r
+        employee_id = norm(ws.cell(r, 2).value)
+        if employee_id and employee_id in seen_emp_ids and parser_warnings is not None:
+            parser_warnings.append(
+                f"HARD_DUPLICATE_EMPLOYEE_ID:employee_id={employee_id!r};"
+                f"first_row={seen_emp_ids[employee_id]};row={r}"
+            )
+        elif employee_id:
+            seen_emp_ids[employee_id] = r
         fixed = [str(ws.cell(r, c).value or "").strip() for c in day_cols]
         associates.append(Associate(
             index=len(associates), row=r, slot=ws.cell(r, 1).value,
@@ -1248,37 +1523,138 @@ def _parse_roster(wb: Any, prefer_final: bool = False) -> Tuple[List[Associate],
     return associates, dates, day_cols
 
 
-def _parse_preferences(wb: Any, associates: List[Associate]) -> None:
+def _parse_departed_acknowledgements(im: Dict[str, Any]) -> Set[str]:
+    """Names the scheduler has explicitly declared as no longer on the roster.
+
+    This is the only escape from the unmatched-row contract failures below.
+    It is a list of names rather than a boolean on purpose: acknowledging that
+    one person left must not also silence a typo in someone else's name.
+    """
+    raw = _instruction_get(
+        im, ["Known Departed Associates", "Departed Associates", "Former Associates"], "")
+    if raw in (None, ""):
+        return set()
+    text = str(raw).replace(";", ",").replace("\n", ",")
+    return {norm(part) for part in text.split(",") if norm(part)}
+
+
+def _report_unmatched_name(
+    parser_warnings: Optional[List[str]],
+    code: str,
+    sheet: str,
+    supplied_name: str,
+    acknowledged: Set[str],
+    carries_data: bool = True,
+) -> None:
+    """Report an unmatched row, hard unless it asserts nothing or was acknowledged.
+
+    An unmatched row that carries no value asserts no constraint, so dropping
+    it cannot lose anything and failing the contract over it would be noise.
+    SAKS_NEW ships exactly such a row: a 51st Preference line against a
+    50-person roster with every day cell empty.
+
+    An unmatched row that DOES carry a value is the dangerous case, and stays a
+    contract failure. The engine cannot tell a misspelling of a roster member
+    from someone who genuinely left -- the same SAKS row carries a real
+    previous-Saturday shift on the boundary sheet -- and that is the reason to
+    make a human reconcile it rather than to guess.
+
+    An acknowledged name still produces a warning. The list exists to let a run
+    proceed, never to make a dropped row invisible.
+    """
+    if parser_warnings is None:
+        return
+    if not carries_data:
+        parser_warnings.append(
+            f"UNMATCHED_EMPTY_ROW_IGNORED: {supplied_name!r} on the {sheet} sheet is not in "
+            f"the Schedule roster. The row is empty, so no constraint was lost."
+        )
+        return
+    if norm(supplied_name) in acknowledged:
+        parser_warnings.append(
+            f"DEPARTED_ASSOCIATE_ROW_IGNORED: {supplied_name!r} on the {sheet} sheet is not in "
+            f"the Schedule roster and was ignored because it is listed under "
+            f"'Known Departed Associates'."
+        )
+        return
+    parser_warnings.append(
+        f"{code}: {supplied_name!r} on the {sheet} sheet is not in the Schedule roster. "
+        f"Correct the spelling, or list the name under 'Known Departed Associates' in "
+        f"Instructions to confirm the row should be dropped."
+    )
+
+
+def _parse_preferences(
+    wb: Any,
+    associates: List[Associate],
+    parser_warnings: Optional[List[str]] = None,
+    acknowledged_departed: Optional[Set[str]] = None,
+) -> None:
+    acknowledged = acknowledged_departed or set()
     ws = _sheet_by_alias(wb, ["Preference", "Prefrence", "Preferences"])
     by_name = {norm(a.name): a for a in associates}
     if ws is not None:
-        header = _find_header_row(ws, ["name"])
+        header = _find_header_row(ws, ["name"], prefer_day_columns=True)
         headers = {norm(ws.cell(header, c).value): c for c in range(1, ws.max_column + 1)}
         name_col = next((c for h, c in headers.items() if "name" in h), 1)
         day_cols = _day_columns(ws, header)
         if not day_cols:
             day_cols = list(range(name_col + 2, name_col + 9))
         for r in range(header + 1, ws.max_row + 1):
-            assoc = by_name.get(norm(ws.cell(r, name_col).value))
+            supplied_name = str(ws.cell(r, name_col).value or "").strip()
+            assoc = by_name.get(norm(supplied_name))
             if assoc:
                 assoc.preferences = [str(ws.cell(r, c).value or "").strip() for c in day_cols]
+            elif supplied_name:
+                # Preferences carry approved leave and hard OFF. Dropping a
+                # populated row schedules someone who is not available.
+                _report_unmatched_name(
+                    parser_warnings, "HARD_PREFERENCE_UNKNOWN_ASSOCIATE",
+                    "Preference", supplied_name, acknowledged,
+                    carries_data=any(
+                        str(ws.cell(r, c).value or "").strip() for c in day_cols))
     prev = _sheet_by_alias(wb, ["Previous week scheduled", "Previous Week Scheduled"])
     if prev is not None:
-        header = _find_header_row(prev, ["name"])
+        header = _find_header_row(prev, ["name"], prefer_day_columns=True)
         headers = {norm(prev.cell(header, c).value): c for c in range(1, prev.max_column + 1)}
         name_col = next((c for h, c in headers.items() if "name" in h), 2)
         sat_col = next((c for h, c in headers.items() if h.startswith("sat")), 4)
+        seen_previous: Set[str] = set()
         for r in range(header + 1, prev.max_row + 1):
-            assoc = by_name.get(norm(prev.cell(r, name_col).value))
+            supplied_name = str(prev.cell(r, name_col).value or "").strip()
+            if not supplied_name:
+                continue
+            normalized_name = norm(supplied_name)
+            if normalized_name in seen_previous:
+                if parser_warnings is not None:
+                    parser_warnings.append(
+                        f"HARD_PREVIOUS_SATURDAY_DUPLICATE: {supplied_name!r} appears more than once."
+                    )
+                continue
+            seen_previous.add(normalized_name)
+            assoc = by_name.get(normalized_name)
             if assoc:
                 assoc.previous_saturday = str(prev.cell(r, sat_col).value or "").strip()
+            else:
+                # A duplicate on this sheet is already a hard failure. An
+                # unknown name drops the Sunday rest-gap carry-in entirely,
+                # which is not the lesser defect.
+                _report_unmatched_name(
+                    parser_warnings, "HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE",
+                    "Previous week scheduled", supplied_name, acknowledged,
+                    carries_data=bool(str(prev.cell(r, sat_col).value or "").strip()))
 
 
-def _parse_fixed_nesting(wb: Any, associates: List[Associate], parser_warnings: List[str]) -> None:
+def _parse_fixed_nesting(
+    wb: Any,
+    associates: List[Associate],
+    parser_warnings: List[str],
+    acknowledged_departed: Optional[Set[str]] = None,
+) -> None:
     ws = _sheet_by_alias(wb, ["Fixed Request", "Fixed Requests", "Nesting", "Fixed/Nesting"])
     if ws is None:
         return
-    header = _find_header_row(ws, ["name"])
+    header = _find_header_row(ws, ["name"], prefer_day_columns=True)
     headers = {norm(ws.cell(header, c).value): c for c in range(1, ws.max_column + 1)}
     name_col = next((c for h, c in headers.items() if "name" in h), None)
     group_col = next((c for h, c in headers.items() if "group" in h or "nest" in h), None)
@@ -1287,13 +1663,25 @@ def _parse_fixed_nesting(wb: Any, associates: List[Associate], parser_warnings: 
     if name_col is None:
         parser_warnings.append("Fixed/nesting sheet found but no associate-name column was recognized.")
         return
+    acknowledged = acknowledged_departed or set()
     by_name = {norm(a.name): a for a in associates}
     matched = 0
     for r in range(header + 1, ws.max_row + 1):
-        assoc = by_name.get(norm(ws.cell(r, name_col).value))
-        if not assoc:
-            continue
+        supplied_name = str(ws.cell(r, name_col).value or "").strip()
+        # The active flag is checked before the name: a row the workbook has
+        # switched off asserts nothing, so whose name is on it does not matter.
         if active_col and not yes(ws.cell(r, active_col).value, True):
+            continue
+        assoc = by_name.get(norm(supplied_name))
+        if not assoc:
+            if supplied_name:
+                row_values = [str(ws.cell(r, c).value or "").strip() for c in day_cols]
+                row_group = (str(ws.cell(r, group_col).value or "").strip()
+                             if group_col else "")
+                _report_unmatched_name(
+                    parser_warnings, "HARD_FIXED_REQUEST_UNKNOWN_ASSOCIATE",
+                    "Fixed Request", supplied_name, acknowledged,
+                    carries_data=bool(any(row_values) or row_group))
             continue
         matched += 1
         group_value = str(ws.cell(r, group_col).value or "").strip() if group_col else ""
@@ -1394,10 +1782,38 @@ def _discover_requirement_sheet(wb: Any, im: Optional[Dict[str, Any]] = None) ->
     raise ValueError("Requirement sheet with Sun-Sat interval columns was not found")
 
 
-def _detect_interval_minutes(ws: Any, header: int, im: Dict[str, Any]) -> int:
-    instructed = int(round(to_float(_instruction_get(im, ["Interval Granularity Minutes", "Interval Minutes", "Interval"], 0), 0)))
-    if instructed in {15, 30, 60}:
-        return instructed
+INTERVAL_MINUTE_CHOICES = (15, 30, 60)
+
+
+def _detect_interval_minutes(
+    ws: Any, header: int, im: Dict[str, Any],
+    parser_warnings: Optional[List[str]] = None,
+) -> int:
+    """Interval granularity: the workbook's value when it states one.
+
+    Absent and supplied-but-invalid used to be the same thing here - both fell
+    through to inference, and inference returns a plausible-looking 60. A
+    scheduler who typed 45 got a 60-minute schedule and every coverage
+    percentage in the release was computed against a granularity they did not
+    choose, with no warning anywhere.
+
+    Interval granularity is the denominator of every coverage number the
+    release reports, so a wrong one is not recoverable downstream. Absent still
+    infers from the demand sheet's own time column; supplied-and-invalid is now
+    a HARD_ parser warning that blocks the run.
+    """
+    raw = _instruction_get(im, ["Interval Granularity Minutes", "Interval Minutes", "Interval"], None)
+    if raw not in (None, ""):
+        value = strict_float(raw)
+        instructed = int(value) if value is not None and value == int(value) else None
+        if instructed in INTERVAL_MINUTE_CHOICES:
+            return instructed
+        if parser_warnings is not None:
+            parser_warnings.append(
+                f"HARD_INVALID_INTERVAL_MINUTES:value={raw!r}; "
+                f"use one of {', '.join(str(c) for c in INTERVAL_MINUTE_CHOICES)}, "
+                f"or leave the row blank to infer it from the demand sheet"
+            )
     times: List[int] = []
     for r in range(header + 1, ws.max_row + 1):
         minute = next((minute_of_day(ws.cell(r, c).value) for c in range(1, min(4, ws.max_column) + 1) if minute_of_day(ws.cell(r, c).value) is not None), None)
@@ -1421,26 +1837,48 @@ def _time_column(ws: Any, header: int) -> int:
     return max(counts)[1] if counts else 2
 
 
-def _parse_requirement_table(wb: Any, im: Dict[str, Any]) -> Tuple[List[List[Optional[float]]], List[List[float]], List[List[bool]], List[Any], int, str, str]:
+def _parse_requirement_table(
+    wb: Any,
+    im: Dict[str, Any],
+    parser_warnings: Optional[List[str]] = None,
+) -> Tuple[List[List[Optional[float]]], List[List[float]], List[List[bool]], List[Any], int, str, str]:
     req_ws = _discover_requirement_sheet(wb, im)
     header = _find_header_row(req_ws, ["sun", "mon"])
     day_cols = _day_columns(req_ws, header)
     if len(day_cols) != 7:
         raise ValueError(f"Could not identify seven day columns in {req_ws.title}")
     time_col = _time_column(req_ws, header)
-    interval = _detect_interval_minutes(req_ws, header, im)
+    interval = _detect_interval_minutes(req_ws, header, im, parser_warnings)
     per_day = 1440 // interval
     requirements: List[List[Optional[float]]] = [[None] * per_day for _ in range(7)]
     dates = [req_ws.cell(header + 1, c).value for c in day_cols]
     populated = 0
     for r in range(header + 1, req_ws.max_row + 1):
-        minute = minute_of_day(req_ws.cell(r, time_col).value)
+        raw_time = req_ws.cell(r, time_col).value
+        minute = minute_of_day(raw_time)
+        if raw_time not in (None, "") and minute is None and parser_warnings is not None:
+            parser_warnings.append(
+                f"HARD_INVALID_REQUIREMENT_TIME:sheet={req_ws.title};row={r};"
+                f"value={raw_time!r};use HH:MM with 00<=HH<24 and 00<=MM<60"
+            )
         if minute is None or minute % interval != 0:
             continue
         index = minute // interval
         for d, c in enumerate(day_cols):
             value = req_ws.cell(r, c).value
-            requirements[d][index] = None if value in (None, "") else max(0.0, to_float(value, 0.0))
+            if value in (None, ""):
+                requirements[d][index] = None
+            else:
+                numeric = strict_float(value)
+                if numeric is None or numeric < 0:
+                    if parser_warnings is not None:
+                        parser_warnings.append(
+                            f"HARD_INVALID_REQUIREMENT_VALUE:sheet={req_ws.title};row={r};"
+                            f"day={DAY_NAMES[d]};value={value!r};use a non-negative number"
+                        )
+                    requirements[d][index] = None
+                else:
+                    requirements[d][index] = numeric
             if requirements[d][index] is not None:
                 populated += 1
     if populated == 0:
@@ -1461,12 +1899,29 @@ def _parse_requirement_table(wb: Any, im: Dict[str, Any]) -> Tuple[List[List[Opt
         shr_time = _time_column(shr_ws, shr_header)
         if len(shr_days) == 7:
             for r in range(shr_header + 1, shr_ws.max_row + 1):
-                minute = minute_of_day(shr_ws.cell(r, shr_time).value)
+                raw_time = shr_ws.cell(r, shr_time).value
+                minute = minute_of_day(raw_time)
+                if raw_time not in (None, "") and minute is None and parser_warnings is not None:
+                    parser_warnings.append(
+                        f"HARD_INVALID_SHRINKAGE_TIME:sheet={shr_ws.title};row={r};"
+                        f"value={raw_time!r};use HH:MM with 00<=HH<24 and 00<=MM<60"
+                    )
                 if minute is None or minute % interval != 0:
                     continue
                 index = minute // interval
                 for d, c in enumerate(shr_days):
-                    shrinkage[d][index] = min(0.95, max(0.0, to_float(shr_ws.cell(r, c).value, 0.0)))
+                    value = shr_ws.cell(r, c).value
+                    if value in (None, ""):
+                        continue
+                    numeric = strict_float(value, allow_percent=True)
+                    if numeric is None or not (0.0 <= numeric < 1.0):
+                        if parser_warnings is not None:
+                            parser_warnings.append(
+                                f"HARD_INVALID_SHRINKAGE_VALUE:sheet={shr_ws.title};row={r};"
+                                f"day={DAY_NAMES[d]};value={value!r};use a ratio from 0 to less than 1"
+                            )
+                        continue
+                    shrinkage[d][index] = numeric
     active = [[requirements[d][i] is not None and requirements[d][i] > 0 for i in range(per_day)] for d in range(7)]
     return requirements, shrinkage, active, dates, interval, req_ws.title, shrinkage_name
 
@@ -1475,13 +1930,83 @@ def _split_languages(value: Any) -> Set[str]:
     return {norm(x) for x in re.split(r"[,;/|]+", str(value or "")) if norm(x)}
 
 
+_LANGUAGE_DAY_INDEX = {
+    "sun": 0, "sunday": 0, "mon": 1, "monday": 1,
+    "tue": 2, "tues": 2, "tuesday": 2, "wed": 3, "wednesday": 3,
+    "thu": 4, "thur": 4, "thurs": 4, "thursday": 4,
+    "fri": 5, "friday": 5, "sat": 6, "saturday": 6,
+}
+
+
+def _alias_key(value: Any) -> str:
+    """Normalise for alias matching: lowercase, alphanumerics only.
+
+    `norm()` keeps inner spaces and punctuation, so alias sets written as
+    single words ("alldays", "everyday") silently never match the spaced
+    spellings people type. Every alias comparison should go through this.
+    """
+    return re.sub(r"[^a-z0-9]", "", norm(value))
+
+
+def _parse_language_days(value: Any) -> Set[int]:
+    """Parse Language Setup Coverage Days; invalid text must not mean all days."""
+    text = str(value or "").strip()
+    # `norm()` lowercases and trims but does NOT remove inner spaces, so the
+    # aliases "alldays", "everyday" and "7days" could never match the way a
+    # scheduler actually writes them - "All Days", "Every Day", "7 Days" - and
+    # those spellings were rejected as malformed. Collapsing to alphanumerics
+    # is what the alias list always assumed. This is the same mistaken
+    # assumption about `norm()` that made the language-window flag inert (A51),
+    # so it is fixed here rather than worked around in the workbook.
+    if not text or _alias_key(text) in {"all", "alldays", "daily", "everyday", "7days"}:
+        return set(range(7))
+    aliases = dict(_LANGUAGE_DAY_INDEX)
+    aliases.update({"m": 1, "w": 3, "f": 5})
+    lowered = text.lower().replace("–", "-").replace("—", "-")
+    tokens = [token.strip() for token in re.split(r"[,;/|&]+", lowered) if token.strip()]
+    if len(tokens) == 1 and _alias_key(tokens[0]) in {"weekday", "weekdays"}:
+        return {1, 2, 3, 4, 5}
+    if len(tokens) == 1 and _alias_key(tokens[0]) in {"weekend", "weekends"}:
+        return {0, 6}
+    days: Set[int] = set()
+    invalid: List[str] = []
+    for raw_token in tokens:
+        token = re.sub(r"\s+", " ", raw_token).strip()
+        range_parts = re.split(r"\s*-\s*|\s+to\s+", token, maxsplit=1)
+        if len(range_parts) == 2:
+            left, right = (norm(part) for part in range_parts)
+            if left in aliases and right in aliases:
+                start = aliases[left]
+                end = aliases[right]
+                cursor = start
+                while True:
+                    days.add(cursor)
+                    if cursor == end:
+                        break
+                    cursor = (cursor + 1) % 7
+                continue
+            invalid.append(raw_token)
+            continue
+        single = norm(token)
+        if single in aliases:
+            days.add(aliases[single])
+        else:
+            invalid.append(raw_token)
+    if invalid:
+        raise ValueError(
+            f"Invalid Coverage Days value {text!r}; use All, Weekdays, Weekends, "
+            "a day range such as Sun-Thu, or comma-separated day names."
+        )
+    return days
+
+
 def _parse_language_rules(
-    wb: Any, associates: List[Associate]
+    wb: Any, associates: List[Associate], parser_warnings: Optional[List[str]] = None
 ) -> Tuple[List[LanguageRule], Dict[str, Set[str]], Dict[str, Tuple[int, int, bool]]]:
     ws = _sheet_by_alias(wb, ["Language Setup", "Skill Setup", "Skills Setup"])
     roster_languages = {norm(a.language) for a in associates if norm(a.language)}
     if ws is None:
-        return [], {lang: {lang} for lang in roster_languages}
+        return [], {lang: {lang} for lang in roster_languages}, {}
     header = _find_header_row(ws, ["language", "minimum"])
     headers = {norm(ws.cell(header, c).value): c for c in range(1, ws.max_column + 1)}
     def find_col(needles: Sequence[str], default: Optional[int] = None) -> Optional[int]:
@@ -1493,6 +2018,7 @@ def _parse_language_rules(
     c_active = find_col(["active", "enabled"], None)
     c_group = find_col(["coverage group", "skill group", "group"], None)
     c_min = find_col(["minimum per interval", "minimum", "min hc", "min fte"], None)
+    c_days = find_col(["coverage days", "active days", "days active", "operating days"], None)
 
     rows: List[Dict[str, Any]] = []
     capabilities: Dict[str, Set[str]] = {lang: {lang} for lang in roster_languages}
@@ -1503,21 +2029,56 @@ def _parse_language_rules(
             continue
         targets = _split_languages(ws.cell(r, c_can).value if c_can else "") | {source}
         capabilities.setdefault(source, {source}).update(targets)
-        active = yes(ws.cell(r, c_active).value, True) if c_active else True
-        minimum = int(round(to_float(ws.cell(r, c_min).value, 0.0))) if c_min else 0
-        start = minute_of_day(ws.cell(r, c_start).value) if c_start else 0
-        end = minute_of_day(ws.cell(r, c_end).value) if c_end else 0
+        active_raw = ws.cell(r, c_active).value if c_active else None
+        active = yes(active_raw, True) if c_active else True
+        if c_active and norm(active_raw):
+            active_token = norm(active_raw)
+            if active_token not in {
+                "yes", "y", "true", "1", "enabled", "on", "hard", "required",
+                "no", "n", "false", "0", "disabled", "off",
+            } and parser_warnings is not None:
+                parser_warnings.append(
+                    f"HARD_INVALID_LANGUAGE_ACTIVE:row={r};value={active_raw!r};use Yes or No"
+                )
+        minimum_raw = ws.cell(r, c_min).value if c_min else None
+        minimum_value = strict_float(minimum_raw) if c_min and minimum_raw not in (None, "") else 0.0
+        if c_min and minimum_raw not in (None, "") and minimum_value is None and parser_warnings is not None:
+            parser_warnings.append(
+                f"HARD_INVALID_LANGUAGE_MINIMUM:row={r};value={minimum_raw!r};use a non-negative number"
+            )
+        minimum = int(round(minimum_value if minimum_value is not None else 0.0))
+        start_raw = ws.cell(r, c_start).value if c_start else None
+        end_raw = ws.cell(r, c_end).value if c_end else None
+        start = minute_of_day(start_raw) if c_start else 0
+        end = minute_of_day(end_raw) if c_end else 0
+        for field_name, raw_value, parsed_value in (
+            ("start", start_raw, start), ("end", end_raw, end)
+        ):
+            if raw_value not in (None, "") and parsed_value is None and parser_warnings is not None:
+                parser_warnings.append(
+                    f"HARD_INVALID_LANGUAGE_TIME:row={r};field={field_name};"
+                    f"value={raw_value!r};use HH:MM with 00<=HH<24 and 00<=MM<60"
+                )
         group = str(ws.cell(r, c_group).value or language).strip() if c_group else language
-        rows.append({"language": language, "source": source, "targets": targets, "active": active, "minimum": minimum, "start": start, "end": end, "group": group})
+        try:
+            active_days = _parse_language_days(ws.cell(r, c_days).value if c_days else "")
+        except ValueError as exc:
+            if parser_warnings is not None and active:
+                parser_warnings.append(f"HARD_INVALID_LANGUAGE_COVERAGE_DAYS:{exc}")
+            # Empty active_days means this malformed row cannot silently add
+            # coverage on all seven days. Preflight turns the warning into a
+            # hard contract failure before CP-SAT starts.
+            active_days = set()
+        rows.append({"language": language, "source": source, "targets": targets, "active": active, "minimum": minimum, "start": start, "end": end, "group": group, "active_days": active_days})
 
-    grouped: Dict[Tuple[str, int, int, int], List[Dict[str, Any]]] = {}
+    grouped: Dict[Tuple[str, int, int, int, Tuple[int, ...]], List[Dict[str, Any]]] = {}
     for row in rows:
         if not row["active"] or row["minimum"] <= 0 or row["start"] is None or row["end"] is None:
             continue
-        key = (norm(row["group"]), int(row["start"]), int(row["end"]), int(row["minimum"]))
+        key = (norm(row["group"]), int(row["start"]), int(row["end"]), int(row["minimum"]), tuple(sorted(row["active_days"])))
         grouped.setdefault(key, []).append(row)
     rules: List[LanguageRule] = []
-    for (group_norm, start, end, minimum), group_rows in grouped.items():
+    for (group_norm, start, end, minimum, active_days), group_rows in grouped.items():
         required = {row["source"] for row in group_rows}
         eligible = {source for source, targets in capabilities.items() if targets & required}
         display_group = str(group_rows[0]["group"] or group_rows[0]["language"])
@@ -1525,6 +2086,7 @@ def _parse_language_rules(
             language=str(group_rows[0]["language"]), group=display_group,
             start_min=start, end_min=end, minimum=minimum, active=True,
             required_languages=required, eligible_languages=eligible,
+            active_days=set(active_days),
         ))
     # Coverage Start/End also bounds the hours the associates of that language
     # may be scheduled, which is a different question from how many of them must
@@ -1532,14 +2094,27 @@ def _parse_language_rules(
     # dropped before a rule is built, and rows sharing a group and window are
     # merged, so French with its own minimum disappears into Bilingual/French.
     # Keep the per-language windows exactly as authored.
-    windows: Dict[str, Tuple[int, int, bool]] = {}
+    windows: Dict[str, List[Tuple[int, int, bool]]] = {}
     for row in rows:
         if not row["active"] or row["start"] is None or row["end"] is None:
             continue
         if int(row["start"]) == int(row["end"]):
             continue  # a window that spans the whole day restricts nothing
-        windows[row["source"]] = (int(row["start"]), int(row["end"]), int(row["minimum"]) > 0)
-    return rules, capabilities, windows
+        entry = (int(row["start"]), int(row["end"]), int(row["minimum"]) > 0)
+        if row["active_days"] == set(range(7)):
+            windows.setdefault(row["source"], []).append(entry)
+        else:
+            for day in row["active_days"]:
+                windows.setdefault(f"{row['source']}@@{day}", []).append(entry)
+    # Preserve the legacy tuple shape for single-window keys so older
+    # regression fixtures and downstream readers remain compatible. A key
+    # with multiple authored windows is represented as a list and is handled
+    # by `_coerce_language_window_entries`.
+    compact_windows: Dict[str, Any] = {
+        key: entries[0] if len(entries) == 1 else entries
+        for key, entries in windows.items()
+    }
+    return rules, capabilities, compact_windows
 
 
 COVERAGE_SPLIT_SHEET_ALIASES = ("coverage split", "coverage responsibility", "language coverage split")
@@ -1829,22 +2404,74 @@ def _parse_coverage_split(
     return rules, ("ACTIVE" if rules else "NO_ACTIVE_ROWS")
 
 
-def _parse_break_segments(im: Dict[str, Any]) -> Tuple[Tuple[int, str], ...]:
-    short_count = int(round(to_float(_instruction_get(im, ["Short Break Count", "Count of Short Breaks", "Number of Short Breaks"], 2), 2)))
-    short_min = int(round(to_float(_instruction_get(im, ["Short Break Duration Minutes", "Short Break Duration", "Break Duration Minutes"], 15), 15)))
-    lunch_count = int(round(to_float(_instruction_get(im, ["Lunch Count", "Meal Count", "Count of Lunch Breaks"], 1), 1)))
-    lunch_min = int(round(to_float(_instruction_get(im, ["Lunch Duration Minutes", "Lunch Duration", "Meal Duration Minutes"], 30), 30)))
-    if short_min not in {15, 30, 45, 60}:
-        short_min = 15
-    if lunch_min not in {15, 30, 45, 60}:
-        lunch_min = 30
+BREAK_DURATION_CHOICES = (15, 30, 45, 60)
+
+
+def _parse_break_segments(
+    im: Dict[str, Any], parser_warnings: Optional[List[str]] = None
+) -> Tuple[Tuple[int, str], ...]:
+    """Break structure exactly as the workbook states it.
+
+    Three silent rewrites used to live here, and each one let the engine
+    schedule a break contract the business never asked for:
+
+    * an out-of-set duration was coerced (20-minute breaks became 15);
+    * a negative count was swallowed by ``max(0, ...)``;
+    * an empty result was backfilled with a hard-coded 15/30/15, so a
+      contract stating ZERO breaks received 60 minutes of them per associate.
+
+    Break minutes drive required headcount directly - the break-capacity
+    arithmetic is ``need * shift_q / (shift_q - break_q)`` - so a silently
+    rewritten break contract sizes the roster for a different business
+    agreement, with nothing in the audit trail to show it happened.
+
+    Absent is still absent: a workbook that never states these rows keeps the
+    historical 15/30/15 default. Supplied-and-invalid is now a HARD_ parser
+    warning, which `validate_input_contract` turns into a contract failure
+    before CP-SAT starts. Zero breaks is a legitimate contract and yields zero
+    segments.
+    """
+    def _count(names: Sequence[str], default: int, label: str) -> int:
+        raw = _instruction_get(im, names, None)
+        if raw in (None, ""):
+            return default
+        value = strict_float(raw)
+        if value is None or value != int(value) or int(value) < 0:
+            if parser_warnings is not None:
+                parser_warnings.append(
+                    f"HARD_INVALID_BREAK_CONTRACT:{label}={raw!r}; "
+                    f"use a whole number of zero or more"
+                )
+            return default
+        return int(value)
+
+    def _duration(names: Sequence[str], default: int, label: str) -> int:
+        raw = _instruction_get(im, names, None)
+        if raw in (None, ""):
+            return default
+        value = strict_float(raw)
+        minutes = int(value) if value is not None and value == int(value) else None
+        if minutes not in BREAK_DURATION_CHOICES:
+            if parser_warnings is not None:
+                parser_warnings.append(
+                    f"HARD_INVALID_BREAK_CONTRACT:{label}={raw!r}; "
+                    f"use one of {', '.join(str(c) for c in BREAK_DURATION_CHOICES)} minutes"
+                )
+            return default
+        return minutes
+
+    short_count = _count(["Short Break Count", "Count of Short Breaks", "Number of Short Breaks"], 2, "Short Break Count")
+    short_min = _duration(["Short Break Duration Minutes", "Short Break Duration", "Break Duration Minutes"], 15, "Short Break Duration Minutes")
+    lunch_count = _count(["Lunch Count", "Meal Count", "Count of Lunch Breaks"], 1, "Lunch Count")
+    lunch_min = _duration(["Lunch Duration Minutes", "Lunch Duration", "Meal Duration Minutes"], 30, "Lunch Duration Minutes")
+
     segments: List[Tuple[int, str]] = []
-    for i in range(max(0, short_count)):
+    for i in range(short_count):
         segments.append((short_min // 15, f"Break {i + 1}"))
-    for i in range(max(0, lunch_count)):
+    for i in range(lunch_count):
         segments.append((lunch_min // 15, "Lunch" if lunch_count == 1 else f"Lunch {i + 1}"))
-    if not segments:
-        segments = [(1, "Break 1"), (2, "Lunch"), (1, "Break 2")]
+    # No backfill. An explicit zero-break contract returns zero segments; a
+    # workbook that states nothing at all has already taken the defaults above.
     # Preserve operational order for the common 15/30/15 contract.
     if len(segments) == 3 and sorted(length for length, _ in segments) == [1, 1, 2]:
         return ((1, "Break 1"), (2, "Lunch"), (1, "Break 2"))
@@ -1968,23 +2595,6 @@ def _parse_break_window_controls(
     return rules, edge_q, hard_min_q, preferred_q, normal_max_q, source
 
 
-def fallback_break_gap_diagnostics(parsed: ParsedInput, break_rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
-    """Summarize imported fallback break-gap violations against the active contract.
-
-    RC8.6 exposes this explicitly so a rejected current-contract fallback says
-    whether the blocker is a newly stricter absolute spacing control rather than
-    a real coverage or language infeasibility.
-    """
-    hard_min_minutes = int(getattr(parsed, "break_min_gap_q", 0) * 15)
-    preferred_minutes = int(getattr(parsed, "break_preferred_gap_q", 0) * 15)
-    return {
-        "status": "DIAGNOSTIC_AVAILABLE",
-        "absolute_minimum_gap_minutes": hard_min_minutes,
-        "preferred_gap_minutes": preferred_minutes,
-        "violation_count": 0,
-        "note": "Runtime fallback validation records exact associate/day gap rows when a fallback is rejected.",
-    }
-
 # What the workbook may say, and what it means. Kept deliberately forgiving:
 # these are dropdown values a scheduler types, not machine tokens.
 RUN_STAGE_VALUES = {
@@ -2011,7 +2621,7 @@ RUN_DEPTH_VALUES = {
 RUN_DEPTH_SECONDS = {"QUICK": 3600, "DEEP": 14400, "OVERNIGHT": 21600}
 
 
-LANGUAGE_WINDOW_MODES = ("OFF", "MINIMUM_ROWS", "ALL_ROWS")
+LANGUAGE_WINDOW_MODES = ("OFF", "MINIMUM_ROWS", "ALL_ROWS", "REQUIRED_LANGUAGE_ONLY")
 
 
 def normalize_language_window_mode(raw: Any) -> str:
@@ -2036,26 +2646,64 @@ def normalize_language_window_mode(raw: Any) -> str:
     if text in {"allrows", "all", "alllanguages", "everyrow", "allactiverows",
                 "everyactiverow", "allactivelanguagerows"}:
         return "ALL_ROWS"
+    if text in {"requiredlanguageonly", "requiredlanguagesonly", "qualifiedonly",
+                "requiredonly", "languageexclusive", "exclusive"}:
+        return "REQUIRED_LANGUAGE_ONLY"
     if text in {"rowswithaminimum", "minimumrows", "withminimum", "yes", "on",
                 "enabled", "rowswithminimum"}:
         return "MINIMUM_ROWS"
     return "OFF"
 
 
-def associate_language_window(
-    parsed: ParsedInput, associate: Associate
-) -> Optional[Tuple[int, int]]:
-    """The hours this associate may be scheduled, or None when unrestricted."""
+def _coerce_language_window_entries(value: Any) -> List[Tuple[int, int, bool]]:
+    """Normalize legacy single-window and current multi-window values."""
+    if value is None:
+        return []
+    if isinstance(value, tuple) and len(value) == 3 and not isinstance(value[0], (tuple, list)):
+        return [(int(value[0]), int(value[1]), bool(value[2]))]
+    if isinstance(value, list) and len(value) == 3 and not isinstance(value[0], (tuple, list)):
+        return [(int(value[0]), int(value[1]), bool(value[2]))]
+    if isinstance(value, (list, tuple)):
+        entries: List[Tuple[int, int, bool]] = []
+        for item in value:
+            if isinstance(item, (list, tuple)) and len(item) == 3:
+                entries.append((int(item[0]), int(item[1]), bool(item[2])))
+        return entries
+    return []
+
+
+def _authored_language_windows(
+    parsed: ParsedInput, associate: Associate, day: Optional[int] = None
+) -> List[Tuple[int, int, bool]]:
+    """Return all authored windows before mode-specific filtering."""
+    source = norm(getattr(associate, "language", ""))
+    windows = getattr(parsed, "language_windows", {}) or {}
+    day_entries = windows.get(f"{source}@@{day}") if day is not None else None
+    entries = _coerce_language_window_entries(day_entries)
+    if not entries:
+        entries = _coerce_language_window_entries(windows.get(source))
+    return entries
+
+
+def associate_language_windows(
+    parsed: ParsedInput, associate: Associate, day: Optional[int] = None
+) -> List[Tuple[int, int]]:
+    """Return all applicable working windows for one associate-day."""
     mode = getattr(parsed, "language_working_window_mode", "OFF")
     if mode == "OFF":
-        return None
-    entry = getattr(parsed, "language_windows", {}).get(norm(getattr(associate, "language", "")))
-    if entry is None:
-        return None
-    start, end, has_minimum = entry
-    if mode == "MINIMUM_ROWS" and not has_minimum:
-        return None
-    return start, end
+        return []
+    entries = _authored_language_windows(parsed, associate, day)
+    if mode == "MINIMUM_ROWS":
+        entries = [entry for entry in entries if entry[2]]
+    return [(start, end) for start, end, _has_minimum in entries]
+
+
+def associate_language_window(
+    parsed: ParsedInput, associate: Associate, day: Optional[int] = None
+) -> Optional[Tuple[int, int]]:
+    """Backward-compatible first-window accessor for legacy callers/tests."""
+    windows = associate_language_windows(parsed, associate, day)
+    return windows[0] if windows else None
 
 
 def shift_within_language_window(shift: Shift, window: Tuple[int, int]) -> bool:
@@ -2085,6 +2733,31 @@ def shift_within_language_window(shift: Shift, window: Tuple[int, int]) -> bool:
     return offset < span
 
 
+def shift_overlaps_required_language_for_noneligible(
+    parsed: ParsedInput, associate: Associate, shift: Shift, day: int
+) -> Optional[LanguageRule]:
+    """Return the first required language rule this associate cannot cover.
+
+    ``REQUIRED_LANGUAGE_ONLY`` is intentionally stricter than the historical
+    working-window modes: during a required UK/French/etc. window, an
+    English-only associate cannot be scheduled at all.  A bilingual associate
+    remains eligible only when the rule explicitly lists that target language
+    in ``Can Cover Languages``.  The whole shift is rejected when any part of
+    it overlaps the required window, preventing an English shift from spilling
+    into a UK-required interval.
+    """
+    if getattr(parsed, "language_working_window_mode", "OFF") != "REQUIRED_LANGUAGE_ONLY":
+        return None
+    start_q = day * 96 + shift.start_min // 15
+    for offset in range(max(1, shift.duration_q)):
+        qslot = start_q + offset
+        minute = (qslot % 96) * 15
+        for rule in language_rules_at(parsed, minute, 15, day=day):
+            if int(rule.minimum) > 0 and not language_eligible(rule, associate):
+                return rule
+    return None
+
+
 def language_working_window_violations(
     parsed: ParsedInput, skeleton: SkeletonSolution
 ) -> Dict[str, Any]:
@@ -2100,21 +2773,20 @@ def language_working_window_violations(
     answers "what would enforcement change", not "what did it enforce".
     """
     rows: List[Dict[str, Any]] = []
-    windows = getattr(parsed, "language_windows", {}) or {}
     for a, d, si in scheduled_cells(skeleton):
         assoc = parsed.associates[a]
-        entry = windows.get(norm(getattr(assoc, "language", "")))
-        if entry is None:
+        authored_entries = _authored_language_windows(parsed, assoc, day=d)
+        entries = [(start, end) for start, end, _has_minimum in authored_entries]
+        if not entries:
             continue
-        start, end, has_minimum = entry
         shift = parsed.shifts[si]
-        if shift_within_language_window(shift, (start, end)):
+        if any(shift_within_language_window(shift, window) for window in entries):
             continue
         rows.append({
             "associate": assoc.name, "language": getattr(assoc, "language", ""),
             "day": DAY_NAMES[d], "shift": shift.label,
-            "window": f"{hhmm(start)}-{hhmm(end)}",
-            "row_has_minimum": bool(has_minimum),
+            "window": ", ".join(f"{hhmm(start)}-{hhmm(end)}" for start, end in entries),
+            "row_has_minimum": any(has_minimum for _start, _end, has_minimum in authored_entries),
         })
     with_minimum = sum(1 for row in rows if row["row_has_minimum"])
     return {
@@ -2162,8 +2834,34 @@ def parse_input(
     im = dict(engine_defaults)
     im.update(visible_instructions)
     parser_warnings: List[str] = []
+    numeric_instruction_specs = [
+        (["Count of Associates", "Roster Count", "Headcount"], False),
+        (["Shift Start Step Minutes", "Shift Start Step"], False),
+        (["Difference Between Shifts", "Rest Gap Hours", "Minimum Rest Gap"], False),
+        (["Opening Minimum FTE", "Opening Minimum HC", "Opening Guard Intervals"], False),
+        (["Target", "Coverage Target", "Interval Target"], True),
+        (["Minimum Per Interval", "Coverage Floor", "Minimum Coverage Percentage"], True),
+        (["Hard Floor Tolerance", "Coverage Floor Tolerance", "Minimum Floor Tolerance"], True),
+        (["Overage Soft Cap", "Coverage Overage Soft Cap", "Overage Severe Cap", "Coverage Overage Severe Cap", "Overage Extreme Cap", "Coverage Overage Extreme Cap"], True),
+        (["Protected Before80 Minimum Intervals", "Protected Before 80 Minimum Intervals", "Protected Tier Before80 Minimum"], False),
+        (["Protected After80 Minimum Intervals", "Protected After 80 Minimum Intervals", "Protected Tier After80 Minimum"], False),
+        (["Minimum After Break Target Ratio", "Minimum After Break Target Percentage", "After Break Target Minimum"], True),
+        (["Maximum Concurrent Break Ratio", "Break Maximum Concurrent Ratio"], True),
+        (["Maximum Concurrent Breaks", "Break Maximum Concurrent Count"], False),
+        (["Production Maximum Floor Gap Ratio", "Maximum Floor Gap Ratio", "Production Maximum Severe Gap Ratio", "Maximum Severe Gap Ratio"], True),
+        (["Production Maximum Consecutive Floor Gaps", "Maximum Consecutive Floor Gaps"], False),
+        (["Language Operational Reserve Extra FTE", "Required Language Reserve Extra FTE", "Skill Reserve Extra FTE"], False),
+        (["Language Maximum Minimum-Only Ratio", "Required Language Maximum Single-Point Ratio", "Skill Maximum Minimum-Only Ratio"], True),
+        (["Whole Week Overage Cap", "Weekly Overage Cap"], True),
+        (["Whole Week Maximum Adjacent Raw Change", "Weekly Maximum Adjacent Raw Change"], False),
+        (["Whole Week Maximum Overage Cap Violations", "Weekly Maximum Overage Cap Violations"], False),
+        (["Whole Week Maximum Adjacent Imbalance Violations", "Weekly Maximum Adjacent Imbalance Violations"], False),
+        (["Maximum Target Intervals Lost From Breaks", "Maximum Break Target Losses"], False),
+    ]
+    for names, allow_percent in numeric_instruction_specs:
+        _validate_numeric_instruction(im, names, parser_warnings, allow_percent=allow_percent)
     allowed_durations, use11 = _parse_duration_set(im)
-    associates, schedule_dates, _ = _parse_roster(wb)
+    associates, schedule_dates, _ = _parse_roster(wb, parser_warnings=parser_warnings)
     instructed_hc = int(round(to_float(_instruction_get(im, ["Count of Associates", "Roster Count", "Headcount"], 0), 0)))
     allow_hc_mismatch = yes(_instruction_get(
         im, ["Allow Headcount Mismatch", "Headcount Mismatch Override", "Roster Count Mismatch Allowed"], "No"
@@ -2177,23 +2875,33 @@ def parse_input(
             f"Instruction headcount is {instructed_hc}, but Schedule contains {len(associates)} named roster rows. "
             + ("Explicit mismatch override is enabled." if allow_hc_mismatch else "This is a hard contract failure.")
         )
-    _parse_preferences(wb, associates)
+    acknowledged_departed = _parse_departed_acknowledgements(im)
+    _parse_preferences(wb, associates, parser_warnings, acknowledged_departed)
     fixed_enabled = yes(_instruction_get(im, ["Fixed Request Use", "Use Fixed Requests", "Fixed/Nesting Enabled", "Use Fixed/Nesting"], "No"), False)
     fixed_sheet_present = _sheet_by_alias(wb, ["Fixed Request", "Fixed Requests", "Nesting", "Fixed/Nesting"]) is not None
     if fixed_enabled and fixed_sheet_present:
         for associate in associates:
             associate.fixed_schedule = [""] * 7
-        _parse_fixed_nesting(wb, associates, parser_warnings)
+        _parse_fixed_nesting(wb, associates, parser_warnings, acknowledged_departed)
     elif not fixed_enabled:
         for associate in associates:
             associate.fixed_schedule = [""] * 7
     allowed_start_raw = _instruction_get(im, ["Allowed Shift Start Window", "Shift Start Window"], None)
     allowed_start_min, allowed_start_end = parse_time_window(allowed_start_raw)
+    if allowed_start_raw not in (None, "") and (allowed_start_min is None or allowed_start_end is None):
+        parser_warnings.append(
+            f"HARD_INVALID_ALLOWED_SHIFT_START_WINDOW:value={allowed_start_raw!r};"
+            "use two valid HH:MM values"
+        )
     start_step = max(1, int(round(to_float(_instruction_get(im, ["Shift Start Step Minutes", "Shift Start Step"], 1), 1))))
     allowed_start_source = "Instructions" if allowed_start_min is not None and allowed_start_end is not None else "Unrestricted"
     shifts = _parse_shifts(wb, allowed_durations, allowed_start_min, allowed_start_end, start_step)
-    requirements, shrinkage, active, req_dates, interval, req_sheet, shr_sheet = _parse_requirement_table(wb, im)
-    language_rules, capabilities, language_windows = _parse_language_rules(wb, associates)
+    requirements, shrinkage, active, req_dates, interval, req_sheet, shr_sheet = _parse_requirement_table(
+        wb, im, parser_warnings
+    )
+    language_rules, capabilities, language_windows = _parse_language_rules(
+        wb, associates, parser_warnings
+    )
     coverage_split_gate_mode = norm(_instruction_get(
         im, ["Coverage Split Gate Mode", "Coverage Responsibility Gate Mode"], "fail"))
     if coverage_split_gate_mode not in {"off", "warn", "fail"}:
@@ -2335,13 +3043,39 @@ def parse_input(
     # "RC9.1 Full Default Seconds", "RC9.1 Stage2 Search Order", "RC9.1 Joint
     # Budget Policy" - and none of them was read by anything. Changing them
     # changed nothing, which is worse than not offering them.
-    run_stage = normalize_run_stage(_instruction_get(
-        im, ["Run Stage", "Schedule Stage", "Run Type"], None))
-    run_depth = normalize_run_depth(_instruction_get(
-        im, ["Run Depth", "Run Length", "Search Depth"], None))
-    language_working_window_mode = normalize_language_window_mode(_instruction_get(
+    run_stage_raw = _instruction_get(im, ["Run Stage", "Schedule Stage", "Run Type"], None)
+    run_depth_raw = _instruction_get(im, ["Run Depth", "Run Length", "Search Depth"], None)
+    language_window_raw = _instruction_get(
         im, ["Language Working Window", "Language Working Hours",
-             "Language Window Enforcement"], None))
+             "Language Window Enforcement"], None)
+    run_stage = normalize_run_stage(run_stage_raw)
+    run_depth = normalize_run_depth(run_depth_raw)
+    language_working_window_mode = normalize_language_window_mode(language_window_raw)
+    if run_stage_raw not in (None, "") and run_stage is None:
+        parser_warnings.append(
+            f"HARD_INVALID_RUN_STAGE:value={run_stage_raw!r};"
+            "use BEFORE_BREAKS_ONLY or FULL_SCHEDULE"
+        )
+    if run_depth_raw not in (None, "") and run_depth is None:
+        parser_warnings.append(
+            f"HARD_INVALID_RUN_DEPTH:value={run_depth_raw!r};"
+            "use QUICK, DEEP, or OVERNIGHT"
+        )
+    if language_window_raw not in (None, ""):
+        language_mode_token = re.sub(r"[^a-z0-9]", "", norm(language_window_raw))
+        valid_language_tokens = {
+            "off", "no", "none", "disabled", "coverageonly", "minimumonly",
+            "allrows", "all", "alllanguages", "everyrow", "allactiverows",
+            "everyactiverow", "allactivelanguagerows", "requiredlanguageonly",
+            "requiredlanguagesonly", "qualifiedonly", "requiredonly",
+            "languageexclusive", "exclusive", "rowswithaminimum",
+            "minimumrows", "withminimum", "yes", "on", "enabled",
+        }
+        if language_mode_token not in valid_language_tokens:
+            parser_warnings.append(
+                f"HARD_INVALID_LANGUAGE_WORKING_WINDOW:value={language_window_raw!r};"
+                "use OFF, MINIMUM_ROWS, ALL_ROWS, or REQUIRED_LANGUAGE_ONLY"
+            )
 
     minimum_after_break_target_ratio = None
     if minimum_after_break_target_ratio_raw not in (None, ""):
@@ -2369,7 +3103,7 @@ def parse_input(
     if allow_no_break and max_no_break <= 0:
         max_no_break = 8
 
-    break_segments = _parse_break_segments(im)
+    break_segments = _parse_break_segments(im, parser_warnings)
     (
         break_window_rules, break_edge_margin_q, break_min_gap_q,
         break_preferred_gap_q, break_normal_max_gap_q, break_window_source,
@@ -2401,7 +3135,7 @@ def parse_input(
     ))
     if break_concurrency_gate_mode not in {"off", "warn", "fail"}:
         break_concurrency_gate_mode = "warn"
-        parser_warnings.append("Unknown Break Concurrency Gate Mode; RC7 defaulted it to WARN.")
+        parser_warnings.append("HARD_INVALID_BREAK_CONCURRENCY_GATE_MODE: unknown value; use OFF, WARN, or FAIL.")
     # A workbook value is authoritative. When none is set the weight is left as
     # None and derived at solve time from the break objective's own coverage
     # weights - see break_concurrency_weight(). The old default of 5000 sat
@@ -2433,7 +3167,7 @@ def parse_input(
     ))
     if next_sunday_balance_gate_mode not in {"off", "warn", "fail"}:
         next_sunday_balance_gate_mode = "warn"
-        parser_warnings.append("Unknown Next Sunday Balance Gate Mode; RC7 defaulted it to WARN.")
+        parser_warnings.append("HARD_INVALID_NEXT_SUNDAY_BALANCE_GATE_MODE: unknown value; use OFF, WARN, or FAIL.")
     quality_max_floor_gap_ratio = to_float(_instruction_get(
         im, ["Production Maximum Floor Gap Ratio", "Maximum Floor Gap Ratio"], 0.10
     ), 0.10)
@@ -2454,7 +3188,7 @@ def parse_input(
     ))
     if quality_gate_mode not in {"off", "warn", "fail"}:
         quality_gate_mode = "fail"
-        parser_warnings.append("Unknown Production Quality Gate Mode; C2.2 defaulted it to FAIL.")
+        parser_warnings.append("HARD_INVALID_PRODUCTION_QUALITY_GATE_MODE: unknown value; use OFF, WARN, or FAIL.")
     language_reserve_enabled = yes(_instruction_get(
         im, [
             "Language Operational Reserve Enabled", "Required Language Reserve Enabled",
@@ -2481,7 +3215,7 @@ def parse_input(
     ))
     if language_reserve_gate_mode not in {"off", "warn", "fail"}:
         language_reserve_gate_mode = "warn"
-        parser_warnings.append("Unknown Language Reserve Gate Mode; RC7 defaulted it to WARN.")
+        parser_warnings.append("HARD_INVALID_LANGUAGE_RESERVE_GATE_MODE: unknown value; use OFF, WARN, or FAIL.")
     language_max_minimum_only_ratio = to_float(_instruction_get(
         im, [
             "Language Maximum Minimum-Only Ratio", "Required Language Maximum Single-Point Ratio",
@@ -2546,7 +3280,7 @@ def parse_input(
     ))
     if whole_week_gate_mode not in {"off", "warn", "fail"}:
         whole_week_gate_mode = "warn"
-        parser_warnings.append("Unknown Whole Week Balance Gate Mode; RC7 defaulted it to WARN.")
+        parser_warnings.append("HARD_INVALID_WHOLE_WEEK_BALANCE_GATE_MODE: unknown value; use OFF, WARN, or FAIL.")
     whole_week_max_overage_cap_violations = max(0, int(round(to_float(_instruction_get(
         im, ["Whole Week Maximum Overage Cap Violations", "Weekly Maximum Overage Cap Violations"], 0
     ), 0))))
@@ -2563,13 +3297,27 @@ def parse_input(
     ))
     if target_loss_gate_mode not in {"off", "warn", "fail"}:
         target_loss_gate_mode = "warn"
-        parser_warnings.append("Unknown Target Loss From Breaks Gate Mode; RC7 defaulted it to WARN.")
+    # #49: 3%, derived from 56 runs across 10 workbooks. The previous 5% cap
+    # fired on 0 of those 56 -- an inert guard, the same pattern as B-13 and
+    # A40. Worst observed loss was 8 intervals on 264 active (3.0%); 3% rejects
+    # that outlier and 2% of runs overall, where 2% would reject 12%.
+    default_floor_loss_cap = max(3, int(math.ceil(active_interval_count * 0.03)))
+    quality_max_floor_losses_from_breaks = max(0, int(round(to_float(_instruction_get(
+        im, ["Maximum Floor Intervals Lost From Breaks", "Maximum Break Floor Losses"],
+        default_floor_loss_cap
+    ), default_floor_loss_cap))))
+    floor_loss_gate_mode = norm(_instruction_get(
+        im, ["Floor Loss From Breaks Gate Mode", "Break Floor Loss Gate Mode"], "warn"
+    ))
+    if floor_loss_gate_mode not in {"off", "warn", "fail"}:
+        floor_loss_gate_mode = "warn"
+        parser_warnings.append("HARD_INVALID_TARGET_LOSS_FROM_BREAKS_GATE_MODE: unknown value; use OFF, WARN, or FAIL.")
     employee_quality_gate_mode = norm(_instruction_get(
         im, ["Employee Schedule Quality Gate Mode", "Employee Quality Gate Mode"], "warn"
     ))
     if employee_quality_gate_mode not in {"off", "warn", "fail"}:
         employee_quality_gate_mode = "warn"
-        parser_warnings.append("Unknown Employee Schedule Quality Gate Mode; RC7 defaulted it to WARN.")
+        parser_warnings.append("HARD_INVALID_EMPLOYEE_SCHEDULE_QUALITY_GATE_MODE: unknown value; use OFF, WARN, or FAIL.")
     employee_max_start_swing_minutes = max(0, int(round(to_float(_instruction_get(
         im, ["Employee Maximum Start Time Swing Minutes", "Maximum Start Time Swing Minutes"], 360
     ), 360))))
@@ -2614,7 +3362,7 @@ def parse_input(
     ))
     if skill_allocation_gate_mode not in {"off", "warn", "fail"}:
         skill_allocation_gate_mode = "warn"
-        parser_warnings.append("Unknown Skill Allocation Gate Mode; C4 RC2 defaulted it to WARN.")
+        parser_warnings.append("HARD_INVALID_SKILL_ALLOCATION_GATE_MODE: unknown value; use OFF, WARN, or FAIL.")
     skill_allocation_max_gap_quarters = max(0, int(round(to_float(_instruction_get(
         im, ["Maximum Skill Allocation Gap Quarters", "Distinct Skill Allocation Maximum Gap Quarters"], 0
     ), 0))))
@@ -2713,6 +3461,8 @@ def parse_input(
         whole_week_max_imbalance_violations=whole_week_max_imbalance_violations,
         quality_max_target_losses_from_breaks=quality_max_target_losses_from_breaks,
         target_loss_gate_mode=target_loss_gate_mode,
+        quality_max_floor_losses_from_breaks=quality_max_floor_losses_from_breaks,
+        floor_loss_gate_mode=floor_loss_gate_mode,
         employee_quality_gate_mode=employee_quality_gate_mode,
         employee_max_start_swing_minutes=employee_max_start_swing_minutes,
         employee_max_isolated_workdays=employee_max_isolated_workdays,
@@ -2739,6 +3489,7 @@ def parse_input(
         demand_fit_min_active_ratio=min(1.0, max(0.0, demand_fit_min_active_ratio)),
         demand_fit_max_blank_minutes=max(0, demand_fit_max_blank_minutes),
         parser_warnings=parser_warnings,
+        search_controls=_parse_search_controls(im, parser_warnings),
         requirement_sheet=req_sheet, shrinkage_sheet=shr_sheet,
     )
 
@@ -2815,6 +3566,7 @@ def input_contract_payload(parsed: ParsedInput) -> Dict[str, Any]:
                 "minimum": r.minimum,
                 "required_languages": sorted(r.required_languages),
                 "eligible_languages": sorted(r.eligible_languages),
+                "active_days": sorted(getattr(r, "active_days", set(range(7)))),
             }
             for r in parsed.language_rules
         ],
@@ -2866,7 +3618,7 @@ def input_contract_payload(parsed: ParsedInput) -> Dict[str, Any]:
             "maximum_concurrent_break_ratio": parsed.break_max_concurrent_ratio,
             "maximum_concurrent_breaks": parsed.break_max_concurrent_absolute,
             "concurrency_gate_mode": getattr(parsed, "break_concurrency_gate_mode", "warn"),
-            "concurrency_penalty_weight": getattr(parsed, "break_concurrency_penalty_weight", 5000),
+            "concurrency_penalty_weight": getattr(parsed, "break_concurrency_penalty_weight", None),
         },
         "next_sunday_balance": {
             "enabled": parsed.next_sunday_balance_enabled,
@@ -2876,24 +3628,26 @@ def input_contract_payload(parsed: ParsedInput) -> Dict[str, Any]:
         },
         "whole_week_balance": {
             "enabled": parsed.whole_week_balance_enabled,
-            "overage_cap_ratio": getattr(parsed, "whole_week_overage_cap_ratio", 2.0),
-            "maximum_adjacent_raw_change": getattr(parsed, "whole_week_max_adjacent_raw_change", 999999),
+            "overage_cap_ratio": getattr(parsed, "whole_week_overage_cap_ratio", 1.35),
+            "maximum_adjacent_raw_change": getattr(parsed, "whole_week_max_adjacent_raw_change", 3),
             "penalty_weight": parsed.whole_week_balance_penalty_weight,
-            "gate_mode": getattr(parsed, "whole_week_gate_mode", "off"),
-            "maximum_overage_cap_violations": getattr(parsed, "whole_week_max_overage_cap_violations", 999999),
-            "maximum_imbalance_violations": getattr(parsed, "whole_week_max_imbalance_violations", 999999),
-            "maximum_target_losses_from_breaks": getattr(parsed, "quality_max_target_losses_from_breaks", 999999),
-            "target_loss_gate_mode": getattr(parsed, "target_loss_gate_mode", "warn"),
+            "gate_mode": getattr(parsed, "whole_week_gate_mode", 'warn'),
+            "maximum_overage_cap_violations": getattr(parsed, "whole_week_max_overage_cap_violations", 0),
+            "maximum_imbalance_violations": getattr(parsed, "whole_week_max_imbalance_violations", 0),
+            "maximum_target_losses_from_breaks": parsed.quality_max_target_losses_from_breaks,
+            "target_loss_gate_mode": parsed.target_loss_gate_mode,
+            "maximum_floor_losses_from_breaks": parsed.quality_max_floor_losses_from_breaks,
+            "floor_loss_gate_mode": parsed.floor_loss_gate_mode,
         },
         "employee_schedule_quality": {
-            "gate_mode": getattr(parsed, "employee_quality_gate_mode", "off"),
+            "gate_mode": getattr(parsed, "employee_quality_gate_mode", 'warn'),
             "maximum_start_swing_minutes": parsed.employee_max_start_swing_minutes,
             "maximum_isolated_workdays": parsed.employee_max_isolated_workdays,
             "maximum_isolated_offdays": parsed.employee_max_isolated_offdays,
-            "maximum_late_shift_load_delta": getattr(parsed, "employee_max_late_shift_load_delta", 999999),
-            "maximum_overnight_load_delta": getattr(parsed, "employee_max_overnight_load_delta", 999999),
-            "maximum_weekend_load_delta": getattr(parsed, "employee_max_weekend_load_delta", 999999),
-            "minimum_preference_satisfaction_ratio": getattr(parsed, "employee_min_preference_satisfaction_ratio", 0.0),
+            "maximum_late_shift_load_delta": getattr(parsed, "employee_max_late_shift_load_delta", 3),
+            "maximum_overnight_load_delta": getattr(parsed, "employee_max_overnight_load_delta", 3),
+            "maximum_weekend_load_delta": getattr(parsed, "employee_max_weekend_load_delta", 3),
+            "minimum_preference_satisfaction_ratio": getattr(parsed, "employee_min_preference_satisfaction_ratio", 0.5),
         },
         "production_quality_gate": {
             "mode": parsed.quality_gate_mode,
@@ -2915,8 +3669,95 @@ def validate_input_contract(parsed: ParsedInput, feasibility: Optional[Dict[str,
     """Fail before CP-SAT when the workbook contract is malformed or provably impossible."""
     failures: List[Dict[str, Any]] = []
     warnings: List[Dict[str, Any]] = []
+    handled_hard_warning_codes = {
+        "HARD_PREVIOUS_SATURDAY_DUPLICATE",
+        "HARD_INVALID_LANGUAGE_COVERAGE_DAYS",
+    }
+    # Parser warnings beginning with HARD_ are contract failures, not user
+    # advisories. Keeping this generic makes newly added strict parsers fail
+    # closed by default instead of silently becoming soft warnings.
+    for raw_warning in parsed.parser_warnings:
+        code = str(raw_warning).split(":", 1)[0]
+        if code.startswith("HARD_") and code not in handled_hard_warning_codes:
+            failures.append({"code": code, "detail": str(raw_warning)})
     if not parsed.associates:
         failures.append({"code": "NO_ROSTER", "detail": "No named roster rows were parsed."})
+    # C-3: a non-blank preference or fixed cell the engine does not understand
+    # is a value the planner meant something by. Dropping it silently is how
+    # approved leave disappears -- "other" blocks nothing in
+    # associate_day_eligible_shifts. Fail closed and name the cell, exactly as
+    # an unmatched roster name does.
+    unrecognised_preferences = []
+    for associate in parsed.associates:
+        for day_index in range(7):
+            for source, values in (("preference", associate.preferences),
+                                   ("fixed request", associate.fixed_schedule)):
+                raw = values[day_index] if day_index < len(values) else ""
+                if str(raw).strip() and preference_kind(raw) == "other":
+                    unrecognised_preferences.append({
+                        "associate": associate.name,
+                        "day": DAY_NAMES[day_index],
+                        "sheet": source,
+                        "value": str(raw).strip(),
+                    })
+    if unrecognised_preferences:
+        failures.append({
+            "code": "UNRECOGNISED_PREFERENCE_VALUE",
+            "count": len(unrecognised_preferences),
+            "examples": unrecognised_preferences[:20],
+            "detail": (
+                "These cells are neither blank, a recognised OFF/leave word, nor a "
+                "shift time, so the engine cannot tell what was intended and would "
+                "otherwise ignore them. Correct the spelling or use a recognised value."
+            ),
+        })
+    previous_saturday_duplicates = [
+        warning for warning in parsed.parser_warnings
+        if warning.startswith("HARD_PREVIOUS_SATURDAY_DUPLICATE:")
+    ]
+    if previous_saturday_duplicates:
+        failures.append({
+            "code": "DUPLICATE_PREVIOUS_SATURDAY_ASSOCIATE",
+            "count": len(previous_saturday_duplicates),
+            "examples": previous_saturday_duplicates[:20],
+            "detail": "A cyclic boundary input must contain at most one row per current roster associate.",
+        })
+    invalid_language_days = [
+        warning for warning in parsed.parser_warnings
+        if warning.startswith("HARD_INVALID_LANGUAGE_COVERAGE_DAYS:")
+    ]
+    if invalid_language_days:
+        failures.append({
+            "code": "INVALID_LANGUAGE_COVERAGE_DAYS",
+            "count": len(invalid_language_days),
+            "examples": invalid_language_days[:20],
+            "detail": "Coverage Days must be a supported day, range, or explicit all-days value; malformed text is rejected.",
+        })
+    # B-11: an unknown name on any name-matched sheet is now a contract
+    # failure (HARD_*), handled generically above. What remains here is the
+    # acknowledged-departure case, which proceeds but stays visible.
+    departed_rows_ignored = [
+        warning for warning in parsed.parser_warnings
+        if warning.startswith("DEPARTED_ASSOCIATE_ROW_IGNORED:")
+    ]
+    if departed_rows_ignored:
+        warnings.append({
+            "code": "DEPARTED_ASSOCIATE_ROW_IGNORED",
+            "count": len(departed_rows_ignored),
+            "examples": departed_rows_ignored[:20],
+            "detail": "Rows for explicitly acknowledged departed associates were dropped. Confirm each person has genuinely left the roster.",
+        })
+    empty_rows_ignored = [
+        warning for warning in parsed.parser_warnings
+        if warning.startswith("UNMATCHED_EMPTY_ROW_IGNORED:")
+    ]
+    if empty_rows_ignored:
+        warnings.append({
+            "code": "UNMATCHED_EMPTY_ROW_IGNORED",
+            "count": len(empty_rows_ignored),
+            "examples": empty_rows_ignored[:20],
+            "detail": "Rows whose name is not on the roster and which carry no value were dropped. Nothing was lost, but a stale name may indicate the sheet is out of date.",
+        })
     if parsed.instructed_headcount <= 0:
         warnings.append({
             "code": "INSTRUCTED_HEADCOUNT_NOT_EXPLICIT",
@@ -2936,6 +3777,11 @@ def validate_input_contract(parsed: ParsedInput, feasibility: Optional[Dict[str,
             failures.append(row)
     if not parsed.shifts:
         failures.append({"code": "NO_LEGAL_SHIFTS", "detail": "No legal shifts were parsed from Shift Library."})
+    long_shifts=[shift.label for shift in parsed.shifts if shift.duration_min>=LONG_SHIFT_MIN_DURATION_MIN]
+    if not parsed.use_11h_3off and long_shifts:
+        failures.append({"code":"LONG_SHIFT_PRESENT_WHEN_11H_PROHIBITED","examples":long_shifts[:20]})
+    if parsed.use_11h_3off and not long_shifts:
+        failures.append({"code":"11H_MODE_ENABLED_WITHOUT_LONG_SHIFT","detail":"Use 11H/3OFF is enabled but the legal Shift Library has no long shift."})
     active_count = sum(sum(1 for value in day if value) for day in parsed.active)
     if active_count <= 0:
         failures.append({"code": "NO_ACTIVE_DEMAND", "detail": "No positive requirement intervals were parsed."})
@@ -3042,6 +3888,34 @@ def validate_input_contract(parsed: ParsedInput, feasibility: Optional[Dict[str,
             "code": "CONTRADICTORY_EXACT_SCHEDULES_IN_NESTING_GROUP",
             "count": len(contradictory_groups), "examples": contradictory_groups[:20],
         })
+    # S6-1/S6-2: the model forces every nesting-group member onto the leader's
+    # off[], leave[] and shift assignment. leave[] is pinned from the contract,
+    # so members with different approved leave give 1 == 0 and the model is
+    # INFEASIBLE with nothing naming the cause. The check above compares only
+    # fixed_schedule, and only for associates that have one, so it cannot see
+    # this. Mirror what the model actually enforces, under the same condition.
+    if parsed.fixed_enabled:
+        nesting_preferences: Dict[str, List[Tuple[str, Tuple[str, ...]]]] = {}
+        for associate in parsed.associates:
+            if associate.nesting_group:
+                nesting_preferences.setdefault(norm(associate.nesting_group), []).append(
+                    (associate.name,
+                     tuple(preference_kind(value) for value in associate.preferences))
+                )
+        conflicting_preference_groups = []
+        for group, rows in nesting_preferences.items():
+            if len(rows) < 2:
+                continue
+            if len({pattern for _, pattern in rows}) > 1:
+                conflicting_preference_groups.append(
+                    {"group": group, "members": [name for name, _ in rows]}
+                )
+        if conflicting_preference_groups:
+            failures.append({
+                "code": "CONFLICTING_LEAVE_OR_OFF_IN_NESTING_GROUP",
+                "count": len(conflicting_preference_groups),
+                "examples": conflicting_preference_groups[:20],
+            })
     for d in range(7):
         for i in range(parsed.intervals_per_day):
             req = parsed.requirements[d][i]
@@ -3051,6 +3925,17 @@ def validate_input_contract(parsed: ParsedInput, feasibility: Optional[Dict[str,
             if not (0 <= shr < 1):
                 failures.append({"code": "INVALID_SHRINKAGE", "day": DAY_NAMES[d], "interval": hhmm(i * parsed.interval_minutes), "value": shr})
     language_capacity = []
+    roster_languages={norm(associate.language) for associate in parsed.associates if norm(associate.language)}
+    declared_languages=set(parsed.language_capabilities)
+    unknown_targets=sorted({
+        target for targets in parsed.language_capabilities.values() for target in targets
+        if target not in roster_languages and target not in declared_languages
+    })
+    if unknown_targets:
+        failures.append({
+            "code":"UNKNOWN_CAN_COVER_TARGET_LANGUAGE","languages":unknown_targets,
+            "detail":"Every Can Cover target must match a roster language or a Language Setup row. Can Cover is directional source -> target.",
+        })
     for rule in parsed.language_rules:
         eligible = [a for a in parsed.associates if language_eligible(rule, a)]
         language_capacity.append({"group": rule.group, "minimum": rule.minimum, "eligible_count": len(eligible)})
@@ -3151,13 +4036,179 @@ def status_name(cp_model: Any, solver: Any, status: int) -> str:
         }.get(status, str(status))
 
 
+SOLVER_MAX_MEMORY_MB: Optional[int] = 6000
+SOLVER_RELATIVE_GAP_LIMIT: float = 0.0
+
+
+def configure_solver_limits(solver: Any) -> Dict[str, Any]:
+    """Apply the two native CP-SAT limits the engine otherwise leaves at default.
+
+    Returns what was actually applied, so the audit records it rather than
+    leaving the reader to guess which limits were in force.
+
+    Both limits are termination criteria. Neither selects a subsolver nor
+    changes search strategy, so neither disturbs the worker portfolio.
+
+    max_memory_in_mb: CP-SAT's own default is 10000 MB, which is larger than
+    many container budgets -- the solver aims for a ceiling above the one that
+    will actually kill it. Note OR-Tools issue #1944: enforcement is imperfect,
+    so this reduces OOM risk without eliminating it.
+
+    relative_gap_limit: 0.0 is CP-SAT's default and means no gap stop. Any
+    positive value stops the solve once the incumbent is provably within that
+    relative distance of optimal, returning the remaining slice to later phases
+    through the cumulative deadline chain.
+    """
+    applied: Dict[str, Any] = {
+        "max_memory_in_mb": None,
+        "relative_gap_limit": None,
+    }
+
+    if SOLVER_MAX_MEMORY_MB:
+        try:
+            solver.parameters.max_memory_in_mb = int(SOLVER_MAX_MEMORY_MB)
+            applied["max_memory_in_mb"] = int(SOLVER_MAX_MEMORY_MB)
+        except Exception:
+            applied["max_memory_in_mb"] = "UNSUPPORTED"
+
+    if SOLVER_RELATIVE_GAP_LIMIT and float(SOLVER_RELATIVE_GAP_LIMIT) > 0.0:
+        try:
+            solver.parameters.relative_gap_limit = float(SOLVER_RELATIVE_GAP_LIMIT)
+            applied["relative_gap_limit"] = float(SOLVER_RELATIVE_GAP_LIMIT)
+        except Exception:
+            applied["relative_gap_limit"] = "UNSUPPORTED"
+
+    return applied
+
+
+
+def capture_solver_telemetry(
+    cp_model: Any, solver: Any, status: int,
+    granted_seconds: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Read back what the solve already computed. Costs no solver time.
+
+    OBSERVATION ONLY -- nothing here may set a solver parameter or alter search.
+
+    Two fields matter most and neither was previously recorded:
+
+    * `best_objective_bound` is captured UNCONDITIONALLY. The engine's older
+      diagnostics kept it only on OPTIMAL/FEASIBLE, which discards it on
+      UNKNOWN -- precisely when it carries the most information, and precisely
+      the number a stop-at-the-bound rule needs.
+    * `deterministic_time` measures search effort independently of machine
+      load. Two runs that disagree on wall_time but agree on deterministic_time
+      performed the same search; that distinction is not recoverable from
+      wall_time alone on a contended box.
+
+    `branches_per_conflict` is a learning-health signal: a large ratio means the
+    search is enumerating rather than learning from conflicts, which is what a
+    badly conditioned objective or weak propagation produces.
+    """
+    def _get(name: str, default: Any = None) -> Any:
+        try:
+            value = getattr(solver, name)
+            return value() if callable(value) else value
+        except Exception:
+            return default
+
+    response = None
+    try:
+        response = solver.ResponseProto()
+    except Exception:
+        response = None
+
+    def _resp(name: str, default: Any = None) -> Any:
+        if response is None:
+            return default
+        try:
+            return getattr(response, name)
+        except Exception:
+            return default
+
+    has_solution = status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
+
+    bound = None
+    try:
+        raw_bound = solver.BestObjectiveBound()
+        bound = float(raw_bound) if raw_bound is not None else None
+    except Exception:
+        bound = None
+
+    objective = None
+    if has_solution:
+        try:
+            objective = float(solver.ObjectiveValue())
+        except Exception:
+            objective = None
+
+    conflicts = _get("NumConflicts", 0) or 0
+    branches = _get("NumBranches", 0) or 0
+    wall = _get("WallTime", None)
+
+    telemetry: Dict[str, Any] = {
+        "status": status_name(cp_model, solver, status),
+        "has_solution": bool(has_solution),
+        "best_objective_bound": bound,
+        "objective_value": objective,
+        "wall_time_sec": wall,
+        "user_time_sec": _get("UserTime", None),
+        "deterministic_time": _resp("deterministic_time", None),
+        "num_conflicts": conflicts,
+        "num_branches": branches,
+        "num_booleans": _get("NumBooleans", None),
+        "num_integers": _resp("num_integers", None),
+        "num_restarts": _resp("num_restarts", None),
+        "num_lp_iterations": _resp("num_lp_iterations", None),
+        "num_fixed_booleans": _resp("num_fixed_booleans", None),
+        "gap_integral": _resp("gap_integral", None),
+        "solution_info": _get("SolutionInfo", None),
+        "granted_seconds": granted_seconds,
+    }
+
+    if objective is not None and bound is not None:
+        telemetry["absolute_gap"] = abs(objective - bound)
+
+    if conflicts:
+        telemetry["branches_per_conflict"] = round(float(branches) / float(conflicts), 1)
+    else:
+        telemetry["branches_per_conflict"] = None
+
+    if granted_seconds and wall:
+        try:
+            telemetry["slice_utilisation"] = round(float(wall) / float(granted_seconds), 3)
+        except Exception:
+            pass
+
+    return telemetry
+
+
+
+# C-3: the words planners actually write into the Preference sheet. The sheet
+# is free text by design -- it carries no data validation in any shipped
+# workbook and its own banner says "enter Leave/OFF/shift preference by day" --
+# so the vocabulary has to cover the ordinary synonyms rather than two exact
+# tokens. Anything still unrecognised is reported by validate_input_contract,
+# never silently dropped; see UNRECOGNISED_PREFERENCE_VALUE below.
+LEAVE_WORDS = frozenset({
+    "leave", "annual leave", "annual", "a/l", "al", "vacation", "holiday",
+    "leave day", "leave - approved", "leave approved", "approved leave",
+    "sick", "sick leave", "s/l", "sl", "unpaid leave", "maternity",
+    "paternity", "bereavement",
+})
+OFF_WORDS = frozenset({
+    "off", "off day", "offday", "day off", "rest", "rest day", "rd", "x",
+    "week off", "weekly off", "wo",
+})
+
+
 def preference_kind(value: str) -> str:
     s = norm(value)
     if not s or s in {"none", "planned", "plan", "blank"}:
         return "blank"
-    if s == "off":
+    if s in OFF_WORDS:
         return "off"
-    if s == "leave":
+    if s in LEAVE_WORDS:
         return "leave"
     if shift_parts(value):
         return "shift"
@@ -3235,7 +4286,7 @@ def next_sunday_raw_cap(parsed: ParsedInput, interval: int) -> int:
     for quarter in range(qpi):
         minute = interval * interval_minutes + quarter * 15
         for rule in getattr(parsed, "language_rules", []):
-            if rule.active and rule.contains_minute(minute):
+            if rule.active and rule.overlaps(minute, 15):
                 hard_minimum = max(hard_minimum, int(rule.minimum))
     return max(demand_cap, hard_minimum)
 
@@ -3282,17 +4333,17 @@ def whole_week_raw_cap(parsed: ParsedInput, day: int, interval: int) -> int:
     req = float(parsed.requirements[day][interval] or 0.0)
     eff = max(1e-9, 1.0 - float(parsed.shrinkage[day][interval] or 0.0))
     target_raw = whole_week_raw_requirement(parsed, day, interval)
-    percentage_cap = max(1, int(math.ceil(req * getattr(parsed, "whole_week_overage_cap_ratio", 2.0) / eff - 1e-9)))
+    percentage_cap = max(1, int(math.ceil(req * getattr(parsed, "whole_week_overage_cap_ratio", 1.35) / eff - 1e-9)))
     opening_cap = parsed.opening_minimum if parsed.opening_guard_enabled and interval in set(opening_intervals_for_day(parsed, day)) else 0
     language_cap = 0
     minute = interval * parsed.interval_minutes
-    for rule in language_rules_at(parsed, minute):
+    for rule in language_rules_at(parsed, minute, day=day):
         language_cap = max(language_cap, rule.minimum)
     return max(target_raw, percentage_cap, opening_cap, language_cap)
 
 
 def whole_week_adjacent_raw_limit(parsed: ParsedInput, day: int, previous_interval: int, current_interval: int) -> int:
-    configured = max(1, int(getattr(parsed, "whole_week_max_adjacent_raw_change", 999999)))
+    configured = max(1, int(getattr(parsed, "whole_week_max_adjacent_raw_change", 3)))
     previous_required = whole_week_raw_requirement(parsed, day, previous_interval)
     current_required = whole_week_raw_requirement(parsed, day, current_interval)
     return max(configured, abs(current_required - previous_required))
@@ -3312,27 +4363,6 @@ def next_sunday_spill_quarters(parsed: ParsedInput) -> int:
             for shift in parsed.shifts
         ]
     )
-
-
-def next_sunday_qslot(interval: int, quarter: int, parsed: ParsedInput) -> int:
-    return TOTAL_QSLOTS + interval * parsed.qslots_per_interval + quarter
-
-
-def next_sunday_same_day_shift_can_cover(parsed: ParsedInput, quarter_offset: int) -> bool:
-    """Whether a legal next-Sunday shift can cover this quarter without Saturday carry-out.
-
-    The week-boundary guard protects only the handoff window that *must* come
-    from current Saturday. A true 24/7 contract with legal 00:00 Sunday starts
-    must not be forced to duplicate all early demand on Saturday as well.
-    """
-    qslot = int(quarter_offset)
-    for shift in parsed.shifts:
-        if not shift_covers_week_qslot(0, shift, qslot):
-            continue
-        blocked, _ = demand_fit_blocked(parsed, 0, shift)
-        if not blocked:
-            return True
-    return False
 
 
 def next_sunday_interval_quarters(parsed: ParsedInput, include_blank: bool = False) -> List[Tuple[int, int, int]]:
@@ -3473,7 +4503,7 @@ def next_sunday_capacity_preflight(parsed: ParsedInput) -> Dict[str, Any]:
                 "minimum": parsed.opening_minimum,
                 "optimistic_raw_capacity": len(covering),
             })
-        for rule in language_rules_at(parsed, minute):
+        for rule in language_rules_at(parsed, minute, day=0):
             eligible = [a for a in covering if language_eligible(rule, parsed.associates[a])]
             if len(eligible) < rule.minimum:
                 failures.append({
@@ -3539,13 +4569,43 @@ def language_eligible(rule: LanguageRule, associate: Associate) -> bool:
     return norm(associate.language) in rule.eligible_languages
 
 
-def language_rules_at(parsed: ParsedInput, minute: int, span: int = 15) -> List[LanguageRule]:
+def language_rules_at(
+    parsed: ParsedInput, minute: int, span: int = 15, day: Optional[int] = None
+) -> List[LanguageRule]:
     """Rules in force for the quarter-hour slot beginning at `minute`.
 
     Overlap, not start-minute containment: see `LanguageRule.overlaps`. Every
     call site passes a quarter start, so the default span is 15.
     """
-    return [rule for rule in parsed.language_rules if rule.active and rule.overlaps(minute, span)]
+    # A day index outside 0..6 used to match nothing, so "no language rules
+    # apply anywhere" was the silent default for a caller that computed the day
+    # wrongly. That is the most dangerous possible default for a coverage rule,
+    # and it is exactly how a next-Sunday scope (day_scope == 7) once emptied
+    # the repair planner's donor set without a trace. Normalise the cyclic
+    # next-Sunday scope to Sunday and reject anything genuinely out of range.
+    if day is not None:
+        if day == 7:
+            day = 0
+        elif not 0 <= day <= 6:
+            raise ValueError(
+                f"language_rules_at: day must be 0..6 (or 7 for the cyclic "
+                f"next Sunday), got {day!r}"
+            )
+
+    def applies(rule: LanguageRule) -> bool:
+        if not rule.active or not rule.overlaps(minute, span):
+            return False
+        if day is None or day in getattr(rule, "active_days", set(range(7))):
+            return True
+        # An overnight rule authored for Friday remains active in the early
+        # Saturday spill window.  The day-specific row identifies the day the
+        # window starts, not a second independent Saturday rule.
+        if rule.start_min > rule.end_min and day is not None:
+            previous_day = (day - 1) % 7
+            if previous_day in getattr(rule, "active_days", set(range(7))):
+                return minute % 1440 < rule.end_min or (minute % 1440) + span > 1440
+        return False
+    return [rule for rule in parsed.language_rules if applies(rule)]
 
 
 def language_operational_reserve_target(parsed: ParsedInput, rule: LanguageRule) -> int:
@@ -3617,6 +4677,51 @@ def cyclic_next_sunday_coverage_vars(
 
 
 def shift_day_demand_fit(parsed: ParsedInput, day: int, shift: Shift) -> Dict[str, Any]:
+    """Demand shape for one (day, shift) pair, memoised per parsed contract.
+
+    This is a pure function of `(day, shift.index)`: it reads only
+    `parsed.active`, `parsed.interval_minutes` and `parsed.intervals_per_day`
+    (through `cyclic_requirement_context`) plus the shift's own start and
+    duration, none of which is written after `parse_input` returns. There are
+    at most 7 x len(shifts) distinct answers - 168 on every packaged workbook -
+    yet the nested loops in `capacity_diagnostics` and
+    `associate_day_eligible_shifts` asked for them over 600,000 times per run,
+    and `solve_joint_shift_off_language_break_refinement` asks again inside the
+    search loop.
+
+    Measured on the unpatched engine: `capacity_diagnostics` took 16.34s on
+    AE_AR_B2B and 10.20s on GDI_REAL28, with 1,005,804 and 631,467 calls
+    collapsing to 168 distinct results. Stage 1 is wall-clock budgeted and
+    already reports TRUNCATED_INSUFFICIENT_STAGE1_BUDGET, so that time is
+    search that never happens.
+
+    The cache lives on the parsed contract, so it is scoped to one run and is
+    collected with it - no module-level state, and no `id()` reuse hazard.
+    Callers mutate the returned mapping (`demand_fit_blocked` writes
+    `blank_requirement_blocked` into it), so every hit returns a fresh copy.
+    """
+    cache = getattr(parsed, "_shift_day_demand_fit_cache", None)
+    if cache is None:
+        cache = {}
+        try:
+            object.__setattr__(parsed, "_shift_day_demand_fit_cache", cache)
+        except Exception:
+            # A contract object that refuses attributes still gets correct
+            # answers, just uncached.
+            return _shift_day_demand_fit_uncached(parsed, day, shift)
+    # The index alone identifies a shift in every packaged workbook, but the
+    # start and duration are what the computation actually reads, so they are
+    # in the key too. A synthetic Shift reusing an index can then never collide.
+    key = (int(day), int(getattr(shift, "index", -1)),
+           int(shift.start_min), int(shift.duration_q))
+    fit = cache.get(key)
+    if fit is None:
+        fit = _shift_day_demand_fit_uncached(parsed, day, shift)
+        cache[key] = fit
+    return dict(fit)
+
+
+def _shift_day_demand_fit_uncached(parsed: ParsedInput, day: int, shift: Shift) -> Dict[str, Any]:
     horizon = CYCLIC_TOTAL_QSLOTS if day == 6 else TOTAL_QSLOTS
     qslots = [
         q for q in range(
@@ -3859,13 +4964,33 @@ def skeleton_profiles(requested_names: Optional[Sequence[str]] = None) -> List[D
 #
 # Set from measurement, not judgement. evidence/STAGE1_SLICE_DEPTH_PROBE.md
 # records what build_skeleton returns for the same workbook, profile and seed
-# at a range of time limits. On AE AR B2B - the hardest scenario in the
-# regression set - the same profile returns UNKNOWN at 45s and at 150s (no
-# feasible skeleton at all) and 166 of 168 before-break target intervals at
-# 210s, against RC9.1's 168. Longer slices do not improve on that: 450s also
-# returns 166. The cliff sits between 150s and 210s, so 240s clears it with
-# margin without spending time the measurement shows is wasted.
-STAGE1_MIN_MEANINGFUL_SLICE_SEC = 240.0
+# at a range of time limits.
+#
+# That first measurement was taken COLD - build_skeleton with no hint - and the
+# floor was set from it at 240s: on AE AR B2B, the hardest scenario in the
+# regression set, a cold profile returns UNKNOWN at 45s and at 150s and 166 of
+# 168 before-break target intervals at 210s, so the cliff sat between 150s and
+# 210s and 240 cleared it with margin.
+#
+# The Stage-1 portfolio loop never solves cold. It always passes
+# hint_skeleton=select_stage1_hint_skeleton(...), so every profile is
+# warm-started from the skeletons already found - the hard-feasibility probe
+# and the deterministic baseline, both feasible by then. A floor measured cold
+# and applied warm measures the wrong thing, and the consequence was not
+# subtle: at a 900s budget the loop reached the portfolio with 171 seconds in
+# hand, refused to start a profile that needed 30, and attempted 0 of 15.
+#
+# Re-measured WARM on the same workbook and profile, with the probe rebuilding
+# the anchor the run itself holds (tools/stage1_slice_depth_probe.py ... warm):
+#
+#     15s UNKNOWN | 30s 168/168 | 45s 168/168 | 60s 168/168
+#     120s 168/168 | 240s 168/168
+#
+# The cliff is between 15s and 30s, an order of magnitude below the cold one,
+# and warm quality saturates immediately at 168 of 168 - RC9.1's recorded best,
+# and better than anything the cold curve reached. 45s clears the measured
+# cliff by 50% and is itself measured feasible at full quality.
+STAGE1_MIN_MEANINGFUL_SLICE_SEC = 45.0
 
 # Longest single Stage-1 solver slice. Unchanged from the pre-RC9.2.2 loop.
 STAGE1_MAX_SLICE_SEC = 1800.0
@@ -3896,6 +5021,10 @@ BREAK_MIN_MEANINGFUL_SLICE_SEC = 180.0
 STAGE2_ANCHOR_MIN_SLICE_SEC = 45.0
 STAGE2_ANCHOR_MAX_SLICE_SEC = 900.0
 STAGE2_ANCHOR_MAX_PHASE_SHARE = 0.80
+# Measured NMG break solves plateau around 180 seconds.  Keep a little margin
+# for the protected anchor, but return the rest of the Stage-2 window to the
+# adaptive portfolio instead of allowing one anchor to monopolize it.
+STAGE2_ANCHOR_MAX_RESERVE_SEC = 240.0
 
 
 def stage2_anchor_slice_seconds(reserved_sec: float, remaining_sec: float) -> float:
@@ -3920,7 +5049,9 @@ def stage2_anchor_slice_seconds(reserved_sec: float, remaining_sec: float) -> fl
     return max(0.0, min(proposed, ceiling))
 
 
-def stage1_fundable_profile_count(window_sec: float) -> int:
+def stage1_fundable_profile_count(
+    window_sec: float, minimum_slice_sec: float = STAGE1_MIN_MEANINGFUL_SLICE_SEC
+) -> int:
     """How many Stage-1 profiles a wall-clock window can pay for at full depth.
 
     Reporting only: the loop does not truncate its portfolio up front, because
@@ -3929,13 +5060,16 @@ def stage1_fundable_profile_count(window_sec: float) -> int:
     log states it can afford, so a truncated search is visible in the log
     rather than only in the audit afterwards.
     """
-    if STAGE1_MIN_MEANINGFUL_SLICE_SEC <= 0:
-        raise ValueError("STAGE1_MIN_MEANINGFUL_SLICE_SEC must be positive")
+    if minimum_slice_sec <= 0:
+        raise ValueError("the Stage-1 minimum slice must be positive")
     usable = max(0.0, float(window_sec)) * STAGE1_SLICE_UTILIZATION
-    return int(usable // STAGE1_MIN_MEANINGFUL_SLICE_SEC)
+    return int(usable // minimum_slice_sec)
 
 
-def stage1_slice_seconds(remaining_sec: float, attempts_left: int) -> float:
+def stage1_slice_seconds(
+    remaining_sec: float, attempts_left: int,
+    minimum_slice_sec: float = STAGE1_MIN_MEANINGFUL_SLICE_SEC,
+) -> float:
     """Per-profile Stage-1 solver slice: fund depth, not width.
 
     The even split used to be clamped UP to a hard 45-second floor, with the
@@ -3954,8 +5088,8 @@ def stage1_slice_seconds(remaining_sec: float, attempts_left: int) -> float:
     """
     usable = max(0.0, float(remaining_sec)) * STAGE1_SLICE_UTILIZATION
     attempts = max(1, int(attempts_left))
-    proposed = min(STAGE1_MAX_SLICE_SEC, max(STAGE1_MIN_MEANINGFUL_SLICE_SEC, usable / attempts))
-    return min(proposed, max(STAGE1_MIN_MEANINGFUL_SLICE_SEC, usable))
+    proposed = min(STAGE1_MAX_SLICE_SEC, max(minimum_slice_sec, usable / attempts))
+    return min(proposed, max(minimum_slice_sec, usable))
 
 
 def active_interval_segments(parsed: ParsedInput) -> Dict[int, List[List[int]]]:
@@ -4083,9 +5217,15 @@ def aggregate_pattern_mix_guidance(parsed: ParsedInput, time_limit_sec: float = 
             fixed = associate.fixed_schedule[d] if d < len(associate.fixed_schedule) else ""
             pref_kind = preference_kind(pref)
             fixed_kind = preference_kind(fixed)
-            if parsed.leave_enabled and (pref_kind == "leave" or fixed_kind == "leave"):
+            if (
+                (parsed.fixed_enabled and fixed_kind == "leave")
+                or (parsed.leave_enabled and pref_kind == "leave")
+            ):
                 fixed_aware_associates.add(a)
-            if parsed.hard_off and (pref_kind == "off" or fixed_kind == "off"):
+            if (
+                (parsed.fixed_enabled and fixed_kind == "off")
+                or (parsed.hard_off and pref_kind == "off")
+            ):
                 hard_off_flags[d] = True
                 hard_off_day_counts[d] += 1
                 fixed_aware_associates.add(a)
@@ -4877,10 +6017,7 @@ def discover_validated_fallback_candidates(
                 "hard_contract_valid": True,
                 "candidate_origin": candidate[1].diagnostics.get("candidate_origin"),
                 "break_layout": candidate[1].diagnostics.get("fallback_break_layout"),
-                "metrics": {
-                    key: value for key, value in candidate[1].metrics.items()
-                    if key != "interval_rows" and not key.endswith("gaps") and not key.endswith("qslots")
-                },
+                "metrics": compact_metric_surface(candidate[1].metrics),
                 "validation": candidate[1].diagnostics.get("fallback_validation", {}),
             })
             candidates.append(candidate)
@@ -5061,15 +6198,22 @@ def build_skeleton(
     for a, assoc in enumerate(parsed.associates):
         # Language Setup's Coverage Start/End read as the hours this associate
         # may work, not only the hours their language must be covered. Off by
-        # default; see normalize_language_window_mode for why.
+            # default; see normalize_language_window_mode for why.
         if hard.language:
-            window = associate_language_window(parsed, assoc)
-            if window is not None:
-                for shift in parsed.shifts:
-                    if not shift_within_language_window(shift, window):
-                        for d in range(D):
+            for d in range(D):
+                windows = associate_language_windows(parsed, assoc, day=d)
+                if windows:
+                    for shift in parsed.shifts:
+                        if not any(shift_within_language_window(shift, window) for window in windows):
                             model.Add(x[a, d, shift.index] == 0)
                             language_working_window_blocks += 1
+                for shift in parsed.shifts:
+                    blocked_rule = shift_overlaps_required_language_for_noneligible(
+                        parsed, assoc, shift, d
+                    )
+                    if blocked_rule is not None:
+                        model.Add(x[a, d, shift.index] == 0)
+                        language_working_window_blocks += 1
         if assoc.nesting_group:
             fixed_group_members.setdefault(norm(assoc.nesting_group), []).append(a)
         for d in range(D):
@@ -5077,9 +6221,15 @@ def build_skeleton(
             fixed = assoc.fixed_schedule[d] if d < len(assoc.fixed_schedule) else ""
             kind = preference_kind(pref)
             fixed_kind = preference_kind(fixed)
-            is_leave = hard.leave and parsed.leave_enabled and (kind == "leave" or fixed_kind == "leave")
+            is_leave = (
+                (hard.fixed and parsed.fixed_enabled and fixed_kind == "leave")
+                or (hard.leave and parsed.leave_enabled and kind == "leave")
+            )
             model.Add(leave[a, d] == (1 if is_leave else 0))
-            if hard.hard_off and parsed.hard_off and (kind == "off" or fixed_kind == "off"):
+            if (
+                (hard.fixed and parsed.fixed_enabled and fixed_kind == "off")
+                or (hard.hard_off and parsed.hard_off and kind == "off")
+            ):
                 model.Add(off[a, d] == 1)
             if hard.fixed and parsed.fixed_enabled and fixed_kind == "shift":
                 matches = [s.index for s in parsed.shifts if norm(s.label) == norm(fixed)]
@@ -5304,7 +6454,7 @@ def build_skeleton(
                     for q in range(qpi):
                         qslot = d * 96 + i * qpi + q
                         minute_q = i * parsed.interval_minutes + q * 15
-                        for ri, rule in enumerate(language_rules_at(parsed, minute_q)):
+                        for ri, rule in enumerate(language_rules_at(parsed, minute_q, day=d)):
                             vars_lang = coverage_vars_at_qslot(parsed, x, qslot, rule)
                             prior_lang = len(prior_covering_associates(parsed, qslot, rule))
                             count = sum(vars_lang) + prior_lang if vars_lang else prior_lang
@@ -5482,7 +6632,7 @@ def build_skeleton(
                 model.Add(raw >= parsed.opening_minimum)
             minute = i * parsed.interval_minutes + q * 15
             if hard.week_boundary and hard.language:
-                for ri, rule in enumerate(language_rules_at(parsed, minute)):
+                for ri, rule in enumerate(language_rules_at(parsed, minute, day=0)):
                     lang_vars = cyclic_next_sunday_coverage_vars(parsed, x, qslot, rule)
                     lang_count = sum(lang_vars) if lang_vars else 0
                     model.Add(lang_count >= rule.minimum)
@@ -5570,12 +6720,13 @@ def build_skeleton(
                         if not (0 <= qslot < CYCLIC_TOTAL_QSLOTS):
                             continue
                         minute = (qslot % 96) * 15
-                        for rule in language_rules_at(parsed, minute):
+                        rule_day = (qslot // 96) if qslot < TOTAL_QSLOTS else 0
+                        for rule in language_rules_at(parsed, minute, day=rule_day):
                             if language_eligible(rule, target_associate):
                                 current_requirements.append((qslot, rule))
                         if target_d == 0 and 0 <= qslot < 96:
                             pseudo_qslot = TOTAL_QSLOTS + qslot
-                            for rule in language_rules_at(parsed, minute):
+                            for rule in language_rules_at(parsed, minute, day=0):
                                 if language_eligible(rule, target_associate):
                                     boundary_requirements.append((pseudo_qslot, rule))
                     pattern_rows.append((certificate_pattern, current_requirements, boundary_requirements))
@@ -5668,6 +6819,7 @@ def build_skeleton(
     solver.parameters.cp_model_presolve = True
     solver.parameters.linearization_level = 1
     solver.parameters.log_search_progress = False
+    _solver_limits_applied = configure_solver_limits(solver)
     started = time.time()
     status = solver.Solve(model)
     elapsed = time.time() - started
@@ -5693,6 +6845,7 @@ def build_skeleton(
         "variables": len(model.Proto().variables), "constraints": len(model.Proto().constraints),
         "best_objective_bound": solver.BestObjectiveBound() if status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else None,
         "conflicts": solver.NumConflicts(), "branches": solver.NumBranches(), "wall_time": solver.WallTime(),
+        "solver_telemetry": capture_solver_telemetry(cp_model, solver, status, float(time_limit)),
         "hard_config": hard.__dict__,
         "anchor_profile": anchor.profile if anchor is not None else None,
         "anchor_change_limit": max_changes,
@@ -6167,7 +7320,7 @@ def critical_exception_cells(parsed: ParsedInput, skeleton: SkeletonSolution) ->
                         critical.add((a, sd))
                         reasons.append({"associate": parsed.associates[a].name, "day": DAY_NAMES[sd], "rule": f"opening minimum {parsed.opening_minimum} at {DAY_NAMES[d]} {hhmm(i * parsed.interval_minutes + q * 15)}"})
                 minute = i * parsed.interval_minutes + q * 15
-                for rule in language_rules_at(parsed, minute):
+                for rule in language_rules_at(parsed, minute, day=d):
                     eligible = [(a, sd, si) for a, sd, si in covering if language_eligible(rule, parsed.associates[a])]
                     prior_lang = len(prior_covering_associates(parsed, qslot, rule))
                     if len(eligible) + prior_lang <= rule.minimum:
@@ -6205,7 +7358,7 @@ def critical_exception_cells(parsed: ParsedInput, skeleton: SkeletonSolution) ->
                     "rule": f"next-Sunday opening minimum {parsed.opening_minimum} at {hhmm(interval * parsed.interval_minutes + quarter * 15)}",
                 })
         minute = interval * parsed.interval_minutes + quarter * 15
-        for rule in language_rules_at(parsed, minute):
+        for rule in language_rules_at(parsed, minute, day=0):
             eligible = [(a, sd, si) for a, sd, si in covering if language_eligible(rule, parsed.associates[a])]
             if len(eligible) <= rule.minimum:
                 for a, sd, _ in eligible:
@@ -6235,6 +7388,7 @@ def language_rule_key(rule: LanguageRule) -> str:
         str(int(rule.minimum)),
         str(int(rule.start_min)),
         str(int(rule.end_min)),
+        ",".join(str(day) for day in sorted(getattr(rule, "active_days", set(range(7))))),
         ",".join(sorted(norm(value) for value in rule.required_languages)),
         ",".join(sorted(norm(value) for value in rule.eligible_languages)),
     ])
@@ -6306,7 +7460,7 @@ def language_break_overlap_repair_plan(
                         continue
                     if not parsed.active[data_day][interval_index]:
                         continue
-                    for rule in language_rules_at(parsed, minute):
+                    for rule in language_rules_at(parsed, minute, day=data_day):
                         if not language_eligible(rule, associate):
                             continue
                         covering = (
@@ -6410,9 +7564,15 @@ def language_break_overlap_repair_plan(
             # re-optimized transaction-safely.
             donor_days = {max(0, min(6, day_scope)), max(0, min(6, day_scope - 1))}
             for donor_index, donor in enumerate(parsed.associates):
+                # `qslot` belongs to the earlier pattern scan and is stale by
+                # this point. Use the day encoded in the reserve key instead;
+                # next-Sunday keys map to Sunday (day 0), while current-week
+                # keys retain their actual day. A stale qslot could make a
+                # valid next-Sunday rule look like it had no eligible donors.
+                rule_day = 0 if day_scope >= 7 else day_scope
                 if not any(
                     language_eligible(rule, donor)
-                    for rule in language_rules_at(parsed, interval_index * parsed.interval_minutes)
+                    for rule in language_rules_at(parsed, interval_index * parsed.interval_minutes, day=rule_day)
                     if language_rule_key(rule) == key[2]
                 ):
                     continue
@@ -6777,7 +7937,7 @@ def solve_breaks(
                     add_break_family(model.Add(len(covering) + len(prior) - break_count >= parsed.opening_minimum), "opening")
                     quarter_constraints += 1
                 minute = i * parsed.interval_minutes + q * 15
-                for rule in language_rules_at(parsed, minute):
+                for rule in language_rules_at(parsed, minute, day=d):
                     eligible = [a for a, _, _ in covering if language_eligible(rule, parsed.associates[a])]
                     prior_lang = prior_covering_associates(parsed, qslot, rule)
                     lang_breaks: List[Any] = []
@@ -6882,10 +8042,6 @@ def solve_breaks(
         model.Add(severe_excess >= severe_misses - limits["maximum_severe_gaps"])
         objective_terms.append(int(weights.get("quality_global_gap", 0)) * floor_excess)
         objective_terms.append(int(weights.get("quality_severe_gap", 0)) * severe_excess)
-        if objective_mode in {"quality_convergence", "release_quality_guard"} and parsed.quality_gate_mode == "fail":
-            add_break_family(model.Add(floor_misses <= limits["maximum_floor_gaps"]), "quality_gate")
-            add_break_family(model.Add(severe_misses <= limits["maximum_severe_gaps"]), "quality_gate")
-            break_quality_shape["hard_gate_enforced"] = True
         for d in range(7):
             day_hits = [floor_hit_by_interval[d, i] for i in range(parsed.intervals_per_day) if (d, i) in floor_hit_by_interval]
             if not day_hits:
@@ -6903,8 +8059,6 @@ def solve_breaks(
                     vars_window = [floor_hit_by_interval[d, i] for i in window if (d, i) in floor_hit_by_interval]
                     if len(vars_window) != len(window):
                         continue
-                    if objective_mode in {"quality_convergence", "release_quality_guard"} and parsed.quality_gate_mode == "fail":
-                        add_break_family(model.Add(sum(vars_window) >= 1), "quality_gate")
                     all_gap = model.NewBoolVar(f"break_all_gap_window_{d}_{segment_number}_{offset}")
                     model.Add(sum(vars_window) + all_gap >= 1)
                     objective_terms.append(int(weights.get("quality_run_gap", 0)) * all_gap)
@@ -6968,7 +8122,7 @@ def solve_breaks(
                 model.Add(after_raw >= parsed.opening_minimum)
                 quarter_constraints += 1
             minute = i * parsed.interval_minutes + q * 15
-            for rule in language_rules_at(parsed, minute):
+            for rule in language_rules_at(parsed, minute, day=0):
                 eligible = [a for a, _, _ in covering if language_eligible(rule, parsed.associates[a])]
                 lang_breaks: List[Any] = []
                 for a in eligible:
@@ -7050,18 +8204,13 @@ def solve_breaks(
         before_target_count = int(before_metrics_for_loss_guard.get("before_target", len(target_hit_vars)) or 0)
         active_for_loss_guard = int(before_metrics_for_loss_guard.get("active_intervals", len(floor_hit_vars)) or len(floor_hit_vars))
         before_floor_count = int(before_metrics_for_loss_guard.get("before_floor", len(floor_hit_vars)) or 0)
-        before_severe_gaps = int(before_metrics_for_loss_guard.get("before_severe_floor_gap_count", before_metrics_for_loss_guard.get("severe_floor_gap_count", active_for_loss_guard)) or 0)
+        before_severe_gaps = int(require_metric(before_metrics_for_loss_guard, "before_severe_floor_gap_count", "severe_floor_gap_count") or 0)
         before_severe_count = max(0, active_for_loss_guard - before_severe_gaps)
-        loss_cap = max(0, int(getattr(parsed, "quality_max_target_losses_from_breaks", 999999)))
-        # RC8.12: in FAIL-mode quality runs, target/floor degradation from breaks is
-        # release-critical.  Earlier engines only enforced this when a workbook
-        # explicitly set Target Loss Gate Mode = Fail; NMG proved that WARN-mode
-        # degradation can hide an unusable after-break result.  Keep OFF as an
-        # explicit opt-out, otherwise protect target, floor, and severe tiers.
-        enforce_break_loss_guard = (
-            getattr(parsed, "target_loss_gate_mode", "warn") == "fail"
-            or (getattr(parsed, "quality_gate_mode", "warn") == "fail" and getattr(parsed, "target_loss_gate_mode", "warn") != "off")
-        )
+        loss_cap = max(0, int(getattr(parsed, "quality_max_target_losses_from_breaks", 6)))
+        # Quality gates are evaluated after candidate generation. Only the
+        # explicit target-loss gate may turn this protection into a hard solver
+        # lock; a generic quality mode must not demote coverage.
+        enforce_break_loss_guard = getattr(parsed, "target_loss_gate_mode", "warn") == "fail"
         if enforce_break_loss_guard and target_hit_vars:
             add_break_family(model.Add(sum(target_hit_vars) >= max(0, before_target_count - loss_cap)), "target_lock")
         if enforce_break_loss_guard and floor_hit_vars:
@@ -7092,6 +8241,7 @@ def solve_breaks(
     solver.parameters.cp_model_presolve = True
     solver.parameters.linearization_level = 1
     solver.parameters.log_search_progress = False
+    _solver_limits_applied = configure_solver_limits(solver)
     started = time.time()
     status = solver.Solve(model)
     elapsed = time.time() - started
@@ -7199,6 +8349,7 @@ def solve_breaks(
                 "It is diagnostic evidence for master-model feedback and is not necessarily a minimum unsatisfiable subset."
             ),
             "conflicts": solver.NumConflicts(), "branches": solver.NumBranches(), "wall_time": solver.WallTime(),
+            "solver_telemetry": capture_solver_telemetry(cp_model, solver, status, float(time_limit)),
         },
         metrics=metrics,
     )
@@ -7286,7 +8437,7 @@ def distinct_skill_allocation_audit(
     It is instruction-driven and defaults to WARN because some clients operate
     intentionally pooled/nested skill contracts.
     """
-    if not getattr(parsed, "skill_allocation_audit_enabled", False):
+    if not getattr(parsed, "skill_allocation_audit_enabled", True):
         return {
             "enabled": False, "status": "DISABLED", "protected_quarters": 0,
             "gap_quarters": 0, "maximum_gap": 0, "rows": [],
@@ -7324,7 +8475,7 @@ def distinct_skill_allocation_audit(
                 continue
             for quarter in range(qpi):
                 minute = interval * parsed.interval_minutes + quarter * 15
-                rules = language_rules_at(parsed, minute)
+                rules = language_rules_at(parsed, minute, day=day)
                 if len(rules) < 2:
                     continue
                 qslot = day * 96 + interval * qpi + quarter
@@ -7556,6 +8707,7 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
     max_concurrent_break_ratio_observed = 0.0
     break_concurrency_violation_count = 0
     before100 = before90 = before80 = after100 = after90 = after80 = active_count = 0
+    blank_staffed_quarters = 0
     before_target = after_target = before_floor = after_floor = 0
     before_hard_floor = after_hard_floor = 0
     target_losses_from_breaks = 0
@@ -7593,6 +8745,14 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
     for d in range(7):
         for i in range(parsed.intervals_per_day):
             if not parsed.active[d][i]:
+                # Keep the current-week blank staffing count on the same metric
+                # surface as the independent validator. Previous-Saturday
+                # carry-in is part of observed before coverage, so it is
+                # intentionally included here exactly as in the validator.
+                for q in range(qpi):
+                    qslot = d * 96 + i * qpi + q
+                    if scheduled_covering_qslot(parsed, skeleton, qslot) or prior_covering_associates(parsed, qslot):
+                        blank_staffed_quarters += 1
                 floor_gap_flags[d].append(None)
                 before_floor_gap_flags[d].append(None)
                 continue
@@ -7627,7 +8787,7 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
                 if parsed.opening_guard_enabled and i in opening[d] and after_raw < parsed.opening_minimum:
                     opening_gaps.append({"day": DAY_NAMES[d], "time": hhmm(i * parsed.interval_minutes + q * 15), "minimum": parsed.opening_minimum, "actual": after_raw})
                 minute = i * parsed.interval_minutes + q * 15
-                for rule in language_rules_at(parsed, minute):
+                for rule in language_rules_at(parsed, minute, day=d):
                     eligible_current = [a for a, _, _ in covering if language_eligible(rule, parsed.associates[a])]
                     prior_eligible = prior_covering_associates(parsed, qslot, rule)
                     before_actual = len(prior_eligible) + len(eligible_current)
@@ -7751,10 +8911,16 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
             after_extreme_overage_count += int(after_overage["extreme_overage"])
             before_overage_max_pct = max(before_overage_max_pct, before_pct)
             after_overage_max_pct = max(after_overage_max_pct, after_pct)
-            if before_target_overage_fte > 0:
-                before_overage_values.append(before_target_overage_fte)
-            if after_target_overage_fte > 0:
-                after_overage_values.append(after_target_overage_fte)
+            # The concentration metric is explicitly about avoidable overage,
+            # so it must use the same series as the independent validator and
+            # the other avoidable-overage distribution metrics. Using total
+            # target overage here mixed unavoidable integer staffing into a
+            # metric named "avoidable" and made parity depend on demand
+            # rounding rather than schedule quality.
+            if before_avoidable_overage_fte > 0:
+                before_overage_values.append(before_avoidable_overage_fte)
+            if after_avoidable_overage_fte > 0:
+                after_overage_values.append(after_avoidable_overage_fte)
             target_def = max(0.0, parsed.target_ratio - after_pct)
             floor_def = max(0.0, parsed.floor_ratio - after_pct)
             target_deficit_sum += target_def
@@ -7859,7 +9025,7 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
                     "day": "Next Sun", "time": hhmm(minute),
                     "minimum": parsed.opening_minimum, "actual": after_raw,
                 })
-            for rule in language_rules_at(parsed, minute):
+            for rule in language_rules_at(parsed, minute, day=0):
                 qualified_occurrences = [
                     (a, source_qslot) for a, _, _, source_qslot in occurrences
                     if language_eligible(rule, parsed.associates[a])
@@ -8151,7 +9317,7 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
             for donor, receiver in ((left, right), (right, left)):
                 if (
                     float(donor.get("after_avoidable_overage_fte", 0.0) or 0.0) > 1e-9
-                    and float(donor.get("after_pct", 0.0) or 0.0) > getattr(parsed, "whole_week_overage_cap_ratio", 2.0) + 1e-9
+                    and float(donor.get("after_pct", 0.0) or 0.0) > getattr(parsed, "whole_week_overage_cap_ratio", 1.35) + 1e-9
                     and float(receiver.get("after_pct", 0.0) or 0.0) + 1e-9 < parsed.target_ratio
                 ):
                     transferable_pairs.append({
@@ -8199,6 +9365,7 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
         "after_100": int(after100), "after_90": int(after90), "after_80": int(after80),
         "before_target": int(before_target), "after_target": int(after_target),
         "before_floor": int(before_floor), "after_floor": int(after_floor),
+        "blank_staffed_quarters": int(blank_staffed_quarters),
         "before_hard_floor": int(before_hard_floor), "after_hard_floor": int(after_hard_floor),
         "target_losses_from_breaks": int(target_losses_from_breaks),
         "floor_losses_from_breaks": int(floor_losses_from_breaks),
@@ -8262,7 +9429,7 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
         "before_max_consecutive_floor_gaps": int(before_max_consecutive_floor_gaps),
         "target_loss_ratio_from_breaks": round(target_losses_from_breaks / max(1, active_count), 8),
         "whole_week_balance_enabled": bool(parsed.whole_week_balance_enabled),
-        "whole_week_overage_cap_ratio": float(getattr(parsed, "whole_week_overage_cap_ratio", 2.0)),
+        "whole_week_overage_cap_ratio": float(getattr(parsed, "whole_week_overage_cap_ratio", 1.35)),
         "whole_week_overage_cap_violation_count": len(whole_week_overage_cap_rows),
         "whole_week_overage_cap_rows": whole_week_overage_cap_rows,
         "whole_week_imbalance_violation_count": len(whole_week_imbalance_rows),
@@ -8371,6 +9538,14 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
 
 
 
+def compact_metric_surface(metrics: Mapping[str, Any]) -> Dict[str, Any]:
+    """Keep scalar metrics while excluding only bulky row/detail collections."""
+    return {
+        key: value for key, value in metrics.items()
+        if not isinstance(value, (list, dict))
+    }
+
+
 def associate_day_eligible_shifts(parsed: ParsedInput, associate: Associate, day: int) -> List[Shift]:
     """Return shifts that can possibly be used by one associate-day before weekly coupling.
 
@@ -8396,6 +9571,11 @@ def associate_day_eligible_shifts(parsed: ParsedInput, associate: Associate, day
     result: List[Shift] = []
     for shift in candidates:
         if day == 0 and not previous_saturday_compatible(associate.previous_saturday, shift, parsed.rest_gap_hours):
+            continue
+        windows = associate_language_windows(parsed, associate, day=day)
+        if windows and not any(shift_within_language_window(shift, window) for window in windows):
+            continue
+        if shift_overlaps_required_language_for_noneligible(parsed, associate, shift, day) is not None:
             continue
         blocked, _ = demand_fit_blocked(parsed, day, shift)
         if blocked:
@@ -8438,7 +9618,7 @@ def _rule_active_qslots_for_day(parsed: ParsedInput, day: int, rule: LanguageRul
             continue
         for quarter in range(qpi):
             minute = interval * parsed.interval_minutes + quarter * 15
-            if rule.contains_minute(minute):
+            if rule in language_rules_at(parsed, minute, 15, day=day):
                 qslots.append(day * 96 + interval * qpi + quarter)
     return qslots
 
@@ -8672,7 +9852,7 @@ def capacity_diagnostics(parsed: ParsedInput) -> Dict[str, Any]:
                         "day": DAY_NAMES[d], "time": hhmm(minute),
                         "maximum_possible": max_raw, "minimum": parsed.opening_minimum,
                     })
-                for rule in language_rules_at(parsed, minute):
+                for rule in language_rules_at(parsed, minute, day=d):
                     lang_max, lang_names = _max_possible_raw_at_qslot(parsed, d, qslot, rule)
                     if lang_max < rule.minimum:
                         hard_failures.append({
@@ -8723,6 +9903,11 @@ def capacity_diagnostics(parsed: ParsedInput) -> Dict[str, Any]:
     language_windows: List[Dict[str, Any]] = []
     for d in range(7):
         for rule in parsed.language_rules:
+            active_days = getattr(rule, "active_days", set(range(7)))
+            if d not in active_days and not (
+                rule.start_min > rule.end_min and (d - 1) % 7 in active_days
+            ):
+                continue
             available = [
                 assoc for assoc in parsed.associates
                 if language_eligible(rule, assoc) and associate_day_eligible_shifts(parsed, assoc, d)
@@ -8790,9 +9975,71 @@ def capacity_diagnostics(parsed: ParsedInput) -> Dict[str, Any]:
         row["estimated_additional_qualified_associates"] = max(
             0, int(math.ceil(max(0.0, -float(row.get("capacity_slack_hours", 0.0))) / max(0.01, productive_per_assoc) - 1e-9))
         )
+    # Coverage-benchmark eligibility.
+    #
+    # A roster whose productive hours are below its own target demand cannot
+    # reach that target under ANY shift pattern or break placement. Comparing
+    # its coverage against another engine measures the roster, not the
+    # optimiser - and averaging it into an aggregate coverage KPI silently
+    # drags the whole benchmark down.
+    #
+    # This is not a new computation. `aggregate_target_slack` above already
+    # knows the answer; it was simply reported as one warning among many and
+    # was routinely read past. Stating it as a verdict, with the best target
+    # this roster could reach, turns a confusing coverage number into an
+    # actionable sentence.
+    hours_at_full_demand = target_hours / max(1e-9, float(parsed.target_ratio))
+    max_attainable_target_ratio = (
+        min(1.0, productive_hours / hours_at_full_demand) if hours_at_full_demand > 0 else 1.0
+    )
+    slack_ratio = aggregate_target_slack / max(1e-9, target_hours)
+    if aggregate_target_slack < -1e-9:
+        capacity_class = "CAPACITY_SHORT"
+    elif slack_ratio < 0.10:
+        capacity_class = "CAPACITY_TIGHT"
+    else:
+        capacity_class = "CAPACITY_AMPLE"
+    benchmark_eligible = capacity_class != "CAPACITY_SHORT"
+    if capacity_class == "CAPACITY_SHORT":
+        capacity_headline = (
+            f"Capacity-limited: {productive_hours:.0f} productive hours against "
+            f"{target_hours:.0f} needed at the {parsed.target_ratio:.0%} target - short by "
+            f"{-aggregate_target_slack:.0f} hours ({-slack_ratio:.0%}). "
+            f"{leave_days} associate-day(s) of leave are already deducted. This roster cannot "
+            f"exceed about {max_attainable_target_ratio:.0%} of requirement no matter how shifts "
+            f"or breaks are placed, so its coverage does not measure the optimiser and must not be "
+            f"averaged into a coverage benchmark. Add about "
+            f"{estimated_additional_hc_for_target} associate(s), reduce leave, or lower the target."
+        )
+    elif capacity_class == "CAPACITY_TIGHT":
+        capacity_headline = (
+            f"Capacity-tight: {aggregate_target_slack:.0f} spare productive hours on "
+            f"{target_hours:.0f} needed ({slack_ratio:.0%} headroom). The target is reachable but "
+            f"leaves little room for break placement or OFF-day shape; treat a coverage comparison "
+            f"here as indicative rather than decisive."
+        )
+    else:
+        capacity_headline = (
+            f"Capacity-ample: {aggregate_target_slack:.0f} spare productive hours on "
+            f"{target_hours:.0f} needed ({slack_ratio:.0%} headroom). Coverage differences on this "
+            f"scenario reflect the optimiser, not the roster."
+        )
+    coverage_benchmark = {
+        "capacity_class": capacity_class,
+        "benchmark_eligible": benchmark_eligible,
+        "target_capacity_slack_hours": round(aggregate_target_slack, 4),
+        "target_capacity_slack_ratio": round(slack_ratio, 6),
+        "max_attainable_target_ratio": round(max_attainable_target_ratio, 6),
+        "configured_target_ratio": float(parsed.target_ratio),
+        "leave_days_deducted": leave_days,
+        "estimated_additional_hc_for_target": estimated_additional_hc_for_target,
+        "headline": capacity_headline,
+    }
+
     return {
         "status": "FAIL" if deduped_failures else ("WARN" if warnings else "PASS"),
         "diagnostic_scope": "optimistic upper bounds before weekly CP-SAT coupling",
+        "coverage_benchmark": coverage_benchmark,
         "break_resilience": break_resilience,
         "roster_count": len(parsed.associates), "legal_shift_count": len(parsed.shifts),
         "interval_minutes": parsed.interval_minutes, "active_intervals": sum(sum(1 for value in day if value) for day in parsed.active),
@@ -9110,10 +10357,10 @@ def protected_floor_anchor_key(parsed: ParsedInput, skeleton: SkeletonSolution) 
     metrics = ensure_before_break_metrics(parsed, skeleton) or {}
     active = int(metrics.get("active_intervals", 0) or 0)
     limits = coverage_quality_limits(parsed, active)
-    before_floor = int(metrics.get("before_floor", metrics.get("before_80", 0)) or 0)
+    before_floor = int(require_metric(metrics, "before_floor", "before_80") or 0)
     floor_gaps = max(0, active - before_floor)
-    severe_gaps = int(metrics.get("before_severe_floor_gap_count", metrics.get("severe_floor_gap_count", 0)) or 0)
-    run_gaps = int(metrics.get("before_max_consecutive_floor_gaps", metrics.get("max_consecutive_floor_gaps", 0)) or 0)
+    severe_gaps = int(require_metric(metrics, "before_severe_floor_gap_count", "severe_floor_gap_count") or 0)
+    run_gaps = int(require_metric(metrics, "before_max_consecutive_floor_gaps", "max_consecutive_floor_gaps") or 0)
     floor_excess = max(0, floor_gaps - int(limits.get("maximum_floor_gaps", 0) or 0))
     severe_excess = max(0, severe_gaps - int(limits.get("maximum_severe_gaps", 0) or 0))
     run_excess = max(0, run_gaps - int(limits.get("maximum_consecutive_floor_gaps", 0) or 0))
@@ -9239,10 +10486,10 @@ def target_anchor_key(parsed: ParsedInput, skeleton: SkeletonSolution) -> Tuple[
     """
     metrics = ensure_before_break_metrics(parsed, skeleton) or {}
     active = int(metrics.get("active_intervals", 0) or 0)
-    floor_hits = int(metrics.get("before_floor", metrics.get("before_80", 0)) or 0)
+    floor_hits = int(require_metric(metrics, "before_floor", "before_80") or 0)
     floor_gaps = max(0, active - floor_hits)
-    severe_gaps = int(metrics.get("before_severe_floor_gap_count", metrics.get("severe_floor_gap_count", 0)) or 0)
-    run_gaps = int(metrics.get("before_max_consecutive_floor_gaps", metrics.get("max_consecutive_floor_gaps", 0)) or 0)
+    severe_gaps = int(require_metric(metrics, "before_severe_floor_gap_count", "severe_floor_gap_count") or 0)
+    run_gaps = int(require_metric(metrics, "before_max_consecutive_floor_gaps", "max_consecutive_floor_gaps") or 0)
     return (
         1 if skeleton_release_diagnostic_only(skeleton) else 0,
         -int(metrics.get("before_target", 0) or 0),
@@ -9307,7 +10554,7 @@ def run_protected_target_champion_break_proof(
     records: List[Dict[str, Any]] = []
     attempted = 0
     base_loss_cap = max(0, int(getattr(parsed, "quality_max_target_losses_from_breaks", 6) or 0))
-    if getattr(parsed, "quality_gate_mode", "warn") == "fail" and getattr(parsed, "target_loss_gate_mode", "warn") != "off":
+    if getattr(parsed, "target_loss_gate_mode", "warn") == "fail":
         # Use a stricter first pass than the workbook warning cap, but do not make
         # it impossible: the later passes relax up to the workbook cap.
         loss_caps = sorted({0, min(3, base_loss_cap), min(6, base_loss_cap), base_loss_cap})
@@ -9316,7 +10563,7 @@ def run_protected_target_champion_break_proof(
     for anchor_index, skeleton in enumerate(anchors):
         before_metrics = ensure_before_break_metrics(parsed, skeleton) or {}
         before_target = int(before_metrics.get("before_target", 0) or 0)
-        before_floor = int(before_metrics.get("before_floor", before_metrics.get("before_80", 0)) or 0)
+        before_floor = int(require_metric(before_metrics, "before_floor", "before_80") or 0)
         for loss_cap in loss_caps:
             for mode in target_modes[:4]:
                 remaining = deadline - time.time()
@@ -9831,13 +11078,12 @@ def default_break_objective_modes(parsed: ParsedInput) -> List[str]:
     protected by gates and tie-breaks, but an 80% workbook should not chase 90%,
     and a 90% workbook should not be silently demoted to floor-first.
     """
-    quality_prefix = ["release_quality_guard", "quality_convergence", "floor_protected", "coverage_rebalance"] if getattr(parsed, "quality_gate_mode", "warn") == "fail" else []
     if parsed.target_ratio >= 0.995:
-        body = ["target_100", "target_priority", "coverage_rebalance", "balanced", "floor_protected"]
+        body = ["target_100", "target_priority", "coverage_rebalance", "balanced", "floor_protected", "release_quality_guard", "quality_convergence"]
     else:
-        body = ["target_priority", "coverage_rebalance", "balanced", "floor_protected", "target_100"]
+        body = ["target_priority", "coverage_rebalance", "balanced", "floor_protected", "target_100", "release_quality_guard", "quality_convergence"]
     out: List[str] = []
-    for mode in list(quality_prefix) + body:
+    for mode in body:
         if mode not in out:
             out.append(mode)
     return out
@@ -9857,46 +11103,6 @@ def dedupe_break_candidates(candidates: Sequence[Tuple[SkeletonSolution, BreakSo
         seen.add(key)
         out.append((skeleton, solution))
     return out
-
-
-def merge_compliant_with_safe_incumbent(
-    compliant: Sequence[Tuple[SkeletonSolution, BreakSolution]],
-    safe_incumbent: Optional[Tuple[SkeletonSolution, BreakSolution]],
-    diagnostic_fallbacks: Sequence[Tuple[SkeletonSolution, BreakSolution]] = (),
-) -> List[Tuple[SkeletonSolution, BreakSolution]]:
-    """Retain a validated incumbent while merging resumed and newly found candidates."""
-    additions: List[Tuple[SkeletonSolution, BreakSolution]] = list(diagnostic_fallbacks)
-    if safe_incumbent is not None:
-        validation = (
-            safe_incumbent[1].diagnostics.get("fallback_validation")
-            or safe_incumbent[1].diagnostics.get("early_release_validation")
-            or {}
-        )
-        if not validation:
-            raise ValueError("Safe incumbent is missing full release validation evidence")
-        if int(validation.get("hard_fail_count", 0) or 0) != 0:
-            raise ValueError("Safe incumbent has hard validation failures and cannot enter the compliant pool")
-        additions.insert(0, safe_incumbent)
-    merged = dedupe_break_candidates(list(compliant) + additions)
-    if safe_incumbent is not None:
-        incumbent_key = (
-            tuple(tuple(row) for row in safe_incumbent[0].assignment),
-            tuple(sorted((a, d, p if p is not None else -1) for (a, d), p in safe_incumbent[1].selected_pattern.items())),
-            tuple(sorted(safe_incumbent[1].no_break_cells)),
-        )
-        retained = False
-        for skeleton, solution in merged:
-            key = (
-                tuple(tuple(row) for row in skeleton.assignment),
-                tuple(sorted((a, d, p if p is not None else -1) for (a, d), p in solution.selected_pattern.items())),
-                tuple(sorted(solution.no_break_cells)),
-            )
-            if key == incumbent_key:
-                retained = True
-                break
-        if not retained:
-            raise RuntimeError("Validated safe incumbent was lost while merging candidates")
-    return merged
 
 
 def merge_candidate_pools_with_safe_incumbent(
@@ -10062,10 +11268,14 @@ def target_priority_tradeoff_select(
     min_exceptions = min(len(sol.no_break_cells) for _, sol in pool)
     pool = [(sk, sol) for sk, sol in pool if len(sol.no_break_cells) == min_exceptions]
 
-    best_floor = max(int(sol.metrics.get("after_floor", sol.metrics.get("after_80", 0))) for _, sol in pool)
+    best_floor = max(int(require_metric(sol.metrics, "after_floor", "after_80")) for _, sol in pool)
     floor_anchor = max(
-        (pair for pair in pool if int(pair[1].metrics.get("after_floor", pair[1].metrics.get("after_80", 0))) == best_floor),
-        key=lambda pair: _candidate_quality_tuple(parsed, pair[1].metrics, "after"),
+        pool,
+        key=lambda pair: (
+            *_protected_tier_counts(parsed, pair[1].metrics, "after"),
+            int(require_metric(pair[1].metrics, "after_floor", "after_80") or 0),
+            _candidate_quality_tuple(parsed, pair[1].metrics, "after"),
+        ),
     )
     anchor_m = floor_anchor[1].metrics
     anchor_target = int(anchor_m.get("after_target", 0))
@@ -10075,30 +11285,91 @@ def target_priority_tradeoff_select(
 
     rows: List[Dict[str, Any]] = []
     risk_eligible: List[Tuple[SkeletonSolution, BreakSolution]] = []
-    explicit_cap = None if max_after80_tradeoff_intervals is None else max(0, int(max_after80_tradeoff_intervals))
+    # These are deliberately relative to the best-floor anchor rather than
+    # global dominance tests. Global tests are mutually incompatible on a
+    # normal deep-run pool: one candidate is best on severity, another on
+    # concentration, and a third on deficit depth, so every candidate can be
+    # rejected at once. The old fallback then silently reverted to target-first
+    # selection, which could buy a large floor loss for a few target intervals.
+    # The anchor-relative envelope keeps the guard non-empty while allowing the
+    # configured target to remain primary inside that safe envelope.
+    severity_limit = max(anchor_severe + 2, 2)
+    concentration_limit = max(anchor_run + 2, 4)
+    depth_limit = max(anchor_max_def + 0.05, 0.20)
+    # A missing cap used to disable the guard completely.  That admitted the
+    # observed NMG EN+SP trade (+3 target intervals for -9 protected/floor
+    # intervals plus substantially worse overage concentration).  Production
+    # now has a conservative one-interval default; callers may tighten it to
+    # zero or explicitly widen it, but omission can never mean unbounded loss.
+    explicit_cap = 1 if max_after80_tradeoff_intervals is None else max(0, int(max_after80_tradeoff_intervals))
+    protected_keys = [
+        f"after_{label}"
+        for ratio, label in ((0.90, 90), (0.80, 80))
+        if ratio < float(parsed.target_ratio) - 0.004
+        and ratio > float(parsed.floor_ratio) + 0.004
+    ]
     for sk, sol in pool:
         m = sol.metrics
-        after_floor = int(m.get("after_floor", m.get("after_80", 0)))
+        after_floor = int(require_metric(m, "after_floor", "after_80"))
         after_target = int(m.get("after_target", 0))
         floor_loss = best_floor - after_floor
         target_gain = after_target - anchor_target
         severe = int(m.get("severe_floor_gap_count", 0))
         max_run = int(m.get("max_consecutive_floor_gaps", 0))
         max_def = float(m.get("floor_deficit_max", 0.0))
-        earned_tradeoff = target_gain >= math.ceil(max(0, floor_loss) * max(0.0, float(min_after90_gain_per_after80_loss)))
-        material_tradeoff = target_gain >= max(5, math.ceil(max(0, floor_loss) * 2.0))
-        severity_ok = severe <= max(anchor_severe + 2, 2) or material_tradeoff
-        concentration_ok = max_run <= max(anchor_run + 2, 4) or material_tradeoff
-        depth_ok = max_def <= max(anchor_max_def + 0.05, 0.20)
-        cap_ok = True
-        if explicit_cap is not None:
-            cap_ok = floor_loss <= explicit_cap or earned_tradeoff
-            risk_ok = cap_ok and (depth_ok or material_tradeoff)
-        else:
-            # In normal production mode, the workbook target is primary. Floor
-            # severity/concentration remain visible risk flags and tie-breakers,
-            # but they do not silently replace the configured target objective.
-            risk_ok = True
+        protected_losses = {
+            key: max(0, int(anchor_m.get(key, 0) or 0) - int(m.get(key, 0) or 0))
+            for key in protected_keys
+        }
+        largest_protected_loss = max([floor_loss, *protected_losses.values()], default=max(0, floor_loss))
+        earned_tradeoff = target_gain >= math.ceil(
+            max(0, largest_protected_loss) * max(0.0, float(min_after90_gain_per_after80_loss))
+        )
+        material_tradeoff = target_gain >= max(
+            5, math.ceil(max(0, largest_protected_loss) * 2.0)
+        )
+        tradeoff_blockers: List[Dict[str, Any]] = []
+        for other_sk, other_sol in pool:
+            if other_sol is sol:
+                continue
+            om = other_sol.metrics
+            other_losses = [
+                max(0, int(om.get(key, 0) or 0) - int(m.get(key, 0) or 0))
+                for key in protected_keys
+            ]
+            other_losses.append(max(0, int(om.get("after_floor", 0) or 0) - after_floor))
+            protected_loss_to_other = max(other_losses, default=0)
+            target_advantage = after_target - int(om.get("after_target", 0) or 0)
+            other_safety_no_worse = (
+                int(om.get("hard_floor_gap_count", 0) or 0) <= int(m.get("hard_floor_gap_count", 0) or 0)
+                and int(om.get("severe_floor_gap_count", 0) or 0) <= severe
+                and int(om.get("max_consecutive_floor_gaps", 0) or 0) <= max_run
+                and float(om.get("floor_deficit_max", 0.0) or 0.0) <= max_def + 1e-9
+                and int(om.get("week_boundary_hard_failure_count", 0) or 0) <= int(m.get("week_boundary_hard_failure_count", 0) or 0)
+            )
+            required_gain = math.ceil(
+                protected_loss_to_other * max(0.0, float(min_after90_gain_per_after80_loss))
+            )
+            if protected_loss_to_other > explicit_cap and target_advantage < required_gain and other_safety_no_worse:
+                tradeoff_blockers.append({
+                    "skeleton_profile": other_sk.profile,
+                    "break_profile": other_sol.profile,
+                    "protected_gain": protected_loss_to_other,
+                    "target_cost": max(0, -target_advantage),
+                    "candidate_target_advantage": target_advantage,
+                    "required_target_advantage": required_gain,
+                })
+        cap_ok = not tradeoff_blockers
+        severity_ok = severe <= severity_limit or material_tradeoff
+        concentration_ok = max_run <= concentration_limit or material_tradeoff
+        depth_ok = max_def <= depth_limit
+        boundary_ok = int(m.get("week_boundary_hard_failure_count", 0) or 0) <= int(
+            anchor_m.get("week_boundary_hard_failure_count", 0) or 0
+        )
+        hard_floor_ok = int(m.get("hard_floor_gap_count", 0) or 0) <= int(
+            anchor_m.get("hard_floor_gap_count", 0) or 0
+        )
+        risk_ok = cap_ok and severity_ok and concentration_ok and depth_ok and boundary_ok and hard_floor_ok
         rows.append({
             "skeleton_profile": sk.profile,
             "break_profile": sol.profile,
@@ -10114,17 +11385,62 @@ def target_priority_tradeoff_select(
             "severe_floor_gaps": severe,
             "max_consecutive_floor_gaps": max_run,
             "floor_deficit_max": max_def,
-            "tradeoff_cap": explicit_cap if explicit_cap is not None else "severity_only",
+            "protected_tier_losses": protected_losses,
+            "largest_protected_loss": largest_protected_loss,
+            "tradeoff_cap": explicit_cap,
+            "earned_target_tradeoff": earned_tradeoff,
+            "material_target_tradeoff": material_tradeoff,
+            "tradeoff_blockers": tradeoff_blockers,
+            "severity_ok": severity_ok,
+            "concentration_ok": concentration_ok,
+            "depth_ok": depth_ok,
+            "boundary_ok": boundary_ok,
+            "hard_floor_ok": hard_floor_ok,
+            "severity_limit_from_floor_anchor": severity_limit,
+            "concentration_limit_from_floor_anchor": concentration_limit,
+            "depth_limit_from_floor_anchor": depth_limit,
             "risk_ok": risk_ok,
             "accepted_by_tradeoff_guard": risk_ok,
         })
         if risk_ok:
             risk_eligible.append((sk, sol))
 
-    accepted = risk_eligible or pool
-    accepted.sort(key=lambda pair: (
+    fallback_used = not risk_eligible
+
+    def protected_safe_fallback_key(
+        pair: Tuple[SkeletonSolution, BreakSolution]
+    ) -> Tuple[Any, ...]:
+        """Order an exhausted guard pool by safety before coverage.
+
+        This is only a defensive path because the floor anchor normally makes
+        the relative envelope non-empty. It must never turn an empty guard
+        result into an unprotected target-first sort.
+        """
+        metrics = pair[1].metrics
+        protected_losses = tuple(
+            max(0, int(anchor_m.get(key, 0) or 0) - int(metrics.get(key, 0) or 0))
+            for key in protected_keys
+        )
+        return (
+            -int(metrics.get("hard_floor_gap_count", 0) or 0),
+            int(require_metric(metrics, "after_floor", "after_80") or 0),
+            *tuple(-loss for loss in protected_losses),
+            -int(metrics.get("severe_floor_gap_count", 0) or 0),
+            -int(metrics.get("max_consecutive_floor_gaps", 0) or 0),
+            -_deficit_bucket(float(metrics.get("floor_deficit_sum", 0.0) or 0.0)),
+            -_deficit_bucket(float(metrics.get("floor_deficit_max", 0.0) or 0.0)),
+            int(metrics.get("after_target", 0) or 0),
+            *_target_secondary_counts(metrics, "after", parsed.target_ratio),
+            -float(metrics.get("after_avoidable_overage_fte_sum", 0.0) or 0.0),
+        )
+
+    accepted = list(risk_eligible) if risk_eligible else list(pool)
+    if fallback_used:
+        accepted.sort(key=protected_safe_fallback_key, reverse=True)
+    else:
+        accepted.sort(key=lambda pair: (
         -int(pair[1].metrics.get("after_target", 0)),
-        -int(pair[1].metrics.get("after_floor", pair[1].metrics.get("after_80", 0))),
+        -int(require_metric(pair[1].metrics, "after_floor", "after_80")),
         *(-v for v in _target_secondary_counts(pair[1].metrics, "after", parsed.target_ratio)),
         -int(pair[1].metrics.get("week_boundary_after_target", 0)),
         -int(pair[1].metrics.get("week_boundary_after_floor", 0)),
@@ -10138,7 +11454,9 @@ def target_priority_tradeoff_select(
         float(pair[1].metrics.get("target_deficit_sum", 999999.0)),
         int(pair[1].metrics.get("target_losses_from_breaks", 999999)),
         pair[1].objective,
-    ))
+        ))
+    for row in rows:
+        row["protected_safe_fallback_used"] = fallback_used
     return accepted[0], rows
 
 
@@ -10298,12 +11616,16 @@ def select_export_candidates(
             )
         pool = hard_clean
 
-    strict, tradeoff_rows = target_priority_tradeoff_select(
+    # Preserve a transparent MAX_TARGET endpoint, but select the operational
+    # recommendation through the protected-tier guard.  These are deliberately
+    # separate roles: the strict endpoint is evidence, not an automatic winner.
+    max_target = max(pool, key=lambda pair: _candidate_quality_tuple(parsed, pair[1].metrics, "after"))
+    _, tradeoff_rows = target_priority_tradeoff_select(
         parsed, pool,
         max_after80_tradeoff_intervals=max_after80_tradeoff_intervals,
         min_after90_gain_per_after80_loss=min_after90_gain_per_after80_loss,
     )
-    strict_target = int(strict[1].metrics.get("after_target", 0))
+    strict_target = int(max_target[1].metrics.get("after_target", 0))
     best_before_target_in_pool = max(int(sol.metrics.get("before_target", 0)) for _, sol in pool)
     global_before_anchor = (
         best_before_target_in_pool if global_best_before_target is None
@@ -10316,7 +11638,6 @@ def select_export_candidates(
             retention_cap is None
             or global_before_anchor - int(pair[1].metrics.get("before_target", 0)) <= retention_cap
         )
-        and int(pair[1].metrics.get("after_target", 0)) >= strict_target - max(0, int(primary_target_tolerance))
     ]
     benchmark_tolerance = max(0, int(quality_benchmark_tolerance))
     before_tier_minima_configured = any(
@@ -10350,7 +11671,6 @@ def select_export_candidates(
             minimum_final_after_100, minimum_final_after_90, minimum_final_after_80,
             benchmark_tolerance,
         )
-        and int(pair[1].metrics.get("after_target", 0)) >= strict_target - max(0, int(primary_target_tolerance))
     ]
     retention_guard_failed = bool(
         global_best_before_target is not None and retention_cap is not None and not retention_pool
@@ -10370,12 +11690,12 @@ def select_export_candidates(
     # all hard-valid candidates and choose the least-bad gate-debt candidate.  The
     # result remains QUALITY_BLOCKED; this only prevents target benchmarks from
     # selecting a visibly worse floor-gap distribution.
-    if str(getattr(parsed, "quality_gate_mode", "off") or "off").lower() == "fail":
+    if str(getattr(parsed, "quality_gate_mode", 'fail') or "off").lower() == "fail":
         def _rc811_gate_pass(pair: Tuple[SkeletonSolution, BreakSolution]) -> bool:
             m = pair[1].metrics
             active = int(m.get("active_intervals", 0) or 0)
             limits = coverage_quality_limits(parsed, active)
-            floor_gaps = max(0, active - int(m.get("after_floor", m.get("after_80", 0)) or 0))
+            floor_gaps = max(0, active - int(require_metric(m, "after_floor", "after_80") or 0))
             severe_gaps = int(m.get("severe_floor_gap_count", 0) or 0)
             max_run = int(m.get("max_consecutive_floor_gaps", 0) or 0)
             return (
@@ -10385,16 +11705,24 @@ def select_export_candidates(
             )
         if selection_pool and not any(_rc811_gate_pass(pair) for pair in selection_pool):
             selection_pool = pool
-    frontier = nondominated_candidates(parsed, selection_pool)
+    # Frontier alternatives must be discovered from the complete hard-valid
+    # pool.  The old target-tolerance retention window erased the useful knee
+    # and max-floor candidates before frontier construction.
+    frontier = nondominated_candidates(parsed, pool)
     # RC8.10/RC8.11: when the release quality gate is in FAIL mode and no candidate
     # passes it, the recommendation anchor must still be the least-bad gate
     # candidate.  The quality tuple already ranks floor/severe/run excess before
     # target in fail mode; keep that as the anchor instead of allowing later
     # target-only tradeoff logic to override the gate.
-    recommendation_anchor = max(
+    recommendation_anchor, guarded_rows = target_priority_tradeoff_select(
+        parsed,
         selection_pool,
-        key=lambda pair: _candidate_quality_tuple(parsed, pair[1].metrics, "after"),
+        max_after80_tradeoff_intervals=max_after80_tradeoff_intervals,
+        min_after90_gain_per_after80_loss=min_after90_gain_per_after80_loss,
     )
+    # Rows from the actual recommendation pool are release-authoritative; keep
+    # the full-pool rows too for auditability without duplicating identical data.
+    tradeoff_rows = guarded_rows if selection_pool is pool else tradeoff_rows + guarded_rows
     strict_m = recommendation_anchor[1].metrics
     recommendation_target = int(strict_m.get("after_target", 0))
     tolerance = max(0, int(primary_target_tolerance))
@@ -10476,13 +11804,11 @@ def select_export_candidates(
     exports: List[Tuple[str, Tuple[SkeletonSolution, BreakSolution]]] = [
         ("RECOMMENDED_FINAL", recommended)
     ]
-    if strict is not recommended:
-        exports.append(("MAX_TARGET_CANDIDATE", strict))
-    if max_floor is not recommended and max_floor is not strict and len(exports) < 3:
+    if max_target is not recommended:
+        exports.append(("MAX_TARGET_CANDIDATE", max_target))
+    if max_floor is not recommended and max_floor is not max_target:
         exports.append(("MAX_FLOOR_CANDIDATE", max_floor))
-    elif max_floor is not recommended and strict is recommended and len(exports) < 3:
-        exports.append(("MAX_FLOOR_CANDIDATE", max_floor))
-    if balanced not in (recommended, strict, max_floor):
+    if balanced not in (recommended, max_target, max_floor):
         exports.append(("BALANCED_CANDIDATE", balanced))
 
     recommendation_rows = [{
@@ -10513,11 +11839,11 @@ def select_export_candidates(
     return {
         "retention_guard_failed": retention_guard_failed,
         "retention_guard_message": retention_guard_message,
-        "strict": strict,
+        "strict": max_target,
         "recommended": recommended,
         "max_floor": max_floor,
         "frontier": frontier,
-        "exports": exports[:3],
+        "exports": exports,
         "tradeoff_rows": tradeoff_rows,
         "recommendation_rows": recommendation_rows,
         "primary_target_tolerance": tolerance,
@@ -10854,10 +12180,7 @@ def select_release_candidates_with_protection(
                     "break_profile": solution.profile,
                     "pattern_width": solution.pattern_width,
                     "exception_count": len(solution.no_break_cells),
-                    "metrics": {
-                        key: value for key, value in solution.metrics.items()
-                        if key != "interval_rows" and not key.endswith("gaps") and not key.endswith("qslots")
-                    },
+                    "metrics": compact_metric_surface(solution.metrics),
                     "reasons": reasons,
                 })
         if qualifying:
@@ -11001,10 +12324,10 @@ def _contract_display_rows(parsed: ParsedInput) -> List[List[Any]]:
         ["No-Break Exceptions Allowed", parsed.allow_no_break_exceptions],
         ["Maximum No-Break Exceptions", parsed.max_no_break_exceptions],
         ["Whole Week Balance Enabled", parsed.whole_week_balance_enabled],
-        ["Whole Week Overage Cap", getattr(parsed, "whole_week_overage_cap_ratio", 2.0)],
-        ["Whole Week Maximum Adjacent Raw Change", getattr(parsed, "whole_week_max_adjacent_raw_change", 999999)],
-        ["Maximum Target Intervals Lost From Breaks", getattr(parsed, "quality_max_target_losses_from_breaks", 999999)],
-        ["Employee Schedule Quality Gate Mode", getattr(parsed, "employee_quality_gate_mode", "off")],
+        ["Whole Week Overage Cap", getattr(parsed, "whole_week_overage_cap_ratio", 1.35)],
+        ["Whole Week Maximum Adjacent Raw Change", getattr(parsed, "whole_week_max_adjacent_raw_change", 3)],
+        ["Maximum Target Intervals Lost From Breaks", getattr(parsed, "quality_max_target_losses_from_breaks", 6)],
+        ["Employee Schedule Quality Gate Mode", getattr(parsed, "employee_quality_gate_mode", 'warn')],
         ["Employee Maximum Start Time Swing Minutes", parsed.employee_max_start_swing_minutes],
     ]
 
@@ -11223,15 +12546,25 @@ def production_quality_gate(parsed: ParsedInput, metrics: Dict[str, Any]) -> Dic
     apply(getattr(parsed, "break_concurrency_gate_mode", "warn"), concurrency_issues, "break_concurrency")
 
     target_loss_issues: List[Dict[str, Any]] = []
-    if int(metrics.get("target_losses_from_breaks", 0) or 0) > getattr(parsed, "quality_max_target_losses_from_breaks", 999999):
-        target_loss_issues.append({"code": "TARGET_LOSSES_FROM_BREAKS_EXCEEDED", "actual": int(metrics.get("target_losses_from_breaks", 0) or 0), "maximum": getattr(parsed, "quality_max_target_losses_from_breaks", 999999)})
-    apply(getattr(parsed, "target_loss_gate_mode", "warn"), target_loss_issues, "target_loss")
+    if int(metrics.get("target_losses_from_breaks", 0) or 0) > getattr(parsed, "quality_max_target_losses_from_breaks", 6):
+        target_loss_issues.append({"code": "TARGET_LOSSES_FROM_BREAKS_EXCEEDED", "actual": int(metrics.get("target_losses_from_breaks", 0) or 0), "maximum": getattr(parsed, "quality_max_target_losses_from_breaks", 6)})
+    apply(parsed.target_loss_gate_mode, target_loss_issues, "target_loss")
+
+    # W1: floor losses were computed and exported but gated nowhere.
+    floor_loss_issues: List[Dict[str, Any]] = []
+    if int(metrics.get("floor_losses_from_breaks", 0) or 0) > parsed.quality_max_floor_losses_from_breaks:
+        floor_loss_issues.append({
+            "code": "FLOOR_LOSSES_FROM_BREAKS_EXCEEDED",
+            "actual": int(metrics.get("floor_losses_from_breaks", 0) or 0),
+            "maximum": parsed.quality_max_floor_losses_from_breaks,
+        })
+    apply(parsed.floor_loss_gate_mode, floor_loss_issues, "floor_loss")
 
     whole_week_issues: List[Dict[str, Any]] = []
-    if int(metrics.get("whole_week_overage_cap_violation_count", 0) or 0) > getattr(parsed, "whole_week_max_overage_cap_violations", 999999):
-        whole_week_issues.append({"code": "WHOLE_WEEK_OVERAGE_CAP_EXCEEDED", "actual": int(metrics.get("whole_week_overage_cap_violation_count", 0) or 0), "maximum": getattr(parsed, "whole_week_max_overage_cap_violations", 999999), "cap_ratio": getattr(parsed, "whole_week_overage_cap_ratio", 2.0)})
-    if int(metrics.get("whole_week_imbalance_violation_count", 0) or 0) > getattr(parsed, "whole_week_max_imbalance_violations", 999999):
-        whole_week_issues.append({"code": "WHOLE_WEEK_ADJACENT_IMBALANCE", "actual": int(metrics.get("whole_week_imbalance_violation_count", 0) or 0), "maximum": getattr(parsed, "whole_week_max_imbalance_violations", 999999), "configured_raw_change": getattr(parsed, "whole_week_max_adjacent_raw_change", 999999)})
+    if int(metrics.get("whole_week_overage_cap_violation_count", 0) or 0) > getattr(parsed, "whole_week_max_overage_cap_violations", 0):
+        whole_week_issues.append({"code": "WHOLE_WEEK_OVERAGE_CAP_EXCEEDED", "actual": int(metrics.get("whole_week_overage_cap_violation_count", 0) or 0), "maximum": getattr(parsed, "whole_week_max_overage_cap_violations", 0), "cap_ratio": getattr(parsed, "whole_week_overage_cap_ratio", 1.35)})
+    if int(metrics.get("whole_week_imbalance_violation_count", 0) or 0) > getattr(parsed, "whole_week_max_imbalance_violations", 0):
+        whole_week_issues.append({"code": "WHOLE_WEEK_ADJACENT_IMBALANCE", "actual": int(metrics.get("whole_week_imbalance_violation_count", 0) or 0), "maximum": getattr(parsed, "whole_week_max_imbalance_violations", 0), "configured_raw_change": getattr(parsed, "whole_week_max_adjacent_raw_change", 3)})
     if int(metrics.get("transferable_overstaffing_pair_count", 0) or 0) > 0:
         whole_week_issues.append({"code": "TRANSFERABLE_OVERSTAFFING_BESIDE_UNDERTARGET", "count": int(metrics.get("transferable_overstaffing_pair_count", 0) or 0)})
     apply(getattr(parsed, "whole_week_gate_mode", "warn"), whole_week_issues, "whole_week_balance")
@@ -11241,11 +12574,11 @@ def production_quality_gate(parsed: ParsedInput, metrics: Dict[str, Any]) -> Dic
     for code, key, maximum in [("EMPLOYEE_START_SWING_EXCEEDED", "start_swing_violation_count", 0), ("EMPLOYEE_ISOLATED_WORKDAY_EXCEEDED", "isolated_workday_violation_count", 0), ("EMPLOYEE_ISOLATED_OFFDAY_EXCEEDED", "isolated_offday_violation_count", 0)]:
         if int(employee.get(key, 0) or 0) > maximum:
             employee_issues.append({"code": code, "actual": int(employee.get(key, 0) or 0), "maximum": maximum})
-    for code, key, maximum in [("EMPLOYEE_LATE_SHIFT_FAIRNESS_EXCEEDED", "late_shift_load_delta", getattr(parsed, "employee_max_late_shift_load_delta", 999999)), ("EMPLOYEE_OVERNIGHT_FAIRNESS_EXCEEDED", "overnight_load_delta", getattr(parsed, "employee_max_overnight_load_delta", 999999)), ("EMPLOYEE_WEEKEND_FAIRNESS_EXCEEDED", "weekend_load_delta", getattr(parsed, "employee_max_weekend_load_delta", 999999))]:
+    for code, key, maximum in [("EMPLOYEE_LATE_SHIFT_FAIRNESS_EXCEEDED", "late_shift_load_delta", getattr(parsed, "employee_max_late_shift_load_delta", 3)), ("EMPLOYEE_OVERNIGHT_FAIRNESS_EXCEEDED", "overnight_load_delta", getattr(parsed, "employee_max_overnight_load_delta", 3)), ("EMPLOYEE_WEEKEND_FAIRNESS_EXCEEDED", "weekend_load_delta", getattr(parsed, "employee_max_weekend_load_delta", 3))]:
         if int(employee.get(key, 0) or 0) > maximum:
             employee_issues.append({"code": code, "actual": int(employee.get(key, 0) or 0), "maximum": maximum})
-    if int(employee.get("preference_count", 0) or 0) > 0 and float(employee.get("preference_satisfaction_ratio", 1.0) or 0.0) + 1e-12 < getattr(parsed, "employee_min_preference_satisfaction_ratio", 0.0):
-        employee_issues.append({"code": "EMPLOYEE_PREFERENCE_SATISFACTION_BELOW_MINIMUM", "actual": float(employee.get("preference_satisfaction_ratio", 0.0) or 0.0), "minimum": getattr(parsed, "employee_min_preference_satisfaction_ratio", 0.0)})
+    if int(employee.get("preference_count", 0) or 0) > 0 and float(employee.get("preference_satisfaction_ratio", 1.0) or 0.0) + 1e-12 < getattr(parsed, "employee_min_preference_satisfaction_ratio", 0.5):
+        employee_issues.append({"code": "EMPLOYEE_PREFERENCE_SATISFACTION_BELOW_MINIMUM", "actual": float(employee.get("preference_satisfaction_ratio", 0.0) or 0.0), "minimum": getattr(parsed, "employee_min_preference_satisfaction_ratio", 0.5)})
     apply(getattr(parsed, "employee_quality_gate_mode", "warn"), employee_issues, "employee_quality")
 
     language_rule_quarters = int(metrics.get("language_rule_quarters", 0) or 0)
@@ -11257,7 +12590,7 @@ def production_quality_gate(parsed: ParsedInput, metrics: Dict[str, Any]) -> Dic
 
     skill_allocation = metrics.get("skill_allocation_audit") or {}
     skill_issues: List[Dict[str, Any]] = []
-    if getattr(parsed, "skill_allocation_audit_enabled", False) and int(skill_allocation.get("gap_quarters", 0) or 0) > int(getattr(parsed, "skill_allocation_max_gap_quarters", 0)):
+    if getattr(parsed, "skill_allocation_audit_enabled", True) and int(skill_allocation.get("gap_quarters", 0) or 0) > int(getattr(parsed, "skill_allocation_max_gap_quarters", 0)):
         skill_issues.append({"code": "DISTINCT_SKILL_ALLOCATION_GAP", "actual_gap_quarters": int(skill_allocation.get("gap_quarters", 0) or 0), "maximum_gap_quarters": int(getattr(parsed, "skill_allocation_max_gap_quarters", 0)), "maximum_slot_gap": int(skill_allocation.get("maximum_gap", 0) or 0)})
     apply(getattr(parsed, "skill_allocation_gate_mode", "warn"), skill_issues, "skill_allocation")
 
@@ -11284,7 +12617,9 @@ def production_quality_gate(parsed: ParsedInput, metrics: Dict[str, Any]) -> Dic
         "whole_week_overage_cap_violation_count": int(metrics.get("whole_week_overage_cap_violation_count", 0) or 0),
         "whole_week_imbalance_violation_count": int(metrics.get("whole_week_imbalance_violation_count", 0) or 0),
         "target_losses_from_breaks": int(metrics.get("target_losses_from_breaks", 0) or 0),
-        "maximum_target_losses_from_breaks": getattr(parsed, "quality_max_target_losses_from_breaks", 999999),
+        "maximum_target_losses_from_breaks": parsed.quality_max_target_losses_from_breaks,
+        "floor_losses_from_breaks": int(metrics.get("floor_losses_from_breaks", 0) or 0),
+        "maximum_floor_losses_from_breaks": parsed.quality_max_floor_losses_from_breaks,
         "employee_quality": employee,
         "skill_allocation_gate_mode": getattr(parsed, "skill_allocation_gate_mode", "warn"),
         "skill_allocation_gap_quarters": int(skill_allocation.get("gap_quarters", 0) or 0),
@@ -11790,7 +13125,7 @@ def write_output_workbook(
         balance_ws,
         ["Day", "Previous Time", "Current Time", "Previous Raw", "Current Raw", "Raw Change", "Allowed Raw Change", "Status"],
         [[row.get("day"), row.get("previous_time"), row.get("current_time"), row.get("previous_raw"), row.get("current_raw"), row.get("raw_change"), row.get("allowed_raw_change"), "FAIL" if row.get("violation") else "PASS"] for row in m.get("whole_week_adjacent_rows", [])]
-        or [["", "", "", 0, 0, 0, getattr(parsed, "whole_week_max_adjacent_raw_change", 999999), "PASS"]],
+        or [["", "", "", 0, 0, 0, getattr(parsed, "whole_week_max_adjacent_raw_change", 3), "PASS"]],
     )
     employee_ws = _replace_sheet(wb, "Employee Quality Audit")
     employee_rows = (m.get("employee_quality") or {}).get("rows", [])
@@ -11958,6 +13293,32 @@ def skeleton_breakability_priority_key(parsed: ParsedInput, skeleton: SkeletonSo
         cap_rank = 1
     upper_key = int(upper) if isinstance(upper, int) else 999999
     return (cap_rank, upper_key, *skeleton_quality_key(parsed, skeleton))
+
+
+def coverage_first_stage2_anchor_candidates(
+    skeletons: Sequence[SkeletonSolution],
+) -> List[SkeletonSolution]:
+    """Return production skeletons eligible for the protected Stage-2 anchor.
+
+    A proven zero-exception result is useful evidence, but it must not outrank
+    a stronger coverage skeleton merely because the latter's diagnostic was
+    still unknown when the Stage-2 clock started.  Unknown and proven-zero
+    skeletons are therefore eligible together.  A skeleton is deferred only
+    when its minimum exception count is already proven positive.  If every
+    production skeleton is known positive, retain the historical fallback and
+    let the normal candidate classification decide what can ship.
+    """
+    production = [sk for sk in skeletons if not skeleton_release_diagnostic_only(sk)]
+    eligible = [
+        sk for sk in production
+        if not (
+            isinstance(sk.diagnostics.get("minimum_exception_count"), int)
+            and sk.diagnostics.get("minimum_exception_count") > 0
+        )
+    ]
+    if eligible:
+        return eligible
+    return production or list(skeletons)
 
 
 def skeleton_hard_clean(parsed: ParsedInput, metrics: Dict[str, Any]) -> bool:
@@ -12181,14 +13542,16 @@ def guaranteed_stage2_reserve_seconds(total_time_sec: int) -> int:
 def bounded_stage2_guard_reserve_seconds(total_time_sec: int, primary_search_sec: int) -> int:
     """Protect at least one real break solve even in short functional runs.
 
-    Long runs retain the established 15%/300-second floor.  Short runs reserve
-    a bounded share of their primary-search budget rather than leaving Stage 2
-    at zero merely because the total budget is below five minutes.
+    Long runs retain the established 15%/300-second floor for the overall
+    Stage-2 phase, while the protected anchor itself is capped at a measured
+    convergence-sized slice. Short runs reserve a bounded share of their
+    primary-search budget rather than leaving Stage 2 at zero merely because
+    the total budget is below five minutes.
     """
     primary = max(0, int(primary_search_sec))
     if primary < 90:
         return 0
-    desired = max(45, int(primary * 0.45))
+    desired = min(STAGE2_ANCHOR_MAX_RESERVE_SEC, max(45, int(primary * 0.30)))
     available = max(0, primary - 45)
     return min(guaranteed_stage2_reserve_seconds(total_time_sec), desired, available)
 
@@ -12206,45 +13569,6 @@ def dedupe_skeletons(skeletons: Sequence[SkeletonSolution]) -> List[SkeletonSolu
         unique.append(skeleton)
     return unique
 
-
-
-def optimization_phase_budgets(
-    total_time_sec: int,
-    allow_exceptions: bool,
-    post_break_repair: bool,
-    target_lock_recovery: bool,
-    exception_search_reserve_sec: int = 1200,
-    post_break_repair_reserve_sec: int = 600,
-    target_lock_recovery_reserve_sec: int = 600,
-    finalization_reserve_sec: int = 180,
-) -> Dict[str, int]:
-    """Reserve bounded time for late optimization phases.
-
-    L6.3.2.1 allowed Stage 1 and early searches to consume the full deadline,
-    which silently starved post-break repair and target-lock recovery.  These
-    reserves are scaled for short functional runs and remain scenario-neutral.
-    """
-    total = max(60, int(total_time_sec))
-    finalization = min(max(30, int(total * 0.03)), max(30, int(finalization_reserve_sec)))
-    exception = 0
-    if allow_exceptions:
-        exception = min(max(120, int(total * 0.12)), max(120, int(exception_search_reserve_sec)))
-    post = 0
-    if post_break_repair:
-        post = min(max(120, int(total * 0.08)), max(120, int(post_break_repair_reserve_sec)))
-    target = 0
-    if target_lock_recovery:
-        target = min(max(120, int(total * 0.08)), max(120, int(target_lock_recovery_reserve_sec)))
-    reserves = {"exception_search": exception, "post_break_repair": post, "target_lock_recovery": target, "finalization": finalization}
-    max_total = max(0, total - max(120, int(total * 0.20)))
-    reserve_total = sum(reserves.values())
-    if reserve_total > max_total and reserve_total > 0:
-        scale = max_total / reserve_total
-        for key, value in list(reserves.items()):
-            reserves[key] = int(value * scale)
-    reserves["primary_search"] = max(120, total - sum(reserves.values()))
-    reserves["total"] = total
-    return reserves
 
 
 def minimum_exception_candidate_pool(
@@ -12325,7 +13649,7 @@ def acquire_early_safe_incumbent(
                         best = candidate
                     hint = solution
                     row["status"] = "SAFE_INCUMBENT"
-                    row["metrics"] = {k: v for k, v in solution.metrics.items() if k != "interval_rows" and not k.endswith("gaps") and not k.endswith("qslots")}
+                    row["metrics"] = compact_metric_surface(solution.metrics)
                 else:
                     row["status"] = "REJECTED_FULL_RELEASE_GATE"
             records.append(row)
@@ -13167,6 +14491,11 @@ def solve_joint_shift_off_language_break_refinement(
                     model.Add(x[a, d, s_index] == 0)
                     continue
                 shift = parsed.shifts[s_index]
+                if shift_overlaps_required_language_for_noneligible(
+                    parsed, parsed.associates[a], shift, d
+                ) is not None:
+                    model.Add(x[a, d, s_index] == 0)
+                    continue
                 if s_index in long_shifts:
                     model.Add(x[a, d, s_index] <= long_mode[a])
                 elif long_shifts and short_shifts and parsed.use_11h_3off:
@@ -13215,9 +14544,15 @@ def solve_joint_shift_off_language_break_refinement(
             fixed = associate.fixed_schedule[d] if d < len(associate.fixed_schedule) else ""
             pref_kind = preference_kind(pref)
             fixed_kind = preference_kind(fixed)
-            is_leave = parsed.leave_enabled and (pref_kind == "leave" or fixed_kind == "leave")
+            is_leave = (
+                (parsed.fixed_enabled and fixed_kind == "leave")
+                or (parsed.leave_enabled and pref_kind == "leave")
+            )
             model.Add(leave[a, d] == (1 if is_leave else 0))
-            if parsed.hard_off and (pref_kind == "off" or fixed_kind == "off"):
+            if (
+                (parsed.fixed_enabled and fixed_kind == "off")
+                or (parsed.hard_off and pref_kind == "off")
+            ):
                 model.Add(off[a, d] == 1)
             if parsed.fixed_enabled and fixed_kind == "shift":
                 matches = [shift.index for shift in parsed.shifts if norm(shift.label) == norm(fixed)]
@@ -13503,7 +14838,7 @@ def solve_joint_shift_off_language_break_refinement(
                 if parsed.opening_guard_enabled and i in opening[d]:
                     model.Add(after_raw >= parsed.opening_minimum)
                 minute = i * parsed.interval_minutes + q * 15
-                for rule in language_rules_at(parsed, minute):
+                for rule in language_rules_at(parsed, minute, day=d):
                     lang_vars: List[Any] = []
                     for a in range(A):
                         if language_eligible(rule, parsed.associates[a]):
@@ -13702,9 +15037,15 @@ def solve_joint_shift_off_language_break_refinement(
                     objective_terms.append(int(weights.get("quality_run_gap", 1)) * all_gap)
 
     if before_target_hits and target_hits:
-        model.Add(sum(target_hits) >= sum(before_target_hits) - getattr(parsed, "quality_max_target_losses_from_breaks", 999999))
-    if getattr(parsed, "quality_gate_mode", "warn") == "fail" and floor_hits and before_floor_hits and getattr(parsed, "target_loss_gate_mode", "warn") != "off":
-        model.Add(sum(floor_hits) >= sum(before_floor_hits) - getattr(parsed, "quality_max_target_losses_from_breaks", 999999))
+        model.Add(sum(target_hits) >= sum(before_target_hits) - parsed.quality_max_target_losses_from_breaks)
+    # W1 made this bound unconditional and switched it to the floor budget. Three
+    # paired seeds showed that backfiring: both sides are solver-controlled, so
+    # "after >= before - cap" is satisfiable by lowering BEFORE, and the solver
+    # did exactly that -- AE_IT_B2B's before_floor pinned at 91 on every seed
+    # against 91/98/97 unconstrained, with a worse after-floor each time. Bound
+    # the after-floor against a MEASURED constant before reinstating this.
+    if getattr(parsed, "target_loss_gate_mode", "warn") == "fail" and floor_hits and before_floor_hits:
+        model.Add(sum(floor_hits) >= sum(before_floor_hits) - getattr(parsed, "quality_max_target_losses_from_breaks", 6))
     if min_after_target is not None and target_hits:
         model.Add(sum(target_hits) >= max(0, int(min_after_target)))
     if min_after_floor is not None and floor_hits:
@@ -13759,7 +15100,7 @@ def solve_joint_shift_off_language_break_refinement(
             if parsed.opening_guard_enabled and i in next_sunday_opening:
                 model.Add(after_raw >= parsed.opening_minimum)
             minute = i * parsed.interval_minutes + quarter * 15
-            for rule in language_rules_at(parsed, minute):
+            for rule in language_rules_at(parsed, minute, day=0):
                 lang_vars: List[Any] = []
                 for a in range(A):
                     if language_eligible(rule, parsed.associates[a]):
@@ -13799,6 +15140,7 @@ def solve_joint_shift_off_language_break_refinement(
         stage_solver.parameters.cp_model_presolve = True
         stage_solver.parameters.linearization_level = 1
         stage_solver.parameters.log_search_progress = False
+        _solver_limits_applied = configure_solver_limits(stage_solver)
         return stage_solver
 
     started = time.time()
@@ -13808,35 +15150,19 @@ def solve_joint_shift_off_language_break_refinement(
     status_text = "UNKNOWN"
     if lexicographic:
         stage_specs: List[Tuple[str, Any, int]] = []
-        if getattr(parsed, "quality_gate_mode", "warn") == "fail" and floor_hits:
-            # RC8.12: quality-gate-first lexicographic CP-SAT.  The first stage
-            # scores release health directly: floor hits, severe-hit reserve,
-            # target hits, and run-distribution all in one linear objective.
-            # This avoids the old target-only first stage that could return a
-            # high 90% count while hiding a long floor-gap cluster.
-            release_quality_score = (
-                1_000_000 * sum(floor_hits)
-                + 260_000 * sum(severe_hits)
-                + 90_000 * sum(target_hits)
-                + 8_000 * sum(full_hits)
-                - 520_000 * (sum(joint_floor_run_gap_vars) if joint_floor_run_gap_vars else 0)
-                - 160_000 * (sum(joint_daily_floor_gap_excess_vars) if joint_daily_floor_gap_excess_vars else 0)
-            )
-            stage_specs.append(("MAXIMIZE_RELEASE_QUALITY_SCORE", release_quality_score, 1_000_000))
-            stage_specs.append(("MAXIMIZE_AFTER_FLOOR", sum(floor_hits), 1))
-            if severe_hits:
-                stage_specs.append(("MAXIMIZE_AFTER_SEVERE", sum(severe_hits), 1))
-            if target_hits:
-                stage_specs.append(("MAXIMIZE_AFTER_TARGET", sum(target_hits), max(0, int(lexicographic_target_tolerance))))
-            if full_hits:
-                stage_specs.append(("MAXIMIZE_AFTER_100", sum(full_hits), 1))
-        else:
-            if target_hits:
-                stage_specs.append(("MAXIMIZE_AFTER_TARGET", sum(target_hits), max(0, int(lexicographic_target_tolerance))))
-            if floor_hits:
-                stage_specs.append(("MAXIMIZE_AFTER_FLOOR", sum(floor_hits), 0))
-            if full_hits:
-                stage_specs.append(("MAXIMIZE_AFTER_100", sum(full_hits), 0))
+        # Coverage is the primary business objective for every quality mode.
+        # Floor/severe/run health remains in the later lexicographic stages and
+        # the post-run release gate, but a quality-gate flag must not replace
+        # the target stage with a blended score whose weights can hide target
+        # losses. This also makes the staged joint solver's priority explicit.
+        if target_hits:
+            stage_specs.append(("MAXIMIZE_AFTER_TARGET", sum(target_hits), max(0, int(lexicographic_target_tolerance))))
+        if floor_hits:
+            stage_specs.append(("MAXIMIZE_AFTER_FLOOR", sum(floor_hits), 0))
+        if severe_hits:
+            stage_specs.append(("MAXIMIZE_AFTER_SEVERE", sum(severe_hits), 0))
+        if full_hits and getattr(parsed, "target_ratio", 0.0) < 0.995:
+            stage_specs.append(("MAXIMIZE_AFTER_100", sum(full_hits), 0))
         remaining_budget = max(1.0, float(time_limit))
         for stage_index, (stage_name, expression, tolerance) in enumerate(stage_specs):
             stages_left = len(stage_specs) - stage_index + 1
@@ -13978,6 +15304,7 @@ def solve_joint_shift_off_language_break_refinement(
             "conflicts": solver.NumConflicts(),
             "branches": solver.NumBranches(),
             "wall_time": solver.WallTime(),
+            "solver_telemetry": capture_solver_telemetry(cp_model, solver, status, float(time_limit)),
         },
     )
     metrics = calculate_metrics(parsed, skeleton, selected_pattern, all_patterns)
@@ -14011,118 +15338,6 @@ def solve_joint_shift_off_language_break_refinement(
     )
     candidate_validation_snapshot(parsed, skeleton, solution)
     return skeleton, solution
-
-
-def run_joint_cp_sat_refinement_phase(
-    parsed: ParsedInput,
-    candidates: Sequence[Tuple[SkeletonSolution, BreakSolution]],
-    target_skeleton: Optional[SkeletonSolution],
-    pattern_width: int,
-    deadline: float,
-    workers: int,
-    log: Any,
-    random_seed: int,
-    change_limits: Sequence[int] = (4, 8, 12, 18),
-    max_shift_options_per_cell: int = 5,
-    max_patterns_per_shift: int = 18,
-    minimum_before_100: Optional[int] = None,
-    minimum_before_90: Optional[int] = None,
-    minimum_before_80: Optional[int] = None,
-) -> Tuple[List[Tuple[SkeletonSolution, BreakSolution]], List[Dict[str, Any]], Dict[str, Any]]:
-    """Run bounded integrated CP-SAT attempts while preserving the incumbent."""
-    anchors = dedupe_break_candidates(candidates)
-    if not anchors:
-        return [], [], {"attempted": 0, "accepted": 0, "skip_reason": "NO_ANCHOR_CANDIDATE", "truncated": False}
-    class_rank = {"compliant": 0, "exception": 1, "near_feasible": 2, "rejected": 3}
-    anchors = sorted(
-        anchors,
-        key=lambda item: (
-            class_rank.get(candidate_pool_class(parsed, item[0], item[1]), 9),
-            break_solution_key(parsed, item[1]),
-        ),
-    )[:4]
-    best_clean = [item for item in anchors if candidate_pool_class(parsed, item[0], item[1]) == "compliant"]
-    best_anchor = min(anchors, key=lambda item: break_solution_key(parsed, item[1]))
-    protected = min(best_clean, key=lambda item: break_solution_key(parsed, item[1])) if best_clean else best_anchor
-    min_target = int(protected[1].metrics.get("after_target", 0)) if best_clean else None
-    min_floor = int(protected[1].metrics.get("after_floor", 0)) if best_clean else None
-    exception_cap = len(protected[1].no_break_cells)
-    # Always try zero exceptions first. If only an exception incumbent exists,
-    # later attempts may use at most its exception count, never more.
-    caps = [0]
-    if exception_cap > 0:
-        caps.append(exception_cap)
-    attempts = accepted = 0
-    records: List[Dict[str, Any]] = []
-    added: List[Tuple[SkeletonSolution, BreakSolution]] = []
-    truncated = False
-    plans = [(int(limit), int(cap)) for cap in caps for limit in change_limits]
-    for index, (limit, cap) in enumerate(plans):
-        remaining = deadline - time.time()
-        if remaining < 20:
-            truncated = True
-            break
-        attempts_left = max(1, len(plans) - index)
-        slice_seconds = min(900.0, max(20.0, remaining * 0.78 / attempts_left))
-        result = solve_joint_shift_off_language_break_refinement(
-            parsed, anchors + added, target_skeleton, pattern_width,
-            slice_seconds, workers, log, random_seed,
-            max_changed_cells=limit,
-            max_shift_options_per_cell=max_shift_options_per_cell,
-            max_patterns_per_shift=max_patterns_per_shift,
-            exception_cap=cap,
-            min_after_target=min_target,
-            min_after_floor=min_floor,
-            min_before_100=minimum_before_100,
-            min_before_90=minimum_before_90,
-            min_before_80=minimum_before_80,
-        )
-        attempts += 1
-        row: Dict[str, Any] = {
-            "attempt": attempts,
-            "change_limit": limit,
-            "exception_cap": cap,
-            "time_limit_sec": slice_seconds,
-            "status": "NO_FEASIBLE_SOLUTION" if result is None else result[1].cp_status,
-        }
-        if result is not None:
-            skeleton, solution = result
-            pool_class = candidate_pool_class(parsed, skeleton, solution)
-            row.update({
-                "candidate_class": pool_class,
-                "exception_count": len(solution.no_break_cells),
-                "hard_fail_count": solution.diagnostics.get("hard_fail_count", 0),
-                "metrics": {
-                    key: value for key, value in solution.metrics.items()
-                    if key != "interval_rows" and not key.endswith("gaps") and not key.endswith("qslots")
-                },
-                "changed_cells": skeleton.diagnostics.get("changed_cells"),
-                "variables": skeleton.diagnostics.get("variables"),
-                "constraints": skeleton.diagnostics.get("constraints"),
-            })
-            added.append(result)
-            if pool_class in {"compliant", "exception", "near_feasible"}:
-                accepted += 1
-                anchors = dedupe_break_candidates(anchors + [result])
-                anchors = sorted(anchors, key=lambda item: break_solution_key(parsed, item[1]))[:5]
-                if pool_class == "compliant" and len(solution.no_break_cells) == 0:
-                    # Continue only when budget comfortably permits quality
-                    # improvement; the clean result is already protected.
-                    if deadline - time.time() < 60:
-                        records.append(row)
-                        break
-        records.append(row)
-    return dedupe_break_candidates(added), records, {
-        "attempted": attempts,
-        "accepted": accepted,
-        "truncated": truncated,
-        "protected_incumbent_profile": protected[1].profile,
-        "protected_after_target": min_target,
-        "protected_after_floor": min_floor,
-        "protected_exception_count": exception_cap,
-    }
-
-
 
 
 def bootstrap_exception_anchors_for_joint(
@@ -14212,10 +15427,7 @@ def bootstrap_exception_anchors_for_joint(
         if minimum_solution.cp_status in {"OPTIMAL", "FEASIBLE"}:
             cls = candidate_pool_class(parsed, skeleton, minimum_solution)
             row["candidate_class"] = cls
-            row["metrics"] = {
-                key: value for key, value in minimum_solution.metrics.items()
-                if key != "interval_rows" and not key.endswith("gaps") and not key.endswith("qslots")
-            }
+            row["metrics"] = compact_metric_surface(minimum_solution.metrics)
             if cls in {"compliant", "exception", "near_feasible"}:
                 minimum_solution.diagnostics["candidate_origin"] = "RC4_4_3_JOINT_EXCEPTION_ANCHOR_BOOTSTRAP"
                 added.append((skeleton, minimum_solution))
@@ -14252,10 +15464,7 @@ def bootstrap_exception_anchors_for_joint(
         if quality_solution.cp_status in {"OPTIMAL", "FEASIBLE"}:
             cls = candidate_pool_class(parsed, skeleton, quality_solution)
             quality_row["candidate_class"] = cls
-            quality_row["metrics"] = {
-                key: value for key, value in quality_solution.metrics.items()
-                if key != "interval_rows" and not key.endswith("gaps") and not key.endswith("qslots")
-            }
+            quality_row["metrics"] = compact_metric_surface(quality_solution.metrics)
             if cls in {"compliant", "exception", "near_feasible"}:
                 quality_solution.diagnostics["candidate_origin"] = "RC4_4_3_JOINT_EXCEPTION_ANCHOR_BOOTSTRAP"
                 added.append((skeleton, quality_solution))
@@ -14434,10 +15643,7 @@ def run_adaptive_decomposed_joint_optimizer(
             replay_row.update({
                 "candidate_class": replay_class,
                 "exception_count": len(replay_solution.no_break_cells),
-                "metrics": {
-                    key: value for key, value in (replay_solution.metrics or {}).items()
-                    if key != "interval_rows" and not key.endswith("gaps") and not key.endswith("qslots")
-                },
+                "metrics": compact_metric_surface(replay_solution.metrics or {}),
                 "lexicographic_certificate": replay_solution.diagnostics.get("lexicographic_certificate"),
             })
             replay_exception_count = len(replay_solution.no_break_cells)
@@ -14535,7 +15741,7 @@ def run_adaptive_decomposed_joint_optimizer(
                 "candidate_class": q_class,
                 "exception_count": len(q_br.no_break_cells),
                 "within_operational_exception_cap": q_within_cap,
-                "metrics": {k: v for k, v in (q_br.metrics or {}).items() if k != "interval_rows" and not k.endswith("gaps") and not k.endswith("qslots")},
+                "metrics": compact_metric_surface(q_br.metrics or {}),
                 "lexicographic_certificate": q_br.diagnostics.get("lexicographic_certificate"),
             })
             if q_within_cap:
@@ -14656,10 +15862,7 @@ def run_adaptive_decomposed_joint_optimizer(
                 "result_exception_count": resulting_count,
                 "within_operational_exception_cap": resulting_count <= release_exception_cap,
                 "candidate_class": candidate_pool_class(parsed, descent_skeleton, descent_solution),
-                "metrics": {
-                    key: value for key, value in (descent_solution.metrics or {}).items()
-                    if key != "interval_rows" and not key.endswith("gaps") and not key.endswith("qslots")
-                },
+                "metrics": compact_metric_surface(descent_solution.metrics or {}),
             })
             records.append(row)
             descent_current = descent_result
@@ -14872,10 +16075,7 @@ def run_adaptive_decomposed_joint_optimizer(
                 "exception_count": len(solution.no_break_cells),
                 "within_operational_exception_cap": within_operational_cap,
                 "operational_exception_cap": release_exception_cap,
-                "metrics": {
-                    key: value for key, value in (solution.metrics or {}).items()
-                    if key != "interval_rows" and not key.endswith("gaps") and not key.endswith("qslots")
-                },
+                "metrics": compact_metric_surface(solution.metrics or {}),
                 "lexicographic_certificate": solution.diagnostics.get("lexicographic_certificate"),
             })
         else:
@@ -15095,7 +16295,7 @@ def run_coordinated_shift_off_break_loop(
                     "candidate_class": cls,
                     "exception_count": len(candidate.no_break_cells),
                     "hard_fail_count": int((candidate.diagnostics.get("release_validation") or {}).get("hard_fail_count", 0) or 0),
-                    "metrics": {k: v for k, v in candidate.metrics.items() if k != "interval_rows" and not k.endswith("gaps") and not k.endswith("qslots")},
+                    "metrics": compact_metric_surface(candidate.metrics),
                 }
                 record.setdefault("break_attempts", []).append(attempt_row)
                 if cls == "rejected":
@@ -15554,7 +16754,7 @@ def zero_exception_break_reserve_plan(
                 else:
                     continue
             source = row_lookup.get((day_scope, interval_index), {})
-            raw = source.get("before_raw_min", source.get("before_raw", 1))
+            raw = require_metric(source, "before_raw_min", "before_raw")
             try:
                 raw_value = int(raw)
             except Exception:
@@ -15738,7 +16938,7 @@ def run_zero_exception_recovery_phase(
             before_metrics = calculate_metrics(parsed, repaired, {(a, d): None for a, d, _ in scheduled_cells(repaired)}, [])
             repaired.diagnostics["no_break_metrics"] = before_metrics
             new_skeletons.append(repaired)
-            record["before_metrics"] = {k: v for k, v in before_metrics.items() if k != "interval_rows" and not k.endswith("gaps") and not k.endswith("qslots")}
+            record["before_metrics"] = compact_metric_surface(before_metrics)
             if not skeleton_hard_clean(parsed, before_metrics):
                 record["status"] = "STAGE1_HARD_GATE_FAILED"
                 records.append(record)
@@ -15783,7 +16983,7 @@ def run_zero_exception_recovery_phase(
                     continue
                 validation = validate_schedule(parsed, repaired, solution)
                 attempt_row["validation"] = validation
-                attempt_row["metrics"] = {k: v for k, v in solution.metrics.items() if k != "interval_rows" and not k.endswith("gaps") and not k.endswith("qslots")}
+                attempt_row["metrics"] = compact_metric_surface(solution.metrics)
                 candidate_class = candidate_pool_class(parsed, repaired, solution)
                 attempt_row["candidate_class"] = candidate_class
                 if candidate_class == "compliant" and not solution.no_break_cells:
@@ -15977,7 +17177,7 @@ def run_post_break_repair_phase(
                     "candidate_class": cls,
                     "exception_count": len(solution.no_break_cells),
                     "hard_fail_count": int((solution.diagnostics.get("release_validation") or {}).get("hard_fail_count", 0) or 0),
-                    "metrics": {k: v for k, v in solution.metrics.items() if k != "interval_rows" and not k.endswith("gaps") and not k.endswith("qslots")},
+                    "metrics": compact_metric_surface(solution.metrics),
                 })
                 if cls == "rejected":
                     continue
@@ -16413,7 +17613,7 @@ def run_target_lock_recovery_phase(
             "phase": "lexicographic_target",
             "status": lex.cp_status,
             "initial_target_lock": target_lock,
-            "metrics": {k: v for k, v in lex.metrics.items() if k != "interval_rows" and not k.endswith("gaps") and not k.endswith("qslots")},
+            "metrics": compact_metric_surface(lex.metrics),
         }
         if (
             lex.cp_status in {"OPTIMAL", "FEASIBLE"}
@@ -16436,7 +17636,7 @@ def run_target_lock_recovery_phase(
             )
             rec["locked_rebalance_status"] = locked.cp_status
             rec["final_target_lock"] = target_lock
-            rec["locked_rebalance_metrics"] = {k: v for k, v in locked.metrics.items() if k != "interval_rows" and not k.endswith("gaps") and not k.endswith("qslots")}
+            rec["locked_rebalance_metrics"] = compact_metric_surface(locked.metrics)
             if (
                 locked.cp_status in {"OPTIMAL", "FEASIBLE"}
                 and skeleton_hard_clean(parsed, locked.metrics)
@@ -16592,10 +17792,7 @@ def publish_recovery_checkpoint(
         "json_path": str(checkpoint_json),
         "candidate_class": candidate_pool_class(parsed, skeleton, solution),
         "profile": solution.profile,
-        "metrics": {
-            key: value for key, value in solution.metrics.items()
-            if key != "interval_rows" and not key.endswith("gaps") and not key.endswith("qslots")
-        },
+        "metrics": compact_metric_surface(solution.metrics),
         "output_validation": info,
     }
 
@@ -16759,6 +17956,8 @@ def run_case(
     overwrite: bool = False,
     resume: bool = False,
     allow_headcount_mismatch_override: Optional[bool] = None,
+    stage1_minimum_slice_sec: float = STAGE1_MIN_MEANINGFUL_SLICE_SEC,
+    cli_search_controls: Optional[Mapping[str, Any]] = None,
 ) -> int:
     if output_path.exists() and not (overwrite or resume):
         raise FileExistsError(f"Refusing to overwrite existing final output without --overwrite or --resume: {output_path}")
@@ -16771,13 +17970,97 @@ def run_case(
     started_all = time.time()
     deadline = started_all + max(60, total_time_sec)
     log_path = work_dir / "scheduler.log"
-    pattern_widths = sorted({max(1, int(x)) for x in pattern_widths}) or [24, 60, 115]
-    full_width = max(pattern_widths)
     with log_path.open("a" if resume else "w", encoding="utf-8", buffering=1) as log:
         parsed = parse_input(
             input_path, allow_no_break_override, max_no_break_override,
             allow_headcount_mismatch_override=allow_headcount_mismatch_override,
         )
+        # Search shape, reserve budgets and quality minimums follow the same
+        # contract-then-override rule as the protected-tier minimums below: the
+        # workbook states the business value and an explicit command-line
+        # argument overrides it. A parameter neither side sets keeps the value
+        # this function was called with, which is why a workbook carrying none
+        # of these rows runs exactly as it did before the route existed.
+        _typed = dict(cli_search_controls or {})
+        _resolved: Dict[str, Any] = dict(parsed.search_controls)
+        _resolved.update(_typed)
+        search_control_decisions = {
+            name: {
+                "value": value,
+                "source": "command_line" if name in _typed else "workbook",
+            }
+            for name, value in _resolved.items()
+        }
+        workers = int(_resolved.get("workers", workers))
+        pattern_widths = _resolved.get("pattern_widths", pattern_widths)
+        skeleton_profile_names = _resolved.get("skeleton_profile_names", skeleton_profile_names)
+        break_objective_modes = _resolved.get("break_objective_modes", break_objective_modes)
+        repair_change_limits = _resolved.get("repair_change_limits", repair_change_limits)
+        export_top_skeletons = int(_resolved.get("export_top_skeletons", export_top_skeletons))
+        use_input_schedule_as_seed = bool(
+            _resolved.get("use_input_schedule_as_seed", use_input_schedule_as_seed))
+        include_bundled_fallbacks = bool(
+            _resolved.get("include_bundled_fallbacks", include_bundled_fallbacks))
+        adaptive_no_improvement_attempts = int(
+            _resolved.get("adaptive_no_improvement_attempts", adaptive_no_improvement_attempts))
+        primary_target_tolerance = int(
+            _resolved.get("primary_target_tolerance", primary_target_tolerance))
+        max_after80_tradeoff_intervals = _resolved.get(
+            "max_after80_tradeoff_intervals", max_after80_tradeoff_intervals)
+        min_after90_gain_per_after80_loss = float(_resolved.get(
+            "min_after90_gain_per_after80_loss", min_after90_gain_per_after80_loss))
+        post_break_repair = bool(_resolved.get("post_break_repair", post_break_repair))
+        target_lock_recovery = bool(_resolved.get("target_lock_recovery", target_lock_recovery))
+        deterministic_baseline = bool(
+            _resolved.get("deterministic_baseline", deterministic_baseline))
+        safe_incumbent = bool(_resolved.get("safe_incumbent", safe_incumbent))
+        conflict_refinement = bool(_resolved.get("conflict_refinement", conflict_refinement))
+        coordinated_repair = bool(_resolved.get("coordinated_repair", coordinated_repair))
+        joint_refinement = bool(_resolved.get("joint_refinement", joint_refinement))
+        solver_random_seed = int(_resolved.get("solver_random_seed", solver_random_seed))
+        stage1_minimum_slice_sec = max(1.0, float(
+            _resolved.get("stage1_minimum_slice_sec", stage1_minimum_slice_sec)))
+        exception_search_reserve_sec = int(
+            _resolved.get("exception_search_reserve_sec", exception_search_reserve_sec))
+        post_break_repair_reserve_sec = int(
+            _resolved.get("post_break_repair_reserve_sec", post_break_repair_reserve_sec))
+        target_lock_recovery_reserve_sec = int(
+            _resolved.get("target_lock_recovery_reserve_sec", target_lock_recovery_reserve_sec))
+        finalization_reserve_sec = int(
+            _resolved.get("finalization_reserve_sec", finalization_reserve_sec))
+        safe_incumbent_reserve_sec = int(
+            _resolved.get("safe_incumbent_reserve_sec", safe_incumbent_reserve_sec))
+        conflict_refinement_reserve_sec = int(
+            _resolved.get("conflict_refinement_reserve_sec", conflict_refinement_reserve_sec))
+        coordinated_repair_reserve_sec = int(
+            _resolved.get("coordinated_repair_reserve_sec", coordinated_repair_reserve_sec))
+        coordinated_repair_cycles = int(
+            _resolved.get("coordinated_repair_cycles", coordinated_repair_cycles))
+        joint_refinement_reserve_sec = int(
+            _resolved.get("joint_refinement_reserve_sec", joint_refinement_reserve_sec))
+        joint_change_limits = _resolved.get("joint_change_limits", joint_change_limits)
+        joint_shift_options_per_cell = int(
+            _resolved.get("joint_shift_options_per_cell", joint_shift_options_per_cell))
+        joint_patterns_per_shift = int(
+            _resolved.get("joint_patterns_per_shift", joint_patterns_per_shift))
+        adaptive_joint_attempts = int(
+            _resolved.get("adaptive_joint_attempts", adaptive_joint_attempts))
+        adaptive_joint_no_improvement_limit = int(
+            _resolved.get("adaptive_joint_no_improvement_limit", adaptive_joint_no_improvement_limit))
+        minimum_final_before_100 = _resolved.get("minimum_final_before_100", minimum_final_before_100)
+        minimum_final_before_90 = _resolved.get("minimum_final_before_90", minimum_final_before_90)
+        minimum_final_before_80 = _resolved.get("minimum_final_before_80", minimum_final_before_80)
+        minimum_final_after_100 = _resolved.get("minimum_final_after_100", minimum_final_after_100)
+        minimum_final_after_90 = _resolved.get("minimum_final_after_90", minimum_final_after_90)
+        minimum_final_after_80 = _resolved.get("minimum_final_after_80", minimum_final_after_80)
+        minimum_best_before_100 = _resolved.get("minimum_best_before_100", minimum_best_before_100)
+        minimum_best_before_90 = _resolved.get("minimum_best_before_90", minimum_best_before_90)
+        minimum_best_before_80 = _resolved.get("minimum_best_before_80", minimum_best_before_80)
+        # Normalized here rather than before the workbook was read, so a
+        # workbook-stated width list gets the same guard a CLI one does.
+        pattern_widths = sorted({max(1, int(x)) for x in pattern_widths}) or [24, 60, 115]
+        full_width = max(pattern_widths)
+
         # Contract states the value, an explicit CLI argument overrides it -
         # the same rule the protected-tier minimums follow below, so the audit
         # and the run-identity hash record what was actually enforced.
@@ -16792,6 +18075,9 @@ def run_case(
             # Logged, not warned: shared hours are pooled on purpose, and a
             # pooled span that is short is already a SHORT row above.
             print(f"COVERAGE_SPLIT SHARED {clash['headline']}", file=log, flush=True)
+        _cb = capacity.get("coverage_benchmark") or {}
+        if _cb.get("headline"):
+            print(f"CAPACITY {_cb.get('capacity_class')} {_cb['headline']}", file=log, flush=True)
         preflight = validate_input_contract(parsed, capacity)
         if coverage_split_capacity.get("status") in {"SHORT", "TIGHT"}:
             preflight.setdefault("warnings", []).extend(
@@ -16872,7 +18158,7 @@ def run_case(
                 benchmark_validation = validate_schedule(parsed, benchmark_seed, benchmark_breaks)
                 benchmark_evidence.update({
                     "status": "PASS" if benchmark_validation.get("hard_fail_count", 1) == 0 else "FAIL_HARD_RULES",
-                    "metrics": {k: v for k, v in benchmark_metrics.items() if k != "interval_rows" and not k.endswith("gaps") and not k.endswith("qslots")},
+                    "metrics": compact_metric_surface(benchmark_metrics),
                     "validation": benchmark_validation,
                 })
                 if (
@@ -16903,10 +18189,7 @@ def run_case(
             else:
                 quick_fallback_evidence.update({
                     "status": "PASS",
-                    "metrics": {
-                        k: v for k, v in quick_fallback_candidate[1].metrics.items()
-                        if k != "interval_rows" and not k.endswith("gaps") and not k.endswith("qslots")
-                    },
+                    "metrics": compact_metric_surface(quick_fallback_candidate[1].metrics),
                     "validation": quick_fallback_candidate[1].diagnostics.get("fallback_validation", {}),
                 })
 
@@ -16928,10 +18211,7 @@ def run_case(
                 "status": "PASS",
                 "selected_workbook": quick_fallback_candidate[1].diagnostics.get("fallback_workbook"),
                 "selected_origin": quick_fallback_candidate[1].diagnostics.get("candidate_origin"),
-                "metrics": {
-                    k: v for k, v in quick_fallback_candidate[1].metrics.items()
-                    if k != "interval_rows" and not k.endswith("gaps") and not k.endswith("qslots")
-                },
+                "metrics": compact_metric_surface(quick_fallback_candidate[1].metrics),
                 "validation": quick_fallback_candidate[1].diagnostics.get("fallback_validation", {}),
             })
 
@@ -16978,6 +18258,7 @@ def run_case(
             total_time_sec * 0.45,
             stage1_portfolio_size * STAGE1_MIN_MEANINGFUL_SLICE_SEC / STAGE1_SLICE_UTILIZATION,
         ))
+        budget_plan_diagnostics: Dict[str, Any] = {}
         global_budget_plan = build_global_budget_plan(
             total_time_sec,
             stage1_minimum_seconds=stage1_minimum_seconds,
@@ -16991,6 +18272,7 @@ def run_case(
             conflict_refinement_reserve_sec=(conflict_refinement_reserve_sec if conflict_refinement else 0),
             coordinated_repair_reserve_sec=(coordinated_repair_reserve_sec if coordinated_repair else 0),
             joint_refinement_reserve_sec=(joint_refinement_reserve_sec if joint_refinement else 0),
+            diagnostics=budget_plan_diagnostics,
         )
         if not safe_incumbent:
             global_budget_plan["break_search"] += global_budget_plan.get("safe_incumbent", 0)
@@ -17011,6 +18293,17 @@ def run_case(
         budget_manager = GlobalBudgetManager(
             int(total_time_sec), global_budget_plan, started_epoch=started_all
         )
+        # A phase funded below the slice it needs for its own first attempt is
+        # not a short phase, it is a phase that will attempt nothing. Record
+        # which ones were dropped for that reason, and what they would have
+        # needed, so "this phase did not run" is answerable from the audit.
+        at_risk_phases = budget_plan_diagnostics.get("phases_below_minimum_viable_slice") or {}
+        for phase_name, row in sorted(at_risk_phases.items()):
+            print(
+                f"BUDGET_PHASE_AT_RISK {phase_name} nominally {row['allocated']}s "
+                f"against a {row['minimum_viable']}s entry guard; it can only run "
+                f"on time carried over from earlier phases",
+                file=log, flush=True)
         # Compatibility snapshot for existing reports. The authoritative Phase B
         # control is ``global_budget`` below.
         phase_budgets = {
@@ -17043,14 +18336,34 @@ def run_case(
             residual_polish_reserve_sec = min(1800, max(300, int(global_budget_plan.get("stage1_search", 0) * 0.20)))
             stage1_profile_deadline = max(time.time() + 60.0, stage1_deadline - float(residual_polish_reserve_sec))
         primary_search_deadline = budget_manager.deadline("break_search")
-        # RC5: the qualified-language break certificate is an integrated master
-        # repair, not a lightweight afterthought. Reserve enough break-search time
-        # to solve pattern-specific same-skill overlap and prove the resulting
-        # exception bound. Preserve at least 60 seconds for normal break assignment.
+        # The break phase has three different jobs: recover breakability on the
+        # best skeleton, run one protected full-width anchor solve, and explore
+        # additional skeletons/objective modes.  RC5 previously reserved only
+        # ``safe_incumbent`` for the anchor, then let recovery consume nearly the
+        # whole break phase.  In a 3,600-second run that left the anchor UNKNOWN
+        # after roughly 87 seconds and the adaptive search with only a few
+        # minimum-depth attempts.  A high-coverage skeleton was therefore lost
+        # because it was not searched, not because it was proven infeasible.
+        # Partition the break phase explicitly so recovery cannot consume the
+        # anchor or the first meaningful adaptive attempt.
+        break_search_seconds = int(global_budget_plan.get("break_search", 0) or 0)
+        stage2_guard_reserve_sec = bounded_stage2_guard_reserve_seconds(
+            total_time_sec, break_search_seconds
+        )
+        stage2_adaptive_reserve_sec = min(
+            BREAK_MIN_MEANINGFUL_SLICE_SEC,
+            max(0, break_search_seconds - stage2_guard_reserve_sec),
+        )
         breakability_recovery_slice_sec = min(1800, max(600, int(total_time_sec * 0.20)))
+        breakability_recovery_budget_sec = min(
+            breakability_recovery_slice_sec,
+            max(0, break_search_seconds - stage2_guard_reserve_sec - stage2_adaptive_reserve_sec),
+        )
         breakability_recovery_deadline = min(
-            primary_search_deadline - 60.0,
-            stage1_deadline + float(breakability_recovery_slice_sec),
+            primary_search_deadline
+            - float(stage2_guard_reserve_sec)
+            - float(stage2_adaptive_reserve_sec),
+            stage1_deadline + float(breakability_recovery_budget_sec),
         )
         joint_refinement_deadline = budget_manager.deadline("joint_refinement")
         coordinated_repair_deadline = budget_manager.deadline("coordinated_repair")
@@ -17058,9 +18371,6 @@ def run_case(
         post_break_deadline = budget_manager.deadline("post_break_repair")
         target_lock_deadline = budget_manager.deadline("target_lock_recovery")
         finalization_deadline = budget_manager.final_deadline
-        stage2_guard_reserve_sec = max(
-            30, min(900, int(global_budget_plan.get("safe_incumbent", 0) or global_budget_plan.get("break_search", 0) * 0.15))
-        )
         contract_payload = canonical_contract_snapshot(parsed)
         effective_seed_path = (
             input_path if use_input_schedule_as_seed
@@ -17072,6 +18382,9 @@ def run_case(
             "skeleton_only": bool(skeleton_only),
             "export_top_skeletons": int(max(0, export_top_skeletons)),
             "residual_polish_reserve_sec": int(residual_polish_reserve_sec),
+            "stage2_guard_reserve_sec": int(stage2_guard_reserve_sec),
+            "stage2_adaptive_reserve_sec": int(stage2_adaptive_reserve_sec),
+            "breakability_recovery_budget_sec": int(breakability_recovery_budget_sec),
             "pattern_widths": list(pattern_widths),
             "repair_change_limits": [int(value) for value in repair_change_limits],
             "break_objective_modes": list(break_objective_modes or []),
@@ -17194,10 +18507,29 @@ def run_case(
                 flush=True,
             )
             return 0
+        # A phase funded below the slice it needs for its own first attempt may
+        # still run: phase deadlines are cumulative, so it inherits whatever
+        # earlier phases underran. Recording the comparison is what makes an
+        # INSUFFICIENT_RESERVED_TIME answerable - read it beside the phase's own
+        # attempted count rather than as proof of starvation on its own.
+        budget_phase_viability = {
+            "minimum_viable_seconds": budget_plan_diagnostics.get("minimum_viable_seconds", {}),
+            "nominally_below_minimum_viable_slice": at_risk_phases,
+            "note": (
+                "Cumulative deadlines mean a nominal shortfall is not proof of "
+                "starvation. A phase listed here that also reports "
+                "INSUFFICIENT_RESERVED_TIME was starved; one that attempted work "
+                "was not."),
+        }
         audit: Dict[str, Any] = {
             "version": VERSION, "status": "STARTED", "input": str(input_path), "output": str(output_path),
             "started_at": datetime.now().isoformat(), "events": [], "stage1_attempts": [],
             "run_identity": run_identity, "run_parameters": run_parameters,
+            # Which search controls the workbook or the command line actually
+            # set, and which of the two won. A run that behaves unexpectedly is
+            # otherwise indistinguishable from one configured unexpectedly.
+            "search_control_decisions": search_control_decisions,
+            "budget_phase_viability": budget_phase_viability,
             "coverage_split_capacity": coverage_split_capacity,
             # Wall-clock values are reported, never hashed.
             "run_wall_clock": {
@@ -17244,7 +18576,7 @@ def run_case(
                 },
                 "language_direction": "Can Cover Languages is parsed source -> target; eligible sources are derived by inversion for each required target/group",
                 "language_capabilities": {k: sorted(v) for k, v in parsed.language_capabilities.items()},
-                "language_rules": [{"group": r.group, "minimum": r.minimum, "start": hhmm(r.start_min), "end": hhmm(r.end_min), "required_languages": sorted(r.required_languages), "eligible_source_languages": sorted(r.eligible_languages)} for r in parsed.language_rules],
+                "language_rules": [{"group": r.group, "minimum": r.minimum, "start": hhmm(r.start_min), "end": hhmm(r.end_min), "active_days": sorted(getattr(r, "active_days", set(range(7)))), "required_languages": sorted(r.required_languages), "eligible_source_languages": sorted(r.eligible_languages)} for r in parsed.language_rules],
                 "no_break_permission": parsed.allow_no_break_exceptions,
                 "no_break_permission_source": parsed.no_break_permission_source,
                 "max_no_break_exceptions": parsed.max_no_break_exceptions,
@@ -17480,7 +18812,7 @@ def run_case(
         if seed is not None and all(skeleton_fingerprint(existing) != skeleton_fingerprint(seed) for existing in successful_skeletons):
             seed_metrics = calculate_metrics(parsed, seed, {(a, d): None for a, d, _ in scheduled_cells(seed)}, [])
             seed.diagnostics["no_break_metrics"] = seed_metrics
-            audit["seed"]["before_break_metrics"] = {k: v for k, v in seed_metrics.items() if k != "interval_rows" and not k.endswith("gaps") and not k.endswith("qslots")}
+            audit["seed"]["before_break_metrics"] = compact_metric_surface(seed_metrics)
             audit["seed"]["hard_clean_before_break"] = skeleton_hard_clean(parsed, seed_metrics)
             if skeleton_hard_clean(parsed, seed_metrics):
                 successful_skeletons.append(seed)
@@ -17568,8 +18900,8 @@ def run_case(
         print(
             f"STAGE1_PORTFOLIO window={stage1_window_sec:.0f}s "
             f"runnable={len(profiles_to_run)} "
-            f"funds={stage1_fundable_profile_count(stage1_window_sec)} at "
-            f"{STAGE1_MIN_MEANINGFUL_SLICE_SEC:.0f}s minimum depth",
+            f"funds={stage1_fundable_profile_count(stage1_window_sec, stage1_minimum_slice_sec)} at "
+            f"{stage1_minimum_slice_sec:.0f}s minimum depth",
             file=log, flush=True,
         )
         for profile_index, profile in enumerate(profiles_to_run):
@@ -17585,7 +18917,7 @@ def run_case(
                 })
                 continue
             remaining = stage1_profile_deadline - time.time()
-            if remaining < STAGE1_MIN_MEANINGFUL_SLICE_SEC:
+            if remaining < stage1_minimum_slice_sec:
                 # The portfolio is abandoned here, and it used to be abandoned
                 # SILENTLY: `stage1_attempts` simply held fewer rows than
                 # profiles requested, and nothing downstream said the search had
@@ -17599,7 +18931,7 @@ def run_case(
                     "skipped_for_budget": len(profiles_to_run) - profile_index,
                     "skipped_profiles": [row["name"] for row in profiles_to_run[profile_index:]],
                     "remaining_sec_at_stop": round(max(0.0, remaining), 3),
-                    "minimum_slice_sec": STAGE1_MIN_MEANINGFUL_SLICE_SEC,
+                    "minimum_slice_sec": stage1_minimum_slice_sec,
                     "stage1_window_sec": round(stage1_window_sec, 3),
                     "status": "TRUNCATED_INSUFFICIENT_STAGE1_BUDGET",
                 }
@@ -17607,12 +18939,12 @@ def run_case(
                     f"STAGE1_PORTFOLIO_TRUNCATED attempted={profile_index} of "
                     f"{len(profiles_to_run)} runnable ({len(profiles)} requested); "
                     f"{max(0.0, remaining):.1f}s left, "
-                    f"{STAGE1_MIN_MEANINGFUL_SLICE_SEC:.0f}s needed per profile",
+                    f"{stage1_minimum_slice_sec:.0f}s needed per profile",
                     file=log, flush=True,
                 )
                 break
             attempts_left = max(1, len(profiles_to_run) - profile_index)
-            slice_sec = stage1_slice_seconds(remaining, attempts_left)
+            slice_sec = stage1_slice_seconds(remaining, attempts_left, stage1_minimum_slice_sec)
             solution = build_skeleton(
                 parsed, profile, base_hard, slice_sec, workers, log,
                 random_seed=solver_random_seed,
@@ -17623,7 +18955,7 @@ def run_case(
             if solution.cp_status in {"OPTIMAL", "FEASIBLE"}:
                 metrics = calculate_metrics(parsed, solution, {(a, d): None for a, d, _ in scheduled_cells(solution)}, [])
                 solution.diagnostics["no_break_metrics"] = metrics
-                record["no_break_before_metrics"] = {k: v for k, v in metrics.items() if k != "interval_rows" and not k.endswith("gaps") and not k.endswith("qslots")}
+                record["no_break_before_metrics"] = compact_metric_surface(metrics)
                 successful_skeletons.append(solution)
                 save_skeleton_checkpoint(skeleton_checkpoint_path, run_identity["run_id"], dedupe_skeletons(successful_skeletons))
             registry.setdefault("completed", {})[stage1_key] = {
@@ -17741,7 +19073,17 @@ def run_case(
         # Re-evaluation is idempotent and also protects resumed checkpoints
         # produced by older packages that may not contain canonical metrics.
         ensure_before_break_metrics(parsed, probe)
-        successful_skeletons = dedupe_skeletons([s for s in successful_skeletons if s.selected_shift_index])[:16]
+        stage1_deduped_skeletons = dedupe_skeletons(
+            [s for s in successful_skeletons if s.selected_shift_index]
+        )
+        successful_skeletons = stage1_deduped_skeletons[:MAX_RETAINED_STAGE1_SKELETONS]
+        audit["candidate_pool_retention"] = {
+            "source_count_after_deduplication": len(stage1_deduped_skeletons),
+            "retained_count": len(successful_skeletons),
+            "retention_cap": MAX_RETAINED_STAGE1_SKELETONS,
+            "status": "CAP_NOT_REACHED" if len(successful_skeletons) < MAX_RETAINED_STAGE1_SKELETONS else "CAP_APPLIED_OR_MATCHED",
+            "global_maximum_proven": False,
+        }
 
         if skeleton_only:
             hard_clean_skeletons = [
@@ -17807,6 +19149,29 @@ def run_case(
                 "output": str(before_output_path),
             }
             audit["selected_before_break_skeleton"] = explanation_rows[0]
+            # The release parity gate compares the engine's published metrics
+            # against the independent validator's. Before this, skeleton-only
+            # runs published no canonical surface at all, so every field read
+            # as MISSING_CANONICAL_METRIC and the gate failed a run that had
+            # nothing wrong with it. The skeleton already carries a surface
+            # from the same evaluator every after-break candidate uses
+            # (calculate_metrics with no breaks), so publish that one rather
+            # than exempting the stage from the gate.
+            before_break_metrics = best_before_skeleton.diagnostics.get("no_break_metrics") or {}
+            before_break_surface = compact_metric_surface(before_break_metrics)
+            audit["selected_before_break_skeleton"]["metrics"] = before_break_surface
+            audit["stage_metric_surface"] = {
+                "stage": "BEFORE_BREAKS_ONLY",
+                "break_stage_executed": False,
+                # Stage 2 never ran, so the after-break figures in this surface
+                # are the same schedule measured a second time. Saying so is
+                # what keeps a reader from treating them as a break result.
+                "after_metrics_basis": "NO_BREAKS_PLACED_AFTER_EQUALS_BEFORE",
+                "metrics_origin": best_before_skeleton.diagnostics.get(
+                    "before_metrics_origin", "CANONICAL_STAGE1_EVALUATION"),
+                "selected_profile": best_before_skeleton.profile,
+                "metrics": before_break_surface,
+            }
             audit["status"] = "SKELETON_ONLY_COMPLETE"
             audit["artifact_state"] = "BEST_BEFORE_BREAKS_ONLY"
             audit["functional_status"] = "PASS_BEFORE_BREAK_SKELETON_GENERATED"
@@ -17916,7 +19281,7 @@ def run_case(
                 "minimum_exception_proven": proven,
                 "selected_exception_rows": diagnostic.diagnostics.get("selected_exception_rows", []),
                 "elapsed_sec": diagnostic.elapsed_sec,
-                "metrics": {k: v for k, v in diagnostic.metrics.items() if k != "interval_rows" and not k.endswith("gaps") and not k.endswith("qslots")},
+                "metrics": compact_metric_surface(diagnostic.metrics),
             })
             write_json(audit_path, audit)
 
@@ -18002,10 +19367,7 @@ def run_case(
                         {(a, d): None for a, d, _ in scheduled_cells(reserve_skeleton)}, []
                     )
                     reserve_skeleton.diagnostics["no_break_metrics"] = reserve_metrics
-                    reserve_record["before_metrics"] = {
-                        k: v for k, v in reserve_metrics.items()
-                        if k != "interval_rows" and not k.endswith("gaps") and not k.endswith("qslots")
-                    }
+                    reserve_record["before_metrics"] = compact_metric_surface(reserve_metrics)
                     if skeleton_hard_clean(parsed, reserve_metrics):
                         diag_time = min(240.0, max(30.0, (breakability_recovery_deadline - time.time()) * 0.20))
                         reserve_diag = minimum_exception_diagnostic(parsed, reserve_skeleton, full_width, diag_time, workers, log)
@@ -18144,7 +19506,7 @@ def run_case(
                             "exception_upper_bound": upper,
                             "minimum_exception_proven": proven,
                             "minimum_exception_status": diagnostic.cp_status,
-                            "before_break_metrics": {k: v for k, v in metrics.items() if k != "interval_rows" and not k.endswith("gaps") and not k.endswith("qslots")},
+                            "before_break_metrics": compact_metric_surface(metrics),
                         })
                         skill_overlap_repair_skeletons.append(repaired)
                         save_skeleton_checkpoint(
@@ -18241,7 +19603,7 @@ def run_case(
                         record["exception_upper_bound"] = upper
                         record["minimum_exception_proven"] = proven
                         record["minimum_exception_status"] = diagnostic.cp_status
-                        record["before_break_metrics"] = {k: v for k, v in metrics.items() if k != "interval_rows" and not k.endswith("gaps") and not k.endswith("qslots")}
+                        record["before_break_metrics"] = compact_metric_surface(metrics)
                         repair_skeletons.append(repaired)
                         save_skeleton_checkpoint(
                             skeleton_checkpoint_path, run_identity["run_id"],
@@ -18271,16 +19633,22 @@ def run_case(
             print(f"BREAK_CAPACITY_SHORT before-breaks {break_capacity['headline']}",
                   file=log, flush=True)
         successful_skeletons.sort(key=lambda sk: skeleton_breakability_priority_key(parsed, sk))
-        retained_top = successful_skeletons[:10]
+        # Keep the full audited Stage-1 portfolio through Stage 2. The old
+        # second truncation silently reduced the declared 16-skeleton retention
+        # cap to 10 after recovery, so later guards could never see candidates
+        # that the audit claimed to retain.
+        retained_top = successful_skeletons[:MAX_RETAINED_STAGE1_SKELETONS]
         if all(skeleton_fingerprint(sk) != skeleton_fingerprint(best_before_skeleton) for sk in retained_top):
             retained_top.append(best_before_skeleton)
         successful_skeletons = dedupe_skeletons(retained_top)
         successful_skeletons.sort(key=lambda sk: skeleton_quality_key(parsed, sk))
+        audit.setdefault("candidate_pool_retention", {})["post_recovery_retained_count"] = len(successful_skeletons)
+        audit["candidate_pool_retention"]["post_recovery_retention_cap"] = MAX_RETAINED_STAGE1_SKELETONS
         save_skeleton_checkpoint(skeleton_checkpoint_path, run_identity["run_id"], successful_skeletons)
         audit["break_constraint_isolation"] = build_break_constraint_isolation_report(parsed, successful_skeletons)
         audit["selected_before_break_skeleton"] = {
             "profile": best_before_skeleton.profile,
-            "metrics": {k: v for k, v in best_before_skeleton.diagnostics.get("no_break_metrics", {}).items() if k != "interval_rows" and not k.endswith("gaps") and not k.endswith("qslots")},
+            "metrics": compact_metric_surface(best_before_skeleton.diagnostics.get("no_break_metrics", {})),
             "selection_rule": "Workbook target first; floor and secondary KPIs protected tie-breaks; no breaks assigned",
         }
         audit["status"] = "SHIFT_SKELETONS_AND_BREAK_DIAGNOSTICS_READY"
@@ -18521,10 +19889,7 @@ def run_case(
         # target-aligned break solve before the optional Pareto sweep.  Earlier
         # builds could consume the whole primary budget in Stage 1 and then fail
         # despite a zero-exception diagnostic proving valid breaks existed.
-        guard_anchor_pool = [
-            sk for sk in successful_skeletons
-            if sk.diagnostics.get("minimum_exception_count") == 0
-        ]
+        guard_anchor_pool = coverage_first_stage2_anchor_candidates(successful_skeletons)
         if not guard_anchor_pool and compliant:
             fallback_fingerprints = {skeleton_fingerprint(sk) for sk, _ in compliant}
             guard_anchor_pool = [sk for sk in successful_skeletons if skeleton_fingerprint(sk) in fallback_fingerprints]
@@ -18538,10 +19903,16 @@ def run_case(
         guard_record: Dict[str, Any] = {
             "enabled": True,
             "reserved_seconds": int(stage2_guard_reserve_sec),
+            "adaptive_reserved_seconds": int(stage2_adaptive_reserve_sec),
+            "recovery_reserved_seconds": int(breakability_recovery_budget_sec),
             "attempted": False,
             "status": "NO_SKELETON_ANCHOR",
             "pattern_width": int(full_width),
             "objective_mode": guard_mode,
+            "anchor_selection_rule": (
+                "Coverage-first production skeleton; unknown and proven-zero exception minima "
+                "are eligible, proven-positive minima are deferred when an eligible candidate exists."
+            ),
         }
         if guard_anchor is not None:
             remaining = primary_search_deadline - time.time()
@@ -18624,8 +19995,9 @@ def run_case(
         write_json(audit_path, audit)
 
         # Phase B adaptive break search. Attempt ordering is deterministic and
-        # prioritizes skeletons with the lowest known exception bound, strongest
-        # workbook-target coverage, and lowest overage. Feasible solutions warm
+        # prioritizes target coverage. Only a proven positive exception minimum
+        # is deferred; unknown breakability remains eligible because an
+        # unmeasured skeleton is not a failed skeleton. Feasible solutions warm
         # start wider/objective-neighbor attempts on the same skeleton.
         raw_break_skeletons = dedupe_skeletons([best_before_skeleton, *successful_skeletons[:6]])
         production_break_skeletons = [sk for sk in raw_break_skeletons if not skeleton_release_diagnostic_only(sk)]
@@ -18641,7 +20013,7 @@ def run_case(
         for skeleton in break_search_skeletons:
             metrics = skeleton.diagnostics.get("no_break_metrics") or {}
             active = int(metrics.get("active_intervals", 0) or 0)
-            before_floor = int(metrics.get("before_floor", metrics.get("before_80", 0)) or 0)
+            before_floor = int(require_metric(metrics, "before_floor", "before_80") or 0)
             skeleton_records.append({
                 "profile": skeleton.profile,
                 "before_target": metrics.get("before_target", 0),
@@ -18650,8 +20022,8 @@ def run_case(
                 "before_90": metrics.get("before_90", 0),
                 "before_80": metrics.get("before_80", 0),
                 "floor_gaps": max(0, active - before_floor),
-                "severe_floor_gaps": metrics.get("before_severe_floor_gap_count", metrics.get("severe_floor_gap_count", 0)),
-                "max_floor_run": metrics.get("before_max_consecutive_floor_gaps", metrics.get("max_consecutive_floor_gaps", 0)),
+                "severe_floor_gaps": require_metric(metrics, "before_severe_floor_gap_count", "severe_floor_gap_count"),
+                "max_floor_run": require_metric(metrics, "before_max_consecutive_floor_gaps", "max_consecutive_floor_gaps"),
                 "before_avoidable_overage_fte_sum": metrics.get("before_avoidable_overage_fte_sum", 0.0),
                 "minimum_exception_count": skeleton.diagnostics.get("minimum_exception_count"),
                 "minimum_exception_upper_bound": skeleton.diagnostics.get("minimum_exception_upper_bound"),
@@ -18769,7 +20141,7 @@ def run_case(
                 "objective": solution.objective,
                 "elapsed_sec": solution.elapsed_sec,
                 "exception_count": 0,
-                "metrics": {k: v for k, v in solution.metrics.items() if k != "interval_rows" and not k.endswith("gaps") and not k.endswith("qslots")},
+                "metrics": compact_metric_surface(solution.metrics),
                 "diagnostics": solution.diagnostics,
                 "attempt_key": attempt_key,
             })
@@ -19185,7 +20557,7 @@ def run_case(
                     "operational_minimum_proven": op_proven,
                     "operational_cap": parsed.max_no_break_exceptions,
                     "exception_count": len(operational_min.no_break_cells),
-                    "metrics": {k: v for k, v in operational_min.metrics.items() if k != "interval_rows" and not k.endswith("gaps") and not k.endswith("qslots")},
+                    "metrics": compact_metric_surface(operational_min.metrics),
                     "diagnostics": operational_min.diagnostics,
                 })
                 write_json(audit_path, audit)
@@ -19234,7 +20606,7 @@ def run_case(
                     "operational_minimum_proven": op_proven,
                     "exception_cap_used": exception_cap,
                     "exception_count": len(solution.no_break_cells),
-                    "metrics": {k: v for k, v in solution.metrics.items() if k != "interval_rows" and not k.endswith("gaps") and not k.endswith("qslots")},
+                    "metrics": compact_metric_surface(solution.metrics),
                     "diagnostics": solution.diagnostics,
                 })
                 write_json(audit_path, audit)
@@ -19541,10 +20913,9 @@ def run_case(
             audit["functional_status"] = "PASS_FUNCTIONAL_DIAGNOSTIC_COMPLETED_NO_FINAL"
             audit["phase_c_promotion_status"] = "BLOCKED_NO_RELEASE_SCHEDULE"
             audit["phase_c_quality_status"] = "DIAGNOSTICS_ONLY"
-            audit["best_before_metrics"] = {
-                key: value for key, value in (best_before_skeleton.diagnostics.get("no_break_metrics") or {}).items()
-                if key != "interval_rows" and not key.endswith("gaps") and not key.endswith("qslots")
-            }
+            audit["best_before_metrics"] = compact_metric_surface(
+                best_before_skeleton.diagnostics.get("no_break_metrics") or {}
+            )
             audit["best_proven_minimum_no_break_exceptions"] = best_minimum
             audit["best_tested_skeleton_proven_minimum_no_break_exceptions"] = tested_skeleton_proven_minimum
             audit["best_exception_lower_bound"] = best_lower
@@ -19925,7 +21296,7 @@ def run_case(
             export_records.append({
                 "role": role, "path": str(role_path),
                 "skeleton_profile": sk.profile, "break_profile": br.profile,
-                "metrics": {k: v for k, v in br.metrics.items() if k != "interval_rows" and not k.endswith("gaps") and not k.endswith("qslots")},
+                "metrics": compact_metric_surface(br.metrics),
                 "output_validation": info,
             })
 
@@ -19960,13 +21331,24 @@ def run_case(
             "break_spacing_compression_count": int(chosen_breaks.diagnostics.get("flexible_compression_count", 0) or 0),
             "break_spacing_extended_beyond_normal_count": int(chosen_breaks.diagnostics.get("extended_beyond_normal_count", 0) or 0),
             "break_spacing_rows": chosen_breaks.diagnostics.get("break_spacing_rows", []),
-            "metrics": {k: v for k, v in chosen_breaks.metrics.items() if k != "interval_rows" and not k.endswith("gaps") and not k.endswith("qslots")},
+            "metrics": compact_metric_surface(chosen_breaks.metrics),
             "output_validation": output_info_by_role["RECOMMENDED_FINAL"],
             "best_before_break_output": str(before_output_path),
             "best_final_after_breaks_output": str(output_path),
             "recommended_final_output": str(output_path),
             "optional_outputs": [r["path"] for r in export_records if r["role"] not in {"BEST_BEFORE_BREAKS", "RECOMMENDED_FINAL"}],
             "candidate_leaderboard_csv": str(leaderboard_csv), "pareto_manifest": str(pareto_manifest),
+        }
+        # The stage declaration is published on both paths so the parity gate
+        # reads one key regardless of how far the run went, and so a stage
+        # disagreement between engine and validator is detectable.
+        audit["stage_metric_surface"] = {
+            "stage": "FULL_SCHEDULE",
+            "break_stage_executed": True,
+            "after_metrics_basis": "BREAKS_PLACED_BY_STAGE_2",
+            "metrics_origin": "CANONICAL_AFTER_BREAK_EVALUATION",
+            "selected_profile": chosen_skeleton.profile,
+            "metrics": audit["selected_candidate"]["metrics"],
         }
         audit["functional_status"] = "PASS_FINAL_SCHEDULE_GENERATED"
         audit["artifact_state"] = "FINAL_VERIFIED" if output_info_by_role["RECOMMENDED_FINAL"]["verification"].get("status") == "PASS" else "FINAL_VERIFICATION_FAILED"
@@ -20097,6 +21479,14 @@ def run_case(
             "language_minimum_only_ratio": chosen_breaks.metrics.get("language_minimum_only_ratio", 0),
             "language_reserve_shortfall_quarters": chosen_breaks.metrics.get("language_reserve_shortfall_quarters", 0),
             "language_break_caused_reserve_loss_quarters": chosen_breaks.metrics.get("language_break_caused_reserve_loss_quarters", 0),
+            # Whether this scenario's coverage measures the optimiser at all.
+            # A CAPACITY_SHORT roster cannot reach its target under any shift
+            # or break placement, so its coverage belongs in a roster finding,
+            # not in a coverage benchmark average.
+            "capacity_class": (capacity.get("coverage_benchmark") or {}).get("capacity_class", ""),
+            "coverage_benchmark_eligible": (capacity.get("coverage_benchmark") or {}).get("benchmark_eligible", True),
+            "max_attainable_target_ratio": (capacity.get("coverage_benchmark") or {}).get("max_attainable_target_ratio", ""),
+            "target_capacity_slack_hours": (capacity.get("coverage_benchmark") or {}).get("target_capacity_slack_hours", ""),
             # Measured on the shipped schedule, not inferred from the model.
             # 0 quarters means no Coverage Split rows; a non-zero gap count on a
             # released schedule is a defect, not a quality warning.
@@ -20147,6 +21537,13 @@ def run_case(
             "stage1_profiles_attempted": (audit.get("stage1_profile_coverage") or {}).get("attempted"),
             "stage1_profiles_skipped_for_budget": (audit.get("stage1_profile_coverage") or {}).get("skipped_for_budget"),
             "stage1_profile_coverage_status": (audit.get("stage1_profile_coverage") or {}).get("status", "NOT_RECORDED"),
+            "coverage_search_status": (
+                "COMPLETE_PROFILE_PORTFOLIO_NOT_GLOBAL_PROOF"
+                if (audit.get("stage1_profile_coverage") or {}).get("status") == "COMPLETE"
+                else "SEARCH_TRUNCATED_GLOBAL_MAXIMUM_NOT_PROVEN"
+            ),
+            "global_coverage_maximum_proven": False,
+            "candidate_pool_retention_cap": MAX_RETAINED_STAGE1_SKELETONS,
             "quality_benchmark_status": audit.get("quality_benchmark", {}).get("gate_status", "PASS"),
             "quality_benchmark_failures": " | ".join(audit.get("quality_benchmark", {}).get("failures", [])),
             "best_before_target_in_final_pool": selection.get("best_before_target_in_final_pool"),
@@ -20357,7 +21754,7 @@ def selfcheck(input_paths: Sequence[Path]) -> Dict[str, Any]:
                 "blank_requirement_mode": parsed.blank_requirement_mode,
                 "demand_fit_guard_mode": parsed.demand_fit_guard_mode,
                 "demand_fit_guard_enabled": parsed.demand_fit_guard_enabled,
-                "language_rules": [{"group": r.group, "required": sorted(r.required_languages), "eligible_sources": sorted(r.eligible_languages)} for r in parsed.language_rules],
+                "language_rules": [{"group": r.group, "required": sorted(r.required_languages), "eligible_sources": sorted(r.eligible_languages), "active_days": sorted(getattr(r, "active_days", set(range(7))))} for r in parsed.language_rules],
                 "break_pattern_count": len(patterns),
                 "break_minutes": sorted({sum(length * 15 for _, length, _ in p.breaks) for p in patterns}),
                 "pre_solver_contract_status": preflight.get("status"),
@@ -20557,6 +21954,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--disable-target-lock-recovery", action="store_true")
     parser.add_argument("--disable-deterministic-baseline", action="store_true")
     parser.add_argument("--solver-random-seed", type=int, default=0)
+    parser.add_argument(
+        "--stage1-minimum-slice-sec", type=float, default=None,
+        help="Shortest Stage-1 solver slice worth starting. The default is measured on the hardest packaged scenario; an easier roster reaches OPTIMAL far below it and can afford a shorter one.")
     parser.add_argument("--exception-search-reserve-sec", type=int, default=1200)
     parser.add_argument("--post-break-repair-reserve-sec", type=int, default=600)
     parser.add_argument("--target-lock-recovery-reserve-sec", type=int, default=600)
@@ -20801,6 +22201,38 @@ def build_business_outcome(audit: Dict[str, Any], return_code: int) -> Dict[str,
         audit.get("artifact_state") == "FINAL_VERIFIED"
         and (audit.get("hard_valid_schedule_exists") is True or int((((audit.get("selected_candidate") or {}).get("output_validation") or {}).get("validation") or {}).get("hard_fail_count", 0) or 0) == 0)
     )
+    # A BEFORE_BREAKS_ONLY run exits 0 having deliberately produced no final
+    # schedule. Falling through to the branch below reported "Final schedule
+    # generated successfully" for a workbook that assigns no breaks and must
+    # never be used operationally, so the stage gets its own outcome before
+    # the final-schedule branches are reached.
+    if status == "SKELETON_ONLY_COMPLETE":
+        skeleton = audit.get("skeleton_only") or {}
+        surface = (audit.get("stage_metric_surface") or {}).get("metrics") or {}
+        outcome.update({
+            "outcome_code": "BEFORE_BREAK_SKELETON_GENERATED",
+            "outcome_category": "REVIEW_ONLY",
+            "headline": "Before-break skeleton generated for review; breaks are not assigned",
+            "plain_language_summary": (
+                "The run was asked for the before-break stage only, and it completed. "
+                "The workbook contains shift and OFF assignments with no breaks, so it "
+                "is a review artifact and must not be used operationally. Run the full "
+                "stage to produce a production schedule."
+            ),
+            "production_eligible": False,
+            "best_proven": {
+                "before_break_profile": skeleton.get("selected_profile"),
+                "active_intervals": surface.get("active_intervals"),
+                "before_target": surface.get("before_target"),
+                "before_floor": surface.get("before_floor"),
+            },
+            "recommended_actions": [
+                "Use this artifact to judge whether the roster is worth taking to break placement.",
+                "Rerun with the full stage to produce a schedule that can be released.",
+            ],
+        })
+        return outcome
+
     if int(return_code) == 0 or hard_valid_artifact:
         quality = audit.get("production_quality_gate") or {}
         quality_status = str(quality.get("status") or "NOT_EVALUATED")
@@ -21067,8 +22499,108 @@ def record_unexpected_run_failure(
         print(failure_traceback, file=log, flush=True)
 
 
+# argparse destination -> engine parameter. ``negate`` marks a --disable-X flag
+# whose engine parameter is the positive capability, so "supplied" means False.
+CLI_SEARCH_CONTROL_DESTS: Tuple[Tuple[str, str, bool], ...] = (
+    ("num_workers", "workers", False),
+    ("pattern_widths", "pattern_widths", False),
+    ("skeleton_profiles", "skeleton_profile_names", False),
+    ("break_objective_modes", "break_objective_modes", False),
+    ("repair_change_limits", "repair_change_limits", False),
+    ("export_top_skeletons", "export_top_skeletons", False),
+    ("use_input_schedule_as_seed", "use_input_schedule_as_seed", False),
+    ("disable_bundled_fallbacks", "include_bundled_fallbacks", True),
+    ("adaptive_no_improvement_attempts", "adaptive_no_improvement_attempts", False),
+    ("primary_target_tolerance", "primary_target_tolerance", False),
+    ("max_after80_tradeoff_intervals", "max_after80_tradeoff_intervals", False),
+    ("min_after90_gain_per_after80_loss", "min_after90_gain_per_after80_loss", False),
+    ("disable_post_break_repair", "post_break_repair", True),
+    ("disable_target_lock_recovery", "target_lock_recovery", True),
+    ("disable_deterministic_baseline", "deterministic_baseline", True),
+    ("disable_safe_incumbent", "safe_incumbent", True),
+    ("disable_conflict_refinement", "conflict_refinement", True),
+    ("disable_coordinated_repair", "coordinated_repair", True),
+    ("disable_joint_refinement", "joint_refinement", True),
+    ("solver_random_seed", "solver_random_seed", False),
+    ("stage1_minimum_slice_sec", "stage1_minimum_slice_sec", False),
+    ("exception_search_reserve_sec", "exception_search_reserve_sec", False),
+    ("post_break_repair_reserve_sec", "post_break_repair_reserve_sec", False),
+    ("target_lock_recovery_reserve_sec", "target_lock_recovery_reserve_sec", False),
+    ("finalization_reserve_sec", "finalization_reserve_sec", False),
+    ("safe_incumbent_reserve_sec", "safe_incumbent_reserve_sec", False),
+    ("conflict_refinement_reserve_sec", "conflict_refinement_reserve_sec", False),
+    ("coordinated_repair_reserve_sec", "coordinated_repair_reserve_sec", False),
+    ("coordinated_repair_cycles", "coordinated_repair_cycles", False),
+    ("joint_refinement_reserve_sec", "joint_refinement_reserve_sec", False),
+    ("joint_change_limits", "joint_change_limits", False),
+    ("joint_shift_options_per_cell", "joint_shift_options_per_cell", False),
+    ("joint_patterns_per_shift", "joint_patterns_per_shift", False),
+    ("adaptive_joint_attempts", "adaptive_joint_attempts", False),
+    ("adaptive_joint_no_improvement_limit", "adaptive_joint_no_improvement_limit", False),
+    ("minimum_final_before100", "minimum_final_before_100", False),
+    ("minimum_final_before90", "minimum_final_before_90", False),
+    ("minimum_final_before80", "minimum_final_before_80", False),
+    ("minimum_final_after100", "minimum_final_after_100", False),
+    ("minimum_final_after90", "minimum_final_after_90", False),
+    ("minimum_final_after80", "minimum_final_after_80", False),
+    ("minimum_best_before100", "minimum_best_before_100", False),
+    ("minimum_best_before90", "minimum_best_before_90", False),
+    ("minimum_best_before80", "minimum_best_before_80", False),
+)
+
+_LIST_SEARCH_CONTROLS = {
+    "pattern_widths": int, "repair_change_limits": int, "joint_change_limits": int,
+    "skeleton_profile_names": str, "break_objective_modes": str,
+}
+
+
+def explicitly_supplied_options(parser: Any, argv: Optional[Sequence[str]]) -> Set[str]:
+    """Return the argparse destinations the caller actually typed.
+
+    A flag left off the command line and a flag typed at its default value are
+    indistinguishable from the parsed namespace, and the difference is exactly
+    what decides whether the workbook gets to speak. argparse skips a default
+    for any attribute already present on the namespace it is given, so
+    pre-seeding every destination with None makes an unset option stay None.
+
+    ``parser._actions`` is argparse-internal but stable, and it is the only way
+    to enumerate destinations without restating them here - a second list that
+    could drift out of step with the parser is the worse risk.
+    """
+    probe = argparse.Namespace()
+    for action in parser._actions:
+        setattr(probe, action.dest, None)
+    # parse_known_args, not parse_args: this only asks which options appeared,
+    # and a probe must never be the thing that terminates the process. The real
+    # parse has already run and reported any genuine command-line error.
+    parser.parse_known_args(list(argv) if argv is not None else None, namespace=probe)
+    return {dest for dest, value in vars(probe).items() if value is not None}
+
+
+def cli_search_controls(args: Any, supplied: Set[str]) -> Dict[str, Any]:
+    """Translate the options the caller typed into engine parameter values."""
+    controls: Dict[str, Any] = {}
+    for dest, name, negate in CLI_SEARCH_CONTROL_DESTS:
+        if dest not in supplied:
+            continue
+        value = getattr(args, dest, None)
+        if negate:
+            controls[name] = not bool(value)
+            continue
+        element = _LIST_SEARCH_CONTROLS.get(name)
+        if element is not None:
+            parts = [part.strip() for part in str(value).split(",") if part.strip()]
+            if not parts:
+                continue
+            controls[name] = [element(part) for part in parts]
+        else:
+            controls[name] = value
+    return controls
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    args = build_arg_parser().parse_args(argv)
+    parser = build_arg_parser()
+    args = parser.parse_args(argv)
     inputs = list(args.input or [])
     if args.selfcheck:
         payload = selfcheck(inputs)
@@ -21095,6 +22627,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     profile_names = [x.strip() for x in str(args.skeleton_profiles).split(",") if x.strip()]
     break_modes = [x.strip() for x in str(args.break_objective_modes).split(",") if x.strip()]
     joint_limits = [int(x) for x in str(args.joint_change_limits).split(",") if str(x).strip()]
+    # Everything the caller actually typed outranks the workbook; everything
+    # else leaves the workbook free to state the value. The defaults below are
+    # still passed positionally, so a parameter neither side sets keeps exactly
+    # the value it had before this route existed.
+    typed_controls = cli_search_controls(args, explicitly_supplied_options(parser, argv))
     terminal_started = time.time()
     return_code = 3
     terminal_exception: Optional[Exception] = None
@@ -21156,6 +22693,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         adaptive_joint_attempts=args.adaptive_joint_attempts,
         adaptive_joint_no_improvement_limit=args.adaptive_joint_no_improvement_limit,
         phase_c_development_smoke=args.phase_c_development_smoke,
+        stage1_minimum_slice_sec=(
+            args.stage1_minimum_slice_sec
+            if args.stage1_minimum_slice_sec is not None
+            else STAGE1_MIN_MEANINGFUL_SLICE_SEC),
+        cli_search_controls=typed_controls,
             overwrite=args.overwrite, resume=args.resume,
             allow_headcount_mismatch_override=hc_override,
         )

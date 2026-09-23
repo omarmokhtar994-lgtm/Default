@@ -286,8 +286,19 @@ class ValidatorCrashIsNotAScheduleFailure(unittest.TestCase):
                       "exit code 2 is the validator's 'evaluated and failed' signal")
 
     def test_validator_returns_two_on_hard_failure(self):
-        source = VALIDATOR_PATH.read_text(encoding="utf-8")
-        self.assertIn("return 0 if result['status']=='PASS' else 2", source.replace('"', "'"))
+        """2 means evaluated-and-failed; 3 means the validator itself crashed.
+
+        The hardened validator wraps validate() in try/except and returns 3 on
+        an exception, so a crash is no longer indistinguishable from a failed
+        schedule -- which is the separation this class exists to enforce.
+        """
+        source = VALIDATOR_PATH.read_text(encoding="utf-8").replace('"', "'")
+        self.assertIn("return_code=0 if result['status']=='PASS' else 2", source,
+                      "exit 2 must still mean the schedule was evaluated and failed")
+        self.assertIn("return_code=3", source,
+                      "a validator exception must be its own exit code, not 2")
+        self.assertIn("'VALIDATOR_EXCEPTION'", source,
+                      "the crash must be recorded in the result, not just the code")
 
     def test_incomplete_validation_still_blocks_release(self):
         """Distinguishable, but not permissive - an unvalidated schedule blocks."""

@@ -663,7 +663,7 @@ class TheRunStageAndDepthDropdownsArriveWithAVisibleChoice(unittest.TestCase):
 
     def test_the_seeds_are_the_engine_fallbacks_so_nothing_changes(self):
         runner = (ROOT / "engine" / "RUN_UNIVERSAL_PRODUCTION.py").read_text()
-        self.assertIn("args.mode or contract_depth or 'DEEP'", runner)
+        self.assertIn("args.mode or contract_depth or 'QUICK'", runner)
         self.assertIn("args.stage or contract_stage or 'FULL_SCHEDULE'", runner)
 
     def test_the_seeded_text_is_what_the_dropdown_offers(self):
@@ -840,6 +840,19 @@ class EveryPackagedWorkbookCarriesTheCurrentTemplateFixes(unittest.TestCase):
                              f"{scenario}: the packaged workbook's contract no longer matches "
                              f"the hash recorded when its baseline prefix was last moved - the "
                              f"RC9.1 comparison for this scenario is no longer justified")
+            # The contract hash also moves when the engine widens
+            # canonical_contract_snapshot, which is not a workbook edit. The
+            # file hash cannot: it catches the thing this guard is actually
+            # for, and it is why the merge entry records one.
+            recorded_file = history[-1].get("file_sha256")
+            if recorded_file:
+                import hashlib
+                actual_file = hashlib.sha256(path.read_bytes()).hexdigest()
+                self.assertEqual(
+                    actual_file, recorded_file,
+                    f"{scenario}: the packaged workbook FILE changed since the "
+                    f"baseline was re-pointed - the RC9.1 comparison is void "
+                    f"regardless of what the contract hash says")
             checked += 1
         self.assertGreater(checked, 0, "expected at least one re-pointed baseline row to verify")
 

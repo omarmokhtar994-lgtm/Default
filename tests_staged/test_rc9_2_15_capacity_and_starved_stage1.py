@@ -149,5 +149,29 @@ class JointSearchStopsBeforeTheOomKiller(unittest.TestCase):
         self.assertIn('"memory_headroom_stop": memory_stop', src)
 
 
+class BlankStaffingCountsOnlyCurrentWeekStaffing(unittest.TestCase):
+    """FA-7: NMG_SP failed engine/validator parity on blank_staffed_quarters, 16 vs 0.
+
+    The rule is "no NEW staffing in blank intervals"; the validator counts
+    current-week staffing. The engine also counted last Saturday's carry-in,
+    which the solver cannot move.
+    """
+
+    WB = REPO / "packages" / "rc9_2_2_production" / "inputs" / "NMG_SP_RC9_1_READY_FIXED.xlsx"
+
+    def test_carry_in_over_blank_quarters_is_not_blank_staffing(self):
+        if not self.WB.exists():
+            self.skipTest("packaged NMG_SP workbook not present")
+        parsed = E.parse_input(self.WB)
+        qpi = parsed.qslots_per_interval
+        carry = sum(1 for d in range(7) for i in range(parsed.intervals_per_day) if not parsed.active[d][i]
+                    for q in range(qpi) if E.prior_covering_associates(parsed, d * 96 + i * qpi + q))
+        self.assertGreater(carry, 0, "precondition: carry-in covers blank quarters in this workbook")
+        n = len(parsed.associates)
+        empty = E.SkeletonSolution("empty", "FEASIBLE", 0.0, 0.0, [["OFF"] * 7 for _ in range(n)],
+                                   [[None] * 7 for _ in range(n)], {})
+        self.assertEqual(E.calculate_metrics(parsed, empty, {}, [])["blank_staffed_quarters"], 0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

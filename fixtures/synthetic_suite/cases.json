@@ -1,0 +1,405 @@
+[
+  {
+    "id": "SYNTH_E1_EXACT_FIT_NO_BREAKS",
+    "tier": "easy",
+    "purpose": "Exact-fit days-off: every day needs exactly 5 of 7, which only the 7 distinct OFF pairs give.",
+    "workbook": "SYNTH_E1_EXACT_FIT_NO_BREAKS.xlsx",
+    "associates": 7,
+    "interval_minutes": 60,
+    "shrinkage": 0.0,
+    "contract_status": "PASS",
+    "contract_failures": [],
+    "certificate": {
+      "active_intervals": 63,
+      "before_target": 63,
+      "after_target": 63,
+      "before_floor": 63,
+      "after_floor": 63,
+      "plan_break_concurrency_violation_count": 0,
+      "plan_language_gap_count": 0,
+      "plan_zero_staffed_active_quarters": 0,
+      "plan_blank_staffed_quarters": 0,
+      "plan_whole_week_imbalance_violation_count": 0,
+      "sunday_active_intervals": 9,
+      "planted_supply_productive_hours": 315.0,
+      "demand_fte_hours": 315.0
+    },
+    "expected": {
+      "contract": "PASS",
+      "optimum_after_target": 63,
+      "optimum_before_target": 63
+    }
+  },
+  {
+    "id": "SYNTH_E2_SINGLE_SHIFT_WITH_BREAKS",
+    "tier": "easy",
+    "purpose": "Two per OFF pair, one shift, standard 15/30/15 breaks, 20% shrinkage.",
+    "workbook": "SYNTH_E2_SINGLE_SHIFT_WITH_BREAKS.xlsx",
+    "associates": 14,
+    "interval_minutes": 60,
+    "shrinkage": 0.2,
+    "contract_status": "PASS",
+    "contract_failures": [],
+    "certificate": {
+      "active_intervals": 63,
+      "before_target": 63,
+      "after_target": 63,
+      "before_floor": 63,
+      "after_floor": 63,
+      "plan_break_concurrency_violation_count": 0,
+      "plan_language_gap_count": 0,
+      "plan_zero_staffed_active_quarters": 0,
+      "plan_blank_staffed_quarters": 0,
+      "plan_whole_week_imbalance_violation_count": 0,
+      "sunday_active_intervals": 9,
+      "planted_supply_productive_hours": 560.0,
+      "demand_fte_hours": 448.0
+    },
+    "expected": {
+      "contract": "PASS",
+      "optimum_after_target": 63,
+      "optimum_before_target": 63
+    }
+  },
+  {
+    "id": "SYNTH_M1_MULTI_START_NO_BREAKS",
+    "tier": "moderate",
+    "purpose": "Ten legal starts, seven used, 20% shrinkage, zero slack before breaks.",
+    "workbook": "SYNTH_M1_MULTI_START_NO_BREAKS.xlsx",
+    "associates": 20,
+    "interval_minutes": 60,
+    "shrinkage": 0.2,
+    "contract_status": "PASS",
+    "contract_failures": [],
+    "certificate": {
+      "active_intervals": 118,
+      "before_target": 118,
+      "after_target": 118,
+      "before_floor": 118,
+      "after_floor": 118,
+      "plan_break_concurrency_violation_count": 0,
+      "plan_language_gap_count": 0,
+      "plan_zero_staffed_active_quarters": 0,
+      "plan_blank_staffed_quarters": 0,
+      "plan_whole_week_imbalance_violation_count": 0,
+      "sunday_active_intervals": 16,
+      "planted_supply_productive_hours": 900.0,
+      "demand_fte_hours": 720.0
+    },
+    "expected": {
+      "contract": "PASS",
+      "optimum_after_target": 118,
+      "optimum_before_target": 118
+    }
+  },
+  {
+    "id": "SYNTH_M2_MULTI_START_WITH_BREAKS",
+    "tier": "moderate",
+    "purpose": "Same shape with breaks: the after-break optimum is the planted plan's.",
+    "workbook": "SYNTH_M2_MULTI_START_WITH_BREAKS.xlsx",
+    "associates": 28,
+    "interval_minutes": 60,
+    "shrinkage": 0.15,
+    "contract_status": "PASS",
+    "contract_failures": [],
+    "certificate": {
+      "active_intervals": 117,
+      "before_target": 117,
+      "after_target": 117,
+      "before_floor": 117,
+      "after_floor": 117,
+      "plan_break_concurrency_violation_count": 0,
+      "plan_language_gap_count": 0,
+      "plan_zero_staffed_active_quarters": 0,
+      "plan_blank_staffed_quarters": 0,
+      "plan_whole_week_imbalance_violation_count": 9,
+      "sunday_active_intervals": 15,
+      "planted_supply_productive_hours": 1120.0,
+      "demand_fte_hours": 951.6
+    },
+    "expected": {
+      "contract": "PASS",
+      "optimum_after_target": 117,
+      "optimum_before_target": 117
+    }
+  },
+  {
+    "id": "SYNTH_H1_24x7_OVERNIGHT",
+    "tier": "hard",
+    "purpose": "24/7 with overnight shifts across midnight, 12% shrinkage, rest 12h.",
+    "workbook": "SYNTH_H1_24x7_OVERNIGHT.xlsx",
+    "associates": 42,
+    "interval_minutes": 60,
+    "shrinkage": 0.12,
+    "contract_status": "PASS",
+    "contract_failures": [],
+    "certificate": {
+      "active_intervals": 168,
+      "before_target": 168,
+      "after_target": 168,
+      "before_floor": 168,
+      "after_floor": 168,
+      "plan_break_concurrency_violation_count": 0,
+      "plan_language_gap_count": 0,
+      "plan_zero_staffed_active_quarters": 0,
+      "plan_blank_staffed_quarters": 0,
+      "plan_whole_week_imbalance_violation_count": 0,
+      "sunday_active_intervals": 24,
+      "planted_supply_productive_hours": 1680.0,
+      "demand_fte_hours": 1478.4
+    },
+    "expected": {
+      "contract": "PASS",
+      "optimum_after_target": 168,
+      "optimum_before_target": 168
+    }
+  },
+  {
+    "id": "SYNTH_H2_HARD_FLOOR_OVERDEMAND",
+    "tier": "hard",
+    "purpose": "Provably infeasible hard floor: must be refused or reported, never shipped as met.",
+    "workbook": "SYNTH_H2_HARD_FLOOR_OVERDEMAND.xlsx",
+    "associates": 20,
+    "interval_minutes": 60,
+    "shrinkage": 0.2,
+    "contract_status": "PASS",
+    "contract_failures": [],
+    "certificate": {
+      "active_intervals": 118,
+      "before_target": 0,
+      "after_target": 0,
+      "before_floor": 0,
+      "after_floor": 0,
+      "plan_break_concurrency_violation_count": 0,
+      "plan_language_gap_count": 0,
+      "plan_zero_staffed_active_quarters": 0,
+      "plan_blank_staffed_quarters": 0,
+      "plan_whole_week_imbalance_violation_count": 0,
+      "sunday_active_intervals": 16,
+      "planted_supply_productive_hours": 800.0,
+      "demand_fte_hours": 1280.0
+    },
+    "expected": {
+      "contract": "PASS",
+      "hard_floor_infeasible": true,
+      "acceptable_refusals": [
+        "HARD_FLOOR_PROVABLY_IMPOSSIBLE",
+        "AGGREGATE_HARD_FLOOR_CAPACITY_SHORTAGE"
+      ],
+      "proof": "floor needs 1024.00 productive FTE-hours after shrinkage; the roster supplies at most 640.00"
+    }
+  },
+  {
+    "id": "SYNTH_H3_LANGUAGE_MINIMUM",
+    "tier": "hard",
+    "purpose": "Hard language minimum after breaks; coverage optimum from the plan.",
+    "workbook": "SYNTH_H3_LANGUAGE_MINIMUM.xlsx",
+    "associates": 30,
+    "interval_minutes": 60,
+    "shrinkage": 0.1,
+    "contract_status": "PASS",
+    "contract_failures": [],
+    "certificate": {
+      "active_intervals": 105,
+      "before_target": 105,
+      "after_target": 105,
+      "before_floor": 105,
+      "after_floor": 105,
+      "plan_break_concurrency_violation_count": 0,
+      "plan_language_gap_count": 0,
+      "plan_zero_staffed_active_quarters": 0,
+      "plan_blank_staffed_quarters": 0,
+      "plan_whole_week_imbalance_violation_count": 5,
+      "sunday_active_intervals": 15,
+      "planted_supply_productive_hours": 1200.0,
+      "demand_fte_hours": 1079.81
+    },
+    "expected": {
+      "contract": "PASS",
+      "optimum_after_target": 105,
+      "optimum_before_target": 105
+    }
+  },
+  {
+    "id": "SYNTH_X1_LARGE_15MIN_24x7",
+    "tier": "extreme",
+    "purpose": "120 associates, 15-minute grid, 24 starts, 24/7, planted after-break optimum.",
+    "workbook": "SYNTH_X1_LARGE_15MIN_24x7.xlsx",
+    "associates": 120,
+    "interval_minutes": 15,
+    "shrinkage": 0.1,
+    "contract_status": "PASS",
+    "contract_failures": [],
+    "certificate": {
+      "active_intervals": 672,
+      "before_target": 672,
+      "after_target": 672,
+      "before_floor": 672,
+      "after_floor": 672,
+      "plan_break_concurrency_violation_count": 0,
+      "plan_language_gap_count": 0,
+      "plan_zero_staffed_active_quarters": 0,
+      "plan_blank_staffed_quarters": 0,
+      "plan_whole_week_imbalance_violation_count": 0,
+      "sunday_active_intervals": 96,
+      "planted_supply_productive_hours": 4800.0,
+      "demand_fte_hours": 4320.0
+    },
+    "expected": {
+      "contract": "PASS",
+      "optimum_after_target": 672,
+      "optimum_before_target": 672
+    }
+  },
+  {
+    "id": "SYNTH_X2_ALL_HARD_OFF_SUNDAY",
+    "tier": "extreme",
+    "purpose": "All associates hard-OFF Sunday: Sunday must be 0 hit, the rest the plan's optimum.",
+    "workbook": "SYNTH_X2_ALL_HARD_OFF_SUNDAY.xlsx",
+    "associates": 21,
+    "interval_minutes": 60,
+    "shrinkage": 0.1,
+    "contract_status": "PASS",
+    "contract_failures": [],
+    "certificate": {
+      "active_intervals": 91,
+      "before_target": 78,
+      "after_target": 78,
+      "before_floor": 78,
+      "after_floor": 78,
+      "plan_break_concurrency_violation_count": 0,
+      "plan_language_gap_count": 0,
+      "plan_zero_staffed_active_quarters": 52,
+      "plan_blank_staffed_quarters": 0,
+      "plan_whole_week_imbalance_violation_count": 7,
+      "sunday_active_intervals": 13,
+      "planted_supply_productive_hours": 840.0,
+      "demand_fte_hours": 834.97
+    },
+    "expected": {
+      "contract": "PASS",
+      "optimum_after_target": 78,
+      "sunday_hits": 0,
+      "acceptable_refusals": [
+        "ZERO_ACTIVE_INTERVAL_PROVABLY_IMPOSSIBLE"
+      ]
+    }
+  },
+  {
+    "id": "SYNTH_R1_OFF_GRID_SHIFT",
+    "tier": "extreme",
+    "workbook": "SYNTH_R1_OFF_GRID_SHIFT.xlsx",
+    "purpose": "Malformed contract must be refused before the solver: SHIFT_OFF_QUARTER_GRID",
+    "expected": {
+      "refused_with": "SHIFT_OFF_QUARTER_GRID"
+    }
+  },
+  {
+    "id": "SYNTH_R2_CAP_ORDER",
+    "tier": "extreme",
+    "workbook": "SYNTH_R2_CAP_ORDER.xlsx",
+    "purpose": "Malformed contract must be refused before the solver: INVALID_OVERAGE_CAP_ORDER",
+    "expected": {
+      "refused_with": "INVALID_OVERAGE_CAP_ORDER"
+    }
+  },
+  {
+    "id": "SYNTH_R3_GATE_MODE_TYPO",
+    "tier": "extreme",
+    "workbook": "SYNTH_R3_GATE_MODE_TYPO.xlsx",
+    "purpose": "Malformed contract must be refused before the solver: HARD_INVALID_FLOOR_LOSS_FROM_BREAKS_GATE_MODE",
+    "expected": {
+      "refused_with": "HARD_INVALID_FLOOR_LOSS_FROM_BREAKS_GATE_MODE"
+    }
+  },
+  {
+    "id": "SYNTH_R4_HEADCOUNT_MISMATCH",
+    "tier": "extreme",
+    "workbook": "SYNTH_R4_HEADCOUNT_MISMATCH.xlsx",
+    "purpose": "Malformed contract must be refused before the solver: HEADCOUNT_MISMATCH",
+    "expected": {
+      "refused_with": "HEADCOUNT_MISMATCH"
+    }
+  },
+  {
+    "id": "SYNTH_R5_SHRINKAGE_100",
+    "tier": "extreme",
+    "workbook": "SYNTH_R5_SHRINKAGE_100.xlsx",
+    "purpose": "Malformed contract must be refused before the solver: HARD_INVALID_SHRINKAGE_VALUE",
+    "expected": {
+      "refused_with": "HARD_INVALID_SHRINKAGE_VALUE"
+    }
+  },
+  {
+    "id": "BENCH_WINSTON_N23",
+    "tier": "benchmark",
+    "workbook": "BENCH_WINSTON_N23.xlsx",
+    "purpose": "Post office days-off problem, 23 employees (published minimum is 23).",
+    "associates": 23,
+    "source": "Winston, Operations Research: Applications and Algorithms, Ch. 3 (post office); published optimum 23 employees, re-derived: IP 23, LP 22.3333",
+    "contract_status": "PASS",
+    "contract_failures": [],
+    "certificate": {
+      "active_intervals": 56
+    },
+    "expected": {
+      "optimum_after_target": 56,
+      "optimum_before_target": 56,
+      "optimum_proof": "exact CP-SAT, OPTIMAL, benchmark rules only (a relaxation of the engine's)"
+    }
+  },
+  {
+    "id": "BENCH_WINSTON_N22",
+    "tier": "benchmark",
+    "workbook": "BENCH_WINSTON_N22.xlsx",
+    "purpose": "Post office days-off problem, 22 employees (published minimum is 23).",
+    "associates": 22,
+    "source": "Winston, Operations Research: Applications and Algorithms, Ch. 3 (post office); published optimum 23 employees, re-derived: IP 23, LP 22.3333",
+    "contract_status": "PASS",
+    "contract_failures": [],
+    "certificate": {
+      "active_intervals": 56
+    },
+    "expected": {
+      "optimum_after_target": 48,
+      "optimum_before_target": 48,
+      "optimum_proof": "exact CP-SAT, OPTIMAL, benchmark rules only (a relaxation of the engine's)"
+    }
+  },
+  {
+    "id": "BENCH_UNION_N247",
+    "tier": "benchmark",
+    "workbook": "BENCH_UNION_N247.xlsx",
+    "purpose": "Union Airways shift problem as a weekly roster of 247 (smallest full-cover roster is 247).",
+    "associates": 247,
+    "source": "Hillier & Lieberman, Introduction to Operations Research, Sec. 3.4 (Union Airways); published optimum $30,610 with (48,31,39,43,15), re-derived: $30610 [48, 31, 39, 43, 15]; min daily headcount 176",
+    "contract_status": "PASS",
+    "contract_failures": [],
+    "certificate": {
+      "active_intervals": 168
+    },
+    "expected": {
+      "optimum_after_target": 168,
+      "optimum_before_target": 168,
+      "optimum_proof": "exact CP-SAT plan covering every interval under the engine's rest/variety rules"
+    }
+  },
+  {
+    "id": "BENCH_UNION_N246",
+    "tier": "benchmark",
+    "workbook": "BENCH_UNION_N246.xlsx",
+    "purpose": "Union Airways shift problem as a weekly roster of 246 (smallest full-cover roster is 247).",
+    "associates": 246,
+    "source": "Hillier & Lieberman, Introduction to Operations Research, Sec. 3.4 (Union Airways); published optimum $30,610 with (48,31,39,43,15), re-derived: $30610 [48, 31, 39, 43, 15]; min daily headcount 176",
+    "contract_status": "PASS",
+    "contract_failures": [],
+    "certificate": {
+      "active_intervals": 168
+    },
+    "expected": {
+      "optimum_after_target": 166,
+      "upper_bound": 168,
+      "optimum_proof": "Reference 166: the cyclic plan (proven optimal for the cyclic week: 1230 shift-starts vs 1232 needed, a window short by k loses >= {'1': 2, '2': 2} hours) is also feasible in the engine's week. Upper bound 168: the engine's week is not cyclic -- Sunday 00:00-06:00 is covered by last Saturday's carry-in {'1': 33, '2': 31, '4': 15, '3': 44, '0': 48}, a fixed input -- and a relaxation of it (engine rules minus the Saturday->Sunday rest against named carry-in associates) solves OPTIMAL at 168."
+    }
+  }
+]

@@ -1,0 +1,69 @@
+--- a/engine/_tools/l632_universal_scheduler.py
++++ b/engine/_tools/l632_universal_scheduler.py
+@@ -8361,9 +8361,22 @@
+                 model.AddAssumption(assumption)
+     solver = cp_model.CpSolver()
+     solver.parameters.max_time_in_seconds = max(1.0, float(time_limit))
+-    # OR-Tools assumption-core extraction is a single-worker diagnostic path.
+-    # Keep normal parallelism only when no assumptions are attached.
+-    effective_workers = 1 if break_assumption_literals else max(1, int(workers))
++    # OR-Tools assumption-core extraction is a single-worker path. It used to
++    # decide the worker count for EVERY break solve: the core is on by default,
++    # so Stage-2 ran on one worker whatever --num-workers said, and production
++    # machines' other cores sat idle through the whole break search. The core
++    # is only needed when the model is infeasible. So with more than one worker,
++    # solve a clone whose family literals are fixed true -- the same model --
++    # on all workers, and extract the core only if that proves INFEASIBLE.
++    # With one worker nothing changes.
++    parallel_without_assumptions = bool(break_assumption_literals) and int(workers) > 1
++    solve_model = model
++    if parallel_without_assumptions:
++        solve_model = model.clone()
++        solve_model.ClearAssumptions()
++        for literal in break_assumption_literals.values():
++            solve_model.Add(solve_model.get_bool_var_from_proto_index(literal.Index()) == 1)
++    effective_workers = 1 if (break_assumption_literals and not parallel_without_assumptions) else max(1, int(workers))
+     solver.parameters.num_search_workers = effective_workers
+     solver.parameters.random_seed = int(random_seed)
+     try:
+@@ -8375,14 +8388,27 @@
+     solver.parameters.log_search_progress = False
+     _solver_limits_applied = configure_solver_limits(solver)
+     started = time.time()
+-    status = solver.Solve(model)
++    status = solver.Solve(solve_model)
+     elapsed = time.time() - started
+     status_text = status_name(cp_model, solver, status)
+     break_infeasibility_core: List[str] = []
+     break_infeasibility_core_raw: List[int] = []
+-    if status_text == "INFEASIBLE" and break_assumption_literals and hasattr(solver, "SufficientAssumptionsForInfeasibility"):
++    core_solver = solver
++    if status_text == "INFEASIBLE" and parallel_without_assumptions:
++        # Same model, now with assumptions, single worker, to name the core.
++        core_solver = cp_model.CpSolver()
++        core_solver.parameters.max_time_in_seconds = max(1.0, min(60.0, float(time_limit)))
++        core_solver.parameters.num_search_workers = 1
++        core_solver.parameters.random_seed = int(random_seed)
++        core_solver.parameters.cp_model_presolve = True
++        configure_solver_limits(core_solver)
++        core_status = core_solver.Solve(model)
++        if status_name(cp_model, core_solver, core_status) != "INFEASIBLE":
++            core_solver = None
++    if (status_text == "INFEASIBLE" and break_assumption_literals and core_solver is not None
++            and hasattr(core_solver, "SufficientAssumptionsForInfeasibility")):
+         try:
+-            raw_core = list(solver.SufficientAssumptionsForInfeasibility())
++            raw_core = list(core_solver.SufficientAssumptionsForInfeasibility())
+             break_infeasibility_core_raw = [int(value) for value in raw_core]
+             by_index = {int(literal.Index()): family for family, literal in break_assumption_literals.items()}
+             for value in break_infeasibility_core_raw:
+@@ -8468,7 +8494,8 @@
+             "forbidden_no_break_cells": sorted([list(x) for x in forbidden_no_break_cells]),
+             "solver_random_seed": int(random_seed),
+             "solver_workers": int(effective_workers),
+-            "break_assumption_core_single_worker": bool(break_assumption_literals),
++            "break_assumption_core_single_worker": bool(break_assumption_literals) and not parallel_without_assumptions,
++            "stage2_parallel_without_assumptions": parallel_without_assumptions,
+             "randomize_search": False,
+             "warm_start_hint_profile": hint_solution.profile if hint_solution is not None else None,
+             "warm_start_hint_count": int(break_hint_count),

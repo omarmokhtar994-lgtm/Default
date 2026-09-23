@@ -8877,13 +8877,16 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
     for d in range(7):
         for i in range(parsed.intervals_per_day):
             if not parsed.active[d][i]:
-                # Keep the current-week blank staffing count on the same metric
-                # surface as the independent validator. Previous-Saturday
-                # carry-in is part of observed before coverage, so it is
-                # intentionally included here exactly as in the validator.
+                # Current-week staffing only, as the rule and the validator
+                # define it: "no NEW staffing in blank intervals". Last
+                # Saturday's carry-in is fixed input the solver cannot move.
+                # This used to add it in, under a comment claiming the
+                # validator did the same; the validator counts
+                # current_week_before, and NMG_SP (carry-in over 16 blank
+                # Sunday quarters) failed metric parity 16 vs 0.
                 for q in range(qpi):
                     qslot = d * 96 + i * qpi + q
-                    if scheduled_covering_qslot(parsed, skeleton, qslot) or prior_covering_associates(parsed, qslot):
+                    if scheduled_covering_qslot(parsed, skeleton, qslot):
                         blank_staffed_quarters += 1
                 floor_gap_flags[d].append(None)
                 before_floor_gap_flags[d].append(None)

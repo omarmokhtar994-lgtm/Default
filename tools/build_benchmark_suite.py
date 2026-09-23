@@ -101,10 +101,18 @@ def main() -> int:
             exp = {"optimum_after_target": res["active"], "optimum_before_target": res["active"],
                    "optimum_proof": "exact CP-SAT plan covering every interval under the engine's rest/variety rules"}
         else:
+            wb_ = ex["union_N%d_window_bound" % n]
+            ew = ex["union_N%d_engine_week" % n]
             exp = {"optimum_after_target": res["hits"],
-                   "upper_bound": relaxed["bound"] if relaxed else None,
-                   "optimum_proof": "exact CP-SAT (%s, bound %s) under engine rules; relaxed bound %s"
-                                    % (res["status"], res["bound"], relaxed and relaxed["bound"])}
+                   "upper_bound": ew["bound"],
+                   "optimum_proof": (
+                       "Reference %d: the cyclic plan (proven optimal for the cyclic week: %d shift-starts vs %d "
+                       "needed, a window short by k loses >= %s hours) is also feasible in the engine's week. "
+                       "Upper bound %d: the engine's week is not cyclic -- Sunday 00:00-06:00 is covered by last "
+                       "Saturday's carry-in %s, a fixed input -- and a relaxation of it (engine rules minus the "
+                       "Saturday->Sunday rest against named carry-in associates) solves %s at %s."
+                       % (res["hits"], wb_["shift_starts"], wb_["needed"], wb_["hours_lost_per_window_deficit"],
+                          ew["bound"], ew["carry_in"], ew["status"], ew["hits"]))}
         emit(case, ud, exp, src_u)
     (a.out_dir / "cases.json").write_text(json.dumps(manifest, indent=2))
     return 0

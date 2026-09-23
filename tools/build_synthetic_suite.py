@@ -456,10 +456,16 @@ def main() -> int:
         exp: Dict[str, Any] = {"contract": "PASS"}
         if case.get("demand_multiplier", 1.0) > 1.0:
             exp = {"contract": "PASS", "hard_floor_infeasible": True,
+                   "acceptable_refusals": ["HARD_FLOOR_PROVABLY_IMPOSSIBLE", "AGGREGATE_HARD_FLOOR_CAPACITY_SHORTAGE"],
                    "proof": "floor needs %.2f productive FTE-hours after shrinkage; the roster supplies at most %.2f"
                             % (0.8 * cert["demand_fte_hours"], cert["planted_supply_productive_hours"] * (1 - s))}
         elif case.get("sunday_copies_monday"):
-            exp.update(optimum_after_target=active - sunday_active, sunday_hits=0)
+            # Two outcomes are correct: a schedule with Sunday at 0 hits and the
+            # rest at the planted optimum, or a refusal proving a demanded
+            # interval cannot be staffed (the engine treats "at least one on
+            # the floor in every demanded interval" as a hard contract).
+            exp.update(optimum_after_target=active - sunday_active, sunday_hits=0,
+                       acceptable_refusals=["ZERO_ACTIVE_INTERVAL_PROVABLY_IMPOSSIBLE"])
         else:
             exp.update(optimum_after_target=active, optimum_before_target=active)
         entry = {"id": case["id"], "tier": case["tier"], "purpose": case["purpose"],

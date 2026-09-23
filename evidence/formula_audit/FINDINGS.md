@@ -3,6 +3,21 @@
 Inventory: 1,102 formula statements across 5 engine files
 (`evidence/formula_audit/formula_statements.json`).
 
+**Resolution (commit de36c3a): all five findings are fixed in `engine/`.**
+
+| finding | fix | evidence it is right | tests |
+|---|---|---|---|
+| F-1 | Stage-2 hits + hard floor on the exact x1e6 form | pre-registered deterministic A/B: Chat after-target 162 -> 165, AE_AR_B2B 166/165/168/167 unchanged, all arms validator+parity PASS | `tests_staged/test_rc9_2_13_*` (7) |
+| F-2 | off-grid shifts refused (`SHIFT_OFF_QUARTER_GRID`) | 0/197 real shifts affected; synthetic R1 refused | `tests_staged/test_rc9_2_12_*` |
+| F-3 | weekly deficit / weekly contribution, one workdays helper | reporting only | same |
+| F-4 | caps divided by 100 only at >= 10; order check reachable | no workbook overrides caps; synthetic R2 refused | same |
+| F-5 | each gate mode typo names its own setting | no workbook sets modes; synthetic R3 refused | same |
+
+F-1 stays scoped to Stage-2. Stage-1's x100 `productive` proxy is its search
+objective, not a reported number; the chosen schedule is always re-scored by
+the exact metric. The next-Sunday block of `solve_breaks` was already exact
+(x1e6) and is asserted to stay so.
+
 ---
 
 ## F-1 · Stage-1/Stage-2 score coverage in a different arithmetic from the metric  — CONFIRMED

@@ -90,59 +90,89 @@ def union_min_cost() -> Tuple[int, List[int], int]:
 
 
 # ------------------------------------------------- weekly roster, engine metric
+def legal_tours(starts_min: Sequence[int], shift_min: int, engine_rules: bool,
+                rest_hours: int = 12, max_variety: int = 2,
+                cyclic: bool = True) -> List[Tuple[Optional[int], ...]]:
+    """Every legal week for one associate: shift index per day, None = OFF.
+
+    Exactly two OFF days, adjacent (cyclically); with engine_rules also a rest
+    of rest_hours between consecutive days' shifts (cyclic: Saturday into the
+    next Sunday, the steady-state week) and at most max_variety distinct shifts.
+    """
+    import itertools
+    S = len(starts_min)
+    tours = []
+    for p in range(7):
+        off = {p, (p + 1) % 7}
+        work = [d for d in range(7) if d not in off]
+        for combo in itertools.product(range(S), repeat=5):
+            tour: List[Optional[int]] = [None] * 7
+            for d, s in zip(work, combo):
+                tour[d] = s
+            if engine_rules:
+                if len(set(combo)) > max_variety:
+                    continue
+                ok = True
+                for d in range(7 if cyclic else 6):
+                    a, b = tour[d], tour[(d + 1) % 7]
+                    if a is not None and b is not None:
+                        if 1440 + starts_min[b] - (starts_min[a] + shift_min) < rest_hours * 60:
+                            ok = False
+                            break
+                if not ok:
+                    continue
+            tours.append(tuple(tour))
+    return tours
+
+
 def weekly_max_hits(n: int, starts_min: Sequence[int], shift_min: int,
                     demand: List[List[int]], engine_rules: bool, rest_hours: int = 12,
                     max_variety: int = 2, time_limit: float = 120.0,
-                    all_hit: bool = False) -> Dict:
-    """Max (day, hour) intervals with headcount >= demand, cyclic week.
+                    all_hit: bool = False, cyclic: bool = True,
+                    carry_in: Optional[Dict[int, int]] = None) -> Dict:
+    """Max (day, hour) intervals with headcount >= demand for a roster of n.
 
-    demand[d][h] in whole people (shrinkage 0, no breaks). A shift starting on
-    day d at minute m covers hour slots m//60 .. of day d and spills into d+1
-    (cyclic: Saturday night into Sunday, the steady-state week).
+    cyclic=False is the engine's own week: Saturday's spill into next Sunday is
+    not scored, and this Sunday's early hours are covered by `carry_in`
+    ({shift index: associates who worked it last Saturday}), a fixed input.
+
+    Associates are interchangeable, so the exact model counts associates per
+    legal weekly tour (an integer program over tours) instead of assigning each
+    one. demand[d][h] is whole people (shrinkage 0, no breaks). A shift starting
+    on day d covers its hours and spills into d+1 cyclically.
     """
+    tours = legal_tours(starts_min, shift_min, engine_rules, rest_hours, max_variety, cyclic)
     m = cp_model.CpModel()
-    S = len(starts_min)
-    w = {(a, d, s): m.NewBoolVar("w%d_%d_%d" % (a, d, s)) for a in range(n) for d in range(7) for s in range(S)}
-    for a in range(n):
-        off = []
-        for d in range(7):
-            m.Add(sum(w[a, d, s] for s in range(S)) <= 1)
-            o = m.NewBoolVar("off%d_%d" % (a, d))
-            m.Add(o == 1 - sum(w[a, d, s] for s in range(S)))
-            off.append(o)
-        m.Add(sum(off) == 2)
-        pairs = []
-        for d in range(7):
-            p = m.NewBoolVar("pair%d_%d" % (a, d))
-            m.AddImplication(p, off[d]); m.AddImplication(p, off[(d + 1) % 7])
-            pairs.append(p)
-        m.Add(sum(pairs) >= 1)
-        if engine_rules:
-            for d in range(7):
-                for s in range(S):
-                    end = starts_min[s] + shift_min
-                    for t in range(S):
-                        gap = 1440 + starts_min[t] - end
-                        if gap < rest_hours * 60:
-                            m.Add(w[a, d, s] + w[a, (d + 1) % 7, t] <= 1)
-            y = [m.NewBoolVar("y%d_%d" % (a, s)) for s in range(S)]
-            for s in range(S):
-                for d in range(7):
-                    m.AddImplication(w[a, d, s], y[s])
-            m.Add(sum(y) <= max_variety)
+    cnt = [m.NewIntVar(0, n, "t%d" % k) for k in range(len(tours))]
+    m.Add(sum(cnt) == n)
+    covers: Dict[Tuple[int, int], List[int]] = {}
+    for k, tour in enumerate(tours):
+        for sd, s in enumerate(tour):
+            if s is None:
+                continue
+            for off in range(0, shift_min, 60):
+                minute = starts_min[s] + off
+                d = sd + minute // 1440
+                if d > 6 and not cyclic:
+                    continue
+                d %= 7
+                h = (minute % 1440) // 60
+                covers.setdefault((d, h), []).append(k)
+    fixed: Dict[Tuple[int, int], int] = {}
+    if not cyclic:
+        for s, count in (carry_in or {}).items():
+            for off in range(0, shift_min, 60):
+                minute = starts_min[s] + off
+                if minute >= 1440:
+                    fixed[(0, (minute - 1440) // 60)] = fixed.get((0, (minute - 1440) // 60), 0) + count
     hits = []
     for d in range(7):
         for h in range(24):
             if not demand[d][h]:
                 continue
-            cover = []
-            for sd in range(7):
-                for s in range(S):
-                    rel = (d - sd) % 7 * 1440 + h * 60 - starts_min[s]
-                    if 0 <= rel < shift_min:
-                        cover.extend(w[a, sd, s] for a in range(n))
             hit = m.NewBoolVar("hit%d_%d" % (d, h))
-            m.Add(sum(cover) >= demand[d][h]).OnlyEnforceIf(hit)
+            ks = covers.get((d, h), [])
+            m.Add(sum(cnt[k] for k in ks) + fixed.get((d, h), 0) >= demand[d][h]).OnlyEnforceIf(hit)
             hits.append(hit)
     if all_hit:
         for h in hits:
@@ -153,19 +183,49 @@ def weekly_max_hits(n: int, starts_min: Sequence[int], shift_min: int,
     solver.parameters.num_workers = 4
     st = solver.Solve(m)
     res = {"n": n, "engine_rules": engine_rules, "status": solver.StatusName(st),
-           "active": len(hits)}
+           "active": len(hits), "legal_tours": len(tours)}
     if st in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         res["hits"] = int(round(solver.ObjectiveValue()))
         res["bound"] = int(round(solver.BestObjectiveBound()))
         plan = []
-        for a in range(n):
-            row = []
-            for d in range(7):
-                ss = [s for s in range(S) if solver.Value(w[a, d, s])]
-                row.append(ss[0] if ss else None)
-            plan.append(row)
+        for k, tour in enumerate(tours):
+            plan.extend([list(tour)] * solver.Value(cnt[k]))
         res["plan"] = plan
     return res
+
+
+def union_window_upper_bound(n: int) -> Dict:
+    """Proof of the most intervals a weekly roster of n can hit (Union Airways).
+
+    Window d = 06:00 day d to 06:00 day d+1. Only shifts STARTING on day d work
+    in it (the 22:00 shift of day d-1 ends at 06:00 day d), so the seven windows
+    are independent and partition the 168 intervals. A roster of n makes 5n
+    shift-starts; covering a whole window needs 176. L(k) = fewest hours a
+    window must drop when it has 176-k starts (exact IP). With a total deficit
+    D = 7*176 - 5n, the loss is at least the cheapest way to split D over
+    windows, so hits <= 168 - that minimum.
+    """
+    need = union_hourly()
+    heads = union_min_cost()[2]
+
+    def lost(k: int) -> int:
+        s = pywraplp.Solver.CreateSolver("CBC")
+        y = [s.IntVar(0, 500, "y%d" % j) for j in range(5)]
+        z = [s.BoolVar("z%d" % h) for h in range(24)]
+        for h in range(24):
+            s.Add(sum(y[j] for j, (st, _) in enumerate(UNION_SHIFTS) if (h - st) % 24 < 8) >= need[h] * (1 - z[h]))
+        s.Add(sum(y) <= heads - k)
+        s.Minimize(sum(z))
+        assert s.Solve() == pywraplp.Solver.OPTIMAL
+        return int(round(s.Objective().Value()))
+
+    deficit = max(0, 7 * heads - 5 * n)
+    L = {k: lost(k) for k in range(1, deficit + 1)}
+    best = [0] + [10 ** 9] * deficit          # best[D]: least loss to absorb D
+    for D in range(1, deficit + 1):
+        best[D] = min(L[k] + best[D - k] for k in range(1, D + 1))
+    return {"n": n, "shift_starts": 5 * n, "needed": 7 * heads, "deficit": deficit,
+            "hours_lost_per_window_deficit": L, "upper_bound": 168 - best[deficit]}
 
 
 def winston_demand() -> List[List[int]]:
@@ -218,6 +278,20 @@ def main() -> int:
             r = weekly_max_hits(n0 - 1, starts, 480, ud, rules, time_limit=300)
             print("UNION    N=%d engine_rules=%s  %s hits=%s/%s bound=%s" % (n0 - 1, rules, r["status"], r.get("hits"), r["active"], r.get("bound")))
             out["union_N%d_%s" % (n0 - 1, "engine" if rules else "relaxed")] = r
+        ref = out["union_N%d_engine" % (n0 - 1)]
+        carry = {}
+        for row in ref.get("plan", []):
+            if row[6] is not None:
+                carry[row[6]] = carry.get(row[6], 0) + 1
+        r = weekly_max_hits(n0 - 1, starts, 480, ud, True, time_limit=600, cyclic=False, carry_in=carry)
+        r.pop("plan", None)
+        r["carry_in"] = carry
+        print("UNION    N=%d engine week (non-cyclic, carry-in %s): %s hits=%s bound=%s"
+              % (n0 - 1, carry, r["status"], r.get("hits"), r.get("bound")))
+        out["union_N%d_engine_week" % (n0 - 1)] = r
+        ub = union_window_upper_bound(n0 - 1)
+        out["union_N%d_window_bound" % (n0 - 1)] = ub
+        print("UNION    N=%d window bound: %s" % (n0 - 1, ub))
     json.dump(out, open(sys.argv[1] if len(sys.argv) > 1 else "benchmark_exact.json", "w"), indent=1)
     return 0
 

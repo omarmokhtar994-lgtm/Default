@@ -72,9 +72,11 @@ def score(case: dict, out_root: Path, run: dict) -> dict:
     if "refused_with" in exp:
         code = exp["refused_with"]
         found = grep_dir(d, code) or code in log
-        summaries = glob.glob(str(d / "*_summary.csv"))
-        res.update(expected=code, code_reported=found, schedule_written=bool(summaries))
-        res["verdict"] = "PASS" if (found and not tb and not summaries) else "FAIL"
+        # The runner writes a summary CSV and audit even when it refuses; a
+        # refusal means no final schedule workbook was published.
+        published = glob.glob(str(d / "*BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"))
+        res.update(expected=code, code_reported=found, schedule_written=bool(published))
+        res["verdict"] = "PASS" if (found and not tb and not published) else "FAIL"
         return res
 
     v = load(str(d / "INDEPENDENT_VALIDATION.json"))
@@ -91,11 +93,22 @@ def score(case: dict, out_root: Path, run: dict) -> dict:
                active=case["certificate"]["active_intervals"])
     clean = (not tb and v.get("status") == "PASS" and int(v.get("hard_fail_count") or 0) == 0
              and par.get("status") == "PASS")
+    published = bool(glob.glob(str(d / "*BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx")))
+    refusal = next((c for c in exp.get("acceptable_refusals", []) if grep_dir(d, c)), None)
+    res["published"] = published
+    res["refused_with"] = refusal
     if exp.get("hard_floor_infeasible"):
-        # Any shipped schedule must NOT claim the floor everywhere.
+        # Either refused with a proof code, or a shipped schedule that does NOT
+        # claim the floor everywhere.
         claims_floor = res["after_floor"] is not None and res["after_floor"] >= res["active"]
         res["proof"] = exp["proof"]
-        res["verdict"] = "PASS" if (not tb and not claims_floor) else "FAIL"
+        ok = (refusal and not published) or (published and clean and not claims_floor)
+        res["verdict"] = "PASS" if (ok and not tb) else "FAIL"
+        return res
+    if refusal and not published and not tb:
+        # A documented fail-closed outcome the case allows (e.g. a demanded
+        # interval nobody can staff): correct, but it is not a coverage result.
+        res["verdict"] = "REFUSED_OK"
         return res
     opt = exp["optimum_after_target"]
     res["optimum_after_target"] = opt
@@ -157,6 +170,8 @@ def main() -> int:
             bad += 1
         if "expected" in r:
             detail = "refused with %s: %s" % (r["expected"], r["code_reported"])
+        elif r.get("refused_with"):
+            detail = "refused before solve: %s" % r["refused_with"]
         elif "proof" in r:
             detail = "after_floor %s of %s active (must be < active)" % (r.get("after_floor"), r["active"])
         else:

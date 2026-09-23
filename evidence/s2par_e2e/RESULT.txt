@@ -1,0 +1,13 @@
+CHAT   CUR {'at': 155, 'af': '228', 'bt': '163', 'ok': True, 'status': 'PASS_WITH_QUALITY_WARNINGS'}
+       NEW {'at': 179, 'af': '224', 'bt': '196', 'ok': True, 'status': 'PASS_WITH_QUALITY_WARNINGS'}
+VOICE  CUR {'at': 227, 'af': '244', 'bt': '245', 'ok': True, 'status': 'PASS_WITH_QUALITY_WARNINGS'}
+       NEW {'at': 246, 'af': '251', 'bt': '250', 'ok': True, 'status': 'PASS_WITH_QUALITY_WARNINGS'}
+AR     CUR {'at': 166, 'af': '168', 'bt': '168', 'ok': True, 'status': 'PASS_WITH_QUALITY_WARNINGS'}
+       NEW {'at': 167, 'af': '168', 'bt': '168', 'ok': True, 'status': 'PASS_WITH_QUALITY_WARNINGS'}
+NMGSP  CUR {'at': 121, 'af': '126', 'bt': '126', 'ok': True, 'status': 'PASS_WITH_QUALITY_WARNINGS'}
+       NEW {'at': 121, 'af': '126', 'bt': '126', 'ok': True, 'status': 'PASS_WITH_QUALITY_WARNINGS'}
+M2     CUR {'at': 82, 'af': '98', 'bt': '83', 'ok': True, 'status': 'PASS_WITH_QUALITY_WARNINGS'}
+       NEW {'at': 109, 'af': '117', 'bt': '117', 'ok': True, 'status': 'PASS_WITH_QUALITY_WARNINGS'}
+H3     CUR {'at': 76, 'af': '95', 'bt': '86', 'ok': True, 'status': 'PASS_WITH_QUALITY_WARNINGS'}
+       NEW {'at': 91, 'af': '105', 'bt': '105', 'ok': True, 'status': 'PASS_WITH_QUALITY_WARNINGS'}
+summed after_target {'CUR': 827, 'NEW': 913} | issues: none

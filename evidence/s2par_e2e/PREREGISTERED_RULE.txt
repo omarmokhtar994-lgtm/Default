@@ -1,0 +1,14 @@
+Registered 2026-09-23T19:55:01Z, before any end-to-end S2-PAR run.
+
+Arms: CURRENT = repo HEAD engine (3bfda69 + docs); NEW = HEAD + patches/S2_PAR_stage2_parallel_break_solve.patch.
+Config: production runner, FULL_SCHEDULE, QUICK, --time-limit 900, --num-workers 2,
+two runs concurrently (4 cores), seed 9000.
+Cases: Cricut Chat, Cricut Voice, AE_AR_B2B, NMG_SP (real); SYNTH_M2, SYNTH_H3 (planted).
+
+SHIP iff ALL:
+  (1) every NEW run: validator PASS, 0 hard failures, parity PASS;
+  (2) summed after_target NEW >= summed CURRENT;
+  (3) no REAL workbook worse by more than 2 intervals. If one is, that case is
+      rerun at seed 9001 in both arms and judged on the two-seed mean;
+  (4) no run of NEW produces no schedule where CURRENT produced one.
+Otherwise NOT shipped.

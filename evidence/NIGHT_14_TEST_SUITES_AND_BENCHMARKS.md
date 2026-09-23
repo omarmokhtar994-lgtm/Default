@@ -322,3 +322,55 @@ Commit 37288d0; tests `tests_staged/test_rc9_2_16_stage2_parallel.py`.
   identified (Stage-2 break solves ran on one worker in 35-180 s slices), and
   S2-PAR, which fixes it, is shipped: M2 82 -> 109 and H3 76 -> 91 of the
   proven 117 and 105, Chat +24, Voice +19.
+
+## Round 2: closing the gaps (after S2-PAR)
+
+### At the production budget
+
+QUICK's default 3,600 s, 2 workers, final engine (S2-PAR included). H1 and
+Union N=247 shared the CPU with prototype experiments for part of their run.
+
+| case | 1 worker, <= 1,800 s (earlier) | production budget | proven optimum |
+|---|---|---|---|
+| M2 | 82 | **105** (109 at 900 s in the A/B) | 117 |
+| H3 | 76 | **93** | 105 |
+| H1 | 114 | **138** | 168 |
+| Union N=247 | 118 | **168 = optimum** | 168 |
+
+Every run validator PASS, 0 hard failures, parity PASS. Union N=247 now
+matches the published benchmark exactly.
+
+### What still separates M2 / H3 / H1 from the optimum, and what was tried
+
+In all three, the engine's best skeleton already covers **every** interval
+before breaks (117/117, 105/105, 168/168); the loss is in fitting breaks into it.
+
+* **Break placement is not the limit.** On the *planted* skeleton the break
+  model finds the optimum 117/117 with no hint, even on one worker (300 s),
+  and keeps it when hinted. On the engine's own skeletons, 600 s on 4 workers
+  plateaus at 110 (M2) and 95 (H3). Those skeletons cover everything before
+  breaks but are not shaped to absorb them.
+* **Implicit-break Stage-1 (Bechtold & Jacobs 1990, Aykin 1996): tried, not
+  shipped.** Breaks as an aggregate flow inside each shift's break windows.
+  The model scores the planted plan as near-perfect (1.5e5 against 3.4e10 for
+  the engine's skeleton), so the objective is right, but the search does not
+  converge: 120-180 s on 4 workers, even warm-started with shifts and flows,
+  gave skeletons worth 95-98 after breaks. Relaxing spacing makes it too loose
+  to steer.
+* **Local search on breaks: tried, not shipped.** One-agent-at-a-time
+  re-placement stalls on coverage plateaus (81/117 even on the planted skeleton).
+* **Day-by-day joint shift+break re-optimisation: tried, not shipped.** Its
+  apparent gains (106 -> 112) came entirely from violating the break-concurrency
+  cap; with the cap respected and only improvements kept, 104 -> 104.
+
+The remaining gap needs a global joint shift+break optimiser (column
+generation / branch-and-price, as in the break-scheduling literature). That is
+a multi-day build, and no claim is made here that it has been done.
+
+### Hard public benchmarks
+
+The benchmark sets that match this problem (schedulingbenchmarks.org's
+multi-activity multi-day set; TU Wien's shift-design and break-scheduling
+sets) could not be downloaded: the environment's network policy blocks
+www.schedulingbenchmarks.org, www.dbai.tuwien.ac.at and web.archive.org.
+They stay untested until those hosts are allowed.

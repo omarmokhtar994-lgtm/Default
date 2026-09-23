@@ -1,5 +1,32 @@
 # Final state
 
+## Update: after the formula audit, the test suites and the benchmarks
+
+Everything below this section was written before the synthetic suite and the
+benchmarks ran. What changed since, with evidence in
+`evidence/NIGHT_14_TEST_SUITES_AND_BENCHMARKS.md` and
+`evidence/formula_audit/FINDINGS.md`:
+
+| change | status | evidence |
+|---|---|---|
+| F-1 exact Stage-2 hits | shipped | pre-registered A/B: Chat 162 -> 165, AE_AR unchanged |
+| F-2..F-5 contract/reporting fixes | shipped | inert on corpus; synthetic R1-R3 refused correctly |
+| Anchor hand-off margin (30 s) | shipped | bit-identical when not binding; margin > worst hand-off |
+| Feasibility probe retries UNKNOWN | shipped | Union N=247/246 and X1 no longer stop at ~60 s |
+| Starved Stage-1 runs a before-basis profile | shipped | E2 at 300 s: 45 -> 63/63 |
+| Break-capacity advisory on interval averaging | shipped | no false "hire 1 more" on a 63/63 roster |
+| Joint search memory guard | shipped | X1 no longer OOM-killed |
+| Blank staffing = current-week only | shipped | FA-7 NMG SP parity 16 vs 0 fixed |
+| F-6 next-Sunday deficit weight | **not shipped** | A/B: Chat 165 -> 161 |
+| S2-PAR Stage-2 on all cores | **not shipped (patch ready)** | 3 of 5 skeletons from no solution to good; M2 -4 broke the pre-registered rule |
+
+Gate: **22 suites** + 2 selfchecks + signature check + undefined-name sweep, PASS.
+
+Correction to row 2 of the table below: the zero-margin anchor cap described
+there did **not** work. The adaptive loop saw 177.0 s, under the 180 s floor,
+and still ran zero attempts (NIGHT_10). It was replaced by the 30 s-margin
+version above.
+
 ## The headline
 
 The two engine lineages are **merged**. `engine/` now carries both the

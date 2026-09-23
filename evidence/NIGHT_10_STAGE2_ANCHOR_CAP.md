@@ -115,3 +115,12 @@ and audit writes, planning the attempts.
 leaving `180 + 30` seconds, three times the worst observed gap — is being tested
 deterministically against the uncapped engine in the same batch as F-1 (see
 `evidence/formula_audit/FINDINGS.md`). It ships only if it helps.
+
+**Outcome.** The margin version shipped (commit de36c3a). In every
+single-worker pair run it never bound and was bit-identical to the uncapped
+engine: Chat 1,800 s 165/211 both arms, 900 s 147/204 both, 700 s 140/217 both
+(anchor granted 135 / 68 / 52 s, phase remaining 736 / 423 / 343 s). It binds
+only where the anchor would consume the last fundable attempt, which in the
+recorded runs happened at 4 workers; there the 30 s margin exceeds the worst
+measured hand-off (9.82 s). Safe, with the benefit shown by arithmetic rather
+than by an end-to-end binding run.

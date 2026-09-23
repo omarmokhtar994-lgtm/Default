@@ -53,6 +53,36 @@ defect the merge introduced.
   engine had improved, the pin was moved to the *new* contract and a negative
   test added alongside it.
 
-## End-to-end A/B
+## End-to-end verification
 
-_Filled in below from the paired AE_AR_B2B runs at 1800s, 1 worker, seed 9000._
+`MERGED_AR` -- AE_AR_B2B, 1800s, `--num-workers 1` (reproducible), seed 9000,
+on the fully merged engine:
+
+| metric | baseline (pre-merge) | merged engine |
+|---|---|---|
+| `before_target` | 166 | **166** |
+| `after_target` | 165 | **165** |
+| `before_floor` | 168 | **168** |
+| `after_floor` | 167 | **167** |
+
+**The merge changed no schedule.** Four for four against the pre-merge
+deterministic result, on a run that exercises the whole pipeline rather than
+the selfchecks.
+
+### The anchor cap on this case is inert, by design
+
+| | `MERGED_AR` (no cap) | `CAP_AR` (cap) |
+|---|---|---|
+| phase remaining at anchor | 399.5s | 401.1s |
+| anchor granted | 135.0s | **135.0s** |
+| real adaptive attempts | 1 | 1 |
+
+The cap only binds when the anchor would consume the last fundable attempt.
+Here the phase had ~400s, so 135 already left ~265 -- comfortably over the
+180s floor -- and `min(135, 401 - 180)` is still 135. AE_AR_B2B therefore
+demonstrates that the cap is **safe**, not that it **works**.
+
+The case it was built for is Cricut Chat, where the phase had 277s and the
+adaptive search ran 0 of 168. That test is running separately and is judged
+on `attempts_completed`, not on a coverage number -- four workers are
+nondeterministic and one run cannot settle a coverage delta.

@@ -490,6 +490,59 @@ class Stage1FundsDepthBeforeWidth(unittest.TestCase):
             "(B-7 added a workbook-overridable minimum as a third argument)")
 
 
+class Stage2AnchorLeavesOneFundableAttempt(unittest.TestCase):
+    """The anchor must not eat the last attempt the break search could fund.
+
+    NIGHT_09: on Cricut Chat at 1800s the break_search phase had 277s left, the
+    guaranteed anchor took 135 and returned UNKNOWN/rejected, and the 139.8s
+    remainder fell under BREAK_MIN_MEANINGFUL_SLICE_SEC (180). The adaptive
+    search ran 0 of 168 planned attempts. Across 22 recorded 1800s runs, 15
+    placed breaks without ever running the break search.
+    """
+
+    def test_the_recorded_chat_case_now_funds_one_attempt(self):
+        granted = E.stage2_anchor_slice_seconds(135.0, 277.008)
+        self.assertLessEqual(
+            granted, 277.008 - E.BREAK_MIN_MEANINGFUL_SLICE_SEC + 1e-9,
+            "the anchor must leave a fundable adaptive attempt behind")
+        self.assertGreaterEqual(
+            277.008 - granted, E.BREAK_MIN_MEANINGFUL_SLICE_SEC,
+            "what is left must actually clear the break-search floor")
+
+    def test_a_roomy_phase_is_untouched(self):
+        """At 3600s the phase already funded three attempts; do not disturb it."""
+        self.assertEqual(E.stage2_anchor_slice_seconds(240.0, 863.325), 240.0)
+
+    def test_it_never_starves_the_anchor_below_its_own_minimum(self):
+        for remaining in (0.0, 50.0, 100.0, 180.0, 225.0, 226.0, 400.0, 5000.0):
+            with self.subTest(remaining=remaining):
+                granted = E.stage2_anchor_slice_seconds(135.0, remaining)
+                self.assertGreaterEqual(granted, 0.0)
+                if remaining >= (E.STAGE2_ANCHOR_MIN_SLICE_SEC
+                                 + E.BREAK_MIN_MEANINGFUL_SLICE_SEC):
+                    self.assertGreaterEqual(
+                        granted, E.STAGE2_ANCHOR_MIN_SLICE_SEC,
+                        "the cap must never push the anchor under its floor")
+
+    def test_it_is_inert_when_the_phase_cannot_pay_for_both(self):
+        """Below anchor-minimum + break-floor the old allowance is unchanged."""
+        for remaining in (0.0, 60.0, 120.0, 200.0):
+            with self.subTest(remaining=remaining):
+                expected = max(0.0, min(
+                    max(E.STAGE2_ANCHOR_MIN_SLICE_SEC, 135.0),
+                    min(E.STAGE2_ANCHOR_MAX_SLICE_SEC,
+                        remaining * E.STAGE2_ANCHOR_MAX_PHASE_SHARE)))
+                self.assertAlmostEqual(
+                    E.stage2_anchor_slice_seconds(135.0, remaining), expected,
+                    places=6)
+
+    def test_the_grant_never_exceeds_the_phase(self):
+        for remaining in (0.0, 1.0, 45.0, 225.0, 300.0, 1000.0, 9000.0):
+            with self.subTest(remaining=remaining):
+                self.assertLessEqual(
+                    E.stage2_anchor_slice_seconds(900.0, remaining), remaining + 1e-9)
+
+
 class Stage2AnchorStaysInsideItsReservation(unittest.TestCase):
     """The anchor protects ONE break solve; it is not the break search.
 

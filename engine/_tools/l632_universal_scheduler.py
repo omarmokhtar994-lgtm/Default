@@ -5046,7 +5046,24 @@ def stage2_anchor_slice_seconds(reserved_sec: float, remaining_sec: float) -> fl
     remaining = max(0.0, float(remaining_sec))
     proposed = max(STAGE2_ANCHOR_MIN_SLICE_SEC, max(0.0, float(reserved_sec)))
     ceiling = min(STAGE2_ANCHOR_MAX_SLICE_SEC, remaining * STAGE2_ANCHOR_MAX_PHASE_SHARE)
-    return max(0.0, min(proposed, ceiling))
+    granted = max(0.0, min(proposed, ceiling))
+    # Leave one fundable adaptive attempt behind.
+    #
+    # The anchor secures ONE compliant candidate; the adaptive search is what
+    # explores skeletons and objective modes, and it refuses to start below
+    # BREAK_MIN_MEANINGFUL_SLICE_SEC because a shorter attempt ships a worse
+    # schedule (B-10). On Cricut Chat at 1800s the phase had 277s left, the
+    # anchor took 135 and returned UNKNOWN/rejected, and the 139.8s remainder
+    # fell under the 180s floor: the adaptive search ran 0 of 168 planned
+    # attempts. Across 22 recorded 1800s runs, 15 placed breaks without ever
+    # running the break search (evidence/NIGHT_09_STAGE2_NEVER_SEARCHES.md).
+    #
+    # So when the phase can pay for both, the anchor may not spend the part
+    # that would fund a real attempt. When it cannot pay for both, this is
+    # inert and the anchor keeps its full grant.
+    if remaining >= STAGE2_ANCHOR_MIN_SLICE_SEC + BREAK_MIN_MEANINGFUL_SLICE_SEC:
+        granted = min(granted, remaining - BREAK_MIN_MEANINGFUL_SLICE_SEC)
+    return max(0.0, granted)
 
 
 def stage1_fundable_profile_count(

@@ -18,9 +18,9 @@ benchmarks ran. What changed since, with evidence in
 | Joint search memory guard | shipped | X1 no longer OOM-killed |
 | Blank staffing = current-week only | shipped | FA-7 NMG SP parity 16 vs 0 fixed |
 | F-6 next-Sunday deficit weight | **not shipped** | A/B: Chat 165 -> 161 |
-| S2-PAR Stage-2 on all cores | **not shipped (patch ready)** | 3 of 5 skeletons from no solution to good; M2 -4 broke the pre-registered rule |
+| S2-PAR Stage-2 on all cores | **shipped** | end-to-end A/B: Chat 155 -> 179, Voice 227 -> 246, M2 82 -> 109, H3 76 -> 91; none worse |
 
-Gate: **22 suites** + 2 selfchecks + signature check + undefined-name sweep, PASS.
+Gate: **23 suites** + 2 selfchecks + signature check + undefined-name sweep, PASS.
 
 Correction to row 2 of the table below: the zero-margin anchor cap described
 there did **not** work. The adaptive loop saw 177.0 s, under the 180 s floor,

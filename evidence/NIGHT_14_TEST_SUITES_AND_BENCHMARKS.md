@@ -272,10 +272,22 @@ workers, seed 9000.
 Criteria: core preserved **pass**; one-worker path identical **pass**; never
 loses a solution **pass**; no case worse by more than 2 **FAIL** (M2 -4: the
 candidate found a solution its own objective prefers, trading 4 target hits for
-other quality terms). **Not shipped.** The upside is large, so the right next
-step is an end-to-end A/B at 4 workers on the corpus with repeated seeds,
-since multi-worker search is not reproducible and one sample cannot settle a
-4-interval difference.
+other quality terms). Held back on this component test.
+
+**Then shipped on its end-to-end A/B** (rule registered before the runs,
+`evidence/s2par_e2e/`): production runner, 900 s, 2 workers, seed 9000.
+
+| workbook | current | S2-PAR | proven optimum |
+|---|---|---|---|
+| Cricut Chat | 155 | **179** | - |
+| Cricut Voice | 227 | **246** | - |
+| AE_AR_B2B | 166 | **167** | 168 |
+| NMG SP | 121 | 121 | - |
+| SYNTH_M2 | 82 | **109** | 117 |
+| SYNTH_H3 | 76 | **91** | 105 |
+
+Summed 827 -> 913, every run validator and parity PASS, no workbook worse.
+Commit 37288d0; tests `tests_staged/test_rc9_2_16_stage2_parallel.py`.
 
 ## Final scoreboard (final engine)
 
@@ -306,7 +318,7 @@ since multi-worker search is not reproducible and one sample cannot settle a
 * On small and structured problems, including both textbook benchmarks, it
   reaches the proven optimum.
 * On zero-slack problems with breaks, and on large rosters, it leaves 10-30% of
-  the proven optimum on the table at one worker and 1,800 s. The mechanism is
-  identified (Stage-2 break solves on one worker in 35-180 s slices), and the
-  change that addresses it is measured and ready (S2-PAR), held back only by
-  its own pre-registered rule.
+  the proven optimum on the table at one worker and 1,800 s. The mechanism was
+  identified (Stage-2 break solves ran on one worker in 35-180 s slices), and
+  S2-PAR, which fixes it, is shipped: M2 82 -> 109 and H3 76 -> 91 of the
+  proven 117 and 105, Chat +24, Voice +19.

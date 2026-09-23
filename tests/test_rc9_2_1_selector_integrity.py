@@ -502,12 +502,24 @@ class Stage2AnchorLeavesOneFundableAttempt(unittest.TestCase):
 
     def test_the_recorded_chat_case_now_funds_one_attempt(self):
         granted = E.stage2_anchor_slice_seconds(135.0, 277.008)
+        reserve = E.BREAK_MIN_MEANINGFUL_SLICE_SEC + E.STAGE2_ANCHOR_HANDOFF_MARGIN_SEC
         self.assertLessEqual(
-            granted, 277.008 - E.BREAK_MIN_MEANINGFUL_SLICE_SEC + 1e-9,
+            granted, 277.008 - reserve + 1e-9,
             "the anchor must leave a fundable adaptive attempt behind")
+        # The loop sees what is left MINUS the hand-off. The worst measured
+        # hand-off is 9.82s; it must still clear the break-search floor.
         self.assertGreaterEqual(
-            277.008 - granted, E.BREAK_MIN_MEANINGFUL_SLICE_SEC,
-            "what is left must actually clear the break-search floor")
+            277.008 - granted - 9.82, E.BREAK_MIN_MEANINGFUL_SLICE_SEC,
+            "what the loop actually sees must clear the break-search floor")
+
+    def test_the_zero_margin_case_that_failed_is_now_funded(self):
+        """NIGHT_10: phase 307.4s, the zero-margin cap granted 127.4s and the
+        loop saw 177.0s -- 2.4s under the floor -- and ran nothing."""
+        granted = E.stage2_anchor_slice_seconds(135.0, 307.4)
+        self.assertGreaterEqual(307.4 - granted - 2.4, E.BREAK_MIN_MEANINGFUL_SLICE_SEC)
+
+    def test_the_margin_covers_every_measured_handoff(self):
+        self.assertGreaterEqual(E.STAGE2_ANCHOR_HANDOFF_MARGIN_SEC, 9.82)
 
     def test_a_roomy_phase_is_untouched(self):
         """At 3600s the phase already funded three attempts; do not disturb it."""
@@ -519,14 +531,15 @@ class Stage2AnchorLeavesOneFundableAttempt(unittest.TestCase):
                 granted = E.stage2_anchor_slice_seconds(135.0, remaining)
                 self.assertGreaterEqual(granted, 0.0)
                 if remaining >= (E.STAGE2_ANCHOR_MIN_SLICE_SEC
-                                 + E.BREAK_MIN_MEANINGFUL_SLICE_SEC):
+                                 + E.BREAK_MIN_MEANINGFUL_SLICE_SEC
+                                 + E.STAGE2_ANCHOR_HANDOFF_MARGIN_SEC):
                     self.assertGreaterEqual(
                         granted, E.STAGE2_ANCHOR_MIN_SLICE_SEC,
                         "the cap must never push the anchor under its floor")
 
     def test_it_is_inert_when_the_phase_cannot_pay_for_both(self):
         """Below anchor-minimum + break-floor the old allowance is unchanged."""
-        for remaining in (0.0, 60.0, 120.0, 200.0):
+        for remaining in (0.0, 60.0, 120.0, 200.0, 254.0):
             with self.subTest(remaining=remaining):
                 expected = max(0.0, min(
                     max(E.STAGE2_ANCHOR_MIN_SLICE_SEC, 135.0),

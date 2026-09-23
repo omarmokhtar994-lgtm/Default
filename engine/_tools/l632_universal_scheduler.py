@@ -2201,7 +2201,7 @@ def coverage_split_capacity_report(parsed: ParsedInput) -> Dict[str, Any]:
         pool = [a for a in parsed.associates if language_eligible(split, a)]
         # Everyone owes the roster its OFF days, so the pool that can be on the
         # floor at one instant is smaller than the headcount on the sheet.
-        workdays = max(1, 7 - 2)
+        workdays = default_workdays_per_week(parsed)
         concurrent_ceiling = int(math.floor(len(pool) * workdays / 7.0)) if pool else 0
         # And a rostered person on a break is not covering. Sustaining `need`
         # through the break window costs need / (1 - break fraction) bodies.
@@ -2971,21 +2971,19 @@ def parse_input(
     overage_extreme_cap_ratio = to_float(_instruction_get(
         im, ["Overage Extreme Cap", "Coverage Overage Extreme Cap"], 1.40
     ), 1.40)
-    for value_name, value in [
-        ("soft", overage_soft_cap_ratio),
-        ("severe", overage_severe_cap_ratio),
-        ("extreme", overage_extreme_cap_ratio),
-    ]:
-        if value > 1.5:
-            if value_name == "soft":
-                overage_soft_cap_ratio = value / 100.0
-            elif value_name == "severe":
-                overage_severe_cap_ratio = value / 100.0
-            else:
-                overage_extreme_cap_ratio = value / 100.0
-    overage_soft_cap_ratio = max(target_ratio, overage_soft_cap_ratio)
-    overage_severe_cap_ratio = max(overage_soft_cap_ratio, overage_severe_cap_ratio)
-    overage_extreme_cap_ratio = max(overage_severe_cap_ratio, overage_extreme_cap_ratio)
+    # Caps sit ABOVE 100%, so the `> 1.5 -> /100` rule Target and Floor use
+    # cannot apply here: it turned a legitimate 1.6 (160%) into 0.016. Only a
+    # bare number of 10 or more can be a percentage ("135" -> 1.35); no
+    # plausible cap is ten times demand. The order of the three caps is NOT
+    # forced here: validate_input_contract rejects a mis-ordered set as
+    # INVALID_OVERAGE_CAP_ORDER, which a silent max() chain used to make
+    # unreachable.
+    if overage_soft_cap_ratio >= 10:
+        overage_soft_cap_ratio /= 100.0
+    if overage_severe_cap_ratio >= 10:
+        overage_severe_cap_ratio /= 100.0
+    if overage_extreme_cap_ratio >= 10:
+        overage_extreme_cap_ratio /= 100.0
     overage_penalty_weight = max(0, int(round(to_float(_instruction_get(
         im, ["Overage Penalty Weight", "Coverage Overage Penalty Weight"], 40
     ), 40))))
@@ -3297,6 +3295,7 @@ def parse_input(
     ))
     if target_loss_gate_mode not in {"off", "warn", "fail"}:
         target_loss_gate_mode = "warn"
+        parser_warnings.append("HARD_INVALID_TARGET_LOSS_FROM_BREAKS_GATE_MODE: unknown value; use OFF, WARN, or FAIL.")
     # #49: 3%, derived from 56 runs across 10 workbooks. The previous 5% cap
     # fired on 0 of those 56 -- an inert guard, the same pattern as B-13 and
     # A40. Worst observed loss was 8 intervals on 264 active (3.0%); 3% rejects
@@ -3311,7 +3310,7 @@ def parse_input(
     ))
     if floor_loss_gate_mode not in {"off", "warn", "fail"}:
         floor_loss_gate_mode = "warn"
-        parser_warnings.append("HARD_INVALID_TARGET_LOSS_FROM_BREAKS_GATE_MODE: unknown value; use OFF, WARN, or FAIL.")
+        parser_warnings.append("HARD_INVALID_FLOOR_LOSS_FROM_BREAKS_GATE_MODE: unknown value; use OFF, WARN, or FAIL.")
     employee_quality_gate_mode = norm(_instruction_get(
         im, ["Employee Schedule Quality Gate Mode", "Employee Quality Gate Mode"], "warn"
     ))
@@ -3777,6 +3776,19 @@ def validate_input_contract(parsed: ParsedInput, feasibility: Optional[Dict[str,
             failures.append(row)
     if not parsed.shifts:
         failures.append({"code": "NO_LEGAL_SHIFTS", "detail": "No legal shifts were parsed from Shift Library."})
+    # Every coverage function floors to 15-minute quarters (start_min // 15,
+    # duration_min // 15), and _parse_shifts accepts any duration within 5
+    # minutes of an allowed one. An off-grid shift would therefore be modelled
+    # silently wrong: 09:00-17:57 becomes 8h45, a 09:10 start is credited from
+    # 09:00. Reject it instead.
+    off_grid = [shift.label for shift in parsed.shifts
+                if shift.start_min % 15 or shift.duration_min % 15]
+    if off_grid:
+        failures.append({
+            "code": "SHIFT_OFF_QUARTER_GRID",
+            "detail": "Shift start and length must be whole 15-minute quarters.",
+            "examples": off_grid[:20],
+        })
     long_shifts=[shift.label for shift in parsed.shifts if shift.duration_min>=LONG_SHIFT_MIN_DURATION_MIN]
     if not parsed.use_11h_3off and long_shifts:
         failures.append({"code":"LONG_SHIFT_PRESENT_WHEN_11H_PROHIBITED","examples":long_shifts[:20]})
@@ -5025,6 +5037,11 @@ STAGE2_ANCHOR_MAX_PHASE_SHARE = 0.80
 # for the protected anchor, but return the rest of the Stage-2 window to the
 # adaptive portfolio instead of allowing one anchor to monopolize it.
 STAGE2_ANCHOR_MAX_RESERVE_SEC = 240.0
+# Seconds between the anchor's own deadline and the adaptive loop sizing its
+# first slice: scoring the anchor, checkpoint and audit writes, planning. Across
+# 61 runs that stopped straight after the anchor: median 1.77s, p90 2.58s,
+# max 9.82s (evidence/NIGHT_10_STAGE2_ANCHOR_CAP.md). 30s is 3x the worst.
+STAGE2_ANCHOR_HANDOFF_MARGIN_SEC = 30.0
 
 
 def stage2_anchor_slice_seconds(reserved_sec: float, remaining_sec: float) -> float:
@@ -5061,8 +5078,13 @@ def stage2_anchor_slice_seconds(reserved_sec: float, remaining_sec: float) -> fl
     # So when the phase can pay for both, the anchor may not spend the part
     # that would fund a real attempt. When it cannot pay for both, this is
     # inert and the anchor keeps its full grant.
-    if remaining >= STAGE2_ANCHOR_MIN_SLICE_SEC + BREAK_MIN_MEANINGFUL_SLICE_SEC:
-        granted = min(granted, remaining - BREAK_MIN_MEANINGFUL_SLICE_SEC)
+    #
+    # The reserve includes a hand-off margin. A first version left exactly the
+    # 180s floor, and the loop then saw 177.0s -- the hand-off itself costs
+    # seconds -- and still ran zero attempts.
+    reserve_for_search = BREAK_MIN_MEANINGFUL_SLICE_SEC + STAGE2_ANCHOR_HANDOFF_MARGIN_SEC
+    if remaining >= STAGE2_ANCHOR_MIN_SLICE_SEC + reserve_for_search:
+        granted = min(granted, remaining - reserve_for_search)
     return max(0.0, granted)
 
 
@@ -7924,8 +7946,14 @@ def solve_breaks(
                 continue
             req = parsed.requirements[d][i] or 0.0
             eff_person = int(round((1.0 - parsed.shrinkage[d][i]) * 100))
+            # F-1: coverage DECISIONS use the exact 6-decimal factor the metric
+            # agrees with; eff_person (x100) is kept for the weighted deficit and
+            # overage terms so no objective magnitude changes.
+            eff_exact = scaled_effective_factor(parsed.shrinkage[d][i])
             interval_break_loss: List[Any] = []
+            interval_break_loss_exact: List[Any] = []
             base_eff = 0
+            base_eff_exact = 0
             for q in range(qpi):
                 qslot = d * 96 + i * qpi + q
                 covering = scheduled_covering_qslot(parsed, skeleton, qslot)
@@ -7989,19 +8017,28 @@ def solve_breaks(
                     quarter_constraints += 1
                 base_eff += (len(covering) + len(prior)) * eff_person
                 interval_break_loss.extend(eff_person * var for var in break_vars)
+                base_eff_exact += (len(covering) + len(prior)) * eff_exact
+                interval_break_loss_exact.extend(eff_exact * var for var in break_vars)
                 if not diagnostic_mode and len(break_vars) > 1:
                     stack = model.NewIntVar(0, max(0, len(covering)), f"stack_{qslot}")
                     model.Add(stack >= break_count - 1)
                     objective_terms.append(1_500 * stack)
             after_eff = base_eff - (sum(interval_break_loss) if interval_break_loss else 0)
+            after_exact = base_eff_exact - (sum(interval_break_loss_exact) if interval_break_loss_exact else 0)
             floor_units = ceil_units(req * parsed.floor_ratio) * qpi
             hard_floor_units = ceil_units(req * float(parsed.hard_floor_ratio or parsed.floor_ratio)) * qpi
             target_units = ceil_units(req * parsed.target_ratio) * qpi
             units_90 = ceil_units(req * 0.90) * qpi
             units_80 = ceil_units(req * 0.80) * qpi
             full_units = ceil_units(req) * qpi
+            floor_exact = scaled_coverage_threshold(req, parsed.floor_ratio, qpi)
+            target_exact = scaled_coverage_threshold(req, parsed.target_ratio, qpi)
+            full_exact = scaled_coverage_threshold(req, 1.0, qpi)
+            severe_exact = scaled_coverage_threshold(req, max(0.0, parsed.floor_ratio - 0.10), qpi)
             if parsed.floor_mode == "hard":
-                add_break_family(model.Add(after_eff >= hard_floor_units), "floor")
+                hard_floor_exact = scaled_coverage_threshold(
+                    req, float(parsed.hard_floor_ratio or parsed.floor_ratio), qpi)
+                add_break_family(model.Add(after_exact >= hard_floor_exact), "floor")
             if not diagnostic_mode:
                 max_def = max(100000, full_units, target_units, floor_units)
                 floor_slack = model.NewIntVar(0, max_def, f"after_floor_slack_{d}_{i}")
@@ -8013,14 +8050,14 @@ def solve_breaks(
                 target_hit = model.NewBoolVar(f"target_hit_{d}_{i}")
                 full_hit = model.NewBoolVar(f"full_hit_{d}_{i}")
                 severe_units = ceil_units(req * max(0.0, parsed.floor_ratio - 0.10)) * qpi
-                model.Add(after_eff >= floor_units).OnlyEnforceIf(floor_hit)
-                model.Add(after_eff <= floor_units - 1).OnlyEnforceIf(floor_hit.Not())
-                model.Add(after_eff >= severe_units).OnlyEnforceIf(severe_hit)
-                model.Add(after_eff <= severe_units - 1).OnlyEnforceIf(severe_hit.Not())
-                model.Add(after_eff >= target_units).OnlyEnforceIf(target_hit)
-                model.Add(after_eff <= target_units - 1).OnlyEnforceIf(target_hit.Not())
-                model.Add(after_eff >= full_units).OnlyEnforceIf(full_hit)
-                model.Add(after_eff <= full_units - 1).OnlyEnforceIf(full_hit.Not())
+                model.Add(after_exact >= floor_exact).OnlyEnforceIf(floor_hit)
+                model.Add(after_exact <= floor_exact - 1).OnlyEnforceIf(floor_hit.Not())
+                model.Add(after_exact >= severe_exact).OnlyEnforceIf(severe_hit)
+                model.Add(after_exact <= severe_exact - 1).OnlyEnforceIf(severe_hit.Not())
+                model.Add(after_exact >= target_exact).OnlyEnforceIf(target_hit)
+                model.Add(after_exact <= target_exact - 1).OnlyEnforceIf(target_hit.Not())
+                model.Add(after_exact >= full_exact).OnlyEnforceIf(full_hit)
+                model.Add(after_exact <= full_exact - 1).OnlyEnforceIf(full_hit.Not())
                 floor_hit_vars.append(floor_hit); severe_hit_vars.append(severe_hit); target_hit_vars.append(target_hit); full_hit_vars.append(full_hit)
                 floor_hit_by_interval[d, i] = floor_hit; severe_hit_by_interval[d, i] = severe_hit
                 objective_terms.append(weights["floor_miss"] * (1 - floor_hit))
@@ -8030,7 +8067,9 @@ def solve_breaks(
                 objective_terms.append(weights["floor_def"] * floor_slack)
                 objective_terms.append(weights["target_def"] * target_def)
                 if parsed.overage_control_enabled:
-                    minimum_raw_target = int(math.ceil(req * parsed.target_ratio * 100.0 / max(1, eff_person) - 1e-9))
+                    minimum_raw_target = int(math.ceil(
+                        req * parsed.target_ratio / max(1e-9, 1.0 - parsed.shrinkage[d][i])
+                        - OVERAGE_CEIL_TOLERANCE))
                     minimum_integer_units = minimum_raw_target * eff_person * qpi
                     soft_units = max(ceil_units(req * parsed.overage_soft_cap_ratio) * qpi, minimum_integer_units)
                     over = model.NewIntVar(0, max_def, f"after_over_{d}_{i}")
@@ -9653,7 +9692,7 @@ def break_resilience_diagnostics(parsed: ParsedInput) -> Dict[str, Any]:
     full CP-SAT model.
     """
     break_minutes = sum(length * 15 for length, _ in parsed.break_segments_q)
-    default_workdays = 4 if parsed.allowed_shift_durations and min(parsed.allowed_shift_durations) >= 630 else 5
+    default_workdays = default_workdays_per_week(parsed)
     rows: List[Dict[str, Any]] = []
     hard_failures: List[Dict[str, Any]] = []
     warnings: List[Dict[str, Any]] = []
@@ -9820,7 +9859,7 @@ def capacity_diagnostics(parsed: ParsedInput) -> Dict[str, Any]:
     CP-SAT is still required to prove the coupled weekly schedule.
     """
     leave_days = sum(1 for assoc in parsed.associates for value in assoc.preferences if preference_kind(value) == "leave")
-    default_workdays = 4 if parsed.allowed_shift_durations and min(parsed.allowed_shift_durations) >= 630 else 5
+    default_workdays = default_workdays_per_week(parsed)
     working_shifts = max(0, len(parsed.associates) * default_workdays - leave_days)
     avg_shift_hours = sum(s.duration_min for s in parsed.shifts) / max(1, len(parsed.shifts)) / 60.0
     break_hours = sum(length for length, _ in parsed.break_segments_q) * 0.25
@@ -12012,6 +12051,17 @@ EXPORT_ROLE_ORDER: Tuple[str, ...] = (
 )
 
 
+def default_workdays_per_week(parsed: ParsedInput) -> int:
+    """Days one associate works in a week, for converting weekly capacity.
+
+    4 for 10.5-hour-or-longer shift rosters (4x10 / 4x11), otherwise 5. The one
+    place this is decided, so the capacity, break-resilience, coverage-split and
+    break-headcount estimates cannot disagree about the length of a week.
+    """
+    durations = getattr(parsed, "allowed_shift_durations", None)
+    return 4 if durations and min(durations) >= 630 else 5
+
+
 def break_capacity_headcount_requirement(
     parsed: ParsedInput, skeleton: SkeletonSolution, measured_on: str = "skeleton"
 ) -> Dict[str, Any]:
@@ -12073,7 +12123,13 @@ def break_capacity_headcount_requirement(
     # Net lossless capacity one more associate contributes: the quarters their
     # shift covers, less the break quarters they themselves consume.
     net_per_associate = max(1, typical_shift_q - break_q_per_shift)
-    additional_hc = int(math.ceil(deficit / net_per_associate)) if deficit else 0
+    # `deficit` is per WEEK (every worked day of the roster); one associate
+    # contributes net_per_associate per SHIFT. Dividing a weekly deficit by one
+    # day's contribution counted each added associate as working one day a
+    # week and overstated the recommendation by roughly the days-per-week
+    # factor (AE_AR_Choice: 7 recommended, 2 correct).
+    net_per_associate_week = net_per_associate * default_workdays_per_week(parsed)
+    additional_hc = int(math.ceil(deficit / net_per_associate_week)) if deficit else 0
 
     return {
         "measured_on": measured_on,

@@ -103,11 +103,29 @@ class Stage2UsesTheExactExpressionOnlyForDecisions(unittest.TestCase):
     def test_every_coverage_hit_is_reified_on_the_exact_expression(self):
         hits = [r for r in self.reified()
                 if any(h in r[2] for h in ("floor_hit", "severe_hit", "target_hit", "full_hit"))]
-        self.assertEqual(len(hits), 8, "four hits, each reified both ways")
-        for lhs, rhs, lit in hits:
+        main = [r for r in hits if r[0] == "after_exact"]
+        self.assertEqual(len(main), 8, "main week: four hits, each reified both ways")
+        for lhs, rhs, lit in main:
             with self.subTest(hit=lit):
-                self.assertEqual(lhs, "after_exact")
                 self.assertTrue(rhs.split(" ")[0].endswith("_exact"), rhs)
+        # The only other hits are the next-Sunday boundary block's target and
+        # full, which were exact before F-1: its after_eff is built from
+        # scaled_effective_factor and its thresholds from
+        # scaled_coverage_threshold (both x1e6). Anything else reified on the
+        # x100 expression would be a hit F-1 missed.
+        rest = [r for r in hits if r[0] != "after_exact"]
+        self.assertEqual(sorted(r[2] for r in rest),
+                         ["full_hit", "full_hit.Not()", "target_hit", "target_hit.Not()"])
+        block = self.src[self.src.index("next_sunday_after_raw_sequence: List"):]
+        block = block[:block.index("if parsed.next_sunday_balance_enabled:\n        ordered_boundary")]
+        self.assertIn("eff_person = scaled_effective_factor(parsed.shrinkage[0][i])", block)
+        self.assertIn("target_units = scaled_coverage_threshold(", block)
+        self.assertIn("full_units = scaled_coverage_threshold(", block)
+        self.assertNotIn("round((1", block)
+        for lhs, rhs, lit in rest:
+            with self.subTest(hit=lit):
+                self.assertEqual(lhs, "after_eff")
+                self.assertIn(rhs.split(" ")[0], ("target_units", "full_units"))
 
     def test_deficit_terms_keep_their_original_units(self):
         """Moving these to x1e6 would multiply their weight by 10,000."""

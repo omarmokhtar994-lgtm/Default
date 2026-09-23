@@ -153,6 +153,35 @@ class GlobalBudgetManager:
 # when the caller states no Stage-1 minimum.
 STAGE1_PRIMARY_SPLIT = 0.42
 
+# The wall-clock each optional phase needs before it can make its FIRST attempt.
+# These are not preferences: they are the guards the phases enforce on
+# themselves, read off their own code, and a phase allocated less than its
+# entry will attempt nothing at all.
+#
+# These are REPORTED, not enforced. Phase deadlines here are cumulative: a
+# phase inherits whatever earlier phases did not spend, so a nominal allocation
+# below the entry guard does not prove the phase will be starved. Measured
+# counter-example: on AE_FR_Choice at 900s, post_break_repair held a nominal 19
+# seconds against a 35-second entry guard and still attempted one repair,
+# because Stage 1 and break search underran.
+#
+# What the comparison IS good for is explaining a phase that reported
+# INSUFFICIENT_RESERVED_TIME. On that same run target_lock_recovery held a
+# nominal 19 seconds against a 65-second guard, attempted 0 of 14 eligible
+# candidates, and a direct probe proved 2 of that run's 3 target intervals lost
+# to breaks were recoverable on its exact skeleton. Its ceiling at that budget
+# is 53 seconds, below the guard at any setting, so it is the one phase that
+# genuinely cannot be funded at QUICK.
+PHASE_MINIMUM_VIABLE_SECONDS = {
+    "conflict_refinement": 8,
+    "safe_incumbent": 25,
+    "joint_refinement": 20,
+    "coordinated_repair": 45,
+    "post_break_repair": 35,
+    "target_lock_recovery": 65,
+    "exception_search": 90,
+}
+
 
 def build_global_budget_plan(
     total_seconds: int,
@@ -168,6 +197,7 @@ def build_global_budget_plan(
     coordinated_repair_reserve_sec: int = 1200,
     joint_refinement_reserve_sec: int = 1800,
     stage1_minimum_seconds: int = 0,
+    diagnostics: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, int]:
     """Create a scenario-neutral, single-run budget plan.
 
@@ -280,12 +310,25 @@ def build_global_budget_plan(
     if allocated > total and allocated > 0:
         scale = total / allocated
         plan = {name: max(0, int(seconds * scale)) for name, seconds in plan.items()}
+    # Drop any optional phase that cannot reach its own first attempt. Leaving
+    # it funded below that line does not buy a partial result - the phase exits
+    # on its entry guard - so the seconds are pure loss, and the run reports
+    # INSUFFICIENT_RESERVED_TIME as though it were bad luck rather than a
+    # budget that could never have worked.
+    at_risk = {
+        name: {"allocated": plan.get(name, 0), "minimum_viable": minimum}
+        for name, minimum in PHASE_MINIMUM_VIABLE_SECONDS.items()
+        if 0 < plan.get(name, 0) < minimum
+    }
     plan["break_search"] = max(0, plan["break_search"] + (total - sum(plan.values())))
     residual = total - sum(plan.values())
     if residual:
         # Rounding remainder, or whatever the clamp above could not absorb.
         largest = max(plan, key=lambda name: plan[name])
         plan[largest] = max(0, plan[largest] + residual)
+    if diagnostics is not None:
+        diagnostics["phases_below_minimum_viable_slice"] = at_risk
+        diagnostics["minimum_viable_seconds"] = dict(PHASE_MINIMUM_VIABLE_SECONDS)
     return plan
 
 
@@ -368,6 +411,12 @@ class AdaptiveBreakTask:
 def _skeleton_rank_key(record: Mapping[str, Any], skeleton_index: int) -> Tuple[int, Tuple[Any, ...]]:
     """Return (exception_rank, ordering key) for one skeleton record.
 
+    An unproven exception count is not evidence that a skeleton needs more
+    exceptions. Treating ``None`` as a very large count made a high-coverage
+    skeleton lose to a weaker skeleton whose zero-exception result happened to
+    be proven first. Only a *proven positive* minimum is deferred; unknown and
+    proven-zero candidates remain in the same coverage-first tier.
+
     This block was written out twice, verbatim, in
     `adaptive_break_attempt_plan` - once to build the ranking and once to build
     the task priorities. Two copies of an ordering rule are two chances for it
@@ -377,9 +426,8 @@ def _skeleton_rank_key(record: Mapping[str, Any], skeleton_index: int) -> Tuple[
     two distinct skeletons can tie.
     """
     min_exc = record.get("minimum_exception_count")
-    upper_exc = record.get("minimum_exception_upper_bound")
-    exception_rank = int(min_exc) if isinstance(min_exc, int) else (
-        int(upper_exc) if isinstance(upper_exc, int) else 999999)
+    proven_positive = isinstance(min_exc, int) and min_exc > 0
+    exception_rank = 1 if proven_positive else 0
     return exception_rank, (
         exception_rank,
         -int(record.get("before_target", 0) or 0),

@@ -158,25 +158,89 @@ class PackagersRefuseIncompleteCases(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(list(root.rglob("*.zip")), [])
 
+    def _sealed_case(self, tmp):
+        """A case sealed the way the release pipeline seals one.
+
+        Phase C now refuses to package unless the manifest is sealed, the
+        independent validation is a clean PASS, and the final workbook, the
+        input snapshot and the engine all hash-match across both documents.
+        Building that chain here is the point: it is what "complete" now means.
+        """
+        import hashlib, json
+        root = self._empty_case(tmp)
+        prod = root / "production"
+        before = prod / "X_BEST_BEFORE_BREAKS_SCHEDULE.xlsx"
+        final = prod / "X_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"
+        before.write_bytes(b"x")
+        final.write_bytes(b"y")
+        snap_dir = root / "input_snapshot"
+        snap_dir.mkdir(parents=True, exist_ok=True)
+        snapshot = snap_dir / "INPUT.xlsx"
+        snapshot.write_bytes(b"input-workbook")
+        engine_sha = hashlib.sha256(b"engine-bytes").hexdigest()
+
+        def sha(path):
+            return hashlib.sha256(path.read_bytes()).hexdigest()
+
+        (prod / "PRODUCTION_ARTIFACT_MANIFEST.json").write_text(json.dumps({
+            "automated_hard_gates_passed": True,
+            "two_artifact_contract": {
+                "BEST_FINAL_AFTER_BREAKS_SCHEDULE": {
+                    "path": str(final.relative_to(root)),
+                    "sha256": sha(final),
+                },
+            },
+            "solver": {"engine_sha256": engine_sha},
+        }), encoding="utf-8")
+        (root / "INDEPENDENT_VALIDATION.json").write_text(json.dumps({
+            "status": "PASS",
+            "hard_fail_count": 0,
+            "output_sha256": sha(final),
+            "input_sha256": sha(snapshot),
+            "engine_sha256": engine_sha,
+        }), encoding="utf-8")
+        return root
+
     def test_a_complete_phase_c_case_still_packages(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._sealed_case(tmp)
+            result = self._run(PACKAGE_C, root)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            produced = sorted(p.name for p in root.rglob("*.zip"))
+            self.assertEqual(len(produced), 3)
+
+    def test_an_unsealed_case_is_refused_even_when_both_schedules_exist(self):
+        """Non-vacuity: the seal is what the packager checks, not the files."""
         with tempfile.TemporaryDirectory() as tmp:
             root = self._empty_case(tmp)
             (root / "production" / "X_BEST_BEFORE_BREAKS_SCHEDULE.xlsx").write_bytes(b"x")
             (root / "production" / "X_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx").write_bytes(b"y")
             result = self._run(PACKAGE_C, root)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            produced = sorted(p.name for p in root.rglob("*.zip"))
-            self.assertEqual(len(produced), 3)
-            with zipfile.ZipFile(root / "packages" / "CASE_01_PRODUCTION_ONLY.zip") as archive:
-                self.assertEqual(len(archive.namelist()), 2)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(list(root.rglob("*.zip")), [],
+                             "an unsealed case must leave no archive behind")
 
-    def test_a_complete_phase_a_case_still_packages(self):
+    def test_a_tampered_final_workbook_is_refused(self):
+        """The identity chain must catch a workbook edited after validation."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._sealed_case(tmp)
+            (root / "production" / "X_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx").write_bytes(b"TAMPERED")
+            result = self._run(PACKAGE_C, root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(list(root.rglob("*.zip")), [])
+
+    def test_phase_a_is_deprecated_and_packages_nothing_at_all(self):
+        """Phase A is disabled: packaging must go through Phase C, which only
+        releases a case that independent validation has sealed. A complete
+        Phase A case is therefore still refused - that is the point."""
         with tempfile.TemporaryDirectory() as tmp:
             root = self._empty_case(tmp)
             (root / "production" / "X_BEST_BEFORE_BREAKS_SCHEDULE.xlsx").write_bytes(b"x")
             result = self._run(PACKAGE_A, root)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(len(list(root.rglob("*.zip"))), 3)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("DEPRECATED PACKAGER", result.stderr)
+            self.assertEqual(list(root.rglob("*.zip")), [],
+                             "a deprecated packager must never write an archive")
 
 
 if __name__ == "__main__":

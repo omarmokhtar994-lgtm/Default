@@ -6,6 +6,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
 
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "_tools"))
+from canonical_metrics import canonicalize_metrics
+
 ENGINE_PATH = Path(__file__).resolve().parent.parent / "_tools" / "l632_universal_scheduler.py"
 
 
@@ -43,9 +47,70 @@ def _status(value: Any, default: str = "UNKNOWN") -> str:
     return text or default
 
 
-def build_report(audit: Dict[str, Any]) -> Dict[str, Any]:
+def _external_validation(case_root: Path | None) -> Dict[str, Any]:
+    """Read the final independent-validation result when one exists.
+
+    The engine audit may contain its own validation, but the release contract
+    also requires the separately invoked checker to validate the exact polished
+    workbook.  Once that file exists it is the authoritative safety result for
+    this report.
+    """
+    if case_root is None:
+        return {}
+    path = case_root / "INDEPENDENT_VALIDATION.json"
+    if not path.is_file():
+        return {}
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"status": "ERROR", "hard_fail_count": 1}
+    return value if isinstance(value, dict) else {"status": "ERROR", "hard_fail_count": 1}
+
+
+def _stopped_at_the_skeleton_stage(audit: Dict[str, Any]) -> bool:
+    """True only when the run deliberately ended after Stage 1."""
+    return (str(audit.get("artifact_state") or "").upper() == "BEST_BEFORE_BREAKS_ONLY"
+            or str(audit.get("status") or "").upper() == "SKELETON_ONLY_COMPLETE")
+
+
+def _stage_and_metrics(audit: Dict[str, Any]) -> tuple[str, Dict[str, Any]]:
+    """Read the metric surface the engine published, with the stage that made it.
+
+    This report used to read ``selected_candidate.metrics`` and nothing else. A
+    BEFORE_BREAKS_ONLY run has no selected candidate, so every coverage figure
+    was published as 0 for a run that had in fact covered every active
+    interval - a fabricated number, not a missing one. Both stages publish a
+    surface now, so both are read here.
+    """
+    stage_surface = audit.get("stage_metric_surface") or {}
+    stage = str(stage_surface.get("stage") or "")
+    metrics = stage_surface.get("metrics") or {}
+    if not metrics:
+        candidate = (audit.get("selected_candidate") or {}).get("metrics") or {}
+        if candidate:
+            metrics, stage = candidate, stage or "FULL_SCHEDULE"
+        elif _stopped_at_the_skeleton_stage(audit):
+            # Only a run that actually STOPPED at Stage 1 may report the
+            # skeleton surface as its own. A full run that reached Stage 2 and
+            # failed also carries a before-break skeleton, and publishing that
+            # as its result would present before-break coverage as an
+            # after-break outcome - the same fabrication this report exists to
+            # prevent. Such a run has no metric surface, and says so.
+            metrics = (audit.get("selected_before_break_skeleton") or {}).get("metrics") or {}
+            if metrics:
+                stage = stage or "BEFORE_BREAKS_ONLY"
+    if not stage:
+        state = str(audit.get("artifact_state") or "").upper()
+        stage = ("BEFORE_BREAKS_ONLY" if state == "BEST_BEFORE_BREAKS_ONLY"
+                 else "FULL_SCHEDULE" if state.startswith("FINAL_")
+                 else "UNKNOWN_STAGE")
+    return stage, metrics
+
+
+def build_report(audit: Dict[str, Any], case_root: Path | None = None) -> Dict[str, Any]:
     selected = audit.get("selected_candidate") or {}
-    metrics = selected.get("metrics") or {}
+    stage, metrics = _stage_and_metrics(audit)
+    before_breaks_only = stage == "BEFORE_BREAKS_ONLY"
     preflight = audit.get("pre_solver_contract_validation") or {}
     feasibility = audit.get("capacity_diagnostics") or {}
     probe = audit.get("hard_feasibility_probe") or {}
@@ -60,16 +125,31 @@ def build_report(audit: Dict[str, Any]) -> Dict[str, Any]:
     concentration = _num(metrics.get("after_overage_top10_concentration"), 0)
     # Track whether a hard-failure count was actually reported, not just whether
     # it happened to be zero. An absent count is not a clean validation.
+    external = _external_validation(case_root)
     reported = (selected.get("output_validation") or {}).get("validation") or {}
     raw_hard = reported.get("hard_fail_count")
     validation_reported = raw_hard is not None
+    validation_source = "engine_audit" if validation_reported else None
     if not validation_reported:
         raw_hard = audit.get("hard_fail_count")
         validation_reported = raw_hard is not None
+        if validation_reported:
+            validation_source = "audit"
+    # The independent validator owns the final polished workbook check.  Do
+    # not let an earlier engine-side PASS hide a later independent FAIL.
+    external_validation_status = None
+    if external:
+        external_validation_status = _status(external.get("status"), "ERROR")
+        raw_hard = external.get("hard_fail_count")
+        validation_reported = raw_hard is not None
+        validation_source = "independent_validator" if validation_reported else "independent_validator_incomplete"
     hard_failures = int(_num(raw_hard, 0))
     contract_status = _status(preflight.get("status"))
     feasibility_status = _status(feasibility.get("status"), _status(probe.get("cp_status")))
-    schedule_present = bool(selected and metrics)
+    # A before-break export is a schedule at its own stage. Reading "no
+    # selected candidate" as "no schedule" is what produced safety NOT_RUN and
+    # DIAGNOSTICS_ONLY on a validated skeleton run.
+    schedule_present = bool(metrics) and (bool(selected) or before_breaks_only)
     # A schedule that was never validated is NOT a safe schedule. Previously an
     # audit carrying no hard_fail_count anywhere produced hard_failures == 0 and
     # therefore safety PASS, so a run whose output validation never executed was
@@ -78,8 +158,10 @@ def build_report(audit: Dict[str, Any]) -> Dict[str, Any]:
         safety_status = "NOT_RUN"
     elif not validation_reported:
         safety_status = "NOT_VALIDATED"
-    elif hard_failures == 0:
+    elif hard_failures == 0 and (not external or external_validation_status == "PASS"):
         safety_status = "PASS"
+    elif external and external_validation_status != "PASS":
+        safety_status = "ERROR" if external_validation_status.startswith("ERROR") else "FAIL"
     else:
         safety_status = "FAIL"
     production_gate = audit.get("production_quality_gate") or {}
@@ -87,18 +169,14 @@ def build_report(audit: Dict[str, Any]) -> Dict[str, Any]:
     production_gate_status = _status(production_gate.get("status"), "NOT_EVALUATED")
     if production_gate_status == "FAIL":
         quality_status = "FAIL_PRODUCTION_QUALITY_GATE"
-    elif production_gate_status == "WARN":
-        quality_status = "WARN_PRODUCTION_QUALITY_LIMITED"
     elif not schedule_present:
         quality_status = "DIAGNOSTICS_ONLY"
     elif safety_status == "NOT_VALIDATED":
-        # The interpretation text below claims a failed production quality gate
-        # cannot be exported as PASS. That was true of a FAILED gate but not of
-        # an unevaluated one: with no gate result and no validation, the chain
-        # below fell through to PASS_CLEAN.
         quality_status = "REVIEW_NOT_VALIDATED"
     elif hard_failures:
         quality_status = "FAIL_SAFETY"
+    elif production_gate_status == "WARN":
+        quality_status = "WARN_PRODUCTION_QUALITY_LIMITED"
     elif extreme > 0:
         quality_status = "REVIEW_EXTREME_OVERAGE"
     elif severe > 0 or avoidable > 1e-9:
@@ -109,9 +187,42 @@ def build_report(audit: Dict[str, Any]) -> Dict[str, Any]:
         quality_status = "PASS_WITH_TARGET_GAPS"
     else:
         quality_status = "PASS_CLEAN"
+    parity = (external.get("metric_parity") or {}) if external else {}
+    # Stage gate: did the stage that was asked for complete and check out?
+    # This is deliberately not the release decision. A before-break artifact is
+    # never releasable, so asking it to be FINAL_VERIFIED is a category error;
+    # asking whether it completed, validated and agreed on its metrics is not.
+    stage_gate_reasons = []
+    if contract_status not in {"PASS", "WARN"} or len(preflight.get("failures") or []) > 0:
+        stage_gate_reasons.append("input_contract_not_pass")
+    if safety_status != "PASS":
+        stage_gate_reasons.append("independent_validation_not_pass")
+    if parity and str(parity.get("status") or "").upper() not in {"", "PASS"}:
+        stage_gate_reasons.append("metric_parity_not_pass")
+    if before_breaks_only:
+        if _status(audit.get("artifact_state")) != "BEST_BEFORE_BREAKS_ONLY":
+            stage_gate_reasons.append("before_break_artifact_not_exported")
+    else:
+        if _status(audit.get("artifact_state")) != "FINAL_VERIFIED":
+            stage_gate_reasons.append("artifact_state_not_final_verified")
+        if production_gate_status == "FAIL":
+            stage_gate_reasons.append("production_quality_gate_failed")
     return {
         "schema_version": 1,
         "release": _status(audit.get("version"), RELEASE),
+        "run_stage": stage,
+        # A before-break artifact can never be released, whatever its numbers
+        # say. Stating that here keeps a good skeleton report from reading as
+        # an approval.
+        "production_release_eligible": (
+            False if before_breaks_only
+            else _status(audit.get("artifact_state")) == "FINAL_VERIFIED"
+        ),
+        "stage_gate": {
+            "stage": stage,
+            "status": "PASS" if not stage_gate_reasons else "BLOCKED",
+            "blocking_reasons": sorted(set(stage_gate_reasons)),
+        },
         "generated_utc": datetime.now(timezone.utc).isoformat(),
         "audit_status": _status(audit.get("status")),
         "run_id": (audit.get("run_identity") or {}).get("run_id"),
@@ -130,6 +241,8 @@ def build_report(audit: Dict[str, Any]) -> Dict[str, Any]:
             "status": safety_status,
             "hard_fail_count": hard_failures,
             "hard_fail_count_reported": validation_reported,
+            "validation_source": validation_source,
+            "external_validation_status": external_validation_status,
             "no_break_exception_count": int(_num(selected.get("no_break_exception_count"), 0)),
         },
         "coverage": {
@@ -141,6 +254,27 @@ def build_report(audit: Dict[str, Any]) -> Dict[str, Any]:
             "after80": int(_num(metrics.get("after_80"), 0)),
             "target_losses_from_breaks": int(_num(metrics.get("target_losses_from_breaks"), 0)),
             "floor_losses_from_breaks": int(_num(metrics.get("floor_losses_from_breaks"), 0)),
+            # No breaks were placed at this stage, so after_* is the same
+            # schedule measured again rather than a break outcome.
+            "after_metrics_basis": (
+                "NO_BREAKS_PLACED_AFTER_EQUALS_BEFORE" if before_breaks_only
+                else "BREAKS_PLACED_BY_STAGE_2"),
+            "canonical_metrics": canonicalize_metrics(metrics, "engine", stage=stage),
+        },
+        "evaluation": {
+            "framework": "canonical_metric_surface_v1",
+            "engine_source": (
+                "stage_metric_surface.metrics" if audit.get("stage_metric_surface")
+                else "selected_candidate.metrics"),
+            "validator_source": "independent_validator.metrics",
+            "engine_metrics": canonicalize_metrics(metrics, "engine", stage=stage),
+            "validator_metrics": canonicalize_metrics(
+                external.get("metrics") or {}, "independent_validator"
+            ) if external else {},
+            "metric_parity": external.get("metric_parity") if external else None,
+            "validator_quality_gate_status": external.get("quality_gate_status") if external else None,
+            "validator_coverage_quality_gate_status": external.get("coverage_quality_gate_status") if external else None,
+            "release_decision": "hard_validation_then_quality_gate_then_human_approval",
         },
         "production_quality_gate": {
             "status": production_gate_status,
@@ -240,7 +374,7 @@ def build_report(audit: Dict[str, Any]) -> Dict[str, Any]:
 
 def flatten(report: Dict[str, Any]) -> list[tuple[str, Any]]:
     rows=[]
-    for section in ("contract","feasibility","safety","production_quality_gate","coverage","next_sunday","break_concurrency","overage","whole_week_balance","language_resilience","skill_allocation","break_feasibility_feedback","feasibility_certificate","business_outcome"):
+    for section in ("contract","feasibility","safety","production_quality_gate","coverage","evaluation","next_sunday","break_concurrency","overage","whole_week_balance","language_resilience","skill_allocation","break_feasibility_feedback","feasibility_certificate","business_outcome"):
         for key,value in (report.get(section) or {}).items():
             rows.append((f"{section}.{key}",value))
     rows.extend([
@@ -258,9 +392,10 @@ def main() -> int:
     ap=argparse.ArgumentParser()
     ap.add_argument("--audit-json",type=Path,required=True)
     ap.add_argument("--case-root",type=Path,required=True)
+    ap.add_argument("--strict",action="store_true",help="Return non-zero when a production release gate is not clean.")
     args=ap.parse_args()
     audit=json.loads(args.audit_json.read_text(encoding="utf-8"))
-    report=build_report(audit)
+    report=build_report(audit, args.case_root)
     args.case_root.mkdir(parents=True,exist_ok=True)
     out_json=args.case_root/"PHASE_C_QUALITY_SUMMARY.json"
     out_csv=args.case_root/"PHASE_C_QUALITY_SUMMARY.csv"
@@ -268,6 +403,52 @@ def main() -> int:
     with out_csv.open("w",encoding="utf-8",newline="") as handle:
         writer=csv.writer(handle); writer.writerow(["Metric","Value"]); writer.writerows(flatten(report))
     print(json.dumps(report,indent=2))
+    # A BEFORE_BREAKS_ONLY run is a diagnostic, not a release. The release
+    # contract below asks whether this artifact can be published, which a
+    # before-break skeleton never can - so applying it returned 2 on every
+    # skeleton run and made the stage unusable. The stage gate answers the
+    # question that stage actually has: did it complete and check out?
+    # The release contract itself is unchanged for full runs.
+    if str(report.get("run_stage") or "") == "BEFORE_BREAKS_ONLY":
+        stage_gate = report.get("stage_gate") or {}
+        stage_blocking = list(stage_gate.get("blocking_reasons") or [])
+        if stage_gate.get("status") != "PASS" or stage_blocking:
+            print(json.dumps({
+                "status": "BLOCKED", "run_stage": "BEFORE_BREAKS_ONLY",
+                "blocking_reasons": sorted(set(stage_blocking)) or ["stage_gate_not_pass"],
+            }, indent=2))
+            return 2
+        # Never silently imply release approval for a review artifact.
+        print(json.dumps({
+            "status": "STAGE_COMPLETE",
+            "run_stage": "BEFORE_BREAKS_ONLY",
+            "production_release_eligible": False,
+            "note": "Before-break review artifact. Breaks are not assigned; not releasable.",
+            "quality_observation": report.get("phase_c_quality_status"),
+        }, indent=2))
+        return 0
+    blocking = []
+    if report.get("artifact_state") != "FINAL_VERIFIED":
+        blocking.append("artifact_state_not_final_verified")
+    contract = report.get("contract") or {}
+    contract_status = str(contract.get("status") or "UNKNOWN").upper()
+    if contract_status not in {"PASS", "WARN"} or int(contract.get("failure_count") or 0) > 0:
+        blocking.append("input_contract_not_pass")
+    if (report.get("safety") or {}).get("status") != "PASS":
+        blocking.append("internal_output_validation_not_pass")
+    gate = report.get("production_quality_gate") or {}
+    if gate.get("status") == "FAIL":
+        blocking.append("production_quality_gate_failed")
+    if args.strict and str(gate.get("mode", "")).lower() == "fail" and gate.get("status") != "PASS":
+        blocking.append("mandatory_production_quality_gate_not_pass")
+    if args.strict and report.get("phase_c_quality_status") in {
+        "FAIL_PRODUCTION_QUALITY_GATE", "FAIL_SAFETY", "REVIEW_NOT_VALIDATED",
+        "REVIEW_EXTREME_OVERAGE", "DIAGNOSTICS_ONLY",
+    }:
+        blocking.append(str(report.get("phase_c_quality_status")))
+    if blocking:
+        print(json.dumps({"status":"BLOCKED","blocking_reasons":sorted(set(blocking))},indent=2))
+        return 2
     return 0
 
 if __name__ == "__main__":

@@ -112,8 +112,29 @@ The hard constraint and the reported metric use different arithmetic:
 to the *model* counter, so a "lock" meant to hold achieved coverage may not
 hold it. Arm B is a live reproduction: locked at 159, reported 157.
 
-Not fixed, and deliberately not fixed blind -- `min_target_hits` is used only
-by `target_lock_recovery`, which the NIGHT_09 census shows barely executes, so
-this is not on the production path. It does mean **NIGHT_06's "159 FEASIBLE"
-proof is weaker than stated**: it proves the model counter can reach 159, not
-that `after_target` does. NIGHT_06 has been annotated accordingly.
+### RESOLVED: the lock does bind, and this retraction was too broad
+
+Measured the two thresholds against each other across all 242 demanded
+intervals of the Cricut Chat workbook (`target_ratio` 1.0, `qpi` 2):
+
+| relationship | intervals |
+|---|---|
+| model threshold **stricter** than the metric | **242** |
+| model threshold looser than the metric | **0** |
+| identical | 0 |
+
+`ceil_units` rounds the requirement UP to whole units, so the model demands at
+least as much as the percentage compare everywhere. **`min_target_hits=N`
+therefore does force `after_target >= N`.**
+
+So **NIGHT_06's "159 FEASIBLE" proof stands**, and the paragraph above
+retracting it was wrong -- a second correction, recorded rather than quietly
+edited away. It is now pinned by a test over the packaged AE_AR_B2B demand.
+
+What remains unexplained is only the single `after_target 157` reading under a
+159 lock. It cannot be a threshold-definition defect, given the above. A
+follow-up probe at 1 worker could not reproduce it because the skeleton itself
+returned UNKNOWN at that width, so the reading is unexplained rather than
+diagnosed. It is not on the production path: `min_target_hits` is reached only
+through `target_lock_recovery`, which the NIGHT_09 census shows barely
+executes.

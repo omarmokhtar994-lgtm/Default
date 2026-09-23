@@ -158,3 +158,18 @@ evidence that does not use `min_target_hits` at all:
 
 Stage-2 is the defect, and NIGHT_09 names the mechanism: at the production
 QUICK budget the break search runs zero of its planned attempts.
+
+
+---
+
+# ANNOTATION WITHDRAWN: the probe above is sound after all
+
+The annotation immediately above said the `min_target_hits` probe proved less
+than claimed. That was wrong, and the measurement is in NIGHT_08: across all
+242 demanded intervals the model's `target_hit` threshold is stricter than the
+`after_target` metric on 242 and looser on 0. A lock at 159 forces the metric
+to 159.
+
+The "159 FEASIBLE" table therefore means what it originally said. The
+CORRECTION section's conclusion -- Stage-2, not Stage-1 -- was already upheld
+on independent evidence; it is now also upheld on its original evidence.

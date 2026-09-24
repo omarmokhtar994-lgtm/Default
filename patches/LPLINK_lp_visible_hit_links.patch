@@ -1,0 +1,99 @@
+diff --git a/engine/_tools/l632_universal_scheduler.py b/engine/_tools/l632_universal_scheduler.py
+index 5b08672..6743a8c 100644
+--- a/engine/_tools/l632_universal_scheduler.py
++++ b/engine/_tools/l632_universal_scheduler.py
+@@ -502,6 +502,16 @@ def ceil_units(v: float, scale: int = 100) -> int:
+ 
+ JOINT_COVERAGE_SCALE = 1_000_000
+ 
++# Each coverage-hit indicator is reified with OnlyEnforceIf, which CP-SAT only
++# puts into its LP relaxation at linearization_level >= 2 (max_lp workers).
++# At the default level, and in every LNS subproblem, the LP sees no link
++# between coverage and the hit it pays for. The same implication written as a
++# plain linear row, coverage >= threshold * hit, is in the LP at level 1. It is
++# redundant for the integer model (coverage >= 0), so the feasible set is
++# unchanged; only the relaxation tightens. Source: OR-Tools v9.15
++# linear_relaxation.cc; evidence/LP_VISIBLE_HIT_LINKS.md.
++LP_VISIBLE_HIT_LINKS = True
++
+ 
+ def scaled_effective_factor(shrinkage: float, scale: int = JOINT_COVERAGE_SCALE) -> int:
+     """Integer effective-FTE multiplier aligned with the canonical evaluator.
+@@ -6489,6 +6499,8 @@ def build_skeleton(
+                 if profile.get("floor_miss", 0) or quality_shape_enabled:
+                     floor_hit = model.NewBoolVar(f"stage1_floor_hit_{d}_{i}")
+                     model.Add(objective_coverage >= floor_units).OnlyEnforceIf(floor_hit)
++                    if LP_VISIBLE_HIT_LINKS:
++                        model.Add(objective_coverage >= floor_units * floor_hit)
+                     model.Add(objective_coverage <= floor_units - 1).OnlyEnforceIf(floor_hit.Not())
+                     stage1_floor_hit_by_interval[d, i] = floor_hit
+                     if profile.get("floor_miss", 0):
+@@ -6497,6 +6509,8 @@ def build_skeleton(
+                 if profile.get("severe_miss", 0) or quality_shape_enabled:
+                     severe_hit = model.NewBoolVar(f"stage1_severe_hit_{d}_{i}")
+                     model.Add(objective_coverage >= severe_units).OnlyEnforceIf(severe_hit)
++                    if LP_VISIBLE_HIT_LINKS:
++                        model.Add(objective_coverage >= severe_units * severe_hit)
+                     model.Add(objective_coverage <= severe_units - 1).OnlyEnforceIf(severe_hit.Not())
+                     stage1_severe_hit_by_interval[d, i] = severe_hit
+                     if profile.get("severe_miss", 0):
+@@ -6504,12 +6518,16 @@ def build_skeleton(
+                 if profile.get("target_miss", 0):
+                     target_hit = model.NewBoolVar(f"stage1_target_hit_{d}_{i}")
+                     model.Add(objective_coverage >= target_units).OnlyEnforceIf(target_hit)
++                    if LP_VISIBLE_HIT_LINKS:
++                        model.Add(objective_coverage >= target_units * target_hit)
+                     model.Add(objective_coverage <= target_units - 1).OnlyEnforceIf(target_hit.Not())
+                     stage1_target_hit_by_interval[d, i] = target_hit
+                     objective_terms.append(profile["target_miss"] * (1 - target_hit))
+                 if profile.get("full_miss", 0) and parsed.target_ratio < 0.995:
+                     full_hit = model.NewBoolVar(f"stage1_full_hit_{d}_{i}")
+                     model.Add(objective_coverage >= full_units).OnlyEnforceIf(full_hit)
++                    if LP_VISIBLE_HIT_LINKS:
++                        model.Add(objective_coverage >= full_units * full_hit)
+                     model.Add(objective_coverage <= full_units - 1).OnlyEnforceIf(full_hit.Not())
+                     objective_terms.append(profile["full_miss"] * (1 - full_hit))
+                 # RC9.2.1: explicit protected-tier variables allow a later polish
+@@ -6522,6 +6540,8 @@ def build_skeleton(
+                     tier_units = ceil_units(req * tier_ratio) * qpi
+                     tier_hit = model.NewBoolVar(f"stage1_tier_{tier_pct}_hit_{d}_{i}")
+                     model.Add(objective_coverage >= tier_units).OnlyEnforceIf(tier_hit)
++                    if LP_VISIBLE_HIT_LINKS:
++                        model.Add(objective_coverage >= tier_units * tier_hit)
+                     model.Add(objective_coverage <= tier_units - 1).OnlyEnforceIf(tier_hit.Not())
+                     stage1_tier_hit_by_ratio[tier_pct][d, i] = tier_hit
+                     if tier_weight > 0:
+@@ -8127,12 +8147,20 @@ def solve_breaks(
+                 full_hit = model.NewBoolVar(f"full_hit_{d}_{i}")
+                 severe_units = ceil_units(req * max(0.0, parsed.floor_ratio - 0.10)) * qpi
+                 model.Add(after_exact >= floor_exact).OnlyEnforceIf(floor_hit)
++                if LP_VISIBLE_HIT_LINKS:
++                    model.Add(after_exact >= floor_exact * floor_hit)
+                 model.Add(after_exact <= floor_exact - 1).OnlyEnforceIf(floor_hit.Not())
+                 model.Add(after_exact >= severe_exact).OnlyEnforceIf(severe_hit)
++                if LP_VISIBLE_HIT_LINKS:
++                    model.Add(after_exact >= severe_exact * severe_hit)
+                 model.Add(after_exact <= severe_exact - 1).OnlyEnforceIf(severe_hit.Not())
+                 model.Add(after_exact >= target_exact).OnlyEnforceIf(target_hit)
++                if LP_VISIBLE_HIT_LINKS:
++                    model.Add(after_exact >= target_exact * target_hit)
+                 model.Add(after_exact <= target_exact - 1).OnlyEnforceIf(target_hit.Not())
+                 model.Add(after_exact >= full_exact).OnlyEnforceIf(full_hit)
++                if LP_VISIBLE_HIT_LINKS:
++                    model.Add(after_exact >= full_exact * full_hit)
+                 model.Add(after_exact <= full_exact - 1).OnlyEnforceIf(full_hit.Not())
+                 floor_hit_vars.append(floor_hit); severe_hit_vars.append(severe_hit); target_hit_vars.append(target_hit); full_hit_vars.append(full_hit)
+                 floor_hit_by_interval[d, i] = floor_hit; severe_hit_by_interval[d, i] = severe_hit
+@@ -8287,8 +8315,12 @@ def solve_breaks(
+             target_hit = model.NewBoolVar(f"next_sun_target_hit_{i}")
+             full_hit = model.NewBoolVar(f"next_sun_full_hit_{i}")
+             model.Add(after_eff >= target_units).OnlyEnforceIf(target_hit)
++            if LP_VISIBLE_HIT_LINKS:
++                model.Add(after_eff >= target_units * target_hit)
+             model.Add(after_eff <= target_units - 1).OnlyEnforceIf(target_hit.Not())
+             model.Add(after_eff >= full_units).OnlyEnforceIf(full_hit)
++            if LP_VISIBLE_HIT_LINKS:
++                model.Add(after_eff >= full_units * full_hit)
+             model.Add(after_eff <= full_units - 1).OnlyEnforceIf(full_hit.Not())
+             objective_terms.append(max(1, weights["target_miss"] // 1000) * (1 - target_hit))
+             objective_terms.append(max(1, weights["full_miss"] // 1000) * (1 - full_hit))

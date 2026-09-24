@@ -1,8 +1,8 @@
 diff --git a/engine/_tools/l632_universal_scheduler.py b/engine/_tools/l632_universal_scheduler.py
-index 5b08672..799c92f 100644
+index 5b08672..7d2279e 100644
 --- a/engine/_tools/l632_universal_scheduler.py
 +++ b/engine/_tools/l632_universal_scheduler.py
-@@ -17221,6 +17221,373 @@ def run_zero_exception_recovery_phase(
+@@ -17221,6 +17221,380 @@ def run_zero_exception_recovery_phase(
          "truncated": deadline - time.time() < 35, "anchor_count": len(anchors),
      }
  
@@ -25,8 +25,11 @@ index 5b08672..799c92f 100644
 +# the finished candidate enters the pool only if the release validator
 +# classifies it compliant. It cannot remove a candidate, only add one.
 +DAY_NEIGHBOURHOOD_BREAK_SEARCH_ENABLED = True
-+DNBS_MAX_SHARE_OF_WINDOW = 0.5
-+DNBS_MAX_SECONDS = 420.0
++# Time comes from its own phase in the global budget plan
++# (phase_b_maturity.DNBS_BUDGET_*), between break search and joint refinement.
++# A second anchor is only worth it when each of its days still gets
++# DNBS_MIN_USEFUL_DAY_SEC.
++DNBS_MIN_USEFUL_DAY_SEC = 15.0
 +DNBS_PER_DAY_CAP_SEC = 60.0
 +DNBS_MIN_DAY_SLICE_SEC = 3.0
 +DNBS_MAX_ANCHORS = 2
@@ -209,6 +212,10 @@ index 5b08672..799c92f 100644
 +        -int(pair[1].metrics.get("after_target", 0) or 0),
 +        -int(pair[1].metrics.get("after_floor", 0) or 0),
 +    ))
++    max_anchors = DNBS_MAX_ANCHORS
++    while max_anchors > 1 and (deadline - time.time()) < 7 * max_anchors * DNBS_MIN_USEFUL_DAY_SEC:
++        max_anchors -= 1
++    summary["max_anchors"] = max_anchors
 +    anchors: List[Tuple[SkeletonSolution, BreakSolution]] = []
 +    seen: Set[str] = set()
 +    for skeleton, solution in pool:
@@ -217,7 +224,7 @@ index 5b08672..799c92f 100644
 +            continue
 +        seen.add(fingerprint)
 +        anchors.append((skeleton, solution))
-+        if len(anchors) >= DNBS_MAX_ANCHORS:
++        if len(anchors) >= max_anchors:
 +            break
 +    if not anchors:
 +        summary["skip_reason"] = "NO_COMPLIANT_ANCHOR"
@@ -376,22 +383,57 @@ index 5b08672..799c92f 100644
  def run_post_break_repair_phase(
      parsed: ParsedInput,
      candidates: Sequence[Tuple[SkeletonSolution, BreakSolution]],
-@@ -20505,6 +20872,30 @@ def run_case(
+@@ -18473,6 +18847,7 @@ def run_case(
+             coordinated_repair_reserve_sec=(coordinated_repair_reserve_sec if coordinated_repair else 0),
+             joint_refinement_reserve_sec=(joint_refinement_reserve_sec if joint_refinement else 0),
+             diagnostics=budget_plan_diagnostics,
++            day_neighbourhood_break_search=DAY_NEIGHBOURHOOD_BREAK_SEARCH_ENABLED and not skeleton_only,
+         )
+         if not safe_incumbent:
+             global_budget_plan["break_search"] += global_budget_plan.get("safe_incumbent", 0)
+@@ -20480,9 +20855,12 @@ def run_case(
+         # RC8 quality recovery: protect the current-contract BEST BEFORE skeleton
+         # with dedicated full-width target-first break optimization. Historical
+         # KPI values are not used as constraints in this lane.
++        # RC8 runs first but may not consume the slot reserved for DNBS.
++        dnbs_reserved_sec = float(global_budget_plan.get("day_neighbourhood_break_search", 0) or 0)
++        rc8_ceiling = joint_refinement_deadline - dnbs_reserved_sec
+         rc8_recovery_deadline = min(
+-            joint_refinement_deadline,
+-            time.time() + max(0.0, min(900.0, joint_refinement_deadline - time.time())),
++            rc8_ceiling,
++            time.time() + max(0.0, min(900.0, rc8_ceiling - time.time())),
+         )
+         rc8_added, rc8_records, rc8_execution = run_rc8_best_before_break_recovery(
+             parsed, best_before_skeleton,
+@@ -20505,6 +20883,42 @@ def run_case(
          )
          write_json(audit_path, audit)
  
 +        # Day-neighbourhood break search on the strongest compliant skeletons.
-+        # It spends at most half of what is left before the joint-refinement
-+        # deadline (joint refinement keeps the rest) and only ever adds
-+        # candidates that dominate their anchor on the engine's own metrics.
++        # It has its own phase in the global budget, paid for out of break
++        # search, and only ever adds candidates that dominate their anchor on
++        # the engine's own metrics.
 +        if DAY_NEIGHBOURHOOD_BREAK_SEARCH_ENABLED and compliant and not completed_phases.get("day_neighbourhood_break_search_complete", False):
-+            dnbs_window = max(0.0, joint_refinement_deadline - time.time())
-+            dnbs_deadline = time.time() + min(DNBS_MAX_SECONDS, dnbs_window * DNBS_MAX_SHARE_OF_WINDOW)
++            # Its own funded phase, plus whatever earlier phases left unspent,
++            # never reaching into joint refinement's allocation.
++            dnbs_deadline = min(
++                joint_refinement_deadline,
++                max(budget_manager.deadline("day_neighbourhood_break_search"), time.time() + dnbs_reserved_sec),
++            )
++            dnbs_window = max(0.0, dnbs_deadline - time.time())
 +            dnbs_added, dnbs_records, dnbs_execution = run_day_neighbourhood_break_search(
 +                parsed, compliant, dnbs_deadline, workers, log, solver_random_seed,
 +            )
 +            compliant = dedupe_break_candidates(list(compliant) + list(dnbs_added))
 +            dnbs_execution["window_sec"] = round(dnbs_window, 6)
++            dnbs_execution["reserved_sec"] = int(dnbs_reserved_sec)
++            budget_manager.record(
++                "day_neighbourhood_break_search", "DNBS_COMPLETE",
++                days_solved=dnbs_execution.get("days_solved", 0),
++                accepted=dnbs_execution.get("accepted_candidates", 0),
++                truncated=bool(dnbs_execution.get("truncated")),
++            )
 +            audit["day_neighbourhood_break_search"] = {"execution": dnbs_execution, "records": dnbs_records}
 +            completed_phases["day_neighbourhood_break_search_complete"] = not bool(dnbs_execution.get("truncated"))
 +            save_candidate_pool_checkpoint(
@@ -407,12 +449,65 @@ index 5b08672..799c92f 100644
          # RC4.2 integrated neighborhood: exact shift/OFF, language and break
          # decisions are solved together. A validated incumbent is protected by
          # minimum after-target/floor locks and an exception cap.
+diff --git a/engine/_tools/phase_b_maturity.py b/engine/_tools/phase_b_maturity.py
+index 18fdc24..28a21be 100644
+--- a/engine/_tools/phase_b_maturity.py
++++ b/engine/_tools/phase_b_maturity.py
+@@ -180,8 +180,19 @@ PHASE_MINIMUM_VIABLE_SECONDS = {
+     "post_break_repair": 35,
+     "target_lock_recovery": 65,
+     "exception_search": 90,
++    "day_neighbourhood_break_search": 21,
+ }
+ 
++# Day-neighbourhood break search (DNBS) runs between break search and joint
++# refinement and is paid for out of break search only, never Stage 1. Sized to
++# give each day of one or two anchors a meaningful slice: 8% of the run,
++# floor 60 s, cap 420 s. Dropped when break search would be left below one
++# meaningful slice (180 s), because DNBS improves what break search produced.
++DNBS_BUDGET_SHARE = 0.08
++DNBS_BUDGET_FLOOR_SEC = 60
++DNBS_BUDGET_CAP_SEC = 420
++DNBS_MIN_BREAK_SEARCH_LEFT_SEC = 180
++
+ 
+ def build_global_budget_plan(
+     total_seconds: int,
+@@ -198,6 +209,7 @@ def build_global_budget_plan(
+     joint_refinement_reserve_sec: int = 1800,
+     stage1_minimum_seconds: int = 0,
+     diagnostics: Optional[Dict[str, Any]] = None,
++    day_neighbourhood_break_search: bool = False,
+ ) -> Dict[str, int]:
+     """Create a scenario-neutral, single-run budget plan.
+ 
+@@ -286,6 +298,12 @@ def build_global_budget_plan(
+     if stage1_need > stage1:
+         stage1 = max(stage1, min(stage1_need, int(primary * 0.75)))
+     break_search = max(30, primary - stage1)
++    dnbs = 0
++    if day_neighbourhood_break_search and total >= 600:
++        dnbs = min(DNBS_BUDGET_CAP_SEC, max(DNBS_BUDGET_FLOOR_SEC, int(total * DNBS_BUDGET_SHARE)))
++        if break_search - dnbs < DNBS_MIN_BREAK_SEARCH_LEFT_SEC:
++            dnbs = 0
++        break_search -= dnbs
+ 
+     plan = {
+         "preflight_probe": preflight_probe,
+@@ -293,6 +311,7 @@ def build_global_budget_plan(
+         "safe_incumbent": safe,
+         "stage1_search": stage1,
+         "break_search": break_search,
++        "day_neighbourhood_break_search": dnbs,
+         "joint_refinement": joint,
+         "coordinated_repair": coordinated,
+         "exception_search": exception,
 diff --git a/tests_staged/test_rc9_2_17_day_neighbourhood_break_search.py b/tests_staged/test_rc9_2_17_day_neighbourhood_break_search.py
 new file mode 100644
-index 0000000..41eba11
+index 0000000..bec5e6f
 --- /dev/null
 +++ b/tests_staged/test_rc9_2_17_day_neighbourhood_break_search.py
-@@ -0,0 +1,139 @@
+@@ -0,0 +1,193 @@
 +"""DNBS: day-neighbourhood break search adds only dominating, compliant candidates.
 +
 +On a fixed skeleton one day's breaks interact only with that day and its
@@ -442,6 +537,8 @@ index 0000000..41eba11
 +import build_synthetic_suite as B  # noqa: E402
 +
 +E = B.load_engine(ROOT / "engine" / "_tools" / "l632_universal_scheduler.py")
++sys.path.insert(0, str(ROOT / "engine" / "_tools"))
++import phase_b_maturity as B_PHASE  # noqa: E402
 +WB = REPO / "fixtures" / "synthetic_suite" / "SYNTH_M2_MULTI_START_WITH_BREAKS.xlsx"
 +
 +
@@ -533,6 +630,17 @@ index 0000000..41eba11
 +        self.assertEqual(added, [])
 +        self.assertTrue(summary["truncated"])
 +
++    def test_a_short_window_uses_one_anchor(self):
++        _, _, summary = E.run_day_neighbourhood_break_search(
++            self.parsed, [(self.sk, self.solution(self.bad, self.m_bad))],
++            time.time() + 7 * 2 * E.DNBS_MIN_USEFUL_DAY_SEC - 5, 2, io.StringIO(), 9000)
++        self.assertEqual(summary["max_anchors"], 1)
++
++    def test_a_funded_window_uses_two(self):
++        _, _, summary = E.run_day_neighbourhood_break_search(
++            self.parsed, [], time.time() + 7 * 2 * E.DNBS_MIN_USEFUL_DAY_SEC + 30, 2, io.StringIO(), 9000)
++        self.assertEqual(summary.get("max_anchors", 2), 2)
++
 +
 +class Wiring(unittest.TestCase):
 +    def test_runs_after_rc8_recovery_and_before_the_joint_pool(self):
@@ -544,10 +652,51 @@ index 0000000..41eba11
 +        self.assertLess(dnbs, joint)
 +        self.assertIn('audit["day_neighbourhood_break_search"]', src)
 +
-+    def test_budget_is_bounded(self):
-+        self.assertLessEqual(E.DNBS_MAX_SHARE_OF_WINDOW, 0.5)
-+        self.assertLessEqual(E.DNBS_MAX_SECONDS, 600)
++    def test_engine_funds_its_own_phase_and_rc8_leaves_it_alone(self):
++        src = inspect.getsource(E)
++        self.assertIn("day_neighbourhood_break_search=DAY_NEIGHBOURHOOD_BREAK_SEARCH_ENABLED and not skeleton_only", src)
++        self.assertIn("rc8_ceiling = joint_refinement_deadline - dnbs_reserved_sec", src)
++        self.assertIn('budget_manager.deadline("day_neighbourhood_break_search")', src)
 +        self.assertTrue(E.DAY_NEIGHBOURHOOD_BREAK_SEARCH_ENABLED)
++
++
++class FundedBudgetPhase(unittest.TestCase):
++    """The first design took half of what was left before joint refinement.
++    At QUICK joint refinement is allocated 0 s, so DNBS got break-search
++    leftovers (8-39 s) and did nothing in 5 of 6 runs of the 3600 s A/B
++    (evidence/dnbs_e2e_3600/RESULT.txt). It now has its own phase."""
++
++    KW = dict(allow_exceptions=False, coordinated_repair=True, joint_refinement=False, target_lock_recovery=True)
++
++    def plan(self, total, on=True):
++        return B_PHASE.build_global_budget_plan(total, day_neighbourhood_break_search=on, **self.KW)
++
++    def test_paid_for_by_break_search_only(self):
++        for total in (900, 1800, 3600, 14400):
++            off, on = self.plan(total, False), self.plan(total)
++            dnbs = on["day_neighbourhood_break_search"]
++            self.assertGreater(dnbs, 0, total)
++            self.assertEqual(sum(on.values()), total)
++            self.assertEqual(on["stage1_search"], off["stage1_search"], total)
++            self.assertEqual(off["break_search"] - on["break_search"], dnbs, total)
++            for name in off:
++                if name not in {"break_search", "day_neighbourhood_break_search"}:
++                    self.assertEqual(on[name], off[name], (total, name))
++
++    def test_sized_and_capped(self):
++        self.assertEqual(self.plan(3600)["day_neighbourhood_break_search"], 288)
++        self.assertEqual(self.plan(14400)["day_neighbourhood_break_search"], B_PHASE.DNBS_BUDGET_CAP_SEC)
++        self.assertEqual(self.plan(900)["day_neighbourhood_break_search"], 72)
++        self.assertEqual(self.plan(300)["day_neighbourhood_break_search"], 0)
++
++    def test_off_by_default_for_other_callers(self):
++        plan = B_PHASE.build_global_budget_plan(3600, **self.KW)
++        self.assertEqual(plan["day_neighbourhood_break_search"], 0)
++
++    def test_runs_between_break_search_and_joint_refinement(self):
++        order = list(self.plan(3600))
++        self.assertEqual(order.index("day_neighbourhood_break_search"), order.index("break_search") + 1)
++        self.assertLess(order.index("day_neighbourhood_break_search"), order.index("joint_refinement"))
 +
 +
 +if __name__ == "__main__":

@@ -1,0 +1,30 @@
+Recorded 2026-09-24T14:31:13Z. VERDICT: VOID - NOT SHIPPED.
+
+The container was restarted after 12 of 28 runs (seed 9000, all cases except
+SYNTH_H1); the remaining 16 runs never happened. Partial data, as scored by
+the pre-registered scorer:
+CHAT   CUR 9000 {'at': 178, 'af': '227', 'ok': True, 'dnbs': {'window': 0.0, 'days_solved': None, 'accepted': None, 'records': []}}
+CHAT   NEW 9000 {'at': 180, 'af': '228', 'ok': True, 'dnbs': {'window': 16.8, 'days_solved': 0, 'accepted': 0, 'records': [(180, None, 'NO_IMPROVEMENT'), (174, None, 'NO_IMPROVEMENT')]}}
+VOICE  CUR 9000 {'at': 245, 'af': '253', 'ok': True, 'dnbs': {'window': 0.0, 'days_solved': None, 'accepted': None, 'records': []}}
+VOICE  NEW 9000 {'at': 247, 'af': '253', 'ok': True, 'dnbs': {'window': 8.6, 'days_solved': 0, 'accepted': 0, 'records': [(247, None, 'NO_IMPROVEMENT'), (244, None, 'NO_IMPROVEMENT')]}}
+AR     CUR 9000 {'at': 168, 'af': '168', 'ok': True, 'dnbs': {'window': 0.0, 'days_solved': None, 'accepted': None, 'records': []}}
+AR     NEW 9000 {'at': 168, 'af': '168', 'ok': True, 'dnbs': {'window': 291.0, 'days_solved': 14, 'accepted': 0, 'records': [(168, None, 'NO_IMPROVEMENT'), (168, None, 'NO_IMPROVEMENT')]}}
+NMGSP  CUR 9000 {'at': 122, 'af': '126', 'ok': True, 'dnbs': {'window': 0.0, 'days_solved': None, 'accepted': None, 'records': []}}
+NMGSP  NEW 9000 {'at': 121, 'af': '126', 'ok': True, 'dnbs': {'window': 8.3, 'days_solved': 0, 'accepted': 0, 'records': [(121, None, 'NO_IMPROVEMENT'), (121, None, 'NO_IMPROVEMENT')]}}
+M2     CUR 9000 {'at': 112, 'af': '117', 'ok': True, 'dnbs': {'window': 0.0, 'days_solved': None, 'accepted': None, 'records': []}}
+M2     NEW 9000 {'at': 108, 'af': '117', 'ok': True, 'dnbs': {'window': 17.2, 'days_solved': 0, 'accepted': 0, 'records': [(108, None, 'NO_IMPROVEMENT'), (106, None, 'NO_IMPROVEMENT')]}}
+H3     CUR 9000 {'at': 92, 'af': '105', 'ok': True, 'dnbs': {'window': 0.0, 'days_solved': None, 'accepted': None, 'records': []}}
+H3     NEW 9000 {'at': 95, 'af': '105', 'ok': True, 'dnbs': {'window': 39.4, 'days_solved': 0, 'accepted': 0, 'records': [(95, None, 'NO_IMPROVEMENT'), (94, None, 'NO_IMPROVEMENT')]}}
+
+All 12 finished runs: validator PASS, 0 hard failures, parity PASS.
+
+DNBS executed (days_solved > 0) in 1 of 6 NEW runs (AE_AR_B2B, 291 s window,
+already optimal). Everywhere else its window was 8-39 s. Cause: DNBS takes
+half of the time left before the joint-refinement deadline, and at QUICK
+joint_refinement is allocated 0 s (phases list above), so DNBS only ever got
+break-search leftovers. Rule (5) could not have been met; finishing the
+remaining 16 runs could not produce a SHIP verdict, so they were not rerun.
+
+This is a design defect in DNBS's budget, not a result about DNBS. It is fixed
+by giving DNBS its own funded phase, which is a new change and needs its own
+pre-registered A/B (evidence/dnbs_e2e_3600b).

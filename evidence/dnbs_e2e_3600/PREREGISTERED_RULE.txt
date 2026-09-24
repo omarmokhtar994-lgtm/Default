@@ -1,0 +1,23 @@
+Registered 2026-09-24T07:53:42Z, before any 3600 s DNBS run.
+
+Why a second A/B: the 900 s A/B (evidence/dnbs_e2e) failed rule (2), but DNBS
+did not execute in 6 of 7 runs (window below its minimum day slice), so it
+measured solver noise, not DNBS. This A/B runs at the QUICK default budget,
+where DNBS is funded, with two seeds, because single-seed noise reached
+34 intervals (H1).
+
+Arms: CURRENT = repo HEAD engine (4e82969); NEW = HEAD + patches/DNBS_day_neighbourhood_break_search.patch.
+Config: production runner, FULL_SCHEDULE, QUICK, --time-limit 3600, --num-workers 2,
+two runs concurrently (4 cores). Seeds 9000 and 9001 (every case, both arms).
+Cases: Cricut Chat, Cricut Voice, AE_AR_B2B, NMG_SP (real); SYNTH_M2, SYNTH_H3,
+SYNTH_H1 (planted).
+Score: BEST_FINAL after_target; per case the mean over the two seeds.
+
+SHIP iff ALL:
+  (1) every NEW run: validator PASS, 0 hard failures, parity PASS;
+  (2) summed two-seed-mean after_target NEW >= summed CURRENT;
+  (3) no REAL workbook's two-seed mean worse by more than 2 intervals;
+  (4) no NEW run produces no schedule where the same-seed CURRENT run produced one;
+  (5) validity: DNBS executed (days_solved > 0) in at least half of the NEW runs.
+      If it did not, the test is INCONCLUSIVE and DNBS is NOT shipped.
+Otherwise NOT shipped. No rerun, re-seed or rule change after results are seen.

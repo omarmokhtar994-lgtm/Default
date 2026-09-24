@@ -336,9 +336,11 @@ Union N=247 shared the CPU with prototype experiments for part of their run.
 | H3 | 76 | **93** | 105 |
 | H1 | 114 | **138** | 168 |
 | Union N=247 | 118 | **168 = optimum** | 168 |
+| Union N=246 | 126 | **168 = upper bound, so optimal** | 166-168 |
+| X1 (120 agents, 15 min) | crash, then clean refusal | **500** (valid schedule) | 672 |
 
-Every run validator PASS, 0 hard failures, parity PASS. Union N=247 now
-matches the published benchmark exactly.
+Every run validator PASS, 0 hard failures, parity PASS. Both Union Airways
+translations now reach the proven optimum.
 
 ### What still separates M2 / H3 / H1 from the optimum, and what was tried
 

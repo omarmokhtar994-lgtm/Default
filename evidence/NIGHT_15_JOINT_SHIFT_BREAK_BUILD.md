@@ -114,7 +114,35 @@ the pipeline; bounded budget.
 Rule: `evidence/dnbs_e2e/PREREGISTERED_RULE.txt`, registered before any run.
 Result: `evidence/dnbs_e2e/RESULT.txt`.
 
-PENDING: the A/B is running. Until it passes, DNBS is parked as `patches/DNBS_day_neighbourhood_break_search.patch` (engine + tests) and is NOT in the engine.
+**NOT SHIPPED.** 900 s, 2 workers, seed 9000, BEST_FINAL after_target:
+
+| case | CURRENT | NEW | DNBS in the NEW run |
+|---|---|---|---|
+| Cricut Chat | 167 | 182 | did not run (window 31 s) |
+| Cricut Voice | 246 | 245 | ran 14 s; improved anchor 2 (241 -> 242), not selected |
+| AE_AR_B2B | 168 | 168 | did not run |
+| NMG_SP | 121 | 122 | did not run (window 8 s) |
+| SYNTH_M2 | 110 | 111 | did not run |
+| SYNTH_H3 | 90 | 92 | did not run |
+| SYNTH_H1 | 117 | 83 | did not run (window 24 s) |
+| **sum** | **1019** | **1003** | |
+
+All 14 runs validator PASS, 0 hard failures, parity PASS. Rule (2) fails
+(1003 < 1019), so DNBS stays in `patches/DNBS_day_neighbourhood_break_search.patch`.
+
+What this A/B did and did not show: at 900 s DNBS gets half of an 8-49 s
+window, spread over 14 day-slots, which is below its 3 s minimum slice, so it
+exited immediately in 6 of 7 runs. Every difference in the table is run-to-run
+variation of the 2-worker solver between arms that behaved identically: the
+H1 swing (-34, a different skeleton won: before_target 121 vs 168) happened
+with DNBS inactive. The test therefore says nothing for or against DNBS; it
+does say that at 900 s the phase is starved and cannot help.
+
+Evidence for DNBS itself remains the paired measurements on fixed candidate
+pools in section 2 and 3, where noise is absent. Proving it end to end needs a
+new, separately pre-registered A/B at the 3,600 s default (where it gets its
+420 s), with enough seeds to see through a noise level that is itself up to
++/-34 intervals on H1.
 
 ## 5. What is still open
 

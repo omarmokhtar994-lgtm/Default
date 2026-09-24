@@ -1,0 +1,36 @@
+Registered 2026-09-24T22:05:13Z, before any run of this measurement.
+
+Question: for each mode, is the wall-clock time better spent on one long run
+or on several shorter seeds, keeping the best (engine/RUN_PORTFOLIO.py)?
+
+Engine: repo engine files as of 4e82969 (the frozen CURRENT arm of
+evidence/dnbs_e2e_3600b), 2 workers per run, production runner, FULL_SCHEDULE.
+Scores per config and case: after = best validated after_target among its
+seeds (single run: the run's own), before = best best_before_target among its
+seeds. A run without validator PASS / 0 hard / parity PASS cannot supply
+"after". Runs killed by infrastructure are rerun, same seed; finished runs never.
+
+QUICK (1 h wall clock), all 7 cases (Chat, Voice, AE_AR_B2B, NMG_SP, M2, H3, H1):
+  A = one 3600 s run: the mean of the two CURRENT runs of dnbs_e2e_3600b
+      (seeds 9000, 9001) - the expected result of today's QUICK.
+  B = best of 2 x 1800 s (seeds 9000, 9001), new runs.
+  C = best of 4 x 900 s (seeds 9000-9003), new runs.
+  QUICK default becomes the config with the highest summed after, provided that
+  (i) no case's after is below A's by more than 3, and (ii) no real workbook's
+  before is below A's mean before by more than 1. If neither B nor C qualifies
+  and beats A, QUICK stays one 3600 s run.
+  Also reported, not a default: D = best of 2 x 3600 s (2 h, the two CURRENT runs).
+
+DEEP (4 h wall clock), cases Chat, Voice, NMG_SP, H1 (AE_AR_B2B is at its
+168/168 ceiling and cannot discriminate):
+  F = one DEEP run (runner --mode DEEP, 14400 s, as shipped), seed 9000, new.
+  E = best of 4 x 3600 s: seeds 9000, 9001 from dnbs_e2e_3600b CURRENT plus new
+      seeds 9002, 9003.
+  DEEP default becomes E if summed after(E) >= summed after(F) and no real
+  workbook's before(E) is below before(F) by more than 1; otherwise DEEP stays.
+OVERNIGHT (6 h): not measured separately. If E is adopted for DEEP, OVERNIGHT
+  becomes best of 6 x 3600 s by the same argument; otherwise it stays.
+
+Honest limits: each "best of" is one realization; A is a 2-run mean; F is one
+run. This decides defaults between configurations of the same, already
+validated engine. It changes no solver code and no validation.

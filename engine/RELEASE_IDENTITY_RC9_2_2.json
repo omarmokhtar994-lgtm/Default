@@ -2,11 +2,11 @@
   "schema_version": 1,
   "release": "L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2",
   "release_short": "RC9.2.2-PRODUCTION-HARDENED-RC5-P1-C1",
-  "generated_utc": "2026-09-23T18:30:00+00:00",
+  "generated_utc": "2026-09-24T07:00:00+00:00",
   "architecture": "Universal workbook-driven scheduler with protected-tier selection, independent exact-artifact validation, and fail-closed publication",
   "base_release": "L6.3.2.6-RC9.2.2-BUDGETED-SEARCH-AND-BREAK-CONCURRENCY-RC1",
   "status": "RELEASE_CANDIDATE_NO_GO_PENDING_SCENARIO_AND_QUALITY_REVIEW",
-  "engine_file_sha256": "6c33efff3c2ff9dc4bd026563e1181e752e8d3ef966b7755963c312b35ae3d35",
+  "engine_file_sha256": "97e984f8525e3ba3cca94e3a17269aae3fb2f5b63b2feba2765a94f4258ab4f8",
   "artifact_filename_compatibility_tag": "L6_3_2_3",
   "identity_authority": "Run identity, engine SHA-256, input snapshot SHA-256, independent validation seal, and package manifest; the compatibility filename tag is not release identity",
   "dependencies": [
@@ -17,6 +17,6 @@
     "scipy>=1.11.0"
   ],
   "base_engine_file_sha256": "0e6f643552c5e59f284fefbabc74803c3450b2a1cd2de47fad44781f6408cc5c",
-  "patch_applied": "P-1 memoisation + A-1/A-2/A-3/A-7 input-contract fidelity. Canonical contract hash identical on all 10 workbooks. | Merged L6.3.2.6 coverage-split line; formula audit F-1..F-5; anchor hand-off margin; feasibility-probe retry; starved Stage-1 before-basis profile; interval-averaged break-capacity advisory; joint-search memory guard; blank staffing = current-week only. Not applied: F-6, S2-PAR (patches/). Evidence: evidence/NIGHT_14_TEST_SUITES_AND_BENCHMARKS.md.",
-  "previous_engine_file_sha256": "0b178297126ccb2b5cd022d69ad6cd6dae20be87d73a980fb571db28696c105c"
+  "patch_applied": "P-1 memoisation + A-1/A-2/A-3/A-7 input-contract fidelity. Canonical contract hash identical on all 10 workbooks. | Merged L6.3.2.6 coverage-split line; formula audit F-1..F-5; anchor hand-off margin; feasibility-probe retry; starved Stage-1 before-basis profile; interval-averaged break-capacity advisory; joint-search memory guard; blank staffing = current-week only. S2-PAR (parallel Stage-2 break solve) applied on its pre-registered A/B (evidence/s2par_e2e). Not applied: F-6; DNBS day-neighbourhood break search (patches/, failed its A/B: evidence/dnbs_e2e). Evidence: evidence/NIGHT_14_TEST_SUITES_AND_BENCHMARKS.md.",
+  "previous_engine_file_sha256": "6c33efff3c2ff9dc4bd026563e1181e752e8d3ef966b7755963c312b35ae3d35"
 }

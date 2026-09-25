@@ -2,11 +2,11 @@
   "schema_version": 1,
   "release": "L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2",
   "release_short": "RC9.2.2-PRODUCTION-HARDENED-RC5-P1-C1",
-  "generated_utc": "2026-09-25T05:45:00+00:00",
+  "generated_utc": "2026-09-25T22:20:00+00:00",
   "architecture": "Universal workbook-driven scheduler with protected-tier selection, independent exact-artifact validation, and fail-closed publication",
   "base_release": "L6.3.2.6-RC9.2.2-BUDGETED-SEARCH-AND-BREAK-CONCURRENCY-RC1",
   "status": "RELEASE_CANDIDATE_NO_GO_PENDING_SCENARIO_AND_QUALITY_REVIEW",
-  "engine_file_sha256": "7a36c9621091143b21b5068a255b9cfd326b9ebe95e85b23c926307a5e16b453",
+  "engine_file_sha256": "2cfe3be0f51714bf7d0d69c37457dc66f71bc77b45e4f94b90aede4a43ed01eb",
   "artifact_filename_compatibility_tag": "L6_3_2_3",
   "identity_authority": "Run identity, engine SHA-256, input snapshot SHA-256, independent validation seal, and package manifest; the compatibility filename tag is not release identity",
   "dependencies": [
@@ -17,6 +17,6 @@
     "scipy>=1.11.0"
   ],
   "base_engine_file_sha256": "0e6f643552c5e59f284fefbabc74803c3450b2a1cd2de47fad44781f6408cc5c",
-  "patch_applied": "P-1 memoisation + A-1/A-2/A-3/A-7 input-contract fidelity. Canonical contract hash identical on all 10 workbooks. | Merged L6.3.2.6 coverage-split line; formula audit F-1..F-5; anchor hand-off margin; feasibility-probe retry; starved Stage-1 before-basis profile; interval-averaged break-capacity advisory; joint-search memory guard; blank staffing = current-week only. S2-PAR (parallel Stage-2 break solve) applied on its pre-registered A/B (evidence/s2par_e2e). DNBS day-neighbourhood break search with its own budget phase applied on its pre-registered 3600 s two-seed A/B (evidence/dnbs_e2e_3600b). Not applied: F-6; LP-visible hit links (measured, no gain). Evidence: evidence/NIGHT_14_TEST_SUITES_AND_BENCHMARKS.md.",
-  "previous_engine_file_sha256": "97e984f8525e3ba3cca94e3a17269aae3fb2f5b63b2feba2765a94f4258ab4f8"
+  "patch_applied": "P-1 memoisation + A-1/A-2/A-3/A-7 input-contract fidelity. Canonical contract hash identical on all 10 workbooks. | Merged L6.3.2.6 coverage-split line; formula audit F-1..F-5; anchor hand-off margin; feasibility-probe retry; starved Stage-1 before-basis profile; interval-averaged break-capacity advisory; joint-search memory guard; blank staffing = current-week only. S2-PAR (parallel Stage-2 break solve) applied on its pre-registered A/B (evidence/s2par_e2e). DNBS day-neighbourhood break search with its own budget phase applied on its pre-registered 3600 s two-seed A/B (evidence/dnbs_e2e_3600b). Joint-solve isolation (joint-refinement CP-SAT solves in a forked, memory-watched child; identical results when memory suffices, a recorded memory stop instead of a killed run when it does not) applied on its registered verification rule (evidence/joint_solve_isolation). Not applied: F-6; LP-visible hit links (measured, no gain). Evidence: evidence/NIGHT_14_TEST_SUITES_AND_BENCHMARKS.md.",
+  "previous_engine_file_sha256": "7a36c9621091143b21b5068a255b9cfd326b9ebe95e85b23c926307a5e16b453"
 }

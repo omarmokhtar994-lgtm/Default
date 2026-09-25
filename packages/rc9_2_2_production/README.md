@@ -27,6 +27,15 @@ a pre-registered A/B (all runs validator PASS, 0 hard failures):
 * DEEP / OVERNIGHT defaults are still being measured (one long run vs several
   1-hour seeds); until then use QUICK + 2 seeds.
 
+**DEEP / OVERNIGHT memory fix.** Those modes run joint refinement (QUICK does
+not). Its CP-SAT models reached 13 GB on Cricut Chat and on the 24x7 synthetic
+case, and the machine killed the whole run with no schedule. Each of those
+solves now runs in a separate child process with a memory watchdog. When memory
+suffices the result is identical (verified solve-for-solve); when it runs out,
+only that solve is stopped, `joint_solve_isolation` in the solver audit records
+it, joint refinement stops, and the run finishes and validates as usual.
+Evidence: `evidence/joint_solve_isolation/`, `evidence/DEEP_MODE_OOM.md`.
+
 Evidence: `evidence/dnbs_e2e_3600b/RESULT.txt`, `evidence/seed_portfolio_ab/`,
 `evidence/NIGHT_15_JOINT_SHIFT_BREAK_BUILD.md`.
 

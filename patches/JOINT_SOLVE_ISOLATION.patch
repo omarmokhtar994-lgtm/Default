@@ -1,5 +1,5 @@
 diff --git a/engine/_tools/l632_universal_scheduler.py b/engine/_tools/l632_universal_scheduler.py
-index 7d2279e..32d0a01 100644
+index 7d2279e..3840891 100644
 --- a/engine/_tools/l632_universal_scheduler.py
 +++ b/engine/_tools/l632_universal_scheduler.py
 @@ -4073,8 +4073,16 @@ def joint_memory_headroom() -> Dict[str, Any]:
@@ -19,7 +19,7 @@ index 7d2279e..32d0a01 100644
      return {"ok": available >= required, "available_mb": available, "required_mb": required, "source": "/proc/meminfo"}
  SOLVER_RELATIVE_GAP_LIMIT: float = 0.0
  
-@@ -4120,6 +4128,240 @@ def configure_solver_limits(solver: Any) -> Dict[str, Any]:
+@@ -4120,6 +4128,263 @@ def configure_solver_limits(solver: Any) -> Dict[str, Any]:
      return applied
  
  
@@ -49,6 +49,7 @@ index 7d2279e..32d0a01 100644
 +JOINT_SOLVE_KILL_BELOW_FREE_SHARE = 0.02
 +JOINT_SOLVE_POLL_SEC = 0.2
 +_JOINT_SOLVE_MEMORY_STOPS: List[Dict[str, Any]] = []
++_JOINT_SOLVE_ISOLATION_LOG: List[Dict[str, Any]] = []
 +_ISOLATED_SOLVER_CLASSES: Dict[int, Any] = {}
 +
 +
@@ -129,6 +130,7 @@ index 7d2279e..32d0a01 100644
 +    record: Dict[str, Any] = {"mode": "IN_PROCESS", "reason": None, "child_exit": None,
 +                              "killed_for_memory": False, "min_free_mb": None, "kill_below_free_mb": None}
 +    solver.isolation_record = record
++    _JOINT_SOLVE_ISOLATION_LOG.append(record)
 +    if not JOINT_SOLVE_ISOLATION_ENABLED:
 +        record["reason"] = "DISABLED"
 +    elif not hasattr(os, "fork"):
@@ -237,6 +239,27 @@ index 7d2279e..32d0a01 100644
 +    return response.status
 +
 +
++def joint_solve_isolation_audit() -> Dict[str, Any]:
++    """Every joint solve of this run: how it ran and how its child ended."""
++    log = list(_JOINT_SOLVE_ISOLATION_LOG)
++    counts: Dict[str, int] = {}
++    exits: Dict[str, int] = {}
++    for row in log:
++        key = row["mode"] if row["mode"] == "ISOLATED" else f"IN_PROCESS_{row.get('reason')}"
++        counts[key] = counts.get(key, 0) + 1
++        if row["mode"] == "ISOLATED":
++            exits[str(row.get("child_exit"))] = exits.get(str(row.get("child_exit")), 0) + 1
++    free = [row["min_free_mb"] for row in log if row.get("min_free_mb") is not None]
++    return {
++        "enabled": bool(JOINT_SOLVE_ISOLATION_ENABLED),
++        "solve_count": len(log),
++        "by_mode": counts,
++        "child_exits": exits,
++        "memory_stops": [dict(r) for r in _JOINT_SOLVE_MEMORY_STOPS],
++        "lowest_free_memory_mb_seen": min(free) if free else None,
++    }
++
++
 +def isolated_cp_solver(cp_model: Any) -> Any:
 +    """A CpSolver whose Solve runs through isolated_cp_solve; otherwise the stock class."""
 +    cls = _ISOLATED_SOLVER_CLASSES.get(id(cp_model))
@@ -260,7 +283,7 @@ index 7d2279e..32d0a01 100644
  
  def capture_solver_telemetry(
      cp_model: Any, solver: Any, status: int,
-@@ -15321,7 +15563,7 @@ def solve_joint_shift_off_language_break_refinement(
+@@ -15321,7 +15586,7 @@ def solve_joint_shift_off_language_break_refinement(
      weighted_objective = sum(objective_terms) if objective_terms else 0
  
      def configured_solver(seconds: float, stage_seed: int) -> Any:
@@ -269,7 +292,7 @@ index 7d2279e..32d0a01 100644
          stage_solver.parameters.max_time_in_seconds = max(1.0, float(seconds))
          stage_solver.parameters.num_search_workers = max(1, int(workers))
          stage_solver.parameters.random_seed = int(stage_seed)
-@@ -15337,6 +15579,7 @@ def solve_joint_shift_off_language_break_refinement(
+@@ -15337,6 +15602,7 @@ def solve_joint_shift_off_language_break_refinement(
  
      started = time.time()
      lexicographic_rows: List[Dict[str, Any]] = []
@@ -277,7 +300,7 @@ index 7d2279e..32d0a01 100644
      solver: Any = None
      status: Any = None
      status_text = "UNKNOWN"
-@@ -15375,6 +15618,7 @@ def solve_joint_shift_off_language_break_refinement(
+@@ -15375,6 +15641,7 @@ def solve_joint_shift_off_language_break_refinement(
                  "best_objective_bound": (float(stage_solver.BestObjectiveBound()) if stage_status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else None),
              }
              lexicographic_rows.append(row)
@@ -285,7 +308,7 @@ index 7d2279e..32d0a01 100644
              if stage_status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
                  print(
                      f"JOINT_CP_SAT operator={operator_name} stage={stage_name} "
-@@ -15385,7 +15629,10 @@ def solve_joint_shift_off_language_break_refinement(
+@@ -15385,7 +15652,10 @@ def solve_joint_shift_off_language_break_refinement(
                      "SOLVER_STAGE_FAILED", "LEXICOGRAPHIC_STAGE_NOT_FEASIBLE",
                      solver_status=stage_status_text, failed_stage=stage_name,
                      lexicographic_rows=list(lexicographic_rows),
@@ -296,7 +319,7 @@ index 7d2279e..32d0a01 100644
                  return None
              locked_value = int(round(stage_solver.ObjectiveValue()))
              model.Add(expression >= locked_value - int(tolerance))
-@@ -15407,6 +15654,7 @@ def solve_joint_shift_off_language_break_refinement(
+@@ -15407,6 +15677,7 @@ def solve_joint_shift_off_language_break_refinement(
              "objective_value": (float(final_solver.ObjectiveValue()) if final_status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else None),
              "best_objective_bound": (float(final_solver.BestObjectiveBound()) if final_status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else None),
          })
@@ -304,7 +327,7 @@ index 7d2279e..32d0a01 100644
          if final_status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
              solver, status, status_text = final_solver, final_status, final_status_text
      else:
-@@ -15414,7 +15662,11 @@ def solve_joint_shift_off_language_break_refinement(
+@@ -15414,7 +15685,11 @@ def solve_joint_shift_off_language_break_refinement(
          solver = configured_solver(max(1.0, float(time_limit)), int(random_seed))
          status = solver.Solve(model)
          status_text = status_name(cp_model, solver, status)
@@ -316,7 +339,7 @@ index 7d2279e..32d0a01 100644
      print(
          f"JOINT_CP_SAT operator={operator_name} changes={max_changed_cells} shift_options={max_shift_options_per_cell} "
          f"patterns={max_patterns_per_shift} exception_cap={exception_cap} status={status_text} elapsed={elapsed:.2f}s",
-@@ -15424,11 +15676,13 @@ def solve_joint_shift_off_language_break_refinement(
+@@ -15424,11 +15699,13 @@ def solve_joint_shift_off_language_break_refinement(
          record_diagnostic(
              "SOLVER_FINAL_FAILED", "FINAL_STAGE_NOT_FEASIBLE",
              solver_status=status_text, lexicographic_rows=list(lexicographic_rows),
@@ -330,3 +353,19 @@ index 7d2279e..32d0a01 100644
      )
  
      assignment = [[""] * D for _ in range(A)]
+@@ -21036,6 +21313,7 @@ def run_case(
+                 "model_contract": "ADAPTIVE_MASTER_X_DYNAMIC_SHIFT_BREAK_TOURS_X_FEEDBACK_CUTS_X_LEXICOGRAPHIC_CP_SAT",
+                 "architecture": "PHASE_C_C3_INTEGRATED_MASTER_ENGINE",
+             }
++            audit["joint_solve_isolation"] = joint_solve_isolation_audit()
+             completed_phases["joint_refinement_complete"] = not bool(joint_execution.get("truncated"))
+             budget_manager.record(
+                 "joint_refinement", "JOINT_CP_SAT_REFINEMENT_COMPLETE",
+@@ -21406,6 +21684,7 @@ def run_case(
+             "release_candidate_count": len(compliant) + len(exceptions),
+             "remaining_total_seconds": round(max(0.0, finalization_deadline - time.time()), 6),
+         }
++        audit["joint_solve_isolation"] = joint_solve_isolation_audit()
+         if endgame_round:
+             budget_manager.record(
+                 "joint_refinement", "FINAL_RECOVERY_ENDGAME_COMPLETE",

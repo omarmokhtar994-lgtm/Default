@@ -59,13 +59,16 @@ def deterministic(solver):
 
 class Base(unittest.TestCase):
     def setUp(self):
-        self.saved = (E.JOINT_SOLVE_ISOLATION_ENABLED, E.JOINT_SOLVE_KILL_BELOW_FREE_MB, list(E._JOINT_SOLVE_MEMORY_STOPS))
+        self.saved = (E.JOINT_SOLVE_ISOLATION_ENABLED, E.JOINT_SOLVE_KILL_BELOW_FREE_MB, list(E._JOINT_SOLVE_MEMORY_STOPS),
+                      list(E._JOINT_SOLVE_ISOLATION_LOG))
         del E._JOINT_SOLVE_MEMORY_STOPS[:]
+        del E._JOINT_SOLVE_ISOLATION_LOG[:]
         self.tmp_before = set(os.listdir(tempfile.gettempdir()))
 
     def tearDown(self):
-        E.JOINT_SOLVE_ISOLATION_ENABLED, E.JOINT_SOLVE_KILL_BELOW_FREE_MB, stops = self.saved
+        E.JOINT_SOLVE_ISOLATION_ENABLED, E.JOINT_SOLVE_KILL_BELOW_FREE_MB, stops, log = self.saved
         E._JOINT_SOLVE_MEMORY_STOPS[:] = stops
+        E._JOINT_SOLVE_ISOLATION_LOG[:] = log
 
     def assert_no_leftover_files(self):
         left = {n for n in set(os.listdir(tempfile.gettempdir())) - self.tmp_before if n.startswith("joint_solve_")}
@@ -165,6 +168,26 @@ class MemoryStop(Base):
         self.assertIn('"/proc/self/oom_score_adj"', src)
         self.assertIn('write("1000")', src)
         self.assertIn("gc.disable()", src)
+
+
+class Audit(Base):
+    def test_every_joint_solve_is_counted_in_the_audit(self):
+        m, _ = small_model(7)
+        deterministic(E.isolated_cp_solver(cp_model)).Solve(m)
+        E.JOINT_SOLVE_ISOLATION_ENABLED = False
+        deterministic(E.isolated_cp_solver(cp_model)).Solve(m)
+        E.JOINT_SOLVE_ISOLATION_ENABLED = True
+        E.JOINT_SOLVE_KILL_BELOW_FREE_MB = 10 ** 9
+        E.isolated_cp_solver(cp_model).Solve(small_model(8, n=600)[0])
+        audit = E.joint_solve_isolation_audit()
+        self.assertEqual(audit["solve_count"], 3)
+        self.assertEqual(audit["by_mode"], {"ISOLATED": 2, "IN_PROCESS_DISABLED": 1})
+        self.assertEqual(audit["child_exits"], {"0": 1, "SIGNAL_9": 1})
+        self.assertEqual(len(audit["memory_stops"]), 1)
+
+    def test_the_run_audit_carries_it(self):
+        src = inspect.getsource(E)
+        self.assertEqual(src.count('audit["joint_solve_isolation"] = joint_solve_isolation_audit()'), 2)
 
 
 class ErrorsAreNotHidden(Base):

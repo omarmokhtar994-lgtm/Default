@@ -4154,6 +4154,7 @@ JOINT_SOLVE_KILL_BELOW_FREE_MB = 256
 JOINT_SOLVE_KILL_BELOW_FREE_SHARE = 0.02
 JOINT_SOLVE_POLL_SEC = 0.2
 _JOINT_SOLVE_MEMORY_STOPS: List[Dict[str, Any]] = []
+_JOINT_SOLVE_ISOLATION_LOG: List[Dict[str, Any]] = []
 _ISOLATED_SOLVER_CLASSES: Dict[int, Any] = {}
 
 
@@ -4234,6 +4235,7 @@ def isolated_cp_solve(solver: Any, model: Any, in_process_solve: Any, response_t
     record: Dict[str, Any] = {"mode": "IN_PROCESS", "reason": None, "child_exit": None,
                               "killed_for_memory": False, "min_free_mb": None, "kill_below_free_mb": None}
     solver.isolation_record = record
+    _JOINT_SOLVE_ISOLATION_LOG.append(record)
     if not JOINT_SOLVE_ISOLATION_ENABLED:
         record["reason"] = "DISABLED"
     elif not hasattr(os, "fork"):
@@ -4340,6 +4342,27 @@ def isolated_cp_solve(solver: Any, model: Any, in_process_solve: Any, response_t
     record["elapsed_sec"] = round(time.time() - started, 3)
     solver._CpSolver__response = response
     return response.status
+
+
+def joint_solve_isolation_audit() -> Dict[str, Any]:
+    """Every joint solve of this run: how it ran and how its child ended."""
+    log = list(_JOINT_SOLVE_ISOLATION_LOG)
+    counts: Dict[str, int] = {}
+    exits: Dict[str, int] = {}
+    for row in log:
+        key = row["mode"] if row["mode"] == "ISOLATED" else f"IN_PROCESS_{row.get('reason')}"
+        counts[key] = counts.get(key, 0) + 1
+        if row["mode"] == "ISOLATED":
+            exits[str(row.get("child_exit"))] = exits.get(str(row.get("child_exit")), 0) + 1
+    free = [row["min_free_mb"] for row in log if row.get("min_free_mb") is not None]
+    return {
+        "enabled": bool(JOINT_SOLVE_ISOLATION_ENABLED),
+        "solve_count": len(log),
+        "by_mode": counts,
+        "child_exits": exits,
+        "memory_stops": [dict(r) for r in _JOINT_SOLVE_MEMORY_STOPS],
+        "lowest_free_memory_mb_seen": min(free) if free else None,
+    }
 
 
 def isolated_cp_solver(cp_model: Any) -> Any:
@@ -21290,6 +21313,7 @@ def run_case(
                 "model_contract": "ADAPTIVE_MASTER_X_DYNAMIC_SHIFT_BREAK_TOURS_X_FEEDBACK_CUTS_X_LEXICOGRAPHIC_CP_SAT",
                 "architecture": "PHASE_C_C3_INTEGRATED_MASTER_ENGINE",
             }
+            audit["joint_solve_isolation"] = joint_solve_isolation_audit()
             completed_phases["joint_refinement_complete"] = not bool(joint_execution.get("truncated"))
             budget_manager.record(
                 "joint_refinement", "JOINT_CP_SAT_REFINEMENT_COMPLETE",
@@ -21660,6 +21684,7 @@ def run_case(
             "release_candidate_count": len(compliant) + len(exceptions),
             "remaining_total_seconds": round(max(0.0, finalization_deadline - time.time()), 6),
         }
+        audit["joint_solve_isolation"] = joint_solve_isolation_audit()
         if endgame_round:
             budget_manager.record(
                 "joint_refinement", "FINAL_RECOVERY_ENDGAME_COMPLETE",

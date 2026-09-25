@@ -1,0 +1,8 @@
+loaded 20 candidates, pss 161MB, emulated machine 7000 MB, kill below 256 MB free
+  LOG JOINT_CP_SAT operator=incumbent_replay stage=MAXIMIZE_AFTER_TARGET status=INFEASIBLE elapsed=1.39s pss=876MB
+  LOG JOINT_CP_SAT operator=release_quality_master stage=MAXIMIZE_AFTER_TARGET status=UNKNOWN elapsed=34.72s pss=3743MB
+  LOG JOINT_SOLVE_ISOLATION memory stop: {"stage": "MAXIMIZE_AFTER_TARGET", "mode": "ISOLATED", "reason": null, "child_exit": "SIGNAL_9", "killed_for_memory": true, "min_free_mb": 233, "kill_below_free_mb": 256, "memory_stop": true, "elapsed_sec": 34.692} pss=3743MB
+  LOG JOINT_CP_SAT stopped: low memory headroom {"ok": false, "available_mb": 9483, "required_mb": 2414, "source": "JOINT_SOLVE_ISOLATION", "memory_stops": [{"mode": "ISOLATED", "reason": null, "child_exit": "SIGNAL_9", "killed_for_memory": true, "min_free_mb": 233, "kill_below_free_mb": 256, "memory_stop pss=3670MB
+RETURNED NORMALLY {'attempted': 2, 'accepted': 0, 'improved': 0, 'truncated': True} peak tree pss 6767MB 283s
+memory_headroom_stop: {"ok": false, "available_mb": 9483, "required_mb": 2414, "source": "JOINT_SOLVE_ISOLATION", "memory_stops": [{"mode": "ISOLATED", "reason": null, "child_exit": "SIGNAL_9", "killed_for_memory": true, "min_free_mb": 233, "kill_below_free_mb": 256, "memory_stop": true}]}
+memory stops: [{"mode": "ISOLATED", "reason": null, "child_exit": "SIGNAL_9", "killed_for_memory": true, "min_free_mb": 233, "kill_below_free_mb": 256, "memory_stop": true}]

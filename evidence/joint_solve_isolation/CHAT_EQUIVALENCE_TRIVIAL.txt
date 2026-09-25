@@ -1,0 +1,4 @@
+OFF [[["INFEASIBLE", 0.0, 0.0, "4f53cda18c2baa0c", 0, 0, "IN_PROCESS"], ["INFEASIBLE", 0.0, 0.0, "4f53cda18c2baa0c", 0, 0, "IN_PROCESS"], ["INFEASIBLE", 0.0, 0.0, "4f53cda18c2baa0c", 0, 0, "IN_PROCESS"], ["INFEASIBLE", 0.0, 0.0, "4f53cda18c2baa0c", 0, 0, "IN_PROCESS"]], [], {"attempted": 4, "accepted": 0, "improved": 0}]
+ON  [[["INFEASIBLE", 0.0, 0.0, "4f53cda18c2baa0c", 0, 0, "ISOLATED"], ["INFEASIBLE", 0.0, 0.0, "4f53cda18c2baa0c", 0, 0, "ISOLATED"], ["INFEASIBLE", 0.0, 0.0, "4f53cda18c2baa0c", 0, 0, "ISOLATED"], ["INFEASIBLE", 0.0, 0.0, "4f53cda18c2baa0c", 0, 0, "ISOLATED"]], [], {"attempted": 4, "accepted": 0, "improved": 0}]
+modes OFF ['IN_PROCESS'] ON ['ISOLATED']
+IDENTICAL 4 solves

@@ -1,0 +1,332 @@
+diff --git a/engine/_tools/l632_universal_scheduler.py b/engine/_tools/l632_universal_scheduler.py
+index 7d2279e..32d0a01 100644
+--- a/engine/_tools/l632_universal_scheduler.py
++++ b/engine/_tools/l632_universal_scheduler.py
+@@ -4073,8 +4073,16 @@ def joint_memory_headroom() -> Dict[str, Any]:
+         total = info["MemTotal"]
+         available = info["MemAvailable"]
+     except Exception:
++        if _JOINT_SOLVE_MEMORY_STOPS:
++            return {"ok": False, "available_mb": None, "required_mb": None,
++                    "source": "JOINT_SOLVE_ISOLATION", "memory_stops": [dict(r) for r in _JOINT_SOLVE_MEMORY_STOPS]}
+         return {"ok": True, "available_mb": None, "required_mb": None, "source": "UNAVAILABLE"}
+     required = max(JOINT_MIN_AVAILABLE_MEMORY_MB, int(total * JOINT_MIN_AVAILABLE_MEMORY_SHARE))
++    if _JOINT_SOLVE_MEMORY_STOPS:
++        # A joint solve already ran the machine out of memory; later joint
++        # models are larger, so none is started (see JOINT_SOLVE_ISOLATION).
++        return {"ok": False, "available_mb": available, "required_mb": required,
++                "source": "JOINT_SOLVE_ISOLATION", "memory_stops": [dict(r) for r in _JOINT_SOLVE_MEMORY_STOPS]}
+     return {"ok": available >= required, "available_mb": available, "required_mb": required, "source": "/proc/meminfo"}
+ SOLVER_RELATIVE_GAP_LIMIT: float = 0.0
+ 
+@@ -4120,6 +4128,240 @@ def configure_solver_limits(solver: Any) -> Dict[str, Any]:
+     return applied
+ 
+ 
++# Joint-refinement solves run in a forked child process (JOINT_SOLVE_ISOLATION).
++#
++# Why: DEEP/OVERNIGHT keep joint refinement on. On Cricut Chat its second model
++# (344k variables) reached 3.8 GB before the solve and grew past 6.5 GB inside
++# CP-SAT (max_memory_in_mb is checked only between search steps, not in
++# presolve); CHAT_DEEP_9000 was then killed by the kernel at 13 GB with no
++# schedule, summary or validation (evidence/DEEP_MODE_OOM.md). A memory stop
++# must cost that one solve, not the run.
++#
++# How: the child is a fork of the engine at the moment of the solve, so it
++# solves the very same model object with the very same parameters and seed; it
++# writes the CpSolverResponse back as protobuf text, which the parent parses
++# into its own solver. Value/ObjectiveValue/StatusName and every other reader
++# work unchanged. While memory suffices the result is the solve the engine
++# would have run in process. When the machine runs out, the kernel's OOM
++# killer is steered at the child (oom_score_adj 1000) and a watchdog kills it
++# first once free memory falls below JOINT_SOLVE_KILL_BELOW_FREE_MB (or
++# _SHARE of RAM); the solve then reports UNKNOWN, the audit records it, and
++# joint refinement stops starting new models (joint_memory_headroom), because
++# the next ones are larger. Where fork is unavailable (Windows) or a callback
++# is attached, the solve runs in process exactly as before.
++JOINT_SOLVE_ISOLATION_ENABLED = True
++JOINT_SOLVE_KILL_BELOW_FREE_MB = 256
++JOINT_SOLVE_KILL_BELOW_FREE_SHARE = 0.02
++JOINT_SOLVE_POLL_SEC = 0.2
++_JOINT_SOLVE_MEMORY_STOPS: List[Dict[str, Any]] = []
++_ISOLATED_SOLVER_CLASSES: Dict[int, Any] = {}
++
++
++def _cgroup_memory_headroom_mb() -> Optional[int]:
++    """limit - usage of this process's own memory cgroup (v2 or v1), if limited."""
++    try:
++        with open("/proc/self/cgroup", "r", encoding="utf-8") as handle:
++            lines = handle.read().splitlines()
++    except Exception:
++        return None
++    candidates: List[Tuple[str, str]] = []
++    for line in lines:
++        parts = line.split(":", 2)
++        if len(parts) != 3:
++            continue
++        if parts[0] == "0" and parts[1] == "":
++            candidates.append((f"/sys/fs/cgroup{parts[2]}".rstrip("/"), "v2"))
++        elif "memory" in parts[1].split(","):
++            candidates.append((f"/sys/fs/cgroup/memory{parts[2]}".rstrip("/"), "v1"))
++    for base, version in candidates:
++        limit_name, usage_name = ("memory.max", "memory.current") if version == "v2" else ("memory.limit_in_bytes", "memory.usage_in_bytes")
++        try:
++            with open(os.path.join(base, limit_name), "r", encoding="utf-8") as handle:
++                raw_limit = handle.read().strip()
++            with open(os.path.join(base, usage_name), "r", encoding="utf-8") as handle:
++                usage = int(handle.read().strip())
++        except Exception:
++            continue
++        if raw_limit == "max" or int(raw_limit) >= (1 << 60):
++            continue
++        return (int(raw_limit) - usage) // (1024 * 1024)
++    return None
++
++
++def machine_free_memory_mb() -> Tuple[Optional[int], Optional[int]]:
++    """(free MB, total MB): MemAvailable, tightened by a cgroup limit if one applies."""
++    total: Optional[int] = None
++    free: Optional[int] = None
++    try:
++        with open("/proc/meminfo", "r", encoding="utf-8") as handle:
++            for line in handle:
++                key, _, rest = line.partition(":")
++                if key == "MemTotal":
++                    total = int(rest.strip().split()[0]) // 1024
++                elif key == "MemAvailable":
++                    free = int(rest.strip().split()[0]) // 1024
++    except Exception:
++        pass
++    cgroup = _cgroup_memory_headroom_mb()
++    if cgroup is not None:
++        free = cgroup if free is None else min(free, cgroup)
++    return free, total
++
++
++def joint_solve_kill_threshold_mb(total_mb: Optional[int]) -> int:
++    return max(int(JOINT_SOLVE_KILL_BELOW_FREE_MB), int((total_mb or 0) * float(JOINT_SOLVE_KILL_BELOW_FREE_SHARE)))
++
++
++def _child_prepare_for_isolated_solve() -> None:
++    """In the forked child: be the OOM killer's first choice and die with the parent."""
++    import gc
++    gc.disable()  # a collection would touch, and so copy, every inherited page
++    try:
++        with open("/proc/self/oom_score_adj", "w", encoding="utf-8") as handle:
++            handle.write("1000")
++    except Exception:
++        pass
++    try:
++        import ctypes
++        import signal
++        ctypes.CDLL(None, use_errno=True).prctl(1, int(signal.SIGKILL), 0, 0, 0)  # PR_SET_PDEATHSIG
++    except Exception:
++        pass
++
++
++def isolated_cp_solve(solver: Any, model: Any, in_process_solve: Any, response_type: Any, solution_callback: Any = None) -> Any:
++    """Run in_process_solve(model) in a forked, memory-watched child; see the block comment above."""
++    record: Dict[str, Any] = {"mode": "IN_PROCESS", "reason": None, "child_exit": None,
++                              "killed_for_memory": False, "min_free_mb": None, "kill_below_free_mb": None}
++    solver.isolation_record = record
++    if not JOINT_SOLVE_ISOLATION_ENABLED:
++        record["reason"] = "DISABLED"
++    elif not hasattr(os, "fork"):
++        record["reason"] = "NO_FORK"
++    elif solution_callback is not None or getattr(solver, "log_callback", None) is not None or getattr(solver, "best_bound_callback", None) is not None:
++        record["reason"] = "CALLBACK_ATTACHED"
++    elif not hasattr(solver, "_CpSolver__response"):
++        record["reason"] = "UNSUPPORTED_ORTOOLS"
++    if record["reason"] is not None:
++        return in_process_solve(model, solution_callback)
++    handle, path = tempfile.mkstemp(prefix="joint_solve_", suffix=".txt")
++    os.close(handle)
++    partial = path + ".part"
++    free, total = machine_free_memory_mb()
++    threshold = joint_solve_kill_threshold_mb(total)
++    record.update(mode="ISOLATED", kill_below_free_mb=threshold, min_free_mb=free)
++    started = time.time()
++    for stream in (sys.stdout, sys.stderr):
++        try:
++            stream.flush()
++        except Exception:
++            pass
++    pid = os.fork()
++    if pid == 0:
++        code = 72
++        try:
++            _child_prepare_for_isolated_solve()
++            in_process_solve(model)
++            with open(partial, "w", encoding="utf-8") as out:
++                out.write(str(solver.response_proto))
++            os.replace(partial, path)
++            code = 0
++        except MemoryError:
++            code = 71
++        except BaseException:
++            code = 72
++            try:
++                with open(path + ".err", "w", encoding="utf-8") as err:
++                    err.write(traceback.format_exc())
++            except Exception:
++                pass
++        finally:
++            os._exit(code)
++    wait_status = 0
++    try:
++        while True:
++            done, wait_status = os.waitpid(pid, os.WNOHANG)
++            if done:
++                break
++            free, _ = machine_free_memory_mb()
++            if free is not None:
++                record["min_free_mb"] = free if record["min_free_mb"] is None else min(record["min_free_mb"], free)
++                if free < threshold:
++                    import signal
++                    os.kill(pid, signal.SIGKILL)
++                    record["killed_for_memory"] = True
++                    _, wait_status = os.waitpid(pid, 0)
++                    break
++            time.sleep(float(JOINT_SOLVE_POLL_SEC))
++    except BaseException:
++        try:
++            import signal
++            os.kill(pid, signal.SIGKILL)
++            os.waitpid(pid, 0)
++        except Exception:
++            pass
++        raise
++    finally:
++        text = None
++        child_error = None
++        try:
++            if os.path.exists(path) and os.path.getsize(path) > 0:
++                with open(path, "r", encoding="utf-8") as src:
++                    text = src.read()
++            if os.path.exists(path + ".err"):
++                with open(path + ".err", "r", encoding="utf-8") as src:
++                    child_error = src.read()
++        finally:
++            for leftover in (path, partial, path + ".err"):
++                try:
++                    os.remove(leftover)
++                except OSError:
++                    pass
++    if os.WIFSIGNALED(wait_status):
++        record["child_exit"] = f"SIGNAL_{os.WTERMSIG(wait_status)}"
++    else:
++        record["child_exit"] = os.WEXITSTATUS(wait_status)
++    if record["child_exit"] == 72:
++        # Not a memory stop: surface it exactly as an in-process error would be.
++        raise RuntimeError("isolated CP-SAT solve raised in the child process:\n" + (child_error or "no traceback"))
++    response = response_type()
++    if record["child_exit"] == 0 and text:
++        response.parse_text_format(text)
++    else:
++        memory_exit = record["killed_for_memory"] or record["child_exit"] in (71, "SIGNAL_9")
++        record["memory_stop"] = bool(memory_exit)
++        response.parse_text_format(
++            "status: UNKNOWN\n"
++            f"wall_time: {time.time() - started:.6f}\n"
++            f"solution_info: \"JOINT_SOLVE_ISOLATION child exit {record['child_exit']}\"\n"
++        )
++        if memory_exit:
++            _JOINT_SOLVE_MEMORY_STOPS.append(dict(record))
++    record["elapsed_sec"] = round(time.time() - started, 3)
++    solver._CpSolver__response = response
++    return response.status
++
++
++def isolated_cp_solver(cp_model: Any) -> Any:
++    """A CpSolver whose Solve runs through isolated_cp_solve; otherwise the stock class."""
++    cls = _ISOLATED_SOLVER_CLASSES.get(id(cp_model))
++    if cls is None:
++        base = cp_model.CpSolver
++        from ortools.sat.python import cp_model_helper as _cmh
++
++        class IsolatedCpSolver(base):  # type: ignore[misc, valid-type]
++            isolation_record: Optional[Dict[str, Any]] = None
++
++            def solve(self, model: Any, solution_callback: Any = None) -> Any:
++                return isolated_cp_solve(self, model, super().solve, _cmh.CpSolverResponse, solution_callback)
++
++            def Solve(self, model: Any, solution_callback: Any = None) -> Any:  # noqa: N802 - engine call style
++                return self.solve(model, solution_callback)
++
++        cls = _ISOLATED_SOLVER_CLASSES[id(cp_model)] = IsolatedCpSolver
++    return cls()
++
++
+ 
+ def capture_solver_telemetry(
+     cp_model: Any, solver: Any, status: int,
+@@ -15321,7 +15563,7 @@ def solve_joint_shift_off_language_break_refinement(
+     weighted_objective = sum(objective_terms) if objective_terms else 0
+ 
+     def configured_solver(seconds: float, stage_seed: int) -> Any:
+-        stage_solver = cp_model.CpSolver()
++        stage_solver = isolated_cp_solver(cp_model)
+         stage_solver.parameters.max_time_in_seconds = max(1.0, float(seconds))
+         stage_solver.parameters.num_search_workers = max(1, int(workers))
+         stage_solver.parameters.random_seed = int(stage_seed)
+@@ -15337,6 +15579,7 @@ def solve_joint_shift_off_language_break_refinement(
+ 
+     started = time.time()
+     lexicographic_rows: List[Dict[str, Any]] = []
++    solve_isolation_rows: List[Dict[str, Any]] = []
+     solver: Any = None
+     status: Any = None
+     status_text = "UNKNOWN"
+@@ -15375,6 +15618,7 @@ def solve_joint_shift_off_language_break_refinement(
+                 "best_objective_bound": (float(stage_solver.BestObjectiveBound()) if stage_status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else None),
+             }
+             lexicographic_rows.append(row)
++            solve_isolation_rows.append({"stage": stage_name, **(getattr(stage_solver, "isolation_record", None) or {})})
+             if stage_status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+                 print(
+                     f"JOINT_CP_SAT operator={operator_name} stage={stage_name} "
+@@ -15385,7 +15629,10 @@ def solve_joint_shift_off_language_break_refinement(
+                     "SOLVER_STAGE_FAILED", "LEXICOGRAPHIC_STAGE_NOT_FEASIBLE",
+                     solver_status=stage_status_text, failed_stage=stage_name,
+                     lexicographic_rows=list(lexicographic_rows),
++                    solve_isolation=list(solve_isolation_rows),
+                 )
++                if solve_isolation_rows[-1].get("memory_stop"):
++                    print("JOINT_SOLVE_ISOLATION memory stop: " + json.dumps(solve_isolation_rows[-1]), file=log, flush=True)
+                 return None
+             locked_value = int(round(stage_solver.ObjectiveValue()))
+             model.Add(expression >= locked_value - int(tolerance))
+@@ -15407,6 +15654,7 @@ def solve_joint_shift_off_language_break_refinement(
+             "objective_value": (float(final_solver.ObjectiveValue()) if final_status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else None),
+             "best_objective_bound": (float(final_solver.BestObjectiveBound()) if final_status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else None),
+         })
++        solve_isolation_rows.append({"stage": "MINIMIZE_DEFICIT_OVERAGE_MOVEMENT", **(getattr(final_solver, "isolation_record", None) or {})})
+         if final_status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+             solver, status, status_text = final_solver, final_status, final_status_text
+     else:
+@@ -15414,7 +15662,11 @@ def solve_joint_shift_off_language_break_refinement(
+         solver = configured_solver(max(1.0, float(time_limit)), int(random_seed))
+         status = solver.Solve(model)
+         status_text = status_name(cp_model, solver, status)
++        solve_isolation_rows.append({"stage": "SINGLE_WEIGHTED", **(getattr(solver, "isolation_record", None) or {})})
+     elapsed = time.time() - started
++    for row in solve_isolation_rows:
++        if row.get("memory_stop"):
++            print("JOINT_SOLVE_ISOLATION memory stop: " + json.dumps(row), file=log, flush=True)
+     print(
+         f"JOINT_CP_SAT operator={operator_name} changes={max_changed_cells} shift_options={max_shift_options_per_cell} "
+         f"patterns={max_patterns_per_shift} exception_cap={exception_cap} status={status_text} elapsed={elapsed:.2f}s",
+@@ -15424,11 +15676,13 @@ def solve_joint_shift_off_language_break_refinement(
+         record_diagnostic(
+             "SOLVER_FINAL_FAILED", "FINAL_STAGE_NOT_FEASIBLE",
+             solver_status=status_text, lexicographic_rows=list(lexicographic_rows),
++            solve_isolation=list(solve_isolation_rows),
+         )
+         return None
+     record_diagnostic(
+         "SOLVER_FEASIBLE", "JOINT_MODEL_SOLVED", solver_status=status_text,
+         lexicographic_rows=list(lexicographic_rows),
++        solve_isolation=list(solve_isolation_rows),
+     )
+ 
+     assignment = [[""] * D for _ in range(A)]

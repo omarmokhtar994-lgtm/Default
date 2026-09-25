@@ -28,3 +28,21 @@ refinement off). Recommendation: do not use DEEP/OVERNIGHT until joint
 refinement is disabled or bounded at those depths; that is a behaviour change
 and gets its own evidence (the remaining DEEP runs of this measurement show
 whether Voice, NMG_SP and H1 hit the same limit).
+
+## Second kill: VOICE_DEEP_9000 (2026-09-25 20:12 UTC) - contaminated, to be rerun
+
+* Engine return code 247 (runner) after ~2.5 h; kernel log:
+  `Memory cgroup out of memory: Killed process 14250 (python3) ...
+  anon-rss:7062976kB` (7.0 GB resident, oom_score_adj 0).
+* Last engine log lines: six `JOINT_CP_SAT ... status=UNKNOWN` attempts - again
+  inside joint refinement.
+* **Not a clean measurement.** While it ran, my own verification jobs for the
+  memory fix (evidence/joint_solve_isolation) shared the machine: a Chat
+  joint-refinement equivalence replay and an M2 DEEP end-to-end run (plus the
+  1 h QUICK seed of the measurement itself). Voice at 7 GB alone would not
+  have filled the machine, so the kill cannot be attributed to the engine
+  alone. It is therefore not scored as "F fails Voice"; it is an interrupted
+  run and, as for every interrupted run in these A/Bs, is rerun with the same
+  seed (9000) once the queue is done, with nothing else on the machine.
+* From 20:20 UTC all verification processes run with oom_score_adj 1000, so
+  if memory runs out again the kernel takes those first, not a measurement run.

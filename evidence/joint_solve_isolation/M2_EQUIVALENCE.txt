@@ -1,0 +1,5 @@
+OFF [[["INFEASIBLE", 0.0, 0.0, "4f53cda18c2baa0c", 0, 0, "IN_PROCESS"], ["UNKNOWN", -0.0, 117.0, "4f53cda18c2baa0c", 1156, 0, "IN_PROCESS"], ["UNKNOWN", -0.0, 117.0, "4f53cda18c2baa0c", 16482, 52, "IN_PROCESS"]], [], {"attempted": 3, "accepted": 0, "improved": 0}]
+ON  [[["INFEASIBLE", 0.0, 0.0, "4f53cda18c2baa0c", 0, 0, "ISOLATED"], ["UNKNOWN", -0.0, 117.0, "4f53cda18c2baa0c", 1156, 0, "ISOLATED"], ["UNKNOWN", -0.0, 117.0, "4f53cda18c2baa0c", 16482, 52, "ISOLATED"]], [], {"attempted": 3, "accepted": 0, "improved": 0}]
+modes OFF ['IN_PROCESS'] ON ['ISOLATED']
+IDENTICAL 3 solves
+non-trivial solves (found a solution or branched): 2/3

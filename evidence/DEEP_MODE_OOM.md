@@ -46,3 +46,16 @@ whether Voice, NMG_SP and H1 hit the same limit).
   seed (9000) once the queue is done, with nothing else on the machine.
 * From 20:20 UTC all verification processes run with oom_score_adj 1000, so
   if memory runs out again the kernel takes those first, not a measurement run.
+
+## Third data point: H1 joint refinement alone reaches 13 GB (2026-09-25 20:31 UTC)
+
+A verification replay of SYNTH_H1's joint refinement (its saved 3,600 s
+candidate pool, DEEP joint settings: 10 shift options per cell, 64 break
+patterns per shift; 1 worker; joint solves in process, i.e. the shipped
+behaviour) was killed by the kernel at **13.0 GB** resident
+(`Killed process 20010 ... anon-rss:13015912kB ... oom_score_adj:1000`). It
+was the kernel's chosen victim because every verification process runs at
+oom_score_adj 1000; the measurement's NMG_SP DEEP run carried on. So the
+joint-refinement memory problem is not specific to Cricut Chat: a 24x7
+synthetic case hits it too. Evidence file for the fix:
+evidence/joint_solve_isolation/.

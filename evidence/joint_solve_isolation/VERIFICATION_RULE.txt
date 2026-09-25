@@ -1,0 +1,25 @@
+JOINT_SOLVE_ISOLATION - verification rule, written before the real-model
+equivalence check and the end-to-end DEEP run finished (2026-09-25 ~20:05 UTC).
+
+Change: every CP-SAT solve inside joint refinement
+(solve_joint_shift_off_language_break_refinement) runs in a forked child of
+the engine with a memory watchdog; the parent parses the child's response.
+It is a reliability change, so the rule is equivalence plus survival, not a
+score A/B:
+
+ 1. Equivalence, toy models: isolated vs in-process on deterministic solves
+    (1 worker, deterministic time limit) gives identical status, objective,
+    bound, every variable value, branches, conflicts, deterministic time.
+ 2. Equivalence, real models: Cricut Chat's joint refinement from its saved
+    candidate pool, same deterministic settings, isolation OFF vs ON: the same
+    number of solves with identical status/objective/bound/solution hash/
+    branches/conflicts, and identical returned candidates.
+ 3. Survival: the Chat replay that died with MemoryError in attempt 2
+    (evidence/DEEP_MODE_OOM.md) returns normally, with the memory stop in the
+    audit and no further joint models started.
+ 4. End to end: a DEEP run through RUN_UNIVERSAL_PRODUCTION.py finishes with
+    validator PASS, 0 hard failures, metric parity PASS, and its joint solves
+    recorded as ISOLATED with child exit 0.
+ 5. ./run_tests.sh PASS with the new staged suite.
+
+Ship into the engine only if all five hold; otherwise park as a patch.

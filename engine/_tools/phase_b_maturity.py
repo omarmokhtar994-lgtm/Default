@@ -180,7 +180,18 @@ PHASE_MINIMUM_VIABLE_SECONDS = {
     "post_break_repair": 35,
     "target_lock_recovery": 65,
     "exception_search": 90,
+    "day_neighbourhood_break_search": 21,
 }
+
+# Day-neighbourhood break search (DNBS) runs between break search and joint
+# refinement and is paid for out of break search only, never Stage 1. Sized to
+# give each day of one or two anchors a meaningful slice: 8% of the run,
+# floor 60 s, cap 420 s. Dropped when break search would be left below one
+# meaningful slice (180 s), because DNBS improves what break search produced.
+DNBS_BUDGET_SHARE = 0.08
+DNBS_BUDGET_FLOOR_SEC = 60
+DNBS_BUDGET_CAP_SEC = 420
+DNBS_MIN_BREAK_SEARCH_LEFT_SEC = 180
 
 
 def build_global_budget_plan(
@@ -198,6 +209,7 @@ def build_global_budget_plan(
     joint_refinement_reserve_sec: int = 1800,
     stage1_minimum_seconds: int = 0,
     diagnostics: Optional[Dict[str, Any]] = None,
+    day_neighbourhood_break_search: bool = False,
 ) -> Dict[str, int]:
     """Create a scenario-neutral, single-run budget plan.
 
@@ -286,6 +298,12 @@ def build_global_budget_plan(
     if stage1_need > stage1:
         stage1 = max(stage1, min(stage1_need, int(primary * 0.75)))
     break_search = max(30, primary - stage1)
+    dnbs = 0
+    if day_neighbourhood_break_search and total >= 600:
+        dnbs = min(DNBS_BUDGET_CAP_SEC, max(DNBS_BUDGET_FLOOR_SEC, int(total * DNBS_BUDGET_SHARE)))
+        if break_search - dnbs < DNBS_MIN_BREAK_SEARCH_LEFT_SEC:
+            dnbs = 0
+        break_search -= dnbs
 
     plan = {
         "preflight_probe": preflight_probe,
@@ -293,6 +311,7 @@ def build_global_budget_plan(
         "safe_incumbent": safe,
         "stage1_search": stage1,
         "break_search": break_search,
+        "day_neighbourhood_break_search": dnbs,
         "joint_refinement": joint,
         "coordinated_repair": coordinated,
         "exception_search": exception,

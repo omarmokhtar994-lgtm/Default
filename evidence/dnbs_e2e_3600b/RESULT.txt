@@ -1,0 +1,60 @@
+Scored 2026-09-25T05:41:46Z against PREREGISTERED_RULE.txt (commit 2f01663).
+
+   CHAT two-seed mean CUR 174.5 NEW 177.0 delta +2.5
+   VOICE two-seed mean CUR 246.5 NEW 246.5 delta +0.0
+   AR two-seed mean CUR 168.0 NEW 168.0 delta +0.0
+   NMGSP two-seed mean CUR 121.0 NEW 121.0 delta +0.0
+   M2 two-seed mean CUR 110.5 NEW 107.5 delta -3.0
+   H3 two-seed mean CUR 95.0 NEW 92.0 delta -3.0
+   H1 two-seed mean CUR 142.0 NEW 146.0 delta +4.0
+summed two-seed means {'CUR': 1057.5, 'NEW': 1058.0} | DNBS executed in 14/14 NEW runs
+VERDICT: SHIP | issues: none
+
+Per run (after_target / after_floor; DNBS days solved, candidates accepted):
+  CHAT  CUR 9000  171/233  validator+parity PASS
+  CHAT  CUR 9001  178/227  validator+parity PASS
+  CHAT  NEW 9000  177/225  validator+parity PASS  DNBS days 10 accepted 1
+  CHAT  NEW 9001  177/224  validator+parity PASS  DNBS days 10 accepted 0
+  VOICE CUR 9000  246/251  validator+parity PASS
+  VOICE CUR 9001  247/251  validator+parity PASS
+  VOICE NEW 9000  246/252  validator+parity PASS  DNBS days 12 accepted 0
+  VOICE NEW 9001  247/252  validator+parity PASS  DNBS days 12 accepted 0
+  AR    CUR 9000  168/168  validator+parity PASS
+  AR    CUR 9001  168/168  validator+parity PASS
+  AR    NEW 9000  168/168  validator+parity PASS  DNBS days 14 accepted 0
+  AR    NEW 9001  168/168  validator+parity PASS  DNBS days 14 accepted 0
+  NMGSP CUR 9000  121/126  validator+parity PASS
+  NMGSP CUR 9001  121/126  validator+parity PASS
+  NMGSP NEW 9000  121/126  validator+parity PASS  DNBS days 12 accepted 0
+  NMGSP NEW 9001  121/126  validator+parity PASS  DNBS days 12 accepted 0
+  M2    CUR 9000  110/117  validator+parity PASS
+  M2    CUR 9001  111/117  validator+parity PASS
+  M2    NEW 9000  111/117  validator+parity PASS  DNBS days 14 accepted 0
+  M2    NEW 9001  104/117  validator+parity PASS  DNBS days 14 accepted 0
+  H3    CUR 9000  92/105  validator+parity PASS
+  H3    CUR 9001  98/105  validator+parity PASS
+  H3    NEW 9000  92/105  validator+parity PASS  DNBS days 14 accepted 1
+  H3    NEW 9001  92/105  validator+parity PASS  DNBS days 14 accepted 2
+  H1    CUR 9000  141/168  validator+parity PASS
+  H1    CUR 9001  143/168  validator+parity PASS
+  H1    NEW 9000  141/168  validator+parity PASS  DNBS days 14 accepted 1
+  H1    NEW 9001  151/168  validator+parity PASS  DNBS days 14 accepted 1
+
+Rules: (1) all 14 NEW runs validator PASS, 0 hard, parity PASS - met.
+(2) summed two-seed mean NEW 1058.0 >= CURRENT 1057.5 - met.
+(3) no real workbook's mean worse by more than 2 (Chat +2.5, Voice 0, AE_AR 0,
+NMG_SP 0) - met. (4) no schedule lost - met. (5) DNBS executed in 14/14 - met.
+
+VERDICT: SHIP.
+
+Not in the rule but checked before shipping: best before-breaks sheet, two-seed
+mean per case, CURRENT vs NEW: Chat 191.0 -> 193.5; Voice 248.5, AE_AR 168,
+NMG_SP 126, M2 117, H3 105, H1 168 all equal. No before-breaks loss.
+
+Honest reading: the summed margin (+0.5) is inside run-to-run noise. The
+effect is concentrated: SYNTH_H1 (24x7 overnight) +4 and Chat +2.5, while the
+synthetic M2 and H3 are -3 each (M2 NEW seed 9001 = 104; DNBS accepted nothing
+there, so the likely cost is the 288 s it takes from break search). DNBS only
+adds candidates that dominate their anchor and pass the release validator; its
+price is break-search time. Shipped as registered; engine files byte-identical
+to the NEW arm; gate PASS (25 suites).

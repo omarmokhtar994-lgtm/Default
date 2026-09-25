@@ -152,3 +152,30 @@ new, separately pre-registered A/B at the 3,600 s default (where it gets its
   H3 93 vs 105, H1 145 vs 168).
 * Hard public benchmarks still need the blocked hosts
   (schedulingbenchmarks.org, dbai.tuwien.ac.at, web.archive.org).
+
+## 6. Update: DNBS v2 shipped (3,600 s two-seed A/B)
+
+The 900 s A/B above measured noise because DNBS never ran. A second 3,600 s
+A/B was void (container restart; DNBS still starved because joint refinement is
+0 s at QUICK). DNBS v2 got its own budget phase, paid for from break search
+only (8% of the run, floor 60 s, cap 420 s; 288 s at 3,600 s), reserved from
+RC8 (`patches/DNBS_day_neighbourhood_break_search.patch`, now applied).
+
+Pre-registered A/B (evidence/dnbs_e2e_3600b): 7 cases x 2 seeds x 2 arms at
+3,600 s. DNBS executed in 14/14 NEW runs; all 28 runs validator-clean.
+
+| case | CURRENT (2-seed mean) | NEW | change |
+|---|---|---|---|
+| Cricut Chat | 174.5 | 177.0 | +2.5 |
+| Cricut Voice | 246.5 | 246.5 | 0 |
+| AE_AR_B2B | 168 | 168 | 0 |
+| NMG_SP | 121 | 121 | 0 |
+| SYNTH_M2 | 110.5 | 107.5 | -3 |
+| SYNTH_H3 | 95 | 92 | -3 |
+| SYNTH_H1 | 142 | 146 | +4 |
+| sum | 1057.5 | 1058.0 | +0.5 |
+
+Verdict SHIP under the registered rule. Before-breaks sheets: no loss (Chat
+191.0 -> 193.5, all others equal). The net effect is small and inside the
+noise; it is concentrated in the 24x7 overnight case and Chat, and M2/H3 pay
+for the break-search time DNBS takes. Gate PASS (25 suites).

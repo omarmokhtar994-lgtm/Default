@@ -17221,6 +17221,380 @@ def run_zero_exception_recovery_phase(
         "truncated": deadline - time.time() < 35, "anchor_count": len(anchors),
     }
 
+
+# Day-neighbourhood break search (DNBS).
+#
+# Stage 2 places every break of the week in one model. On a fixed skeleton the
+# breaks of one day only interact with that day and its overnight spill, and
+# associates on the same (day, shift, language) are interchangeable for every
+# coverage term, so one day's break placement is a small aggregated model:
+# n[s, p] = associates on shift s taking pattern p. Solving it day by day, with
+# the rest of the week held at the incumbent, found what the whole-week solve
+# had not, measured standalone on the final engine's own candidate pools
+# (evidence/NIGHT_15_JOINT_SHIFT_BREAK_BUILD.md): H1 138 -> 145, Cricut Voice
+# 246 -> 247, M2 108 -> 109, and no change on Chat, H3, AE AR B2B and NMG SP
+# (the last two proven optimal day by day). No guard metric got worse anywhere.
+#
+# A move is kept only if the engine's own calculate_metrics says after_target
+# rose and nothing in DNBS_NO_WORSE_HIGHER / DNBS_NO_WORSE_LOWER got worse, and
+# the finished candidate enters the pool only if the release validator
+# classifies it compliant. It cannot remove a candidate, only add one.
+DAY_NEIGHBOURHOOD_BREAK_SEARCH_ENABLED = True
+# Time comes from its own phase in the global budget plan
+# (phase_b_maturity.DNBS_BUDGET_*), between break search and joint refinement.
+# A second anchor is only worth it when each of its days still gets
+# DNBS_MIN_USEFUL_DAY_SEC.
+DNBS_MIN_USEFUL_DAY_SEC = 15.0
+DNBS_PER_DAY_CAP_SEC = 60.0
+DNBS_MIN_DAY_SLICE_SEC = 3.0
+DNBS_MAX_ANCHORS = 2
+DNBS_MAX_TRIES_PER_DAY = 3
+DNBS_NO_WORSE_HIGHER = (
+    "after_floor", "after_90", "after_80", "after_100",
+    "week_boundary_after_target", "week_boundary_after_floor",
+)
+DNBS_NO_WORSE_LOWER = (
+    "severe_floor_gap_count", "hard_floor_gap_count", "max_consecutive_floor_gaps",
+    "zero_staffed_active_quarters", "language_gap_count", "opening_gap_count",
+    "break_concurrency_violation_count", "blank_staffed_quarters",
+    "week_boundary_zero_staffed_active_quarters", "week_boundary_hard_failure_count",
+    "coverage_split_gap_count", "after_extreme_overage_count", "after_severe_overage_count",
+    "whole_week_overage_cap_violation_count", "whole_week_imbalance_violation_count",
+    "after_avoidable_overage_fte_sum",
+)
+
+
+def dnbs_metrics_no_worse(new: Mapping[str, Any], old: Mapping[str, Any]) -> Tuple[bool, List[str]]:
+    """True when after_target strictly rose and no guarded metric got worse."""
+    worse = [k for k in DNBS_NO_WORSE_HIGHER if float(new.get(k, 0) or 0) < float(old.get(k, 0) or 0)]
+    worse += [k for k in DNBS_NO_WORSE_LOWER if float(new.get(k, 0) or 0) > float(old.get(k, 0) or 0) + 1e-6]
+    if int(new.get("after_target", 0) or 0) <= int(old.get("after_target", 0) or 0):
+        worse.append("after_target")
+    return not worse, worse
+
+
+def dnbs_day_neighbourhood_model(
+    parsed: ParsedInput,
+    skeleton: SkeletonSolution,
+    selected: Dict[Tuple[int, int], Optional[int]],
+    patterns: Sequence[BreakPattern],
+    day: int,
+) -> Optional[Dict[str, Any]]:
+    """Aggregated break model for the shifts starting on ``day``.
+
+    Returns None when nothing on the day can move. Otherwise returns the model,
+    its count variables, the incumbent's counts, and the linear expressions for
+    target / floor / protected-tier hits, concurrency violations and
+    zero-staffed quarters over every active interval those shifts touch.
+    """
+    cp_model = import_cp_sat()
+    qpi = parsed.qslots_per_interval
+    by_duration: Dict[int, List[BreakPattern]] = {}
+    for pattern in patterns:
+        by_duration.setdefault(pattern.duration_q, []).append(pattern)
+    by_id = pattern_map(patterns)
+    cells = scheduled_cells(skeleton)
+    groups: Dict[Tuple[int, str], List[int]] = {}
+    for a, d, si in cells:
+        if d != day or selected.get((a, d)) is None or selected.get((a, d)) not in by_id:
+            continue
+        if not by_duration.get(parsed.shifts[si].duration_q):
+            continue
+        start = d * 96 + parsed.shifts[si].start_min // 15
+        if start + parsed.shifts[si].duration_q > 7 * 96:
+            continue  # week-boundary spill is scored cyclically; leave it at the incumbent
+        groups.setdefault((si, norm(parsed.associates[a].language)), []).append(a)
+    if not groups:
+        return None
+    movable = {(a, day) for members in groups.values() for a in members}
+    carry = {q: len(prior_covering_associates(parsed, q)) for q in range(96)}
+    raw_const: Dict[int, int] = dict(carry)
+    on_const: Dict[int, int] = dict(carry)
+    brk_const: Dict[int, int] = {}
+    for a, d, si in cells:
+        start = d * 96 + parsed.shifts[si].start_min // 15
+        pid = selected.get((a, d))
+        broken = by_id[pid].broken_offsets if pid is not None and pid in by_id else set()
+        for offset in range(parsed.shifts[si].duration_q):
+            q = start + offset
+            if q >= 7 * 96:
+                continue
+            raw_const[q] = raw_const.get(q, 0) + 1
+            if (a, d) in movable:
+                continue
+            if offset in broken:
+                brk_const[q] = brk_const.get(q, 0) + 1
+            else:
+                on_const[q] = on_const.get(q, 0) + 1
+    model = cp_model.CpModel()
+    on_terms: Dict[int, List[Any]] = {}
+    brk_terms: Dict[int, List[Any]] = {}
+    count_vars: Dict[Tuple[int, str, int], Any] = {}
+    incumbent_counts: Dict[Tuple[int, str, int], int] = {}
+    touched: Set[Tuple[int, int]] = set()
+    for (si, language), members in groups.items():
+        start = day * 96 + parsed.shifts[si].start_min // 15
+        duration = parsed.shifts[si].duration_q
+        for q in range(start, start + duration):
+            touched.add((q // 96, (q % 96) // qpi))
+        group_vars = []
+        for pattern in by_duration[duration]:
+            var = model.NewIntVar(0, len(members), f"dnbs_n_{si}_{pattern.index}")
+            count_vars[(si, language, pattern.index)] = var
+            group_vars.append(var)
+            broken = pattern.broken_offsets
+            for offset in range(duration):
+                (brk_terms if offset in broken else on_terms).setdefault(start + offset, []).append(var)
+        model.Add(sum(group_vars) == len(members))
+        for a in members:
+            key = (si, language, int(selected[(a, day)]))
+            incumbent_counts[key] = incumbent_counts.get(key, 0) + 1
+    protected = [
+        ratio for ratio in (0.90, 0.80)
+        if ratio < float(parsed.target_ratio) - 0.004 and ratio > float(parsed.floor_ratio) + 0.004
+    ]
+    protected.append(max(0.0, float(parsed.floor_ratio) - 0.10))
+    target_hits: List[Any] = []
+    floor_hits: List[Any] = []
+    protected_hits: List[Any] = []
+    violations: List[Any] = []
+    zeros: List[Any] = []
+    for d, i in sorted(touched):
+        if d > 6 or not parsed.active[d][i]:
+            continue
+        quarters = range(d * 96 + i * qpi, d * 96 + i * qpi + qpi)
+        total = sum(sum(on_terms.get(q, [])) + on_const.get(q, 0) for q in quarters)
+        factor = scaled_effective_factor(parsed.shrinkage[d][i])
+        requirement = parsed.requirements[d][i] or 0.0
+        tiers = [(parsed.target_ratio, target_hits), (parsed.floor_ratio, floor_hits)]
+        tiers += [(ratio, protected_hits) for ratio in protected]
+        for ratio, bucket in tiers:
+            threshold = scaled_coverage_threshold(requirement, ratio, qpi)
+            hit = model.NewBoolVar("")
+            model.Add(factor * total >= threshold).OnlyEnforceIf(hit)
+            model.Add(factor * total < threshold).OnlyEnforceIf(hit.Not())
+            bucket.append(hit)
+        for q in quarters:
+            on_count = sum(on_terms.get(q, [])) + on_const.get(q, 0)
+            zero = model.NewBoolVar("")
+            model.Add(on_count == 0).OnlyEnforceIf(zero)
+            model.Add(on_count >= 1).OnlyEnforceIf(zero.Not())
+            zeros.append(zero)
+            if not brk_terms.get(q):
+                continue
+            breaks_now = sum(brk_terms[q]) + brk_const.get(q, 0)
+            cap = maximum_concurrent_breaks(parsed, raw_const.get(q, 0))
+            within = model.NewBoolVar("")
+            model.Add(breaks_now <= cap).OnlyEnforceIf(within)
+            model.Add(breaks_now > cap).OnlyEnforceIf(within.Not())
+            violations.append(within.Not())
+    return {
+        "model": model, "count_vars": count_vars, "incumbent_counts": incumbent_counts,
+        "groups": groups,
+        "target": sum(target_hits), "floor": sum(floor_hits), "protected": sum(protected_hits),
+        "violations": sum(violations), "zeros": sum(zeros),
+    }
+
+
+def run_day_neighbourhood_break_search(
+    parsed: ParsedInput,
+    candidates: Sequence[Tuple[SkeletonSolution, BreakSolution]],
+    deadline: float,
+    workers: int,
+    log: Any,
+    random_seed: int = 0,
+) -> Tuple[List[Tuple[SkeletonSolution, BreakSolution]], List[Dict[str, Any]], Dict[str, Any]]:
+    """Improve the best compliant candidates' breaks one day at a time.
+
+    Anchors are the strongest compliant candidates by after_target then
+    after_floor, one per distinct skeleton, at most DNBS_MAX_ANCHORS. Returns
+    only candidates that the engine metrics show dominate their anchor and the
+    release validator classifies compliant.
+    """
+    cp_model = import_cp_sat()
+    started = time.time()
+    summary: Dict[str, Any] = {
+        "enabled": True, "anchors": 0, "days_solved": 0, "days_accepted": 0,
+        "accepted_candidates": 0, "truncated": False, "skip_reason": None,
+    }
+    records: List[Dict[str, Any]] = []
+    additions: List[Tuple[SkeletonSolution, BreakSolution]] = []
+    pool = [
+        pair for pair in dedupe_break_candidates(candidates)
+        if not pair[1].no_break_cells and pair[1].selected_pattern and pair[1].metrics
+    ]
+    pool.sort(key=lambda pair: (
+        -int(pair[1].metrics.get("after_target", 0) or 0),
+        -int(pair[1].metrics.get("after_floor", 0) or 0),
+    ))
+    max_anchors = DNBS_MAX_ANCHORS
+    while max_anchors > 1 and (deadline - time.time()) < 7 * max_anchors * DNBS_MIN_USEFUL_DAY_SEC:
+        max_anchors -= 1
+    summary["max_anchors"] = max_anchors
+    anchors: List[Tuple[SkeletonSolution, BreakSolution]] = []
+    seen: Set[str] = set()
+    for skeleton, solution in pool:
+        fingerprint = skeleton_fingerprint(skeleton)
+        if fingerprint in seen:
+            continue
+        seen.add(fingerprint)
+        anchors.append((skeleton, solution))
+        if len(anchors) >= max_anchors:
+            break
+    if not anchors:
+        summary["skip_reason"] = "NO_COMPLIANT_ANCHOR"
+        return additions, records, summary
+    for anchor_index, (skeleton, anchor) in enumerate(anchors):
+        if deadline - time.time() < DNBS_MIN_DAY_SLICE_SEC:
+            summary["truncated"] = True
+            break
+        summary["anchors"] += 1
+        selected = dict(anchor.selected_pattern)
+        current = anchor.metrics
+        record: Dict[str, Any] = {
+            "anchor_index": anchor_index,
+            "skeleton_profile": skeleton.profile,
+            "anchor_break_profile": anchor.profile,
+            "anchor_after_target": int(current.get("after_target", 0) or 0),
+            "anchor_after_floor": int(current.get("after_floor", 0) or 0),
+            "days": [],
+        }
+        for day in range(7):
+            anchors_left = len(anchors) - anchor_index
+            days_left = 7 - day + 7 * (anchors_left - 1)
+            slice_sec = min(DNBS_PER_DAY_CAP_SEC, (deadline - time.time()) / max(1, days_left))
+            if slice_sec < DNBS_MIN_DAY_SLICE_SEC:
+                summary["truncated"] = True
+                break
+            day_started = time.time()
+            built = dnbs_day_neighbourhood_model(parsed, skeleton, selected, anchor.patterns, day)
+            if built is None:
+                continue
+            model, count_vars = built["model"], built["count_vars"]
+            incumbent = built["incumbent_counts"]
+            baseline_model = model.clone()
+            for key, var in count_vars.items():
+                baseline_model.Add(var == incumbent.get(key, 0))
+            baseline = cp_model.CpSolver()
+            baseline.parameters.num_workers = 1
+            baseline.parameters.max_time_in_seconds = max(1.0, min(30.0, slice_sec))
+            if baseline.Solve(baseline_model) not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+                record["days"].append({"day": day, "status": "BASELINE_NOT_REPRODUCED"})
+                continue
+            base = {name: int(baseline.Value(built[name])) for name in ("target", "floor", "protected", "violations", "zeros")}
+            model.Add(built["target"] >= base["target"])
+            model.Add(built["floor"] >= base["floor"])
+            model.Add(built["protected"] >= base["protected"])
+            model.Add(built["violations"] <= base["violations"])
+            model.Add(built["zeros"] <= base["zeros"])
+            deviation_terms = []
+            for key, var in count_vars.items():
+                model.AddHint(var, incumbent.get(key, 0))
+                gap = model.NewIntVar(0, len(parsed.associates), "")
+                model.AddAbsEquality(gap, var - incumbent.get(key, 0))
+                deviation_terms.append(gap)
+            # Hits first; among equal hits, the smallest change to the incumbent,
+            # which keeps the unmodelled overage and imbalance terms where they were.
+            model.Maximize(
+                100000 * built["target"] + 100 * built["floor"] + 100 * built["protected"]
+                - 10 * built["violations"] - sum(deviation_terms)
+            )
+            day_record: Dict[str, Any] = {"day": day, "touched_target_before": base["target"], "tries": []}
+            for attempt in range(DNBS_MAX_TRIES_PER_DAY):
+                remaining = min(slice_sec - (time.time() - day_started), deadline - time.time())
+                if attempt and remaining < DNBS_MIN_DAY_SLICE_SEC:
+                    break
+                solver = cp_model.CpSolver()
+                solver.parameters.max_time_in_seconds = max(1.0, remaining)
+                solver.parameters.num_workers = max(1, int(workers))
+                solver.parameters.random_seed = int(random_seed)
+                status = solver.Solve(model)
+                summary["days_solved"] += int(attempt == 0)
+                attempt_record: Dict[str, Any] = {"status": solver.StatusName(status)}
+                day_record["tries"].append(attempt_record)
+                if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+                    break
+                attempt_record["touched_target_after"] = int(solver.Value(built["target"]))
+                if attempt_record["touched_target_after"] <= base["target"]:
+                    break
+                values = {key: int(solver.Value(var)) for key, var in count_vars.items()}
+                trial = dict(selected)
+                for (si, language), members in built["groups"].items():
+                    queue: List[int] = []
+                    for pattern in sorted(anchor.patterns, key=lambda p: p.index):
+                        if (si, language, pattern.index) in values:
+                            queue.extend([pattern.index] * values[(si, language, pattern.index)])
+                    for a, pattern_index in zip(members, queue):
+                        trial[(a, day)] = pattern_index
+                trial_metrics = calculate_metrics(parsed, skeleton, trial, anchor.patterns)
+                ok, worse = dnbs_metrics_no_worse(trial_metrics, current)
+                attempt_record["engine_after_target"] = int(trial_metrics.get("after_target", 0) or 0)
+                if ok:
+                    selected, current = trial, trial_metrics
+                    summary["days_accepted"] += 1
+                    day_record["accepted"] = True
+                    break
+                attempt_record["rejected_by_engine_metrics"] = worse
+                # Exclude exactly this solution and look for another one.
+                differs = []
+                for key, var in count_vars.items():
+                    below = model.NewBoolVar(""); above = model.NewBoolVar("")
+                    model.Add(var <= values[key] - 1).OnlyEnforceIf(below)
+                    model.Add(var >= values[key] + 1).OnlyEnforceIf(above)
+                    differs.extend([below, above])
+                model.AddBoolOr(differs)
+            record["days"].append(day_record)
+        if selected == anchor.selected_pattern:
+            record["status"] = "NO_IMPROVEMENT"
+            records.append(record)
+            continue
+        spacing_rows = selected_break_spacing_rows(parsed, skeleton, selected, anchor.patterns)
+        diagnostics = {
+            key: value for key, value in anchor.diagnostics.items()
+            if key not in {"release_validation", "hard_failure_types", "hard_fail_count", "early_release_validation"}
+        }
+        diagnostics.update({
+            "candidate_origin": "DAY_NEIGHBOURHOOD_BREAK_SEARCH",
+            "dnbs_anchor_profile": anchor.profile,
+            "break_spacing_rows": spacing_rows,
+            "flexible_compression_count": sum(1 for row in spacing_rows if row.get("classification") == "FLEXIBLE_COMPRESSION"),
+            "extended_beyond_normal_count": sum(1 for row in spacing_rows if row.get("classification") == "EXTENDED_BEYOND_NORMAL_RANGE"),
+        })
+        candidate = BreakSolution(
+            profile="day_neighbourhood_break_search",
+            skeleton_profile=skeleton.profile,
+            cp_status="FEASIBLE",
+            elapsed_sec=round(time.time() - started, 6),
+            objective=anchor.objective,
+            pattern_width=anchor.pattern_width,
+            exception_mode=anchor.exception_mode,
+            selected_pattern=selected,
+            no_break_cells=set(anchor.no_break_cells),
+            patterns=list(anchor.patterns),
+            diagnostics=diagnostics,
+            metrics=calculate_metrics(parsed, skeleton, selected, anchor.patterns),
+        )
+        candidate_class = candidate_pool_class(parsed, skeleton, candidate)
+        record["candidate_class"] = candidate_class
+        record["after_target"] = int(candidate.metrics.get("after_target", 0) or 0)
+        record["after_floor"] = int(candidate.metrics.get("after_floor", 0) or 0)
+        if candidate_class == "compliant":
+            additions.append((skeleton, candidate))
+            summary["accepted_candidates"] += 1
+            record["status"] = "COMPLIANT_IMPROVEMENT_ADDED"
+            print(
+                f"DNBS anchor {anchor_index} {skeleton.profile}: after_target "
+                f"{record['anchor_after_target']} -> {record['after_target']}, "
+                f"after_floor {record['anchor_after_floor']} -> {record['after_floor']}",
+                file=log, flush=True,
+            )
+        else:
+            record["status"] = "REJECTED_BY_RELEASE_VALIDATION"
+        records.append(record)
+    summary["elapsed_sec"] = round(time.time() - started, 6)
+    return additions, records, summary
+
+
 def run_post_break_repair_phase(
     parsed: ParsedInput,
     candidates: Sequence[Tuple[SkeletonSolution, BreakSolution]],
@@ -18473,6 +18847,7 @@ def run_case(
             coordinated_repair_reserve_sec=(coordinated_repair_reserve_sec if coordinated_repair else 0),
             joint_refinement_reserve_sec=(joint_refinement_reserve_sec if joint_refinement else 0),
             diagnostics=budget_plan_diagnostics,
+            day_neighbourhood_break_search=DAY_NEIGHBOURHOOD_BREAK_SEARCH_ENABLED and not skeleton_only,
         )
         if not safe_incumbent:
             global_budget_plan["break_search"] += global_budget_plan.get("safe_incumbent", 0)
@@ -20480,9 +20855,12 @@ def run_case(
         # RC8 quality recovery: protect the current-contract BEST BEFORE skeleton
         # with dedicated full-width target-first break optimization. Historical
         # KPI values are not used as constraints in this lane.
+        # RC8 runs first but may not consume the slot reserved for DNBS.
+        dnbs_reserved_sec = float(global_budget_plan.get("day_neighbourhood_break_search", 0) or 0)
+        rc8_ceiling = joint_refinement_deadline - dnbs_reserved_sec
         rc8_recovery_deadline = min(
-            joint_refinement_deadline,
-            time.time() + max(0.0, min(900.0, joint_refinement_deadline - time.time())),
+            rc8_ceiling,
+            time.time() + max(0.0, min(900.0, rc8_ceiling - time.time())),
         )
         rc8_added, rc8_records, rc8_execution = run_rc8_best_before_break_recovery(
             parsed, best_before_skeleton,
@@ -20504,6 +20882,42 @@ def run_case(
             candidate_pool_path, run_identity["run_id"], compliant, exceptions, completed_phases, near_feasible
         )
         write_json(audit_path, audit)
+
+        # Day-neighbourhood break search on the strongest compliant skeletons.
+        # It has its own phase in the global budget, paid for out of break
+        # search, and only ever adds candidates that dominate their anchor on
+        # the engine's own metrics.
+        if DAY_NEIGHBOURHOOD_BREAK_SEARCH_ENABLED and compliant and not completed_phases.get("day_neighbourhood_break_search_complete", False):
+            # Its own funded phase, plus whatever earlier phases left unspent,
+            # never reaching into joint refinement's allocation.
+            dnbs_deadline = min(
+                joint_refinement_deadline,
+                max(budget_manager.deadline("day_neighbourhood_break_search"), time.time() + dnbs_reserved_sec),
+            )
+            dnbs_window = max(0.0, dnbs_deadline - time.time())
+            dnbs_added, dnbs_records, dnbs_execution = run_day_neighbourhood_break_search(
+                parsed, compliant, dnbs_deadline, workers, log, solver_random_seed,
+            )
+            compliant = dedupe_break_candidates(list(compliant) + list(dnbs_added))
+            dnbs_execution["window_sec"] = round(dnbs_window, 6)
+            dnbs_execution["reserved_sec"] = int(dnbs_reserved_sec)
+            budget_manager.record(
+                "day_neighbourhood_break_search", "DNBS_COMPLETE",
+                days_solved=dnbs_execution.get("days_solved", 0),
+                accepted=dnbs_execution.get("accepted_candidates", 0),
+                truncated=bool(dnbs_execution.get("truncated")),
+            )
+            audit["day_neighbourhood_break_search"] = {"execution": dnbs_execution, "records": dnbs_records}
+            completed_phases["day_neighbourhood_break_search_complete"] = not bool(dnbs_execution.get("truncated"))
+            save_candidate_pool_checkpoint(
+                candidate_pool_path, run_identity["run_id"], compliant, exceptions, completed_phases, near_feasible
+            )
+            write_json(audit_path, audit)
+        else:
+            audit["day_neighbourhood_break_search"] = {"execution": {
+                "enabled": bool(DAY_NEIGHBOURHOOD_BREAK_SEARCH_ENABLED),
+                "skip_reason": "NO_COMPLIANT_CANDIDATE" if not compliant else "COMPLETED_ON_RESUME_OR_DISABLED",
+            }, "records": []}
 
         # RC4.2 integrated neighborhood: exact shift/OFF, language and break
         # decisions are solved together. A validated incumbent is protected by

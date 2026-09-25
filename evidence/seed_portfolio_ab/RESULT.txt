@@ -1,0 +1,30 @@
+QUICK part scored 2026-09-25T12:41:36Z against PREREGISTERED_RULE.txt (commit 5c8f6aa).
+
+```
+case     A 1x3600 mean   B best 2x1800   C best 4x900   D best 2x3600   (after / before)
+CHAT      174.5 / 191.0      180 / 198       178 / 195        178 / 191  
+VOICE     246.5 / 248.5      247 / 249       247 / 250        247 / 249  
+AR        168.0 / 168.0      168 / 168       168 / 168        168 / 168  
+NMGSP     121.0 / 126.0      121 / 126       122 / 126        121 / 126  
+M2        110.5 / 117.0      113 / 117       110 / 117        111 / 117  
+H3         95.0 / 105.0       90 / 105        93 / 105         98 / 105  
+H1        142.0 / 168.0      111 / 168       123 / 168        143 / 168  
+summed after: {'A': 1057.5, 'B': 1030, 'C': 1041, 'D': 1066}
+config B: qualifies=False beats A=False issues=['(i) H3 after 90 < A 95.0 - 3', '(i) H1 after 111 < A 142.0 - 3']
+config C: qualifies=False beats A=False issues=['(i) H1 after 123 < A 142.0 - 3']
+QUICK VERDICT: stay: one 3600 s run
+```
+
+QUICK: stays one 3,600 s run (neither split qualifies under rule (i)).
+
+What the numbers say:
+* Real workbooks gain from splitting the hour into seeds: summed after for
+  Chat+Voice+AE_AR+NMG_SP is A 710.0, B 716, C 715, and the before-breaks
+  sheet improves (Chat 191.0 -> 198 / 195).
+* The hard 24x7 overnight case (H1) needs a long single run: 142.0 -> 111 (B)
+  and 123 (C). That is what the rule's no-case-worse-by-3 condition protects.
+* D, best of two full 3,600 s seeds (2 h, not eligible as a QUICK default), is
+  the best configuration: summed 1066 vs 1057.5, no before-breaks loss, H1 143.
+  Available now as `RUN_PORTFOLIO.py --seeds 2 --mode QUICK`.
+
+DEEP/OVERNIGHT: pending (phase 2 running).

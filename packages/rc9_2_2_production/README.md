@@ -1,11 +1,41 @@
 # RC9.2.2 — production package
 
-`L6.3.2.6-RC9.2.2-BUDGETED-SEARCH-AND-BREAK-CONCURRENCY-RC1`
+`L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2` · engine sha256 in `SCENARIOS.json`
+and `MANIFEST.json` (checked before every run)
+
+## This build: what is new and how to get the best schedule
+
+Three measured improvements over the package you last ran, each shipped only on
+a pre-registered A/B (all runs validator PASS, 0 hard failures):
+
+| | Change | Measured |
+|---|---|---|
+| **S2-PAR** | Break placement uses every CPU worker (it silently used one) | summed after-break target 827 -> 913 over 6 cases (Chat 155 -> 179, Voice 227 -> 246) |
+| **DNBS** | Day-by-day break re-placement on the best schedules, in its own time slot | 24x7 overnight +4, Chat +2.5; no before-breaks sheet lower |
+| **Seeds** | Solve the same workbook with 2 seeds and keep the better result | best of 2 x 1 h vs one 1 h run: +8.5 summed, Chat 174.5 -> 178; no before-breaks sheet lower |
+
+**Recommended setting: `MODE = QUICK`, `SEEDS = 2`** (Notebook A defaults).
+
+* Each seed is a full 1-hour run. On a Colab with **4+ CPUs** the two seeds run
+  side by side (about **1 hour** per scenario); on **2 CPUs** they run one after
+  the other (about **2 hours**). The runner decides automatically.
+* The best validated after-breaks schedule becomes `results/<scenario>/` (a
+  complete, unmodified run). `results/<scenario>/PORTFOLIO/` holds the best
+  before-breaks sheet of any seed and `PORTFOLIO_SUMMARY.csv` with every seed.
+* `SEEDS = 1` is an ordinary single run. Splitting one hour into shorter seeds
+  is **not** recommended: it hurts hard 24x7 workbooks badly (measured).
+* DEEP / OVERNIGHT defaults are still being measured (one long run vs several
+  1-hour seeds); until then use QUICK + 2 seeds.
+
+Evidence: `evidence/dnbs_e2e_3600b/RESULT.txt`, `evidence/seed_portfolio_ab/`,
+`evidence/NIGHT_15_JOINT_SHIFT_BREAK_BUILD.md`.
+
+## Earlier changes (already in the package you scored)
 
 Self-contained: engine, inputs, 419 offline guards, gate scorer, evidence and
 Colab runners. Nothing here needs the repository or any earlier run.
 
-## What changed since the runs you scored
+### Seven defects fixed in the previous build
 
 Seven defects, found by reading artifacts rather than reasoning about code.
 Four were the **same bug**: a per-attempt time slice clamped *up* to a floor, so
@@ -55,11 +85,14 @@ each.
 
 ## How to run
 
-One scenario per Colab instance, seven instances, ~4 hours.
+One scenario per Colab instance. With the recommended QUICK + 2 seeds: about
+1 hour on a 4-CPU runtime, 2 hours on 2 CPUs.
 
 1. Upload this zip (or place it in Drive for the `B_WITH_DRIVE` notebook).
 2. Open `runners/RC921_Colab_A_NO_DRIVE.ipynb`.
-3. Set `ONLY` to **one** scenario id and run all cells.
+3. Set `ONLY` to **one** scenario id (or `MY_WORKBOOK` to your own .xlsx),
+   keep `MODE = QUICK` and `SEEDS = 2`, and run all cells.
+4. Download `results/` (it includes `RUN_LEDGER.json` and `_gate_report/`).
 
 `NMG_SP` · `CRICUT_VOICE` · `CRICUT_CHAT` · `AE_AR_B2B` · `GDI_REAL28` ·
 `NMG_EN_SP` · `NMG_EN`

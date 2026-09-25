@@ -29,6 +29,11 @@ TREES = [
     ("engine", "engine"),
     ("tools", "tools"),
     ("tests", "tests"),
+    # run_tests.sh refuses to pass without the staged suites, and several of
+    # them build their planted cases from fixtures/. Leaving these out made the
+    # staged gate fail inside every package built after the suites moved there.
+    ("tests_staged", "tests_staged"),
+    ("fixtures", "fixtures"),
     ("evidence", "evidence"),
     ("packages/rc9_2_2_production/inputs", "inputs"),
     ("packages/rc9_2_2_production/runners", "runners"),

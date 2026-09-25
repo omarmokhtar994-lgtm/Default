@@ -15,11 +15,22 @@ Usage
     python rc921_runner.py --shard 0 --shards 4          # instance 0 of 4
     python rc921_runner.py --time-limit 5400             # override the budget
     python rc921_runner.py --gate-only                   # just re-score results
+    python rc921_runner.py --mode QUICK --seeds 2        # best of 2 seeds per scenario
+
+Seeds: the same workbook solved with a different solver seed gives a different
+schedule. --seeds N runs N seeds per scenario through engine/RUN_PORTFOLIO.py
+and keeps the best validated after-breaks schedule; the best before-breaks sheet
+of any seed is kept alongside it. Measured (evidence/seed_portfolio_ab/): best of
+2 x 3600 s beat a single 3600 s run by +8.5 target intervals summed over 7 cases,
+with no before-breaks sheet lower. Seeds run side by side when there are at
+least 2 cores per seed (2 workers each, as measured), otherwise one after another.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import math
+import shutil
 import os
 import platform
 import subprocess
@@ -112,6 +123,8 @@ def run_one(root: Path, results_root: Path, row: dict, args) -> dict:
         command += ["--language-working-window", args.language_working_window]
     if args.resume:
         command.append("--resume")
+    if int(getattr(args, "seeds", 1) or 1) > 1:
+        return run_portfolio(root, results_root, row, args, command, budget)
     log(f"START {scenario}  budget={budget}s  workers={command[command.index('--num-workers')+1]}")
     started = time.time()
     logfile = results_root / f"{scenario}.log"
@@ -124,6 +137,76 @@ def run_one(root: Path, results_root: Path, row: dict, args) -> dict:
     return {"scenario_id": scenario, "exit_code": proc.returncode,
             "wall_sec": elapsed, "budget_sec": budget,
             "overran_budget": elapsed > budget, "log": str(logfile)}
+
+
+def seed_plan(seeds: int, parallel: int, cpus: int) -> tuple:
+    """(seeds at once, workers per seed). Auto: 2+ cores per seed side by side."""
+    seeds = max(1, int(seeds))
+    if parallel <= 0:
+        parallel = max(1, min(seeds, cpus // 2))
+    parallel = max(1, min(seeds, parallel))
+    return parallel, max(1, cpus // parallel)
+
+
+def run_portfolio(root: Path, results_root: Path, row: dict, args, command: list, budget: int) -> dict:
+    """Run N seeds via RUN_PORTFOLIO.py; publish the winning seed as the scenario."""
+    scenario = row["scenario_id"]
+    seeds = int(args.seeds)
+    parallel, workers = seed_plan(seeds, int(getattr(args, "parallel", 0) or 0), os.cpu_count() or 2)
+    base_seed = int(row.get("solver_random_seed", 9000))
+    passthrough = [c for c in command[3:] if c not in ("--overwrite",)]
+    # drop the arguments RUN_PORTFOLIO sets itself, and the worker count it is given here
+    cleaned, skip = [], False
+    for c in passthrough:
+        if skip:
+            skip = False
+            continue
+        if c in ("--output-root", "--schedule-id", "--solver-random-seed", "--num-workers"):
+            skip = True
+            continue
+        cleaned.append(c)
+    if "--resume" in cleaned:
+        cleaned.remove("--resume")
+        log("note: --resume is not supported with --seeds; seeds start fresh")
+    seeds_root = results_root / "_seeds"
+    cmd = [sys.executable, "-u", str(root / "engine" / "RUN_PORTFOLIO.py"),
+           "--seeds", str(seeds), "--base-seed", str(base_seed), "--parallel", str(parallel),
+           "--output-root", str(seeds_root), "--schedule-id", scenario,
+           *cleaned, "--num-workers", str(workers)]
+    log(f"START {scenario}  seeds={seeds} (base {base_seed})  side-by-side={parallel}  "
+        f"workers/seed={workers}  budget/seed={budget}s")
+    started = time.time()
+    logfile = results_root / f"{scenario}.log"
+    rounds = math.ceil(seeds / parallel)
+    with logfile.open("w", encoding="utf-8") as handle:
+        proc = subprocess.run(cmd, stdout=handle, stderr=subprocess.STDOUT,
+                              timeout=budget * rounds + 1800 * rounds)
+    elapsed = round(time.time() - started, 1)
+    summary_path = seeds_root / scenario / "PORTFOLIO_SUMMARY.json"
+    summary = json.loads(summary_path.read_text(encoding="utf-8")) if summary_path.exists() else {}
+    winner = summary.get("after_breaks_winner_seed")
+    published = None
+    if winner is not None:
+        # The winning seed's complete run becomes results/<scenario>/, unchanged,
+        # so the gate report and the reader see one self-consistent run.
+        src = seeds_root / scenario / "seeds" / f"{scenario}_S{winner}"
+        dst = results_root / scenario
+        if dst.exists():
+            shutil.rmtree(dst)
+        shutil.copytree(src, dst)
+        portfolio_dir = dst / "PORTFOLIO"
+        shutil.copytree(seeds_root / scenario / "PORTFOLIO_BEST", portfolio_dir)
+        for name in ("PORTFOLIO_SUMMARY.json", "PORTFOLIO_SUMMARY.csv"):
+            shutil.copy2(seeds_root / scenario / name, portfolio_dir / name)
+        published = str(dst)
+    log(f"DONE  {scenario}  exit={proc.returncode}  wall={elapsed}s  "
+        f"after-breaks winner seed={winner}  before-breaks winner seed={summary.get('before_breaks_winner_seed')}")
+    return {"scenario_id": scenario, "exit_code": proc.returncode, "wall_sec": elapsed,
+            "budget_sec": budget, "seeds": seeds, "side_by_side": parallel, "workers_per_seed": workers,
+            "after_breaks_winner_seed": winner,
+            "before_breaks_winner_seed": summary.get("before_breaks_winner_seed"),
+            "published_case": published, "overran_budget": elapsed > budget * rounds,
+            "log": str(logfile)}
 
 
 def score_gates(root: Path, results_root: Path) -> int:
@@ -182,6 +265,10 @@ def main() -> int:
                          "scenario. Skips the manifest hash check for that file only; "
                          "the manifest scenarios stay hash-verified.")
     ap.add_argument("--num-workers", type=int, default=0)
+    ap.add_argument("--seeds", type=int, default=1,
+                    help="solver seeds per scenario; the best validated result is kept (default 1)")
+    ap.add_argument("--parallel", type=int, default=0,
+                    help="seeds to run side by side (default: automatic, 2+ cores per seed)")
     ap.add_argument("--resume", action="store_true")
     ap.add_argument("--skip-guards", action="store_true")
     ap.add_argument("--gate-only", action="store_true", help="re-score existing results")
@@ -257,6 +344,7 @@ def main() -> int:
         except subprocess.TimeoutExpired:
             log(f"TIMEOUT {row['scenario_id']} - hard kill, recorded as a failure")
             records.append({"scenario_id": row["scenario_id"], "exit_code": "TIMEOUT",
+                            "seeds": int(args.seeds or 1),
                             "wall_sec": None, "budget_sec": row["time_limit_sec"],
                             "overran_budget": True})
         (results_root / "RUN_LEDGER.json").write_text(json.dumps({

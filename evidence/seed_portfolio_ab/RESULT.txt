@@ -27,4 +27,37 @@ What the numbers say:
   the best configuration: summed 1066 vs 1057.5, no before-breaks loss, H1 143.
   Available now as `RUN_PORTFOLIO.py --seeds 2 --mode QUICK`.
 
-DEEP/OVERNIGHT: pending (phase 2 running).
+DEEP part scored 2026-09-26T06:34:41Z against PREREGISTERED_RULE.txt (commit 5c8f6aa).
+
+```
+case     E best 4x3600 (seeds)              F one DEEP run              
+CHAT     179 / 192.0  [171, 178, 179, 179]  no validated schedule (not validated)
+VOICE    248 / 250.0  [246, 247, 248, 246]  248 / 249.0
+NMGSP    122 / 126.0  [121, 121, 122, 121]  122 / 126.0
+H1       143 / 168.0  [141, 143, 143, 125]  no validated schedule (no summary (killed))
+summed after: E 692  F 370 (a case without a validated F schedule contributes 0)
+before check (real workbooks, E not below F by more than 1): OK
+DEEP VERDICT: adopt E: DEEP = best of 4 x 3600 s; OVERNIGHT = best of 6 x 3600 s
+```
+
+DEEP: adopts E. OVERNIGHT: best of 6 x 3,600 s by the registered argument.
+
+What the numbers say:
+* Where one DEEP run produced a schedule it tied the best of four 1 h seeds
+  (Voice 248, NMG_SP 122) and never beat it; before-breaks sheets equal or
+  better under E (Voice 250 vs 249, NMG_SP 126 = 126).
+* One DEEP run produced no schedule at all on Chat (killed at 13.0 GB) and H1
+  (killed at 13.9 GB, engine alone), both inside joint refinement, which only
+  DEEP/OVERNIGHT run (evidence/DEEP_MODE_OOM.md). E's seeds are QUICK runs
+  (joint refinement off, ~1-2 GB each), so E is also the memory-safe choice.
+* The engine shipped since (joint-solve isolation, 8506631) no longer dies in
+  that phase; the measurement kept the frozen engine so both arms ran the same
+  code. That changes F's failures into finished runs, not into wins: on the
+  cases where F finished it did not beat E.
+
+Run integrity: VOICE_DEEP_9000's first run was OOM-killed while verification
+jobs shared the machine; it was rerun alone with the same seed (as the rule
+requires for infrastructure kills) and that rerun is the one scored. CHAT_DEEP
+and H1_DEEP kills were the engine alone and count as F failing those cases.
+Honest limits: E is one realization of a best-of-4, F one run; the verdict
+does not depend on the failed cases (E >= F on every case where F finished).

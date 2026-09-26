@@ -16632,6 +16632,140 @@ def run_adaptive_decomposed_joint_optimizer(
     return dedupe_break_candidates(added), records, execution
 
 
+# Break-load feedback (Stage-2 -> Stage-1). Off until its registered A/B
+# (evidence/break_load_feedback_ab). When on it replaces coordinated repair in
+# the pipeline and takes that phase's budget plus 8% from break search.
+BREAK_LOAD_FEEDBACK_ENABLED = False
+FBL_VARIANT_CHANGES = (24, 12)
+
+
+def break_load_by_interval(parsed: ParsedInput, metrics: Dict[str, Any], damaged_only: bool = True) -> Dict[Tuple[int, int], int]:
+    """Coverage units breaks removed per interval (before_effective - after_effective,
+    in Stage-1 units), for the intervals breaks pushed below target."""
+    qpi = int(parsed.qslots_per_interval)
+    load: Dict[Tuple[int, int], int] = {}
+    for row in metrics.get("interval_rows") or []:
+        if damaged_only and not (row.get("target_hit_before") and not row.get("target_hit_after")):
+            continue
+        units = int(round((float(row.get("before_effective") or 0.0) - float(row.get("after_effective") or 0.0)) * 100 * qpi))
+        if units > 0:
+            load[(int(row["day_index"]), int(row["interval_index"]))] = units
+    return load
+
+
+def run_break_load_feedback(
+    parsed: ParsedInput,
+    candidates: Sequence[Tuple[SkeletonSolution, BreakSolution]],
+    hard: HardConfig,
+    pattern_width: int,
+    deadline: float,
+    workers: int,
+    log: Any,
+    random_seed: int = 0,
+) -> Tuple[List[Tuple[SkeletonSolution, BreakSolution]], List[Dict[str, Any]], Dict[str, Any]]:
+    """Feed the break load Stage 2 left on under-target intervals back to Stage 1.
+
+    Anchor: the best compliant candidate. Each round: the intervals breaks pushed
+    below target, with their break load, raise Stage 1's hit thresholds there
+    (build_skeleton break_load_units; objective only, before-coverage basis);
+    Stage 1 re-solves anchored to the incumbent with at most k changed cells
+    (FBL_VARIANT_CHANGES); Stage 2 places breaks, DNBS polishes them. A result
+    is kept only if dnbs_metrics_no_worse against the incumbent (after_target
+    up, nothing guarded worse) and the release validator calls it compliant;
+    the next round starts from it. Measured on saved pools (evidence/
+    feedback_loop): SYNTH_H1 142 -> 150, Chat and M2 unchanged.
+    """
+    started = time.time()
+    summary: Dict[str, Any] = {"enabled": True, "rounds": 0, "attempts": 0, "accepted_candidates": 0,
+                               "truncated": False, "skip_reason": None}
+    records: List[Dict[str, Any]] = []
+    additions: List[Tuple[SkeletonSolution, BreakSolution]] = []
+    pool = [pair for pair in dedupe_break_candidates(candidates)
+            if pair[1].metrics and candidate_pool_class(parsed, pair[0], pair[1]) == "compliant"]
+    if not pool:
+        summary["skip_reason"] = "NO_COMPLIANT_ANCHOR"
+        return additions, records, summary
+    pool.sort(key=lambda pair: (-int(pair[1].metrics.get("after_target", 0) or 0),
+                                -int(pair[1].metrics.get("after_floor", 0) or 0)))
+    incumbent = pool[0]
+    known = {profile["name"]: profile for profile in skeleton_profiles()}
+    seed = int(random_seed) + 7100
+    while deadline - time.time() >= 60:
+        summary["rounds"] += 1
+        load = break_load_by_interval(parsed, incumbent[1].metrics)
+        if not load:
+            summary["skip_reason"] = summary["skip_reason"] or "NO_BREAK_DAMAGED_INTERVAL"
+            break
+        progress = False
+        for changes in FBL_VARIANT_CHANGES:
+            remaining = deadline - time.time()
+            if remaining < 60:
+                summary["truncated"] = True
+                break
+            summary["attempts"] += 1
+            a_sk, a_br = incumbent
+            base = dict(known.get(a_sk.profile) or known.get("target90_restore_champion") or next(iter(known.values())))
+            base["name"] = f"break_load_feedback_{summary['rounds']}_{changes}"
+            base["coverage_basis"] = "before"
+            record: Dict[str, Any] = {"round": summary["rounds"], "max_changes": changes,
+                                      "load_interval_count": len(load),
+                                      "anchor_after_target": int(a_br.metrics.get("after_target", 0) or 0)}
+            new_sk = build_skeleton(parsed, base, hard, min(300.0, max(20.0, remaining * 0.35)), workers, log,
+                                    anchor=a_sk, max_changes=changes, random_seed=seed, hint_skeleton=a_sk,
+                                    break_load_units=load)
+            seed += 1
+            record["stage1_status"] = new_sk.cp_status
+            if new_sk.cp_status not in {"OPTIMAL", "FEASIBLE"}:
+                record["status"] = "STAGE1_NOT_FEASIBLE"; records.append(record); continue
+            before_metrics = calculate_metrics(parsed, new_sk, {(a, d): None for a, d, _ in scheduled_cells(new_sk)}, [])
+            new_sk.diagnostics["no_break_metrics"] = before_metrics
+            record["before_target"] = int(before_metrics.get("before_target", 0) or 0)
+            if not skeleton_hard_clean(parsed, before_metrics):
+                record["status"] = "STAGE1_HARD_GATE"; records.append(record); continue
+            remaining = deadline - time.time()
+            if remaining < 30:
+                summary["truncated"] = True; record["status"] = "NO_BREAK_BUDGET"; records.append(record); break
+            candidate = solve_breaks(parsed, new_sk, pattern_width, False, min(300.0, max(15.0, remaining * 0.45)),
+                                     workers, log, objective_mode="target_priority", random_seed=seed,
+                                     hint_solution=a_br)
+            record["stage2_status"] = candidate.cp_status
+            if candidate.cp_status not in {"OPTIMAL", "FEASIBLE"} or not candidate.selected_pattern:
+                record["status"] = "STAGE2_NOT_FEASIBLE"; records.append(record); continue
+            candidate.metrics = calculate_metrics(parsed, new_sk, candidate.selected_pattern, candidate.patterns)
+            candidate.diagnostics["candidate_origin"] = "BREAK_LOAD_FEEDBACK"
+            pair: Tuple[SkeletonSolution, BreakSolution] = (new_sk, candidate)
+            record["after_target_stage2"] = int(candidate.metrics.get("after_target", 0) or 0)
+            remaining = deadline - time.time()
+            if remaining > 20:
+                polished, _, _ = run_day_neighbourhood_break_search(
+                    parsed, [pair], time.time() + min(300.0, remaining * 0.8), workers, log, seed)
+                if polished:
+                    pair = polished[0]
+                    pair[1].diagnostics["feedback_origin"] = "BREAK_LOAD_FEEDBACK"
+            metrics = pair[1].metrics
+            candidate_class = candidate_pool_class(parsed, pair[0], pair[1])
+            ok, worse = dnbs_metrics_no_worse(metrics, incumbent[1].metrics)
+            record.update(after_target=int(metrics.get("after_target", 0) or 0),
+                          after_floor=int(metrics.get("after_floor", 0) or 0),
+                          candidate_class=candidate_class, worse=list(worse)[:6])
+            if ok and candidate_class == "compliant":
+                record["status"] = "ACCEPTED"
+                records.append(record)
+                print(f"BREAK_LOAD_FEEDBACK round {summary['rounds']} k={changes}: after_target "
+                      f"{record['anchor_after_target']} -> {record['after_target']}", file=log, flush=True)
+                incumbent = pair
+                additions.append(pair)
+                summary["accepted_candidates"] += 1
+                progress = True
+                break
+            record["status"] = "REJECTED"
+            records.append(record)
+        if not progress:
+            break
+    summary["elapsed_sec"] = round(time.time() - started, 3)
+    return additions, records, summary
+
+
 def run_coordinated_shift_off_break_loop(
     parsed: ParsedInput,
     candidates: Sequence[Tuple[SkeletonSolution, BreakSolution]],
@@ -19165,6 +19299,7 @@ def run_case(
             joint_refinement_reserve_sec=(joint_refinement_reserve_sec if joint_refinement else 0),
             diagnostics=budget_plan_diagnostics,
             day_neighbourhood_break_search=DAY_NEIGHBOURHOOD_BREAK_SEARCH_ENABLED and not skeleton_only,
+            break_load_feedback=BREAK_LOAD_FEEDBACK_ENABLED and coordinated_repair and not skeleton_only,
         )
         if not safe_incumbent:
             global_budget_plan["break_search"] += global_budget_plan.get("safe_incumbent", 0)
@@ -19259,6 +19394,7 @@ def run_case(
         )
         joint_refinement_deadline = budget_manager.deadline("joint_refinement")
         coordinated_repair_deadline = budget_manager.deadline("coordinated_repair")
+        break_load_feedback_deadline = budget_manager.deadline("break_load_feedback")
         exception_deadline = budget_manager.deadline("exception_search")
         post_break_deadline = budget_manager.deadline("post_break_repair")
         target_lock_deadline = budget_manager.deadline("target_lock_recovery")
@@ -21381,7 +21517,29 @@ def run_case(
         # candidates are all valid optimization inputs, but only candidates with
         # zero hard validation failures can enter a releasable pool.
         coordinated_pool = dedupe_break_candidates(list(compliant) + list(near_feasible) + list(exceptions))
-        if coordinated_repair and coordinated_pool and not completed_phases.get("coordinated_repair_complete", False):
+        break_load_feedback_on = bool(float(global_budget_plan.get("break_load_feedback", 0) or 0) > 0)
+        if break_load_feedback_on and compliant and not completed_phases.get("break_load_feedback_complete", False):
+            fbl_added, fbl_records, fbl_execution = run_break_load_feedback(
+                parsed, compliant, base_hard, full_width, break_load_feedback_deadline, workers, log,
+                solver_random_seed,
+            )
+            added_compliant, added_near, added_exceptions, added_rejected = split_candidate_pool(parsed, fbl_added)
+            compliant = dedupe_break_candidates(list(compliant) + list(added_compliant))
+            near_feasible = dedupe_break_candidates(list(near_feasible) + list(added_near))
+            exceptions = dedupe_break_candidates(list(exceptions) + list(added_exceptions))
+            audit["break_load_feedback"] = {"enabled": True, "records": fbl_records, "execution": fbl_execution,
+                                            "rejected_addition_count": len(added_rejected)}
+            completed_phases["break_load_feedback_complete"] = not bool(fbl_execution.get("truncated"))
+            budget_manager.record("break_load_feedback", "BREAK_LOAD_FEEDBACK_COMPLETE",
+                                  attempted=fbl_execution.get("attempts", 0),
+                                  accepted=fbl_execution.get("accepted_candidates", 0))
+            audit["global_budget"] = budget_manager.snapshot()
+            save_candidate_pool_checkpoint(candidate_pool_path, run_identity["run_id"], compliant, exceptions, completed_phases, near_feasible)
+            write_json(audit_path, audit)
+        elif not break_load_feedback_on:
+            audit["break_load_feedback"] = {"enabled": False, "status": "DISABLED"}
+        if (coordinated_repair and not break_load_feedback_on and coordinated_pool
+                and not completed_phases.get("coordinated_repair_complete", False)):
             coordinated_added, coordinated_records, coordinated_execution = run_coordinated_shift_off_break_loop(
                 parsed,
                 coordinated_pool,
@@ -22953,6 +23111,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--disable-conflict-refinement", action="store_true")
     parser.add_argument("--disable-coordinated-repair", action="store_true")
     parser.add_argument("--disable-joint-refinement", action="store_true")
+    parser.add_argument("--enable-break-load-feedback", action="store_true",
+                        help="Stage-2 -> Stage-1 break-load feedback in place of coordinated repair "
+                             "(off by default until its registered A/B).")
     parser.add_argument("--stage1-profile-rotation", default=None,
                         help="i/n: Stage-1 profile order for seed i of an n-seed portfolio "
                              "(first profiles fixed, the rest rotated). Default: unchanged.")
@@ -23595,7 +23756,9 @@ def cli_search_controls(args: Any, supplied: Set[str]) -> Dict[str, Any]:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
-    global FINAL_RECOVERY_ENDGAME_ENABLED, STAGE1_PROFILE_ROTATION
+    global FINAL_RECOVERY_ENDGAME_ENABLED, STAGE1_PROFILE_ROTATION, BREAK_LOAD_FEEDBACK_ENABLED
+    if getattr(args, "enable_break_load_feedback", False):
+        BREAK_LOAD_FEEDBACK_ENABLED = True
     if getattr(args, "enable_final_recovery_endgame", False):
         FINAL_RECOVERY_ENDGAME_ENABLED = True
     if getattr(args, "stage1_profile_rotation", None):

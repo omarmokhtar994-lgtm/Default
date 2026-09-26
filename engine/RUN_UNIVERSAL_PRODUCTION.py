@@ -880,6 +880,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help='Force joint refinement on. Off by default at every depth: 474 '
                         'solver audits (QUICK and DEEP) with improved 0, ~90%% of peak memory, '
                         'and two DEEP runs killed at 13-14 GB inside it.')
+    p.add_argument('--enable-break-load-feedback', action='store_true',
+                   help='Stage-2 -> Stage-1 break-load feedback in place of coordinated repair '
+                        '(off by default until its registered A/B).')
     p.add_argument('--stage1-profile-rotation', default=None,
                    help='i/n: Stage-1 profile order for seed i of an n-seed portfolio '
                         '(set by RUN_PORTFOLIO.py; default unchanged).')
@@ -1001,6 +1004,8 @@ def main() -> int:
         command.append('--disable-joint-refinement')
     if args.enable_final_recovery_endgame:
         command.append('--enable-final-recovery-endgame')
+    if args.enable_break_load_feedback:
+        command.append('--enable-break-load-feedback')
     if args.stage1_profile_rotation:
         command += ['--stage1-profile-rotation', str(args.stage1_profile_rotation)]
     if args.use_input_schedule_as_seed and not args.disable_input_schedule_seed:

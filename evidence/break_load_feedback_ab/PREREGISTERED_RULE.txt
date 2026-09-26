@@ -1,0 +1,32 @@
+Registered 2026-09-26 (before any run of this A/B).
+
+Change: --enable-break-load-feedback. Stage 2 -> Stage 1 feedback in place of
+coordinated repair: the intervals breaks pushed below target, with their break
+load, raise Stage 1's hit thresholds (objective only); Stage 1 re-solves
+anchored to the best compliant candidate (at most 24, then 12 changed cells);
+Stage 2 + DNBS; kept only if compliant and no guarded metric worse
+(dnbs_metrics_no_worse). Budget: coordinated repair's slot plus 8% of the run
+from break search (540 s at 3,600 s). Probe on saved pools: H1 142 -> 150,
+Chat and M2 unchanged (evidence/feedback_loop).
+
+Arms: CURRENT = the NEW arm runs of evidence/dnbs_e2e_3600b (engine 7a36c962;
+its QUICK code path equals today's default engine: joint refinement off,
+isolation unused, endgame not reached in those runs). NEW = today's engine
+(frozen copy, sha recorded in RESULT) with --enable-break-load-feedback.
+Config: production runner, FULL_SCHEDULE, QUICK, --time-limit 3600,
+--num-workers 2, two runs concurrently (4 cores). Seeds 9000 and 9001, every
+case. Cases: Cricut Chat, Cricut Voice, AE_AR_B2B, NMG_SP (real); SYNTH_M2,
+SYNTH_H3, SYNTH_H1 (planted).
+Score: BEST_FINAL after_target; per case the mean over the two seeds.
+
+SHIP (turn on by default) iff ALL:
+  (1) every NEW run: validator PASS, 0 hard failures, parity PASS;
+  (2) summed two-seed-mean after_target NEW >= summed CURRENT;
+  (3) no REAL workbook's two-seed mean worse by more than 2 intervals;
+  (4) no NEW run produces no schedule where the same-seed CURRENT run produced one;
+  (5) no real workbook's best before-breaks sheet (two-seed max) lower by more than 1;
+  (6) validity: the phase attempted at least one round (attempts > 0) in at
+      least half of the NEW runs, otherwise INCONCLUSIVE and NOT shipped.
+Otherwise NOT shipped (stays an opt-in flag).
+Interruptions: infrastructure-killed runs are rerun with the same arm, case and
+seed. Finished runs are never rerun. No rule change after results are seen.

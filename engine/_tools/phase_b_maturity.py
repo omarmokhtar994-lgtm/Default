@@ -181,6 +181,7 @@ PHASE_MINIMUM_VIABLE_SECONDS = {
     "target_lock_recovery": 65,
     "exception_search": 90,
     "day_neighbourhood_break_search": 21,
+    "break_load_feedback": 120,
 }
 
 # Day-neighbourhood break search (DNBS) runs between break search and joint
@@ -192,6 +193,15 @@ DNBS_BUDGET_SHARE = 0.08
 DNBS_BUDGET_FLOOR_SEC = 60
 DNBS_BUDGET_CAP_SEC = 420
 DNBS_MIN_BREAK_SEARCH_LEFT_SEC = 180
+
+# Break-load feedback (Stage-2 -> Stage-1) replaces coordinated repair when on:
+# it takes coordinated repair's slot (0 commits in 22 attempts at 3,600 s) plus
+# 8% of the run from break search (floor 120 s, cap 900 s), dropped if break
+# search would fall below 180 s. 540 s at 3,600 s.
+FBL_BUDGET_SHARE = 0.08
+FBL_BUDGET_FLOOR_SEC = 120
+FBL_BUDGET_CAP_SEC = 900
+FBL_MIN_BREAK_SEARCH_LEFT_SEC = 180
 
 
 def build_global_budget_plan(
@@ -210,6 +220,7 @@ def build_global_budget_plan(
     stage1_minimum_seconds: int = 0,
     diagnostics: Optional[Dict[str, Any]] = None,
     day_neighbourhood_break_search: bool = False,
+    break_load_feedback: bool = False,
 ) -> Dict[str, int]:
     """Create a scenario-neutral, single-run budget plan.
 
@@ -304,6 +315,14 @@ def build_global_budget_plan(
         if break_search - dnbs < DNBS_MIN_BREAK_SEARCH_LEFT_SEC:
             dnbs = 0
         break_search -= dnbs
+    fbl = 0
+    if break_load_feedback and total >= 600:
+        extra = min(FBL_BUDGET_CAP_SEC, max(FBL_BUDGET_FLOOR_SEC, int(total * FBL_BUDGET_SHARE)))
+        if break_search - extra < FBL_MIN_BREAK_SEARCH_LEFT_SEC:
+            extra = 0
+        break_search -= extra
+        fbl = coordinated + extra
+        coordinated = 0
 
     plan = {
         "preflight_probe": preflight_probe,
@@ -314,6 +333,7 @@ def build_global_budget_plan(
         "day_neighbourhood_break_search": dnbs,
         "joint_refinement": joint,
         "coordinated_repair": coordinated,
+        "break_load_feedback": fbl,
         "exception_search": exception,
         "post_break_repair": post,
         "target_lock_recovery": target,

@@ -1,0 +1,35 @@
+Registered 2026-09-26 (before any run of this A/B).
+
+Question: in a seed portfolio, does giving the second seed a different Stage-1
+profile order (--diversify-profiles: first 5 profiles fixed, the other 10
+rotated; seed i of n) beat seeds that all use the same order?
+
+Why it might: at 3,600 s Stage 1 funds 9-10 of the 15 profiles, always the
+same first ones, so every seed explores the same skeletons and 5 profiles
+(target_priority_balanced, floor_protected, coverage_rebalance,
+before_target_champion, protected_balance_polish) never run on 6 of 7 cases.
+protected_balance_polish produced the selected final 3 times on NMG_SP, the one
+case where all profiles run.
+
+Design (paired, 7 cases: Chat, Voice, AE_AR_B2B, NMG_SP, M2, H3, H1; QUICK,
+3,600 s, 2 workers, production runner, FULL_SCHEDULE):
+  B0 = best of {seed 9000, seed 9001}, both default order: the NEW arm runs of
+       evidence/dnbs_e2e_3600b (engine 7a36c962).
+  B1 = best of {the same seed-9000 run (rotation 0/2 = default order, so it
+       is shared), a new seed-9001 run with --stage1-profile-rotation 1/2}.
+  The only difference between arms is seed 9001's profile order. The new runs
+  use the current engine (frozen copy, sha recorded in RESULT); its QUICK code
+  path equals 7a36c962's except the no-candidate endgame (now off), which did
+  not run in any B0 run - recorded per run in RESULT.
+Scores: after = best validated after_target (validator PASS, 0 hard, parity
+PASS); before = best best_before_target of the two seeds.
+
+SHIP --diversify-profiles as the portfolio default (Colab runner, DEEP/
+OVERNIGHT presets, QUICK 2 seeds) iff all hold:
+  (1) summed after(B1) > summed after(B0);
+  (2) no case's after(B1) below after(B0) by more than 3;
+  (3) no real workbook's before(B1) below before(B0) by more than 1.
+Otherwise it stays an opt-in flag. Infrastructure-killed runs are rerun with
+the same seed; finished runs never.
+Honest limits: one realization per arm per case; a paired design removes the
+seed-9000 noise but not seed-9001's.

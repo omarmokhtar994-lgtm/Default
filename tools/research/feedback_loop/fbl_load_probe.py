@@ -10,7 +10,7 @@ candidate_pool_class is compliant; repeat from the accepted candidate.
 Variants per round: FULL (unanchored re-solve, hinted with the anchor) and
 LOCAL-k (anchored, at most k changed cells).
 
-usage: fbl_load_probe.py ENGINE RUN_DIR SECONDS WORKERS [VARIANTS] [ALL|DAMAGED]
+usage: fbl_load_probe.py ENGINE RUN_DIR SECONDS WORKERS [VARIANTS] [ALL|DAMAGED] [CARRY|SOLVE]
 """
 import glob
 import io
@@ -22,7 +22,8 @@ from pathlib import Path
 
 eng, run_dir, budget, workers = sys.argv[1], Path(sys.argv[2]), float(sys.argv[3]), int(sys.argv[4])
 variants = (sys.argv[5] if len(sys.argv) > 5 else "FULL,LOCAL-12,LOCAL-24").split(",")
-load_scope = sys.argv[6] if len(sys.argv) > 6 else "DAMAGED"   # DAMAGED: only intervals breaks pushed below target
+load_scope = sys.argv[6] if len(sys.argv) > 6 else "DAMAGED"
+stage2_mode = sys.argv[7] if len(sys.argv) > 7 else "CARRY"   # CARRY: anchor breaks kept, DNBS re-places; SOLVE: fresh Stage 2   # DAMAGED: only intervals breaks pushed below target
 spec = importlib.util.spec_from_file_location("E", eng)
 E = importlib.util.module_from_spec(spec)
 sys.path.insert(0, str(Path(eng).parent))
@@ -52,6 +53,34 @@ def break_load(metrics):
         if units > 0:
             load[(int(row["day_index"]), int(row["interval_index"]))] = units
     return load
+
+
+def carried_breaks(new_sk, a_sk, a_br):
+    """Anchor's break pattern wherever the shift is unchanged; for a changed cell,
+    the pattern another associate uses on the same day and shift, else the first
+    pattern of that duration. DNBS then re-places breaks day by day."""
+    pats = list(a_br.patterns)
+    by_duration = {}
+    for p in pats:
+        by_duration.setdefault(p.duration_q, []).append(p)
+    same_day_shift = {}
+    for (a, d), pid in a_br.selected_pattern.items():
+        si = a_sk.selected_shift_index[a][d]
+        if pid is not None and si is not None:
+            same_day_shift.setdefault((d, si), pid)
+    selected = {}
+    for a, d, si in E.scheduled_cells(new_sk):
+        if a_sk.selected_shift_index[a][d] == si and (a, d) in a_br.selected_pattern:
+            selected[(a, d)] = a_br.selected_pattern[(a, d)]
+            continue
+        pid = same_day_shift.get((d, si))
+        if pid is None:
+            options = by_duration.get(P.shifts[si].duration_q) or []
+            pid = options[0].index if options else None
+        selected[(a, d)] = pid
+    metrics = E.calculate_metrics(P, new_sk, selected, pats)
+    return E.BreakSolution("fbl_carried", new_sk.profile, "FEASIBLE", 0.0, 0.0, 115, False,
+                           selected, set(), pats, {}, metrics)
 
 
 def stage1_profile(name):
@@ -90,12 +119,16 @@ while time.time() < deadline - 60:
         if not E.skeleton_hard_clean(P, bm):
             row["result"] = "STAGE1_HARD_GATE"; print(row, flush=True); continue
         remaining = deadline - time.time()
-        t2 = min(300.0, max(30.0, remaining * 0.3))
-        cand = E.solve_breaks(P, new_sk, 115, False, t2, workers, log, objective_mode="target_priority",
-                              random_seed=seed, hint_solution=a_br)
-        row["stage2"] = cand.cp_status
-        if cand.cp_status not in {"OPTIMAL", "FEASIBLE"}:
-            print(row, flush=True); continue
+        if stage2_mode == "CARRY":
+            cand = carried_breaks(new_sk, a_sk, a_br)
+            row["stage2"] = "CARRIED"
+        else:
+            t2 = min(300.0, max(30.0, remaining * 0.3))
+            cand = E.solve_breaks(P, new_sk, 115, False, t2, workers, log, objective_mode="target_priority",
+                                  random_seed=seed, hint_solution=a_br)
+            row["stage2"] = cand.cp_status
+            if cand.cp_status not in {"OPTIMAL", "FEASIBLE"}:
+                print(row, flush=True); continue
         cand.metrics = E.calculate_metrics(P, new_sk, cand.selected_pattern, cand.patterns)
         row["after_stage2"] = cand.metrics["after_target"]
         pair = (new_sk, cand)

@@ -138,6 +138,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0], add_help=True)
     p.add_argument("--seeds", type=int, default=0,
                    help="Number of seeds to run (default 1 = a single ordinary run; with --preset, the preset's count).")
+    p.add_argument("--diversify-profiles", action="store_true",
+                   help="Give each seed a different Stage-1 profile order (first profiles fixed, "
+                        "the rest rotated) so the portfolio covers every profile.")
     p.add_argument("--preset", choices=sorted(PRESET_SEEDS),
                    help="DEEP = best of 4 x 1 h QUICK seeds, OVERNIGHT = best of 6 (measured defaults).")
     p.add_argument("--seed-list", help="Explicit comma-separated seeds; overrides --seeds.")
@@ -162,8 +165,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     seeds_root = case_root / "seeds"
     seeds_root.mkdir(parents=True, exist_ok=True)
     print(f"[portfolio] {args.schedule_id}: seeds {seeds}, parallel {args.parallel}", flush=True)
+    def seed_arguments(index: int) -> List[str]:
+        if args.diversify_profiles and len(seeds) > 1 and "--skeleton-profiles" not in passthrough:
+            return list(passthrough) + ["--stage1-profile-rotation", f"{index}/{len(seeds)}"]
+        return list(passthrough)
+
     with ThreadPoolExecutor(max_workers=max(1, args.parallel)) as pool:
-        dirs = list(pool.map(lambda s: run_seed(s, args.schedule_id, seeds_root, passthrough, case_root), seeds))
+        dirs = list(pool.map(lambda item: run_seed(item[1], args.schedule_id, seeds_root, seed_arguments(item[0]), case_root),
+                             enumerate(seeds)))
     results = []
     for seed, run_dir in zip(seeds, dirs):
         r = read_seed_result(run_dir)
@@ -184,6 +193,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "schedule_id": args.schedule_id,
         "seeds": seeds,
         "preset": args.preset,
+        "diversify_profiles": bool(args.diversify_profiles),
         "passthrough_arguments": passthrough,
         "after_breaks_winner_seed": winners["after"]["seed"] if winners["after"] else None,
         "before_breaks_winner_seed": winners["before"]["seed"] if winners["before"] else None,

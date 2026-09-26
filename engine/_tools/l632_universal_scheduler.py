@@ -4155,6 +4155,28 @@ JOINT_SOLVE_ISOLATION_ENABLED = True
 # 0 candidates every time (EXHAUSTED; evidence/JOINT_REFINEMENT_REMOVED.md).
 # --enable-final-recovery-endgame turns it back on.
 FINAL_RECOVERY_ENDGAME_ENABLED = False
+
+# Stage-1 profile rotation for seed portfolios (--stage1-profile-rotation i/n).
+# At a 3,600 s budget Stage 1 funds 9-10 of the 15 profiles, always the same
+# first ones, so every seed of a portfolio explored the same skeletons and 5-6
+# profiles never ran. Seed i of n keeps the first STAGE1_ROTATION_ANCHORS
+# profiles (78 runs: they produced 64 of the selected finals) and rotates the
+# rest, so a portfolio covers every profile. (0, 1) = unchanged order.
+STAGE1_ROTATION_ANCHORS = 5
+STAGE1_PROFILE_ROTATION: Tuple[int, int] = (0, 1)
+
+
+def rotate_stage1_profiles(names: Optional[Sequence[str]], seed_index: int, seed_count: int) -> Optional[List[str]]:
+    """The profile order for seed `seed_index` of `seed_count`; see STAGE1_PROFILE_ROTATION."""
+    if seed_count <= 1 or seed_index % seed_count == 0:
+        return list(names) if names else names
+    order = list(names) if names else [profile["name"] for profile in skeleton_profiles()]
+    head, tail = order[:STAGE1_ROTATION_ANCHORS], order[STAGE1_ROTATION_ANCHORS:]
+    if not tail:
+        return order
+    step = max(1, math.ceil(len(tail) / seed_count))
+    offset = ((seed_index % seed_count) * step) % len(tail)
+    return head + tail[offset:] + tail[:offset]
 JOINT_SOLVE_KILL_BELOW_FREE_MB = 256
 JOINT_SOLVE_KILL_BELOW_FREE_SHARE = 0.02
 JOINT_SOLVE_POLL_SEC = 0.2
@@ -6424,7 +6446,13 @@ def build_skeleton(
     qualified_language_break_certificate_max_waivers: Optional[int] = None,
     aggregate_guidance: Optional[Dict[str, Any]] = None,
     minimum_tier_hits: Optional[Dict[int, int]] = None,
+    break_load_units: Optional[Dict[Tuple[int, int], int]] = None,
 ) -> SkeletonSolution:
+    # break_load_units (Stage-2 -> Stage-1 feedback, search only): coverage
+    # units that breaks removed from each current-week interval in a solved
+    # break placement. They raise the Stage-1 hit thresholds for the objective
+    # so the skeleton aims to stay at target AFTER that load; hard constraints
+    # and every reported metric keep the workbook's own demand. None = unchanged.
     cp_model = import_cp_sat()
     model = cp_model.CpModel()
     A, D, S = len(parsed.associates), 7, len(parsed.shifts)
@@ -6749,6 +6777,11 @@ def build_skeleton(
                 full_units = ceil_units(req) * qpi
                 if hard.hard_floor and parsed.floor_mode == "hard":
                     model.Add(eff >= hard_floor_units)
+                observed_break_load = int((break_load_units or {}).get((d, i), 0) or 0)
+                if observed_break_load > 0:
+                    floor_units += observed_break_load
+                    target_units += observed_break_load
+                    full_units += observed_break_load
                 quality_shape_enabled = bool(
                     profile.get("enforce_quality_gate")
                     or profile.get("quality_global_gap", 0)
@@ -6789,7 +6822,7 @@ def build_skeleton(
                     tier_weight = int(profile.get(f"protected{tier_pct}_miss", 0) or 0)
                     if tier_pct not in minimum_tier_hits and tier_weight <= 0:
                         continue
-                    tier_units = ceil_units(req * tier_ratio) * qpi
+                    tier_units = ceil_units(req * tier_ratio) * qpi + max(0, observed_break_load)
                     tier_hit = model.NewBoolVar(f"stage1_tier_{tier_pct}_hit_{d}_{i}")
                     model.Add(objective_coverage >= tier_units).OnlyEnforceIf(tier_hit)
                     model.Add(objective_coverage <= tier_units - 1).OnlyEnforceIf(tier_hit.Not())
@@ -18850,6 +18883,8 @@ def run_case(
         workers = int(_resolved.get("workers", workers))
         pattern_widths = _resolved.get("pattern_widths", pattern_widths)
         skeleton_profile_names = _resolved.get("skeleton_profile_names", skeleton_profile_names)
+        if STAGE1_PROFILE_ROTATION[1] > 1:
+            skeleton_profile_names = rotate_stage1_profiles(skeleton_profile_names, *STAGE1_PROFILE_ROTATION)
         break_objective_modes = _resolved.get("break_objective_modes", break_objective_modes)
         repair_change_limits = _resolved.get("repair_change_limits", repair_change_limits)
         export_top_skeletons = int(_resolved.get("export_top_skeletons", export_top_skeletons))
@@ -19246,6 +19281,7 @@ def run_case(
             "repair_change_limits": [int(value) for value in repair_change_limits],
             "break_objective_modes": list(break_objective_modes or []),
             "skeleton_profile_names": list(skeleton_profile_names or []),
+            "stage1_profile_rotation": list(STAGE1_PROFILE_ROTATION),
             "primary_target_tolerance": int(primary_target_tolerance),
             "max_final_before_target_loss": max_final_before_target_loss,
             "benchmark_workbook": str(benchmark_workbook) if benchmark_workbook else None,
@@ -22917,6 +22953,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--disable-conflict-refinement", action="store_true")
     parser.add_argument("--disable-coordinated-repair", action="store_true")
     parser.add_argument("--disable-joint-refinement", action="store_true")
+    parser.add_argument("--stage1-profile-rotation", default=None,
+                        help="i/n: Stage-1 profile order for seed i of an n-seed portfolio "
+                             "(first profiles fixed, the rest rotated). Default: unchanged.")
     parser.add_argument("--enable-final-recovery-endgame", action="store_true",
                         help="Reopen the joint search when a run ends with no release candidate "
                              "(off by default: 9 runs, 0 candidates added).")
@@ -23556,9 +23595,15 @@ def cli_search_controls(args: Any, supplied: Set[str]) -> Dict[str, Any]:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
+    global FINAL_RECOVERY_ENDGAME_ENABLED, STAGE1_PROFILE_ROTATION
     if getattr(args, "enable_final_recovery_endgame", False):
-        global FINAL_RECOVERY_ENDGAME_ENABLED
         FINAL_RECOVERY_ENDGAME_ENABLED = True
+    if getattr(args, "stage1_profile_rotation", None):
+        index_text, _, count_text = str(args.stage1_profile_rotation).partition("/")
+        index, count = int(index_text), int(count_text or 1)
+        if count < 1 or not 0 <= index < count:
+            parser.error("--stage1-profile-rotation expects i/n with 0 <= i < n")
+        STAGE1_PROFILE_ROTATION = (index, count)
     inputs = list(args.input or [])
     if args.selfcheck:
         payload = selfcheck(inputs)

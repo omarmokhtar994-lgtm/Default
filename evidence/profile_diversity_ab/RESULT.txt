@@ -1,0 +1,27 @@
+Scored 2026-09-26T19:00:16Z against PREREGISTERED_RULE.txt; new-run engine sha 0d202dbc086a7c4a
+
+```
+case   s9000 (shared)   s9001 default    s9001 rotated    B0 after/before  B1 after/before 
+CHAT   177/195          177/192          172/191          177/195          177/195           rot=[1, 2] endgame B0=RELEASE_CANDIDATE_FOUND
+VOICE  246/248          247/249          248/249          247/249          248/249           rot=[1, 2] endgame B0=RELEASE_CANDIDATE_FOUND
+AR     168/168          168/168          168/168          168/168          168/168           rot=[1, 2] endgame B0=RELEASE_CANDIDATE_FOUND
+NMGSP  121/126          121/126          122/126          121/126          122/126           rot=[1, 2] endgame B0=RELEASE_CANDIDATE_FOUND
+M2     111/117          104/117          108/117          111/117          111/117           rot=[1, 2] endgame B0=RELEASE_CANDIDATE_FOUND
+H3     92/105           92/105           96/105           92/105           96/105            rot=[1, 2] endgame B0=RELEASE_CANDIDATE_FOUND
+H1     141/168          151/168          143/168          151/168          143/168           rot=[1, 2] endgame B0=RELEASE_CANDIDATE_FOUND
+summed after: B0 1067  B1 1065
+VERDICT: NOT SHIPPED (stays opt-in): (1) summed after B1 1065 not > B0 1067; (2) H1 after 143 < 151 - 3
+```
+
+Per the registered rule, --diversify-profiles stays an opt-in flag and the
+portfolio default is unchanged.
+
+Reading: the rotated seed was better than the default seed 9001 on Voice (+1),
+NMG_SP (+1), M2 (+4), H3 (+4) and worse on Chat (-5) and H1 (-8); after taking
+the best with the shared seed 9000, B1 wins H3 (+4), Voice and NMG_SP (+1),
+loses H1 (-8). The differences are the size of seed-to-seed variation on the
+same order (H1 across seeds: 125-151), so one realization per arm cannot tell
+diversity from luck. The flag is kept (RUN_PORTFOLIO.py --diversify-profiles,
+tested) for anyone who wants to try it; nothing changes by default.
+Endgame (now off by default) did not run in any B0 run, so the QUICK code
+paths of the two engines were identical as registered.

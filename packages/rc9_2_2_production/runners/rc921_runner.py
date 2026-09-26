@@ -16,6 +16,8 @@ Usage
     python rc921_runner.py --time-limit 5400             # override the budget
     python rc921_runner.py --gate-only                   # just re-score results
     python rc921_runner.py --mode QUICK --seeds 2        # best of 2 seeds per scenario
+    python rc921_runner.py --mode DEEP                   # best of 4 x 1 h seeds (measured default)
+    python rc921_runner.py --mode DEEP --single-run      # one 4 h run instead
 
 Seeds: the same workbook solved with a different solver seed gives a different
 schedule. --seeds N runs N seeds per scenario through engine/RUN_PORTFOLIO.py
@@ -24,6 +26,15 @@ of any seed is kept alongside it. Measured (evidence/seed_portfolio_ab/): best o
 2 x 3600 s beat a single 3600 s run by +8.5 target intervals summed over 7 cases,
 with no before-breaks sheet lower. Seeds run side by side when there are at
 least 2 cores per seed (2 workers each, as measured), otherwise one after another.
+
+DEEP and OVERNIGHT: measured against one long run on the same engine
+(evidence/seed_portfolio_ab/RESULT.txt, rule registered before the runs), the
+best of four 1 h QUICK seeds tied one 4 h DEEP run where that run finished
+(Voice 248, NMG_SP 122) and the single DEEP run produced no schedule at all on
+Chat and on the 24x7 case (killed at 13-14 GB in joint refinement). So DEEP
+now means best of 4 x 3600 s QUICK seeds and OVERNIGHT best of 6 x 3600 s.
+--seeds N changes the count, --time-limit the per-seed budget, and
+--single-run restores one long DEEP/OVERNIGHT run.
 """
 from __future__ import annotations
 
@@ -89,6 +100,29 @@ def mode_default_budget(args) -> int:
                                    "DEEP": 14400, "OVERNIGHT": 21600}[args.mode or "DEEP"])
 
 
+# DEEP / OVERNIGHT as seed portfolios of 1 h QUICK runs (see module docstring).
+PORTFOLIO_DEPTH_SEEDS = {"DEEP": 4, "OVERNIGHT": 6}
+PORTFOLIO_SEED_MODE = "QUICK"
+PORTFOLIO_SEED_SECONDS = 3600
+
+
+def depth_plan(args, row: dict) -> tuple:
+    """(engine mode, budget per run in seconds, number of seeds) for one scenario."""
+    mode = args.mode or row.get("mode", "DEEP")
+    requested = int(getattr(args, "seeds", 0) or 0)
+    if mode in PORTFOLIO_DEPTH_SEEDS and not getattr(args, "single_run", False):
+        budget = int(args.time_limit) if args.time_limit else PORTFOLIO_SEED_SECONDS
+        return PORTFOLIO_SEED_MODE, budget, requested or PORTFOLIO_DEPTH_SEEDS[mode]
+    mode_budgets = {"SMOKE": 900, "QUICK": 3600, "DEEP": 14400, "OVERNIGHT": 21600}
+    if args.time_limit:
+        budget = int(args.time_limit)
+    elif args.mode:
+        budget = mode_budgets[args.mode]
+    else:
+        budget = int(row["time_limit_sec"])
+    return mode, budget, requested or 1
+
+
 def run_one(root: Path, results_root: Path, row: dict, args) -> dict:
     scenario = row["scenario_id"]
     # The wrapper creates <output-root>/<schedule-id>/ itself, so output-root is
@@ -99,19 +133,13 @@ def run_one(root: Path, results_root: Path, row: dict, args) -> dict:
     # A mode override without a matching budget is the trap this exists to
     # avoid: DEEP's 14400s budget under --mode QUICK, or QUICK's phase reserves
     # under a 14400s one. An explicit --time-limit still wins over both.
-    mode_budgets = {"SMOKE": 900, "QUICK": 3600, "DEEP": 14400, "OVERNIGHT": 21600}
-    if args.time_limit:
-        budget = int(args.time_limit)
-    elif args.mode:
-        budget = mode_budgets[args.mode]
-    else:
-        budget = int(row["time_limit_sec"])
+    engine_mode, budget, seeds = depth_plan(args, row)
     command = [
         sys.executable, "-u", str(root / "engine" / "RUN_UNIVERSAL_PRODUCTION.py"),
         "--input", str(row.get("_input_path") or (root / "inputs" / row["input"])),
         "--output-root", str(results_root),
         "--schedule-id", scenario,
-        "--mode", args.mode or row.get("mode", "DEEP"),
+        "--mode", engine_mode,
         "--time-limit", str(budget),
         "--num-workers", str(args.num_workers or row.get("num_workers", 4)),
         "--solver-random-seed", str(row.get("solver_random_seed", 9000)),
@@ -123,8 +151,8 @@ def run_one(root: Path, results_root: Path, row: dict, args) -> dict:
         command += ["--language-working-window", args.language_working_window]
     if args.resume:
         command.append("--resume")
-    if int(getattr(args, "seeds", 1) or 1) > 1:
-        return run_portfolio(root, results_root, row, args, command, budget)
+    if seeds > 1:
+        return run_portfolio(root, results_root, row, args, command, budget, seeds)
     log(f"START {scenario}  budget={budget}s  workers={command[command.index('--num-workers')+1]}")
     started = time.time()
     logfile = results_root / f"{scenario}.log"
@@ -148,10 +176,11 @@ def seed_plan(seeds: int, parallel: int, cpus: int) -> tuple:
     return parallel, max(1, cpus // parallel)
 
 
-def run_portfolio(root: Path, results_root: Path, row: dict, args, command: list, budget: int) -> dict:
+def run_portfolio(root: Path, results_root: Path, row: dict, args, command: list, budget: int,
+                  seeds: int) -> dict:
     """Run N seeds via RUN_PORTFOLIO.py; publish the winning seed as the scenario."""
     scenario = row["scenario_id"]
-    seeds = int(args.seeds)
+    seeds = int(seeds)
     parallel, workers = seed_plan(seeds, int(getattr(args, "parallel", 0) or 0), os.cpu_count() or 2)
     base_seed = int(row.get("solver_random_seed", 9000))
     passthrough = [c for c in command[3:] if c not in ("--overwrite",)]
@@ -265,8 +294,11 @@ def main() -> int:
                          "scenario. Skips the manifest hash check for that file only; "
                          "the manifest scenarios stay hash-verified.")
     ap.add_argument("--num-workers", type=int, default=0)
-    ap.add_argument("--seeds", type=int, default=1,
-                    help="solver seeds per scenario; the best validated result is kept (default 1)")
+    ap.add_argument("--seeds", type=int, default=0,
+                    help="solver seeds per scenario; the best validated result is kept "
+                         "(default: 4 for DEEP, 6 for OVERNIGHT, 1 otherwise)")
+    ap.add_argument("--single-run", action="store_true",
+                    help="DEEP/OVERNIGHT as one long run instead of 1 h seeds")
     ap.add_argument("--parallel", type=int, default=0,
                     help="seeds to run side by side (default: automatic, 2+ cores per seed)")
     ap.add_argument("--resume", action="store_true")

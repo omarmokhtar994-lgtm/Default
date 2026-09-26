@@ -21,6 +21,12 @@ What it guarantees:
 
 Seeds run one after another by default (each keeps all its workers); pass
 --parallel to run several at once when there are enough cores.
+
+--preset DEEP / OVERNIGHT: the measured replacement for one long run
+(evidence/seed_portfolio_ab/RESULT.txt, rule registered before the runs). The
+best of four 1 h QUICK seeds tied one 4 h DEEP run wherever that run finished
+and the DEEP run produced no schedule on two of four cases (killed at 13-14 GB
+in joint refinement). DEEP = 4 x 3600 s QUICK seeds, OVERNIGHT = 6 x 3600 s.
 """
 from __future__ import annotations
 
@@ -40,6 +46,8 @@ from typing import Any, Dict, List, Optional
 ROOT = Path(__file__).resolve().parent
 RUNNER = ROOT / "RUN_UNIVERSAL_PRODUCTION.py"
 DEFAULT_BASE_SEED = 9000
+PRESET_SEEDS = {"DEEP": 4, "OVERNIGHT": 6}
+PRESET_SEED_ARGS = ["--mode", "QUICK", "--time-limit", "3600"]
 
 # After-breaks ranking across seeds, most important first. Target coverage is
 # the production objective; the rest only break ties.
@@ -128,7 +136,10 @@ def run_seed(seed: int, schedule_id: str, seeds_root: Path, passthrough: List[st
 
 def main(argv: Optional[List[str]] = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0], add_help=True)
-    p.add_argument("--seeds", type=int, default=1, help="Number of seeds to run (default 1 = a single ordinary run).")
+    p.add_argument("--seeds", type=int, default=0,
+                   help="Number of seeds to run (default 1 = a single ordinary run; with --preset, the preset's count).")
+    p.add_argument("--preset", choices=sorted(PRESET_SEEDS),
+                   help="DEEP = best of 4 x 1 h QUICK seeds, OVERNIGHT = best of 6 (measured defaults).")
     p.add_argument("--seed-list", help="Explicit comma-separated seeds; overrides --seeds.")
     p.add_argument("--base-seed", type=int, default=DEFAULT_BASE_SEED)
     p.add_argument("--parallel", type=int, default=1,
@@ -140,7 +151,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     for forbidden in ("--output-root", "--schedule-id", "--solver-random-seed"):
         if forbidden in passthrough:
             p.error(f"{forbidden} is set by the portfolio runner")
-    seeds = seed_list(args.seeds, args.base_seed, args.seed_list)
+    if args.preset:
+        for clash in ("--mode", "--time-limit"):
+            if clash in passthrough:
+                p.error(f"{clash} is set by --preset {args.preset} (each seed: {' '.join(PRESET_SEED_ARGS)})")
+        passthrough = list(passthrough) + PRESET_SEED_ARGS
+    count = args.seeds or (PRESET_SEEDS[args.preset] if args.preset else 1)
+    seeds = seed_list(count, args.base_seed, args.seed_list)
     case_root = args.output_root / args.schedule_id
     seeds_root = case_root / "seeds"
     seeds_root.mkdir(parents=True, exist_ok=True)
@@ -166,6 +183,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     summary = {
         "schedule_id": args.schedule_id,
         "seeds": seeds,
+        "preset": args.preset,
         "passthrough_arguments": passthrough,
         "after_breaks_winner_seed": winners["after"]["seed"] if winners["after"] else None,
         "before_breaks_winner_seed": winners["before"]["seed"] if winners["before"] else None,

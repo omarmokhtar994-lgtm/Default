@@ -1,7 +1,11 @@
-"""Joint refinement default: OFF at SMOKE/QUICK, ON at DEEP/OVERNIGHT.
+"""Joint refinement default: OFF at every depth.
 
-The scope split is the point. Evidence covers QUICK budgets only, so the
-untested long modes must keep the phase enabled.
+History: this suite first pinned OFF at SMOKE/QUICK and ON at DEEP/OVERNIGHT,
+because the evidence then covered QUICK budgets only and the long modes were
+untested. They have been measured since (evidence/JOINT_REFINEMENT_REMOVED.md):
+36 attempts in 4 DEEP runs with improved 0, two DEEP runs killed at 13.0 and
+13.9 GB inside the phase, and improved 0 in all 474 solver audits on record.
+The long modes now default it off too; --enable-joint-refinement remains.
 """
 import ast
 import os
@@ -35,13 +39,13 @@ class JointDefaultTest(unittest.TestCase):
                 f"{mode} must default joint refinement off: 69 attempts, 0 improvements",
             )
 
-    def test_on_at_untested_long_modes(self):
-        """DEEP/OVERNIGHT allot 5400s/8400s and were never measured."""
+    def test_off_at_long_modes_now_that_they_are_measured(self):
+        """DEEP/OVERNIGHT: measured, improved 0, and the phase caused the kills."""
         d = _mode_defaults()
         for mode in ("DEEP", "OVERNIGHT"):
-            self.assertIsNot(
+            self.assertIs(
                 d[mode].get("joint_enabled"), False,
-                f"{mode} is untested; do not disable the phase there",
+                f"{mode}: 36 DEEP attempts improved nothing and two runs died in the phase",
             )
 
     def test_the_disable_flag_is_actually_emitted(self):

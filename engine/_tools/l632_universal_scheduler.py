@@ -4150,6 +4150,11 @@ def configure_solver_limits(solver: Any) -> Dict[str, Any]:
 # the next ones are larger. Where fork is unavailable (Windows) or a callback
 # is attached, the solve runs in process exactly as before.
 JOINT_SOLVE_ISOLATION_ENABLED = True
+# Final recovery endgame (joint search reopened when a run ends with no release
+# candidate): off by default. Across 474 solver audits it ran 9 times and added
+# 0 candidates every time (EXHAUSTED; evidence/JOINT_REFINEMENT_REMOVED.md).
+# --enable-final-recovery-endgame turns it back on.
+FINAL_RECOVERY_ENDGAME_ENABLED = False
 JOINT_SOLVE_KILL_BELOW_FREE_MB = 256
 JOINT_SOLVE_KILL_BELOW_FREE_SHARE = 0.02
 JOINT_SOLVE_POLL_SEC = 0.2
@@ -21618,7 +21623,8 @@ def run_case(
             list(compliant) + list(near_feasible) + list(exceptions) + list(diagnostic_joint_anchors)
         )
         while (
-            not (compliant or exceptions)
+            FINAL_RECOVERY_ENDGAME_ENABLED
+            and not (compliant or exceptions)
             and endgame_pool
             and endgame_deadline - time.time() >= 90.0
             and endgame_round < 6
@@ -21673,8 +21679,9 @@ def run_case(
             if round_execution.get("truncated"):
                 break
         audit["final_recovery_endgame"] = {
-            "enabled": True,
+            "enabled": bool(FINAL_RECOVERY_ENDGAME_ENABLED),
             "status": "RELEASE_CANDIDATE_FOUND" if (compliant or exceptions) else (
+                "DISABLED_NO_MEASURED_VALUE" if not FINAL_RECOVERY_ENDGAME_ENABLED else
                 "EXHAUSTED" if endgame_round else "SKIPPED_NO_TIME_OR_ANCHOR"
             ),
             "rounds": endgame_records,
@@ -22910,6 +22917,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--disable-conflict-refinement", action="store_true")
     parser.add_argument("--disable-coordinated-repair", action="store_true")
     parser.add_argument("--disable-joint-refinement", action="store_true")
+    parser.add_argument("--enable-final-recovery-endgame", action="store_true",
+                        help="Reopen the joint search when a run ends with no release candidate "
+                             "(off by default: 9 runs, 0 candidates added).")
     parser.add_argument("--safe-incumbent-reserve-sec", type=int, default=600)
     parser.add_argument("--conflict-refinement-reserve-sec", type=int, default=300)
     parser.add_argument("--coordinated-repair-reserve-sec", type=int, default=1200)
@@ -23546,6 +23556,9 @@ def cli_search_controls(args: Any, supplied: Set[str]) -> Dict[str, Any]:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
+    if getattr(args, "enable_final_recovery_endgame", False):
+        global FINAL_RECOVERY_ENDGAME_ENABLED
+        FINAL_RECOVERY_ENDGAME_ENABLED = True
     inputs = list(args.input or [])
     if args.selfcheck:
         payload = selfcheck(inputs)

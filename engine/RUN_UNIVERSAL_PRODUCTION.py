@@ -877,9 +877,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--resume', action='store_true')
     p.add_argument('--skip-independent-validation', action='store_true', help='Development-only bypass. It always blocks production packaging and returns a non-production status.')
     p.add_argument('--enable-joint-refinement', action='store_true',
-                   help='Force joint refinement on. Off by default at SMOKE/QUICK, where it '
-                        'was measured to improve nothing across 69 attempts while accounting '
-                        'for ~90% of peak memory. On by default at DEEP/OVERNIGHT.')
+                   help='Force joint refinement on. Off by default at every depth: 474 '
+                        'solver audits (QUICK and DEEP) with improved 0, ~90%% of peak memory, '
+                        'and two DEEP runs killed at 13-14 GB inside it.')
+    p.add_argument('--enable-final-recovery-endgame', action='store_true',
+                   help='Reopen the joint search when a run ends with no release candidate '
+                        '(off by default: 9 runs, 0 candidates added).')
     p.add_argument('--selfcheck', action='store_true')
     return p
 
@@ -942,17 +945,20 @@ def main() -> int:
     stage = args.stage or contract_stage or 'FULL_SCHEDULE'
 
     all_mode_defaults = {
-        # joint_enabled False at SMOKE/QUICK: 69 attempts across 7 workbooks
-        # produced improved: 0, while the phase accounted for ~90% of peak RSS
-        # (8197 MB -> 820 MB when disabled, coverage unchanged) and caused the
-        # 3600s OOM. DEEP and OVERNIGHT keep it ON -- they allot it 5400s and
-        # 8400s and have NOT been measured.
+        # joint_enabled False at every depth. SMOKE/QUICK: 69 attempts across 7
+        # workbooks produced improved: 0, while the phase accounted for ~90% of
+        # peak RSS (8197 MB -> 820 MB when disabled, coverage unchanged).
+        # DEEP/OVERNIGHT, measured since: 36 attempts in 4 DEEP runs, improved 0,
+        # and two DEEP runs killed at 13.0 / 13.9 GB inside the phase; 474
+        # solver audits in all, improved 0 in every one
+        # (evidence/JOINT_REFINEMENT_REMOVED.md). Its time goes to the other
+        # phases. --enable-joint-refinement turns it back on.
         'SMOKE': {'time_limit': 900, 'joint': 120, 'joint_enabled': False, 'safe': 120, 'post': 60, 'target': 60, 'final': 60, 'adaptive': 6, 'joint_attempts': 4, 'joint_no_improve': 2},
         'QUICK': {'time_limit': 3600, 'joint': 900, 'joint_enabled': False, 'safe': 180, 'post': 180, 'target': 180, 'final': 120, 'adaptive': 18, 'joint_attempts': 16, 'joint_no_improve': 6},
         # RC9.1 production defaults: Deep may use four hours and Overnight six.
         # The engine remains workbook-driven; longer time only expands universal search breadth/depth.
-        'DEEP': {'time_limit': 14400, 'joint': 5400, 'safe': 360, 'post': 600, 'target': 600, 'final': 240, 'adaptive': 48, 'joint_attempts': 48, 'joint_no_improve': 16},
-        'OVERNIGHT': {'time_limit': 21600, 'joint': 8400, 'safe': 480, 'post': 900, 'target': 900, 'final': 300, 'adaptive': 72, 'joint_attempts': 72, 'joint_no_improve': 22},
+        'DEEP': {'time_limit': 14400, 'joint': 5400, 'joint_enabled': False, 'safe': 360, 'post': 600, 'target': 600, 'final': 240, 'adaptive': 48, 'joint_attempts': 48, 'joint_no_improve': 16},
+        'OVERNIGHT': {'time_limit': 21600, 'joint': 8400, 'joint_enabled': False, 'safe': 480, 'post': 900, 'target': 900, 'final': 300, 'adaptive': 72, 'joint_attempts': 72, 'joint_no_improve': 22},
     }
     mode_defaults = all_mode_defaults[mode]
     time_limit = int(args.time_limit or mode_defaults['time_limit'])
@@ -990,6 +996,8 @@ def main() -> int:
         command.append('--disable-bundled-fallbacks')
     if not mode_defaults.get('joint_enabled', True) and not args.enable_joint_refinement:
         command.append('--disable-joint-refinement')
+    if args.enable_final_recovery_endgame:
+        command.append('--enable-final-recovery-endgame')
     if args.use_input_schedule_as_seed and not args.disable_input_schedule_seed:
         command.append('--use-input-schedule-as-seed')
     if args.allow_no_break_exceptions:

@@ -59,3 +59,19 @@ oom_score_adj 1000; the measurement's NMG_SP DEEP run carried on. So the
 joint-refinement memory problem is not specific to Cricut Chat: a 24x7
 synthetic case hits it too. Evidence file for the fix:
 evidence/joint_solve_isolation/.
+
+## Fourth kill: H1_DEEP_9000 (2026-09-26 02:38 UTC) - genuine
+
+* Runner `--mode DEEP` (14,400 s), SYNTH_H1_24x7_OVERNIGHT, 2 workers, seed
+  9000, frozen pre-isolation engine. Killed after ~2.5 h:
+  `Memory cgroup out of memory: Killed process 28978 (python3) ...
+  anon-rss:13935856kB` (13.9 GB resident, oom_score_adj 0).
+* Last engine log line: `JOINT_CP_SAT operator=incumbent_replay ...
+  status=INFEASIBLE` - the next joint model is the one that grew.
+* Nothing else of mine was running (the Voice rerun waiter was asleep; the
+  measurement's 3,600 s queue had finished at 20:30). This is the engine
+  alone: under the registered rule, F (one DEEP run) fails H1.
+* The engine shipped since (8506631, joint-solve isolation) replays this
+  exact situation and returns normally (evidence/joint_solve_isolation/
+  H1_SURVIVAL_REPLAY.txt); the measurement deliberately keeps the frozen
+  engine so both arms of the A/B use the same code.

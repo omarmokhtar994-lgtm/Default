@@ -49,6 +49,16 @@ only that solve is stopped, `joint_solve_isolation` in the solver audit records
 it, joint refinement stops, and the run finishes and validates as usual.
 Evidence: `evidence/joint_solve_isolation/`, `evidence/DEEP_MODE_OOM.md`.
 
+**Removed / measured-and-kept-optional (2026-09-27):**
+* Joint refinement and its no-candidate endgame no longer run at any depth
+  (474 audits, 0 improvements; two DEEP runs died in it). Flags
+  `--enable-joint-refinement` / `--enable-final-recovery-endgame` remain.
+* Tested and NOT turned on (their registered A/Bs did not pass): per-seed
+  Stage-1 strategy rotation (`RUN_PORTFOLIO.py --diversify-profiles`; 1065 vs
+  1067) and Stage-2 -> Stage-1 break-load feedback (`--enable-break-load-feedback`;
+  1056.5 vs 1058.0 at 1 h, +8 on the 24x7 case only with ~40 min). Scores are
+  unchanged by this build.
+
 Evidence: `evidence/dnbs_e2e_3600b/RESULT.txt`, `evidence/seed_portfolio_ab/`,
 `evidence/NIGHT_15_JOINT_SHIFT_BREAK_BUILD.md`.
 

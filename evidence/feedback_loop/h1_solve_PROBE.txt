@@ -1,0 +1,7 @@
+H1_NEW_9000: pool 13; best after_target 142 floor 168 before 168 (floor_gate_hunter_before/fully_compliant_lexicographic_target)
+{'round': 1, 'variant': 'LOCAL-12', 'load_intervals': 26, 'stage1': 'FEASIBLE', 't1': 300.0, 'before_target': 167, 'stage2': 'FEASIBLE', 'after_stage2': 144, 'after_dnbs': 149, 'floor': 168, 'cls': 'compliant', 'accepted': True, 'worse': []}
+{'round': 2, 'variant': 'LOCAL-12', 'load_intervals': 18, 'stage1': 'FEASIBLE', 't1': 300.0, 'before_target': 167, 'stage2': 'FEASIBLE', 'after_stage2': 146, 'after_dnbs': 149, 'floor': 168, 'cls': 'compliant', 'accepted': False, 'worse': ['after_90', 'break_concurrency_violation_count', 'after_target']}
+{'round': 2, 'variant': 'LOCAL-24', 'load_intervals': 18, 'stage1': 'FEASIBLE', 't1': 203.6, 'before_target': 167, 'stage2': 'FEASIBLE', 'after_stage2': 144, 'after_dnbs': 150, 'floor': 168, 'cls': 'compliant', 'accepted': True, 'worse': []}
+{'round': 3, 'variant': 'LOCAL-12', 'load_intervals': 17, 'stage1': 'FEASIBLE', 't1': 58.9, 'before_target': 168, 'stage2': 'UNKNOWN'}
+{'round': 3, 'variant': 'LOCAL-24', 'load_intervals': 17, 'stage1': 'FEASIBLE', 't1': 30.0, 'before_target': 167, 'stage2': 'FEASIBLE', 'after_stage2': 125, 'after_dnbs': 125, 'floor': 167, 'cls': 'compliant', 'accepted': False, 'worse': ['after_floor', 'after_90', 'after_80', 'after_100']}
+RESULT {"case": "H1_NEW_9000", "start_after_target": 142, "end_after_target": 150, "start_floor": 168, "end_floor": 168, "accepted": 2, "rounds": 3}

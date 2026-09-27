@@ -1,0 +1,5 @@
+CHAT_NEW_9000: pool 18; best after_target 178 floor 224 before 195 (target_floor_pareto_master/fully_compliant_coverage_rebalance)
+{'round': 1, 'variant': 'LOCAL-12', 'load_intervals': 17, 'stage1': 'FEASIBLE', 't1': 300.0, 'before_target': 193, 'stage2': 'FEASIBLE', 'after_stage2': 174, 'after_dnbs': 174, 'floor': 229, 'cls': 'compliant', 'accepted': False, 'worse': ['after_90', 'after_100', 'after_target']}
+{'round': 1, 'variant': 'LOCAL-24', 'load_intervals': 17, 'stage1': 'FEASIBLE', 't1': 300.0, 'before_target': 197, 'stage2': 'FEASIBLE', 'after_stage2': 177, 'after_dnbs': 177, 'floor': 229, 'cls': 'compliant', 'accepted': False, 'worse': ['after_100', 'after_target']}
+{'round': 1, 'variant': 'FULL', 'load_intervals': 17, 'stage1': 'FEASIBLE', 't1': 228.9, 'before_target': 199, 'stage2': 'FEASIBLE', 'after_stage2': 178, 'after_dnbs': 179, 'floor': 224, 'cls': 'compliant', 'accepted': False, 'worse': ['week_boundary_after_target', 'severe_floor_gap_count', 'whole_week_imbalance_violation_count']}
+RESULT {"case": "CHAT_NEW_9000", "start_after_target": 178, "end_after_target": 178, "start_floor": 224, "end_floor": 224, "accepted": 0, "rounds": 1}

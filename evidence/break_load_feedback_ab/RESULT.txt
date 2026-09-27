@@ -1,0 +1,32 @@
+Scored 2026-09-27T02:33:51Z against PREREGISTERED_RULE.txt; NEW engine sha 2071ae894f14f6e3
+```
+case   CUR 9000/9001  NEW 9000/9001  CUR mean  NEW mean  before CUR/NEW  phase attempts/accepted
+CHAT   177/177        175/178        177.0     176.5     195/198         [(2, 0), (2, 0)]
+VOICE  246/247        247/247        246.5     247.0     249/249         [(2, 0), (2, 0)]
+AR     168/168        168/168        168.0     168.0     168/168         [(0, 0), (0, 0)]
+NMGSP  121/121        121/121        121.0     121.0     126/126         [(2, 0), (2, 0)]
+M2     111/104        106/105        107.5     105.5     117/117         [(1, 0), (1, 0)]
+H3     92/92          94/92          92.0      93.0      105/105         [(2, 0), (1, 0)]
+H1     141/151        144/147        146.0     145.5     168/168         [(2, 0), (2, 0)]
+summed two-seed mean after_target: CURRENT 1058.0  NEW 1056.5; phase attempted in 12/14 NEW runs
+VERDICT: NOT SHIPPED (stays opt-in): (2) summed NEW 1056.5 < CURRENT 1058.0
+```
+
+Per the registered rule the phase stays opt-in (--enable-break-load-feedback);
+the default engine is unchanged.
+
+What happened: the phase executed in 12 of 14 runs (AE_AR_B2B has no
+break-damaged interval, so nothing to feed back) and made 26 attempts; none was
+accepted. In a 3,600 s run it gets 540 s, so one Stage-1 re-solve, one break
+solve and one DNBS pass share nine minutes. The +8 on SYNTH_H1 in the saved-pool
+probe came from rounds of ~15 minutes each (2,400 s per case), and even there
+Chat and M2 did not improve. The small per-case differences above (Chat -0.5,
+M2 -2, H3 +1, Voice +0.5, H1 -0.5) come from the 288 s the phase took from
+break search, not from any feedback candidate, since none was kept.
+
+Conclusion for the Stage-2 -> Stage-1 feedback: the mechanism is real (the
+skeleton leaves intervals exactly at target; breaks push them under), and it
+can recover coverage on a 24x7 case given ~40 minutes, but not within the
+QUICK budget, and it did not help the real workbooks measured. It remains
+available for long single runs (--single-run DEEP/OVERNIGHT with
+--enable-break-load-feedback) and as research tooling.

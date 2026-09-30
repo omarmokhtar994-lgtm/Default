@@ -12,12 +12,17 @@ Rows the engine does not read are dropped; rows it reads but the workbook never
 set are added at their engine default so they are visible and changeable.
 """
 import shutil, sys
+from copy import copy
 from pathlib import Path
 from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.worksheet.datavalidation import DataValidation
 
 YES_NO = '"Yes,No"'
+# Restored from RC5's template (audit F-17): the language working window and the
+# per-language coverage days were settable from RC5's template, not from this one.
+LANGUAGE_WINDOW_CHOICES = '"OFF,MINIMUM_ROWS,ALL_ROWS,REQUIRED_LANGUAGE_ONLY"'
+LANGUAGE_DAYS_CHOICES = '"All,Weekdays,Weekends,Sun-Thu,Mon-Fri,Sun,Mon,Tue,Wed,Thu,Fri,Sat"'
 SETUP_LAYOUT = [
     ("Case Setup", [
         ("Program Name", None),
@@ -67,6 +72,9 @@ SETUP_LAYOUT = [
         ("Break Normal Maximum Gap Minutes", None),
         ("Allow Back-to-Back Breaks", YES_NO),
     ]),
+    ("Language / Skill", [
+        ("Language Working Window", LANGUAGE_WINDOW_CHOICES),
+    ]),
     ("Exception Policy", [
         ("Critical Coverage No-Break Exception Enabled", YES_NO),
         ("Critical Coverage No-Break Max Associate-Days", None),
@@ -109,7 +117,7 @@ DEAD_ROWS = {"rc9.1deepdefaultseconds", "rc9.1fulldefaultseconds",
 # makes the setting visible. Nothing else is seeded, because pre-filling a row
 # whose default the engine may revise would freeze that default into the
 # contract without anyone deciding to.
-SEEDED_DEFAULTS = {"runstage": "Full Schedule", "rundepth": "Deep"}
+SEEDED_DEFAULTS = {"runstage": "Full Schedule", "rundepth": "Quick"}  # the engine's own fallback depth is QUICK
 
 HDR = PatternFill("solid", fgColor="1F3864")
 SECTION = PatternFill("solid", fgColor="D9E2F3")
@@ -123,19 +131,72 @@ def enforced_list_validation(choices):
     accept any typed value: "Enable" in a Yes/No row then reads as No
     (audit finding F-18). RC5's shipped workbooks enforced every list.
     """
-    return DataValidation(type="list", formula1=choices, allow_blank=True,
-                          showErrorMessage=True, errorStyle="stop",
-                          errorTitle="Value not allowed",
-                          error="Choose a value from the list. Typed values outside the list are not accepted.")
+    dv = DataValidation(type="list", formula1=choices, allow_blank=True)
+    dv.errorStyle = "stop"
+    dv.showErrorMessage = True
+    dv.errorTitle = "Value not allowed"
+    dv.error = "Choose a value from the list. Typed values outside the list are not accepted."
+    return dv
+
+
+def ensure_language_setup_controls(wb):
+    """Add the day-scope field and enforced dropdown to an existing skill sheet (from RC5)."""
+    ws = next((wb[name] for name in ("Language Setup", "Skill Setup", "Skills Setup")
+               if name in wb.sheetnames), None)
+    if ws is None:
+        return False
+    header = None
+    for r in range(1, ws.max_row + 1):
+        labels = {norm(ws.cell(r, c).value) for c in range(1, ws.max_column + 1)}
+        if "language" in labels and any("minimum" in label for label in labels):
+            header = r
+            break
+    if header is None:
+        return False
+    headers = {norm(ws.cell(header, c).value): c for c in range(1, ws.max_column + 1)}
+    days_col = next((c for label, c in headers.items()
+                     if "coveragedays" in label or "activedays" in label or "daysactive" in label), None)
+    if days_col is None:
+        days_col = ws.max_column + 1
+        ws.cell(header, days_col, "Coverage Days")
+        if days_col > 1:
+            ws.cell(header, days_col)._style = copy(ws.cell(header, days_col - 1)._style)
+    ws.column_dimensions[ws.cell(header, days_col).column_letter].width = 20
+    dv = enforced_list_validation(LANGUAGE_DAYS_CHOICES)
+    dv.errorTitle = "Invalid coverage days"
+    dv.error = "Choose a listed day or range, or type a supported value such as Sun-Thu."
+    ws.add_data_validation(dv)
+    for r in range(header + 1, ws.max_row + 1):
+        language = ws.cell(r, headers.get("language", 1)).value
+        if language not in (None, ""):
+            cell = ws.cell(r, days_col)
+            if cell.value in (None, ""):
+                cell.value = "All"
+            dv.add(cell)
+    return True
 
 def norm(s): return "".join(ch for ch in str(s or "").lower() if ch.isalnum() or ch == ".")
+
+def _two_tab_layout(ws):
+    """True when the sheet already has this template's Section|Instruction|Value|Notes header."""
+    for r in ws.iter_rows(min_row=1, max_row=8, values_only=True):
+        labels = [norm(c) for c in r[:3]]
+        if labels[1:3] == ["instruction", "value"]:
+            return True
+    return False
+
 
 def existing_values(wb):
     values = {}
     for name in ("Instructions", "Engine Defaults"):
         if name not in wb.sheetnames: continue
+        # A workbook already rebuilt by this template has Section|Instruction|
+        # Value|Notes on BOTH tabs. Reading its Engine Defaults as the legacy
+        # Key|Value layout dropped every set value on a second rebuild (e.g.
+        # "Demand Fit Guard Enabled = Auto" came back blank, i.e. No).
+        two_tab = name == "Instructions" or _two_tab_layout(wb[name])
         for r in wb[name].iter_rows(values_only=True):
-            if name == "Instructions":
+            if two_tab:
                 key, val = (r[1] if len(r) > 1 else None, r[2] if len(r) > 2 else None)
             else:
                 key, val = (r[0], r[1] if len(r) > 1 else None)
@@ -205,6 +266,7 @@ n2 = write_sheet(wb, "Engine Defaults", ADVANCED_LAYOUT, values,
                  "ADVANCED - engine tuning. Defaults are production-tested.",
                  "Change these only with a specific reason. They are not per-schedule business "
                  "settings; the values here are the ones every released result was measured with.")
+ensure_language_setup_controls(wb)
 # Input Checks was a static snapshot that said PASS no matter what the roster held.
 if "Input Checks" in wb.sheetnames:
     del wb["Input Checks"]

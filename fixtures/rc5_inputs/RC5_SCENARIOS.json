@@ -1,0 +1,108 @@
+{
+  "package": "RC9_2_2_MAX_COVERAGE_RC5",
+  "engine_release": "L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2",
+  "engine_sha256": "0b178297126ccb2b5cd022d69ad6cd6dae20be87d73a980fb571db28696c105c",
+  "purpose": "Impact-based RC9.2.2 validation manifest. QUICK is the safe default; DEEP requires the dedicated runner and a recorded defect reason. Hashes are verified before solver time is consumed.",
+  "generated_by": "tools/build_production_package.py",
+  "scenarios": [
+    {
+      "scenario_id": "AE_AR_B2B",
+      "input": "AE_AR_B2B.xlsx",
+      "input_sha256": "b7be7e0a4b1f3ba7657d0144b8f824918c3ae60b4713e71959b3ae93d3f7c4d7",
+      "mode": "QUICK",
+      "time_limit_sec": 3600,
+      "num_workers": 4,
+      "solver_random_seed": 9000,
+      "target_ratio": 1.0,
+      "associates": 35,
+      "rc9_1_baseline_scenario": "AE AR B2B",
+      "note": "has an RC9.1 baseline row - gates 2 and 9 are decided for this scenario"
+    },
+    {
+      "scenario_id": "CRICUT_CHAT",
+      "input": "Cricut_Chat_RC9_1_READY_SKELETON.xlsx",
+      "input_sha256": "efa92a665a37e3bf17863d0d1d1c828246ddff053d7c2369057ee2dc0ce143ab",
+      "mode": "QUICK",
+      "time_limit_sec": 3600,
+      "num_workers": 4,
+      "solver_random_seed": 9000,
+      "target_ratio": 1.0,
+      "associates": 27,
+      "note": "no RC9.1 baseline names this workbook - gates 2 and 9 report NOT_COMPARABLE"
+    },
+    {
+      "scenario_id": "CRICUT_VOICE",
+      "input": "Cricut_Voice_RC9_1_READY_SKELETON.xlsx",
+      "input_sha256": "36ddb0884908779d4b98ed238be37371e4cfbb9c015a07440bb8fc4418b4245f",
+      "mode": "QUICK",
+      "time_limit_sec": 3600,
+      "num_workers": 4,
+      "solver_random_seed": 9000,
+      "target_ratio": 1.0,
+      "associates": 33,
+      "rc9_1_baseline_scenario": "Cricut Voice",
+      "note": "has an RC9.1 baseline row - gates 2 and 9 are decided for this scenario"
+    },
+    {
+      "scenario_id": "GDI_REAL28",
+      "input": "GDI_REAL28_RC9_1_24_7_FINAL_READY.xlsx",
+      "input_sha256": "7131b29f08a788f37245ee7db51c36c299f198e60641b15f1eae68376c85769c",
+      "mode": "QUICK",
+      "time_limit_sec": 3600,
+      "num_workers": 4,
+      "solver_random_seed": 9000,
+      "target_ratio": 1.0,
+      "associates": 29,
+      "note": "no RC9.1 baseline names this workbook - gates 2 and 9 report NOT_COMPARABLE"
+    },
+    {
+      "scenario_id": "NMG_EN_SP",
+      "input": "NMG_EN_AND_SP.xlsx",
+      "input_sha256": "ab85935a3b211db7c8002ce3b17d93a78e652c4f253bbc46c2cf1cf1a8b47396",
+      "mode": "QUICK",
+      "time_limit_sec": 3600,
+      "num_workers": 4,
+      "solver_random_seed": 9000,
+      "target_ratio": 0.9,
+      "associates": 17,
+      "note": "no RC9.1 baseline names this workbook - gates 2 and 9 report NOT_COMPARABLE"
+    },
+    {
+      "scenario_id": "NMG_EN",
+      "input": "NMG_EN_FIXED_NESTING_REST_SAFE_REGRESSION_CLEAN.xlsx",
+      "input_sha256": "3cdc0b756144aed02013b874eb8213b724d87fa222f08af4550b7246e992b22f",
+      "mode": "QUICK",
+      "time_limit_sec": 3600,
+      "num_workers": 4,
+      "solver_random_seed": 9000,
+      "target_ratio": 0.9,
+      "associates": 42,
+      "note": "no RC9.1 baseline names this workbook - gates 2 and 9 report NOT_COMPARABLE"
+    },
+    {
+      "scenario_id": "NMG_SP",
+      "input": "NMG_SP_RC9_1_READY_FIXED.xlsx",
+      "input_sha256": "05f1f7db1d5ae1d84c6770f44a51e3143a82925c9388ad54db580e8e8dbf5ad1",
+      "mode": "QUICK",
+      "time_limit_sec": 3600,
+      "num_workers": 4,
+      "solver_random_seed": 9000,
+      "target_ratio": 0.9,
+      "associates": 7,
+      "rc9_1_baseline_scenario": "NMG SP",
+      "note": "has an RC9.1 baseline row - gates 2 and 9 are decided for this scenario"
+    },
+    {
+      "scenario_id": "NMG_EN_PRODUCTION",
+      "input": "RC9_2_2_NMG_EN_PRODUCTION_INPUT.xlsx",
+      "input_sha256": "f770c32610931be35936c267a066291e930a70eaab40a8cb4d1cda9406c4fc52",
+      "mode": "QUICK",
+      "time_limit_sec": 3600,
+      "num_workers": 4,
+      "solver_random_seed": 9000,
+      "target_ratio": 0.9,
+      "associates": 42,
+      "note": "priority live NMG workbook; manually corrected roster preserved and production gates set fail-closed"
+    }
+  ]
+}

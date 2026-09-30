@@ -185,8 +185,30 @@ class WorkbooksEnforceTheirDropdowns(unittest.TestCase):
 
     def test_the_template_builder_creates_enforced_dropdowns(self):
         source = (TOOLS / "build_input_template.py").read_text()
-        self.assertIn("showErrorMessage=True", source)
-        self.assertNotIn('DataValidation(type="list", formula1=choices, allow_blank=True)\n', source)
+        helper = source[source.index("def enforced_list_validation"):source.index("def ensure_language_setup_controls")]
+        self.assertIn("dv.showErrorMessage = True", helper)
+        self.assertIn('dv.errorStyle = "stop"', helper)
+        self.assertEqual(source.count("DataValidation(type="), 1)  # only inside the helper
+
+    def test_rebuilding_a_shipped_workbook_preserves_its_contract_and_enforces_dropdowns(self):
+        # The builder read an already two-tab 'Engine Defaults' sheet as the legacy
+        # Key|Value layout and dropped its values on rebuild ("Demand Fit Guard
+        # Enabled = Auto" came back as No). Every shipped workbook must survive it.
+        sys.path.insert(0, str(ROOT / "engine" / "_tools"))
+        import l632_universal_scheduler as E
+        for book in sorted(INPUTS.glob("*.xlsx")):
+            with self.subTest(workbook=book.name), tempfile.TemporaryDirectory() as tmp:
+                rebuilt = Path(tmp) / book.name
+                subprocess.run([sys.executable, str(TOOLS / "build_input_template.py"), str(book), str(rebuilt)],
+                               check=True, capture_output=True)
+                before = E.canonical_hash(E.canonical_contract_snapshot(E.parse_input(book)))
+                after = E.canonical_hash(E.canonical_contract_snapshot(E.parse_input(rebuilt)))
+                self.assertEqual(before, after)
+                with zipfile.ZipFile(rebuilt) as archive:
+                    for name in archive.namelist():
+                        if name.startswith("xl/worksheets/") and name.endswith(".xml"):
+                            for tag in re.findall(rb"<dataValidation\b[^>]*>", archive.read(name)):
+                                self.assertIn(b'showErrorMessage="1"', tag)
 
     def test_manifest_hashes_match_the_shipped_workbooks(self):
         import hashlib

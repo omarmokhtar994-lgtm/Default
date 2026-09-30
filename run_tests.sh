@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# RC9.2.1 fast gate: pure selector/metric/parity/identity guards.
+# RC9.2.2 fast gate: pure selector/metric/parity/identity guards.
 # No solver, no workbook, no network. Intended to run on every commit before any
 # solver time is spent.
 #
@@ -10,6 +10,18 @@ cd "$(dirname "$0")"
 
 fail=0
 total=0
+tests_run=0
+tests_skipped=0
+
+# Count what each suite actually ran and skipped (audit F-01/F-15): the gate
+# reported suites only, so 209 tests could drop out of it and nothing noticed.
+count_tests() {
+  local output="$1" ran skipped
+  ran=$(echo "$output" | grep -oE "^Ran [0-9]+ test" | tail -1 | grep -oE "[0-9]+" || true)
+  skipped=$(echo "$output" | grep -oE "skipped=[0-9]+" | tail -1 | grep -oE "[0-9]+" || true)
+  tests_run=$((tests_run + ${ran:-0}))
+  tests_skipped=$((tests_skipped + ${skipped:-0}))
+}
 
 run_suite() {
   local suite="$1"
@@ -22,6 +34,7 @@ run_suite() {
   output="$("$PY" "$suite" 2>&1)"
   status=$?
   set -e
+  count_tests "$output"
   if [ "$status" -eq 0 ]; then
     echo "$output" | tail -3
   else
@@ -41,6 +54,7 @@ run_staged_suite() {
   output="$("$PY" "$suite" 2>&1)"
   status=$?
   set -e
+  count_tests "$output"
   if [ "$status" -ne 0 ]; then
     echo "$output"
     echo "   ^^ FAILED: $suite (exit $status)"
@@ -143,9 +157,23 @@ else
   echo "   still runs an in-process cross-check"
 fi
 
+# Floors on what the gate must execute: a suite or test that silently stops
+# running, or a skip that creeps in because an asset went missing, fails here.
+echo "── test totals"
+read -r min_tests max_skips < <("$PY" -c "import json;d=json.load(open('tests_staged/GATE_MINIMUMS.json'));print(d['min_tests'],d['max_skips'])")
+echo "   $tests_run tests run, $tests_skipped skipped (minimum $min_tests run, at most $max_skips skipped)"
+if [ "$tests_run" -lt "$min_tests" ]; then
+  echo "   FAILED: fewer tests ran than tests_staged/GATE_MINIMUMS.json requires"
+  fail=1
+fi
+if [ "$tests_skipped" -gt "$max_skips" ]; then
+  echo "   FAILED: more tests skipped than tests_staged/GATE_MINIMUMS.json allows"
+  fail=1
+fi
+
 echo
 if [ "$fail" -eq 0 ]; then
-  echo "GATE PASS — $total suite(s) + 2 selfchecks + cross-module call signatures + undefined-name sweep"
+  echo "GATE PASS — $total suite(s), $tests_run tests ($tests_skipped skipped) + 2 selfchecks + cross-module call signatures + undefined-name sweep"
 else
   echo "GATE FAIL — see failures above"
 fi

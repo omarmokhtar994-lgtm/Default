@@ -298,6 +298,184 @@ def max_gap_run(flags: List[Optional[bool]], intervals_per_day: int) -> int:
             else: run=0
     return best
 
+# --- Independent input cross-check (audit F-13) ------------------------------
+# The validator re-derives schedule metrics itself but takes the input contract
+# from the engine's own parse_input, so a parser defect (a dropped associate, a
+# misread demand column, a leave cell that silently vanishes -- B-11) would be
+# invisible to it. These checks re-read the raw workbook with openpyxl and no
+# engine code, and compare the few facts every metric depends on. Where the
+# layout cannot be recognised the check is reported NOT_CHECKED, never passed.
+_XC_DAYS = ("sun", "mon", "tue", "wed", "thu", "fri", "sat")
+_XC_FULL = ("sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday")
+_XC_NAME_HEADERS = ("sf name", "associate name", "associate", "name", "employee name")
+_XC_LEAVE_OR_OFF = re.compile(r"\b(off|leave|holiday|vacation|annual|sick|pto|loa)\b", re.I)
+
+
+def _xc_day(value: Any) -> Optional[int]:
+    if hasattr(value, "weekday") and callable(value.weekday):
+        return (value.weekday() + 1) % 7
+    h = norm(value)
+    for i, (short, full) in enumerate(zip(_XC_DAYS, _XC_FULL)):
+        if h in (short, full) or (h.startswith(full + " ") and any(ch.isdigit() for ch in h)):
+            return i
+    return None
+
+
+def _xc_minute(value: Any) -> Optional[int]:
+    if value is None or isinstance(value, bool):
+        return None
+    if hasattr(value, "hour") and hasattr(value, "minute") and not hasattr(value, "weekday"):
+        return int(value.hour) * 60 + int(value.minute)
+    m = re.fullmatch(r"\s*(\d{1,2}):(\d{2})(?::\d{2})?\s*", str(value))
+    return int(m.group(1)) * 60 + int(m.group(2)) if m and int(m.group(1)) < 24 else None
+
+
+def _xc_name_header(ws) -> Optional[Tuple[int, int]]:
+    for r in range(1, min(ws.max_row, 20) + 1):
+        headers = {norm(ws.cell(r, c).value): c for c in range(1, ws.max_column + 1)}
+        col = next((headers[h] for h in _XC_NAME_HEADERS if h in headers), None)
+        if col:
+            return r, col
+    return None
+
+
+def _xc_demand_grids(wb) -> Dict[str, Tuple[int, Dict[Tuple[int, int], float]]]:
+    grids = {}
+    for ws in wb.worksheets:
+        for r in range(1, min(ws.max_row, 15) + 1):
+            cols: Dict[int, int] = {}
+            for c in range(1, ws.max_column + 1):
+                d = _xc_day(ws.cell(r, c).value)
+                if d is not None and d not in cols:
+                    cols[d] = c
+            if len(cols) != 7:
+                continue
+            rows = []
+            for rr in range(r + 1, ws.max_row + 1):
+                t = next((m for m in (_xc_minute(ws.cell(rr, c).value) for c in range(1, min(4, ws.max_column) + 1))
+                          if m is not None), None)
+                if t is not None:
+                    rows.append((rr, t))
+            if len(rows) >= 12:
+                times = sorted({t for _, t in rows})
+                steps = [b - a for a, b in zip(times, times[1:]) if b > a]
+                grid: Dict[Tuple[int, int], float] = {}
+                for rr, t in rows:
+                    for d, c in cols.items():
+                        v = ws.cell(rr, c).value
+                        if isinstance(v, (int, float)) and not isinstance(v, bool):
+                            grid[(d, t)] = grid.get((d, t), 0.0) + float(v)
+                grids[ws.title] = (min(steps) if steps else 60, grid)
+            break
+    return grids
+
+
+def _xc_hours(grid: Dict[Tuple[int, int], float], step: int, bucket: int) -> Dict[Tuple[int, int], float]:
+    out: Dict[Tuple[int, int], float] = {}
+    for (d, t), v in grid.items():
+        key = (d, t // bucket)
+        out[key] = out.get(key, 0.0) + v * step / 60.0
+    return out
+
+
+def _xc_day_cells(wb, sheet_names, roster_norm) -> Optional[Dict[Tuple[str, int], str]]:
+    ws = next((wb[n] for n in wb.sheetnames if norm(n) in sheet_names), None)
+    if ws is None:
+        return None
+    found = _xc_name_header(ws)
+    if not found:
+        return None
+    r, name_col = found
+    day_cols: Dict[int, int] = {}
+    for c in range(1, ws.max_column + 1):
+        d = _xc_day(ws.cell(r, c).value)
+        if d is not None and d not in day_cols:
+            day_cols[d] = c
+    if len(day_cols) != 7:
+        return None
+    cells = {}
+    for rr in range(r + 1, ws.max_row + 1):
+        name = norm(ws.cell(rr, name_col).value)
+        if name in roster_norm:
+            for d, c in day_cols.items():
+                cells[(name, d)] = str(ws.cell(rr, c).value or "").strip()
+    return cells
+
+
+def independent_input_crosscheck(input_path: Path, parsed) -> Dict[str, Any]:
+    """Compare parse_input's roster, demand and leave/OFF cells with the raw workbook."""
+    wb = load_workbook(input_path, data_only=True)
+    checks: Dict[str, str] = {}
+    mismatches: List[Dict[str, Any]] = []
+    not_checked: List[Dict[str, Any]] = []
+
+    parsed_names = {norm(a.name) for a in parsed.associates}
+    roster_ws = next((wb[n] for n in wb.sheetnames if norm(n) == "schedule"), None)
+    found = _xc_name_header(roster_ws) if roster_ws is not None else None
+    if not found:
+        checks["roster"] = "NOT_CHECKED"
+        not_checked.append({"check": "roster", "reason": "no Schedule sheet with a name header"})
+    else:
+        r, col = found
+        raw_names = {norm(roster_ws.cell(rr, col).value) for rr in range(r + 1, roster_ws.max_row + 1)
+                     if norm(roster_ws.cell(rr, col).value)}
+        checks["roster"] = "PASS" if raw_names == parsed_names else "FAIL"
+        if raw_names != parsed_names:
+            mismatches.append({"check": "roster", "raw_count": len(raw_names), "parsed_count": len(parsed_names),
+                               "only_in_workbook": sorted(raw_names - parsed_names)[:20],
+                               "only_in_parse": sorted(parsed_names - raw_names)[:20]})
+
+    minutes = int(parsed.interval_minutes)
+    parsed_grid = {(d, i * minutes): float(x or 0) for d, day in enumerate(parsed.requirements) for i, x in enumerate(day)}
+    grids = _xc_demand_grids(wb)
+    matching = []
+    for title, (step, grid) in grids.items():
+        bucket = max(step, minutes)
+        raw_h, parsed_h = _xc_hours(grid, step, bucket), _xc_hours(parsed_grid, minutes, bucket)
+        if all(abs(raw_h.get(k, 0.0) - parsed_h.get(k, 0.0)) <= 1e-6 for k in set(raw_h) | set(parsed_h)):
+            matching.append(title)
+    if not grids:
+        checks["demand"] = "NOT_CHECKED"
+        not_checked.append({"check": "demand", "reason": "no sheet with Sun-Sat columns and a time column"})
+    else:
+        checks["demand"] = "PASS" if matching else "FAIL"
+        if not matching:
+            parsed_days = [round(sum(float(x or 0) for x in day) * minutes / 60.0, 4) for day in parsed.requirements]
+            mismatches.append({"check": "demand", "parsed_hours_by_day": parsed_days,
+                               "sheet_hours_by_day": {t: [round(sum(v for (d, _), v in _xc_hours(g, s, 1440).items() if d == day), 4)
+                                                          for day in range(7)] for t, (s, g) in grids.items()}})
+
+    for label, enabled, names, attr in (
+        ("preference", parsed.use_preferences, {"preference", "prefrence", "preferences"}, "preferences"),
+        ("fixed", parsed.fixed_enabled, {"fixed request", "fixed requests", "fixed shift requests"}, "fixed_schedule"),
+    ):
+        if not enabled:
+            checks[label] = "DISABLED_IN_WORKBOOK"
+            continue
+        raw = _xc_day_cells(wb, names, parsed_names)
+        if raw is None:
+            checks[label] = "NOT_CHECKED"
+            not_checked.append({"check": label, "reason": "no sheet with a name header and seven day columns"})
+            continue
+        bad = []
+        for assoc in parsed.associates:
+            values = list(getattr(assoc, attr) or [])
+            for d in range(7):
+                got = str(values[d] if d < len(values) else "").strip()
+                cell = raw.get((norm(assoc.name), d), "")
+                if got and not cell:
+                    bad.append({"associate": assoc.name, "day": DAYS[d], "parsed": got, "workbook": ""})
+                elif cell and not got and _XC_LEAVE_OR_OFF.search(cell):
+                    bad.append({"associate": assoc.name, "day": DAYS[d], "parsed": "", "workbook": cell})
+        checks[label] = "PASS" if not bad else "FAIL"
+        if bad:
+            mismatches.append({"check": label, "count": len(bad), "examples": bad[:20]})
+
+    return {"checks": checks, "demand_sheets_matching": matching, "mismatches": mismatches,
+            "not_checked": not_checked,
+            "shared_engine_surface": "parse_input and the rule helpers listed in engine/tools/VALIDATOR_INDEPENDENCE.md"}
+
+
 def validate(input_path: Path, output_path: Path, engine_path: Path) -> Dict[str,Any]:
     eng=load_engine(engine_path)
     from canonical_metrics import canonicalize_metrics
@@ -322,6 +500,11 @@ def validate(input_path: Path, output_path: Path, engine_path: Path) -> Dict[str
         artifact_role="BEST_BEFORE_BREAKS"
     shift_map={norm(s.label):s for s in parsed.shifts}
     failures=[]; warnings=[]
+    input_crosscheck=independent_input_crosscheck(input_path, parsed)
+    for mismatch in input_crosscheck["mismatches"]:
+        failures.append({"type":"INPUT_CROSSCHECK_MISMATCH", **mismatch})
+    for skipped in input_crosscheck["not_checked"]:
+        warnings.append({"type":"INPUT_CROSSCHECK_NOT_CHECKED", **skipped})
     # #38a: independently recompute the employee_quality gate. It is one of
     # three release gates the engine previously self-reported with no check,
     # and the only one observed returning a verdict other than PASS.
@@ -961,6 +1144,7 @@ def validate(input_path: Path, output_path: Path, engine_path: Path) -> Dict[str
         "quality_gate_status":quality_gate_status,
         "metrics":metrics,
         "employee_quality_independent":employee_quality_independent,
+        "input_crosscheck":input_crosscheck,
         "language_reserve_independent":{
             "enabled":bool(parsed.language_reserve_enabled),
             "extra_qualified_fte":int(parsed.language_reserve_extra),

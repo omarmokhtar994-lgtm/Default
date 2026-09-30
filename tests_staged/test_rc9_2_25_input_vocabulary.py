@@ -157,6 +157,66 @@ class BaselineWorkbookDepartedOverride(unittest.TestCase):
         self.assertIn("HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE", codes(partial))
 
 
+class TheTemplateCarriesTheDepartedRow(unittest.TestCase):
+    """The rebuilt template has a visible 'Known Departed Associates' row, and
+    filling it is the workbook's own way to clear the unknown-associate failure."""
+
+    def test_listing_the_names_in_the_template_row_clears_exactly_those(self):
+        import json
+        import subprocess
+        from openpyxl import load_workbook
+        manifest = next(p for p in (ROOT / "SCENARIOS.json",
+                                    REPO / "packages" / "rc9_2_2_production" / "SCENARIOS.json") if p.exists())
+        row = next(r for r in json.loads(manifest.read_text())["scenarios"] if r["scenario_id"] == "AE_AR_B2B")
+        names = row["acknowledged_departed"]
+        codes = lambda book: {f.get("code") for f in E.validate_input_contract(E.parse_input(book)).get("failures", [])}
+        with tempfile.TemporaryDirectory() as tmp:
+            rebuilt = Path(tmp) / "rebuilt.xlsx"
+            subprocess.run([sys.executable, str(ROOT / "tools" / "build_input_template.py"),
+                            str(INPUTS / row["input"]), str(rebuilt)], check=True, capture_output=True)
+            for listed, expect_clean in ((names[:-1], False), (names, True)):
+                wb = load_workbook(rebuilt)
+                ws = wb["Instructions"]
+                cell = next(c for r in ws.iter_rows() for c in r
+                            if isinstance(c.value, str) and c.value.strip() == "Known Departed Associates")
+                ws.cell(cell.row, cell.column + 1, "; ".join(listed))
+                book = Path(tmp) / f"filled_{len(listed)}.xlsx"
+                wb.save(book)
+                self.assertEqual("HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE" not in codes(book), expect_clean, len(listed))
+
+
+class TheWorkbookPreCheckSaysWhatTheRunWillDo(unittest.TestCase):
+    """tools/check_input_workbook.py: exit 0 exactly when the run would accept it."""
+
+    def check(self, *args):
+        import subprocess
+        return subprocess.run([sys.executable, str(ROOT / "tools" / "check_input_workbook.py"), *map(str, args)],
+                              capture_output=True, text=True, timeout=300)
+
+    def test_accepted_refused_and_acknowledged(self):
+        ok = self.check(BOOK)
+        self.assertEqual(ok.returncode, 0, ok.stdout)
+        self.assertIn("ACCEPTED", ok.stdout)
+        refused = self.check(INPUTS / "AE_AR_B2B.xlsx")
+        self.assertEqual(refused.returncode, 1)
+        self.assertIn("Known Departed Associates", refused.stdout)
+        import json
+        manifest = next(p for p in (ROOT / "SCENARIOS.json",
+                                    REPO / "packages" / "rc9_2_2_production" / "SCENARIOS.json") if p.exists())
+        row = next(r for r in json.loads(manifest.read_text())["scenarios"] if r["scenario_id"] == "AE_AR_B2B")
+        acknowledged = self.check(INPUTS / "AE_AR_B2B.xlsx", "--acknowledge-departed", "; ".join(row["acknowledged_departed"]))
+        self.assertEqual(acknowledged.returncode, 0, acknowledged.stdout)
+
+    def test_a_typed_yes_with_a_dot_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            book = Path(tmp) / BOOK.name
+            shutil.copy(BOOK, book)
+            _edit(book, [_set_instruction("Leave Enabled", "Yes.")])
+            out = self.check(book)
+            self.assertEqual(out.returncode, 1)
+            self.assertIn("HARD_INVALID_INSTRUCTION_BOOLEAN", out.stdout)
+
+
 class OnlyTheRowTheEngineReadsIsChecked(unittest.TestCase):
     def test_a_later_alias_with_prose_is_ignored(self):
         warnings = []

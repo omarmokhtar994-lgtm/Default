@@ -3,15 +3,17 @@
 `L6.3.2.8-RC9.2.2-PRODUCTION-HARDENED-RC6` · engine sha256 in `SCENARIOS.json`
 and `MANIFEST.json` (checked before every run)
 
+**To run a production schedule, read `PRODUCTION_RUN_GUIDE.md`.** It covers
+preparing the input workbook, the Colab steps, and which file to publish.
+
 ## This build: what is new and how to get the best schedule
 
-Three measured improvements over the package you last ran, each shipped only on
-a pre-registered A/B (all runs validator PASS, 0 hard failures):
+Measured changes over the package you last ran (all runs validator PASS, 0 hard failures):
 
 | | Change | Measured |
 |---|---|---|
 | **S2-PAR** | Break placement uses every CPU worker (it silently used one) | summed after-break target 827 -> 913 over 6 cases (Chat 155 -> 179, Voice 227 -> 246) |
-| **DNBS** | Day-by-day break re-placement on the best schedules, in its own time slot | 24x7 overnight +4, Chat +2.5; no before-breaks sheet lower |
+| **DNBS** | Day-by-day break re-placement on the best schedules. **Now off by default** (opt-in `--enable-dnbs`): the audit found its evidence inside run-to-run noise | 24x7 overnight +4, Chat +2.5, but M2/H3 -3 each |
 | **Seeds** | Solve the same workbook with 2 seeds and keep the better result | best of 2 x 1 h vs one 1 h run: +8.5 summed, Chat 174.5 -> 178; no before-breaks sheet lower |
 
 **Recommended setting: `MODE = QUICK`, `SEEDS = 0` (automatic: 2 seeds)** (Notebook A defaults). For more time, `MODE = DEEP` (4 seeds) or `OVERNIGHT` (6).
@@ -41,7 +43,8 @@ a pre-registered A/B (all runs validator PASS, 0 hard failures):
   (fixed since - see below - but it still did not beat the seeds). Wall
   clock: 4 seeds take ~1 h on 8+ CPUs, ~2 h on 4, ~4 h on 2 (same as before).
   `SEEDS` changes the count; `SINGLE_LONG_RUN = True` (runner:
-  `--single-run`) restores one long run.
+  `--single-run`) restores one long run. **Not for production yet:** that
+  path is still being verified end to end (audit F-16).
 
 **DEEP / OVERNIGHT memory fix.** Those modes run joint refinement (QUICK does
 not). Its CP-SAT models reached 13 GB on Cricut Chat and on the 24x7 synthetic

@@ -42,6 +42,7 @@ FILES = [
     ("run_tests.sh", "run_tests.sh"),
     ("CODE_AUDIT.md", "CODE_AUDIT.md"),
     ("packages/rc9_2_2_production/README.md", "README.md"),
+    ("packages/rc9_2_2_production/PRODUCTION_RUN_GUIDE.md", "PRODUCTION_RUN_GUIDE.md"),
     ("packages/rc9_2_2_production/LIVE_SCENARIOS.md", "LIVE_SCENARIOS.md"),
     ("packages/rc9_2_2_production/SCENARIOS.json", "SCENARIOS.json"),
 ]

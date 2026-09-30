@@ -56,6 +56,11 @@ SETUP_LAYOUT = [
         ("Hard OFF Preferences", YES_NO),
         ("Leave Enabled", YES_NO),
         ("Use Preferences", YES_NO),
+        # Names (comma or semicolon separated) of people on the previous-week
+        # sheet who have left. Without it such a row fails the input contract,
+        # and there was no visible place to say so. One name never silences
+        # another: each must be listed.
+        ("Known Departed Associates", None),
     ]),
     ("Opening Guard", [
         ("Opening Guard Enabled", YES_NO),

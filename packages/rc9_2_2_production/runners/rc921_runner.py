@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""RC9.2.1 scenario runner — shared core for every Colab variant.
+"""RC9.2.2 scenario runner — shared core for every Colab variant.
 
 Runs one or more scenarios from SCENARIOS.json at their configured budget, then
 scores the release gates. Designed for SHARDED parallel execution: launch
@@ -44,6 +44,7 @@ import math
 import shutil
 import os
 import platform
+import signal
 import subprocess
 import sys
 import time
@@ -81,6 +82,82 @@ def verify_inputs(root: Path, scenarios: list) -> list:
             problems.append(f"{row['scenario_id']}: input sha256 {actual[:16]} "
                             f"!= manifest {row['input_sha256'][:16]}")
     return problems
+
+
+def verify_engine(root: Path, manifest: dict) -> list:
+    """The engine that will run must be the engine the manifest names (RC5 F-17)."""
+    import hashlib
+    engine = root / "engine" / "_tools" / "l632_universal_scheduler.py"
+    if not engine.is_file():
+        return [f"missing engine: {engine}"]
+    actual = hashlib.sha256(engine.read_bytes()).hexdigest()
+    expected = str(manifest.get("engine_sha256") or "")
+    return [] if expected and actual == expected else [
+        f"engine sha256 {actual[:16]} != manifest {expected[:16] or 'missing'}"]
+
+
+def run_runtime_check(root: Path) -> bool:
+    """Reject a solver run before any optimization budget is consumed."""
+    checker = root / "tools" / "runtime_environment_check.py"
+    if not checker.is_file():
+        print(f"RUNTIME CHECK FAILED: missing {checker}", file=sys.stderr)
+        return False
+    log("checking pinned runtime and CP-SAT compatibility")
+    proc = subprocess.run([sys.executable, str(checker)], capture_output=True, text=True, timeout=120)
+    if proc.returncode:
+        print(proc.stdout, file=sys.stderr)
+        print(proc.stderr, file=sys.stderr)
+        return False
+    log("runtime check PASS")
+    return True
+
+
+def _terminate_process_tree(proc: subprocess.Popen, grace_seconds: float = 15.0) -> None:
+    """Terminate a run and every descendant (portfolio seeds, engines, joint children)."""
+    if proc.poll() is not None:
+        return
+    try:
+        if os.name == "posix":
+            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+        else:
+            proc.terminate()
+        proc.wait(timeout=grace_seconds)
+        return
+    except (ProcessLookupError, ChildProcessError):
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        if os.name == "posix":
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        else:
+            proc.kill()
+    except (ProcessLookupError, ChildProcessError):
+        pass
+    try:
+        proc.wait(timeout=grace_seconds)
+    except subprocess.TimeoutExpired:
+        pass
+
+
+def _run_engine(command: list, logfile: Path, timeout: int) -> int:
+    """Run in its own process group so a timeout or interrupt stops every descendant.
+
+    subprocess.run(timeout=...) kills only the direct child: a timed-out
+    portfolio left its seed runs and their engines running into the next
+    scenario (audit F-05). RC5's runner had this; it is restored here.
+    """
+    with logfile.open("w", encoding="utf-8") as handle:
+        proc = subprocess.Popen(command, stdout=handle, stderr=subprocess.STDOUT,
+                                start_new_session=(os.name == "posix"))
+        try:
+            return int(proc.wait(timeout=timeout))
+        except KeyboardInterrupt:
+            _terminate_process_tree(proc)
+            raise
+        except subprocess.TimeoutExpired:
+            _terminate_process_tree(proc)
+            raise
 
 
 def select(scenarios: list, only: str, shard: int, shards: int) -> list:
@@ -143,8 +220,15 @@ def run_one(root: Path, results_root: Path, row: dict, args) -> dict:
         "--time-limit", str(budget),
         "--num-workers", str(args.num_workers or row.get("num_workers", 4)),
         "--solver-random-seed", str(row.get("solver_random_seed", 9000)),
-        "--overwrite",
     ]
+    if getattr(args, "overwrite", False):
+        # RC5 semantics: replacing an existing schedule-id is an explicit choice.
+        command.append("--overwrite")
+    if row.get("acknowledged_departed"):
+        # Baseline-protected workbooks cannot be edited, so a scenario whose
+        # previous-week sheet names people no longer on the roster lists them in
+        # the manifest; the engine records the override in its run identity.
+        command += ["--acknowledge-departed", ";".join(row["acknowledged_departed"])]
     if args.stage:
         command += ["--stage", args.stage]
     if args.language_working_window:
@@ -156,22 +240,46 @@ def run_one(root: Path, results_root: Path, row: dict, args) -> dict:
     log(f"START {scenario}  budget={budget}s  workers={command[command.index('--num-workers')+1]}")
     started = time.time()
     logfile = results_root / f"{scenario}.log"
-    with logfile.open("w", encoding="utf-8") as handle:
-        proc = subprocess.run(command, stdout=handle, stderr=subprocess.STDOUT,
-                              timeout=budget + 1800)
+    returncode = _run_engine(command, logfile, budget + 1800)
     elapsed = round(time.time() - started, 1)
-    log(f"DONE  {scenario}  exit={proc.returncode}  wall={elapsed}s  "
+    log(f"DONE  {scenario}  exit={returncode}  wall={elapsed}s  "
         f"({'within' if elapsed <= budget else 'OVER'} budget)")
-    return {"scenario_id": scenario, "exit_code": proc.returncode,
+    return {"scenario_id": scenario, "exit_code": returncode,
             "wall_sec": elapsed, "budget_sec": budget,
             "overran_budget": elapsed > budget, "log": str(logfile)}
 
 
-def seed_plan(seeds: int, parallel: int, cpus: int) -> tuple:
+def record_failed(record: dict) -> bool:
+    """A scenario failed if its run exited nonzero, timed out, or (portfolio) produced no winner."""
+    if record.get("exit_code") not in (0, "0"):
+        return True
+    return int(record.get("seeds") or 1) > 1 and record.get("after_breaks_winner_seed") is None
+
+
+# Measured peak RSS of one QUICK engine run with joint refinement off is about
+# 0.8-2 GB (evidence/NIGHT_03, BUDGET_SWEEP_AND_OOM.md); 3 GB per seed keeps a
+# margin. Side-by-side seeds are limited by memory as well as by cores (M-09).
+SEED_MEMORY_MB = 3072
+
+
+def available_memory_mb():
+    try:
+        with open("/proc/meminfo", encoding="utf-8") as handle:
+            for line in handle:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) // 1024
+    except OSError:
+        return None
+    return None
+
+
+def seed_plan(seeds: int, parallel: int, cpus: int, memory_mb=None) -> tuple:
     """(seeds at once, workers per seed). Auto: 2+ cores per seed side by side."""
     seeds = max(1, int(seeds))
     if parallel <= 0:
         parallel = max(1, min(seeds, cpus // 2))
+        if memory_mb:
+            parallel = max(1, min(parallel, int(memory_mb) // SEED_MEMORY_MB))
     parallel = max(1, min(seeds, parallel))
     return parallel, max(1, cpus // parallel)
 
@@ -181,7 +289,8 @@ def run_portfolio(root: Path, results_root: Path, row: dict, args, command: list
     """Run N seeds via RUN_PORTFOLIO.py; publish the winning seed as the scenario."""
     scenario = row["scenario_id"]
     seeds = int(seeds)
-    parallel, workers = seed_plan(seeds, int(getattr(args, "parallel", 0) or 0), os.cpu_count() or 2)
+    parallel, workers = seed_plan(seeds, int(getattr(args, "parallel", 0) or 0), os.cpu_count() or 2,
+                                  available_memory_mb())
     base_seed = int(row.get("solver_random_seed", 9000))
     passthrough = [c for c in command[3:] if c not in ("--overwrite",)]
     # drop the arguments RUN_PORTFOLIO sets itself, and the worker count it is given here
@@ -204,12 +313,15 @@ def run_portfolio(root: Path, results_root: Path, row: dict, args, command: list
            *cleaned, "--num-workers", str(workers)]
     log(f"START {scenario}  seeds={seeds} (base {base_seed})  side-by-side={parallel}  "
         f"workers/seed={workers}  budget/seed={budget}s")
+    # A summary left by an earlier portfolio of the same scenario must never be
+    # read as this run's result if this run dies before writing its own.
+    stale = seeds_root / scenario / "PORTFOLIO_SUMMARY.json"
+    if stale.exists():
+        stale.unlink()
     started = time.time()
     logfile = results_root / f"{scenario}.log"
     rounds = math.ceil(seeds / parallel)
-    with logfile.open("w", encoding="utf-8") as handle:
-        proc = subprocess.run(cmd, stdout=handle, stderr=subprocess.STDOUT,
-                              timeout=budget * rounds + 1800 * rounds)
+    returncode = _run_engine(cmd, logfile, budget * rounds + 1800 * rounds)
     elapsed = round(time.time() - started, 1)
     summary_path = seeds_root / scenario / "PORTFOLIO_SUMMARY.json"
     summary = json.loads(summary_path.read_text(encoding="utf-8")) if summary_path.exists() else {}
@@ -220,6 +332,13 @@ def run_portfolio(root: Path, results_root: Path, row: dict, args, command: list
         # so the gate report and the reader see one self-consistent run.
         src = seeds_root / scenario / "seeds" / f"{scenario}_S{winner}"
         dst = results_root / scenario
+        if dst.exists() and not getattr(args, "overwrite", False):
+            log(f"REFUSED {scenario}: {dst} exists; pass --overwrite to replace it "
+                f"(the portfolio's own seeds are kept under {seeds_root / scenario})")
+            return {"scenario_id": scenario, "exit_code": "EXISTS_NOT_OVERWRITTEN", "wall_sec": elapsed,
+                    "budget_sec": budget, "seeds": seeds, "after_breaks_winner_seed": winner,
+                    "before_breaks_winner_seed": summary.get("before_breaks_winner_seed"),
+                    "published_case": None, "log": str(logfile)}
         if dst.exists():
             shutil.rmtree(dst)
         shutil.copytree(src, dst)
@@ -228,9 +347,9 @@ def run_portfolio(root: Path, results_root: Path, row: dict, args, command: list
         for name in ("PORTFOLIO_SUMMARY.json", "PORTFOLIO_SUMMARY.csv"):
             shutil.copy2(seeds_root / scenario / name, portfolio_dir / name)
         published = str(dst)
-    log(f"DONE  {scenario}  exit={proc.returncode}  wall={elapsed}s  "
+    log(f"DONE  {scenario}  exit={returncode}  wall={elapsed}s  "
         f"after-breaks winner seed={winner}  before-breaks winner seed={summary.get('before_breaks_winner_seed')}")
-    return {"scenario_id": scenario, "exit_code": proc.returncode, "wall_sec": elapsed,
+    return {"scenario_id": scenario, "exit_code": returncode, "wall_sec": elapsed,
             "budget_sec": budget, "seeds": seeds, "side_by_side": parallel, "workers_per_seed": workers,
             "after_breaks_winner_seed": winner,
             "before_breaks_winner_seed": summary.get("before_breaks_winner_seed"),
@@ -251,23 +370,28 @@ def score_gates(root: Path, results_root: Path) -> int:
 
 
 def run_guard_suite(root: Path) -> bool:
-    """The 291 offline guards. Fast, no solver, and they must pass first.
+    """Run the package's full offline gate before any solver time is spent.
 
-    If the engine in this package is not the engine the guards expect, nothing
-    produced afterwards is worth comparing.
+    This is the same gate the repository and the package builder run
+    (run_tests.sh: tests/, tests_staged/, selfchecks, call-signature check),
+    so the Colab guard and the release gate cannot drift apart. The previous
+    runner globbed tests/test_rc9_2_1_*.py only and skipped every staged
+    suite (audit F-17 / H-03).
     """
-    log("running offline guard suite")
-    ok = True
-    for suite in sorted((root / "tests").glob("test_rc9_2_1_*.py")):
-        proc = subprocess.run([sys.executable, str(suite)],
-                              capture_output=True, text=True, timeout=1800)
-        tail = (proc.stderr or proc.stdout).strip().splitlines()[-1:] or [""]
-        status = "OK" if proc.returncode == 0 else "FAILED"
-        log(f"   {suite.name:48} {status}  {tail[0][:40]}")
-        if proc.returncode != 0:
-            ok = False
-            print((proc.stderr or proc.stdout)[-3000:], file=sys.stderr)
-    return ok
+    log("running the offline gate (run_tests.sh)")
+    gate = root / "run_tests.sh"
+    if not gate.is_file():
+        print(f"GUARD SUITE FAILED: missing {gate}", file=sys.stderr)
+        return False
+    proc = subprocess.run(["bash", str(gate)], cwd=str(root), capture_output=True,
+                          text=True, timeout=3600)
+    tail = (proc.stdout or "").strip().splitlines()[-1:] or [""]
+    log(f"   {tail[0][:120]}")
+    if proc.returncode != 0:
+        print((proc.stdout or "")[-6000:], file=sys.stderr)
+        print((proc.stderr or "")[-2000:], file=sys.stderr)
+        return False
+    return True
 
 
 def main() -> int:
@@ -287,7 +411,7 @@ def main() -> int:
                     help="BEFORE_BREAKS_ONLY runs Stage 1 and exports the before-break "
                          "champion without placing breaks.")
     ap.add_argument("--language-working-window",
-                    choices=["OFF", "MINIMUM_ROWS", "ALL_ROWS"], default=None,
+                    choices=["OFF", "MINIMUM_ROWS", "ALL_ROWS", "REQUIRED_LANGUAGE_ONLY"], default=None,
                     help="override the workbook's Language Working Window setting.")
     ap.add_argument("--input", type=Path, default=None,
                     help="run a workbook that is not in SCENARIOS.json - your own live "
@@ -302,7 +426,11 @@ def main() -> int:
     ap.add_argument("--parallel", type=int, default=0,
                     help="seeds to run side by side (default: automatic, 2+ cores per seed)")
     ap.add_argument("--resume", action="store_true")
+    ap.add_argument("--overwrite", action="store_true",
+                    help="explicitly replace an existing schedule-id; off by default")
     ap.add_argument("--skip-guards", action="store_true")
+    ap.add_argument("--skip-gates", action="store_true",
+                    help="defer release-gate scoring; used by parallel shards")
     ap.add_argument("--gate-only", action="store_true", help="re-score existing results")
     args = ap.parse_args()
 
@@ -316,8 +444,18 @@ def main() -> int:
     log(f"sha256  : {manifest['engine_sha256'][:24]}…")
     log(f"host    : {platform.platform()} | cpus={os.cpu_count()} | python={platform.python_version()}")
 
+    engine_problems = verify_engine(root, manifest)
+    if engine_problems:
+        for problem in engine_problems:
+            print(f"ENGINE VERIFICATION FAILED: {problem}", file=sys.stderr)
+        return 2
+
     if args.gate_only:
         return score_gates(root, results_root)
+
+    if not run_runtime_check(root):
+        log("RUNTIME CHECK FAILED - refusing to consume solver time")
+        return 2
 
     if not args.skip_guards and not run_guard_suite(root):
         log("GUARD SUITE FAILED - refusing to run scenarios against an engine "
@@ -346,16 +484,14 @@ def main() -> int:
             "solver_random_seed": 9000,
             "_input_path": workbook,
         }
-        if not args.skip_guards and not run_guard_suite(root):
-            log("GUARD SUITE FAILED - refusing to run")
-            return 2
         record = run_one(root, results_root, row, args)
         (results_root / "RUN_LEDGER.json").write_text(json.dumps({
             "generated_utc": datetime.now(timezone.utc).isoformat(),
             "package": manifest["package"], "engine_sha256": manifest["engine_sha256"],
             "ad_hoc_input": str(workbook), "runs": [record],
         }, indent=2), encoding="utf-8")
-        return score_gates(root, results_root)
+        gate_rc = 0 if args.skip_gates else score_gates(root, results_root)
+        return 2 if record_failed(record) else gate_rc
 
     problems = verify_inputs(root, manifest["scenarios"])
     if problems:
@@ -376,7 +512,7 @@ def main() -> int:
         except subprocess.TimeoutExpired:
             log(f"TIMEOUT {row['scenario_id']} - hard kill, recorded as a failure")
             records.append({"scenario_id": row["scenario_id"], "exit_code": "TIMEOUT",
-                            "seeds": int(args.seeds or 1),
+                            "seeds": depth_plan(args, row)[2],
                             "wall_sec": None, "budget_sec": row["time_limit_sec"],
                             "overran_budget": True})
         (results_root / "RUN_LEDGER.json").write_text(json.dumps({
@@ -386,11 +522,17 @@ def main() -> int:
             "shard": args.shard, "shards": args.shards,
             "runs": records}, indent=2), encoding="utf-8")
 
-    score_gates(root, results_root)
+    run_failed = [r["scenario_id"] for r in records if record_failed(r)]
+    gate_rc = 0 if args.skip_gates else score_gates(root, results_root)
     log(f"results in {results_root}")
     log("Send back the whole results directory, including RUN_LEDGER.json and "
         "_gate_report/.")
-    return 0
+    # Failures are the exit status (audit F-17 / H-02 / M-10): a failed or
+    # timed-out scenario is 2, otherwise the release-gate verdict decides.
+    if run_failed:
+        log(f"FAILED scenarios: {run_failed}")
+        return 2
+    return gate_rc
 
 
 if __name__ == "__main__":

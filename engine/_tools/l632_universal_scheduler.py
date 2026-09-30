@@ -354,7 +354,7 @@ def yes(v: Any, default: bool = False) -> bool:
     s = norm(v)
     if not s:
         return default
-    return s in {"yes", "y", "true", "1", "enabled", "on", "hard", "required"}
+    return s in YES_WORDS
 
 
 def tri_state(v: Any, default: str = "no") -> str:
@@ -1333,6 +1333,55 @@ def _validate_numeric_instruction(
             )
 
 
+# C-2: yes() reads anything outside YES_WORDS as "No". For an instruction row
+# that switches a whole rule on or off (Leave, Hard OFF, Use Preferences, ...),
+# a typo such as "Enable" or "Yes." then silently disables the rule for the
+# entire roster. The shipped dropdowns now reject such values (F-18), but a
+# pasted or hand-built workbook bypasses them, so the contract checks too.
+YES_WORDS = frozenset({"yes", "y", "true", "1", "enabled", "on", "hard", "required"})
+NO_WORDS = frozenset({"no", "n", "false", "0", "disabled", "off", "soft", "not required", "none"})
+BOOLEAN_INSTRUCTION_ALIASES: Tuple[Tuple[str, ...], ...] = (
+    ("Use 11H/3OFF", "Use 11H 3OFF", "11H/3OFF"),
+    ("Allow Headcount Mismatch", "Headcount Mismatch Override", "Roster Count Mismatch Allowed"),
+    ("Fixed Request Use", "Use Fixed Requests", "Fixed/Nesting Enabled", "Use Fixed/Nesting"),
+    ("Hard OFF Preferences", "Hard OFF", "OFF Preferences Hard"),
+    ("Strict 2 OFF", "Strict Two OFF", "Strict OFF Count"),
+    ("Separate OFF Days", "Separate Off Days", "Allow Separate OFF Days"),
+    ("Leave", "Leave Days", "Leave Enabled"),
+    ("Use Preferences", "Preferences"),
+    ("Opening Guard Enabled",),
+    ("Hard Floor Solver Constraint Enabled", "Minimum Floor Enforcement Hard", "Coverage Floor Hard Constraint"),
+    ("Target Priority Confirmed", "Coverage Target Confirmed", "Target Confirmed"),
+    ("Overage Control Enabled", "Coverage Overage Control Enabled"),
+    ("Critical Coverage No-Break Exception Enabled", "No-Break Exception Enabled"),
+    ("Allow Back-to-Back Breaks", "Back-to-Back Breaks Allowed"),
+    ("Next Sunday Balance Enabled", "Week Boundary Balance Enabled"),
+    ("Language Operational Reserve Enabled", "Required Language Reserve Enabled", "Skill Operational Reserve Enabled"),
+    ("Whole Week Balance Enabled", "Weekly Coverage Balance Enabled"),
+    ("Break Infeasibility Core Enabled", "Break Assumption Core Enabled"),
+    ("Logic-Based Break Feedback Enabled", "Break Feasibility Cut Feedback Enabled"),
+    ("Skill Allocation Audit Enabled", "Distinct Skill Allocation Audit Enabled"),
+)
+
+
+def _validate_boolean_instructions(im: Dict[str, Any], parser_warnings: List[str]) -> None:
+    """A switch row holding something that is neither yes nor no fails the contract."""
+    for names in BOOLEAN_INSTRUCTION_ALIASES:
+        # Check exactly the row the engine reads: _instruction_get takes the
+        # first alias present, and a later alias with other text (NMG13 has a
+        # descriptive "Preferences" row beside "Use Preferences = No") is never
+        # consulted for this switch.
+        name = next((alias for alias in names if norm(alias) in im), None)
+        if name is None or im[norm(name)] in (None, ""):
+            continue
+        token = norm(im[norm(name)])
+        if token and token not in YES_WORDS and token not in NO_WORDS:
+            parser_warnings.append(
+                f"HARD_INVALID_INSTRUCTION_BOOLEAN:key={name!r};value={im[norm(name)]!r};"
+                "use Yes or No"
+            )
+
+
 def _terms_in_distinct_cells(terms: Sequence[str], values: Sequence[str]) -> bool:
     """True when every term can be matched to a DIFFERENT cell of the row.
 
@@ -1643,6 +1692,57 @@ def _parse_preferences(
                     parser_warnings, "HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE",
                     "Previous week scheduled", supplied_name, acknowledged,
                     carries_data=bool(str(prev.cell(r, sat_col).value or "").strip()))
+
+
+PREFERENCE_MAPPING_CANONICAL = {"leave": "Leave", "off": "OFF", "blank": ""}
+
+
+def _apply_preference_mapping(wb: Any, associates: List[Associate], parser_warnings: List[str]) -> None:
+    """Translate site-specific Preference/Fixed codes via an optional mapping sheet.
+
+    A "Preference Code Mapping" sheet (columns Value, Meaning; Meaning one of Leave,
+    OFF, Blank) lets a site keep its own codes ("TRN", "Comp Off", ...) instead
+    of failing the contract on them. Mapped cells are rewritten to the canonical
+    word before anything reads them, so every consumer agrees, and the number of
+    rewrites is reported. A row whose Meaning is not one of the three fails the
+    contract. With no such sheet nothing changes.
+    """
+    ws = _sheet_by_alias(wb, ["Preference Code Mapping", "Preference Codes"])
+    if ws is None:
+        return
+    header = _find_header_row(ws, ["value", "meaning"])
+    headers = {norm(ws.cell(header, c).value): c for c in range(1, ws.max_column + 1)}
+    value_col = next((c for h, c in headers.items() if h in {"value", "code", "preference value"}), None)
+    meaning_col = next((c for h, c in headers.items() if h == "meaning"), None)
+    if value_col is None or meaning_col is None:
+        parser_warnings.append(
+            "HARD_INVALID_PREFERENCE_MAPPING:sheet has no 'Value' and 'Meaning' header columns"
+        )
+        return
+    mapping: Dict[str, str] = {}
+    for r in range(header + 1, ws.max_row + 1):
+        value = str(ws.cell(r, value_col).value or "").strip()
+        meaning = norm(ws.cell(r, meaning_col).value)
+        if not value:
+            continue
+        if meaning not in PREFERENCE_MAPPING_CANONICAL:
+            parser_warnings.append(
+                f"HARD_INVALID_PREFERENCE_MAPPING:value={value!r};meaning={ws.cell(r, meaning_col).value!r};"
+                "Meaning must be Leave, OFF or Blank"
+            )
+            continue
+        mapping[norm(value)] = PREFERENCE_MAPPING_CANONICAL[meaning]
+    rewritten = 0
+    for associate in associates:
+        for attribute in ("preferences", "fixed_schedule"):
+            values = list(getattr(associate, attribute) or [])
+            for index, cell in enumerate(values):
+                key = norm(cell)
+                if key and key in mapping:
+                    values[index] = mapping[key]
+                    rewritten += 1
+            setattr(associate, attribute, values)
+    parser_warnings.append(f"PREFERENCE_MAPPING_APPLIED:codes={len(mapping)};cells_rewritten={rewritten}")
 
 
 def _parse_fixed_nesting(
@@ -2822,6 +2922,7 @@ def parse_input(
     allow_no_break_override: Optional[bool] = None,
     max_no_break_override: Optional[int] = None,
     allow_headcount_mismatch_override: Optional[bool] = None,
+    acknowledged_departed_override: Optional[Sequence[str]] = None,
 ) -> ParsedInput:
     from openpyxl import load_workbook
     wb = load_workbook(path, data_only=False, read_only=False)
@@ -2860,6 +2961,7 @@ def parse_input(
     ]
     for names, allow_percent in numeric_instruction_specs:
         _validate_numeric_instruction(im, names, parser_warnings, allow_percent=allow_percent)
+    _validate_boolean_instructions(im, parser_warnings)
     allowed_durations, use11 = _parse_duration_set(im)
     associates, schedule_dates, _ = _parse_roster(wb, parser_warnings=parser_warnings)
     instructed_hc = int(round(to_float(_instruction_get(im, ["Count of Associates", "Roster Count", "Headcount"], 0), 0)))
@@ -2876,6 +2978,11 @@ def parse_input(
             + ("Explicit mismatch override is enabled." if allow_hc_mismatch else "This is a hard contract failure.")
         )
     acknowledged_departed = _parse_departed_acknowledgements(im)
+    if acknowledged_departed_override:
+        # Same named, per-person escape as the workbook's "Known Departed
+        # Associates" row, supplied by the operator for a workbook that must not
+        # be edited (a baseline-protected scenario). Recorded in the run identity.
+        acknowledged_departed |= {norm(name) for name in acknowledged_departed_override if norm(name)}
     _parse_preferences(wb, associates, parser_warnings, acknowledged_departed)
     fixed_enabled = yes(_instruction_get(im, ["Fixed Request Use", "Use Fixed Requests", "Fixed/Nesting Enabled", "Use Fixed/Nesting"], "No"), False)
     fixed_sheet_present = _sheet_by_alias(wb, ["Fixed Request", "Fixed Requests", "Nesting", "Fixed/Nesting"]) is not None
@@ -2886,6 +2993,7 @@ def parse_input(
     elif not fixed_enabled:
         for associate in associates:
             associate.fixed_schedule = [""] * 7
+    _apply_preference_mapping(wb, associates, parser_warnings)
     allowed_start_raw = _instruction_get(im, ["Allowed Shift Start Window", "Shift Start Window"], None)
     allowed_start_min, allowed_start_end = parse_time_window(allowed_start_raw)
     if allowed_start_raw not in (None, "") and (allowed_start_min is None or allowed_start_end is None):
@@ -4533,6 +4641,50 @@ OFF_WORDS = frozenset({
 })
 
 
+# F-02: ordinary spellings that the two word lists above missed, each of which
+# made the whole run fail its contract (UNRECOGNISED_PREFERENCE_VALUE). They are
+# only consulted when the exact lists and the shift parser have not matched, so
+# no value that was already recognised changes meaning. Anything still unknown
+# (e.g. "Training", "WFH", "Half Day") keeps failing closed; a workbook can map
+# it explicitly on a "Preference Code Mapping" sheet (see _apply_preference_mapping).
+BLANK_PREFERENCE_WORDS = frozenset({"-", "--", "n/a", "na", "tbd", "tba", "nil", "not applicable"})
+PREFERENCE_QUALIFIER_WORDS = frozenset({
+    "approved", "requested", "request", "req", "confirmed", "full", "the", "day", "days",
+})
+LEAVE_ROOT_WORDS = frozenset({
+    "leave", "holiday", "vacation", "sick", "maternity", "paternity", "parental", "bereavement",
+    "compassionate", "annual", "casual", "medical", "emergency", "personal", "unpaid", "study",
+    "marriage", "loa", "pto", "absence", "absent",
+})
+LEAVE_ABBREVIATIONS = frozenset({"al", "a/l", "sl", "s/l", "cl", "c/l", "pl", "p/l", "el", "ml", "ph", "bh", "lwp", "upl"})
+OFF_ABBREVIATIONS = frozenset({"rd", "r/d", "do", "d/o", "wo", "w/o", "x"})
+
+
+def _preference_tokens(text: str) -> List[str]:
+    cleaned = re.sub(r"[()\[\]{}.,;:!?*_]+", " ", norm(text)).replace("-", " ")
+    return [token for token in cleaned.split() if token]
+
+
+def _extended_preference_kind(value: Any) -> Optional[str]:
+    raw = norm(value)
+    if raw in BLANK_PREFERENCE_WORDS:
+        return "blank"
+    tokens = _preference_tokens(value)
+    core = [token for token in tokens if token not in PREFERENCE_QUALIFIER_WORDS]
+    if not core:
+        return None
+    joined = " ".join(core)
+    if joined in OFF_WORDS or joined in OFF_ABBREVIATIONS:
+        return "off"
+    if joined in LEAVE_WORDS or joined in LEAVE_ABBREVIATIONS:
+        return "leave"
+    if any(token in LEAVE_ROOT_WORDS for token in core) and "off" not in core:
+        return "leave"
+    if "off" in core and all(token in {"off", "comp", "compensatory", "week", "weekly", "rest"} for token in core):
+        return "off"
+    return None
+
+
 def preference_kind(value: str) -> str:
     s = norm(value)
     if not s or s in {"none", "planned", "plan", "blank"}:
@@ -4543,7 +4695,7 @@ def preference_kind(value: str) -> str:
         return "leave"
     if shift_parts(value):
         return "shift"
-    return "other"
+    return _extended_preference_kind(value) or "other"
 
 
 def circular_minute_distance(a: int, b: int) -> int:
@@ -18979,6 +19131,7 @@ def run_case(
     overwrite: bool = False,
     resume: bool = False,
     allow_headcount_mismatch_override: Optional[bool] = None,
+    acknowledged_departed_override: Optional[Sequence[str]] = None,
     stage1_minimum_slice_sec: float = STAGE1_MIN_MEANINGFUL_SLICE_SEC,
     cli_search_controls: Optional[Mapping[str, Any]] = None,
 ) -> int:
@@ -18997,6 +19150,7 @@ def run_case(
         parsed = parse_input(
             input_path, allow_no_break_override, max_no_break_override,
             allow_headcount_mismatch_override=allow_headcount_mismatch_override,
+            acknowledged_departed_override=acknowledged_departed_override,
         )
         # Search shape, reserve budgets and quality minimums follow the same
         # contract-then-override rule as the protected-tier minimums below: the
@@ -19486,6 +19640,7 @@ def run_case(
             "allow_no_break_override": allow_no_break_override,
             "max_no_break_override": max_no_break_override,
             "allow_headcount_mismatch_override": allow_headcount_mismatch_override,
+            "acknowledged_departed_override": sorted(acknowledged_departed_override or []),
         }
         git_identity = git_repository_identity()
         run_identity = {
@@ -19704,6 +19859,11 @@ def run_case(
             parsed, time_limit_sec=min(45.0, max(5.0, total_time_sec * 0.015))
         )
         audit["aggregate_pattern_mix_guidance"] = aggregate_guidance
+        if aggregate_guidance.get("status") == "UNAVAILABLE":
+            # Visible, not only in the audit: without scipy Stage 1 runs without
+            # this guide, which is not the engine production runs (audit F-20).
+            print(f"WARNING AGGREGATE_GUIDANCE_UNAVAILABLE {aggregate_guidance.get('reason')}",
+                  file=log, flush=True)
         write_json(work_dir / "AGGREGATE_PATTERN_MIX_GUIDANCE.json", aggregate_guidance)
         audit["events"].append({
             "event": "AGGREGATE_PATTERN_MIX_GUIDANCE_COMPLETE",
@@ -23064,6 +23224,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
                              "also bounds working hours for language rows with a minimum >= 1. "
                              "ALL_ROWS bounds every active row, including rows with no minimum.")
     parser.add_argument("--allow-headcount-mismatch", action="store_true", default=None)
+    parser.add_argument("--acknowledge-departed", default="",
+                        help="semicolon-separated names to treat as departed, like the workbook's "
+                             "'Known Departed Associates' row; recorded in the run identity")
     parser.add_argument("--disable-headcount-mismatch-override", action="store_true")
     parser.add_argument("--diagnostics-only", action="store_true")
     parser.add_argument("--skeleton-only", action="store_true", help="Run only Stage 1, export the target-protected before-break champion, then stop.")
@@ -23866,6 +24029,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         cli_search_controls=typed_controls,
             overwrite=args.overwrite, resume=args.resume,
             allow_headcount_mismatch_override=hc_override,
+            acknowledged_departed_override=[n.strip() for n in str(args.acknowledge_departed or "").split(";") if n.strip()],
         )
     except Exception as exc:
         terminal_exception = exc

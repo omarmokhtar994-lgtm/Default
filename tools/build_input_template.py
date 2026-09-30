@@ -116,6 +116,18 @@ SECTION = PatternFill("solid", fgColor="D9E2F3")
 WARN = PatternFill("solid", fgColor="FFF2CC")
 THIN = Border(*[Side(style="thin", color="BFBFBF")] * 4)
 
+def enforced_list_validation(choices):
+    """A dropdown that rejects anything outside its list.
+
+    openpyxl's DataValidation leaves showErrorMessage off, which lets Excel
+    accept any typed value: "Enable" in a Yes/No row then reads as No
+    (audit finding F-18). RC5's shipped workbooks enforced every list.
+    """
+    return DataValidation(type="list", formula1=choices, allow_blank=True,
+                          showErrorMessage=True, errorStyle="stop",
+                          errorTitle="Value not allowed",
+                          error="Choose a value from the list. Typed values outside the list are not accepted.")
+
 def norm(s): return "".join(ch for ch in str(s or "").lower() if ch.isalnum() or ch == ".")
 
 def existing_values(wb):
@@ -169,7 +181,7 @@ def write_sheet(wb, title, layout, values, blurb, start_note=None):
             if choices:
                 dv = validations.get(choices)
                 if dv is None:
-                    dv = DataValidation(type="list", formula1=choices, allow_blank=True)
+                    dv = enforced_list_validation(choices)
                     ws.add_data_validation(dv); validations[choices] = dv
                 dv.add(ws.cell(row, 3))
             if v is None:
@@ -248,7 +260,7 @@ for col, note in enumerate(notes, start=1):
 ws.row_dimensions[5].height = 40
 for col, width in zip("ABCDEFG", (22, 12, 12, 16, 13, 11, 46)):
     ws.column_dimensions[col].width = width
-dv_yesno = DataValidation(type="list", formula1=YES_NO, allow_blank=True)
+dv_yesno = enforced_list_validation(YES_NO)
 ws.add_data_validation(dv_yesno)
 for row in range(6, 26):
     for col in range(1, 8):

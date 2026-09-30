@@ -868,6 +868,8 @@ def build_parser() -> argparse.ArgumentParser:
                         "associates who cannot cover an active required language from being "
                         "scheduled during that language's window.")
     p.add_argument('--allow-headcount-mismatch', action='store_true')
+    p.add_argument('--acknowledge-departed', default='',
+                   help='semicolon-separated names treated as departed (see Known Departed Associates)')
     p.add_argument('--diagnostics-only', action='store_true')
     p.add_argument('--skeleton-only', action='store_true', help='Run Stage 1 only and export ranked before-break skeletons.')
     p.add_argument('--export-top-skeletons', type=int, default=5)
@@ -918,6 +920,21 @@ def selfcheck() -> int:
     return 0
 
 
+REQUIRED_RUNTIME_MODULES = ('ortools', 'openpyxl', 'numpy', 'scipy')
+
+
+def missing_runtime_dependencies() -> list:
+    """Modules the engine needs to behave as measured; empty when all import."""
+    import importlib
+    missing = []
+    for name in REQUIRED_RUNTIME_MODULES:
+        try:
+            importlib.import_module(name)
+        except Exception as exc:  # noqa: BLE001 - any import failure is a missing dependency
+            missing.append(f'{name} ({type(exc).__name__})')
+    return missing
+
+
 def main() -> int:
     runner_parser = build_parser()
     args = runner_parser.parse_args()
@@ -925,6 +942,15 @@ def main() -> int:
         return selfcheck()
     if args.input is None:
         raise SystemExit('--input is required unless --selfcheck is used')
+    missing = missing_runtime_dependencies()
+    if missing:
+        # The engine's Stage-1 aggregate guide (scipy MILP) silently degrades to
+        # UNAVAILABLE without scipy, and every schedule is then searched without
+        # it. That is a different engine from the one production runs, so refuse
+        # rather than produce a schedule nobody measured (audit F-20).
+        print('[run] RUNTIME DEPENDENCY MISSING: ' + ', '.join(missing) + '. Install the pinned '
+              'requirements (ortools==9.15.6755, openpyxl, pandas, numpy, scipy>=1.11).', flush=True)
+        return 2
     original_input_path = args.input.resolve()
     if not original_input_path.exists():
         raise FileNotFoundError(original_input_path)
@@ -1020,6 +1046,8 @@ def main() -> int:
         command += ['--language-working-window', args.language_working_window]
     if args.allow_headcount_mismatch:
         command.append('--allow-headcount-mismatch')
+    if args.acknowledge_departed:
+        command += ['--acknowledge-departed', args.acknowledge_departed]
     if diagnostics_only:
         command.append('--diagnostics-only')
     if skeleton_only:

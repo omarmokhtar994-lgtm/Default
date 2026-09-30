@@ -1,7 +1,7 @@
 {
   "package": "RC9_2_2_PRODUCTION_PACKAGE",
   "engine_release": "L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2",
-  "engine_sha256": "2071ae894f14f6e37131111dddfd0512ec147ab98e678cd714141a30dd3b75a4",
+  "engine_sha256": "aaacafef6b03874f3ee8dc5ad4f5cb38079bf7d5ed5e99467a782b1b2099a4b7",
   "purpose": "RC9.2.2 production package (S2-PAR parallel break solve + DNBS day-neighbourhood break search + multi-seed runner + memory-isolated joint refinement for DEEP/OVERNIGHT). Seven scenarios plus your own workbooks. Hashes describe the workbooks shipped in inputs/ and are verified before any run.",
   "generated_by": "tools/build_production_package.py",
   "scenarios": [
@@ -16,12 +16,20 @@
       "target_ratio": 1.0,
       "associates": 35,
       "rc9_1_baseline_scenario": "AE AR B2B",
-      "note": "has an RC9.1 baseline row - gates 2 and 9 are decided for this scenario"
+      "note": "has an RC9.1 baseline row - gates 2 and 9 are decided for this scenario",
+      "acknowledged_departed": [
+        "Jessica Gendy Youssef Abdelshahid",
+        "Hager Ahmed Abo Elnaga Ahmed Qenawy",
+        "Fatma Abdelwahid Diab",
+        "Omnia ElSayed Zakaria Mahmoud",
+        "Samaa Ashraf Alswaf"
+      ],
+      "acknowledged_departed_reason": "On 'Previous week scheduled' but absent from the 35-row roster the instructed headcount (35) confirms, and absent from every other AE_AR_B2B roster on record. RC9.1 ignored these rows when it produced the baseline; the fail-closed contract (B-11) needs them named. The workbook is baseline-protected and is not edited."
     },
     {
       "scenario_id": "CRICUT_CHAT",
       "input": "Cricut_Chat_RC9_1_READY_SKELETON.xlsx",
-      "input_sha256": "519cecb2069c130f77ff87f258b27a7ba8e8d4a548cc3f9cff449e209d22d681",
+      "input_sha256": "520432c9c5a57fa040a9e57bce38700654f956491e7e80c2ac4b0d994a30d0e1",
       "mode": "DEEP",
       "time_limit_sec": 14400,
       "num_workers": 4,
@@ -46,7 +54,7 @@
     {
       "scenario_id": "GDI_REAL28",
       "input": "GDI_REAL28_RC9_1_24_7_FINAL_READY.xlsx",
-      "input_sha256": "369a8426fa9eb4575f9d87ff5d9097510b2a73b57188d87e0aaeb51a42d46315",
+      "input_sha256": "02e5148b46c6c82106ecf39bb1ade061fcd0a323f36113a4a3f23b0e7ee13270",
       "mode": "DEEP",
       "time_limit_sec": 14400,
       "num_workers": 4,
@@ -58,7 +66,7 @@
     {
       "scenario_id": "NMG_EN_SP",
       "input": "NMG_EN_AND_SP.xlsx",
-      "input_sha256": "687f4b32032c6cbebbf6539866fbcfdb09d1c641bd55cf271fe1182a7c9fa782",
+      "input_sha256": "8f998e2270f21caea585a6bc60cd935c4483913d4f927b54ed303771ed0cf598",
       "mode": "DEEP",
       "time_limit_sec": 14400,
       "num_workers": 4,
@@ -70,7 +78,7 @@
     {
       "scenario_id": "NMG_EN",
       "input": "NMG_EN_FIXED_NESTING_REST_SAFE_REGRESSION_CLEAN.xlsx",
-      "input_sha256": "1d9db7efd49870071e863d40aca992c81be7f1dedbedc0699d58766a0ca4c9c2",
+      "input_sha256": "198b7b73dcb31febb58ad116fbcd339406ce1ff4127c04abf018daca65cd350d",
       "mode": "DEEP",
       "time_limit_sec": 14400,
       "num_workers": 4,

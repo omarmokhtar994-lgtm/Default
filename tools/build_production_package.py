@@ -51,7 +51,14 @@ EXCLUDE = {"__pycache__", ".ruff_cache", ".pytest_cache", ".git"}
 
 
 def _ignore(_dir: str, names: list[str]) -> set[str]:
-    return {n for n in names if n in EXCLUDE or n.endswith(".pyc")}
+    # RC921_*.ipynb are the pre-RC5 notebooks without the resume / process-group
+    # safeguards; RC922_* replace them and must be the only ones shipped.
+    return {n for n in names if n in EXCLUDE or n.endswith(".pyc")
+            or (name_is_legacy_notebook(n))}
+
+
+def name_is_legacy_notebook(name: str) -> bool:
+    return name.startswith("RC921_") and name.endswith(".ipynb")
 
 
 def build(output_dir: Path) -> Path:

@@ -121,7 +121,8 @@ One scenario per Colab instance. With the recommended QUICK + 2 seeds: about
 1 hour on a 4-CPU runtime, 2 hours on 2 CPUs.
 
 1. Upload this zip (or place it in Drive for the `B_WITH_DRIVE` notebook).
-2. Open `runners/RC921_Colab_A_NO_DRIVE.ipynb`.
+2. Open `runners/RC922_Colab_A_NO_DRIVE.ipynb` (or `RC922_Colab_B_WITH_DRIVE.ipynb` to keep
+   results on Drive).
 3. Set `ONLY` to **one** scenario id (or `MY_WORKBOOK` to your own .xlsx),
    keep `MODE = QUICK` and `SEEDS = 2`, and run all cells.
 4. Download `results/` (it includes `RUN_LEDGER.json` and `_gate_report/`).
@@ -129,8 +130,11 @@ One scenario per Colab instance. With the recommended QUICK + 2 seeds: about
 `NMG_SP` · `CRICUT_VOICE` · `CRICUT_CHAT` · `AE_AR_B2B` · `GDI_REAL28` ·
 `NMG_EN_SP` · `NMG_EN`
 
-The runner refuses any workbook whose sha256 does not match `SCENARIOS.json`,
-and runs the 419 guards first.
+The runner refuses to spend solver time unless the engine's sha256 matches
+`SCENARIOS.json`, the pinned OR-Tools runtime is installed, every workbook's
+sha256 matches `SCENARIOS.json`, and the full offline gate (`run_tests.sh`)
+passes. Its exit code is nonzero if any scenario fails or the release gates fail.
+The shipped workbooks' dropdowns reject values outside their lists.
 
 ## What the evidence says about quality
 

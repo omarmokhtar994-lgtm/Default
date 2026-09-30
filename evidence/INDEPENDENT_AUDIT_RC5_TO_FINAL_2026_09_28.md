@@ -461,3 +461,70 @@ None of these needs a redesign.
 3. Commit the §7 rule and a fail-closed scorer, then launch the minimum
    RC5-vs-FINAL experiment (Chat, Voice, NMG_SP, AE_IT_B2B, H1, M2 × 10
    paired seeds).
+
+---
+
+## 12. Disposition of every finding (updated 2026-09-30)
+
+Every fix below was made on `claude/handoff-document-m6egz2`. Each has a test
+in the gate, and each test was mutation-checked: removing the fix makes a test
+fail. Gate after the last fix: **48 suites, 1236 tests, 2 skipped**, in the
+repository and in the built package layout.
+
+### Findings of this audit
+
+| ID | status | what was done | commit |
+|---|---|---|---|
+| F-01 | **Closed** | The 8 orphaned Stage-A suites, RC5's base suites and RC5's production-hardening suite are in the gate again, run against the package layout (45 → 48 suites). `run_tests.sh` sums "Ran N" / "skipped=K" and fails below `tests_staged/GATE_MINIMUMS.json` (min 1236 tests, max 2 skips). | 572ff17 |
+| F-02 | **Closed** | The vocabulary now accepts ordinary spellings: Public Holiday, PH, Casual Leave, OFF (approved), R/D, N/A, "-" and others. Ambiguous values (Training, WFH, Half Day, Sick Off) still fail closed. A workbook can map site codes on a "Preference Code Mapping" sheet (Value / Meaning). 42-workbook corpus: 0 contract results and 0 contract hashes changed. | 1d81b32 |
+| F-03 | **Registered, running** | `experiments/rc5_vs_final/`: rule, driver and fail-closed scorer committed before any run (420258e). CHAT, VOICE, NMGSP, AE_IT_B2B, H1, M2 × 10 paired seeds × {RC5 0e6f6435, FINAL 251cf35a}, QUICK 3600 s. The brief's overstated Stage-A claim is corrected. | 420258e, fe0d0c3 |
+| F-04 | **Closed** | Both portfolio slots come only from eligible seeds (exit 0, validator PASS, 0 hard, parity PASS, production_eligible TRUE). | 9d41800 |
+| F-05 | **Closed** | The Colab runner starts each engine in its own session and kills the process group on timeout or interrupt. A test proves the grandchild dies. | 1d81b32 |
+| F-06 | **Closed** | Isolated solves have a hard deadline (time limit + 120 s grace). A hung child is killed and reported as `killed_for_deadline`, not as a memory stop. | 3cb1441 |
+| F-07 | **Closed** | A child dying of any signal other than the memory watchdog's SIGKILL raises RuntimeError. It is no longer turned into an UNKNOWN solve. | 3cb1441 |
+| F-08 | **Closed** | The S2-PAR core re-solve time is recorded (`break_infeasibility_core_resolve_sec`). Every outcome is labelled `break_infeasibility_core_status`. | 3cb1441 |
+| F-09 | **Closed** | The DNBS guard also covers language reserve and minimum-only quarters, skill allocation, avoidable-overage peak and concentration, and the week-boundary metrics. | 3cb1441 |
+| F-10 | **Closed** | DNBS is off by default (opt-in `--enable-dnbs`), because the evidence it shipped on was inside noise. | 3cb1441 |
+| F-11 | **Closed** | `evidence/raw_runs/`: 144 runs behind seven published A/Bs (summary, validation, status, identity, audit extract, log tail; 11 MB). A gate test recomputes every published verdict from it. | 02f4d1a |
+| F-12 | **Closed** | `joint_memory_headroom` uses `machine_free_memory_mb()`, which respects a cgroup limit. | 3cb1441 |
+| F-13 | **Mitigated** | `independent_input_crosscheck` re-reads roster, demand and leave/OFF cells without engine code (50 workbooks, 0 false positives). The remaining shared surface is documented in `engine/tools/VALIDATOR_INDEPENDENCE.md`. A fully separate contract parser is still open. | 16ce157 |
+| F-14 | **Closed** | Release is L6.3.2.8-RC9.2.2-PRODUCTION-HARDENED-RC6 in VERSION, the polisher, the release identity and the manifest. | 22775ba |
+| F-15 | **Closed** | The gate caps skips at 2. That cap exposed 26 tests that silently skipped in every package build (they looked only for repository paths); they now run there. | 572ff17, 20d4aff |
+| F-16 | **Running** | Single-run DEEP end to end, through the Colab runner, on Chat and H1: the two cases whose single DEEP run was killed at 13–14 GB before. | — |
+| F-17 | **Closed** | RC5's runner safeguards are back: engine sha check, pinned runtime check, full gate, process-group kill, and a nonzero exit on any failed scenario. `--overwrite` is explicit, and seed parallelism is capped by memory. | 1d81b32 |
+| F-18 | **Closed** | Every dropdown in the 4 non-baseline shipped workbooks rejects typed values. This is a byte-minimal attribute rewrite; cell values and contract hashes are unchanged. The 3 RC9.1 baseline-protected workbooks are untouched; the engine's boolean check covers them. | 1d81b32 |
+| F-19 | **Closed** | All four scorers read through `runlib`. They exit 2 when a run folder is missing, and count killed or rejected runs as failures. They reproduce every published table and verdict exactly. | 02f4d1a |
+| F-20 (new) | **Closed** | Found while fixing: the measured runs had no scipy, so the aggregate MILP guide was UNAVAILABLE in all of them. With scipy it is OPTIMAL on all 7 cases. scipy is now a checked runtime dependency (runner refuses to start without it). The engine prints `WARNING AGGREGATE_GUIDANCE_UNAVAILABLE` when the guide is missing. | 1d81b32, 3cb1441 |
+| F-21 (new) | **Closed** | Found while fixing: the packaged AE_AR_B2B fails its own contract (5 previous-week associates not on the roster). The workbook is baseline-protected, so it is left byte-identical. The manifest names the 5 departed associates, and the runner passes them with `--acknowledge-departed`. Acknowledging only some of them still fails. | 1d81b32 |
+
+### ChatGPT's findings (section 10)
+
+| ID | status |
+|---|---|
+| C-01 | Closed with F-19. |
+| H-01 | Closed: brief corrected; the gate asserts its own total. |
+| H-02, H-03, M-10 | Closed with F-17. |
+| H-04, H-05, H-06, M-08 | Closed with F-04: eligibility includes `production_eligible`; distinct seeds; exit codes persisted; seed-labelled files with a sha256 provenance manifest. |
+| H-07 | Closed with F-09. Employee quality and preferences are not affected by DNBS, which changes only break placement inside fixed shifts. |
+| H-08 | Closed with F-07. |
+| H-09 | No change, by decision. Joint refinement is off by default, and Colab/Linux has fork. Where fork is missing, the fallback is not silent: every solve is counted in the run's solver audit as `IN_PROCESS_NO_FORK`. A console warning is deferred so the engine under experiment stays frozen. |
+| H-10 | Mitigated with F-13. |
+| H-11 | F-03, running. |
+| H-12 | Open as a fact: quality is still below known optima on H1/M2. The proposed remedies were measured and did not help (break-load feedback, profile rotation). No change. |
+| M-01 | Closed: the engine refuses `--time-limit` below 60 s. |
+| M-02 | Closed with F-08. |
+| M-03 | Design limit; DNBS is now opt-in (F-10). |
+| M-04 | Closed with F-10. |
+| M-05 | No change, by decision. `target_loss_gate_mode="warn"` is RC5's own default. It is policy, not a regression, and the business outcome reports the declared quality debt on every run. |
+| M-06, L-02 | C-2 re-rated and fixed (`yes()` fails closed; `HARD_INVALID_INSTRUCTION_BOOLEAN`). The other register items are unchanged and listed in `DEFECT_REGISTER.md`. |
+| M-07 | Closed with F-14. `engine/README.md`'s title is left as is: it names the tier model, not the release. |
+| M-09 | Closed: `seed_plan` caps side-by-side seeds by available memory (3 GB per seed). |
+| M-11, L-01 | Invalid (section 10); no change. |
+| §Numeric 12 | The brief is corrected to 172. `evidence/COMMIT_LOG_SINCE_RC5.txt` has every commit. |
+
+### Not done, and why
+- **RC9.1 as a third arm, the other five AE workbooks, and the secondary
+  identical-flags arm** of §7 are outside the minimum experiment (60 h on this
+  4-core machine). A verdict speaks only for the six cases run.
+- **DNBS 10-seed A/B and "QUICK = 2 parallel seeds"** are improvement
+  experiments, not defect fixes. DNBS stays opt-in until such an A/B passes.

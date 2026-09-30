@@ -236,6 +236,29 @@ class NotebooksAreTheSafeOnes(unittest.TestCase):
                 self.assertIn("from rc922_runner import main", (RUNNERS / name).read_text())
 
 
+class AFailedRunShowsItsReason(unittest.TestCase):
+    """The first Colab production run printed only 'exit=1 ... winner seed=None':
+    the reason was in seed log files the notebook never showed."""
+
+    def test_failure_logs_are_printed(self):
+        import contextlib
+        import io
+        runner = load("rc921_runner_failure_logs", RUNNERS / "rc921_runner.py")
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "S9000.log"
+            log.write_text("\n".join(f"line {i}" for i in range(40)) + "\nTHE REAL ERROR\n")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                runner.show_failure_logs([log, Path(tmp) / "absent.log"])
+        self.assertIn("THE REAL ERROR", out.getvalue())
+        self.assertIn("no log at", out.getvalue())
+
+    def test_both_run_paths_call_it_on_failure(self):
+        source = (RUNNERS / "rc921_runner.py").read_text()
+        self.assertIn("if returncode != 0:\n        show_failure_logs([logfile])", source)
+        self.assertIn('show_failure_logs([logfile, *sorted((seeds_root / scenario).glob(f"{scenario}_S*.log"))])', source)
+
+
 class TheGateNeedsNothingOutsideThePackage(unittest.TestCase):
     """Tests read only files that ship in the package.
 

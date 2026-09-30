@@ -140,6 +140,23 @@ def _terminate_process_tree(proc: subprocess.Popen, grace_seconds: float = 15.0)
         pass
 
 
+def show_failure_logs(logfiles, lines: int = 25) -> None:
+    """Print the end of each log of a failed run into the notebook.
+
+    A failed run used to report only 'exit=1' and 'winner seed=None'; the reason
+    sat in a log file the notebook never showed (first Colab production run).
+    """
+    for path in logfiles:
+        path = Path(path)
+        if not path.is_file():
+            print(f"  (no log at {path})", flush=True)
+            continue
+        tail = path.read_text(encoding="utf-8", errors="replace").splitlines()[-lines:]
+        print(f"---- last {len(tail)} lines of {path} ----", flush=True)
+        for line in tail:
+            print(f"  {line}", flush=True)
+
+
 def _run_engine(command: list, logfile: Path, timeout: int) -> int:
     """Run in its own process group so a timeout or interrupt stops every descendant.
 
@@ -241,6 +258,8 @@ def run_one(root: Path, results_root: Path, row: dict, args) -> dict:
     started = time.time()
     logfile = results_root / f"{scenario}.log"
     returncode = _run_engine(command, logfile, budget + 1800)
+    if returncode != 0:
+        show_failure_logs([logfile])
     elapsed = round(time.time() - started, 1)
     log(f"DONE  {scenario}  exit={returncode}  wall={elapsed}s  "
         f"({'within' if elapsed <= budget else 'OVER'} budget)")
@@ -322,6 +341,8 @@ def run_portfolio(root: Path, results_root: Path, row: dict, args, command: list
     logfile = results_root / f"{scenario}.log"
     rounds = math.ceil(seeds / parallel)
     returncode = _run_engine(cmd, logfile, budget * rounds + 1800 * rounds)
+    if returncode != 0 or not (seeds_root / scenario / "PORTFOLIO_SUMMARY.json").exists():
+        show_failure_logs([logfile, *sorted((seeds_root / scenario).glob(f"{scenario}_S*.log"))])
     elapsed = round(time.time() - started, 1)
     summary_path = seeds_root / scenario / "PORTFOLIO_SUMMARY.json"
     summary = json.loads(summary_path.read_text(encoding="utf-8")) if summary_path.exists() else {}

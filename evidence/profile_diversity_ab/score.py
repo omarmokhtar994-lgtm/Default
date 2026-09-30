@@ -1,25 +1,34 @@
-import json, csv, glob, datetime
-SP = "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad"
-def run(d):
-    s = glob.glob(d + "/*_summary.csv")
-    if not s:
-        return {"after": None, "before": None}
-    r = list(csv.DictReader(open(s[0])))[-1]
-    v = json.load(open(d + "/INDEPENDENT_VALIDATION.json"))
-    ok = v.get("status") == "PASS" and int(v.get("hard_fail_count") or 0) == 0 and (v.get("metric_parity") or {}).get("status") == "PASS"
-    A = json.load(open(glob.glob(d + "/*solver_audit.json")[0]))
-    eg = (A.get("final_recovery_endgame") or {}).get("status")
-    return {"after": int(float(r["after_target"])) if ok else None, "before": float(r["best_before_target"]), "endgame": eg,
-            "rotation": (A.get("run_parameters") or {}).get("stage1_profile_rotation")}
+# Scores the profile-diversity A/B against PREREGISTERED_RULE.txt from the
+# per-run evidence in evidence/raw_runs. Fails closed (audit F-19): a missing
+# run folder aborts with exit 2; a run without a validated schedule scores
+# "no schedule" for its arm (it can never win a best-of).
+import datetime, sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "raw_runs"))
+import runlib  # noqa: E402
+
 cases = ["CHAT", "VOICE", "AR", "NMGSP", "M2", "H3", "H1"]
 real = {"CHAT", "VOICE", "AR", "NMGSP"}
+R = runlib.RAW
+runs = runlib.load_all({**{(c, "s0"): R / "dnbs_e2e_3600b" / f"{c}_NEW_9000" for c in cases},
+                        **{(c, "s1"): R / "dnbs_e2e_3600b" / f"{c}_NEW_9001" for c in cases},
+                        **{(c, "r1"): R / "profile_diversity_ab" / f"{c}_ROT_9001" for c in cases}})
+
+
+def view(r):
+    A = r["audit"]
+    return {"after": r["after"], "before": r["before"] or 0.0,
+            "endgame": (A.get("final_recovery_endgame") or {}).get("status"),
+            "rotation": (A.get("run_parameters") or {}).get("stage1_profile_rotation")}
+
+
 sum0 = sum1 = 0; issues = []
 print(f"Scored {datetime.datetime.utcnow().replace(microsecond=0).isoformat()}Z against PREREGISTERED_RULE.txt; new-run engine sha "
-      + open(SP + "/div/ENGINE_SHA.txt").read().split()[0][:16] + "\n")
+      + runlib.engine_sha(R / "profile_diversity_ab")[:16] + "\n")
 print("```")
 print(f"{'case':6} {'s9000 (shared)':16} {'s9001 default':16} {'s9001 rotated':16} {'B0 after/before':16} {'B1 after/before':16}")
 for c in cases:
-    s0 = run(f"{SP}/dnbs3600b/out/{c}_NEW_9000"); s1 = run(f"{SP}/dnbs3600b/out/{c}_NEW_9001"); r1 = run(f"{SP}/div/out/{c}_ROT_9001")
+    s0, s1, r1 = (view(runs[(c, k)]) for k in ("s0", "s1", "r1"))
     b0a = max([x for x in (s0["after"], s1["after"]) if x is not None], default=0)
     b1a = max([x for x in (s0["after"], r1["after"]) if x is not None], default=0)
     b0b = max(s0["before"], s1["before"]); b1b = max(s0["before"], r1["before"])

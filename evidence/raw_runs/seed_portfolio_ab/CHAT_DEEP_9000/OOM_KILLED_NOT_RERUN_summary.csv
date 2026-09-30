@@ -1,0 +1,2 @@
+note
+NOT RERUN: first run was OOM-killed by the kernel at 13.0 GB inside joint refinement (engine outcome, not infrastructure); see evidence/DEEP_MODE_OOM.md. This file only stops the resumable runner from starting it again.

@@ -1,25 +1,34 @@
-import json, csv, glob, datetime
-SP = "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad"
-def run(d):
-    s = glob.glob(d + "/*_summary.csv")
-    if not s:
-        return {"after": None, "before": None, "valid": False, "has": False}
-    r = list(csv.DictReader(open(s[0])))[-1]
-    v = json.load(open(d + "/INDEPENDENT_VALIDATION.json"))
-    ok = v.get("status") == "PASS" and int(v.get("hard_fail_count") or 0) == 0 and (v.get("metric_parity") or {}).get("status") == "PASS"
-    A = json.load(open(glob.glob(d + "/*solver_audit.json")[0]))
-    fb = ((A.get("break_load_feedback") or {}).get("execution") or {})
-    return {"after": int(float(r["after_target"])), "before": float(r["best_before_target"]), "valid": ok, "has": True,
-            "attempts": fb.get("attempts"), "accepted": fb.get("accepted_candidates")}
+# Scores the break-load-feedback A/B against PREREGISTERED_RULE.txt from the
+# per-run evidence in evidence/raw_runs. Fails closed (audit F-19): a missing
+# run folder aborts with exit 2; a run without a schedule counts against its arm.
+import datetime, sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "raw_runs"))
+import runlib  # noqa: E402
+
 cases = ["CHAT", "VOICE", "AR", "NMGSP", "M2", "H3", "H1"]
 real = {"CHAT", "VOICE", "AR", "NMGSP"}
+seeds = ("9000", "9001")
+R = runlib.RAW
+runs = runlib.load_all({**{("CUR", c, s): R / "dnbs_e2e_3600b" / f"{c}_NEW_{s}" for c in cases for s in seeds},
+                        **{("NEW", c, s): R / "break_load_feedback_ab" / f"{c}_FBL_{s}" for c in cases for s in seeds}})
+
+
+def view(r):
+    fb = ((r["audit"].get("break_load_feedback") or {}).get("execution") or {})
+    raw = r.get("raw_after")
+    return {"after": int(float(raw)) if raw not in (None, "") else 0, "before": r["before"] or 0.0,
+            "valid": r["valid"], "has": raw not in (None, ""),
+            "attempts": fb.get("attempts"), "accepted": fb.get("accepted_candidates")}
+
+
 issues = []; sc = sn = 0.0; attempted = total = 0
 print(f"Scored {datetime.datetime.utcnow().replace(microsecond=0).isoformat()}Z against PREREGISTERED_RULE.txt; NEW engine sha "
-      + open(SP + "/fblab/ENGINE_SHA.txt").read().split()[0][:16] + "\n```")
+      + runlib.engine_sha(R / "break_load_feedback_ab")[:16] + "\n```")
 print(f"{'case':6} {'CUR 9000/9001':14} {'NEW 9000/9001':14} {'CUR mean':9} {'NEW mean':9} {'before CUR/NEW':15} phase attempts/accepted")
 for c in cases:
-    cur = [run(f"{SP}/dnbs3600b/out/{c}_NEW_{s}") for s in ("9000", "9001")]
-    new = [run(f"{SP}/fblab/out/{c}_FBL_{s}") for s in ("9000", "9001")]
+    cur = [view(runs[("CUR", c, s)]) for s in seeds]
+    new = [view(runs[("NEW", c, s)]) for s in seeds]
     for s, n in zip(cur, new):
         total += 1
         attempted += 1 if (n.get("attempts") or 0) > 0 else 0

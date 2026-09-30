@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "release": "L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2",
+  "schedule_id": "H1_DEEP_9000",
+  "mode": "DEEP",
+  "stage": "FULL_SCHEDULE",
+  "return_code": -9,
+  "engine_return_code": -9,
+  "initial_quality_report_return_code": 2,
+  "quality_report_return_code": 2,
+  "hard_valid_artifact": false,
+  "metrics": {},
+  "case_root": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/seedtime/out/H1_DEEP_9000",
+  "independent_validation": {
+    "enabled": true,
+    "status": "NOT_RUN",
+    "return_code": null,
+    "workbook": null,
+    "json": null,
+    "csv": null,
+    "quality_gate_status": null,
+    "coverage_quality_gate_status": null,
+    "canonical_metrics": null,
+    "metric_parity": null
+  }
+}

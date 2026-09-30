@@ -147,7 +147,13 @@ class Wiring(unittest.TestCase):
         self.assertIn("day_neighbourhood_break_search=DAY_NEIGHBOURHOOD_BREAK_SEARCH_ENABLED and not skeleton_only", src)
         self.assertIn("rc8_ceiling = joint_refinement_deadline - dnbs_reserved_sec", src)
         self.assertIn('budget_manager.deadline("day_neighbourhood_break_search")', src)
-        self.assertTrue(E.DAY_NEIGHBOURHOOD_BREAK_SEARCH_ENABLED)
+        # Re-pinned (audit F-10, 2026-09-28): DNBS is opt-in. It shipped on its
+        # third attempt with +0.5 summed (inside noise) and M2/H3 -3 each;
+        # off is the measured CURRENT arm of evidence/dnbs_e2e_3600b.
+        self.assertFalse(E.DAY_NEIGHBOURHOOD_BREAK_SEARCH_ENABLED)
+        self.assertIn('if getattr(args, "enable_dnbs", False):\n        DAY_NEIGHBOURHOOD_BREAK_SEARCH_ENABLED = True', src)
+        runner = (ROOT / "engine" / "RUN_UNIVERSAL_PRODUCTION.py").read_text()
+        self.assertIn("command.append('--enable-dnbs')", runner)
 
 
 class FundedBudgetPhase(unittest.TestCase):

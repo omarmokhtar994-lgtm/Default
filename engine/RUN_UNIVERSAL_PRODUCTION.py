@@ -882,6 +882,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help='Force joint refinement on. Off by default at every depth: 474 '
                         'solver audits (QUICK and DEEP) with improved 0, ~90%% of peak memory, '
                         'and two DEEP runs killed at 13-14 GB inside it.')
+    p.add_argument('--enable-dnbs', action='store_true',
+                   help='enable the day-neighbourhood break search (off by default since the 2026-09-28 audit, F-10)')
     p.add_argument('--enable-break-load-feedback', action='store_true',
                    help='Stage-2 -> Stage-1 break-load feedback in place of coordinated repair '
                         '(off by default until its registered A/B).')
@@ -994,6 +996,9 @@ def main() -> int:
     }
     mode_defaults = all_mode_defaults[mode]
     time_limit = int(args.time_limit or mode_defaults['time_limit'])
+    if time_limit < 60:
+        print(f'[run] --time-limit {time_limit} is below the 60 s minimum the engine can plan (audit M-01)', flush=True)
+        return 2
     diagnostics_only = bool(args.diagnostics_only or mode == 'SMOKE')
     # One source of truth. `--skeleton-only` already existed as a flag with full
     # downstream handling; the workbook's Run Stage is a second way to ask for
@@ -1032,6 +1037,8 @@ def main() -> int:
         command.append('--enable-final-recovery-endgame')
     if args.enable_break_load_feedback:
         command.append('--enable-break-load-feedback')
+    if args.enable_dnbs:
+        command.append('--enable-dnbs')
     if args.stage1_profile_rotation:
         command += ['--stage1-profile-rotation', str(args.stage1_profile_rotation)]
     if args.use_input_schedule_as_seed and not args.disable_input_schedule_seed:

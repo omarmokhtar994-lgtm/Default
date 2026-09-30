@@ -202,6 +202,50 @@ class ErrorsAreNotHidden(Base):
         self.assert_no_leftover_files()
 
 
+class DeadlineAndCrashAreNotHidden(Base):
+    """Audit F-06 / F-07 / F-12 (2026-09-28)."""
+
+    def setUp(self):
+        super().setUp()
+        self.saved_grace = E.JOINT_SOLVE_GRACE_SEC
+
+    def tearDown(self):
+        E.JOINT_SOLVE_GRACE_SEC = self.saved_grace
+        super().tearDown()
+
+    def test_a_hung_child_is_killed_at_its_deadline_not_waited_on_forever(self):
+        E.JOINT_SOLVE_GRACE_SEC = 1.0
+        s = E.isolated_cp_solver(cp_model)
+        s.parameters.max_time_in_seconds = 1.0
+        started = time.time()
+        status = E.isolated_cp_solve(s, None, lambda model, cb=None: time.sleep(120), CMH.CpSolverResponse)
+        self.assertLess(time.time() - started, 15)
+        self.assertEqual(status, cp_model.UNKNOWN)
+        self.assertTrue(s.isolation_record["killed_for_deadline"])
+        self.assertFalse(s.isolation_record["memory_stop"])  # a hang is not a memory stop
+        self.assertEqual(E._JOINT_SOLVE_MEMORY_STOPS, [])
+        self.assert_no_leftover_files()
+
+    def test_a_crashing_child_is_an_error_not_an_unknown(self):
+        s = E.isolated_cp_solver(cp_model)
+        with self.assertRaises(RuntimeError) as ctx:
+            E.isolated_cp_solve(s, None, lambda model, cb=None: os.kill(os.getpid(), signal.SIGSEGV),
+                                CMH.CpSolverResponse)
+        self.assertIn("SIGNAL_11", str(ctx.exception))
+        self.assertEqual(E._JOINT_SOLVE_MEMORY_STOPS, [])
+        self.assert_no_leftover_files()
+
+    def test_headroom_reads_the_cgroup_aware_free_memory(self):
+        saved = E.machine_free_memory_mb
+        try:
+            E.machine_free_memory_mb = lambda: (100, 64000)  # 100 MB free inside a small cgroup
+            self.assertFalse(E.joint_memory_headroom()["ok"])
+            E.machine_free_memory_mb = lambda: (40000, 64000)
+            self.assertTrue(E.joint_memory_headroom()["ok"])
+        finally:
+            E.machine_free_memory_mb = saved
+
+
 class InProcessFallbacks(Base):
     def test_disabled_runs_in_process(self):
         E.JOINT_SOLVE_ISOLATION_ENABLED = False

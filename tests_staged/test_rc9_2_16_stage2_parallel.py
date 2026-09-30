@@ -75,6 +75,16 @@ class Stage2UsesAllWorkers(unittest.TestCase):
         self.assertEqual(sorted(many.diagnostics["break_infeasibility_core_families"]),
                          sorted(one.diagnostics["break_infeasibility_core_families"]))
 
+    def test_the_core_status_and_resolve_time_are_recorded(self):
+        # Audit F-08 / M-02: the re-solve runs on top of the solve's own limit and a
+        # missing core used to look the same as "nothing to report".
+        many = self.solve(self.alone, 2)
+        self.assertEqual(many.diagnostics["break_infeasibility_core_status"], "EXTRACTED")
+        self.assertGreaterEqual(many.diagnostics["break_infeasibility_core_resolve_sec"], 0.0)
+        feasible = self.solve(self.planted, 2)
+        self.assertEqual(feasible.diagnostics["break_infeasibility_core_status"], "NOT_INFEASIBLE")
+        self.assertEqual(feasible.diagnostics["break_infeasibility_core_resolve_sec"], 0.0)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

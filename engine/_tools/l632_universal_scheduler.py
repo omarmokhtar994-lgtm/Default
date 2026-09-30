@@ -4172,14 +4172,11 @@ def joint_memory_headroom() -> Dict[str, Any]:
     if it cannot be read, it does not block (returns ok=True).
     """
     try:
-        info: Dict[str, int] = {}
-        with open("/proc/meminfo", "r", encoding="utf-8") as handle:
-            for line in handle:
-                key, _, rest = line.partition(":")
-                if key in {"MemTotal", "MemAvailable"}:
-                    info[key] = int(rest.strip().split()[0]) // 1024
-        total = info["MemTotal"]
-        available = info["MemAvailable"]
+        # machine_free_memory_mb applies a cgroup limit when one exists; host
+        # MemAvailable alone overstates headroom inside a container (F-12).
+        available, total = machine_free_memory_mb()
+        if available is None or total is None:
+            raise ValueError("memory not readable")
     except Exception:
         if _JOINT_SOLVE_MEMORY_STOPS:
             return {"ok": False, "available_mb": None, "required_mb": None,
@@ -4288,6 +4285,7 @@ def rotate_stage1_profiles(names: Optional[Sequence[str]], seed_index: int, seed
 JOINT_SOLVE_KILL_BELOW_FREE_MB = 256
 JOINT_SOLVE_KILL_BELOW_FREE_SHARE = 0.02
 JOINT_SOLVE_POLL_SEC = 0.2
+JOINT_SOLVE_GRACE_SEC = 120.0
 _JOINT_SOLVE_MEMORY_STOPS: List[Dict[str, Any]] = []
 _JOINT_SOLVE_ISOLATION_LOG: List[Dict[str, Any]] = []
 _ISOLATED_SOLVER_CLASSES: Dict[int, Any] = {}
@@ -4393,6 +4391,14 @@ def isolated_cp_solve(solver: Any, model: Any, in_process_solve: Any, response_t
             stream.flush()
         except Exception:
             pass
+    # A child that never returns (a post-fork deadlock, or a solver ignoring its
+    # own limit) must not hang the run: it gets its time limit plus a grace
+    # period, then it is killed and recorded (audit F-06).
+    try:
+        granted = float(solver.parameters.max_time_in_seconds)
+    except Exception:
+        granted = 0.0
+    hard_deadline = started + (granted if 0 < granted < 1e8 else 3600.0) + JOINT_SOLVE_GRACE_SEC
     pid = os.fork()
     if pid == 0:
         code = 72
@@ -4419,6 +4425,12 @@ def isolated_cp_solve(solver: Any, model: Any, in_process_solve: Any, response_t
         while True:
             done, wait_status = os.waitpid(pid, os.WNOHANG)
             if done:
+                break
+            if time.time() > hard_deadline:
+                import signal
+                os.kill(pid, signal.SIGKILL)
+                record["killed_for_deadline"] = True
+                _, wait_status = os.waitpid(pid, 0)
                 break
             free, _ = machine_free_memory_mb()
             if free is not None:
@@ -4461,11 +4473,17 @@ def isolated_cp_solve(solver: Any, model: Any, in_process_solve: Any, response_t
     if record["child_exit"] == 72:
         # Not a memory stop: surface it exactly as an in-process error would be.
         raise RuntimeError("isolated CP-SAT solve raised in the child process:\n" + (child_error or "no traceback"))
+    crash_signal = isinstance(record["child_exit"], str) and record["child_exit"] != "SIGNAL_9"
+    if crash_signal and not record["killed_for_memory"]:
+        # SIGSEGV/SIGABRT/... is a solver crash. In process it would have taken
+        # the whole run down; reporting it as an ordinary UNKNOWN hid it (F-07).
+        raise RuntimeError(f"isolated CP-SAT solve crashed in the child process ({record['child_exit']})")
     response = response_type()
     if record["child_exit"] == 0 and text:
         response.parse_text_format(text)
     else:
-        memory_exit = record["killed_for_memory"] or record["child_exit"] in (71, "SIGNAL_9")
+        memory_exit = not record.get("killed_for_deadline") and (
+            record["killed_for_memory"] or record["child_exit"] in (71, "SIGNAL_9"))
         record["memory_stop"] = bool(memory_exit)
         response.parse_text_format(
             "status: UNKNOWN\n"
@@ -8849,17 +8867,26 @@ def solve_breaks(
     break_infeasibility_core: List[str] = []
     break_infeasibility_core_raw: List[int] = []
     core_solver = solver
+    # Diagnostic only (audit F-08 / M-02): the status says whether a core was
+    # named or why not, and the re-solve's own time is recorded, since it runs
+    # on top of this solve's time limit and was invisible in `elapsed`.
+    core_status = "NOT_INFEASIBLE" if status_text != "INFEASIBLE" else (
+        "NO_ASSUMPTIONS" if not break_assumption_literals else "SINGLE_WORKER_SOLVE")
+    core_resolve_sec = 0.0
     if status_text == "INFEASIBLE" and parallel_without_assumptions:
         # Same model, now with assumptions, single worker, to name the core.
+        core_started = time.time()
         core_solver = cp_model.CpSolver()
         core_solver.parameters.max_time_in_seconds = max(1.0, min(60.0, float(time_limit)))
         core_solver.parameters.num_search_workers = 1
         core_solver.parameters.random_seed = int(random_seed)
         core_solver.parameters.cp_model_presolve = True
         configure_solver_limits(core_solver)
-        core_status = core_solver.Solve(model)
-        if status_name(cp_model, core_solver, core_status) != "INFEASIBLE":
+        resolve_status = core_solver.Solve(model)
+        core_resolve_sec = time.time() - core_started
+        if status_name(cp_model, core_solver, resolve_status) != "INFEASIBLE":
             core_solver = None
+            core_status = "UNAVAILABLE_RESOLVE_NOT_PROVEN_INFEASIBLE"
     if (status_text == "INFEASIBLE" and break_assumption_literals and core_solver is not None
             and hasattr(core_solver, "SufficientAssumptionsForInfeasibility")):
         try:
@@ -8871,8 +8898,10 @@ def solve_breaks(
                 family = by_index.get(normalized_index)
                 if family and family not in break_infeasibility_core:
                     break_infeasibility_core.append(family)
+            core_status = "EXTRACTED" if break_infeasibility_core else "EXTRACTED_EMPTY"
         except Exception as exc:
             break_infeasibility_core = [f"CORE_EXTRACTION_ERROR:{type(exc).__name__}"]
+            core_status = "EXTRACTION_ERROR"
     print(
         f"STAGE2 skeleton={skeleton.profile} width={pattern_width} exceptions={allow_exceptions} "
         f"mode={objective_mode} target_lock={min_target_hits} floor_lock={min_floor_hits} "
@@ -8958,6 +8987,8 @@ def solve_breaks(
             "break_assumption_families": sorted(break_assumption_literals),
             "break_infeasibility_core_families": break_infeasibility_core,
             "break_infeasibility_core_raw_literals": break_infeasibility_core_raw,
+            "break_infeasibility_core_status": core_status,
+            "break_infeasibility_core_resolve_sec": round(core_resolve_sec, 3),
             "break_infeasibility_core_interpretation": (
                 "A sufficient conflicting family set from the fixed-skeleton break subproblem. "
                 "It is diagnostic evidence for master-model feedback and is not necessarily a minimum unsatisfiable subset."
@@ -17840,7 +17871,10 @@ def run_zero_exception_recovery_phase(
 # rose and nothing in DNBS_NO_WORSE_HIGHER / DNBS_NO_WORSE_LOWER got worse, and
 # the finished candidate enters the pool only if the release validator
 # classifies it compliant. It cannot remove a candidate, only add one.
-DAY_NEIGHBOURHOOD_BREAK_SEARCH_ENABLED = True
+# Opt-in (--enable-dnbs) since the audit of 2026-09-28 (F-10): it shipped on its
+# third attempt with a +0.5 summed gain, inside run-to-run noise, and M2/H3 -3
+# each (evidence/dnbs_e2e_3600b). Off is the measured CURRENT arm of that A/B.
+DAY_NEIGHBOURHOOD_BREAK_SEARCH_ENABLED = False
 # Time comes from its own phase in the global budget plan
 # (phase_b_maturity.DNBS_BUDGET_*), between break search and joint refinement.
 # A second anchor is only worth it when each of its days still gets
@@ -17862,6 +17896,12 @@ DNBS_NO_WORSE_LOWER = (
     "coverage_split_gap_count", "after_extreme_overage_count", "after_severe_overage_count",
     "whole_week_overage_cap_violation_count", "whole_week_imbalance_violation_count",
     "after_avoidable_overage_fte_sum",
+    # Soft metrics DNBS could trade for +1 target (audit F-09). Skills in this
+    # engine are language groups, which the day model already keys by.
+    "language_reserve_shortfall_quarters", "language_minimum_only_quarters",
+    "skill_allocation_gap_quarters", "after_avoidable_overage_peak_fte",
+    "after_avoidable_overage_top10_concentration", "week_boundary_imbalance_violation_count",
+    "week_boundary_overage_cap_violation_count", "week_boundary_language_reserve_shortfall_quarters",
 )
 
 
@@ -23274,6 +23314,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--disable-conflict-refinement", action="store_true")
     parser.add_argument("--disable-coordinated-repair", action="store_true")
     parser.add_argument("--disable-joint-refinement", action="store_true")
+    parser.add_argument("--enable-dnbs", action="store_true",
+                        help="enable the day-neighbourhood break search phase (off by default; see F-10)")
     parser.add_argument("--enable-break-load-feedback", action="store_true",
                         help="Stage-2 -> Stage-1 break-load feedback in place of coordinated repair "
                              "(off by default until its registered A/B).")
@@ -23920,6 +23962,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
     global FINAL_RECOVERY_ENDGAME_ENABLED, STAGE1_PROFILE_ROTATION, BREAK_LOAD_FEEDBACK_ENABLED
+    global DAY_NEIGHBOURHOOD_BREAK_SEARCH_ENABLED
+    if not args.selfcheck and getattr(args, "time_limit", None) is not None and int(args.time_limit) < 60:
+        # The budget plan and the run deadline both use max(60, total): a shorter
+        # request silently ran for 60 s (audit M-01). Refuse it instead.
+        parser.error(f"--time-limit {args.time_limit} is below the 60 s minimum the engine can plan")
+    if getattr(args, "enable_dnbs", False):
+        DAY_NEIGHBOURHOOD_BREAK_SEARCH_ENABLED = True
     if getattr(args, "enable_break_load_feedback", False):
         BREAK_LOAD_FEEDBACK_ENABLED = True
     if getattr(args, "enable_final_recovery_endgame", False):

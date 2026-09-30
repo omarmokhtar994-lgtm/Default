@@ -1,0 +1,120 @@
+RC5 vs FINAL confirmation experiment (audit F-03) - PRE-REGISTERED RULE
+=====================================================================
+
+Registered 2026-09-30, before any run of this experiment. This file, run.py,
+score.py, the RC5 arm and the inputs are committed first; the runs start only
+after that commit is pushed. Nothing in this file is changed after the first
+run starts. If something has to change, the change is recorded in AMENDMENTS.txt
+with its reason and time, and the verdict states it.
+
+Why: the brief's "Stage-A hardening changed no schedule" covered only the later
+nine-fix stack. The behavioural block between RC5 and FINAL (B-3 slice floor,
+portfolio sizing, A34/A35/A37, S2-PAR, DNBS, joint removal, and the audit fixes)
+was never compared head to head on the same inputs, seeds and machine, and no
+AE workbook was in any Stage-C A/B. This is the minimum version of the design in
+evidence/INDEPENDENT_AUDIT_RC5_TO_FINAL_2026_09_28.md section 7.
+
+Arms (each "as shipped": its own production runner and its own defaults)
+------------------------------------------------------------------------
+RC5    experiments/rc5_vs_final/arms/RC5 (byte-identical copy of the RC5
+       release package RC9_2_2_MAX_COVERAGE_RC5_RELEASE_CANDIDATE),
+       scheduler sha256 0e6f643552c5e59f...
+FINAL  engine/ of commit 20d4affc3d7c85f0e1fc83daaea577da549669c2
+       (release L6.3.2.8-RC9.2.2-PRODUCTION-HARDENED-RC6),
+       scheduler sha256 251cf35a9ae41258...
+       run.py extracts it with `git archive` and refuses to run if the
+       scheduler hash differs.
+
+Command, identical for both arms except the runner path:
+  python3 <arm>/engine/RUN_UNIVERSAL_PRODUCTION.py --input <workbook>
+      --mode QUICK --time-limit 3600 --num-workers 2 --solver-random-seed <seed>
+      --output-root <dir> --schedule-id <ID> --overwrite
+No other flag. Stage is each runner's default (FULL_SCHEDULE).
+
+Not in this minimum version: the secondary arm (both engines with identical
+explicit flags, to separate code from defaults), the other five AE workbooks,
+E2 and Union. A verdict therefore speaks for these six cases only.
+
+Cases (inputs in experiments/rc5_vs_final/inputs, sha256 prefixes)
+------------------------------------------------------------------
+Real       CHAT   Cricut_Chat_RC9_1_READY_SKELETON.xlsx     efa92a665a37e3bf
+           VOICE  Cricut_Voice_RC9_1_READY_SKELETON.xlsx    36ddb0884908779d
+           NMGSP  NMG_SP_RC9_1_READY_FIXED.xlsx             05f1f7db1d5ae1d8
+           AEIT   AE_IT_B2B.xlsx                            83080efc496cb7ca
+Synthetic  H1     SYNTH_H1_24x7_OVERNIGHT.xlsx              400c4f7278d54f83
+           M2     SYNTH_M2_MULTI_START_WITH_BREAKS.xlsx     d27af5ea97c4dd7a
+The real workbooks are RC5's own shipped bytes. FINAL's contract accepts all
+six (checked before registration: 0 contract failures), so rule 7 has nothing
+to inspect. Inputs are never edited.
+
+Seeds: 9000-9009, paired (the same seed in both arms). 6 x 10 x 2 = 120 runs.
+
+Environment
+-----------
+One container: 4 vCPU, 15 GB RAM, Python 3.11.15, OR-Tools 9.15.6755,
+scipy 1.17.1, openpyxl 3.1.5, numpy 2.4.6 (scipy present, so both arms get the
+aggregate MILP guide; F-20).
+Two runs at a time, each pinned with sched_setaffinity to its own two cores
+({0,1} and {2,3}). Run order: the 120 (arm, case, seed) jobs shuffled with
+random.Random(20260930). No other CPU-heavy work during the experiment. Every
+5 s run.py checks every process outside the experiment's runs; if one used more
+than half a core over the sample, every run active at that moment is marked
+CONTAMINATED and rerun with the same seed (the rerun replaces it). The 1-minute
+load average is recorded for information only (the runs' own solver processes
+raise it, so it cannot tell contamination apart).
+A run is killed at 7,200 s wall and recorded as TIMEOUT.
+
+Recorded per run (experiments/rc5_vs_final/runs/<ARM>_<CASE>_<SEED>/)
+---------------------------------------------------------------------
+The engine's summary CSV (after/before target and floor, after90/80/100, floor
+and severe gaps, max consecutive gaps, zero-staffed quarters, language gaps and
+reserve quarters, break concurrency violations, overage sum/severe/extreme,
+next-Sunday metrics, elapsed_sec), INDEPENDENT_VALIDATION.json.gz,
+UNIVERSAL_RUN_STATUS.json, UNIVERSAL_RUN_IDENTITY.json, a solver-audit extract,
+the log tail, and RUN_RECORD.json: arm, case, seed, return code, wall seconds,
+peak RSS of the run's process tree (MB, sampled every 5 s), maximum load
+average, CPUs, UTC start/end, scheduler and input sha256.
+The before-breaks and after-breaks workbooks stay in the scratch run folder.
+
+A run is VALIDATED when its runner exited 0, the validator says PASS with 0
+hard failures and metric parity PASS, and the summary has after_target.
+Anything else (crash, OOM kill, timeout, validator FAIL, no summary) is FAILED.
+
+Analysis (score.py; fails closed: a missing run folder aborts with exit 2)
+--------------------------------------------------------------------------
+Per case, over seed pairs where BOTH runs are VALIDATED: the paired delta
+FINAL - RC5 for each metric; mean; 95% CI by a 10,000-resample percentile
+bootstrap over pairs (numpy default_rng(20260930)); exact two-sided sign-flip
+permutation p-value (all 2^n sign patterns).
+A case with fewer than 8 validated pairs is INCONCLUSIVE for rules 3-4.
+Summed over the four real cases: the sum of per-case mean deltas, with a
+case-stratified bootstrap (pairs resampled within each case) for its CI.
+
+Rules
+-----
+1 Validity.     Every FINAL run is VALIDATED, except runs killed for a
+                resource limit, which count under rule 2. A FINAL validator
+                FAIL, hard failure or parity FAIL on any run means STOP.
+2 Robustness.   FINAL's count of FAILED runs <= RC5's count.
+3 Non-inferiority, each real case:
+                after_target, after_floor, best_before_target: CI lower >= -1;
+                severe_floor_gaps, language_gaps, break_concurrency_violations:
+                CI upper of the mean increase <= 0.5.
+4 Synthetic.    H1 and M2: after_target CI lower >= -3.
+5 Superiority.  Summed real after_target delta: CI lower > 0.
+6 Resources.    Every FINAL run: elapsed_sec <= 3,780 (3,600 + 5%) and peak
+                RSS <= 8,192 MB.
+7 Contract.     0 false-positive refusals on the real workbooks (none refused).
+
+Outcome
+-------
+RELEASE-CONFIRMED  rules 1-7 all pass: FINAL is confirmed better than RC5 on
+                   these cases.
+NON-INFERIOR       rules 1-4, 6, 7 pass but 5 does not: FINAL is not worse than
+                   RC5 on these cases; "better" is not claimed.
+ROLLBACK / MORE ENGINEERING
+                   rule 1 or 2 fails, or any real case has after_target CI
+                   upper < -1 (a clear regression): bisect along the stage diffs.
+INCONCLUSIVE       anything else (a CI straddles a margin, or a case has < 8
+                   validated pairs): keep current production and add 10 seeds
+                   for the affected cases.

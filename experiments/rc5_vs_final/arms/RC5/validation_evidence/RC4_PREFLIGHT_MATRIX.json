@@ -1,0 +1,164 @@
+{
+  "schema_version": 1,
+  "generated_utc": "2026-09-10T02:03:39.948878+00:00",
+  "engine_release": "L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2",
+  "engine_sha256": "117b14d0dcd4883769b2dea0ce437aa910c3b005239011f04358ffde8f3d3937",
+  "manifest_engine_hash_match": true,
+  "status": "PASS",
+  "rows": [
+    {
+      "scenario_id": "AE_AR_B2B",
+      "input": "AE_AR_B2B.xlsx",
+      "status": "WARN",
+      "failure_count": 0,
+      "warning_count": 1,
+      "warning_codes": [
+        "UNKNOWN_PREVIOUS_SATURDAY_ASSOCIATE"
+      ],
+      "sha256": "b7be7e0a4b1f3ba7657d0144b8f824918c3ae60b4713e71959b3ae93d3f7c4d7",
+      "manifest_hash_match": true,
+      "associates": 35,
+      "shift_count": 24,
+      "shift_durations_minutes": [
+        540
+      ],
+      "use_11h_3off": false,
+      "run_stage": null,
+      "run_depth": null,
+      "language_working_window": "OFF"
+    },
+    {
+      "scenario_id": "CRICUT_CHAT",
+      "input": "Cricut_Chat_RC9_1_READY_SKELETON.xlsx",
+      "status": "PASS",
+      "failure_count": 0,
+      "warning_count": 0,
+      "warning_codes": [],
+      "sha256": "efa92a665a37e3bf17863d0d1d1c828246ddff053d7c2369057ee2dc0ce143ab",
+      "manifest_hash_match": true,
+      "associates": 27,
+      "shift_count": 24,
+      "shift_durations_minutes": [
+        540
+      ],
+      "use_11h_3off": false,
+      "run_stage": "FULL_SCHEDULE",
+      "run_depth": "DEEP",
+      "language_working_window": "OFF"
+    },
+    {
+      "scenario_id": "CRICUT_VOICE",
+      "input": "Cricut_Voice_RC9_1_READY_SKELETON.xlsx",
+      "status": "PASS",
+      "failure_count": 0,
+      "warning_count": 0,
+      "warning_codes": [],
+      "sha256": "36ddb0884908779d4b98ed238be37371e4cfbb9c015a07440bb8fc4418b4245f",
+      "manifest_hash_match": true,
+      "associates": 33,
+      "shift_count": 24,
+      "shift_durations_minutes": [
+        540
+      ],
+      "use_11h_3off": false,
+      "run_stage": null,
+      "run_depth": null,
+      "language_working_window": "OFF"
+    },
+    {
+      "scenario_id": "GDI_REAL28",
+      "input": "GDI_REAL28_RC9_1_24_7_FINAL_READY.xlsx",
+      "status": "PASS",
+      "failure_count": 0,
+      "warning_count": 0,
+      "warning_codes": [],
+      "sha256": "7131b29f08a788f37245ee7db51c36c299f198e60641b15f1eae68376c85769c",
+      "manifest_hash_match": true,
+      "associates": 29,
+      "shift_count": 24,
+      "shift_durations_minutes": [
+        540
+      ],
+      "use_11h_3off": false,
+      "run_stage": "FULL_SCHEDULE",
+      "run_depth": "DEEP",
+      "language_working_window": "OFF"
+    },
+    {
+      "scenario_id": "NMG_EN_SP",
+      "input": "NMG_EN_AND_SP.xlsx",
+      "status": "PASS",
+      "failure_count": 0,
+      "warning_count": 0,
+      "warning_codes": [],
+      "sha256": "ab85935a3b211db7c8002ce3b17d93a78e652c4f253bbc46c2cf1cf1a8b47396",
+      "manifest_hash_match": true,
+      "associates": 17,
+      "shift_count": 10,
+      "shift_durations_minutes": [
+        540
+      ],
+      "use_11h_3off": false,
+      "run_stage": "FULL_SCHEDULE",
+      "run_depth": "DEEP",
+      "language_working_window": "OFF"
+    },
+    {
+      "scenario_id": "NMG_EN",
+      "input": "NMG_EN_FIXED_NESTING_REST_SAFE_REGRESSION_CLEAN.xlsx",
+      "status": "PASS",
+      "failure_count": 0,
+      "warning_count": 0,
+      "warning_codes": [],
+      "sha256": "3cdc0b756144aed02013b874eb8213b724d87fa222f08af4550b7246e992b22f",
+      "manifest_hash_match": true,
+      "associates": 42,
+      "shift_count": 10,
+      "shift_durations_minutes": [
+        540
+      ],
+      "use_11h_3off": false,
+      "run_stage": "FULL_SCHEDULE",
+      "run_depth": "DEEP",
+      "language_working_window": "OFF"
+    },
+    {
+      "scenario_id": "NMG_SP",
+      "input": "NMG_SP_RC9_1_READY_FIXED.xlsx",
+      "status": "PASS",
+      "failure_count": 0,
+      "warning_count": 0,
+      "warning_codes": [],
+      "sha256": "05f1f7db1d5ae1d84c6770f44a51e3143a82925c9388ad54db580e8e8dbf5ad1",
+      "manifest_hash_match": true,
+      "associates": 7,
+      "shift_count": 1,
+      "shift_durations_minutes": [
+        540
+      ],
+      "use_11h_3off": false,
+      "run_stage": null,
+      "run_depth": null,
+      "language_working_window": "OFF"
+    },
+    {
+      "scenario_id": "NMG_EN_PRODUCTION",
+      "input": "RC9_2_2_NMG_EN_PRODUCTION_INPUT.xlsx",
+      "status": "PASS",
+      "failure_count": 0,
+      "warning_count": 0,
+      "warning_codes": [],
+      "sha256": "f770c32610931be35936c267a066291e930a70eaab40a8cb4d1cda9406c4fc52",
+      "manifest_hash_match": true,
+      "associates": 42,
+      "shift_count": 10,
+      "shift_durations_minutes": [
+        540
+      ],
+      "use_11h_3off": false,
+      "run_stage": "FULL_SCHEDULE",
+      "run_depth": "QUICK",
+      "language_working_window": "OFF"
+    }
+  ]
+}

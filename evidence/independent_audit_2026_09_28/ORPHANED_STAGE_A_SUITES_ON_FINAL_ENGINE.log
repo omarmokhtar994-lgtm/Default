@@ -1,0 +1,121 @@
+── tests/test_rc9_2_1_engine_name_resolution.py
+Ran 9 tests in 1.502s
+
+OK
+── tests/test_rc9_2_1_orchestration_integrity.py
+Ran 35 tests in 0.278s
+
+OK
+── tests/test_rc9_2_1_phase_c_integrity.py
+Ran 17 tests in 0.231s
+
+OK
+── tests/test_rc9_2_1_production_identity.py
+Ran 11 tests in 0.083s
+
+OK
+── tests/test_rc9_2_1_regression_lab_integrity.py
+Ran 18 tests in 0.635s
+
+OK
+── tests/test_rc9_2_1_rule_semantics.py
+Ran 85 tests in 1.401s
+
+OK
+── tests/test_rc9_2_1_selector_integrity.py
+Ran 107 tests in 0.106s
+
+OK
+── tests/test_rc9_2_1_tooling_integrity.py
+Ran 70 tests in 0.051s
+
+OK (skipped=4)
+── tests/test_rc9_2_1_validator_parity.py
+Ran 46 tests in 1.012s
+
+OK
+── tests/test_rc9_2_2_production_hardening.py
+Ran 49 tests in 1.687s
+
+OK
+── tests/test_rc9_2_3_coverage_benchmark_gate.py
+Ran 10 tests in 13.539s
+
+OK
+── tests/test_rc9_2_3_demand_fit_memo.py
+Ran 6 tests in 44.343s
+
+OK
+── tests/test_rc9_2_3_input_contract_fidelity.py
+Ran 16 tests in 0.652s
+
+OK
+── tests/test_rc9_2_3_max_coverage_hardening.py
+Ran 11 tests in 0.074s
+
+OK
+── tests/test_rc9_2_4_b9_metric_coverage.py
+Ran 10 tests in 596.101s
+
+OK
+── tests/test_rc9_2_4_budget_objective_symmetry.py
+Ran 16 tests in 0.281s
+
+OK
+── tests/test_rc9_2_4_stage_aware_parity.py
+Ran 67 tests in 7.215s
+
+OK
+── tests/test_rc9_2_4_workbook_search_controls.py
+Ran 34 tests in 1.401s
+
+OK
+── tests/test_rc9_2_5_joint_bound_shape.py
+Ran 3 tests in 0.016s
+
+OK
+── tests/test_rc9_2_6_solver_telemetry.py
+Ran 5 tests in 0.074s
+
+OK
+── tests/test_rc9_2_7_solver_limits.py
+Ran 6 tests in 0.025s
+
+OK
+── tests/test_rc9_2_8_joint_default.py
+test_escape_hatch_exists (__main__.JointDefaultTest.test_escape_hatch_exists) ... ok
+test_off_at_short_modes (__main__.JointDefaultTest.test_off_at_short_modes) ... ok
+test_on_at_untested_long_modes (__main__.JointDefaultTest.test_on_at_untested_long_modes)
+DEEP/OVERNIGHT allot 5400s/8400s and were never measured. ... FAIL
+test_reserve_zero_is_not_used_as_the_switch (__main__.JointDefaultTest.test_reserve_zero_is_not_used_as_the_switch)
+Guard the measured fact that reserve=0 leaves the phase running. ... ok
+test_the_disable_flag_is_actually_emitted (__main__.JointDefaultTest.test_the_disable_flag_is_actually_emitted)
+Non-vacuity: the default must reach the engine command line. ... ok
+
+======================================================================
+FAIL: test_on_at_untested_long_modes (__main__.JointDefaultTest.test_on_at_untested_long_modes)
+DEEP/OVERNIGHT allot 5400s/8400s and were never measured.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/audit2/cand_with_final_engine/tests/test_rc9_2_8_joint_default.py", line 42, in test_on_at_untested_long_modes
+    self.assertIsNot(
+AssertionError: unexpectedly identical: False : DEEP is untested; do not disable the phase there
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.027s
+
+FAILED (failures=1)
+   ^^ FAILED: tests/test_rc9_2_8_joint_default.py (exit 1)
+── tests/test_rc9_2_9_employee_quality_validation.py
+Ran 9 tests in 0.005s
+
+OK
+── engine selfcheck
+   engine selfcheck OK
+── wrapper selfcheck
+   wrapper selfcheck OK
+── undefined-name sweep
+   undefined-name sweep OK
+
+GATE FAIL — see failures above
+EXIT 1

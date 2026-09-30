@@ -1,0 +1,39 @@
+'Leave'              -> leave
+'Annual Leave'       -> leave
+'annual-leave'       -> other
+'A/L'                -> leave
+'Sick Leave'         -> leave
+'Vacation'           -> leave
+'OFF'                -> off
+'Day Off'            -> off
+'RD'                 -> off
+'WO'                 -> off
+'Public Holiday'     -> other
+'PH'                 -> other
+'Bank Holiday'       -> other
+'Comp Off'           -> other
+'Casual Leave'       -> other
+'CL'                 -> other
+'PL'                 -> other
+'Emergency Leave'    -> other
+'Medical Leave'      -> other
+'Maternity Leave'    -> other
+'Personal Leave'     -> other
+'Vacation Leave'     -> other
+'Holiday Leave'      -> other
+'Unpaid'             -> other
+'LOA'                -> other
+'Training'           -> other
+'WFH'                -> other
+'Half Day'           -> other
+'OFF (approved)'     -> other
+'Leave (approved)'   -> other
+'Requested Off'      -> other
+'Off Request'        -> other
+'R/D'                -> other
+'D/O'                -> other
+'N/A'                -> other
+'-'                  -> other
+'TBD'                -> other
+'09:00-18:00'        -> shift
+'9-6'                -> other

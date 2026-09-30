@@ -1,0 +1,12 @@
+DEEP part scored 2026-09-30T12:09:32Z against PREREGISTERED_RULE.txt (commit 5c8f6aa).
+
+```
+case     E best 4x3600 (seeds)              F one DEEP run              
+CHAT     None / None  [None, None, None, None] no validated schedule (no summary (killed))
+VOICE    None / None  [None, None, None, None] no validated schedule (no summary (killed))
+NMGSP    None / None  [None, None, None, None] no validated schedule (no summary (killed))
+H1       None / None  [None, None, None, None] no validated schedule (no summary (killed))
+summed after: E 0  F 0 (a case without a validated F schedule contributes 0)
+before check (real workbooks, E not below F by more than 1): OK
+DEEP VERDICT: adopt E: DEEP = best of 4 x 3600 s; OVERNIGHT = best of 6 x 3600 s
+```

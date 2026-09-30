@@ -6,9 +6,17 @@ that bias, every claim below was re-derived from a primary source (re-running
 the code, rescoring raw run outputs, re-reading code) rather than from memory.
 Where the audit contradicts the brief, the audit wins.
 
-**Missing input.** The handoff note (`CLAUDE_HANDOFF_INDEPENDENT_AUDIT_RC5_TO_FINAL.txt`)
-was not uploaded. Section 10 (checking the handoff's findings) is therefore
-pending.
+**Handoff note (added 2026-09-30).** The ChatGPT handoff note
+(`CLAUDE_HANDOFF_INDEPENDENT_AUDIT_RC5_TO_FINAL.txt`) arrived after the first
+version of this report. Section 10 now classifies every finding in it.
+
+Checking it exposed two regressions that both audits had missed:
+- **F-17**: the Colab runner lost RC5's hardening.
+- **F-18**: the shipped workbooks no longer enforce their dropdowns.
+
+It also corrected one of my own results: F-01's RC5 production-hardening
+suite fails 13 of 49 tests inside the final *package* (see F-17). Both
+regressions are added to §2, and the verdict and §11 are updated.
 
 **Artifacts audited:**
 
@@ -45,6 +53,9 @@ pending.
     slice floor 240→45 s, portfolio sizing, A34/A35/A37 budget fixes) were
     never isolated in a clean A/B against RC5.
   - The AE workbooks were not in any Stage-C A/B.
+- **Update (2026-09-30).** The Colab package also regressed against RC5's
+  package in two places (F-17, F-18). Those regressions are in the delivery
+  layer, not the engine, but they are on the path every Colab run takes.
 - **Is it production-safe? Not yet**, for three reasons:
   1. The gate silently stopped running the 8 Stage-A regression suites
      (209 tests) plus 17 RC5 test methods. They all pass on FINAL today (RUN),
@@ -71,7 +82,10 @@ pending.
 | **F-01** | **High** | `run_tests.sh:72,94`; `candidates/RC9_2_2_HARDENED_RC5/tests/` | After the merge, the gate runs only `tests/test_rc9_2_1_*.py` and `tests_staged/`. 8 Stage-A suites (209 tests) are never run against the shipping engine: `production_hardening` 49, `stage_aware_parity` 67, `workbook_search_controls` 34, `input_contract_fidelity` 16, `budget_objective_symmetry` 16, `max_coverage_hardening` 11, `coverage_benchmark_gate` 10, `demand_fit_memo` 6. Neither are 17 RC5 test methods in same-named suites (7 language-window semantics, 3 phase-C, 2 orchestration, 3 selector, 2 tooling). Run against FINAL, all pass except one deliberately re-pinned test (`test_rc9_2_8` old copy), and the RC5 selector/rule-semantics variants fail only on the documented re-pins (slice 240→45, B-7 signature, 3-tuple, `floor_loss` gate). | A later edit re-breaks C-1 (e.g. a zero-break contract gets 15/30/15 again), B-7 workbook routing or B-1 stage-aware parity, and the gate still says PASS. | Move the 8 suites into `tests_staged/` (drop the superseded `test_rc9_2_8` copy). Restore the 17 methods, or record for each why it was superseded. The count reported by the gate must include them. | RUN (`ORPHANED_STAGE_A_SUITES_ON_FINAL_ENGINE.log`, `RC5_BASE_SUITES_ON_FINAL_ENGINE.log`) |
 | **F-02** | **High** (operability) | `l632_universal_scheduler.py:4524-4547` (`LEAVE_WORDS`, `OFF_WORDS`, `preference_kind`), `:3704` (`UNRECOGNISED_PREFERENCE_VALUE` added to `failures`) | Any Preference cell that is not in two small word lists is a **hard** contract failure. 29 of 39 ordinary values probed are rejected, including: "Public Holiday", "Bank Holiday", "Casual Leave", "Medical Leave", "Maternity Leave" (plain "maternity" is accepted), "Vacation Leave", "Comp Off", "OFF (approved)", "Leave (approved)", "Requested Off", "annual-leave", "N/A", "-", "TBD", "9-6". | A live workbook that has always run under RC5 (where these values were silently ignored, which was the real defect C-3 fixed) now produces **no schedule at all**. Safe, but the run is blocked. The brief's "0 false positives on 15 workbooks" is true of the corpus only. | Keep fail-closed. Normalise punctuation, brackets and hyphens. Treat `-`, `n/a`, `tbd` as blank. Recognise any value containing a leave or off token (leave, holiday, sick, maternity, paternity, off, rest). Add an optional workbook "Preference Mapping" table. Report each unknown with a suggested mapping. | RUN (`probe_preference_vocabulary.txt`) |
 | **F-03** | **High** (evidence) | `evidence/AUDIT_BRIEF_RC5_TO_FINAL.md` §6.7; `DETERMINISTIC_MEASUREMENT.md`; `IT_STAGE1_REGRESSION_ROOT_CAUSE.md` | The brief's "Stage-A hardening: 0 schedule change" covers only the later nine-fix stack (`f5f99789` → `172d7710`). The behavioural block RC5 `0e6f6435` → `f5f99789` (B-3 slice floor, portfolio sizing, A34/A35/A37) was never cleanly measured. The only comparison was confounded by about 25 different CLI flags (the AE_IT_B2B before_target drop of 83→78 cannot be attributed to either). The Stage-C A/Bs used 4 real and 3 synthetic cases. None of the 6 AE workbooks were in them. | FINAL could be worse than RC5 on an AE-type workbook and nothing on record would show it. | Run the §7 experiment, including the AE cases. Correct the brief. | READ + RUN (hashes) |
-| F-04 | Med | `RUN_PORTFOLIO.py:113`, `:132` | The before-breaks winner is picked from any finished seed, with no validation gate and possibly from a different seed than the after-breaks winner. The seed's exit code is ignored (only artifacts are read). | A user receives a before-breaks sheet that does not correspond to the after-breaks schedule, or one from a run whose contract or validation failed. | Require the seed to be finished with its contract accepted. Label both sheets with their seed. Offer "paired" mode (the before sheet of the after-winner). Record the exit code and treat nonzero with artifacts as suspect. | READ |
+| **F-17** | **High** (regression vs RC5) | `packages/rc9_2_2_production/runners/rc921_runner.py:253-270` (guards), `:389-393` (exit), `:211-212` (timeout); compare RC5 `runners/rc921_runner.py:69-75`, `:95-130`, `:209`, `:221-235`, `:373-377` | The final Colab package ships an **older runner lineage** than RC5's. The merge covered `engine/` only. Compared with RC5's runner, it has lost: (a) `verify_engine` (engine sha256 checked against the manifest at run time); (b) `run_runtime_check` and `tools/runtime_environment_check.py` (pinned OR-Tools checked before any budget is spent); (c) `_terminate_process_tree` with `start_new_session` + `killpg`; (d) exit-code propagation: RC5 returned `2 if run_failed else gate_rc`, FINAL returns 0; (e) the guard glob `test_rc9_2_*` (FINAL runs `test_rc9_2_1_*` only); (f) the `rc922` entry point and notebooks, and the helper runners. Run inside the final package, RC5's production-hardening suite fails 13 of 49: 5 FAIL, including `test_runner_terminates_the_full_engine_process_group`, plus 8 ERROR, 6 of which come from RC5-only input files. | A modified or mismatched engine runs unnoticed. A wrong OR-Tools version wastes the whole budget. A timeout leaves engines running. A failed scenario or failed gates report success to automation. | Port RC5's runner functions into the final runner, keeping `depth_plan`, `run_portfolio` and `seed_plan`. Ship `runtime_environment_check.py`. Put the RC5 production-hardening suite into the gate, run against the **package** layout. | RUN (`prodhard_in_final_pkg.log`) + READ |
+| **F-18** | **High** (regression vs RC5) | `packages/rc9_2_2_production/inputs/*.xlsx` (and the notebooks that copy them) | RC5's 8 shipped workbooks enforce every data validation (`showErrorMessage=1`, 10–67 per workbook). FINAL's 7 workbooks still have the dropdowns, but `showErrorMessage=0` on all of them, so Excel accepts any typed value. My defect register rated C-2 (a yes/no instruction with an unrecognised value silently means "No") as "not reachable in Excel" **because** of those enforced dropdowns. It is reachable again: `yes("Yes.")`, `yes("Enable")`, `yes("Si")` and `yes("✓")` are all False (RUN). | A planner types "Enable" in "Leave Enabled" or "Hard OFF Preferences". Leave or hard OFF is silently ignored for the **whole roster**; the run passes and the schedule is published. | Re-apply RC5's validation hardening (`harden_input_validations.mjs`) to the shipped workbooks and add the RC5 test that checks it to the gate. Independently, make `yes()` fail closed on unrecognised non-empty values (C-2). | RUN |
+| **F-19** | Med (evidence integrity) | `evidence/seed_portfolio_ab/score_deep.py:3-36`; same pattern in `profile_diversity_ab/score.py`, `break_load_feedback_ab/score.py` and this audit's own `indep_score.py` | Scorers treat a missing run as 0. Run on **no evidence at all**, `score_deep.py` prints "DEEP VERDICT: adopt E" and exits 0 (RUN). The published verdict is **not** affected: all 16 E runs and all 4 F run folders exist and rescore to 692 vs 370 (RUN). | Future evidence with missing runs yields a confident verdict. | Check the expected case × seed × arm set is complete. Distinguish "killed" (counts as a failure under the rule) from "missing" (abort). Exit nonzero on incomplete evidence. | RUN |
+| F-04 | Med | `RUN_PORTFOLIO.py:113`, `:132` | The before-breaks winner is picked from any finished seed, with no validation gate and possibly from a different seed than the after-breaks winner. The seed's exit code is ignored (only artifacts are read). | A user receives a before-breaks sheet that does not correspond to the after-breaks schedule, or one from a run whose contract or validation failed. | Require the seed to be finished with its contract accepted **and** `production_eligible` true. Label both sheets with their seed. Offer "paired" mode (the before sheet of the after-winner). Record the exit code and treat nonzero with artifacts as suspect. Deduplicate `--seed-list` (`9000,9000` runs the same seed twice into one folder). | RUN (a fake seed that failed validation, scoring 999, won the before-breaks slot over a valid 100; duplicate seeds accepted) |
 | F-05 | Med | `packages/.../rc921_runner.py:211-212` | Portfolio timeout: `subprocess.run(timeout=…)` kills only `RUN_PORTFOLIO.py`. Its seed runs (and their engines) are grandchildren and keep running. The ledger records `seeds=int(args.seeds or 1)`, which says 1 when the automatic count was 4. | On Colab, a timed-out DEEP scenario leaves engines running into the next scenario, contaminating it or causing an OOM kill. | Start with `start_new_session=True` and on timeout `os.killpg`. Record the planned seed count. | READ / PLAUS |
 | F-06 | Med | `l632_universal_scheduler.py:4311` | `isolated_cp_solve`: the parent's wait loop has no deadline. | A child that hangs (a post-fork lock deadlock, or a solver ignoring its limit) blocks the run forever. Only reachable with joint refinement enabled, which is off by default. | Deadline = solver time limit + 60 s; then SIGKILL → UNKNOWN, recorded. | READ |
 | F-07 | Med | `l632_universal_scheduler.py:4353-4366` | A child killed by a non-memory signal (SIGSEGV, SIGABRT) is converted into an UNKNOWN solve (`memory_stop=False`) and the run continues. | A CP-SAT crash is recorded in the audit but does not fail or warn visibly, which is contrary to the "do not hide errors" rule. | Treat signals other than 9 as errors: raise, or at least produce a top-level warning in the release gate. | READ |
@@ -312,8 +326,7 @@ The before-breaks and after-breaks artifacts are kept separately.
 
 ## 9. What could not be checked, and why
 
-- **The handoff note** was not supplied, so its findings could not be checked
-  (section 10).
+- **ChatGPT's environment** could not install OR-Tools; this audit could, and ran the full gate. ChatGPT's findings are classified in §10.
 - **No new solver runs** were made during this audit. Results come from
   re-scoring existing raw runs, which exist only on the author's machine, not
   in the zip.
@@ -331,24 +344,77 @@ The before-breaks and after-breaks artifacts are kept separately.
 
 ## 10. Checking the handoff's findings
 
-**Pending.** The note was not uploaded. Every item is UNVERIFIED until it is
-supplied. Upload `CLAUDE_HANDOFF_INDEPENDENT_AUDIT_RC5_TO_FINAL.txt` and each
-finding will be classified VALID / PARTIALLY VALID / INVALID / UNVERIFIED
-against the evidence above.
+**Summary.**
+- ChatGPT's overall verdict matches this audit: a better engineering baseline,
+  not proven better on schedules, not production-ready, targeted fixes plus a
+  direct RC5-vs-FINAL experiment, no rewrite.
+- Its runner and portfolio findings are largely **right**. Checking them led
+  to F-17: those runner behaviours are *regressions from RC5*, which neither
+  audit had seen.
+- It **missed** the three issues this audit ranks highest:
+  - the 209 Stage-A tests the gate no longer runs (F-01);
+  - the preference vocabulary rejecting ordinary values (F-02);
+  - the unenforced workbook dropdowns (F-18).
+- It is **wrong** on two record-keeping points: the commit count, and the
+  S2-PAR pre-registration.
+- Several severities are overstated because they ignore that joint refinement
+  is off by default.
+- It could not run OR-Tools. The full gate was run here: 30 suites PASS.
+
+| # | ChatGPT finding | classification | evidence | corrected interpretation |
+|---|---|---|---|---|
+| C-01 | DEEP scorer reports success on missing evidence | **PARTIALLY VALID** | RUN: `score_deep.py` on an empty evidence directory prints "adopt E", exit 0. RUN: all 16 E runs and all 4 F folders exist and rescore to 692 vs 370. | The defect is real (now F-19) and applies to all the scorers, including this audit's own. It did **not** produce a false claim: the published verdict came from complete evidence. Severity: Medium (evidence tooling), not Critical. |
+| H-01 | 677 / 246 tests is wrong; true 657 / 226 | **VALID** | RUN: both gate logs | Same as §3. Also valid: the gate should assert its own total. |
+| H-02 | Runner ignores gate failure | **VALID, and a regression** | READ: `rc921_runner.py:389-393` returns 0; RC5's runner returned `2 if run_failed else gate_rc` | Part of F-17. |
+| H-03 | Colab guards skip the staged suites | **VALID, and a regression** | READ: `rc921_runner.py:259` globs `test_rc9_2_1_*`; RC5's globbed `test_rc9_2_*` | Part of F-17. It is the same gap as F-01, in the runner rather than the gate. |
+| H-04 | Portfolio can pick an unvalidated before-breaks winner | **VALID** | RUN: a fake failed seed (999) beat a valid one (100) | F-04. |
+| H-05 | "Validated" portfolio candidates need not be production-quality | **PARTIALLY VALID** | RUN: 80 of 80 evidence runs are `PASS_WITH_QUALITY_WARNINGS` with `production_eligible=TRUE`. READ: `RUN_PORTFOLIO.py` does not read `production_eligible`. | Valid that the portfolio uses its own predicate instead of the engine's `production_eligible`. **Invalid** as a demand that quality warnings must not exist: that would make every run ineligible. Employee quality and language are already validator warnings by design (warn mode). Fix: also require `production_eligible`. |
+| H-06 | Duplicate seeds; exit code not persisted | **VALID** | RUN: `seed_list(…,"9000,9000")` → `[9000, 9000]`; READ: `RUN_PORTFOLIO.py:132` | Severity Low–Medium. Added to F-04. |
+| H-07 | DNBS acceptance ignores language reserve, skills, employee quality, preferences | **PARTIALLY VALID** | READ: `DNBS_NO_WORSE_*` (`:17701-17714`); DNBS changes only break patterns within fixed shifts | Language reserve, skills (and overage concentration) are valid (F-09). **Employee quality and preferences are invalid:** both depend only on shifts and OFF days, which DNBS never changes. A pure guard test with a made-up metrics dict proves nothing about what DNBS can actually move. |
+| H-08 | Isolated-solver signal deaths become UNKNOWN | **VALID** | READ: `:4353-4366` | F-07. Severity Medium, not High: the path runs only when joint refinement is enabled, which is off by default. |
+| H-09 | Model is built in the parent; fallback is silent on Windows/macOS | **PARTIALLY VALID** | READ: `:4260-4275`; `RESULT.md` discloses the build in the parent | The fact is valid and was disclosed. "Silently downgrade" is **invalid**: every fallback records `IN_PROCESS_<reason>` (`NO_FORK`, `CALLBACK_ATTACHED`, …) in `joint_solve_isolation`. Severity is low while joint refinement is off by default. Moving the build into the child is worth it only if joint refinement is ever re-enabled. |
+| H-10 | Validator shares the engine's `parse_input` | **VALID** | READ: `independent_validator.py:47,302`, plus about 25 shared helpers | F-13. Severity Medium at most. It **pre-dates RC5** (RC5's validator already used `parse_input`); FINAL added 4 shared helpers. |
+| H-11 | No direct RC5-vs-FINAL A/B | **VALID** | | F-03; §7 experiment. |
+| H-12 | Quality still below known optima | **VALID as a fact, PARTIALLY on the remedy** | | The proposed fix ("reopen Stage 1 after breaks / bounded LNS") was already **measured**. Break-load feedback reopens Stage 1 from the break load: 0 of 26 accepted at 540 s; at 40 minutes, H1 +8 and every other case +0. Joint refinement: 0 improvements. Exact joint models did not beat the engine within budget (7f55c60). The gap is real, but the obvious remedy has evidence against it at production budgets. This is a capability gap, not a release defect. |
+| M-01 | Budget plan below the declared minimum at tiny budgets | **PARTIALLY VALID** | RUN: `build_global_budget_plan(1)` sums to 60 | Real only below 60 s: the engine deliberately treats such runs as 60 s (the deadline is `max(60, total)`), so "total ≤ budget" is violated for requests under 60 s. Phases below their viable minimum **are** reported (`phases_below_minimum_viable_slice`). Low. |
+| M-02 | S2 core re-solve is capped at 60 s and may yield no core | **VALID** | READ: `:8700-8723` | Diagnostic only. A missing core is not labelled. This audit adds that the re-solve time is also unbudgeted (F-08). |
+| M-03 | DNBS is local; skips cross-week shifts | **VALID** (design limit) | READ: `:17752-17755` | Low; this is a search limitation, not a defect. |
+| M-04 | DNBS shipped on weak evidence | **VALID** | RUN: rescored 1057.5 → 1058.0 | F-10. |
+| M-05 | Quality gates default to WARN | **PARTIALLY VALID** | READ: `target_loss_gate_mode="warn"` in **both** RC5 and FINAL | A policy decision unchanged from RC5, not a regression. `production_ready` stays false when quality fails. Strict defaults would block every evidence run (all carry quality warnings), so "fail" needs a per-gate calibration first. |
+| M-06 | Defect register has unresolved items | **VALID** | `DEFECT_REGISTER.md` | Known and listed in the register. **C-2 must be re-rated**: it was "not reachable" only because of enforced dropdowns, which FINAL's workbooks lost (F-18). |
+| M-07 | Stale names | **VALID** | READ: `engine/README.md` line 1 says "RC9.2.1 Protected Tier + Residual Balance RC1"; `VERSION` says `…HARDENED-RC2` | F-14. |
+| M-08 | Portfolio mixes before/after winners and deletes provenance | **PARTIALLY VALID** | READ: `RUN_PORTFOLIO.py:182-191` | Mixing is valid (F-04). "Deletes provenance" is overstated: only the previous `PORTFOLIO_BEST` copy is replaced; every seed folder and `PORTFOLIO_SUMMARY.json` are kept. |
+| M-09 | Parallelism is based on CPU, not memory | **VALID**, Low | READ: `seed_plan` | With joint refinement off, QUICK seeds peak around 0.8–2 GB, so the risk is modest on Colab. |
+| M-10 | Timeouts and failures do not propagate | **VALID, and a regression** | READ | Part of F-17. |
+| M-11 | Runner parse errors fall back to defaults | **INVALID** (as an impact claim) | READ: `RUN_UNIVERSAL_PRODUCTION.py:55-71` | The fallback covers only the convenience read of Run Stage and Run Depth. The engine then re-parses the same workbook with the same `parse_input` and fails closed, so a malformed workbook cannot produce "a valid-looking schedule" through this path. |
+| M-12 | Scorers are not self-contained | **VALID** | | F-11 and F-19. |
+| L-01 | `__pycache__` in the audit tree | **INVALID** | RUN: the zip ChatGPT received (sha `3f579d68…`, identical to the one built) contains 0 `__pycache__` entries | Most likely created by ChatGPT's own test runs after extracting. |
+| L-02 | Residual items unexercised | **VALID** | | Same as M-06. |
+| §Numeric 12 | "168 commits since RC5: MATCHES" | **INVALID** | RUN: `git rev-list` gives 172 commits since RC5; the packaged log omits 5, including P-1 (`e68617d`) and C-1 (`c0f7d3c`) | ChatGPT counted the log, not the history. |
+| §Numeric 8 | "474 audits": matches the document | **PARTIALLY** | RUN: 437 audits currently carry the joint key, 0 improved | The conclusion holds; the count is not reproducible. |
+| §Prereg | "S2 rule … appear[s] in the commit history before [its] reported runs" | **INVALID** for S2-PAR | RUN: the rule and the result were committed together in `37288d0` (21:23); the runs started 19:55:11; the rule text is stamped 19:55:01 | Plausible, not provable. The other rules are correct as stated. |
+| §Prereg | "Re-pins … still need confirmation in the pinned environment" | **Now confirmed** | RUN: full gate on OR-Tools 9.15.6755, 30 suites PASS; RC5 suites against FINAL fail only on documented re-pins | |
+| §Quality-failure path | Final path is "substantially stronger" | **VALID** (engine) | | It holds for the engine and runner; the Colab wrapper regressed (F-17). |
+| Recommendation | Targeted refactoring plus a direct confirmation test; no rewrite | **VALID** | | Matches §11. The P0 list must add F-01, F-02, F-17 and F-18. |
 
 ---
 
 ## 11. Next-step decision
 
 **Do immediately, before any more schedule runs:**
-1. F-01: restore the gate.
-2. Correct the brief (§3 mismatches).
-3. F-11: add raw per-run evidence to the audit package.
+1. F-17: restore RC5's runner safeguards in the Colab runner (engine sha
+   check, runtime check, process-tree kill, exit propagation, full guard
+   glob).
+2. F-18: re-enforce the workbook dropdowns.
+3. F-01: restore the gate.
+4. Correct the brief (§3 mismatches).
+5. F-11 and F-19: ship raw per-run evidence, and make the scorers fail
+   closed.
 
 **Fix before production:**
 - F-02 (preference vocabulary);
-- F-05 (Colab orphan processes);
-- F-04 (portfolio before-sheet);
+- C-2 (`yes()` must fail closed);
+- F-04 (portfolio eligibility and duplicate seeds);
 - F-07 (hidden child crashes);
 - F-08 (core re-solve overrun);
 - F-14 (version);
@@ -365,9 +431,17 @@ against the evidence above.
 - any further joint-refinement work.
 
 **Recommendation: proceed with FINAL after targeted fixes.** Keep the current
-production engine running until FINAL passes §7. FINAL's main gains are real
-and reproducible, and no hard-rule defect was found. What is missing is
-protection (the gate), operability (the vocabulary) and a direct comparison.
+production engine running until FINAL passes §7. FINAL's engine gains are real
+and reproducible, and no hard-rule defect was found in the engine. The package
+around it must be brought back to RC5's safety level (F-17, F-18) before any
+Colab or production use.
+
+What is missing is:
+- protection (the gate and the runner guards);
+- operability (the vocabulary);
+- input safety (the dropdowns);
+- a direct comparison.
+
 None of these needs a redesign.
 
 **Minimum evidence to promote FINAL:**
@@ -377,9 +451,13 @@ None of these needs a redesign.
 - rule 5 passes, if you want to claim "better" rather than "not worse".
 
 **First three actions:**
-1. Restore the 209 orphaned tests to the gate and fix the brief's counts
-   (½ day).
-2. Widen the preference vocabulary with a mapping table, then run the
-   contract check on every workbook you schedule with (1 day).
-3. Commit the §7 rule and scorer, then launch the minimum RC5-vs-FINAL
-   experiment (Chat, Voice, NMG_SP, AE_IT_B2B, H1, M2 × 10 paired seeds).
+1. Package safety (1 day). Port RC5's runner functions into the final
+   runner. Re-enforce the workbook validations. Put the 209 orphaned Stage-A
+   tests, and RC5's production-hardening suite run against the package
+   layout, into the gate. Fix the brief's counts.
+2. Input safety (1 day). Widen the preference vocabulary with a mapping
+   table, make `yes()` fail closed, then run the contract check on every
+   workbook you schedule with.
+3. Commit the §7 rule and a fail-closed scorer, then launch the minimum
+   RC5-vs-FINAL experiment (Chat, Voice, NMG_SP, AE_IT_B2B, H1, M2 × 10
+   paired seeds).

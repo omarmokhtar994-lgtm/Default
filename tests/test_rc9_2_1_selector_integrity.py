@@ -271,9 +271,15 @@ class ReleaseIdentityIntegrity(unittest.TestCase):
         The L6.3.2.6 line and the L6.3.2.7 hardening line diverged and were
         merged back together; this is the resulting identity. It must be
         updated deliberately, never drift.
+
+        Re-pinned 2026-09-30 from L6.3.2.7-...-RC2: the engine changed after the
+        RC5-to-final audit (fail-closed input vocabulary, boolean instruction
+        check, departed-associate override, DNBS opt-in, isolation deadline)
+        while still reporting the RC2 string, so outputs of two different
+        engines carried one identity (audit F-14).
         """
         self.assertEqual(
-            E.VERSION, "L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2")
+            E.VERSION, "L6.3.2.8-RC9.2.2-PRODUCTION-HARDENED-RC6")
 
 
 class SkeletonOnlyLeaderboardIsAuditable(unittest.TestCase):

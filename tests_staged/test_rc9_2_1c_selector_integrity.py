@@ -280,8 +280,10 @@ class ReleaseIdentityIntegrity(unittest.TestCase):
         )
 
     def test_engine_version_is_hardened_rc9_2_2(self):
+        # Re-pinned 2026-09-30 from L6.3.2.7-...-RC2 (audit F-14): the engine
+        # changed after the RC5-to-final audit while still reporting RC2.
         self.assertEqual(
-            E.VERSION, "L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2")
+            E.VERSION, "L6.3.2.8-RC9.2.2-PRODUCTION-HARDENED-RC6")
 
 
 class SkeletonOnlyLeaderboardIsAuditable(unittest.TestCase):

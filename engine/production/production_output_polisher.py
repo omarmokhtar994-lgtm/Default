@@ -16,7 +16,7 @@ from pathlib import Path
 # Legacy literals remain readable for old evidence only.  Production
 # preparation below refuses to use them: an unknown identity is not a
 # publishable identity.
-RELEASE='L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2'
+RELEASE='L6.3.2.8-RC9.2.2-PRODUCTION-HARDENED-RC6'
 SOLVER=RELEASE
 COMMIT='RC9_2_2_MAX_COVERAGE_RC5'
 ENGINE='FALLBACK_ENGINE_IDENTITY_REJECTED'

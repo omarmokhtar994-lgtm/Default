@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "release": "L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2",
-  "release_short": "RC9.2.2-PRODUCTION-HARDENED-RC5-P1-C1",
-  "generated_utc": "2026-09-30T13:23:07+00:00",
+  "release": "L6.3.2.8-RC9.2.2-PRODUCTION-HARDENED-RC6",
+  "release_short": "RC9.2.2-PRODUCTION-HARDENED-RC6",
+  "generated_utc": "2026-09-30T14:07:16+00:00",
   "architecture": "Universal workbook-driven scheduler with protected-tier selection, independent exact-artifact validation, and fail-closed publication",
   "base_release": "L6.3.2.6-RC9.2.2-BUDGETED-SEARCH-AND-BREAK-CONCURRENCY-RC1",
   "status": "RELEASE_CANDIDATE_NO_GO_PENDING_SCENARIO_AND_QUALITY_REVIEW",
-  "engine_file_sha256": "d8df45c7f09896e9d9990683ac5fd37379fcd5953bc804d65335b72ff0d83ee4",
+  "engine_file_sha256": "251cf35a9ae4125816d3d9e02681109d3dbddf4f6e606e65beb0292db4932907",
   "artifact_filename_compatibility_tag": "L6_3_2_3",
   "identity_authority": "Run identity, engine SHA-256, input snapshot SHA-256, independent validation seal, and package manifest; the compatibility filename tag is not release identity",
   "dependencies": [

@@ -1,6 +1,6 @@
 # RC9.2.2 — production package
 
-`L6.3.2.7-RC9.2.2-PRODUCTION-HARDENED-RC2` · engine sha256 in `SCENARIOS.json`
+`L6.3.2.8-RC9.2.2-PRODUCTION-HARDENED-RC6` · engine sha256 in `SCENARIOS.json`
 and `MANIFEST.json` (checked before every run)
 
 ## This build: what is new and how to get the best schedule

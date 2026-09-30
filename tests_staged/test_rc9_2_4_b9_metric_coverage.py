@@ -150,7 +150,10 @@ class AgainstRecordedArtifacts(unittest.TestCase):
     def setUpClass(cls):
         cls.validator = load("independent_validator_b9", VALIDATOR)
         cls.cases = []
-        for base in (ROOT.parent.parent,):
+        # Only the package's own fixtures. It used to glob everything two levels
+        # above the package: /home here (nothing found), and on Colab all of
+        # /content, which with Google Drive mounted walks the user's whole Drive.
+        for base in (ROOT / "fixtures" / "real_runs",):
             for audit in sorted(base.glob("**/*.l6_3_2_3_solver_audit.json")):
                 root = audit.parent
                 books = list(root.glob("*BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"))

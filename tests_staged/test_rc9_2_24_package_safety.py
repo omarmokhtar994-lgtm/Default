@@ -236,6 +236,38 @@ class NotebooksAreTheSafeOnes(unittest.TestCase):
                 self.assertIn("from rc922_runner import main", (RUNNERS / name).read_text())
 
 
+class TheGateNeedsNothingOutsideThePackage(unittest.TestCase):
+    """Tests read only files that ship in the package.
+
+    Six tests used to read real run outputs from one machine's scratch
+    directory: they ran there, and on the first Colab run they skipped, the
+    gate's skip ceiling refused the run, and nothing had been checked either
+    way. Those files now ship under fixtures/.
+    """
+
+    MACHINE_PATHS = ("/tmp/" + "claude-0", "scratch" + "pad", "/home/" + "user/")
+
+    def test_no_test_refers_to_a_path_on_one_machine(self):
+        offenders = []
+        for folder in (ROOT / "tests", ROOT / "tests_staged"):
+            for path in sorted(folder.glob("test_*.py")):
+                text = path.read_text(encoding="utf-8")
+                offenders += [f"{path.name}: {m}" for m in self.MACHINE_PATHS if m in text]
+        self.assertEqual(offenders, [])
+
+    def test_the_fixtures_the_artifact_tests_read_are_shipped(self):
+        fixtures = ROOT / "fixtures"
+        self.assertTrue(list((fixtures / "real_runs" / "before_break").rglob("*_BEST_BEFORE_BREAKS_SCHEDULE.xlsx")))
+        self.assertEqual(len(list((fixtures / "real_runs" / "week_boundary").glob("*/production/*.xlsx"))), 5)
+        self.assertEqual(len(list((fixtures / "ae_inputs").glob("*.xlsx"))), 6)
+
+    def test_the_notebooks_install_what_the_gate_runs(self):
+        for name in ("RC922_Colab_A_NO_DRIVE.ipynb", "RC922_Colab_B_WITH_DRIVE.ipynb"):
+            text = (RUNNERS / name).read_text()
+            for pin in ("ortools==9.15.6755", "scipy>=1.11", "ruff=="):
+                self.assertIn(pin, text, name)
+
+
 class MissingDependenciesStopTheRun(unittest.TestCase):
     def test_the_production_runner_refuses_without_scipy(self):
         source = (ROOT / "engine" / "RUN_UNIVERSAL_PRODUCTION.py").read_text()

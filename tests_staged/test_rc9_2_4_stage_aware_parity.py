@@ -483,12 +483,10 @@ class RealBeforeBreakArtifact(unittest.TestCase):
     the engine writes the two signals this stage detection depends on.
     """
 
-    SEARCH = (
-        Path("/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a"
-             "/scratchpad/verify_b1"),
-        Path("/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a"
-             "/scratchpad/loop"),
-    )
+    # Shipped with the package (fixtures/real_runs). These used to be paths in
+    # one machine's scratch directory, so the check ran there and silently
+    # skipped everywhere else (it skipped on the first Colab run).
+    SEARCH = (REPO / "fixtures" / "real_runs" / "before_break",)
 
     @classmethod
     def locate(cls):
@@ -921,11 +919,9 @@ class NextSundayAdjacencyIsMeasuredWhereItIsEnforced(unittest.TestCase):
     def test_both_sides_agree_on_a_real_artifact_that_has_a_violation(self):
         # The regression that started this: a workbook where the count is
         # non-zero, so a checker that under-reports is visible.
-        roots = sorted(Path(
-            "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a"
-            "/scratchpad/verify_b3").glob("*")) if Path(
-            "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a"
-            "/scratchpad/verify_b3").is_dir() else []
+        # Shipped with the package (fixtures/real_runs/week_boundary): the five
+        # runs this check was written against, with the one audit field it reads.
+        roots = sorted((REPO / "fixtures" / "real_runs" / "week_boundary").glob("*"))
         checked = 0
         validator = load("rc924_validator_b8", VALIDATOR)
         for root in roots:

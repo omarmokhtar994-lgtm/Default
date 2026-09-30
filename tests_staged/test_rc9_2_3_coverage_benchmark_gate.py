@@ -104,8 +104,8 @@ class TheVerdictReachesTheRunSummary(unittest.TestCase):
 class RealAeWorkbooksAreClassifiedCorrectly(unittest.TestCase):
     """The six workbooks that produced the mistaken comparison."""
 
-    AE = Path("/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/"
-              "scratchpad/ae/RC5_AE_REAL_SCHEDULES_QUICK_PACKAGE/inputs")
+    # Shipped with the package; byte-identical to the RC5 AE package inputs.
+    AE = REPO / "fixtures" / "ae_inputs"
     EXPECTED = {
         "AE_AR_B2B": "CAPACITY_AMPLE",
         "AE_FR_B2B": "CAPACITY_AMPLE",

@@ -181,8 +181,8 @@ ZIP and download the results.
 
 1. Open the notebook in Colab (File → Upload notebook).
    *Runtime → Change runtime type: CPU*, and High-RAM if offered.
-2. **Step 1 (Environment):** run it. It installs the pinned solver and prints
-   the versions.
+2. **Step 1 (Environment):** run it. It installs the pinned solver, scipy and ruff,
+   and prints the versions.
 3. **Step 2 (Drive):** run it and allow access. It finds
    `RC9_2_2_PRODUCTION_PACKAGE.zip` in MyDrive, `Colab Notebooks`, `Downloads`
    or one folder down. Otherwise, set `ZIP_PATH` to its full path.
@@ -195,7 +195,7 @@ ZIP and download the results.
 7. **Step 5 (Run):** set:
    - `MY_WORKBOOK` = the same path as in 4b;
    - `MODE = QUICK` (recommended) or `DEEP`;
-   - leave `SEEDS = 0`, `SINGLE_LONG_RUN = False`, `SKIP_GUARDS = False`;
+   - leave `SEEDS = 0` (automatic: 2 seeds for QUICK, 4 for DEEP), `SINGLE_LONG_RUN = False`, `SKIP_GUARDS = False`;
    - leave `LANGUAGE_WORKING_WINDOW = workbook` (it uses your Instructions sheet).
 
    Run it and keep the tab open. It prints the safety-gate result, then the
@@ -269,7 +269,7 @@ On any Linux or macOS machine with Python 3.11 (4+ CPUs and 8 GB+ RAM
 recommended):
 
 ```
-pip install "ortools==9.15.6755" "openpyxl>=3.1" "scipy>=1.11"
+pip install "ortools==9.15.6755" "openpyxl>=3.1" "scipy>=1.11" "ruff==0.15.8"
 cd RC9_2_2_PRODUCTION_PACKAGE
 python3 tools/check_input_workbook.py /path/week42.xlsx
 python3 runners/rc922_runner.py --input /path/week42.xlsx --mode QUICK --seeds 2 --results-root results_week42

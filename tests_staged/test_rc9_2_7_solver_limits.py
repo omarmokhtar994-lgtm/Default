@@ -72,15 +72,27 @@ class SolverLimitsTest(unittest.TestCase):
         self.assertAlmostEqual(applied["relative_gap_limit"], 0.01)
 
     def test_gap_limit_actually_stops_the_search_early(self):
-        """Non-vacuity: a loose gap must return sooner than proving optimality."""
+        """Non-vacuity: a loose gap must stop the search before optimality is proved.
+
+        Re-pinned 2026-09-30 (audit gate run): the previous model was solved by
+        presolve at the root, so both runs did identical work (205 branches, the
+        same deterministic time) and the test compared two ~12 ms wall clocks --
+        it failed on timer noise and could never detect a gap limit that did
+        nothing. This multi-knapsack needs real search, and the comparison uses
+        CP-SAT's deterministic time and branch count (single worker, fixed
+        seed), which are reproducible, instead of wall time.
+        """
+        import random
+
         def build():
+            rnd = random.Random(7)
             model = cp_model.CpModel()
-            xs = [model.NewIntVar(0, 10 ** 4, f"x{i}") for i in range(220)]
-            for i in range(219):
-                model.Add(xs[i] + xs[i + 1] >= 9000)
-            for i in range(0, 200, 7):
-                model.Add(xs[i] + xs[i + 10] + xs[i + 20] >= 14000)
-            model.Minimize(sum((i % 5 + 1) * xs[i] for i in range(220)))
+            xs = [model.NewBoolVar(f"x{i}") for i in range(60)]
+            for _ in range(5):
+                w = [rnd.randint(10, 100) for _ in range(60)]
+                model.Add(sum(w[i] * xs[i] for i in range(60)) <= sum(w) // 3)
+            v = [rnd.randint(10, 100) for _ in range(60)]
+            model.Maximize(sum(v[i] * xs[i] for i in range(60)))
             return model
 
         def run(gap):
@@ -90,20 +102,21 @@ class SolverLimitsTest(unittest.TestCase):
             solver.parameters.random_seed = 9000
             if gap:
                 solver.parameters.relative_gap_limit = gap
-            status = solver.Solve(build())
-            return solver.WallTime(), solver.ObjectiveValue(), solver.StatusName(status)
+            solver.Solve(build())
+            return (solver.ResponseProto().deterministic_time, solver.NumBranches(),
+                    solver.ObjectiveValue(), solver.BestObjectiveBound())
 
-        exact_time, exact_obj, _ = run(0.0)
-        loose_time, loose_obj, _ = run(0.25)
+        exact_work, exact_branches, exact_obj, exact_bound = run(0.0)
+        loose_work, loose_branches, loose_obj, loose_bound = run(0.05)
 
-        self.assertLessEqual(
-            loose_time, exact_time + 1e-6,
-            "a loose gap limit must never take longer than proving optimality",
-        )
-        self.assertGreaterEqual(
-            loose_obj, exact_obj - 1e-6,
-            "a loose gap minimisation cannot beat the proven optimum",
-        )
+        self.assertEqual(exact_obj, exact_bound, "the reference run must prove optimality")
+        self.assertGreater(loose_bound, loose_obj, "the loose run must stop with an open gap")
+        self.assertLessEqual((loose_bound - loose_obj) / loose_bound, 0.05 + 1e-9)
+        self.assertLess(loose_work, exact_work / 2,
+                        "a loose gap limit must stop the search well before proving optimality")
+        self.assertLess(loose_branches, exact_branches)
+        self.assertLessEqual(loose_obj, exact_obj + 1e-6,
+                             "a loose gap maximisation cannot beat the proven optimum")
 
     def test_limits_do_not_touch_search_strategy(self):
         """Primer warning: top-level search params perturb the subsolver portfolio.

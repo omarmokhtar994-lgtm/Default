@@ -48,7 +48,7 @@ class PortfolioPreset(unittest.TestCase):
             calls.append((seed, list(passthrough)))
             d = Path(seeds_root) / f"{schedule_id}_S{seed}"
             d.mkdir(parents=True)
-            return d
+            return d, 0  # run_seed returns (run dir, exit code) since audit H-06
 
         saved = PF.run_seed
         PF.run_seed = fake_run_seed

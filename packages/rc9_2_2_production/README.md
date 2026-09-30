@@ -21,7 +21,10 @@ a pre-registered A/B (all runs validator PASS, 0 hard failures):
   the other (about **2 hours**). The runner decides automatically.
 * The best validated after-breaks schedule becomes `results/<scenario>/` (a
   complete, unmodified run). `results/<scenario>/PORTFOLIO/` holds the best
-  before-breaks sheet of any seed and `PORTFOLIO_SUMMARY.csv` with every seed.
+  before-breaks sheet among the eligible seeds (a seed that exited nonzero or
+  failed validation contributes neither sheet), `PORTFOLIO_BEST_MANIFEST.json`
+  with each kept file's seed and sha256, and `PORTFOLIO_SUMMARY.csv` with every
+  seed and its return code.
 * `SEEDS = 1` is an ordinary single run. Splitting one hour into shorter seeds
   is **not** recommended: it hurts hard 24x7 workbooks badly (measured).
 * **DEEP = best of 4 x 1-hour seeds, OVERNIGHT = best of 6** (measured, rule

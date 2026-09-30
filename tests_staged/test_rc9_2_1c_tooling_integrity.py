@@ -30,7 +30,7 @@ REPO = Path(__file__).resolve().parent.parent
 ROOT = Path(_os.environ.get("CANDIDATE_ENGINE", REPO)).resolve()
 RC5_INPUTS = next(p for p in (ROOT / "fixtures" / "rc5_inputs", REPO / "fixtures" / "rc5_inputs") if p.exists())
 RUNNERS = next(p for p in (ROOT / "runners", REPO / "packages" / "rc9_2_2_production" / "runners") if p.exists())
-SHIPPED_INPUTS = next(p for p in (ROOT / "inputs", REPO / "packages" / "rc9_2_2_production" / "inputs") if p.exists())
+SHIPPED_INPUTS = next(p for p in (ROOT / "inputs", next((p for p in (REPO / "inputs", REPO / "packages" / "rc9_2_2_production" / "inputs") if p.is_dir()), REPO / "packages" / "rc9_2_2_production" / "inputs")) if p.exists())
 SHIPPED_MANIFEST = next(p for p in (ROOT / "SCENARIOS.json", REPO / "packages" / "rc9_2_2_production" / "SCENARIOS.json") if p.exists())
 # -------------------------------------------------------------------------
 sys.path.insert(0, str(ROOT / "engine" / "_tools"))
@@ -751,7 +751,7 @@ class NonBaselineWorkbooksCarryTheCurrentTemplateFixes(unittest.TestCase):
     nothing in the offline gate would have.
     """
 
-    INPUTS = ROOT / "packages" / "rc9_2_2_production" / "inputs"
+    INPUTS = next((p for p in (ROOT / "inputs", ROOT / "packages" / "rc9_2_2_production" / "inputs") if p.is_dir()), ROOT / "packages" / "rc9_2_2_production" / "inputs")
     # These three are restored verbatim from the RC9.1-comparable build and must
     # keep hashing to the baseline prefix - see
     # ThePackagedWorkbooksStillMatchTheRC9_1Baseline. Every other packaged
@@ -802,7 +802,7 @@ class ThePackagedWorkbooksStillMatchTheRC9_1Baseline(unittest.TestCase):
     nothing failing to say so.
     """
 
-    INPUTS = ROOT / "packages" / "rc9_2_2_production" / "inputs"
+    INPUTS = next((p for p in (ROOT / "inputs", ROOT / "packages" / "rc9_2_2_production" / "inputs") if p.is_dir()), ROOT / "packages" / "rc9_2_2_production" / "inputs")
 
     def setUp(self):
         if not self.INPUTS.is_dir():

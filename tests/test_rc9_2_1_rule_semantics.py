@@ -298,7 +298,7 @@ class TheTargetLockBindsWhatTheMetricReports(unittest.TestCase):
     stricter of the two -- this pins that, per interval, on a real workbook.
     """
 
-    BOOK = (ROOT / "packages" / "rc9_2_2_production" / "inputs" / "AE_AR_B2B.xlsx")
+    BOOK = (next((p for p in (ROOT / "inputs", ROOT / "packages" / "rc9_2_2_production" / "inputs") if p.is_dir()), ROOT / "packages" / "rc9_2_2_production" / "inputs") / "AE_AR_B2B.xlsx")
 
     def test_the_model_threshold_is_never_looser_than_the_metric(self):
         if not self.BOOK.is_file():
@@ -906,7 +906,7 @@ class CoverageSplitMakesOneGroupResponsibleForAWholeWindow(unittest.TestCase):
         """Every packaged scenario predates this feature. A rule that starts
         binding on workbooks that never asked for it breaks a whole release."""
         from pathlib import Path
-        inputs = ROOT / "packages" / "rc9_2_2_production" / "inputs"
+        inputs = next((p for p in (ROOT / "inputs", ROOT / "packages" / "rc9_2_2_production" / "inputs") if p.is_dir()), ROOT / "packages" / "rc9_2_2_production" / "inputs")
         if not inputs.is_dir():
             self.skipTest("packaged inputs not present")
         for path in sorted(inputs.glob("*.xlsx")):

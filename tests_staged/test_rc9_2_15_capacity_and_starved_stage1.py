@@ -157,7 +157,7 @@ class BlankStaffingCountsOnlyCurrentWeekStaffing(unittest.TestCase):
     which the solver cannot move.
     """
 
-    WB = REPO / "packages" / "rc9_2_2_production" / "inputs" / "NMG_SP_RC9_1_READY_FIXED.xlsx"
+    WB = next((p for p in (REPO / "inputs", REPO / "packages" / "rc9_2_2_production" / "inputs") if p.is_dir()), REPO / "packages" / "rc9_2_2_production" / "inputs") / "NMG_SP_RC9_1_READY_FIXED.xlsx"
 
     def test_carry_in_over_blank_quarters_is_not_blank_staffing(self):
         if not self.WB.exists():

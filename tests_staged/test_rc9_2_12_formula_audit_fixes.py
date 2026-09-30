@@ -23,7 +23,7 @@ ROOT = (Path(os.environ["RC9_ENGINE_DIR"]).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "engine" / "_tools"))
 import l632_universal_scheduler as E  # noqa: E402
 
-BOOK = ROOT / "packages" / "rc9_2_2_production" / "inputs" / "AE_AR_B2B.xlsx"
+BOOK = next((p for p in (ROOT / "inputs", ROOT / "packages" / "rc9_2_2_production" / "inputs") if p.is_dir()), ROOT / "packages" / "rc9_2_2_production" / "inputs") / "AE_AR_B2B.xlsx"
 
 
 def with_instruction(tmp: str, pairs: dict) -> Path:

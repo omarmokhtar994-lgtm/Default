@@ -758,7 +758,7 @@ class EveryPackagedWorkbookCarriesTheCurrentTemplateFixes(unittest.TestCase):
     either - it never opens a packaged workbook.
     """
 
-    INPUTS = ROOT / "packages" / "rc9_2_2_production" / "inputs"
+    INPUTS = next((p for p in (ROOT / "inputs", ROOT / "packages" / "rc9_2_2_production" / "inputs") if p.is_dir()), ROOT / "packages" / "rc9_2_2_production" / "inputs")
 
     def setUp(self):
         if not self.INPUTS.is_dir():
@@ -874,7 +874,7 @@ class ThePackagedWorkbooksStillMatchTheRC9_1Baseline(unittest.TestCase):
     nothing failing to say so.
     """
 
-    INPUTS = ROOT / "packages" / "rc9_2_2_production" / "inputs"
+    INPUTS = next((p for p in (ROOT / "inputs", ROOT / "packages" / "rc9_2_2_production" / "inputs") if p.is_dir()), ROOT / "packages" / "rc9_2_2_production" / "inputs")
 
     def setUp(self):
         if not self.INPUTS.is_dir():

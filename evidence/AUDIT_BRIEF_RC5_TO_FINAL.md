@@ -6,6 +6,22 @@ why, how each change was measured, the results, what was gained and lost, and
 what is still open or weak. Every claim points to a file in this package, so
 you can check it.
 
+> **Corrections (2026-09-30), from the independent audit**
+> (`evidence/INDEPENDENT_AUDIT_RC5_TO_FINAL_2026_09_28.md` §3, H-01, F-03).
+> The body below is the brief as sent; each wrong statement is marked
+> *corrected* where it appears.
+> - Tests at the final gate were **657** (431 in `tests/`, **226** in
+>   `tests_staged/`), not 677 / 246. The gate now asserts its own total.
+> - Commits since RC5 were **172** (`git rev-list --count 92c76d0..4ad7a35~1`), not
+>   168, and the packaged log omitted 5 of them (`4561ba2`, `e68617d` P-1,
+>   `a8993d6`, `c0f7d3c` C-1, `e2f7a45`). The complete log with full messages and
+>   file stats is `evidence/COMMIT_LOG_SINCE_RC5.txt`.
+> - "Stage-A hardening changed no schedule" holds only for the later nine-fix
+>   stack (`f5f99789` → `172d7710`). The behavioural block from RC5 `0e6f6435`
+>   to `f5f99789` (B-3 slice floor, portfolio sizing, A34/A35/A37) was never
+>   cleanly measured against RC5. That comparison is
+>   `experiments/rc5_vs_final/` (pre-registered).
+
 Times are UTC unless marked (Egypt time = UTC+3).
 
 ---
@@ -19,10 +35,10 @@ Times are UTC unless marked (Egypt time = UTC+3).
 | Baseline test gate | 11 suites, 453 tests |
 | Final engine sha256 | `2071ae894f14f6e37131111dddfd0512ec147ab98e678cd714141a30dd3b75a4` |
 | Final release identity | `engine/RELEASE_IDENTITY_RC9_2_2.json` (`release_short`: RC9.2.2-PRODUCTION-HARDENED-RC5-P1-C1; status still `RELEASE_CANDIDATE_NO_GO_PENDING_SCENARIO_AND_QUALITY_REVIEW`, not changed by me) |
-| Final test gate | `./run_tests.sh`: **PASS, 30 suites, 677 tests** (431 in `tests/`, 246 in `tests_staged/`), plus 2 selfchecks, a cross-module call-signature check and an undefined-name sweep. Log: `05_TESTS/GATE_FINAL.log` |
+| Final test gate | `./run_tests.sh`: **PASS, 30 suites, 657 tests** (431 in `tests/`, 226 in `tests_staged/`; *corrected: the brief said 677 / 246*), plus 2 selfchecks, a cross-module call-signature check and an undefined-name sweep. Log: `05_TESTS/GATE_FINAL.log` |
 | Production package | `01_ENGINE_PACKAGE/RC9_2_2_PRODUCTION_PACKAGE.zip`, 316 files, sha256 `77e810c63ec0c79a6292f830bca2ed76c3f10fd131a06ca7d5abea1bad25e7b7`. Its engine files are byte-identical to `04_FINAL_ENGINE/` (checked by sha256). |
 | Solver | OR-Tools CP-SAT 9.15.6755 (unchanged) |
-| Git | branch `claude/handoff-document-m6egz2`; 168 commits since RC5, all in `07_COMMIT_LOG_SINCE_RC5.txt` with full messages and file stats |
+| Git | branch `claude/handoff-document-m6egz2`; 172 commits since RC5 (*corrected: the brief said 168, and its log omitted 5*); the complete log is `evidence/COMMIT_LOG_SINCE_RC5.txt` |
 
 ### Package layout
 
@@ -234,7 +250,9 @@ seed 9000, AE_AR_B2B and AE_IT_B2B, original engine vs the nine-fix tree:
 - all 46 pre-existing canonical metrics identical;
 - every scheduling sheet byte-identical.
 
-So the Stage-A hardening **changed no schedule** on those cases. An earlier
+So the nine-fix Stage-A stack (`f5f99789` → `172d7710`) **changed no schedule** on those cases.
+*Corrected: this does not cover the earlier behavioural Stage-A block (RC5 →
+`f5f99789`), which does change schedules and was not measured against RC5 here.* An earlier
 "+0.15%" claim came from multi-worker noise and was retracted.
 
 ### Stage B: merge with the Coverage Split line (2026-09-23)
@@ -371,7 +389,7 @@ global before setting them.
 | | RC5 | final |
 |---|---|---|
 | suites run by `run_tests.sh` | 11 | **30** |
-| tests | 453 | **677** (tests/ 431 + tests_staged/ 246) |
+| tests | 453 | **657** (tests/ 431 + tests_staged/ 226; *corrected from 677 / 246*) |
 | extra static checks | selfchecks | 2 selfchecks + cross-module call signatures + undefined-name sweep |
 
 The final gate result is `GATE PASS — 30 suite(s) + 2 selfchecks + …`
@@ -578,7 +596,7 @@ headroom check (2 GB or 15% free).
 
 | step | measured effect | how |
 |---|---|---|
-| Stage-A hardening stack | **0 schedule change** (46/46 metrics, all scheduling sheets byte-identical) on AE_AR_B2B and AE_IT_B2B | deterministic, 1 worker |
+| Stage-A nine-fix stack (`f5f99789`→`172d7710` only; *corrected*) | **0 schedule change** (46/46 metrics, all scheduling sheets byte-identical) on AE_AR_B2B and AE_IT_B2B | deterministic, 1 worker |
 | Stage-A behavioural items (B-3 slice floor, joint off at QUICK) | B-3: a 900 s run went from 0 of 15 Stage-1 profiles attempted to a funded portfolio. Joint off: 8197 → 798 MB, coverage identical | targeted measurements |
 | Merge with Coverage Split | 166/165/168/167 identical | deterministic |
 | F-1 | Chat +3 | deterministic |
@@ -672,7 +690,7 @@ from scope. See `06_EVIDENCE/upper_bound/CHAT_BOUND.md`.
   - blank-staffing parity fix;
   - no silent fallbacks (RC-A, RC-B).
 - **Engineering:**
-  - gate 11 → 30 suites (453 → 677 tests);
+  - gate 11 → 30 suites (453 → 657 tests; *corrected from 677*);
   - static cross-module signature check;
   - CP-SAT telemetry;
   - 213 dead lines removed;

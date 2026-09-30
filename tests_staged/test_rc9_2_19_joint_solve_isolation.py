@@ -19,6 +19,7 @@ import os
 import signal
 import subprocess
 import sys
+import shutil
 import tempfile
 import textwrap
 import time
@@ -63,15 +64,23 @@ class Base(unittest.TestCase):
                       list(E._JOINT_SOLVE_ISOLATION_LOG))
         del E._JOINT_SOLVE_MEMORY_STOPS[:]
         del E._JOINT_SOLVE_ISOLATION_LOG[:]
-        self.tmp_before = set(os.listdir(tempfile.gettempdir()))
+        # A private temp directory per test: the leftover-file check must see
+        # only this test's files. With the shared /tmp, two gates running at
+        # once (two package runners side by side) saw each other's in-flight
+        # joint_solve_* files and failed.
+        self.saved_tempdir = tempfile.tempdir
+        self.private_tmp = tempfile.mkdtemp(prefix="isolation_test_")
+        tempfile.tempdir = self.private_tmp
 
     def tearDown(self):
         E.JOINT_SOLVE_ISOLATION_ENABLED, E.JOINT_SOLVE_KILL_BELOW_FREE_MB, stops, log = self.saved
         E._JOINT_SOLVE_MEMORY_STOPS[:] = stops
         E._JOINT_SOLVE_ISOLATION_LOG[:] = log
+        tempfile.tempdir = self.saved_tempdir
+        shutil.rmtree(self.private_tmp, ignore_errors=True)
 
     def assert_no_leftover_files(self):
-        left = {n for n in set(os.listdir(tempfile.gettempdir())) - self.tmp_before if n.startswith("joint_solve_")}
+        left = {n for n in os.listdir(self.private_tmp) if n.startswith("joint_solve_")}
         self.assertEqual(left, set())
 
 

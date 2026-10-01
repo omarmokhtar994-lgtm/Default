@@ -1,0 +1,41 @@
+{
+  "id": "FINAL_AEIT_9009",
+  "arm": "FINAL",
+  "case": "AEIT",
+  "seed": 9009,
+  "cpus": [
+    2,
+    3
+  ],
+  "command": [
+    "/usr/local/bin/python3",
+    "-u",
+    "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5final/arms/FINAL/engine/RUN_UNIVERSAL_PRODUCTION.py",
+    "--input",
+    "/home/user/Default/experiments/rc5_vs_final/inputs/AE_IT_B2B.xlsx",
+    "--mode",
+    "QUICK",
+    "--time-limit",
+    "3600",
+    "--num-workers",
+    "2",
+    "--solver-random-seed",
+    "9009",
+    "--output-root",
+    "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5final/out",
+    "--schedule-id",
+    "FINAL_AEIT_9009",
+    "--overwrite"
+  ],
+  "start_utc": "2026-10-01T06:31:24.219541+00:00",
+  "scheduler_sha256": "251cf35a9ae4125816d3d9e02681109d3dbddf4f6e606e65beb0292db4932907",
+  "input_sha256": "83080efc496cb7ca509a236a068f39f7b63b9056098161dd5abfc7406faf0b8d",
+  "contaminated": false,
+  "return_code": 0,
+  "timed_out": false,
+  "wall_sec": 3461.8,
+  "peak_rss_mb": 833.3,
+  "max_load_1min": 4.54,
+  "end_utc": "2026-10-01T07:29:05.978059+00:00",
+  "extract": "FINISHED"
+}

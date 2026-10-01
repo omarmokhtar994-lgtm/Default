@@ -1,0 +1,38 @@
+Amendments to PREREGISTERED_RULE.txt
+====================================
+
+A1 and A2 - recorded 2026-10-01 ~17:45 UTC, before any quality metric was looked at
+-----------------------------------------------------------------------------------
+State when decided: 40 of 120 runs recorded. The only facts seen were run
+counts, return codes, validator status (PASS / FAIL_METRIC_PARITY) and
+contamination flags. No after_target, floor or any other quality value of any
+run has been read, printed or summarised; the scorer has not been run on the
+real records.
+
+Reason: time. Each run needs this session to stay continuously active (the
+container is reclaimed shortly after an idle turn), and the user chose to close
+on 6 paired seeds rather than wait about 16 more hours for 10.
+
+A1  Seeds 9000-9005 (6 paired seeds) instead of 9000-9009.
+    MIN_PAIRS 5 instead of 8 (a case needs at least 5 validated pairs to be
+    scored under rules 3 and 4).
+    Runs already recorded for seeds 9006-9009 stay in runs/ but are not scored.
+    run.py now queues only the remaining seed-9000-9005 jobs. Their order comes
+    from the same random.Random(20260930) shuffle, applied to the reduced job
+    list.
+    Consequence, stated before seeing results: confidence intervals are wider
+    (about 30%) and rule 5 (superiority) is unlikely to be met; NON-INFERIOR is
+    the realistic best outcome.
+
+A2  Comparator failure. The registered rules did not anticipate the comparator
+    itself failing. Seen so far: RC5 failed its own validator (metric parity) on
+    5 runs, 4 of them on NMG_SP, while every FINAL run passed.
+    A case where RC5 has fewer than MIN_PAIRS validated runs and every FINAL
+    run of that case validated is reported as COMPARATOR FAILED:
+    - it is left out of rules 3 and 4 and of the rule-5 sum;
+    - it is not, by itself, a reason for INCONCLUSIVE;
+    - its failures still count under rule 2 (robustness).
+    A case where FINAL also has failures is not a comparator failure. It is
+    scored, or INCONCLUSIVE, as before.
+
+Everything else in PREREGISTERED_RULE.txt is unchanged.

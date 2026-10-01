@@ -42,7 +42,7 @@ CASES = {
     "H1": "SYNTH_H1_24x7_OVERNIGHT.xlsx",
     "M2": "SYNTH_M2_MULTI_START_WITH_BREAKS.xlsx",
 }
-SEEDS = list(range(9000, 9010))
+SEEDS = list(range(9000, 9006))  # AMENDMENTS.txt A1 (was 9000-9009)
 ARMS = ("RC5", "FINAL")
 BUDGET = 3600
 KILL_AFTER = 7200

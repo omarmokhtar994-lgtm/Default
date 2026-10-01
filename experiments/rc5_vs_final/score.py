@@ -22,13 +22,13 @@ import runlib  # noqa: E402
 
 REAL = ("CHAT", "VOICE", "NMGSP", "AEIT")
 SYNTH = ("H1", "M2")
-SEEDS = range(9000, 9010)
+SEEDS = range(9000, 9006)  # AMENDMENTS.txt A1 (was 9000-9009)
 HIGHER_BETTER = ("after_target", "after_floor", "best_before_target")
 LOWER_BETTER = ("severe_floor_gaps", "language_gaps", "break_concurrency_violations")
 REPORTED = HIGHER_BETTER + LOWER_BETTER + ("after90", "after80", "floor_gaps", "zero_active_quarters",
                                            "after_severe_overage_count", "after_avoidable_overage_fte_sum")
 N_BOOT = 10_000
-MIN_PAIRS = 8
+MIN_PAIRS = 5  # AMENDMENTS.txt A1 (was 8)
 
 
 def load(runs: Path):
@@ -100,8 +100,14 @@ def main() -> int:
                                      "rc5_mean": float(np.mean([data[("RC5", case, s)]["row"][metric] for s in pairs])),
                                      "final_mean": float(np.mean([data[("FINAL", case, s)]["row"][metric] for s in pairs]))}
     # summed real after_target: case-stratified bootstrap
+    # AMENDMENTS.txt A2: a case where RC5 produced fewer than MIN_PAIRS validated
+    # runs while every FINAL run of it validated is a comparator failure: reported
+    # on its own, left out of rules 3 and 5, and not by itself INCONCLUSIVE.
+    comparator_failed = [c for c in REAL + SYNTH
+                         if sum(data[("RC5", c, s)]["validated"] for s in SEEDS) < MIN_PAIRS
+                         and all(data[("FINAL", c, s)]["validated"] for s in SEEDS)]
     per_case = {c: np.array([data[("FINAL", c, s)]["row"]["after_target"] - data[("RC5", c, s)]["row"]["after_target"]
-                             for s in pairs_by_case[c]]) for c in REAL}
+                             for s in pairs_by_case[c]]) for c in REAL if c not in comparator_failed}
     summed = sum(float(v.mean()) for v in per_case.values() if len(v))
     if all(len(v) for v in per_case.values()):
         boots = sum(v[rng.integers(0, len(v), size=(N_BOOT, len(v)))].mean(axis=1) for v in per_case.values())
@@ -114,10 +120,10 @@ def main() -> int:
                      if not (data[k]["record"].get("timed_out") or data[k]["record"].get("return_code") in (-9, 137))]
     rules[1] = not final_invalid
     rules[2] = len(failures["FINAL"]) <= len(failures["RC5"])
-    inconclusive = [c for c in REAL + SYNTH if len(pairs_by_case[c]) < MIN_PAIRS]
+    inconclusive = [c for c in REAL + SYNTH if len(pairs_by_case[c]) < MIN_PAIRS and c not in comparator_failed]
     r3 = True
     for c in REAL:
-        if c in inconclusive:
+        if c in inconclusive or c in comparator_failed:
             continue
         for m in HIGHER_BETTER:
             if stats[(c, m)]["lo"] < -1:
@@ -128,7 +134,7 @@ def main() -> int:
     rules[3] = r3
     r4 = True
     for c in SYNTH:
-        if c not in inconclusive and stats[(c, "after_target")]["lo"] < -3:
+        if c not in inconclusive and c not in comparator_failed and stats[(c, "after_target")]["lo"] < -3:
             r4 = False; notes.append(f"rule 4: {c} after_target CI lower {stats[(c, 'after_target')]['lo']:.2f} < -3")
     rules[4] = r4
     rules[5] = summed_ci[0] > 0
@@ -138,7 +144,8 @@ def main() -> int:
              and (v["record"].get("peak_rss_mb") or 0) > 8192]
     rules[6] = not over
     rules[7] = True  # FINAL's contract accepted all six inputs (checked before registration)
-    regression = [c for c in REAL if c not in inconclusive and stats[(c, "after_target")]["hi"] < -1]
+    regression = [c for c in REAL if c not in inconclusive and c not in comparator_failed
+                  and stats[(c, "after_target")]["hi"] < -1]
 
     if not rules[1] or not rules[2] or regression:
         verdict = "ROLLBACK / MORE ENGINEERING"
@@ -173,6 +180,8 @@ def main() -> int:
         print("  " + n)
     if inconclusive:
         print(f"cases with < {MIN_PAIRS} validated pairs: {inconclusive}")
+    if comparator_failed:
+        print(f"comparator failures (RC5 < {MIN_PAIRS} validated runs, FINAL all validated): {comparator_failed}")
     if final_invalid:
         print("FINAL validity failures:", ["_".join(map(str, k)) for k in final_invalid])
     if over:

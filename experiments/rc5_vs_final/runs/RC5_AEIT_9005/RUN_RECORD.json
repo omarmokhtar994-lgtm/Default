@@ -1,0 +1,41 @@
+{
+  "id": "RC5_AEIT_9005",
+  "arm": "RC5",
+  "case": "AEIT",
+  "seed": 9005,
+  "cpus": [
+    0,
+    1
+  ],
+  "command": [
+    "/usr/local/bin/python3",
+    "-u",
+    "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5final/arms/RC5/engine/RUN_UNIVERSAL_PRODUCTION.py",
+    "--input",
+    "/home/user/Default/experiments/rc5_vs_final/inputs/AE_IT_B2B.xlsx",
+    "--mode",
+    "QUICK",
+    "--time-limit",
+    "3600",
+    "--num-workers",
+    "2",
+    "--solver-random-seed",
+    "9005",
+    "--output-root",
+    "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5final/out",
+    "--schedule-id",
+    "RC5_AEIT_9005",
+    "--overwrite"
+  ],
+  "start_utc": "2026-10-01T22:00:04.760926+00:00",
+  "scheduler_sha256": "0e6f643552c5e59f284fefbabc74803c3450b2a1cd2de47fad44781f6408cc5c",
+  "input_sha256": "83080efc496cb7ca509a236a068f39f7b63b9056098161dd5abfc7406faf0b8d",
+  "contaminated": false,
+  "return_code": 0,
+  "timed_out": false,
+  "wall_sec": 3486.8,
+  "peak_rss_mb": 1253.5,
+  "max_load_1min": 4.48,
+  "end_utc": "2026-10-01T22:58:11.521817+00:00",
+  "extract": "FINISHED"
+}

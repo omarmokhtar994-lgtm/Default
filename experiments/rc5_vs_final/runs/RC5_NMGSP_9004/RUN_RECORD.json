@@ -1,0 +1,41 @@
+{
+  "id": "RC5_NMGSP_9004",
+  "arm": "RC5",
+  "case": "NMGSP",
+  "seed": 9004,
+  "cpus": [
+    0,
+    1
+  ],
+  "command": [
+    "/usr/local/bin/python3",
+    "-u",
+    "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5final/arms/RC5/engine/RUN_UNIVERSAL_PRODUCTION.py",
+    "--input",
+    "/home/user/Default/experiments/rc5_vs_final/inputs/NMG_SP_RC9_1_READY_FIXED.xlsx",
+    "--mode",
+    "QUICK",
+    "--time-limit",
+    "3600",
+    "--num-workers",
+    "2",
+    "--solver-random-seed",
+    "9004",
+    "--output-root",
+    "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5final/out",
+    "--schedule-id",
+    "RC5_NMGSP_9004",
+    "--overwrite"
+  ],
+  "start_utc": "2026-10-01T10:25:28.191451+00:00",
+  "scheduler_sha256": "0e6f643552c5e59f284fefbabc74803c3450b2a1cd2de47fad44781f6408cc5c",
+  "input_sha256": "05f1f7db1d5ae1d84c6770f44a51e3143a82925c9388ad54db580e8e8dbf5ad1",
+  "contaminated": false,
+  "return_code": 4,
+  "timed_out": false,
+  "wall_sec": 3481.5,
+  "peak_rss_mb": 688.4,
+  "max_load_1min": 3.15,
+  "end_utc": "2026-10-01T11:23:29.740645+00:00",
+  "extract": "FINISHED"
+}

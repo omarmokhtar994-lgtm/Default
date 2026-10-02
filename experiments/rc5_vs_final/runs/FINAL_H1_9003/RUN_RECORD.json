@@ -1,0 +1,41 @@
+{
+  "id": "FINAL_H1_9003",
+  "arm": "FINAL",
+  "case": "H1",
+  "seed": 9003,
+  "cpus": [
+    0,
+    1
+  ],
+  "command": [
+    "/usr/bin/python3",
+    "-u",
+    "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5final/arms/FINAL/engine/RUN_UNIVERSAL_PRODUCTION.py",
+    "--input",
+    "/home/user/Default/experiments/rc5_vs_final/inputs/SYNTH_H1_24x7_OVERNIGHT.xlsx",
+    "--mode",
+    "QUICK",
+    "--time-limit",
+    "3600",
+    "--num-workers",
+    "2",
+    "--solver-random-seed",
+    "9003",
+    "--output-root",
+    "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5final/out",
+    "--schedule-id",
+    "FINAL_H1_9003",
+    "--overwrite"
+  ],
+  "start_utc": "2026-10-02T01:22:01.838498+00:00",
+  "scheduler_sha256": "251cf35a9ae4125816d3d9e02681109d3dbddf4f6e606e65beb0292db4932907",
+  "input_sha256": "400c4f7278d54f835460bf767854fe08b39ca703dcf3d0acb5ff54dc93619471",
+  "contaminated": false,
+  "return_code": 0,
+  "timed_out": false,
+  "wall_sec": 3466.6,
+  "peak_rss_mb": 1734.8,
+  "max_load_1min": 4.22,
+  "end_utc": "2026-10-02T02:19:48.477132+00:00",
+  "extract": "FINISHED"
+}

@@ -1,0 +1,107 @@
+RC5 vs FINAL confirmation experiment - scored against PREREGISTERED_RULE.txt
+runs: 72; FAILED runs RC5 7, FINAL 0
+  FAILED RC5_CHAT_9001: rc 4, timed_out False, peak 7104.1 MB, validator FAIL_METRIC_PARITY, hard 1, parity FAIL
+  FAILED RC5_NMGSP_9000: rc 4, timed_out False, peak 636.8 MB, validator FAIL_METRIC_PARITY, hard 1, parity FAIL
+  FAILED RC5_NMGSP_9001: rc 4, timed_out False, peak 685.7 MB, validator FAIL_METRIC_PARITY, hard 1, parity FAIL
+  FAILED RC5_NMGSP_9002: rc 4, timed_out False, peak 567.3 MB, validator FAIL_METRIC_PARITY, hard 1, parity FAIL
+  FAILED RC5_NMGSP_9003: rc 4, timed_out False, peak 672.1 MB, validator FAIL_METRIC_PARITY, hard 1, parity FAIL
+  FAILED RC5_NMGSP_9004: rc 4, timed_out False, peak 688.4 MB, validator FAIL_METRIC_PARITY, hard 1, parity FAIL
+  FAILED RC5_NMGSP_9005: rc 4, timed_out False, peak 603.6 MB, validator FAIL_METRIC_PARITY, hard 1, parity FAIL
+
+case   metric                            n       RC5     FINAL   delta            95% CI      p
+CHAT   after_target                      5    160.00    175.80  +15.80 [+11.00,+20.60]  0.062
+CHAT   after_floor                       5    224.40    226.40   +2.00 [ -2.00, +5.20]  0.438
+CHAT   best_before_target                5    195.80    192.60   -3.20 [ -5.40, -0.60]  0.188
+CHAT   severe_floor_gaps                 5      8.80      5.80   -3.00 [ -8.00, +1.60]  0.438
+CHAT   language_gaps                     5      0.00      0.00   +0.00 [ +0.00, +0.00]  1.000
+CHAT   break_concurrency_violations      5     10.20      0.40   -9.80 [-18.80, -3.20]  0.062
+CHAT   after90                           5    184.60    181.40   -3.20 [ -5.80, -0.60]  0.250
+CHAT   after80                           5    224.40    226.40   +2.00 [ -2.00, +5.20]  0.438
+CHAT   floor_gaps                        5     17.60     15.60   -2.00 [ -5.20, +2.00]  0.438
+CHAT   zero_active_quarters              5      0.00      0.00   +0.00 [ +0.00, +0.00]  1.000
+CHAT   after_severe_overage_count        5     25.60     23.60   -2.00 [ -5.40, +1.40]  0.438
+CHAT   after_avoidable_overage_fte_sum   5     68.45     65.16   -3.29 [ -9.33, +0.81]  0.375
+
+VOICE  after_target                      6    241.83    246.00   +4.17 [ -0.50,+11.50]  0.344
+VOICE  after_floor                       6    249.50    252.83   +3.33 [ +0.83, +6.33]  0.094
+VOICE  best_before_target                6    249.17    247.83   -1.33 [ -1.83, -0.67]  0.062
+VOICE  severe_floor_gaps                 6     10.67      9.83   -0.83 [ -2.83, +1.17]  0.562
+VOICE  language_gaps                     6      0.00      0.00   +0.00 [ +0.00, +0.00]  1.000
+VOICE  break_concurrency_violations      6     20.50      3.83  -16.67 [-42.67, -1.33]  0.094
+VOICE  after90                           6    244.00    247.50   +3.50 [ +0.00, +7.83]  0.188
+VOICE  after80                           6    249.50    252.83   +3.33 [ +1.00, +6.33]  0.094
+VOICE  floor_gaps                        6     14.50     11.17   -3.33 [ -6.33, -1.00]  0.094
+VOICE  zero_active_quarters              6      0.00      0.00   +0.00 [ +0.00, +0.00]  1.000
+VOICE  after_severe_overage_count        6    199.83    196.17   -3.67 [-10.50, +3.33]  0.438
+VOICE  after_avoidable_overage_fte_sum   6    590.89    584.62   -6.28 [-21.60, +3.79]  0.656
+
+NMGSP  after_target                     no validated pairs
+NMGSP  after_floor                      no validated pairs
+NMGSP  best_before_target               no validated pairs
+NMGSP  severe_floor_gaps                no validated pairs
+NMGSP  language_gaps                    no validated pairs
+NMGSP  break_concurrency_violations     no validated pairs
+NMGSP  after90                          no validated pairs
+NMGSP  after80                          no validated pairs
+NMGSP  floor_gaps                       no validated pairs
+NMGSP  zero_active_quarters             no validated pairs
+NMGSP  after_severe_overage_count       no validated pairs
+NMGSP  after_avoidable_overage_fte_sum  no validated pairs
+
+AEIT   after_target                      6     68.17     72.17   +4.00 [ +0.33, +7.33]  0.094
+AEIT   after_floor                       6     91.50     87.50   -4.00 [ -5.17, -2.67]  0.031
+AEIT   best_before_target                6     84.50     82.17   -2.33 [ -4.00, -0.67]  0.125
+AEIT   severe_floor_gaps                 6     18.00     20.33   +2.33 [ +0.17, +4.50]  0.156
+AEIT   language_gaps                     6      0.00      0.00   +0.00 [ +0.00, +0.00]  1.000
+AEIT   break_concurrency_violations      6     14.17      1.17  -13.00 [-16.33, -9.83]  0.031
+AEIT   after90                           6     78.83     77.17   -1.67 [ -5.83, +2.33]  0.531
+AEIT   after80                           6     91.50     87.50   -4.00 [ -5.17, -2.67]  0.031
+AEIT   floor_gaps                        6     20.50     24.50   +4.00 [ +2.67, +5.17]  0.031
+AEIT   zero_active_quarters              6      0.00      0.00   +0.00 [ +0.00, +0.00]  1.000
+AEIT   after_severe_overage_count        6     11.33     10.17   -1.17 [ -2.17, -0.33]  0.250
+AEIT   after_avoidable_overage_fte_sum   6     22.95     21.19   -1.76 [ -2.70, -0.75]  0.062
+
+H1     after_target                      6    123.67    143.67  +20.00 [+14.00,+26.50]  0.031
+H1     after_floor                       6    157.50    167.83  +10.33 [ +5.33,+14.67]  0.062
+H1     best_before_target                6    168.00    167.83   -0.17 [ -0.50, +0.00]  1.000
+H1     severe_floor_gaps                 6      4.00      0.00   -4.00 [ -6.00, -2.00]  0.062
+H1     language_gaps                     6      0.00      0.00   +0.00 [ +0.00, +0.00]  1.000
+H1     break_concurrency_violations      6      2.17      0.17   -2.00 [ -2.83, -0.67]  0.062
+H1     after90                           6    134.00    154.67  +20.67 [+12.00,+28.33]  0.031
+H1     after80                           6    157.50    167.83  +10.33 [ +5.33,+14.83]  0.062
+H1     floor_gaps                        6     10.50      0.17  -10.33 [-14.67, -5.33]  0.062
+H1     zero_active_quarters              6      0.00      0.00   +0.00 [ +0.00, +0.00]  1.000
+H1     after_severe_overage_count        6      8.33      4.50   -3.83 [ -6.33, -1.50]  0.062
+H1     after_avoidable_overage_fte_sum   6     49.39     12.72  -36.67 [-49.79,-20.02]  0.031
+
+M2     after_target                      6     99.83    106.00   +6.17 [ +4.33, +7.83]  0.031
+M2     after_floor                       6    116.67    117.00   +0.33 [ +0.00, +0.67]  0.500
+M2     best_before_target                6    117.00    117.00   +0.00 [ +0.00, +0.00]  1.000
+M2     severe_floor_gaps                 6      0.00      0.00   +0.00 [ +0.00, +0.00]  1.000
+M2     language_gaps                     6      0.00      0.00   +0.00 [ +0.00, +0.00]  1.000
+M2     break_concurrency_violations      6      4.17      0.00   -4.17 [ -6.67, -1.83]  0.062
+M2     after90                           6    108.33    112.00   +3.67 [ +1.16, +5.67]  0.094
+M2     after80                           6    116.67    117.00   +0.33 [ +0.00, +0.67]  0.500
+M2     floor_gaps                        6      0.33      0.00   -0.33 [ -0.67, +0.00]  0.500
+M2     zero_active_quarters              6      0.00      0.00   +0.00 [ +0.00, +0.00]  1.000
+M2     after_severe_overage_count        6      2.50      1.17   -1.33 [ -2.33, -0.17]  0.125
+M2     after_avoidable_overage_fte_sum   6      9.46      5.10   -4.36 [ -6.06, -2.41]  0.031
+
+summed real after_target delta +23.97, 95% CI [+15.80, +33.23]
+rule 1: PASS
+rule 2: PASS
+rule 3: FAIL
+rule 4: PASS
+rule 5: PASS
+rule 6: PASS
+rule 7: PASS
+  rule 3: CHAT after_floor CI lower -2.00 < -1
+  rule 3: CHAT best_before_target CI lower -5.40 < -1
+  rule 3: CHAT severe_floor_gaps CI upper 1.60 > 0.5
+  rule 3: VOICE best_before_target CI lower -1.83 < -1
+  rule 3: VOICE severe_floor_gaps CI upper 1.17 > 0.5
+  rule 3: AEIT after_floor CI lower -5.17 < -1
+  rule 3: AEIT best_before_target CI lower -4.00 < -1
+  rule 3: AEIT severe_floor_gaps CI upper 4.50 > 0.5
+comparator failures (RC5 < 5 validated runs, FINAL all validated): ['NMGSP']
+VERDICT: INCONCLUSIVE

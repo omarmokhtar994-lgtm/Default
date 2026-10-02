@@ -42,7 +42,7 @@ publish.
 **Do not use yet, for production:**
 | Setting | Why |
 |---|---|
-| `SINGLE_LONG_RUN = True` | The one-long-run DEEP/OVERNIGHT path is still being verified end to end. Use `MODE = DEEP` with seeds instead (the default). |
+| `SINGLE_LONG_RUN = True` | The one-long-run DEEP/OVERNIGHT path works end to end (F-16: Chat and H1 completed and passed the validator). It is not better: on Chat one 4 h run scored 166 after-break target, against 169-184 for single 1 h QUICK runs. Use `MODE = DEEP` with seeds instead (the default). |
 | `SKIP_GUARDS = True` | It turns off the checks that make the output safe. |
 | `--enable-dnbs`, `--enable-joint-refinement`, `--enable-break-load-feedback` | Measured and not shown to help. They are off by default; leave them off. |
 

@@ -1,0 +1,26 @@
+[19:10:37] package : RC9_2_2_PRODUCTION_PACKAGE
+[19:10:37] engine  : L6.3.2.8-RC9.2.2-PRODUCTION-HARDENED-RC6
+[19:10:37] sha256  : 251cf35a9ae4125816d3d9e0…
+[19:10:37] host    : Linux-6.18.44-fc-v51-x86_64-with-glibc2.39 | cpus=4 | python=3.11.15
+[19:10:37] checking pinned runtime and CP-SAT compatibility
+[19:10:38] runtime check PASS
+[19:10:38] running the offline gate (run_tests.sh)
+[19:17:18]    GATE PASS — 48 suite(s), 1244 tests (2 skipped) + 2 selfchecks + cross-module call signatures + undefined-name sweep
+[19:17:18] scenarios: ['CRICUT_CHAT']
+[19:17:18] START CRICUT_CHAT  budget=14400s  workers=4
+[23:13:21] DONE  CRICUT_CHAT  exit=0  wall=14163.1s  (within budget)
+[23:13:21] scoring release gates
+case        status                     G4     G5              G8          
+---------------------------------------------------------------------------
+CRICUT_CHAT PASS_WITH_QUALITY_WARNINGS PASS_P FAIL            PASS        
+
+CRICUT_CHAT:
+    gate 4 PASS_PROTECTED_NOT_EVALUATED quality_benchmark=PASS, protected_benchmark=NOT_CONFIGURED; no protected minimum was configured, so the protected tier was never checked
+    gate 5 FAIL                   target loss 35/242 = 14.5%; after-break target 166/242 = 68.6%; STAFFING_LIMITED: 103 break-quarters had nowhere to go without dropping an interval below target; about 1 more associate(s) needed (lower bound)
+    gate 8 PASS                   0 hard failures on FINAL_AFTER_BREAKS
+
+written: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/f16/results_chat/_gate_report/RC9_2_1_RELEASE_GATE_REPORT.csv
+gates 2 and 9 are decided against evidence/RC9_1_BASELINE.json (consolidated RC9.1 metrics, before-break only). A case is only compared when its input sha256, active-interval count and target ratio all match the baseline row; otherwise it is reported as NOT_COMPARABLE rather than compared.
+
+[23:13:21] results in /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/f16/results_chat
+[23:13:21] Send back the whole results directory, including RUN_LEDGER.json and _gate_report/.

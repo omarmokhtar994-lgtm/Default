@@ -1,0 +1,41 @@
+{
+  "id": "RC5_VOICE_9002",
+  "arm": "RC5",
+  "case": "VOICE",
+  "seed": 9002,
+  "cpus": [
+    2,
+    3
+  ],
+  "command": [
+    "/usr/bin/python3",
+    "-u",
+    "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5final/arms/RC5/engine/RUN_UNIVERSAL_PRODUCTION.py",
+    "--input",
+    "/home/user/Default/experiments/rc5_vs_final/inputs/Cricut_Voice_RC9_1_READY_SKELETON.xlsx",
+    "--mode",
+    "QUICK",
+    "--time-limit",
+    "3600",
+    "--num-workers",
+    "2",
+    "--solver-random-seed",
+    "9002",
+    "--output-root",
+    "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/rc5final/out",
+    "--schedule-id",
+    "RC5_VOICE_9002",
+    "--overwrite"
+  ],
+  "start_utc": "2026-10-02T05:13:19.165509+00:00",
+  "scheduler_sha256": "0e6f643552c5e59f284fefbabc74803c3450b2a1cd2de47fad44781f6408cc5c",
+  "input_sha256": "36ddb0884908779d4b98ed238be37371e4cfbb9c015a07440bb8fc4418b4245f",
+  "contaminated": false,
+  "return_code": 0,
+  "timed_out": false,
+  "wall_sec": 3496.8,
+  "peak_rss_mb": 2443.1,
+  "max_load_1min": 4.03,
+  "end_utc": "2026-10-02T06:11:35.992434+00:00",
+  "extract": "FINISHED"
+}

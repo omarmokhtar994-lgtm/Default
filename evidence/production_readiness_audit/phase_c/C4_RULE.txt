@@ -1,0 +1,40 @@
+Phase C4 (audit F-28) - PRE-REGISTERED RULE
+==========================================
+
+Written 2026-10-03, before the C4 code was run on any workbook.
+
+What C4 ships
+-------------
+An opt-in workbook row, "Coverage Objective Weighting":
+  Interval Count  (default)  every interval's miss weighs the same, as before;
+  Volume Weighted            an interval's miss weighs in proportion to its
+                             requirement (requirement / mean active requirement),
+                             in Stage 1 and Stage 2, and the selector ranks first
+                             by the requirement covered at target
+                             (after_target_volume_fte), then as before.
+The default does NOT change.
+
+Shipping rules (this release)
+-----------------------------
+V1 Default unchanged: with the row absent, the Stage-1 and Stage-2 models of
+   every packaged and real-run workbook are canonically identical to the
+   engine without C4 (stage1_model_identity.py / f33_stage2_model_diff.py,
+   0 differing constraints beyond F-33), and all 111 repository workbooks parse
+   to the same contract results.
+V2 The switch does what it says: on a constructed two-window case (9 intervals
+   at 0.5 FTE against 6 at 1.0 FTE, one shift possible) interval counting covers
+   the 9 intervals and volume weighting the 6.
+V3 Gate passes.
+
+Before Volume Weighted may become the default (NOT done in this release)
+------------------------------------------------------------------------
+An end-to-end paired A/B through the production runner: Cricut Voice, Cricut
+Chat, AE_IT_B2B, NMG_SP and GDI_REAL28, QUICK 3600 s, seeds 9000-9009, both
+arms identical except the row. Primary metric: after_target_volume_fte (the
+requirement covered at target); guard metrics: after_target, after_floor,
+severe floor gaps, language gaps, break concurrency.
+Flip only if, for every case, the after_target_volume_fte CI lower bound is
+> 0, after_floor's is >= -1, and the business has agreed that requirement
+covered, not intervals covered, is the measure it wants. The two measures
+trade against each other by construction, so the A/B can only show the price;
+choosing the measure is a business decision.

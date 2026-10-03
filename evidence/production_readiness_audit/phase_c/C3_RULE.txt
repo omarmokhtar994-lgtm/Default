@@ -1,0 +1,47 @@
+Phase C3 (audit F-21) - AE_IT_B2B after-break floor: PRE-REGISTERED RULE
+========================================================================
+
+Written 2026-10-03, before any C3 run. Committed and pushed before the runs.
+
+Background (evidence/aeit_floor_cause/RESULT.md)
+------------------------------------------------
+FINAL is about +4 after_target and -4 after_floor against RC5 on AE_IT_B2B. Three
+single causes were refuted: selection, the break-concurrency cap, and the
+Stage-1 minimum slice (240 s) on its own. The remaining difference is the
+Stage-1 SHAPE. Measured in the F-03 audits:
+  RC5    Stage-1 window about 928 s, 3 profiles at the 240 s slice;
+  FINAL  Stage-1 window about 514 s, 11 profiles at the 45 s slice.
+The earlier slice-240 test could not reproduce RC5's shape. The budget planner
+sized the Stage-1 window from the 45 s constant, not from the configured slice
+(audit F-34, fixed in this phase), so that test ran 1-2 profiles in FINAL's
+small window. With F-34 fixed, "Stage 1 Minimum Slice Seconds = 240" gives a
+Stage-1 window of up to 45 % of the run (1,620 s at 3,600 s), the RC5 shape.
+
+Arms (same engine: the Phase C engine, including F-33 and F-34)
+---------------------------------------------------------------
+DEFAULT  AE_IT_B2B.xlsx, byte-identical to experiments/rc5_vs_final/inputs.
+S240     A copy of it in scratch, with one row added on Engine Defaults:
+         "Stage 1 Minimum Slice Seconds" = 240. Nothing else differs.
+Runner: engine/RUN_UNIVERSAL_PRODUCTION.py --mode QUICK --time-limit 3600
+--num-workers 2 --solver-random-seed <seed>. Seeds 9000-9004, paired.
+Two runs at a time, each pinned to its own two cores; nothing else
+CPU-heavy runs meanwhile. 10 runs.
+
+Read (means over the 5 seeds)
+-----------------------------
+CAUSE        S240 after_floor >= 90 AND S240 after_floor >= DEFAULT
+             after_floor + 2 AND S240 after_target >= 67 (RC5's 6-seed mean
+             68.2, less one).
+NOT THE CAUSE  S240 after_floor <= DEFAULT after_floor + 1.
+Otherwise    unresolved by this test; reported as such.
+Validity: every run must exit 0 with validator and parity PASS; a failed run
+is reported and voids the read for that arm.
+
+Decision
+--------
+No default changes, whatever the read. F-03 found FINAL's defaults better on
+every other case, so a global change for one workbook is not justified. If
+CAUSE: the remedy is documented as a per-workbook setting for AE_IT ("Stage 1
+Minimum Slice Seconds = 240": more floor, at a measured target cost). Choosing
+it is a business decision. If NOT THE CAUSE or unresolved: F-21 stays open,
+with the remaining candidate causes named.

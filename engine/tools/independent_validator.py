@@ -402,7 +402,325 @@ def _xc_day_cells(wb, sheet_names, roster_norm) -> Optional[Dict[Tuple[str, int]
     return cells
 
 
-def independent_input_crosscheck(input_path: Path, parsed) -> Dict[str, Any]:
+# Language hours, read without engine code: the Schedule sheet's Language column,
+# Language Setup's Coverage Start/End/Days/Active/Minimum rows, and the
+# Instructions row "Language Working Window". The engine enforces these as hard
+# rules, so a parser defect here would be invisible to the validator's window
+# checks, which use the engine's own reading (audit F-13).
+_XC_YES = {"yes", "y", "true", "1", "enabled", "on", "hard", "required"}
+_XC_NO = {"no", "n", "false", "0", "disabled", "off"}
+_XC_WINDOW_KEYS = {"languageworkingwindow", "languageworkinghours", "languagewindowenforcement"}
+
+
+def _xc_squash(value: Any) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(value or "").lower())
+
+
+def _xc_window_mode(raw: Any) -> str:
+    s = _xc_squash(raw)
+    if s in {"allrows", "all", "alllanguages", "everyrow", "allactiverows", "everyactiverow", "allactivelanguagerows"}:
+        return "ALL_ROWS"
+    if s in {"requiredlanguageonly", "requiredlanguagesonly", "qualifiedonly", "requiredonly",
+             "languageexclusive", "exclusive"}:
+        return "REQUIRED_LANGUAGE_ONLY"
+    if s in {"rowswithaminimum", "minimumrows", "withminimum", "yes", "on", "enabled", "rowswithminimum"}:
+        return "MINIMUM_ROWS"
+    return "OFF"
+
+
+def _xc_days(raw: Any) -> Optional[set]:
+    """Coverage Days -> day indices (Sun=0); None when the text is not understood."""
+    text = str(raw or "").strip().lower().replace("\u2013", "-").replace("\u2014", "-")
+    if not text or _xc_squash(text) in {"all", "alldays", "daily", "everyday", "7days"}:
+        return set(range(7))
+    if _xc_squash(text) in {"weekday", "weekdays"}:
+        return {1, 2, 3, 4, 5}
+    if _xc_squash(text) in {"weekend", "weekends"}:
+        return {0, 6}
+    def one(token: str) -> Optional[int]:
+        token = token.strip()
+        for i, (short, full) in enumerate(zip(_XC_DAYS, _XC_FULL)):
+            if token in (short, full) or (len(token) >= 3 and full.startswith(token)):
+                return i
+        return {"m": 1, "w": 3, "f": 5}.get(token)
+    days: set = set()
+    for part in re.split(r"[,;/|&]+", text):
+        part = part.strip()
+        if not part:
+            continue
+        ends = re.split(r"\s*-\s*|\s+to\s+", part, maxsplit=1)
+        if len(ends) == 2:
+            a, b = one(ends[0]), one(ends[1])
+            if a is None or b is None:
+                return None
+            d = a
+            while True:
+                days.add(d)
+                if d == b:
+                    break
+                d = (d + 1) % 7
+        else:
+            d = one(part)
+            if d is None:
+                return None
+            days.add(d)
+    return days
+
+
+def _xc_language_crosscheck(wb, parsed, run_override: Optional[str]) -> Tuple[Dict[str, str], List[Dict[str, Any]], List[Dict[str, Any]]]:
+    checks: Dict[str, str] = {}
+    mismatches: List[Dict[str, Any]] = []
+    not_checked: List[Dict[str, Any]] = []
+
+    # 1. Each associate's Language on the Schedule sheet.
+    roster_ws = next((wb[n] for n in wb.sheetnames if norm(n) == "schedule"), None)
+    found = _xc_name_header(roster_ws) if roster_ws is not None else None
+    lang_col = None
+    if found:
+        r, name_col = found
+        lang_col = next((c for c in range(1, roster_ws.max_column + 1)
+                         if norm(roster_ws.cell(r, c).value) == "language"), None)
+    if not found or lang_col is None:
+        checks["roster_language"] = "NOT_CHECKED"
+        not_checked.append({"check": "roster_language", "reason": "no Schedule sheet with name and Language headers"})
+    else:
+        raw = {norm(roster_ws.cell(rr, name_col).value): norm(roster_ws.cell(rr, lang_col).value)
+               for rr in range(r + 1, roster_ws.max_row + 1) if norm(roster_ws.cell(rr, name_col).value)}
+        bad = [{"associate": a.name, "parsed": a.language, "workbook": raw.get(norm(a.name))}
+               for a in parsed.associates
+               if norm(a.name) in raw and raw[norm(a.name)] != norm(getattr(a, "language", ""))]
+        checks["roster_language"] = "FAIL" if bad else "PASS"
+        if bad:
+            mismatches.append({"check": "roster_language", "count": len(bad), "examples": bad[:20]})
+
+    # 2. Language Setup hours per language and day.
+    ws = next((wb[n] for n in wb.sheetnames if norm(n) in {"language setup", "skill setup", "skills setup"}), None)
+    header = None
+    if ws is not None:
+        for rr in range(1, min(ws.max_row, 15) + 1):
+            heads = {norm(ws.cell(rr, c).value): c for c in range(1, ws.max_column + 1) if norm(ws.cell(rr, c).value)}
+            if any("language" in h or "skill" in h for h in heads) and any("start" in h for h in heads):
+                header = (rr, heads)
+                break
+    if header is None:
+        checks["language_hours"] = "NOT_CHECKED" if ws is not None else "NO_LANGUAGE_SETUP"
+        if ws is not None:
+            not_checked.append({"check": "language_hours", "reason": "Language Setup has no Language/Start header"})
+    else:
+        rr0, heads = header
+        def col(*needles):
+            return next((c for h, c in heads.items() if any(n in h for n in needles)), None)
+        c_lang, c_start, c_end = col("language", "skill"), col("coverage start", "start time"), col("coverage end", "end time")
+        c_active, c_min, c_days = col("active", "enabled"), col("minimum per interval", "minimum", "min hc", "min fte"), \
+            col("coverage days", "active days", "days active", "operating days")
+        expected: Dict[Tuple[str, int], set] = {}
+        unreadable = []
+        for rr in range(rr0 + 1, ws.max_row + 1):
+            lang = norm(ws.cell(rr, c_lang).value) if c_lang else ""
+            if not lang:
+                continue
+            active_raw = norm(ws.cell(rr, c_active).value) if c_active else ""
+            if active_raw in _XC_NO:
+                continue
+            if active_raw and active_raw not in _XC_YES:
+                unreadable.append(rr)
+                continue
+            start = _xc_minute(ws.cell(rr, c_start).value) if c_start else None
+            end = _xc_minute(ws.cell(rr, c_end).value) if c_end else None
+            if start is None or end is None or start == end:
+                continue
+            days = _xc_days(ws.cell(rr, c_days).value if c_days else "")
+            if days is None:
+                unreadable.append(rr)
+                continue
+            raw_min = ws.cell(rr, c_min).value if c_min else None
+            try:
+                has_min = int(round(float(raw_min))) > 0 if raw_min not in (None, "") else False
+            except (TypeError, ValueError):
+                unreadable.append(rr)
+                continue
+            for d in days:
+                expected.setdefault((lang, d), set()).add((start, end, has_min))
+        if unreadable:
+            checks["language_hours"] = "NOT_CHECKED"
+            not_checked.append({"check": "language_hours", "reason": f"rows not understood: {unreadable[:10]}"})
+        else:
+            windows = getattr(parsed, "language_windows", {}) or {}
+            def entries(value):
+                if value is None:
+                    return set()
+                if isinstance(value, (tuple, list)) and len(value) == 3 and not isinstance(value[0], (tuple, list)):
+                    value = [value]
+                return {(int(a), int(b), bool(c)) for a, b, c in value}
+            got: Dict[Tuple[str, int], set] = {}
+            for key, value in windows.items():
+                lang, _, day = key.partition("@@")
+                for d in ([int(day)] if day else range(7)):
+                    got.setdefault((lang, d), set()).update(entries(value))
+            bad = [{"language": lang, "day": DAYS[d],
+                    "workbook": sorted(expected.get((lang, d), set())), "parsed": sorted(got.get((lang, d), set()))}
+                   for lang, d in sorted(set(expected) | set(got)) if expected.get((lang, d), set()) != got.get((lang, d), set())]
+            checks["language_hours"] = "FAIL" if bad else "PASS"
+            if bad:
+                mismatches.append({"check": "language_hours", "count": len(bad), "examples": bad[:20]})
+
+    # 3. The Language Working Window setting (a run override replaces it).
+    if run_override is not None:
+        checks["language_window_mode"] = "RUN_OVERRIDE"
+    else:
+        values = []
+        for sheet in wb.worksheets:
+            for row in sheet.iter_rows():
+                for cell in row:
+                    if _xc_squash(cell.value) in _XC_WINDOW_KEYS:
+                        values.append(sheet.cell(cell.row, cell.column + 1).value)
+        raw_modes = {_xc_window_mode(v) for v in values} or {"OFF"}
+        if len(raw_modes) > 1:
+            checks["language_window_mode"] = "NOT_CHECKED"
+            not_checked.append({"check": "language_window_mode", "reason": f"several differing rows: {sorted(raw_modes)}"})
+        else:
+            raw_mode = raw_modes.pop()
+            ok = raw_mode == parsed.language_working_window_mode
+            checks["language_window_mode"] = "PASS" if ok else "FAIL"
+            if not ok:
+                mismatches.append({"check": "language_window_mode", "workbook": raw_mode,
+                                   "parsed": parsed.language_working_window_mode})
+    return checks, mismatches, not_checked
+
+
+# Switch rows whose misreading would silently drop or invent hard rules
+# (preferences, fixed requests, leave, hard OFF, strict OFF), with the default
+# the engine applies when the row is absent. Only the key names are shared.
+_XC_SWITCHES = (
+    ("use_preferences", ("Use Preferences", "Preferences"), True),
+    ("fixed_enabled", ("Fixed Request Use", "Use Fixed Requests", "Fixed/Nesting Enabled", "Use Fixed/Nesting"), False),
+    ("leave_enabled", ("Leave", "Leave Days", "Leave Enabled"), True),
+    ("hard_off", ("Hard OFF Preferences", "Hard OFF", "OFF Preferences Hard"), True),
+    ("strict_off", ("Strict 2 OFF", "Strict Two OFF", "Strict OFF Count"), True),
+)
+
+
+def _xc_instruction_cells(wb) -> Dict[str, Any]:
+    """Effective 'key | value' pairs (columns A|B and B|C) under the workbook
+    contract: Instructions overrides Engine Defaults, and on one sheet the last
+    row stating a key is the one that counts."""
+    effective: Dict[str, Any] = {}
+    for titles in ({"engine defaults", "engine default", "scheduler defaults"}, {"instructions"}):
+        ws = next((s for s in wb.worksheets if norm(s.title) in titles), None)
+        if ws is None:
+            continue
+        for r in range(1, ws.max_row + 1):
+            for kc in (1, 2):
+                key, value = ws.cell(r, kc).value, ws.cell(r, kc + 1).value
+                if key not in (None, "") and value not in (None, ""):
+                    effective[norm(key)] = value
+    return effective
+
+
+def _xc_contract_crosscheck(wb, parsed) -> Tuple[Dict[str, str], List[Dict[str, Any]], List[Dict[str, Any]]]:
+    checks: Dict[str, str] = {}
+    mismatches: List[Dict[str, Any]] = []
+    not_checked: List[Dict[str, Any]] = []
+
+    # Request switches.
+    cells = _xc_instruction_cells(wb)
+    bad, unclear = [], []
+    for attr, keys, default in _XC_SWITCHES:
+        key = next((norm(k) for k in keys if norm(k) in cells), None)
+        if key is None:
+            expected = default
+        else:
+            token = _xc_squash(cells[key])
+            if token not in _XC_YES | _XC_NO:
+                unclear.append(attr)
+                continue
+            expected = token in _XC_YES
+        if bool(getattr(parsed, attr)) != expected:
+            bad.append({"switch": attr, "workbook": expected, "parsed": bool(getattr(parsed, attr))})
+    if unclear:
+        not_checked.append({"check": "request_switches", "reason": f"values not understood: {unclear}"})
+    checks["request_switches"] = "FAIL" if bad else ("NOT_CHECKED" if unclear else "PASS")
+    if bad:
+        mismatches.append({"check": "request_switches", "examples": bad})
+
+    # The numbers every metric is measured against.
+    def number(value: Any) -> Optional[float]:
+        text = str(value).strip()
+        percent = text.endswith("%")
+        try:
+            return float(text.rstrip("%").strip()) / (100.0 if percent else 1.0)
+        except ValueError:
+            return None
+    wrong, unread = [], []
+    for attr, keys, default, is_ratio in (
+        ("target_ratio", ("Target", "Coverage Target", "Interval Target"), 0.90, True),
+        ("floor_ratio", ("Minimum Per Interval", "Coverage Floor", "Minimum Coverage Percentage"), 0.80, True),
+        ("rest_gap_hours", ("Difference Between Shifts", "Rest Gap Hours", "Minimum Rest Gap"), 12.0, False),
+    ):
+        key = next((norm(k) for k in keys if norm(k) in cells), None)
+        value = default if key is None else number(cells[key])
+        if value is None:
+            unread.append(attr)
+            continue
+        if is_ratio:
+            value = min(1.0, max(0.0, value / 100.0 if value > 1.5 else value))
+        if abs(float(getattr(parsed, attr)) - value) > 1e-9:
+            wrong.append({"setting": attr, "workbook": value, "parsed": float(getattr(parsed, attr))})
+    if unread:
+        not_checked.append({"check": "contract_numbers", "reason": f"values not understood: {unread}"})
+    checks["contract_numbers"] = "FAIL" if wrong else ("NOT_CHECKED" if unread else "PASS")
+    if wrong:
+        mismatches.append({"check": "contract_numbers", "examples": wrong})
+
+    # Every shift the engine may assign exists in the workbook with that start and length.
+    catalog = set()
+    for ws in wb.worksheets:
+        if "shift" not in norm(ws.title):
+            continue
+        for r in range(1, ws.max_row + 1):
+            for c in range(1, ws.max_column):
+                start, end = _xc_minute(ws.cell(r, c).value), _xc_minute(ws.cell(r, c + 1).value)
+                if start is not None and end is not None:
+                    catalog.add((start, (end - start) % 1440 or 1440))
+            for c in range(1, ws.max_column + 1):
+                m = re.fullmatch(r"\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*", str(ws.cell(r, c).value or ""))
+                if m and int(m.group(1)) < 24 and int(m.group(3)) < 24:
+                    start, end = int(m.group(1)) * 60 + int(m.group(2)), int(m.group(3)) * 60 + int(m.group(4))
+                    catalog.add((start, (end - start) % 1440 or 1440))
+    if not catalog:
+        checks["shifts"] = "NOT_CHECKED"
+        not_checked.append({"check": "shifts", "reason": "no shift sheet with start/end times"})
+    else:
+        invented = [s.label for s in parsed.shifts if (int(s.start_min), int(s.duration_q) * 15) not in catalog]
+        checks["shifts"] = "FAIL" if invented else "PASS"
+        if invented:
+            mismatches.append({"check": "shifts", "not_in_workbook": invented[:20]})
+
+    # Shrinkage equals one shrinkage sheet at the run's interval.
+    minutes = int(parsed.interval_minutes)
+    parsed_grid = {(d, i * minutes): float(x or 0.0) for d, day in enumerate(parsed.shrinkage) for i, x in enumerate(day)}
+    candidates = {title: (step, grid) for title, (step, grid) in _xc_demand_grids(wb).items() if "shrink" in norm(title)}
+    same_step = {title: grid for title, (step, grid) in candidates.items() if step == minutes}
+    if not same_step:
+        checks["shrinkage"] = "NOT_CHECKED"
+        not_checked.append({"check": "shrinkage", "reason": f"no shrinkage sheet at {minutes}-minute intervals"})
+    else:
+        def as_ratio(v: float) -> float:
+            return v / 100.0 if v > 1.0 else v
+        if any(not 0.0 <= as_ratio(v) < 1.0 for grid in same_step.values() for v in grid.values()):
+            checks["shrinkage"] = "NOT_CHECKED"
+            not_checked.append({"check": "shrinkage", "reason": "a shrinkage value outside 0 to <1; the input "
+                                "contract refuses this workbook (HARD_INVALID_SHRINKAGE_VALUE)"})
+            return checks, mismatches, not_checked
+        matching_shrink = [title for title, grid in same_step.items()
+                           if all(abs(as_ratio(grid.get(k, 0.0)) - v) <= 1e-6 for k, v in parsed_grid.items())]
+        checks["shrinkage"] = "PASS" if matching_shrink else "FAIL"
+        if not matching_shrink:
+            mismatches.append({"check": "shrinkage", "sheets_compared": sorted(same_step)})
+    return checks, mismatches, not_checked
+
+
+def independent_input_crosscheck(input_path: Path, parsed, run_override: Optional[str] = None) -> Dict[str, Any]:
     """Compare parse_input's roster, demand and leave/OFF cells with the raw workbook."""
     wb = load_workbook(input_path, data_only=True)
     checks: Dict[str, str] = {}
@@ -471,15 +789,29 @@ def independent_input_crosscheck(input_path: Path, parsed) -> Dict[str, Any]:
         if bad:
             mismatches.append({"check": label, "count": len(bad), "examples": bad[:20]})
 
+    for part in (_xc_language_crosscheck(wb, parsed, run_override), _xc_contract_crosscheck(wb, parsed)):
+        checks.update(part[0])
+        mismatches.extend(part[1])
+        not_checked.extend(part[2])
+
     return {"checks": checks, "demand_sheets_matching": matching, "mismatches": mismatches,
             "not_checked": not_checked,
             "shared_engine_surface": "parse_input and the rule helpers listed in engine/tools/VALIDATOR_INDEPENDENCE.md"}
 
 
-def validate(input_path: Path, output_path: Path, engine_path: Path) -> Dict[str,Any]:
+def validate(input_path: Path, output_path: Path, engine_path: Path,
+             language_working_window: Optional[str] = None) -> Dict[str,Any]:
     eng=load_engine(engine_path)
     from canonical_metrics import canonicalize_metrics
     parsed=eng.parse_input(input_path)
+    # The run's --language-working-window overrides the workbook in the engine
+    # (the notebook's LANGUAGE_WORKING_WINDOW setting uses it). Without the same
+    # override here the validator checked an enforced run as OFF and verified
+    # none of its language hours.
+    language_window_source="workbook"
+    if language_working_window is not None:
+        parsed.language_working_window_mode=eng.normalize_language_window_mode(language_working_window)
+        language_window_source="run override"
     assignments,output_languages=parse_output_schedule(output_path,[a.name for a in parsed.associates])
     breaks,before_only=parse_breaks(output_path)
     # Two independent statements of the stage, so a disagreement is visible.
@@ -500,7 +832,7 @@ def validate(input_path: Path, output_path: Path, engine_path: Path) -> Dict[str
         artifact_role="BEST_BEFORE_BREAKS"
     shift_map={norm(s.label):s for s in parsed.shifts}
     failures=[]; warnings=[]
-    input_crosscheck=independent_input_crosscheck(input_path, parsed)
+    input_crosscheck=independent_input_crosscheck(input_path, parsed, language_working_window)
     for mismatch in input_crosscheck["mismatches"]:
         failures.append({"type":"INPUT_CROSSCHECK_MISMATCH", **mismatch})
     for skipped in input_crosscheck["not_checked"]:
@@ -1148,6 +1480,7 @@ def validate(input_path: Path, output_path: Path, engine_path: Path) -> Dict[str
             else "BREAKS_PLACED_BY_STAGE_2"),
         "status":"PASS" if not failures else "FAIL","hard_fail_count":len(failures),"warning_count":len(warnings),
         "quality_gate_status":quality_gate_status,
+        "language_working_window":{"mode":parsed.language_working_window_mode,"source":language_window_source},
         "metrics":metrics,
         "employee_quality_independent":employee_quality_independent,
         "input_crosscheck":input_crosscheck,
@@ -1176,11 +1509,13 @@ def main():
     p.add_argument('--engine',type=Path,default=Path(__file__).resolve().parents[1]/'_tools/l632_universal_scheduler.py')
     p.add_argument('--json-out',type=Path)
     p.add_argument('--csv-out',type=Path)
+    p.add_argument('--language-working-window',default=None,
+                   help="the run's override of the workbook's Language Working Window, if any")
     args=p.parse_args()
     jout=args.json_out or args.output.with_name(args.output.stem+'_INDEPENDENT_VALIDATION.json')
     cout=args.csv_out or args.output.with_name(args.output.stem+'_INDEPENDENT_VALIDATION.csv')
     try:
-        result=validate(args.input,args.output,args.engine)
+        result=validate(args.input,args.output,args.engine,args.language_working_window)
         return_code=0 if result['status']=='PASS' else 2
     except Exception as exc:
         result={

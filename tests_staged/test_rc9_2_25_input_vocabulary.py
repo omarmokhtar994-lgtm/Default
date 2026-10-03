@@ -415,6 +415,30 @@ class TheValidatorChecksLanguageHoursInEveryEnforcedMode(unittest.TestCase):
         self.assertIn(("LANGUAGE_WORKING_WINDOW", name, day),
                       {(f["type"], f["associate"], f["day"]) for f in failures})
 
+    def test_the_runs_override_is_checked_not_the_workbooks_off(self):
+        # The notebook's LANGUAGE_WORKING_WINDOW reaches the engine as a run
+        # override; the validator used to re-read the workbook (OFF here) and
+        # verify none of the hours the engine had enforced.
+        sys.path.insert(0, str(ROOT / "engine" / "tools"))
+        import independent_validator as V
+        engine = ROOT / "engine" / "_tools" / "l632_universal_scheduler.py"
+        with tempfile.TemporaryDirectory() as tmp:
+            book = self._with_mode(tmp, "OFF")
+            out, name, day = self._move_international_to_evening(tmp)
+            silent = V.validate(book, out, engine)
+            checked = V.validate(book, out, engine, "ALL_ROWS")
+        self.assertEqual(silent["language_working_window"], {"mode": "OFF", "source": "workbook"})
+        self.assertEqual(checked["language_working_window"], {"mode": "ALL_ROWS", "source": "run override"})
+        self.assertNotIn("LANGUAGE_WORKING_WINDOW", {f["type"] for f in silent["failures"]})
+        self.assertIn(("LANGUAGE_WORKING_WINDOW", name, day),
+                      {(f["type"], f.get("associate"), f.get("day")) for f in checked["failures"]})
+
+    def test_the_wrapper_hands_its_override_to_the_validator(self):
+        source = (ROOT / "engine" / "RUN_UNIVERSAL_PRODUCTION.py").read_text(encoding="utf-8")
+        call = source.index("validator_command = [")
+        self.assertIn("validator_command += ['--language-working-window', args.language_working_window]",
+                      source[call:call + 800])
+
     def test_required_language_only_exclusivity_is_reachable(self):
         # International minimum 1 in 00:00-16:00: English associates cannot
         # cover International, so English shifts reaching into those hours are
@@ -484,6 +508,108 @@ class AStaleRunLockNeverBlocksANewRun(unittest.TestCase):
     def test_a_reused_pid_on_this_machine_is_cleared(self):
         self._lock(pid=1, machine=self.w._machine_identity(), pid_start="not-the-start-of-pid-1")
         self.w.acquire_case_lock(self.case, "X")
+
+
+class TheValidatorReadsLanguageInputsItself(unittest.TestCase):
+    """Audit F-13: the validator took the language contract from the engine's
+    parse. It now re-reads each associate's Language, Language Setup's hours per
+    day and the Language Working Window row with openpyxl alone, so a parser
+    defect in any of them is a hard INPUT_CROSSCHECK_MISMATCH. Each test plants
+    such a defect in the engine's reading."""
+
+    BOOK = LANG_RUN / "Cricut_Voice_LANGUAGE_HOURS.xlsx"
+
+    def crosscheck(self, parsed, book=None, override=None):
+        sys.path.insert(0, str(ROOT / "engine" / "tools"))
+        import independent_validator as V
+        return V.independent_input_crosscheck(Path(book or self.BOOK), parsed, override)
+
+    def test_the_true_reading_passes(self):
+        r = self.crosscheck(E.parse_input(self.BOOK))
+        for key in ("roster_language", "language_hours", "language_window_mode"):
+            self.assertEqual(r["checks"][key], "PASS", key)
+
+    def test_a_misread_associate_language_is_caught(self):
+        parsed = E.parse_input(self.BOOK)
+        parsed.associates[0].language = "International" if parsed.associates[0].language == "English" else "English"
+        r = self.crosscheck(parsed)
+        self.assertEqual(r["checks"]["roster_language"], "FAIL")
+
+    def test_a_misread_window_is_caught(self):
+        parsed = E.parse_input(self.BOOK)
+        parsed.language_windows = {"english": (960, 180, False)}  # International's row dropped
+        r = self.crosscheck(parsed)
+        self.assertEqual(r["checks"]["language_hours"], "FAIL")
+
+    def test_a_misread_mode_is_caught_and_a_run_override_is_not(self):
+        parsed = E.parse_input(self.BOOK)
+        parsed.language_working_window_mode = "OFF"
+        self.assertEqual(self.crosscheck(parsed)["checks"]["language_window_mode"], "FAIL")
+        self.assertEqual(self.crosscheck(parsed, override="OFF")["checks"]["language_window_mode"], "RUN_OVERRIDE")
+
+    def test_per_day_rows_are_read_per_day(self):
+        import datetime
+        from openpyxl import load_workbook
+        with tempfile.TemporaryDirectory() as tmp:
+            book = Path(tmp) / "per_day.xlsx"
+            shutil.copy(self.BOOK, book)
+            wb = load_workbook(book)
+            ws = wb["Language Setup"]
+            cols = {ws.cell(2, c).value: c for c in range(1, ws.max_column + 1)}
+            english = next(r for r in range(3, ws.max_row + 1) if ws.cell(r, cols["Language"]).value == "English")
+            ws.cell(english, cols["Coverage Days"], "Mon-Fri")
+            new_row = ws.max_row + 1
+            for c in range(1, ws.max_column + 1):
+                ws.cell(new_row, c, ws.cell(english, c).value)
+            ws.cell(new_row, cols["Coverage Start"], datetime.time(17, 0))
+            ws.cell(new_row, cols["Coverage End"], datetime.time(4, 0))
+            ws.cell(new_row, cols["Coverage Days"], "Sat,Sun")
+            wb.save(book)
+            parsed = E.parse_input(book)
+            self.assertEqual(self.crosscheck(parsed, book)["checks"]["language_hours"], "PASS")
+            parsed.language_windows["english@@6"] = (960, 180, False)  # Saturday read as a weekday row
+            self.assertEqual(self.crosscheck(parsed, book)["checks"]["language_hours"], "FAIL")
+
+
+class TheValidatorReadsTheContractItself(unittest.TestCase):
+    """Audit F-13, completed: request switches, the shift catalog, shrinkage and
+    the target / floor / rest numbers are re-read without engine code. Each
+    test plants a parser defect in the engine's reading and expects a hard
+    mismatch; the true reading passes."""
+
+    def crosscheck(self, parsed):
+        sys.path.insert(0, str(ROOT / "engine" / "tools"))
+        import independent_validator as V
+        return V.independent_input_crosscheck(BOOK, parsed)
+
+    def test_the_true_reading_passes_every_check(self):
+        r = self.crosscheck(E.parse_input(BOOK))
+        for key in ("request_switches", "shifts", "shrinkage", "contract_numbers"):
+            self.assertEqual(r["checks"][key], "PASS", key)
+
+    def test_a_dropped_switch_is_caught(self):
+        parsed = E.parse_input(BOOK)
+        parsed.leave_enabled = not parsed.leave_enabled  # leave cells would silently stop counting
+        self.assertEqual(self.crosscheck(parsed)["checks"]["request_switches"], "FAIL")
+
+    def test_an_invented_shift_is_caught(self):
+        import copy
+        parsed = E.parse_input(BOOK)
+        ghost = copy.copy(parsed.shifts[0])
+        ghost.start_min = (ghost.start_min + 7 * 15) % 1440
+        parsed.shifts = list(parsed.shifts) + [ghost]
+        self.assertEqual(self.crosscheck(parsed)["checks"]["shifts"], "FAIL")
+
+    def test_misread_shrinkage_is_caught(self):
+        parsed = E.parse_input(BOOK)
+        parsed.shrinkage[2][10] = float(parsed.shrinkage[2][10] or 0.0) + 0.05
+        self.assertEqual(self.crosscheck(parsed)["checks"]["shrinkage"], "FAIL")
+
+    def test_a_misread_target_floor_or_rest_is_caught(self):
+        for attr, delta in (("target_ratio", 0.05), ("floor_ratio", -0.05), ("rest_gap_hours", 1.0)):
+            parsed = E.parse_input(BOOK)
+            setattr(parsed, attr, float(getattr(parsed, attr)) + delta)
+            self.assertEqual(self.crosscheck(parsed)["checks"]["contract_numbers"], "FAIL", attr)
 
 
 class OnlyTheRowTheEngineReadsIsChecked(unittest.TestCase):

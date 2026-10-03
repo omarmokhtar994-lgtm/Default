@@ -1264,11 +1264,15 @@ def main() -> int:
     if validation_workbook is not None and not args.skip_independent_validation:
         validation_json = case_root / 'INDEPENDENT_VALIDATION.json'
         validation_csv = case_root / 'INDEPENDENT_VALIDATION.csv'
-        vrc = subprocess.call([
+        validator_command = [
             sys.executable, '-u', str(VALIDATOR),
             '--input', str(input_path), '--output', str(validation_workbook),
             '--json-out', str(validation_json), '--csv-out', str(validation_csv),
-        ])
+        ]
+        if args.language_working_window is not None:
+            # The engine enforced the run's override, so the validator must check it.
+            validator_command += ['--language-working-window', args.language_working_window]
+        vrc = subprocess.call(validator_command)
         # The validator exits 0 on PASS and 2 when it has evaluated the schedule
         # and found hard-rule violations.  Any other code means it did not
         # complete - a crash, a missing file, an unreadable sheet.  Collapsing

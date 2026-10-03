@@ -64,6 +64,19 @@ regressions are added to §2, and the verdict and §11 are updated.
      values as **hard contract failures**: 29 of 39 common spellings probed
      (RUN).
   3. The confirmation experiment has not been run.
+- **Update (2026-10-03): the three reasons are resolved.**
+  1. The gate runs all 48 suites again, with a count floor and a skip ceiling
+     (F-01, F-15). It is now at 1,273 tests.
+  2. The preference vocabulary accepts ordinary spellings and site mapping
+     tables (F-02).
+  3. The confirmation experiment ran: 72 paired runs (F-03).
+     - Verdict: INCONCLUSIVE on rule 3. FINAL validated 36 of 36 runs; RC5
+       failed its own validator on 7. After-break target is up 24, CI
+       [+15.8, +33.2].
+     - AE_IT_B2B after-break floor is 4 lower; section 12 F-03 gives its cause.
+  Since then the Colab lock defect, the validator's language-hours gaps and an
+  orphan-process race have also been found and fixed. They are listed in
+  section 12.
 - **Correctness of the schedules FINAL does publish:**
   - no hard-rule defect was found;
   - every published schedule in the evidence passed the independent
@@ -491,6 +504,7 @@ repository and in the built package layout.
 | F-14 | **Closed** | Release is L6.3.2.8-RC9.2.2-PRODUCTION-HARDENED-RC6 in VERSION, the polisher, the release identity and the manifest. | 22775ba |
 | F-15 | **Closed** | The gate caps skips at 2. That cap exposed 26 tests that silently skipped in every package build (they looked only for repository paths); they now run there. | 572ff17, 20d4aff |
 | F-16 | **Closed** | 2026-10-02, here, from the built package (gate PASS, 1244 tests). Both cases were run with `--mode DEEP --single-run`, 14,400 s each, concurrently: CRICUT_CHAT and SYNTH_H1. Both exited 0 within budget, and the validator passed with 0 hard failures, metric parity PASS and production_eligible TRUE. Engine RSS peaked around 3.7 GB for both together, against 13-14 GB kills before. The path works, but it is not better: Chat after_target 166, against 169-184 for 1 h QUICK runs in F-03. The notebooks and guide now say "works, not recommended" instead of "not for production yet". Evidence: `evidence/f16_single_run_deep/`. | df3715d, this commit |
+| F-16b (new) | **Closed** (2026-10-03) | The 1-in-24 isolation-suite error left unexplained in df3715d. It was caught on the old engine twice in 100 side-by-side rounds and once in 150 stress runs. Cause: the forked solve armed PR_SET_PDEATHSIG only after other setup, so a parent killed in that window left an orphan solve running. Fix: the death signal is armed first, then the parent is re-checked. A deterministic delayed-arming test fails on the old order and passes on the fix; there were 0 failures in 150 stress runs on the fix. Evidence: `evidence/isolation_orphan_race/`. | this commit |
 | F-17 | **Closed** | RC5's runner safeguards are back: engine sha check, pinned runtime check, full gate, process-group kill, and a nonzero exit on any failed scenario. `--overwrite` is explicit, and seed parallelism is capped by memory. | 1d81b32 |
 | F-18 | **Closed** | Every dropdown in the 4 non-baseline shipped workbooks rejects typed values. This is a byte-minimal attribute rewrite; cell values and contract hashes are unchanged. The 3 RC9.1 baseline-protected workbooks are untouched; the engine's boolean check covers them. | 1d81b32 |
 | F-19 | **Closed** | All four scorers read through `runlib`. They exit 2 when a run folder is missing, and count killed or rejected runs as failures. They reproduce every published table and verdict exactly. | 02f4d1a |

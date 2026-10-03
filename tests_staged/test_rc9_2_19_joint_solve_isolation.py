@@ -278,7 +278,7 @@ class InProcessFallbacks(Base):
 
 
 class ChildDiesWithItsParent(Base):
-    def test_killing_the_engine_kills_its_solve(self):
+    def test_killing_the_engine_kills_its_solve(self, delay_before_arming=0.0):
         script = textwrap.dedent(f"""
             import sys, time
             from pathlib import Path
@@ -288,6 +288,9 @@ class ChildDiesWithItsParent(Base):
             cp_model = E.import_cp_sat()
             from ortools.sat.python import cp_model_helper as CMH
             s = E.isolated_cp_solver(cp_model)
+            if {delay_before_arming!r}:
+                prepare = E._child_prepare_for_isolated_solve
+                E._child_prepare_for_isolated_solve = lambda *a: (time.sleep({delay_before_arming!r}), prepare(*a))
             E.isolated_cp_solve(s, None, lambda model, cb=None: time.sleep(120), CMH.CpSolverResponse)
         """)
         proc = subprocess.Popen([sys.executable, "-c", script])
@@ -313,6 +316,31 @@ class ChildDiesWithItsParent(Base):
         finally:
             if proc.poll() is None:
                 proc.kill()
+
+
+    def test_a_parent_killed_before_the_signal_is_armed_leaves_no_orphan(self):
+        # Holds the child for 1 s before the death signal is armed, so the
+        # parent is always killed inside the fork-to-prctl window that caused
+        # the intermittent orphan above. The old order fails this every time.
+        self.test_killing_the_engine_kills_its_solve(delay_before_arming=1.0)
+
+    def test_a_child_whose_parent_is_already_gone_exits_at_once(self):
+        # The death signal only fires for a parent that dies after it is armed.
+        # A parent killed between fork() and prctl() left the solve orphaned
+        # (1 in about 40 side-by-side runs of the test above), so the child
+        # re-checks its parent once the signal is armed.
+        script = textwrap.dedent(f"""
+            import sys
+            from pathlib import Path
+            sys.path.insert(0, {str(REPO / 'tools')!r})
+            import build_synthetic_suite as B
+            E = B.load_engine(Path({str(ENGINE)!r}))
+            E._child_prepare_for_isolated_solve(parent_pid=-1)
+            print("survived")
+        """)
+        done = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=120)
+        self.assertEqual(done.returncode, 73, done.stdout + done.stderr)
+        self.assertNotIn("survived", done.stdout)
 
 
 class Wiring(unittest.TestCase):

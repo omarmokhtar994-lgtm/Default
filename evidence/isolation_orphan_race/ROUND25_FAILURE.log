@@ -1,0 +1,7 @@
+FAIL: test_killing_the_engine_kills_its_solve (tests_staged.test_rc9_2_19_joint_solve_isolation.ChildDiesWithItsParent.test_killing_the_engine_kills_its_solve)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_19_joint_solve_isolation.py", line 312, in test_killing_the_engine_kills_its_solve
+    self.assertFalse(alive, "orphaned solve still running")
+AssertionError: True is not false : orphaned solve still running
+

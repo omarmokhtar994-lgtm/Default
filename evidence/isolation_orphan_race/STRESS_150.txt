@@ -1,0 +1,2 @@
+old runs=150 failures=1
+new runs=150 failures=0

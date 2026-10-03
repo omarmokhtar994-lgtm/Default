@@ -4377,19 +4377,29 @@ def joint_solve_kill_threshold_mb(total_mb: Optional[int]) -> int:
     return max(int(JOINT_SOLVE_KILL_BELOW_FREE_MB), int((total_mb or 0) * float(JOINT_SOLVE_KILL_BELOW_FREE_SHARE)))
 
 
-def _child_prepare_for_isolated_solve() -> None:
-    """In the forked child: be the OOM killer's first choice and die with the parent."""
+def _child_prepare_for_isolated_solve(parent_pid: Optional[int] = None) -> None:
+    """In the forked child: die with the parent, and be the OOM killer's first choice.
+
+    The death signal is armed first and then the parent is re-checked. A parent
+    killed between fork() and prctl() sends no signal, because the child is
+    already reparented, so the solve ran on as an orphan for its whole time
+    limit. Caught as an intermittent failure (1 in about 40 side-by-side runs)
+    of test_killing_the_engine_kills_its_solve, which kills the parent right
+    after the fork.
+    """
+    try:
+        import ctypes
+        import signal
+        ctypes.CDLL(None, use_errno=True).prctl(1, int(signal.SIGKILL), 0, 0, 0)  # PR_SET_PDEATHSIG
+    except Exception:
+        pass
+    if parent_pid is not None and os.getppid() != parent_pid:
+        os._exit(73)  # the parent is already gone
     import gc
     gc.disable()  # a collection would touch, and so copy, every inherited page
     try:
         with open("/proc/self/oom_score_adj", "w", encoding="utf-8") as handle:
             handle.write("1000")
-    except Exception:
-        pass
-    try:
-        import ctypes
-        import signal
-        ctypes.CDLL(None, use_errno=True).prctl(1, int(signal.SIGKILL), 0, 0, 0)  # PR_SET_PDEATHSIG
     except Exception:
         pass
 
@@ -4430,11 +4440,12 @@ def isolated_cp_solve(solver: Any, model: Any, in_process_solve: Any, response_t
     except Exception:
         granted = 0.0
     hard_deadline = started + (granted if 0 < granted < 1e8 else 3600.0) + JOINT_SOLVE_GRACE_SEC
+    parent_pid = os.getpid()
     pid = os.fork()
     if pid == 0:
         code = 72
         try:
-            _child_prepare_for_isolated_solve()
+            _child_prepare_for_isolated_solve(parent_pid)
             in_process_solve(model)
             with open(partial, "w", encoding="utf-8") as out:
                 out.write(str(solver.response_proto))

@@ -1,0 +1,78 @@
+Phase C1 (audit F-06, F-07) - PRE-REGISTERED RULE
+=================================================
+
+Written 2026-10-03, before any C1 code is written and before any run. The file
+is committed and pushed before the implementation starts. Changes after that go
+to C1_AMENDMENTS.txt with a reason, and the verdict states them.
+
+What C1 changes
+---------------
+1. Elastic shortfall pass (F-06). Only on the exits where a run today ends with
+   NO schedule:
+     a) the pre-solver contract fails and EVERY failure is a capacity proof
+        (ZERO_ACTIVE_INTERVAL_PROVABLY_IMPOSSIBLE, LANGUAGE_WINDOW_MAX_CAPACITY_
+        BELOW_MINIMUM, OPENING_WINDOW_MAX_CAPACITY_BELOW_MINIMUM,
+        HARD_FLOOR_PROVABLY_IMPOSSIBLE, NEXT_SUNDAY_*_PROVABLY_IMPOSSIBLE,
+        SKILL_WINDOW_PAID_CAPACITY_PROVABLY_INSUFFICIENT); any input error
+        (HARD_*, duplicate, unknown value, request conflicts) stays a refusal
+        with no shortfall schedule;
+     b) the hard probe is INFEASIBLE or UNKNOWN;
+     c) Stage 2 ends with no break-feasible candidate (FAIL_NO_BREAK_FEASIBLE_
+        CANDIDATE, FAIL_TESTED_SKELETON_EXCEPTION_LOWER_BOUND_EXCEEDS_CAP,
+        FAIL_BREAKS_REQUIRE_EXPLICIT_EXCEPTION_FOR_TESTED_SKELETONS,
+        FAIL_STAGE2_TIME_BUDGET_EXHAUSTED and the near-feasible statuses).
+   In that pass every coverage MINIMUM gets a non-negative slack with a penalty
+   above every other objective term: at least one person per active quarter,
+   language minimum, opening minimum, coverage split, hard floor, and the
+   next-Sunday zero / language / opening / floor minimums, in Stage 1 and
+   Stage 2. Person rules stay hard: rest, OFF count and shape, leave, hard OFF,
+   fixed requests, nesting, shift variety, language working window, blank-hours
+   ban, break contract, exception cap, concurrency in FAIL mode.
+   The result is exported as HARD_RULE_SHORTFALL_SCHEDULE with a Shortfalls
+   sheet listing every slack by day, time, rule, required and actual. It is
+   NOT releasable: the runner never returns 0 for it.
+2. Next-Sunday floor measured as coverage quality, not as a hard failure
+   (F-07). week_boundary_hard_failure_count (engine) and NEXT_SUNDAY_CARRY_OUT
+   (validator) keep zero staffing, language, opening and blank staffing; the
+   floor misses move to the coverage quality gate. The FIRST pass keeps the
+   next-Sunday floor as a hard model constraint, so the search of every week
+   that is feasible today is unchanged.
+
+Measurements and pass rules
+---------------------------
+R1 Normal path unchanged.
+   - All repository workbooks: identical contract results and parsed facts
+     (the Phase B snapshot script, Phase B engine vs C1 engine).
+   - Golden replay of the saved final schedules: zero parity mismatches, and
+     every published schedule has week_boundary_floor_gap_count = 0, so the
+     F-07 metric change leaves week_boundary_hard_failure_count identical on
+     all of them.
+   - A real QUICK 3600 s run of Cricut_Voice_LANGUAGE_HOURS, seed 9000: the
+     shortfall pass does not run, runner exit 0, validator PASS.
+R2 Shortfall schedules exist where none did. Production runner, QUICK 300 s,
+   2 workers, seed 9000, on S04, S05, S09, S11, S13
+   (evidence/production_readiness_audit/adversarial/solver_scenarios.py):
+   each exports a HARD_RULE_SHORTFALL_SCHEDULE workbook, or, if its only
+   shortfalls are next-Sunday floor misses, a normal final schedule.
+R3 Shortfall schedules are honest. For each R2 workbook the independent
+   validator is run on it:
+   - every failure type it reports is one of ZERO_STAFF_ACTIVE,
+     LANGUAGE_MINIMUM, OPENING_MINIMUM, COVERAGE_SPLIT, HARD_FLOOR,
+     NEXT_SUNDAY_CARRY_OUT (person rules all pass);
+   - the number of shortfall quarters it reports per family equals the
+     number listed on the Shortfalls sheet;
+   - the clean-room checker reports no violation outside those families.
+R4 Shortfall is minimal where it is provable. S04 (one 0.5 FTE quarter no
+   legal shift reaches): every listed shortfall is in Sunday 03:00-03:59.
+R5 Never releasable. The runner exits non-zero on every R2 case whose
+   workbook is a HARD_RULE_SHORTFALL_SCHEDULE, and BUSINESS_OUTCOME.txt says
+   the schedule does not meet every hard rule and lists the shortfalls.
+R6 Input errors unchanged. S10 and S14 are refused before solving, with no
+   shortfall schedule.
+R7 Gate. ./run_tests.sh passes, with the new tests written failing-first.
+
+Verdict
+-------
+SHIP if R1-R7 all pass. Otherwise C1 is not shipped as is: the failing rule
+is fixed and the whole measurement is repeated, or C1 is reported as not
+done with the evidence.

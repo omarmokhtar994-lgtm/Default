@@ -1,0 +1,55 @@
+Audit F-33 (found during Phase C1) - PRE-REGISTERED RULE
+========================================================
+
+Written 2026-10-03, after the defect was measured (F33_STAGE2_MODEL_DIFF.json)
+and BEFORE any quality comparison was run. Committed and pushed before the A/B
+starts. Changes go to F33_AMENDMENTS.txt.
+
+The defect
+----------
+Stage 2 (solve_breaks) stored one `headcount - breaks` expression per quarter
+and reused it in the whole-week and next-Sunday adjacent-balance terms. OR-Tools
+9.15 reduces `k - (k - S)` to the inner sum object S and the `- allowed` that
+follows modifies S in place. Measured on 40 saved final schedules: every Stage-2
+model had 4 (Chat) to 40 (AE_IT) corrupted balance constraints; every other
+constraint is identical. The corrupted terms are soft penalties, so no released
+schedule broke a hard rule (the validator re-checks every one), but the break
+placement optimised a different objective from the one written. On a one-person
+toy case it makes a schedule with a permitted no-break exception infeasible.
+
+The fix
+-------
+after_break_raw_expression(): a fresh expression per use. Wherever no mutation
+happened, the constraints are structurally identical (measured: 0 other
+differences on all 40 models).
+
+A/B (isolates exactly the change: same skeleton, same seed, same time)
+---------------------------------------------------------------------
+Arms     OLD = engine of commit 407a725 (Phase B), NEW = the fixed engine.
+Cases    the published skeleton of each distinct real or 24/7 case saved in
+         this audit: VOICE (Cricut_Voice_LANGUAGE_HOURS, Phase B real run),
+         CHAT (Cricut Chat), AEIT (AE_IT_B2B), H1 (SYNTH_H1_24x7_OVERNIGHT),
+         S08 (24/7 week-boundary scenario).
+Solve    solve_breaks(skeleton, width 60, no exceptions, mode M, seed s,
+         60 s, 2 workers), M in {target_priority, release_quality_guard},
+         s in {9000..9004}: 10 paired solves per case, 50 pairs in all.
+         Two solves at a time, each on 2 cores; nothing else CPU-heavy runs.
+Metrics  calculate_metrics of each solution (the canonical evaluator):
+         after_target, after_floor (primary); whole_week_imbalance_violation_
+         count, break_concurrency_violation_count, zero_staffed_active_quarters
+         (secondary). A solve with no solution counts as FAILED.
+
+Rules
+-----
+F1 Validity: every NEW solution has zero_staffed_active_quarters = 0 and
+   language_gap_count = 0 (the hard minimums), and NEW has no more FAILED
+   solves than OLD.
+F2 Non-inferiority per case: the mean paired delta (NEW - OLD) of
+   after_target and of after_floor is >= -1.0.
+F3 Reported, not gating: the secondary metrics and the sums over cases.
+
+Verdict
+-------
+SHIP the fix if F1 and F2 pass. Otherwise do not ship it as is: report the
+case and metric, and investigate whether the corrupted terms were doing useful
+work by accident before any decision.

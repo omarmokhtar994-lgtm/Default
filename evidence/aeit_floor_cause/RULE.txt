@@ -1,0 +1,27 @@
+AE_IT_B2B floor loss (F-03 rule 3) - diagnostic rule, written 2026-10-03 05:01 UTC
+before the slice-240 runs below started
+
+Facts so far:
+- The 12 F-03 AE_IT runs, as means. FINAL - RC5: after_floor -4.0. The chosen
+  skeleton's before_floor is about -3, floor lost to breaks about -1, and
+  best_before_target -2.3.
+- Not a selection defect: FINAL's own pool (seed 9002 rerun, 34 candidates) has
+  no candidate with after_target >= 70 and after_floor >= 91.
+- Not the break-concurrency cap: seed 9002 with the cap lifted (ratio 0.75,
+  count 99) gave 76 target / 89 floor, with max concurrency still 4. This is
+  within the capped runs' range (85-89).
+
+Hypothesis: B-3 (Stage-1 minimum slice 240 s -> 45 s) leaves each Stage-1
+profile less search. The skeletons then hold less floor and less before-break
+target on AE_IT.
+
+Test: FINAL engine (sha 8d148627, reporting/robustness changes only since
+251cf35a). AE_IT_B2B as in F-03 with "Stage 1 Minimum Slice Seconds" = 240 on
+Engine Defaults. QUICK 3600 s, 2 workers, seeds 9002 and 9004, each pinned to
+2 cores.
+
+Read:
+- B-3 IS the cause if both seeds reach after_floor >= 90 AND best_before_target >= 84
+  (RC5's 6-seed means are 91.5 and 84.5).
+- B-3 is NOT the cause if both seeds stay at after_floor <= 89 (FINAL's 6-seed range is 85-89).
+- Anything else: unresolved by this test, and reported as such.

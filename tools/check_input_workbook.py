@@ -160,27 +160,12 @@ def language_hours_report(E, parsed) -> list:
 
 def fixed_requests_outside_language_hours(E, parsed, mode: str) -> list:
     """Fixed shift requests that start outside the associate's language window
-    under `mode`, matched exactly the way the engine applies them."""
-    if not getattr(parsed, "fixed_enabled", False):
-        return []
+    under `mode`. The engine's own function, so the run names the same ones."""
     import copy
     probe = copy.copy(parsed)
     probe.language_working_window_mode = mode
-    found = []
-    for assoc in parsed.associates:
-        for d in range(7):
-            fixed = assoc.fixed_schedule[d] if d < len(assoc.fixed_schedule) else ""
-            if E.preference_kind(fixed) != "shift":
-                continue
-            shift = next((s for s in parsed.shifts if E.norm(s.label) == E.norm(fixed)), None)
-            windows = E.associate_language_windows(probe, assoc, day=d)
-            if shift is None or not windows:
-                continue
-            if not any(E.shift_within_language_window(shift, w) for w in windows):
-                found.append((assoc.name, assoc.language, E.DAY_NAMES[d], shift.label,
-                              "+".join(f"{E.hhmm(s)}-{E.hhmm(e)}" for s, e in windows)))
-    return found
-
+    return [(r["associate"], r["language"], r["day"], r["shift"], r["window"])
+            for r in E.fixed_requests_outside_language_windows(probe)]
 
 if __name__ == "__main__":
     raise SystemExit(main())

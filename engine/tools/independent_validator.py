@@ -567,7 +567,13 @@ def validate(input_path: Path, output_path: Path, engine_path: Path) -> Dict[str
                 failures.append({"type":"HARD_OFF_VIOLATION","associate":assoc.name,"day":DAYS[d],"actual":value})
             if parsed.fixed_enabled and fixed_kind=="shift" and norm(value)!=norm(assoc.fixed_schedule[d]):
                 failures.append({"type":"FIXED_SHIFT_VIOLATION","associate":assoc.name,"day":DAYS[d],"expected":assoc.fixed_schedule[d],"actual":value})
-            if kind=="shift" and parsed.language_working_window_mode in {"ALL_ROWS", "MINIMUM_ROWS"}:
+            # Every enforced mode bounds working hours: the engine's Stage-1 model
+            # blocks a start outside the window under ALL_ROWS, MINIMUM_ROWS and
+            # REQUIRED_LANGUAGE_ONLY alike (associate_language_windows is empty
+            # only for OFF). The REQUIRED_LANGUAGE_ONLY exclusivity check used to
+            # sit inside an ALL_ROWS/MINIMUM_ROWS branch and could never run, so
+            # that mode's rules were not validated at all.
+            if kind=="shift" and parsed.language_working_window_mode in {"ALL_ROWS", "MINIMUM_ROWS", "REQUIRED_LANGUAGE_ONLY"}:
                 entries = eng.associate_language_windows(parsed, assoc, day=d)
                 if entries and not any(
                     eng.shift_within_language_window(shift_map[norm(value)], window)
@@ -582,21 +588,21 @@ def validate(input_path: Path, output_path: Path, engine_path: Path) -> Dict[str
                         "window":", ".join(f"{eng.hhmm(start)}-{eng.hhmm(end)}" for start, end in entries),
                         "mode":parsed.language_working_window_mode,
                     })
-                if parsed.language_working_window_mode=="REQUIRED_LANGUAGE_ONLY":
-                    blocked = eng.shift_overlaps_required_language_for_noneligible(
-                        parsed, assoc, shift_map[norm(value)], d
-                    )
-                    if blocked is not None:
-                        failures.append({
-                            "type":"REQUIRED_LANGUAGE_ONLY_VIOLATION",
-                            "associate":assoc.name,
-                            "language":assoc.language,
-                            "required_language":sorted(blocked.required_languages),
-                            "day":DAYS[d],
-                            "shift":value,
-                            "window":f"{eng.hhmm(blocked.start_min)}-{eng.hhmm(blocked.end_min)}",
-                            "mode":parsed.language_working_window_mode,
-                        })
+            if kind=="shift" and parsed.language_working_window_mode=="REQUIRED_LANGUAGE_ONLY":
+                blocked = eng.shift_overlaps_required_language_for_noneligible(
+                    parsed, assoc, shift_map[norm(value)], d
+                )
+                if blocked is not None:
+                    failures.append({
+                        "type":"REQUIRED_LANGUAGE_ONLY_VIOLATION",
+                        "associate":assoc.name,
+                        "language":assoc.language,
+                        "required_language":sorted(blocked.required_languages),
+                        "day":DAYS[d],
+                        "shift":value,
+                        "window":f"{eng.hhmm(blocked.start_min)}-{eng.hhmm(blocked.end_min)}",
+                        "mode":parsed.language_working_window_mode,
+                    })
         # Contract constant shared with the engine, not an independent judgement.
         # Independence means recomputing coverage from the exported workbook - it
         # does not mean re-guessing what the contract says a long shift is.  This

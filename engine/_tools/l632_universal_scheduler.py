@@ -2899,6 +2899,37 @@ def language_working_window_violations(
     }
 
 
+def fixed_requests_outside_language_windows(parsed: ParsedInput) -> List[Dict[str, Any]]:
+    """Fixed shift requests that start outside their associate's enforced
+    language window, matched exactly as the Stage-1 model applies both.
+
+    Both are hard rules, so each row is a contradiction the solver can only
+    report as INFEASIBLE. Naming them turns "no schedule satisfies all hard
+    rules" into the cell to fix. Empty when the window is OFF or fixed
+    requests are disabled, because then nothing contradicts.
+    """
+    if not getattr(parsed, "fixed_enabled", False):
+        return []
+    rows: List[Dict[str, Any]] = []
+    for assoc in parsed.associates:
+        for d in range(min(7, len(assoc.fixed_schedule))):
+            fixed = assoc.fixed_schedule[d]
+            if preference_kind(fixed) != "shift":
+                continue
+            shift = next((s for s in parsed.shifts if norm(s.label) == norm(fixed)), None)
+            windows = associate_language_windows(parsed, assoc, day=d)
+            if shift is None or not windows:
+                continue
+            if any(shift_within_language_window(shift, window) for window in windows):
+                continue
+            rows.append({
+                "associate": assoc.name, "language": getattr(assoc, "language", ""),
+                "day": DAY_NAMES[d], "shift": shift.label,
+                "window": "+".join(f"{hhmm(start)}-{hhmm(end)}" for start, end in windows),
+            })
+    return rows
+
+
 def normalize_run_stage(raw: Any) -> Optional[str]:
     """Map a workbook Run Stage cell to a canonical stage, or None if unset.
 
@@ -20008,6 +20039,7 @@ def run_case(
             ) if remaining_conflict >= 30 else 0.0
             isolation = run_constraint_isolation(parsed, base_hard, isolation_budget, workers, log) if isolation_budget >= 15 else []
             audit["constraint_isolation"] = isolation
+            audit["hard_conflict_examples"] = fixed_requests_outside_language_windows(parsed)
             if conflict_refinement and conflict_refinement_deadline - time.time() >= 20:
                 refined = run_conflict_refinement(
                     parsed, base_hard, conflict_refinement_deadline - time.time(), workers, log
@@ -23535,6 +23567,82 @@ def _business_contract_message(row: Dict[str, Any]) -> Tuple[str, str, Dict[str,
     )
 
 
+HARD_FAMILY_LABELS = {
+    "zero_active": "every open interval needs at least one person",
+    "language": "language rules (minimum per interval and Language Working Window hours)",
+    "opening": "opening coverage",
+    "rest": "minimum rest between shifts",
+    "fixed": "fixed requests (Fixed Request sheet)",
+    "hard_off": "requested OFF days",
+    "leave": "leave",
+    "strict_off": "exact OFF days per week",
+    "max_shift_variety": "maximum different shift times per person",
+    "hard_floor": "hard coverage floor",
+    "week_boundary": "week boundary / next-Sunday rules",
+    "coverage_split": "Coverage Split group windows",
+}
+
+
+def _business_hard_conflict(audit: Dict[str, Any]) -> Dict[str, Any]:
+    """Plain-language findings for a hard-rule contradiction.
+
+    The constraint-isolation rows used to be shown as raw solver dumps. What a
+    scheduler needs from them is which rule, relaxed on its own, makes a
+    schedule possible - and, when a fixed request contradicts an enforced
+    language window, which request on which day.
+    """
+    isolation = [row for row in (audit.get("constraint_isolation") or []) if isinstance(row, dict)]
+    unlocking = [str(row.get("relaxed_family")) for row in isolation
+                 if row.get("status") in {"FEASIBLE", "OPTIMAL"}]
+    refined = audit.get("conflict_refinement") or {}
+    core = [str(f) for f in (refined.get("refined_core_families") or [])]
+    findings: List[Dict[str, Any]] = []
+    for family in core:
+        findings.append({"rule": HARD_FAMILY_LABELS.get(family, family), "family": family,
+                         "finding": "part of the smallest set of rules that cannot all hold together"})
+    for family in unlocking:
+        if family not in core:
+            findings.append({"rule": HARD_FAMILY_LABELS.get(family, family), "family": family,
+                             "finding": "relaxing this rule alone makes a schedule possible"})
+    examples = [
+        {"associate": f"{row.get('associate')} ({row.get('language')})", "day": row.get("day"),
+         "shift": f"fixed {row.get('shift')}", "window": f"language hours {row.get('window')}"}
+        for row in (audit.get("hard_conflict_examples") or []) if isinstance(row, dict)
+    ]
+    if unlocking or core:
+        names = [HARD_FAMILY_LABELS.get(f, f) for f in (core or unlocking)]
+        summary = ("The rules that conflict: " + "; ".join(names) + ".")
+    elif isolation:
+        summary = ("No single rule family explains it on its own: the conflict needs a combination "
+                   "of rules. Relaxing any one family alone did not make a schedule possible.")
+    else:
+        summary = "There was not enough time left to find which rules conflict."
+    actions: List[str] = []
+    if examples:
+        actions.append(
+            f"{len(examples)} fixed request(s) start outside their associate's language hours (listed "
+            "above). For each: change the request, correct the associate's Language on the Schedule "
+            "sheet, or widen that language's Coverage Start/End in Language Setup. "
+            "tools/check_input_workbook.py lists these before a run.")
+    actions.append("Review the rules named above in the workbook, then rerun.")
+    return {"summary": summary, "findings": findings, "examples": examples, "actions": actions}
+
+
+def _business_finding_text(item: Any) -> str:
+    """One readable line per finding: named fields, never nested solver dumps."""
+    if not isinstance(item, dict):
+        return str(item)[:300]
+    if item.get("rule") and item.get("finding"):
+        return f"{item['rule']}: {item['finding']}"
+    keys = ("detail", "message", "headline", "summary", "code", "failure_code", "gate", "rule",
+            "family", "relaxed_family", "status", "interpretation", "value", "limit")
+    parts = [f"{k}={item[k]}" for k in keys
+             if k in item and not isinstance(item[k], (dict, list, tuple, set)) and item[k] not in (None, "")]
+    if not parts:
+        parts = [f"{k}={v}" for k, v in item.items() if not isinstance(v, (dict, list, tuple, set))]
+    return "; ".join(parts)[:300]
+
+
 def build_business_outcome(audit: Dict[str, Any], return_code: int) -> Dict[str, Any]:
     status = str(audit.get("status") or ("PASS" if int(return_code) == 0 else "FAIL"))
     outcome: Dict[str, Any] = {
@@ -23712,13 +23820,15 @@ def build_business_outcome(audit: Dict[str, Any], return_code: int) -> Dict[str,
         return outcome
 
     if status == "FAIL_HARD_CONTRACT_INFEASIBLE":
+        conflict = _business_hard_conflict(audit)
         outcome.update({
             "outcome_code": "HARD_RULE_COMBINATION_INFEASIBLE",
             "outcome_category": "INPUT_OR_POLICY_ACTION_REQUIRED",
             "headline": "No schedule satisfies all hard rules together",
-            "plain_language_summary": "The roster and legal shifts are individually readable, but the combined hard-rule contract was proven infeasible by the hard-feasibility probe.",
-            "resource_findings": [row for row in (audit.get("constraint_isolation") or []) if isinstance(row, dict)][:20],
-            "recommended_actions": ["Review the reported hard-rule families, fixed requests, rest, OFF, language, and boundary requirements before rerunning."],
+            "plain_language_summary": "The roster and legal shifts are individually readable, but the hard rules contradict each other. " + conflict["summary"],
+            "resource_findings": conflict["findings"][:20],
+            "affected_examples": conflict["examples"][:50],
+            "recommended_actions": conflict["actions"],
         })
         return outcome
 
@@ -23730,7 +23840,8 @@ def build_business_outcome(audit: Dict[str, Any], return_code: int) -> Dict[str,
             "headline": "Hard-feasibility search ended UNKNOWN before a release schedule was found",
             "plain_language_summary": "The smoke/runtime budget was not enough to prove feasibility or infeasibility. This is not a mathematical proof that the schedule is impossible.",
             "best_proven": {"probe_status": probe.get("cp_status"), "probe_elapsed_sec": probe.get("elapsed_sec")},
-            "resource_findings": [row for row in (audit.get("constraint_isolation") or []) if isinstance(row, dict)][:20],
+            "resource_findings": _business_hard_conflict(audit)["findings"][:20],
+            "affected_examples": _business_hard_conflict(audit)["examples"][:50],
             "recommended_actions": ["Rerun with the RC8.4 GDI/NMG runtime policy or a longer Quick/Deep budget before changing business rules."],
         })
         return outcome
@@ -23768,12 +23879,14 @@ def format_business_outcome(outcome: Dict[str, Any]) -> str:
     findings = outcome.get("resource_findings") or []
     if findings:
         lines.extend(["", "Main blockers:"])
-        lines.extend("- " + json.dumps(item, ensure_ascii=False, sort_keys=True) for item in findings[:8])
+        lines.extend("- " + _business_finding_text(item) for item in findings[:8])
     examples = outcome.get("affected_examples") or []
     if examples:
         lines.extend(["", "Affected examples:"])
-        for item in examples[:8]:
+        for item in examples[:20]:
             lines.append(f"- {item.get('associate') or 'Unknown associate'} | {item.get('day') or ''} | {item.get('shift') or ''} | {item.get('window') or ''}".strip(" |"))
+        if len(examples) > 20:
+            lines.append(f"- ... and {len(examples) - 20} more (BUSINESS_OUTCOME.json lists them all)")
     actions = outcome.get("recommended_actions") or []
     if actions:
         lines.extend(["", "Required action:"])

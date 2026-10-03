@@ -1,0 +1,37 @@
+Outcome: No schedule satisfies all hard rules together
+Status: FAIL_HARD_CONTRACT_INFEASIBLE
+Production eligible: False
+Independent validation: NOT_RUN (return code None)
+
+The roster and legal shifts are individually readable, but the hard rules contradict each other. The rules that conflict: language rules (minimum per interval and Language Working Window hours); fixed requests (Fixed Request sheet).
+
+Main blockers:
+- language rules (minimum per interval and Language Working Window hours): relaxing this rule alone makes a schedule possible
+- fixed requests (Fixed Request sheet): relaxing this rule alone makes a schedule possible
+
+Affected examples:
+- Jhonny Mascarenhas (English) | Sun | fixed 05:00 - 14:00 | language hours 17:00-04:00
+- Jhonny Mascarenhas (English) | Mon | fixed 05:00 - 14:00 | language hours 16:00-03:00
+- Jhonny Mascarenhas (English) | Tue | fixed 05:00 - 14:00 | language hours 16:00-03:00
+- Jhonny Mascarenhas (English) | Wed | fixed 05:00 - 14:00 | language hours 16:00-03:00
+- Jhonny Mascarenhas (English) | Thu | fixed 05:00 - 14:00 | language hours 16:00-03:00
+- Meraj Shaikh (English) | Sun | fixed 05:00 - 14:00 | language hours 17:00-04:00
+- Meraj Shaikh (English) | Mon | fixed 05:00 - 14:00 | language hours 16:00-03:00
+- Meraj Shaikh (English) | Tue | fixed 05:00 - 14:00 | language hours 16:00-03:00
+- Meraj Shaikh (English) | Wed | fixed 05:00 - 14:00 | language hours 16:00-03:00
+- Meraj Shaikh (English) | Thu | fixed 05:00 - 14:00 | language hours 16:00-03:00
+- Jojie Lovino (English) | Sun | fixed 04:00 - 13:00 | language hours 17:00-04:00
+- Jojie Lovino (English) | Mon | fixed 04:00 - 13:00 | language hours 16:00-03:00
+- Jojie Lovino (English) | Tue | fixed 04:00 - 13:00 | language hours 16:00-03:00
+- Jojie Lovino (English) | Wed | fixed 04:00 - 13:00 | language hours 16:00-03:00
+- Jojie Lovino (English) | Thu | fixed 04:00 - 13:00 | language hours 16:00-03:00
+- Sharmaine Magtoto (English) | Mon | fixed 03:00 - 12:00 | language hours 16:00-03:00
+- Sharmaine Magtoto (English) | Tue | fixed 03:00 - 12:00 | language hours 16:00-03:00
+- Sharmaine Magtoto (English) | Wed | fixed 03:00 - 12:00 | language hours 16:00-03:00
+- Sharmaine Magtoto (English) | Thu | fixed 03:00 - 12:00 | language hours 16:00-03:00
+- Zyad Mahrous (International) | Sun | fixed 00:00 - 09:00 | language hours 03:00-16:00
+- ... and 4 more (BUSINESS_OUTCOME.json lists them all)
+
+Required action:
+- 24 fixed request(s) start outside their associate's language hours (listed above). For each: change the request, correct the associate's Language on the Schedule sheet, or widen that language's Coverage Start/End in Language Setup. tools/check_input_workbook.py lists these before a run.
+- Review the rules named above in the workbook, then rerun.

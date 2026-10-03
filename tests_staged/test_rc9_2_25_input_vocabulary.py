@@ -275,6 +275,159 @@ class ThePreCheckShowsTheLanguageHours(unittest.TestCase):
                           out.stdout)
 
 
+class TheRunNamesTheConflictingRules(unittest.TestCase):
+    """A hard-rule contradiction used to print each constraint-isolation row as
+    a raw solver dump under "Main blockers". It now names the rule families
+    that conflict and, for an enforced language window, each fixed request
+    that starts outside its person's hours."""
+
+    ISOLATION = [
+        {"relaxed_family": "language", "status": "FEASIBLE", "interpretation": "x",
+         "diagnostics": {"solver_telemetry": {"num_conflicts": 0}}},
+        {"relaxed_family": "fixed", "status": "FEASIBLE", "diagnostics": {"variables": 1}},
+        {"relaxed_family": "rest", "status": "INFEASIBLE", "diagnostics": {"variables": 1}},
+    ]
+
+    def test_the_engine_lists_fixed_requests_outside_an_enforced_window(self):
+        parsed = E.parse_input(VOICE)
+        self.assertEqual(E.fixed_requests_outside_language_windows(parsed), [],
+                         "with the window OFF nothing contradicts")
+        parsed.language_working_window_mode = "ALL_ROWS"
+        rows = E.fixed_requests_outside_language_windows(parsed)
+        self.assertEqual(len(rows), 20)
+        self.assertIn({"associate": "Jhonny Mascarenhas", "language": "English", "day": "Sun",
+                       "shift": "05:00 - 14:00", "window": "16:00-03:00"}, rows)
+
+    def test_the_outcome_text_names_rules_and_requests_without_solver_dumps(self):
+        audit = {"status": "FAIL_HARD_CONTRACT_INFEASIBLE", "constraint_isolation": self.ISOLATION,
+                 "hard_conflict_examples": [{"associate": "A B", "language": "English", "day": "Sun",
+                                             "shift": "05:00 - 14:00", "window": "16:00-03:00"}]}
+        text = E.format_business_outcome(E.build_business_outcome(audit, 2))
+        self.assertNotIn("diagnostics", text)
+        self.assertNotIn("{", text)
+        self.assertIn("fixed requests (Fixed Request sheet): relaxing this rule alone makes a schedule possible", text)
+        self.assertIn("language rules", text)
+        self.assertNotIn("minimum rest between shifts", text)
+        self.assertIn("A B (English) | Sun | fixed 05:00 - 14:00 | language hours 16:00-03:00", text)
+        self.assertIn("1 fixed request(s) start outside", text)
+
+    def test_no_single_family_and_no_isolation_are_said_plainly(self):
+        combo = E.build_business_outcome({"status": "FAIL_HARD_CONTRACT_INFEASIBLE",
+                                          "constraint_isolation": self.ISOLATION[2:]}, 2)
+        self.assertIn("No single rule family explains it", combo["plain_language_summary"])
+        none = E.build_business_outcome({"status": "FAIL_HARD_CONTRACT_INFEASIBLE"}, 2)
+        self.assertIn("not enough time left", none["plain_language_summary"])
+
+    def test_the_results_folder_keeps_the_engine_diagnosis(self):
+        """The wrapper used to replace it with "the engine output problem" and
+        wrote only the summary paragraph to BUSINESS_OUTCOME.txt."""
+        import importlib.util
+        import json
+        spec = importlib.util.spec_from_file_location(
+            "wrapper_hard_conflict", ROOT / "engine" / "RUN_UNIVERSAL_PRODUCTION.py")
+        wrapper = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = wrapper
+        spec.loader.exec_module(wrapper)
+        audit = {"status": "FAIL_HARD_CONTRACT_INFEASIBLE", "constraint_isolation": self.ISOLATION,
+                 "hard_conflict_examples": [{"associate": "A B", "language": "English", "day": "Sun",
+                                             "shift": "05:00 - 14:00", "window": "16:00-03:00"}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "BUSINESS_OUTCOME.json").write_text(json.dumps(E.build_business_outcome(audit, 2)))
+            (root / "CASE.l6_3_2_3_solver_audit.json").write_text(json.dumps({"status": audit["status"]}))
+            wrapper.reconcile_business_outcome_after_validation(root, {"status": "NOT_RUN", "return_code": None}, 2)
+            outcome = json.loads((root / "BUSINESS_OUTCOME.json").read_text())
+            text = (root / "BUSINESS_OUTCOME.txt").read_text()
+        self.assertEqual(outcome["outcome_code"], "HARD_RULE_COMBINATION_INFEASIBLE")
+        self.assertEqual(outcome["technical_status"], "FAIL_HARD_CONTRACT_INFEASIBLE")
+        self.assertFalse(outcome["production_eligible"])
+        self.assertNotIn("engine output problem", text)
+        self.assertIn("No schedule satisfies all hard rules together", text)
+        self.assertIn("fixed requests (Fixed Request sheet): relaxing this rule alone", text)
+        self.assertIn("A B (English) | Sun | fixed 05:00 - 14:00 | language hours 16:00-03:00", text)
+        self.assertIn("Required action:", text)
+
+
+LANG_RUN = REPO / "fixtures" / "real_runs" / "language_hours"
+
+
+class TheValidatorChecksLanguageHoursInEveryEnforcedMode(unittest.TestCase):
+    """The validator checked shift starts against language hours only under
+    ALL_ROWS and MINIMUM_ROWS, and its REQUIRED_LANGUAGE_ONLY check sat inside
+    that branch, so it never ran. The engine enforces the hours in all three
+    modes. Fixture: the enforced Voice run of 2026-10-03 (evidence/language_hours)."""
+
+    INPUT = LANG_RUN / "Cricut_Voice_LANGUAGE_HOURS.xlsx"
+    OUTPUT = LANG_RUN / "VOICE_FINAL_SHEET_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"
+
+    def validate(self, book, output):
+        sys.path.insert(0, str(ROOT / "engine" / "tools"))
+        import independent_validator as V
+        result = V.validate(Path(book), Path(output), ROOT / "engine" / "_tools" / "l632_universal_scheduler.py")
+        return [f for f in result.get("failures", []) if "LANGUAGE" in str(f.get("type"))]
+
+    def _move_international_to_evening(self, tmp):
+        from openpyxl import load_workbook
+        out = Path(tmp) / self.OUTPUT.name
+        shutil.copy(self.OUTPUT, out)
+        wb = load_workbook(out)
+        ws = wb["Schedule"]
+        header = next(r for r in range(1, 10) if "Language" in [c.value for c in ws[r]])
+        cols = {c.value: c.column for c in ws[header]}
+        for r in range(header + 1, ws.max_row + 1):
+            if ws.cell(r, cols["Language"]).value == "International":
+                for day in ("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"):
+                    if ":" in str(ws.cell(r, cols[day]).value or ""):
+                        ws.cell(r, cols[day], "18:00 - 03:00")
+                        wb.save(out)
+                        return out, ws.cell(r, cols["SF Name"]).value, day
+        raise AssertionError("no International shift in the fixture")
+
+    def _with_mode(self, tmp, mode, international_minimum=None):
+        book = Path(tmp) / f"in_{mode}.xlsx"
+        shutil.copy(self.INPUT, book)
+        edits = [_set_instruction("Language Working Window", mode)]
+        if international_minimum is not None:
+            def set_minimum(wb):
+                ws = wb["Language Setup"]
+                cols = {ws.cell(2, c).value: c for c in range(1, ws.max_column + 1)}
+                for r in range(3, ws.max_row + 1):
+                    if ws.cell(r, cols["Language"]).value == "International":
+                        ws.cell(r, cols["Minimum Per Interval"], international_minimum)
+            edits.append(set_minimum)
+        _edit(book, edits)
+        return book
+
+    def test_the_enforced_run_passes_and_a_moved_shift_is_caught_under_all_rows(self):
+        self.assertEqual(self.validate(self.INPUT, self.OUTPUT), [])
+        with tempfile.TemporaryDirectory() as tmp:
+            out, name, day = self._move_international_to_evening(tmp)
+            failures = self.validate(self.INPUT, out)
+        self.assertIn(("LANGUAGE_WORKING_WINDOW", name, day),
+                      {(f["type"], f["associate"], f["day"]) for f in failures})
+
+    def test_required_language_only_also_checks_the_hours(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            book = self._with_mode(tmp, "REQUIRED_LANGUAGE_ONLY")
+            self.assertEqual(self.validate(book, self.OUTPUT), [])
+            out, name, day = self._move_international_to_evening(tmp)
+            failures = self.validate(book, out)
+        self.assertIn(("LANGUAGE_WORKING_WINDOW", name, day),
+                      {(f["type"], f["associate"], f["day"]) for f in failures})
+
+    def test_required_language_only_exclusivity_is_reachable(self):
+        # International minimum 1 in 00:00-16:00: English associates cannot
+        # cover International, so English shifts reaching into those hours are
+        # violations under REQUIRED_LANGUAGE_ONLY and only under it.
+        with tempfile.TemporaryDirectory() as tmp:
+            required = self._with_mode(tmp, "REQUIRED_LANGUAGE_ONLY", international_minimum=1)
+            all_rows = self._with_mode(tmp, "ALL_ROWS", international_minimum=1)
+            types_required = {f["type"] for f in self.validate(required, self.OUTPUT)}
+            types_all_rows = {f["type"] for f in self.validate(all_rows, self.OUTPUT)}
+        self.assertIn("REQUIRED_LANGUAGE_ONLY_VIOLATION", types_required)
+        self.assertNotIn("REQUIRED_LANGUAGE_ONLY_VIOLATION", types_all_rows)
+
+
 class OnlyTheRowTheEngineReadsIsChecked(unittest.TestCase):
     def test_a_later_alias_with_prose_is_ignored(self):
         warnings = []

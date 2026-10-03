@@ -456,6 +456,46 @@ def apply_metric_parity_gate(
     return int(validation['return_code']), validation
 
 
+# Engine statuses that end without a schedule but carry the engine's own
+# diagnosis of why; the reconciled outcome keeps it.
+ENGINE_DIAGNOSED_NO_ARTIFACT = {'FAIL_HARD_CONTRACT_INFEASIBLE', 'FAIL_HARD_CONTRACT_UNKNOWN'}
+
+
+def _outcome_detail_text(outcome: dict) -> str:
+    """The findings, named requests and actions as readable lines.
+
+    BUSINESS_OUTCOME.txt is the file a scheduler opens; it used to stop at the
+    one-paragraph summary, so the rules and cells to fix were only in the JSON.
+    """
+    def finding(item) -> str:
+        if not isinstance(item, dict):
+            return str(item)[:300]
+        if item.get('rule') and item.get('finding'):
+            return f"{item['rule']}: {item['finding']}"
+        keys = ('detail', 'message', 'headline', 'summary', 'code', 'failure_code', 'gate',
+                'rule', 'family', 'status', 'value', 'limit')
+        parts = [f'{k}={item[k]}' for k in keys
+                 if k in item and not isinstance(item[k], (dict, list)) and item[k] not in (None, '')]
+        return '; '.join(parts)[:300] or str({k: v for k, v in item.items()
+                                              if not isinstance(v, (dict, list))})[:300]
+    lines = []
+    findings = outcome.get('resource_findings') or []
+    if findings:
+        lines += ['', 'Main blockers:'] + [f'- {finding(item)}' for item in findings[:8]]
+    examples = outcome.get('affected_examples') or []
+    if examples:
+        lines += ['', 'Affected examples:']
+        for item in examples[:20]:
+            if isinstance(item, dict):
+                lines.append('- ' + ' | '.join(str(item.get(k) or '') for k in ('associate', 'day', 'shift', 'window')).strip(' |'))
+        if len(examples) > 20:
+            lines.append(f'- ... and {len(examples) - 20} more (BUSINESS_OUTCOME.json lists them all)')
+    actions = outcome.get('recommended_actions') or []
+    if actions:
+        lines += ['', 'Required action:'] + [f'- {a}' for a in actions]
+    return '\n'.join(lines) + ('\n' if lines else '')
+
+
 def reconcile_business_outcome_after_validation(
     case_root: Path, independent_validation: dict, runner_return_code: int
 ) -> None:
@@ -581,6 +621,12 @@ def reconcile_business_outcome_after_validation(
                         'correct the input/resource contract and rerun.'
                     )
                 outcome['technical_status'] = 'FAIL_PRE_SOLVER_CONTRACT'
+            elif audit_status in ENGINE_DIAGNOSED_NO_ARTIFACT and validation_status == 'NOT_RUN':
+                # The engine proved why there is no schedule (which hard rules
+                # contradict, and the requests involved). Replacing that with
+                # "the engine output problem" hid the reason from the person
+                # who has to fix the workbook.
+                outcome['technical_status'] = audit_status
             else:
                 outcome['outcome_code'] = 'NO_FINAL_SCHEDULE_GENERATED_VALIDATION_NOT_RUN'
                 outcome['outcome_category'] = 'ACTION_REQUIRED'
@@ -668,7 +714,7 @@ def reconcile_business_outcome_after_validation(
         f"Production eligible: {bool(outcome.get('production_eligible'))}\n"
         f"Independent validation: {validation_status} (return code {validation_rc})\n\n"
         f"{outcome.get('plain_language_summary', '')}\n"
-    )
+    ) + _outcome_detail_text(outcome)
     for path in (outcome_path, debug_outcome_path):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(outcome, indent=2), encoding='utf-8')

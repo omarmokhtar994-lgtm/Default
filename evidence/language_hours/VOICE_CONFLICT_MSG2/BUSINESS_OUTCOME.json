@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "engine_release": "L6.3.2.8-RC9.2.2-PRODUCTION-HARDENED-RC6",
+  "technical_status": "FAIL_HARD_CONTRACT_INFEASIBLE",
+  "technical_return_code": 2,
+  "production_eligible": false,
+  "outcome_code": "HARD_RULE_COMBINATION_INFEASIBLE",
+  "outcome_category": "INPUT_OR_POLICY_ACTION_REQUIRED",
+  "headline": "No schedule satisfies all hard rules together",
+  "plain_language_summary": "The roster and legal shifts are individually readable, but the hard rules contradict each other. The rules that conflict: language rules (minimum per interval and Language Working Window hours); fixed requests (Fixed Request sheet).",
+  "requested": {},
+  "best_proven": {},
+  "gap": {},
+  "resource_findings": [
+    {
+      "rule": "language rules (minimum per interval and Language Working Window hours)",
+      "family": "language",
+      "finding": "relaxing this rule alone makes a schedule possible"
+    },
+    {
+      "rule": "fixed requests (Fixed Request sheet)",
+      "family": "fixed",
+      "finding": "relaxing this rule alone makes a schedule possible"
+    }
+  ],
+  "affected_examples": [
+    {
+      "associate": "Jhonny Mascarenhas (English)",
+      "day": "Sun",
+      "shift": "fixed 05:00 - 14:00",
+      "window": "language hours 17:00-04:00"
+    },
+    {
+      "associate": "Jhonny Mascarenhas (English)",
+      "day": "Mon",
+      "shift": "fixed 05:00 - 14:00",
+      "window": "language hours 16:00-03:00"
+    },
+    {
+      "associate": "Jhonny Mascarenhas (English)",
+      "day": "Tue",
+      "shift": "fixed 05:00 - 14:00",
+      "window": "language hours 16:00-03:00"
+    },
+    {
+      "associate": "Jhonny Mascarenhas (English)",
+      "day": "Wed",
+      "shift": "fixed 05:00 - 14:00",
+      "window": "language hours 16:00-03:00"
+    },
+    {
+      "associate": "Jhonny Mascarenhas (English)",
+      "day": "Thu",
+      "shift": "fixed 05:00 - 14:00",
+      "window": "language hours 16:00-03:00"
+    },
+    {
+      "associate": "Meraj Shaikh (English)",
+      "day": "Sun",
+      "shift": "fixed 05:00 - 14:00",
+      "window": "language hours 17:00-04:00"
+    },
+    {
+      "associate": "Meraj Shaikh (English)",
+      "day": "Mon",
+      "shift": "fixed 05:00 - 14:00",
+      "window": "language hours 16:00-03:00"
+    },
+    {
+      "associate": "Meraj Shaikh (English)",
+      "day": "Tue",
+      "shift": "fixed 05:00 - 14:00",
+      "window": "language hours 16:00-03:00"
+    },
+    {
+      "associate": "Meraj Shaikh (English)",
+      "day": "Wed",
+      "shift": "fixed 05:00 - 14:00",
+      "window": "language hours 16:00-03:00"
+    },
+    {
+      "associate": "Meraj Shaikh (English)",
+      "day": "Thu",
+      "shift": "fixed 05:00 - 14:00",
+      "window": "language hours 16:00-03:00"
+    },
+    {
+      "associate": "Jojie Lovino (English)",
+      "day": "Sun",
+      "shift": "fixed 04:00 - 13:00",
+      "window": "language hours 17:00-04:00"
+    },
+    {
+      "associate": "Jojie Lovino (English)",
+      "day": "Mon",
+      "shift": "fixed 04:00 - 13:00",
+      "window": "language hours 16:00-03:00"
+    },
+    {
+      "associate": "Jojie Lovino (English)",
+      "day": "Tue",
+      "shift": "fixed 04:00 - 13:00",
+      "window": "language hours 16:00-03:00"
+    },
+    {
+      "associate": "Jojie Lovino (English)",
+      "day": "Wed",
+      "shift": "fixed 04:00 - 13:00",
+      "window": "language hours 16:00-03:00"
+    },
+    {
+      "associate": "Jojie Lovino (English)",
+      "day": "Thu",
+      "shift": "fixed 04:00 - 13:00",
+      "window": "language hours 16:00-03:00"
+    },
+    {
+      "associate": "Sharmaine Magtoto (English)",
+      "day": "Mon",
+      "shift": "fixed 03:00 - 12:00",
+      "window": "language hours 16:00-03:00"
+    },
+    {
+      "associate": "Sharmaine Magtoto (English)",
+      "day": "Tue",
+      "shift": "fixed 03:00 - 12:00",
+      "window": "language hours 16:00-03:00"
+    },
+    {
+      "associate": "Sharmaine Magtoto (English)",
+      "day": "Wed",
+      "shift": "fixed 03:00 - 12:00",
+      "window": "language hours 16:00-03:00"
+    },
+    {
+      "associate": "Sharmaine Magtoto (English)",
+      "day": "Thu",
+      "shift": "fixed 03:00 - 12:00",
+      "window": "language hours 16:00-03:00"
+    },
+    {
+      "associate": "Zyad Mahrous (International)",
+      "day": "Sun",
+      "shift": "fixed 00:00 - 09:00",
+      "window": "language hours 03:00-16:00"
+    },
+    {
+      "associate": "Zyad Mahrous (International)",
+      "day": "Mon",
+      "shift": "fixed 01:00 - 10:00",
+      "window": "language hours 03:00-16:00"
+    },
+    {
+      "associate": "Zyad Mahrous (International)",
+      "day": "Tue",
+      "shift": "fixed 01:00 - 10:00",
+      "window": "language hours 03:00-16:00"
+    },
+    {
+      "associate": "Zyad Mahrous (International)",
+      "day": "Wed",
+      "shift": "fixed 01:00 - 10:00",
+      "window": "language hours 03:00-16:00"
+    },
+    {
+      "associate": "Zyad Mahrous (International)",
+      "day": "Thu",
+      "shift": "fixed 01:00 - 10:00",
+      "window": "language hours 03:00-16:00"
+    }
+  ],
+  "recommended_actions": [
+    "24 fixed request(s) start outside their associate's language hours (listed above). For each: change the request, correct the associate's Language on the Schedule sheet, or widen that language's Coverage Start/End in Language Setup. tools/check_input_workbook.py lists these before a run.",
+    "Review the rules named above in the workbook, then rerun."
+  ],
+  "technical_reference": {
+    "return_code_meaning": "The numeric return code is retained for automation only. Use this business outcome as the primary user-facing result."
+  },
+  "independent_validation": {
+    "status": "NOT_RUN",
+    "return_code": null,
+    "workbook": null,
+    "json": null,
+    "csv": null,
+    "quality_gate_status": null,
+    "coverage_quality_gate_status": null,
+    "metric_parity": null
+  }
+}

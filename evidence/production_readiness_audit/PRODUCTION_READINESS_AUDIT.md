@@ -38,6 +38,32 @@ All evidence is in this folder; `WORKING_NOTES.md` is the running log.
 >   - The joint model's split constraint (that model is off in production).
 >   - P3 items.
 
+> **Status update — Phase C done (2026-10-03, engine sha256 `a2d4e7a1…`).**
+> - **Fixed:** F-06 and F-07. F-20 is fixed as a capability: the business still has to state its long-shift break rule. F-28 is mitigated by an opt-in switch.
+> - **F-06:** a week with no schedule that meets every hard rule now gets a non-releasable **shortfall schedule**. It meets every person rule, and every missed coverage minimum is listed on a Shortfalls sheet and confirmed by the independent validator and the clean-room checker (`phase_c/PHASE_C_RESULT.md`):
+>   - S04: Sun 03:00–03:45 only;
+>   - S05: 64 Spanish quarters;
+>   - S09: 9 quarters;
+>   - S11: 1 Spanish quarter;
+>   - S13: 4 quarters.
+>
+>   Input errors (S10, S14) are still refused, and the runner never exits 0 on a shortfall schedule.
+> - **New findings:**
+>   - **F-33:** OR-Tools corrupts Stage 2's shared balance expressions. It is fixed for the shortfall pass and **open for normal runs**: the pre-registered A/B of the fix did not pass.
+>   - **F-34:** the Stage-1 window ignored the configured slice. Fixed; identical at the default.
+> - **F-21 (C3):** the AE_IT Stage-1 shape test (10 runs) is in progress.
+> - **Good inputs are unaffected:**
+>   - all 111 repository workbooks parse identically;
+>   - the Stage-1 and Stage-2 models of every packaged and real-run workbook are constraint-for-constraint identical to Phase B;
+>   - the real Voice run gives the same 248 / 264.
+> - **Gate:** 1,377 tests, PASS.
+> - **Still open:**
+>   - F-33 for normal runs;
+>   - Volume Weighted as a default (needs the five-case A/B and a business decision);
+>   - the F-11 range clamps;
+>   - the joint model's split constraint;
+>   - P3 items.
+
 ## A. Executive summary
 
 **Verdict: not ready for unsupervised production.** It is usable today only for the packaged workbooks and their layouts, with a person reviewing every run. The schedules it does publish are trustworthy against the contract it parsed. The problems are on both sides of that:
@@ -187,7 +213,7 @@ Evidence paths are relative to `evidence/production_readiness_audit/`. `l632` me
 - **Regression risk:** low for all-days rules (identical answers). Day-specific overnight rules change on the first listed day's early hours, which is the intended correction.
 - **Test:** K-11.
 
-#### F-06 · P1 · Confirmed (S04/S05/S09/S10/S11) — no degraded mode: one locally impossible hard minimum withholds the whole week's schedule
+#### ✅ FIXED (Phase C: shortfall schedule, `phase_c/PHASE_C_RESULT.md`) — F-06 · P1 · Confirmed (S04/S05/S09/S10/S11) — no degraded mode: one locally impossible hard minimum withholds the whole week's schedule
 - **Where:**
   - `l632 capacity_diagnostics` (hard_failures: `ZERO_ACTIVE_INTERVAL_PROVABLY_IMPOSSIBLE`, `LANGUAGE_WINDOW_MAX_CAPACITY_BELOW_MINIMUM`, opening, hard floor).
   - `build_skeleton` hard families: ≥1 person in every active quarter, language minimum, opening minimum, coverage split, next-Sunday floor (F-07).
@@ -210,7 +236,7 @@ Evidence paths are relative to `evidence/production_readiness_audit/`. `l632` me
 - **Regression risk:** medium. A new path, but only on inputs that today produce nothing.
 - **Test:** K-17.
 
-#### F-07 · P1 · Confirmed (reading + S13) — the next-Sunday floor is hard while the current-week floor is soft
+#### ✅ FIXED (Phase C: measured as coverage quality; the normal model keeps it as a constraint so feasible weeks search as before, and the shortfall pass makes it elastic) — F-07 · P1 · Confirmed (reading + S13) — the next-Sunday floor is hard while the current-week floor is soft
 - **Where:**
   - `l632 build_skeleton` 7243 and 7299: `eff*raw >= floor units` per spill quarter and per interval.
   - `calculate_metrics` 10222: `week_boundary_hard_failure_count` includes floor misses.
@@ -323,7 +349,7 @@ Each probe below was ACCEPTED or WARNED by the contract unless stated.
 - F-05 is the proof that a shared defect is invisible to it. F-01's duplicate-row loss passes its raw cross-check as well.
 - **Fix:** add the clean-room checker (`tools/clean_room_check.py`, written in this audit, no engine imports) to the release gate. It agreed with the engine on all 20 real runs.
 
-#### F-20 · P2 · Missing capability (stated as a defect only where the business requires it) — breaks are the same for every shift length
+#### ✅ FIXED (Phase C: optional `Break Set For Shifts Of N Hours Or More` rows; the business must state the rule) — F-20 · P2 · Missing capability (stated as a defect only where the business requires it) — breaks are the same for every shift length
 - `_parse_break_segments`: one global set (default 15/30/15) applied to 9 h and 11 h shifts alike. See E-5.
 
 #### F-21 · P2 · Regression (known, measured) — AE_IT after-break floor
@@ -342,11 +368,13 @@ Each probe below was ACCEPTED or WARNED by the contract unless stated.
 | F-25 | Confirmed | Runner `--overwrite` refuses a case whose input snapshot differs ("Use a new schedule-id"), contrary to its help text. Fail-safe but confusing. |
 | F-26 | Confirmed | Dead or latent code: `parsed.dates` is never read, and holds the first demand row rather than dates. Bundled-fallback inventory points at directories that do not exist. |
 | F-27 | Confirmed | `CoverageSplitRule.overlaps` tests only the slot start for a 15-minute span (the defect fixed in `LanguageRule.overlaps`). Harmless on quarter-aligned windows. |
-| F-28 | Design risk | The selector counts intervals at or above a ratio, all equally weighted; volume is ignored and deficit depth only enters through 0.01 buckets. Pool-relative envelopes (anchor+2, +0.05) make the winner depend on which other candidates exist. |
+| F-28 ✅ MITIGATED (Phase C: opt-in `Coverage Objective Weighting = Volume Weighted`; default unchanged until a five-case A/B and a business decision) | Design risk | The selector counts intervals at or above a ratio, all equally weighted; volume is ignored and deficit depth only enters through 0.01 buckets. Pool-relative envelopes (anchor+2, +0.05) make the winner depend on which other candidates exist. |
 | F-29 | Confirmed | The engine CLI defaults differ from the runner's (joint refinement on in the engine, off in the runner). Direct engine calls behave differently from production. |
 | F-30 | Design risk | `separate_off_days = No` accepts a Sat+Sun pair of the same week as consecutive (cyclic assumption). With a different next week, those days are not consecutive. |
 | F-31 | Design risk | A Language Setup per-day working window: on a day with no row, that language's associates may start at any hour (documented in the pre-check, surprising to planners). |
 | F-32 | Improvement | Stage 1 uses whole-percent shrinkage (×100), while Stage 2 and the joint model use the 1e6 scale. Search-only; final metrics are exact. |
+| F-33 (Phase C, **open for normal runs**) | Confirmed defect | OR-Tools 9.15 reduces `k - (k - S)` to `S` itself, and the following `- allowed` mutates `S` in place. Stage 2 reuses one `headcount - breaks` expression per quarter in the whole-week and next-Sunday adjacent-balance terms, so 4–40 balance constraints per real model are corrupted (all 40 saved models; `phase_c/F33_STAGE2_MODEL_DIFF.json`). Soft terms only: no hard rule is affected, and every one is re-checked from the cells. Fixed in the shortfall pass, where the model is wrong without it. For normal runs the pre-registered A/B failed (H1 after-target −5.0; concurrency worse on Voice, Chat, H1; `phase_c/F33_AB_SCORE.json`), so the corrected objective needs re-tuning before it ships. |
+| F-34 (Phase C, ✅ FIXED) | Confirmed defect | The budget planner sized the Stage-1 window from the 45 s constant and ignored `Stage 1 Minimum Slice Seconds`, so a deeper slice ran fewer profiles instead of deeper ones (and the earlier AE_IT slice test could not test its hypothesis). Now `max(45 s, slice)` per profile, capped at 45 % of the run; identical at the default. |
 
 ## D. Production readiness assessment
 
@@ -580,10 +608,10 @@ After Phase A, rerun the parse probes and scenarios S01–S14. Expected: every "
 
 | Step | Fixes | Change | Depends on |
 |---|---|---|---|
-| C1 | F-06, F-07 | Elastic second pass when the hard probe fails or the contract's capacity proofs fail. Next-Sunday floor becomes soft. Published as a non-releasable shortfall schedule with every slack listed. | A2, B5 |
-| C2 | F-20 | Break entitlement by shift duration. Needs a business statement of the rule first. | – |
+| C1 ✅ | F-06, F-07 | Elastic second pass when the hard probe fails or the contract's capacity proofs fail. Next-Sunday floor becomes soft. Published as a non-releasable shortfall schedule with every slack listed. | A2, B5 |
+| C2 ✅ | F-20 | Break entitlement by shift duration. Needs a business statement of the rule first. | – |
 | C3 | F-21 | AE_IT floor: the stage-bisection A/B already designed (RC5 vs FINAL, one block at a time, ≥ 5 seeds). | – |
-| C4 | F-28 | Optional volume-weighted objective, behind a workbook switch, measured by pre-registered A/B before it can become the default. | – |
+| C4 ✅ (switch shipped; default unchanged) | F-28 | Optional volume-weighted objective, behind a workbook switch, measured by pre-registered A/B before it can become the default. | – |
 
 ### Phase D — performance
 

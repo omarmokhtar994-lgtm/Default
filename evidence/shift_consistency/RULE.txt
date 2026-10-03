@@ -1,0 +1,23 @@
+Shift consistency polish - acceptance rule, written 2026-10-03 before the corpus measurement
+
+The polish runs after the final schedule is chosen. It re-deals same-day shifts
+between associates of one language and shift length, and moves a start by +-1 h
+only when the full metrics show nothing got worse.
+
+Measured on:
+(a) every finished run in this session that kept its candidate pool: 11 runs over
+    Voice (3), Chat, H1, AE_IT (5) and the corrected Voice sheet seeds (2). The
+    polish is applied to the published schedule.
+(b) one end-to-end run per case of Chat, Voice and AE_IT with the polish on in
+    the engine, the exported workbook checked by the independent validator.
+
+ON BY DEFAULT only if ALL hold:
+ 1. In every case, no guarded metric is worse. That covers after_target,
+    after_floor, every before/after tier, gaps, concurrency, overage, language,
+    week boundary, preference matches, employee violations and load spreads.
+ 2. In every case, validate_schedule has 0 hard failures and the release class is
+    unchanged. In (b), the independent validator gives PASS with metric parity.
+ 3. Start movement or distinct start times improve in at least half of the cases,
+    and get worse in none (the polish only accepts improvements, so worse = defect).
+ 4. The polish takes at most 60 s per run, and no run exceeds its time budget.
+Otherwise it ships opt-in, and the failing item is reported.

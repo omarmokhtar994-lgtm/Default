@@ -1,0 +1,6 @@
+[03:06:05] START AE_IT_B2B  seeds=2 (base 9000)  side-by-side=2  workers/seed=2  budget/seed=3600s
+  [portfolio] AE_IT_B2B: seeds [9000, 9001], parallel 2
+  [portfolio] seed 9001 finished rc=1 in 0s
+  [portfolio] seed 9000 finished rc=1 in 0s
+  [portfolio] no seed produced a validated final schedule
+[03:06:06] DONE  AE_IT_B2B  exit=1  wall=0.4s  after-breaks winner seed=None  before-breaks winner seed=None

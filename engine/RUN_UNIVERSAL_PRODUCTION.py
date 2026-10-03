@@ -229,14 +229,68 @@ def _write_initial_heartbeat(heartbeat_path: Path, schedule_id: str) -> None:
         raise RuntimeError(f'Unable to publish run heartbeat: {heartbeat_path}')
 
 
+HEARTBEAT_FRESH_SEC = 300
+
+
+def _machine_identity() -> str:
+    """This boot of this machine. A pid means nothing outside it."""
+    try:
+        return Path('/proc/sys/kernel/random/boot_id').read_text(encoding='utf-8').strip()
+    except OSError:
+        return f'host:{platform.node()}'
+
+
+def _process_start_token(pid: int) -> "str | None":
+    """Kernel start time of `pid` (Linux), so a reused pid is told apart."""
+    try:
+        stat = Path(f'/proc/{int(pid)}/stat').read_text(encoding='utf-8')
+        return stat.rsplit(')', 1)[1].split()[19]
+    except (OSError, IndexError, ValueError):
+        return None
+
+
+def _heartbeat_is_fresh(case_root: Path) -> bool:
+    try:
+        beat = json.loads((case_root / 'RUN_HEARTBEAT.json').read_text(encoding='utf-8'))
+        last = datetime.fromisoformat(str(beat.get('heartbeat_utc')))
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return False
+    return (datetime.now(timezone.utc) - last).total_seconds() <= HEARTBEAT_FRESH_SEC
+
+
+def _lock_owner_is_running(case_root: Path, existing: dict) -> bool:
+    """Is the run that wrote this RUN_LOCK.json still running?
+
+    A pid alone cannot answer it. On Colab the results live on Drive and
+    outlive the VM: a run interrupted there leaves its lock behind, and in the
+    next VM the same small pid numbers belong to other processes. The old
+    check (is that pid alive?) then refused every seed at once with "Case is
+    already running" - a whole portfolio ended in 0.4 s with no schedule.
+    On the machine that wrote the lock, the pid must be alive with the same
+    start time. Anywhere else (another VM sharing the Drive folder, or a lock
+    written before this check existed), only a heartbeat newer than
+    HEARTBEAT_FRESH_SEC shows a live run; the heartbeat is rewritten every 30 s.
+    """
+    owner = int(existing.get('pid') or 0)
+    if existing.get('machine') and existing.get('machine') == _machine_identity():
+        if not _pid_is_alive(owner):
+            return False
+        recorded, current = existing.get('pid_start'), _process_start_token(owner)
+        return recorded is None or current is None or recorded == current
+    return _heartbeat_is_fresh(case_root)
+
+
 def acquire_case_lock(case_root: Path, schedule_id: str) -> None:
     """Prevent concurrent writers and make abandoned runs safely resumable."""
     global _ACTIVE_CASE_LOCK, _ACTIVE_HEARTBEAT, _HEARTBEAT_THREAD
     lock_path = case_root / 'RUN_LOCK.json'
     payload = {
-        'schema_version': 1,
+        'schema_version': 2,
         'schedule_id': schedule_id,
         'pid': os.getpid(),
+        'pid_start': _process_start_token(os.getpid()),
+        'machine': _machine_identity(),
+        'host': platform.node(),
         'created_utc': datetime.now(timezone.utc).isoformat(),
     }
     for _ in range(2):
@@ -248,10 +302,11 @@ def acquire_case_lock(case_root: Path, schedule_id: str) -> None:
             except (OSError, json.JSONDecodeError):
                 existing = {}
             owner = int(existing.get('pid') or 0)
-            if _pid_is_alive(owner):
+            if _lock_owner_is_running(case_root, existing):
                 raise RuntimeError(
-                    f'Case is already running: {case_root} (pid={owner}). '
-                    'Use a different schedule-id or wait for that run to finish.'
+                    f'Case is already running: {case_root} (pid={owner}, host='
+                    f'{existing.get("host") or "unknown"}). Use a different schedule-id or wait for '
+                    'that run to finish. If no run is active, delete RUN_LOCK.json in that folder.'
                 )
             lock_path.unlink(missing_ok=True)
             continue

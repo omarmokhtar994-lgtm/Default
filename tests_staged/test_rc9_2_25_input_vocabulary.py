@@ -428,6 +428,64 @@ class TheValidatorChecksLanguageHoursInEveryEnforcedMode(unittest.TestCase):
         self.assertNotIn("REQUIRED_LANGUAGE_ONLY_VIOLATION", types_all_rows)
 
 
+class AStaleRunLockNeverBlocksANewRun(unittest.TestCase):
+    """A Colab portfolio ended in 0.4 s with no schedule: every seed refused
+    with "Case is already running" because RUN_LOCK.json files left on Drive by
+    an interrupted run named pids that, in the new VM, belonged to other live
+    processes. Reproduced with pid 1 in the lock (2026-10-03)."""
+
+    def setUp(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "wrapper_run_lock", ROOT / "engine" / "RUN_UNIVERSAL_PRODUCTION.py")
+        self.w = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = self.w
+        spec.loader.exec_module(self.w)
+        self.tmp = tempfile.TemporaryDirectory()
+        self.case = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.w.release_case_lock()
+        self.tmp.cleanup()
+
+    def _lock(self, **fields):
+        import json
+        (self.case / "RUN_LOCK.json").write_text(json.dumps({"schema_version": 1, "pid": 1, **fields}))
+
+    def _heartbeat(self, seconds_ago):
+        import json
+        from datetime import datetime, timedelta, timezone
+        when = datetime.now(timezone.utc) - timedelta(seconds=seconds_ago)
+        (self.case / "RUN_HEARTBEAT.json").write_text(json.dumps({"pid": 1, "heartbeat_utc": when.isoformat()}))
+
+    def test_a_lock_from_another_session_with_a_live_pid_is_cleared(self):
+        self._lock()  # written before this check existed: no machine identity
+        self.w.acquire_case_lock(self.case, "X")
+        self.assertTrue((self.case / "RUN_LOCK.json").exists())
+
+    def test_a_lock_from_another_machine_is_cleared_once_its_heartbeat_stops(self):
+        self._lock(machine="another-vm")
+        self._heartbeat(seconds_ago=3600)
+        self.w.acquire_case_lock(self.case, "X")
+
+    def test_a_live_run_elsewhere_still_holds_the_lock(self):
+        self._lock(machine="another-vm")
+        self._heartbeat(seconds_ago=10)
+        with self.assertRaisesRegex(RuntimeError, "already running"):
+            self.w.acquire_case_lock(self.case, "X")
+
+    def test_a_live_run_on_this_machine_still_holds_the_lock(self):
+        import os
+        self._lock(pid=os.getpid(), machine=self.w._machine_identity(),
+                   pid_start=self.w._process_start_token(os.getpid()))
+        with self.assertRaisesRegex(RuntimeError, "already running"):
+            self.w.acquire_case_lock(self.case, "X")
+
+    def test_a_reused_pid_on_this_machine_is_cleared(self):
+        self._lock(pid=1, machine=self.w._machine_identity(), pid_start="not-the-start-of-pid-1")
+        self.w.acquire_case_lock(self.case, "X")
+
+
 class OnlyTheRowTheEngineReadsIsChecked(unittest.TestCase):
     def test_a_later_alias_with_prose_is_ignored(self):
         warnings = []

@@ -314,6 +314,7 @@ Results are in `DRIVE_RESULTS/<YOUR WORKBOOK NAME>/`.
 | `HARD_INVALID_INSTRUCTION_BOOLEAN` | A yes/no cell holds something other than `Yes`/`No`. | Section 3.5. |
 | `HARD_INVALID_PREFERENCE_MAPPING` | A mapping row's Meaning is not Leave/OFF/blank. | Fix that row. |
 | `INPUT_CROSSCHECK_MISMATCH` | The validator's own reading of the workbook disagrees with the engine's (roster, demand or a leave/OFF cell). | Do not publish. Send the workbook and `INDEPENDENT_VALIDATION.json`. |
+| `Case is already running` / portfolio `DONE ... exit=1 wall=0.4s ... winner seed=None` | Older packages: a run lock left on Drive by an interrupted run was read as a live run in the new Colab VM, so every seed refused at once. Fixed: a lock now counts only while its run is alive on the same machine, or its heartbeat is under 5 minutes old. | Use this package. With an older one, delete the `RUN_LOCK.json` files under `RESULTS_ROOT/_seeds/<WORKBOOK>/seeds/`. |
 | `REFUSED ... exists; pass --overwrite` | Results for this workbook already exist. | Tick `OVERWRITE`, or set a new `DRIVE_RESULTS`. |
 | `HARD_RULE_COMBINATION_INFEASIBLE` / "No schedule satisfies all hard rules" | The hard rules contradict each other. With a language window on, the usual cause is a fixed request outside its person's language hours. | Run the pre-check (3.6). It names each conflicting request. See 3.7. |
 | Exit code 2, no schedule | The run failed or was refused; the log says why. | Fix the cause and re-run. Never publish from a failed run. |

@@ -23645,13 +23645,15 @@ def _business_finding_text(item: Any) -> str:
         return str(item)[:300]
     if item.get("rule") and item.get("finding"):
         return f"{item['rule']}: {item['finding']}"
-    keys = ("detail", "message", "headline", "summary", "code", "failure_code", "gate", "rule",
-            "family", "relaxed_family", "status", "interpretation", "value", "limit")
-    parts = [f"{k}={item[k]}" for k in keys
-             if k in item and not isinstance(item[k], (dict, list, tuple, set)) and item[k] not in (None, "")]
-    if not parts:
-        parts = [f"{k}={v}" for k, v in item.items() if not isinstance(v, (dict, list, tuple, set))]
-    return "; ".join(parts)[:300]
+    head = next((str(item[k]) for k in ("code", "failure_code", "type", "gate") if item.get(k)), "")
+    text = next((str(item[k]) for k in ("detail", "message", "headline", "summary") if item.get(k)), "")
+    rest = [f"{k}={v}" for k, v in item.items()
+            if k not in ("code", "failure_code", "type", "gate", "detail", "message", "headline", "summary")
+            and not isinstance(v, (dict, list, tuple, set)) and v not in (None, "")]
+    line = ": ".join(x for x in (head, text) if x)
+    if rest:
+        line = f"{line} ({', '.join(rest)})" if line else ", ".join(rest)
+    return line[:300]
 
 
 def build_business_outcome(audit: Dict[str, Any], return_code: int) -> Dict[str, Any]:
@@ -23889,7 +23891,7 @@ def format_business_outcome(outcome: Dict[str, Any]) -> str:
             lines.extend(["", label + ":", json.dumps(value, ensure_ascii=False, sort_keys=True)])
     findings = outcome.get("resource_findings") or []
     if findings:
-        lines.extend(["", "Main blockers:"])
+        lines.extend(["", "Warnings:" if outcome.get("production_eligible") else "Main blockers:"])
         lines.extend("- " + _business_finding_text(item) for item in findings[:8])
     examples = outcome.get("affected_examples") or []
     if examples:

@@ -66,7 +66,7 @@ regressions are added to §2, and the verdict and §11 are updated.
   3. The confirmation experiment has not been run.
 - **Update (2026-10-03): the three reasons are resolved.**
   1. The gate runs all 48 suites again, with a count floor and a skip ceiling
-     (F-01, F-15). It is now at 1,273 tests.
+     (F-01, F-15). It is now at 1,274 tests.
   2. The preference vocabulary accepts ordinary spellings and site mapping
      tables (F-02).
   3. The confirmation experiment ran: 72 paired runs (F-03).

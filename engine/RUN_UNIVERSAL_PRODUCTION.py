@@ -527,16 +527,20 @@ def _outcome_detail_text(outcome: dict) -> str:
             return str(item)[:300]
         if item.get('rule') and item.get('finding'):
             return f"{item['rule']}: {item['finding']}"
-        keys = ('detail', 'message', 'headline', 'summary', 'code', 'failure_code', 'gate',
-                'rule', 'family', 'status', 'value', 'limit')
-        parts = [f'{k}={item[k]}' for k in keys
-                 if k in item and not isinstance(item[k], (dict, list)) and item[k] not in (None, '')]
-        return '; '.join(parts)[:300] or str({k: v for k, v in item.items()
-                                              if not isinstance(v, (dict, list))})[:300]
+        named = ('code', 'failure_code', 'type', 'gate', 'detail', 'message', 'headline', 'summary')
+        head = next((str(item[k]) for k in named[:4] if item.get(k)), '')
+        text = next((str(item[k]) for k in named[4:] if item.get(k)), '')
+        rest = [f'{k}={v}' for k, v in item.items()
+                if k not in named and not isinstance(v, (dict, list)) and v not in (None, '')]
+        line = ': '.join(x for x in (head, text) if x)
+        if rest:
+            line = f"{line} ({', '.join(rest)})" if line else ', '.join(rest)
+        return line[:300]
     lines = []
     findings = outcome.get('resource_findings') or []
     if findings:
-        lines += ['', 'Main blockers:'] + [f'- {finding(item)}' for item in findings[:8]]
+        label = 'Warnings:' if outcome.get('production_eligible') else 'Main blockers:'
+        lines += ['', label] + [f'- {finding(item)}' for item in findings[:8]]
     examples = outcome.get('affected_examples') or []
     if examples:
         lines += ['', 'Affected examples:']

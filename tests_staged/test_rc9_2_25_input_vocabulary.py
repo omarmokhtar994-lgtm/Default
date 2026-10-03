@@ -318,6 +318,17 @@ class TheRunNamesTheConflictingRules(unittest.TestCase):
         none = E.build_business_outcome({"status": "FAIL_HARD_CONTRACT_INFEASIBLE"}, 2)
         self.assertIn("not enough time left", none["plain_language_summary"])
 
+    def test_a_passing_run_lists_warnings_not_blockers(self):
+        outcome = {"production_eligible": True, "headline": "ok", "plain_language_summary": "ok",
+                   "resource_findings": [{"code": "BREAK_CONCURRENCY_LIMIT_EXCEEDED", "count": 36,
+                                          "observed_max_breaks": 6}]}
+        text = E.format_business_outcome(outcome)
+        self.assertIn("Warnings:", text)
+        self.assertNotIn("Main blockers", text)
+        self.assertIn("BREAK_CONCURRENCY_LIMIT_EXCEEDED (count=36, observed_max_breaks=6)", text)
+        outcome["production_eligible"] = False
+        self.assertIn("Main blockers:", E.format_business_outcome(outcome))
+
     def test_the_results_folder_keeps_the_engine_diagnosis(self):
         """The wrapper used to replace it with "the engine output problem" and
         wrote only the summary paragraph to BUSINESS_OUTCOME.txt."""

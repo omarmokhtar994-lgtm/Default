@@ -83,8 +83,103 @@ def main() -> int:
         print("   Typed values outside a list are not blocked in this workbook. Fix with:\n"
               f"   python3 tools/enforce_workbook_validations.py \"{book}\"   (cell values stay unchanged)")
 
+    lines, conflicts = language_hours_report(E, parsed)
+    for line in lines:
+        print(line)
+    failed = failed or conflicts
+
     print("\nRESULT:", "REFUSED - fix the items above" if failed else "ACCEPTED - ready to run")
     return 1 if failed else 0
+
+
+def language_hours_report(E, parsed) -> list:
+    """Say whether Language Setup's Coverage Start/End limit who works when.
+
+    They do only when the Instructions row "Language Working Window" is set:
+    with it OFF (the default) an English associate can be scheduled in the
+    International hours and the other way round, and nothing in the run looks
+    wrong. MINIMUM_ROWS enforces only rows whose Minimum Per Interval is above
+    0. This changes no result; it makes the setting visible before the run.
+    """
+    mode = getattr(parsed, "language_working_window_mode", "OFF")
+    windows = getattr(parsed, "language_windows", {}) or {}
+    lines = [f"4. language hours          : Language Working Window = {mode}"]
+    if not windows:
+        lines.append("   no Language Setup row limits working hours")
+        return lines, False
+    by_language: dict = {}
+    for key, value in windows.items():
+        language, _, day = key.partition("@@")
+        for start, end, has_minimum in E._coerce_language_window_entries(value):
+            days = [int(day)] if day else list(range(7))
+            for d in days:
+                by_language.setdefault(language, {}).setdefault(d, []).append((start, end, has_minimum))
+    unenforced_rows = 0
+    for language in sorted(by_language):
+        per_day = by_language[language]
+        parts = []
+        for d in range(7):
+            entries = per_day.get(d)
+            if not entries:
+                parts.append(f"{E.DAY_NAMES[d]} none")
+                continue
+            parts.append(E.DAY_NAMES[d] + " " + "+".join(f"{E.hhmm(s)}-{E.hhmm(e)}" for s, e, _m in entries))
+            if mode == "MINIMUM_ROWS":
+                unenforced_rows += sum(1 for _s, _e, m in entries if not m)
+        lines.append(f"   {language}: " + ", ".join(parts))
+        missing = [E.DAY_NAMES[d] for d in range(7) if d not in per_day]
+        if missing and mode != "OFF":
+            lines.append(f"   note: {language} has no row for {', '.join(missing)}; on those days its "
+                         "associates may start at any hour")
+    if mode == "OFF":
+        lines.append("   WARNING: these hours do NOT limit when each language's associates work "
+                     "(they only set the minimum-per-interval hours). To keep each language inside its "
+                     "hours set Instructions > Language Working Window = ALL_ROWS.")
+    elif unenforced_rows:
+        lines.append(f"   WARNING: MINIMUM_ROWS enforces only rows with Minimum Per Interval above 0; "
+                     f"{unenforced_rows} language-day window(s) above have minimum 0 and are not enforced. "
+                     "Use ALL_ROWS to enforce every row.")
+    lines.append("   A shift is inside a window when it STARTS inside it (it may run past the window's end).")
+    # A fixed request is a hard rule and so is an enforced window: one that
+    # starts outside its associate's window makes the run infeasible, and the
+    # engine only says "no schedule satisfies all hard rules". Name each one.
+    check_mode = mode if mode != "OFF" else "ALL_ROWS"
+    conflicts = fixed_requests_outside_language_hours(E, parsed, check_mode)
+    if conflicts and mode != "OFF":
+        lines.append(f"   FAIL: {len(conflicts)} fixed request(s) start outside the associate's language hours; "
+                     "the run cannot satisfy both. Change the request, the associate's Language, or the window:")
+    elif conflicts:
+        lines.append(f"   note: if you set ALL_ROWS, {len(conflicts)} fixed request(s) would start outside the "
+                     "associate's language hours and the run would be refused. Fix these first:")
+    for name, language, day, shift, allowed in conflicts[:20]:
+        lines.append(f"     - {name} ({language}) {day}: fixed {shift}, {language} hours {allowed}")
+    if len(conflicts) > 20:
+        lines.append(f"     ... and {len(conflicts) - 20} more")
+    return lines, bool(conflicts) and mode != "OFF"
+
+
+def fixed_requests_outside_language_hours(E, parsed, mode: str) -> list:
+    """Fixed shift requests that start outside the associate's language window
+    under `mode`, matched exactly the way the engine applies them."""
+    if not getattr(parsed, "fixed_enabled", False):
+        return []
+    import copy
+    probe = copy.copy(parsed)
+    probe.language_working_window_mode = mode
+    found = []
+    for assoc in parsed.associates:
+        for d in range(7):
+            fixed = assoc.fixed_schedule[d] if d < len(assoc.fixed_schedule) else ""
+            if E.preference_kind(fixed) != "shift":
+                continue
+            shift = next((s for s in parsed.shifts if E.norm(s.label) == E.norm(fixed)), None)
+            windows = E.associate_language_windows(probe, assoc, day=d)
+            if shift is None or not windows:
+                continue
+            if not any(E.shift_within_language_window(shift, w) for w in windows):
+                found.append((assoc.name, assoc.language, E.DAY_NAMES[d], shift.label,
+                              "+".join(f"{E.hhmm(s)}-{E.hhmm(e)}" for s, e in windows)))
+    return found
 
 
 if __name__ == "__main__":

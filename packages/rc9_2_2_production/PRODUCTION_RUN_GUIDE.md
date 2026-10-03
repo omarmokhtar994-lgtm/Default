@@ -76,6 +76,12 @@ preferences and previous-week data with this week's.
 | GDI 28 HC 24/7 | `GDI_REAL28_RC9_1_24_7_FINAL_READY.xlsx` |
 | AE Arabic B2B | `AE_AR_B2B.xlsx` |
 
+The shipped workbooks keep their original layout byte for byte (they are the
+baselines the release is measured against). That layout has **no
+`Language Working Window` row and no `Coverage Days` column**, so a copy of one
+cannot limit when each language works, or set different language hours per day.
+To get those controls, convert the copy with Option B, then follow 3.7.
+
 **Option B:** convert your existing (older-layout) workbook. This carries every
 value across unchanged, adds the new rows at their defaults, and makes every
 dropdown reject typed values. Keep your original as a backup.
@@ -103,7 +109,7 @@ In Colab, add a cell after step 3 of the notebook:
 | **FT Wise 15 / 30 / 60 Min** | Demand: required FTE per interval, Sun–Sat. The one named in `Requirements Source` is used. | Yes: fill the sheet that matches `Interval Minutes`. |
 | **Shrinkage 15 / 30 / 60 Min** | Shrinkage ratio per interval (0.08 = 8%). | Yes, the matching one. |
 | **Shift Library / Shift Catalog** | Allowed shifts and statuses. | Only if the shift policy changed. |
-| **Language Setup** | Languages, coverage windows, minimum per interval. | Only if coverage rules changed. |
+| **Language Setup** | One row per language and set of days: coverage start/end, minimum per interval, `Coverage Days`. Whether the hours also limit who may work when is set by `Language Working Window` (3.7). | Only if coverage rules changed. |
 | **Validation Lists**, **00 START HERE**, **Input Checks**, release-notes sheets | Lists behind the dropdowns, and notes. | Do not edit. |
 
 ### 3.3 Preference and Fixed cells: accepted values
@@ -169,6 +175,56 @@ python3 tools/check_input_workbook.py MY_WORKBOOK.xlsx
 `RESULT: ACCEPTED - ready to run` means the run will accept it. `REFUSED` lists
 each problem with the sheet and name to fix. Fix it, then check again. This
 saves waiting through the 15–30 minute safety gate only to be refused.
+
+### 3.7 Language hours: who may work when
+
+`Coverage Start` / `Coverage End` on **Language Setup** do two different jobs:
+
+1. **Minimum coverage.** If `Minimum Per Interval` is above 0, at least that many
+   people who can cover the language must be on duty inside those hours.
+2. **Working hours.** Whether that language's associates may only **start**
+   their shifts inside those hours. This happens **only** when
+   **Instructions → `Language Working Window`** is set. It is `OFF` by default,
+   and with `OFF` an English associate can be scheduled in International hours
+   and the other way round.
+
+| `Language Working Window` | What it does |
+|---|---|
+| `OFF` (default) | Hours set only the minimum coverage. They do not limit who works when. |
+| `MINIMUM_ROWS` | Limits working hours only for rows whose `Minimum Per Interval` is above 0. A row with minimum 0 limits nothing. |
+| `ALL_ROWS` | **Every active row limits its language's working hours.** Use this to keep each team inside its hours. |
+| `REQUIRED_LANGUAGE_ONLY` | Also blocks anyone who cannot cover a required language from working during that language's required hours. |
+
+**Different hours on different days.** Add one row per set of days and fill
+`Coverage Days` (`All`, `Weekdays`, `Weekends`, `Mon-Fri`, `Sun-Thu`, `Sat,Sun`,
+or day names separated by commas). Example:
+
+| Language | Coverage Start | Coverage End | Coverage Days |
+|---|---|---|---|
+| Spanish | 18:00 | 05:00 | Mon-Fri |
+| Spanish | 19:00 | 06:00 | Sat,Sun |
+
+Rules worth knowing:
+- A shift is inside a window when it **starts** inside it. A shift starting at
+  02:00 in an 18:00–05:00 window may end at 11:00.
+- Each day uses its own rows. If two rows cover the same day, a start inside
+  either one is allowed.
+- On a day with no row for a language, that language's associates may start at
+  any hour. Add a row for every day they work.
+- An overnight row is read **within each listed calendar day**. `18:00–05:00`
+  on `Mon-Fri` allows starts on Monday 00:00–04:45 and Monday 18:00–23:45, and the
+  same on each day to Friday. The after-midnight part of **Friday night** is a
+  **Saturday** start, so the `Sat,Sun` row decides it. Write each day's rows for
+  the starts that fall on that calendar day.
+- The roster's `Language` column decides each person's hours. Someone who works
+  International hours but is labelled `English` is held to English hours.
+- A **fixed request** outside its person's hours cannot be met together with an
+  enforced window. The run then stops with "No schedule satisfies all hard
+  rules". The pre-check (3.6) lists every such request by name and day, so fix
+  those first.
+
+The pre-check prints, under **4. language hours**, the mode and each language's
+hours per day. It warns when the hours are authored but not enforced.
 
 ---
 
@@ -259,6 +315,7 @@ Results are in `DRIVE_RESULTS/<YOUR WORKBOOK NAME>/`.
 | `HARD_INVALID_PREFERENCE_MAPPING` | A mapping row's Meaning is not Leave/OFF/blank. | Fix that row. |
 | `INPUT_CROSSCHECK_MISMATCH` | The validator's own reading of the workbook disagrees with the engine's (roster, demand or a leave/OFF cell). | Do not publish. Send the workbook and `INDEPENDENT_VALIDATION.json`. |
 | `REFUSED ... exists; pass --overwrite` | Results for this workbook already exist. | Tick `OVERWRITE`, or set a new `DRIVE_RESULTS`. |
+| `HARD_RULE_COMBINATION_INFEASIBLE` / "No schedule satisfies all hard rules" | The hard rules contradict each other. With a language window on, the usual cause is a fixed request outside its person's language hours. | Run the pre-check (3.6). It names each conflicting request. See 3.7. |
 | Exit code 2, no schedule | The run failed or was refused; the log says why. | Fix the cause and re-run. Never publish from a failed run. |
 
 ---

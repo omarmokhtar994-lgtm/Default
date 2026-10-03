@@ -217,6 +217,64 @@ class TheWorkbookPreCheckSaysWhatTheRunWillDo(unittest.TestCase):
             self.assertIn("HARD_INVALID_INSTRUCTION_BOOLEAN", out.stdout)
 
 
+VOICE = INPUTS / "Cricut_Voice_RC9_1_READY_SKELETON.xlsx"
+
+
+class ThePreCheckShowsTheLanguageHours(unittest.TestCase):
+    """Language Setup's Coverage Start/End limit who works when only if the
+    Instructions row "Language Working Window" is set. A Voice run reported
+    English associates in International hours and the other way round: the
+    window was OFF, and Cricut Voice's roster has English-labelled associates
+    with fixed 03:00-05:00 starts, so switching it on is refused as infeasible
+    without naming why. The pre-check now says both before the run."""
+
+    check = TheWorkbookPreCheckSaysWhatTheRunWillDo.check
+
+    def test_off_is_shown_with_a_warning_and_the_conflicts_it_would_hit(self):
+        out = self.check(VOICE)
+        self.assertEqual(out.returncode, 0, out.stdout)
+        self.assertIn("Language Working Window = OFF", out.stdout)
+        self.assertIn("these hours do NOT limit", out.stdout)
+        self.assertIn("if you set ALL_ROWS, 20 fixed request(s)", out.stdout)
+        self.assertIn("Jhonny Mascarenhas (English) Sun: fixed 05:00 - 14:00, English hours 16:00-03:00", out.stdout)
+
+    def test_an_enforced_window_that_contradicts_a_fixed_request_is_refused(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as tmp:
+            book = Path(tmp) / "voice_template.xlsx"
+            subprocess.run([sys.executable, str(ROOT / "tools" / "build_input_template.py"), str(VOICE), str(book)],
+                           check=True, capture_output=True)
+            _edit(book, [_set_instruction("Language Working Window", "ALL_ROWS")])
+            out = self.check(book)
+            self.assertEqual(out.returncode, 1, out.stdout)
+            self.assertIn("Language Working Window = ALL_ROWS", out.stdout)
+            self.assertIn("FAIL: 20 fixed request(s) start outside", out.stdout)
+            self.assertNotIn("these hours do NOT limit", out.stdout)
+
+    def test_per_day_rows_are_shown_per_day(self):
+        import datetime
+        from openpyxl import load_workbook
+        with tempfile.TemporaryDirectory() as tmp:
+            book = Path(tmp) / VOICE.name
+            shutil.copy(VOICE, book)
+            wb = load_workbook(book)
+            ws = wb["Language Setup"]
+            ws.cell(2, 10, "Coverage Days")
+            ws.cell(3, 10, "Mon-Fri")
+            for c in range(1, 10):
+                ws.cell(5, c, ws.cell(3, c).value)
+            ws.cell(5, 2, datetime.time(17, 0))
+            ws.cell(5, 3, datetime.time(4, 0))
+            ws.cell(5, 10, "Sat,Sun")
+            wb.save(book)
+            out = self.check(book)
+            self.assertIn("english: Sun 17:00-04:00, Mon 16:00-03:00, Tue 16:00-03:00, Wed 16:00-03:00, "
+                          "Thu 16:00-03:00, Fri 16:00-03:00, Sat 17:00-04:00", out.stdout)
+            # Sunday's own window is 17:00-04:00, so a fixed 05:00 start is still outside it.
+            self.assertIn("Jhonny Mascarenhas (English) Sun: fixed 05:00 - 14:00, English hours 17:00-04:00",
+                          out.stdout)
+
+
 class OnlyTheRowTheEngineReadsIsChecked(unittest.TestCase):
     def test_a_later_alias_with_prose_is_ignored(self):
         warnings = []

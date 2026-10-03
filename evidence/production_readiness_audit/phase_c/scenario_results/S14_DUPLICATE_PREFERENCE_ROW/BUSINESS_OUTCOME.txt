@@ -1,0 +1,12 @@
+Outcome: The workbook contract cannot be scheduled as submitted
+Status: FAIL_PRE_SOLVER_CONTRACT
+Production eligible: False
+Independent validation: NOT_RUN (return code None)
+
+HARD_PREFERENCE_DUPLICATE_ASSOCIATE: 'Agent A' has more than one populated row on the Preference sheet (rows 3 and 4). Put all of this person's requests on one row.
+
+Main blockers:
+- HARD_PREFERENCE_DUPLICATE_ASSOCIATE: HARD_PREFERENCE_DUPLICATE_ASSOCIATE: 'Agent A' has more than one populated row on the Preference sheet (rows 3 and 4). Put all of this person's requests on one row.
+
+Required action:
+- Correct the listed workbook contract issue and rerun the schedule.

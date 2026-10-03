@@ -1,0 +1,42 @@
+Phase C1 - AMENDMENTS to C1_RULE.txt (written after C1_RULE.txt was pushed in 85d4e0b)
+====================================================================================
+
+A1  Stage 2 balance terms in the elastic pass (audit F-33, found while building C1).
+    What happened: the first elastic Stage 2 was INFEASIBLE on S04, where an elastic
+    model cannot be infeasible. Traced through the constraint core to OR-Tools 9.15:
+    `k - (k - S)` returns the inner sum S itself, and the following `- const` then
+    mutates S in place. Stage 2's whole-week and next-Sunday adjacent-balance terms are
+    built that way, so later constraints reuse a corrupted expression. Measured on every
+    saved real model: 4 to 40 corrupted constraints per model (F33_STAGE2_MODEL_DIFF.json).
+    The fix (after_break_raw_expression: a fresh headcount - sum(break_vars) per use) was
+    pre-registered as its own A/B (F33_RULE.txt, e6ee6b1) and that A/B returned
+    DO_NOT_SHIP_AS_IS (F33_AB_SCORE.json): it lost after_target on H1 and break
+    concurrency on Voice, Chat and H1. So:
+      - the elastic (shortfall) pass uses the fresh expressions; without them it is
+        not a correct model;
+      - the normal path keeps the legacy expressions, so the model every feasible week
+        solves is unchanged (STAGE2_MODEL_IDENTITY.json: 40 saved models, 0 differing
+        constraints against the Phase B engine).
+    F-33 stays OPEN for normal runs: the corrupted terms are a soft-objective defect
+    whose fix needs re-tuning, not a hard-rule defect (validator, parity and clean-room
+    recompute every hard rule from the cells and pass).
+
+A2  Stage-1 window sizing (audit F-34, found while preparing C3). The budget planner sized
+    the Stage-1 window from the 45 s constant and ignored "Stage 1 Minimum Slice Seconds".
+    Fixed in stage1_minimum_budget_seconds: max(45 s, configured slice) per profile, still
+    capped at 45 % of the run. At the default slice (45 s), and for any configured slice
+    of 45 s or less, the number is the same as before, so no default run changes
+    (STAGE1_MODEL_IDENTITY.json covers the models; this covers the budget).
+
+A3  Stage-1 elastic probe. The shortfall pass first solves an elastic hard probe that
+    minimises the weighted slack, then the target_priority_balanced profile with the
+    probe's weighted slack as a cap, so the coverage search cannot buy coverage with
+    extra hard-rule shortfall. This is the "penalty above every other objective term" of
+    C1_RULE.txt made exact; recorded because the rule did not say how.
+
+A4  Stage-2 failure exits. FAIL_ZERO_EXCEPTION_CANDIDATE_RETENTION_BREACH and
+    FAIL_PROTECTED_BENCHMARK_NOT_MET do not start a
+    shortfall pass: a break-feasible schedule exists on those exits and was held back by
+    a quality guard, so they are not "no schedule because a hard minimum cannot be met".
+
+None of A1-A4 changes a measurement or a pass rule (R1-R7).

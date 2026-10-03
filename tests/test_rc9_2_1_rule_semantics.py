@@ -1091,8 +1091,17 @@ class CoverageSplitMakesOneGroupResponsibleForAWholeWindow(unittest.TestCase):
     def test_it_is_enforced_in_stage_1_and_in_the_break_stage(self):
         """A before-break split that breaks hollow out is not a split."""
         source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
-        self.assertIn("model.Add(owned >= need)", source)
-        self.assertIn('add_break_family(model.Add(split_after >= need_split), "coverage_split")', source)
+        # Re-pinned in Phase C (audit F-06): every coverage minimum now goes through
+        # at_least(), which is `model.Add(expr >= required)` in a normal run and gets a
+        # reported slack only in the shortfall pass. The constraint a normal run builds
+        # is unchanged: the Stage-1 and Stage-2 models of every packaged and real-run
+        # workbook are constraint-for-constraint identical to the Phase B engine
+        # (evidence/production_readiness_audit/phase_c/STAGE1_MODEL_IDENTITY.json,
+        # STAGE2_MODEL_IDENTITY.json). Only the source text moved.
+        self.assertIn('at_least(owned, need, "coverage_split", d, minute_q, split.group)', source)
+        self.assertIn('add_break_family(at_least(split_after, need_split, "coverage_split", d, minute, split.group),', source)
+        self.assertEqual(source.count("if not hard.elastic or required <= 0:\n            return model.Add(expr >= required)"), 1)
+        self.assertEqual(source.count("if not elastic or required <= 0:\n            return model.Add(expr >= required)"), 1)
 
     def test_the_infeasibility_probe_can_relax_it(self):
         """This is the diagnostic that names a blocking rule instead of leaving

@@ -92,7 +92,10 @@ class BreakLoadInput(unittest.TestCase):
         self.assertIsNone(sig.parameters["break_load_units"].default)
         src = inspect.getsource(E.build_skeleton)
         load = src.index("observed_break_load = int(")
-        self.assertLess(src.index("model.Add(eff >= hard_floor_units)"), load)
+        # Re-pinned in Phase C (audit F-06): the hard floor goes through at_least(),
+        # `model.Add(eff >= hard_floor_units)` in a normal run; the Stage-1 models are
+        # unchanged (evidence/production_readiness_audit/phase_c/STAGE1_MODEL_IDENTITY.json).
+        self.assertLess(src.index('at_least(eff, hard_floor_units, "hard_floor"'), load)
 
 
 if __name__ == "__main__":

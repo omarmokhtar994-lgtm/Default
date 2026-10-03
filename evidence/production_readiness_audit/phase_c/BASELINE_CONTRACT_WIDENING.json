@@ -1,0 +1,41 @@
+{
+ "AE AR B2B": {
+  "file_sha256": "321f1eff6e86c8c1b65e39a2c2ab9859e53bd58a6c0ae41425809e4ee4920c77",
+  "file_sha256_pinned": "321f1eff6e86c8c1b65e39a2c2ab9859e53bd58a6c0ae41425809e4ee4920c77",
+  "previous_hash": "161c04655864690f56fc7c0b69e31c9d87b96787e385042dd31142e08eb605d5",
+  "previous_hash_recorded": "161c04655864690f56fc7c0b69e31c9d87b96787e385042dd31142e08eb605d5",
+  "phase_c_hash": "90c5aab4080a10f42f26c38594572ba28180e46b050e170863ec62f2195848a4",
+  "changed_existing_fields": [],
+  "added_fields": [
+   "break_sets_by_shift_length",
+   "coverage_objective_weighting"
+  ],
+  "removed_fields": []
+ },
+ "Cricut Voice": {
+  "file_sha256": "55b4ee899cfd38ad586962a16fe40c6d2f9ca41eee13f531eab2f04d1627d9f1",
+  "file_sha256_pinned": "55b4ee899cfd38ad586962a16fe40c6d2f9ca41eee13f531eab2f04d1627d9f1",
+  "previous_hash": "8f2ce54794a58a28dd19288778ae156fd8c8d61a285c5b905886353538c9ffaf",
+  "previous_hash_recorded": "8f2ce54794a58a28dd19288778ae156fd8c8d61a285c5b905886353538c9ffaf",
+  "phase_c_hash": "d8b3f8d86de39ed879f1e91e9ce44a7eda0f09da5bf32af54bf92702be3934cd",
+  "changed_existing_fields": [],
+  "added_fields": [
+   "break_sets_by_shift_length",
+   "coverage_objective_weighting"
+  ],
+  "removed_fields": []
+ },
+ "NMG SP": {
+  "file_sha256": "58aeb4ca5d1c1d5c163d5d3f938d4b9ba635a3daf38d1a0d6e3af2f30f4efa09",
+  "file_sha256_pinned": "58aeb4ca5d1c1d5c163d5d3f938d4b9ba635a3daf38d1a0d6e3af2f30f4efa09",
+  "previous_hash": "151baee69ac9eedab3fc1c705759812f2bffecd0987eeec3caa99474cc4c2d40",
+  "previous_hash_recorded": "151baee69ac9eedab3fc1c705759812f2bffecd0987eeec3caa99474cc4c2d40",
+  "phase_c_hash": "237e6837c359579117e55a63a1cf2a4465736cc592f8efb6cc22cab51eac9ae6",
+  "changed_existing_fields": [],
+  "added_fields": [
+   "break_sets_by_shift_length",
+   "coverage_objective_weighting"
+  ],
+  "removed_fields": []
+ }
+}

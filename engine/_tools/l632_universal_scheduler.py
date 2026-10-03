@@ -285,6 +285,7 @@ def cleanup_stale_run_outputs(
         output_path.with_name(prefix + "_MAX_FLOOR_CANDIDATE" + output_path.suffix),
         output_path.with_name(prefix + "_BALANCED_CANDIDATE" + output_path.suffix),
         output_path.with_name(prefix + "_SAFER_BALANCED_CANDIDATE" + output_path.suffix),
+        output_path.with_name(prefix + "_HARD_RULE_SHORTFALL_SCHEDULE" + output_path.suffix),
         output_path.with_name(prefix + "_PARETO_EXPORT_MANIFEST.json"),
         output_path.with_name(output_path.stem + "_CANDIDATE_LEADERBOARD.csv"),
     }
@@ -827,6 +828,12 @@ class ParsedInput:
     coverage_split_rules: List[CoverageSplitRule] = field(default_factory=list)
     coverage_split_source: str = "ABSENT"
     coverage_split_gate_mode: str = "hard"
+    # Audit F-20: (minimum shift minutes, break set) rows stated in the
+    # workbook; empty = every shift takes break_segments_q, as before.
+    break_sets_by_shift_length: Tuple[Tuple[int, Tuple[Tuple[int, str], ...]], ...] = ()
+    # Audit F-28: "interval_count" (default, every interval counts once) or
+    # "volume_weighted" (an interval counts in proportion to its requirement).
+    coverage_objective_weighting: str = "interval_count"
     allow_back_to_back_breaks: bool = False
     break_max_concurrent_ratio: float = 0.30
     break_max_concurrent_absolute: int = 4
@@ -898,6 +905,25 @@ class HardConfig:
     hard_floor: bool = True
     week_boundary: bool = True
     coverage_split: bool = True
+    # Audit F-06: True turns every coverage MINIMUM (at least one person,
+    # language, opening, coverage split, hard floor, next-Sunday minimums) into
+    # "at least, or report the shortfall": each gets a slack priced above every
+    # other objective term. Person rules are unaffected. Only the shortfall pass
+    # sets it; every normal model is built with False.
+    elastic: bool = False
+
+
+# Price of one person-quarter of shortfall in an elastic model. It sits above
+# every other term in both stages, including a no-break exception (2e9 in
+# Stage 2): an exception the workbook allows is a legal choice, a short quarter
+# is not. Floor-type minimums are in coverage units, so their slack is priced
+# per unit: x100 units in Stage 1, x1e6 exact units in Stage 2.
+ELASTIC_PERSON_WEIGHT = 100_000_000_000
+ELASTIC_UNIT_WEIGHTS = {
+    "people": ELASTIC_PERSON_WEIGHT,
+    "coverage_units": ELASTIC_PERSON_WEIGHT // 100,
+    "coverage_exact": ELASTIC_PERSON_WEIGHT // JOINT_COVERAGE_SCALE,
+}
 
 
 @dataclass
@@ -2548,7 +2574,7 @@ def coverage_split_capacity_report(parsed: ParsedInput) -> Dict[str, Any]:
         shifts = list(getattr(parsed, "shifts", ()) or ())
         durations = sorted(sh.duration_q for sh in shifts) or [36]
         shift_q = max(1, durations[len(durations) // 2])
-        break_q = sum(count for count, _ in getattr(parsed, "break_segments_q", ()) or ())
+        break_q = break_quarters_for(parsed, shift_q * 15) if hasattr(parsed, "break_segments_q") else 0
         productive = max(1, shift_q - break_q)
         need_with_breaks = int(math.ceil(peak_need * shift_q / productive)) if peak_need else 0
         margin = concurrent_ceiling - need_with_breaks
@@ -2860,6 +2886,93 @@ def _parse_break_segments(
     if len(segments) == 3 and sorted(length for length, _ in segments) == [1, 1, 2]:
         return ((1, "Break 1"), (2, "Lunch"), (1, "Break 2"))
     return tuple(segments)
+
+
+BREAK_SET_ROW_PATTERN = re.compile(r"^break set for shifts of (\d+(?:\.\d+)?) hours? or more$")
+
+
+def _parse_break_sets_by_shift_length(
+    im: Dict[str, Any], parser_warnings: List[str]
+) -> Tuple[Tuple[int, Tuple[Tuple[int, str], ...]], ...]:
+    """Audit F-20: per-shift-length break sets stated in the workbook.
+
+    ``Break Set For Shifts Of 10 Hours Or More = 15, 30, 15, 15`` gives every
+    shift of 10 hours or more those breaks, in that order. A segment of 30
+    minutes or more is a lunch; the others are numbered breaks. Unreadable
+    values are refused, never defaulted.
+    """
+    sets: List[Tuple[int, Tuple[Tuple[int, str], ...]]] = []
+    for key in sorted(dict.keys(im)):
+        match = BREAK_SET_ROW_PATTERN.match(key)
+        if not match:
+            continue
+        if isinstance(im, _TrackedInstructions):
+            im.looked_up.add(key)
+        raw = im[key]
+        threshold = int(round(float(match.group(1)) * 60))
+        tokens = [t.strip() for t in re.split(r"[,;/]+", str(raw or "")) if t.strip()]
+        minutes: List[int] = []
+        for token in tokens:
+            value = strict_float(token)
+            if value is None or value != int(value) or int(value) not in BREAK_DURATION_CHOICES:
+                minutes = []
+                break
+            minutes.append(int(value))
+        if not tokens or not minutes:
+            parser_warnings.append(
+                f"HARD_INVALID_BREAK_CONTRACT:{key!r}={raw!r}; list break minutes from "
+                f"{', '.join(str(c) for c in BREAK_DURATION_CHOICES)}, e.g. 15, 30, 15, 15")
+            continue
+        lunches = sum(1 for m in minutes if m >= 30)
+        segments: List[Tuple[int, str]] = []
+        short_index = lunch_index = 0
+        for m in minutes:
+            if m >= 30:
+                lunch_index += 1
+                label = "Lunch" if lunches == 1 else f"Lunch {lunch_index}"
+            else:
+                short_index += 1
+                label = f"Break {short_index}"
+            segments.append((m // 15, label))
+        sets.append((threshold, tuple(segments)))
+    return tuple(sorted(sets))
+
+
+def volume_weight(parsed: ParsedInput, weight: int, day: int, interval: int) -> int:
+    """Audit F-28: an interval's miss weight, scaled by its requirement when the
+    workbook chooses "Volume Weighted"; exactly ``weight`` otherwise.
+
+    The scale is the interval's requirement over the mean requirement of the
+    week's active intervals, so the total weight across the week is about the
+    same as with interval counting: only its distribution changes.
+    """
+    if getattr(parsed, "coverage_objective_weighting", "interval_count") != "volume_weighted" or not weight:
+        return weight
+    mean = getattr(parsed, "_mean_active_requirement", None)
+    if mean is None:
+        values = [float(parsed.requirements[d][i] or 0.0) for d in range(7)
+                  for i in range(parsed.intervals_per_day) if parsed.active[d][i]]
+        mean = (sum(values) / len(values)) if values else 1.0
+        parsed._mean_active_requirement = mean  # type: ignore[attr-defined]
+    req = float(parsed.requirements[day][interval] or 0.0)
+    return max(1, int(round(weight * req / max(mean, 1e-9))))
+
+
+def break_segments_for(parsed: ParsedInput, duration_min: int) -> Tuple[Tuple[int, str], ...]:
+    """The break set for a shift of ``duration_min`` minutes (audit F-20).
+
+    The stated set with the largest threshold the shift reaches; without one,
+    the workbook's global set.
+    """
+    chosen = parsed.break_segments_q
+    for threshold, segments in getattr(parsed, "break_sets_by_shift_length", ()) or ():
+        if int(duration_min) >= int(threshold):
+            chosen = segments
+    return chosen
+
+
+def break_quarters_for(parsed: ParsedInput, duration_min: int) -> int:
+    return sum(length for length, _ in break_segments_for(parsed, duration_min))
 
 
 def _optional_instruction_minutes(im: Dict[str, Any], keys: Sequence[str]) -> Optional[int]:
@@ -3587,10 +3700,30 @@ def parse_input(
         max_no_break = 8
 
     break_segments = _parse_break_segments(im, parser_warnings)
+    break_sets_by_length = _parse_break_sets_by_shift_length(im, parser_warnings)
+    _weighting_raw = _instruction_get(im, ["Coverage Objective Weighting", "Coverage Weighting"], None)
+    coverage_objective_weighting = "interval_count"
+    if _weighting_raw not in (None, ""):
+        _weighting = re.sub(r"[^a-z]", "", norm(_weighting_raw))
+        if _weighting in {"intervalcount", "intervals", "count", "intervalcounts"}:
+            coverage_objective_weighting = "interval_count"
+        elif _weighting in {"volumeweighted", "volume", "fteweighted", "requirementweighted"}:
+            coverage_objective_weighting = "volume_weighted"
+        else:
+            parser_warnings.append(
+                f"HARD_INVALID_COVERAGE_OBJECTIVE_WEIGHTING:value={_weighting_raw!r};"
+                "use Interval Count or Volume Weighted")
+    # Window rows ("Break 3 Earliest Minutes From Shift Start") are read for
+    # every label any set uses, not only the global set's labels.
+    window_segments = list(break_segments)
+    for _threshold, extra in break_sets_by_length:
+        for segment in extra:
+            if all(norm(segment[1]) != norm(existing[1]) for existing in window_segments):
+                window_segments.append(segment)
     (
         break_window_rules, break_edge_margin_q, break_min_gap_q,
         break_preferred_gap_q, break_normal_max_gap_q, break_window_source,
-    ) = _parse_break_window_controls(im, break_segments)
+    ) = _parse_break_window_controls(im, tuple(window_segments))
     allow_back_to_back_breaks = yes(_instruction_get(
         im, ["Allow Back-to-Back Breaks", "Back-to-Back Breaks Allowed"], "No"
     ), False)
@@ -3921,6 +4054,8 @@ def parse_input(
         allowed_shift_start_min=allowed_start_min, allowed_shift_start_end=allowed_start_end,
         shift_start_step_minutes=start_step, allowed_shift_start_source=allowed_start_source,
         break_segments_q=break_segments,
+        break_sets_by_shift_length=break_sets_by_length,
+        coverage_objective_weighting=coverage_objective_weighting,
         break_window_rules_q=break_window_rules,
         break_edge_margin_q=break_edge_margin_q,
         break_min_gap_q=break_min_gap_q,
@@ -4104,6 +4239,11 @@ def input_contract_payload(parsed: ParsedInput) -> Dict[str, Any]:
             ),
         },
         "break_segments": [{"quarters": q, "label": label} for q, label in parsed.break_segments_q],
+        "break_sets_by_shift_length": [
+            {"minimum_shift_minutes": threshold, "segments": [{"quarters": q, "label": label} for q, label in segments]}
+            for threshold, segments in getattr(parsed, "break_sets_by_shift_length", ()) or ()
+        ],
+        "coverage_objective_weighting": getattr(parsed, "coverage_objective_weighting", "interval_count"),
         "break_window_contract": {
             "source": parsed.break_window_source,
             "edge_margin_quarters": parsed.break_edge_margin_q,
@@ -4380,10 +4520,15 @@ def validate_input_contract(parsed: ParsedInput, feasibility: Optional[Dict[str,
         failures.append({"code": "INVALID_REST_GAP", "value": parsed.rest_gap_hours})
     if parsed.max_different_shifts <= 0:
         failures.append({"code": "INVALID_MAX_SHIFT_VARIETY", "value": parsed.max_different_shifts})
-    break_minutes = sum(q * 15 for q, _ in parsed.break_segments_q)
-    min_shift = min((s.duration_min for s in parsed.shifts), default=0)
-    if min_shift and break_minutes >= min_shift:
-        failures.append({"code": "BREAKS_EXCEED_SHIFT", "break_minutes": break_minutes, "minimum_shift_minutes": min_shift})
+    # Each shift against its own break set (audit F-20); identical to the old
+    # single check when the workbook states one set.
+    break_minutes = sum(q * 15 for q, _ in parsed.break_segments_q)  # the global set, as reported below
+    for shift in sorted(parsed.shifts, key=lambda sh: sh.duration_min):
+        shift_break_minutes = break_quarters_for(parsed, shift.duration_min) * 15
+        if shift_break_minutes >= shift.duration_min:
+            failures.append({"code": "BREAKS_EXCEED_SHIFT", "break_minutes": shift_break_minutes,
+                             "minimum_shift_minutes": shift.duration_min, "shift": shift.label})
+            break
     legal = {norm(s.label) for s in parsed.shifts}
     invalid_fixed = []
     for associate in parsed.associates:
@@ -4600,7 +4745,7 @@ def validate_input_contract(parsed: ParsedInput, feasibility: Optional[Dict[str,
         failures.append({"code": "OPENING_MINIMUM_EXCEEDS_ROSTER", "minimum": parsed.opening_minimum, "roster_count": len(parsed.associates)})
     for duration_q in sorted({shift.duration_q for shift in parsed.shifts}):
         patterns = _generic_break_patterns(
-            duration_q, parsed.break_segments_q, 1,
+            duration_q, break_segments_for(parsed, duration_q * 15), 1,
             window_rules=parsed.break_window_rules_q,
             edge_margin_q=parsed.break_edge_margin_q,
             minimum_gap_q=parsed.break_min_gap_q,
@@ -6986,8 +7131,6 @@ def load_validated_fallback_candidate(
     finally:
         wb.close()
 
-    expected_lengths = [int(length) for length, _ in parsed.break_segments_q]
-    expected_labels = [str(label) for _, label in parsed.break_segments_q]
     patterns: List[BreakPattern] = []
     selected: Dict[Tuple[int, int], Optional[int]] = {}
     pattern_ids: Dict[Tuple[int, Tuple[Tuple[int, int, str], ...]], int] = {}
@@ -6998,6 +7141,9 @@ def load_validated_fallback_candidate(
                 return None
             selected[a, d] = None
             continue
+        cell_segments = break_segments_for(parsed, parsed.shifts[si].duration_min)
+        expected_lengths = [int(length) for length, _ in cell_segments]
+        expected_labels = [str(label) for _, label in cell_segments]
         if [int(length) for _, length, _ in source_breaks] != expected_lengths:
             return None
         # Historical workbooks used labels such as Short 1/Short 2 while the
@@ -7213,6 +7359,7 @@ def build_skeleton(
     aggregate_guidance: Optional[Dict[str, Any]] = None,
     minimum_tier_hits: Optional[Dict[int, int]] = None,
     break_load_units: Optional[Dict[Tuple[int, int], int]] = None,
+    elastic_cap: Optional[int] = None,
 ) -> SkeletonSolution:
     # break_load_units (Stage-2 -> Stage-1 feedback, search only): coverage
     # units that breaks removed from each current-week interval in a solved
@@ -7229,6 +7376,18 @@ def build_skeleton(
     y: Dict[Tuple[int, int], Any] = {}
     long_mode: Dict[int, Any] = {}
     objective_terms: List[Any] = []
+    elastic_slacks: List[Tuple[str, int, int, str, int, str, Any, Any]] = []
+
+    def at_least(expr: Any, required: Any, family: str, day: int, minute: int,
+                 rule: str = "", unit: str = "people") -> Any:
+        """``expr >= required``; in an elastic model, or report how far short (F-06)."""
+        required = int(required)
+        if not hard.elastic or required <= 0:
+            return model.Add(expr >= required)
+        slack = model.NewIntVar(0, required, f"elastic_{family}_{len(elastic_slacks)}")
+        elastic_slacks.append((family, day, minute, rule, required, unit, slack, expr))
+        return model.Add(expr + slack >= required)
+
     language_break_reserve_requirements = language_break_reserve_requirements or {}
     minimum_tier_hits = {int(k): int(v) for k, v in (minimum_tier_hits or {}).items() if int(k) in {80, 90, 100}}
     long_shifts = {s.index for s in parsed.shifts if s.duration_min >= LONG_SHIFT_MIN_DURATION_MIN}
@@ -7506,7 +7665,7 @@ def build_skeleton(
                                     var = x[a, sd, shift.index]
                                     eff_terms.append(eff_coeff * var)
                                     paid_q = shift.duration_q
-                                    break_q = sum(length for length, _ in parsed.break_segments_q)
+                                    break_q = break_quarters_for(parsed, shift.duration_min)
                                     productive_coeff = int(round(eff_coeff * max(0, paid_q - break_q) / max(1, paid_q)))
                                     productive_terms.append(productive_coeff * var)
                 eff = sum(eff_terms) + prior_eff if eff_terms else prior_eff
@@ -7514,7 +7673,7 @@ def build_skeleton(
                 objective_coverage = eff if profile.get("coverage_basis") == "before" else productive
                 if hard.zero_active:
                     for q, raw_q in enumerate(interval_qslot_raws):
-                        model.Add(raw_q >= 1)
+                        at_least(raw_q, 1, "zero_active", d, i * parsed.interval_minutes + q * 15)
                 staffing_reserve_required = break_staffing_reserve_requirements.get((d, i))
                 if staffing_reserve_required is not None:
                     for q, raw_q in enumerate(interval_qslot_raws):
@@ -7533,7 +7692,8 @@ def build_skeleton(
                 target_units = ceil_units(req * parsed.target_ratio) * qpi
                 full_units = ceil_units(req) * qpi
                 if hard.hard_floor and parsed.floor_mode == "hard":
-                    model.Add(eff >= hard_floor_units)
+                    at_least(eff, hard_floor_units, "hard_floor", d, i * parsed.interval_minutes,
+                             unit="coverage_units")
                 observed_break_load = int((break_load_units or {}).get((d, i), 0) or 0)
                 if observed_break_load > 0:
                     floor_units += observed_break_load
@@ -7552,7 +7712,7 @@ def build_skeleton(
                     model.Add(objective_coverage <= floor_units - 1).OnlyEnforceIf(floor_hit.Not())
                     stage1_floor_hit_by_interval[d, i] = floor_hit
                     if profile.get("floor_miss", 0):
-                        objective_terms.append(profile["floor_miss"] * (1 - floor_hit))
+                        objective_terms.append(volume_weight(parsed, profile["floor_miss"], d, i) * (1 - floor_hit))
                 severe_units = ceil_units(req * max(0.0, parsed.floor_ratio - 0.10)) * qpi
                 if profile.get("severe_miss", 0) or quality_shape_enabled:
                     severe_hit = model.NewBoolVar(f"stage1_severe_hit_{d}_{i}")
@@ -7560,18 +7720,18 @@ def build_skeleton(
                     model.Add(objective_coverage <= severe_units - 1).OnlyEnforceIf(severe_hit.Not())
                     stage1_severe_hit_by_interval[d, i] = severe_hit
                     if profile.get("severe_miss", 0):
-                        objective_terms.append(profile["severe_miss"] * (1 - severe_hit))
+                        objective_terms.append(volume_weight(parsed, profile["severe_miss"], d, i) * (1 - severe_hit))
                 if profile.get("target_miss", 0):
                     target_hit = model.NewBoolVar(f"stage1_target_hit_{d}_{i}")
                     model.Add(objective_coverage >= target_units).OnlyEnforceIf(target_hit)
                     model.Add(objective_coverage <= target_units - 1).OnlyEnforceIf(target_hit.Not())
                     stage1_target_hit_by_interval[d, i] = target_hit
-                    objective_terms.append(profile["target_miss"] * (1 - target_hit))
+                    objective_terms.append(volume_weight(parsed, profile["target_miss"], d, i) * (1 - target_hit))
                 if profile.get("full_miss", 0) and parsed.target_ratio < 0.995:
                     full_hit = model.NewBoolVar(f"stage1_full_hit_{d}_{i}")
                     model.Add(objective_coverage >= full_units).OnlyEnforceIf(full_hit)
                     model.Add(objective_coverage <= full_units - 1).OnlyEnforceIf(full_hit.Not())
-                    objective_terms.append(profile["full_miss"] * (1 - full_hit))
+                    objective_terms.append(volume_weight(parsed, profile["full_miss"], d, i) * (1 - full_hit))
                 # RC9.2.1: explicit protected-tier variables allow a later polish
                 # solve to HARD-lock the best target while optimizing 80/90 safety
                 # tiers.  They are created only when requested by a lock or profile.
@@ -7620,7 +7780,7 @@ def build_skeleton(
                         objective_terms.append(profile["extreme_overage"] * extreme_over)
                 if hard.opening and parsed.opening_guard_enabled and i in opening[d]:
                     for q, raw_q in enumerate(interval_qslot_raws):
-                        model.Add(raw_q >= parsed.opening_minimum)
+                        at_least(raw_q, parsed.opening_minimum, "opening", d, i * parsed.interval_minutes + q * 15)
                         if profile["opening_reserve"]:
                             reserve = model.NewIntVar(0, 20, f"opening_reserve_{d}_{i}_{q}")
                             model.Add(reserve >= parsed.opening_minimum + 1 - raw_q)
@@ -7633,7 +7793,7 @@ def build_skeleton(
                             vars_lang = coverage_vars_at_qslot(parsed, x, qslot, rule)
                             prior_lang = len(prior_covering_associates(parsed, qslot, rule))
                             count = sum(vars_lang) + prior_lang if vars_lang else prior_lang
-                            model.Add(count >= rule.minimum)
+                            at_least(count, rule.minimum, "language", d, minute_q, rule.group)
                             reserve_required = language_break_reserve_requirements.get(
                                 (d, i, language_rule_key(rule))
                             )
@@ -7657,7 +7817,7 @@ def build_skeleton(
                             vars_split = coverage_vars_at_qslot(parsed, x, qslot, split)
                             prior_split = len(prior_covering_associates(parsed, qslot, split))
                             owned = sum(vars_split) + prior_split if vars_split else prior_split
-                            model.Add(owned >= need)
+                            at_least(owned, need, "coverage_split", d, minute_q, split.group)
                             coverage_split_constraint_count += 1
                             if split.exclusive:
                                 outside = [
@@ -7776,10 +7936,12 @@ def build_skeleton(
         productive_terms: List[Any] = []
         for q, qslot, vars_all in quarter_vars:
             raw = sum(vars_all) if vars_all else 0
+            boundary_minute = i * parsed.interval_minutes + q * 15
             if hard.week_boundary and hard.zero_active:
-                model.Add(raw >= 1)
+                at_least(raw, 1, "next_sunday_zero", 7, boundary_minute)
             if hard.week_boundary:
-                model.Add(eff_coeff * raw >= ceil_units(req * parsed.floor_ratio))
+                at_least(eff_coeff * raw, ceil_units(req * parsed.floor_ratio), "next_sunday_floor", 7,
+                         boundary_minute, unit="coverage_units")
             if hard.week_boundary and parsed.next_sunday_balance_enabled:
                 quarter_target_units = ceil_units(req * parsed.target_ratio)
                 quarter_target_def = model.NewIntVar(0, max(100000, quarter_target_units), f"next_sun_q_target_def_{i}_{q}")
@@ -7804,13 +7966,13 @@ def build_skeleton(
                 model.Add(reserve >= 2 - raw)
                 objective_terms.append(profile["zero_reserve"] * reserve)
             if hard.week_boundary and hard.opening and parsed.opening_guard_enabled and i in next_sunday_opening:
-                model.Add(raw >= parsed.opening_minimum)
+                at_least(raw, parsed.opening_minimum, "next_sunday_opening", 7, boundary_minute)
             minute = i * parsed.interval_minutes + q * 15
             if hard.week_boundary and hard.language:
                 for ri, rule in enumerate(language_rules_at(parsed, minute, day=0)):
                     lang_vars = cyclic_next_sunday_coverage_vars(parsed, x, qslot, rule)
                     lang_count = sum(lang_vars) if lang_vars else 0
-                    model.Add(lang_count >= rule.minimum)
+                    at_least(lang_count, rule.minimum, "next_sunday_language", 7, minute, rule.group)
                     reserve_required = language_break_reserve_requirements.get((7, i, language_rule_key(rule)))
                     if reserve_required is not None:
                         model.Add(lang_count >= max(rule.minimum, int(reserve_required)))
@@ -7826,7 +7988,7 @@ def build_skeleton(
                             if not shift_covers_week_qslot(sd, shift, source_qslot):
                                 continue
                             paid_q = shift.duration_q
-                            break_q = sum(length for length, _ in parsed.break_segments_q)
+                            break_q = break_quarters_for(parsed, shift.duration_min)
                             productive_coeff = int(round(eff_coeff * max(0, paid_q - break_q) / max(1, paid_q)))
                             productive_terms.append(productive_coeff * x[a, sd, shift.index])
 
@@ -7835,7 +7997,8 @@ def build_skeleton(
         effective = sum(effective_terms) if effective_terms else 0
         productive = sum(productive_terms) if productive_terms else 0
         if hard.week_boundary:
-            model.Add(effective >= floor_units)
+            at_least(effective, floor_units, "next_sunday_floor", 7, i * parsed.interval_minutes,
+                     unit="coverage_units")
         if profile["target_def"]:
             target_def = model.NewIntVar(0, max(100000, target_units), f"next_sun_target_def_{i}")
             model.Add(target_def >= target_units - productive)
@@ -7981,6 +8144,15 @@ def build_skeleton(
             model.Add(sum(tier_vars) >= bounded_minimum)
             applied_tier_locks[str(tier_pct)] = bounded_minimum
 
+    elastic_weighted = None
+    if elastic_slacks:
+        elastic_weighted = sum(
+            ELASTIC_UNIT_WEIGHTS[unit] * var
+            for _family, _day, _minute, _rule, _required, unit, var, _expr in elastic_slacks
+        )
+        objective_terms.append(elastic_weighted)
+        if elastic_cap is not None:
+            model.Add(elastic_weighted <= int(elastic_cap))
     if objective_terms:
         model.Minimize(sum(objective_terms))
     solver = cp_model.CpSolver()
@@ -8029,6 +8201,11 @@ def build_skeleton(
         "anchor_changed_cells": sum(solver.Value(v) for v in anchor_change_vars) if status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else None,
         "coverage_split_constraint_count": int(coverage_split_constraint_count),
         "coverage_split_rule_count": len(getattr(parsed, "coverage_split_rules", ()) or ()),
+        "elastic_slacks": elastic_slack_rows(elastic_slacks, solver, status in (cp_model.OPTIMAL, cp_model.FEASIBLE)),
+        "elastic_weighted_total": (
+            int(solver.Value(elastic_weighted))
+            if elastic_weighted is not None and status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else None
+        ),
         "language_working_window_mode": getattr(parsed, "language_working_window_mode", "OFF"),
         "language_working_window_blocked_cells": int(language_working_window_blocks),
         "language_break_reserve_constraint_count": len(language_break_reserve_requirements),
@@ -8082,6 +8259,181 @@ def build_skeleton(
         objective=solver.ObjectiveValue() if status in (cp_model.OPTIMAL, cp_model.FEASIBLE) and objective_terms else 0.0,
         elapsed_sec=elapsed, assignment=assignment, selected_shift_index=selected, diagnostics=diag,
     )
+
+
+def elastic_slack_rows(slacks: Sequence[Tuple[str, int, int, str, int, str, Any, Any]], solver: Any,
+                       solved: bool) -> List[Dict[str, Any]]:
+    """One row per minimum the solution actually misses, with the measured deficit.
+
+    The deficit is ``required - value(expression)`` in the solution, not the
+    slack variable: a solver may leave a slack positive where it was not
+    needed, and that must never be listed as a shortfall.
+    """
+    if not solved:
+        return []
+    rows: List[Dict[str, Any]] = []
+    for family, day, minute, rule, required, unit, var, expr in slacks:
+        value = max(0, int(required) - int(solver.Value(expr)))
+        if value <= 0:
+            continue
+        rows.append({
+            "family": family, "day": "Next Sun" if day == 7 else DAY_NAMES[day], "day_index": int(day),
+            "time": hhmm(minute), "rule": rule, "required": int(required),
+            "shortfall": value, "unit": unit,
+        })
+    return rows
+
+
+# Audit F-06: contract failures that are capacity PROOFS (the roster cannot
+# meet a minimum somewhere), as opposed to input errors. Only a run refused
+# for these alone may go on to a shortfall schedule; a workbook with an input
+# error is never scheduled, elastic or not.
+SHORTFALL_CAPACITY_CODES = frozenset({
+    "ZERO_ACTIVE_INTERVAL_PROVABLY_IMPOSSIBLE",
+    "LANGUAGE_WINDOW_MAX_CAPACITY_BELOW_MINIMUM",
+    "OPENING_WINDOW_MAX_CAPACITY_BELOW_MINIMUM",
+    "HARD_FLOOR_PROVABLY_IMPOSSIBLE",
+    "NEXT_SUNDAY_ZERO_ACTIVE_PROVABLY_IMPOSSIBLE",
+    "NEXT_SUNDAY_LANGUAGE_PROVABLY_IMPOSSIBLE",
+    "NEXT_SUNDAY_OPENING_PROVABLY_IMPOSSIBLE",
+    "NEXT_SUNDAY_FLOOR_PROVABLY_IMPOSSIBLE",
+    "SKILL_WINDOW_PAID_CAPACITY_PROVABLY_INSUFFICIENT",
+})
+
+# What each shortfall family means, and the independent validator's name for
+# the same failure.
+SHORTFALL_FAMILIES = {
+    "zero_coverage": ("Nobody on the floor after breaks", "ZERO_STAFF_ACTIVE"),
+    "language": ("Language minimum after breaks", "LANGUAGE_MINIMUM"),
+    "opening": ("Opening minimum after breaks", "OPENING_MINIMUM"),
+    "coverage_split": ("Coverage Split group after breaks", "COVERAGE_SPLIT"),
+    "hard_floor": ("Hard coverage floor after breaks", "HARD_FLOOR"),
+    "next_sunday_zero": ("Next Sunday (Saturday carry-out): nobody on the floor", "NEXT_SUNDAY_CARRY_OUT"),
+    "next_sunday_language": ("Next Sunday: language minimum", "NEXT_SUNDAY_CARRY_OUT"),
+    "next_sunday_opening": ("Next Sunday: opening minimum", "NEXT_SUNDAY_CARRY_OUT"),
+    "next_sunday_floor": ("Next Sunday: coverage floor (coverage quality, F-07)", None),
+}
+SHORTFALL_ARTIFACT_TYPE = "HARD_RULE_SHORTFALL_SCHEDULE"
+
+
+def shortfall_pass_allowed(failures: Sequence[Dict[str, Any]]) -> bool:
+    """True when every contract failure is a capacity proof (F-06)."""
+    codes = {str(row.get("code")) for row in failures if isinstance(row, dict)}
+    return bool(codes) and codes <= SHORTFALL_CAPACITY_CODES
+
+
+def run_shortfall_pass(
+    parsed: ParsedInput, input_path: Path, output_path: Path, audit: Dict[str, Any],
+    capacity: Dict[str, Any], time_limit: float, workers: int, log: Any,
+    random_seed: int = 0, skeleton: Optional[SkeletonSolution] = None, pattern_width: int = 115,
+) -> Dict[str, Any]:
+    """Audit F-06: the best schedule that meets every PERSON rule, with every
+    coverage minimum it cannot meet named.
+
+    Runs only where the normal run ends with no schedule. Coverage minimums
+    become elastic (HardConfig.elastic); rest, OFF, leave, fixed requests,
+    nesting, shift variety, the language working window, the blank-hours ban,
+    the break contract and the exception cap stay hard.
+
+      1. minimise the total shortfall alone (Stage 1, no other objective);
+      2. at that shortfall, the best-covering skeleton (target_priority_balanced);
+      3. elastic break placement on it (Stage 2), breaks still mandatory.
+
+    A Stage-2 failure already has a hard-valid skeleton; pass it as
+    ``skeleton`` and only step 3 runs. The workbook is exported as
+    HARD_RULE_SHORTFALL_SCHEDULE with a Shortfalls sheet. It is never
+    releasable.
+    """
+    started = time.time()
+    deadline = started + max(10.0, float(time_limit))
+    record: Dict[str, Any] = {
+        "status": "NOT_RUN", "releasable": False, "workbook": None, "artifact_type": SHORTFALL_ARTIFACT_TYPE,
+        "shortfalls": [], "families": {}, "person_rule_failures": [],
+        "time_limit_sec": round(float(time_limit), 1),
+    }
+    elastic = HardConfig(elastic=True)
+    if skeleton is None:
+        probe = build_skeleton(parsed, None, elastic, max(5.0, 0.4 * (deadline - time.time())),
+                               workers, log, random_seed=random_seed)
+        record["stage1_minimum_shortfall_status"] = probe.cp_status
+        if probe.cp_status == "INFEASIBLE":
+            # Every coverage minimum is elastic here, so only the person rules
+            # can make this model infeasible.
+            record["status"] = "NO_SCHEDULE_MEETS_THE_PERSON_RULES"
+            record["elapsed_sec"] = round(time.time() - started, 1)
+            return record
+        if probe.cp_status != "OPTIMAL" and probe.cp_status != "FEASIBLE":
+            record["status"] = "NO_SHORTFALL_SCHEDULE_FOUND_IN_TIME"
+            record["elapsed_sec"] = round(time.time() - started, 1)
+            return record
+        cap = probe.diagnostics.get("elastic_weighted_total")
+        skeleton = probe
+        if deadline - time.time() > 20:
+            profile = skeleton_profiles(["target_priority_balanced"])[0]
+            refined = build_skeleton(parsed, profile, elastic, max(5.0, 0.5 * (deadline - time.time())),
+                                     workers, log, random_seed=random_seed, hint_skeleton=probe,
+                                     elastic_cap=cap)
+            record["stage1_coverage_status"] = refined.cp_status
+            if refined.cp_status in {"OPTIMAL", "FEASIBLE"}:
+                skeleton = refined
+        record["stage1_minimum_weighted_shortfall"] = cap
+    ensure_before_break_metrics(parsed, skeleton)
+    breaks = solve_breaks(
+        parsed, skeleton, pattern_width, bool(parsed.allow_no_break_exceptions),
+        max(5.0, deadline - time.time() - 5.0), workers, log,
+        exception_cap=parsed.max_no_break_exceptions if parsed.allow_no_break_exceptions else None,
+        objective_mode="target_priority", random_seed=random_seed, elastic=True,
+    )
+    record["stage2_status"] = breaks.cp_status
+    if breaks.cp_status not in {"OPTIMAL", "FEASIBLE"}:
+        record["status"] = "NO_BREAK_PLAN_MEETS_THE_PERSON_RULES"
+        record["elapsed_sec"] = round(time.time() - started, 1)
+        return record
+    shortfalls = list(breaks.diagnostics.get("elastic_slacks") or [])
+    for row in shortfalls:
+        label, validator_type = SHORTFALL_FAMILIES.get(row["family"], (row["family"], None))
+        row["meaning"] = label
+        row["validator_failure_type"] = validator_type
+    record["shortfalls"] = shortfalls
+    families: Dict[str, int] = {}
+    for row in shortfalls:
+        families[row["family"]] = families.get(row["family"], 0) + 1
+    record["families"] = families
+    # Everything the engine's own self-check reports must be a declared
+    # shortfall family; a person-rule failure here would be a defect.
+    minimum_types = {"zero_active", "language", "opening", "coverage_split", "hard_floor", "next_sunday_carry_out"}
+    validation = validate_schedule(parsed, skeleton, breaks)
+    record["person_rule_failures"] = [
+        row for row in validation["failures"] if str(row.get("type")) not in minimum_types
+    ][:50]
+    if record["person_rule_failures"]:
+        record["status"] = "PERSON_RULE_FAILURE_IN_SHORTFALL_SCHEDULE"
+        record["elapsed_sec"] = round(time.time() - started, 1)
+        return record
+    summary_audit = dict(audit)
+    write_output_workbook(
+        input_path, output_path, parsed, skeleton, breaks, capacity, [], summary_audit, [],
+        artifact_type=SHORTFALL_ARTIFACT_TYPE,
+        selection_basis="Elastic shortfall pass (audit F-06): no schedule meets every hard rule; "
+                        "this one meets every person rule and names each coverage minimum it misses",
+        status_override="FAIL_HARD_RULE_SHORTFALL",
+    )
+    from openpyxl import load_workbook
+    wb = load_workbook(output_path)
+    ws = _replace_sheet(wb, "Shortfalls")
+    _write_records(ws, ["Rule", "Meaning", "Day", "Time", "Group", "Required", "Short by", "Unit"], [
+        [row["family"], row["meaning"], row["day"], row["time"], row.get("rule") or "", row["required"],
+         row["shortfall"], row["unit"]]
+        for row in sorted(shortfalls, key=lambda r: (r["day_index"], r["time"], r["family"]))
+    ])
+    wb.move_sheet("Shortfalls", offset=-(len(wb.sheetnames) - 1))
+    wb.save(output_path)
+    record.update({
+        "status": "EXPORTED", "workbook": str(output_path), "metrics": compact_metric_surface(breaks.metrics),
+        "no_break_exceptions": len(breaks.no_break_cells),
+        "elapsed_sec": round(time.time() - started, 1),
+    })
+    return record
 
 
 def run_constraint_isolation(parsed: ParsedInput, base_hard: HardConfig, time_limit: float, workers: int, log: Any) -> List[Dict[str, Any]]:
@@ -8320,7 +8672,7 @@ def generate_break_patterns(parsed: ParsedInput, limit_per_duration: int = 115) 
     patterns: List[BreakPattern] = []
     for duration_q in sorted({s.duration_q for s in parsed.shifts}):
         for pattern in _generic_break_patterns(
-            duration_q, parsed.break_segments_q, limit_per_duration,
+            duration_q, break_segments_for(parsed, duration_q * 15), limit_per_duration,
             window_rules=parsed.break_window_rules_q,
             edge_margin_q=parsed.break_edge_margin_q,
             minimum_gap_q=parsed.break_min_gap_q,
@@ -8432,7 +8784,7 @@ def build_break_constraint_isolation_report(
     for duration_q in sorted({shift.duration_q for shift in parsed.shifts}):
         patterns = _generic_break_patterns(
             duration_q,
-            parsed.break_segments_q,
+            break_segments_for(parsed, duration_q * 15),
             0,
             window_rules=parsed.break_window_rules_q,
             edge_margin_q=parsed.break_edge_margin_q,
@@ -8962,6 +9314,30 @@ def run_qualified_language_break_certificate_repairs(
     }
 
 
+def after_break_raw_expression(entry: Tuple[int, List[Any]]) -> Any:
+    """A NEW ``headcount - breaks`` expression for one quarter, built for one use.
+
+    Audit F-33. The adjacent-balance terms used to reuse one stored expression
+    per quarter. OR-Tools 9.15 simplifies ``k - (k - S)`` to the inner sum
+    object ``S`` itself, and the ``- allowed`` that follows then modifies ``S``
+    in place. So whenever a quarter with no break options (a plain integer)
+    preceded one with the same headcount, the next quarter's stored expression
+    was silently changed, and every later term that read it was wrong by the
+    allowed change. A fresh expression per use is structurally identical to
+    the old one wherever that did not happen.
+
+    Used by the elastic shortfall pass only. The pre-registered A/B of the fix
+    for normal runs (evidence/production_readiness_audit/phase_c/F33_RULE.txt,
+    F33_AB_SCORE.json) did not pass: the corrected objective lost 5 target
+    intervals on H1 (2 scorable pairs) and placed breaks with more concurrency
+    on Voice, Chat and H1, so the corrupted terms were doing useful work by
+    accident. Normal runs keep the measured objective until an explicit
+    replacement is measured.
+    """
+    headcount, break_vars = entry
+    return headcount - (sum(break_vars) if break_vars else 0)
+
+
 def solve_breaks(
     parsed: ParsedInput, skeleton: SkeletonSolution, pattern_width: int,
     allow_exceptions: bool, time_limit: float, workers: int, log: Any,
@@ -8972,6 +9348,7 @@ def solve_breaks(
     min_floor_hits: Optional[int] = None,
     random_seed: int = 0,
     hint_solution: Optional[BreakSolution] = None,
+    elastic: bool = False,
 ) -> BreakSolution:
     cp_model = import_cp_sat()
     all_patterns = generate_break_patterns(parsed, pattern_width)
@@ -8993,6 +9370,18 @@ def solve_breaks(
         if literal is not None:
             constraint.OnlyEnforceIf(literal)
         return constraint
+
+    elastic_slacks: List[Tuple[str, int, int, str, int, str, Any, Any]] = []
+
+    def at_least(expr: Any, required: Any, family: str, day: int, minute: int,
+                 rule: str = "", unit: str = "people") -> Any:
+        """``expr >= required``; when ``elastic``, or report how far short (F-06)."""
+        required = int(required)
+        if not elastic or required <= 0:
+            return model.Add(expr >= required)
+        slack = model.NewIntVar(0, required, f"elastic_{family}_{len(elastic_slacks)}")
+        elastic_slacks.append((family, day, minute, rule, required, unit, slack, expr))
+        return model.Add(expr + slack >= required)
 
     cells = scheduled_cells(skeleton)
     critical, critical_reasons = critical_exception_cells(parsed, skeleton)
@@ -9115,8 +9504,13 @@ def solve_breaks(
                         model.Add(concurrency_excess >= break_count - concurrency_cap)
                         objective_terms.append(break_concurrency_weight(parsed, weights) * concurrency_excess)
                 after_raw_expr = len(covering) + len(prior) - break_count
-                whole_week_break_after_raw[qslot] = after_raw_expr
-                add_break_family(model.Add(after_raw_expr >= 1), "zero_coverage")
+                # F-33: normal runs keep the measured objective (the shared
+                # expression, see after_break_raw_expression); the elastic
+                # shortfall pass rebuilds a fresh one per use.
+                whole_week_break_after_raw[qslot] = (
+                    (len(covering) + len(prior), list(break_vars)) if elastic else after_raw_expr)
+                add_break_family(at_least(after_raw_expr, 1, "zero_coverage", d,
+                                          i * parsed.interval_minutes + q * 15), "zero_coverage")
                 if parsed.whole_week_balance_enabled and not diagnostic_mode:
                     cap = whole_week_raw_cap(parsed, d, i)
                     cap_excess = model.NewIntVar(0, max(0, len(covering) + len(prior)), f"break_whole_week_cap_excess_{qslot}")
@@ -9124,7 +9518,8 @@ def solve_breaks(
                     objective_terms.append(parsed.whole_week_balance_penalty_weight * cap_excess)
                 quarter_constraints += 1
                 if parsed.opening_guard_enabled and i in opening[d]:
-                    add_break_family(model.Add(len(covering) + len(prior) - break_count >= parsed.opening_minimum), "opening")
+                    add_break_family(at_least(len(covering) + len(prior) - break_count, parsed.opening_minimum,
+                                              "opening", d, i * parsed.interval_minutes + q * 15), "opening")
                     quarter_constraints += 1
                 minute = i * parsed.interval_minutes + q * 15
                 for rule in language_rules_at(parsed, minute, day=d):
@@ -9134,7 +9529,8 @@ def solve_breaks(
                     for a in eligible:
                         lang_breaks.extend(break_vars_by_qslot_assoc.get((qslot, a), []))
                     language_after = len(eligible) + len(prior_lang) - (sum(lang_breaks) if lang_breaks else 0)
-                    add_break_family(model.Add(language_after >= rule.minimum), "language")
+                    add_break_family(at_least(language_after, rule.minimum, "language", d, minute, rule.group),
+                                     "language")
                     if parsed.language_reserve_enabled and not diagnostic_mode:
                         reserve_target = language_operational_reserve_target(parsed, rule)
                         reserve_shortfall = model.NewIntVar(0, reserve_target, f"language_reserve_shortfall_{d}_{i}_{q}_{norm(rule.group)}")
@@ -9158,7 +9554,8 @@ def solve_breaks(
                     for a in eligible_split:
                         split_breaks.extend(break_vars_by_qslot_assoc.get((qslot, a), []))
                     split_after = len(eligible_split) + len(prior_split) - (sum(split_breaks) if split_breaks else 0)
-                    add_break_family(model.Add(split_after >= need_split), "coverage_split")
+                    add_break_family(at_least(split_after, need_split, "coverage_split", d, minute, split.group),
+                                     "coverage_split")
                     quarter_constraints += 1
                 base_eff += (len(covering) + len(prior)) * eff_person
                 interval_break_loss.extend(eff_person * var for var in break_vars)
@@ -9183,7 +9580,8 @@ def solve_breaks(
             if parsed.floor_mode == "hard":
                 hard_floor_exact = scaled_coverage_threshold(
                     req, float(parsed.hard_floor_ratio or parsed.floor_ratio), qpi)
-                add_break_family(model.Add(after_exact >= hard_floor_exact), "floor")
+                add_break_family(at_least(after_exact, hard_floor_exact, "hard_floor", d,
+                                          i * parsed.interval_minutes, unit="coverage_exact"), "floor")
             if not diagnostic_mode:
                 max_def = max(100000, full_units, target_units, floor_units)
                 floor_slack = model.NewIntVar(0, max_def, f"after_floor_slack_{d}_{i}")
@@ -9205,10 +9603,10 @@ def solve_breaks(
                 model.Add(after_exact <= full_exact - 1).OnlyEnforceIf(full_hit.Not())
                 floor_hit_vars.append(floor_hit); severe_hit_vars.append(severe_hit); target_hit_vars.append(target_hit); full_hit_vars.append(full_hit)
                 floor_hit_by_interval[d, i] = floor_hit; severe_hit_by_interval[d, i] = severe_hit
-                objective_terms.append(weights["floor_miss"] * (1 - floor_hit))
-                objective_terms.append(weights.get("severe_miss", 0) * (1 - severe_hit))
-                objective_terms.append(weights["target_miss"] * (1 - target_hit))
-                objective_terms.append(weights["full_miss"] * (1 - full_hit))
+                objective_terms.append(volume_weight(parsed, weights["floor_miss"], d, i) * (1 - floor_hit))
+                objective_terms.append(volume_weight(parsed, weights.get("severe_miss", 0), d, i) * (1 - severe_hit))
+                objective_terms.append(volume_weight(parsed, weights["target_miss"], d, i) * (1 - target_hit))
+                objective_terms.append(volume_weight(parsed, weights["full_miss"], d, i) * (1 - full_hit))
                 objective_terms.append(weights["floor_def"] * floor_slack)
                 objective_terms.append(weights["target_def"] * target_def)
                 if parsed.overage_control_enabled:
@@ -9306,8 +9704,10 @@ def solve_breaks(
                     model.Add(concurrency_excess >= break_count - concurrency_cap)
                     objective_terms.append(break_concurrency_weight(parsed, weights) * concurrency_excess)
             after_raw = len(covering) - break_count
-            model.Add(after_raw >= 1)
-            model.Add(eff_person * after_raw >= scaled_coverage_threshold(req, parsed.floor_ratio, 1))
+            boundary_minute = i * parsed.interval_minutes + q * 15
+            at_least(after_raw, 1, "next_sunday_zero", 7, boundary_minute)
+            at_least(eff_person * after_raw, scaled_coverage_threshold(req, parsed.floor_ratio, 1),
+                     "next_sunday_floor", 7, boundary_minute, unit="coverage_exact")
             if parsed.next_sunday_balance_enabled:
                 boundary_cap = next_sunday_raw_cap(parsed, i)
                 boundary_mode = getattr(parsed, "next_sunday_balance_gate_mode", "warn")
@@ -9317,10 +9717,11 @@ def solve_breaks(
                     boundary_excess = model.NewIntVar(0, len(covering), f"next_sun_overage_excess_{qslot}")
                     model.Add(boundary_excess >= after_raw - boundary_cap)
                     objective_terms.append(max(1, parsed.whole_week_balance_penalty_weight) * boundary_excess)
-                next_sunday_after_raw_sequence.append((qslot, i, after_raw))
+                next_sunday_after_raw_sequence.append(
+                    (qslot, i, (len(covering), list(break_vars)) if elastic else after_raw))
             quarter_constraints += 2
             if parsed.opening_guard_enabled and i in next_sunday_opening:
-                model.Add(after_raw >= parsed.opening_minimum)
+                at_least(after_raw, parsed.opening_minimum, "next_sunday_opening", 7, boundary_minute)
                 quarter_constraints += 1
             minute = i * parsed.interval_minutes + q * 15
             for rule in language_rules_at(parsed, minute, day=0):
@@ -9330,7 +9731,7 @@ def solve_breaks(
                     lang_breaks.extend(break_vars_by_qslot_assoc.get((qslot, a), []))
                     lang_breaks.extend(break_vars_by_qslot_assoc.get((own_qslot, a), []))
                 language_after = len(eligible) - (sum(lang_breaks) if lang_breaks else 0)
-                model.Add(language_after >= rule.minimum)
+                at_least(language_after, rule.minimum, "next_sunday_language", 7, minute, rule.group)
                 if parsed.language_reserve_enabled and not diagnostic_mode:
                     reserve_target = language_operational_reserve_target(parsed, rule)
                     reserve_shortfall = model.NewIntVar(0, reserve_target, f"next_sun_language_reserve_shortfall_{i}_{q}_{norm(rule.group)}")
@@ -9348,7 +9749,8 @@ def solve_breaks(
         floor_units = scaled_coverage_threshold(req, parsed.floor_ratio, len(protected_quarters))
         target_units = scaled_coverage_threshold(req, parsed.target_ratio, len(protected_quarters))
         full_units = scaled_coverage_threshold(req, 1.0, len(protected_quarters))
-        add_break_family(model.Add(after_eff >= floor_units), "week_boundary")
+        add_break_family(at_least(after_eff, floor_units, "next_sunday_floor", 7, i * parsed.interval_minutes,
+                                  unit="coverage_exact"), "week_boundary")
         if not diagnostic_mode:
             max_def = max(100000, full_units, target_units, floor_units)
             target_def = model.NewIntVar(0, max_def, f"next_sun_target_def_{i}")
@@ -9365,9 +9767,11 @@ def solve_breaks(
 
     if parsed.next_sunday_balance_enabled:
         ordered_boundary = sorted(next_sunday_after_raw_sequence, key=lambda row: row[0])
-        for (previous_qslot, previous_interval, previous_raw), (current_qslot, current_interval, current_raw) in zip(ordered_boundary, ordered_boundary[1:]):
+        for (previous_qslot, previous_interval, previous_entry), (current_qslot, current_interval, current_entry) in zip(ordered_boundary, ordered_boundary[1:]):
             if current_qslot != previous_qslot + 1:
                 continue
+            previous_raw = after_break_raw_expression(previous_entry) if elastic else previous_entry
+            current_raw = after_break_raw_expression(current_entry) if elastic else current_entry
             adjacent_limit = next_sunday_adjacent_raw_limit(parsed, previous_interval, current_interval)
             boundary_mode = getattr(parsed, "next_sunday_balance_gate_mode", "warn")
             if boundary_mode == "fail":
@@ -9382,10 +9786,12 @@ def solve_breaks(
     if parsed.whole_week_balance_enabled and not diagnostic_mode:
         for d in range(7):
             for qslot in range(d * 96, (d + 1) * 96 - 1):
-                previous_raw = whole_week_break_after_raw.get(qslot)
-                current_raw = whole_week_break_after_raw.get(qslot + 1)
-                if previous_raw is None or current_raw is None:
+                previous_entry = whole_week_break_after_raw.get(qslot)
+                current_entry = whole_week_break_after_raw.get(qslot + 1)
+                if previous_entry is None or current_entry is None:
                     continue
+                previous_raw = after_break_raw_expression(previous_entry) if elastic else previous_entry
+                current_raw = after_break_raw_expression(current_entry) if elastic else current_entry
                 previous_interval = (qslot - d * 96) // qpi
                 current_interval = (qslot + 1 - d * 96) // qpi
                 allowed = whole_week_adjacent_raw_limit(parsed, d, previous_interval, current_interval)
@@ -9419,6 +9825,13 @@ def solve_breaks(
         if enforce_break_loss_guard and severe_hit_vars:
             add_break_family(model.Add(sum(severe_hit_vars) >= max(0, before_severe_count - loss_cap)), "severe_loss_guard")
 
+    elastic_weighted = None
+    if elastic_slacks:
+        elastic_weighted = sum(
+            ELASTIC_UNIT_WEIGHTS[unit] * var
+            for _family, _day, _minute, _rule, _required, unit, var, _expr in elastic_slacks
+        )
+        objective_terms.append(elastic_weighted)
     if objective_terms:
         model.Minimize(sum(objective_terms))
     if break_assumption_literals:
@@ -9544,6 +9957,8 @@ def solve_breaks(
         selected_pattern=selected_pattern, no_break_cells=no_break_cells, patterns=all_patterns,
         diagnostics={
             "variables": len(model.Proto().variables), "constraints": len(model.Proto().constraints),
+            "elastic": bool(elastic),
+            "elastic_slacks": elastic_slack_rows(elastic_slacks, solver, status in (cp_model.OPTIMAL, cp_model.FEASIBLE)),
             "quarter_constraints": quarter_constraints, "critical_cell_count": len(critical),
             "exception_candidate_count": len(exception_candidates),
             "critical_reasons": critical_reasons[:500],
@@ -9957,6 +10372,8 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
     before100 = before90 = before80 = after100 = after90 = after80 = active_count = 0
     blank_staffed_quarters = 0
     before_target = after_target = before_floor = after_floor = 0
+    volume_mode = getattr(parsed, "coverage_objective_weighting", "interval_count") == "volume_weighted"
+    before_target_volume = after_target_volume = before_floor_volume = after_floor_volume = 0.0
     before_hard_floor = after_hard_floor = 0
     target_losses_from_breaks = 0
     floor_losses_from_breaks = 0
@@ -10112,6 +10529,11 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
             after_target += int(after_pct + 1e-9 >= parsed.target_ratio)
             before_floor += int(before_pct + 1e-9 >= parsed.floor_ratio)
             after_floor += int(after_pct + 1e-9 >= parsed.floor_ratio)
+            if volume_mode:
+                before_target_volume += req * (before_pct + 1e-9 >= parsed.target_ratio)
+                after_target_volume += req * (after_pct + 1e-9 >= parsed.target_ratio)
+                before_floor_volume += req * (before_pct + 1e-9 >= parsed.floor_ratio)
+                after_floor_volume += req * (after_pct + 1e-9 >= parsed.floor_ratio)
             if parsed.hard_floor_ratio is not None:
                 before_hard_floor += int(before_pct + 1e-9 >= parsed.hard_floor_ratio)
                 after_hard_floor += int(after_pct + 1e-9 >= parsed.hard_floor_ratio)
@@ -10638,6 +11060,10 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
         "before_100": int(before100), "before_90": int(before90), "before_80": int(before80),
         "after_100": int(after100), "after_90": int(after90), "after_80": int(after80),
         "before_target": int(before_target), "after_target": int(after_target),
+        **({"before_target_volume_fte": round(before_target_volume, 6),
+            "after_target_volume_fte": round(after_target_volume, 6),
+            "before_floor_volume_fte": round(before_floor_volume, 6),
+            "after_floor_volume_fte": round(after_floor_volume, 6)} if volume_mode else {}),
         "before_floor": int(before_floor), "after_floor": int(after_floor),
         "blank_staffed_quarters": int(blank_staffed_quarters),
         "before_hard_floor": int(before_hard_floor), "after_hard_floor": int(after_hard_floor),
@@ -10799,9 +11225,13 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
         ),
         "week_boundary_blank_staffed_qslots": week_boundary_blank_staffed_qslots,
         "week_boundary_blank_rows": week_boundary_blank_rows,
+        # Audit F-07: the next-Sunday floor is coverage quality, exactly like
+        # the current week's floor (week_boundary_floor_gap_count, gated by the
+        # coverage quality gate). Zero staffing, language, opening and banned
+        # blank staffing stay hard. The first-pass models still enforce the
+        # floor, so this only changes how a shortfall schedule is classified.
         "week_boundary_hard_failure_count": (
-            sum(not row["floor_hit_after"] for row in week_boundary_rows)
-            + len(week_boundary_zero_qslots)
+            len(week_boundary_zero_qslots)
             + len(week_boundary_language_gaps)
             + len(week_boundary_opening_gaps)
             + (
@@ -10942,6 +11372,7 @@ def break_resilience_diagnostics(parsed: ParsedInput) -> Dict[str, Any]:
                 best_paid_q = 0
                 best_shift = None
                 best_shift_day = None
+                best_shift_minutes = 0
                 for shift_day in {day, max(0, day - 1)}:
                     for shift in associate_day_eligible_shifts(parsed, associate, shift_day):
                         overlap_q = _shift_overlap_qslots(shift_day, shift, target_qslots)
@@ -10949,12 +11380,14 @@ def break_resilience_diagnostics(parsed: ParsedInput) -> Dict[str, Any]:
                             best_paid_q = overlap_q
                             best_shift = shift.label
                             best_shift_day = shift_day
+                            best_shift_minutes = shift.duration_min
                 if best_paid_q <= 0:
                     continue
                 paid_minutes = best_paid_q * 15
                 # Conservative warning estimate: a mandatory break can consume
                 # at most the break minutes inside the required window.
-                productive_warning_minutes = max(0, paid_minutes - min(break_minutes, paid_minutes))
+                shift_break_minutes = break_quarters_for(parsed, best_shift_minutes) * 15
+                productive_warning_minutes = max(0, paid_minutes - min(shift_break_minutes, paid_minutes))
                 per_associate.append({
                     "associate": associate.name,
                     "paid_overlap_minutes_upper_bound": paid_minutes,
@@ -11083,7 +11516,8 @@ def capacity_diagnostics(parsed: ParsedInput) -> Dict[str, Any]:
     default_workdays = default_workdays_per_week(parsed)
     working_shifts = max(0, len(parsed.associates) * default_workdays - leave_days)
     avg_shift_hours = sum(s.duration_min for s in parsed.shifts) / max(1, len(parsed.shifts)) / 60.0
-    break_hours = sum(length for length, _ in parsed.break_segments_q) * 0.25
+    break_hours = (sum(break_quarters_for(parsed, s.duration_min) for s in parsed.shifts)
+                   / max(1, len(parsed.shifts))) * 0.25
     productive_hours = working_shifts * max(0.0, avg_shift_hours - break_hours)
     target_hours = floor_hours = hard_floor_hours = 0.0
     day_summaries: List[Dict[str, Any]] = []
@@ -12343,7 +12777,14 @@ def _candidate_quality_tuple(parsed: ParsedInput, metrics: Dict[str, Any], prefi
         int(metrics.get("before_target", 0) or 0),
         int(metrics.get("before_floor", 0) or 0),
     )
+    # Audit F-28: with "Volume Weighted", the requirement covered at target
+    # leads; the interval count follows. Without it the tuple is unchanged.
+    volume_lead = (
+        (round(float(metrics.get(f"{prefix}_target_volume_fte", 0.0) or 0.0), 6),)
+        if getattr(parsed, "coverage_objective_weighting", "interval_count") == "volume_weighted" else ()
+    )
     return (
+        *volume_lead,
         int(metrics.get(f"{prefix}_target", 0) or 0),
         *_protected_tier_counts(parsed, metrics, prefix),
         floor_hits,
@@ -13397,16 +13838,25 @@ def break_capacity_headcount_requirement(
             interval_room = int(math.floor(staffed_total - qpi * need_exact + 1e-9))
             lossless_capacity += max(0, min(interval_room, concurrency_room))
 
-    break_q_per_shift = sum(count for count, _ in parsed.break_segments_q)
     worked_days = sum(1 for row in skeleton.assignment for value in row if value != "OFF")
+    break_q_per_shift = sum(count for count, _ in parsed.break_segments_q)
     break_demand = worked_days * break_q_per_shift
+    if getattr(parsed, "break_sets_by_shift_length", ()):
+        # Audit F-20: each worked shift brings the break set of its own length.
+        # A non-OFF cell without a shift (Leave) keeps the global set it was
+        # always counted with. Without per-length sets nothing changes.
+        break_demand = sum(
+            (break_quarters_for(parsed, parsed.shifts[si].duration_min) if si is not None else break_q_per_shift)
+            for row_cells, row_shifts in zip(skeleton.assignment, skeleton.selected_shift_index)
+            for value, si in zip(row_cells, row_shifts) if value != "OFF"
+        )
     deficit = max(0, break_demand - lossless_capacity)
 
     durations = sorted({shift.duration_q for shift in parsed.shifts}) or [0]
     typical_shift_q = durations[len(durations) // 2]
     # Net lossless capacity one more associate contributes: the quarters their
     # shift covers, less the break quarters they themselves consume.
-    net_per_associate = max(1, typical_shift_q - break_q_per_shift)
+    net_per_associate = max(1, typical_shift_q - break_quarters_for(parsed, typical_shift_q * 15))
     # `deficit` is per WEEK (every worked day of the roster); one associate
     # contributes net_per_associate per SHIFT. Dividing a weekly deficit by one
     # day's contribution counted each added associate as working one day a
@@ -13697,10 +14147,10 @@ def synchronize_contract_metadata(wb: Any, parsed: ParsedInput, capacity: Dict[s
     _write_records(contract_ws, ["Contract Field", "Canonical Value"], _contract_display_rows(parsed))
     contract_ws.sheet_properties.tabColor = "4472C4"
 
-    break_hours = sum(length for length, _ in parsed.break_segments_q) * 0.25
+    break_hours = break_quarters_for(parsed, 540) * 0.25
     roster_count = len(parsed.associates)
     net_9h = roster_count * 5 * max(0.0, 9.0 - break_hours)
-    net_11h = roster_count * 4 * max(0.0, 11.0 - break_hours)
+    net_11h = roster_count * 4 * max(0.0, 11.0 - break_quarters_for(parsed, 660) * 0.25)
     start_window = (
         "Unrestricted"
         if parsed.allowed_shift_start_min is None or parsed.allowed_shift_start_end is None
@@ -13888,6 +14338,11 @@ def production_quality_gate(parsed: ParsedInput, metrics: Dict[str, Any]) -> Dic
         coverage_issues.append({"code": "SEVERE_GAP_RATIO_EXCEEDED", "actual": severe_ratio, "maximum": parsed.quality_max_severe_gap_ratio, "count": severe_gaps})
     if int(metrics.get("max_consecutive_floor_gaps", 0) or 0) > parsed.quality_max_consecutive_floor_gaps:
         coverage_issues.append({"code": "CONSECUTIVE_FLOOR_GAPS_EXCEEDED", "actual": int(metrics.get("max_consecutive_floor_gaps", 0) or 0), "maximum": parsed.quality_max_consecutive_floor_gaps})
+    boundary_floor_gaps = int(metrics.get("week_boundary_floor_gap_count", 0) or 0)
+    if boundary_floor_gaps > 0:
+        # Audit F-07: reported with the coverage gate, as the current week's floor is.
+        coverage_issues.append({"code": "NEXT_SUNDAY_FLOOR_GAPS", "count": boundary_floor_gaps,
+                                "floor_ratio": parsed.floor_ratio})
     apply(parsed.quality_gate_mode, coverage_issues, "coverage")
 
     boundary_issues: List[Dict[str, Any]] = []
@@ -18180,7 +18635,7 @@ def global_zero_exception_break_reserve_requirements(parsed: ParsedInput) -> Dic
     requirements: Dict[Tuple[int, int], int] = {}
     if parsed.allow_no_break_exceptions or int(parsed.max_no_break_exceptions or 0) > 0:
         return requirements
-    if not parsed.break_segments_q or sum(length for length, _ in parsed.break_segments_q) <= 0:
+    if not any(break_quarters_for(parsed, s.duration_min) > 0 for s in parsed.shifts):
         return requirements
     for d in range(7):
         for i in range(parsed.intervals_per_day):
@@ -20308,6 +20763,16 @@ def infeasibility_diagnosis_budget(remaining_total: float, finalization_reserve:
     return budget if budget >= 15.0 else 0.0
 
 
+def stage1_minimum_budget_seconds(total_time_sec: float, portfolio_size: int, minimum_slice_sec: float) -> int:
+    """What a Stage-1 portfolio of ``portfolio_size`` profiles needs at the configured
+    minimum slice, capped at 45 % of the run (audit F-34: the slice used to be ignored)."""
+    return int(min(
+        float(total_time_sec) * 0.45,
+        max(1, int(portfolio_size)) * max(STAGE1_MIN_MEANINGFUL_SLICE_SEC, float(minimum_slice_sec))
+        / STAGE1_SLICE_UTILIZATION,
+    ))
+
+
 def run_case(
     input_path: Path, output_path: Path, audit_path: Path, summary_csv: Path,
     work_dir: Path, total_time_sec: int, workers: int,
@@ -20670,10 +21135,12 @@ def run_case(
         # reserves leave behind. Capped at 45% of the run so break search,
         # joint refinement and finalization all remain funded.
         stage1_portfolio_size = max(1, len(skeleton_profiles(skeleton_profile_names)))
-        stage1_minimum_seconds = int(min(
-            total_time_sec * 0.45,
-            stage1_portfolio_size * STAGE1_MIN_MEANINGFUL_SLICE_SEC / STAGE1_SLICE_UTILIZATION,
-        ))
+        # Audit F-34: the configured minimum slice, not the 45 s constant. A
+        # workbook asking for 240 s per profile used to get a Stage-1 window
+        # sized for 45 s slices, so it ran one or two profiles instead of the
+        # deep portfolio it asked for. Identical at the default slice.
+        stage1_minimum_seconds = stage1_minimum_budget_seconds(
+            total_time_sec, stage1_portfolio_size, stage1_minimum_slice_sec)
         budget_plan_diagnostics: Dict[str, Any] = {}
         global_budget_plan = build_global_budget_plan(
             total_time_sec,
@@ -20994,6 +21461,10 @@ def run_case(
                 "opening_guard_enabled": parsed.opening_guard_enabled, "opening_minimum": parsed.opening_minimum,
                 "opening_intervals": parsed.opening_intervals,
                 "break_segments": [{"quarters": length, "minutes": length * 15, "label": label} for length, label in parsed.break_segments_q],
+                "break_sets_by_shift_length": [
+                    {"minimum_shift_minutes": threshold, "minutes": [length * 15 for length, _ in segments]}
+                    for threshold, segments in parsed.break_sets_by_shift_length
+                ],
                 "break_window_contract": {
                     "source": parsed.break_window_source,
                     "edge_margin_quarters": parsed.break_edge_margin_q,
@@ -21087,6 +21558,31 @@ def run_case(
         audit["status"] = "INPUT_PARSED"
         write_json(audit_path, audit)
         print(json.dumps(audit["input_contract"], indent=2), file=log, flush=True)
+
+        def attempt_shortfall_schedule(reason: str, skeleton: Optional[SkeletonSolution] = None) -> None:
+            """Audit F-06: where this run ends with no schedule, the best one
+            that meets every person rule, with each missed minimum named."""
+            if diagnostics_only or skeleton_only:
+                return
+            remaining = started_all + float(total_time_sec) - time.time() - float(finalization_reserve_sec)
+            budget = max(30.0, remaining)
+            shortfall_path = output_path.with_name(
+                normalized_output_prefix(output_path) + "_HARD_RULE_SHORTFALL_SCHEDULE" + output_path.suffix)
+            print(f"SHORTFALL_PASS start reason={reason} budget={budget:.0f}s", file=log, flush=True)
+            try:
+                shortfall = run_shortfall_pass(
+                    parsed, input_path, shortfall_path, audit, capacity, budget, workers, log,
+                    random_seed=solver_random_seed, skeleton=skeleton, pattern_width=full_width)
+            except Exception as exc:  # recorded, never hidden; the run still fails
+                shortfall = {"status": "ERROR", "error": f"{type(exc).__name__}: {exc}",
+                             "traceback": traceback.format_exc()[-4000:], "releasable": False}
+            shortfall["reason"] = reason
+            audit["shortfall_schedule"] = shortfall
+            print(f"SHORTFALL_PASS {shortfall.get('status')} families={shortfall.get('families')}",
+                  file=log, flush=True)
+            audit["elapsed_sec"] = time.time() - started_all
+            write_json(audit_path, audit)
+
         if preflight.get("failures"):
             audit["status"] = "FAIL_PRE_SOLVER_CONTRACT"
             audit["elapsed_sec"] = time.time() - started_all
@@ -21095,6 +21591,8 @@ def run_case(
                 "status": audit["status"], "input": str(input_path), "audit": str(audit_path),
                 "run_id": run_identity["run_id"], "preflight_failure_count": len(preflight.get("failures", [])),
             }])
+            if shortfall_pass_allowed(preflight.get("failures", [])):
+                attempt_shortfall_schedule("contract_capacity_proof")
             return 2
 
         aggregate_guidance = aggregate_pattern_mix_guidance(
@@ -21210,8 +21708,10 @@ def run_case(
             # before that phase was due to start, and on a 300 s run the
             # isolation was skipped with 298 s unused. Nothing else will run
             # now, so the diagnosis gets everything except finalization.
+            # Half of what is left names the cause; the shortfall pass
+            # (audit F-06) gets the rest to produce a schedule to review.
             diagnosis_budget = infeasibility_diagnosis_budget(
-                budget_manager.remaining_total(), float(finalization_reserve_sec))
+                budget_manager.remaining_total() / 2.0, float(finalization_reserve_sec) / 2.0)
             diagnosis_deadline = time.time() + diagnosis_budget
             isolation_budget = (
                 diagnosis_budget * (0.45 if conflict_refinement else 0.90)
@@ -21242,6 +21742,7 @@ def run_case(
             audit["elapsed_sec"] = time.time() - started_all
             write_json(audit_path, audit)
             write_csv(summary_csv, [{"status": audit["status"], "input": str(input_path), "audit": str(audit_path), "probe_status": probe.cp_status}])
+            attempt_shortfall_schedule("hard_probe_" + str(probe.cp_status).lower())
             return 2
         if diagnostics_only:
             audit["status"] = "PASS_DIAGNOSTICS_ONLY"
@@ -23647,6 +24148,15 @@ def run_case(
                 "best_before_target": int((audit.get("best_before_metrics") or {}).get("before_target", 0) or 0),
             }
             write_csv(summary_csv, [summary_row])
+            # Audit F-06: no break-feasible candidate. Not for an internal
+            # retention breach (a defect, not a week) or for candidates that
+            # exist but miss a protected benchmark (not a no-schedule week).
+            if status not in {"FAIL_ZERO_EXCEPTION_CANDIDATE_RETENTION_BREACH", "FAIL_PROTECTED_BENCHMARK_NOT_MET"}:
+                attempt_shortfall_schedule(
+                    status.lower(),
+                    skeleton=best_before_skeleton if best_before_skeleton is not None else (
+                        best_diagnostic[0] if best_diagnostic is not None else None),
+                )
             return 2
 
         selection = select_export_candidates(
@@ -24859,6 +25369,51 @@ def _business_finding_text(item: Any) -> str:
 
 
 def build_business_outcome(audit: Dict[str, Any], return_code: int) -> Dict[str, Any]:
+    """The run's business outcome, plus the shortfall schedule when one was made (F-06)."""
+    outcome = _build_business_outcome_core(audit, return_code)
+    shortfall = audit.get("shortfall_schedule") or {}
+    if shortfall.get("status") != "EXPORTED":
+        if shortfall:
+            outcome["shortfall_schedule"] = {"status": shortfall.get("status"), "reason": shortfall.get("reason")}
+        return outcome
+    rows = list(shortfall.get("shortfalls") or [])
+    by_family: Dict[str, int] = {}
+    for row in rows:
+        label = row.get("meaning") or row.get("family")
+        by_family[label] = by_family.get(label, 0) + 1
+    listed = "; ".join(f"{label}: {count} quarter(s)" for label, count in sorted(by_family.items()))
+    outcome["production_eligible"] = False
+    outcome["outcome_code"] = "HARD_RULE_SHORTFALL_SCHEDULE_FOR_REVIEW"
+    outcome["outcome_category"] = "ACTION_REQUIRED"
+    outcome["headline"] = ("No schedule meets every hard rule; a shortfall schedule is attached for review "
+                           "and must not be published as is")
+    lead = str(outcome.get("plain_language_summary") or "").rstrip()
+    if lead and lead[-1] not in ".!?":
+        lead += "."
+    outcome["plain_language_summary"] = (
+        lead
+        + f" A shortfall schedule was produced ({Path(str(shortfall.get('workbook'))).name}). It meets every "
+          "person rule (rest, OFF days, leave, fixed requests, breaks) and misses only these coverage minimums: "
+        + (listed or "none") + ". Every missed quarter is listed on its Shortfalls sheet."
+    ).strip()
+    outcome["shortfall_schedule"] = {
+        "status": "EXPORTED", "workbook": shortfall.get("workbook"), "reason": shortfall.get("reason"),
+        "artifact_type": shortfall.get("artifact_type"), "families": shortfall.get("families"),
+        "shortfall_count": len(rows), "releasable": False,
+    }
+    outcome["shortfall_rows"] = [
+        {"day": row.get("day"), "time": row.get("time"), "meaning": row.get("meaning"), "rule": row.get("rule"),
+         "required": row.get("required"), "short_by": row.get("shortfall"), "unit": row.get("unit")}
+        for row in rows
+    ]
+    actions = list(outcome.get("recommended_actions") or [])
+    actions.append("Review the shortfall schedule: use it only after the business has accepted each listed "
+                   "shortfall, or add qualified staff and rerun.")
+    outcome["recommended_actions"] = actions
+    return outcome
+
+
+def _build_business_outcome_core(audit: Dict[str, Any], return_code: int) -> Dict[str, Any]:
     status = str(audit.get("status") or ("PASS" if int(return_code) == 0 else "FAIL"))
     outcome: Dict[str, Any] = {
         "schema_version": 1,
@@ -25118,6 +25673,13 @@ def build_business_outcome(audit: Dict[str, Any], return_code: int) -> Dict[str,
     return outcome
 
 
+def shortfall_text_line(row: Mapping[str, Any]) -> str:
+    unit = " (coverage units)" if str(row.get("unit")) != "people" else ""
+    group = f" [{row.get('rule')}]" if row.get("rule") else ""
+    return (f"- {row.get('day')} {row.get('time')} | {row.get('meaning')}{group} | "
+            f"required {row.get('required')}, short by {row.get('short_by')}{unit}")
+
+
 def format_business_outcome(outcome: Dict[str, Any]) -> str:
     lines = [str(outcome.get("headline") or "Schedule outcome"), "", str(outcome.get("plain_language_summary") or "")]
     for label, key in [("Requested / configured", "requested"), ("Best proven result", "best_proven"), ("Gap", "gap")]:
@@ -25132,6 +25694,12 @@ def format_business_outcome(outcome: Dict[str, Any]) -> str:
     if findings:
         lines.extend(["", "Warnings:" if outcome.get("production_eligible") else "Main blockers:"])
         lines.extend("- " + text for text in findings[:8])
+    shortfall_rows = outcome.get("shortfall_rows") or []
+    if shortfall_rows:
+        lines.extend(["", "Shortfalls (the schedule misses these minimums):"])
+        lines.extend(shortfall_text_line(row) for row in shortfall_rows[:20])
+        if len(shortfall_rows) > 20:
+            lines.append(f"- ... and {len(shortfall_rows) - 20} more (the Shortfalls sheet lists them all)")
     examples = outcome.get("affected_examples") or []
     if examples:
         lines.extend(["", "Affected examples:"])

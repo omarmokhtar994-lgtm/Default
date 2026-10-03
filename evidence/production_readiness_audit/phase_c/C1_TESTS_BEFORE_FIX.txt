@@ -1,0 +1,89 @@
+test_a_language_shortage_is_named_as_language (tests_staged.test_rc9_2_32_phase_c_shortfall.C1ElasticStageOne.test_a_language_shortage_is_named_as_language) ... ERROR
+test_an_unreachable_quarter_is_one_named_shortfall (tests_staged.test_rc9_2_32_phase_c_shortfall.C1ElasticStageOne.test_an_unreachable_quarter_is_one_named_shortfall) ... ERROR
+test_hard_config_has_an_elastic_switch_off_by_default (tests_staged.test_rc9_2_32_phase_c_shortfall.C1ElasticStageOne.test_hard_config_has_an_elastic_switch_off_by_default) ... ERROR
+test_person_rules_stay_hard (tests_staged.test_rc9_2_32_phase_c_shortfall.C1ElasticStageOne.test_person_rules_stay_hard) ... ERROR
+test_a_lone_cover_takes_its_breaks_and_the_gap_is_named (tests_staged.test_rc9_2_32_phase_c_shortfall.C1ElasticStageTwo.test_a_lone_cover_takes_its_breaks_and_the_gap_is_named) ... ERROR
+test_a_boundary_floor_miss_is_not_a_hard_failure (tests_staged.test_rc9_2_32_phase_c_shortfall.C1NextSundayFloorIsCoverageQuality.test_a_boundary_floor_miss_is_not_a_hard_failure) ... FAIL
+test_capacity_proofs_allow_the_pass_and_input_errors_do_not (tests_staged.test_rc9_2_32_phase_c_shortfall.C1ShortfallPass.test_capacity_proofs_allow_the_pass_and_input_errors_do_not) ... ERROR
+test_the_pass_exports_a_listed_non_releasable_schedule (tests_staged.test_rc9_2_32_phase_c_shortfall.C1ShortfallPass.test_the_pass_exports_a_listed_non_releasable_schedule) ... ERROR
+
+======================================================================
+ERROR: test_a_language_shortage_is_named_as_language (tests_staged.test_rc9_2_32_phase_c_shortfall.C1ElasticStageOne.test_a_language_shortage_is_named_as_language)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_32_phase_c_shortfall.py", line 83, in test_a_language_shortage_is_named_as_language
+    sk = E.build_skeleton(parsed, None, E.HardConfig(elastic=True), 30, 2, io.StringIO())
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: HardConfig.__init__() got an unexpected keyword argument 'elastic'
+
+======================================================================
+ERROR: test_an_unreachable_quarter_is_one_named_shortfall (tests_staged.test_rc9_2_32_phase_c_shortfall.C1ElasticStageOne.test_an_unreachable_quarter_is_one_named_shortfall)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_32_phase_c_shortfall.py", line 74, in test_an_unreachable_quarter_is_one_named_shortfall
+    sk = E.build_skeleton(parsed, None, E.HardConfig(elastic=True), 20, 2, io.StringIO())
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: HardConfig.__init__() got an unexpected keyword argument 'elastic'
+
+======================================================================
+ERROR: test_hard_config_has_an_elastic_switch_off_by_default (tests_staged.test_rc9_2_32_phase_c_shortfall.C1ElasticStageOne.test_hard_config_has_an_elastic_switch_off_by_default)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_32_phase_c_shortfall.py", line 68, in test_hard_config_has_an_elastic_switch_off_by_default
+    self.assertFalse(E.HardConfig().elastic)
+                     ^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'HardConfig' object has no attribute 'elastic'
+
+======================================================================
+ERROR: test_person_rules_stay_hard (tests_staged.test_rc9_2_32_phase_c_shortfall.C1ElasticStageOne.test_person_rules_stay_hard)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_32_phase_c_shortfall.py", line 90, in test_person_rules_stay_hard
+    sk = E.build_skeleton(parsed, None, E.HardConfig(elastic=True), 30, 2, io.StringIO())
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: HardConfig.__init__() got an unexpected keyword argument 'elastic'
+
+======================================================================
+ERROR: test_a_lone_cover_takes_its_breaks_and_the_gap_is_named (tests_staged.test_rc9_2_32_phase_c_shortfall.C1ElasticStageTwo.test_a_lone_cover_takes_its_breaks_and_the_gap_is_named)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_32_phase_c_shortfall.py", line 100, in test_a_lone_cover_takes_its_breaks_and_the_gap_is_named
+    hard = E.solve_breaks(parsed, sk, 24, False, 20, 1, io.StringIO())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Default/engine/_tools/l632_universal_scheduler.py", line 9408, in solve_breaks
+    before_severe_gaps = int(require_metric(before_metrics_for_loss_guard, "before_severe_floor_gap_count", "severe_floor_gap_count") or 0)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Default/engine/_tools/l632_universal_scheduler.py", line 74, in require_metric
+    raise MissingMetricError(
+l632_universal_scheduler.MissingMetricError: "required metric 'before_severe_floor_gap_count' is missing; refusing to substitute 'severe_floor_gap_count', which is a different quantity whenever the coverage floor is not 0.80"
+
+======================================================================
+ERROR: test_capacity_proofs_allow_the_pass_and_input_errors_do_not (tests_staged.test_rc9_2_32_phase_c_shortfall.C1ShortfallPass.test_capacity_proofs_allow_the_pass_and_input_errors_do_not)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_32_phase_c_shortfall.py", line 112, in test_capacity_proofs_allow_the_pass_and_input_errors_do_not
+    self.assertTrue(E.shortfall_pass_allowed([{"code": "ZERO_ACTIVE_INTERVAL_PROVABLY_IMPOSSIBLE"}]))
+                    ^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'l632_universal_scheduler' has no attribute 'shortfall_pass_allowed'
+
+======================================================================
+ERROR: test_the_pass_exports_a_listed_non_releasable_schedule (tests_staged.test_rc9_2_32_phase_c_shortfall.C1ShortfallPass.test_the_pass_exports_a_listed_non_releasable_schedule)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_32_phase_c_shortfall.py", line 123, in test_the_pass_exports_a_listed_non_releasable_schedule
+    record = E.run_shortfall_pass(parsed, path, out, {}, E.capacity_diagnostics(parsed),
+             ^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'l632_universal_scheduler' has no attribute 'run_shortfall_pass'
+
+======================================================================
+FAIL: test_a_boundary_floor_miss_is_not_a_hard_failure (tests_staged.test_rc9_2_32_phase_c_shortfall.C1NextSundayFloorIsCoverageQuality.test_a_boundary_floor_miss_is_not_a_hard_failure)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_32_phase_c_shortfall.py", line 160, in test_a_boundary_floor_miss_is_not_a_hard_failure
+    self.assertEqual(m["week_boundary_hard_failure_count"], 0)
+AssertionError: 5 != 0
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.672s
+
+FAILED (failures=1, errors=7)

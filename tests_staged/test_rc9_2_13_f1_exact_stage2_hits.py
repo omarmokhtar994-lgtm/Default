@@ -133,7 +133,14 @@ class Stage2UsesTheExactExpressionOnlyForDecisions(unittest.TestCase):
         self.assertIn("model.Add(target_def >= target_units - after_eff)", self.src)
 
     def test_the_hard_floor_is_exact(self):
-        self.assertIn('add_break_family(model.Add(after_exact >= hard_floor_exact), "floor")', self.src)
+        # Re-pinned in Phase C (audit F-06): the hard floor goes through at_least(),
+        # which is `model.Add(after_exact >= hard_floor_exact)` in a normal run (the
+        # shortfall pass alone adds a reported slack). The normal Stage-2 model is
+        # unchanged on every saved real schedule
+        # (evidence/production_readiness_audit/phase_c/STAGE2_MODEL_IDENTITY.json).
+        self.assertIn('add_break_family(at_least(after_exact, hard_floor_exact, "hard_floor", d,', self.src)
+        self.assertIn('unit="coverage_exact"), "floor")', self.src)
+        self.assertIn("if not elastic or required <= 0:\n            return model.Add(expr >= required)", self.src)
         self.assertNotIn("model.Add(after_eff >= hard_floor_units)", self.src)
 
     def test_overage_minimum_headcount_uses_the_true_factor(self):

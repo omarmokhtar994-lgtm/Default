@@ -1,0 +1,38 @@
+Outcome: No schedule meets every hard rule; a shortfall schedule is attached for review and must not be published as is
+Status: FAIL_HARD_CONTRACT_INFEASIBLE
+Production eligible: False
+Independent validation: NOT_RUN (return code None)
+
+The roster and legal shifts are individually readable, but the hard rules contradict each other. The rules that conflict: language rules (minimum per interval and Language Working Window hours). A shortfall schedule was produced (S05_LANGUAGE_SHORTAGE_L6_3_2_3_HARD_RULE_SHORTFALL_SCHEDULE.xlsx). It meets every person rule (rest, OFF days, leave, fixed requests, breaks) and misses only these coverage minimums: Language minimum after breaks: 64 quarter(s). Every missed quarter is listed on its Shortfalls sheet.
+
+Shortfalls (the attached schedule misses these minimums):
+- Tue 08:00 | Language minimum after breaks [Spanish] | required 1, short by 1
+- Tue 08:15 | Language minimum after breaks [Spanish] | required 1, short by 1
+- Tue 08:30 | Language minimum after breaks [Spanish] | required 1, short by 1
+- Tue 08:45 | Language minimum after breaks [Spanish] | required 1, short by 1
+- Tue 09:00 | Language minimum after breaks [Spanish] | required 1, short by 1
+- Tue 09:15 | Language minimum after breaks [Spanish] | required 1, short by 1
+- Tue 09:30 | Language minimum after breaks [Spanish] | required 1, short by 1
+- Tue 09:45 | Language minimum after breaks [Spanish] | required 1, short by 1
+- Tue 10:00 | Language minimum after breaks [Spanish] | required 1, short by 1
+- Tue 10:15 | Language minimum after breaks [Spanish] | required 1, short by 1
+- Tue 10:30 | Language minimum after breaks [Spanish] | required 1, short by 1
+- Tue 10:45 | Language minimum after breaks [Spanish] | required 1, short by 1
+- Tue 12:00 | Language minimum after breaks [Spanish] | required 1, short by 1
+- Tue 13:15 | Language minimum after breaks [Spanish] | required 1, short by 1
+- Tue 13:30 | Language minimum after breaks [Spanish] | required 1, short by 1
+- Tue 14:45 | Language minimum after breaks [Spanish] | required 1, short by 1
+- Thu 08:00 | Language minimum after breaks [Spanish] | required 1, short by 1
+- Thu 08:15 | Language minimum after breaks [Spanish] | required 1, short by 1
+- Thu 08:30 | Language minimum after breaks [Spanish] | required 1, short by 1
+- Thu 08:45 | Language minimum after breaks [Spanish] | required 1, short by 1
+- ... and 44 more (the Shortfalls sheet lists them all)
+
+Independent check of the shortfall schedule: SHORTFALLS_CONFIRMED (validator failure types: LANGUAGE_MINIMUM)
+
+Main blockers:
+- language rules (minimum per interval and Language Working Window hours): part of the smallest set of rules that cannot all hold together
+
+Required action:
+- Review the rules named above in the workbook, then rerun.
+- Review the shortfall schedule: use it only after the business has accepted each listed shortfall, or add qualified staff and rerun.

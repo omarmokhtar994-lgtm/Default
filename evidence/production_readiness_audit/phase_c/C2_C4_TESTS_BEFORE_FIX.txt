@@ -1,0 +1,154 @@
+test_an_eleven_hour_schedule_gets_its_four_breaks_and_both_checkers_agree (tests_staged.test_rc9_2_33_phase_c_breaks_by_duration.C2EndToEnd.test_an_eleven_hour_schedule_gets_its_four_breaks_and_both_checkers_agree) ... ERROR
+test_a_long_shift_row_applies_to_long_shifts_only (tests_staged.test_rc9_2_33_phase_c_breaks_by_duration.C2Parsing.test_a_long_shift_row_applies_to_long_shifts_only) ... ERROR
+test_a_set_longer_than_the_shift_is_refused (tests_staged.test_rc9_2_33_phase_c_breaks_by_duration.C2Parsing.test_a_set_longer_than_the_shift_is_refused) ... FAIL
+test_the_contract_fingerprint_carries_the_sets (tests_staged.test_rc9_2_33_phase_c_breaks_by_duration.C2Parsing.test_the_contract_fingerprint_carries_the_sets) ... FAIL
+test_the_largest_reached_threshold_wins (tests_staged.test_rc9_2_33_phase_c_breaks_by_duration.C2Parsing.test_the_largest_reached_threshold_wins) ... ERROR
+test_unreadable_sets_are_refused (tests_staged.test_rc9_2_33_phase_c_breaks_by_duration.C2Parsing.test_unreadable_sets_are_refused) ... FAIL
+test_without_a_row_every_shift_keeps_the_global_set (tests_staged.test_rc9_2_33_phase_c_breaks_by_duration.C2Parsing.test_without_a_row_every_shift_keeps_the_global_set) ... ERROR
+test_patterns_follow_the_shift_length (tests_staged.test_rc9_2_33_phase_c_breaks_by_duration.C2Patterns.test_patterns_follow_the_shift_length) ... FAIL
+test_interval_count_covers_more_intervals (tests_staged.test_rc9_2_34_phase_c_volume_weighting.C4Effect.test_interval_count_covers_more_intervals) ... ok
+test_the_selector_leads_with_covered_requirement_only_when_chosen (tests_staged.test_rc9_2_34_phase_c_volume_weighting.C4Effect.test_the_selector_leads_with_covered_requirement_only_when_chosen) ... FAIL
+test_volume_weighting_covers_more_requirement (tests_staged.test_rc9_2_34_phase_c_volume_weighting.C4Effect.test_volume_weighting_covers_more_requirement) ... FAIL
+test_an_unknown_value_is_refused (tests_staged.test_rc9_2_34_phase_c_volume_weighting.C4Switch.test_an_unknown_value_is_refused) ... FAIL
+test_the_default_is_interval_count_and_weights_are_untouched (tests_staged.test_rc9_2_34_phase_c_volume_weighting.C4Switch.test_the_default_is_interval_count_and_weights_are_untouched) ... ERROR
+test_the_setting_is_in_the_contract_fingerprint (tests_staged.test_rc9_2_34_phase_c_volume_weighting.C4Switch.test_the_setting_is_in_the_contract_fingerprint) ... FAIL
+test_volume_weighted_is_read_and_scales_by_requirement (tests_staged.test_rc9_2_34_phase_c_volume_weighting.C4Switch.test_volume_weighted_is_read_and_scales_by_requirement) ... ERROR
+
+======================================================================
+ERROR: test_an_eleven_hour_schedule_gets_its_four_breaks_and_both_checkers_agree (tests_staged.test_rc9_2_33_phase_c_breaks_by_duration.C2EndToEnd.test_an_eleven_hour_schedule_gets_its_four_breaks_and_both_checkers_agree)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_33_phase_c_breaks_by_duration.py", line 133, in test_an_eleven_hour_schedule_gets_its_four_breaks_and_both_checkers_agree
+    want = len(E.break_segments_for(parsed, shift.duration_min))
+               ^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'l632_universal_scheduler' has no attribute 'break_segments_for'
+
+======================================================================
+ERROR: test_a_long_shift_row_applies_to_long_shifts_only (tests_staged.test_rc9_2_33_phase_c_breaks_by_duration.C2Parsing.test_a_long_shift_row_applies_to_long_shifts_only)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_33_phase_c_breaks_by_duration.py", line 79, in test_a_long_shift_row_applies_to_long_shifts_only
+    self.assertEqual(E.break_segments_for(parsed, 540), parsed.break_segments_q)
+                     ^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'l632_universal_scheduler' has no attribute 'break_segments_for'
+
+======================================================================
+ERROR: test_the_largest_reached_threshold_wins (tests_staged.test_rc9_2_33_phase_c_breaks_by_duration.C2Parsing.test_the_largest_reached_threshold_wins)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_33_phase_c_breaks_by_duration.py", line 86, in test_the_largest_reached_threshold_wins
+    self.assertEqual(E.break_segments_for(parsed, 600), ((1, "Break 1"), (2, "Lunch"), (1, "Break 2")))
+                     ^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'l632_universal_scheduler' has no attribute 'break_segments_for'
+
+======================================================================
+ERROR: test_without_a_row_every_shift_keeps_the_global_set (tests_staged.test_rc9_2_33_phase_c_breaks_by_duration.C2Parsing.test_without_a_row_every_shift_keeps_the_global_set)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_33_phase_c_breaks_by_duration.py", line 74, in test_without_a_row_every_shift_keeps_the_global_set
+    self.assertEqual(E.break_segments_for(parsed, minutes), parsed.break_segments_q)
+                     ^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'l632_universal_scheduler' has no attribute 'break_segments_for'
+
+======================================================================
+ERROR: test_the_default_is_interval_count_and_weights_are_untouched (tests_staged.test_rc9_2_34_phase_c_volume_weighting.C4Switch.test_the_default_is_interval_count_and_weights_are_untouched)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_34_phase_c_volume_weighting.py", line 62, in test_the_default_is_interval_count_and_weights_are_untouched
+    self.assertEqual(parsed.coverage_objective_weighting, "interval_count")
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ParsedInput' object has no attribute 'coverage_objective_weighting'
+
+======================================================================
+ERROR: test_volume_weighted_is_read_and_scales_by_requirement (tests_staged.test_rc9_2_34_phase_c_volume_weighting.C4Switch.test_volume_weighted_is_read_and_scales_by_requirement)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_34_phase_c_volume_weighting.py", line 67, in test_volume_weighted_is_read_and_scales_by_requirement
+    self.assertEqual(parsed.coverage_objective_weighting, "volume_weighted")
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ParsedInput' object has no attribute 'coverage_objective_weighting'
+
+======================================================================
+FAIL: test_a_set_longer_than_the_shift_is_refused (tests_staged.test_rc9_2_33_phase_c_breaks_by_duration.C2Parsing.test_a_set_longer_than_the_shift_is_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_33_phase_c_breaks_by_duration.py", line 98, in test_a_set_longer_than_the_shift_is_refused
+    self.assertIn("BREAKS_EXCEED_SHIFT", codes)
+AssertionError: 'BREAKS_EXCEED_SHIFT' not found in set()
+
+======================================================================
+FAIL: test_the_contract_fingerprint_carries_the_sets (tests_staged.test_rc9_2_33_phase_c_breaks_by_duration.C2Parsing.test_the_contract_fingerprint_carries_the_sets)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_33_phase_c_breaks_by_duration.py", line 103, in test_the_contract_fingerprint_carries_the_sets
+    self.assertNotEqual(E.canonical_hash(E.canonical_contract_snapshot(a)),
+AssertionError: 'cb0c021b068541eea39767b15775b03e4ba3782c62adbdebeb2d9eabdbc52c23' == 'cb0c021b068541eea39767b15775b03e4ba3782c62adbdebeb2d9eabdbc52c23'
+
+======================================================================
+FAIL: test_unreadable_sets_are_refused (tests_staged.test_rc9_2_33_phase_c_breaks_by_duration.C2Parsing.test_unreadable_sets_are_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_33_phase_c_breaks_by_duration.py", line 94, in test_unreadable_sets_are_refused
+    self.assertIn("HARD_INVALID_BREAK_CONTRACT", codes, value)
+AssertionError: 'HARD_INVALID_BREAK_CONTRACT' not found in set() : 15, 20
+
+======================================================================
+FAIL: test_patterns_follow_the_shift_length (tests_staged.test_rc9_2_33_phase_c_breaks_by_duration.C2Patterns.test_patterns_follow_the_shift_length)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_33_phase_c_breaks_by_duration.py", line 118, in test_patterns_follow_the_shift_length
+    self.assertEqual(sorted(length for _, length, _ in p.breaks), [1, 1, 1, 2])
+AssertionError: Lists differ: [1, 1, 2] != [1, 1, 1, 2]
+
+First differing element 2:
+2
+1
+
+Second list contains 1 additional elements.
+First extra element 3:
+2
+
+- [1, 1, 2]
++ [1, 1, 1, 2]
+?        +++
+
+
+======================================================================
+FAIL: test_the_selector_leads_with_covered_requirement_only_when_chosen (tests_staged.test_rc9_2_34_phase_c_volume_weighting.C4Effect.test_the_selector_leads_with_covered_requirement_only_when_chosen)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_34_phase_c_volume_weighting.py", line 102, in test_the_selector_leads_with_covered_requirement_only_when_chosen
+    self.assertGreater(E._candidate_quality_tuple(parsed, n, "after"), E._candidate_quality_tuple(parsed, m, "after"))
+AssertionError: (6, 0, 0, -14, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.0, -0.0, -0.0, 0, -0.0, -0.0, 0, 0, 0, -0.0, -0.0, -0.0) not greater than (9, 0, 0, -14, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.0, -0.0, -0.0, 0, -0.0, -0.0, 0, 0, 0, -0.0, -0.0, -0.0)
+
+======================================================================
+FAIL: test_volume_weighting_covers_more_requirement (tests_staged.test_rc9_2_34_phase_c_volume_weighting.C4Effect.test_volume_weighting_covers_more_requirement)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_34_phase_c_volume_weighting.py", line 96, in test_volume_weighting_covers_more_requirement
+    self.assertEqual(self.monday_shift(parsed), "15:00 - 00:00")
+AssertionError: '06:00 - 15:00' != '15:00 - 00:00'
+- 06:00 - 15:00
++ 15:00 - 00:00
+
+
+======================================================================
+FAIL: test_an_unknown_value_is_refused (tests_staged.test_rc9_2_34_phase_c_volume_weighting.C4Switch.test_an_unknown_value_is_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_34_phase_c_volume_weighting.py", line 74, in test_an_unknown_value_is_refused
+    self.assertIn("HARD_INVALID_COVERAGE_OBJECTIVE_WEIGHTING", codes)
+AssertionError: 'HARD_INVALID_COVERAGE_OBJECTIVE_WEIGHTING' not found in set()
+
+======================================================================
+FAIL: test_the_setting_is_in_the_contract_fingerprint (tests_staged.test_rc9_2_34_phase_c_volume_weighting.C4Switch.test_the_setting_is_in_the_contract_fingerprint)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_34_phase_c_volume_weighting.py", line 79, in test_the_setting_is_in_the_contract_fingerprint
+    self.assertNotEqual(E.canonical_hash(E.canonical_contract_snapshot(a)),
+AssertionError: 'a394a7ddb1ffc2bbea15181b08ea7f66196a4221815290482631163eb13b6c98' == 'a394a7ddb1ffc2bbea15181b08ea7f66196a4221815290482631163eb13b6c98'
+
+----------------------------------------------------------------------
+Ran 15 tests in 44.220s
+
+FAILED (failures=8, errors=6)

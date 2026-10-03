@@ -1,0 +1,23 @@
+{
+ "scenario": "S13_24x7_UNDERSTAFFED",
+ "why": "24/7 demand of 3 FTE every hour, 10 agents (about 75% of the hours needed), overnight shifts allowed",
+ "expected": "best achievable schedule with the deficit named (current-week floor is soft)",
+ "runner_rc": 3,
+ "elapsed_sec": 178.1,
+ "engine_status": "FAIL_UNEXPECTED_ENGINE_EXCEPTION",
+ "artifact_state": "RUNNING_NOT_FINAL",
+ "independent_validation": "NOT_RUN",
+ "published_final": [],
+ "workbooks_in_case_root": [],
+ "selected_metrics": {
+  "after_target": null,
+  "after_floor": null,
+  "active_intervals": null,
+  "language_gap_count": null
+ },
+ "run_id": "f4c5434ff5e2ba28d1285cf3",
+ "business_outcome": "Outcome: The engine stopped because of an unexpected technical error\nStatus: FAIL_UNEXPECTED_ENGINE_EXCEPTION\nProduction eligible: False\nIndependent validation: NOT_RUN (return code None)\n\nname 'break_q_per_shift' is not defined\n\nRequired action:\n- Use the exception type, traceback, and run identity for technical investigation; do not interpret this as staffing infeasibility.\n",
+ "clean_room": null,
+ "pre_solver_failures": [],
+ "hard_probe": "OPTIMAL"
+}

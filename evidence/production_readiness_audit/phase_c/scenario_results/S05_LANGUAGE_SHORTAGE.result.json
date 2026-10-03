@@ -1,0 +1,25 @@
+{
+ "scenario": "S05_LANGUAGE_SHORTAGE",
+ "why": "Spanish minimum 1 from 08:00-20:00 every day, only 2 Spanish agents (10 shifts for 14 needed)",
+ "expected": "schedule with Spanish gaps named, or refusal naming Spanish",
+ "runner_rc": 2,
+ "elapsed_sec": 178.7,
+ "engine_status": "FAIL_HARD_CONTRACT_INFEASIBLE",
+ "artifact_state": "RUNNING_NOT_FINAL",
+ "independent_validation": "NOT_RUN",
+ "published_final": [],
+ "workbooks_in_case_root": [
+  "S05_LANGUAGE_SHORTAGE_L6_3_2_3_HARD_RULE_SHORTFALL_SCHEDULE.xlsx"
+ ],
+ "selected_metrics": {
+  "after_target": null,
+  "after_floor": null,
+  "active_intervals": null,
+  "language_gap_count": null
+ },
+ "run_id": "76ed795a74958a8d829deba2",
+ "business_outcome": "Outcome: No schedule meets every hard rule; a shortfall schedule is attached for review and must not be published as is\nStatus: FAIL_HARD_CONTRACT_INFEASIBLE\nProduction eligible: False\nIndependent validation: NOT_RUN (return code None)\n\nThe roster and legal shifts are individually readable, but the hard rules contradict each other. The rules that conflict: language rules (minimum per interval and Language Working Window hours). A shortfall schedule was produced (S05_LANGUAGE_SHORTAGE_L6_3_2_3_HARD_RULE_SHORTFALL_SCHEDULE.xlsx). It meets every person rule (rest, OFF days, leave, fixed requests, breaks) and misses only these coverage minimums: Language minimum after breaks: 64 quarter(s). Every missed quarter is listed on its Shortfalls sheet.\n\nShortfalls (the attached schedule misses these minimums):\n- Tue 08:00 | Language minimum after breaks [Spanish] | required 1, short by 1\n- Tue 08:15 | Language minimum after breaks [Spanish] | required 1, short by 1\n- Tue 08:30 | Language minimum after breaks [Spanish] | required 1, short by 1\n- Tue 08:45 | Language minimum after breaks [Spanish] | required 1, short by 1\n- Tue 09:00 | Language minimum after breaks [Spanish] | required 1, short by 1\n- Tue 09:15 | Language minimum after breaks [Spanish] | required 1, short by 1\n- Tue 09:30 | Language minimum after breaks [Spanish] | required 1, short by 1\n- Tue 09:45 | Language minimum after breaks [Spanish] | required 1, short by 1\n- Tue 10:00 | Language minimum after breaks [Spanish] | r",
+ "clean_room": null,
+ "pre_solver_failures": [],
+ "hard_probe": "INFEASIBLE"
+}

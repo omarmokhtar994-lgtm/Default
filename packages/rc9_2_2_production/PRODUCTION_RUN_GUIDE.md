@@ -228,6 +228,46 @@ validator and the metric parity check, the run now:
 keeps the engine's own explanation when no schedule was produced, and reports a
 diagnostics-only (SMOKE) run as diagnostics rather than as a final schedule.
 
+### 3.5c When no schedule meets every hard rule: the shortfall schedule
+
+Some weeks have no schedule that meets every hard rule: a quarter no legal
+shift can reach, too few language agents, a lone night cover who must take a
+break. Such a run used to end with no schedule at all. It now also produces
+`<id>_L6_3_2_3_HARD_RULE_SHORTFALL_SCHEDULE.xlsx`:
+
+- it meets every **person** rule: rest, OFF days, leave, hard OFF, fixed
+  requests, nesting, shift variety, language working hours, blank-hours ban,
+  breaks and the no-break exception limit;
+- it misses only **coverage minimums** (nobody on the floor, language
+  minimum, opening minimum, Coverage Split, hard floor, next-Sunday
+  minimums), as few as the solver could find;
+- its first sheet, **Shortfalls**, lists every missed quarter with the day,
+  time, rule, what was required and how far short it is;
+- the run still ends with a blocking code and `BUSINESS_OUTCOME.txt` says
+  "No schedule meets every hard rule; a shortfall schedule is attached for
+  review". The independent validator checks it and must find exactly the
+  listed shortfalls and nothing else (`SHORTFALL_SCHEDULE_VALIDATION.json`).
+
+It is not releasable. Use it only after the business has accepted each listed
+shortfall, or add staff and rerun. Input errors (duplicate rows, unreadable
+values, contradictory requests) never get a shortfall schedule: fix the
+workbook. The shortfall pass uses the run's remaining time; if it finds no
+schedule in that time, `BUSINESS_OUTCOME.json` records why under
+`shortfall_schedule` and the run ends as before.
+
+The next-Sunday floor (Saturday-night carry-out) is now treated like the
+current week's floor: a coverage-quality finding under the coverage gate
+(`NEXT_SUNDAY_FLOOR_GAPS`), not a hard failure. Zero staffing, language and
+opening minimums on next Sunday stay hard.
+
+### 3.5d Optional rows added in Phase C
+
+| Row (Instructions or Engine Defaults) | Effect | Default |
+|---|---|---|
+| `Break Set For Shifts Of N Hours Or More` = `15, 30, 15, 15` | Shifts of N hours or more get these breaks, in this order (30 minutes or more is a lunch). Several rows may be given; the largest threshold a shift reaches wins. The validator and the clean-room checker read the same rows. | Absent: every shift gets the global break set |
+| `Coverage Objective Weighting` = `Interval Count` or `Volume Weighted` | `Volume Weighted` weighs each interval's miss by its requirement, and ranks schedules first by the requirement covered at target. It trades interval count for covered volume; choose it only if that is the measure the business wants. | `Interval Count` |
+| `Stage 1 Minimum Slice Seconds` (Engine Defaults) | The Stage-1 search time per profile. The planner now funds the Stage-1 window for this slice (up to 45 % of the run); it used to size the window for 45 s whatever was set. | 45 |
+
 ### 3.6 Check the workbook before running (seconds)
 
 Use notebook step **4b** (set `WORKBOOK_TO_CHECK`), or run:

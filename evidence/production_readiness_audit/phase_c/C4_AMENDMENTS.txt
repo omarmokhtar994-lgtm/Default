@@ -1,0 +1,18 @@
+Phase C4 - AMENDMENT to C4_RULE.txt (written after C4_RULE.txt was pushed in c5bc453)
+=================================================================================
+
+V2's constructed case said "9 intervals at 0.5 FTE against 6 at 1.0 FTE". With 1.0 FTE the
+case cannot test the switch: Stage 1 scores PRODUCTIVE coverage, and one 9-hour shift less
+its 15/30/15 breaks gives about 0.89 FTE per quarter, below the 90 % target of 1.0 FTE
+(0.9). The thick window then misses target in every interval whichever shift is chosen,
+so neither weighting has a reason to pick it, and the first test run (Volume Weighted
+still choosing 06:00 - 15:00) measured exactly that, not a defect in the switch.
+
+The thick window is set to 0.85 FTE (target 0.765, reachable by one person), the thin one
+stays 9 x 0.5 FTE. Requirement covered: 4.5 FTE (thin) against 5.1 FTE (thick); intervals
+covered: 9 against 6. Interval Count must choose the thin window and Volume Weighted the
+thick one, which is what V2 means. tests_staged/test_rc9_2_34_phase_c_volume_weighting.py
+uses this case; on the engine without C4 the two switch-effect tests fail
+(C2_C4_TESTS_BEFORE_FIX.txt), on the C4 engine all 7 pass.
+
+No other part of the rule changes; Interval Count stays the default.

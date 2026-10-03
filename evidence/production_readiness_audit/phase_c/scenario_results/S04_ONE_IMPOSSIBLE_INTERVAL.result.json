@@ -1,0 +1,27 @@
+{
+ "scenario": "S04_ONE_IMPOSSIBLE_INTERVAL",
+ "why": "0.5 FTE at Sun 03:00 that no legal shift can reach; everything else easy",
+ "expected": "schedule for the solvable week, with Sun 03:00 named as uncoverable",
+ "runner_rc": 2,
+ "elapsed_sec": 178.2,
+ "engine_status": "FAIL_PRE_SOLVER_CONTRACT",
+ "artifact_state": "RUNNING_NOT_FINAL",
+ "independent_validation": "NOT_RUN",
+ "published_final": [],
+ "workbooks_in_case_root": [
+  "S04_ONE_IMPOSSIBLE_INTERVAL_L6_3_2_3_HARD_RULE_SHORTFALL_SCHEDULE.xlsx"
+ ],
+ "selected_metrics": {
+  "after_target": null,
+  "after_floor": null,
+  "active_intervals": null,
+  "language_gap_count": null
+ },
+ "run_id": "9a7df3af325e6cc4bc852f5d",
+ "business_outcome": "Outcome: No schedule meets every hard rule; a shortfall schedule is attached for review and must not be published as is\nStatus: FAIL_PRE_SOLVER_CONTRACT\nProduction eligible: False\nIndependent validation: NOT_RUN (return code None)\n\nZero Active Interval Provably Impossible. A shortfall schedule was produced (S04_ONE_IMPOSSIBLE_INTERVAL_L6_3_2_3_HARD_RULE_SHORTFALL_SCHEDULE.xlsx). It meets every person rule (rest, OFF days, leave, fixed requests, breaks) and misses only these coverage minimums: Nobody on the floor after breaks: 4 quarter(s). Every missed quarter is listed on its Shortfalls sheet.\n\nShortfalls (the attached schedule misses these minimums):\n- Sun 03:00 | Nobody on the floor after breaks | required 1, short by 1\n- Sun 03:15 | Nobody on the floor after breaks | required 1, short by 1\n- Sun 03:30 | Nobody on the floor after breaks | required 1, short by 1\n- Sun 03:45 | Nobody on the floor after breaks | required 1, short by 1\n\nIndependent check of the shortfall schedule: SHORTFALLS_CONFIRMED (validator failure types: ZERO_STAFF_ACTIVE)\n\nMain blockers:\n- ZERO_ACTIVE_INTERVAL_PROVABLY_IMPOSSIBLE (day=Sun, time=03:00)\n\nRequired action:\n- Correct the listed workbook contract issue and rerun the schedule.\n- Review the shortfall schedule: use it only after the business has accepted each listed shortfall, or add qualified staff and rerun.\n",
+ "clean_room": null,
+ "pre_solver_failures": [
+  "ZERO_ACTIVE_INTERVAL_PROVABLY_IMPOSSIBLE"
+ ],
+ "hard_probe": null
+}

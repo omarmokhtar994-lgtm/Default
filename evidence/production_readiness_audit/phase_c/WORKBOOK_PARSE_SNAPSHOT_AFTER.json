@@ -1,0 +1,2774 @@
+{
+ "candidates/RC9_2_2_HARDENED_RC5/engine/regression_assets/ready_inputs/AE_FRENCH_RC8_6_1_INPUT_READY.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "218e8fe5e35c84ae",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "4882cfd6ab984286",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "candidates/RC9_2_2_HARDENED_RC5/engine/regression_assets/ready_inputs/GDI_28HC_NO247_RC8_6_1_INPUT_READY.xlsx": {
+  "codes": [
+   "HARD_INVALID_REQUIREMENT_TIME",
+   "HARD_INVALID_SHRINKAGE_TIME"
+  ],
+  "hard_warnings": [
+   "HARD_INVALID_REQUIREMENT_TIME",
+   "HARD_INVALID_SHRINKAGE_TIME"
+  ],
+  "facts_sha": "7f82c0ccae158fb7",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": true,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "13ee89b159634e53",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "candidates/RC9_2_2_HARDENED_RC5/engine/regression_assets/ready_inputs/GDI_REAL28_RC8_6_1_INPUT_READY.xlsx": {
+  "codes": [
+   "HARD_INVALID_REQUIREMENT_TIME",
+   "HARD_INVALID_SHRINKAGE_TIME"
+  ],
+  "hard_warnings": [
+   "HARD_INVALID_REQUIREMENT_TIME",
+   "HARD_INVALID_SHRINKAGE_TIME"
+  ],
+  "facts_sha": "939a809784ba24ea",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": true,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "13ee89b159634e53",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "candidates/RC9_2_2_HARDENED_RC5/engine/regression_assets/ready_inputs/NMG12_RC8_6_1_INPUT_READY.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "23c4576638e6300c",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "dd5bbe3a5f63930e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "candidates/RC9_2_2_HARDENED_RC5/engine/regression_assets/ready_inputs/NMG13_RC8_13_CONDITIONAL_PRODUCTION_INPUT_READY.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "65f1a961e3b5480c",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "candidates/RC9_2_2_HARDENED_RC5/engine/regression_assets/ready_inputs/NMG13_RC8_6_1_INPUT_READY.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "65f1a961e3b5480c",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "candidates/RC9_2_2_HARDENED_RC5/engine/regression_assets/ready_inputs/NMG_EN_RC8_6_1_INPUT_READY.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "823c990584eeb41e",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "dd5bbe3a5f63930e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "candidates/RC9_2_2_HARDENED_RC5/engine/regression_assets/ready_inputs/NMG_SPEN_RC8_6_1_INPUT_READY.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "8cfe30efce5c1567",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "dacba015f2bc1b17",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "candidates/RC9_2_2_HARDENED_RC5/engine/regression_assets/ready_inputs/SAKS_NEW_RC8_6_1_INPUT_READY.xlsx": {
+  "codes": [
+   "HARD_INVALID_REQUIREMENT_TIME",
+   "HARD_INVALID_SHRINKAGE_TIME",
+   "HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE"
+  ],
+  "hard_warnings": [
+   "HARD_INVALID_REQUIREMENT_TIME",
+   "HARD_INVALID_SHRINKAGE_TIME",
+   "HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE"
+  ],
+  "facts_sha": "ed8686fb88fb9d75",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "candidates/RC9_2_2_HARDENED_RC5/inputs/AE_AR_B2B.xlsx": {
+  "codes": [
+   "HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE"
+  ],
+  "hard_warnings": [
+   "HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE"
+  ],
+  "facts_sha": "d0cc8ea11797d046",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "0c8e24558c6d0c27",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "candidates/RC9_2_2_HARDENED_RC5/inputs/Cricut_Chat_RC9_1_READY_SKELETON.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "d643d72ed563ba80",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "0c8e24558c6d0c27",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "candidates/RC9_2_2_HARDENED_RC5/inputs/Cricut_Voice_RC9_1_READY_SKELETON.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "4422b3256bb81c57",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "candidates/RC9_2_2_HARDENED_RC5/inputs/GDI_REAL28_RC9_1_24_7_FINAL_READY.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "973d6fa876eeb8fb",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": true,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "3380c1bdebf20cf7",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "candidates/RC9_2_2_HARDENED_RC5/inputs/NMG_EN_AND_SP.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "9d7c9d3ee99bddad",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "6781b667e41fdd1e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "candidates/RC9_2_2_HARDENED_RC5/inputs/NMG_EN_FIXED_NESTING_REST_SAFE_REGRESSION_CLEAN.xlsx": {
+  "codes": [
+   "LANGUAGE_WINDOW_MAX_CAPACITY_BELOW_MINIMUM",
+   "ZERO_ACTIVE_INTERVAL_PROVABLY_IMPOSSIBLE"
+  ],
+  "hard_warnings": [],
+  "facts_sha": "b5bbf73be9cfb258",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "5f6a30430a42b81a",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "candidates/RC9_2_2_HARDENED_RC5/inputs/NMG_SP_RC9_1_READY_FIXED.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "41296ee6c083405d",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "6781b667e41fdd1e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "candidates/RC9_2_2_HARDENED_RC5/inputs/RC9_2_2_NMG_EN_PRODUCTION_INPUT.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "2a9b3407a250df35",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "5f6a30430a42b81a",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "engine/regression_assets/ready_inputs/AE_FRENCH_RC8_6_1_INPUT_READY.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "218e8fe5e35c84ae",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "4882cfd6ab984286",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "engine/regression_assets/ready_inputs/GDI_28HC_NO247_RC8_6_1_INPUT_READY.xlsx": {
+  "codes": [
+   "HARD_INVALID_REQUIREMENT_TIME",
+   "HARD_INVALID_SHRINKAGE_TIME"
+  ],
+  "hard_warnings": [
+   "HARD_INVALID_REQUIREMENT_TIME",
+   "HARD_INVALID_SHRINKAGE_TIME"
+  ],
+  "facts_sha": "7f82c0ccae158fb7",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": true,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "13ee89b159634e53",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "engine/regression_assets/ready_inputs/GDI_REAL28_RC8_6_1_INPUT_READY.xlsx": {
+  "codes": [
+   "HARD_INVALID_REQUIREMENT_TIME",
+   "HARD_INVALID_SHRINKAGE_TIME"
+  ],
+  "hard_warnings": [
+   "HARD_INVALID_REQUIREMENT_TIME",
+   "HARD_INVALID_SHRINKAGE_TIME"
+  ],
+  "facts_sha": "939a809784ba24ea",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": true,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "13ee89b159634e53",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "engine/regression_assets/ready_inputs/NMG12_RC8_6_1_INPUT_READY.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "23c4576638e6300c",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "dd5bbe3a5f63930e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "engine/regression_assets/ready_inputs/NMG13_RC8_13_CONDITIONAL_PRODUCTION_INPUT_READY.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "65f1a961e3b5480c",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "engine/regression_assets/ready_inputs/NMG13_RC8_6_1_INPUT_READY.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "65f1a961e3b5480c",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "engine/regression_assets/ready_inputs/NMG_EN_RC8_6_1_INPUT_READY.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "823c990584eeb41e",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "dd5bbe3a5f63930e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "engine/regression_assets/ready_inputs/NMG_SPEN_RC8_6_1_INPUT_READY.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "8cfe30efce5c1567",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "dacba015f2bc1b17",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "engine/regression_assets/ready_inputs/SAKS_NEW_RC8_6_1_INPUT_READY.xlsx": {
+  "codes": [
+   "HARD_INVALID_REQUIREMENT_TIME",
+   "HARD_INVALID_SHRINKAGE_TIME",
+   "HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE"
+  ],
+  "hard_warnings": [
+   "HARD_INVALID_REQUIREMENT_TIME",
+   "HARD_INVALID_SHRINKAGE_TIME",
+   "HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE"
+  ],
+  "facts_sha": "ed8686fb88fb9d75",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "evidence/RC9_1_VERIFIED_BASELINE_RESULTS_FOR_RC9_2_1_COMPARISON.xlsx": {
+  "error": "ValueError: Schedule sheet not found"
+ },
+ "evidence/language_hours/Cricut_Voice_LANGUAGE_HOURS.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "6da19b94babdc1d9",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "experiments/rc5_vs_final/arms/RC5/engine/regression_assets/ready_inputs/AE_FRENCH_RC8_6_1_INPUT_READY.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "218e8fe5e35c84ae",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "4882cfd6ab984286",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "experiments/rc5_vs_final/arms/RC5/engine/regression_assets/ready_inputs/GDI_28HC_NO247_RC8_6_1_INPUT_READY.xlsx": {
+  "codes": [
+   "HARD_INVALID_REQUIREMENT_TIME",
+   "HARD_INVALID_SHRINKAGE_TIME"
+  ],
+  "hard_warnings": [
+   "HARD_INVALID_REQUIREMENT_TIME",
+   "HARD_INVALID_SHRINKAGE_TIME"
+  ],
+  "facts_sha": "7f82c0ccae158fb7",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": true,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "13ee89b159634e53",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "experiments/rc5_vs_final/arms/RC5/engine/regression_assets/ready_inputs/GDI_REAL28_RC8_6_1_INPUT_READY.xlsx": {
+  "codes": [
+   "HARD_INVALID_REQUIREMENT_TIME",
+   "HARD_INVALID_SHRINKAGE_TIME"
+  ],
+  "hard_warnings": [
+   "HARD_INVALID_REQUIREMENT_TIME",
+   "HARD_INVALID_SHRINKAGE_TIME"
+  ],
+  "facts_sha": "939a809784ba24ea",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": true,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "13ee89b159634e53",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "experiments/rc5_vs_final/arms/RC5/engine/regression_assets/ready_inputs/NMG12_RC8_6_1_INPUT_READY.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "23c4576638e6300c",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "dd5bbe3a5f63930e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "experiments/rc5_vs_final/arms/RC5/engine/regression_assets/ready_inputs/NMG13_RC8_13_CONDITIONAL_PRODUCTION_INPUT_READY.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "65f1a961e3b5480c",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "experiments/rc5_vs_final/arms/RC5/engine/regression_assets/ready_inputs/NMG13_RC8_6_1_INPUT_READY.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "65f1a961e3b5480c",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "experiments/rc5_vs_final/arms/RC5/engine/regression_assets/ready_inputs/NMG_EN_RC8_6_1_INPUT_READY.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "823c990584eeb41e",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "dd5bbe3a5f63930e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "experiments/rc5_vs_final/arms/RC5/engine/regression_assets/ready_inputs/NMG_SPEN_RC8_6_1_INPUT_READY.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "8cfe30efce5c1567",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "dacba015f2bc1b17",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "experiments/rc5_vs_final/arms/RC5/engine/regression_assets/ready_inputs/SAKS_NEW_RC8_6_1_INPUT_READY.xlsx": {
+  "codes": [
+   "HARD_INVALID_REQUIREMENT_TIME",
+   "HARD_INVALID_SHRINKAGE_TIME",
+   "HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE"
+  ],
+  "hard_warnings": [
+   "HARD_INVALID_REQUIREMENT_TIME",
+   "HARD_INVALID_SHRINKAGE_TIME",
+   "HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE"
+  ],
+  "facts_sha": "ed8686fb88fb9d75",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "experiments/rc5_vs_final/arms/RC5/inputs/AE_AR_B2B.xlsx": {
+  "codes": [
+   "HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE"
+  ],
+  "hard_warnings": [
+   "HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE"
+  ],
+  "facts_sha": "d0cc8ea11797d046",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "0c8e24558c6d0c27",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "experiments/rc5_vs_final/arms/RC5/inputs/Cricut_Chat_RC9_1_READY_SKELETON.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "d643d72ed563ba80",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "0c8e24558c6d0c27",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "experiments/rc5_vs_final/arms/RC5/inputs/Cricut_Voice_RC9_1_READY_SKELETON.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "4422b3256bb81c57",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "experiments/rc5_vs_final/arms/RC5/inputs/GDI_REAL28_RC9_1_24_7_FINAL_READY.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "973d6fa876eeb8fb",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": true,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "3380c1bdebf20cf7",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "experiments/rc5_vs_final/arms/RC5/inputs/NMG_EN_AND_SP.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "9d7c9d3ee99bddad",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "6781b667e41fdd1e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "experiments/rc5_vs_final/arms/RC5/inputs/NMG_EN_FIXED_NESTING_REST_SAFE_REGRESSION_CLEAN.xlsx": {
+  "codes": [
+   "LANGUAGE_WINDOW_MAX_CAPACITY_BELOW_MINIMUM",
+   "ZERO_ACTIVE_INTERVAL_PROVABLY_IMPOSSIBLE"
+  ],
+  "hard_warnings": [],
+  "facts_sha": "b5bbf73be9cfb258",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "5f6a30430a42b81a",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "experiments/rc5_vs_final/arms/RC5/inputs/NMG_SP_RC9_1_READY_FIXED.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "41296ee6c083405d",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "6781b667e41fdd1e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "experiments/rc5_vs_final/arms/RC5/inputs/RC9_2_2_NMG_EN_PRODUCTION_INPUT.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "2a9b3407a250df35",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "5f6a30430a42b81a",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "experiments/rc5_vs_final/inputs/AE_AR_B2B.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "164b31fa5cb81503",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "0c8e24558c6d0c27",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "experiments/rc5_vs_final/inputs/AE_AR_Choice.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "860fff4e63137176",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "0c8e24558c6d0c27",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "experiments/rc5_vs_final/inputs/AE_FR_B2B.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "a957e6ed62d163a0",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "6142a560e08d888e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "experiments/rc5_vs_final/inputs/AE_FR_Choice.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "36829646f9882834",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "6142a560e08d888e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "experiments/rc5_vs_final/inputs/AE_IT_B2B.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "9b3c7ebf01d64539",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "6142a560e08d888e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "experiments/rc5_vs_final/inputs/AE_IT_Choice.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "98383ca5c8c0943f",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "6142a560e08d888e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "experiments/rc5_vs_final/inputs/Cricut_Chat_RC9_1_READY_SKELETON.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "d643d72ed563ba80",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "0c8e24558c6d0c27",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "experiments/rc5_vs_final/inputs/Cricut_Voice_RC9_1_READY_SKELETON.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "4422b3256bb81c57",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "experiments/rc5_vs_final/inputs/NMG_SP_RC9_1_READY_FIXED.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "41296ee6c083405d",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "6781b667e41fdd1e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "experiments/rc5_vs_final/inputs/SYNTH_H1_24x7_OVERNIGHT.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "3118ca81fcf6f3e7",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "experiments/rc5_vs_final/inputs/SYNTH_M2_MULTI_START_WITH_BREAKS.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "8666c8a405846898",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/Cricut_Voice_ROSTER_RECONCILED_40.xlsx": {
+  "codes": [
+   "HEADCOUNT_MISMATCH"
+  ],
+  "hard_warnings": [],
+  "facts_sha": "cecf831846d13a05",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/NMG_EN_REST_SAFE_REGRESSION_CLEAN_SUNDAY_CARRYIN_REPAIR.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "e85368f9adf56024",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "5f6a30430a42b81a",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/NMG_EN_SP_DIRECTIONAL_BILINGUAL.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "b7ef4ffe9ff43df4",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "824314d2e861f7a5",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/SAKS_11H_3OFF_ENABLED.xlsx": {
+  "codes": [
+   "HARD_INVALID_REQUIREMENT_TIME",
+   "HARD_INVALID_SHRINKAGE_TIME",
+   "HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE"
+  ],
+  "hard_warnings": [
+   "HARD_INVALID_REQUIREMENT_TIME",
+   "HARD_INVALID_SHRINKAGE_TIME",
+   "HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE"
+  ],
+  "facts_sha": "cb1cc737a4bffca4",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540,
+    660
+   ],
+   "use_11h": true,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (1, 'Break 2'), (1, 'Break 3'), (2, 'Lunch'))"
+    ],
+    [
+     660,
+     "((1, 'Break 1'), (1, 'Break 2'), (1, 'Break 3'), (2, 'Lunch'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/SYNTHETIC_FIXTURE_FIXED_EXACT_DAYS.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "95d4e6231201ac7b",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "6142a560e08d888e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/SYNTHETIC_FIXTURE_FLOOR_NOT_80.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "98383ca5c8c0943f",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "6142a560e08d888e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/SYNTHETIC_FIXTURE_MULTI_SHIFT_DURATION.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "e26e7de1896858d3",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540,
+    660
+   ],
+   "use_11h": true,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "6142a560e08d888e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ],
+    [
+     660,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/SYNTHETIC_FIXTURE_NESTING_GROUP_MIXED_LEAVE.xlsx": {
+  "codes": [
+   "CONFLICTING_LEAVE_OR_OFF_IN_NESTING_GROUP"
+  ],
+  "hard_warnings": [],
+  "facts_sha": "3a545cbad588da82",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "6142a560e08d888e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/ae_inputs/AE_AR_B2B.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "164b31fa5cb81503",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "0c8e24558c6d0c27",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/ae_inputs/AE_AR_Choice.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "860fff4e63137176",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "0c8e24558c6d0c27",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/ae_inputs/AE_FR_B2B.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "a957e6ed62d163a0",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "6142a560e08d888e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/ae_inputs/AE_FR_Choice.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "36829646f9882834",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "6142a560e08d888e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/ae_inputs/AE_IT_B2B.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "9b3c7ebf01d64539",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "6142a560e08d888e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/ae_inputs/AE_IT_Choice.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "98383ca5c8c0943f",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "6142a560e08d888e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/rc5_inputs/AE_AR_B2B.xlsx": {
+  "codes": [
+   "HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE"
+  ],
+  "hard_warnings": [
+   "HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE"
+  ],
+  "facts_sha": "d0cc8ea11797d046",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "0c8e24558c6d0c27",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/rc5_inputs/Cricut_Chat_RC9_1_READY_SKELETON.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "d643d72ed563ba80",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "0c8e24558c6d0c27",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/rc5_inputs/Cricut_Voice_RC9_1_READY_SKELETON.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "4422b3256bb81c57",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/rc5_inputs/GDI_REAL28_RC9_1_24_7_FINAL_READY.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "973d6fa876eeb8fb",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": true,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "3380c1bdebf20cf7",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/rc5_inputs/NMG_EN_AND_SP.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "9d7c9d3ee99bddad",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "6781b667e41fdd1e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/rc5_inputs/NMG_EN_FIXED_NESTING_REST_SAFE_REGRESSION_CLEAN.xlsx": {
+  "codes": [
+   "LANGUAGE_WINDOW_MAX_CAPACITY_BELOW_MINIMUM",
+   "ZERO_ACTIVE_INTERVAL_PROVABLY_IMPOSSIBLE"
+  ],
+  "hard_warnings": [],
+  "facts_sha": "b5bbf73be9cfb258",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "5f6a30430a42b81a",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/rc5_inputs/NMG_SP_RC9_1_READY_FIXED.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "41296ee6c083405d",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "6781b667e41fdd1e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/rc5_inputs/RC9_2_2_NMG_EN_PRODUCTION_INPUT.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "2a9b3407a250df35",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "5f6a30430a42b81a",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/real_runs/before_break/B1_BEFORE/input_snapshot/AE_FR_Choice.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "36829646f9882834",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "6142a560e08d888e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/real_runs/language_hours/Cricut_Voice_LANGUAGE_HOURS.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "6da19b94babdc1d9",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/real_runs/parity_blank_breaks/S01_BASELINE.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "a870d61a778a4e64",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/real_runs/week_boundary/B3_ARB2B_BASE/input_snapshot/AE_AR_B2B.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "164b31fa5cb81503",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "0c8e24558c6d0c27",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/real_runs/week_boundary/B3_ARB2B_DEFAULT45/input_snapshot/AE_AR_B2B.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "164b31fa5cb81503",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "0c8e24558c6d0c27",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/real_runs/week_boundary/B3_ARB2B_S30/input_snapshot/AE_AR_B2B_SLICE30.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "164b31fa5cb81503",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "0c8e24558c6d0c27",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/real_runs/week_boundary/B3_FRC_DEFAULT45/input_snapshot/AE_FR_Choice.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "36829646f9882834",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "6142a560e08d888e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/real_runs/week_boundary/B3_SLICE30/input_snapshot/AE_FR_Choice_SLICE30.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "36829646f9882834",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "6142a560e08d888e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/synthetic_suite/BENCH_UNION_N246.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "dc1ad88d7d19a791",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    480
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     480,
+     "()"
+    ]
+   ]
+  }
+ },
+ "fixtures/synthetic_suite/BENCH_UNION_N247.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "eab6b938f087b600",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    480
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     480,
+     "()"
+    ]
+   ]
+  }
+ },
+ "fixtures/synthetic_suite/BENCH_WINSTON_N22.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "bc68e2d6e99dc0a7",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    480
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     480,
+     "()"
+    ]
+   ]
+  }
+ },
+ "fixtures/synthetic_suite/BENCH_WINSTON_N23.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "eaf1a461c080b1bd",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    480
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     480,
+     "()"
+    ]
+   ]
+  }
+ },
+ "fixtures/synthetic_suite/SYNTH_E1_EXACT_FIT_NO_BREAKS.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "bf7a9f9c14cc800c",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "()"
+    ]
+   ]
+  }
+ },
+ "fixtures/synthetic_suite/SYNTH_E2_SINGLE_SHIFT_WITH_BREAKS.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "e9331253ae03601e",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/synthetic_suite/SYNTH_H1_24x7_OVERNIGHT.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "3118ca81fcf6f3e7",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/synthetic_suite/SYNTH_H2_HARD_FLOOR_OVERDEMAND.xlsx": {
+  "codes": [
+   "AGGREGATE_HARD_FLOOR_CAPACITY_SHORTAGE",
+   "HARD_FLOOR_PROVABLY_IMPOSSIBLE"
+  ],
+  "hard_warnings": [],
+  "facts_sha": "149731e0f6f1f621",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/synthetic_suite/SYNTH_H3_LANGUAGE_MINIMUM.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "4636fbab8bd75df5",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "36ba5a0ab1ac3d15",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/synthetic_suite/SYNTH_M1_MULTI_START_NO_BREAKS.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "151238fef7dd81cf",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "()"
+    ]
+   ]
+  }
+ },
+ "fixtures/synthetic_suite/SYNTH_M2_MULTI_START_WITH_BREAKS.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "8666c8a405846898",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/synthetic_suite/SYNTH_R1_OFF_GRID_SHIFT.xlsx": {
+  "codes": [
+   "SHIFT_OFF_QUARTER_GRID"
+  ],
+  "hard_warnings": [],
+  "facts_sha": "86ce519f743875cf",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/synthetic_suite/SYNTH_R2_CAP_ORDER.xlsx": {
+  "codes": [
+   "INVALID_OVERAGE_CAP_ORDER"
+  ],
+  "hard_warnings": [],
+  "facts_sha": "e9331253ae03601e",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/synthetic_suite/SYNTH_R3_GATE_MODE_TYPO.xlsx": {
+  "codes": [
+   "HARD_INVALID_FLOOR_LOSS_FROM_BREAKS_GATE_MODE"
+  ],
+  "hard_warnings": [
+   "HARD_INVALID_FLOOR_LOSS_FROM_BREAKS_GATE_MODE"
+  ],
+  "facts_sha": "e9331253ae03601e",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/synthetic_suite/SYNTH_R4_HEADCOUNT_MISMATCH.xlsx": {
+  "codes": [
+   "HEADCOUNT_MISMATCH"
+  ],
+  "hard_warnings": [],
+  "facts_sha": "e9331253ae03601e",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/synthetic_suite/SYNTH_R5_SHRINKAGE_100.xlsx": {
+  "codes": [
+   "HARD_INVALID_SHRINKAGE_VALUE"
+  ],
+  "hard_warnings": [
+   "HARD_INVALID_SHRINKAGE_VALUE"
+  ],
+  "facts_sha": "6c404c533823228b",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/synthetic_suite/SYNTH_X1_LARGE_15MIN_24x7.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "b03dc3f0b0fdd589",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "fixtures/synthetic_suite/SYNTH_X2_ALL_HARD_OFF_SUNDAY.xlsx": {
+  "codes": [
+   "ZERO_ACTIVE_INTERVAL_PROVABLY_IMPOSSIBLE"
+  ],
+  "hard_warnings": [],
+  "facts_sha": "7621727b21695d37",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "packages/rc9_2_2_production/inputs/AE_AR_B2B.xlsx": {
+  "codes": [
+   "HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE"
+  ],
+  "hard_warnings": [
+   "HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE"
+  ],
+  "facts_sha": "d0cc8ea11797d046",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "0c8e24558c6d0c27",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "packages/rc9_2_2_production/inputs/Cricut_Chat_RC9_1_READY_SKELETON.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "d643d72ed563ba80",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "0c8e24558c6d0c27",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "packages/rc9_2_2_production/inputs/Cricut_Voice_RC9_1_READY_SKELETON.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "4422b3256bb81c57",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "10fb0f4d92f19637",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "packages/rc9_2_2_production/inputs/GDI_REAL28_RC9_1_24_7_FINAL_READY.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "973d6fa876eeb8fb",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": true,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "3380c1bdebf20cf7",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "packages/rc9_2_2_production/inputs/NMG_EN_AND_SP.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "9d7c9d3ee99bddad",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "6781b667e41fdd1e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "packages/rc9_2_2_production/inputs/NMG_EN_FIXED_NESTING_REST_SAFE_REGRESSION_CLEAN.xlsx": {
+  "codes": [
+   "LANGUAGE_WINDOW_MAX_CAPACITY_BELOW_MINIMUM",
+   "ZERO_ACTIVE_INTERVAL_PROVABLY_IMPOSSIBLE"
+  ],
+  "hard_warnings": [],
+  "facts_sha": "b5bbf73be9cfb258",
+  "extra": {
+   "max_different_shifts": 2,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "5f6a30430a42b81a",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ },
+ "packages/rc9_2_2_production/inputs/NMG_SP_RC9_1_READY_FIXED.xlsx": {
+  "codes": [],
+  "hard_warnings": [],
+  "facts_sha": "41296ee6c083405d",
+  "extra": {
+   "max_different_shifts": 3,
+   "durations": [
+    540
+   ],
+   "use_11h": false,
+   "allow_no_break": false,
+   "split_full": [],
+   "split_gate_mode": "fail",
+   "rules_in_force_sha": "6781b667e41fdd1e",
+   "break_sets_by_shift_length": [],
+   "coverage_objective_weighting": "interval_count",
+   "break_set_per_shift": [
+    [
+     540,
+     "((1, 'Break 1'), (2, 'Lunch'), (1, 'Break 2'))"
+    ]
+   ]
+  }
+ }
+}

@@ -1,0 +1,25 @@
+{
+ "scenario": "S10_FIXED_IN_BLANK_HOURS",
+ "why": "fixed 22:00 starts while the blank-interval rule forbids staffing outside 08:00-20:00",
+ "expected": "refused naming the fixed requests and the blank rule",
+ "runner_rc": 2,
+ "elapsed_sec": 1.0,
+ "engine_status": "FAIL_PRE_SOLVER_CONTRACT",
+ "artifact_state": "RUNNING_NOT_FINAL",
+ "independent_validation": "NOT_RUN",
+ "published_final": [],
+ "workbooks_in_case_root": [],
+ "selected_metrics": {
+  "after_target": null,
+  "after_floor": null,
+  "active_intervals": null,
+  "language_gap_count": null
+ },
+ "run_id": "8ba2ad2956425fbfecd1a296",
+ "business_outcome": "Outcome: The workbook contract cannot be scheduled as submitted\nStatus: FAIL_PRE_SOLVER_CONTRACT\nProduction eligible: False\nIndependent validation: NOT_RUN (return code None)\n\nBlank Interval Staffing Rule forbids staffing hours with no requirement; these fixed shifts cover such hours.\n\nMain blockers:\n- FIXED_REQUEST_IN_BLANK_HOURS: Blank Interval Staffing Rule forbids staffing hours with no requirement; these fixed shifts cover such hours. (count=5)\n\nAffected examples:\n- Agent A | Sun | 22:00 - 07:00 | covers hours with no requirement\n- Agent A | Mon | 22:00 - 07:00 | covers hours with no requirement\n- Agent A | Tue | 22:00 - 07:00 | covers hours with no requirement\n- Agent A | Wed | 22:00 - 07:00 | covers hours with no requirement\n- Agent A | Thu | 22:00 - 07:00 | covers hours with no requirement\n\nRequired action:\n- Correct the listed workbook contract issue and rerun the schedule.\n",
+ "clean_room": null,
+ "pre_solver_failures": [
+  "FIXED_REQUEST_IN_BLANK_HOURS"
+ ],
+ "hard_probe": null
+}

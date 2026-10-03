@@ -1,0 +1,23 @@
+{
+ "scenario": "S11_OVERNIGHT_DAY_WINDOW",
+ "why": "Spanish minimum 1, Mon-Fri 18:00-05:00 (day-specific overnight). Two Spanish agents are hard-OFF Sun+Mon; the third is hard-OFF Sat+Sun. Business meaning (window opens Mon..Fri) is feasible.",
+ "expected": "schedule produced; Monday 00:00-05:00 needs no Spanish (it is Sunday night)",
+ "runner_rc": 3,
+ "elapsed_sec": 154.8,
+ "engine_status": "FAIL_UNEXPECTED_ENGINE_EXCEPTION",
+ "artifact_state": "RUNNING_NOT_FINAL",
+ "independent_validation": "NOT_RUN",
+ "published_final": [],
+ "workbooks_in_case_root": [],
+ "selected_metrics": {
+  "after_target": null,
+  "after_floor": null,
+  "active_intervals": null,
+  "language_gap_count": null
+ },
+ "run_id": "cf975ea6d533b5c325d62d8a",
+ "business_outcome": "Outcome: The engine stopped because of an unexpected technical error\nStatus: FAIL_UNEXPECTED_ENGINE_EXCEPTION\nProduction eligible: False\nIndependent validation: NOT_RUN (return code None)\n\nname 'break_q_per_shift' is not defined\n\nRequired action:\n- Use the exception type, traceback, and run identity for technical investigation; do not interpret this as staffing infeasibility.\n",
+ "clean_room": null,
+ "pre_solver_failures": [],
+ "hard_probe": "FEASIBLE"
+}

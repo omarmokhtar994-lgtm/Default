@@ -1,0 +1,150 @@
+{
+ "cases": {
+  "S04_ONE_IMPOSSIBLE_INTERVAL": {
+   "runner_rc": 2,
+   "engine_status": "FAIL_PRE_SOLVER_CONTRACT",
+   "published_final": [],
+   "shortfall_workbook": "S04_ONE_IMPOSSIBLE_INTERVAL_L6_3_2_3_HARD_RULE_SHORTFALL_SCHEDULE.xlsx",
+   "R2": "PASS",
+   "validator_failure_types": [
+    "ZERO_STAFF_ACTIVE"
+   ],
+   "runner_shortfall_check": "SHORTFALLS_CONFIRMED",
+   "count_mismatches": [],
+   "shortfall_rows": 4,
+   "shortfall_families": [
+    "zero_coverage"
+   ],
+   "clean_room_violations_by_rule": {},
+   "clean_room_engine_mismatches": [],
+   "R3": "PASS",
+   "R5": "PASS",
+   "shortfall_day_times": [
+    [
+     "Sun",
+     "03:00"
+    ],
+    [
+     "Sun",
+     "03:15"
+    ],
+    [
+     "Sun",
+     "03:30"
+    ],
+    [
+     "Sun",
+     "03:45"
+    ]
+   ],
+   "R4": "PASS"
+  },
+  "S05_LANGUAGE_SHORTAGE": {
+   "runner_rc": 2,
+   "engine_status": "FAIL_HARD_CONTRACT_INFEASIBLE",
+   "published_final": [],
+   "shortfall_workbook": "S05_LANGUAGE_SHORTAGE_L6_3_2_3_HARD_RULE_SHORTFALL_SCHEDULE.xlsx",
+   "R2": "PASS",
+   "validator_failure_types": [
+    "LANGUAGE_MINIMUM"
+   ],
+   "runner_shortfall_check": "SHORTFALLS_CONFIRMED",
+   "count_mismatches": [],
+   "shortfall_rows": 64,
+   "shortfall_families": [
+    "language"
+   ],
+   "clean_room_violations_by_rule": {},
+   "clean_room_engine_mismatches": [],
+   "R3": "PASS",
+   "R5": "PASS"
+  },
+  "S09_LONE_NIGHT_BREAKS": {
+   "runner_rc": 2,
+   "engine_status": "FAIL_TESTED_SKELETON_EXCEPTION_LOWER_BOUND_EXCEEDS_CAP",
+   "published_final": [],
+   "shortfall_workbook": "S09_LONE_NIGHT_BREAKS_L6_3_2_3_HARD_RULE_SHORTFALL_SCHEDULE.xlsx",
+   "R2": "PASS",
+   "validator_failure_types": [
+    "ZERO_STAFF_ACTIVE"
+   ],
+   "runner_shortfall_check": "SHORTFALLS_CONFIRMED",
+   "count_mismatches": [],
+   "shortfall_rows": 9,
+   "shortfall_families": [
+    "zero_coverage"
+   ],
+   "clean_room_violations_by_rule": {},
+   "clean_room_engine_mismatches": [],
+   "R3": "PASS",
+   "R5": "PASS"
+  },
+  "S11_OVERNIGHT_DAY_WINDOW": {
+   "runner_rc": 2,
+   "engine_status": "FAIL_NO_BREAK_FEASIBLE_CANDIDATE",
+   "published_final": [],
+   "shortfall_workbook": "S11_OVERNIGHT_DAY_WINDOW_L6_3_2_3_HARD_RULE_SHORTFALL_SCHEDULE.xlsx",
+   "R2": "PASS",
+   "validator_failure_types": [
+    "LANGUAGE_MINIMUM"
+   ],
+   "runner_shortfall_check": "SHORTFALLS_CONFIRMED",
+   "count_mismatches": [],
+   "shortfall_rows": 1,
+   "shortfall_families": [
+    "language"
+   ],
+   "clean_room_violations_by_rule": {},
+   "clean_room_engine_mismatches": [],
+   "R3": "PASS",
+   "R5": "PASS"
+  },
+  "S13_24x7_UNDERSTAFFED": {
+   "runner_rc": 2,
+   "engine_status": "FAIL_NO_BREAK_FEASIBLE_CANDIDATE",
+   "published_final": [],
+   "shortfall_workbook": "S13_24x7_UNDERSTAFFED_L6_3_2_3_HARD_RULE_SHORTFALL_SCHEDULE.xlsx",
+   "R2": "PASS",
+   "validator_failure_types": [
+    "ZERO_STAFF_ACTIVE"
+   ],
+   "runner_shortfall_check": "SHORTFALLS_CONFIRMED",
+   "count_mismatches": [],
+   "shortfall_rows": 4,
+   "shortfall_families": [
+    "zero_coverage"
+   ],
+   "clean_room_violations_by_rule": {},
+   "clean_room_engine_mismatches": [],
+   "R3": "PASS",
+   "R5": "PASS"
+  },
+  "S10_FIXED_IN_BLANK_HOURS": {
+   "runner_rc": 2,
+   "engine_status": "FAIL_PRE_SOLVER_CONTRACT",
+   "published_final": [],
+   "shortfall_workbook": null,
+   "pre_solver_failures": [
+    "FIXED_REQUEST_IN_BLANK_HOURS"
+   ],
+   "R6": "PASS"
+  },
+  "S14_DUPLICATE_PREFERENCE_ROW": {
+   "runner_rc": 2,
+   "engine_status": "FAIL_PRE_SOLVER_CONTRACT",
+   "published_final": [],
+   "shortfall_workbook": null,
+   "pre_solver_failures": [
+    "HARD_PREFERENCE_DUPLICATE_ASSOCIATE"
+   ],
+   "R6": "PASS"
+  }
+ },
+ "rules_pass": {
+  "R2": true,
+  "R3": true,
+  "R4": true,
+  "R5": true,
+  "R6": true
+ }
+}

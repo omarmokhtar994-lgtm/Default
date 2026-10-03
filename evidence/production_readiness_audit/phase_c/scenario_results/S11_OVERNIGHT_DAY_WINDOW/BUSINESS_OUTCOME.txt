@@ -1,0 +1,24 @@
+Outcome: No schedule meets every hard rule; a shortfall schedule is attached for review and must not be published as is
+Status: FAIL_NO_BREAK_FEASIBLE_CANDIDATE
+Production eligible: False
+Independent validation: NOT_RUN (return code None)
+
+The engine could not find a legal break plan for the tested shift/OFF skeletons within the available search budget. Main resource blocker: Spanish coverage, affecting 1 associate-day(s) without qualified backup. A shortfall schedule was produced (S11_OVERNIGHT_DAY_WINDOW_L6_3_2_3_HARD_RULE_SHORTFALL_SCHEDULE.xlsx). It meets every person rule (rest, OFF days, leave, fixed requests, breaks) and misses only these coverage minimums: Language minimum after breaks: 1 quarter(s). Every missed quarter is listed on its Shortfalls sheet.
+
+Shortfalls (the attached schedule misses these minimums):
+- Mon 23:00 | Language minimum after breaks [Spanish] | required 1, short by 1
+
+Independent check of the shortfall schedule: SHORTFALLS_CONFIRMED (validator failure types: LANGUAGE_MINIMUM)
+
+Main blockers:
+- group=Spanish, affected_associate_days=1, critical_quarters=24
+- family=LANGUAGE, affected_associate_days=1
+
+Affected examples:
+- Agent C | Mon | 18:00 - 03:00 | Mon 18:00 to Mon 23:45
+
+Required action:
+- Add or overlap qualified resources in the named bottleneck windows, especially single-person language coverage.
+- Change shift/OFF patterns so qualified associates have legal break coverage.
+- Change the exception cap only through an explicit business decision; the engine will not raise it automatically.
+- Review the shortfall schedule: use it only after the business has accepted each listed shortfall, or add qualified staff and rerun.

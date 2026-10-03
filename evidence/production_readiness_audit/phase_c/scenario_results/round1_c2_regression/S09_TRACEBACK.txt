@@ -1,0 +1,13 @@
+Traceback (most recent call last):
+  File "/home/user/Default/engine/_tools/l632_universal_scheduler.py", line 25939, in main
+    return_code = run_case(
+                  ^^^^^^^^^
+  File "/home/user/Default/engine/_tools/l632_universal_scheduler.py", line 22603, in run_case
+    break_capacity = break_capacity_headcount_requirement(
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Default/engine/_tools/l632_universal_scheduler.py", line 13846, in break_capacity_headcount_requirement
+    net_per_associate = max(1, typical_shift_q - break_q_per_shift)
+                                                 ^^^^^^^^^^^^^^^^^
+NameError: name 'break_q_per_shift' is not defined
+
+=== BUSINESS OUTCOME ===

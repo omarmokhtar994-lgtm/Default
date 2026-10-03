@@ -142,7 +142,10 @@ def declared_artifact_type(path: Path) -> Optional[str]:
             # after-break schedules from the same candidate pool. Read as
             # UNRECOGNIZED, none of them could ever be validated.
             if value.replace(" ","_") in {"max_target_candidate","max_floor_candidate",
-                                          "balanced_candidate","safer_balanced_candidate"}:
+                                          "balanced_candidate","safer_balanced_candidate",
+                                          # audit F-06: a full after-break schedule
+                                          # that names its own shortfalls
+                                          "hard_rule_shortfall_schedule"}:
                 return "FINAL_AFTER_BREAKS"
             return "UNRECOGNIZED:"+value
         return None
@@ -1101,10 +1104,12 @@ def validate(input_path: Path, output_path: Path, engine_path: Path,
         by_cell[aidx,didx].append(br)
     failures.extend(break_fail)
     if not before_only:
-        expected_segments=[(q*15,label) for q,label in parsed.break_segments_q]
         for a,assoc in enumerate(parsed.associates):
             for d,value in enumerate(matrix[a]):
                 if norm(value) not in shift_map: continue
+                # Audit F-20: each shift's own break set (the global set unless
+                # the workbook states one for this shift length).
+                expected_segments=[(q*15,label) for q,label in eng.break_segments_for(parsed,shift_map[norm(value)].duration_min)]
                 cell=by_cell.get((a,d),[])
                 if (a,d) in exception_cells:
                     if cell:
@@ -1409,7 +1414,10 @@ def validate(input_path: Path, output_path: Path, engine_path: Path,
         hard_gaps=[r for r in interval_rows if float(r['after_pct'])+1e-9<hard_ratio]
         if hard_gaps: failures.append({"type":"HARD_FLOOR","count":len(hard_gaps),"ratio":hard_ratio,"examples":hard_gaps[:20]})
     next_floor_gaps=[row for row in next_rows if float(row['pct'])+1e-9<float(parsed.floor_ratio)]
-    if next_floor_gaps or next_zero or next_language or next_opening or (parsed.blank_requirement_mode=="hard_no_current_week_staffing" and next_blank):
+    # Audit F-07: the next-Sunday floor is coverage quality (below), as the
+    # current week's floor is; zero staffing, language, opening and banned
+    # blank staffing stay hard.
+    if next_zero or next_language or next_opening or (parsed.blank_requirement_mode=="hard_no_current_week_staffing" and next_blank):
         failures.append({"type":"NEXT_SUNDAY_CARRY_OUT","floor_gap_count":len(next_floor_gaps),"zero_count":len(next_zero),"language_gap_count":len(next_language),"opening_gap_count":len(next_opening),"blank_staffed_count":len(next_blank) if parsed.blank_requirement_mode=="hard_no_current_week_staffing" else 0})
 
     next_overage_cap_violations=[]; next_imbalance=[]; next_adjacent_deltas=[]
@@ -1450,6 +1458,7 @@ def validate(input_path: Path, output_path: Path, engine_path: Path,
     if maxrun>quality_limits['maximum_consecutive_floor_gaps']: quality_issues.append({"code":"FLOOR_RUN_LIMIT","actual":maxrun,"maximum":quality_limits['maximum_consecutive_floor_gaps']})
     if parsed.protected_after80_minimum is not None and int(after80)<int(parsed.protected_after80_minimum): quality_issues.append({"code":"PROTECTED_AFTER80_MINIMUM","actual":int(after80),"minimum":int(parsed.protected_after80_minimum)})
     if parsed.minimum_after_break_target_ratio is not None and active and int(after_target)/active+1e-12<float(parsed.minimum_after_break_target_ratio): quality_issues.append({"code":"AFTER_TARGET_RATIO_MINIMUM","actual":int(after_target)/active,"minimum":float(parsed.minimum_after_break_target_ratio)})
+    if next_floor_gaps: quality_issues.append({"code":"NEXT_SUNDAY_FLOOR_GAPS","count":len(next_floor_gaps),"floor_ratio":parsed.floor_ratio})
     quality_gate_mode=norm(parsed.quality_gate_mode)
     if quality_issues:
         coverage_quality_gate_status=("FAIL" if quality_gate_mode=="fail" else
@@ -1539,7 +1548,7 @@ def validate(input_path: Path, output_path: Path, engine_path: Path,
             else sum(1 for r in interval_rows
                      if float(r['after_pct'])+1e-9<float(parsed.hard_floor_ratio))),
         "next_sunday_hard_failure_count":(
-            len(next_floor_gaps)+len(next_zero)+len(next_language)+len(next_opening)
+            len(next_zero)+len(next_language)+len(next_opening)
             +(len(next_blank)
               if parsed.blank_requirement_mode=="hard_no_current_week_staffing" else 0)),
         "next_sunday_max_adjacent_raw_change":max(next_adjacent_deltas,default=0),

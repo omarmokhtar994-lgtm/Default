@@ -1,0 +1,26 @@
+{
+ "scenario": "S09_LONE_NIGHT_BREAKS",
+ "why": "24/7, 6 agents: nights can be held by one person, whose own breaks leave nobody",
+ "expected": "schedule with overlap at night, or a named no-break exception need",
+ "runner_rc": 2,
+ "elapsed_sec": 210.7,
+ "engine_status": "FAIL_TESTED_SKELETON_EXCEPTION_LOWER_BOUND_EXCEEDS_CAP",
+ "artifact_state": "FINAL_DIAGNOSTIC_NO_RELEASE_SCHEDULE",
+ "independent_validation": "NOT_RUN",
+ "published_final": [],
+ "workbooks_in_case_root": [
+  "S09_LONE_NIGHT_BREAKS_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx",
+  "S09_LONE_NIGHT_BREAKS_L6_3_2_3_HARD_RULE_SHORTFALL_SCHEDULE.xlsx"
+ ],
+ "selected_metrics": {
+  "after_target": null,
+  "after_floor": null,
+  "active_intervals": null,
+  "language_gap_count": null
+ },
+ "run_id": "22e891d4b782d80f96ab840e",
+ "business_outcome": "Outcome: No schedule meets every hard rule; a shortfall schedule is attached for review and must not be published as is\nStatus: FAIL_TESTED_SKELETON_EXCEPTION_LOWER_BOUND_EXCEEDS_CAP\nProduction eligible: False\nIndependent validation: NOT_RUN (return code None)\n\nRequested maximum no-break associate-days: 0. Best proven minimum among the tested skeletons: 6. The proven gap is 6. A shortfall schedule was produced (S09_LONE_NIGHT_BREAKS_L6_3_2_3_HARD_RULE_SHORTFALL_SCHEDULE.xlsx). It meets every person rule (rest, OFF days, leave, fixed requests, breaks) and misses only these coverage minimums: Nobody on the floor after breaks: 9 quarter(s). Every missed quarter is listed on its Shortfalls sheet.\n\nShortfalls (the attached schedule misses these minimums):\n- Sun 22:00 | Nobody on the floor after breaks | required 1, short by 1\n- Sun 22:15 | Nobody on the floor after breaks | required 1, short by 1\n- Mon 00:30 | Nobody on the floor after breaks | required 1, short by 1\n- Wed 06:45 | Nobody on the floor after breaks | required 1, short by 1\n- Wed 21:00 | Nobody on the floor after breaks | required 1, short by 1\n- Thu 06:45 | Nobody on the floor after breaks | required 1, short by 1\n- Thu 21:00 | Nobody on the floor after breaks | required 1, short by 1\n- Fri 06:45 | Nobody on the floor after breaks | required 1, short by 1\n- Fri 21:00 | Nobody on the floor after breaks | required 1, short by 1\n\nIndependent check of the shortfall schedule: SHORTFALLS_CONFIRMED (validator failure types",
+ "clean_room": null,
+ "pre_solver_failures": [],
+ "hard_probe": "OPTIMAL"
+}

@@ -1,0 +1,282 @@
+[
+ {
+  "case": "adv/runs/S01_BASELINE",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "adv/runs/S01_BASELINE_R2",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "adv/runs/S01_BASELINE_R3",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "adv/runs/S02_DEMAND_SLIGHTLY_ABOVE_CAPACITY",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "adv/runs/S03_DEMAND_MASSIVELY_ABOVE_CAPACITY",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "adv/runs/S08_24x7_WEEK_BOUNDARY",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "adv/runs/S12_OVERLAPPING_SKILLS",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "adv/runs/S14_DUPLICATE_PREFERENCE_ROW",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "advA/runs/S01_BASELINE",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "advA/runs/S02_DEMAND_SLIGHTLY_ABOVE_CAPACITY",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "advA/runs/S03_DEMAND_MASSIVELY_ABOVE_CAPACITY",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "advA/runs/S06_FULL_WEEK_LEAVE",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "advA/runs/S07_SIX_LEAVE_DAYS",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "advA/runs/S08_24x7_WEEK_BOUNDARY",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "advA/runs/S12_OVERLAPPING_SKILLS",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "advB/runs/S01_BASELINE",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "advB/runs/S06_FULL_WEEK_LEAVE",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "advB/runs/S08_24x7_WEEK_BOUNDARY",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "aeit/out/AEIT_9002_NOCAP",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "aeit/out/AEIT_9002_S240",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "aeit/out/AEIT_9004_NOCAP",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "aeit/out/AEIT_9004_S240",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "aeit/out/FINAL_AEIT_9002_R",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "f16/results_chat/CRICUT_CHAT",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "f16/results_h1/SYNTH_H1_24X7_OVERNIGHT",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "final/MyDrive/RESULTS/CRICUT_VOICE_LANGUAGE_HOURS",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "final/MyDrive/RESULTS/_seeds/CRICUT_VOICE_LANGUAGE_HOURS/seeds/CRICUT_VOICE_LANGUAGE_HOURS_S9000",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "final/MyDrive/RESULTS/_seeds/CRICUT_VOICE_LANGUAGE_HOURS/seeds/CRICUT_VOICE_LANGUAGE_HOURS_S9001",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "lang/out/VOICE_ALLROWS2",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "lang/out/VOICE_FINAL_SHEET",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "phaseA/qr_CHAT_POLISH",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "phaseA/qr_S02_DEMAND_SLIGHTLY_ABOVE_CAPACITY",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "phaseA/qr_S08_24x7_WEEK_BOUNDARY",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "phaseA/qr_S12_OVERLAPPING_SKILLS",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "phaseA/qr_VOICE_POLISH",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "phaseA/real/VOICE_PHASE_A",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "phaseB_real/VOICE_PHASE_B",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "polish/e2e/AEIT_POLISH",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "polish/e2e/CHAT_POLISH",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ },
+ {
+  "case": "polish/e2e/VOICE_POLISH",
+  "engine_audit_week_boundary_floor_gap_count": 0,
+  "engine_audit_week_boundary_hard_failure_count": 0,
+  "validator_next_sunday_floor_gap_count": 0,
+  "validator_next_sunday_carry_out_failure": false
+ }
+]

@@ -200,6 +200,15 @@ def read_contract(path: Path) -> Contract:
     lunches = int(num(get(im, "Lunch Count", "Meal Count", "Count of Lunch Breaks", default=1)))
     lunch_len = int(num(get(im, "Lunch Duration Minutes", "Lunch Duration", "Meal Duration Minutes", default=30)))
     k.break_lengths = sorted([short_len] * shorts + [lunch_len] * lunches)
+    # Breaks by shift length: "Break Set For Shifts Of 10 Hours Or More" =
+    # "15, 30, 15, 15". The longest threshold a shift reaches applies.
+    k.break_sets: List[Tuple[int, List[int]]] = []
+    for label, value in im.items():
+        m = re.match(r"^break set for shifts of (\d+(?:\.\d+)?) hours? or more$", label)
+        if m:
+            minutes = [int(float(t)) for t in re.split(r"[,;/]+", str(value)) if t.strip()]
+            k.break_sets.append((int(round(float(m.group(1)) * 60)), sorted(minutes)))
+    k.break_sets.sort()
     hard_gap = num(get(im, "Break Absolute Minimum Gap Minutes", "Absolute Minimum Gap Between Breaks Minutes",
                        "Break Hard Minimum Gap Minutes", "Minimum Legal Break Separation Minutes"))
     k.break_min_gap = int(hard_gap) if hard_gap is not None else 60
@@ -450,6 +459,14 @@ def read_output(path: Path) -> Tuple[Dict[str, List[str]], List[Dict[str, Any]],
 leave_words_all = ("leave", "annual leave", "vacation", "holiday", "sick", "sick leave", "pto")
 
 
+def break_lengths_for(k: Contract, shift_minutes: int) -> List[int]:
+    lengths = k.break_lengths
+    for threshold, minutes in getattr(k, "break_sets", []):
+        if shift_minutes >= threshold:
+            lengths = minutes
+    return lengths
+
+
 def check(k: Contract, sched: Dict[str, List[str]], breaks, exceptions) -> Dict[str, Any]:
     v: List[Dict[str, Any]] = list(getattr(k, "input_issues", []))
     kinds: Dict[str, List[str]] = {}
@@ -565,14 +582,14 @@ def check(k: Contract, sched: Dict[str, List[str]], breaks, exceptions) -> Dict[
                     v.append({"rule": "break_overlap", "who": key, "day": DAYS[d]})
                 bq[key].add(q)
         rels.sort()
-        if sorted(x[1] for x in rels) != k.break_lengths:
+        if sorted(x[1] for x in rels) != break_lengths_for(k, s[1]):
             v.append({"rule": "break_set", "who": key, "day": DAYS[d], "got": sorted(x[1] for x in rels)})
         for (r1, l1), (r2, _l2) in zip(rels, rels[1:]):
             if r2 - (r1 + l1) < k.break_min_gap:
                 v.append({"rule": "break_gap", "who": key, "day": DAYS[d], "gap": r2 - (r1 + l1)})
     for key, ss in shifts.items():
         for d in range(7):
-            if ss[d] and (key, d) not in per_cell and (key, d) not in exceptions and k.break_lengths:
+            if ss[d] and (key, d) not in per_cell and (key, d) not in exceptions and break_lengths_for(k, ss[d][1]):
                 v.append({"rule": "shift_without_breaks", "who": key, "day": DAYS[d]})
 
     # Coverage at quarter level: current-week shifts + previous-Saturday carry-in.

@@ -596,6 +596,21 @@ def _outcome_detail_text(outcome: dict, findings_label: "str | None" = None) -> 
     reasons = outcome.get('blocking_reasons') or []
     if reasons:
         lines += ['', 'Why it is blocked:'] + [f'- {r}' for r in reasons[:12]]
+    shortfall_rows = outcome.get('shortfall_rows') or []
+    if shortfall_rows:
+        lines += ['', 'Shortfalls (the attached schedule misses these minimums):']
+        for row in shortfall_rows[:20]:
+            unit = ' (coverage units)' if str(row.get('unit')) != 'people' else ''
+            group = f" [{row.get('rule')}]" if row.get('rule') else ''
+            lines.append(f"- {row.get('day')} {row.get('time')} | {row.get('meaning')}{group} | "
+                         f"required {row.get('required')}, short by {row.get('short_by')}{unit}")
+        if len(shortfall_rows) > 20:
+            lines.append(f'- ... and {len(shortfall_rows) - 20} more (the Shortfalls sheet lists them all)')
+    check = (outcome.get('independent_validation') or {}).get('shortfall_schedule') or {}
+    if check:
+        lines += ['', f"Independent check of the shortfall schedule: {check.get('status')}"
+                  + (f" (validator failure types: {', '.join(check.get('validator_failure_types') or [])})"
+                     if check.get('validator_failure_types') else '')]
     findings = []
     for item in outcome.get('resource_findings') or []:
         text = finding(item)
@@ -669,6 +684,7 @@ def reconcile_business_outcome_after_validation(
         'metric_parity': independent_validation.get('metric_parity'),
         'clean_room': independent_validation.get('clean_room'),
         'alternative_exports': independent_validation.get('alternative_exports'),
+        'shortfall_schedule': independent_validation.get('shortfall_schedule'),
     }
     outcome['independent_validation'] = validation_record
     audit_status = ''
@@ -1527,6 +1543,19 @@ def main() -> int:
         if rc == 0:
             rc = 5 if args.skip_independent_validation else 4
 
+    shortfall_books = sorted(case_root.glob('*_HARD_RULE_SHORTFALL_SCHEDULE.xlsx'))
+    if validation_workbook is None and shortfall_books and not args.skip_independent_validation:
+        # Audit F-06: no releasable schedule, but the engine produced one that
+        # meets every person rule and lists its missed minimums. Check it
+        # independently; it never changes the (non-zero) return code.
+        check = validate_shortfall_schedule(input_path, shortfall_books[0], args.language_working_window,
+                                            case_root / 'SHORTFALL_SCHEDULE_VALIDATION.json')
+        check['clean_room'] = run_clean_room_gate(input_path, shortfall_books[0], audit,
+                                                  case_root / 'SHORTFALL_CLEAN_ROOM_CHECK.json')
+        independent_validation['shortfall_schedule'] = check
+        print(f"[run] shortfall schedule (not releasable): {check.get('status')}", flush=True)
+        if rc == 0:
+            rc = 2
     if (validation_workbook is not None and not args.skip_independent_validation
             and not skeleton_only):
         alternatives = validate_alternative_exports(case_root, input_path, args.language_working_window)
@@ -1570,6 +1599,79 @@ def main() -> int:
             status_path.write_text(json.dumps(run_status, indent=2, default=str), encoding='utf-8')
     print(json.dumps(run_status, indent=2, default=str), flush=True)
     return rc
+
+# Audit F-06. Each Shortfalls-sheet rule, and where the independent validator
+# reports the same miss: (failure type, count field or None = one row each).
+SHORTFALL_VALIDATOR_MAP = {
+    'zero_coverage': ('ZERO_STAFF_ACTIVE', None),
+    'language': ('LANGUAGE_MINIMUM', None),
+    'opening': ('OPENING_MINIMUM', None),
+    'coverage_split': ('COVERAGE_SPLIT', 'count'),
+    'hard_floor': ('HARD_FLOOR', 'count'),
+    'next_sunday_zero': ('NEXT_SUNDAY_CARRY_OUT', 'zero_count'),
+    'next_sunday_language': ('NEXT_SUNDAY_CARRY_OUT', 'language_gap_count'),
+    'next_sunday_opening': ('NEXT_SUNDAY_CARRY_OUT', 'opening_gap_count'),
+}
+
+
+def validate_shortfall_schedule(input_path: Path, workbook: Path, language_working_window: "str | None",
+                                json_out: Path) -> dict:
+    """Independent check of a HARD_RULE_SHORTFALL_SCHEDULE (audit F-06).
+
+    SHORTFALLS_CONFIRMED means the validator's only failures are coverage
+    minimums, and it counts exactly the misses the Shortfalls sheet lists.
+    Anything else (a person-rule failure, a miss the sheet does not list, a
+    listed miss the validator does not see) is INCONSISTENT. Either way the
+    schedule is not releasable.
+    """
+    command = [sys.executable, '-u', str(VALIDATOR), '--input', str(input_path),
+               '--output', str(workbook), '--json-out', str(json_out)]
+    if language_working_window is not None:
+        command += ['--language-working-window', language_working_window]
+    proc = subprocess.run(command, capture_output=True, text=True)
+    result = {'workbook': str(workbook), 'json': str(json_out), 'return_code': proc.returncode}
+    try:
+        report = json.loads(json_out.read_text(encoding='utf-8'))
+    except (OSError, json.JSONDecodeError):
+        result['status'] = 'ERROR_VALIDATOR_DID_NOT_COMPLETE'
+        return result
+    failures = report.get('failures') or []
+    allowed = {kind for kind, _field in SHORTFALL_VALIDATOR_MAP.values()}
+    types = sorted({str(row.get('type')) for row in failures})
+    result['validator_failure_types'] = types
+    from openpyxl import load_workbook
+    listed = {}
+    wb = load_workbook(workbook, read_only=True)
+    try:
+        if 'Shortfalls' in wb.sheetnames:
+            for row in wb['Shortfalls'].iter_rows(min_row=2, values_only=True):
+                if row and row[0]:
+                    listed[str(row[0])] = listed.get(str(row[0]), 0) + 1
+    finally:
+        wb.close()
+    result['listed'] = listed
+    expected = {}
+    for family, count in listed.items():
+        if family in SHORTFALL_VALIDATOR_MAP:
+            key = SHORTFALL_VALIDATOR_MAP[family]
+            expected[key] = expected.get(key, 0) + count
+    seen = {}
+    for kind, field in set(SHORTFALL_VALIDATOR_MAP.values()):
+        rows = [row for row in failures if row.get('type') == kind]
+        seen[(kind, field)] = (len(rows) if field is None
+                               else sum(int(row.get(field) or 0) for row in rows))
+    mismatches = [
+        {'validator_type': kind, 'field': field, 'validator': seen.get((kind, field), 0),
+         'shortfalls_sheet': expected.get((kind, field), 0)}
+        for kind, field in sorted(set(SHORTFALL_VALIDATOR_MAP.values()), key=str)
+        if seen.get((kind, field), 0) != expected.get((kind, field), 0)
+    ]
+    outside = [t for t in types if t not in allowed]
+    result['outside_declared_families'] = outside
+    result['count_mismatches'] = mismatches
+    result['status'] = 'SHORTFALLS_CONFIRMED' if not outside and not mismatches else 'INCONSISTENT'
+    return result
+
 
 ALTERNATIVE_EXPORT_ROLES = ('MAX_TARGET_CANDIDATE', 'MAX_FLOOR_CANDIDATE', 'BALANCED_CANDIDATE',
                             'SAFER_BALANCED_CANDIDATE')

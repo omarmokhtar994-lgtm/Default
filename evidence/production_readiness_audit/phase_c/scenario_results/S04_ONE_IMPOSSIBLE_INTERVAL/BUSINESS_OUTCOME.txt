@@ -1,0 +1,21 @@
+Outcome: No schedule meets every hard rule; a shortfall schedule is attached for review and must not be published as is
+Status: FAIL_PRE_SOLVER_CONTRACT
+Production eligible: False
+Independent validation: NOT_RUN (return code None)
+
+Zero Active Interval Provably Impossible. A shortfall schedule was produced (S04_ONE_IMPOSSIBLE_INTERVAL_L6_3_2_3_HARD_RULE_SHORTFALL_SCHEDULE.xlsx). It meets every person rule (rest, OFF days, leave, fixed requests, breaks) and misses only these coverage minimums: Nobody on the floor after breaks: 4 quarter(s). Every missed quarter is listed on its Shortfalls sheet.
+
+Shortfalls (the attached schedule misses these minimums):
+- Sun 03:00 | Nobody on the floor after breaks | required 1, short by 1
+- Sun 03:15 | Nobody on the floor after breaks | required 1, short by 1
+- Sun 03:30 | Nobody on the floor after breaks | required 1, short by 1
+- Sun 03:45 | Nobody on the floor after breaks | required 1, short by 1
+
+Independent check of the shortfall schedule: SHORTFALLS_CONFIRMED (validator failure types: ZERO_STAFF_ACTIVE)
+
+Main blockers:
+- ZERO_ACTIVE_INTERVAL_PROVABLY_IMPOSSIBLE (day=Sun, time=03:00)
+
+Required action:
+- Correct the listed workbook contract issue and rerun the schedule.
+- Review the shortfall schedule: use it only after the business has accepted each listed shortfall, or add qualified staff and rerun.

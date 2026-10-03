@@ -73,6 +73,13 @@
           "reason": "Phase B of the production-readiness audit (F-08) widened canonical_contract_snapshot so the fingerprint covers every enforced setting: coverage_split_gate_mode, coverage_split_rules, fixed_enabled, hard_off, language_windows, language_working_window_mode, leave_enabled, requests, separate_off_days, shift_consistency_polish, strict_off, use_11h_3off, use_preferences. The WORKBOOK IS BYTE-IDENTICAL (file_sha256 unchanged). Every field the previous snapshot recorded has the same value under the new engine (proof: evidence/production_readiness_audit/phase_b/BASELINE_CONTRACT_WIDENING.json), so the RC9.1 comparison on this row remains justified. The scored RC9.1 metrics are untouched.",
           "canonical_contract_hash": "151baee69ac9eedab3fc1c705759812f2bffecd0987eeec3caa99474cc4c2d40",
           "file_sha256": "58aeb4ca5d1c1d5c163d5d3f938d4b9ba635a3daf38d1a0d6e3af2f30f4efa09"
+        },
+        {
+          "previous_prefix": "58aeb4ca5d1c1d5c",
+          "previous_canonical_contract_hash": "151baee69ac9eedab3fc1c705759812f2bffecd0987eeec3caa99474cc4c2d40",
+          "reason": "Phase C of the production-readiness audit added two optional workbook rows (C2, audit F-20: 'Break Set For Shifts Of N Hours Or More'; C4, audit F-28: 'Coverage Objective Weighting'), and canonical_contract_snapshot records them: break_sets_by_shift_length, coverage_objective_weighting. The workbook has neither row, so both carry their defaults (no per-length sets, Interval Count). The WORKBOOK IS BYTE-IDENTICAL (file_sha256 unchanged). Every field the previous snapshot recorded has the same value under the new engine (proof: evidence/production_readiness_audit/phase_c/BASELINE_CONTRACT_WIDENING.json), so the RC9.1 comparison on this row remains justified. The scored RC9.1 metrics are untouched.",
+          "canonical_contract_hash": "237e6837c359579117e55a63a1cf2a4465736cc592f8efb6cc22cab51eac9ae6",
+          "file_sha256": "58aeb4ca5d1c1d5c163d5d3f938d4b9ba635a3daf38d1a0d6e3af2f30f4efa09"
         }
       ]
     },
@@ -165,6 +172,13 @@
           "reason": "Phase B of the production-readiness audit (F-08) widened canonical_contract_snapshot so the fingerprint covers every enforced setting: coverage_split_gate_mode, coverage_split_rules, fixed_enabled, hard_off, language_windows, language_working_window_mode, leave_enabled, requests, separate_off_days, shift_consistency_polish, strict_off, use_11h_3off, use_preferences. The WORKBOOK IS BYTE-IDENTICAL (file_sha256 unchanged). Every field the previous snapshot recorded has the same value under the new engine (proof: evidence/production_readiness_audit/phase_b/BASELINE_CONTRACT_WIDENING.json), so the RC9.1 comparison on this row remains justified. The scored RC9.1 metrics are untouched.",
           "canonical_contract_hash": "161c04655864690f56fc7c0b69e31c9d87b96787e385042dd31142e08eb605d5",
           "file_sha256": "321f1eff6e86c8c1b65e39a2c2ab9859e53bd58a6c0ae41425809e4ee4920c77"
+        },
+        {
+          "previous_prefix": "321f1eff6e86c8c1",
+          "previous_canonical_contract_hash": "161c04655864690f56fc7c0b69e31c9d87b96787e385042dd31142e08eb605d5",
+          "reason": "Phase C of the production-readiness audit added two optional workbook rows (C2, audit F-20: 'Break Set For Shifts Of N Hours Or More'; C4, audit F-28: 'Coverage Objective Weighting'), and canonical_contract_snapshot records them: break_sets_by_shift_length, coverage_objective_weighting. The workbook has neither row, so both carry their defaults (no per-length sets, Interval Count). The WORKBOOK IS BYTE-IDENTICAL (file_sha256 unchanged). Every field the previous snapshot recorded has the same value under the new engine (proof: evidence/production_readiness_audit/phase_c/BASELINE_CONTRACT_WIDENING.json), so the RC9.1 comparison on this row remains justified. The scored RC9.1 metrics are untouched.",
+          "canonical_contract_hash": "90c5aab4080a10f42f26c38594572ba28180e46b050e170863ec62f2195848a4",
+          "file_sha256": "321f1eff6e86c8c1b65e39a2c2ab9859e53bd58a6c0ae41425809e4ee4920c77"
         }
       ]
     },
@@ -200,6 +214,13 @@
           "previous_canonical_contract_hash": "fe5f5944ffc8b7204bb576ef657252bc18001579fe75f427c04b7774eeabaaff",
           "reason": "Phase B of the production-readiness audit (F-08) widened canonical_contract_snapshot so the fingerprint covers every enforced setting: coverage_split_gate_mode, coverage_split_rules, fixed_enabled, hard_off, language_windows, language_working_window_mode, leave_enabled, requests, separate_off_days, shift_consistency_polish, strict_off, use_11h_3off, use_preferences. The WORKBOOK IS BYTE-IDENTICAL (file_sha256 unchanged). Every field the previous snapshot recorded has the same value under the new engine (proof: evidence/production_readiness_audit/phase_b/BASELINE_CONTRACT_WIDENING.json), so the RC9.1 comparison on this row remains justified. The scored RC9.1 metrics are untouched.",
           "canonical_contract_hash": "8f2ce54794a58a28dd19288778ae156fd8c8d61a285c5b905886353538c9ffaf",
+          "file_sha256": "55b4ee899cfd38ad586962a16fe40c6d2f9ca41eee13f531eab2f04d1627d9f1"
+        },
+        {
+          "previous_prefix": "55b4ee899cfd38ad",
+          "previous_canonical_contract_hash": "8f2ce54794a58a28dd19288778ae156fd8c8d61a285c5b905886353538c9ffaf",
+          "reason": "Phase C of the production-readiness audit added two optional workbook rows (C2, audit F-20: 'Break Set For Shifts Of N Hours Or More'; C4, audit F-28: 'Coverage Objective Weighting'), and canonical_contract_snapshot records them: break_sets_by_shift_length, coverage_objective_weighting. The workbook has neither row, so both carry their defaults (no per-length sets, Interval Count). The WORKBOOK IS BYTE-IDENTICAL (file_sha256 unchanged). Every field the previous snapshot recorded has the same value under the new engine (proof: evidence/production_readiness_audit/phase_c/BASELINE_CONTRACT_WIDENING.json), so the RC9.1 comparison on this row remains justified. The scored RC9.1 metrics are untouched.",
+          "canonical_contract_hash": "d8b3f8d86de39ed879f1e91e9ce44a7eda0f09da5bf32af54bf92702be3934cd",
           "file_sha256": "55b4ee899cfd38ad586962a16fe40c6d2f9ca41eee13f531eab2f04d1627d9f1"
         }
       ]

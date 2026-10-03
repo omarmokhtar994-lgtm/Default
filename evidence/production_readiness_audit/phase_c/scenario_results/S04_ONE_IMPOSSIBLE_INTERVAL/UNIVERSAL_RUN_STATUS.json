@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "release": "L6.3.2.8-RC9.2.2-PRODUCTION-HARDENED-RC6",
+  "schedule_id": "S04_ONE_IMPOSSIBLE_INTERVAL",
+  "mode": "QUICK",
+  "stage": "FULL_SCHEDULE",
+  "return_code": 2,
+  "engine_return_code": 2,
+  "initial_quality_report_return_code": 2,
+  "quality_report_return_code": 2,
+  "hard_valid_artifact": false,
+  "metrics": {
+    "audit": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/advC/runs/S04_ONE_IMPOSSIBLE_INTERVAL/S04_ONE_IMPOSSIBLE_INTERVAL.l6_3_2_3_solver_audit.json",
+    "business_headline": "No schedule meets every hard rule; a shortfall schedule is attached for review and must not be published as is",
+    "business_message": "Zero Active Interval Provably Impossible. A shortfall schedule was produced (S04_ONE_IMPOSSIBLE_INTERVAL_L6_3_2_3_HARD_RULE_SHORTFALL_SCHEDULE.xlsx). It meets every person rule (rest, OFF days, leave, fixed requests, breaks) and misses only these coverage minimums: Nobody on the floor after breaks: 4 quarter(s). Every missed quarter is listed on its Shortfalls sheet.",
+    "business_outcome_category": "ACTION_REQUIRED",
+    "business_outcome_code": "HARD_RULE_SHORTFALL_SCHEDULE_FOR_REVIEW",
+    "input": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/advC/runs/S04_ONE_IMPOSSIBLE_INTERVAL/input_snapshot/S04_ONE_IMPOSSIBLE_INTERVAL.xlsx",
+    "preflight_failure_count": "1",
+    "production_eligible": "FALSE",
+    "run_id": "9a7df3af325e6cc4bc852f5d",
+    "status": "FAIL_PRE_SOLVER_CONTRACT",
+    "independent_validation_status": "NOT_RUN",
+    "independent_validation_return_code": "",
+    "independent_validation_json": ""
+  },
+  "case_root": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/advC/runs/S04_ONE_IMPOSSIBLE_INTERVAL",
+  "independent_validation": {
+    "enabled": true,
+    "status": "NOT_RUN",
+    "return_code": null,
+    "workbook": null,
+    "json": null,
+    "csv": null,
+    "quality_gate_status": null,
+    "coverage_quality_gate_status": null,
+    "canonical_metrics": null,
+    "metric_parity": null,
+    "shortfall_schedule": {
+      "workbook": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/advC/runs/S04_ONE_IMPOSSIBLE_INTERVAL/S04_ONE_IMPOSSIBLE_INTERVAL_L6_3_2_3_HARD_RULE_SHORTFALL_SCHEDULE.xlsx",
+      "json": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/advC/runs/S04_ONE_IMPOSSIBLE_INTERVAL/SHORTFALL_SCHEDULE_VALIDATION.json",
+      "return_code": 2,
+      "validator_failure_types": [
+        "ZERO_STAFF_ACTIVE"
+      ],
+      "listed": {
+        "zero_coverage": 4
+      },
+      "outside_declared_families": [],
+      "count_mismatches": [],
+      "status": "SHORTFALLS_CONFIRMED",
+      "clean_room": {
+        "status": "PASS",
+        "json": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/advC/runs/S04_ONE_IMPOSSIBLE_INTERVAL/SHORTFALL_CLEAN_ROOM_CHECK.json",
+        "checker": "/home/user/Default/tools/clean_room_check.py",
+        "return_code": 0,
+        "violation_count": 0,
+        "violations_by_rule": {},
+        "engine_mismatches": [],
+        "validator_mismatches": [],
+        "input_issues": []
+      }
+    }
+  }
+}

@@ -1,0 +1,168 @@
+{
+ "cases": {
+  "VOICE": {
+   "pairs_scored": 10,
+   "after_target": {
+    "mean_old": 246.4,
+    "mean_new": 246.0,
+    "mean_delta": -0.4,
+    "wins_new": 4,
+    "wins_old": 4
+   },
+   "after_floor": {
+    "mean_old": 252.9,
+    "mean_new": 252.7,
+    "mean_delta": -0.2,
+    "wins_new": 0,
+    "wins_old": 1
+   },
+   "whole_week_imbalance_violation_count": {
+    "mean_old": 16.4,
+    "mean_new": 17.4,
+    "mean_delta": 1.0,
+    "wins_new": 5,
+    "wins_old": 2
+   },
+   "break_concurrency_violation_count": {
+    "mean_old": 5.4,
+    "mean_new": 6.4,
+    "mean_delta": 1.0,
+    "wins_new": 6,
+    "wins_old": 4
+   }
+  },
+  "CHAT": {
+   "pairs_scored": 8,
+   "after_target": {
+    "mean_old": 157.62,
+    "mean_new": 157.38,
+    "mean_delta": -0.25,
+    "wins_new": 3,
+    "wins_old": 5
+   },
+   "after_floor": {
+    "mean_old": 230.0,
+    "mean_new": 229.25,
+    "mean_delta": -0.75,
+    "wins_new": 4,
+    "wins_old": 3
+   },
+   "whole_week_imbalance_violation_count": {
+    "mean_old": 2.25,
+    "mean_new": 1.88,
+    "mean_delta": -0.38,
+    "wins_new": 2,
+    "wins_old": 4
+   },
+   "break_concurrency_violation_count": {
+    "mean_old": 1.62,
+    "mean_new": 2.38,
+    "mean_delta": 0.75,
+    "wins_new": 5,
+    "wins_old": 1
+   }
+  },
+  "AEIT": {
+   "pairs_scored": 10,
+   "after_target": {
+    "mean_old": 70.1,
+    "mean_new": 70.0,
+    "mean_delta": -0.1,
+    "wins_new": 4,
+    "wins_old": 5
+   },
+   "after_floor": {
+    "mean_old": 87.7,
+    "mean_new": 87.7,
+    "mean_delta": 0.0,
+    "wins_new": 1,
+    "wins_old": 2
+   },
+   "whole_week_imbalance_violation_count": {
+    "mean_old": 2.7,
+    "mean_new": 3.0,
+    "mean_delta": 0.3,
+    "wins_new": 3,
+    "wins_old": 1
+   },
+   "break_concurrency_violation_count": {
+    "mean_old": 2.7,
+    "mean_new": 2.4,
+    "mean_delta": -0.3,
+    "wins_new": 1,
+    "wins_old": 4
+   }
+  },
+  "H1": {
+   "pairs_scored": 2,
+   "after_target": {
+    "mean_old": 128.0,
+    "mean_new": 123.0,
+    "mean_delta": -5.0,
+    "wins_new": 1,
+    "wins_old": 1
+   },
+   "after_floor": {
+    "mean_old": 168.0,
+    "mean_new": 168.0,
+    "mean_delta": 0.0,
+    "wins_new": 0,
+    "wins_old": 0
+   },
+   "whole_week_imbalance_violation_count": {
+    "mean_old": 0.0,
+    "mean_new": 4.5,
+    "mean_delta": 4.5,
+    "wins_new": 2,
+    "wins_old": 0
+   },
+   "break_concurrency_violation_count": {
+    "mean_old": 3.0,
+    "mean_new": 11.5,
+    "mean_delta": 8.5,
+    "wins_new": 2,
+    "wins_old": 0
+   }
+  },
+  "S08": {
+   "pairs_scored": 10,
+   "after_target": {
+    "mean_old": 168.0,
+    "mean_new": 168.0,
+    "mean_delta": 0.0,
+    "wins_new": 0,
+    "wins_old": 0
+   },
+   "after_floor": {
+    "mean_old": 168.0,
+    "mean_new": 168.0,
+    "mean_delta": 0.0,
+    "wins_new": 0,
+    "wins_old": 0
+   },
+   "whole_week_imbalance_violation_count": {
+    "mean_old": 1.0,
+    "mean_new": 1.0,
+    "mean_delta": 0.0,
+    "wins_new": 0,
+    "wins_old": 0
+   },
+   "break_concurrency_violation_count": {
+    "mean_old": 0.0,
+    "mean_new": 0.0,
+    "mean_delta": 0.0,
+    "wins_new": 0,
+    "wins_old": 0
+   }
+  }
+ },
+ "rules": {
+  "F1_validity": "PASS",
+  "F2_non_inferiority": "FAIL"
+ },
+ "failed_solves": {
+  "OLD": 8,
+  "NEW": 7
+ },
+ "verdict": "DO_NOT_SHIP_AS_IS"
+}

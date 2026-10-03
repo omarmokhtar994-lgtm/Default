@@ -1,0 +1,322 @@
+[
+ {
+  "case": "adv/runs/S01_BASELINE",
+  "constraints_old": 3142,
+  "constraints_new": 3142,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "adv/runs/S01_BASELINE_R2",
+  "constraints_old": 3142,
+  "constraints_new": 3142,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "adv/runs/S01_BASELINE_R3",
+  "constraints_old": 3142,
+  "constraints_new": 3142,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "adv/runs/S02_DEMAND_SLIGHTLY_ABOVE_CAPACITY",
+  "constraints_old": 3121,
+  "constraints_new": 3121,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "adv/runs/S03_DEMAND_MASSIVELY_ABOVE_CAPACITY",
+  "constraints_old": 3136,
+  "constraints_new": 3136,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "adv/runs/S08_24x7_WEEK_BOUNDARY",
+  "constraints_old": 6583,
+  "constraints_new": 6583,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "adv/runs/S12_OVERLAPPING_SKILLS",
+  "constraints_old": 3814,
+  "constraints_new": 3814,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "adv/runs/S14_DUPLICATE_PREFERENCE_ROW",
+  "constraints_old": 3142,
+  "constraints_new": 3142,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "advA/runs/S01_BASELINE",
+  "constraints_old": 3142,
+  "constraints_new": 3142,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "advA/runs/S02_DEMAND_SLIGHTLY_ABOVE_CAPACITY",
+  "constraints_old": 3121,
+  "constraints_new": 3121,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "advA/runs/S03_DEMAND_MASSIVELY_ABOVE_CAPACITY",
+  "constraints_old": 3153,
+  "constraints_new": 3153,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "advA/runs/S06_FULL_WEEK_LEAVE",
+  "constraints_old": 3141,
+  "constraints_new": 3141,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "advA/runs/S07_SIX_LEAVE_DAYS",
+  "constraints_old": 3139,
+  "constraints_new": 3139,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "advA/runs/S08_24x7_WEEK_BOUNDARY",
+  "constraints_old": 6594,
+  "constraints_new": 6594,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "advA/runs/S12_OVERLAPPING_SKILLS",
+  "constraints_old": 3814,
+  "constraints_new": 3814,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "advB/runs/S01_BASELINE",
+  "constraints_old": 3142,
+  "constraints_new": 3142,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "advB/runs/S06_FULL_WEEK_LEAVE",
+  "constraints_old": 3141,
+  "constraints_new": 3141,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "advB/runs/S08_24x7_WEEK_BOUNDARY",
+  "constraints_old": 6559,
+  "constraints_new": 6559,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "aeit/out/AEIT_9002_NOCAP",
+  "constraints_old": 5027,
+  "constraints_new": 5027,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "aeit/out/AEIT_9002_S240",
+  "constraints_old": 5030,
+  "constraints_new": 5030,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "aeit/out/AEIT_9004_NOCAP",
+  "constraints_old": 5030,
+  "constraints_new": 5030,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "aeit/out/AEIT_9004_S240",
+  "constraints_old": 5039,
+  "constraints_new": 5039,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "aeit/out/FINAL_AEIT_9002_R",
+  "constraints_old": 5053,
+  "constraints_new": 5053,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "f16/results_chat/CRICUT_CHAT",
+  "constraints_old": 7682,
+  "constraints_new": 7682,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "f16/results_h1/SYNTH_H1_24X7_OVERNIGHT",
+  "constraints_old": 6827,
+  "constraints_new": 6827,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "final/MyDrive/RESULTS/CRICUT_VOICE_LANGUAGE_HOURS",
+  "constraints_old": 7254,
+  "constraints_new": 7254,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "final/MyDrive/RESULTS/_seeds/CRICUT_VOICE_LANGUAGE_HOURS/seeds/CRICUT_VOICE_LANGUAGE_HOURS_S9000",
+  "constraints_old": 7256,
+  "constraints_new": 7256,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "final/MyDrive/RESULTS/_seeds/CRICUT_VOICE_LANGUAGE_HOURS/seeds/CRICUT_VOICE_LANGUAGE_HOURS_S9001",
+  "constraints_old": 7254,
+  "constraints_new": 7254,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "lang/out/VOICE_ALLROWS2",
+  "constraints_old": 7256,
+  "constraints_new": 7256,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "lang/out/VOICE_FINAL_SHEET",
+  "constraints_old": 7252,
+  "constraints_new": 7252,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "phaseA/qr_CHAT_POLISH",
+  "constraints_old": 7682,
+  "constraints_new": 7682,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "phaseA/qr_S02_DEMAND_SLIGHTLY_ABOVE_CAPACITY",
+  "constraints_old": 3121,
+  "constraints_new": 3121,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "phaseA/qr_S08_24x7_WEEK_BOUNDARY",
+  "constraints_old": 6583,
+  "constraints_new": 6583,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "phaseA/qr_S12_OVERLAPPING_SKILLS",
+  "constraints_old": 3814,
+  "constraints_new": 3814,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "phaseA/qr_VOICE_POLISH",
+  "constraints_old": 7254,
+  "constraints_new": 7254,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "phaseA/real/VOICE_PHASE_A",
+  "constraints_old": 7254,
+  "constraints_new": 7254,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "phaseB_real/VOICE_PHASE_B",
+  "constraints_old": 7256,
+  "constraints_new": 7256,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "polish/e2e/AEIT_POLISH",
+  "constraints_old": 5059,
+  "constraints_new": 5059,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "polish/e2e/CHAT_POLISH",
+  "constraints_old": 7682,
+  "constraints_new": 7682,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ },
+ {
+  "case": "polish/e2e/VOICE_POLISH",
+  "constraints_old": 7254,
+  "constraints_new": 7254,
+  "differing": 0,
+  "only_new": 0,
+  "corrupted_examples": []
+ }
+]

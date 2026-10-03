@@ -1,0 +1,22 @@
+C2 regression found by the C1 scenario runs (S09, S11, S13: FAIL_UNEXPECTED_ENGINE_EXCEPTION,
+NameError: break_q_per_shift in break_capacity_headcount_requirement). The new test, run against
+the engine with that stale name restored (everything else the final engine):
+
+test_the_break_capacity_diagnostic_counts_each_shift_its_own_set (tests_staged.test_rc9_2_33_phase_c_breaks_by_duration.C2EndToEnd.test_the_break_capacity_diagnostic_counts_each_shift_its_own_set) ... ERROR
+
+======================================================================
+ERROR: test_the_break_capacity_diagnostic_counts_each_shift_its_own_set (tests_staged.test_rc9_2_33_phase_c_breaks_by_duration.C2EndToEnd.test_the_break_capacity_diagnostic_counts_each_shift_its_own_set)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_33_phase_c_breaks_by_duration.py", line 156, in test_the_break_capacity_diagnostic_counts_each_shift_its_own_set
+    got = E.break_capacity_headcount_requirement(parsed, sk)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/c2bug/engine/_tools/l632_universal_scheduler.py", line 13850, in break_capacity_headcount_requirement
+    net_per_associate = max(1, typical_shift_q - break_q_per_shift)
+                                                 ^^^^^^^^^^^^^^^^^
+NameError: name 'break_q_per_shift' is not defined
+
+----------------------------------------------------------------------
+Ran 1 test in 30.693s
+
+FAILED (errors=1)

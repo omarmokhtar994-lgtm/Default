@@ -1,0 +1,26 @@
+{
+ "scenario": "S13_24x7_UNDERSTAFFED",
+ "why": "24/7 demand of 3 FTE every hour, 10 agents (about 75% of the hours needed), overnight shifts allowed",
+ "expected": "best achievable schedule with the deficit named (current-week floor is soft)",
+ "runner_rc": 2,
+ "elapsed_sec": 212.5,
+ "engine_status": "FAIL_NO_BREAK_FEASIBLE_CANDIDATE",
+ "artifact_state": "FINAL_DIAGNOSTIC_NO_RELEASE_SCHEDULE",
+ "independent_validation": "NOT_RUN",
+ "published_final": [],
+ "workbooks_in_case_root": [
+  "S13_24x7_UNDERSTAFFED_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx",
+  "S13_24x7_UNDERSTAFFED_L6_3_2_3_HARD_RULE_SHORTFALL_SCHEDULE.xlsx"
+ ],
+ "selected_metrics": {
+  "after_target": null,
+  "after_floor": null,
+  "active_intervals": null,
+  "language_gap_count": null
+ },
+ "run_id": "9ae557ab5d4d6ffc2d4d6fe1",
+ "business_outcome": "Outcome: No schedule meets every hard rule; a shortfall schedule is attached for review and must not be published as is\nStatus: FAIL_NO_BREAK_FEASIBLE_CANDIDATE\nProduction eligible: False\nIndependent validation: NOT_RUN (return code None)\n\nThe engine could not find a legal break plan for the tested shift/OFF skeletons within the available search budget. A shortfall schedule was produced (S13_24x7_UNDERSTAFFED_L6_3_2_3_HARD_RULE_SHORTFALL_SCHEDULE.xlsx). It meets every person rule (rest, OFF days, leave, fixed requests, breaks) and misses only these coverage minimums: Nobody on the floor after breaks: 4 quarter(s). Every missed quarter is listed on its Shortfalls sheet.\n\nShortfalls (the attached schedule misses these minimums):\n- Sun 14:15 | Nobody on the floor after breaks | required 1, short by 1\n- Sun 16:30 | Nobody on the floor after breaks | required 1, short by 1\n- Sun 16:45 | Nobody on the floor after breaks | required 1, short by 1\n- Sun 19:00 | Nobody on the floor after breaks | required 1, short by 1\n\nIndependent check of the shortfall schedule: SHORTFALLS_CONFIRMED (validator failure types: ZERO_STAFF_ACTIVE)\n\nMain blockers:\n- family=ZERO_STAFF, affected_associate_days=1\n\nAffected examples:\n- Agent C | Sun | 12:00 - 21:00 | Sun 12:00 to Sun 20:45\n\nRequired action:\n- Add or overlap qualified resources in the named bottleneck windows, especially single-person language coverage.\n- Change shift/OFF patterns so qualified associates have legal break coverage.\n- Change the",
+ "clean_room": null,
+ "pre_solver_failures": [],
+ "hard_probe": "OPTIMAL"
+}

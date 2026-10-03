@@ -123,3 +123,46 @@ at all.
   old validator.
 - No shipped or fixture workbook uses REQUIRED_LANGUAGE_ONLY (59 OFF, 2
   ALL_ROWS), so no existing result changes.
+
+## Follow-up: the failure message and the validator (2026-10-03)
+
+**Engine message.** A hard-rule contradiction used to print each
+constraint-isolation row as a raw solver dump under "Main blockers". Then the
+wrapper replaced the engine's diagnosis in `BUSINESS_OUTCOME.txt` with "the
+engine output problem", so the reason never reached the results folder. Now:
+
+- `build_business_outcome` names, in plain words, the rule families that conflict:
+  - the refined core, when it was computed;
+  - otherwise each family whose relaxation alone makes a schedule possible.
+- It lists every fixed request that starts outside its associate's enforced
+  language window, using `fixed_requests_outside_language_windows`. The pre-check
+  now calls this same function, so both report the same requests.
+- `RUN_UNIVERSAL_PRODUCTION.py` keeps the engine's diagnosis for
+  FAIL_HARD_CONTRACT_INFEASIBLE / UNKNOWN. It also writes the findings, the named
+  requests and the actions into `BUSINESS_OUTCOME.txt`.
+
+These are reporting changes only; no solve path changed.
+
+- Engine sha256 is now `d449b6f2...`; the previous one was `251cf35a...`.
+- End to end, the same input as the first refused run gives the following.
+  Evidence is in `VOICE_CONFLICT_MSG2/BUSINESS_OUTCOME.txt`.
+
+      Outcome: No schedule satisfies all hard rules together
+      ... The rules that conflict: language rules (...); fixed requests (Fixed Request sheet).
+      Main blockers:
+      - fixed requests (Fixed Request sheet): relaxing this rule alone makes a schedule possible
+      Affected examples:
+      - Jhonny Mascarenhas (English) | Mon | fixed 05:00 - 14:00 | language hours 16:00-03:00
+      ...
+
+**Validator.** `independent_validator.py` checked shift starts against language
+hours only under ALL_ROWS and MINIMUM_ROWS. Its REQUIRED_LANGUAGE_ONLY check sat
+inside that branch and could never run. The engine enforces the hours in all
+three modes, so a REQUIRED_LANGUAGE_ONLY schedule was not independently checked
+at all.
+
+- Both checks now run in every enforced mode.
+- Tests use the enforced Voice run as a fixture. Two of the three fail on the old
+  validator and pass on the fixed one.
+- No shipped or fixture workbook uses REQUIRED_LANGUAGE_ONLY (59 OFF, 2 ALL_ROWS),
+  so no existing result changes.

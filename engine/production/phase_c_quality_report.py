@@ -281,6 +281,10 @@ def build_report(audit: Dict[str, Any], case_root: Path | None = None) -> Dict[s
             "mode": _status(production_gate.get("mode"), "NOT_EVALUATED"),
             "failure_count": len(production_gate.get("failures") or []),
             "failures": production_gate.get("failures") or [],
+            # Per-family results, so the release check can tell a family in
+            # FAIL mode from a warning (release_blocking_reasons, audit F-04).
+            "gate_results": dict(production_gate.get("gate_results") or {}),
+            "coverage_gate_status": production_gate.get("coverage_gate_status"),
         },
         "next_sunday": {
             "active_intervals": int(_num(metrics.get("week_boundary_active_intervals"), 0)),
@@ -388,6 +392,43 @@ def flatten(report: Dict[str, Any]) -> list[tuple[str, Any]]:
     return rows
 
 
+def release_blocking_reasons(report: dict, strict: bool) -> list:
+    """Why this full-schedule report may not be released; empty means releasable.
+
+    Audit F-04: the strict check used to read "the coverage gate is in FAIL
+    mode and the overall gate is not PASS". The overall status also carries
+    every family a workbook declared as WARN (overage balance, employee
+    fairness, next-Sunday balance), so on any workbook that left the coverage
+    gate at its FAIL default a warning blocked the release - a 100 % coverage,
+    validator-approved schedule included. The rule now asks what its name
+    says: a family in FAIL mode that found an issue blocks, and the coverage
+    gate must actually have passed when it is in FAIL mode. Warnings stay
+    warnings.
+    """
+    blocking = []
+    if report.get("artifact_state") != "FINAL_VERIFIED":
+        blocking.append("artifact_state_not_final_verified")
+    contract = report.get("contract") or {}
+    contract_status = str(contract.get("status") or "UNKNOWN").upper()
+    if contract_status not in {"PASS", "WARN"} or int(contract.get("failure_count") or 0) > 0:
+        blocking.append("input_contract_not_pass")
+    if (report.get("safety") or {}).get("status") != "PASS":
+        blocking.append("internal_output_validation_not_pass")
+    gate = report.get("production_quality_gate") or {}
+    gate_results = gate.get("gate_results") or {}
+    if gate.get("status") == "FAIL" or any(str(v).upper() == "FAIL" for v in gate_results.values()):
+        blocking.append("production_quality_gate_failed")
+    coverage_status = str(gate_results.get("coverage") or gate.get("coverage_gate_status") or "NOT_EVALUATED").upper()
+    if strict and str(gate.get("mode", "")).lower() == "fail" and coverage_status != "PASS":
+        blocking.append("mandatory_production_quality_gate_not_pass")
+    if strict and report.get("phase_c_quality_status") in {
+        "FAIL_PRODUCTION_QUALITY_GATE", "FAIL_SAFETY", "REVIEW_NOT_VALIDATED",
+        "REVIEW_EXTREME_OVERAGE", "DIAGNOSTICS_ONLY",
+    }:
+        blocking.append(str(report.get("phase_c_quality_status")))
+    return blocking
+
+
 def main() -> int:
     ap=argparse.ArgumentParser()
     ap.add_argument("--audit-json",type=Path,required=True)
@@ -427,25 +468,7 @@ def main() -> int:
             "quality_observation": report.get("phase_c_quality_status"),
         }, indent=2))
         return 0
-    blocking = []
-    if report.get("artifact_state") != "FINAL_VERIFIED":
-        blocking.append("artifact_state_not_final_verified")
-    contract = report.get("contract") or {}
-    contract_status = str(contract.get("status") or "UNKNOWN").upper()
-    if contract_status not in {"PASS", "WARN"} or int(contract.get("failure_count") or 0) > 0:
-        blocking.append("input_contract_not_pass")
-    if (report.get("safety") or {}).get("status") != "PASS":
-        blocking.append("internal_output_validation_not_pass")
-    gate = report.get("production_quality_gate") or {}
-    if gate.get("status") == "FAIL":
-        blocking.append("production_quality_gate_failed")
-    if args.strict and str(gate.get("mode", "")).lower() == "fail" and gate.get("status") != "PASS":
-        blocking.append("mandatory_production_quality_gate_not_pass")
-    if args.strict and report.get("phase_c_quality_status") in {
-        "FAIL_PRODUCTION_QUALITY_GATE", "FAIL_SAFETY", "REVIEW_NOT_VALIDATED",
-        "REVIEW_EXTREME_OVERAGE", "DIAGNOSTICS_ONLY",
-    }:
-        blocking.append(str(report.get("phase_c_quality_status")))
+    blocking = release_blocking_reasons(report, strict=args.strict)
     if blocking:
         print(json.dumps({"status":"BLOCKED","blocking_reasons":sorted(set(blocking))},indent=2))
         return 2

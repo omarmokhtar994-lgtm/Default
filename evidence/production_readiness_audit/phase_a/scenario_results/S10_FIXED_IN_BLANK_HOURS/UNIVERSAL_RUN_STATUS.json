@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "release": "L6.3.2.8-RC9.2.2-PRODUCTION-HARDENED-RC6",
+  "schedule_id": "S10_FIXED_IN_BLANK_HOURS",
+  "mode": "QUICK",
+  "stage": "FULL_SCHEDULE",
+  "return_code": 2,
+  "engine_return_code": 2,
+  "initial_quality_report_return_code": 2,
+  "quality_report_return_code": 2,
+  "hard_valid_artifact": false,
+  "metrics": {
+    "audit": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/advA/runs/S10_FIXED_IN_BLANK_HOURS/S10_FIXED_IN_BLANK_HOURS.l6_3_2_3_solver_audit.json",
+    "business_headline": "No schedule satisfies all hard rules together",
+    "business_message": "The roster and legal shifts are individually readable, but the hard rules contradict each other. There was not enough time left to find which rules conflict.",
+    "business_outcome_category": "INPUT_OR_POLICY_ACTION_REQUIRED",
+    "business_outcome_code": "HARD_RULE_COMBINATION_INFEASIBLE",
+    "input": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/advA/runs/S10_FIXED_IN_BLANK_HOURS/input_snapshot/S10_FIXED_IN_BLANK_HOURS.xlsx",
+    "probe_status": "INFEASIBLE",
+    "production_eligible": "FALSE",
+    "status": "FAIL_HARD_CONTRACT_INFEASIBLE",
+    "independent_validation_status": "NOT_RUN",
+    "independent_validation_return_code": "",
+    "independent_validation_json": ""
+  },
+  "case_root": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/advA/runs/S10_FIXED_IN_BLANK_HOURS",
+  "independent_validation": {
+    "enabled": true,
+    "status": "NOT_RUN",
+    "return_code": null,
+    "workbook": null,
+    "json": null,
+    "csv": null,
+    "quality_gate_status": null,
+    "coverage_quality_gate_status": null,
+    "canonical_metrics": null,
+    "metric_parity": null
+  }
+}

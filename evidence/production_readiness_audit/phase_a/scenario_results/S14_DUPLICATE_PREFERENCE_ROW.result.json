@@ -1,0 +1,25 @@
+{
+ "scenario": "S14_DUPLICATE_PREFERENCE_ROW",
+ "why": "Agent A appears twice on Preference: row 1 = approved Leave on Monday; row 2 = OFF Friday and Saturday",
+ "expected": "refused as a duplicate, or Leave Monday honoured",
+ "runner_rc": 2,
+ "elapsed_sec": 1.0,
+ "engine_status": "FAIL_PRE_SOLVER_CONTRACT",
+ "artifact_state": "RUNNING_NOT_FINAL",
+ "independent_validation": "NOT_RUN",
+ "published_final": [],
+ "workbooks_in_case_root": [],
+ "selected_metrics": {
+  "after_target": null,
+  "after_floor": null,
+  "active_intervals": null,
+  "language_gap_count": null
+ },
+ "run_id": "1f78a06d9e6121fec9cee8a4",
+ "business_outcome": "Outcome: The workbook contract cannot be scheduled as submitted\nStatus: FAIL_PRE_SOLVER_CONTRACT\nProduction eligible: False\nIndependent validation: NOT_RUN (return code None)\n\nHARD_PREFERENCE_DUPLICATE_ASSOCIATE: 'Agent A' has more than one populated row on the Preference sheet (rows 3 and 4). Put all of this person's requests on one row.\n\nMain blockers:\n- HARD_PREFERENCE_DUPLICATE_ASSOCIATE: HARD_PREFERENCE_DUPLICATE_ASSOCIATE: 'Agent A' has more than one populated row on the Preference sheet (rows 3 and 4). Put all of this person's requests on one row.\n\nRequired action:\n- Correct the listed workbook contract issue and rerun the schedule.\n",
+ "clean_room": null,
+ "pre_solver_failures": [
+  "HARD_PREFERENCE_DUPLICATE_ASSOCIATE"
+ ],
+ "hard_probe": null
+}

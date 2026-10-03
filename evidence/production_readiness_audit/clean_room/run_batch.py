@@ -4,7 +4,7 @@ SP=sys.argv[1]; OUT=Path(sys.argv[2])
 roots=set()
 for p in glob.glob(SP+'/**/production/*BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx', recursive=True):
     root=Path(p).parent.parent
-    if '/pkg/' in str(root) or '/chk/' in str(root) or '/colab/' in str(root) or '/iso/' in str(root) or '/final/RC9_2_2' in str(root): continue
+    if '/pkg/' in str(root) or '/chk/' in str(root) or '/colab/' in str(root) or '/iso/' in str(root) or '/final/RC9_2_2' in str(root) or '/advA/' in str(root) or '/phaseA/' in str(root): continue
     roots.add(root)
 for p in glob.glob('/home/user/Default/fixtures/real_runs/**/production/*BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx', recursive=True):
     roots.add(Path(p).parent.parent)

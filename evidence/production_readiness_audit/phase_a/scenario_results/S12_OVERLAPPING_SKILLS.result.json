@@ -1,0 +1,52 @@
+{
+ "scenario": "S12_OVERLAPPING_SKILLS",
+ "why": "bilingual agents can cover Spanish and English; Spanish minimum 1 all day; English-only cannot",
+ "expected": "PASS; Spanish minimum met only by Spanish/bilingual agents",
+ "runner_rc": 0,
+ "elapsed_sec": 251.7,
+ "engine_status": "PASS_WITH_QUALITY_WARNINGS",
+ "artifact_state": "FINAL_VERIFIED",
+ "independent_validation": "PASS",
+ "published_final": [
+  "S12_OVERLAPPING_SKILLS_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"
+ ],
+ "workbooks_in_case_root": [
+  "S12_OVERLAPPING_SKILLS_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx",
+  "S12_OVERLAPPING_SKILLS_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx",
+  "S12_OVERLAPPING_SKILLS_L6_3_2_3_MAX_FLOOR_CANDIDATE.xlsx",
+  "S12_OVERLAPPING_SKILLS_L6_3_2_3_MAX_TARGET_CANDIDATE.xlsx"
+ ],
+ "selected_metrics": {
+  "after_target": 84,
+  "after_floor": 84,
+  "active_intervals": 84,
+  "language_gap_count": 0
+ },
+ "run_id": "45b2641e86f19c52586e3513",
+ "business_outcome": "Outcome: Hard-valid final schedule generated with declared operational warnings\nStatus: PASS_WITH_QUALITY_WARNINGS\nProduction eligible: True\nIndependent validation: PASS (return code 0)\n\nThe schedule passed all hard rules and uses 0 approved no-break associate-day exception(s). Operational-quality findings remain visible as warnings rather than hidden hard failures.\n\nWarnings:\n- WHOLE_WEEK_OVERAGE_CAP_EXCEEDED (actual=8, maximum=0, cap_ratio=1.35)\n- EMPLOYEE_ISOLATED_OFFDAY_EXCEEDED (actual=16, maximum=0)\n- LANGUAGE_MINIMUM_ONLY_RATIO_EXCEEDED (actual=0.36309524, maximum=0.25, minimum_only_quarters=122, protected_quarters=336, reserve_extra_fte=1)\n\nRequired action:\n- Review the declared warnings and no-break exception comments during operational approval.\n",
+ "clean_room": {
+  "checked": "S12_OVERLAPPING_SKILLS_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx",
+  "violations": {},
+  "engine_mismatches": [],
+  "validator_mismatches": [],
+  "metrics": {
+   "active_intervals": 84,
+   "before_target": 84,
+   "before_floor": 84,
+   "before100": 84,
+   "before90": 84,
+   "before80": 84,
+   "after_target": 84,
+   "after_floor": 84,
+   "after100": 69,
+   "after90": 84,
+   "after80": 84,
+   "target_losses_from_breaks": 0,
+   "floor_losses_from_breaks": 0,
+   "language_gap_count": 0,
+   "zero_staffed_active_quarters": 0
+  }
+ },
+ "pre_solver_failures": [],
+ "hard_probe": "OPTIMAL"
+}

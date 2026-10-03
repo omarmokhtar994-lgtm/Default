@@ -1,0 +1,12 @@
+Outcome: Final schedule generated, but the production quality gate blocks release
+Status: FAIL_RELEASE_GATE
+Production eligible: False
+Independent validation: PASS (return code 0)
+
+The exact final workbook passed independent hard-rule validation, but the configured production quality gate still failed. The schedule is retained for review and cannot be treated as production-approved without remediation or explicit human approval.
+
+Main blockers:
+- SEVERE_GAP_RATIO_EXCEEDED (actual=0.07142857142857142, maximum=0.05, count=6)
+
+Required action:
+- Review the independent validation and release-gate failures, correct the cause, and rerun validation.

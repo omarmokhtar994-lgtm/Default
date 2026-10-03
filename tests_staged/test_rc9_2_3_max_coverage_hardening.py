@@ -79,6 +79,12 @@ class CanonicalMetricSurface(unittest.TestCase):
             "whole_week_imbalance_violation_count": 0,
             "max_concurrent_breaks_observed": 2,
             "max_concurrent_break_ratio_observed": 0.5,
+            # Audit F-03 (Phase A): the every-staffed-quarter concurrency
+            # figures joined the parity surface under their own names, so both
+            # sides of this fixture now publish them.
+            "max_concurrent_breaks_all_staffed_quarters": 3,
+            "max_concurrent_break_ratio_all_staffed_quarters": 0.75,
+            "break_concurrency_violation_count_all_staffed_quarters": 1,
             "after_avoidable_overage_fte_sum": 1.25,
             "after_avoidable_overage_interval_count": 2,
             "after_severe_overage_count": 1,
@@ -118,6 +124,9 @@ class CanonicalMetricSurface(unittest.TestCase):
                      "whole_week_imbalance_violation_count": 0,
                      "max_concurrent_breaks_observed": 2,
                      "max_concurrent_break_ratio_observed": 0.5,
+                     "max_concurrent_breaks_all_staffed_quarters": 3,
+                     "max_concurrent_break_ratio_all_staffed_quarters": 0.75,
+                     "break_concurrency_violation_count_all_staffed_quarters": 1,
                      "avoidable_overage_fte_sum": 1.25,
                      "avoidable_overage_positive_interval_count": 2,
                      "severe_overage_interval_count": 1,

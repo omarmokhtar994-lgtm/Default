@@ -1,0 +1,9 @@
+Outcome: No schedule satisfies all hard rules together
+Status: FAIL_HARD_CONTRACT_INFEASIBLE
+Production eligible: False
+Independent validation: NOT_RUN (return code None)
+
+The roster and legal shifts are individually readable, but the hard rules contradict each other. There was not enough time left to find which rules conflict.
+
+Required action:
+- Review the rules named above in the workbook, then rerun.

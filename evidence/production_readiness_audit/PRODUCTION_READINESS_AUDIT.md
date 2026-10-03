@@ -11,6 +11,16 @@ Method:
 
 All evidence is in this folder; `WORKING_NOTES.md` is the running log.
 
+> **Status update — Phase A done (2026-10-03, engine sha256 `e5afd99d…`).**
+> - **Fixed:** F-01, F-02, F-03 and F-04. F-09 and F-15 are fixed except the instruction-row values that belong to F-11.
+> - **Effect on the scenarios** (`phase_a/PHASE_A_RESULT.md`):
+>   - S01, S06, S07, S08 and S12 now publish (exit 0).
+>   - S14 is refused in 1 s, naming the person.
+>   - S02 and S03 are blocked only by their real coverage-gate failure.
+> - **Good inputs are unaffected:** all 110 repository workbooks parse to identical contracts and parsed facts.
+> - **Gate:** 1,315 tests, PASS.
+> - **Still open, Phase B:** F-05, F-06, F-07, F-08, F-10, F-11, F-12 and below.
+
 ## A. Executive summary
 
 **Verdict: not ready for unsupervised production.** It is usable today only for the packaged workbooks and their layouts, with a person reviewing every run. The schedules it does publish are trustworthy against the contract it parsed. The problems are on both sides of that:
@@ -91,7 +101,7 @@ Evidence paths are relative to `evidence/production_readiness_audit/`. `l632` me
 
 ### P0 — production blockers
 
-#### F-01 · P0 · Confirmed defect — duplicate rows on name-keyed request sheets silently overwrite each other; approved leave can be lost and the schedule still passes validation
+#### ✅ FIXED (Phase A) — F-01 · P0 · Confirmed defect — duplicate rows on name-keyed request sheets silently overwrite each other; approved leave can be lost and the schedule still passes validation
 - **Where:** `l632 _parse_preferences` (1640–1700), `_parse_fixed_nesting` (1752–1805). The independent validator's raw cross-check and the pre-run checker have the same last-row-wins behaviour.
 - **What happens:** when an associate appears twice on the Preference sheet, the later row replaces the earlier one without any message. The Previous-Saturday sheet already refuses duplicates; Preference and Fixed Request do not.
 - **Evidence:**
@@ -104,7 +114,7 @@ Evidence paths are relative to `evidence/production_readiness_audit/`. `l632` me
 - **Regression risk:** low. A workbook that relied on duplicates will now be refused, which is the intent.
 - **Test:** K-1.
 
-#### F-02 · P0 · Confirmed defect — an associate with 6 or 7 leave days makes the whole roster unschedulable, and the message does not say why
+#### ✅ FIXED (Phase A) — F-02 · P0 · Confirmed defect — an associate with 6 or 7 leave days makes the whole roster unschedulable, and the message does not say why
 - **Where:** `l632 build_skeleton` 6845–6880: `x+off+leave == 1` per day, leave pinned, and `sum(off) == 2 + long_mode` under Strict OFF.
 - **What happens:** a full week of leave leaves no day for the two mandatory OFF days. The hard probe is INFEASIBLE in about 2 s and the run ends with no schedule for anyone.
 - **Evidence:**
@@ -120,7 +130,7 @@ Evidence paths are relative to `evidence/production_readiness_audit/`. `l632` me
 
 ### P1 — critical
 
-#### F-03 · P1 · Confirmed defect — the metric-parity gate blocks valid schedules because two metrics are defined differently in the engine and the validator
+#### ✅ FIXED (Phase A) — F-03 · P1 · Confirmed defect — the metric-parity gate blocks valid schedules because two metrics are defined differently in the engine and the validator
 - **Where:** `independent_validator.py` 1094–1102 counts break concurrency (and its ratio) over every quarter, including blank-demand intervals. `l632 calculate_metrics` counts only active intervals plus the next-Sunday horizon. Runner `apply_metric_parity_gate` fails the release on any difference.
 - **Evidence:**
   - S01 baseline: clean-room 0 violations, all 15 coverage metrics identical, yet `FAIL_METRIC_PARITY` on `max_concurrent_break_ratio_observed`, engine 0.333 vs validator 0.5.
@@ -134,7 +144,7 @@ Evidence paths are relative to `evidence/production_readiness_audit/`. `l632` me
 - **Regression risk:** low. The metric only changes.
 - **Test:** K-14.
 
-#### F-04 · P1 · Confirmed defect — WARN-level quality findings block release on any workbook that leaves the coverage gate at its default
+#### ✅ FIXED (Phase A) — F-04 · P1 · Confirmed defect — WARN-level quality findings block release on any workbook that leaves the coverage gate at its default
 - **Where:** `engine/production/phase_c_quality_report.py` 442: `if args.strict and gate.mode == "fail" and gate.status != "PASS"`.
   - `gate.mode` is the coverage gate's mode; its engine default is `fail` when the workbook has no `Production Quality Gate Mode` row.
   - `gate.status` aggregates every family, including the ones declared WARN (overage cap, employee fairness, next-Sunday balance).
@@ -205,7 +215,7 @@ Evidence paths are relative to `evidence/production_readiness_audit/`. `l632` me
 - **Regression risk:** none functionally. run_ids change once.
 - **Test:** K-13.
 
-#### F-09 · P1 · Confirmed defects — structural input errors silently change the contract (header fallbacks and demand rows)
+#### ✅ FIXED (Phase A; instruction-row values remain under F-11) — F-09 · P1 · Confirmed defects — structural input errors silently change the contract (header fallbacks and demand rows)
 Each probe below was ACCEPTED or WARNED by the contract unless stated.
 
 | Probe | Input | What the engine did | Caught later? |
@@ -260,7 +270,7 @@ Each probe below was ACCEPTED or WARNED by the contract unless stated.
 - S11 prints the same blocker row twice.
 - **Fix:** derive the headline from the actual blocking reason list. Give SMOKE its own outcome code.
 
-#### F-15 · P2 · Confirmed — invalid or unusual values that drop a rule silently
+#### ✅ FIXED (Phase A) — F-15 · P2 · Confirmed — invalid or unusual values that drop a rule silently
 - P13: language minimum 0.5 or −1 silently removes the rule. Banker's rounding sends 0.5 to 0.
 - P18: an invalid previous-Saturday shift ("25:00 - 06:00") is ignored, so there is no carry-in and no Sunday rest check.
 - P15: malformed Shift Library labels are skipped without a message.

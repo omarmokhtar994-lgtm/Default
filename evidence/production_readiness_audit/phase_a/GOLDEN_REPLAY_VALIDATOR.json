@@ -1,0 +1,186 @@
+[
+ {
+  "case": "S01_BASELINE",
+  "rule_failures_now": 0,
+  "parity_mismatches_on_existing_fields": [],
+  "all_staffed_ratio": 0.5,
+  "active_ratio": 0.3333333333333333,
+  "validator_status_at_the_time": "FAIL_METRIC_PARITY"
+ },
+ {
+  "case": "S01_BASELINE_R2",
+  "rule_failures_now": 0,
+  "parity_mismatches_on_existing_fields": [],
+  "all_staffed_ratio": 0.5,
+  "active_ratio": 0.3333333333333333,
+  "validator_status_at_the_time": "FAIL_METRIC_PARITY"
+ },
+ {
+  "case": "S01_BASELINE_R3",
+  "rule_failures_now": 0,
+  "parity_mismatches_on_existing_fields": [],
+  "all_staffed_ratio": 0.3333333333333333,
+  "active_ratio": 0.3333333333333333,
+  "validator_status_at_the_time": "PASS"
+ },
+ {
+  "case": "S02_DEMAND_SLIGHTLY_ABOVE_CAPACITY",
+  "rule_failures_now": 0,
+  "parity_mismatches_on_existing_fields": [],
+  "all_staffed_ratio": 0.3333333333333333,
+  "active_ratio": 0.25,
+  "validator_status_at_the_time": "FAIL_METRIC_PARITY"
+ },
+ {
+  "case": "S03_DEMAND_MASSIVELY_ABOVE_CAPACITY",
+  "rule_failures_now": 0,
+  "parity_mismatches_on_existing_fields": [],
+  "all_staffed_ratio": 1.0,
+  "active_ratio": 0.5,
+  "validator_status_at_the_time": "FAIL_METRIC_PARITY"
+ },
+ {
+  "case": "S08_24x7_WEEK_BOUNDARY",
+  "rule_failures_now": 0,
+  "parity_mismatches_on_existing_fields": [],
+  "all_staffed_ratio": 0.5,
+  "active_ratio": 0.5,
+  "validator_status_at_the_time": "PASS"
+ },
+ {
+  "case": "S12_OVERLAPPING_SKILLS",
+  "rule_failures_now": 0,
+  "parity_mismatches_on_existing_fields": [],
+  "all_staffed_ratio": 0.3333333333333333,
+  "active_ratio": 0.3333333333333333,
+  "validator_status_at_the_time": "PASS"
+ },
+ {
+  "case": "S14_DUPLICATE_PREFERENCE_ROW",
+  "rule_failures_now": 2,
+  "parity_mismatches_on_existing_fields": [],
+  "all_staffed_ratio": 0.5,
+  "active_ratio": 0.3333333333333333,
+  "validator_status_at_the_time": "FAIL_METRIC_PARITY"
+ },
+ {
+  "case": "AEIT_9002_NOCAP",
+  "rule_failures_now": 0,
+  "parity_mismatches_on_existing_fields": [],
+  "all_staffed_ratio": 0.6,
+  "active_ratio": 0.6,
+  "validator_status_at_the_time": "PASS"
+ },
+ {
+  "case": "AEIT_9002_S240",
+  "rule_failures_now": 0,
+  "parity_mismatches_on_existing_fields": [],
+  "all_staffed_ratio": 0.5,
+  "active_ratio": 0.5,
+  "validator_status_at_the_time": "PASS"
+ },
+ {
+  "case": "AEIT_9004_NOCAP",
+  "rule_failures_now": 0,
+  "parity_mismatches_on_existing_fields": [],
+  "all_staffed_ratio": 0.75,
+  "active_ratio": 0.75,
+  "validator_status_at_the_time": "PASS"
+ },
+ {
+  "case": "AEIT_9004_S240",
+  "rule_failures_now": 0,
+  "parity_mismatches_on_existing_fields": [],
+  "all_staffed_ratio": 0.5,
+  "active_ratio": 0.5,
+  "validator_status_at_the_time": "PASS"
+ },
+ {
+  "case": "FINAL_AEIT_9002_R",
+  "rule_failures_now": 0,
+  "parity_mismatches_on_existing_fields": [],
+  "all_staffed_ratio": 0.5,
+  "active_ratio": 0.5,
+  "validator_status_at_the_time": "PASS"
+ },
+ {
+  "case": "CRICUT_CHAT",
+  "rule_failures_now": 0,
+  "parity_mismatches_on_existing_fields": [],
+  "all_staffed_ratio": 0.3,
+  "active_ratio": 0.3,
+  "validator_status_at_the_time": "PASS"
+ },
+ {
+  "case": "SYNTH_H1_24X7_OVERNIGHT",
+  "rule_failures_now": 0,
+  "parity_mismatches_on_existing_fields": [],
+  "all_staffed_ratio": 0.5,
+  "active_ratio": 0.5,
+  "validator_status_at_the_time": "PASS"
+ },
+ {
+  "case": "CRICUT_VOICE_LANGUAGE_HOURS",
+  "rule_failures_now": 0,
+  "parity_mismatches_on_existing_fields": [],
+  "all_staffed_ratio": 0.5,
+  "active_ratio": 0.5,
+  "validator_status_at_the_time": "PASS"
+ },
+ {
+  "case": "CRICUT_VOICE_LANGUAGE_HOURS_S9000",
+  "rule_failures_now": 0,
+  "parity_mismatches_on_existing_fields": [],
+  "all_staffed_ratio": 0.5,
+  "active_ratio": 0.5,
+  "validator_status_at_the_time": "PASS"
+ },
+ {
+  "case": "CRICUT_VOICE_LANGUAGE_HOURS_S9001",
+  "rule_failures_now": 0,
+  "parity_mismatches_on_existing_fields": [],
+  "all_staffed_ratio": 0.5,
+  "active_ratio": 0.5,
+  "validator_status_at_the_time": "PASS"
+ },
+ {
+  "case": "VOICE_ALLROWS2",
+  "rule_failures_now": 0,
+  "parity_mismatches_on_existing_fields": [],
+  "all_staffed_ratio": 0.5,
+  "active_ratio": 0.5,
+  "validator_status_at_the_time": "PASS"
+ },
+ {
+  "case": "VOICE_FINAL_SHEET",
+  "rule_failures_now": 0,
+  "parity_mismatches_on_existing_fields": [],
+  "all_staffed_ratio": 0.4,
+  "active_ratio": 0.4,
+  "validator_status_at_the_time": "PASS"
+ },
+ {
+  "case": "AEIT_POLISH",
+  "rule_failures_now": 0,
+  "parity_mismatches_on_existing_fields": [],
+  "all_staffed_ratio": 0.5,
+  "active_ratio": 0.5,
+  "validator_status_at_the_time": "PASS"
+ },
+ {
+  "case": "CHAT_POLISH",
+  "rule_failures_now": 0,
+  "parity_mismatches_on_existing_fields": [],
+  "all_staffed_ratio": 0.3,
+  "active_ratio": 0.3,
+  "validator_status_at_the_time": "PASS"
+ },
+ {
+  "case": "VOICE_POLISH",
+  "rule_failures_now": 0,
+  "parity_mismatches_on_existing_fields": [],
+  "all_staffed_ratio": 0.5,
+  "active_ratio": 0.5,
+  "validator_status_at_the_time": "PASS"
+ }
+]

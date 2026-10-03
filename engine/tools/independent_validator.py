@@ -378,7 +378,8 @@ def _xc_hours(grid: Dict[Tuple[int, int], float], step: int, bucket: int) -> Dic
     return out
 
 
-def _xc_day_cells(wb, sheet_names, roster_norm) -> Optional[Dict[Tuple[str, int], str]]:
+def _xc_day_cells(wb, sheet_names, roster_norm, duplicates: Optional[List[Dict[str, Any]]] = None
+                  ) -> Optional[Dict[Tuple[str, int], str]]:
     ws = next((wb[n] for n in wb.sheetnames if norm(n) in sheet_names), None)
     if ws is None:
         return None
@@ -394,11 +395,22 @@ def _xc_day_cells(wb, sheet_names, roster_norm) -> Optional[Dict[Tuple[str, int]
     if len(day_cols) != 7:
         return None
     cells = {}
+    populated: Dict[str, int] = {}
     for rr in range(r + 1, ws.max_row + 1):
         name = norm(ws.cell(rr, name_col).value)
         if name in roster_norm:
-            for d, c in day_cols.items():
-                cells[(name, d)] = str(ws.cell(rr, c).value or "").strip()
+            values = {d: str(ws.cell(rr, c).value or "").strip() for d, c in day_cols.items()}
+            if not any(values.values()):
+                continue  # an empty row asserts nothing
+            if name in populated:
+                # Two rows that both say something for one person: the engine
+                # refuses this (audit F-01), and the check must not pick one.
+                if duplicates is not None:
+                    duplicates.append({"sheet": ws.title, "associate": name, "rows": [populated[name], rr]})
+                continue
+            populated[name] = rr
+            for d, value in values.items():
+                cells[(name, d)] = value
     return cells
 
 
@@ -770,7 +782,11 @@ def independent_input_crosscheck(input_path: Path, parsed, run_override: Optiona
         if not enabled:
             checks[label] = "DISABLED_IN_WORKBOOK"
             continue
-        raw = _xc_day_cells(wb, names, parsed_names)
+        duplicate_rows: List[Dict[str, Any]] = []
+        raw = _xc_day_cells(wb, names, parsed_names, duplicate_rows)
+        if duplicate_rows:
+            mismatches.append({"check": f"{label}_duplicate_rows", "count": len(duplicate_rows),
+                               "examples": duplicate_rows[:20]})
         if raw is None:
             checks[label] = "NOT_CHECKED"
             not_checked.append({"check": label, "reason": "no sheet with a name header and seven day columns"})
@@ -942,10 +958,12 @@ def validate(input_path: Path, output_path: Path, engine_path: Path,
         # long to the engine and short to the validator, producing a false
         # OFF_COUNT_VIOLATION that would block an otherwise valid release.
         long_mode=any(s.duration_min>=eng.LONG_SHIFT_MIN_DURATION_MIN for _,s in shift_days)
-        expected_off=3 if long_mode else 2
+        # Same rule the engine's models enforce (audit F-02): leave days come out
+        # of the week, so a full week of leave owes no OFF day.
+        expected_off=eng.required_off_days(parsed,assoc,long_mode)
         if parsed.strict_off and len(off_days)!=expected_off:
             failures.append({"type":"OFF_COUNT_VIOLATION","associate":assoc.name,"expected":expected_off,"actual":len(off_days),"off_days":[DAYS[d] for d in off_days]})
-        if parsed.strict_off and not parsed.separate_off_days:
+        if parsed.strict_off and not parsed.separate_off_days and expected_off>=2:
             consecutive=any(d in off_days and (d+1)%7 in off_days for d in range(7))
             if not consecutive: failures.append({"type":"CONSECUTIVE_OFF_VIOLATION","associate":assoc.name,"off_days":[DAYS[d] for d in off_days]})
         distinct=len({norm(s.label) for _,s in shift_days})
@@ -1091,12 +1109,24 @@ def validate(input_path: Path, output_path: Path, engine_path: Path,
             failures.append({"type":"NO_BREAK_EXCEPTION_POLICY","actual":len(exception_cells),"allowed":bool(parsed.allow_no_break_exceptions),"maximum":int(parsed.max_no_break_exceptions)})
 
     quality_gate_failures=[]; quality_gate_warnings=[]; quality_gate_suppressed=[]
+    # Two definitions, each published under its own name (audit F-03). The
+    # check below - and the BREAK_CONCURRENCY gate issue - counts every staffed
+    # quarter ("*_all_staffed_quarters"). The canonical names count only the
+    # quarters of active-demand intervals plus the next-Sunday horizon, which
+    # is what the engine optimises and publishes. One name used to carry the
+    # broader count here and the narrower one in the engine, so the parity
+    # gate blocked valid schedules whose breaks fell in blank-demand hours.
     concurrency_violations=[]; max_concurrent=0; max_concurrent_ratio=0.0
+    active_concurrency={"max_breaks":0,"max_ratio":0.0,"violations":0}
     for qslot in range(horizon):
         staffed=len(before[qslot]); on_break=sum(qslot in slots for slots in break_qslots.values())
         max_concurrent=max(max_concurrent,on_break)
         max_concurrent_ratio=max(max_concurrent_ratio,on_break/max(1,staffed))
         allowed=eng.maximum_concurrent_breaks(parsed,staffed)
+        if parsed.active[qslot//96][(qslot%96)//parsed.qslots_per_interval]:
+            active_concurrency["max_breaks"]=max(active_concurrency["max_breaks"],on_break)
+            active_concurrency["max_ratio"]=max(active_concurrency["max_ratio"],on_break/max(1,staffed))
+            active_concurrency["violations"]+=int(on_break>allowed)
         if on_break>allowed:
             concurrency_violations.append({"day":DAYS[qslot//96],"time":eng.hhmm((qslot%96)*15),"staffed":staffed,"on_break":on_break,"maximum":allowed})
     if concurrency_violations:
@@ -1295,6 +1325,9 @@ def validate(input_path: Path, output_path: Path, engine_path: Path,
             boundary_ratio = boundary_on_break / before_raw if before_raw else 0.0
             max_concurrent_ratio = max(max_concurrent_ratio, boundary_ratio)
             boundary_allowed = eng.maximum_concurrent_breaks(parsed, before_raw)
+            active_concurrency["max_breaks"] = max(active_concurrency["max_breaks"], boundary_on_break)
+            active_concurrency["max_ratio"] = max(active_concurrency["max_ratio"], boundary_ratio)
+            active_concurrency["violations"] += int(boundary_on_break > boundary_allowed)
             if boundary_on_break > boundary_allowed:
                 concurrency_violations.append({
                     "day": "Next Sun", "time": eng.hhmm(minute),
@@ -1418,8 +1451,12 @@ def validate(input_path: Path, output_path: Path, engine_path: Path,
         "break_spacing_compressed_count":sum(row['classification']=="FLEXIBLE_COMPRESSION" for row in break_spacing_rows),
         "break_spacing_extended_count":sum(row['classification']=="FLEXIBLE_EXTENSION" for row in break_spacing_rows),
         "break_spacing_beyond_normal_count":len(extended_spacing),
-        "max_concurrent_breaks_observed":max_concurrent,"max_concurrent_break_ratio_observed":max_concurrent_ratio,
-        "break_concurrency_violation_count":len(concurrency_violations),
+        "max_concurrent_breaks_observed":active_concurrency["max_breaks"],
+        "max_concurrent_break_ratio_observed":active_concurrency["max_ratio"],
+        "break_concurrency_violation_count":active_concurrency["violations"],
+        "max_concurrent_breaks_all_staffed_quarters":max_concurrent,
+        "max_concurrent_break_ratio_all_staffed_quarters":max_concurrent_ratio,
+        "break_concurrency_violation_count_all_staffed_quarters":len(concurrency_violations),
         "next_sunday_target_hits":sum(r['pct']+1e-9>=parsed.target_ratio for r in next_rows),
         "next_sunday_floor_hits":sum(r['pct']+1e-9>=parsed.floor_ratio for r in next_rows),
         "next_sunday_floor_gap_count":len(next_floor_gaps),"next_sunday_zero_staffed_quarters":len(next_zero),

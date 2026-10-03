@@ -65,6 +65,14 @@ ALIASES = {
     "whole_week_imbalance_violation_count": ("whole_week_imbalance_violation_count",),
     "max_concurrent_breaks_observed": ("max_concurrent_breaks_observed",),
     "max_concurrent_break_ratio_observed": ("max_concurrent_break_ratio_observed",),
+    # Audit F-03: the same concurrency figures over EVERY staffed quarter,
+    # including blank-demand hours. The three names above cover active-demand
+    # quarters plus the next-Sunday horizon. Each definition now has its own
+    # name on both sides, so neither can be compared with the other.
+    "max_concurrent_breaks_all_staffed_quarters": ("max_concurrent_breaks_all_staffed_quarters",),
+    "max_concurrent_break_ratio_all_staffed_quarters": ("max_concurrent_break_ratio_all_staffed_quarters",),
+    "break_concurrency_violation_count_all_staffed_quarters": (
+        "break_concurrency_violation_count_all_staffed_quarters",),
     # The validator's post-break-only value maps to the engine's explicit
     # after-break value. This is a documented alias, not a second calculation.
     "after_avoidable_overage_fte_sum": (
@@ -139,6 +147,7 @@ PARITY_FIELDS = tuple(ALIASES)
 INTEGER_FIELDS = {
     name for name in PARITY_FIELDS
     if not name.endswith("_ratio_observed") and name not in {
+        "max_concurrent_break_ratio_all_staffed_quarters",
         "week_boundary_max_coverage_ratio",
         "after_avoidable_overage_fte_sum",
         "after_avoidable_overage_peak_fte",

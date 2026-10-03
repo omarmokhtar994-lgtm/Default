@@ -87,8 +87,16 @@ class CanonicalSurface(unittest.TestCase):
                 self.assertIn(field, CM.PARITY_FIELDS)
 
     def test_b9_added_exactly_seven_fields(self):
-        """Pinned so a later edit cannot quietly drop one back off the gate."""
-        self.assertEqual(len(CM.PARITY_FIELDS), 48)
+        """Pinned so a later edit cannot quietly drop one back off the gate.
+
+        Re-pinned 48 -> 51 by Phase A of the production-readiness audit (F-03):
+        the three every-staffed-quarter concurrency fields
+        (max_concurrent_breaks_all_staffed_quarters,
+        max_concurrent_break_ratio_all_staffed_quarters,
+        break_concurrency_violation_count_all_staffed_quarters) were added to
+        the parity surface. The measured contract grew; nothing was removed.
+        """
+        self.assertEqual(len(CM.PARITY_FIELDS), 51)
         self.assertEqual(len(set(B9_FIELDS) & set(CM.PARITY_FIELDS)), 7)
 
     def test_engine_spelling_resolves(self):

@@ -1,0 +1,8 @@
+..../home/user/Default/tests_staged/test_rc9_2_30_phase_a_input_safety.py:108: ResourceWarning: unclosed file <_io.TextIOWrapper name='/dev/null' mode='w' encoding='utf-8'>
+  probe = E.build_skeleton(parsed, None, E.HardConfig(), 20.0, 2, open(os.devnull, "w"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.........................
+----------------------------------------------------------------------
+Ran 29 tests in 3.718s
+
+OK

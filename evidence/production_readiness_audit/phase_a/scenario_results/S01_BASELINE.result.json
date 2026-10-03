@@ -1,0 +1,51 @@
+{
+ "scenario": "S01_BASELINE",
+ "why": "sanity: 10 agents, 3 FTE 08:00-20:00, day shifts",
+ "expected": "PASS with a validated schedule",
+ "runner_rc": 0,
+ "elapsed_sec": 279.1,
+ "engine_status": "PASS_WITH_QUALITY_WARNINGS",
+ "artifact_state": "FINAL_VERIFIED",
+ "independent_validation": "PASS",
+ "published_final": [
+  "S01_BASELINE_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"
+ ],
+ "workbooks_in_case_root": [
+  "S01_BASELINE_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx",
+  "S01_BASELINE_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx",
+  "S01_BASELINE_L6_3_2_3_MAX_TARGET_CANDIDATE.xlsx"
+ ],
+ "selected_metrics": {
+  "after_target": 84,
+  "after_floor": 84,
+  "active_intervals": 84,
+  "language_gap_count": 0
+ },
+ "run_id": "4aefe7d246978f9e03bc032a",
+ "business_outcome": "Outcome: Hard-valid final schedule generated with declared operational warnings\nStatus: PASS_WITH_QUALITY_WARNINGS\nProduction eligible: True\nIndependent validation: PASS (return code 0)\n\nThe schedule passed all hard rules and uses 0 approved no-break associate-day exception(s). Operational-quality findings remain visible as warnings rather than hidden hard failures.\n\nWarnings:\n- WHOLE_WEEK_OVERAGE_CAP_EXCEEDED (actual=8, maximum=0, cap_ratio=1.35)\n- EMPLOYEE_ISOLATED_OFFDAY_EXCEEDED (actual=12, maximum=0)\n\nRequired action:\n- Review the declared warnings and no-break exception comments during operational approval.\n",
+ "clean_room": {
+  "checked": "S01_BASELINE_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx",
+  "violations": {},
+  "engine_mismatches": [],
+  "validator_mismatches": [],
+  "metrics": {
+   "active_intervals": 84,
+   "before_target": 84,
+   "before_floor": 84,
+   "before100": 84,
+   "before90": 84,
+   "before80": 84,
+   "after_target": 84,
+   "after_floor": 84,
+   "after100": 68,
+   "after90": 84,
+   "after80": 84,
+   "target_losses_from_breaks": 0,
+   "floor_losses_from_breaks": 0,
+   "language_gap_count": 0,
+   "zero_staffed_active_quarters": 0
+  }
+ },
+ "pre_solver_failures": [],
+ "hard_probe": "OPTIMAL"
+}

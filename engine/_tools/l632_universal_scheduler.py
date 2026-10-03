@@ -1508,7 +1508,22 @@ def _day_columns(ws: Any, header: int) -> List[int]:
         candidates = [c for h, c in vals.items() if _is_day_header(h, short, full)]
         if candidates:
             result.append(min(candidates))
-    return result if len(result) == 7 else []
+    if len(result) == 7:
+        return result
+    # A real calendar date names its weekday with certainty, so a header row of
+    # seven dates covering Sun..Sat binds by weekday (audit F-09). Before, such
+    # a row fell back to a positional guess, which happened to be right on the
+    # RC8 GDI/SAKS Preference sheets and wrong whenever another column sat
+    # between the name and the first date. Text that merely looks like a date
+    # is not accepted.
+    by_weekday: Dict[int, int] = {}
+    for c in range(1, ws.max_column + 1):
+        value = ws.cell(header, c).value
+        if isinstance(value, datetime):
+            by_weekday.setdefault((value.weekday() + 1) % 7, c)
+    if len(by_weekday) == 7:
+        return [by_weekday[d] for d in range(7)]
+    return []
 
 
 def _parse_roster(
@@ -1526,11 +1541,16 @@ def _parse_roster(
     lang_col = next((c for h, c in headers.items() if "language" in h or "skill" in h), 6)
     tl_col = next((c for h, c in headers.items() if h in {"tl", "team leader", "supervisor"}), 5)
     email_col = next((c for h, c in headers.items() if "email" in h), 3)
+    # Audit F-09: the employee ID used to be read from column 2 whatever that
+    # column held, so a re-ordered sheet produced false duplicate-ID refusals
+    # and published the wrong IDs. Bind it by header; no ID header, no ID.
+    emp_id_col = next((c for h, c in headers.items()
+                       if h in {"emp id", "employee id", "emp no", "employee number", "staff id", "id"}), None)
     day_cols = _day_columns(ws, header)
-    if not day_cols:
-        day_cols = list(range(name_col + 3, name_col + 10))
-    if not day_cols or max(day_cols) > ws.max_column:
-        day_cols = list(range(7, 14))
+    # The day cells are read only under real Sun..Sat headers. They used to be
+    # guessed from the name column's position, which read whatever sat there
+    # (notes, dates) as fixed requests. parse_input refuses the workbook when
+    # those cells are needed and cannot be located.
     dates = [ws.cell(header, c).value for c in day_cols]
     associates: List[Associate] = []
     seen_names: Dict[str, int] = {}
@@ -1541,6 +1561,16 @@ def _parse_roster(
         if not name:
             blank_run += 1
             if blank_run > 20 and associates:
+                # Audit F-09: everyone listed below a long gap used to be
+                # dropped without a word. Stop reading, but refuse if the gap
+                # hides more roster rows.
+                later = [str(ws.cell(rr, name_col).value or "").strip() for rr in range(r + 1, ws.max_row + 1)]
+                later = [n for n in later if n and norm(n) not in {"total", "staffed hc", "required hc"}]
+                if later and parser_warnings is not None:
+                    parser_warnings.append(
+                        f"HARD_ROSTER_ROWS_AFTER_BLANK_GAP: the Schedule sheet has {len(later)} name(s) below "
+                        f"a gap of more than 20 empty rows (first: {later[0]!r}). Remove the gap so every "
+                        f"associate is read.")
                 break
             continue
         blank_run = 0
@@ -1554,7 +1584,8 @@ def _parse_roster(
             )
         else:
             seen_names[normalized_name] = r
-        employee_id = norm(ws.cell(r, 2).value)
+        raw_emp_id = ws.cell(r, emp_id_col).value if emp_id_col else None
+        employee_id = norm(raw_emp_id)
         if employee_id and employee_id in seen_emp_ids and parser_warnings is not None:
             parser_warnings.append(
                 f"HARD_DUPLICATE_EMPLOYEE_ID:employee_id={employee_id!r};"
@@ -1562,10 +1593,11 @@ def _parse_roster(
             )
         elif employee_id:
             seen_emp_ids[employee_id] = r
-        fixed = [str(ws.cell(r, c).value or "").strip() for c in day_cols]
+        fixed = ([str(ws.cell(r, c).value or "").strip() for c in day_cols]
+                 if len(day_cols) == 7 else [""] * 7)
         associates.append(Associate(
             index=len(associates), row=r, slot=ws.cell(r, 1).value,
-            emp_id=ws.cell(r, 2).value,
+            emp_id=raw_emp_id,
             email=str(ws.cell(r, email_col).value or "").strip(),
             name=name, tl=str(ws.cell(r, tl_col).value or "").strip(),
             language=str(ws.cell(r, lang_col).value or "").strip(),
@@ -1637,6 +1669,21 @@ def _report_unmatched_name(
     )
 
 
+def _sheet_has_named_rows(ws: Any, header: int, name_col: Optional[int]) -> bool:
+    """True when any row under the header carries a name, i.e. the sheet asserts something."""
+    if name_col is None:
+        return False
+    return any(str(ws.cell(r, name_col).value or "").strip() for r in range(header + 1, ws.max_row + 1))
+
+
+def _report_missing_day_columns(parser_warnings: Optional[List[str]], sheet: str) -> None:
+    if parser_warnings is not None:
+        parser_warnings.append(
+            f"HARD_DAY_COLUMNS_NOT_FOUND: the {sheet!r} sheet has no header row naming all seven days "
+            f"(Sun..Sat or Sunday..Saturday), so the engine cannot tell which column is which day. "
+            f"Label the day columns; dates alone are not enough.")
+
+
 def _parse_preferences(
     wb: Any,
     associates: List[Associate],
@@ -1651,13 +1698,38 @@ def _parse_preferences(
         headers = {norm(ws.cell(header, c).value): c for c in range(1, ws.max_column + 1)}
         name_col = next((c for h, c in headers.items() if "name" in h), 1)
         day_cols = _day_columns(ws, header)
-        if not day_cols:
-            day_cols = list(range(name_col + 2, name_col + 9))
-        for r in range(header + 1, ws.max_row + 1):
+        # Audit F-09: with no Sun..Sat header this used to read the seven
+        # columns after the name by position. Preference carries approved
+        # leave and hard OFF, so a guessed column moves leave to another day.
+        if not day_cols and _sheet_has_named_rows(ws, header, name_col):
+            _report_missing_day_columns(parser_warnings, ws.title)
+        populated_rows: Dict[str, int] = {}
+        for r in range(header + 1, ws.max_row + 1) if day_cols else ():
             supplied_name = str(ws.cell(r, name_col).value or "").strip()
             assoc = by_name.get(norm(supplied_name))
             if assoc:
-                assoc.preferences = [str(ws.cell(r, c).value or "").strip() for c in day_cols]
+                values = [str(ws.cell(r, c).value or "").strip() for c in day_cols]
+                key = norm(supplied_name)
+                # Audit F-01: a second row for the same person used to replace
+                # the first silently, so "Leave Monday" on one row and "OFF
+                # Fri+Sat" on another lost the leave. An empty row asserts
+                # nothing and is ignored; two rows that both say something
+                # cannot be merged without guessing, so the contract fails.
+                if not any(values):
+                    if key in populated_rows and parser_warnings is not None:
+                        parser_warnings.append(
+                            f"PREFERENCE_BLANK_DUPLICATE_IGNORED: {supplied_name!r} has an empty extra "
+                            f"row {r} on the Preference sheet; row {populated_rows[key]} is used.")
+                    continue
+                if key in populated_rows:
+                    if parser_warnings is not None:
+                        parser_warnings.append(
+                            f"HARD_PREFERENCE_DUPLICATE_ASSOCIATE: {supplied_name!r} has more than one "
+                            f"populated row on the Preference sheet (rows {populated_rows[key]} and {r}). "
+                            f"Put all of this person's requests on one row.")
+                    continue
+                assoc.preferences = values
+                populated_rows[key] = r
             elif supplied_name:
                 # Preferences carry approved leave and hard OFF. Dropping a
                 # populated row schedules someone who is not available.
@@ -1687,7 +1759,16 @@ def _parse_preferences(
             seen_previous.add(normalized_name)
             assoc = by_name.get(normalized_name)
             if assoc:
-                assoc.previous_saturday = str(prev.cell(r, sat_col).value or "").strip()
+                value = str(prev.cell(r, sat_col).value or "").strip()
+                # Audit F-15: an unreadable shift here used to be ignored, which
+                # silently dropped both the Sunday carry-in coverage and the
+                # Saturday->Sunday rest check for this person.
+                if value and shift_parts(value) is None and preference_kind(value) not in {"blank", "off", "leave"}:
+                    if parser_warnings is not None:
+                        parser_warnings.append(
+                            f"HARD_INVALID_PREVIOUS_SATURDAY_SHIFT: {supplied_name!r} has {value!r} on the "
+                            f"Previous week scheduled sheet; use a shift such as 22:00 - 07:00, OFF, or leave it blank.")
+                assoc.previous_saturday = value
             else:
                 # A duplicate on this sheet is already a hard failure. An
                 # unknown name drops the Sunday rest-gap carry-in entirely,
@@ -1770,6 +1851,12 @@ def _parse_fixed_nesting(
     acknowledged = acknowledged_departed or set()
     by_name = {norm(a.name): a for a in associates}
     matched = 0
+    # Audit F-09: without seven day headers every exact request on this sheet
+    # used to be dropped (values == []), with nothing said. Refuse instead.
+    if len(day_cols) != 7 and _sheet_has_named_rows(ws, header, name_col):
+        _report_missing_day_columns(parser_warnings, ws.title)
+        return
+    active_rows: Dict[str, int] = {}
     for r in range(header + 1, ws.max_row + 1):
         supplied_name = str(ws.cell(r, name_col).value or "").strip()
         # The active flag is checked before the name: a row the workbook has
@@ -1790,6 +1877,16 @@ def _parse_fixed_nesting(
         matched += 1
         group_value = str(ws.cell(r, group_col).value or "").strip() if group_col else ""
         values = [str(ws.cell(r, c).value or "").strip() for c in day_cols] if len(day_cols) == 7 else []
+        key = norm(supplied_name)
+        if not any(values) and not group_value:
+            continue  # an active row that asserts nothing cannot conflict with anything
+        if key in active_rows:
+            # Audit F-01: the later row used to replace the earlier one.
+            parser_warnings.append(
+                f"HARD_FIXED_REQUEST_DUPLICATE_ASSOCIATE: {supplied_name!r} has more than one active row on "
+                f"the Fixed Request sheet (rows {active_rows[key]} and {r}). Keep one row per person.")
+            continue
+        active_rows[key] = r
         if any(values):
             assoc.fixed_schedule = values
             if group_value:
@@ -1825,6 +1922,7 @@ def _parse_shifts(
     allowed_start_min: Optional[int] = None,
     allowed_start_end: Optional[int] = None,
     start_step_minutes: int = 1,
+    parser_warnings: Optional[List[str]] = None,
 ) -> List[Shift]:
     ws = _sheet_by_alias(wb, ["Shift Library"])
     if ws is None:
@@ -1836,6 +1934,15 @@ def _parse_shifts(
             value = ws.cell(r, c).value
             parts = shift_parts(value)
             if parts is None:
+                # Audit F-15: a label that names two clock times but cannot be
+                # read ("08:00 - 24:00") used to vanish from the library
+                # without a word. A cell with one time (a Start column) or
+                # prose is not a label and stays ignored.
+                if (parser_warnings is not None and isinstance(value, str)
+                        and len(re.findall(r"(?<!\d)\d{1,2}:\d{2}(?!\d)", value)) >= 2):
+                    parser_warnings.append(
+                        f"HARD_INVALID_SHIFT_LABEL:sheet={ws.title};row={r};value={value!r};"
+                        f"use HH:MM - HH:MM with hours 00-23 (a shift ending at midnight ends at 00:00)")
                 continue
             label = str(value).strip()
             st, en, dur = parts
@@ -1957,6 +2064,12 @@ def _parse_requirement_table(
     requirements: List[List[Optional[float]]] = [[None] * per_day for _ in range(7)]
     dates = [req_ws.cell(header + 1, c).value for c in day_cols]
     populated = 0
+    # Audit F-09: one row per interval, exactly. A repeated time row used to
+    # overwrite the first (a blank repeat erased that hour's demand all week),
+    # a missing row was read as "no demand", and rows off the interval grid
+    # were dropped. Each now fails the contract and names the row.
+    seen_rows: Dict[int, int] = {}
+    off_grid_rows: List[int] = []
     for r in range(header + 1, req_ws.max_row + 1):
         raw_time = req_ws.cell(r, time_col).value
         minute = minute_of_day(raw_time)
@@ -1965,9 +2078,20 @@ def _parse_requirement_table(
                 f"HARD_INVALID_REQUIREMENT_TIME:sheet={req_ws.title};row={r};"
                 f"value={raw_time!r};use HH:MM with 00<=HH<24 and 00<=MM<60"
             )
-        if minute is None or minute % interval != 0:
+        if minute is None:
+            continue
+        if minute % interval != 0:
+            if any(req_ws.cell(r, c).value not in (None, "") for c in day_cols):
+                off_grid_rows.append(r)
             continue
         index = minute // interval
+        if index in seen_rows:
+            if parser_warnings is not None:
+                parser_warnings.append(
+                    f"HARD_DUPLICATE_REQUIREMENT_TIME:sheet={req_ws.title};time={hhmm(minute)};"
+                    f"rows={seen_rows[index]},{r};keep one row per interval")
+            continue
+        seen_rows[index] = r
         for d, c in enumerate(day_cols):
             value = req_ws.cell(r, c).value
             if value in (None, ""):
@@ -1987,6 +2111,17 @@ def _parse_requirement_table(
                 populated += 1
     if populated == 0:
         raise ValueError(f"No interval requirements were parsed from {req_ws.title}")
+    if parser_warnings is not None:
+        if off_grid_rows:
+            parser_warnings.append(
+                f"HARD_OFF_GRID_REQUIREMENT_TIME:sheet={req_ws.title};interval_minutes={interval};"
+                f"rows={off_grid_rows[:10]};count={len(off_grid_rows)};these rows carry demand at times "
+                f"that are not on the {interval}-minute grid and would be ignored")
+        missing = [hhmm(i * interval) for i in range(per_day) if i not in seen_rows]
+        if missing:
+            parser_warnings.append(
+                f"HARD_MISSING_REQUIREMENT_TIME:sheet={req_ws.title};missing={missing[:10]};"
+                f"count={len(missing)};every interval needs its own row (leave the cells blank for no demand)")
     shrinkage: List[List[float]] = [[0.0] * per_day for _ in range(7)]
     shrinkage_source = _instruction_get(im, ["Shrinkage Source", "Shrinkage Sheet"], None)
     shr_ws = None
@@ -2002,6 +2137,7 @@ def _parse_requirement_table(
         shr_days = _day_columns(shr_ws, shr_header)
         shr_time = _time_column(shr_ws, shr_header)
         if len(shr_days) == 7:
+            seen_shrinkage_rows: Dict[int, int] = {}
             for r in range(shr_header + 1, shr_ws.max_row + 1):
                 raw_time = shr_ws.cell(r, shr_time).value
                 minute = minute_of_day(raw_time)
@@ -2013,6 +2149,14 @@ def _parse_requirement_table(
                 if minute is None or minute % interval != 0:
                     continue
                 index = minute // interval
+                if index in seen_shrinkage_rows:
+                    # Same rule as demand: a repeated row would overwrite the first.
+                    if parser_warnings is not None:
+                        parser_warnings.append(
+                            f"HARD_DUPLICATE_SHRINKAGE_TIME:sheet={shr_ws.title};time={hhmm(minute)};"
+                            f"rows={seen_shrinkage_rows[index]},{r};keep one row per interval")
+                    continue
+                seen_shrinkage_rows[index] = r
                 for d, c in enumerate(shr_days):
                     value = shr_ws.cell(r, c).value
                     if value in (None, ""):
@@ -2146,9 +2290,13 @@ def _parse_language_rules(
                 )
         minimum_raw = ws.cell(r, c_min).value if c_min else None
         minimum_value = strict_float(minimum_raw) if c_min and minimum_raw not in (None, "") else 0.0
-        if c_min and minimum_raw not in (None, "") and minimum_value is None and parser_warnings is not None:
+        # Audit F-15: 0.5 used to round to 0 and -1 to a dropped rule, both
+        # silently. A minimum is a count of people: a whole number >= 0.
+        if c_min and minimum_raw not in (None, "") and (
+                minimum_value is None or minimum_value < 0 or float(minimum_value) != int(minimum_value)) \
+                and parser_warnings is not None:
             parser_warnings.append(
-                f"HARD_INVALID_LANGUAGE_MINIMUM:row={r};value={minimum_raw!r};use a non-negative number"
+                f"HARD_INVALID_LANGUAGE_MINIMUM:row={r};value={minimum_raw!r};use a whole number of zero or more"
             )
         minimum = int(round(minimum_value if minimum_value is not None else 0.0))
         start_raw = ws.cell(r, c_start).value if c_start else None
@@ -2998,7 +3146,7 @@ def parse_input(
         _validate_numeric_instruction(im, names, parser_warnings, allow_percent=allow_percent)
     _validate_boolean_instructions(im, parser_warnings)
     allowed_durations, use11 = _parse_duration_set(im)
-    associates, schedule_dates, _ = _parse_roster(wb, parser_warnings=parser_warnings)
+    associates, schedule_dates, schedule_day_cols = _parse_roster(wb, parser_warnings=parser_warnings)
     instructed_hc = int(round(to_float(_instruction_get(im, ["Count of Associates", "Roster Count", "Headcount"], 0), 0)))
     allow_hc_mismatch = yes(_instruction_get(
         im, ["Allow Headcount Mismatch", "Headcount Mismatch Override", "Roster Count Mismatch Allowed"], "No"
@@ -3028,6 +3176,11 @@ def parse_input(
     elif not fixed_enabled:
         for associate in associates:
             associate.fixed_schedule = [""] * 7
+    elif len(schedule_day_cols) != 7:
+        # Fixed requests come from the Schedule sheet's day cells here, and
+        # without Sun..Sat headers there is no way to know which cell is which
+        # day (audit F-09). This used to be a positional guess.
+        _report_missing_day_columns(parser_warnings, "Schedule")
     _apply_preference_mapping(wb, associates, parser_warnings)
     allowed_start_raw = _instruction_get(im, ["Allowed Shift Start Window", "Shift Start Window"], None)
     allowed_start_min, allowed_start_end = parse_time_window(allowed_start_raw)
@@ -3038,7 +3191,7 @@ def parse_input(
         )
     start_step = max(1, int(round(to_float(_instruction_get(im, ["Shift Start Step Minutes", "Shift Start Step"], 1), 1))))
     allowed_start_source = "Instructions" if allowed_start_min is not None and allowed_start_end is not None else "Unrestricted"
-    shifts = _parse_shifts(wb, allowed_durations, allowed_start_min, allowed_start_end, start_step)
+    shifts = _parse_shifts(wb, allowed_durations, allowed_start_min, allowed_start_end, start_step, parser_warnings)
     requirements, shrinkage, active, req_dates, interval, req_sheet, shr_sheet = _parse_requirement_table(
         wb, im, parser_warnings
     )
@@ -4030,6 +4183,58 @@ def validate_input_contract(parsed: ParsedInput, feasibility: Optional[Dict[str,
             "code": "FIXED_CYCLIC_REST_CONFLICT", "count": len(fixed_rest_conflicts),
             "minimum_rest_hours": parsed.rest_gap_hours, "examples": fixed_rest_conflicts[:20],
         })
+    # Audit F-02/F-10: requests that cannot fit in seven days made the hard
+    # probe INFEASIBLE, and the run then reported only "the hard rules
+    # contradict each other". Each check below is an exact proof against the
+    # weekly rule the models enforce (add_weekly_off_rule), so it names the
+    # person without ever refusing a schedulable week.
+    long_possible = any(s.duration_min >= LONG_SHIFT_MIN_DURATION_MIN for s in parsed.shifts)
+    short_possible = any(s.duration_min < LONG_SHIFT_MIN_DURATION_MIN for s in parsed.shifts)
+    long_modes = ({False} if not long_possible else {True} if not short_possible
+                  else ({False, True} if parsed.use_11h_3off else {False}))
+    week_conflicts: List[Dict[str, Any]] = []
+    for associate in parsed.associates:
+        leave_days, off_days, shift_days, clashes = [], [], [], []
+        for d in range(7):
+            fixed = associate.fixed_schedule[d] if d < len(associate.fixed_schedule) else ""
+            pref = associate.preferences[d] if d < len(associate.preferences) else ""
+            fk, pk = preference_kind(fixed), preference_kind(pref)
+            is_leave = (parsed.fixed_enabled and fk == "leave") or (parsed.leave_enabled and pk == "leave")
+            is_off = (parsed.fixed_enabled and fk == "off") or (parsed.hard_off and pk == "off")
+            is_shift = parsed.fixed_enabled and fk == "shift"
+            if sum((is_leave, is_off, is_shift)) > 1:
+                clashes.append(DAY_NAMES[d])
+            if is_leave:
+                leave_days.append(DAY_NAMES[d])
+            elif is_off:
+                off_days.append(DAY_NAMES[d])
+            elif is_shift:
+                shift_days.append(DAY_NAMES[d])
+        room = 7 - len(leave_days)
+
+        def fits(long_mode: bool) -> bool:
+            owed = max(0, min(3 if long_mode else 2, room))
+            if parsed.strict_off:
+                return len(off_days) <= owed and len(shift_days) + owed <= room
+            return len(shift_days) + min(2, room) <= room
+        if clashes or not any(fits(mode) for mode in long_modes):
+            week_conflicts.append({
+                "associate": associate.name, "leave_days": leave_days, "requested_off_days": off_days,
+                "fixed_shift_days": shift_days, "days_with_two_requests": clashes,
+                "off_days_owed": sorted({max(0, min(3 if m else 2, room)) for m in long_modes}),
+                "strict_off": parsed.strict_off,
+            })
+    if week_conflicts:
+        failures.append({
+            "code": "ASSOCIATE_REQUESTS_EXCEED_WEEK",
+            "count": len(week_conflicts),
+            "examples": week_conflicts[:20],
+            "detail": (
+                "These associates' leave, OFF and fixed-shift requests cannot all fit in one week under the "
+                "weekly OFF rule (two OFF days, three in 11H/3OFF; leave days count toward the week). "
+                "Change the requests or the OFF rule for these people."
+            ),
+        })
     nesting_exact: Dict[str, List[Tuple[str, Tuple[str, ...]]]] = {}
     for associate in parsed.associates:
         if associate.nesting_group and any(associate.fixed_schedule):
@@ -4768,6 +4973,58 @@ def preference_kind(value: str) -> str:
 def circular_minute_distance(a: int, b: int) -> int:
     diff = abs(a - b) % 1440
     return min(diff, 1440 - diff)
+
+
+def pinned_leave_days(parsed: ParsedInput, associate: Associate,
+                      honour_fixed: bool = True, honour_leave: bool = True) -> int:
+    """Days this associate is pinned to Leave by the contract (fixed or approved leave)."""
+    count = 0
+    for d in range(7):
+        fixed = associate.fixed_schedule[d] if d < len(associate.fixed_schedule) else ""
+        pref = associate.preferences[d] if d < len(associate.preferences) else ""
+        if ((honour_fixed and parsed.fixed_enabled and preference_kind(fixed) == "leave")
+                or (honour_leave and parsed.leave_enabled and preference_kind(pref) == "leave")):
+            count += 1
+    return count
+
+
+def required_off_days(parsed: ParsedInput, associate: Associate, long_mode: bool,
+                      honour_fixed: bool = True, honour_leave: bool = True) -> int:
+    """How many OFF days the weekly rule asks of this associate.
+
+    The contract is two OFF days a week (three in 11H/3OFF long mode). Leave
+    days come out of the same seven days, so an associate on leave all week
+    owes no OFF day, and one on leave six days owes one. Audit F-02: the rule
+    used to demand 2 OFF regardless, which made a single full-week leave
+    infeasible for the WHOLE roster. Only associates with five or more leave
+    days are affected; for everyone else this returns 2 or 3 exactly as before.
+    """
+    leave_days = pinned_leave_days(parsed, associate, honour_fixed, honour_leave)
+    return max(0, min(3 if long_mode else 2, 7 - leave_days))
+
+
+def add_weekly_off_rule(model: Any, off_vars: Sequence[Any], long_mode_var: Any, leave_days: int,
+                        strict: bool, consecutive_required: bool, name: str) -> None:
+    """The weekly OFF rule, shared by every model that decides OFF days."""
+    room = 7 - int(leave_days)
+    if strict:
+        if room >= 3:
+            model.Add(sum(off_vars) == 2 + long_mode_var)
+        else:
+            model.Add(sum(off_vars) == max(0, room))
+    else:
+        model.Add(sum(off_vars) >= min(2, max(0, room)))
+    # A consecutive pair is only demanded where two OFF days are owed.
+    if strict and consecutive_required and room >= 2:
+        pairs = []
+        for d in range(7):
+            pair = model.NewBoolVar(f"{name}_off_pair_{d}")
+            nd = (d + 1) % 7
+            model.Add(pair <= off_vars[d])
+            model.Add(pair <= off_vars[nd])
+            model.Add(pair >= off_vars[d] + off_vars[nd] - 1)
+            pairs.append(pair)
+        model.Add(sum(pairs) >= 1)
 
 
 def rest_compatible(prev_shift: Shift, next_shift: Shift, rest_gap_hours: float) -> bool:
@@ -6878,20 +7135,11 @@ def build_skeleton(
             elif parsed.use_preferences and kind == "off" and not parsed.hard_off and profile["preference"]:
                 objective_terms.append(profile["preference"] * 12 * (1 - off[a, d]))
 
-        if hard.strict_off and parsed.strict_off:
-            model.Add(sum(off[a, d] for d in range(D)) == 2 + long_mode[a])
-        else:
-            model.Add(sum(off[a, d] for d in range(D)) >= 2)
-        if hard.strict_off and parsed.strict_off and not parsed.separate_off_days:
-            adjacent_pairs = []
-            for d in range(D):
-                pair = model.NewBoolVar(f"off_pair_{a}_{d}")
-                nd = (d + 1) % D
-                model.Add(pair <= off[a, d])
-                model.Add(pair <= off[a, nd])
-                model.Add(pair >= off[a, d] + off[a, nd] - 1)
-                adjacent_pairs.append(pair)
-            model.Add(sum(adjacent_pairs) >= 1)
+        add_weekly_off_rule(
+            model, [off[a, d] for d in range(D)], long_mode[a],
+            pinned_leave_days(parsed, assoc, honour_fixed=hard.fixed, honour_leave=hard.leave),
+            strict=bool(hard.strict_off and parsed.strict_off),
+            consecutive_required=not parsed.separate_off_days, name=f"stage1_{a}")
         if hard.max_shift_variety:
             model.Add(sum(y[a, s] for s in range(S)) <= parsed.max_different_shifts)
         if profile["shift_variety"]:
@@ -9400,6 +9648,13 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
     max_concurrent_breaks_observed = 0
     max_concurrent_break_ratio_observed = 0.0
     break_concurrency_violation_count = 0
+    # The three figures above cover active-demand quarters plus the protected
+    # next-Sunday horizon: where breaks cost coverage, and what Stage 2 and the
+    # selector act on. Their *_all_staffed_quarters twins (built below) also
+    # count blank-demand quarters where someone is working. Audit F-03: the
+    # validator published the second definition under the first name, so the
+    # parity gate blocked valid schedules with breaks in blank-demand hours.
+    boundary_concurrency = {"max_breaks": 0, "max_ratio": 0.0, "violations": 0}
     before100 = before90 = before80 = after100 = after90 = after80 = active_count = 0
     blank_staffed_quarters = 0
     before_target = after_target = before_floor = after_floor = 0
@@ -9705,6 +9960,9 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
             break_ratio_actual = break_count_actual / before_raw if before_raw > 0 else 0.0
             max_concurrent_break_ratio_observed = max(max_concurrent_break_ratio_observed, break_ratio_actual)
             break_concurrency_violation_count += int(break_count_actual > maximum_concurrent_breaks(parsed, before_raw))
+            boundary_concurrency["max_breaks"] = max(boundary_concurrency["max_breaks"], break_count_actual)
+            boundary_concurrency["max_ratio"] = max(boundary_concurrency["max_ratio"], break_ratio_actual)
+            boundary_concurrency["violations"] += int(break_count_actual > maximum_concurrent_breaks(parsed, before_raw))
             week_boundary_raw_sequence.append((qslot, i, after_raw))
             contributing.update(parsed.associates[a].name for a, _, _, _ in occurrences)
             break_contributors.update(parsed.associates[a].name for a, _ in broken_occurrences)
@@ -9889,6 +10147,26 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
             ),
         })
 
+    staffed_by_qslot = [0] * TOTAL_QSLOTS
+    for a, d, si in scheduled_cells(skeleton):
+        start = d * 96 + parsed.shifts[si].start_min // 15
+        for qslot in range(start, min(TOTAL_QSLOTS, start + parsed.shifts[si].duration_q)):
+            staffed_by_qslot[qslot] += 1
+    for associate in parsed.associates:
+        for qslot in range(96):
+            if previous_saturday_covers_qslot(associate.previous_saturday, qslot):
+                staffed_by_qslot[qslot] += 1
+    on_break_by_qslot = [0] * TOTAL_QSLOTS
+    for _a, qslot in breaks:
+        if 0 <= qslot < TOTAL_QSLOTS:
+            on_break_by_qslot[qslot] += 1
+    all_staffed_concurrency = dict(boundary_concurrency)
+    for qslot in range(TOTAL_QSLOTS):
+        staffed, on_break = staffed_by_qslot[qslot], on_break_by_qslot[qslot]
+        all_staffed_concurrency["max_breaks"] = max(all_staffed_concurrency["max_breaks"], on_break)
+        all_staffed_concurrency["max_ratio"] = max(
+            all_staffed_concurrency["max_ratio"], on_break / staffed if staffed > 0 else 0.0)
+        all_staffed_concurrency["violations"] += int(on_break > maximum_concurrent_breaks(parsed, staffed))
     all_language_rows = language_quarter_rows + week_boundary_language_quarter_rows
     language_group_summary_map: Dict[Tuple[str, str], Dict[str, Any]] = {}
     for row in all_language_rows:
@@ -10199,6 +10477,9 @@ def calculate_metrics(parsed: ParsedInput, skeleton: SkeletonSolution, selected:
         "max_concurrent_breaks_observed": int(max_concurrent_breaks_observed),
         "max_concurrent_break_ratio_observed": round(max_concurrent_break_ratio_observed, 8),
         "break_concurrency_violation_count": int(break_concurrency_violation_count),
+        "max_concurrent_breaks_all_staffed_quarters": int(all_staffed_concurrency["max_breaks"]),
+        "max_concurrent_break_ratio_all_staffed_quarters": round(all_staffed_concurrency["max_ratio"], 8),
+        "break_concurrency_violation_count_all_staffed_quarters": int(all_staffed_concurrency["violations"]),
         "week_boundary_zero_staffed_active_quarters": len(week_boundary_zero_qslots),
         "week_boundary_zero_qslots": week_boundary_zero_qslots,
         "week_boundary_language_gap_count": len(week_boundary_language_gaps),
@@ -10977,7 +11258,7 @@ def validate_schedule(parsed: ParsedInput, skeleton: SkeletonSolution, breaks: B
     for a, assoc in enumerate(parsed.associates):
         off_count = sum(skeleton.assignment[a][d] == "OFF" for d in range(7))
         long_mode = any((skeleton.selected_shift_index[a][d] is not None and parsed.shifts[skeleton.selected_shift_index[a][d]].duration_min >= LONG_SHIFT_MIN_DURATION_MIN) for d in range(7))
-        expected_off = 3 if long_mode else 2
+        expected_off = required_off_days(parsed, assoc, long_mode)
         if parsed.strict_off and off_count != expected_off:
             failures.append({"type": "off_count", "associate": assoc.name, "expected": expected_off, "actual": off_count})
         used = {s for s in skeleton.selected_shift_index[a] if s is not None}
@@ -15373,20 +15654,11 @@ def solve_joint_shift_off_language_break_refinement(
                             return None
                         model.Add(choose[replay_key] == 1)
 
-        if parsed.strict_off:
-            model.Add(sum(off[a, d] for d in range(D)) == 2 + long_mode[a])
-        else:
-            model.Add(sum(off[a, d] for d in range(D)) >= 2)
-        if parsed.strict_off and not parsed.separate_off_days:
-            adjacent_pairs: List[Any] = []
-            for d in range(D):
-                pair = model.NewBoolVar(f"joint_off_pair_{a}_{d}")
-                nd = (d + 1) % D
-                model.Add(pair <= off[a, d])
-                model.Add(pair <= off[a, nd])
-                model.Add(pair >= off[a, d] + off[a, nd] - 1)
-                adjacent_pairs.append(pair)
-            model.Add(sum(adjacent_pairs) >= 1)
+        add_weekly_off_rule(
+            model, [off[a, d] for d in range(D)], long_mode[a],
+            pinned_leave_days(parsed, parsed.associates[a]),
+            strict=bool(parsed.strict_off), consecutive_required=not parsed.separate_off_days,
+            name=f"joint_{a}")
         model.Add(sum(y[a, s_index] for s_index in range(S)) <= parsed.max_different_shifts)
         objective_terms.append(25 * sum(y[a, s_index] for s_index in range(S)))
         for shift in parsed.shifts:

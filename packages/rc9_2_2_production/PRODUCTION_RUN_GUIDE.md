@@ -11,7 +11,7 @@ publish.
 **What the package guarantees on every run:**
 - **Engine and tests are checked first.** Before any solving, the runner
   verifies the engine's sha256, the pinned runtime (OR-Tools 9.15.6755, scipy),
-  and runs the full offline test gate (1236 tests). If anything fails, it
+  and runs the full offline test gate (1315 tests). If anything fails, it
   **refuses to run**.
 - **Bad inputs are refused.** A workbook that breaks the input contract is
   refused with a message naming the cell or person. Examples: an unknown
@@ -163,6 +163,33 @@ another workbook (cell values are not changed):
 ```
 python3 tools/enforce_workbook_validations.py MY_WORKBOOK.xlsx
 ```
+
+### 3.5b Layout rules the run enforces (refused, never guessed)
+
+These used to be read by guesswork and could silently change what the run
+scheduled. Each one now stops the run before solving and names the sheet, row
+or person:
+
+| Problem in the workbook | Code |
+|---|---|
+| The same person on two **filled** Preference rows (for example leave on one row, OFF on another). Put all of a person's requests on one row. An extra **empty** row is ignored. | `HARD_PREFERENCE_DUPLICATE_ASSOCIATE` |
+| The same person on two active Fixed Request rows | `HARD_FIXED_REQUEST_DUPLICATE_ASSOCIATE` |
+| Day columns on Schedule (when it carries fixed requests), Preference or Fixed Request are not labelled Sun..Sat. Real calendar dates are fine: each date is read as its weekday. | `HARD_DAY_COLUMNS_NOT_FOUND` |
+| A demand time row appears twice, is missing, or sits off the interval grid (for example 10:15 on a 30-minute sheet) | `HARD_DUPLICATE_REQUIREMENT_TIME`, `HARD_MISSING_REQUIREMENT_TIME`, `HARD_OFF_GRID_REQUIREMENT_TIME` |
+| A shrinkage time row appears twice | `HARD_DUPLICATE_SHRINKAGE_TIME` |
+| Names below a gap of more than 20 empty rows on the Schedule sheet | `HARD_ROSTER_ROWS_AFTER_BLANK_GAP` |
+| A Shift Library label with two times that cannot be read (`08:00 - 24:00`; write `16:00 - 00:00`) | `HARD_INVALID_SHIFT_LABEL` |
+| A language `Minimum Per Interval` that is not a whole number of zero or more | `HARD_INVALID_LANGUAGE_MINIMUM` |
+| An unreadable previous-Saturday shift (`25:00 - 06:00`) | `HARD_INVALID_PREVIOUS_SATURDAY_SHIFT` |
+| One person's leave, OFF and fixed-shift requests cannot fit in one week (for example three OFF requests under Strict 2 OFF) | `ASSOCIATE_REQUESTS_EXCEED_WEEK` |
+
+The employee ID is now read from the column headed `Emp ID` / `Employee ID`
+wherever it is, not from the second column.
+
+**Leave counts against the week.** The weekly rule is two OFF days (three in
+11H/3OFF), taken from the days not already on approved leave. Someone on leave
+all week owes no OFF day; someone on leave six days owes one. This used to
+make the whole week unschedulable.
 
 ### 3.6 Check the workbook before running (seconds)
 

@@ -402,6 +402,9 @@ def read_output(path: Path) -> Tuple[Dict[str, List[str]], List[Dict[str, Any]],
 
 
 # --------------------------------------------------------------------------- check
+leave_words_all = ("leave", "annual leave", "vacation", "holiday", "sick", "sick leave", "pto")
+
+
 def check(k: Contract, sched: Dict[str, List[str]], breaks, exceptions) -> Dict[str, Any]:
     v: List[Dict[str, Any]] = list(getattr(k, "input_issues", []))
     kinds: Dict[str, List[str]] = {}
@@ -431,7 +434,7 @@ def check(k: Contract, sched: Dict[str, List[str]], breaks, exceptions) -> Dict[
         fix = k.fixed.get(key, [""] * 7)
         for d in range(7):
             p, f = n(pref[d]), n(fix[d])
-            leave_words = ("leave", "annual leave", "vacation", "holiday", "sick", "sick leave", "pto")
+            leave_words = leave_words_all
             if (k.leave and p in leave_words) or f in leave_words:
                 if ks[d] != "leave":
                     v.append({"rule": "leave_not_honoured", "who": nm, "day": DAYS[d], "got": row[d]})
@@ -442,11 +445,16 @@ def check(k: Contract, sched: Dict[str, List[str]], breaks, exceptions) -> Dict[
                 v.append({"rule": "fixed_not_honoured", "who": nm, "day": DAYS[d], "want": fix[d], "got": row[d]})
         offs = [d for d in range(7) if ks[d] == "off"]
         long_mode = any(s and s[1] >= k.long_min for s in ss)
-        if k.strict_off and len(offs) != (3 if long_mode else 2):
-            v.append({"rule": "off_count", "who": nm, "offs": len(offs)})
-        if not k.strict_off and len(offs) < 2:
+        # Two OFF days a week (three in long mode), out of the days not already
+        # on approved leave: a full week of leave owes no OFF day.
+        leave_days = sum(1 for d in range(7) if (k.leave and n(pref[d]) in leave_words_all) or n(fix[d]) in leave_words_all)
+        room = 7 - leave_days
+        owed = max(0, min(3 if long_mode else 2, room))
+        if k.strict_off and len(offs) != owed:
+            v.append({"rule": "off_count", "who": nm, "offs": len(offs), "owed": owed})
+        if not k.strict_off and len(offs) < min(2, room):
             v.append({"rule": "off_minimum", "who": nm, "offs": len(offs)})
-        if k.strict_off and not k.separate_off and not any((d + 1) % 7 in offs for d in offs):
+        if k.strict_off and not k.separate_off and owed >= 2 and not any((d + 1) % 7 in offs for d in offs):
             v.append({"rule": "off_not_consecutive", "who": nm})
         labels = {n(row[d]) for d in range(7) if ks[d] == "shift"}
         if len(labels) > k.max_diff:

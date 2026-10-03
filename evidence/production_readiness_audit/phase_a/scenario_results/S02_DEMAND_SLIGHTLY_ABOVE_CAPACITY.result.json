@@ -1,0 +1,51 @@
+{
+ "scenario": "S02_DEMAND_SLIGHTLY_ABOVE_CAPACITY",
+ "why": "demand ~10% above what 10 agents can staff",
+ "expected": "a schedule that covers as much as possible and names the deficit",
+ "runner_rc": 2,
+ "elapsed_sec": 253.7,
+ "engine_status": "FAIL_PRODUCTION_QUALITY_GATE",
+ "artifact_state": "FINAL_VERIFIED",
+ "independent_validation": "PASS",
+ "published_final": [
+  "S02_DEMAND_SLIGHTLY_ABOVE_CAPACITY_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"
+ ],
+ "workbooks_in_case_root": [
+  "S02_DEMAND_SLIGHTLY_ABOVE_CAPACITY_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx",
+  "S02_DEMAND_SLIGHTLY_ABOVE_CAPACITY_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx",
+  "S02_DEMAND_SLIGHTLY_ABOVE_CAPACITY_L6_3_2_3_MAX_TARGET_CANDIDATE.xlsx"
+ ],
+ "selected_metrics": {
+  "after_target": 76,
+  "after_floor": 77,
+  "active_intervals": 84,
+  "language_gap_count": 0
+ },
+ "run_id": "12abe93f39cbe81d3532f4c3",
+ "business_outcome": "Outcome: Final schedule generated, but the production quality gate blocks release\nStatus: FAIL_RELEASE_GATE\nProduction eligible: False\nIndependent validation: PASS (return code 0)\n\nThe exact final workbook passed independent hard-rule validation, but the configured production quality gate still failed. The schedule is retained for review and cannot be treated as production-approved without remediation or explicit human approval.\n\nMain blockers:\n- SEVERE_GAP_RATIO_EXCEEDED (actual=0.07142857142857142, maximum=0.05, count=6)\n\nRequired action:\n- Review the independent validation and release-gate failures, correct the cause, and rerun validation.\n",
+ "clean_room": {
+  "checked": "S02_DEMAND_SLIGHTLY_ABOVE_CAPACITY_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx",
+  "violations": {},
+  "engine_mismatches": [],
+  "validator_mismatches": [],
+  "metrics": {
+   "active_intervals": 84,
+   "before_target": 78,
+   "before_floor": 78,
+   "before100": 42,
+   "before90": 78,
+   "before80": 78,
+   "after_target": 76,
+   "after_floor": 77,
+   "after100": 35,
+   "after90": 76,
+   "after80": 77,
+   "target_losses_from_breaks": 2,
+   "floor_losses_from_breaks": 1,
+   "language_gap_count": 0,
+   "zero_staffed_active_quarters": 0
+  }
+ },
+ "pre_solver_failures": [],
+ "hard_probe": "OPTIMAL"
+}

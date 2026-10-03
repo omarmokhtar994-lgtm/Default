@@ -80,6 +80,17 @@ Clean-room checker on every published schedule: 0 violations, and exact metric a
 - the parity-field count went 48 → 51;
 - the canonical-surface fixture now carries the three new fields.
 
-## Real workbook end to end
+## Real workbook end to end (`real_run_voice_language_hours/`)
 
-See the section appended below once the one-hour Cricut Voice (language hours, ALL_ROWS) QUICK run finishes.
+Workbook: `fixtures/real_runs/language_hours/Cricut_Voice_LANGUAGE_HOURS.xlsx` (33 associates, language hours enforced with ALL_ROWS, per-day windows). Run: production runner, QUICK 3600 s, 4 workers, seed 9000, Phase A engine `e5afd99d…`.
+
+| Check | Result |
+|---|---|
+| Runner exit code | **0** (engine 0, quality report 0) |
+| Independent validator | **PASS**, parity **PASS** on all 51 canonical fields |
+| Production package | built (production / review / debug zips) |
+| Clean-room checker | 0 rule violations; 15 coverage metrics identical to engine and validator |
+| After-break target | 248 / 264 (earlier runs of this workbook: 243–247; search is unchanged, so this is seed variance) |
+| Break concurrency | 3 violations, identical under both definitions |
+| Elapsed | 3,448 s of 3,600 |
+Package: dist/RC9_2_2_PRODUCTION_PACKAGE.zip, sha256 a86b335c58d27fa1756cdee2b01146e70d9479be343dcda854e5f4bc344e721b, 1514 files; its own ./run_tests.sh: GATE PASS, 50 suites, 1315 tests.

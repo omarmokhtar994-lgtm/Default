@@ -1,0 +1,27 @@
+{
+ "metrics": {
+  "active_intervals": 264,
+  "before_target": 246,
+  "before_floor": 252,
+  "before100": 246,
+  "before90": 250,
+  "before80": 252,
+  "after_target": 242,
+  "after_floor": 251,
+  "after100": 242,
+  "after90": 246,
+  "after80": 251,
+  "target_losses_from_breaks": 4,
+  "floor_losses_from_breaks": 1,
+  "language_gap_count": 0,
+  "zero_staffed_active_quarters": 0
+ },
+ "violation_count": 0,
+ "violations_by_rule": {},
+ "violations": [],
+ "language_window_mode": "ALL_ROWS",
+ "language_rules": [],
+ "engine_mismatches": [],
+ "validator_mismatches": [],
+ "validator_status": "PASS"
+}

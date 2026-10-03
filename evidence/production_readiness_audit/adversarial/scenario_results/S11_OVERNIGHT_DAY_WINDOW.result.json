@@ -1,0 +1,25 @@
+{
+ "scenario": "S11_OVERNIGHT_DAY_WINDOW",
+ "why": "Spanish minimum 1, Mon-Fri 18:00-05:00 (day-specific overnight). Two Spanish agents are hard-OFF Sun+Mon; the third is hard-OFF Sat+Sun. Business meaning (window opens Mon..Fri) is feasible.",
+ "expected": "schedule produced; Monday 00:00-05:00 needs no Spanish (it is Sunday night)",
+ "runner_rc": 2,
+ "elapsed_sec": 1.2,
+ "engine_status": "FAIL_PRE_SOLVER_CONTRACT",
+ "artifact_state": "RUNNING_NOT_FINAL",
+ "independent_validation": "NOT_RUN",
+ "published_final": [],
+ "workbooks_in_case_root": [],
+ "selected_metrics": {
+  "after_target": null,
+  "after_floor": null,
+  "active_intervals": null,
+  "language_gap_count": null
+ },
+ "run_id": "b97a79d41516b082c4940b62",
+ "business_outcome": "Outcome: The workbook contract cannot be scheduled as submitted\nStatus: FAIL_PRE_SOLVER_CONTRACT\nProduction eligible: False\nIndependent validation: NOT_RUN (return code None)\n\nSkill Window Paid Capacity Provably Insufficient\n\nMain blockers:\n- SKILL_WINDOW_PAID_CAPACITY_PROVABLY_INSUFFICIENT (day=Mon, group=Spanish, required_minutes=660, optimistic_paid_capacity_minutes=360, minimum_additional_qualified_worker_days=2)\n- SKILL_WINDOW_PAID_CAPACITY_PROVABLY_INSUFFICIENT (day=Mon, group=Spanish, required_minutes=660, optimistic_paid_capacity_minutes=360, minimum_additional_qualified_worker_days=2)\n\nRequired action:\n- Correct the listed workbook contract issue and rerun the schedule.\n",
+ "clean_room": null,
+ "pre_solver_failures": [
+  "SKILL_WINDOW_PAID_CAPACITY_PROVABLY_INSUFFICIENT"
+ ],
+ "hard_probe": null
+}

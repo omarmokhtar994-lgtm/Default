@@ -1,0 +1,13 @@
+Outcome: The workbook contract cannot be scheduled as submitted
+Status: FAIL_PRE_SOLVER_CONTRACT
+Production eligible: False
+Independent validation: NOT_RUN (return code None)
+
+Skill Window Paid Capacity Provably Insufficient
+
+Main blockers:
+- SKILL_WINDOW_PAID_CAPACITY_PROVABLY_INSUFFICIENT (day=Mon, group=Spanish, required_minutes=660, optimistic_paid_capacity_minutes=360, minimum_additional_qualified_worker_days=2)
+- SKILL_WINDOW_PAID_CAPACITY_PROVABLY_INSUFFICIENT (day=Mon, group=Spanish, required_minutes=660, optimistic_paid_capacity_minutes=360, minimum_additional_qualified_worker_days=2)
+
+Required action:
+- Correct the listed workbook contract issue and rerun the schedule.

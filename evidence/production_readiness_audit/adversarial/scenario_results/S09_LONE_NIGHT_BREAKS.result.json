@@ -1,0 +1,25 @@
+{
+ "scenario": "S09_LONE_NIGHT_BREAKS",
+ "why": "24/7, 6 agents: nights can be held by one person, whose own breaks leave nobody",
+ "expected": "schedule with overlap at night, or a named no-break exception need",
+ "runner_rc": 2,
+ "elapsed_sec": 177.5,
+ "engine_status": "FAIL_TESTED_SKELETON_EXCEPTION_LOWER_BOUND_EXCEEDS_CAP",
+ "artifact_state": "FINAL_DIAGNOSTIC_NO_RELEASE_SCHEDULE",
+ "independent_validation": "NOT_RUN",
+ "published_final": [],
+ "workbooks_in_case_root": [
+  "S09_LONE_NIGHT_BREAKS_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx"
+ ],
+ "selected_metrics": {
+  "after_target": null,
+  "after_floor": null,
+  "active_intervals": null,
+  "language_gap_count": null
+ },
+ "run_id": "e440a2108dc4ca2c1c625918",
+ "business_outcome": "Outcome: No final schedule was generated; validation was not run\nStatus: FAIL_NO_FINAL_SCHEDULE\nProduction eligible: False\nIndependent validation: NOT_RUN (return code None)\n\nNo final schedule workbook was produced, so independent validation could not run. The run is blocked until the engine output problem is corrected and the case is rerun.\n\nMain blockers:\n- family=ZERO_STAFF, affected_associate_days=8\n\nAffected examples:\n- Agent B | Tue | 17:00 - 02:00 | Tue 20:00 to Wed 01:45\n- Agent B | Wed | 17:00 - 02:00 | Wed 20:00 to Thu 01:45\n- Agent D | Wed | 02:00 - 11:00 | Wed 02:00 to Wed 07:45\n- Agent D | Fri | 02:00 - 11:00 | Fri 02:00 to Fri 07:45\n- Agent E | Sun | 18:00 - 03:00 | Sun 20:00 to Sun 23:45\n- Agent E | Thu | 17:00 - 02:00 | Thu 20:00 to Fri 01:45\n- Agent E | Fri | 17:00 - 02:00 | Fri 20:00 to Sat 01:45\n- Agent F | Thu | 02:00 - 11:00 | Thu 02:00 to Thu 07:45\n\nRequired action:\n- Add or overlap qualified resources in the named bottleneck windows, especially single-person language coverage.\n- Change shift/OFF patterns so qualified associates have legal break coverage.\n- Change the exception cap only through an explicit business decision; the engine will not raise it automatically.\n",
+ "clean_room": null,
+ "pre_solver_failures": [],
+ "hard_probe": "OPTIMAL"
+}

@@ -1,0 +1,13 @@
+Outcome: The workbook contract cannot be scheduled as submitted
+Status: FAIL_PRE_SOLVER_CONTRACT
+Production eligible: False
+Independent validation: NOT_RUN (return code None)
+
+Zero Active Interval Provably Impossible
+
+Main blockers:
+- ZERO_ACTIVE_INTERVAL_PROVABLY_IMPOSSIBLE (day=Sun, time=03:00)
+- ZERO_ACTIVE_INTERVAL_PROVABLY_IMPOSSIBLE (day=Sun, time=03:00)
+
+Required action:
+- Correct the listed workbook contract issue and rerun the schedule.

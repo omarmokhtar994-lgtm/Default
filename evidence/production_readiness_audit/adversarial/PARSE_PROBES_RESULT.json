@@ -1,0 +1,484 @@
+[
+ {
+  "id": "P01",
+  "probe": "baseline small workbook",
+  "expected": "ACCEPTED",
+  "outcome": "WARNED",
+  "failure_codes": [],
+  "warning_codes": [
+   "BREAK_WINDOWS_USING_DERIVED_DEFAULTS"
+  ],
+  "parser_notes": [],
+  "seen": {
+   "associates": 10,
+   "demand_fte_hours": 252.0
+  }
+ },
+ {
+  "id": "P02",
+  "probe": "Schedule columns re-ordered: Emp ID moved to column 4, TL in column 2",
+  "expected": "names/languages still bound by header; employee IDs read correctly",
+  "outcome": "REFUSED",
+  "failure_codes": [
+   "HARD_DUPLICATE_EMPLOYEE_ID"
+  ],
+  "warning_codes": [
+   "BREAK_WINDOWS_USING_DERIVED_DEFAULTS"
+  ],
+  "parser_notes": [
+   "HARD_DUPLICATE_EMPLOYEE_ID:employee_id='same tl';first_row=3;row=4",
+   "HARD_DUPLICATE_EMPLOYEE_ID:employee_id='same tl';first_row=3;row=5",
+   "HARD_DUPLICATE_EMPLOYEE_ID:employee_id='same tl';first_row=3;row=6",
+   "HARD_DUPLICATE_EMPLOYEE_ID:employee_id='same tl';first_row=3;row=7",
+   "HARD_DUPLICATE_EMPLOYEE_ID:employee_id='same tl';first_row=3;row=8",
+   "HARD_DUPLICATE_EMPLOYEE_ID:employee_id='same tl';first_row=3;row=9"
+  ],
+  "seen": {
+   "emp_ids_read": [
+    "Same TL",
+    "Same TL",
+    "Same TL"
+   ],
+   "names": [
+    "Agent A",
+    "Agent B",
+    "Agent C"
+   ]
+  }
+ },
+ {
+  "id": "P03",
+  "probe": "Schedule day headers are real dates (not Sun..Sat) and carry fixed requests; no Fixed Request sheet",
+  "expected": "day columns found or refused; never a positional guess",
+  "outcome": "REFUSED",
+  "failure_codes": [
+   "UNKNOWN_FIXED_SHIFT",
+   "UNRECOGNISED_PREFERENCE_VALUE",
+   "ZERO_ACTIVE_INTERVAL_PROVABLY_IMPOSSIBLE"
+  ],
+  "warning_codes": [
+   "BREAK_WINDOWS_USING_DERIVED_DEFAULTS"
+  ],
+  "parser_notes": [],
+  "seen": {
+   "fixed_schedule_of_first": [
+    "x",
+    "y",
+    "08:00 - 17:00",
+    "08:00 - 17:00",
+    "08:00 - 17:00",
+    "08:00 - 17:00",
+    "08:00 - 17:00"
+   ]
+  }
+ },
+ {
+  "id": "P04",
+  "probe": "Preference sheet lists the same associate twice: Leave on Monday, then a blank row",
+  "expected": "duplicate refused (as Previous-Saturday duplicates are) or Leave kept",
+  "outcome": "WARNED",
+  "failure_codes": [],
+  "warning_codes": [
+   "BREAK_WINDOWS_USING_DERIVED_DEFAULTS"
+  ],
+  "parser_notes": [],
+  "seen": {
+   "agent_a_preferences": [
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    ""
+   ]
+  }
+ },
+ {
+  "id": "P05",
+  "probe": "Fixed Request sheet with date headers instead of Sun..Sat (Fixed Request Use = Yes)",
+  "expected": "fixed requests read, or refused; never silently dropped",
+  "outcome": "WARNED",
+  "failure_codes": [],
+  "warning_codes": [
+   "BREAK_WINDOWS_USING_DERIVED_DEFAULTS"
+  ],
+  "parser_notes": [],
+  "seen": {
+   "agent_a_fixed": [
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    ""
+   ]
+  }
+ },
+ {
+  "id": "P06",
+  "probe": "11-hour shifts requested while Use 11H/3OFF = No",
+  "expected": "refused with a contradiction message; never a silent switch to 9-hour shifts",
+  "outcome": "REFUSED",
+  "failure_codes": [
+   "ZERO_ACTIVE_INTERVAL_PROVABLY_IMPOSSIBLE"
+  ],
+  "warning_codes": [
+   "BREAK_WINDOWS_USING_DERIVED_DEFAULTS"
+  ],
+  "parser_notes": [],
+  "seen": {
+   "allowed_durations_min": [
+    540
+   ],
+   "shift_labels": [
+    "08:00 - 17:00"
+   ]
+  }
+ },
+ {
+  "id": "P07",
+  "probe": "Interval Minutes = 30 but the demand sheet is 15-minute",
+  "expected": "refused or demand preserved; never silently drop half the rows",
+  "outcome": "WARNED",
+  "failure_codes": [],
+  "warning_codes": [
+   "BREAK_WINDOWS_USING_DERIVED_DEFAULTS"
+  ],
+  "parser_notes": [],
+  "seen": {
+   "interval": 30,
+   "demand_fte_hours": 168.0,
+   "workbook_demand_fte_hours": 168
+  }
+ },
+ {
+  "id": "P08",
+  "probe": "Demand sheet repeats the 10:00 row; the repeat is blank",
+  "expected": "duplicate time refused; never silently erase demand",
+  "outcome": "WARNED",
+  "failure_codes": [],
+  "warning_codes": [
+   "BREAK_WINDOWS_USING_DERIVED_DEFAULTS"
+  ],
+  "parser_notes": [],
+  "seen": {
+   "demand_10_00": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ],
+   "demand_fte_hours": 231.0,
+   "workbook_demand_fte_hours": 252
+  }
+ },
+ {
+  "id": "P09",
+  "probe": "Demand sheet is missing the 12:00 row entirely",
+  "expected": "warned or refused; never silently read as 'no demand'",
+  "outcome": "WARNED",
+  "failure_codes": [],
+  "warning_codes": [
+   "BREAK_WINDOWS_USING_DERIVED_DEFAULTS"
+  ],
+  "parser_notes": [],
+  "seen": {
+   "demand_12_00": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ],
+   "active_12_00": false
+  }
+ },
+ {
+  "id": "P10",
+  "probe": "No-break exceptions enabled with Max Associate-Days = 0",
+  "expected": "0 honoured, or refused as contradictory",
+  "outcome": "WARNED",
+  "failure_codes": [],
+  "warning_codes": [
+   "BREAK_WINDOWS_USING_DERIVED_DEFAULTS"
+  ],
+  "parser_notes": [],
+  "seen": {
+   "allow": true,
+   "max_no_break_exceptions": 8
+  }
+ },
+ {
+  "id": "P11",
+  "probe": "'Count of Different Shifts Per week' = 'three'; and = 0",
+  "expected": "refused as non-numeric / out of range",
+  "outcome": "SEE_CASES",
+  "cases": {
+   "three": {
+    "outcome": "WARNED",
+    "failure_codes": [],
+    "warning_codes": [
+     "BREAK_WINDOWS_USING_DERIVED_DEFAULTS"
+    ],
+    "parser_notes": [],
+    "seen": {
+     "max_different_shifts": 3
+    }
+   },
+   "0": {
+    "outcome": "WARNED",
+    "failure_codes": [],
+    "warning_codes": [
+     "BREAK_WINDOWS_USING_DERIVED_DEFAULTS"
+    ],
+    "parser_notes": [],
+    "seen": {
+     "max_different_shifts": 1
+    }
+   }
+  }
+ },
+ {
+  "id": "P12",
+  "probe": "Coverage Split row with Start = '9am'",
+  "expected": "refused; never silently drop a hard staffing rule",
+  "outcome": "WARNED",
+  "failure_codes": [],
+  "warning_codes": [
+   "BREAK_WINDOWS_USING_DERIVED_DEFAULTS"
+  ],
+  "parser_notes": [],
+  "seen": {
+   "coverage_split_rules": 0,
+   "source": "NO_ACTIVE_ROWS"
+  }
+ },
+ {
+  "id": "P13",
+  "probe": "Language minimum 0.5 and -1",
+  "expected": "refused (minimum must be a whole number >= 0)",
+  "outcome": "SEE_CASES",
+  "cases": {
+   "0.5": {
+    "outcome": "WARNED",
+    "failure_codes": [],
+    "warning_codes": [
+     "BREAK_WINDOWS_USING_DERIVED_DEFAULTS"
+    ],
+    "parser_notes": [],
+    "seen": {
+     "language_rules": []
+    }
+   },
+   "-1": {
+    "outcome": "WARNED",
+    "failure_codes": [],
+    "warning_codes": [
+     "BREAK_WINDOWS_USING_DERIVED_DEFAULTS"
+    ],
+    "parser_notes": [],
+    "seen": {
+     "language_rules": []
+    }
+   }
+  }
+ },
+ {
+  "id": "P14",
+  "probe": "One associate on Leave all 7 days (Strict OFF = Yes)",
+  "expected": "accepted; that associate simply does not work",
+  "outcome": "WARNED",
+  "failure_codes": [],
+  "warning_codes": [
+   "BREAK_WINDOWS_USING_DERIVED_DEFAULTS"
+  ],
+  "parser_notes": []
+ },
+ {
+  "id": "P15",
+  "probe": "Shift Library with malformed labels ('9-18', '08:00 - 24:00') beside valid ones",
+  "expected": "malformed labels reported",
+  "outcome": "WARNED",
+  "failure_codes": [],
+  "warning_codes": [
+   "BREAK_WINDOWS_USING_DERIVED_DEFAULTS"
+  ],
+  "parser_notes": [],
+  "seen": {
+   "shifts_parsed": [
+    "06:00 - 15:00",
+    "07:00 - 16:00",
+    "08:00 - 17:00",
+    "09:00 - 18:00",
+    "10:00 - 19:00",
+    "11:00 - 20:00"
+   ]
+  }
+ },
+ {
+  "id": "P16",
+  "probe": "Demand cell 'abc'",
+  "expected": "REFUSED",
+  "outcome": "REFUSED",
+  "failure_codes": [
+   "HARD_INVALID_REQUIREMENT_VALUE"
+  ],
+  "warning_codes": [
+   "BREAK_WINDOWS_USING_DERIVED_DEFAULTS"
+  ],
+  "parser_notes": [
+   "HARD_INVALID_REQUIREMENT_VALUE:sheet=FT Wise 60 Min;row=13;day=Mon;value='abc';use a non-negative number"
+  ]
+ },
+ {
+  "id": "P17",
+  "probe": "Roster has 25 blank rows between associates 5 and 6; Count of Associates left blank",
+  "expected": "all 10 associates read, or refused",
+  "outcome": "WARNED",
+  "failure_codes": [],
+  "warning_codes": [
+   "AGGREGATE_CONFIGURED_FLOOR_CAPACITY_SHORTAGE",
+   "AGGREGATE_TARGET_CAPACITY_SHORTAGE",
+   "BREAK_WINDOWS_USING_DERIVED_DEFAULTS",
+   "INSTRUCTED_HEADCOUNT_NOT_EXPLICIT"
+  ],
+  "parser_notes": [],
+  "seen": {
+   "associates_read": 5
+  }
+ },
+ {
+  "id": "P18",
+  "probe": "Previous-Saturday shift '25:00 - 06:00' (invalid hour)",
+  "expected": "refused",
+  "outcome": "WARNED",
+  "failure_codes": [],
+  "warning_codes": [
+   "BREAK_WINDOWS_USING_DERIVED_DEFAULTS"
+  ],
+  "parser_notes": [],
+  "seen": {
+   "agent_a_previous_saturday": "25:00 - 06:00"
+  }
+ },
+ {
+  "id": "P19",
+  "probe": "Instructions list 'Target' twice: 0.9 then 0.5",
+  "expected": "refused as contradictory, or warned",
+  "outcome": "REFUSED",
+  "failure_codes": [
+   "INVALID_FLOOR_RATIO"
+  ],
+  "seen": {
+   "target_ratio_used": 0.5
+  }
+ },
+ {
+  "id": "P20",
+  "probe": "Language Working Window = 'Enforce' (not a listed value)",
+  "expected": "REFUSED",
+  "outcome": "REFUSED",
+  "failure_codes": [
+   "HARD_INVALID_LANGUAGE_WORKING_WINDOW"
+  ],
+  "warning_codes": [
+   "BREAK_WINDOWS_USING_DERIVED_DEFAULTS"
+  ],
+  "parser_notes": [
+   "HARD_INVALID_LANGUAGE_WORKING_WINDOW:value='Enforce';use OFF, MINIMUM_ROWS, ALL_ROWS, or REQUIRED_LANGUAGE_ONLY"
+  ]
+ },
+ {
+  "id": "P21",
+  "probe": "Overnight day-specific language minimum Mon-Fri 18:00-05:00 (Spanish, min 1)",
+  "expected": "minimum applies Mon 18:00..Tue 05:00 ... Fri 18:00..Sat 05:00; NOT Mon 00:00-05:00",
+  "outcome": "WARNED",
+  "failure_codes": [],
+  "warning_codes": [
+   "BREAK_WINDOWS_USING_DERIVED_DEFAULTS"
+  ],
+  "parser_notes": [],
+  "seen": {
+   "Sun": [],
+   "Mon": [
+    "00:00",
+    "01:00",
+    "02:00",
+    "03:00",
+    "04:00",
+    "18:00",
+    "19:00",
+    "20:00",
+    "21:00",
+    "22:00",
+    "23:00"
+   ],
+   "Tue": [
+    "00:00",
+    "01:00",
+    "02:00",
+    "03:00",
+    "04:00",
+    "18:00",
+    "19:00",
+    "20:00",
+    "21:00",
+    "22:00",
+    "23:00"
+   ],
+   "Wed": [
+    "00:00",
+    "01:00",
+    "02:00",
+    "03:00",
+    "04:00",
+    "18:00",
+    "19:00",
+    "20:00",
+    "21:00",
+    "22:00",
+    "23:00"
+   ],
+   "Thu": [
+    "00:00",
+    "01:00",
+    "02:00",
+    "03:00",
+    "04:00",
+    "18:00",
+    "19:00",
+    "20:00",
+    "21:00",
+    "22:00",
+    "23:00"
+   ],
+   "Fri": [
+    "00:00",
+    "01:00",
+    "02:00",
+    "03:00",
+    "04:00",
+    "18:00",
+    "19:00",
+    "20:00",
+    "21:00",
+    "22:00",
+    "23:00"
+   ],
+   "Sat": [
+    "00:00",
+    "01:00",
+    "02:00",
+    "03:00",
+    "04:00"
+   ]
+  }
+ }
+]

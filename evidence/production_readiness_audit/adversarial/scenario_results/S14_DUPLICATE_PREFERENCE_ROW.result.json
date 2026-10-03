@@ -1,0 +1,54 @@
+{
+ "scenario": "S14_DUPLICATE_PREFERENCE_ROW",
+ "why": "Agent A appears twice on Preference: row 1 = approved Leave on Monday; row 2 = OFF Friday and Saturday",
+ "expected": "refused as a duplicate, or Leave Monday honoured",
+ "runner_rc": 4,
+ "elapsed_sec": 277.7,
+ "engine_status": "PASS_WITH_QUALITY_WARNINGS",
+ "artifact_state": "FINAL_VERIFIED",
+ "independent_validation": "FAIL_METRIC_PARITY",
+ "published_final": [
+  "S14_DUPLICATE_PREFERENCE_ROW_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"
+ ],
+ "workbooks_in_case_root": [
+  "S14_DUPLICATE_PREFERENCE_ROW_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx",
+  "S14_DUPLICATE_PREFERENCE_ROW_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx",
+  "S14_DUPLICATE_PREFERENCE_ROW_L6_3_2_3_MAX_FLOOR_CANDIDATE.xlsx",
+  "S14_DUPLICATE_PREFERENCE_ROW_L6_3_2_3_MAX_TARGET_CANDIDATE.xlsx"
+ ],
+ "selected_metrics": {
+  "after_target": 84,
+  "after_floor": 84,
+  "active_intervals": 84,
+  "language_gap_count": 0
+ },
+ "run_id": "d6bae43b3490887272390bae",
+ "business_outcome": "Outcome: Final schedule generated, but evaluator metric parity blocks release\nStatus: FAIL_INDEPENDENT_VALIDATION\nProduction eligible: False\nIndependent validation: FAIL_METRIC_PARITY (return code 2)\n\nThe exact workbook passed the independent rule checks, but the engine and independent evaluator did not agree on one or more canonical metrics. The schedule is retained as evidence and blocked until the discrepancy is resolved.\n\nMain blockers:\n- BREAK_CONCURRENCY_LIMIT_EXCEEDED (count=2, observed_max_breaks=3, observed_max_ratio=0.33333333)\n- WHOLE_WEEK_OVERAGE_CAP_EXCEEDED (actual=9, maximum=0, cap_ratio=1.35)\n- WHOLE_WEEK_ADJACENT_IMBALANCE (actual=1, maximum=0, configured_raw_change=3)\n- EMPLOYEE_ISOLATED_OFFDAY_EXCEEDED (actual=14, maximum=0)\n\nRequired action:\n- Review the independent validation and release-gate failures, correct the cause, and rerun validation.\n",
+ "clean_room": {
+  "checked": "S14_DUPLICATE_PREFERENCE_ROW_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx",
+  "violations": {
+   "duplicate_input_row": 1
+  },
+  "engine_mismatches": [],
+  "validator_mismatches": [],
+  "metrics": {
+   "active_intervals": 84,
+   "before_target": 84,
+   "before_floor": 84,
+   "before100": 84,
+   "before90": 84,
+   "before80": 84,
+   "after_target": 84,
+   "after_floor": 84,
+   "after100": 69,
+   "after90": 84,
+   "after80": 84,
+   "target_losses_from_breaks": 0,
+   "floor_losses_from_breaks": 0,
+   "language_gap_count": 0,
+   "zero_staffed_active_quarters": 0
+  }
+ },
+ "pre_solver_failures": [],
+ "hard_probe": "OPTIMAL"
+}

@@ -1,0 +1,25 @@
+{
+ "scenario": "S04_ONE_IMPOSSIBLE_INTERVAL",
+ "why": "0.5 FTE at Sun 03:00 that no legal shift can reach; everything else easy",
+ "expected": "schedule for the solvable week, with Sun 03:00 named as uncoverable",
+ "runner_rc": 2,
+ "elapsed_sec": 1.0,
+ "engine_status": "FAIL_PRE_SOLVER_CONTRACT",
+ "artifact_state": "RUNNING_NOT_FINAL",
+ "independent_validation": "NOT_RUN",
+ "published_final": [],
+ "workbooks_in_case_root": [],
+ "selected_metrics": {
+  "after_target": null,
+  "after_floor": null,
+  "active_intervals": null,
+  "language_gap_count": null
+ },
+ "run_id": "f9e46d245861615d1d7f2666",
+ "business_outcome": "Outcome: The workbook contract cannot be scheduled as submitted\nStatus: FAIL_PRE_SOLVER_CONTRACT\nProduction eligible: False\nIndependent validation: NOT_RUN (return code None)\n\nZero Active Interval Provably Impossible\n\nMain blockers:\n- ZERO_ACTIVE_INTERVAL_PROVABLY_IMPOSSIBLE (day=Sun, time=03:00)\n- ZERO_ACTIVE_INTERVAL_PROVABLY_IMPOSSIBLE (day=Sun, time=03:00)\n\nRequired action:\n- Correct the listed workbook contract issue and rerun the schedule.\n",
+ "clean_room": null,
+ "pre_solver_failures": [
+  "ZERO_ACTIVE_INTERVAL_PROVABLY_IMPOSSIBLE"
+ ],
+ "hard_probe": null
+}

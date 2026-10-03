@@ -1,0 +1,51 @@
+{
+ "scenario": "S03_DEMAND_MASSIVELY_ABOVE_CAPACITY",
+ "why": "demand 3x what the roster can staff",
+ "expected": "best achievable schedule published with the deficit stated (not a refusal)",
+ "runner_rc": 4,
+ "elapsed_sec": 277.4,
+ "engine_status": "FAIL_PRODUCTION_QUALITY_GATE",
+ "artifact_state": "FINAL_VERIFIED",
+ "independent_validation": "FAIL_METRIC_PARITY",
+ "published_final": [
+  "S03_DEMAND_MASSIVELY_ABOVE_CAPACITY_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"
+ ],
+ "workbooks_in_case_root": [
+  "S03_DEMAND_MASSIVELY_ABOVE_CAPACITY_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx",
+  "S03_DEMAND_MASSIVELY_ABOVE_CAPACITY_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx",
+  "S03_DEMAND_MASSIVELY_ABOVE_CAPACITY_L6_3_2_3_MAX_TARGET_CANDIDATE.xlsx"
+ ],
+ "selected_metrics": {
+  "after_target": 0,
+  "after_floor": 3,
+  "active_intervals": 84,
+  "language_gap_count": 0
+ },
+ "run_id": "f32acef593dccb785e51184e",
+ "business_outcome": "Outcome: Final schedule generated, but evaluator metric parity blocks release\nStatus: FAIL_INDEPENDENT_VALIDATION\nProduction eligible: False\nIndependent validation: FAIL_METRIC_PARITY (return code 2)\n\nThe exact workbook passed the independent rule checks, but the engine and independent evaluator did not agree on one or more canonical metrics. The schedule is retained as evidence and blocked until the discrepancy is resolved.\n\nMain blockers:\n- FLOOR_GAP_RATIO_EXCEEDED (actual=0.9642857142857143, maximum=0.1, count=81)\n- SEVERE_GAP_RATIO_EXCEEDED (actual=0.9523809523809523, maximum=0.05, count=80)\n- CONSECUTIVE_FLOOR_GAPS_EXCEEDED (actual=12, maximum=3)\n\nRequired action:\n- Review the independent validation and release-gate failures, correct the cause, and rerun validation.\n",
+ "clean_room": {
+  "checked": "S03_DEMAND_MASSIVELY_ABOVE_CAPACITY_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx",
+  "violations": {},
+  "engine_mismatches": [],
+  "validator_mismatches": [],
+  "metrics": {
+   "active_intervals": 84,
+   "before_target": 0,
+   "before_floor": 4,
+   "before100": 0,
+   "before90": 0,
+   "before80": 4,
+   "after_target": 0,
+   "after_floor": 3,
+   "after100": 0,
+   "after90": 0,
+   "after80": 3,
+   "target_losses_from_breaks": 0,
+   "floor_losses_from_breaks": 1,
+   "language_gap_count": 0,
+   "zero_staffed_active_quarters": 0
+  }
+ },
+ "pre_solver_failures": [],
+ "hard_probe": "OPTIMAL"
+}

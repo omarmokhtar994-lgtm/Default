@@ -1,0 +1,13 @@
+Outcome: Final schedule generated, but release gates block publication
+Status: FAIL_RELEASE_GATE
+Production eligible: False
+Independent validation: PASS (return code 0)
+
+The schedule was generated, but a final release gate did not pass. It is blocked from production use.
+
+Main blockers:
+- WHOLE_WEEK_OVERAGE_CAP_EXCEEDED (actual=9, maximum=0, cap_ratio=1.35)
+- EMPLOYEE_ISOLATED_OFFDAY_EXCEEDED (actual=16, maximum=0)
+
+Required action:
+- Review the independent validation and release-gate failures, correct the cause, and rerun validation.

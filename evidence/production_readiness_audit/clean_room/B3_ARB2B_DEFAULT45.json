@@ -1,0 +1,44 @@
+{
+ "metrics": {
+  "active_intervals": 168,
+  "before_target": 168,
+  "before_floor": 168,
+  "before100": 168,
+  "before90": 168,
+  "before80": 168,
+  "after_target": 164,
+  "after_floor": 168,
+  "after100": 164,
+  "after90": 168,
+  "after80": 168,
+  "target_losses_from_breaks": 4,
+  "floor_losses_from_breaks": 0,
+  "language_gap_count": 0,
+  "zero_staffed_active_quarters": 0
+ },
+ "violation_count": 0,
+ "violations_by_rule": {},
+ "violations": [],
+ "language_window_mode": "OFF",
+ "language_rules": [
+  {
+   "group": "english",
+   "start": 0,
+   "end": 0,
+   "minimum": 1,
+   "days": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+   ],
+   "eligible": [
+    "english"
+   ]
+  }
+ ],
+ "engine_mismatches": []
+}

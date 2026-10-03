@@ -1,0 +1,12 @@
+Outcome: Final schedule generated, but evaluator metric parity blocks release
+Status: FAIL_INDEPENDENT_VALIDATION
+Production eligible: False
+Independent validation: FAIL_METRIC_PARITY (return code 2)
+
+The exact workbook passed the independent rule checks, but the engine and independent evaluator did not agree on one or more canonical metrics. The schedule is retained as evidence and blocked until the discrepancy is resolved.
+
+Main blockers:
+- SEVERE_GAP_RATIO_EXCEEDED (actual=0.07142857142857142, maximum=0.05, count=6)
+
+Required action:
+- Review the independent validation and release-gate failures, correct the cause, and rerun validation.

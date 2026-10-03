@@ -1,0 +1,19 @@
+Outcome: No final schedule was generated; validation was not run
+Status: FAIL_NO_FINAL_SCHEDULE
+Production eligible: False
+Independent validation: NOT_RUN (return code None)
+
+No final schedule workbook was produced, so independent validation could not run. The run is blocked until the engine output problem is corrected and the case is rerun.
+
+Main blockers:
+- family=HARD_FLOOR, affected_associate_days=1
+- family=WEEK_BOUNDARY, affected_associate_days=1
+- family=ZERO_STAFF, affected_associate_days=1
+
+Affected examples:
+- Agent D | Sun | 00:00 - 09:00 | Sun 00:00 to 07:45
+
+Required action:
+- Add or overlap qualified resources in the named bottleneck windows, especially single-person language coverage.
+- Change shift/OFF patterns so qualified associates have legal break coverage.
+- Change the exception cap only through an explicit business decision; the engine will not raise it automatically.

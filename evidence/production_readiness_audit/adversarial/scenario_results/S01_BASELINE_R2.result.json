@@ -1,0 +1,51 @@
+{
+ "scenario": "S01_BASELINE_R2",
+ "why": "sanity: 10 agents, 3 FTE 08:00-20:00, day shifts",
+ "expected": "PASS with a validated schedule",
+ "runner_rc": 4,
+ "elapsed_sec": 247.9,
+ "engine_status": "PASS_WITH_QUALITY_WARNINGS",
+ "artifact_state": "FINAL_VERIFIED",
+ "independent_validation": "FAIL_METRIC_PARITY",
+ "published_final": [
+  "S01_BASELINE_R2_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"
+ ],
+ "workbooks_in_case_root": [
+  "S01_BASELINE_R2_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx",
+  "S01_BASELINE_R2_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx",
+  "S01_BASELINE_R2_L6_3_2_3_MAX_TARGET_CANDIDATE.xlsx"
+ ],
+ "selected_metrics": {
+  "after_target": 84,
+  "after_floor": 84,
+  "active_intervals": 84,
+  "language_gap_count": 0
+ },
+ "run_id": "f52cb1b90c393208a8da2d76",
+ "business_outcome": "Outcome: Final schedule generated, but evaluator metric parity blocks release\nStatus: FAIL_INDEPENDENT_VALIDATION\nProduction eligible: False\nIndependent validation: FAIL_METRIC_PARITY (return code 2)\n\nThe exact workbook passed the independent rule checks, but the engine and independent evaluator did not agree on one or more canonical metrics. The schedule is retained as evidence and blocked until the discrepancy is resolved.\n\nMain blockers:\n- WHOLE_WEEK_OVERAGE_CAP_EXCEEDED (actual=9, maximum=0, cap_ratio=1.35)\n- EMPLOYEE_ISOLATED_OFFDAY_EXCEEDED (actual=10, maximum=0)\n\nRequired action:\n- Review the independent validation and release-gate failures, correct the cause, and rerun validation.\n",
+ "clean_room": {
+  "checked": "S01_BASELINE_R2_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx",
+  "violations": {},
+  "engine_mismatches": [],
+  "validator_mismatches": [],
+  "metrics": {
+   "active_intervals": 84,
+   "before_target": 84,
+   "before_floor": 84,
+   "before100": 84,
+   "before90": 84,
+   "before80": 84,
+   "after_target": 84,
+   "after_floor": 84,
+   "after100": 67,
+   "after90": 84,
+   "after80": 84,
+   "target_losses_from_breaks": 0,
+   "floor_losses_from_breaks": 0,
+   "language_gap_count": 0,
+   "zero_staffed_active_quarters": 0
+  }
+ },
+ "pre_solver_failures": [],
+ "hard_probe": "OPTIMAL"
+}

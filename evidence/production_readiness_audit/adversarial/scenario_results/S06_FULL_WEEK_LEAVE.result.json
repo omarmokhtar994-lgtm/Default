@@ -1,0 +1,23 @@
+{
+ "scenario": "S06_FULL_WEEK_LEAVE",
+ "why": "one associate on approved Leave all 7 days; otherwise S01",
+ "expected": "PASS; that associate is Leave all week",
+ "runner_rc": 2,
+ "elapsed_sec": 2.1,
+ "engine_status": "FAIL_HARD_CONTRACT_INFEASIBLE",
+ "artifact_state": "RUNNING_NOT_FINAL",
+ "independent_validation": "NOT_RUN",
+ "published_final": [],
+ "workbooks_in_case_root": [],
+ "selected_metrics": {
+  "after_target": null,
+  "after_floor": null,
+  "active_intervals": null,
+  "language_gap_count": null
+ },
+ "run_id": "51096fa4d40544f9a5382a09",
+ "business_outcome": "Outcome: No schedule satisfies all hard rules together\nStatus: FAIL_HARD_CONTRACT_INFEASIBLE\nProduction eligible: False\nIndependent validation: NOT_RUN (return code None)\n\nThe roster and legal shifts are individually readable, but the hard rules contradict each other. There was not enough time left to find which rules conflict.\n\nRequired action:\n- Review the rules named above in the workbook, then rerun.\n",
+ "clean_room": null,
+ "pre_solver_failures": [],
+ "hard_probe": "INFEASIBLE"
+}

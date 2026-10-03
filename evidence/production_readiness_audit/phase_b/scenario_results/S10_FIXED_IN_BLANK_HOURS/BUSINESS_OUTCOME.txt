@@ -1,0 +1,19 @@
+Outcome: The workbook contract cannot be scheduled as submitted
+Status: FAIL_PRE_SOLVER_CONTRACT
+Production eligible: False
+Independent validation: NOT_RUN (return code None)
+
+Blank Interval Staffing Rule forbids staffing hours with no requirement; these fixed shifts cover such hours.
+
+Main blockers:
+- FIXED_REQUEST_IN_BLANK_HOURS: Blank Interval Staffing Rule forbids staffing hours with no requirement; these fixed shifts cover such hours. (count=5)
+
+Affected examples:
+- Agent A | Sun | 22:00 - 07:00 | covers hours with no requirement
+- Agent A | Mon | 22:00 - 07:00 | covers hours with no requirement
+- Agent A | Tue | 22:00 - 07:00 | covers hours with no requirement
+- Agent A | Wed | 22:00 - 07:00 | covers hours with no requirement
+- Agent A | Thu | 22:00 - 07:00 | covers hours with no requirement
+
+Required action:
+- Correct the listed workbook contract issue and rerun the schedule.

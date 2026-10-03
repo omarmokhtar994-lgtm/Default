@@ -1,0 +1,23 @@
+Outcome: The break plan exceeds the approved exception limit
+Status: FAIL_TESTED_SKELETON_EXCEPTION_LOWER_BOUND_EXCEEDS_CAP
+Production eligible: False
+Independent validation: NOT_RUN (return code None)
+
+Requested maximum no-break associate-days: 0. Best proven minimum among the tested skeletons: 6. The proven gap is 6.
+
+Main blockers:
+- family=ZERO_STAFF, affected_associate_days=7
+
+Affected examples:
+- Agent A | Tue | 17:00 - 02:00 | Tue 18:00 to Wed 01:45
+- Agent A | Fri | 17:00 - 02:00 | Fri 20:00 to Sat 01:45
+- Agent D | Wed | 17:00 - 02:00 | Wed 20:00 to Thu 01:45
+- Agent E | Mon | 23:00 - 08:00 | Tue 02:00 to Tue 07:45
+- Agent F | Wed | 02:00 - 11:00 | Wed 02:00 to Wed 07:45
+- Agent F | Thu | 02:00 - 11:00 | Thu 02:00 to Thu 07:45
+- Agent F | Fri | 02:00 - 11:00 | Fri 02:00 to Fri 07:45
+
+Required action:
+- Add or overlap qualified resources in the named bottleneck windows, especially single-person language coverage.
+- Change shift/OFF patterns so qualified associates have legal break coverage.
+- Change the exception cap only through an explicit business decision; the engine will not raise it automatically.

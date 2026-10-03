@@ -11,7 +11,7 @@ publish.
 **What the package guarantees on every run:**
 - **Engine and tests are checked first.** Before any solving, the runner
   verifies the engine's sha256, the pinned runtime (OR-Tools 9.15.6755, scipy),
-  and runs the full offline test gate (1315 tests). If anything fails, it
+  and runs the full offline test gate (1349 tests). If anything fails, it
   **refuses to run**.
 - **Bad inputs are refused.** A workbook that breaks the input contract is
   refused with a message naming the cell or person. Examples: an unknown
@@ -190,6 +190,43 @@ wherever it is, not from the second column.
 11H/3OFF), taken from the days not already on approved leave. Someone on leave
 all week owes no OFF day; someone on leave six days owes one. This used to
 make the whole week unschedulable.
+
+**Instruction values and contradictions (also refused before solving).** Each
+of these used to be replaced by a default without a word:
+
+| Problem in the workbook | Code |
+|---|---|
+| A number row the engine reads holds text or a formula (`three`, `=A1`) | `HARD_INVALID_INSTRUCTION_NUMBER` |
+| The same instruction label twice on one sheet with different values (the last row used to win) | `HARD_DUPLICATE_INSTRUCTION` |
+| `Count of Different Shifts Per week` is 0 | `INVALID_MAX_SHIFT_VARIETY` |
+| No-break exceptions enabled with a maximum of 0 (it used to become 8). Enabled with no maximum stated still uses 8 and says so. | `HARD_CONTRADICTORY_NO_BREAK_LIMIT` |
+| `Allowed Shift Durations` lists 10.5 h or more while `Use 11H/3OFF` is No (they used to become 9 h) | `HARD_LONG_DURATION_WITHOUT_11H_MODE` |
+| `Allowed Shift Durations` has no readable duration between 4 and 16 hours | `HARD_INVALID_SHIFT_DURATIONS` |
+| A Coverage Split row with an unreadable time, ratio, `Exclusive?` or `Active?`, or a blank `Active?` (write Yes or No) | `HARD_INVALID_COVERAGE_SPLIT_ROW` |
+| A fixed shift in hours the Blank Interval Staffing Rule forbids | `FIXED_REQUEST_IN_BLANK_HOURS` |
+| A fixed shift the Language Working Window does not allow for that person | `FIXED_REQUEST_OUTSIDE_LANGUAGE_HOURS` |
+
+**Overnight language rules with Coverage Days** open on each listed day: a
+Mon-Fri 18:00-05:00 rule runs from Monday 18:00 to Saturday 05:00. Monday
+00:00-05:00 belongs to Sunday night and is not covered by it.
+
+**Coverage Split Gate Mode** now decides what a Coverage Split shortfall
+after breaks does: `Fail` blocks release, `Warn` reports it.
+
+**Release checks after the schedule is built.** On top of the independent
+validator and the metric parity check, the run now:
+
+- runs the clean-room checker (`tools/clean_room_check.py`, no engine code).
+  A rule violation, or a coverage figure that differs from the engine's,
+  blocks release (`FAIL_CLEAN_ROOM`). A layout it cannot read is recorded as
+  `NOT_CHECKED` in `CLEAN_ROOM_CHECK.json` and does not block.
+- validates every alternative export (`MAX_TARGET`, `MAX_FLOOR`, `BALANCED`).
+  Each verdict is in `INDEPENDENT_VALIDATION_<ROLE>.json` and in
+  `UNIVERSAL_RUN_STATUS.json`. These do not affect the main schedule's release.
+
+`BUSINESS_OUTCOME.txt` now lists **Why it is blocked** for a blocked schedule,
+keeps the engine's own explanation when no schedule was produced, and reports a
+diagnostics-only (SMOKE) run as diagnostics rather than as a final schedule.
 
 ### 3.6 Check the workbook before running (seconds)
 

@@ -1,0 +1,25 @@
+{
+ "scenario": "S13_24x7_UNDERSTAFFED",
+ "why": "24/7 demand of 3 FTE every hour, 10 agents (about 75% of the hours needed), overnight shifts allowed",
+ "expected": "best achievable schedule with the deficit named (current-week floor is soft)",
+ "runner_rc": 2,
+ "elapsed_sec": 185.3,
+ "engine_status": "FAIL_NO_BREAK_FEASIBLE_CANDIDATE",
+ "artifact_state": "FINAL_DIAGNOSTIC_NO_RELEASE_SCHEDULE",
+ "independent_validation": "NOT_RUN",
+ "published_final": [],
+ "workbooks_in_case_root": [
+  "S13_24x7_UNDERSTAFFED_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx"
+ ],
+ "selected_metrics": {
+  "after_target": null,
+  "after_floor": null,
+  "active_intervals": null,
+  "language_gap_count": null
+ },
+ "run_id": "603b3e0f7e66935c3d43c4c2",
+ "business_outcome": "Outcome: No legal final break plan was found\nStatus: FAIL_NO_BREAK_FEASIBLE_CANDIDATE\nProduction eligible: False\nIndependent validation: NOT_RUN (return code None)\n\nThe engine could not find a legal break plan for the tested shift/OFF skeletons within the available search budget.\n\nMain blockers:\n- family=HARD_FLOOR, affected_associate_days=1\n- family=WEEK_BOUNDARY, affected_associate_days=1\n- family=ZERO_STAFF, affected_associate_days=1\n\nAffected examples:\n- Agent D | Sun | 00:00 - 09:00 | Sun 00:00 to 07:45\n\nRequired action:\n- Add or overlap qualified resources in the named bottleneck windows, especially single-person language coverage.\n- Change shift/OFF patterns so qualified associates have legal break coverage.\n- Change the exception cap only through an explicit business decision; the engine will not raise it automatically.\n",
+ "clean_room": null,
+ "pre_solver_failures": [],
+ "hard_probe": "OPTIMAL"
+}

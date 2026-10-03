@@ -1,5 +1,5 @@
 {
-  "min_tests": 1315,
+  "min_tests": 1349,
   "max_skips": 2,
   "note": "Floors for run_tests.sh. min_tests is set to the count of the last passing gate; raise it when tests are added, never lower it without a written reason. max_skips: tests_staged/test_rc9_2_4_b9_metric_coverage.py skips 2 when no full-schedule artifacts are present.",
   "superseded_rc5_methods": {

@@ -1,0 +1,52 @@
+{
+ "scenario": "S08_24x7_WEEK_BOUNDARY",
+ "why": "24/7 demand, overnight shifts crossing Sat->Sun, previous-Saturday carry-in",
+ "expected": "PASS; clean-room and validator agree incl. Saturday spill",
+ "runner_rc": 0,
+ "elapsed_sec": 288.0,
+ "engine_status": "PASS_WITH_QUALITY_WARNINGS",
+ "artifact_state": "FINAL_VERIFIED",
+ "independent_validation": "PASS",
+ "published_final": [
+  "S08_24x7_WEEK_BOUNDARY_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"
+ ],
+ "workbooks_in_case_root": [
+  "S08_24x7_WEEK_BOUNDARY_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx",
+  "S08_24x7_WEEK_BOUNDARY_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx",
+  "S08_24x7_WEEK_BOUNDARY_L6_3_2_3_MAX_TARGET_CANDIDATE.xlsx"
+ ],
+ "selected_metrics": {
+  "after_target": 168,
+  "after_floor": 168,
+  "active_intervals": 168,
+  "language_gap_count": 0
+ },
+ "run_id": "8d214b9e71a273655efd26a9",
+ "business_outcome": "Outcome: Hard-valid final schedule generated with declared operational warnings\nStatus: PASS_WITH_QUALITY_WARNINGS\nProduction eligible: True\nIndependent validation: PASS (return code 0)\n\nThe schedule passed all hard rules and uses 0 approved no-break associate-day exception(s). Operational-quality findings remain visible as warnings rather than hidden hard failures.\n\nWarnings:\n- NEXT_SUNDAY_OVERAGE_CAP_EXCEEDED (count=8, maximum_ratio=1.3, observed_max_ratio=9.25)\n- WHOLE_WEEK_OVERAGE_CAP_EXCEEDED (actual=76, maximum=0, cap_ratio=1.35)\n- WHOLE_WEEK_ADJACENT_IMBALANCE (actual=1, maximum=0, configured_raw_change=3)\n- EMPLOYEE_START_SWING_EXCEEDED (actual=10, maximum=0)\n- EMPLOYEE_ISOLATED_OFFDAY_EXCEEDED (actual=22, maximum=0)\n- EMPLOYEE_LATE_SHIFT_FAIRNESS_EXCEEDED (actual=5, maximum=3)\n- EMPLOYEE_OVERNIGHT_FAIRNESS_EXCEEDED (actual=5, maximum=3)\n\nRequired action:\n- Review the declared warnings and no-break exception comments during operational approval.\n",
+ "clean_room": {
+  "checked": "S08_24x7_WEEK_BOUNDARY_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx",
+  "violations": {},
+  "engine_mismatches": [],
+  "validator_mismatches": [],
+  "metrics": {
+   "active_intervals": 168,
+   "before_target": 168,
+   "before_floor": 168,
+   "before100": 168,
+   "before90": 168,
+   "before80": 168,
+   "after_target": 168,
+   "after_floor": 168,
+   "after100": 168,
+   "after90": 168,
+   "after80": 168,
+   "target_losses_from_breaks": 0,
+   "floor_losses_from_breaks": 0,
+   "language_gap_count": 0,
+   "coverage_split_gap_count": 0,
+   "zero_staffed_active_quarters": 0
+  }
+ },
+ "pre_solver_failures": [],
+ "hard_probe": "OPTIMAL"
+}

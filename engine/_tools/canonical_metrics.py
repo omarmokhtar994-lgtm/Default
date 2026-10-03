@@ -59,6 +59,8 @@ ALIASES = {
     "zero_staffed_active_quarters": ("zero_staffed_active_quarters",),
     "language_gap_count": ("language_gap_count",),
     "opening_gap_count": ("opening_gap_count",),
+    # Audit F-12: Coverage Split shortfalls after breaks, counted per quarter.
+    "coverage_split_gap_count": ("coverage_split_gap_count",),
     "blank_staffed_quarters": ("blank_staffed_quarters",),
     "break_concurrency_violation_count": ("break_concurrency_violation_count",),
     "whole_week_overage_cap_violation_count": ("whole_week_overage_cap_violation_count",),

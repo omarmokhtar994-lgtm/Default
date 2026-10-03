@@ -21,6 +21,23 @@ All evidence is in this folder; `WORKING_NOTES.md` is the running log.
 > - **Gate:** 1,315 tests, PASS.
 > - **Still open, Phase B:** F-05, F-06, F-07, F-08, F-10, F-11, F-12 and below.
 
+> **Status update — Phase B done (2026-10-03, engine sha256 `38f494d9…`).**
+> - **Fixed:** F-05, F-08, F-10, F-14 and F-16. F-11, F-12 and F-13 are fixed except one sub-item each, named in their headings. F-19 is mitigated: the clean-room checker is now a release gate.
+> - **Effect on the scenarios** (`phase_b/PHASE_B_RESULT.md`):
+>   - S10 is refused in 1 s, naming Agent A and each day.
+>   - S05 names the conflicting rule family (language).
+>   - S11 now passes the contract it was wrongly refused under; it stops at break placement on a real lone-Spanish-coverage window (Phase C).
+>   - S09, S11 and S13 keep the engine's diagnosis instead of "engine output problem".
+>   - S01, S06 and S08 publish, with the clean-room gate PASS and the alternative exports validated PASS.
+> - **A defect found on the way:** the validator could never pass an alternative export, because it did not recognise their artifact type. Fixed.
+> - **Good inputs are unaffected:** all 111 repository workbooks parse identically under the Phase A and Phase B engines (contract result, facts, and the language rules in force each quarter).
+> - **Gate:** 1,349 tests, PASS.
+> - **Still open:**
+>   - Phase C: F-06, F-07, F-20.
+>   - The F-11 range clamps.
+>   - The joint model's split constraint (that model is off in production).
+>   - P3 items.
+
 ## A. Executive summary
 
 **Verdict: not ready for unsupervised production.** It is usable today only for the packaged workbooks and their layouts, with a person reviewing every run. The schedules it does publish are trustworthy against the contract it parsed. The problems are on both sides of that:
@@ -157,7 +174,7 @@ Evidence paths are relative to `evidence/production_readiness_audit/`. `l632` me
 - **Regression risk:** low.
 - **Test:** S08 must exit 0, plus a unit test on the quality report.
 
-#### F-05 · P1 · Confirmed defect — overnight language rules with Coverage Days are enforced on the wrong day
+#### ✅ FIXED (Phase B) — F-05 · P1 · Confirmed defect — overnight language rules with Coverage Days are enforced on the wrong day
 - **Where:** `l632 language_rules_at.applies` (5122–5158), shared by Stage 1, Stage 2, metrics, capacity diagnostics and the independent validator.
 - **What happens:** a rule "Mon-Fri 18:00–05:00" is in force on Mon 00:00–05:00 (Sunday night, not requested) as well as on Tue..Sat 00:00–05:00. Morning quarters on a listed day are accepted without checking that the window opened on that day.
 - **Evidence:**
@@ -205,7 +222,7 @@ Evidence paths are relative to `evidence/production_readiness_audit/`. `l632` me
 - **Regression risk:** low to medium. The boundary metric becomes a warning on cases that were refused before.
 - **Test:** S13.
 
-#### F-08 · P1 · Confirmed defect — run identity omits CLI-enforced settings, so a resumed run can return a schedule made under a different rule
+#### ✅ FIXED (Phase B) — F-08 · P1 · Confirmed defect — run identity omits CLI-enforced settings, so a resumed run can return a schedule made under a different rule
 - **Where:**
   - `l632 run_case` 20146–20280. `contract_payload` has no language window mode, windows or coverage split; `run_parameters` omits `language_working_window_override` and the polish flag.
   - The comment at 19833 claims the opposite.
@@ -233,7 +250,7 @@ Each probe below was ACCEPTED or WARNED by the contract unless stated.
 - **Regression risk:** low. Refusals only on malformed workbooks. Re-run all 7 packaged workbooks to prove none is refused.
 - **Tests:** K-2, K-3, K-4, K-9.
 
-#### F-10 · P1 · Confirmed defect — infeasibility diagnosis is skipped although almost the whole budget is unused
+#### ✅ FIXED (Phase B) — F-10 · P1 · Confirmed defect — infeasibility diagnosis is skipped although almost the whole budget is unused
 - **Where:** `l632 run_case` 20562–20568: `isolation_budget` uses `conflict_refinement_deadline − now`. That is a cumulative phase deadline (20 s at a 300 s budget), not the remaining run time.
 - **Evidence:** S05, S06, S07 and S10 ended in about 2 s, with 298 s unused, `constraint_isolation: []`, and `conflict_refinement: SKIPPED_DISABLED_OR_INSUFFICIENT_BUDGET`. The outcome text: "There was not enough time left to find which rules conflict".
 - **Impact:** exactly when the planner needs the cause named, they get none. At QUICK 3600 the reserve is larger, so this is worst on short and SMOKE runs.
@@ -242,7 +259,7 @@ Each probe below was ACCEPTED or WARNED by the contract unless stated.
 
 ### P2 — important
 
-#### F-11 · P2 · Confirmed — silent numeric fallbacks and clamps on instruction rows
+#### ✅ FIXED (Phase B; the range clamps on concurrency and cap ratios remain) — F-11 · P2 · Confirmed — silent numeric fallbacks and clamps on instruction rows
 - About 100 controls go through `to_float(v, default)`, outside `numeric_instruction_specs`, so an unreadable value becomes the default without a word.
 - P10: No-break exceptions enabled with Max = 0 becomes **8** (`parse_input` ~3218).
 - P11: max different shifts "three" becomes 3; 0 becomes 1, and `INVALID_MAX_SHIFT_VARIETY` can never fire.
@@ -251,19 +268,19 @@ Each probe below was ACCEPTED or WARNED by the contract unless stated.
 - Silent clamps: concurrency ratio [0.05, 0.75]; next-Sunday and whole-week caps.
 - **Fix:** one declarative control table (type, range, default, aliases). Refuse unreadable or contradictory values. Refuse duplicate labels with different values. **Test:** K-6, K-7, K-10.
 
-#### F-12 · P2 · Confirmed — Coverage Split is enforced by the model but nowhere audited
+#### ✅ FIXED (Phase B; the joint-refinement model, off in the production runner, still has no split constraint) — F-12 · P2 · Confirmed — Coverage Split is enforced by the model but nowhere audited
 - The gate mode row (`warn`/`fail`) is parsed and never read; only `off` has an effect (3048–3078).
 - Post-break split gaps are reported in the summary but not in `validate_schedule`, `production_quality_gate` or the independent validator (it has no split check at all).
 - A row with an unreadable time or ratio is silently dropped (P12).
 - The joint-refinement model (off in the runner, on when the engine CLI is called directly) has no split constraint.
 - **Fix:** validator check, gate wiring, refusal of unreadable rows. **Test:** K-8 plus a split scenario.
 
-#### F-13 · P2 · Confirmed — the engine's own `validate_schedule` misses several hard families
+#### ✅ FIXED (Phase B; break legality is still checked only by the independent validator and the clean-room gate) — F-13 · P2 · Confirmed — the engine's own `validate_schedule` misses several hard families
 - Not re-checked: hard-OFF and leave *preferences*, the Sat→Sun rest wrap, consecutive OFF, nesting equality, break legality, coverage split (10974–11041).
 - The independent validator covers all of these except coverage split, so release is protected. Internal repair phases that accept candidates on `validate_schedule` alone (consistency polish, DNBS) rely on the model, not on this check.
 - **Fix:** make `validate_schedule` call the same rule set as the validator.
 
-#### F-14 · P2 · Confirmed — misleading run outcome texts
+#### ✅ FIXED (Phase B) — F-14 · P2 · Confirmed — misleading run outcome texts
 - SMOKE (= diagnostics only, runner 1114): the engine prints "Final schedule generated successfully … passed all current release gates", and the wrapper then says "blocked until the engine output problem is corrected".
 - S09, a capacity problem, is also described as "engine output problem".
 - When a run is not production-eligible, WARN items are listed as "Main blockers" while the real blocker (parity, S01) is missing.
@@ -276,7 +293,7 @@ Each probe below was ACCEPTED or WARNED by the contract unless stated.
 - P15: malformed Shift Library labels are skipped without a message.
 - **Fix:** refuse. **Test:** K-5, K-8.
 
-#### F-16 · P2 · Confirmed — alternative candidate workbooks are not independently validated
+#### ✅ FIXED (Phase B) — F-16 · P2 · Confirmed — alternative candidate workbooks are not independently validated
 - MAX_TARGET, MAX_FLOOR and BALANCED are written by `write_output_workbook` with engine self-validation only. The validator, parity gate and seal apply only to `production/*_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx`.
 - My earlier statement in this conversation, that these are "validated schedules too", was wrong in the sense that matters (independent validation). Corrected here.
 - **Fix:** validate them, or label them "engine-checked only, not approved".
@@ -301,7 +318,7 @@ Each probe below was ACCEPTED or WARNED by the contract unless stated.
 - OR-Tools itself documents non-determinism in parallel search ([or-tools#3590](https://github.com/google/or-tools/issues/3590)). Reproducible parallel search needs interleaved search with fixed batch sizes ([or-tools PR #5423](https://github.com/google/or-tools/pull/5423)).
 - **Fix:** add a `--reproducible` mode for audit replays. Record that a run was not reproducible in its identity.
 
-#### F-19 · P2 · Design risk — the "independent" validator is not independent of the rules
+#### ✅ MITIGATED (Phase B: clean-room checker is a release gate) — F-19 · P2 · Design risk — the "independent" validator is not independent of the rules
 - It imports the engine's `parse_input` and calls `language_rules_at`, `rest_compatible`, `maximum_concurrent_breaks`, `whole_week_raw_cap` and others.
 - F-05 is the proof that a shared defect is invisible to it. F-01's duplicate-row loss passes its raw cross-check as well.
 - **Fix:** add the clean-room checker (`tools/clean_room_check.py`, written in this audit, no engine imports) to the release gate. It agreed with the engine on all 20 real runs.

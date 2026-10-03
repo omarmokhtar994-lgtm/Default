@@ -1,0 +1,23 @@
+{
+ "scenario": "S05_LANGUAGE_SHORTAGE",
+ "why": "Spanish minimum 1 from 08:00-20:00 every day, only 2 Spanish agents (10 shifts for 14 needed)",
+ "expected": "schedule with Spanish gaps named, or refusal naming Spanish",
+ "runner_rc": 2,
+ "elapsed_sec": 6.3,
+ "engine_status": "FAIL_HARD_CONTRACT_INFEASIBLE",
+ "artifact_state": "RUNNING_NOT_FINAL",
+ "independent_validation": "NOT_RUN",
+ "published_final": [],
+ "workbooks_in_case_root": [],
+ "selected_metrics": {
+  "after_target": null,
+  "after_floor": null,
+  "active_intervals": null,
+  "language_gap_count": null
+ },
+ "run_id": "bf0b6032a02c24f8b37da12d",
+ "business_outcome": "Outcome: No schedule satisfies all hard rules together\nStatus: FAIL_HARD_CONTRACT_INFEASIBLE\nProduction eligible: False\nIndependent validation: NOT_RUN (return code None)\n\nThe roster and legal shifts are individually readable, but the hard rules contradict each other. The rules that conflict: language rules (minimum per interval and Language Working Window hours).\n\nMain blockers:\n- language rules (minimum per interval and Language Working Window hours): part of the smallest set of rules that cannot all hold together\n\nRequired action:\n- Review the rules named above in the workbook, then rerun.\n",
+ "clean_room": null,
+ "pre_solver_failures": [],
+ "hard_probe": "INFEASIBLE"
+}

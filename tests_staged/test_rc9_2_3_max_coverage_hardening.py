@@ -85,6 +85,9 @@ class CanonicalMetricSurface(unittest.TestCase):
             "max_concurrent_breaks_all_staffed_quarters": 3,
             "max_concurrent_break_ratio_all_staffed_quarters": 0.75,
             "break_concurrency_violation_count_all_staffed_quarters": 1,
+            # Audit F-12 (Phase B): Coverage Split shortfalls after breaks
+            # joined the parity surface, so both sides publish the count.
+            "coverage_split_gap_count": 0,
             "after_avoidable_overage_fte_sum": 1.25,
             "after_avoidable_overage_interval_count": 2,
             "after_severe_overage_count": 1,
@@ -127,6 +130,7 @@ class CanonicalMetricSurface(unittest.TestCase):
                      "max_concurrent_breaks_all_staffed_quarters": 3,
                      "max_concurrent_break_ratio_all_staffed_quarters": 0.75,
                      "break_concurrency_violation_count_all_staffed_quarters": 1,
+                     "coverage_split_gap_count": 0,
                      "avoidable_overage_fte_sum": 1.25,
                      "avoidable_overage_positive_interval_count": 2,
                      "severe_overage_interval_count": 1,

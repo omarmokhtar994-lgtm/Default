@@ -1,0 +1,12 @@
+Outcome: No schedule satisfies all hard rules together
+Status: FAIL_HARD_CONTRACT_INFEASIBLE
+Production eligible: False
+Independent validation: NOT_RUN (return code None)
+
+The roster and legal shifts are individually readable, but the hard rules contradict each other. The rules that conflict: language rules (minimum per interval and Language Working Window hours).
+
+Main blockers:
+- language rules (minimum per interval and Language Working Window hours): part of the smallest set of rules that cannot all hold together
+
+Required action:
+- Review the rules named above in the workbook, then rerun.

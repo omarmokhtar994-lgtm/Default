@@ -1,0 +1,13 @@
+Outcome: Hard-valid final schedule generated with declared operational warnings
+Status: PASS_WITH_QUALITY_WARNINGS
+Production eligible: True
+Independent validation: PASS (return code 0)
+
+The schedule passed all hard rules and uses 0 approved no-break associate-day exception(s). Operational-quality findings remain visible as warnings rather than hidden hard failures.
+
+Warnings:
+- WHOLE_WEEK_OVERAGE_CAP_EXCEEDED (actual=11, maximum=0, cap_ratio=1.35)
+- EMPLOYEE_ISOLATED_OFFDAY_EXCEEDED (actual=12, maximum=0)
+
+Required action:
+- Review the declared warnings and no-break exception comments during operational approval.

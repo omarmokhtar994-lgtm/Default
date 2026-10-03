@@ -1,0 +1,1015 @@
+[
+ {
+  "case": "adv/runs/S01_BASELINE",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [
+   [
+    "max_concurrent_breaks_all_staffed_quarters",
+    null,
+    3
+   ],
+   [
+    "max_concurrent_break_ratio_all_staffed_quarters",
+    null,
+    0.5
+   ],
+   [
+    "break_concurrency_violation_count_all_staffed_quarters",
+    null,
+    0
+   ]
+  ],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "adv/runs/S01_BASELINE_R2",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [
+   [
+    "max_concurrent_breaks_all_staffed_quarters",
+    null,
+    3
+   ],
+   [
+    "max_concurrent_break_ratio_all_staffed_quarters",
+    null,
+    0.5
+   ],
+   [
+    "break_concurrency_violation_count_all_staffed_quarters",
+    null,
+    0
+   ]
+  ],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "adv/runs/S01_BASELINE_R3",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [
+   [
+    "max_concurrent_breaks_all_staffed_quarters",
+    null,
+    3
+   ],
+   [
+    "max_concurrent_break_ratio_all_staffed_quarters",
+    null,
+    0.3333333333333333
+   ],
+   [
+    "break_concurrency_violation_count_all_staffed_quarters",
+    null,
+    0
+   ]
+  ],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "adv/runs/S02_DEMAND_SLIGHTLY_ABOVE_CAPACITY",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [
+   [
+    "max_concurrent_breaks_all_staffed_quarters",
+    null,
+    2
+   ],
+   [
+    "max_concurrent_break_ratio_all_staffed_quarters",
+    null,
+    0.3333333333333333
+   ],
+   [
+    "break_concurrency_violation_count_all_staffed_quarters",
+    null,
+    0
+   ]
+  ],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "adv/runs/S03_DEMAND_MASSIVELY_ABOVE_CAPACITY",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [
+   [
+    "max_concurrent_breaks_all_staffed_quarters",
+    null,
+    2
+   ],
+   [
+    "max_concurrent_break_ratio_all_staffed_quarters",
+    null,
+    1.0
+   ],
+   [
+    "break_concurrency_violation_count_all_staffed_quarters",
+    null,
+    7
+   ]
+  ],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "adv/runs/S08_24x7_WEEK_BOUNDARY",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [
+   [
+    "max_concurrent_breaks_all_staffed_quarters",
+    null,
+    3
+   ],
+   [
+    "max_concurrent_break_ratio_all_staffed_quarters",
+    null,
+    0.5
+   ],
+   [
+    "break_concurrency_violation_count_all_staffed_quarters",
+    null,
+    0
+   ]
+  ],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "adv/runs/S12_OVERLAPPING_SKILLS",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [
+   [
+    "max_concurrent_breaks_all_staffed_quarters",
+    null,
+    3
+   ],
+   [
+    "max_concurrent_break_ratio_all_staffed_quarters",
+    null,
+    0.3333333333333333
+   ],
+   [
+    "break_concurrency_violation_count_all_staffed_quarters",
+    null,
+    0
+   ]
+  ],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "adv/runs/S14_DUPLICATE_PREFERENCE_ROW",
+  "validator_rule_failures": 2,
+  "validator_failure_types": [
+   "INPUT_CROSSCHECK_MISMATCH",
+   "LEAVE_VIOLATION"
+  ],
+  "parity_mismatches_existing_fields": [
+   [
+    "max_concurrent_breaks_all_staffed_quarters",
+    null,
+    3
+   ],
+   [
+    "max_concurrent_break_ratio_all_staffed_quarters",
+    null,
+    0.5
+   ],
+   [
+    "break_concurrency_violation_count_all_staffed_quarters",
+    null,
+    2
+   ]
+  ],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "FAIL",
+   "reason": null,
+   "violation_count": 1,
+   "violations_by_rule": {
+    "duplicate_input_row": 1
+   },
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "advA/runs/S01_BASELINE",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "advA/runs/S02_DEMAND_SLIGHTLY_ABOVE_CAPACITY",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "advA/runs/S03_DEMAND_MASSIVELY_ABOVE_CAPACITY",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "advA/runs/S06_FULL_WEEK_LEAVE",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "advA/runs/S07_SIX_LEAVE_DAYS",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "advA/runs/S08_24x7_WEEK_BOUNDARY",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "advA/runs/S12_OVERLAPPING_SKILLS",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "advB/runs/S01_BASELINE",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "advB/runs/S06_FULL_WEEK_LEAVE",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "advB/runs/S08_24x7_WEEK_BOUNDARY",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "aeit/out/AEIT_9002_NOCAP",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [
+   [
+    "max_concurrent_breaks_all_staffed_quarters",
+    null,
+    4
+   ],
+   [
+    "max_concurrent_break_ratio_all_staffed_quarters",
+    null,
+    0.6
+   ],
+   [
+    "break_concurrency_violation_count_all_staffed_quarters",
+    null,
+    0
+   ]
+  ],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "aeit/out/AEIT_9002_S240",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [
+   [
+    "max_concurrent_breaks_all_staffed_quarters",
+    null,
+    3
+   ],
+   [
+    "max_concurrent_break_ratio_all_staffed_quarters",
+    null,
+    0.5
+   ],
+   [
+    "break_concurrency_violation_count_all_staffed_quarters",
+    null,
+    5
+   ]
+  ],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "aeit/out/AEIT_9004_NOCAP",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [
+   [
+    "max_concurrent_breaks_all_staffed_quarters",
+    null,
+    3
+   ],
+   [
+    "max_concurrent_break_ratio_all_staffed_quarters",
+    null,
+    0.75
+   ],
+   [
+    "break_concurrency_violation_count_all_staffed_quarters",
+    null,
+    0
+   ]
+  ],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "aeit/out/AEIT_9004_S240",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [
+   [
+    "max_concurrent_breaks_all_staffed_quarters",
+    null,
+    2
+   ],
+   [
+    "max_concurrent_break_ratio_all_staffed_quarters",
+    null,
+    0.5
+   ],
+   [
+    "break_concurrency_violation_count_all_staffed_quarters",
+    null,
+    0
+   ]
+  ],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "aeit/out/FINAL_AEIT_9002_R",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [
+   [
+    "max_concurrent_breaks_all_staffed_quarters",
+    null,
+    3
+   ],
+   [
+    "max_concurrent_break_ratio_all_staffed_quarters",
+    null,
+    0.5
+   ],
+   [
+    "break_concurrency_violation_count_all_staffed_quarters",
+    null,
+    3
+   ]
+  ],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "f16/results_chat/CRICUT_CHAT",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [
+   [
+    "max_concurrent_breaks_all_staffed_quarters",
+    null,
+    4
+   ],
+   [
+    "max_concurrent_break_ratio_all_staffed_quarters",
+    null,
+    0.3
+   ],
+   [
+    "break_concurrency_violation_count_all_staffed_quarters",
+    null,
+    0
+   ]
+  ],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "f16/results_h1/SYNTH_H1_24X7_OVERNIGHT",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [
+   [
+    "max_concurrent_breaks_all_staffed_quarters",
+    null,
+    4
+   ],
+   [
+    "max_concurrent_break_ratio_all_staffed_quarters",
+    null,
+    0.5
+   ],
+   [
+    "break_concurrency_violation_count_all_staffed_quarters",
+    null,
+    0
+   ]
+  ],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "final/MyDrive/RESULTS/CRICUT_VOICE_LANGUAGE_HOURS",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [
+   [
+    "max_concurrent_breaks_all_staffed_quarters",
+    null,
+    6
+   ],
+   [
+    "max_concurrent_break_ratio_all_staffed_quarters",
+    null,
+    0.5
+   ],
+   [
+    "break_concurrency_violation_count_all_staffed_quarters",
+    null,
+    36
+   ]
+  ],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "final/MyDrive/RESULTS/_seeds/CRICUT_VOICE_LANGUAGE_HOURS/seeds/CRICUT_VOICE_LANGUAGE_HOURS_S9000",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [
+   [
+    "max_concurrent_breaks_all_staffed_quarters",
+    null,
+    8
+   ],
+   [
+    "max_concurrent_break_ratio_all_staffed_quarters",
+    null,
+    0.5
+   ],
+   [
+    "break_concurrency_violation_count_all_staffed_quarters",
+    null,
+    29
+   ]
+  ],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "final/MyDrive/RESULTS/_seeds/CRICUT_VOICE_LANGUAGE_HOURS/seeds/CRICUT_VOICE_LANGUAGE_HOURS_S9001",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [
+   [
+    "max_concurrent_breaks_all_staffed_quarters",
+    null,
+    6
+   ],
+   [
+    "max_concurrent_break_ratio_all_staffed_quarters",
+    null,
+    0.5
+   ],
+   [
+    "break_concurrency_violation_count_all_staffed_quarters",
+    null,
+    36
+   ]
+  ],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "lang/out/VOICE_ALLROWS2",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [
+   [
+    "max_concurrent_breaks_all_staffed_quarters",
+    null,
+    4
+   ],
+   [
+    "max_concurrent_break_ratio_all_staffed_quarters",
+    null,
+    0.5
+   ],
+   [
+    "break_concurrency_violation_count_all_staffed_quarters",
+    null,
+    8
+   ]
+  ],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "lang/out/VOICE_FINAL_SHEET",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [
+   [
+    "max_concurrent_breaks_all_staffed_quarters",
+    null,
+    5
+   ],
+   [
+    "max_concurrent_break_ratio_all_staffed_quarters",
+    null,
+    0.4
+   ],
+   [
+    "break_concurrency_violation_count_all_staffed_quarters",
+    null,
+    4
+   ]
+  ],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "phaseA/qr_CHAT_POLISH",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [
+   [
+    "max_concurrent_breaks_all_staffed_quarters",
+    null,
+    4
+   ],
+   [
+    "max_concurrent_break_ratio_all_staffed_quarters",
+    null,
+    0.3
+   ],
+   [
+    "break_concurrency_violation_count_all_staffed_quarters",
+    null,
+    0
+   ]
+  ],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "phaseA/qr_S02_DEMAND_SLIGHTLY_ABOVE_CAPACITY",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [
+   [
+    "max_concurrent_breaks_all_staffed_quarters",
+    null,
+    2
+   ],
+   [
+    "max_concurrent_break_ratio_all_staffed_quarters",
+    null,
+    0.3333333333333333
+   ],
+   [
+    "break_concurrency_violation_count_all_staffed_quarters",
+    null,
+    0
+   ]
+  ],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "phaseA/qr_S08_24x7_WEEK_BOUNDARY",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [
+   [
+    "max_concurrent_breaks_all_staffed_quarters",
+    null,
+    3
+   ],
+   [
+    "max_concurrent_break_ratio_all_staffed_quarters",
+    null,
+    0.5
+   ],
+   [
+    "break_concurrency_violation_count_all_staffed_quarters",
+    null,
+    0
+   ]
+  ],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "phaseA/qr_S12_OVERLAPPING_SKILLS",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [
+   [
+    "max_concurrent_breaks_all_staffed_quarters",
+    null,
+    3
+   ],
+   [
+    "max_concurrent_break_ratio_all_staffed_quarters",
+    null,
+    0.3333333333333333
+   ],
+   [
+    "break_concurrency_violation_count_all_staffed_quarters",
+    null,
+    0
+   ]
+  ],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "phaseA/qr_VOICE_POLISH",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [
+   [
+    "max_concurrent_breaks_all_staffed_quarters",
+    null,
+    6
+   ],
+   [
+    "max_concurrent_break_ratio_all_staffed_quarters",
+    null,
+    0.5
+   ],
+   [
+    "break_concurrency_violation_count_all_staffed_quarters",
+    null,
+    9
+   ]
+  ],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "phaseA/real/VOICE_PHASE_A",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "phaseB_real/VOICE_PHASE_B",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "polish/e2e/AEIT_POLISH",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [
+   [
+    "max_concurrent_breaks_all_staffed_quarters",
+    null,
+    3
+   ],
+   [
+    "max_concurrent_break_ratio_all_staffed_quarters",
+    null,
+    0.5
+   ],
+   [
+    "break_concurrency_violation_count_all_staffed_quarters",
+    null,
+    1
+   ]
+  ],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "polish/e2e/CHAT_POLISH",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [
+   [
+    "max_concurrent_breaks_all_staffed_quarters",
+    null,
+    4
+   ],
+   [
+    "max_concurrent_break_ratio_all_staffed_quarters",
+    null,
+    0.3
+   ],
+   [
+    "break_concurrency_violation_count_all_staffed_quarters",
+    null,
+    0
+   ]
+  ],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ },
+ {
+  "case": "polish/e2e/VOICE_POLISH",
+  "validator_rule_failures": 0,
+  "validator_failure_types": [],
+  "parity_mismatches_existing_fields": [
+   [
+    "max_concurrent_breaks_all_staffed_quarters",
+    null,
+    6
+   ],
+   [
+    "max_concurrent_break_ratio_all_staffed_quarters",
+    null,
+    0.5
+   ],
+   [
+    "break_concurrency_violation_count_all_staffed_quarters",
+    null,
+    9
+   ]
+  ],
+  "parity_new_fields": [],
+  "clean_room": {
+   "status": "PASS",
+   "reason": null,
+   "violation_count": 0,
+   "violations_by_rule": {},
+   "engine_mismatches": []
+  }
+ }
+]

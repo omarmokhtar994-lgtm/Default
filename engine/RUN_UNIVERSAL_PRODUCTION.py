@@ -14,6 +14,8 @@ POLISHER = ROOT / "production" / "production_output_polisher.py"
 QUALITY_REPORTER = ROOT / "production" / "phase_c_quality_report.py"
 PACKAGER = ROOT / "production" / "package_phase_c_outputs.py"
 VALIDATOR = ROOT / "tools" / "independent_validator.py"
+# Shares no code with the engine; see its docstring. Lives beside engine/.
+CLEAN_ROOM = ROOT.parent / "tools" / "clean_room_check.py"
 def _engine_release() -> str:
     """Read the release identity from the engine itself.
 
@@ -516,7 +518,61 @@ def apply_metric_parity_gate(
 ENGINE_DIAGNOSED_NO_ARTIFACT = {'FAIL_HARD_CONTRACT_INFEASIBLE', 'FAIL_HARD_CONTRACT_UNKNOWN'}
 
 
-def _outcome_detail_text(outcome: dict) -> str:
+def _blocking_reasons(case_root: Path, independent_validation: dict, runner_return_code: int) -> list:
+    """Plain lines naming what stopped a generated schedule from release.
+
+    Audit F-14: a blocked schedule used to show only the engine's quality
+    findings, under "Main blockers", while the gate that actually blocked it
+    (a parity mismatch, a validator rule, the clean-room check) was named
+    nowhere in the text.
+    """
+    reasons = []
+    status = str(independent_validation.get('status') or 'NOT_RUN')
+    for row in ((independent_validation.get('metric_parity') or {}).get('mismatches') or [])[:10]:
+        reasons.append(f"Engine and independent validator disagree on {row.get('field')}: "
+                       f"engine {row.get('engine')}, validator {row.get('validator')}")
+    validation_json = independent_validation.get('json')
+    if status == 'FAIL' and validation_json:
+        try:
+            failures = json.loads(Path(validation_json).read_text(encoding='utf-8')).get('failures') or []
+        except (OSError, json.JSONDecodeError):
+            failures = []
+        counts = {}
+        for row in failures:
+            counts[str(row.get('type'))] = counts.get(str(row.get('type')), 0) + 1
+        for kind, count in sorted(counts.items()):
+            reasons.append(f'Independent validation: {kind} x{count}')
+    clean_room = independent_validation.get('clean_room') or {}
+    if clean_room.get('status') == 'FAIL':
+        for rule, count in sorted((clean_room.get('violations_by_rule') or {}).items()):
+            reasons.append(f'Clean-room check: {rule} x{count}')
+        for row in (clean_room.get('engine_mismatches') or [])[:10]:
+            reasons.append(f"Clean-room check disagrees with the engine on {row.get('metric')}: "
+                           f"clean room {row.get('clean_room')}, engine {row.get('published')}")
+    if status.startswith('ERROR'):
+        reasons.append(f'Independent validation did not complete ({status})')
+    if status.startswith('SKIPPED'):
+        reasons.append(f'Independent validation was skipped ({status})')
+    quality_path = case_root / 'PHASE_C_QUALITY_SUMMARY.json'
+    if quality_path.is_file():
+        try:
+            gate = json.loads(quality_path.read_text(encoding='utf-8')).get('production_quality_gate') or {}
+        except (OSError, json.JSONDecodeError):
+            gate = {}
+        for row in gate.get('failures') or []:
+            if isinstance(row, dict):
+                reasons.append(f"Quality gate in FAIL mode: {row.get('code')}"
+                               + (f" (actual {row.get('actual', row.get('count'))})" if row.get('actual', row.get('count')) is not None else ''))
+    if not reasons and int(runner_return_code or 0) != 0:
+        reasons.append(f'Run returned blocking code {runner_return_code}')
+    deduped = []
+    for line in reasons:
+        if line not in deduped:
+            deduped.append(line)
+    return deduped
+
+
+def _outcome_detail_text(outcome: dict, findings_label: "str | None" = None) -> str:
     """The findings, named requests and actions as readable lines.
 
     BUSINESS_OUTCOME.txt is the file a scheduler opens; it used to stop at the
@@ -537,10 +593,17 @@ def _outcome_detail_text(outcome: dict) -> str:
             line = f"{line} ({', '.join(rest)})" if line else ', '.join(rest)
         return line[:300]
     lines = []
-    findings = outcome.get('resource_findings') or []
+    reasons = outcome.get('blocking_reasons') or []
+    if reasons:
+        lines += ['', 'Why it is blocked:'] + [f'- {r}' for r in reasons[:12]]
+    findings = []
+    for item in outcome.get('resource_findings') or []:
+        text = finding(item)
+        if text not in findings:
+            findings.append(text)
     if findings:
-        label = 'Warnings:' if outcome.get('production_eligible') else 'Main blockers:'
-        lines += ['', label] + [f'- {finding(item)}' for item in findings[:8]]
+        label = findings_label or ('Warnings:' if outcome.get('production_eligible') else 'Main blockers:')
+        lines += ['', label] + [f'- {text}' for text in findings[:8]]
     examples = outcome.get('affected_examples') or []
     if examples:
         lines += ['', 'Affected examples:']
@@ -580,6 +643,10 @@ def reconcile_business_outcome_after_validation(
     validation_status = str(independent_validation.get('status') or 'NOT_RUN')
     validation_rc = independent_validation.get('return_code')
     blocked = validation_status != 'PASS' or int(runner_return_code or 0) != 0
+    # The engine's own findings on a schedule it judged releasable are declared
+    # quality debt (warnings), even when a later gate blocks the release.
+    engine_said_releasable = bool(outcome.get('production_eligible'))
+    outcome.pop('blocking_reasons', None)
     quality_gate_status = 'NOT_EVALUATED'
     quality_report_path = case_root / 'PHASE_C_QUALITY_SUMMARY.json'
     if quality_report_path.is_file():
@@ -600,6 +667,8 @@ def reconcile_business_outcome_after_validation(
         'quality_gate_status': independent_validation.get('quality_gate_status'),
         'coverage_quality_gate_status': independent_validation.get('coverage_quality_gate_status'),
         'metric_parity': independent_validation.get('metric_parity'),
+        'clean_room': independent_validation.get('clean_room'),
+        'alternative_exports': independent_validation.get('alternative_exports'),
     }
     outcome['independent_validation'] = validation_record
     audit_status = ''
@@ -661,6 +730,21 @@ def reconcile_business_outcome_after_validation(
             'Rerun with the full stage to produce a schedule that can be released.',
         ]
 
+    elif audit_status == 'PASS_DIAGNOSTICS_ONLY' and not schedule_generated:
+        # Audit F-14: a diagnostics-only run produces no schedule by design.
+        # It is neither a success nor an "engine output problem".
+        outcome['production_eligible'] = False
+        outcome['technical_return_code'] = int(runner_return_code or 0)
+        outcome['technical_status'] = 'PASS_DIAGNOSTICS_ONLY'
+        outcome['outcome_code'] = 'DIAGNOSTICS_ONLY_COMPLETE'
+        outcome['outcome_category'] = 'REVIEW_ONLY'
+        outcome['headline'] = 'Diagnostics completed; no schedule was produced'
+        outcome['plain_language_summary'] = (
+            'This was a diagnostics-only run: the workbook was read and checked and the hard rules '
+            'were tested for satisfiability, but no shifts or breaks were scheduled, so there was '
+            'nothing to validate.')
+        outcome['recommended_actions'] = ['Rerun at QUICK depth or deeper to produce a schedule.']
+
     elif blocked:
         outcome['production_eligible'] = False
         outcome['technical_return_code'] = int(runner_return_code or validation_rc or 4)
@@ -680,20 +764,25 @@ def reconcile_business_outcome_after_validation(
                         'correct the input/resource contract and rerun.'
                     )
                 outcome['technical_status'] = 'FAIL_PRE_SOLVER_CONTRACT'
-            elif audit_status in ENGINE_DIAGNOSED_NO_ARTIFACT and validation_status == 'NOT_RUN':
-                # The engine proved why there is no schedule (which hard rules
-                # contradict, and the requests involved). Replacing that with
-                # "the engine output problem" hid the reason from the person
-                # who has to fix the workbook.
+            elif (validation_status == 'NOT_RUN'
+                  and (audit_status in ENGINE_DIAGNOSED_NO_ARTIFACT or audit_status.startswith('FAIL'))
+                  and not str(outcome.get('outcome_code') or '').startswith('FINAL_SCHEDULE_GENERATED')):
+                # The engine said why there is no schedule (which hard rules
+                # contradict, which break placement failed, and the requests
+                # involved). Replacing that with "the engine output problem"
+                # hid the reason from the person who has to fix the workbook.
+                # Audit F-14: this used to cover only the two hard-contract
+                # statuses, so every other no-schedule ending lost its reason.
                 outcome['technical_status'] = audit_status
             else:
                 outcome['outcome_code'] = 'NO_FINAL_SCHEDULE_GENERATED_VALIDATION_NOT_RUN'
                 outcome['outcome_category'] = 'ACTION_REQUIRED'
                 outcome['headline'] = 'No final schedule was generated; validation was not run'
                 outcome['plain_language_summary'] = (
-                    'No final schedule workbook was produced, so independent validation could '
-                    'not run. The run is blocked until the engine output problem is corrected '
-                    'and the case is rerun.'
+                    'No final schedule workbook was produced'
+                    + (f' (engine status {audit_status})' if audit_status else '')
+                    + ', so independent validation could not run. See the engine audit and log '
+                    'for the cause, correct it and rerun.'
                 )
                 outcome['technical_status'] = (
                     'FAIL_INDEPENDENT_VALIDATION'
@@ -766,6 +855,8 @@ def reconcile_business_outcome_after_validation(
             outcome['recommended_actions'] = [
                 'Review the independent validation and release-gate failures, correct the cause, and rerun validation.'
             ]
+            outcome['blocking_reasons'] = _blocking_reasons(
+                case_root, independent_validation, runner_return_code)
 
     rendered_text = (
         f"Outcome: {outcome.get('headline', '')}\n"
@@ -773,7 +864,7 @@ def reconcile_business_outcome_after_validation(
         f"Production eligible: {bool(outcome.get('production_eligible'))}\n"
         f"Independent validation: {validation_status} (return code {validation_rc})\n\n"
         f"{outcome.get('plain_language_summary', '')}\n"
-    ) + _outcome_detail_text(outcome)
+    ) + _outcome_detail_text(outcome, 'Warnings:' if engine_said_releasable else None)
     for path in (outcome_path, debug_outcome_path):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(outcome, indent=2), encoding='utf-8')
@@ -817,6 +908,48 @@ def reconcile_business_outcome_after_validation(
                 writer.writerows(rows)
         except (OSError, ValueError, csv.Error):
             continue
+
+
+def run_clean_room_gate(input_path: Path, output_workbook: Path, audit_path: Path,
+                        json_out: Path, validation_json: "Path | None" = None) -> dict:
+    """Second, engine-independent check of the schedule about to be released.
+
+    Audit F-19: the independent validator takes its contract from the engine's
+    own parser and rule helpers, so a defect in one of those is invisible to
+    both. The clean-room checker re-reads both workbooks with openpyxl alone.
+
+      PASS        no rule violation and every compared metric equals the engine's
+      FAIL        a violation, or a metric the engine published differently
+                  (blocks release)
+      NOT_CHECKED the checker could not read this workbook layout; recorded and
+                  surfaced, not blocking, because the validator has passed it
+    """
+    result = {'status': 'NOT_CHECKED', 'json': str(json_out), 'checker': str(CLEAN_ROOM)}
+    if not CLEAN_ROOM.exists():
+        result['reason'] = 'clean-room checker not found'
+        return result
+    if json_out.exists():
+        json_out.unlink()
+    command = [sys.executable, '-u', str(CLEAN_ROOM), '--input', str(input_path),
+               '--output', str(output_workbook), '--audit', str(audit_path), '--json-out', str(json_out)]
+    if validation_json is not None:
+        command += ['--validation', str(validation_json)]
+    proc = subprocess.run(command, capture_output=True, text=True)
+    result['return_code'] = proc.returncode
+    try:
+        report = json.loads(json_out.read_text(encoding='utf-8'))
+    except (OSError, json.JSONDecodeError):
+        tail = (proc.stderr or proc.stdout or '').strip().splitlines()[-3:]
+        result['reason'] = 'the checker did not finish reading this workbook: ' + ' | '.join(tail)
+        return result
+    result['violation_count'] = int(report.get('violation_count', 0) or 0)
+    result['violations_by_rule'] = report.get('violations_by_rule') or {}
+    result['engine_mismatches'] = report.get('engine_mismatches') or []
+    result['validator_mismatches'] = report.get('validator_mismatches') or []
+    result['input_issues'] = report.get('input_issues') or []
+    blocking = result['violation_count'] > 0 or bool(result['engine_mismatches'])
+    result['status'] = 'FAIL' if blocking else 'PASS'
+    return result
 
 
 def quality_allows_validation(case_root: Path, quality_rc: int) -> bool:
@@ -1349,6 +1482,17 @@ def main() -> int:
                 validation_status = 'FAIL_METRIC_PARITY'
                 independent_validation['status'] = validation_status
                 independent_validation['return_code'] = int(vrc)
+        if vrc == 0 and not skeleton_only:
+            clean_room = run_clean_room_gate(input_path, validation_workbook, audit,
+                                             case_root / 'CLEAN_ROOM_CHECK.json', validation_json)
+            independent_validation['clean_room'] = clean_room
+            print(f"[run] clean-room check: {clean_room['status']}"
+                  + (f" ({clean_room.get('reason')})" if clean_room.get('reason') else ''), flush=True)
+            if clean_room['status'] == 'FAIL':
+                vrc = 2
+                validation_status = 'FAIL_CLEAN_ROOM'
+                independent_validation['status'] = validation_status
+                independent_validation['return_code'] = int(vrc)
         if vrc != 0:
             rc = 4
         # Re-evaluate Phase C after the exact polished workbook has been
@@ -1383,6 +1527,12 @@ def main() -> int:
         if rc == 0:
             rc = 5 if args.skip_independent_validation else 4
 
+    if (validation_workbook is not None and not args.skip_independent_validation
+            and not skeleton_only):
+        alternatives = validate_alternative_exports(case_root, input_path, args.language_working_window)
+        independent_validation['alternative_exports'] = alternatives
+        for row in alternatives:
+            print(f"[run] alternative export {row['role']}: {row['status']}", flush=True)
     reconcile_business_outcome_after_validation(case_root, independent_validation, rc)
     metrics = read_summary_metrics(case_root)
     run_status = {
@@ -1420,6 +1570,43 @@ def main() -> int:
             status_path.write_text(json.dumps(run_status, indent=2, default=str), encoding='utf-8')
     print(json.dumps(run_status, indent=2, default=str), flush=True)
     return rc
+
+ALTERNATIVE_EXPORT_ROLES = ('MAX_TARGET_CANDIDATE', 'MAX_FLOOR_CANDIDATE', 'BALANCED_CANDIDATE',
+                            'SAFER_BALANCED_CANDIDATE')
+
+
+def validate_alternative_exports(case_root: Path, input_path: Path,
+                                 language_working_window: "str | None") -> list:
+    """Run the independent validator on every alternative schedule the engine exported.
+
+    Audit F-16: the MAX_TARGET / MAX_FLOOR / BALANCED workbooks sit beside the
+    released schedule and a planner may pick one, but only the selected
+    schedule was ever validated. Each now carries its own verdict. This does
+    not change the release decision for the selected schedule.
+    """
+    results = []
+    for path in sorted(case_root.glob('*_CANDIDATE.xlsx')):
+        role = next((r for r in sorted(ALTERNATIVE_EXPORT_ROLES, key=len, reverse=True)
+                     if path.stem.endswith('_' + r)), None)
+        if role is None:
+            continue
+        json_out = case_root / f'INDEPENDENT_VALIDATION_{role}.json'
+        command = [sys.executable, '-u', str(VALIDATOR), '--input', str(input_path),
+                   '--output', str(path), '--json-out', str(json_out)]
+        if language_working_window is not None:
+            command += ['--language-working-window', language_working_window]
+        proc = subprocess.run(command, capture_output=True, text=True)
+        row = {'role': role, 'workbook': str(path), 'json': str(json_out), 'return_code': proc.returncode}
+        try:
+            report = json.loads(json_out.read_text(encoding='utf-8'))
+            row['status'] = 'PASS' if proc.returncode == 0 else str(report.get('status') or 'FAIL')
+            row['hard_fail_count'] = report.get('hard_fail_count')
+            row['failure_types'] = sorted({str(f.get('type')) for f in report.get('failures') or []})
+        except (OSError, json.JSONDecodeError):
+            row['status'] = 'ERROR_VALIDATOR_DID_NOT_COMPLETE'
+        results.append(row)
+    return results
+
 
 if __name__ == '__main__':
     raise SystemExit(main())

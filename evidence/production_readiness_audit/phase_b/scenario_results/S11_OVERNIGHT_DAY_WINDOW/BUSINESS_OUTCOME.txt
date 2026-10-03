@@ -1,0 +1,18 @@
+Outcome: No legal final break plan was found
+Status: FAIL_NO_BREAK_FEASIBLE_CANDIDATE
+Production eligible: False
+Independent validation: NOT_RUN (return code None)
+
+The engine could not find a legal break plan for the tested shift/OFF skeletons within the available search budget. Main resource blocker: Spanish coverage, affecting 1 associate-day(s) without qualified backup.
+
+Main blockers:
+- group=Spanish, affected_associate_days=1, critical_quarters=24
+- family=LANGUAGE, affected_associate_days=1
+
+Affected examples:
+- Agent C | Mon | 18:00 - 03:00 | Mon 18:00 to Mon 23:45
+
+Required action:
+- Add or overlap qualified resources in the named bottleneck windows, especially single-person language coverage.
+- Change shift/OFF patterns so qualified associates have legal break coverage.
+- Change the exception cap only through an explicit business decision; the engine will not raise it automatically.

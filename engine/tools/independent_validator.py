@@ -138,6 +138,12 @@ def declared_artifact_type(path: Path) -> Optional[str]:
             if not value: return None
             if "before break" in value: return "BEST_BEFORE_BREAKS"
             if "after break" in value or "final" in value: return "FINAL_AFTER_BREAKS"
+            # The engine's alternative exports (audit F-16) are complete
+            # after-break schedules from the same candidate pool. Read as
+            # UNRECOGNIZED, none of them could ever be validated.
+            if value.replace(" ","_") in {"max_target_candidate","max_floor_candidate",
+                                          "balanced_candidate","safer_balanced_candidate"}:
+                return "FINAL_AFTER_BREAKS"
             return "UNRECOGNIZED:"+value
         return None
     finally:
@@ -815,6 +821,41 @@ def independent_input_crosscheck(input_path: Path, parsed, run_override: Optiona
             "shared_engine_surface": "parse_input and the rule helpers listed in engine/tools/VALIDATOR_INDEPENDENCE.md"}
 
 
+def coverage_split_gaps(eng, parsed, after) -> List[Dict[str, Any]]:
+    """Coverage Split windows left short on the schedule as published.
+
+    `after[slot]` lists the associates on the floor after breaks in each
+    quarter of the week (previous-Saturday carry included), exactly as the
+    coverage figures above count them. The rule lookup and the grossed-up
+    headcount are the contract, read through the engine; the count of who is
+    present is this validator's own. (Audit F-12: no check outside the engine
+    used to look at Coverage Split at all.)
+    """
+    gaps: List[Dict[str, Any]] = []
+    if not getattr(parsed, "coverage_split_rules", None):
+        return gaps
+    qpi = parsed.qslots_per_interval
+    for d in range(7):
+        for i in range(parsed.intervals_per_day):
+            if not parsed.active[d][i]:
+                continue
+            for q in range(qpi):
+                slot = d*96 + i*qpi + q
+                minute = i*parsed.interval_minutes + q*15
+                rule = eng.merge_coverage_split_rules(eng.coverage_split_rules_at(parsed, minute))
+                if rule is None:
+                    continue
+                need = eng.coverage_split_required_headcount(parsed, d, i, rule.coverage_ratio)
+                if need <= 0:
+                    continue
+                present = sum(1 for a in after[slot]
+                              if norm(parsed.associates[a].language) in rule.eligible_languages)
+                if present < need:
+                    gaps.append({"day": DAYS[d], "time": eng.hhmm(minute), "group": rule.group,
+                                 "required": int(need), "actual": int(present)})
+    return gaps
+
+
 def validate(input_path: Path, output_path: Path, engine_path: Path,
              language_working_window: Optional[str] = None) -> Dict[str,Any]:
     eng=load_engine(engine_path)
@@ -1352,6 +1393,15 @@ def validate(input_path: Path, output_path: Path, engine_path: Path,
     failures.extend({"type":"ZERO_STAFF_ACTIVE","detail":row} for row in zero)
     failures.extend({"type":"LANGUAGE_MINIMUM","detail":row} for row in language_gaps)
     failures.extend({"type":"OPENING_MINIMUM","detail":row} for row in opening_gaps)
+    split_gaps=coverage_split_gaps(eng, parsed, after)
+    if split_gaps:
+        # Same release rule as the engine's coverage_split gate: FAIL mode
+        # blocks, WARN mode is reported.
+        entry={"type":"COVERAGE_SPLIT","count":len(split_gaps),"examples":split_gaps[:20]}
+        if str(getattr(parsed,"coverage_split_gate_mode","fail")).lower()=="warn":
+            warnings.append(entry)
+        else:
+            failures.append(entry)
     if parsed.blank_requirement_mode=="hard_no_current_week_staffing" and blank_staffed:
         failures.append({"type":"BLANK_INTERVAL_STAFFING","count":len(blank_staffed),"examples":blank_staffed[:20]})
     if parsed.floor_mode=="hard":
@@ -1434,6 +1484,7 @@ def validate(input_path: Path, output_path: Path, engine_path: Path,
         "before_target":int(before_target),"after_target":int(after_target),"before_floor":int(before_floor),"after_floor":int(after_floor),
         "floor_gaps":active-int(after_floor),"severe_floor_gaps":severe,"max_consecutive_floor_gaps":maxrun,
         "zero_staffed_active_quarters":len(zero),"language_gap_count":len(language_gaps),"opening_gap_count":len(opening_gaps),
+        "coverage_split_gap_count":len(split_gaps),
         "avoidable_overage_fte_sum":sum(overages),"avoidable_overage_peak_fte":max(overages,default=0),
         "avoidable_overage_variance_fte":variance,"avoidable_overage_stddev_fte":math.sqrt(max(0,variance)),
         "avoidable_overage_positive_interval_count":len(positive_overages),

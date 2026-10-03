@@ -1,0 +1,215 @@
+{
+ "workbooks": 111,
+ "changed": {
+  "candidates/RC9_2_2_HARDENED_RC5/engine/regression_assets/ready_inputs/AE_FRENCH_RC8_6_1_INPUT_READY.xlsx": {
+   "contract_fields_changed": {},
+   "hard_without_rule": [
+    "HARD_DUPLICATE_INSTRUCTION",
+    "HARD_INVALID_INSTRUCTION_NUMBER"
+   ],
+   "hard_with_rule": []
+  },
+  "candidates/RC9_2_2_HARDENED_RC5/engine/regression_assets/ready_inputs/NMG12_RC8_6_1_INPUT_READY.xlsx": {
+   "contract_fields_changed": {},
+   "hard_without_rule": [
+    "HARD_DUPLICATE_INSTRUCTION",
+    "HARD_INVALID_INSTRUCTION_NUMBER"
+   ],
+   "hard_with_rule": []
+  },
+  "candidates/RC9_2_2_HARDENED_RC5/engine/regression_assets/ready_inputs/NMG13_RC8_13_CONDITIONAL_PRODUCTION_INPUT_READY.xlsx": {
+   "contract_fields_changed": {},
+   "hard_without_rule": [
+    "HARD_DUPLICATE_INSTRUCTION",
+    "HARD_INVALID_INSTRUCTION_NUMBER"
+   ],
+   "hard_with_rule": []
+  },
+  "candidates/RC9_2_2_HARDENED_RC5/engine/regression_assets/ready_inputs/NMG13_RC8_6_1_INPUT_READY.xlsx": {
+   "contract_fields_changed": {},
+   "hard_without_rule": [
+    "HARD_DUPLICATE_INSTRUCTION",
+    "HARD_INVALID_INSTRUCTION_NUMBER"
+   ],
+   "hard_with_rule": []
+  },
+  "candidates/RC9_2_2_HARDENED_RC5/engine/regression_assets/ready_inputs/NMG_EN_RC8_6_1_INPUT_READY.xlsx": {
+   "contract_fields_changed": {},
+   "hard_without_rule": [
+    "HARD_DUPLICATE_INSTRUCTION",
+    "HARD_INVALID_INSTRUCTION_NUMBER"
+   ],
+   "hard_with_rule": []
+  },
+  "candidates/RC9_2_2_HARDENED_RC5/engine/regression_assets/ready_inputs/NMG_SPEN_RC8_6_1_INPUT_READY.xlsx": {
+   "contract_fields_changed": {},
+   "hard_without_rule": [
+    "HARD_DUPLICATE_INSTRUCTION",
+    "HARD_INVALID_INSTRUCTION_NUMBER"
+   ],
+   "hard_with_rule": []
+  },
+  "candidates/RC9_2_2_HARDENED_RC5/engine/regression_assets/ready_inputs/SAKS_NEW_RC8_6_1_INPUT_READY.xlsx": {
+   "contract_fields_changed": {},
+   "hard_without_rule": [
+    "HARD_DUPLICATE_INSTRUCTION",
+    "HARD_INVALID_INSTRUCTION_NUMBER",
+    "HARD_INVALID_REQUIREMENT_TIME",
+    "HARD_INVALID_SHRINKAGE_TIME",
+    "HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE"
+   ],
+   "hard_with_rule": [
+    "HARD_INVALID_REQUIREMENT_TIME",
+    "HARD_INVALID_SHRINKAGE_TIME",
+    "HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE"
+   ]
+  },
+  "engine/regression_assets/ready_inputs/AE_FRENCH_RC8_6_1_INPUT_READY.xlsx": {
+   "contract_fields_changed": {},
+   "hard_without_rule": [
+    "HARD_DUPLICATE_INSTRUCTION",
+    "HARD_INVALID_INSTRUCTION_NUMBER"
+   ],
+   "hard_with_rule": []
+  },
+  "engine/regression_assets/ready_inputs/NMG12_RC8_6_1_INPUT_READY.xlsx": {
+   "contract_fields_changed": {},
+   "hard_without_rule": [
+    "HARD_DUPLICATE_INSTRUCTION",
+    "HARD_INVALID_INSTRUCTION_NUMBER"
+   ],
+   "hard_with_rule": []
+  },
+  "engine/regression_assets/ready_inputs/NMG13_RC8_13_CONDITIONAL_PRODUCTION_INPUT_READY.xlsx": {
+   "contract_fields_changed": {},
+   "hard_without_rule": [
+    "HARD_DUPLICATE_INSTRUCTION",
+    "HARD_INVALID_INSTRUCTION_NUMBER"
+   ],
+   "hard_with_rule": []
+  },
+  "engine/regression_assets/ready_inputs/NMG13_RC8_6_1_INPUT_READY.xlsx": {
+   "contract_fields_changed": {},
+   "hard_without_rule": [
+    "HARD_DUPLICATE_INSTRUCTION",
+    "HARD_INVALID_INSTRUCTION_NUMBER"
+   ],
+   "hard_with_rule": []
+  },
+  "engine/regression_assets/ready_inputs/NMG_EN_RC8_6_1_INPUT_READY.xlsx": {
+   "contract_fields_changed": {},
+   "hard_without_rule": [
+    "HARD_DUPLICATE_INSTRUCTION",
+    "HARD_INVALID_INSTRUCTION_NUMBER"
+   ],
+   "hard_with_rule": []
+  },
+  "engine/regression_assets/ready_inputs/NMG_SPEN_RC8_6_1_INPUT_READY.xlsx": {
+   "contract_fields_changed": {},
+   "hard_without_rule": [
+    "HARD_DUPLICATE_INSTRUCTION",
+    "HARD_INVALID_INSTRUCTION_NUMBER"
+   ],
+   "hard_with_rule": []
+  },
+  "engine/regression_assets/ready_inputs/SAKS_NEW_RC8_6_1_INPUT_READY.xlsx": {
+   "contract_fields_changed": {},
+   "hard_without_rule": [
+    "HARD_DUPLICATE_INSTRUCTION",
+    "HARD_INVALID_INSTRUCTION_NUMBER",
+    "HARD_INVALID_REQUIREMENT_TIME",
+    "HARD_INVALID_SHRINKAGE_TIME",
+    "HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE"
+   ],
+   "hard_with_rule": [
+    "HARD_INVALID_REQUIREMENT_TIME",
+    "HARD_INVALID_SHRINKAGE_TIME",
+    "HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE"
+   ]
+  },
+  "evidence/RC9_1_VERIFIED_BASELINE_RESULTS_FOR_RC9_2_1_COMPARISON.xlsx": {
+   "error": [
+    "Schedule sheet not found",
+    "Schedule sheet not found"
+   ]
+  },
+  "experiments/rc5_vs_final/arms/RC5/engine/regression_assets/ready_inputs/AE_FRENCH_RC8_6_1_INPUT_READY.xlsx": {
+   "contract_fields_changed": {},
+   "hard_without_rule": [
+    "HARD_DUPLICATE_INSTRUCTION",
+    "HARD_INVALID_INSTRUCTION_NUMBER"
+   ],
+   "hard_with_rule": []
+  },
+  "experiments/rc5_vs_final/arms/RC5/engine/regression_assets/ready_inputs/NMG12_RC8_6_1_INPUT_READY.xlsx": {
+   "contract_fields_changed": {},
+   "hard_without_rule": [
+    "HARD_DUPLICATE_INSTRUCTION",
+    "HARD_INVALID_INSTRUCTION_NUMBER"
+   ],
+   "hard_with_rule": []
+  },
+  "experiments/rc5_vs_final/arms/RC5/engine/regression_assets/ready_inputs/NMG13_RC8_13_CONDITIONAL_PRODUCTION_INPUT_READY.xlsx": {
+   "contract_fields_changed": {},
+   "hard_without_rule": [
+    "HARD_DUPLICATE_INSTRUCTION",
+    "HARD_INVALID_INSTRUCTION_NUMBER"
+   ],
+   "hard_with_rule": []
+  },
+  "experiments/rc5_vs_final/arms/RC5/engine/regression_assets/ready_inputs/NMG13_RC8_6_1_INPUT_READY.xlsx": {
+   "contract_fields_changed": {},
+   "hard_without_rule": [
+    "HARD_DUPLICATE_INSTRUCTION",
+    "HARD_INVALID_INSTRUCTION_NUMBER"
+   ],
+   "hard_with_rule": []
+  },
+  "experiments/rc5_vs_final/arms/RC5/engine/regression_assets/ready_inputs/NMG_EN_RC8_6_1_INPUT_READY.xlsx": {
+   "contract_fields_changed": {},
+   "hard_without_rule": [
+    "HARD_DUPLICATE_INSTRUCTION",
+    "HARD_INVALID_INSTRUCTION_NUMBER"
+   ],
+   "hard_with_rule": []
+  },
+  "experiments/rc5_vs_final/arms/RC5/engine/regression_assets/ready_inputs/NMG_SPEN_RC8_6_1_INPUT_READY.xlsx": {
+   "contract_fields_changed": {},
+   "hard_without_rule": [
+    "HARD_DUPLICATE_INSTRUCTION",
+    "HARD_INVALID_INSTRUCTION_NUMBER"
+   ],
+   "hard_with_rule": []
+  },
+  "experiments/rc5_vs_final/arms/RC5/engine/regression_assets/ready_inputs/SAKS_NEW_RC8_6_1_INPUT_READY.xlsx": {
+   "contract_fields_changed": {},
+   "hard_without_rule": [
+    "HARD_DUPLICATE_INSTRUCTION",
+    "HARD_INVALID_INSTRUCTION_NUMBER",
+    "HARD_INVALID_REQUIREMENT_TIME",
+    "HARD_INVALID_SHRINKAGE_TIME",
+    "HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE"
+   ],
+   "hard_with_rule": [
+    "HARD_INVALID_REQUIREMENT_TIME",
+    "HARD_INVALID_SHRINKAGE_TIME",
+    "HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE"
+   ]
+  },
+  "fixtures/SAKS_11H_3OFF_ENABLED.xlsx": {
+   "contract_fields_changed": {},
+   "hard_without_rule": [
+    "HARD_DUPLICATE_INSTRUCTION",
+    "HARD_INVALID_INSTRUCTION_NUMBER",
+    "HARD_INVALID_REQUIREMENT_TIME",
+    "HARD_INVALID_SHRINKAGE_TIME",
+    "HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE"
+   ],
+   "hard_with_rule": [
+    "HARD_INVALID_REQUIREMENT_TIME",
+    "HARD_INVALID_SHRINKAGE_TIME",
+    "HARD_PREVIOUS_SATURDAY_UNKNOWN_ASSOCIATE"
+   ]
+  }
+ }
+}

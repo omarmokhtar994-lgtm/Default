@@ -1,0 +1,213 @@
+.FF.FFF.FEFFEEFFFFFEFFE.FFF.FF
+======================================================================
+ERROR: test_the_validator_measures_coverage_split_after_breaks (tests_staged.test_rc9_2_31_phase_b_correctness.B3CoverageSplitAndSelfValidation.test_the_validator_measures_coverage_split_after_breaks)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_31_phase_b_correctness.py", line 210, in test_the_validator_measures_coverage_split_after_breaks
+    gaps = iv.coverage_split_gaps(E, parsed, after)
+           ^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'iv_phase_b' has no attribute 'coverage_split_gaps'
+
+======================================================================
+ERROR: test_a_disagreement_with_the_engine_blocks (tests_staged.test_rc9_2_31_phase_b_correctness.B4CleanRoomIsAReleaseGate.test_a_disagreement_with_the_engine_blocks)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_31_phase_b_correctness.py", line 235, in test_a_disagreement_with_the_engine_blocks
+    result = r.run_clean_room_gate(PARITY / "S01_BASELINE.xlsx",
+             ^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'runner_phase_b' has no attribute 'run_clean_room_gate'
+
+======================================================================
+ERROR: test_the_runner_runs_the_clean_room_check_and_passes_a_correct_schedule (tests_staged.test_rc9_2_31_phase_b_correctness.B4CleanRoomIsAReleaseGate.test_the_runner_runs_the_clean_room_check_and_passes_a_correct_schedule)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_31_phase_b_correctness.py", line 223, in test_the_runner_runs_the_clean_room_check_and_passes_a_correct_schedule
+    result = r.run_clean_room_gate(PARITY / "S01_BASELINE.xlsx",
+             ^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'runner_phase_b' has no attribute 'run_clean_room_gate'
+
+======================================================================
+ERROR: test_diagnosis_uses_the_unused_budget (tests_staged.test_rc9_2_31_phase_b_correctness.B5NoScheduleRunsNameTheCause.test_diagnosis_uses_the_unused_budget)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_31_phase_b_correctness.py", line 243, in test_diagnosis_uses_the_unused_budget
+    self.assertGreaterEqual(E.infeasibility_diagnosis_budget(remaining_total=298.0, finalization_reserve=30.0), 60.0)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'l632_universal_scheduler' has no attribute 'infeasibility_diagnosis_budget'
+
+======================================================================
+ERROR: test_each_alternative_export_gets_a_validator_verdict (tests_staged.test_rc9_2_31_phase_b_correctness.B6AlternativeExportsAreValidated.test_each_alternative_export_gets_a_validator_verdict)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_31_phase_b_correctness.py", line 322, in test_each_alternative_export_gets_a_validator_verdict
+    results = r.validate_alternative_exports(case, PARITY / "S01_BASELINE.xlsx", None)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'runner_phase_b' has no attribute 'validate_alternative_exports'
+
+======================================================================
+FAIL: test_monday_early_morning_is_sunday_night_and_not_covered (tests_staged.test_rc9_2_31_phase_b_correctness.B1OvernightRulesOpenOnTheirListedDays.test_monday_early_morning_is_sunday_night_and_not_covered)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_31_phase_b_correctness.py", line 102, in test_monday_early_morning_is_sunday_night_and_not_covered
+    self.assertFalse(self.in_force(1, 60))
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_the_feasible_week_is_no_longer_refused (tests_staged.test_rc9_2_31_phase_b_correctness.B1OvernightRulesOpenOnTheirListedDays.test_the_feasible_week_is_no_longer_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_31_phase_b_correctness.py", line 121, in test_the_feasible_week_is_no_longer_refused
+    self.assertNotIn("SKILL_WINDOW_PAID_CAPACITY_PROVABLY_INSUFFICIENT", self.codes)
+AssertionError: 'SKILL_WINDOW_PAID_CAPACITY_PROVABLY_INSUFFICIENT' unexpectedly found in {'SKILL_WINDOW_PAID_CAPACITY_PROVABLY_INSUFFICIENT'}
+
+======================================================================
+FAIL: test_language_window_mode_changes_the_contract_hash (tests_staged.test_rc9_2_31_phase_b_correctness.B2TheContractFingerprintCoversEnforcedSettings.test_language_window_mode_changes_the_contract_hash)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_31_phase_b_correctness.py", line 130, in test_language_window_mode_changes_the_contract_hash
+    self.assertNotEqual(before, E.canonical_hash(E.canonical_contract_snapshot(parsed)))
+AssertionError: '70850c998dad1c2e747991b95e8517c1e199b433813be906b81c063a5c36c35a' == '70850c998dad1c2e747991b95e8517c1e199b433813be906b81c063a5c36c35a'
+
+======================================================================
+FAIL: test_requests_and_switches_are_in_the_contract (tests_staged.test_rc9_2_31_phase_b_correctness.B2TheContractFingerprintCoversEnforcedSettings.test_requests_and_switches_are_in_the_contract)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_31_phase_b_correctness.py", line 135, in test_requests_and_switches_are_in_the_contract
+    self.assertNotEqual(E.canonical_hash(E.canonical_contract_snapshot(a)),
+AssertionError: '70850c998dad1c2e747991b95e8517c1e199b433813be906b81c063a5c36c35a' == '70850c998dad1c2e747991b95e8517c1e199b433813be906b81c063a5c36c35a'
+
+======================================================================
+FAIL: test_run_overrides_are_in_the_run_parameters (tests_staged.test_rc9_2_31_phase_b_correctness.B2TheContractFingerprintCoversEnforcedSettings.test_run_overrides_are_in_the_run_parameters)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_31_phase_b_correctness.py", line 147, in test_run_overrides_are_in_the_run_parameters
+    self.assertIn('"language_working_window_override"', block)
+AssertionError: '"language_working_window_override"' not found in '        run_parameters = {\n            "time_limit_sec": int(total_time_sec),\n            "workers": int(workers),\n            "skeleton_only": bool(skeleton_only),\n            "export_top_skeletons": int(max(0, export_top_skeletons)),\n            "residual_polish_reserve_sec": int(residual_polish_reserve_sec),\n            "stage2_guard_reserve_sec": int(stage2_guard_reserve_sec),\n            "stage2_adaptive_reserve_sec": int(stage2_adaptive_reserve_sec),\n            "breakability_recovery_budget_sec": int(breakability_recovery_budget_sec),\n            "pattern_widths": list(pattern_widths),\n            "repair_change_limits": [int(value) for value in repair_change_limits],\n            "break_objective_modes": list(break_objective_modes or []),\n            "skeleton_profile_names": list(skeleton_profile_names or []),\n            "stage1_profile_rotation": list(STAGE1_PROFILE_ROTATION),\n            "primary_target_tolerance": int(primary_target_tolerance),\n            "max_final_before_target_loss": max_final_before_target_loss,\n            "benchmark_workbook": str(benchmark_workbook) if benchmark_workbook else None,\n            "minimum_final_before_target": effective_minimum_final_before_target,\n            "minimum_best_before_target": effective_minimum_best_before_target,\n            "minimum_final_before_100": effective_minimum_final_before_100,\n            "minimum_final_before_90": effective_minimum_final_before_90,\n            "minimum_final_before_80": effective_minimum_final_before_80,\n            "minimum_final_after_100": effective_minimum_final_after_100,\n            "minimum_final_after_90": effective_minimum_final_after_90,\n            "minimum_final_after_80": effective_minimum_final_after_80,\n            "minimum_best_before_100": effective_minimum_best_before_100,\n            "minimum_best_before_90": effective_minimum_best_before_90,\n            "minimum_best_before_80": effective_minimum_best_before_80,\n            "quality_benchmark_tolerance": effective_quality_tolerance,\n            "target_lock_recovery": bool(target_lock_recovery),\n            "post_break_repair": bool(post_break_repair),\n            "deterministic_baseline": bool(deterministic_baseline),\n            "solver_random_seed": int(solver_random_seed),\n            "exception_search_reserve_sec": int(exception_search_reserve_sec),\n            "post_break_repair_reserve_sec": int(post_break_repair_reserve_sec),\n            "target_lock_recovery_reserve_sec": int(target_lock_recovery_reserve_sec),\n            "finalization_reserve_sec": int(finalization_reserve_sec),\n            "safe_incumbent": bool(safe_incumbent),\n            "conflict_refinement": bool(conflict_refinement),\n            "coordinated_repair": bool(coordinated_repair),\n            "joint_refinement": bool(joint_refinement),\n            "joint_refinement_reserve_sec": int(joint_refinement_reserve_sec),\n            "joint_change_limits": [int(x) for x in joint_change_limits],\n            "joint_shift_options_per_cell": int(joint_shift_options_per_cell),\n            "joint_patterns_per_shift": int(joint_patterns_per_shift),\n            "adaptive_joint_attempts": int(adaptive_joint_attempts),\n            "adaptive_joint_no_improvement_limit": int(adaptive_joint_no_improvement_limit),\n            "adaptive_joint_architecture": "MASTER_POOL_PLUS_DYNAMIC_TOURS_PLUS_FEEDBACK_CUTS_PLUS_LEXICOGRAPHIC_CP_SAT",\n            "include_bundled_fallbacks": bool(include_bundled_fallbacks),\n            "validated_fallback_workbooks": [str(path) for path in validated_fallback_workbooks],\n            "safe_incumbent_reserve_sec": int(safe_incumbent_reserve_sec),\n            "conflict_refinement_reserve_sec": int(conflict_refinement_reserve_sec),\n            "coordinated_repair_reserve_sec": int(coordinated_repair_reserve_sec),\n            "coordinated_repair_cycles": int(coordinated_repair_cycles),\n            "global_budget_plan": dict(global_budget_plan),\n            "guaranteed_stage2_reserve_sec": int(stage2_guard_reserve_sec),\n            "breakability_diagnostic_reserve_sec": int(breakability_diagnostic_reserve_sec),\n            # `stage1_profile_deadline` is deliberately NOT hashed, in any form.\n            # It used to be here as float(stage1_profile_deadline) - an absolute\n            # wall-clock timestamp - and run_parameters is hashed into\n            # parameters_sha256, hence into run_id. The run identity therefore\n            # depended on the moment the run started, which meant:\n            #   * two runs of the same input with the same parameters produced\n            #     different run_ids, defeating the exact-identity release gate;\n            #   * `--resume` could NEVER match its own checkpoint and always\n            #     raised "Resume refused", so checkpoint/resume was inoperative.\n            # Expressing it relative to started_epoch is not enough either: the\n            # deadline has a `time.time() + 30` floor, so the value still\n            # carries milliseconds of scheduling jitter. It is a DERIVED runtime\n            # artifact, not an input. What determines it - global_budget_plan\n            # and breakability_diagnostic_reserve_sec - is already hashed above.\n            # The absolute value is reported in the audit under run_wall_clock.\n            "adaptive_no_improvement_attempts": int(adaptive_no_improvement_attempts),\n            "max_after80_tradeoff_intervals": max_after80_tradeoff_intervals,\n            "min_after90_gain_per_after80_loss": float(min_after90_gain_per_after80_loss),\n            "protected_before80_min": protected_before80_min,\n            "protected_after80_min": protected_after80_min,\n            "diagnostics_only": bool(diagnostics_only),\n            "use_input_schedule_as_seed": bool(use_input_schedule_as_seed),\n            "allow_no_break_override": allow_no_break_override,\n            "max_no_break_override": max_no_break_override,\n            "allow_headcount_mismatch_override": allow_headcount_mismatch_override,\n            "acknowledged_departed_override": sorted(acknowledged_departed_override or []),'
+
+======================================================================
+FAIL: test_the_coverage_split_gate_mode_reaches_the_quality_gate (tests_staged.test_rc9_2_31_phase_b_correctness.B3CoverageSplitAndSelfValidation.test_the_coverage_split_gate_mode_reaches_the_quality_gate)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_31_phase_b_correctness.py", line 174, in test_the_coverage_split_gate_mode_reaches_the_quality_gate
+    self.assertEqual(gate["gate_results"].get("coverage_split"), "WARN")
+AssertionError: None != 'WARN'
+
+======================================================================
+FAIL: test_unreadable_coverage_split_rows_are_refused (tests_staged.test_rc9_2_31_phase_b_correctness.B3CoverageSplitAndSelfValidation.test_unreadable_coverage_split_rows_are_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_31_phase_b_correctness.py", line 163, in test_unreadable_coverage_split_rows_are_refused
+    self.assertIn("HARD_INVALID_COVERAGE_SPLIT_ROW", codes, field)
+AssertionError: 'HARD_INVALID_COVERAGE_SPLIT_ROW' not found in set() : Start
+
+======================================================================
+FAIL: test_validate_schedule_checks_requests_rest_wrap_and_consecutive_off (tests_staged.test_rc9_2_31_phase_b_correctness.B3CoverageSplitAndSelfValidation.test_validate_schedule_checks_requests_rest_wrap_and_consecutive_off)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_31_phase_b_correctness.py", line 201, in test_validate_schedule_checks_requests_rest_wrap_and_consecutive_off
+    self.assertIn("hard_off_preference", types)
+AssertionError: 'hard_off_preference' not found in {'zero_active', 'off_count'}
+
+======================================================================
+FAIL: test_a_blocked_schedule_lists_why_it_is_blocked (tests_staged.test_rc9_2_31_phase_b_correctness.B5NoScheduleRunsNameTheCause.test_a_blocked_schedule_lists_why_it_is_blocked)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_31_phase_b_correctness.py", line 310, in test_a_blocked_schedule_lists_why_it_is_blocked
+    self.assertIn("Why it is blocked:", text)
+AssertionError: 'Why it is blocked:' not found in 'Outcome: Final schedule generated, but evaluator metric parity blocks release\nStatus: FAIL_INDEPENDENT_VALIDATION\nProduction eligible: False\nIndependent validation: FAIL_METRIC_PARITY (return code 2)\n\nThe exact workbook passed the independent rule checks, but the engine and independent evaluator did not agree on one or more canonical metrics. The schedule is retained as evidence and blocked until the discrepancy is resolved.\n\nMain blockers:\n- EMPLOYEE_ISOLATED_OFFDAY_EXCEEDED\n\nRequired action:\n- Review the independent validation and release-gate failures, correct the cause, and rerun validation.\n'
+
+======================================================================
+FAIL: test_a_diagnostics_run_does_not_claim_a_schedule (tests_staged.test_rc9_2_31_phase_b_correctness.B5NoScheduleRunsNameTheCause.test_a_diagnostics_run_does_not_claim_a_schedule)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_31_phase_b_correctness.py", line 264, in test_a_diagnostics_run_does_not_claim_a_schedule
+    self.assertEqual(outcome["outcome_code"], "DIAGNOSTICS_ONLY_COMPLETE")
+AssertionError: 'FINAL_SCHEDULE_GENERATED' != 'DIAGNOSTICS_ONLY_COMPLETE'
+- FINAL_SCHEDULE_GENERATED
++ DIAGNOSTICS_ONLY_COMPLETE
+
+
+======================================================================
+FAIL: test_a_diagnostics_run_is_reported_as_one (tests_staged.test_rc9_2_31_phase_b_correctness.B5NoScheduleRunsNameTheCause.test_a_diagnostics_run_is_reported_as_one)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_31_phase_b_correctness.py", line 296, in test_a_diagnostics_run_is_reported_as_one
+    self.assertIn("Diagnostics", text)
+AssertionError: 'Diagnostics' not found in 'Outcome: No final schedule was generated; validation was not run\nStatus: FAIL_NO_FINAL_SCHEDULE\nProduction eligible: False\nIndependent validation: NOT_RUN (return code None)\n\nNo final schedule workbook was produced, so independent validation could not run. The run is blocked until the engine output problem is corrected and the case is rerun.\n\nRequired action:\n- Review the contract or engine-output findings, correct the cause, and rerun.\n'
+
+======================================================================
+FAIL: test_a_fixed_shift_in_banned_blank_hours_is_named_before_solving (tests_staged.test_rc9_2_31_phase_b_correctness.B5NoScheduleRunsNameTheCause.test_a_fixed_shift_in_banned_blank_hours_is_named_before_solving)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_31_phase_b_correctness.py", line 252, in test_a_fixed_shift_in_banned_blank_hours_is_named_before_solving
+    self.assertIn("FIXED_REQUEST_IN_BLANK_HOURS", codes)
+AssertionError: 'FIXED_REQUEST_IN_BLANK_HOURS' not found in set()
+
+======================================================================
+FAIL: test_a_fixed_shift_outside_enforced_language_hours_is_named_before_solving (tests_staged.test_rc9_2_31_phase_b_correctness.B5NoScheduleRunsNameTheCause.test_a_fixed_shift_outside_enforced_language_hours_is_named_before_solving)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_31_phase_b_correctness.py", line 260, in test_a_fixed_shift_outside_enforced_language_hours_is_named_before_solving
+    self.assertIn("FIXED_REQUEST_OUTSIDE_LANGUAGE_HOURS", codes)
+AssertionError: 'FIXED_REQUEST_OUTSIDE_LANGUAGE_HOURS' not found in set()
+
+======================================================================
+FAIL: test_findings_are_not_printed_twice (tests_staged.test_rc9_2_31_phase_b_correctness.B5NoScheduleRunsNameTheCause.test_findings_are_not_printed_twice)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_31_phase_b_correctness.py", line 272, in test_findings_are_not_printed_twice
+    self.assertEqual(text.count("X: same"), 1)
+AssertionError: 2 != 1
+
+======================================================================
+FAIL: test_the_engine_diagnosis_of_a_no_schedule_run_is_kept (tests_staged.test_rc9_2_31_phase_b_correctness.B5NoScheduleRunsNameTheCause.test_the_engine_diagnosis_of_a_no_schedule_run_is_kept)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_31_phase_b_correctness.py", line 287, in test_the_engine_diagnosis_of_a_no_schedule_run_is_kept
+    self.assertIn("Breaks leave a quarter unstaffed", text)
+AssertionError: 'Breaks leave a quarter unstaffed' not found in 'Outcome: No final schedule was generated; validation was not run\nStatus: FAIL_NO_FINAL_SCHEDULE\nProduction eligible: False\nIndependent validation: NOT_RUN (return code None)\n\nNo final schedule workbook was produced, so independent validation could not run. The run is blocked until the engine output problem is corrected and the case is rerun.\n\nRequired action:\n- Review the contract or engine-output findings, correct the cause, and rerun.\n'
+
+======================================================================
+FAIL: test_a_label_given_twice_with_different_values_is_refused (tests_staged.test_rc9_2_31_phase_b_correctness.B7InstructionRowsAreReadStrictly.test_a_label_given_twice_with_different_values_is_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_31_phase_b_correctness.py", line 360, in test_a_label_given_twice_with_different_values_is_refused
+    self.assertIn("HARD_DUPLICATE_INSTRUCTION", codes)
+AssertionError: 'HARD_DUPLICATE_INSTRUCTION' not found in set()
+
+======================================================================
+FAIL: test_long_durations_without_11h_mode_are_refused (tests_staged.test_rc9_2_31_phase_b_correctness.B7InstructionRowsAreReadStrictly.test_long_durations_without_11h_mode_are_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_31_phase_b_correctness.py", line 349, in test_long_durations_without_11h_mode_are_refused
+    self.assertIn("HARD_LONG_DURATION_WITHOUT_11H_MODE", codes)
+AssertionError: 'HARD_LONG_DURATION_WITHOUT_11H_MODE' not found in set()
+
+======================================================================
+FAIL: test_no_break_exceptions_enabled_with_a_zero_limit_is_refused (tests_staged.test_rc9_2_31_phase_b_correctness.B7InstructionRowsAreReadStrictly.test_no_break_exceptions_enabled_with_a_zero_limit_is_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_31_phase_b_correctness.py", line 344, in test_no_break_exceptions_enabled_with_a_zero_limit_is_refused
+    self.assertIn("HARD_CONTRADICTORY_NO_BREAK_LIMIT", codes)
+AssertionError: 'HARD_CONTRADICTORY_NO_BREAK_LIMIT' not found in set()
+
+======================================================================
+FAIL: test_unreadable_numbers_are_refused_on_every_numeric_row (tests_staged.test_rc9_2_31_phase_b_correctness.B7InstructionRowsAreReadStrictly.test_unreadable_numbers_are_refused_on_every_numeric_row)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_31_phase_b_correctness.py", line 335, in test_unreadable_numbers_are_refused_on_every_numeric_row
+    self.assertIn("HARD_INVALID_INSTRUCTION_NUMBER", codes, label)
+AssertionError: 'HARD_INVALID_INSTRUCTION_NUMBER' not found in set() : Count of Different Shifts Per week
+
+======================================================================
+FAIL: test_zero_different_shifts_is_refused (tests_staged.test_rc9_2_31_phase_b_correctness.B7InstructionRowsAreReadStrictly.test_zero_different_shifts_is_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_31_phase_b_correctness.py", line 339, in test_zero_different_shifts_is_refused
+    self.assertIn("INVALID_MAX_SHIFT_VARIETY", codes)
+AssertionError: 'INVALID_MAX_SHIFT_VARIETY' not found in set()
+
+----------------------------------------------------------------------
+Ran 30 tests in 4.266s
+
+FAILED (failures=20, errors=5)

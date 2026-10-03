@@ -95,8 +95,12 @@ class CanonicalSurface(unittest.TestCase):
         max_concurrent_break_ratio_all_staffed_quarters,
         break_concurrency_violation_count_all_staffed_quarters) were added to
         the parity surface. The measured contract grew; nothing was removed.
+
+        Re-pinned 51 -> 52 by Phase B (F-12): coverage_split_gap_count, which
+        the independent validator now recomputes from the published schedule,
+        joined the parity surface. Again nothing was removed.
         """
-        self.assertEqual(len(CM.PARITY_FIELDS), 51)
+        self.assertEqual(len(CM.PARITY_FIELDS), 52)
         self.assertEqual(len(set(B9_FIELDS) & set(CM.PARITY_FIELDS)), 7)
 
     def test_engine_spelling_resolves(self):

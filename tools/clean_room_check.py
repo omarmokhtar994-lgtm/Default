@@ -308,6 +308,44 @@ def read_contract(path: Path) -> Contract:
             eligible = {src for src, tg in can.items() if tg & required}
             k.rules.append({"group": grp, "start": st, "end": en, "minimum": mn,
                             "days": set(days), "eligible": eligible})
+    else:
+        can = defaultdict(set)
+        for lang in k.lang.values():
+            can[lang] |= {lang}
+
+    # Coverage Split: a group that must field a share of each interval's
+    # requirement itself, after breaks, inside its window (every day). Groups
+    # whose windows overlap pool their people and owe the stricter share.
+    k.split_mode = n(get(im, "Coverage Split Gate Mode", "Coverage Responsibility Gate Mode", default="fail")) or "fail"
+    k.split: List[Dict[str, Any]] = []
+    split_title = next((t for t in wb.sheetnames
+                        if n(t) in ("coverage split", "coverage responsibility", "language coverage split")), None)
+    if split_title and k.split_mode != "off":
+        s = wb[split_title]
+        hr4 = header_row(s, ("coverage group", "start"))
+        if hr4 is None:
+            raise ValueError(f"{split_title}: no header row")
+        hc = {n(s.cell(hr4, c).value): c for c in range(1, s.max_column + 1)}
+
+        def scol(*keys: str) -> Optional[int]:
+            return next((c for h, c in hc.items() if any(key in h for key in keys)), None)
+        c_g, c_s, c_e = scol("coverage group", "group"), scol("start"), scol("end")
+        c_r, c_a = scol("coverage ratio", "ratio"), scol("active", "enabled")
+        for r in range(hr4 + 1, s.max_row + 1):
+            grp = n(s.cell(r, c_g).value)
+            if not grp or (c_a and not yes(s.cell(r, c_a).value, True)):
+                continue
+            st, en = clock(s.cell(r, c_s).value), clock(s.cell(r, c_e).value)
+            if st is None or en is None:
+                raise ValueError(f"{split_title} row {r}: unreadable window")
+            ratio = num(s.cell(r, c_r).value, pct=True) if c_r else None
+            ratio = float(ratio or 0.0)
+            if ratio > 1.5:
+                ratio /= 100.0
+            if ratio <= 0:
+                ratio = float(k.floor)
+            eligible = {src for src, tg in can.items() if grp in tg or src == grp} or {grp}
+            k.split.append({"group": grp, "start": st, "end": en, "ratio": ratio, "eligible": eligible})
     return k
 
 
@@ -340,6 +378,13 @@ def parse_days(v: Any) -> Set[int]:
         else:
             raise ValueError(f"unreadable Coverage Days {v!r}")
     return out
+
+
+def in_window(start: int, end: int, minute: int) -> bool:
+    """The quarter starting at `minute` lies in [start, end) on the clock (wraps past midnight)."""
+    if start == end:
+        return True
+    return start <= minute < end if start < end else (minute >= start or minute < end)
 
 
 def rule_in_force(rule: Dict[str, Any], day: int, minute: int) -> bool:
@@ -447,7 +492,20 @@ def check(k: Contract, sched: Dict[str, List[str]], breaks, exceptions) -> Dict[
         long_mode = any(s and s[1] >= k.long_min for s in ss)
         # Two OFF days a week (three in long mode), out of the days not already
         # on approved leave: a full week of leave owes no OFF day.
-        leave_days = sum(1 for d in range(7) if (k.leave and n(pref[d]) in leave_words_all) or n(fix[d]) in leave_words_all)
+        # Leave days are read from the published cells, not from this script's
+        # own list of leave words: a request the engine understands as leave
+        # ("Maternity", "Unpaid leave") would otherwise owe two OFF days here
+        # and raise a false off_count. A published Leave nobody asked for is
+        # its own violation, so the count cannot be inflated unseen.
+        leave_days = 0
+        for d in range(7):
+            if ks[d] != "leave":
+                continue
+            asked = [n(x) for x in (pref[d], fix[d])]
+            if not any(a and a not in ("off", "day off", "rest day") and not shift_of(a) for a in asked):
+                v.append({"rule": "leave_without_request", "who": nm, "day": DAYS[d]})
+            else:
+                leave_days += 1
         room = 7 - leave_days
         owed = max(0, min(3 if long_mode else 2, room))
         if k.strict_off and len(offs) != owed:
@@ -536,6 +594,7 @@ def check(k: Contract, sched: Dict[str, List[str]], breaks, exceptions) -> Dict[
     qpi = k.step // 15
     m = defaultdict(int)
     lang_gaps, zero = 0, 0
+    split_gaps = 0
     for d in range(7):
         for i in range(k.per_day):
             r = k.req[d][i]
@@ -555,6 +614,16 @@ def check(k: Contract, sched: Dict[str, List[str]], breaks, exceptions) -> Dict[
                     if rule_in_force(rule, d, minute):
                         got = sum(1 for x in after if k.lang.get(x) in rule["eligible"])
                         lang_gaps += int(got < rule["minimum"])
+                owning = [sr for sr in k.split if in_window(sr["start"], sr["end"], minute)]
+                if owning:
+                    need = math.ceil(r * max(sr["ratio"] for sr in owning) / max(eff, 1e-9) - 1e-9)
+                    pool = set().union(*(sr["eligible"] for sr in owning))
+                    got = sum(1 for x in after if k.lang.get(x) in pool)
+                    if need > 0 and got < need:
+                        split_gaps += 1
+                        if k.split_mode == "fail":
+                            v.append({"rule": "coverage_split", "day": DAYS[d], "minute": minute,
+                                      "groups": [sr["group"] for sr in owning], "need": need, "got": got})
             bp, ap = b_sum / qpi / r, a_sum / qpi / r
             m["active_intervals"] += 1
             for tag, pct in (("before", bp), ("after", ap)):
@@ -566,6 +635,7 @@ def check(k: Contract, sched: Dict[str, List[str]], breaks, exceptions) -> Dict[
             m["target_losses_from_breaks"] += int(bp + EPS >= k.target > ap + EPS)
             m["floor_losses_from_breaks"] += int(bp + EPS >= k.floor > ap + EPS)
     m["language_gap_count"] = lang_gaps
+    m["coverage_split_gap_count"] = split_gaps
     m["zero_staffed_active_quarters"] = zero
     by_rule: Dict[str, int] = defaultdict(int)
     for row in v:
@@ -578,7 +648,7 @@ def check(k: Contract, sched: Dict[str, List[str]], breaks, exceptions) -> Dict[
 COMPARE = ("active_intervals", "before_target", "after_target", "before_floor", "after_floor",
            "before100", "before90", "before80", "after100", "after90", "after80",
            "target_losses_from_breaks", "floor_losses_from_breaks", "language_gap_count",
-           "zero_staffed_active_quarters")
+           "zero_staffed_active_quarters", "coverage_split_gap_count")
 
 
 def compare(mine: Dict[str, Any], other: Dict[str, Any], aliases: Dict[str, str]) -> List[Dict[str, Any]]:

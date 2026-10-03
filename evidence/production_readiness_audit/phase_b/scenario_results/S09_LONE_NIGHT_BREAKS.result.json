@@ -1,0 +1,25 @@
+{
+ "scenario": "S09_LONE_NIGHT_BREAKS",
+ "why": "24/7, 6 agents: nights can be held by one person, whose own breaks leave nobody",
+ "expected": "schedule with overlap at night, or a named no-break exception need",
+ "runner_rc": 2,
+ "elapsed_sec": 172.1,
+ "engine_status": "FAIL_TESTED_SKELETON_EXCEPTION_LOWER_BOUND_EXCEEDS_CAP",
+ "artifact_state": "FINAL_DIAGNOSTIC_NO_RELEASE_SCHEDULE",
+ "independent_validation": "NOT_RUN",
+ "published_final": [],
+ "workbooks_in_case_root": [
+  "S09_LONE_NIGHT_BREAKS_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx"
+ ],
+ "selected_metrics": {
+  "after_target": null,
+  "after_floor": null,
+  "active_intervals": null,
+  "language_gap_count": null
+ },
+ "run_id": "5cb4e34d5f56d3de3f0d2de3",
+ "business_outcome": "Outcome: The break plan exceeds the approved exception limit\nStatus: FAIL_TESTED_SKELETON_EXCEPTION_LOWER_BOUND_EXCEEDS_CAP\nProduction eligible: False\nIndependent validation: NOT_RUN (return code None)\n\nRequested maximum no-break associate-days: 0. Best proven minimum among the tested skeletons: 6. The proven gap is 6.\n\nMain blockers:\n- family=ZERO_STAFF, affected_associate_days=7\n\nAffected examples:\n- Agent A | Tue | 17:00 - 02:00 | Tue 18:00 to Wed 01:45\n- Agent A | Fri | 17:00 - 02:00 | Fri 20:00 to Sat 01:45\n- Agent D | Wed | 17:00 - 02:00 | Wed 20:00 to Thu 01:45\n- Agent E | Mon | 23:00 - 08:00 | Tue 02:00 to Tue 07:45\n- Agent F | Wed | 02:00 - 11:00 | Wed 02:00 to Wed 07:45\n- Agent F | Thu | 02:00 - 11:00 | Thu 02:00 to Thu 07:45\n- Agent F | Fri | 02:00 - 11:00 | Fri 02:00 to Fri 07:45\n\nRequired action:\n- Add or overlap qualified resources in the named bottleneck windows, especially single-person language coverage.\n- Change shift/OFF patterns so qualified associates have legal break coverage.\n- Change the exception cap only through an explicit business decision; the engine will not raise it automatically.\n",
+ "clean_room": null,
+ "pre_solver_failures": [],
+ "hard_probe": "OPTIMAL"
+}

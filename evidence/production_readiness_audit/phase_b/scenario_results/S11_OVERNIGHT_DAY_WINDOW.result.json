@@ -1,0 +1,25 @@
+{
+ "scenario": "S11_OVERNIGHT_DAY_WINDOW",
+ "why": "Spanish minimum 1, Mon-Fri 18:00-05:00 (day-specific overnight). Two Spanish agents are hard-OFF Sun+Mon; the third is hard-OFF Sat+Sun. Business meaning (window opens Mon..Fri) is feasible.",
+ "expected": "schedule produced; Monday 00:00-05:00 needs no Spanish (it is Sunday night)",
+ "runner_rc": 2,
+ "elapsed_sec": 174.1,
+ "engine_status": "FAIL_NO_BREAK_FEASIBLE_CANDIDATE",
+ "artifact_state": "FINAL_DIAGNOSTIC_NO_RELEASE_SCHEDULE",
+ "independent_validation": "NOT_RUN",
+ "published_final": [],
+ "workbooks_in_case_root": [
+  "S11_OVERNIGHT_DAY_WINDOW_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx"
+ ],
+ "selected_metrics": {
+  "after_target": null,
+  "after_floor": null,
+  "active_intervals": null,
+  "language_gap_count": null
+ },
+ "run_id": "95b5eaf5908c7a75dfab55a9",
+ "business_outcome": "Outcome: No legal final break plan was found\nStatus: FAIL_NO_BREAK_FEASIBLE_CANDIDATE\nProduction eligible: False\nIndependent validation: NOT_RUN (return code None)\n\nThe engine could not find a legal break plan for the tested shift/OFF skeletons within the available search budget. Main resource blocker: Spanish coverage, affecting 1 associate-day(s) without qualified backup.\n\nMain blockers:\n- group=Spanish, affected_associate_days=1, critical_quarters=24\n- family=LANGUAGE, affected_associate_days=1\n\nAffected examples:\n- Agent C | Mon | 18:00 - 03:00 | Mon 18:00 to Mon 23:45\n\nRequired action:\n- Add or overlap qualified resources in the named bottleneck windows, especially single-person language coverage.\n- Change shift/OFF patterns so qualified associates have legal break coverage.\n- Change the exception cap only through an explicit business decision; the engine will not raise it automatically.\n",
+ "clean_room": null,
+ "pre_solver_failures": [],
+ "hard_probe": "FEASIBLE"
+}

@@ -988,10 +988,14 @@ class CoverageSplitMakesOneGroupResponsibleForAWholeWindow(unittest.TestCase):
 
     def test_the_merged_rule_is_used_at_every_site_that_reads_the_rules(self):
         """A merge the constraint builder does not use changes nothing - and a
-        site that reads the raw rules instead would reintroduce stacking. Three
-        sites read them: Stage 1, the break stage, and the artifact audit."""
+        site that reads the raw rules instead would reintroduce stacking. Four
+        sites read them: Stage 1, the break stage, the artifact audit, and
+        (re-pinned 2026-10-03, 3 -> 4) the shift consistency polish's check that
+        a moved shift stays out of another group's exclusive window. The new
+        site reads through the merge like the others; that contract, asserted
+        below, is unchanged."""
         source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
-        self.assertEqual(source.count("merge_coverage_split_rules(coverage_split_rules_at("), 3)
+        self.assertEqual(source.count("merge_coverage_split_rules(coverage_split_rules_at("), 4)
         # coverage_split_rules_at is only ever consumed through the merge.
         self.assertEqual(source.count("coverage_split_rules_at(parsed"),
                          source.count("merge_coverage_split_rules(coverage_split_rules_at("))

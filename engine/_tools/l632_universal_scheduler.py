@@ -821,6 +821,9 @@ class ParsedInput:
     # with older ParsedInput fixtures.
     language_windows: Dict[str, Any] = field(default_factory=dict)
     language_working_window_mode: str = "OFF"
+    # None = the engine default (SHIFT_CONSISTENCY_POLISH_ENABLED); Yes/No in
+    # the workbook's "Shift Consistency Polish" row overrides it.
+    shift_consistency_polish: Optional[bool] = None
     coverage_split_rules: List[CoverageSplitRule] = field(default_factory=list)
     coverage_split_source: str = "ABSENT"
     coverage_split_gate_mode: str = "hard"
@@ -1361,6 +1364,7 @@ BOOLEAN_INSTRUCTION_ALIASES: Tuple[Tuple[str, ...], ...] = (
     ("Break Infeasibility Core Enabled", "Break Assumption Core Enabled"),
     ("Logic-Based Break Feedback Enabled", "Break Feasibility Cut Feedback Enabled"),
     ("Skill Allocation Audit Enabled", "Distinct Skill Allocation Audit Enabled"),
+    ("Shift Consistency Polish", "Consistency Polish"),
 )
 
 
@@ -3052,6 +3056,8 @@ def parse_input(
     separate_off_days = yes(_instruction_get(im, ["Separate OFF Days", "Separate Off Days", "Allow Separate OFF Days"], "Yes"), True)
     leave_enabled = yes(_instruction_get(im, ["Leave", "Leave Days", "Leave Enabled"], "Yes"), True)
     use_preferences = yes(_instruction_get(im, ["Use Preferences", "Preferences"], "Yes"), True)
+    _polish_raw = _instruction_get(im, ["Shift Consistency Polish", "Consistency Polish"], None)
+    shift_consistency_polish = None if _polish_raw in (None, "") else yes(_polish_raw, False)
     max_diff = int(round(to_float(_instruction_get(im, ["Count of Different Shifts Per week", "Max Different Shifts per Week"], 3), 3)))
     rest = to_float(_instruction_get(im, ["Difference Between Shifts", "Rest Gap Hours", "Minimum Rest Gap"], 12), 12)
     opening_enabled = yes(_instruction_get(im, ["Opening Guard Enabled"], "No"), False)
@@ -3551,6 +3557,7 @@ def parse_input(
         run_depth=run_depth,
         language_windows=language_windows,
         language_working_window_mode=language_working_window_mode,
+        shift_consistency_polish=shift_consistency_polish,
         coverage_split_rules=coverage_split_rules,
         coverage_split_source=coverage_split_source,
         coverage_split_gate_mode=coverage_split_gate_mode,
@@ -18278,6 +18285,507 @@ def run_day_neighbourhood_break_search(
     return additions, records, summary
 
 
+# Shift consistency polish.
+#
+# A finished schedule can give one associate starts of 06:00, 09:00, 07:00 and
+# 10:00 in the same week while an interchangeable colleague (same language, same
+# shift length) has the mirror image. The polish makes each associate's week
+# more uniform after the schedule is chosen, without changing what was chosen
+# for:
+#
+#   1. Swaps. Two associates of the same language and shift length exchange a
+#      day's whole assignment, shift and break pattern. Coverage counts depend
+#      on an associate's language only, so every interval is covered exactly
+#      as before; the full metrics are recomputed to prove it.
+#   2. One-hour moves. A shift starts an hour earlier or later, with the same
+#      length and break pattern. This changes coverage, so it is kept only when
+#      the engine's full metrics show nothing got worse (the DNBS guard plus
+#      after_target and every before-break tier).
+#
+# Every move must keep every hard rule the Stage-1 model enforces per cell:
+# legal shift, demand-fit guard, language hours, required-language and
+# exclusive coverage-split windows, rest (from last Saturday, between days and
+# across the week wrap), maximum different shifts, shift length (11h/3-OFF
+# mode), fixed requests, and flexible nesting groups (untouched). It must also
+# not lower preference matches or raise any employee-quality violation or
+# load spread. The result must still pass validate_schedule with the same
+# release class. If anything fails, the original schedule is kept.
+# On by default under the rule registered in evidence/shift_consistency/RULE.txt.
+# 11 published schedules: 10 more consistent, 1 already at its best, none worse.
+# 3 end-to-end runs: validator PASS, all inside budget (RESULT.md there).
+SHIFT_CONSISTENCY_POLISH_ENABLED = True
+SHIFT_CONSISTENCY_CLI_OVERRIDE: Optional[bool] = None
+SHIFT_CONSISTENCY_TIME_LIMIT_SEC = 60.0
+SHIFT_CONSISTENCY_TAIL_RESERVE_SEC = 30.0
+SHIFT_CONSISTENCY_MIN_SEC = 10.0
+SHIFT_CONSISTENCY_CHECK_RESERVE_SEC = 3.0
+SHIFT_CONSISTENCY_STEP_MIN = 60
+SHIFT_CONSISTENCY_SWAP_DETERMINISTIC_TIME = 30.0
+SHIFT_CONSISTENCY_SWAP_MAX_SEC = 60.0
+SHIFT_CONSISTENCY_SWAP_WORKERS = 4
+SHIFT_CONSISTENCY_GUARD_HIGHER = DNBS_NO_WORSE_HIGHER + (
+    "after_target", "before_target", "before_floor", "before_100", "before_90", "before_80",
+)
+SHIFT_CONSISTENCY_GUARD_LOWER = DNBS_NO_WORSE_LOWER
+SHIFT_CONSISTENCY_EMPLOYEE_HIGHER = ("preference_match_count",)
+SHIFT_CONSISTENCY_EMPLOYEE_LOWER = (
+    "start_swing_violation_count", "isolated_workday_violation_count", "isolated_offday_violation_count",
+    "late_shift_load_delta", "overnight_load_delta", "weekend_load_delta",
+)
+
+
+def shift_consistency_cost(parsed: ParsedInput, row: Sequence[Optional[int]]) -> Tuple[int, int]:
+    """(distinct start times, minutes of start movement between consecutive worked days)."""
+    starts = [parsed.shifts[si].start_min if si is not None else None for si in row]
+    distinct = len({s for s in starts if s is not None})
+    movement = sum(
+        circular_minute_distance(starts[d], starts[d + 1])
+        for d in range(6) if starts[d] is not None and starts[d + 1] is not None
+    )
+    return distinct, movement
+
+
+def shift_consistency_summary(parsed: ParsedInput, skeleton: SkeletonSolution) -> Dict[str, Any]:
+    costs = [shift_consistency_cost(parsed, row) for row in skeleton.selected_shift_index]
+    worked = [row for row in skeleton.selected_shift_index if any(si is not None for si in row)]
+    return {
+        "distinct_start_times": int(sum(c[0] for c in costs)),
+        "start_movement_hours": round(sum(c[1] for c in costs) / 60.0, 2),
+        "associates_with_one_start_time": int(sum(1 for c, row in zip(costs, skeleton.selected_shift_index)
+                                                  if c[0] == 1 and any(si is not None for si in row))),
+        "working_associates": len(worked),
+    }
+
+
+def _consistency_cell_allowed(parsed: ParsedInput, a: int, d: int, shift: Shift) -> bool:
+    assoc = parsed.associates[a]
+    if getattr(parsed, "demand_fit_guard_enabled", False) and demand_fit_blocked(parsed, d, shift)[0]:
+        return False
+    windows = associate_language_windows(parsed, assoc, day=d)
+    if windows and not any(shift_within_language_window(shift, w) for w in windows):
+        return False
+    if shift_overlaps_required_language_for_noneligible(parsed, assoc, shift, d) is not None:
+        return False
+    if getattr(parsed, "coverage_split_rules", None):
+        start_q = d * 96 + shift.start_min // 15
+        for offset in range(max(1, shift.duration_q)):
+            split = merge_coverage_split_rules(coverage_split_rules_at(parsed, ((start_q + offset) % 96) * 15))
+            if split is not None and split.exclusive and not language_eligible(split, assoc):
+                return False
+    return True
+
+
+def _consistency_row_allowed(parsed: ParsedInput, a: int, row: Sequence[Optional[int]]) -> bool:
+    if len({si for si in row if si is not None}) > parsed.max_different_shifts:
+        return False
+    shifts = [parsed.shifts[si] if si is not None else None for si in row]
+    assoc = parsed.associates[a]
+    if shifts[0] is not None and not previous_saturday_compatible(
+            assoc.previous_saturday, shifts[0], parsed.rest_gap_hours):
+        return False
+    for d in range(7):
+        nxt = shifts[(d + 1) % 7]
+        if shifts[d] is not None and nxt is not None and not rest_compatible(shifts[d], nxt, parsed.rest_gap_hours):
+            return False
+    return True
+
+
+def _consistency_metrics_no_worse(new: Mapping[str, Any], old: Mapping[str, Any]) -> List[str]:
+    worse = [k for k in SHIFT_CONSISTENCY_GUARD_HIGHER if float(new.get(k, 0) or 0) < float(old.get(k, 0) or 0)]
+    worse += [k for k in SHIFT_CONSISTENCY_GUARD_LOWER if float(new.get(k, 0) or 0) > float(old.get(k, 0) or 0) + 1e-6]
+    new_e, old_e = new.get("employee_quality") or {}, old.get("employee_quality") or {}
+    worse += [f"employee.{k}" for k in SHIFT_CONSISTENCY_EMPLOYEE_HIGHER
+              if float(new_e.get(k, 0) or 0) < float(old_e.get(k, 0) or 0)]
+    worse += [f"employee.{k}" for k in SHIFT_CONSISTENCY_EMPLOYEE_LOWER
+              if float(new_e.get(k, 0) or 0) > float(old_e.get(k, 0) or 0)]
+    return worse
+
+
+def _consistency_employee_no_worse(new: Mapping[str, Any], old: Mapping[str, Any]) -> bool:
+    return (all(float(new.get(k, 0) or 0) >= float(old.get(k, 0) or 0) for k in SHIFT_CONSISTENCY_EMPLOYEE_HIGHER)
+            and all(float(new.get(k, 0) or 0) <= float(old.get(k, 0) or 0) for k in SHIFT_CONSISTENCY_EMPLOYEE_LOWER))
+
+
+def _consistency_skeleton(parsed: ParsedInput, base: SkeletonSolution, rows: List[List[Optional[int]]]) -> SkeletonSolution:
+    assignment = []
+    for a, row in enumerate(rows):
+        labels = list(base.assignment[a])
+        for d, si in enumerate(row):
+            if si is not None:
+                labels[d] = parsed.shifts[si].label
+        assignment.append(labels)
+    return SkeletonSolution(profile=base.profile, cp_status=base.cp_status, objective=base.objective,
+                            elapsed_sec=base.elapsed_sec, assignment=assignment,
+                            selected_shift_index=[list(r) for r in rows], diagnostics=dict(base.diagnostics))
+
+
+def _consistency_greedy_swaps(
+    parsed: ParsedInput,
+    skeleton: SkeletonSolution,
+    rows: List[List[Optional[int]]],
+    movable: Any,
+    employee_now: Mapping[str, Any],
+    deadline: float,
+) -> Tuple[List[List[Optional[int]]], Mapping[str, Any], List[Tuple[int, int, int]]]:
+    """Pairwise same-day swaps that lower the two associates' cost; the model
+    then starts from here. Returns (rows, employee quality, swaps made)."""
+    rows = [list(r) for r in rows]
+    shifts = parsed.shifts
+    A = len(parsed.associates)
+    costs = [shift_consistency_cost(parsed, row) for row in rows]
+    made: List[Tuple[int, int, int]] = []
+    improved = True
+    while improved and time.time() < deadline:
+        improved = False
+        for d in range(7):
+            groups: Dict[Tuple[str, int], List[int]] = {}
+            for a in range(A):
+                if movable(a, d):
+                    groups.setdefault((norm(parsed.associates[a].language), shifts[rows[a][d]].duration_min), []).append(a)
+            for members in groups.values():
+                for i, a in enumerate(members):
+                    for b in members[i + 1:]:
+                        if rows[a][d] == rows[b][d]:
+                            continue
+                        ra, rb = list(rows[a]), list(rows[b])
+                        ra[d], rb[d] = rb[d], ra[d]
+                        ca, cb = shift_consistency_cost(parsed, ra), shift_consistency_cost(parsed, rb)
+                        gain = (costs[a][0] + costs[b][0] - ca[0] - cb[0], costs[a][1] + costs[b][1] - ca[1] - cb[1])
+                        if gain <= (0, 0):
+                            continue
+                        if not (_consistency_row_allowed(parsed, a, ra) and _consistency_row_allowed(parsed, b, rb)
+                                and _consistency_cell_allowed(parsed, a, d, shifts[ra[d]])
+                                and _consistency_cell_allowed(parsed, b, d, shifts[rb[d]])):
+                            continue
+                        trial = [list(r) for r in rows]
+                        trial[a], trial[b] = ra, rb
+                        employee = employee_operational_quality(parsed, _consistency_skeleton(parsed, skeleton, trial))
+                        if not _consistency_employee_no_worse(employee, employee_now):
+                            continue
+                        rows, employee_now = trial, employee
+                        costs[a], costs[b] = ca, cb
+                        made.append((d, a, b))
+                        improved = True
+    return rows, employee_now, made
+
+
+def _consistency_swap_model(
+    parsed: ParsedInput,
+    rows: List[List[Optional[int]]],
+    movable: Any,
+    employee_now: Mapping[str, Any],
+    deadline: float,
+    record: Dict[str, Any],
+) -> Optional[List[List[Optional[int]]]]:
+    """Re-deal each day's shifts within (language, shift length) groups.
+
+    u[a, d, s] = associate a works shift s on day d. Hard rules: legal cell,
+    rest (last Saturday, day to day, week wrap), maximum different shifts.
+    Employee guards: preference matches, start-swing violations and the late
+    and overnight load spreads may not get worse. Objective: fewer distinct
+    start times per associate, then less movement between consecutive days.
+    Returns the new rows, or None when nothing better was found.
+    """
+    cp_model = import_cp_sat()
+    A = len(parsed.associates)
+    shifts = parsed.shifts
+    model = cp_model.CpModel()
+    group_types: Dict[Tuple[int, str, int], Dict[int, int]] = {}
+    for a in range(A):
+        for d in range(7):
+            if movable(a, d):
+                key = (d, norm(parsed.associates[a].language), shifts[rows[a][d]].duration_min)
+                counts = group_types.setdefault(key, {})
+                counts[rows[a][d]] = counts.get(rows[a][d], 0) + 1
+    if not group_types:
+        return None
+    one = model.NewConstant(1)
+    zero = model.NewConstant(0)
+    u: Dict[Tuple[int, int, int], Any] = {}
+    options: Dict[Tuple[int, int], List[int]] = {}
+    for a in range(A):
+        for d in range(7):
+            si = rows[a][d]
+            if si is None:
+                continue
+            if not movable(a, d):
+                options[(a, d)] = [si]
+                u[(a, d, si)] = one
+                continue
+            key = (d, norm(parsed.associates[a].language), shifts[si].duration_min)
+            opts = []
+            for s in group_types[key]:
+                if s == si or _consistency_cell_allowed(parsed, a, d, shifts[s]):
+                    u[(a, d, s)] = model.NewBoolVar(f"u_{a}_{d}_{s}")
+                    model.AddHint(u[(a, d, s)], int(s == si))
+                    opts.append(s)
+            options[(a, d)] = opts
+            model.AddExactlyOne(u[(a, d, s)] for s in opts)
+    for (d, lang, dur), counts in group_types.items():
+        for s, count in counts.items():
+            members = [u[(a, d, s)] for a in range(A)
+                       if movable(a, d) and (a, d, s) in u
+                       and (d, norm(parsed.associates[a].language), shifts[rows[a][d]].duration_min) == (d, lang, dur)]
+            model.Add(sum(members) == count)
+    pref_terms: List[Any] = []
+    late_load: List[Any] = []
+    overnight_load: List[Any] = []
+    swing_flags: List[Any] = []
+    objective: List[Any] = []
+    limit = int(parsed.employee_max_start_swing_minutes)
+    for a in range(A):
+        assoc = parsed.associates[a]
+        worked = [d for d in range(7) if rows[a][d] is not None]
+        if not worked:
+            continue
+        if rows[a][0] is not None:
+            for s in options[(a, 0)]:
+                if not previous_saturday_compatible(assoc.previous_saturday, shifts[s], parsed.rest_gap_hours):
+                    model.Add(u[(a, 0, s)] == 0)
+        swing = model.NewBoolVar(f"swing_{a}")
+        swing_flags.append(swing)
+        # Every auxiliary variable is hinted from the current deal too, so the
+        # solver starts from a complete feasible solution on large weeks.
+        model.AddHint(swing, int(any(
+            rows[a][d] is not None and rows[a][(d + 1) % 7] is not None
+            and circular_minute_distance(shifts[rows[a][d]].start_min, shifts[rows[a][(d + 1) % 7]].start_min) > limit
+            for d in range(7))))
+        for d in range(7):
+            nd = (d + 1) % 7
+            if rows[a][d] is None or rows[a][nd] is None:
+                continue
+            for s in options[(a, d)]:
+                for s2 in options[(a, nd)]:
+                    both = [u[(a, d, s)], u[(a, nd, s2)]]
+                    if not rest_compatible(shifts[s], shifts[s2], parsed.rest_gap_hours):
+                        model.Add(sum(both) <= 1)
+                    if circular_minute_distance(shifts[s].start_min, shifts[s2].start_min) > limit:
+                        model.Add(swing >= sum(both) - 1)
+                    if nd == d + 1:
+                        dist = circular_minute_distance(shifts[s].start_min, shifts[s2].start_min)
+                        if dist:
+                            pair = model.NewBoolVar(f"pair_{a}_{d}_{s}_{s2}")
+                            model.AddHint(pair, int(rows[a][d] == s and rows[a][nd] == s2))
+                            model.Add(pair >= sum(both) - 1)
+                            objective.append(dist * pair)
+        used: Dict[int, Any] = {}
+        starts: Dict[int, Any] = {}
+        current_shifts = {rows[a][d] for d in worked}
+        current_starts = {shifts[rows[a][d]].start_min for d in worked}
+        for d in worked:
+            for s in options[(a, d)]:
+                if s not in used:
+                    used[s] = model.NewBoolVar(f"y_{a}_{s}")
+                    model.AddHint(used[s], int(s in current_shifts))
+                model.Add(used[s] >= u[(a, d, s)])
+                start = shifts[s].start_min
+                if start not in starts:
+                    starts[start] = model.NewBoolVar(f"v_{a}_{start}")
+                    model.AddHint(starts[start], int(start in current_starts))
+                model.Add(starts[start] >= u[(a, d, s)])
+        model.Add(sum(used.values()) <= parsed.max_different_shifts)
+        objective.extend(10_000 * v for v in starts.values())
+        late_load.append(sum(u[(a, d, s)] for d in worked for s in options[(a, d)]
+                             if shifts[s].start_min >= 18 * 60 or shifts[s].start_min < 4 * 60))
+        overnight_load.append(sum(u[(a, d, s)] for d in worked for s in options[(a, d)]
+                                  if shifts[s].start_min + shifts[s].duration_min > 1440))
+        for d in worked:
+            parts = shift_parts(assoc.preferences[d] if d < len(assoc.preferences) else "")
+            if preference_kind(assoc.preferences[d] if d < len(assoc.preferences) else "") == "shift" and parts:
+                pref_terms.extend(u[(a, d, s)] for s in options[(a, d)]
+                                  if circular_minute_distance(parts[0], shifts[s].start_min) <= 60)
+    # Shift preferences matched now; OFF/leave matches do not move.
+    current_shift_matches = sum(
+        1 for a in range(A) for d in range(7)
+        if rows[a][d] is not None
+        and preference_kind(parsed.associates[a].preferences[d] if d < len(parsed.associates[a].preferences) else "") == "shift"
+        and shift_parts(parsed.associates[a].preferences[d])
+        and circular_minute_distance(shift_parts(parsed.associates[a].preferences[d])[0], shifts[rows[a][d]].start_min) <= 60
+    )
+    model.Add(sum(pref_terms) >= current_shift_matches)
+    model.Add(sum(swing_flags) <= int(employee_now.get("start_swing_violation_count", 0) or 0))
+    # Associates with no shift still count in the engine's load spreads (load 0).
+    idle = any(all(r is None for r in rows[a]) for a in range(A))
+    for loads, key in ((late_load, "late_shift_load_delta"), (overnight_load, "overnight_load_delta")):
+        if not loads:
+            continue
+        hi = model.NewIntVar(0, 7, f"hi_{key}")
+        lo = model.NewIntVar(0, 7, f"lo_{key}")
+        late = key == "late_shift_load_delta"
+        now = [sum(1 for s in r if s is not None and (
+                   (shifts[s].start_min >= 18 * 60 or shifts[s].start_min < 4 * 60) if late
+                   else shifts[s].start_min + shifts[s].duration_min > 1440)) for r in rows]
+        model.AddHint(hi, max(now))
+        model.AddHint(lo, min(now))
+        for load in loads:
+            model.Add(hi >= load)
+            model.Add(lo <= load)
+        if idle:
+            model.Add(lo == 0)
+        model.Add(hi - lo <= int(employee_now.get(key, 0) or 0))
+    model.Minimize(sum(objective))
+    solver = cp_model.CpSolver()
+    # Interleaved search keeps several workers (including LNS, which a single
+    # worker lacks) while staying deterministic under a deterministic limit.
+    solver.parameters.num_workers = SHIFT_CONSISTENCY_SWAP_WORKERS
+    solver.parameters.interleave_search = True
+    solver.parameters.random_seed = 0
+    solver.parameters.max_time_in_seconds = max(1.0, min(SHIFT_CONSISTENCY_SWAP_MAX_SEC, deadline - time.time()))
+    solver.parameters.max_deterministic_time = SHIFT_CONSISTENCY_SWAP_DETERMINISTIC_TIME
+    status = solver.Solve(model)
+    record["swap_model_status"] = solver.StatusName(status)
+    if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        return None
+    new_rows = [list(r) for r in rows]
+    for (a, d), opts in options.items():
+        if movable(a, d):
+            new_rows[a][d] = next(s for s in opts if solver.Value(u[(a, d, s)]))
+    before = sum(10_000 * c[0] + c[1] for c in (shift_consistency_cost(parsed, r) for r in rows))
+    after = sum(10_000 * c[0] + c[1] for c in (shift_consistency_cost(parsed, r) for r in new_rows))
+    record["swap_model_objective"] = {"before": before, "after": after}
+    return new_rows if after < before else None
+
+
+def shift_consistency_polish(
+    parsed: ParsedInput,
+    skeleton: SkeletonSolution,
+    solution: BreakSolution,
+    time_limit_sec: float = SHIFT_CONSISTENCY_TIME_LIMIT_SEC,
+) -> Tuple[SkeletonSolution, BreakSolution, Dict[str, Any]]:
+    """Return a more consistent schedule, or the original with the reason it was kept."""
+    started = time.time()
+    # The last seconds are kept for the final metrics and release checks, so
+    # the whole polish stays inside time_limit_sec.
+    deadline = started + max(1.0, float(time_limit_sec) - SHIFT_CONSISTENCY_CHECK_RESERVE_SEC)
+    record: Dict[str, Any] = {"enabled": True, "cells_reassigned": 0, "moves": 0, "move_trials": 0,
+                              "before": shift_consistency_summary(parsed, skeleton)}
+    A = len(parsed.associates)
+    rows = [list(r) for r in skeleton.selected_shift_index]
+    pattern = dict(solution.selected_pattern)
+    no_break = set(solution.no_break_cells)
+    base_metrics = calculate_metrics(parsed, skeleton, solution.selected_pattern, solution.patterns)
+    nested = {a for a, assoc in enumerate(parsed.associates) if norm(getattr(assoc, "nesting_group", ""))}
+    locked = {
+        (a, d) for a, assoc in enumerate(parsed.associates) for d in range(7)
+        if parsed.fixed_enabled and preference_kind(assoc.fixed_schedule[d] if d < len(assoc.fixed_schedule) else "") == "shift"
+    }
+    costs = [shift_consistency_cost(parsed, row) for row in rows]
+    employee_now = employee_operational_quality(parsed, skeleton)
+
+    def movable(a: int, d: int) -> bool:
+        return rows[a][d] is not None and a not in nested and (a, d) not in locked
+
+    # 1. Swaps: on each day, associates of one language and shift length may
+    # hold that day's shifts in any order without changing coverage, so the
+    # whole week is re-dealt at once (CP-SAT, deterministic, hinted with the
+    # current deal so it can only stay level or improve).
+    original_rows = [list(r) for r in rows]
+    rows, employee_now, greedy_moves = _consistency_greedy_swaps(
+        parsed, skeleton, rows, movable, employee_now, deadline)
+    record["greedy_swaps"] = len(greedy_moves)
+    dealt = _consistency_swap_model(parsed, rows, movable, employee_now, deadline, record)
+    new_rows = dealt if dealt is not None else rows
+    if new_rows != original_rows:
+        for d in range(7):
+            groups: Dict[Tuple[str, int], List[int]] = {}
+            for a in range(A):
+                if movable(a, d):
+                    groups.setdefault((norm(parsed.associates[a].language),
+                                       parsed.shifts[original_rows[a][d]].duration_min), []).append(a)
+            for members in groups.values():
+                # Each shift keeps one of its own break patterns: a member who
+                # keeps its shift keeps its pattern; the others take the rest.
+                slots: Dict[int, List[Tuple[Optional[int], bool]]] = {}
+                changed = [a for a in members if new_rows[a][d] != original_rows[a][d]]
+                for a in changed:
+                    slots.setdefault(original_rows[a][d], []).append((pattern.get((a, d)), (a, d) in no_break))
+                for a in changed:
+                    taken, flag = slots[new_rows[a][d]].pop()
+                    pattern[(a, d)] = taken
+                    no_break.discard((a, d))
+                    if flag:
+                        no_break.add((a, d))
+                    record["cells_reassigned"] += 1
+    rows = new_rows
+    costs = [shift_consistency_cost(parsed, row) for row in rows]
+    current_skeleton = _consistency_skeleton(parsed, skeleton, rows)
+    current_metrics = calculate_metrics(parsed, current_skeleton, pattern, solution.patterns)
+    swap_worse = _consistency_metrics_no_worse(current_metrics, base_metrics)
+    if swap_worse:
+        # Cannot happen if coverage depends on language only; if it ever does,
+        # nothing from this phase is kept.
+        record["swap_phase_reverted"] = swap_worse
+        rows = [list(r) for r in skeleton.selected_shift_index]
+        pattern = dict(solution.selected_pattern)
+        no_break = set(solution.no_break_cells)
+        costs = [shift_consistency_cost(parsed, row) for row in rows]
+        current_skeleton, current_metrics = skeleton, base_metrics
+        record["cells_reassigned"] = 0
+
+    # 2. One-hour moves: kept only when the full metrics are no worse.
+    by_start_duration = {(s.start_min, s.duration_min): s for s in parsed.shifts}
+    order = sorted(range(A), key=lambda a: costs[a], reverse=True)
+    for a in order:
+        for d in range(7):
+            if time.time() > deadline:
+                record["stopped_by_time_limit"] = True
+                break
+            if not movable(a, d):
+                continue
+            current = parsed.shifts[rows[a][d]]
+            for step in (SHIFT_CONSISTENCY_STEP_MIN, -SHIFT_CONSISTENCY_STEP_MIN):
+                target = by_start_duration.get(((current.start_min + step) % 1440, current.duration_min))
+                if target is None:
+                    continue
+                trial_row = list(rows[a])
+                trial_row[d] = target.index
+                new_cost = shift_consistency_cost(parsed, trial_row)
+                if new_cost >= costs[a]:
+                    continue
+                if not (_consistency_row_allowed(parsed, a, trial_row) and _consistency_cell_allowed(parsed, a, d, target)):
+                    continue
+                trial_rows = [list(r) for r in rows]
+                trial_rows[a] = trial_row
+                trial_skeleton = _consistency_skeleton(parsed, skeleton, trial_rows)
+                record["move_trials"] += 1
+                trial_metrics = calculate_metrics(parsed, trial_skeleton, pattern, solution.patterns)
+                if _consistency_metrics_no_worse(trial_metrics, current_metrics):
+                    continue
+                rows, costs[a] = trial_rows, new_cost
+                current_skeleton, current_metrics = trial_skeleton, trial_metrics
+                record["moves"] += 1
+                break
+    record["elapsed_sec"] = round(time.time() - started, 3)
+    if not record["cells_reassigned"] and not record["moves"]:
+        record["status"] = "NO_CHANGE"
+        record["after"] = record["before"]
+        return skeleton, solution, record
+    final_skeleton = current_skeleton
+    final_skeleton.diagnostics["no_break_metrics"] = calculate_metrics(
+        parsed, final_skeleton, {(a, d): None for a, d, _ in scheduled_cells(final_skeleton)}, [])
+    final_skeleton.diagnostics["shift_consistency_polish"] = True
+    diagnostics = {k: v for k, v in solution.diagnostics.items()
+                   if k not in {"release_validation", "hard_failure_types", "hard_fail_count", "early_release_validation"}}
+    diagnostics["shift_consistency_polish"] = {"cells_reassigned": record["cells_reassigned"], "moves": record["moves"]}
+    polished = BreakSolution(
+        profile=solution.profile, skeleton_profile=solution.skeleton_profile, cp_status=solution.cp_status,
+        elapsed_sec=solution.elapsed_sec, objective=solution.objective, pattern_width=solution.pattern_width,
+        exception_mode=solution.exception_mode, selected_pattern=pattern, no_break_cells=no_break,
+        patterns=list(solution.patterns), diagnostics=diagnostics, metrics=current_metrics,
+    )
+    original_class = candidate_pool_class(parsed, skeleton, solution)
+    polished_class = candidate_pool_class(parsed, final_skeleton, polished)
+    final_worse = _consistency_metrics_no_worse(current_metrics, base_metrics)
+    if polished_class != original_class or final_worse:
+        record["status"] = "KEPT_ORIGINAL"
+        record["reason"] = {"original_class": original_class, "polished_class": polished_class, "worse": final_worse}
+        record["after"] = record["before"]
+        return skeleton, solution, record
+    record["status"] = "APPLIED"
+    record["after"] = shift_consistency_summary(parsed, final_skeleton)
+    return final_skeleton, polished, record
+
+
 def run_post_break_repair_phase(
     parsed: ParsedInput,
     candidates: Sequence[Tuple[SkeletonSolution, BreakSolution]],
@@ -22497,6 +23005,31 @@ def run_case(
                 best_before_skeleton.diagnostics.get("no_break_metrics", {}).get("before_target", 0)
             ),
         )
+        polish_on = (SHIFT_CONSISTENCY_CLI_OVERRIDE if SHIFT_CONSISTENCY_CLI_OVERRIDE is not None
+                     else SHIFT_CONSISTENCY_POLISH_ENABLED if parsed.shift_consistency_polish is None
+                     else bool(parsed.shift_consistency_polish))
+        if polish_on:
+            # Leave the export tail its time; never overrun the run. Measured on
+            # Chat and Voice: about 92 s remain at this point and the export after
+            # it takes about 5 s, so a 30 s reserve keeps a wide margin.
+            polish_budget = min(SHIFT_CONSISTENCY_TIME_LIMIT_SEC,
+                                budget_manager.remaining_total() - SHIFT_CONSISTENCY_TAIL_RESERVE_SEC)
+            if polish_budget < SHIFT_CONSISTENCY_MIN_SEC:
+                audit["shift_consistency_polish"] = {"enabled": True, "status": "SKIPPED_NO_TIME",
+                                                     "remaining_sec": round(budget_manager.remaining_total(), 1)}
+            else:
+                polished_skeleton, polished_breaks, polish_record = shift_consistency_polish(
+                    parsed, *selection["recommended"], time_limit_sec=polish_budget)
+                audit["shift_consistency_polish"] = polish_record
+                if polish_record.get("status") == "APPLIED":
+                    selection["recommended"] = (polished_skeleton, polished_breaks)
+                print(f"SHIFT_CONSISTENCY_POLISH {polish_record.get('status')}: start movement "
+                      f"{polish_record['before']['start_movement_hours']} h -> "
+                      f"{polish_record['after']['start_movement_hours']} h, distinct starts "
+                      f"{polish_record['before']['distinct_start_times']} -> "
+                      f"{polish_record['after']['distinct_start_times']}", file=log, flush=True)
+        else:
+            audit["shift_consistency_polish"] = {"enabled": False}
         chosen_skeleton, chosen_breaks = selection["recommended"]
         break_capacity = break_capacity_headcount_requirement(
             parsed, chosen_skeleton, measured_on="recommended_final_skeleton")
@@ -23357,6 +23890,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--disable-conflict-refinement", action="store_true")
     parser.add_argument("--disable-coordinated-repair", action="store_true")
     parser.add_argument("--disable-joint-refinement", action="store_true")
+    polish = parser.add_mutually_exclusive_group()
+    polish.add_argument("--shift-consistency-polish", dest="shift_consistency_polish", action="store_const", const=True,
+                        default=None, help="After choosing the schedule, re-deal same-day shifts between "
+                        "interchangeable associates (and +-1 h moves that change no metric) so each week is "
+                        "more uniform. Overrides the workbook row.")
+    polish.add_argument("--no-shift-consistency-polish", dest="shift_consistency_polish", action="store_const",
+                        const=False, help="Turn the shift consistency polish off (overrides the workbook row).")
     parser.add_argument("--enable-dnbs", action="store_true",
                         help="enable the day-neighbourhood break search phase (off by default; see F-10)")
     parser.add_argument("--enable-break-load-feedback", action="store_true",
@@ -24095,6 +24635,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         parser.error(f"--time-limit {args.time_limit} is below the 60 s minimum the engine can plan")
     if getattr(args, "enable_dnbs", False):
         DAY_NEIGHBOURHOOD_BREAK_SEARCH_ENABLED = True
+    global SHIFT_CONSISTENCY_CLI_OVERRIDE
+    SHIFT_CONSISTENCY_CLI_OVERRIDE = getattr(args, "shift_consistency_polish", None)
     if getattr(args, "enable_break_load_feedback", False):
         BREAK_LOAD_FEEDBACK_ENABLED = True
     if getattr(args, "enable_final_recovery_endgame", False):

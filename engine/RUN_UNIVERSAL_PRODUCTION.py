@@ -987,6 +987,13 @@ def build_parser() -> argparse.ArgumentParser:
                    help='Force joint refinement on. Off by default at every depth: 474 '
                         'solver audits (QUICK and DEEP) with improved 0, ~90%% of peak memory, '
                         'and two DEEP runs killed at 13-14 GB inside it.')
+    polish = p.add_mutually_exclusive_group()
+    polish.add_argument('--shift-consistency-polish', dest='shift_consistency_polish', action='store_const',
+                        const=True, default=None,
+                        help='Re-deal same-day shifts between interchangeable associates after the schedule '
+                             'is chosen, so each week is more uniform. No metric may get worse.')
+    polish.add_argument('--no-shift-consistency-polish', dest='shift_consistency_polish', action='store_const',
+                        const=False, help='Turn the shift consistency polish off.')
     p.add_argument('--enable-dnbs', action='store_true',
                    help='enable the day-neighbourhood break search (off by default since the 2026-09-28 audit, F-10)')
     p.add_argument('--enable-break-load-feedback', action='store_true',
@@ -1144,6 +1151,10 @@ def main() -> int:
         command.append('--enable-break-load-feedback')
     if args.enable_dnbs:
         command.append('--enable-dnbs')
+    if args.shift_consistency_polish is True:
+        command.append('--shift-consistency-polish')
+    elif args.shift_consistency_polish is False:
+        command.append('--no-shift-consistency-polish')
     if args.stage1_profile_rotation:
         command += ['--stage1-profile-rotation', str(args.stage1_profile_rotation)]
     if args.use_input_schedule_as_seed and not args.disable_input_schedule_seed:

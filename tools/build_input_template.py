@@ -35,6 +35,10 @@ SETUP_LAYOUT = [
     ("How To Run", [
         ("Run Stage", '"Before Breaks Only,Full Schedule"'),
         ("Run Depth", '"Quick,Deep,Overnight"'),
+        # After the schedule is chosen: re-deal same-day shifts between
+        # interchangeable associates so each week is more uniform. Blank = the
+        # engine default; nothing it measures may get worse.
+        ("Shift Consistency Polish", YES_NO),
     ]),
     ("Coverage", [
         ("Target", None),

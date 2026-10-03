@@ -226,6 +226,38 @@ Rules worth knowing:
 The pre-check prints, under **4. language hours**, the mode and each language's
 hours per day. It warns when the hours are authored but not enforced.
 
+### 3.8 More consistent weeks: the shift consistency polish
+
+Once the schedule is chosen, the polish makes each associate's week more uniform.
+
+1. **Swaps.** Two associates with the same language and shift length exchange a
+   day's shift, breaks included. Every interval is covered exactly as before.
+2. **One-hour moves.** A shift starts one hour earlier or later. This is kept only
+   when nothing the engine measures gets worse: target, floor, every tier, gaps,
+   breaks, overage, language and week boundary.
+
+Every move keeps every hard rule:
+
+- rest, including from last Saturday and across the week;
+- OFF days and leave;
+- the maximum number of different shifts;
+- language hours;
+- shift length (11h/3-OFF mode).
+
+Fixed requests and nesting groups are never moved. Preference matches and the
+fairness spreads (late, overnight, weekend shifts, start swings) may not get worse.
+
+The polish uses spare time at the end of the run and never extends it. Measured on 14 schedules:
+start-time movement fell by up to 70% (AE_IT 47 h -> 14 h), and coverage and compliance were identical
+in every case (`evidence/shift_consistency/RESULT.md`). The audit
+records what it did, and the log prints
+`SHIFT_CONSISTENCY_POLISH APPLIED: start movement 154.0 h -> 119.0 h, distinct starts 68 -> 66`.
+
+| Setting | Effect |
+|---|---|
+| Instructions → `Shift Consistency Polish` = `Yes` / `No` | On or off for this workbook. Blank means **on** (the default since 2026-10-03). |
+| `--shift-consistency-polish` / `--no-shift-consistency-polish` | Command-line override. |
+
 ---
 
 ## 4. Running on Colab, step by step

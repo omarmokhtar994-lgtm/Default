@@ -1,0 +1,68 @@
+[
+ {
+  "run": "SYNTH_H1_24X7_OVERNIGHT",
+  "status": "APPLIED",
+  "sec": 52.6,
+  "cells": 6,
+  "moves": 0,
+  "movement_h": [
+   187.0,
+   174.0
+  ],
+  "distinct": [
+   84,
+   84
+  ],
+  "one_start": [
+   0,
+   0
+  ],
+  "after_target": [
+   143,
+   143
+  ],
+  "after_floor": [
+   167,
+   167
+  ],
+  "worse": [],
+  "hard_fail": 0,
+  "class": [
+   "compliant",
+   "compliant"
+  ]
+ },
+ {
+  "run": "CRICUT_CHAT",
+  "status": "APPLIED",
+  "sec": 34.5,
+  "cells": 99,
+  "moves": 0,
+  "movement_h": [
+   154.0,
+   119.0
+  ],
+  "distinct": [
+   68,
+   66
+  ],
+  "one_start": [
+   1,
+   1
+  ],
+  "after_target": [
+   166,
+   166
+  ],
+  "after_floor": [
+   237,
+   237
+  ],
+  "worse": [],
+  "hard_fail": 0,
+  "class": [
+   "compliant",
+   "compliant"
+  ]
+ }
+]

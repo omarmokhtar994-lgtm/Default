@@ -44,6 +44,7 @@ Every fix was written test-first:
 | Golden replay of the release checks on the 40 saved schedules | **Identical to Phase B, row for row.** The only parity differences are the three `*_all_staffed_quarters` fields that pre-Phase-A audits lack. The one clean-room FAIL is still the correct S14 duplicate-row case. | `GOLDEN_REPLAY_GATES.json` |
 | Next-Sunday floor gaps on the 40 saved schedules | **0 on every one** (validator recomputation and engine audit). So F-07 leaves every published schedule's hard-failure count unchanged. | `R1_BOUNDARY_FLOOR.json` |
 | Real Voice run (below) | 248 / 264 after-break target and 253 floor, the same as Phase B | `real_run_voice_language_hours/` |
+| **Since Phase A:** the same comparison against the Phase A engine (`5597971`, sha256 `e5afd99d…`) | **Stage 1: 45 builds, 0 differing constraints, objectives identical. Stage 2: 51 models, 0 differing constraints.** Default runs build exactly the models they built after Phase A, so neither Phase B nor Phase C can have lowered any of these schedules. | `STAGE1_MODEL_IDENTITY_PHASE_A.json`, `STAGE2_MODEL_IDENTITY_PHASE_A.json` |
 
 The three engine edits made after the model-identity runs do not touch `build_skeleton` or `solve_breaks`:
 - the break-capacity diagnostic;

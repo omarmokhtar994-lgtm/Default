@@ -1,0 +1,452 @@
+[
+ {
+  "workbook": "fixtures/real_runs/before_break/B1_BEFORE/input_snapshot/AE_FR_Choice.xlsx",
+  "profile": "hard_probe",
+  "constraints": 3516,
+  "variables_old": 1408,
+  "variables_new": 1408,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "fixtures/real_runs/before_break/B1_BEFORE/input_snapshot/AE_FR_Choice.xlsx",
+  "profile": "target_priority_balanced",
+  "constraints": 5744,
+  "variables_old": 3300,
+  "variables_new": 3300,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "fixtures/real_runs/before_break/B1_BEFORE/input_snapshot/AE_FR_Choice.xlsx",
+  "profile": "target90_restore_champion",
+  "constraints": 5744,
+  "variables_old": 3300,
+  "variables_new": 3300,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "fixtures/real_runs/language_hours/Cricut_Voice_LANGUAGE_HOURS.xlsx",
+  "profile": "hard_probe",
+  "constraints": 60784,
+  "variables_old": 7414,
+  "variables_new": 7414,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "fixtures/real_runs/language_hours/Cricut_Voice_LANGUAGE_HOURS.xlsx",
+  "profile": "target_priority_balanced",
+  "constraints": 64529,
+  "variables_old": 10367,
+  "variables_new": 10367,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "fixtures/real_runs/language_hours/Cricut_Voice_LANGUAGE_HOURS.xlsx",
+  "profile": "target90_restore_champion",
+  "constraints": 64529,
+  "variables_old": 10367,
+  "variables_new": 10367,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "fixtures/real_runs/parity_blank_breaks/S01_BASELINE.xlsx",
+  "profile": "hard_probe",
+  "constraints": 1364,
+  "variables_old": 782,
+  "variables_new": 782,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "fixtures/real_runs/parity_blank_breaks/S01_BASELINE.xlsx",
+  "profile": "target_priority_balanced",
+  "constraints": 2864,
+  "variables_old": 1946,
+  "variables_new": 1946,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "fixtures/real_runs/parity_blank_breaks/S01_BASELINE.xlsx",
+  "profile": "target90_restore_champion",
+  "constraints": 2864,
+  "variables_old": 1946,
+  "variables_new": 1946,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "fixtures/real_runs/week_boundary/B3_ARB2B_BASE/input_snapshot/AE_AR_B2B.xlsx",
+  "profile": "hard_probe",
+  "constraints": 67628,
+  "variables_old": 8732,
+  "variables_new": 8732,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "fixtures/real_runs/week_boundary/B3_ARB2B_BASE/input_snapshot/AE_AR_B2B.xlsx",
+  "profile": "target_priority_balanced",
+  "constraints": 71056,
+  "variables_old": 11656,
+  "variables_new": 11656,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "fixtures/real_runs/week_boundary/B3_ARB2B_BASE/input_snapshot/AE_AR_B2B.xlsx",
+  "profile": "target90_restore_champion",
+  "constraints": 71056,
+  "variables_old": 11656,
+  "variables_new": 11656,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "fixtures/real_runs/week_boundary/B3_ARB2B_DEFAULT45/input_snapshot/AE_AR_B2B.xlsx",
+  "profile": "hard_probe",
+  "constraints": 67628,
+  "variables_old": 8732,
+  "variables_new": 8732,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "fixtures/real_runs/week_boundary/B3_ARB2B_DEFAULT45/input_snapshot/AE_AR_B2B.xlsx",
+  "profile": "target_priority_balanced",
+  "constraints": 71056,
+  "variables_old": 11656,
+  "variables_new": 11656,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "fixtures/real_runs/week_boundary/B3_ARB2B_DEFAULT45/input_snapshot/AE_AR_B2B.xlsx",
+  "profile": "target90_restore_champion",
+  "constraints": 71056,
+  "variables_old": 11656,
+  "variables_new": 11656,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "fixtures/real_runs/week_boundary/B3_ARB2B_S30/input_snapshot/AE_AR_B2B_SLICE30.xlsx",
+  "profile": "hard_probe",
+  "constraints": 67628,
+  "variables_old": 8732,
+  "variables_new": 8732,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "fixtures/real_runs/week_boundary/B3_ARB2B_S30/input_snapshot/AE_AR_B2B_SLICE30.xlsx",
+  "profile": "target_priority_balanced",
+  "constraints": 71056,
+  "variables_old": 11656,
+  "variables_new": 11656,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "fixtures/real_runs/week_boundary/B3_ARB2B_S30/input_snapshot/AE_AR_B2B_SLICE30.xlsx",
+  "profile": "target90_restore_champion",
+  "constraints": 71056,
+  "variables_old": 11656,
+  "variables_new": 11656,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "fixtures/real_runs/week_boundary/B3_FRC_DEFAULT45/input_snapshot/AE_FR_Choice.xlsx",
+  "profile": "hard_probe",
+  "constraints": 3516,
+  "variables_old": 1408,
+  "variables_new": 1408,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "fixtures/real_runs/week_boundary/B3_FRC_DEFAULT45/input_snapshot/AE_FR_Choice.xlsx",
+  "profile": "target_priority_balanced",
+  "constraints": 5744,
+  "variables_old": 3300,
+  "variables_new": 3300,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "fixtures/real_runs/week_boundary/B3_FRC_DEFAULT45/input_snapshot/AE_FR_Choice.xlsx",
+  "profile": "target90_restore_champion",
+  "constraints": 5744,
+  "variables_old": 3300,
+  "variables_new": 3300,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "fixtures/real_runs/week_boundary/B3_SLICE30/input_snapshot/AE_FR_Choice_SLICE30.xlsx",
+  "profile": "hard_probe",
+  "constraints": 3516,
+  "variables_old": 1408,
+  "variables_new": 1408,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "fixtures/real_runs/week_boundary/B3_SLICE30/input_snapshot/AE_FR_Choice_SLICE30.xlsx",
+  "profile": "target_priority_balanced",
+  "constraints": 5744,
+  "variables_old": 3300,
+  "variables_new": 3300,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "fixtures/real_runs/week_boundary/B3_SLICE30/input_snapshot/AE_FR_Choice_SLICE30.xlsx",
+  "profile": "target90_restore_champion",
+  "constraints": 5744,
+  "variables_old": 3300,
+  "variables_new": 3300,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "packages/rc9_2_2_production/inputs/AE_AR_B2B.xlsx",
+  "profile": "hard_probe",
+  "constraints": 60920,
+  "variables_old": 7880,
+  "variables_new": 7880,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "packages/rc9_2_2_production/inputs/AE_AR_B2B.xlsx",
+  "profile": "target_priority_balanced",
+  "constraints": 64348,
+  "variables_old": 10804,
+  "variables_new": 10804,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "packages/rc9_2_2_production/inputs/AE_AR_B2B.xlsx",
+  "profile": "target90_restore_champion",
+  "constraints": 64348,
+  "variables_old": 10804,
+  "variables_new": 10804,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "packages/rc9_2_2_production/inputs/Cricut_Chat_RC9_1_READY_SKELETON.xlsx",
+  "profile": "hard_probe",
+  "constraints": 48825,
+  "variables_old": 6313,
+  "variables_new": 6313,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "packages/rc9_2_2_production/inputs/Cricut_Chat_RC9_1_READY_SKELETON.xlsx",
+  "profile": "target_priority_balanced",
+  "constraints": 52771,
+  "variables_old": 9533,
+  "variables_new": 9533,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "packages/rc9_2_2_production/inputs/Cricut_Chat_RC9_1_READY_SKELETON.xlsx",
+  "profile": "target90_restore_champion",
+  "constraints": 52771,
+  "variables_old": 9533,
+  "variables_new": 9533,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "packages/rc9_2_2_production/inputs/Cricut_Voice_RC9_1_READY_SKELETON.xlsx",
+  "profile": "hard_probe",
+  "constraints": 58061,
+  "variables_old": 7414,
+  "variables_new": 7414,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "packages/rc9_2_2_production/inputs/Cricut_Voice_RC9_1_READY_SKELETON.xlsx",
+  "profile": "target_priority_balanced",
+  "constraints": 61806,
+  "variables_old": 10367,
+  "variables_new": 10367,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "packages/rc9_2_2_production/inputs/Cricut_Voice_RC9_1_READY_SKELETON.xlsx",
+  "profile": "target90_restore_champion",
+  "constraints": 61806,
+  "variables_old": 10367,
+  "variables_new": 10367,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "packages/rc9_2_2_production/inputs/GDI_REAL28_RC9_1_24_7_FINAL_READY.xlsx",
+  "profile": "hard_probe",
+  "constraints": 52020,
+  "variables_old": 6527,
+  "variables_new": 6527,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "packages/rc9_2_2_production/inputs/GDI_REAL28_RC9_1_24_7_FINAL_READY.xlsx",
+  "profile": "target_priority_balanced",
+  "constraints": 55447,
+  "variables_old": 9486,
+  "variables_new": 9486,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "packages/rc9_2_2_production/inputs/GDI_REAL28_RC9_1_24_7_FINAL_READY.xlsx",
+  "profile": "target90_restore_champion",
+  "constraints": 55447,
+  "variables_old": 9486,
+  "variables_new": 9486,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "packages/rc9_2_2_production/inputs/NMG_EN_AND_SP.xlsx",
+  "profile": "hard_probe",
+  "constraints": 6047,
+  "variables_old": 2304,
+  "variables_new": 2304,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "packages/rc9_2_2_production/inputs/NMG_EN_AND_SP.xlsx",
+  "profile": "target_priority_balanced",
+  "constraints": 10370,
+  "variables_old": 5619,
+  "variables_new": 5619,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "packages/rc9_2_2_production/inputs/NMG_EN_AND_SP.xlsx",
+  "profile": "target90_restore_champion",
+  "constraints": 10370,
+  "variables_old": 5619,
+  "variables_new": 5619,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "packages/rc9_2_2_production/inputs/NMG_EN_FIXED_NESTING_REST_SAFE_REGRESSION_CLEAN.xlsx",
+  "profile": "hard_probe",
+  "constraints": 12894,
+  "variables_old": 4829,
+  "variables_new": 4829,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "packages/rc9_2_2_production/inputs/NMG_EN_FIXED_NESTING_REST_SAFE_REGRESSION_CLEAN.xlsx",
+  "profile": "target_priority_balanced",
+  "constraints": 17493,
+  "variables_old": 8420,
+  "variables_new": 8420,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "packages/rc9_2_2_production/inputs/NMG_EN_FIXED_NESTING_REST_SAFE_REGRESSION_CLEAN.xlsx",
+  "profile": "target90_restore_champion",
+  "constraints": 17493,
+  "variables_old": 8420,
+  "variables_new": 8420,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "packages/rc9_2_2_production/inputs/NMG_SP_RC9_1_READY_FIXED.xlsx",
+  "profile": "hard_probe",
+  "constraints": 1228,
+  "variables_old": 466,
+  "variables_new": 466,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "packages/rc9_2_2_production/inputs/NMG_SP_RC9_1_READY_FIXED.xlsx",
+  "profile": "target_priority_balanced",
+  "constraints": 3487,
+  "variables_old": 2221,
+  "variables_new": 2221,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ },
+ {
+  "workbook": "packages/rc9_2_2_production/inputs/NMG_SP_RC9_1_READY_FIXED.xlsx",
+  "profile": "target90_restore_champion",
+  "constraints": 3487,
+  "variables_old": 2221,
+  "variables_new": 2221,
+  "constraints_only_old": 0,
+  "constraints_only_new": 0,
+  "objective_identical": true
+ }
+]

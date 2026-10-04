@@ -212,6 +212,19 @@ One existing test, and its duplicate under `tests/`, was re-pinned: `test_rc9_2_
 
 The impact of Volume Weighted on real programs is measured by the pre-registered A/B in `C4_AB_RULE.txt` and `C4_AB_AMENDMENTS.txt`, which runs after this package ships.
 
+## F-36 (new): best-of-seeds ignored the coverage measure
+
+**Found:** while reading the C4 A/B (the seed is the largest source of variation), the selection across seeds turned out to ignore the program's measure. `RUN_PORTFOLIO.py` (Colab QUICK = best of 2 seeds, DEEP = 4, OVERNIGHT = 6) always ranked by intervals at target.
+
+**Fix:**
+- When every seed ran Volume Weighted (read from each run's audit), seeds rank first by requirement covered at target, recomputed from the independent validator's interval rows, then in the old order.
+- Interval Count ranks exactly as before.
+- Seeds that disagree on the measure fall back to the old ranking and say so (`INTERVAL_COUNT_MIXED_MEASURES`).
+- Eligibility is unchanged.
+- `PORTFOLIO_SUMMARY.json` records `after_ranking_measure` and the ranking used.
+
+**Tests written first** (`F36_TESTS_BEFORE_FIX.txt`): 5 of 6 failed before; the 6th checks that eligibility is unchanged. The existing portfolio suites pass unchanged.
+
 ## C3: AE_IT after-break floor, Stage-1 shape (`C3_RULE.txt`, `c3_runs/`)
 
 **Setup:**

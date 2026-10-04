@@ -68,6 +68,31 @@ AFTER_KEY = (
 BEFORE_KEY = (("best_before_target", +1), ("best_before_floor", +1))
 
 
+def after_ranking_key(ranking: str) -> tuple:
+    """The after-breaks ranking for the coverage measure the seeds optimised (audit F-36).
+
+    Interval Count ranks exactly as before. Volume Weighted ranks first by the
+    requirement covered at target, recomputed from the independent validator's
+    interval rows, then by the same order as Interval Count.
+    """
+    if ranking == "VOLUME_WEIGHTED":
+        return (("req_covered_at_target", +1),) + AFTER_KEY
+    return AFTER_KEY
+
+
+def requirement_covered_at_target(validation: Dict[str, Any], target_ratio: Any) -> Optional[float]:
+    """FTE of requirement in intervals at target after breaks, from the validator's own rows."""
+    rows = validation.get("interval_rows") or []
+    try:
+        target = float(target_ratio)
+    except (TypeError, ValueError):
+        return None
+    if not rows:
+        return None
+    return round(sum(float(r.get("required") or 0.0) for r in rows
+                     if float(r.get("after_pct") or 0.0) + 1e-9 >= target), 6)
+
+
 def _num(value: Any) -> float:
     try:
         return float(value)
@@ -96,6 +121,14 @@ def read_seed_result(run_dir: Path, return_code: Optional[int] = None) -> Dict[s
     if validation_path.exists():
         validation = json.loads(validation_path.read_text(encoding="utf-8"))
     parity = (validation.get("metric_parity") or {}).get("status")
+    out["summary"]["req_covered_at_target"] = requirement_covered_at_target(validation, summary.get("target_ratio"))
+    out["coverage_measure"] = "interval_count"
+    for audit_path in sorted(glob.glob(str(run_dir / "*solver_audit.json"))):
+        try:
+            measure = (json.loads(Path(audit_path).read_text(encoding="utf-8")).get("coverage_measure") or {})
+        except (OSError, json.JSONDecodeError):
+            continue
+        out["coverage_measure"] = str(measure.get("mode") or "interval_count")
     out["validation"] = {
         "status": validation.get("status"),
         "hard_fail_count": validation.get("hard_fail_count"),
@@ -125,9 +158,19 @@ def choose_winners(results: List[Dict[str, Any]]) -> Dict[str, Optional[Dict[str
     """Best eligible after-breaks run, and best before-breaks run of the eligible seeds."""
     after_pool = [r for r in results if r.get("after_eligible")]
     before_pool = [r for r in after_pool if r.get("before_workbook")]
-    after = max(after_pool, key=lambda r: _key(r, AFTER_KEY)) if after_pool else None
+    measures = {r.get("coverage_measure", "interval_count") for r in results if r.get("finished")}
+    if measures == {"volume_weighted"}:
+        ranking = "VOLUME_WEIGHTED"
+    elif len(measures) > 1:
+        # Every seed runs the same command, so this should not happen; if it
+        # does, rank as before and say so rather than guess.
+        ranking = "INTERVAL_COUNT_MIXED_MEASURES"
+    else:
+        ranking = "INTERVAL_COUNT"
+    spec = after_ranking_key(ranking)
+    after = max(after_pool, key=lambda r: _key(r, spec)) if after_pool else None
     before = max(before_pool, key=lambda r: _key(r, BEFORE_KEY)) if before_pool else None
-    return {"after": after, "before": before}
+    return {"after": after, "before": before, "ranking": ranking}
 
 
 def seed_list(count: int, base: int, explicit: Optional[str]) -> List[int]:
@@ -245,7 +288,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         "passthrough_arguments": passthrough,
         "after_breaks_winner_seed": winners["after"]["seed"] if winners["after"] else None,
         "before_breaks_winner_seed": winners["before"]["seed"] if winners["before"] else None,
-        "after_ranking": [k for k, _ in AFTER_KEY],
+        "after_ranking_measure": winners["ranking"],
+        "after_ranking": [k for k, _ in after_ranking_key(winners["ranking"])],
         "before_ranking": [k for k, _ in BEFORE_KEY],
         "eligibility": "return code 0, validator PASS, 0 hard failures, parity PASS, production_eligible TRUE",
         "best": best_manifest,
@@ -265,7 +309,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                         r is winners["after"], r is winners["before"]])
     if winners["after"]:
         a, b = winners["after"], winners["before"]
-        print(f"[portfolio] best after-breaks: seed {a['seed']} after_target {a['summary']['after_target']}; "
+        print(f"[portfolio] best after-breaks ({winners['ranking']}): seed {a['seed']} after_target "
+              f"{a['summary']['after_target']}, requirement covered {a['summary'].get('req_covered_at_target')}; "
               f"best before-breaks: seed {b['seed'] if b else None} "
               f"{(b or {}).get('summary', {}).get('best_before_target')}", flush=True)
         return 0

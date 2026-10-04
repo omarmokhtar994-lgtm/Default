@@ -1,0 +1,21 @@
+Phase C4 impact A/B - AMENDMENT to C4_AB_RULE.txt (written after the rule was pushed
+in 58acabf, and before any A/B run started)
+=====================================================================================
+
+A1  Seeds: 2 per case (9000, 9001) instead of 3, at the business's request, to cut
+    the wall-clock time from about 14 h to about 9 h (18 new runs instead of 27; AEIT
+    INTERVAL still reuses the C3 DEFAULT runs of the same seeds).
+
+A2  A third seed (9002) is run for a case, both arms, when any of these holds after
+    its two seeds:
+      - the two paired req_covered deltas have opposite signs (one positive, one
+        negative), so rule B's direction is not settled for that case;
+      - the two seeds give different prices (one MINOR, one MAJOR, applying rule
+        C's thresholds to each seed's delta);
+      - a VOLUME run fails rule A. A rule-A failure is still a defect: it is
+        root-caused whatever the third seed shows.
+    The case is then scored on its three seeds.
+
+Nothing else changes: arms, cases, engine, command, measures, rules A, B and C, and
+the verdicts are as written in C4_AB_RULE.txt. Two seeds show direction and size,
+not a confidence interval.

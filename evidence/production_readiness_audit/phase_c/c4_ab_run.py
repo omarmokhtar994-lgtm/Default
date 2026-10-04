@@ -1,6 +1,9 @@
 """C4 impact A/B driver (C4_AB_RULE.txt): Interval Count vs Volume Weighted.
 
-    python3 c4_ab_run.py FROZEN_REPO WORK_DIR EVIDENCE_DIR
+    python3 c4_ab_run.py FROZEN_REPO WORK_DIR EVIDENCE_DIR [CASE:SEED ...]
+
+Seeds 9000 and 9001 (C4_AB_AMENDMENTS.txt A1). Extra CASE:SEED arguments add a
+third seed for a case, both arms (A2).
 
 Waits until FROZEN_REPO/engine exists (the release engine, copied before the
 first run). Two runs at a time, each on a free core pair, {0,1} or {2,3}.
@@ -11,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 FROZEN, WORK, EVID = (Path(a).resolve() for a in sys.argv[1:4])
+EXTRA = [(a.split(":")[0], int(a.split(":")[1])) for a in sys.argv[4:]]
 REPO = Path(__file__).resolve().parents[3]
 INPUTS = REPO / "experiments" / "rc5_vs_final" / "inputs"
 CASES = {
@@ -20,7 +24,7 @@ CASES = {
     "AEIT": INPUTS / "AE_IT_B2B.xlsx",
     "GDI": REPO / "packages" / "rc9_2_2_production" / "inputs" / "GDI_REAL28_RC9_1_24_7_FINAL_READY.xlsx",
 }
-SEEDS = (9000, 9001, 9002)
+SEEDS = (9000, 9001)
 ARMS = ("INTERVAL", "VOLUME")
 SLOTS = ({0, 1}, {2, 3})
 FREE = queue.Queue()
@@ -75,7 +79,8 @@ def main():
     while not (FROZEN / "engine" / "RUN_UNIVERSAL_PRODUCTION.py").exists():
         time.sleep(30)
     EVID.mkdir(parents=True, exist_ok=True)
-    jobs = [(case, arm, seed) for seed in SEEDS for case in CASES for arm in ARMS
+    pairs = [(case, seed) for seed in SEEDS for case in CASES] + EXTRA
+    jobs = [(case, arm, seed) for case, seed in pairs for arm in ARMS
             if not (case == "AEIT" and arm == "INTERVAL")]
     with ThreadPoolExecutor(max_workers=2) as pool:
         for rid, rec in pool.map(run, jobs):

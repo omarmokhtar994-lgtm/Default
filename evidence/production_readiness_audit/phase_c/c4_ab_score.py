@@ -13,7 +13,7 @@ import l632_universal_scheduler as E  # noqa: E402
 
 EVID, C3, OUT = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
 CASES = ("VOICE", "CHAT", "NMGSP", "AEIT", "GDI")
-SEEDS = (9000, 9001, 9002)
+SEEDS = (9000, 9001, 9002)  # 9002 only where C4_AB_AMENDMENTS.txt A2 called for it
 METRICS = ("req_covered", "fte_gap", "after_target", "after_floor", "severe_floor_gaps", "language_gap_count",
            "zero_staffed_active_quarters", "break_concurrency_violation_count")
 
@@ -50,13 +50,17 @@ for case in CASES:
     for seed in SEEDS:
         for arm in ("INTERVAL", "VOLUME"):
             if case == "AEIT" and arm == "INTERVAL":
+                if seed == 9002 and not (EVID / f"C4AB_AEIT_VOLUME_{seed}" / "RUN_RECORD.json").exists():
+                    continue
                 c3 = C3 / f"C3_DEFAULT_{seed}"
                 rec = json.loads((Path(sys.argv[1]).parent / "c3_runs" / f"C3_DEFAULT_{seed}" / "RUN_RECORD.json").read_text())
                 runs[(case, arm, seed)] = measure(c3, rec.get("return_code")) | {"reused_from_c3": True}
                 continue
             p = EVID / f"C4AB_{case}_{arm}_{seed}" / "RUN_RECORD.json"
             if not p.exists():
-                runs[(case, arm, seed)] = {"missing": True}; continue
+                if seed != 9002:
+                    runs[(case, arm, seed)] = {"missing": True}
+                continue
             rec = json.loads(p.read_text())
             runs[(case, arm, seed)] = measure(Path(rec["run_root"]), rec.get("return_code"))
 
@@ -94,13 +98,27 @@ for case in CASES:
     if mean["after_floor"] is not None and -mean["after_floor"] > 3: major.append("after_floor")
     if mean["severe_floor_gaps"] is not None and mean["severe_floor_gaps"] > 3: major.append("severe_floor_gaps")
     if mean["break_concurrency_violation_count"] is not None and mean["break_concurrency_violation_count"] > 3: major.append("break_concurrency")
+    def seed_major(i):
+        out = []
+        d = {k: (v[i] if i < len(v) else None) for k, v in deltas.items()}
+        if d["after_target"] is not None and active and -d["after_target"] > 0.05 * active: out.append("after_target")
+        if d["after_floor"] is not None and -d["after_floor"] > 3: out.append("after_floor")
+        if d["severe_floor_gaps"] is not None and d["severe_floor_gaps"] > 3: out.append("severe_floor_gaps")
+        if d["break_concurrency_violation_count"] is not None and d["break_concurrency_violation_count"] > 3: out.append("break_concurrency")
+        return bool(out)
+    rc = deltas["req_covered"][:2]
+    third = []
+    if len(rc) == 2 and rc[0] * rc[1] < 0: third.append("req_covered deltas of opposite signs")
+    if len(deltas["req_covered"]) >= 2 and seed_major(0) != seed_major(1): third.append("seeds disagree on MINOR/MAJOR")
+    if any(f["case"] == case for f in rule_a): third.append("a VOLUME run failed rule A")
     cases[case] = {"pairs": len(deltas["req_covered"]), "active_intervals": active, "mean_delta": mean,
-                   "per_seed_delta": deltas, "price": "MAJOR" if major else "MINOR", "major_on": major}
+                   "per_seed_delta": deltas, "price": "MAJOR" if major else "MINOR", "major_on": major,
+                   "third_seed_needed": third if len(deltas["req_covered"]) < 3 else []}
 
 b_pos = [c for c, v in cases.items() if v["mean_delta"]["req_covered"] is not None and v["mean_delta"]["req_covered"] >= 0]
 b_sum = sum(v["mean_delta"]["req_covered"] or 0 for v in cases.values())
 rule_b = len(b_pos) >= 4 and b_sum > 0
-complete = all(v["pairs"] == len(SEEDS) for v in cases.values())
+complete = all(v["pairs"] >= 2 and not v["third_seed_needed"] for v in cases.values())
 verdict = ("INCOMPLETE" if not complete else "DEFECT" if rule_a else "CLOSE" if rule_b else "NOT_EFFECTIVE")
 out = {"rule": "C4_AB_RULE.txt", "verdict": verdict, "rule_a_failures": rule_a,
        "rule_b": {"cases_with_req_covered_delta_ge_0": b_pos, "sum_mean_delta": round(b_sum, 3), "pass": rule_b},

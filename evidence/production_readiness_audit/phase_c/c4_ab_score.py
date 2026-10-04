@@ -52,6 +52,26 @@ def measure(run_root: Path, return_code):
     target = float(E.parse_input(Path(v["input"])).target_ratio)
     rows = v.get("interval_rows") or []
     row["hard_fail_count"] = v.get("hard_fail_count")
+    # C4_AB_AMENDMENTS.txt A4: the parity record itself, and the clean-room check
+    # the runner skips after a parity failure, for runs A3 attributes to F-35.
+    row["hard_fail_count_excluding_parity"] = sum(
+        1 for f in (v.get("failures") or []) if f.get("type") != "METRIC_PARITY_MISMATCH")
+    if row.get("parity_failure_is_f35") and row.get("clean_room") is None:
+        import subprocess, tempfile
+        inp = sorted((run_root / "input_snapshot").glob("*.xlsx"))[0]
+        out = Path(v["output"])
+        tmp = Path(tempfile.mkdtemp()) / "CLEAN_ROOM.json"
+        subprocess.run([sys.executable, str(Path(__file__).resolve().parents[3] / "tools" / "clean_room_check.py"),
+                        "--input", str(inp), "--output", str(out), "--json-out", str(tmp)],
+                       capture_output=True, text=True)
+        try:
+            cr = json.loads(tmp.read_text())
+            row["clean_room_by_scorer"] = {"violation_count": cr.get("violation_count"),
+                                           "violations_by_rule": cr.get("violations_by_rule")}
+            row["clean_room"] = "PASS" if not cr.get("violation_count") else "FAIL"
+            row["clean_room_violations"] = cr.get("violation_count")
+        except (OSError, json.JSONDecodeError):
+            row["clean_room_by_scorer"] = {"error": "clean-room check did not complete"}
     row["active_intervals"] = m.get("active_intervals")
     row["req_covered"] = round(sum(float(r["required"]) for r in rows if float(r["after_pct"]) + 1e-9 >= target), 3)
     row["fte_gap"] = round(sum(max(0.0, target * float(r["required"]) - float(r["after_effective"])) for r in rows), 3)
@@ -91,7 +111,8 @@ for (case, arm, seed), r in runs.items():
     if r.get("missing") or r.get("error"):
         problems.append(r.get("error") or "missing")
     else:
-        if r.get("hard_fail_count") != 0: problems.append(f"hard_fail_count={r.get('hard_fail_count')}")
+        hard = r.get("hard_fail_count_excluding_parity") if r.get("parity_failure_is_f35") else r.get("hard_fail_count")
+        if hard != 0: problems.append(f"hard_fail_count={hard}")
         if r.get("parity") != "PASS" and not r.get("parity_failure_is_f35"): problems.append(f"parity={r.get('parity')}")
         if r.get("clean_room") != "PASS" or r.get("clean_room_violations"): problems.append(f"clean_room={r.get('clean_room')}/{r.get('clean_room_violations')}")
         if r.get("language_gap_count"): problems.append(f"language_gaps={r.get('language_gap_count')}")

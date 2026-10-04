@@ -35,3 +35,13 @@ A3  (written 2026-10-04 11:30 UTC, after the VOICE and CHAT seed-9000 pairs and 
     check (validator hard failures, clean-room, language gaps, empty quarters, crashes)
     applies unchanged, and the measures of rules B and C come from the validator, which
     reads the published workbook, so they are unaffected.
+
+A4  (written 2026-10-04 18:58 UTC, after GDI VOLUME 9001 ended FAIL_METRIC_PARITY; a
+    clarification of how A3 is applied, not a new exemption.) On a run whose parity
+    failure A3 attributes to F-35, the validator's hard_fail_count includes the
+    METRIC_PARITY_MISMATCH record itself, and the runner never reaches the clean-room
+    gate (it stops at the parity failure). So for such a run: the hard-failure check
+    counts every validator failure except METRIC_PARITY_MISMATCH, and the clean-room
+    checker is run by the scorer on the published workbook (tools/clean_room_check.py,
+    rule violations only; its comparison with the engine audit is the F-35 mismatch and
+    is not used). Both must still be zero. Applies equally to every arm and every run.

@@ -253,6 +253,15 @@ One engine change was made for a test rather than re-pinning it:
 - **The conflict:** the shortfall pass, earlier in the file, used the same line.
 - **The change:** the shortfall pass now tests INFEASIBLE (`NO_SCHEDULE_MEETS_THE_PERSON_RULES`) separately from a timeout (`NO_SHORTFALL_SCHEDULE_FOUND_IN_TIME`). Its earlier single status misreported a timeout as a person-rule infeasibility.
 
+## Package
+
+`dist/RC9_2_2_PRODUCTION_PACKAGE.zip`, sha256 `750cb6ca64dbe28d1e9634335599f64911c8ae040ec04db45dee5d9f83380e07`, 1,713 files, built by `tools/build_production_package.py` from commit-ready sources. The checks run on it:
+- the builder's own gate on the staged copy: PASS;
+- `./run_tests.sh` from a clean extract of the zip: **GATE PASS, 55 suites, 1,389 tests** (2 skipped);
+- the clean-room checker ships at `tools/clean_room_check.py`, where the runner looks for it.
+
+The first build was refused by that gate. The new coverage-measure test read the runners from the repository layout (`packages/rc9_2_2_production/runners`), which the package does not have (it ships them at `runners/`). The test now resolves either layout, as the other runner tests do. No shipped code changed.
+
 ## Still open after Phase C
 
 - **F-33** for normal runs: the corrected Stage-2 objective needs re-tuning and a new A/B before it ships.

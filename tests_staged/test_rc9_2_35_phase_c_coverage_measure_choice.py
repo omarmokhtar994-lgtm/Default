@@ -36,8 +36,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import l632_universal_scheduler as E  # noqa: E402
 import phase_a_workbooks as W  # noqa: E402
 
-PACKAGE = REPO / "packages" / "rc9_2_2_production"
-TEMPLATE = REPO / "tools" / "build_input_template.py"
+# The repository keeps the runners under packages/rc9_2_2_production/runners;
+# the shipped package keeps them at runners/. Both layouts run this test.
+RUNNERS = next(p for p in (ROOT / "runners", REPO / "packages" / "rc9_2_2_production" / "runners") if p.exists())
+TEMPLATE = ROOT / "tools" / "build_input_template.py"
 
 ONE_DAY = dict(
     roster=[("Agent A", "English")], shifts=["06:00 - 15:00", "15:00 - 00:00"],
@@ -126,14 +128,14 @@ class EveryRunnerPassesItOn(unittest.TestCase):
         self.assertIn("command += ['--coverage-objective-weighting', args.coverage_objective_weighting]", source)
 
     def test_the_colab_runner(self):
-        source = (PACKAGE / "runners" / "rc921_runner.py").read_text()
+        source = (RUNNERS / "rc921_runner.py").read_text()
         self.assertIn('"--coverage-objective-weighting"', source)
         self.assertIn('command += ["--coverage-objective-weighting", args.coverage_objective_weighting]', source)
 
     def test_both_notebooks_offer_the_choice(self):
         for name in ("RC922_Colab_A_NO_DRIVE.ipynb", "RC922_Colab_B_WITH_DRIVE.ipynb"):
             with self.subTest(notebook=name):
-                cells = json.loads((PACKAGE / "runners" / name).read_text())["cells"]
+                cells = json.loads((RUNNERS / name).read_text())["cells"]
                 run = next("".join(c["source"]) for c in cells if "#@title 5. Run" in "".join(c["source"]))
                 self.assertIn('COVERAGE_MEASURE = "workbook" #@param ["workbook", "INTERVAL_COUNT", "VOLUME_WEIGHTED"]', run)
                 self.assertIn('cmd += ["--coverage-objective-weighting", COVERAGE_MEASURE]', run)

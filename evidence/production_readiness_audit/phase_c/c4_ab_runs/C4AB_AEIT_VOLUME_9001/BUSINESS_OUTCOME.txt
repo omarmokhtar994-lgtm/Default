@@ -1,0 +1,17 @@
+Outcome: Hard-valid final schedule generated with declared operational warnings
+Status: PASS_WITH_QUALITY_WARNINGS
+Production eligible: True
+Independent validation: PASS (return code 0)
+Coverage measure: Volume Weighted (run override)
+
+The schedule passed all hard rules and uses 0 approved no-break associate-day exception(s). Operational-quality findings remain visible as warnings rather than hidden hard failures.
+
+Warnings:
+- FLOOR_GAP_RATIO_EXCEEDED (actual=0.25892857142857145, maximum=0.1, count=29)
+- SEVERE_GAP_RATIO_EXCEEDED (actual=0.24107142857142858, maximum=0.05, count=27)
+- CONSECUTIVE_FLOOR_GAPS_EXCEEDED (actual=5, maximum=3)
+- WHOLE_WEEK_OVERAGE_CAP_EXCEEDED (actual=6, maximum=0, cap_ratio=1.35)
+- WHOLE_WEEK_ADJACENT_IMBALANCE (actual=1, maximum=0, configured_raw_change=3)
+
+Required action:
+- Review the declared warnings and no-break exception comments during operational approval.

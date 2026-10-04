@@ -1,0 +1,218 @@
+{
+ "arm": "DEFAULT",
+ "seed": 9002,
+ "cores": [
+  2,
+  3
+ ],
+ "return_code": 0,
+ "wall_sec": 3465.7,
+ "validation": "PASS",
+ "parity": "PASS",
+ "after_target": 70,
+ "after_floor": 86,
+ "before_target": 74,
+ "before_floor": 90,
+ "severe_floor_gap_count": 19,
+ "break_concurrency_violation_count": 1,
+ "stage1_profile_coverage": {
+  "requested": 15,
+  "runnable_after_resume": 15,
+  "attempted": 11,
+  "skipped_for_budget": 4,
+  "skipped_profiles": [
+   "floor_protected",
+   "coverage_rebalance",
+   "before_target_champion",
+   "protected_balance_polish"
+  ],
+  "remaining_sec_at_stop": 26.242,
+  "minimum_slice_sec": 45.0,
+  "stage1_window_sec": 533.566,
+  "status": "TRUNCATED_INSUFFICIENT_STAGE1_BUDGET"
+ },
+ "stage1_attempts": 11,
+ "global_budget": {
+  "infrastructure_version": "1.4-rc9.2",
+  "total_seconds": 3600,
+  "elapsed_seconds": 3445.011764,
+  "remaining_seconds": 154.988235,
+  "phases": [
+   {
+    "phase": "preflight_probe",
+    "allocated_seconds": 126,
+    "deadline_offset_seconds": 126
+   },
+   {
+    "phase": "conflict_refinement",
+    "allocated_seconds": 90,
+    "deadline_offset_seconds": 216
+   },
+   {
+    "phase": "safe_incumbent",
+    "allocated_seconds": 180,
+    "deadline_offset_seconds": 396
+   },
+   {
+    "phase": "stage1_search",
+    "allocated_seconds": 1068,
+    "deadline_offset_seconds": 1464
+   },
+   {
+    "phase": "break_search",
+    "allocated_seconds": 1476,
+    "deadline_offset_seconds": 2940
+   },
+   {
+    "phase": "day_neighbourhood_break_search",
+    "allocated_seconds": 0,
+    "deadline_offset_seconds": 2940
+   },
+   {
+    "phase": "joint_refinement",
+    "allocated_seconds": 0,
+    "deadline_offset_seconds": 2940
+   },
+   {
+    "phase": "coordinated_repair",
+    "allocated_seconds": 252,
+    "deadline_offset_seconds": 3192
+   },
+   {
+    "phase": "break_load_feedback",
+    "allocated_seconds": 0,
+    "deadline_offset_seconds": 3192
+   },
+   {
+    "phase": "exception_search",
+    "allocated_seconds": 0,
+    "deadline_offset_seconds": 3192
+   },
+   {
+    "phase": "post_break_repair",
+    "allocated_seconds": 144,
+    "deadline_offset_seconds": 3336
+   },
+   {
+    "phase": "target_lock_recovery",
+    "allocated_seconds": 144,
+    "deadline_offset_seconds": 3480
+   },
+   {
+    "phase": "finalization",
+    "allocated_seconds": 120,
+    "deadline_offset_seconds": 3600
+   }
+  ],
+  "events": [
+   {
+    "phase": "preflight_probe",
+    "event": "HARD_FEASIBILITY_PROBE_COMPLETE",
+    "elapsed_sec": 0.5658929347991943,
+    "remaining_total_sec": 3597.561416,
+    "remaining_phase_sec": 123.561412,
+    "cp_status": "OPTIMAL",
+    "fallback_seed_recovery": false
+   },
+   {
+    "phase": "safe_incumbent",
+    "event": "EARLY_SAFE_INCUMBENT_COMPLETE",
+    "elapsed_sec": 272.218675,
+    "remaining_total_sec": 3327.781312,
+    "remaining_phase_sec": 123.781304,
+    "acquired": true,
+    "attempt_count": 2
+   },
+   {
+    "phase": "break_search",
+    "event": "ADAPTIVE_BREAK_ATTEMPT_COMPLETE",
+    "elapsed_sec": 180.01772952079773,
+    "remaining_total_sec": 1187.639646,
+    "remaining_phase_sec": 527.639638,
+    "skeleton_profile": "target90_restore_productive",
+    "pattern_width": 115,
+    "objective_mode": "target_priority",
+    "cp_status": "FEASIBLE",
+    "hint_profile": "fully_compliant_target_priority"
+   },
+   {
+    "phase": "break_search",
+    "event": "ADAPTIVE_BREAK_ATTEMPT_COMPLETE",
+    "elapsed_sec": 180.02306818962097,
+    "remaining_total_sec": 1006.395637,
+    "remaining_phase_sec": 346.395627,
+    "skeleton_profile": "target90_restore_champion",
+    "pattern_width": 115,
+    "objective_mode": "target_priority",
+    "cp_status": "FEASIBLE",
+    "hint_profile": "fully_compliant_diagnostic_fallback"
+   },
+   {
+    "phase": "break_search",
+    "event": "ADAPTIVE_BREAK_ATTEMPT_COMPLETE",
+    "elapsed_sec": 180.01694107055664,
+    "remaining_total_sec": 825.007605,
+    "remaining_phase_sec": 165.007597,
+    "skeleton_profile": "target_priority_balanced",
+    "pattern_width": 115,
+    "objective_mode": "target_priority",
+    "cp_status": "FEASIBLE",
+    "hint_profile": "fully_compliant_target_priority"
+   },
+   {
+    "phase": "break_search",
+    "event": "ADAPTIVE_BREAK_SEARCH_STOPPED_INSUFFICIENT_DEPTH",
+    "elapsed_sec": 2775.484975,
+    "remaining_total_sec": 824.515022,
+    "remaining_phase_sec": 164.515019,
+    "attempts_completed": 3,
+    "attempts_planned": 168,
+    "proposed_slice_sec": 164.515,
+    "minimum_slice_sec": 180.0
+   },
+   {
+    "phase": "coordinated_repair",
+    "event": "COORDINATED_REPAIR_COMPLETE",
+    "elapsed_sec": 3180.870157,
+    "remaining_total_sec": 419.129822,
+    "remaining_phase_sec": 11.129816,
+    "attempted": 2,
+    "committed": 0,
+    "rolled_back": 2,
+    "retained_near_feasible": 0
+   },
+   {
+    "phase": "post_break_repair",
+    "event": "POST_BREAK_REPAIR_COMPLETE",
+    "elapsed_sec": 3314.280679,
+    "remaining_total_sec": 285.719305,
+    "remaining_phase_sec": 21.7193,
+    "attempted": 1,
+    "accepted": 0,
+    "truncated": true,
+    "skip_reason": null
+   },
+   {
+    "phase": "target_lock_recovery",
+    "event": "TARGET_LOCK_RECOVERY_COMPLETE",
+    "elapsed_sec": 3432.726324,
+    "remaining_total_sec": 167.273656,
+    "remaining_phase_sec": 47.27365,
+    "attempted": 1,
+    "accepted": 2,
+    "truncated": true,
+    "skip_reason": null
+   },
+   {
+    "phase": "finalization",
+    "event": "FINAL_ARTIFACTS_PUBLISHED",
+    "elapsed_sec": 3445.01173,
+    "remaining_total_sec": 154.988255,
+    "remaining_phase_sec": 154.98825,
+    "status": "PASS_WITH_QUALITY_WARNINGS",
+    "exported_schedule_workbooks": 5
+   }
+  ]
+ },
+ "engine_elapsed_sec": 3445.0117897987366
+}

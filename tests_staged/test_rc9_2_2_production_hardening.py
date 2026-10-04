@@ -373,7 +373,12 @@ class OutputIdentityAndReleaseChain(unittest.TestCase):
 
     def test_production_output_includes_the_current_control_center(self):
         source = (ROOT / "engine" / "production" / "production_output_polisher.py").read_text()
-        self.assertIn("OUTPUT_STYLE_VERSION='RC9.2.2-OUTPUT-UX-RC1'", source)
+        # Re-pinned 2026-10-04 from RC1: the presentation contract changed on
+        # purpose (business request): eight planner tabs visible, every audit and
+        # input tab kept but hidden, a new Break Plan tab, and the alternative
+        # exports presented the same way before validation. Proven in
+        # tests_staged/test_rc9_2_40_friendly_output_workbook.py.
+        self.assertIn("OUTPUT_STYLE_VERSION='RC9.2.2-OUTPUT-UX-RC2'", source)
         self.assertIn("Read Me First", source)
         self.assertIn("Schedule Control Center", source)
 

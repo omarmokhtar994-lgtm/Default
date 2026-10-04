@@ -48,7 +48,12 @@ def run_identity(root):
   if ident['identity_source']=='FALLBACK_LITERALS': ident['identity_source']=name
  if len(sources)>1: ident['identity_source']='+'.join(sources)
  return ident
-OUTPUT_STYLE_VERSION='RC9.2.2-OUTPUT-UX-RC1'
+OUTPUT_STYLE_VERSION='RC9.2.2-OUTPUT-UX-RC2'
+# The tabs a planner opens. Every other tab - the per-rule audits, the copied
+# input tabs (Start Here, Instructions, demand, shrinkage, ...) and the technical
+# twins - stays in the workbook, hidden, so the evidence behind the schedule is
+# one right-click away and nothing the validator reads is removed.
+VISIBLE=['Read Me First','Schedule','Break Plan','Break Schedule','FT Wise After Breaks','Coverage Before Breaks','Production Summary','Validation Log']
 ORDER=['Read Me First','Schedule','Break Schedule','FT Wise After Breaks','Coverage Before Breaks','Production Summary','Validation Log','No-Break Exceptions','Break Spacing Audit','Interval Coverage Audit','Overage Audit','Next Sunday Carry-Out Audit','Canonical Contract','Rule Checks','Rest Gap Audit','Language Skill Audit','Language Reserve Summary','Skill Allocation Audit','Whole Week Balance Audit','Employee Quality Audit','Feasibility Certificate','Language Setup','Preference','Instructions','Fixed Shift Requests','Candidate Leaderboard','Target Tradeoff Audit','Feasibility Report','Blank Interval Audit','Shift Demand Fit Audit','Overnight Audit','Cyclic Sunday Audit']
 TECH={'Final Schedule','Break Schedule Active','Daily Interval Review','FT Wise Active','FT Wise After Breaks Active','Scheduler Engine','Previous Engine','Balanced Scenario Schedule','Future Use','Implementation Notes','Formula Fix Notes','Review Runs','Balance Change Log','Benchmark Comparison','Dynamic Interval Guide','Constraint Isolation','Day Tail Fit Audit'}
 
@@ -219,19 +224,109 @@ def _build_dashboard(wb,ps,role,use):
   ws.cell(i,6).fill=PatternFill('solid',fgColor=LIGHT_GRAY); ws.cell(i,6).font=Font(bold=True)
   if 'ratio' in label.lower(): ws.cell(i,7).number_format='0.0%'
  ws.merge_cells('A28:H28'); ws['A28']='How to use this workbook'; ws['A28'].fill=PatternFill('solid',fgColor=NAVY); ws['A28'].font=Font(color=WHITE,bold=True,size=13)
- instructions=[('1','Use Schedule as the operating roster; OFF and leave cells are color-coded.'),('2','Use Break Schedule for break execution; investigate WARN/REVIEW rows before release.'),('3','Review FT Wise After Breaks for interval coverage and color-coded attainment.'),('4','Use Production Summary and audit tabs for full traceability; hidden TECH tabs are retained.'),('5',f"This result uses a {_count_text(m.get('Interval Minutes'))}-minute grid. The engine supports both 30- and 60-minute workbooks.")]
+ instructions=[('1','Schedule = the week to publish; OFF and leave cells are colour-coded. Break Plan shows each person\'s shift and breaks per day.'),('2','Break Schedule lists every break; investigate WARN/REVIEW rows before release.'),('3','FT Wise After Breaks = interval coverage, colour-coded (red below 80%, amber below 90%).'),('4','Production Summary and Validation Log hold every measure. The audit and input tabs are hidden, not deleted: right-click any tab > Unhide.'),('5',f"This result uses a {_count_text(m.get('Interval Minutes'))}-minute grid. The engine supports both 30- and 60-minute workbooks.")]
  for i,(step,note) in enumerate(instructions,29):
   ws.cell(i,1).value=step; ws.cell(i,1).fill=PatternFill('solid',fgColor=TEAL); ws.cell(i,1).font=Font(color=WHITE,bold=True); ws.cell(i,1).alignment=Alignment(horizontal='center')
   ws.merge_cells(start_row=i,start_column=2,end_row=i,end_column=8); ws.cell(i,2).value=note; ws.cell(i,2).alignment=Alignment(wrap_text=True,vertical='center'); ws.cell(i,2).fill=PatternFill('solid',fgColor='F8FAFC')
   for c in range(1,9): ws.cell(i,c).border=_border()
- ws.row_dimensions[33].height=34
+  ws.row_dimensions[i].height=34
+ ws.row_dimensions[2].height=46
  return ws
+
+def _build_break_plan(wb):
+ """One row per person, one cell per day: the shift and its breaks together.
+
+ Read from the Schedule and Break Schedule tabs the workbook already carries;
+ a view, not a second source. Returns None when either tab is missing."""
+ from openpyxl.styles import Alignment,Font,PatternFill
+ from openpyxl.formatting.rule import FormulaRule
+ from openpyxl.utils import get_column_letter
+ if 'Schedule' not in wb.sheetnames or 'Break Schedule' not in wb.sheetnames: return None
+ sched=wb['Schedule']; days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+ header=next((r for r in range(1,min(sched.max_row,12)+1) if [str(sched.cell(r,c).value or '').strip()[:3] for c in range(1,sched.max_column+1)].count('Sun')),None)
+ if header is None: return None
+ heads={str(sched.cell(header,c).value or '').strip().lower():c for c in range(1,sched.max_column+1)}
+ name_c=next((c for h,c in heads.items() if 'sf name' in h or h in {'name','associate name','employee name'}),None)
+ lang_c=next((c for h,c in heads.items() if 'language' in h or 'skill' in h),None)
+ day_c=[next((c for h,c in heads.items() if h[:3]==d.lower()),None) for d in days]
+ if name_c is None or None in day_c: return None
+ short={'break 1':'B1','break 2':'B2','break 3':'B3','break 4':'B4','lunch':'L','lunch 2':'L2'}
+ breaks={}
+ bs=wb['Break Schedule']; bh={str(bs.cell(1,c).value or '').strip().lower():c for c in range(1,bs.max_column+1)}
+ need=('associate','day','break type','start')
+ if all(k in bh for k in need):
+  for r in range(2,bs.max_row+1):
+   who=str(bs.cell(r,bh['associate']).value or '').strip(); day=str(bs.cell(r,bh['day']).value or '').strip()[:3]
+   if not who or day not in days: continue
+   kind=str(bs.cell(r,bh['break type']).value or '').strip(); start=bs.cell(r,bh['start']).value
+   status=str(bs.cell(r,bh['status']).value or '') if 'status' in bh else ''
+   label=short.get(kind.lower(),kind)
+   text=f"{label} {start}" if start not in (None,'') and 'no break' not in status.lower() else f"{label} none"
+   breaks.setdefault((who.lower(),day),[]).append(text)
+ if 'Break Plan' in wb.sheetnames: del wb['Break Plan']
+ ws=wb.create_sheet('Break Plan')
+ ws.sheet_view.showGridLines=False; ws.sheet_properties.tabColor=TEAL
+ last=get_column_letter(2+len(days))
+ ws.merge_cells(f'A1:{last}1'); ws['A1']='Break Plan  -  each person\'s shift and breaks, day by day'
+ ws['A1'].fill=PatternFill('solid',fgColor=NAVY); ws['A1'].font=Font(color=WHITE,bold=True,size=16); ws.row_dimensions[1].height=34
+ ws.merge_cells(f'A2:{last}2'); ws['A2']='B1 / B2 = short breaks, L = lunch. Built from the Schedule and Break Schedule tabs of this workbook.'
+ ws['A2'].font=Font(italic=True,color='595959')
+ for c,v in enumerate(['Associate','Language']+days,1): ws.cell(3,c).value=v
+ _header(ws,3,1,2+len(days),TEAL)
+ ws.column_dimensions['A'].width=26; ws.column_dimensions['B'].width=14
+ for i in range(len(days)): ws.column_dimensions[get_column_letter(3+i)].width=30
+ r=4
+ for row in range(header+1,sched.max_row+1):
+  name=str(sched.cell(row,name_c).value or '').strip()
+  if not name or name.lower() in ('total','staffed hc','required hc'): continue
+  ws.cell(r,1).value=name; ws.cell(r,2).value=sched.cell(row,lang_c).value if lang_c else None
+  for i,d in enumerate(days):
+   shift=str(sched.cell(row,day_c[i]).value or '').strip()
+   parts=breaks.get((name.lower(),d),[])
+   ws.cell(r,3+i).value=shift+('\n'+' | '.join(parts) if parts and shift.upper() not in ('OFF',) else '')
+  for c in range(1,3+len(days)):
+   cell=ws.cell(r,c); cell.border=_border(); cell.alignment=Alignment(vertical='center',wrap_text=True,horizontal='left' if c<3 else 'center')
+  ws.row_dimensions[r].height=34; r+=1
+ if r>4:
+  rng=f'C4:{last}{r-1}'
+  ws.conditional_formatting.add(rng,FormulaRule(formula=['UPPER(LEFT(C4,3))="OFF"'],fill=PatternFill('solid',fgColor=LIGHT_GRAY),font=Font(color='6B7280',italic=True)))
+  ws.conditional_formatting.add(rng,FormulaRule(formula=['ISNUMBER(SEARCH("LEAVE",C4))'],fill=PatternFill('solid',fgColor=PALE_RED),font=Font(color='9C0006')))
+  ws.conditional_formatting.add(rng,FormulaRule(formula=['LEN(C4)>0'],fill=PatternFill('solid',fgColor=PALE_GREEN)))
+ ws.freeze_panes='C4'
+ ws.page_setup.orientation='landscape'; ws.sheet_properties.pageSetUpPr.fitToPage=True; ws.page_setup.fitToWidth=1; ws.page_setup.fitToHeight=0
+ return ws
+
+def _has_exceptions(wb):
+ if 'No-Break Exceptions' not in wb.sheetnames: return False
+ ws=wb['No-Break Exceptions']
+ return any(str(ws.cell(r,1).value or '').strip() for r in range(2,ws.max_row+1))
+
+def _arrange_tabs(wb):
+ """Planner tabs first and visible; every other tab kept, hidden. Returns the hidden count."""
+ visible=[n for n in VISIBLE if n in wb.sheetnames]
+ if _has_exceptions(wb): visible.insert(visible.index('Break Schedule')+1 if 'Break Schedule' in visible else len(visible),'No-Break Exceptions')
+ by={ws.title:ws for ws in wb.worksheets}; ordered=[by[n] for n in visible]; used=set(visible)
+ ordered+=[by[n] for n in ORDER if n in by and n not in used]; used|={n for n in ORDER if n in by}
+ ordered+=[ws for ws in wb.worksheets if ws.title not in used]; wb._sheets=ordered
+ hidden=0
+ for ws in wb.worksheets:
+  ws.sheet_state='visible' if ws.title in visible else 'hidden'
+  hidden+=ws.sheet_state=='hidden'
+  ws.sheet_view.tabSelected=ws.title=='Read Me First'
+  if ws.sheet_state=='hidden': ws.sheet_properties.tabColor='BFBFBF'
+  else:
+   # Printing a planner tab gives one page wide, landscape.
+   ws.page_setup.orientation='landscape'; ws.sheet_properties.pageSetUpPr.fitToPage=True
+   ws.page_setup.fitToWidth=1; ws.page_setup.fitToHeight=0
+ if 'Read Me First' in wb.sheetnames: wb.active=wb.sheetnames.index('Read Me First')
+ return hidden
 
 def _apply_output_theme(wb,ps,role,use):
  from openpyxl.styles import Alignment,Font,PatternFill
  dashboard=_build_dashboard(wb,ps,role,use)
+ plan=_build_break_plan(wb) if role!='BEST_BEFORE_BREAKS_SCHEDULE' else None
  for ws in wb.worksheets:
-  if ws is dashboard: continue
+  if ws is dashboard or ws is plan: continue
   name=ws.title.lower()
   if name in {'schedule','final schedule'}: _style_schedule(ws)
   elif 'coverage' in name or name in {'ft wise after breaks','ft wise active','ft wise after breaks active'}: _style_coverage(ws)
@@ -245,6 +340,25 @@ def _apply_output_theme(wb,ps,role,use):
  ps.sheet_properties.tabColor=PURPLE; ps.column_dimensions['A'].width=42; ps.column_dimensions['B'].width=96
  for r in range(2,ps.max_row+1): ps.cell(r,2).alignment=Alignment(vertical='top',wrap_text=True)
  return dashboard
+
+def present_in_place(path,role,use):
+ """Give an alternative export (MAX_TARGET, MORE_CONSISTENT, ...) the same
+ tabs, colours and Break Plan as the published schedule, before it is
+ validated. Only presentation changes: no value of any tab the validator reads
+ is rewritten; nothing is removed. Returns the hidden-tab count."""
+ from openpyxl import load_workbook
+ path=Path(path)
+ wb=load_workbook(path)
+ if 'Production Summary' not in wb.sheetnames or 'Schedule' not in wb.sheetnames:
+  wb.close(); return None
+ _apply_output_theme(wb,wb['Production Summary'],role,use)
+ hidden=_arrange_tabs(wb)
+ tmp=path.with_name(path.stem+'.presenting.xlsx'); wb.save(tmp); wb.close()
+ with zipfile.ZipFile(tmp) as z:
+  bad=z.testzip()
+  if bad: tmp.unlink(); raise RuntimeError(bad)
+ tmp.replace(path)
+ return hidden
 
 def sha(p):
  h=hashlib.sha256()
@@ -300,13 +414,7 @@ def clean_book(src,dst,role,use,pareto,ident):
   ps.sheet_view.showGridLines=False; ps.freeze_panes='A2'; ps.column_dimensions['A'].width=38; ps.column_dimensions['B'].width=105; ps.column_dimensions['G'].width=72
   for cell in ps[1]: cell.fill=PatternFill('solid',fgColor='1F4E78'); cell.font=Font(color='FFFFFF',bold=True); cell.alignment=Alignment(horizontal='center')
   _apply_output_theme(wb,ps,role,use)
-  by={ws.title:ws for ws in wb.worksheets}; ordered=[]; used=set()
-  for name in ORDER:
-   if name in by: ordered.append(by[name]); used.add(name)
-  ordered += [ws for ws in wb.worksheets if ws.title not in used]; wb._sheets=ordered
-  for ws in wb.worksheets:
-   ws.sheet_state='hidden' if ws.title in TECH else 'visible'
-  wb.active=wb.sheetnames.index('Read Me First')
+  _arrange_tabs(wb)
   if getattr(wb,'calculation',None) is None: wb.calculation=CalcProperties(calcMode='auto')
   wb.calculation.fullCalcOnLoad=True; wb.calculation.forceFullCalc=True; wb.save(dst); wb.close()
  with zipfile.ZipFile(dst) as z:

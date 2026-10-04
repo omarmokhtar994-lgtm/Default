@@ -1725,6 +1725,34 @@ def more_consistent_coverage_verdict(selected: dict, candidate: dict) -> tuple:
     return (not losses, losses)
 
 
+ALTERNATIVE_USE = {
+    'MAX_TARGET_CANDIDATE': 'ALTERNATIVE - most intervals at target; validated on its own',
+    'MAX_FLOOR_CANDIDATE': 'ALTERNATIVE - fewest intervals below the floor; validated on its own',
+    'BALANCED_CANDIDATE': 'ALTERNATIVE - balanced trade-off; validated on its own',
+    'SAFER_BALANCED_CANDIDATE': 'ALTERNATIVE - safer balanced trade-off; validated on its own',
+    'MORE_CONSISTENT_CANDIDATE': 'ALTERNATIVE - the same week with steadier start times; '
+                                 'offered only if its coverage is no worse',
+}
+
+
+def present_alternative(path: Path, role: str) -> str:
+    """Same tabs, colours and Break Plan as the published schedule, applied
+    BEFORE the validator runs, so the workbook validated is the workbook shipped.
+    A presentation failure is recorded and the unpolished workbook is validated
+    as written; it never blocks or hides the export."""
+    import importlib.util
+    try:
+        spec = importlib.util.spec_from_file_location('production_output_polisher_alt', POLISHER)
+        polisher = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(polisher)
+        hidden = polisher.present_in_place(path, role, ALTERNATIVE_USE.get(role, 'ALTERNATIVE'))
+    except Exception as exc:  # recorded in UNIVERSAL_RUN_STATUS.json and printed
+        print(f"[run] alternative export {role}: presentation failed ({type(exc).__name__}: {exc}); "
+              "validating the workbook as written", flush=True)
+        return f'FAILED: {type(exc).__name__}: {exc}'
+    return 'APPLIED' if hidden is not None else 'SKIPPED_NO_SUMMARY_SHEET'
+
+
 def validate_alternative_exports(case_root: Path, input_path: Path,
                                  language_working_window: "str | None") -> list:
     """Run the independent validator on every alternative schedule the engine exported.
@@ -1740,13 +1768,15 @@ def validate_alternative_exports(case_root: Path, input_path: Path,
                      if path.stem.endswith('_' + r)), None)
         if role is None:
             continue
+        presentation = present_alternative(path, role)
         json_out = case_root / f'INDEPENDENT_VALIDATION_{role}.json'
         command = [sys.executable, '-u', str(VALIDATOR), '--input', str(input_path),
                    '--output', str(path), '--json-out', str(json_out)]
         if language_working_window is not None:
             command += ['--language-working-window', language_working_window]
         proc = subprocess.run(command, capture_output=True, text=True)
-        row = {'role': role, 'workbook': str(path), 'json': str(json_out), 'return_code': proc.returncode}
+        row = {'role': role, 'workbook': str(path), 'json': str(json_out), 'return_code': proc.returncode,
+               'presentation': presentation}
         try:
             report = json.loads(json_out.read_text(encoding='utf-8'))
             row['status'] = 'PASS' if proc.returncode == 0 else str(report.get('status') or 'FAIL')

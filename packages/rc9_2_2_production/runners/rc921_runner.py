@@ -250,6 +250,8 @@ def run_one(root: Path, results_root: Path, row: dict, args) -> dict:
         command += ["--stage", args.stage]
     if args.language_working_window:
         command += ["--language-working-window", args.language_working_window]
+    if args.coverage_objective_weighting:
+        command += ["--coverage-objective-weighting", args.coverage_objective_weighting]
     if args.resume:
         command.append("--resume")
     if seeds > 1:
@@ -434,6 +436,10 @@ def main() -> int:
     ap.add_argument("--language-working-window",
                     choices=["OFF", "MINIMUM_ROWS", "ALL_ROWS", "REQUIRED_LANGUAGE_ONLY"], default=None,
                     help="override the workbook's Language Working Window setting.")
+    ap.add_argument("--coverage-objective-weighting", choices=["INTERVAL_COUNT", "VOLUME_WEIGHTED"], default=None,
+                    help="override the workbook's Coverage Objective Weighting: INTERVAL_COUNT for "
+                         "programs measured on interval compliance, VOLUME_WEIGHTED for programs "
+                         "measured on service level.")
     ap.add_argument("--input", type=Path, default=None,
                     help="run a workbook that is not in SCENARIOS.json - your own live "
                          "scenario. Skips the manifest hash check for that file only; "

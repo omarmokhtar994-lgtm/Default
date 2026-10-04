@@ -672,8 +672,13 @@ class TheRunStageAndDepthDropdownsArriveWithAVisibleChoice(unittest.TestCase):
     SOURCE = (ROOT / "tools" / "build_input_template.py").read_text()
 
     def test_the_two_rows_the_planner_drives_are_seeded(self):
-        self.assertIn('SEEDED_DEFAULTS = {"runstage": "Full Schedule", "rundepth": "Quick"}',
-                      self.SOURCE)
+        # Re-pinned in Phase C (C4 follow-up): a third seeded row was added on
+        # purpose, Coverage Objective Weighting = Interval Count, the value an
+        # empty cell already means (tests_staged/test_rc9_2_35_phase_c_coverage_
+        # measure_choice.py proves the rebuilt contract is unchanged). The two
+        # rows this test is about keep exactly their seeds.
+        self.assertIn('SEEDED_DEFAULTS = {"runstage": "Full Schedule", "rundepth": "Quick",', self.SOURCE)
+        self.assertIn('"coverageobjectiveweighting": "Interval Count"}', self.SOURCE)
 
     def test_the_seeds_are_the_engine_fallbacks_so_nothing_changes(self):
         runner = (ROOT / "engine" / "RUN_UNIVERSAL_PRODUCTION.py").read_text()

@@ -633,6 +633,16 @@ def _outcome_detail_text(outcome: dict, findings_label: "str | None" = None) -> 
     return '\n'.join(lines) + ('\n' if lines else '')
 
 
+def coverage_measure_line(outcome: dict) -> str:
+    """Which coverage measure the schedule was optimised for, and where that came from."""
+    measure = outcome.get('coverage_measure') or {}
+    if not measure.get('mode'):
+        return ''
+    label = {'interval_count': 'Interval Count', 'volume_weighted': 'Volume Weighted'}.get(
+        measure['mode'], measure['mode'])
+    return f"Coverage measure: {label} ({measure.get('source') or 'default'})\n"
+
+
 def reconcile_business_outcome_after_validation(
     case_root: Path, independent_validation: dict, runner_return_code: int
 ) -> None:
@@ -878,7 +888,8 @@ def reconcile_business_outcome_after_validation(
         f"Outcome: {outcome.get('headline', '')}\n"
         f"Status: {outcome.get('technical_status', '')}\n"
         f"Production eligible: {bool(outcome.get('production_eligible'))}\n"
-        f"Independent validation: {validation_status} (return code {validation_rc})\n\n"
+        f"Independent validation: {validation_status} (return code {validation_rc})\n"
+        + coverage_measure_line(outcome) + "\n"
         f"{outcome.get('plain_language_summary', '')}\n"
     ) + _outcome_detail_text(outcome, 'Warnings:' if engine_said_releasable else None)
     for path in (outcome_path, debug_outcome_path):
@@ -1110,6 +1121,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--break-objective-modes', default=DEFAULT_BREAK_OBJECTIVES)
     p.add_argument('--use-input-schedule-as-seed', action='store_true', default=True)
     p.add_argument('--disable-input-schedule-seed', action='store_true')
+    p.add_argument('--coverage-objective-weighting', choices=['INTERVAL_COUNT', 'VOLUME_WEIGHTED'], default=None,
+                   help="Override the workbook's Coverage Objective Weighting for this run. "
+                        "INTERVAL_COUNT counts every interval at target once (interval compliance); "
+                        "VOLUME_WEIGHTED weighs each interval by its requirement (service level).")
     p.add_argument('--allow-no-break-exceptions', action='store_true')
     p.add_argument('--disable-no-break-exceptions', action='store_true')
     p.add_argument('--max-no-break-exceptions', type=int)
@@ -1316,6 +1331,8 @@ def main() -> int:
         command += ['--max-no-break-exceptions', str(args.max_no_break_exceptions)]
     if args.language_working_window is not None:
         command += ['--language-working-window', args.language_working_window]
+    if args.coverage_objective_weighting is not None:
+        command += ['--coverage-objective-weighting', args.coverage_objective_weighting]
     if args.allow_headcount_mismatch:
         command.append('--allow-headcount-mismatch')
     if args.acknowledge_departed:

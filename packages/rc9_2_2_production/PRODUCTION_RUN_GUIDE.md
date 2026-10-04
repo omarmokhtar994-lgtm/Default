@@ -265,7 +265,7 @@ opening minimums on next Sunday stay hard.
 | Row (Instructions or Engine Defaults) | Effect | Default |
 |---|---|---|
 | `Break Set For Shifts Of N Hours Or More` = `15, 30, 15, 15` | Shifts of N hours or more get these breaks, in this order (30 minutes or more is a lunch). Several rows may be given; the largest threshold a shift reaches wins. The validator and the clean-room checker read the same rows. | Absent: every shift gets the global break set |
-| `Coverage Objective Weighting` = `Interval Count` or `Volume Weighted` | `Volume Weighted` weighs each interval's miss by its requirement, and ranks schedules first by the requirement covered at target. It trades interval count for covered volume; choose it only if that is the measure the business wants. | `Interval Count` |
+| `Coverage Objective Weighting` = `Interval Count` or `Volume Weighted` (a dropdown in the Coverage section of a template-built workbook) | What "better coverage" means for this program. **Interval Count**: the share of intervals at target; choose it for a program accountable for interval compliance. **Volume Weighted**: each interval's miss weighs by its requirement, and schedules are ranked first by the requirement covered at target; choose it for a program accountable for service level (busy intervals matter more). The two trade against each other: Volume Weighted can give up quiet intervals to cover a peak. The Colab run cell can override it per run (`COVERAGE_MEASURE`). The first lines of `BUSINESS_OUTCOME.txt` say which measure was used and where it came from (workbook, run override, or default). | `Interval Count` |
 | `Stage 1 Minimum Slice Seconds` (Engine Defaults) | The Stage-1 search time per profile. The planner now funds the Stage-1 window for this slice (up to 45 % of the run); it used to size the window for 45 s whatever was set. | 45 |
 
 ### 3.6 Check the workbook before running (seconds)
@@ -388,7 +388,10 @@ ZIP and download the results.
    - `MY_WORKBOOK` = the same path as in 4b;
    - `MODE = QUICK` (recommended) or `DEEP`;
    - leave `SEEDS = 0` (automatic: 2 seeds for QUICK, 4 for DEEP), `SINGLE_LONG_RUN = False`, `SKIP_GUARDS = False`;
-   - leave `LANGUAGE_WORKING_WINDOW = workbook` (it uses your Instructions sheet).
+   - leave `LANGUAGE_WORKING_WINDOW = workbook` (it uses your Instructions sheet);
+   - leave `COVERAGE_MEASURE = workbook` to use the workbook's Coverage Objective
+     Weighting, or pick `INTERVAL_COUNT` (interval-compliance programs) or
+     `VOLUME_WEIGHTED` (service-level programs) for this run (3.5d).
 
    Run it and keep the tab open. It prints the safety-gate result, then the
    run's progress, then `exit code: 0` for an approved schedule.

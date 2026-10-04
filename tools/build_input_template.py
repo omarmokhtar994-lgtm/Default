@@ -46,6 +46,11 @@ SETUP_LAYOUT = [
         ("Minimum Per Interval", None),
         ("Hard Floor Solver Constraint Enabled", YES_NO),
         ("Blank Interval Staffing Rule", None),
+        # What "better coverage" means for this program (audit F-28): Interval
+        # Count = the share of intervals at target (interval compliance);
+        # Volume Weighted = the requirement covered, so busy intervals weigh
+        # more (service level). The Colab runner can override it per run.
+        ("Coverage Objective Weighting", '"Interval Count,Volume Weighted"'),
     ]),
     ("Shift & OFF", [
         ("Allowed Shift Durations Hours", None),
@@ -121,12 +126,14 @@ DEAD_ROWS = {"rc9.1deepdefaultseconds", "rc9.1fulldefaultseconds",
              "rc9.1stage2searchorder", "rc9.1jointbudgetpolicy"}
 # Rows the planner was asked to drive from the sheet. Leaving them blank is
 # honest but useless: a dropdown you have to discover is not a choice you were
-# offered. These two are seeded with the exact value the engine falls back to
+# offered. These rows are seeded with the exact value the engine falls back to
 # when the cell is empty, so pre-filling them changes no behaviour - it only
 # makes the setting visible. Nothing else is seeded, because pre-filling a row
 # whose default the engine may revise would freeze that default into the
 # contract without anyone deciding to.
-SEEDED_DEFAULTS = {"runstage": "Full Schedule", "rundepth": "Quick"}  # the engine's own fallback depth is QUICK
+SEEDED_DEFAULTS = {"runstage": "Full Schedule", "rundepth": "Quick",  # the engine's own fallback depth is QUICK
+                   # An empty cell means Interval Count, so seeding it changes no contract.
+                   "coverageobjectiveweighting": "Interval Count"}
 
 HDR = PatternFill("solid", fgColor="1F3864")
 SECTION = PatternFill("solid", fgColor="D9E2F3")

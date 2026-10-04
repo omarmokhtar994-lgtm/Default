@@ -834,6 +834,10 @@ class ParsedInput:
     # Audit F-28: "interval_count" (default, every interval counts once) or
     # "volume_weighted" (an interval counts in proportion to its requirement).
     coverage_objective_weighting: str = "interval_count"
+    # "default" (no row), "workbook" (the row), or "run override". Reported in
+    # the audit and the outcome; not part of the contract, because a seeded
+    # "Interval Count" row and an empty cell enforce the same thing.
+    coverage_objective_weighting_source: str = "default"
     allow_back_to_back_breaks: bool = False
     break_max_concurrent_ratio: float = 0.30
     break_max_concurrent_absolute: int = 4
@@ -2958,6 +2962,29 @@ def volume_weight(parsed: ParsedInput, weight: int, day: int, interval: int) -> 
     return max(1, int(round(weight * req / max(mean, 1e-9))))
 
 
+COVERAGE_OBJECTIVE_OVERRIDES = ("INTERVAL_COUNT", "VOLUME_WEIGHTED")
+
+
+def apply_coverage_objective_override(parsed: ParsedInput, override: Optional[str]) -> Dict[str, str]:
+    """Which coverage measure the run uses, and where it came from (audit F-28).
+
+    A program accountable for interval compliance keeps Interval Count; one
+    accountable for service level chooses Volume Weighted. The run override
+    (engine, production runner, Colab runner, notebooks) beats the workbook
+    row, which beats the default. The override is applied to ``parsed`` before
+    the contract is read, so the contract fingerprint records what was used.
+    """
+    if override is not None:
+        value = str(override).strip().upper().replace(" ", "_")
+        if value not in COVERAGE_OBJECTIVE_OVERRIDES:
+            raise ValueError(f"coverage objective override must be one of {COVERAGE_OBJECTIVE_OVERRIDES}: {override!r}")
+        parsed.coverage_objective_weighting = value.lower()
+        parsed.coverage_objective_weighting_source = "run override"
+        parsed.__dict__.pop("_mean_active_requirement", None)
+    return {"mode": parsed.coverage_objective_weighting,
+            "source": getattr(parsed, "coverage_objective_weighting_source", "default")}
+
+
 def break_segments_for(parsed: ParsedInput, duration_min: int) -> Tuple[Tuple[int, str], ...]:
     """The break set for a shift of ``duration_min`` minutes (audit F-20).
 
@@ -3703,7 +3730,9 @@ def parse_input(
     break_sets_by_length = _parse_break_sets_by_shift_length(im, parser_warnings)
     _weighting_raw = _instruction_get(im, ["Coverage Objective Weighting", "Coverage Weighting"], None)
     coverage_objective_weighting = "interval_count"
+    coverage_objective_weighting_source = "default"
     if _weighting_raw not in (None, ""):
+        coverage_objective_weighting_source = "workbook"
         _weighting = re.sub(r"[^a-z]", "", norm(_weighting_raw))
         if _weighting in {"intervalcount", "intervals", "count", "intervalcounts"}:
             coverage_objective_weighting = "interval_count"
@@ -4056,6 +4085,7 @@ def parse_input(
         break_segments_q=break_segments,
         break_sets_by_shift_length=break_sets_by_length,
         coverage_objective_weighting=coverage_objective_weighting,
+        coverage_objective_weighting_source=coverage_objective_weighting_source,
         break_window_rules_q=break_window_rules,
         break_edge_margin_q=break_edge_margin_q,
         break_min_gap_q=break_min_gap_q,
@@ -20779,6 +20809,7 @@ def run_case(
     pattern_widths: Sequence[int], allow_no_break_override: Optional[bool],
     max_no_break_override: Optional[int], diagnostics_only: bool = False,
     language_working_window_override: Optional[str] = None,
+    coverage_objective_weighting_override: Optional[str] = None,
     skeleton_only: bool = False, export_top_skeletons: int = 5,
     seed_path: Optional[Path] = None, use_input_schedule_as_seed: bool = False,
     repair_change_limits: Sequence[int] = (2, 4, 6),
@@ -20948,6 +20979,8 @@ def run_case(
         if language_working_window_override is not None:
             parsed.language_working_window_mode = normalize_language_window_mode(
                 language_working_window_override)
+        coverage_measure = apply_coverage_objective_override(parsed, coverage_objective_weighting_override)
+        print(f"COVERAGE_MEASURE {coverage_measure['mode']} ({coverage_measure['source']})", file=log, flush=True)
         capacity = capacity_diagnostics(parsed)
         coverage_split_capacity = coverage_split_capacity_report(parsed)
         for row in coverage_split_capacity.get("rows", []):
@@ -21349,6 +21382,7 @@ def run_case(
             # override is also visible in the contract (it is applied to
             # `parsed` before the contract is read); the polish override is not.
             "language_working_window_override": language_working_window_override,
+            "coverage_objective_weighting_override": coverage_objective_weighting_override,
             "shift_consistency_polish_override": SHIFT_CONSISTENCY_CLI_OVERRIDE,
         }
         git_identity = git_repository_identity()
@@ -21422,6 +21456,7 @@ def run_case(
             # set, and which of the two won. A run that behaves unexpectedly is
             # otherwise indistinguishable from one configured unexpectedly.
             "search_control_decisions": search_control_decisions,
+            "coverage_measure": coverage_measure,
             "budget_phase_viability": budget_phase_viability,
             "coverage_split_capacity": coverage_split_capacity,
             # Wall-clock values are reported, never hashed.
@@ -25011,6 +25046,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
                              "Coverage Start/End as a coverage minimum only (default). MINIMUM_ROWS "
                              "also bounds working hours for language rows with a minimum >= 1. "
                              "ALL_ROWS bounds every active row, including rows with no minimum.")
+    parser.add_argument("--coverage-objective-weighting", choices=COVERAGE_OBJECTIVE_OVERRIDES, default=None,
+                        help="Override the workbook's Coverage Objective Weighting. INTERVAL_COUNT "
+                             "(default) counts every interval at target once (interval compliance); "
+                             "VOLUME_WEIGHTED weighs each interval by its requirement (service level).")
     parser.add_argument("--allow-headcount-mismatch", action="store_true", default=None)
     parser.add_argument("--acknowledge-departed", default="",
                         help="semicolon-separated names to treat as departed, like the workbook's "
@@ -25371,6 +25410,8 @@ def _business_finding_text(item: Any) -> str:
 def build_business_outcome(audit: Dict[str, Any], return_code: int) -> Dict[str, Any]:
     """The run's business outcome, plus the shortfall schedule when one was made (F-06)."""
     outcome = _build_business_outcome_core(audit, return_code)
+    if audit.get("coverage_measure"):
+        outcome["coverage_measure"] = dict(audit["coverage_measure"])
     shortfall = audit.get("shortfall_schedule") or {}
     if shortfall.get("status") != "EXPORTED":
         if shortfall:
@@ -25680,8 +25721,16 @@ def shortfall_text_line(row: Mapping[str, Any]) -> str:
             f"required {row.get('required')}, short by {row.get('short_by')}{unit}")
 
 
+COVERAGE_MEASURE_LABELS = {"interval_count": "Interval Count", "volume_weighted": "Volume Weighted"}
+
+
 def format_business_outcome(outcome: Dict[str, Any]) -> str:
-    lines = [str(outcome.get("headline") or "Schedule outcome"), "", str(outcome.get("plain_language_summary") or "")]
+    lines = [str(outcome.get("headline") or "Schedule outcome")]
+    measure = outcome.get("coverage_measure") or {}
+    if measure.get("mode"):
+        lines.append(f"Coverage measure: {COVERAGE_MEASURE_LABELS.get(measure['mode'], measure['mode'])}"
+                     f" ({measure.get('source') or 'default'})")
+    lines += ["", str(outcome.get("plain_language_summary") or "")]
     for label, key in [("Requested / configured", "requested"), ("Best proven result", "best_proven"), ("Gap", "gap")]:
         value = outcome.get(key) or {}
         if value:
@@ -25954,6 +26003,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         args.time_limit, args.num_workers, widths,
         allow_override, args.max_no_break_exceptions, args.diagnostics_only,
         language_working_window_override=args.language_working_window,
+        coverage_objective_weighting_override=args.coverage_objective_weighting,
         skeleton_only=args.skeleton_only, export_top_skeletons=args.export_top_skeletons,
         seed_path=args.seed_workbook,
         use_input_schedule_as_seed=args.use_input_schedule_as_seed,

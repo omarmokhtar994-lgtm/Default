@@ -1,0 +1,252 @@
+── tests/test_rc9_2_1_engine_name_resolution.py
+Ran 9 tests in 3.802s
+
+OK
+── tests/test_rc9_2_1_orchestration_integrity.py
+Ran 33 tests in 0.413s
+
+OK
+── tests/test_rc9_2_1_phase_c_integrity.py
+Ran 17 tests in 0.742s
+
+OK
+── tests/test_rc9_2_1_production_identity.py
+Ran 11 tests in 0.175s
+
+OK
+── tests/test_rc9_2_1_regression_lab_integrity.py
+Ran 18 tests in 1.098s
+
+OK
+── tests/test_rc9_2_1_rule_semantics.py
+Ran 115 tests in 2.752s
+
+OK
+── tests/test_rc9_2_1_selector_integrity.py
+Ran 109 tests in 0.183s
+
+OK
+── tests/test_rc9_2_1_tooling_integrity.py
+Ran 73 tests in 2.675s
+
+OK
+── tests/test_rc9_2_1_validator_parity.py
+Ran 46 tests in 1.551s
+
+OK
+── tests_staged/test_engine_logic_checks.py
+Ran 42 tests in 0.006s
+
+OK
+── tests_staged/test_rc9_2_10_language_reserve_validation.py
+Ran 10 tests in 0.145s
+
+OK
+── tests_staged/test_rc9_2_11_time_arithmetic.py
+Ran 15 tests in 3.359s
+
+OK
+── tests_staged/test_rc9_2_12_formula_audit_fixes.py
+Ran 16 tests in 4.336s
+
+OK
+── tests_staged/test_rc9_2_13_f1_exact_stage2_hits.py
+Ran 7 tests in 0.168s
+
+OK
+── tests_staged/test_rc9_2_14_probe_retry.py
+Ran 10 tests in 0.010s
+
+OK
+── tests_staged/test_rc9_2_15_capacity_and_starved_stage1.py
+Ran 14 tests in 4.663s
+
+OK
+── tests_staged/test_rc9_2_16_stage2_parallel.py
+Ran 5 tests in 63.286s
+
+OK
+── tests_staged/test_rc9_2_17_day_neighbourhood_break_search.py
+Ran 16 tests in 46.904s
+
+OK
+── tests_staged/test_rc9_2_18_seed_portfolio.py
+Ran 11 tests in 0.031s
+
+OK
+── tests_staged/test_rc9_2_19_joint_solve_isolation.py
+Ran 21 tests in 34.484s
+
+OK
+── tests_staged/test_rc9_2_1c_orchestration_integrity.py
+Ran 35 tests in 0.386s
+
+OK
+── tests_staged/test_rc9_2_1c_phase_c_integrity.py
+Ran 17 tests in 0.323s
+
+OK
+── tests_staged/test_rc9_2_1c_rule_semantics.py
+Ran 85 tests in 2.006s
+
+OK
+── tests_staged/test_rc9_2_1c_selector_integrity.py
+Ran 107 tests in 0.239s
+
+OK
+── tests_staged/test_rc9_2_1c_tooling_integrity.py
+Ran 70 tests in 1.397s
+
+OK
+── tests_staged/test_rc9_2_20_depth_presets.py
+Ran 10 tests in 0.023s
+
+OK
+── tests_staged/test_rc9_2_21_joint_refinement_removed.py
+Ran 5 tests in 0.028s
+
+OK
+── tests_staged/test_rc9_2_22_stage1_profile_rotation.py
+Ran 8 tests in 0.149s
+
+OK
+── tests_staged/test_rc9_2_23_break_load_feedback.py
+Ran 7 tests in 140.589s
+
+OK
+── tests_staged/test_rc9_2_24_package_safety.py
+Ran 26 tests in 12.344s
+
+OK
+── tests_staged/test_rc9_2_25_input_vocabulary.py
+Ran 43 tests in 30.437s
+
+OK
+── tests_staged/test_rc9_2_26_engine_audit_fixes.py
+Ran 5 tests in 0.492s
+
+OK
+── tests_staged/test_rc9_2_27_evidence_scorers.py
+Ran 4 tests in 2.757s
+
+OK
+── tests_staged/test_rc9_2_28_validator_input_crosscheck.py
+Ran 7 tests in 2.575s
+
+OK
+── tests_staged/test_rc9_2_29_shift_consistency.py
+Ran 12 tests in 71.001s
+
+OK
+── tests_staged/test_rc9_2_2_production_hardening.py
+Ran 49 tests in 2.640s
+
+OK
+── tests_staged/test_rc9_2_30_phase_a_input_safety.py
+Ran 29 tests in 4.152s
+
+OK
+── tests_staged/test_rc9_2_31_phase_b_correctness.py
+Ran 34 tests in 11.122s
+
+OK
+── tests_staged/test_rc9_2_32_phase_c_shortfall.py
+Ran 12 tests in 100.041s
+
+OK
+── tests_staged/test_rc9_2_33_phase_c_breaks_by_duration.py
+Ran 9 tests in 97.085s
+
+OK
+── tests_staged/test_rc9_2_34_phase_c_volume_weighting.py
+Ran 7 tests in 0.827s
+
+OK
+── tests_staged/test_rc9_2_35_phase_c_coverage_measure_choice.py
+Ran 12 tests in 1.063s
+
+OK
+── tests_staged/test_rc9_2_36_f35_published_schedule_is_measured.py
+Ran 6 tests in 0.001s
+
+OK
+── tests_staged/test_rc9_2_37_more_consistent_candidate.py
+Ran 9 tests in 13.104s
+
+OK
+── tests_staged/test_rc9_2_38_portfolio_respects_coverage_measure.py
+Ran 6 tests in 0.120s
+
+OK
+── tests_staged/test_rc9_2_39_friendly_input_template.py
+Ran 14 tests in 67.253s
+
+OK
+── tests_staged/test_rc9_2_3_coverage_benchmark_gate.py
+Ran 10 tests in 21.652s
+
+OK
+── tests_staged/test_rc9_2_3_demand_fit_memo.py
+Ran 6 tests in 68.731s
+
+OK
+── tests_staged/test_rc9_2_3_input_contract_fidelity.py
+Ran 16 tests in 1.003s
+
+OK
+── tests_staged/test_rc9_2_3_max_coverage_hardening.py
+Ran 11 tests in 0.103s
+
+OK
+── tests_staged/test_rc9_2_40_friendly_output_workbook.py
+Ran 8 tests in 15.640s
+
+OK
+── tests_staged/test_rc9_2_4_b9_metric_coverage.py
+Ran 10 tests in 0.247s
+
+OK (skipped=2)
+── tests_staged/test_rc9_2_4_budget_objective_symmetry.py
+Ran 16 tests in 0.456s
+
+OK
+── tests_staged/test_rc9_2_4_stage_aware_parity.py
+Ran 67 tests in 11.653s
+
+OK
+── tests_staged/test_rc9_2_4_workbook_search_controls.py
+Ran 34 tests in 2.084s
+
+OK
+── tests_staged/test_rc9_2_5_joint_bound_shape.py
+Ran 3 tests in 0.023s
+
+OK
+── tests_staged/test_rc9_2_6_solver_telemetry.py
+Ran 5 tests in 0.098s
+
+OK
+── tests_staged/test_rc9_2_7_solver_limits.py
+Ran 6 tests in 0.118s
+
+OK
+── tests_staged/test_rc9_2_8_joint_default.py
+Ran 5 tests in 0.071s
+
+OK
+── tests_staged/test_rc9_2_9_employee_quality_validation.py
+Ran 9 tests in 0.007s
+
+OK
+── engine selfcheck
+   engine selfcheck OK
+── wrapper selfcheck
+   wrapper selfcheck OK
+── cross-module call signatures
+   cross-module call signatures OK
+── undefined-name sweep
+   undefined-name sweep OK
+── test totals
+   1432 tests run, 2 skipped (minimum 1432 run, at most 3 skipped)
+
+GATE PASS — 60 suite(s), 1432 tests (2 skipped) + 2 selfchecks + cross-module call signatures + undefined-name sweep

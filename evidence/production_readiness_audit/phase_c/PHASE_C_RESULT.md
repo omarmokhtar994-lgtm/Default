@@ -309,6 +309,9 @@ For reference, RC5's 6-seed means were 68.2 target / 91.5 floor.
 
 ## Gate (`GATE_RUN.txt`)
 
+**Final gate (`GATE_RUN_FINAL.txt`), after F-35's published polish, F-36 and the friendly workbooks:** `./run_tests.sh` on engine `9f91e56c…`: **GATE PASS, 60 suites, 1,432 tests (2 skipped)**. The floor in `GATE_MINIMUMS.json` was raised from 1,395 to 1,432 (+9 more-consistent workbook, +6 F-36, +14 friendly input, +8 friendly output); max_skips 2 -> 3 because the Start Here live-check test skips on a machine without LibreOffice (written reason in the file).
+
+
 `./run_tests.sh` on the released engine `34964381…` (F-35 fix included): **GATE PASS: 56 suites, 1,395 tests (2 skipped)**. The floor in `GATE_MINIMUMS.json` was raised from 1,349 to 1,395: 28 tests for C1, C2 and C4, 12 for the per-program coverage measure, and 6 for F-35.
 
 Five existing tests were re-pinned. Three check the engine's **source text** for a hard-minimum constraint; two check the order in which the chosen schedule is bound. Each reason is written in the test.

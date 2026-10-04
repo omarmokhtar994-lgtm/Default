@@ -662,8 +662,13 @@ class TheRunStageAndDepthDropdownsArriveWithAVisibleChoice(unittest.TestCase):
         # seed equals the engine fallback, and the next test asserts that fallback
         # is QUICK (it moved from DEEP in the RC5 hardening). RC5's template seeded
         # Quick; the "Deep" pin contradicted its sibling test.
-        self.assertIn('SEEDED_DEFAULTS = {"runstage": "Full Schedule", "rundepth": "Quick"}',
-                      self.SOURCE)
+        # Re-pinned in Phase C (C4 follow-up): a third seeded row was added on
+        # purpose, Coverage Objective Weighting = Interval Count, the value an
+        # empty cell already means (tests_staged/test_rc9_2_35_phase_c_coverage_
+        # measure_choice.py proves the rebuilt contract is unchanged). The two
+        # rows this test is about keep exactly their seeds.
+        self.assertIn('SEEDED_DEFAULTS = {"runstage": "Full Schedule", "rundepth": "Quick",', self.SOURCE)
+        self.assertIn('"coverageobjectiveweighting": "Interval Count"}', self.SOURCE)
 
     def test_the_seeds_are_the_engine_fallbacks_so_nothing_changes(self):
         runner = (ROOT / "engine" / "RUN_UNIVERSAL_PRODUCTION.py").read_text()

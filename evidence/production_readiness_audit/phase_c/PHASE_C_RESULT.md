@@ -1,6 +1,6 @@
 # Phase C result: graceful degradation and schedule quality
 
-Started from commit `407a725` (engine sha256 `38f494d9…`). Engine after Phase C: sha256 `a2d4e7a1…` (commit `f326be4`).
+Started from commit `407a725` (engine sha256 `38f494d9…`). Engine after C1–C4: sha256 `a2d4e7a1…` (commit `f326be4`). Released engine, with the per-program coverage measure: sha256 `e211adeb…`. Its default models are identical to `a2d4e7a1…`, Phase B and Phase A (below).
 
 Every rule was written and pushed before its code or its runs:
 
@@ -146,6 +146,36 @@ Volume Weighted is **not** the default. Making it the default needs two things (
 - the end-to-end A/B on five real cases;
 - a business decision, because the two measures trade against each other by construction.
 
+## C4 follow-up: each program chooses its coverage measure
+
+Programs accountable for service level and programs accountable for interval compliance need different measures. So the choice is made per program, in the same two places as the Language Working Window.
+
+**In the workbook:**
+- The template builder adds a **Coverage Objective Weighting** dropdown to the Coverage section, with the choices Interval Count and Volume Weighted.
+- It is seeded with Interval Count, which is what an empty cell already means. So a rebuilt workbook keeps its contract.
+- The packaged workbooks were not modified: they are hash-pinned, and three of them are baseline-protected.
+
+**Per run:**
+- `--coverage-objective-weighting INTERVAL_COUNT|VOLUME_WEIGHTED` on the engine, the production runner and the Colab runner.
+- A `COVERAGE_MEASURE` dropdown in both notebooks. Its default, `workbook`, uses the row.
+
+**Precedence:** run override, then workbook, then default (Interval Count).
+
+**Where it is recorded:**
+- The override is applied before the contract is read, so the contract fingerprint records it.
+- The measure used and where it came from are in the audit (`coverage_measure`), and in `BUSINESS_OUTCOME.txt`, e.g. `Coverage measure: Volume Weighted (run override)`.
+
+| Check | Result |
+|---|---|
+| Tests, written first (`C4_MEASURE_CHOICE_TESTS_BEFORE_FIX.txt`) | 12 tests. Before the change, 11 failed; the 12th checks that an unknown value is refused, which argparse already did. After the change, all pass. |
+| Default runs unchanged | Final engine against Phase B and against Phase A: 45 Stage-1 builds and 51 Stage-2 models, 0 differing constraints |
+| First Volume Weighted run end to end (S01, QUICK 300 s, `--coverage-objective-weighting VOLUME_WEIGHTED`) | Exit 0. Validator PASS, parity PASS, clean-room PASS with 0 violations, MAX_TARGET export PASS. 84/84 intervals at target. The outcome shows `Coverage measure: Volume Weighted (run override)`. |
+| Real Voice workbook with Volume Weighted (QUICK 3600 s, seed 9000) | Exit 0. Validator PASS, parity PASS, clean-room PASS with 0 violations, MAX_FLOOR and MAX_TARGET exports PASS. Against the default run of the same seed: requirement covered at target 1,590 vs 1,587 FTE (+3); intervals at target 248 vs 248; floor 252 vs 253; severe floor gaps 11 vs 10; break-concurrency violations 1 vs 0; language gaps 0. A small trade on Voice, one seed, so direction only. The A/B measures it properly. (`volume_e2e/`) |
+
+One existing test, and its duplicate under `tests/`, was re-pinned: `test_rc9_2_1c_tooling_integrity` pins the template's seeded rows, and a third seeded row was added on purpose. The reason is written in the test.
+
+The impact of Volume Weighted on real programs is measured by the pre-registered A/B in `C4_AB_RULE.txt` and `C4_AB_AMENDMENTS.txt`, which runs after this package ships.
+
 ## C3: AE_IT after-break floor, Stage-1 shape (`C3_RULE.txt`, `c3_runs/`)
 
 **Setup:**
@@ -206,7 +236,7 @@ For reference, RC5's 6-seed means were 68.2 target / 91.5 floor.
 
 ## Gate (`GATE_RUN.txt`)
 
-`./run_tests.sh` on engine `a2d4e7a1…`: **GATE PASS: 54 suites, 1,377 tests (2 skipped)**. The floor in `GATE_MINIMUMS.json` was raised from 1,349 to 1,377.
+`./run_tests.sh` on the released engine `e211adeb…`: **GATE PASS: 55 suites, 1,389 tests (2 skipped)**. The floor in `GATE_MINIMUMS.json` was raised from 1,349 to 1,389: 28 tests for C1, C2 and C4, plus 12 for the per-program coverage measure.
 
 Three existing tests were re-pinned. Each checks the engine's **source text** for a hard-minimum constraint, and each reason is written in the test.
 

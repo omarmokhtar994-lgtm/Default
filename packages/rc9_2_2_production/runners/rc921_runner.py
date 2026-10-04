@@ -250,7 +250,9 @@ def run_one(root: Path, results_root: Path, row: dict, args) -> dict:
         command += ["--stage", args.stage]
     if args.language_working_window:
         command += ["--language-working-window", args.language_working_window]
-    if args.coverage_objective_weighting:
+    if getattr(args, "coverage_objective_weighting", None):
+        # getattr: callers that build their own namespace (run_parallel, tests)
+        # predate this option and must keep working without it.
         command += ["--coverage-objective-weighting", args.coverage_objective_weighting]
     if args.resume:
         command.append("--resume")

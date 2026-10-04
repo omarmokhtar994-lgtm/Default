@@ -284,9 +284,9 @@ One engine change was made for a test rather than re-pinning it:
 
 ## Package
 
-`dist/RC9_2_2_PRODUCTION_PACKAGE.zip`, sha256 `750cb6ca64dbe28d1e9634335599f64911c8ae040ec04db45dee5d9f83380e07`, 1,713 files, built by `tools/build_production_package.py` from commit-ready sources. The checks run on it:
+`dist/RC9_2_2_PRODUCTION_PACKAGE.zip`, sha256 `50919d4758bb82a7d9ba574cc6723a425dab89963cdad94d0d0d389d82d2711f`, 1,733 files (rebuilt with the F-35 fix; the first Phase C package was `750cb6ca…`), built by `tools/build_production_package.py` from commit-ready sources. The checks run on it:
 - the builder's own gate on the staged copy: PASS;
-- `./run_tests.sh` from a clean extract of the zip: **GATE PASS, 55 suites, 1,389 tests** (2 skipped);
+- `./run_tests.sh` from a clean extract of the zip: **GATE PASS, 56 suites, 1,395 tests** (2 skipped);
 - the clean-room checker ships at `tools/clean_room_check.py`, where the runner looks for it.
 
 The first build was refused by that gate. The new coverage-measure test read the runners from the repository layout (`packages/rc9_2_2_production/runners`), which the package does not have (it ships them at `runners/`). The test now resolves either layout, as the other runner tests do. No shipped code changed.

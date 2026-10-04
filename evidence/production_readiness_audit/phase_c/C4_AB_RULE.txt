@@ -1,0 +1,87 @@
+Phase C4 (audit F-28) - per-program coverage measure: IMPACT A/B, PRE-REGISTERED RULE
+=====================================================================================
+
+Written 2026-10-04, before any Volume Weighted run on a real workbook. Committed
+and pushed before the A/B starts. Changes after that go to C4_AB_AMENDMENTS.txt
+with a reason, and the verdict states them.
+
+Why
+---
+Volume Weighted is now a per-program choice: a workbook row or a run
+override. It does not replace the default; programs measured on service level
+pick it and programs measured on interval compliance keep Interval Count. So
+this A/B does not decide a default. It answers three questions:
+  1. Does Volume Weighted ever produce a wrong schedule (a hard-rule failure,
+     a validator/parity/clean-room disagreement, a crash)?
+  2. Does it do what it says (cover more of the requirement)?
+  3. What does it cost in the interval measures, per program, and is that
+     cost minor or major?
+C4_RULE.txt's ten-seed rule for flipping the default stays as written; it is not
+needed for a per-program choice.
+
+Design
+------
+Arms     INTERVAL = no override (the workbooks have no row, so Interval Count).
+         VOLUME   = --coverage-objective-weighting VOLUME_WEIGHTED.
+         Nothing else differs.
+Engine   One frozen copy of the release engine (the commit that ships the
+         per-program choice), taken before the first run.
+Cases    VOICE  Cricut_Voice_RC9_1_READY_SKELETON.xlsx
+         CHAT   Cricut_Chat_RC9_1_READY_SKELETON.xlsx
+         NMGSP  NMG_SP_RC9_1_READY_FIXED.xlsx
+         AEIT   AE_IT_B2B.xlsx
+           (these four from experiments/rc5_vs_final/inputs, as in the RC5 A/B)
+         GDI    packages/rc9_2_2_production/inputs/GDI_REAL28_RC9_1_24_7_FINAL_READY.xlsx
+Run      engine/RUN_UNIVERSAL_PRODUCTION.py --mode QUICK --time-limit 3600
+         --num-workers 2 --solver-random-seed s, s in {9000, 9001, 9002}.
+         Two runs at a time, each pinned to its own free core pair; nothing
+         else CPU-heavy runs meanwhile. 30 paired runs.
+Reuse    AEIT INTERVAL seeds 9000-9002 are the C3 DEFAULT runs: same workbook,
+         same command, same pinning, and an engine whose default models are
+         proven constraint-for-constraint identical
+         (STAGE1/STAGE2_MODEL_IDENTITY.json on the release engine). They are
+         not rerun.
+
+Measures (all from the independent validator's output, the same for both arms)
+-------------------------------------------------------------------------------
+  req_covered     requirement (FTE) of the active intervals at target after
+                  breaks: sum of `required` over interval_rows with
+                  after_pct >= the workbook's target ratio.
+  fte_gap         FTE short of target after breaks: sum over active intervals
+                  of max(0, target x required - after_effective).
+  after_target, after_floor (interval counts), severe_floor_gaps,
+  language_gap_count, zero_staffed_active_quarters,
+  break_concurrency_violation_count.
+
+Rules
+-----
+A  No wrong results. Every VOLUME run:
+     - validator hard_fail_count = 0, metric parity PASS, clean-room gate
+       PASS with 0 violations;
+     - language_gap_count = 0 and zero_staffed_active_quarters = 0;
+     - runner exit 0 wherever its paired INTERVAL run exits 0;
+     - no crash and no time-out.
+   One failure fails A.
+B  It does what it says. Per case, the mean paired delta (VOLUME - INTERVAL)
+   of req_covered is >= 0 on at least 4 of the 5 cases, and its sum over the
+   5 cases is > 0.
+C  Price, per case (mean paired delta over the 3 seeds). A case is MAJOR if
+   any of:
+     after_target loss > 5 % of the case's active intervals;
+     after_floor loss > 3 intervals;
+     severe_floor_gaps increase > 3;
+     break_concurrency_violation_count increase > 3.
+   Otherwise MINOR. C is reported, not gating: it is the guidance a program
+   reads before choosing Volume Weighted.
+
+Verdict
+-------
+CLOSE (option validated)  A and B pass. F-28 closes as a per-program option,
+                          with the C table published in the run guide.
+DEFECT                    A fails: the failing run is root-caused and fixed,
+                          and the A/B is repeated.
+NOT EFFECTIVE             A passes, B fails: Volume Weighted is not
+                          recommended to any program until the weighting is
+                          investigated.
+Three seeds per case show direction and size, not a confidence interval. No
+statistical claim beyond that is made.

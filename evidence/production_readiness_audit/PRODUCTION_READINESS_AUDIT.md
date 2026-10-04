@@ -38,7 +38,7 @@ All evidence is in this folder; `WORKING_NOTES.md` is the running log.
 >   - The joint model's split constraint (that model is off in production).
 >   - P3 items.
 
-> **Status update — Phase C done (2026-10-04, engine sha256 `e211adeb…`).**
+> **Status update — Phase C done (2026-10-04, engine sha256 `34964381…`).**
 > - **Fixed:** F-06 and F-07. F-20 is fixed as a capability: the business still has to state its long-shift break rule. F-28 is mitigated by an opt-in switch.
 > - **F-06:** a week with no schedule that meets every hard rule now gets a non-releasable **shortfall schedule**. It meets every person rule, and every missed coverage minimum is listed on a Shortfalls sheet and confirmed by the independent validator and the clean-room checker (`phase_c/PHASE_C_RESULT.md`):
 >   - S04: Sun 03:00–03:45 only;
@@ -62,7 +62,7 @@ All evidence is in this folder; `WORKING_NOTES.md` is the running log.
 >   - the real Voice run gives the same 248 / 264.
 > - **Per-program coverage measure:** each program can choose Interval Count or Volume Weighted, by a workbook dropdown or a Colab/runner override. Default runs are unchanged; models are identical back to Phase A (45 Stage-1 builds and 51 Stage-2 models).
 > - **Volume Weighted runs end to end:** S01 and the real Voice workbook pass validator, parity and clean-room. Its impact on five programs is measured by a pre-registered A/B (`phase_c/C4_AB_RULE.txt`).
-> - **Gate:** 1,389 tests, PASS.
+> - **Gate:** 1,395 tests, PASS.
 > - **Still open:**
 >   - F-33 for normal runs;
 >   - Volume Weighted as a default (needs the five-case A/B and a business decision);

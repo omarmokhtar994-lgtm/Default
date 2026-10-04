@@ -1,6 +1,6 @@
 # Phase C result: graceful degradation and schedule quality
 
-Started from commit `407a725` (engine sha256 `38f494d9…`). Engine after C1–C4: sha256 `a2d4e7a1…` (commit `f326be4`). Released engine, with the per-program coverage measure: sha256 `e211adeb…`. Its default models are identical to `a2d4e7a1…`, Phase B and Phase A (below).
+Started from commit `407a725` (engine sha256 `38f494d9…`). Engine after C1–C4: sha256 `a2d4e7a1…` (commit `f326be4`). With the per-program coverage measure: `e211adeb…`. Released engine, with the F-35 fix: sha256 `34964381…`. Its default models are identical to `a2d4e7a1…`, Phase B and Phase A (below).
 
 Every rule was written and pushed before its code or its runs:
 
@@ -264,9 +264,9 @@ For reference, RC5's 6-seed means were 68.2 target / 91.5 floor.
 
 ## Gate (`GATE_RUN.txt`)
 
-`./run_tests.sh` on the released engine `e211adeb…`: **GATE PASS: 55 suites, 1,389 tests (2 skipped)**. The floor in `GATE_MINIMUMS.json` was raised from 1,349 to 1,389: 28 tests for C1, C2 and C4, plus 12 for the per-program coverage measure.
+`./run_tests.sh` on the released engine `34964381…` (F-35 fix included): **GATE PASS: 56 suites, 1,395 tests (2 skipped)**. The floor in `GATE_MINIMUMS.json` was raised from 1,349 to 1,395: 28 tests for C1, C2 and C4, 12 for the per-program coverage measure, and 6 for F-35.
 
-Three existing tests were re-pinned. Each checks the engine's **source text** for a hard-minimum constraint, and each reason is written in the test.
+Five existing tests were re-pinned. Three check the engine's **source text** for a hard-minimum constraint; two check the order in which the chosen schedule is bound. Each reason is written in the test.
 
 The text changed: every coverage minimum now goes through `at_least()`. That is `model.Add(expr >= required)` in a normal run, and gets a reported slack only in the shortfall pass. The constraint itself did not change: both model-identity checks above show it, constraint by constraint.
 
@@ -275,6 +275,7 @@ The text changed: every coverage minimum now goes through `at_least()`. That is 
 | `test_rc9_2_1_rule_semantics` (coverage split in Stage 1 and Stage 2) | Pins the `at_least(...)` calls, plus `at_least`'s hard branch in both stages |
 | `test_rc9_2_13_f1_exact_stage2_hits` (hard floor is exact) | Pins `at_least(after_exact, hard_floor_exact, …)` and the hard branch |
 | `test_rc9_2_22_stage1_profile_rotation` (hard floor precedes the break load) | Pins `at_least(eff, hard_floor_units, …)` |
+| `test_rc9_2_1_selector_integrity` and its `tests_staged` copy (the final break-capacity measurement follows the selection) | Pins the binding `chosen_skeleton, chosen_breaks = recommended_export_pair(selection)` (F-35); the ordering it protects is unchanged |
 
 One engine change was made for a test rather than re-pinning it:
 - **The test:** `test_rc9_2_14_probe_retry` checks that the hard-probe retry comes before the first `if probe.cp_status not in {"OPTIMAL", "FEASIBLE"}:` in the file.

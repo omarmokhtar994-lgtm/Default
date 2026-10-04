@@ -896,7 +896,10 @@ class HeadcountNeededForBreaksIsMeasuredNotAggregated(unittest.TestCase):
         region, where that name is not bound until Stage 2 has selected."""
         source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
         early = source.index("measured_on=\"best_shippable_before_breaks\"")
-        binding = source.index("chosen_skeleton, chosen_breaks = selection[\"recommended\"]")
+        # Re-pinned for audit F-35: the binding now goes through
+        # recommended_export_pair(selection), which also checks that the pair is
+        # the one the writer publishes. The ordering this test protects is unchanged.
+        binding = source.index("chosen_skeleton, chosen_breaks = recommended_export_pair(selection)")
         late = source.index("measured_on=\"recommended_final_skeleton\"")
         self.assertLess(early, binding, "the pre-break measurement must not need Stage 2")
         self.assertLess(binding, late, "the final measurement must follow the selection")

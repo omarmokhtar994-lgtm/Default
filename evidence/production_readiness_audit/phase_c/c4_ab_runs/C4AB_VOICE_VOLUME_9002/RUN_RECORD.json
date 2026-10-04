@@ -1,0 +1,33 @@
+{
+ "case": "VOICE",
+ "arm": "VOLUME",
+ "seed": 9002,
+ "cores": [
+  2,
+  3
+ ],
+ "return_code": 0,
+ "wall_sec": 3469.2,
+ "run_root": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/c4ab_work/runs/C4AB_VOICE_VOLUME_9002",
+ "command": [
+  "/usr/bin/python3",
+  "-u",
+  "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/c4ab_frozen/engine/RUN_UNIVERSAL_PRODUCTION.py",
+  "--input",
+  "/home/user/Default/experiments/rc5_vs_final/inputs/Cricut_Voice_RC9_1_READY_SKELETON.xlsx",
+  "--output-root",
+  "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/c4ab_work/runs",
+  "--schedule-id",
+  "C4AB_VOICE_VOLUME_9002",
+  "--mode",
+  "QUICK",
+  "--time-limit",
+  "3600",
+  "--num-workers",
+  "2",
+  "--solver-random-seed",
+  "9002",
+  "--coverage-objective-weighting",
+  "VOLUME_WEIGHTED"
+ ]
+}

@@ -19766,6 +19766,29 @@ def _consistency_swap_model(
     return new_rows if after < before else None
 
 
+class PublishedScheduleMismatch(RuntimeError):
+    """The pair the engine measured is not the pair it is about to publish (audit F-35)."""
+
+
+def recommended_export_pair(selection: Mapping[str, Any]) -> Tuple[Any, Any]:
+    """The recommended pair, checked to be the RECOMMENDED_FINAL pair the writer publishes.
+
+    Every audit metric, quality gate and outcome number is taken from the pair
+    this returns, and the workbook is written from selection["exports"]. If they
+    are not the same objects, the run refuses rather than describe one schedule
+    and publish another (audit F-35).
+    """
+    recommended = selection["recommended"]
+    for role, pair in selection["exports"]:
+        if role == "RECOMMENDED_FINAL":
+            if pair[0] is not recommended[0] or pair[1] is not recommended[1]:
+                raise PublishedScheduleMismatch(
+                    "the recommended schedule is not the RECOMMENDED_FINAL export; refusing to measure one "
+                    "schedule and publish another (F-35)")
+            return pair
+    raise PublishedScheduleMismatch("no RECOMMENDED_FINAL export in the selection (F-35)")
+
+
 def shift_consistency_polish(
     parsed: ParsedInput,
     skeleton: SkeletonSolution,
@@ -24215,29 +24238,20 @@ def run_case(
         polish_on = (SHIFT_CONSISTENCY_CLI_OVERRIDE if SHIFT_CONSISTENCY_CLI_OVERRIDE is not None
                      else SHIFT_CONSISTENCY_POLISH_ENABLED if parsed.shift_consistency_polish is None
                      else bool(parsed.shift_consistency_polish))
+        # Audit F-35: the polish replaced selection["recommended"] while the
+        # workbook writer published selection["exports"], so no workbook ever
+        # carried it, and a one-hour move made the audit disagree with the
+        # published schedule (a valid schedule blocked at the parity gate).
+        # Business decision 2026-10-04: publish exactly what was published
+        # before; the polish is withheld until it is validated on its own.
+        audit["shift_consistency_polish"] = (
+            {"enabled": True, "status": "WITHHELD_PENDING_VALIDATION",
+             "reason": "F-35: the polished schedule was never the published one; withheld until validated"}
+            if polish_on else {"enabled": False})
         if polish_on:
-            # Leave the export tail its time; never overrun the run. Measured on
-            # Chat and Voice: about 92 s remain at this point and the export after
-            # it takes about 5 s, so a 30 s reserve keeps a wide margin.
-            polish_budget = min(SHIFT_CONSISTENCY_TIME_LIMIT_SEC,
-                                budget_manager.remaining_total() - SHIFT_CONSISTENCY_TAIL_RESERVE_SEC)
-            if polish_budget < SHIFT_CONSISTENCY_MIN_SEC:
-                audit["shift_consistency_polish"] = {"enabled": True, "status": "SKIPPED_NO_TIME",
-                                                     "remaining_sec": round(budget_manager.remaining_total(), 1)}
-            else:
-                polished_skeleton, polished_breaks, polish_record = shift_consistency_polish(
-                    parsed, *selection["recommended"], time_limit_sec=polish_budget)
-                audit["shift_consistency_polish"] = polish_record
-                if polish_record.get("status") == "APPLIED":
-                    selection["recommended"] = (polished_skeleton, polished_breaks)
-                print(f"SHIFT_CONSISTENCY_POLISH {polish_record.get('status')}: start movement "
-                      f"{polish_record['before']['start_movement_hours']} h -> "
-                      f"{polish_record['after']['start_movement_hours']} h, distinct starts "
-                      f"{polish_record['before']['distinct_start_times']} -> "
-                      f"{polish_record['after']['distinct_start_times']}", file=log, flush=True)
-        else:
-            audit["shift_consistency_polish"] = {"enabled": False}
-        chosen_skeleton, chosen_breaks = selection["recommended"]
+            print("SHIFT_CONSISTENCY_POLISH WITHHELD (F-35): the published schedule is the selected one",
+                  file=log, flush=True)
+        chosen_skeleton, chosen_breaks = recommended_export_pair(selection)
         break_capacity = break_capacity_headcount_requirement(
             parsed, chosen_skeleton, measured_on="recommended_final_skeleton")
         audit["break_capacity_headcount"] = break_capacity

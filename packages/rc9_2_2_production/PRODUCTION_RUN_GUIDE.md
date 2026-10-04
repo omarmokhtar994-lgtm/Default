@@ -332,6 +332,13 @@ hours per day. It warns when the hours are authored but not enforced.
 
 ### 3.8 More consistent weeks: the shift consistency polish
 
+> **Withheld since 2026-10-04 (audit F-35).** The polish never reached a published
+> workbook: the engine measured the polished schedule but wrote the original one, and a
+> one-hour move could make the audit disagree with the workbook and block a valid schedule.
+> Published schedules stay exactly as they were; the polish does not run (the audit records
+> `WITHHELD_PENDING_VALIDATION`) until it is validated end to end. The settings below are
+> still read, and have no effect until then.
+
 Once the schedule is chosen, the polish makes each associate's week more uniform.
 
 1. **Swaps.** Two associates with the same language and shift length exchange a

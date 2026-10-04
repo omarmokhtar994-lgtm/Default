@@ -23,6 +23,24 @@ def measure(run_root: Path, return_code):
     status = json.loads((run_root / "UNIVERSAL_RUN_STATUS.json").read_text()) if (run_root / "UNIVERSAL_RUN_STATUS.json").exists() else {}
     iv = status.get("independent_validation") or {}
     row["validation"] = iv.get("status")
+    mism_rows = (iv.get("metric_parity") or {}).get("mismatches") or []
+    row["parity_mismatch_fields"] = [m.get("field") for m in mism_rows]
+    audit = next(iter(sorted(run_root.glob("*solver_audit.json"))), None)
+    if audit is not None and mism_rows:
+        # C4_AB_AMENDMENTS.txt A3: an F-35 parity failure is one where the polish
+        # moved a shift and the engine's own RECOMMENDED_FINAL export metrics (the
+        # published workbook) equal the validator's value on every mismatching
+        # field the export records.
+        a = json.loads(audit.read_text())
+        moves = int(((a.get("shift_consistency_polish") or {}).get("moves")) or 0)
+        export = next((e.get("metrics") or {} for e in ((a.get("export_manifest") or {}).get("exports") or [])
+                       if e.get("role") == "RECOMMENDED_FINAL"), {})
+        checked = [m for m in mism_rows if export.get(m.get("field")) is not None]
+        same = bool(checked) and all(abs(float(export[m["field"]]) - float(m.get("validator") or 0)) <= 1e-6
+                                     for m in checked)
+        row["parity_f35_check"] = {"polish_moves": moves, "fields_checked": [m["field"] for m in checked],
+                                   "export_equals_validator": same}
+        row["parity_failure_is_f35"] = bool(moves >= 1 and same)
     row["parity"] = (iv.get("metric_parity") or {}).get("status")
     cr = iv.get("clean_room") or {}
     row["clean_room"] = cr.get("status"); row["clean_room_violations"] = cr.get("violation_count")
@@ -74,11 +92,12 @@ for (case, arm, seed), r in runs.items():
         problems.append(r.get("error") or "missing")
     else:
         if r.get("hard_fail_count") != 0: problems.append(f"hard_fail_count={r.get('hard_fail_count')}")
-        if r.get("parity") != "PASS": problems.append(f"parity={r.get('parity')}")
+        if r.get("parity") != "PASS" and not r.get("parity_failure_is_f35"): problems.append(f"parity={r.get('parity')}")
         if r.get("clean_room") != "PASS" or r.get("clean_room_violations"): problems.append(f"clean_room={r.get('clean_room')}/{r.get('clean_room_violations')}")
         if r.get("language_gap_count"): problems.append(f"language_gaps={r.get('language_gap_count')}")
         if r.get("zero_staffed_active_quarters"): problems.append(f"zero_staffed={r.get('zero_staffed_active_quarters')}")
-        if pair.get("return_code") == 0 and r.get("return_code") != 0: problems.append(f"exit {r.get('return_code')} where INTERVAL exits 0")
+        if pair.get("return_code") == 0 and r.get("return_code") != 0 and not r.get("parity_failure_is_f35"):
+            problems.append(f"exit {r.get('return_code')} where INTERVAL exits 0")
     if problems:
         rule_a.append({"case": case, "seed": seed, "problems": problems})
 

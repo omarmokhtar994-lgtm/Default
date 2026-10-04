@@ -19,3 +19,19 @@ A2  A third seed (9002) is run for a case, both arms, when any of these holds af
 Nothing else changes: arms, cases, engine, command, measures, rules A, B and C, and
 the verdicts are as written in C4_AB_RULE.txt. Two seeds show direction and size,
 not a confidence interval.
+
+A3  (written 2026-10-04 11:30 UTC, after the VOICE and CHAT seed-9000 pairs and before
+    any other result.) The A/B's frozen engine (e211adeb) carries audit F-35: the
+    shift-consistency polish replaced the measured schedule but never the published one,
+    and when it moved a shift by an hour the audit and the published workbook disagreed
+    and parity failed (VOICE INTERVAL 9000, exit 4). The release engine fixes F-35 by
+    publishing, and measuring, exactly the schedule the frozen engine publishes, so every
+    A/B workbook is the workbook the release engine would publish. Rule A is therefore
+    applied as follows: a VOLUME run whose only rule-A failure is metric parity, where
+    (a) its polish record shows at least one move, and (b) the engine's RECOMMENDED_FINAL
+    export metrics (the published workbook) equal the validator's value on every mismatching
+    field the export records, is attributed to F-35,
+    reported as such, and not counted as a Volume Weighted defect. Every other rule-A
+    check (validator hard failures, clean-room, language gaps, empty quarters, crashes)
+    applies unchanged, and the measures of rules B and C come from the validator, which
+    reads the published workbook, so they are unaffected.

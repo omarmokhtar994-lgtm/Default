@@ -113,6 +113,34 @@ Production runner, QUICK 300 s, 2 workers, seed 9000, engine `a2d4e7a1…`. Scor
 
 **F-33 stays open:** the corrected objective needs re-tuning before it can replace the old one.
 
+## F-35 (new): the shift-consistency polish was never published
+
+Found in the C4 impact A/B: Voice, Interval Count, seed 9000 ended with exit 4. The validator passed every hard rule, but parity failed on five overage statistics (for example extreme-overage intervals: engine 134, validator 135).
+
+**Cause:**
+- After selection, `run_case` replaced `selection["recommended"]` with the polished pair. Every audit metric, gate and outcome number was then taken from that pair.
+- The workbook writer iterated `selection["exports"]`, which still held the original pair.
+- The engine's own export record for the published workbook said 135, the validator's figure. Its canonical metrics said 134, the polished schedule's figure.
+
+**Scope** (`F35_POLISH_NOT_PUBLISHED.txt`, `f35_polish_check.py`):
+- On all six runs checked, the published workbook has the pre-polish start times. This includes the polish's own evidence runs (Voice, Chat, AE_IT).
+- The polish's measured gains were never delivered.
+- Swaps alone change no measured statistic, so parity passed. A one-hour move could change one, and then parity blocked a valid schedule.
+
+**What it did not affect:**
+- No hard rule; no wrong schedule was published.
+- Every published workbook is the schedule the validator checked.
+
+**Fix** (business decision, 2026-10-04: keep published schedules as they are):
+- The polish is withheld. The audit records `WITHHELD_PENDING_VALIDATION`.
+- `run_case` takes the measured pair from `recommended_export_pair(selection)`, which raises `PublishedScheduleMismatch` if the measured pair is not the published RECOMMENDED_FINAL pair.
+- Published workbooks are unchanged by construction: the writer and its export list are untouched, and the polish ran only after the search had ended.
+- Tests written first (`F35_TESTS_BEFORE_FIX.txt`): 5 of 6 failed before the fix. The 6th checks that the polish function is kept for its own validation.
+
+**Effect on the running C4 A/B:**
+- Its frozen engine publishes the same workbooks as the fixed engine, so the validator-based measures of rules B and C are unaffected.
+- A parity failure caused by F-35 is attributed under `C4_AB_AMENDMENTS.txt` A3. That amendment was written after the Voice and Chat seed-9000 pairs and before any other result.
+
 ## F-34 (new): Stage 1 ignored its configured slice
 
 The budget planner sized the Stage-1 window from the 45 s constant, whatever `Stage 1 Minimum Slice Seconds` said. So the earlier AE_IT test at 240 s ran one or two profiles in FINAL's small window, and could not test what it was meant to test.

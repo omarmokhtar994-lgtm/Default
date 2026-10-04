@@ -1,5 +1,12 @@
 # Shift consistency polish: result against the registered rule
 
+> **Correction, 2026-10-04 (audit F-35).** The figures below were read from the engine audit, which
+> described the polished schedule. The published workbook was never the polished one: the workbook
+> writer used the pre-polish export (checked on six runs, `evidence/production_readiness_audit/phase_c/
+> F35_POLISH_NOT_PUBLISHED.txt`). The improvement measured here was therefore never delivered. The polish
+> is withheld until it is validated end to end; published schedules are unchanged.
+
+
 The rule was written before the measurement: `RULE.txt`, commit ef4a540.
 **Verdict: all four items pass, so the polish is on by default.** The workbook row
 `Shift Consistency Polish = No` or `--no-shift-consistency-polish` turns it off.

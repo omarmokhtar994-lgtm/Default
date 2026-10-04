@@ -1,0 +1,47 @@
+The 4 F-33/F-34 tests run against the Phase B engine (commit 407a725):
+
+test_each_use_gets_a_fresh_expression (tests_staged.test_rc9_2_32_phase_c_shortfall.F33BalanceTermsAreBuiltFromUncorruptedExpressions.test_each_use_gets_a_fresh_expression) ... ERROR
+test_the_shortfall_pass_uses_a_permitted_exception_instead_of_a_gap (tests_staged.test_rc9_2_32_phase_c_shortfall.F33BalanceTermsAreBuiltFromUncorruptedExpressions.test_the_shortfall_pass_uses_a_permitted_exception_instead_of_a_gap) ... ERROR
+test_a_deeper_slice_is_funded_up_to_the_cap (tests_staged.test_rc9_2_32_phase_c_shortfall.F34StageOneIsFundedForTheConfiguredSlice.test_a_deeper_slice_is_funded_up_to_the_cap) ... ERROR
+test_the_default_slice_is_unchanged (tests_staged.test_rc9_2_32_phase_c_shortfall.F34StageOneIsFundedForTheConfiguredSlice.test_the_default_slice_is_unchanged) ... ERROR
+
+======================================================================
+ERROR: test_each_use_gets_a_fresh_expression (tests_staged.test_rc9_2_32_phase_c_shortfall.F33BalanceTermsAreBuiltFromUncorruptedExpressions.test_each_use_gets_a_fresh_expression)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_32_phase_c_shortfall.py", line 142, in test_each_use_gets_a_fresh_expression
+    first = E.after_break_raw_expression(entry)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'l632_universal_scheduler' has no attribute 'after_break_raw_expression'
+
+======================================================================
+ERROR: test_the_shortfall_pass_uses_a_permitted_exception_instead_of_a_gap (tests_staged.test_rc9_2_32_phase_c_shortfall.F33BalanceTermsAreBuiltFromUncorruptedExpressions.test_the_shortfall_pass_uses_a_permitted_exception_instead_of_a_gap)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_32_phase_c_shortfall.py", line 132, in test_the_shortfall_pass_uses_a_permitted_exception_instead_of_a_gap
+    sol = E.solve_breaks(parsed, sk, 24, True, 20, 1, io.StringIO(), exception_cap=1, elastic=True)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: solve_breaks() got an unexpected keyword argument 'elastic'
+
+======================================================================
+ERROR: test_a_deeper_slice_is_funded_up_to_the_cap (tests_staged.test_rc9_2_32_phase_c_shortfall.F34StageOneIsFundedForTheConfiguredSlice.test_a_deeper_slice_is_funded_up_to_the_cap)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_32_phase_c_shortfall.py", line 157, in test_a_deeper_slice_is_funded_up_to_the_cap
+    self.assertEqual(E.stage1_minimum_budget_seconds(3600, 15, 240.0), 1620)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'l632_universal_scheduler' has no attribute 'stage1_minimum_budget_seconds'
+
+======================================================================
+ERROR: test_the_default_slice_is_unchanged (tests_staged.test_rc9_2_32_phase_c_shortfall.F34StageOneIsFundedForTheConfiguredSlice.test_the_default_slice_is_unchanged)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_32_phase_c_shortfall.py", line 154, in test_the_default_slice_is_unchanged
+    self.assertEqual(E.stage1_minimum_budget_seconds(3600, 15, 45.0), int(15 * 45 / 0.82))
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'l632_universal_scheduler' has no attribute 'stage1_minimum_budget_seconds'
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.272s
+
+FAILED (errors=4)

@@ -1,0 +1,135 @@
+{
+ "rule": "C3_RULE.txt",
+ "arms": {
+  "DEFAULT": {
+   "after_target": 71.8,
+   "after_floor": 86.8,
+   "before_target": 79.2,
+   "before_floor": 90,
+   "severe_floor_gap_count": 20.2,
+   "break_concurrency_violation_count": 1,
+   "per_seed": {
+    "9000": {
+     "after_target": 76,
+     "after_floor": 87,
+     "return_code": 0,
+     "validation": "PASS",
+     "parity": "PASS",
+     "stage1_attempts": 11
+    },
+    "9001": {
+     "after_target": 74,
+     "after_floor": 86,
+     "return_code": 0,
+     "validation": "PASS",
+     "parity": "PASS",
+     "stage1_attempts": 10
+    },
+    "9002": {
+     "after_target": 70,
+     "after_floor": 86,
+     "return_code": 0,
+     "validation": "PASS",
+     "parity": "PASS",
+     "stage1_attempts": 11
+    },
+    "9003": {
+     "after_target": 73,
+     "after_floor": 88,
+     "return_code": 0,
+     "validation": "PASS",
+     "parity": "PASS",
+     "stage1_attempts": 10
+    },
+    "9004": {
+     "after_target": 66,
+     "after_floor": 87,
+     "return_code": 0,
+     "validation": "PASS",
+     "parity": "PASS",
+     "stage1_attempts": 10
+    }
+   }
+  },
+  "S240": {
+   "after_target": 73.8,
+   "after_floor": 88.2,
+   "before_target": 81.2,
+   "before_floor": 91,
+   "severe_floor_gap_count": 19.4,
+   "break_concurrency_violation_count": 2.4,
+   "per_seed": {
+    "9000": {
+     "after_target": 75,
+     "after_floor": 88,
+     "return_code": 0,
+     "validation": "PASS",
+     "parity": "PASS",
+     "stage1_attempts": 4
+    },
+    "9001": {
+     "after_target": 73,
+     "after_floor": 88,
+     "return_code": 0,
+     "validation": "PASS",
+     "parity": "PASS",
+     "stage1_attempts": 3
+    },
+    "9002": {
+     "after_target": 73,
+     "after_floor": 90,
+     "return_code": 0,
+     "validation": "PASS",
+     "parity": "PASS",
+     "stage1_attempts": 3
+    },
+    "9003": {
+     "after_target": 75,
+     "after_floor": 87,
+     "return_code": 0,
+     "validation": "PASS",
+     "parity": "PASS",
+     "stage1_attempts": 3
+    },
+    "9004": {
+     "after_target": 73,
+     "after_floor": 88,
+     "return_code": 0,
+     "validation": "PASS",
+     "parity": "PASS",
+     "stage1_attempts": 4
+    }
+   }
+  }
+ },
+ "paired": [
+  {
+   "seed": 9000,
+   "after_floor_delta": 1,
+   "after_target_delta": -1
+  },
+  {
+   "seed": 9001,
+   "after_floor_delta": 2,
+   "after_target_delta": -1
+  },
+  {
+   "seed": 9002,
+   "after_floor_delta": 4,
+   "after_target_delta": 3
+  },
+  {
+   "seed": 9003,
+   "after_floor_delta": -1,
+   "after_target_delta": 2
+  },
+  {
+   "seed": 9004,
+   "after_floor_delta": 1,
+   "after_target_delta": 7
+  }
+ ],
+ "invalid_runs": {},
+ "read": "UNRESOLVED",
+ "decision": "No default changes, whatever the read (C3_RULE.txt)."
+}

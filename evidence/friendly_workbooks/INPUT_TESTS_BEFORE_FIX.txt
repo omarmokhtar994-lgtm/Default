@@ -1,0 +1,11 @@
+Alias test (Leave = No): source leave_enabled = False ; old builder output leave_enabled = True
+Instructions: 22 of 44 value cells accept anything: ['Program Name', 'Count of Associates', 'Target', 'Minimum Per Interval', 'Blank Interval Staffing Rule', 'Allowed Shift Durations Hours', 'Rest Gap Hours', 'Count of Different Shifts Per week', 'Known Departed Associates', 'Opening Minimum FTE', 'Opening Guard Intervals', 'Short Break Count', 'Short Break Duration Minutes', 'Lunch Count', 'Lunch Duration Minutes', 'Break Preferred Gap Minutes', 'Break Absolute Minimum Gap Minutes', 'Break Normal Maximum Gap Minutes', 'Critical Coverage No-Break Max Associate-Days', 'Minimum After Break Target Ratio', 'Protected Before80 Minimum Intervals', 'Protected After80 Minimum Intervals']
+Engine Defaults: 14 of 23 value cells accept anything: ['Demand Fit Minimum Active Minutes', 'Demand Fit Minimum Active Ratio', 'Demand Fit Maximum Blank Span Minutes', 'Overage Soft Cap', 'Overage Severe Cap', 'Overage Extreme Cap', 'Overage Penalty Weight', 'Maximum Concurrent Break Ratio', 'Maximum Concurrent Breaks', 'Next Sunday Overage Cap', 'Next Sunday Maximum Adjacent Raw Change', 'Language Operational Reserve Extra FTE', 'Whole Week Overage Cap', 'Quality Benchmark Tolerance Intervals']
+Schedule validations: 0
+Preference validations: 0
+Fixed Request validations: 0
+Previous week scheduled validations: 0
+FT Wise 30 Min validations: 0
+Shrinkage 30 Min validations: 0
+First tab: Instructions ; hidden tabs: []
+Importable API (engine_reading self-check): False

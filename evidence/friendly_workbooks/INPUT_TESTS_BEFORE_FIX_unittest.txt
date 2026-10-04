@@ -1,0 +1,30 @@
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/usr/lib/python3.11/unittest/__main__.py", line 18, in <module>
+    main(module=None)
+  File "/usr/lib/python3.11/unittest/main.py", line 101, in __init__
+    self.parseArgs(argv)
+  File "/usr/lib/python3.11/unittest/main.py", line 150, in parseArgs
+    self.createTests()
+  File "/usr/lib/python3.11/unittest/main.py", line 161, in createTests
+    self.test = self.testLoader.loadTestsFromNames(self.testNames,
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/unittest/loader.py", line 232, in loadTestsFromNames
+    suites = [self.loadTestsFromName(name, module) for name in names]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/unittest/loader.py", line 232, in <listcomp>
+    suites = [self.loadTestsFromName(name, module) for name in names]
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/unittest/loader.py", line 162, in loadTestsFromName
+    module = __import__(module_name)
+             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Default/tests_staged/test_rc9_2_39_friendly_input_template.py", line 60, in <module>
+    B = load_builder()
+        ^^^^^^^^^^^^^^
+  File "/home/user/Default/tests_staged/test_rc9_2_39_friendly_input_template.py", line 56, in load_builder
+    spec.loader.exec_module(mod)
+  File "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/oldbuilder_root/tools/build_input_template.py", line 273, in <module>
+    src, dst = Path(sys.argv[1]), Path(sys.argv[2])
+                                       ~~~~~~~~^^^
+IndexError: list index out of range

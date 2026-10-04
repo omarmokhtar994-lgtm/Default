@@ -39,7 +39,7 @@ All evidence is in this folder; `WORKING_NOTES.md` is the running log.
 >   - P3 items.
 
 > **Status update — Phase C done (2026-10-04, engine sha256 `34964381…`).**
-> - **Fixed:** F-06 and F-07. F-20 is fixed as a capability: the business still has to state its long-shift break rule. F-28 is mitigated by an opt-in switch.
+> - **Fixed:** F-06 and F-07. F-20 is fixed as a capability: the business still has to state its long-shift break rule. F-28 is closed as a per-program option, validated by a five-program A/B.
 > - **F-06:** a week with no schedule that meets every hard rule now gets a non-releasable **shortfall schedule**. It meets every person rule, and every missed coverage minimum is listed on a Shortfalls sheet and confirmed by the independent validator and the clean-room checker (`phase_c/PHASE_C_RESULT.md`):
 >   - S04: Sun 03:00–03:45 only;
 >   - S05: 64 Spanish quarters;
@@ -377,7 +377,7 @@ Each probe below was ACCEPTED or WARNED by the contract unless stated.
 | F-25 | Confirmed | Runner `--overwrite` refuses a case whose input snapshot differs ("Use a new schedule-id"), contrary to its help text. Fail-safe but confusing. |
 | F-26 | Confirmed | Dead or latent code: `parsed.dates` is never read, and holds the first demand row rather than dates. Bundled-fallback inventory points at directories that do not exist. |
 | F-27 | Confirmed | `CoverageSplitRule.overlaps` tests only the slot start for a 15-minute span (the defect fixed in `LanguageRule.overlaps`). Harmless on quarter-aligned windows. |
-| F-28 ✅ MITIGATED (Phase C: opt-in `Coverage Objective Weighting = Volume Weighted`; default unchanged until a five-case A/B and a business decision) | Design risk | The selector counts intervals at or above a ratio, all equally weighted; volume is ignored and deficit depth only enters through 0.01 buckets. Pool-relative envelopes (anchor+2, +0.05) make the winner depend on which other candidates exist. |
+| F-28 ✅ CLOSED as a per-program option (Phase C: `Coverage Objective Weighting` dropdown or run override; five-program A/B verdict CLOSE: 0 wrong results, more requirement covered on 5/5, price MINOR on 4, MAJOR on AE IT; default stays Interval Count) | Design risk | The selector counts intervals at or above a ratio, all equally weighted; volume is ignored and deficit depth only enters through 0.01 buckets. Pool-relative envelopes (anchor+2, +0.05) make the winner depend on which other candidates exist. |
 | F-29 | Confirmed | The engine CLI defaults differ from the runner's (joint refinement on in the engine, off in the runner). Direct engine calls behave differently from production. |
 | F-30 | Design risk | `separate_off_days = No` accepts a Sat+Sun pair of the same week as consecutive (cyclic assumption). With a different next week, those days are not consecutive. |
 | F-31 | Design risk | A Language Setup per-day working window: on a day with no row, that language's associates may start at any hour (documented in the pre-check, surprising to planners). |
@@ -622,7 +622,7 @@ After Phase A, rerun the parse probes and scenarios S01–S14. Expected: every "
 | C1 ✅ | F-06, F-07 | Elastic second pass when the hard probe fails or the contract's capacity proofs fail. Next-Sunday floor becomes soft. Published as a non-releasable shortfall schedule with every slack listed. | A2, B5 |
 | C2 ✅ | F-20 | Break entitlement by shift duration. Needs a business statement of the rule first. | – |
 | C3 | F-21 | AE_IT floor: the stage-bisection A/B already designed (RC5 vs FINAL, one block at a time, ≥ 5 seeds). | – |
-| C4 ✅ (switch shipped; default unchanged) | F-28 | Optional volume-weighted objective, behind a workbook switch, measured by pre-registered A/B before it can become the default. | – |
+| C4 ✅ (per-program option; A/B CLOSE) | F-28 | Optional volume-weighted objective, behind a workbook switch, measured by pre-registered A/B before it can become the default. | – |
 
 ### Phase D — performance
 

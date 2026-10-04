@@ -311,6 +311,27 @@ opening minimums on next Sunday stay hard.
 | `Coverage Objective Weighting` = `Interval Count` or `Volume Weighted` (a dropdown in the Coverage section of a template-built workbook) | What "better coverage" means for this program. **Interval Count**: the share of intervals at target; choose it for a program accountable for interval compliance. **Volume Weighted**: each interval's miss weighs by its requirement, and schedules are ranked first by the requirement covered at target; choose it for a program accountable for service level (busy intervals matter more). The two trade against each other: Volume Weighted can give up quiet intervals to cover a peak. The Colab run cell can override it per run (`COVERAGE_MEASURE`). With several seeds (QUICK keeps the best of 2), the best seed is picked by the same measure: by requirement covered at target, recomputed by the independent validator, for Volume Weighted, and by intervals at target as before for Interval Count (`PORTFOLIO_SUMMARY.json` → `after_ranking_measure`). The first lines of `BUSINESS_OUTCOME.txt` say which measure was used and where it came from (workbook, run override, or default). | `Interval Count` |
 | `Stage 1 Minimum Slice Seconds` (Engine Defaults) | The Stage-1 search time per profile. The planner now funds the Stage-1 window for this slice (up to 45 % of the run); it used to size the window for 45 s whatever was set. Measured on AE_IT_B2B (5 paired seeds, QUICK): `240` gave +1.4 after-break floor and +2.0 target intervals, with 1.4 more break-concurrency violations; a per-workbook option, not a default. | 45 |
 
+**Choosing the coverage measure: what Volume Weighted did on each program.**
+Measured on five real programs, three seeds each (two for NMG Spanish), QUICK
+3600 s, by the independent validator (`evidence/production_readiness_audit/phase_c/
+C4_AB_SCORE_FINAL.json`). Numbers are Volume Weighted minus Interval Count, on average.
+
+| Program | Busy-interval demand covered at target | Intervals at target | Side effects | Price |
+|---|---|---|---|---|
+| Cricut Voice | +8.3 FTE | +0.3 of 264 | +1.3 break-overlap | Minor |
+| Cricut Chat | +20.0 FTE | -5.7 of 242 | -2.3 at floor, +1.3 break-overlap | Minor |
+| NMG Spanish | +12.4 FTE | +3 of 126 | +3 break-overlap | Minor |
+| AE IT B2B | +9.3 FTE | -0.7 of 112 | **+5.3 break-overlap, +3 severe floor gaps** | **Major** |
+| GDI 28 HC 24/7 | +2.7 FTE | +1 of 156 | +2.3 break-overlap | Minor |
+
+- Never produced a wrong schedule: no hard-rule failure, no validator or clean-room
+  disagreement, no crash.
+- **Service-level programs:** Volume Weighted is a reasonable choice; check the
+  break-overlap line in `BUSINESS_OUTCOME.txt`.
+- **AE IT:** stay on Interval Count unless the extra break overlap is acceptable.
+- One run varies a lot with the seed (Chat: -32 to +57 FTE). Use QUICK's best of 2
+  seeds or more; the pick follows the chosen measure.
+
 ### 3.6 Check the workbook before running (seconds)
 
 Use notebook step **4b** (set `WORKBOOK_TO_CHECK`), or run:

@@ -212,6 +212,30 @@ One existing test, and its duplicate under `tests/`, was re-pinned: `test_rc9_2_
 
 The impact of Volume Weighted on real programs is measured by the pre-registered A/B in `C4_AB_RULE.txt` and `C4_AB_AMENDMENTS.txt`, which runs after this package ships.
 
+## C4 impact A/B: does Volume Weighted work, and what does it cost? (`C4_AB_RULE.txt`, `C4_AB_AMENDMENTS.txt`, `c4_ab_runs/`, `C4_AB_SCORE_FINAL.json`)
+
+Pre-registered before the first run. Five real programs, Interval Count against Volume Weighted on one frozen engine, QUICK 3600 s, 2 workers per run, two runs at a time on their own cores. Seeds 9000 and 9001 for every program (amendment A1, at the business's request); a third seed, 9002, for every program whose two seeds disagreed on direction or price (A2: Voice, Chat, AE IT, GDI). AE IT's Interval Count arm reuses the C3 default runs (same command, models proven identical). F-35 parity failures are attributed per A3/A4 and still checked for hard failures and clean-room violations.
+
+Verdict: **CLOSE**. Rule A failures: 0. Rule B: 5 of 5 cases cover at least as much requirement, sum of mean deltas +52.7 FTE (PASS).
+
+| Program | Seeds | Requirement covered at target (FTE) | Intervals at target | Intervals at floor | Severe floor gaps | Break-overlap violations | Price (rule C) |
+|---|---|---|---|---|---|---|---|
+| Cricut Voice | 3 | +8.3 (seeds: +9, +19, -3) | +0.3 of 264 | -0.7 | +0.3 | +1.3 | MINOR |
+| Cricut Chat | 3 | +20.0 (seeds: -32, +35, +57) | -5.7 of 242 | -2.3 | +1.3 | +1.3 | MINOR |
+| NMG Spanish | 2 | +12.4 (seeds: +12, +12) | +3.0 of 126 | +0.0 | +0.0 | +3.0 | MINOR |
+| AE IT B2B | 3 | +9.3 (seeds: -10, +9, +29) | -0.7 of 112 | -0.7 | +3.0 | +5.3 | MAJOR (break_concurrency) |
+| GDI 28 HC 24/7 | 3 | +2.7 (seeds: -19, +14, +13) | +1.0 of 156 | +0.0 | +0.0 | +2.3 | MINOR |
+
+Columns are the mean paired difference, Volume Weighted minus Interval Count, measured by the independent validator on the published workbooks. "Requirement covered at target" is the FTE of the intervals that reach target after breaks.
+
+**What it says:**
+- **No wrong schedule (rule A).** Every Volume Weighted run: exit 0 where its pair exits 0, 0 validator hard failures, 0 clean-room violations, 0 language gaps, 0 empty quarters, no crash or time-out.
+- **It does what it says (rule B).** On all five programs it covers at least as much requirement at target; +52.7 FTE in total.
+- **The price (rule C)** is MINOR on four programs. Chat trades about 6 of 242 intervals at target for +20 FTE of busy-interval demand covered: the intended trade. **AE IT is MAJOR**: +9.3 FTE covered, but about 5 more break-overlap violations (one seed, +18) and 3 more severe floor gaps.
+- **The seed matters more than the measure** on a single run (Chat: -32 and +57 FTE on two seeds). F-36 now ranks the best-of-seeds pick by the program's own measure, so a multi-seed run keeps that benefit.
+
+**Verdict (pre-registered): CLOSE.** Volume Weighted is validated as a per-program option. It stays opt-in (default Interval Count); the price table is in the run guide (3.5d). Three seeds show direction and size, not a confidence interval.
+
 ## F-36 (new): best-of-seeds ignored the coverage measure
 
 **Found:** while reading the C4 A/B (the seed is the largest source of variation), the selection across seeds turned out to ignore the program's measure. `RUN_PORTFOLIO.py` (Colab QUICK = best of 2 seeds, DEEP = 4, OVERNIGHT = 6) always ranked by intervals at target.
@@ -315,7 +339,7 @@ The first build was refused by that gate. The new coverage-measure test read the
 ## Still open after Phase C
 
 - **F-33** for normal runs: the corrected Stage-2 objective needs re-tuning and a new A/B before it ships.
-- **C4:** Volume Weighted as the default needs the five-case A/B and a business decision.
+- **C4:** closed as a per-program option (A/B verdict CLOSE). Making it the default for everyone is not proposed: AE IT pays a MAJOR break-overlap price, and C4_RULE.txt's ten-seed rule would still apply.
 - **C2:** the business must state the break rule for long shifts. Until then, every shift gets the global set.
 - **From Phase B:** the F-11 range clamps and the joint model's split constraint (that model is off in production).
 - P3 items.

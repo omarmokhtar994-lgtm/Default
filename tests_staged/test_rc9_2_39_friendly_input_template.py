@@ -247,9 +247,11 @@ class TheWeeklyTabsAreTiedTogether(unittest.TestCase):
     def test_start_here_comes_first_and_reference_tabs_are_hidden_not_deleted(self):
         self.assertEqual(self.wb.sheetnames[:3], ["Start Here", "Instructions", "Schedule"])
         hidden = {ws.title for ws in self.wb.worksheets if ws.sheet_state == "hidden"}
-        self.assertTrue({"Engine Defaults", "Validation Lists", "FT Wise 15 Min", "FT Wise 60 Min",
+        self.assertTrue({"Engine Defaults", "Validation Lists", "FT Wise 15 Min", "Shrinkage 15 Min",
                          "RC9.1 Release Notes", "00 START HERE"} <= hidden, hidden)
-        self.assertEqual(self.wb["FT Wise 30 Min"].sheet_state, "visible")
+        # Both grids stay visible (business request 2026-10-04: "both are needed").
+        for tab in ("FT Wise 30 Min", "FT Wise 60 Min", "Shrinkage 30 Min", "Shrinkage 60 Min"):
+            self.assertEqual(self.wb[tab].sheet_state, "visible", tab)
         self.assertEqual(self.wb.active.title, "Start Here")
 
 

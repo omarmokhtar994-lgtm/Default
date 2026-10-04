@@ -88,12 +88,14 @@ every parsed field). What is different is how it works for you:
 - Every setting has one line of help beside it, and appears as a tip when the
   cell is selected.
 - Tabs are colour-coded: orange = update every week, blue = settings, grey =
-  reference. Engine tuning, the lists behind the dropdowns, the demand tabs for
-  the interval sizes you do not use and the old notes are **hidden, not
+  reference. The **30- and 60-minute** demand and shrinkage tabs are always
+  visible, so either grid is ready. Engine tuning, the lists behind the
+  dropdowns, unused 15-minute tabs and the old notes are **hidden, not
   deleted** (right-click a tab > Unhide).
 
-Changing `Interval Minutes`: unhide the matching `FT Wise` and `Shrinkage` tabs
-and pick them in `Requirements Source` / `Shrinkage Source`.
+Switching between 30 and 60 minutes: set `Interval Minutes`, then pick the
+matching tabs in `Requirements Source` / `Shrinkage Source` (all three are
+dropdowns offering 15, 30 and 60).
 
 **Option A:** copy the shipped workbook for the same program from
 the package's `inputs/` folder. Replace the roster, demand, shrinkage,

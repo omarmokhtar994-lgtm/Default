@@ -17,7 +17,7 @@ Defaults', 'Schedule', ...); only their content and presentation change.
                      coverage-split cells get dropdowns tied to the roster and
                      the Shift Library; demand and shrinkage get number limits.
   Reference tabs  -> the old release notes, start-here and list tabs, and the
-                     demand/shrinkage tabs for the interval sizes not in use,
+                     unused 15-minute demand/shrinkage tabs,
                      are hidden, not deleted.
 
 Nothing is invented: every value is carried across from the source workbook.
@@ -991,9 +991,9 @@ def write_start_here(wb, cells, refs, values, req_title, shr_title):
     notes = [
         "The quick checks above help while you type. The scheduler re-checks everything on every run and "
         "stops with a clear message if anything is wrong - that check is the authority.",
-        "Hidden tabs (engine tuning, lists, the demand tabs for other interval sizes, old notes) are kept, "
+        "Hidden tabs (engine tuning, lists, unused 15-minute tabs, old notes) are kept, "
         "not deleted: right-click any tab > Unhide.",
-        "Changing Interval Minutes? Unhide the matching FT Wise and Shrinkage tabs and pick them in Instructions.",
+        "30- and 60-minute demand and shrinkage tabs are both here. Switching? Set Interval Minutes and pick the matching tabs in Requirements Source and Shrinkage Source.",
         "Outputs: the main schedule, plus optional MAX_TARGET, MAX_FLOOR and MORE_CONSISTENT copies to choose from.",
     ]
     for note in notes:
@@ -1007,7 +1007,12 @@ def write_start_here(wb, cells, refs, values, req_title, shr_title):
 
 
 def organize_tabs(wb, values, req_title, shr_title):
-    weekly = ["Schedule", req_title, shr_title, "Preference", "Fixed Request", "Previous week scheduled"]
+    # The 30- and 60-minute demand and shrinkage tabs always stay visible: programs
+    # run on both grids and switch between them. A 15-minute tab is shown when it
+    # is the one in use.
+    demand = [req_title] + [t for t in ("FT Wise 30 Min", "FT Wise 60 Min") if t != req_title]
+    shrink = [shr_title] + [t for t in ("Shrinkage 30 Min", "Shrinkage 60 Min") if t != shr_title]
+    weekly = ["Schedule", *demand, *shrink, "Preference", "Fixed Request", "Previous week scheduled"]
     policy = ["Language Setup", "Coverage Split", "Shift Library"]
     order = ["Start Here", "Instructions"] + [t for t in weekly + policy if t and t in wb.sheetnames]
     rest = [s for s in wb.sheetnames if s not in order]

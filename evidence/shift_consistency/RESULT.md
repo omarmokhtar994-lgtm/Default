@@ -4,7 +4,8 @@
 > described the polished schedule. The published workbook was never the polished one: the workbook
 > writer used the pre-polish export (checked on six runs, `evidence/production_readiness_audit/phase_c/
 > F35_POLISH_NOT_PUBLISHED.txt`). The improvement measured here was therefore never delivered. The polish
-> is withheld until it is validated end to end; published schedules are unchanged.
+> now ships as its own workbook, `MORE_CONSISTENT_CANDIDATE`, beside an unchanged selected schedule, approved
+> only when the independent validator finds its coverage no worse.
 
 
 The rule was written before the measurement: `RULE.txt`, commit ef4a540.

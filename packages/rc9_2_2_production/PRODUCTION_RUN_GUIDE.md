@@ -332,12 +332,16 @@ hours per day. It warns when the hours are authored but not enforced.
 
 ### 3.8 More consistent weeks: the shift consistency polish
 
-> **Withheld since 2026-10-04 (audit F-35).** The polish never reached a published
-> workbook: the engine measured the polished schedule but wrote the original one, and a
-> one-hour move could make the audit disagree with the workbook and block a valid schedule.
-> Published schedules stay exactly as they were; the polish does not run (the audit records
-> `WITHHELD_PENDING_VALIDATION`) until it is validated end to end. The settings below are
-> still read, and have no effect until then.
+> **Published as its own workbook since 2026-10-04 (audit F-35).** Until then the
+> polish never reached a published workbook: the engine measured the polished
+> schedule but wrote the original one. Now the selected schedule is never changed.
+> When the polish improves the week, it is written beside it as
+> `<id>_L6_3_2_3_MORE_CONSISTENT_CANDIDATE.xlsx`. The independent validator checks
+> it, and the runner approves it only if its coverage (target, floor, tiers,
+> severe floor gaps, language, empty quarters, Coverage Split, break concurrency),
+> recomputed by the validator, is no worse than the selected schedule's. When
+> approved, `BUSINESS_OUTCOME.txt` names the file and its start-time movement
+> before and after. Use either workbook.
 
 Once the schedule is chosen, the polish makes each associate's week more uniform.
 
@@ -358,9 +362,9 @@ Every move keeps every hard rule:
 Fixed requests and nesting groups are never moved. Preference matches and the
 fairness spreads (late, overnight, weekend shifts, start swings) may not get worse.
 
-The polish uses spare time at the end of the run and never extends it. Measured on 14 schedules:
-start-time movement fell by up to 70% (AE_IT 47 h -> 14 h), and coverage and compliance were identical
-in every case (`evidence/shift_consistency/RESULT.md`). The audit
+The polish uses spare time at the end of the run and never extends it. Measured on 14 schedules (on the
+engine's own record, before F-35 was found): start-time movement fell by up to 70% (AE_IT 47 h -> 14 h), with
+coverage and compliance unchanged (`evidence/shift_consistency/RESULT.md`). The audit
 records what it did, and the log prints
 `SHIFT_CONSISTENCY_POLISH APPLIED: start movement 154.0 h -> 119.0 h, distinct starts 68 -> 66`.
 

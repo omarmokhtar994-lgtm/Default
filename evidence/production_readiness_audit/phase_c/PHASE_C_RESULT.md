@@ -137,6 +137,14 @@ Found in the C4 impact A/B: Voice, Interval Count, seed 9000 ended with exit 4. 
 - Published workbooks are unchanged by construction: the writer and its export list are untouched, and the polish ran only after the search had ended.
 - Tests written first (`F35_TESTS_BEFORE_FIX.txt`): 5 of 6 failed before the fix. The 6th checks that the polish function is kept for its own validation.
 
+**Follow-up the same day (business decision): publish the polish as its own workbook.**
+- The selected schedule is still never rewritten.
+- An applied polish is published beside it as `MORE_CONSISTENT_CANDIDATE`, written from the polished pair itself (`add_more_consistent_export`).
+- The independent validator recognises the new artifact type.
+- The runner approves the workbook only if its coverage, recomputed by the validator, is no worse than the selected schedule's (`more_consistent_coverage_verdict`). If it is approved, `BUSINESS_OUTCOME.txt` names the file and its start-time movement before and after.
+- Tests written first (`MORE_CONSISTENT_TESTS_BEFORE_FIX.txt`): 7 of 9 failed before the change. On the real Voice fixture, the test proves the written workbook's start times are the polish record's "after" values. That is exactly the check F-35 lacked.
+- Two F-35 tests were re-pinned to the lasting contract ("the polish never replaces the selected pair"), with the reason written in the test.
+
 **Effect on the running C4 A/B:**
 - Its frozen engine publishes the same workbooks as the fixed engine, so the validator-based measures of rules B and C are unaffected.
 - A parity failure caused by F-35 is attributed under `C4_AB_AMENDMENTS.txt` A3. That amendment was written after the Voice and Chat seed-9000 pairs and before any other result.

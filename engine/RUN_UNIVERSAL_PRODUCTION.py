@@ -627,6 +627,18 @@ def _outcome_detail_text(outcome: dict, findings_label: "str | None" = None) -> 
                 lines.append('- ' + ' | '.join(str(item.get(k) or '') for k in ('associate', 'day', 'shift', 'window')).strip(' |'))
         if len(examples) > 20:
             lines.append(f'- ... and {len(examples) - 20} more (BUSINESS_OUTCOME.json lists them all)')
+    for alt in (outcome.get('independent_validation') or {}).get('alternative_exports') or []:
+        if alt.get('role') != 'MORE_CONSISTENT_CANDIDATE':
+            continue
+        if alt.get('status') == 'PASS' and alt.get('coverage_no_worse'):
+            before = ((alt.get('consistency') or {}).get('before') or {})
+            after = ((alt.get('consistency') or {}).get('after') or {})
+            lines += ['', 'A more consistent version of this schedule (same coverage, checked independently):',
+                      f"- {Path(str(alt.get('workbook'))).name}",
+                      f"- start-time movement {before.get('start_movement_hours')} h -> "
+                      f"{after.get('start_movement_hours')} h; distinct start times "
+                      f"{before.get('distinct_start_times')} -> {after.get('distinct_start_times')}",
+                      '- The schedule above is unchanged; use either.']
     actions = outcome.get('recommended_actions') or []
     if actions:
         lines += ['', 'Required action:'] + [f'- {a}' for a in actions]
@@ -1691,7 +1703,26 @@ def validate_shortfall_schedule(input_path: Path, workbook: Path, language_worki
 
 
 ALTERNATIVE_EXPORT_ROLES = ('MAX_TARGET_CANDIDATE', 'MAX_FLOOR_CANDIDATE', 'BALANCED_CANDIDATE',
-                            'SAFER_BALANCED_CANDIDATE')
+                            'SAFER_BALANCED_CANDIDATE', 'MORE_CONSISTENT_CANDIDATE')
+
+# What "no worse" means for MORE_CONSISTENT_CANDIDATE, on the validator's own
+# metrics: the first group may not fall, the second may not rise.
+MORE_CONSISTENT_HIGHER_IS_BETTER = ('after_target', 'after_floor', 'after100', 'after90', 'after80')
+MORE_CONSISTENT_LOWER_IS_BETTER = ('severe_floor_gaps', 'language_gap_count', 'zero_staffed_active_quarters',
+                                   'coverage_split_gap_count', 'break_concurrency_violation_count')
+
+
+def more_consistent_coverage_verdict(selected: dict, candidate: dict) -> tuple:
+    """(approved, losses): the polished week is approved only if no coverage measure is worse.
+
+    Both sides are the independent validator's numbers for the two workbooks,
+    so the comparison does not trust the engine's own claim (audit F-35).
+    """
+    losses = [k for k in MORE_CONSISTENT_HIGHER_IS_BETTER
+              if float(candidate.get(k) or 0) < float(selected.get(k) or 0)]
+    losses += [k for k in MORE_CONSISTENT_LOWER_IS_BETTER
+               if float(candidate.get(k) or 0) > float(selected.get(k) or 0)]
+    return (not losses, losses)
 
 
 def validate_alternative_exports(case_root: Path, input_path: Path,
@@ -1721,10 +1752,34 @@ def validate_alternative_exports(case_root: Path, input_path: Path,
             row['status'] = 'PASS' if proc.returncode == 0 else str(report.get('status') or 'FAIL')
             row['hard_fail_count'] = report.get('hard_fail_count')
             row['failure_types'] = sorted({str(f.get('type')) for f in report.get('failures') or []})
+            if role == 'MORE_CONSISTENT_CANDIDATE':
+                _more_consistent_review(case_root, report, row)
         except (OSError, json.JSONDecodeError):
             row['status'] = 'ERROR_VALIDATOR_DID_NOT_COMPLETE'
         results.append(row)
     return results
+
+
+def _more_consistent_review(case_root: Path, report: dict, row: dict) -> None:
+    """Approve the polished week only if its coverage is no worse than the selected schedule's."""
+    selected_json = case_root / 'INDEPENDENT_VALIDATION.json'
+    try:
+        selected = json.loads(selected_json.read_text(encoding='utf-8')).get('metrics') or {}
+    except (OSError, json.JSONDecodeError):
+        row['coverage_no_worse'] = False
+        row['coverage_losses'] = ['selected schedule not validated']
+    else:
+        ok, losses = more_consistent_coverage_verdict(selected, report.get('metrics') or {})
+        row['coverage_no_worse'] = ok
+        row['coverage_losses'] = losses
+    for audit_path in sorted(case_root.glob('*solver_audit.json')):
+        try:
+            polish = json.loads(audit_path.read_text(encoding='utf-8')).get('shift_consistency_polish') or {}
+        except (OSError, json.JSONDecodeError):
+            continue
+        row['consistency'] = {'before': polish.get('before'), 'after': polish.get('after')}
+    if row.get('status') == 'PASS' and not row.get('coverage_no_worse'):
+        row['status'] = 'NOT_APPROVED_COVERAGE_WORSE'
 
 
 if __name__ == '__main__':

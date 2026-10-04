@@ -60,17 +60,23 @@ class TheMeasuredPairIsThePublishedPair(unittest.TestCase):
         self.assertLess(check, RUN_CASE.index('for role, (sk, br) in selection["exports"]:'))
 
 
-class ThePolishIsWithheld(unittest.TestCase):
-    def test_run_case_no_longer_replaces_the_recommended_pair(self):
+class ThePolishNeverReplacesTheSelectedSchedule(unittest.TestCase):
+    """Re-pinned 2026-10-04, same day: the first F-35 fix withheld the polish
+    (audit status WITHHELD_PENDING_VALIDATION). The business then chose to
+    publish the polished week as its own workbook, MORE_CONSISTENT_CANDIDATE,
+    beside the selected schedule (tests_staged/test_rc9_2_37_more_consistent_
+    candidate.py). What must hold for good: the polish never replaces the
+    selected, measured, published pair."""
+
+    def test_run_case_never_replaces_the_recommended_pair(self):
         self.assertNotIn('selection["recommended"] = (polished_skeleton, polished_breaks)', RUN_CASE)
-        self.assertNotIn("shift_consistency_polish(\n", RUN_CASE)
+        self.assertNotIn('selection["recommended"] =', RUN_CASE[RUN_CASE.index("polish_on = ("):])
 
-    def test_the_audit_says_it_was_withheld_and_why(self):
-        self.assertIn('"status": "WITHHELD_PENDING_VALIDATION"', RUN_CASE)
-        self.assertIn("F-35", RUN_CASE[RUN_CASE.index('"status": "WITHHELD_PENDING_VALIDATION"') - 600:
-                                       RUN_CASE.index('"status": "WITHHELD_PENDING_VALIDATION"') + 600])
+    def test_an_applied_polish_goes_to_its_own_export(self):
+        self.assertIn("add_more_consistent_export(selection, (polished_skeleton, polished_breaks), polish_record)",
+                      RUN_CASE)
 
-    def test_the_polish_itself_is_kept_for_its_own_validation(self):
+    def test_the_polish_itself_is_kept(self):
         self.assertTrue(callable(E.shift_consistency_polish))
 
 

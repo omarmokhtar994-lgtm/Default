@@ -284,6 +284,7 @@ def cleanup_stale_run_outputs(
         output_path.with_name(prefix + "_MAX_TARGET_CANDIDATE" + output_path.suffix),
         output_path.with_name(prefix + "_MAX_FLOOR_CANDIDATE" + output_path.suffix),
         output_path.with_name(prefix + "_BALANCED_CANDIDATE" + output_path.suffix),
+        output_path.with_name(prefix + "_MORE_CONSISTENT_CANDIDATE" + output_path.suffix),
         output_path.with_name(prefix + "_SAFER_BALANCED_CANDIDATE" + output_path.suffix),
         output_path.with_name(prefix + "_HARD_RULE_SHORTFALL_SCHEDULE" + output_path.suffix),
         output_path.with_name(prefix + "_PARETO_EXPORT_MANIFEST.json"),
@@ -13789,6 +13790,9 @@ EXPORT_ROLE_ORDER: Tuple[str, ...] = (
     "RECOMMENDED_FINAL",
     "MAX_TARGET_CANDIDATE",
     "MAX_FLOOR_CANDIDATE",
+    # The selected schedule with a more uniform week per associate (the
+    # shift-consistency polish), published beside it, never in its place (F-35).
+    "MORE_CONSISTENT_CANDIDATE",
     "BALANCED_CANDIDATE",
 )
 
@@ -19789,6 +19793,23 @@ def recommended_export_pair(selection: Mapping[str, Any]) -> Tuple[Any, Any]:
     raise PublishedScheduleMismatch("no RECOMMENDED_FINAL export in the selection (F-35)")
 
 
+def add_more_consistent_export(selection: Dict[str, Any], polished_pair: Tuple[Any, Any],
+                               record: Mapping[str, Any]) -> bool:
+    """Publish an applied polish as MORE_CONSISTENT_CANDIDATE, beside the selected schedule.
+
+    Business decision after audit F-35: the selected schedule is never
+    rewritten. The polished week is one more alternative export, written from
+    the polished pair itself, and the runner approves it only when the
+    independent validator finds its coverage no worse than the selected one's.
+    """
+    if record.get("status") != "APPLIED":
+        return False
+    if any(role == "MORE_CONSISTENT_CANDIDATE" for role, _ in selection["exports"]):
+        return False
+    selection["exports"].append(("MORE_CONSISTENT_CANDIDATE", polished_pair))
+    return True
+
+
 def shift_consistency_polish(
     parsed: ParsedInput,
     skeleton: SkeletonSolution,
@@ -24238,19 +24259,38 @@ def run_case(
         polish_on = (SHIFT_CONSISTENCY_CLI_OVERRIDE if SHIFT_CONSISTENCY_CLI_OVERRIDE is not None
                      else SHIFT_CONSISTENCY_POLISH_ENABLED if parsed.shift_consistency_polish is None
                      else bool(parsed.shift_consistency_polish))
-        # Audit F-35: the polish replaced selection["recommended"] while the
-        # workbook writer published selection["exports"], so no workbook ever
-        # carried it, and a one-hour move made the audit disagree with the
-        # published schedule (a valid schedule blocked at the parity gate).
-        # Business decision 2026-10-04: publish exactly what was published
-        # before; the polish is withheld until it is validated on its own.
-        audit["shift_consistency_polish"] = (
-            {"enabled": True, "status": "WITHHELD_PENDING_VALIDATION",
-             "reason": "F-35: the polished schedule was never the published one; withheld until validated"}
-            if polish_on else {"enabled": False})
+        # Audit F-35: the polish used to replace selection["recommended"] while
+        # the workbook writer published selection["exports"], so no workbook ever
+        # carried it, and a one-hour move could make the audit disagree with the
+        # published schedule. Business decision 2026-10-04: the selected schedule
+        # is never rewritten; an applied polish is published beside it as
+        # MORE_CONSISTENT_CANDIDATE, written from the polished pair itself.
         if polish_on:
-            print("SHIFT_CONSISTENCY_POLISH WITHHELD (F-35): the published schedule is the selected one",
-                  file=log, flush=True)
+            # Leave the export tail its time; never overrun the run. Measured on
+            # Chat and Voice: about 92 s remain at this point and the export after
+            # it takes about 5 s, so a 30 s reserve keeps a wide margin.
+            polish_budget = min(SHIFT_CONSISTENCY_TIME_LIMIT_SEC,
+                                budget_manager.remaining_total() - SHIFT_CONSISTENCY_TAIL_RESERVE_SEC)
+            if polish_budget < SHIFT_CONSISTENCY_MIN_SEC:
+                audit["shift_consistency_polish"] = {"enabled": True, "status": "SKIPPED_NO_TIME",
+                                                     "remaining_sec": round(budget_manager.remaining_total(), 1)}
+            else:
+                polished_skeleton, polished_breaks, polish_record = shift_consistency_polish(
+                    parsed, *selection["recommended"], time_limit_sec=polish_budget)
+                polish_record["published_as"] = (
+                    "MORE_CONSISTENT_CANDIDATE"
+                    if add_more_consistent_export(selection, (polished_skeleton, polished_breaks), polish_record)
+                    else None)
+                audit["shift_consistency_polish"] = polish_record
+                print(f"SHIFT_CONSISTENCY_POLISH {polish_record.get('status')}: start movement "
+                      f"{polish_record['before']['start_movement_hours']} h -> "
+                      f"{polish_record['after']['start_movement_hours']} h, distinct starts "
+                      f"{polish_record['before']['distinct_start_times']} -> "
+                      f"{polish_record['after']['distinct_start_times']}"
+                      + (" (published as MORE_CONSISTENT_CANDIDATE; the selected schedule is unchanged)"
+                         if polish_record["published_as"] else ""), file=log, flush=True)
+        else:
+            audit["shift_consistency_polish"] = {"enabled": False}
         chosen_skeleton, chosen_breaks = recommended_export_pair(selection)
         break_capacity = break_capacity_headcount_requirement(
             parsed, chosen_skeleton, measured_on="recommended_final_skeleton")
@@ -24406,6 +24446,8 @@ def run_case(
             "MAX_TARGET_CANDIDATE": output_path.with_name(prefix + "_MAX_TARGET_CANDIDATE" + output_path.suffix),
             "MAX_FLOOR_CANDIDATE": output_path.with_name(prefix + "_MAX_FLOOR_CANDIDATE" + output_path.suffix),
             "BALANCED_CANDIDATE": output_path.with_name(prefix + "_BALANCED_CANDIDATE" + output_path.suffix),
+            "MORE_CONSISTENT_CANDIDATE": output_path.with_name(
+                prefix + "_MORE_CONSISTENT_CANDIDATE" + output_path.suffix),
         }
         selection_basis = {
             "RECOMMENDED_FINAL": (
@@ -24415,6 +24457,11 @@ def run_case(
             "MAX_TARGET_CANDIDATE": "Strict maximum attainment at the workbook-configured target after hard gates and minimum exceptions",
             "MAX_FLOOR_CANDIDATE": "Distinct nondominated candidate with the strongest configured floor attainment and safety depth",
             "BALANCED_CANDIDATE": "Nondominated candidate with the greatest total covered intervals across both tiers (after_target + after_floor) - the knee of the frontier rather than either extreme",
+            "MORE_CONSISTENT_CANDIDATE": (
+                "The recommended schedule with a more uniform week per associate (same-day swaps between "
+                "interchangeable associates and one-hour moves kept only when no measured coverage, compliance "
+                "or fairness value gets worse); offered beside the recommended schedule, never in its place"
+            ),
         }
         export_records: List[Dict[str, Any]] = [{
             "role": "BEST_BEFORE_BREAKS", "path": str(before_output_path),
@@ -24428,6 +24475,7 @@ def run_case(
                 "MAX_TARGET_CANDIDATE": "MAX_TARGET_CANDIDATE",
                 "MAX_FLOOR_CANDIDATE": "MAX_FLOOR_CANDIDATE",
                 "BALANCED_CANDIDATE": "BALANCED_CANDIDATE",
+                "MORE_CONSISTENT_CANDIDATE": "MORE_CONSISTENT_CANDIDATE",
             }[role]
             role_path = role_paths[role]
             info = write_output_workbook(
@@ -24564,6 +24612,8 @@ def run_case(
             "recommended_final_output": str(output_path),
             "max_target_candidate_output": str(role_paths["MAX_TARGET_CANDIDATE"]) if "MAX_TARGET_CANDIDATE" in output_info_by_role else "",
             "max_floor_candidate_output": str(role_paths["MAX_FLOOR_CANDIDATE"]) if "MAX_FLOOR_CANDIDATE" in output_info_by_role else "",
+            "more_consistent_candidate_output": (
+                str(role_paths["MORE_CONSISTENT_CANDIDATE"]) if "MORE_CONSISTENT_CANDIDATE" in output_info_by_role else ""),
             "candidate_leaderboard_csv": str(leaderboard_csv), "pareto_manifest": str(pareto_manifest), "audit": str(audit_path),
             "interval_minutes": parsed.interval_minutes, "target_ratio": parsed.target_ratio,
             "minimum_after_break_target_ratio": (

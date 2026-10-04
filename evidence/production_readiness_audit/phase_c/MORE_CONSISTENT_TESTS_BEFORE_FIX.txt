@@ -1,0 +1,77 @@
+test_the_engine_runner_and_cleanup_know_the_role (tests_staged.test_rc9_2_37_more_consistent_candidate.TheRoleExistsEverywhere.test_the_engine_runner_and_cleanup_know_the_role) ... FAIL
+test_any_coverage_loss_is_named_and_not_approved (tests_staged.test_rc9_2_37_more_consistent_candidate.TheRunnerApprovesItOnlyIfCoverageIsNoWorse.test_any_coverage_loss_is_named_and_not_approved) ... ERROR
+test_same_coverage_is_approved (tests_staged.test_rc9_2_37_more_consistent_candidate.TheRunnerApprovesItOnlyIfCoverageIsNoWorse.test_same_coverage_is_approved) ... ERROR
+test_the_outcome_text_offers_it_only_when_approved (tests_staged.test_rc9_2_37_more_consistent_candidate.TheRunnerApprovesItOnlyIfCoverageIsNoWorse.test_the_outcome_text_offers_it_only_when_approved) ... FAIL
+test_an_applied_polish_adds_an_export_and_leaves_the_selection (tests_staged.test_rc9_2_37_more_consistent_candidate.TheSelectedScheduleIsNeverRewritten.test_an_applied_polish_adds_an_export_and_leaves_the_selection) ... ERROR
+test_nothing_is_added_when_the_polish_kept_or_changed_nothing (tests_staged.test_rc9_2_37_more_consistent_candidate.TheSelectedScheduleIsNeverRewritten.test_nothing_is_added_when_the_polish_kept_or_changed_nothing) ... ERROR
+test_the_fixture_polish_changes_the_week (tests_staged.test_rc9_2_37_more_consistent_candidate.TheWorkbookCarriesThePolishedWeek.test_the_fixture_polish_changes_the_week) ... ok
+test_the_validator_recognises_and_passes_it (tests_staged.test_rc9_2_37_more_consistent_candidate.TheWorkbookCarriesThePolishedWeek.test_the_validator_recognises_and_passes_it) ... FAIL
+test_the_workbook_is_the_polished_week_not_the_original (tests_staged.test_rc9_2_37_more_consistent_candidate.TheWorkbookCarriesThePolishedWeek.test_the_workbook_is_the_polished_week_not_the_original) ... ok
+
+======================================================================
+ERROR: test_any_coverage_loss_is_named_and_not_approved (tests_staged.test_rc9_2_37_more_consistent_candidate.TheRunnerApprovesItOnlyIfCoverageIsNoWorse.test_any_coverage_loss_is_named_and_not_approved)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_37_more_consistent_candidate.py", line 127, in test_any_coverage_loss_is_named_and_not_approved
+    ok, losses = RUNNER.more_consistent_coverage_verdict(self.MAIN, worse)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'runner_c37' has no attribute 'more_consistent_coverage_verdict'
+
+======================================================================
+ERROR: test_same_coverage_is_approved (tests_staged.test_rc9_2_37_more_consistent_candidate.TheRunnerApprovesItOnlyIfCoverageIsNoWorse.test_same_coverage_is_approved)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_37_more_consistent_candidate.py", line 123, in test_same_coverage_is_approved
+    self.assertEqual(RUNNER.more_consistent_coverage_verdict(self.MAIN, dict(self.MAIN)), (True, []))
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'runner_c37' has no attribute 'more_consistent_coverage_verdict'
+
+======================================================================
+ERROR: test_an_applied_polish_adds_an_export_and_leaves_the_selection (tests_staged.test_rc9_2_37_more_consistent_candidate.TheSelectedScheduleIsNeverRewritten.test_an_applied_polish_adds_an_export_and_leaves_the_selection)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_37_more_consistent_candidate.py", line 66, in test_an_applied_polish_adds_an_export_and_leaves_the_selection
+    self.assertTrue(E.add_more_consistent_export(selection, polished, {"status": "APPLIED"}))
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'l632_universal_scheduler' has no attribute 'add_more_consistent_export'
+
+======================================================================
+ERROR: test_nothing_is_added_when_the_polish_kept_or_changed_nothing (tests_staged.test_rc9_2_37_more_consistent_candidate.TheSelectedScheduleIsNeverRewritten.test_nothing_is_added_when_the_polish_kept_or_changed_nothing)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_37_more_consistent_candidate.py", line 76, in test_nothing_is_added_when_the_polish_kept_or_changed_nothing
+    self.assertFalse(E.add_more_consistent_export(selection, self.pair("p"), {"status": status}), status)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'l632_universal_scheduler' has no attribute 'add_more_consistent_export'
+
+======================================================================
+FAIL: test_the_engine_runner_and_cleanup_know_the_role (tests_staged.test_rc9_2_37_more_consistent_candidate.TheRoleExistsEverywhere.test_the_engine_runner_and_cleanup_know_the_role)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_37_more_consistent_candidate.py", line 52, in test_the_engine_runner_and_cleanup_know_the_role
+    self.assertIn(ROLE, E.EXPORT_ROLE_ORDER)
+AssertionError: 'MORE_CONSISTENT_CANDIDATE' not found in ('BEST_BEFORE_BREAKS', 'RECOMMENDED_FINAL', 'MAX_TARGET_CANDIDATE', 'MAX_FLOOR_CANDIDATE', 'BALANCED_CANDIDATE')
+
+======================================================================
+FAIL: test_the_outcome_text_offers_it_only_when_approved (tests_staged.test_rc9_2_37_more_consistent_candidate.TheRunnerApprovesItOnlyIfCoverageIsNoWorse.test_the_outcome_text_offers_it_only_when_approved)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_37_more_consistent_candidate.py", line 138, in test_the_outcome_text_offers_it_only_when_approved
+    self.assertIn("case_L6_3_2_3_MORE_CONSISTENT_CANDIDATE.xlsx", text)
+AssertionError: 'case_L6_3_2_3_MORE_CONSISTENT_CANDIDATE.xlsx' not found in ''
+
+======================================================================
+FAIL: test_the_validator_recognises_and_passes_it (tests_staged.test_rc9_2_37_more_consistent_candidate.TheWorkbookCarriesThePolishedWeek.test_the_validator_recognises_and_passes_it)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_37_more_consistent_candidate.py", line 112, in test_the_validator_recognises_and_passes_it
+    self.assertEqual(IV.declared_artifact_type(self.out), "FINAL_AFTER_BREAKS")
+AssertionError: 'UNRECOGNIZED:more_consistent_candidate' != 'FINAL_AFTER_BREAKS'
+- UNRECOGNIZED:more_consistent_candidate
++ FINAL_AFTER_BREAKS
+
+
+----------------------------------------------------------------------
+Ran 9 tests in 7.877s
+
+FAILED (failures=3, errors=4)

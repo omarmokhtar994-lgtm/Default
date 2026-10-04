@@ -65,6 +65,13 @@ PALE_BLUE='DCE6F1'; PALE_TEAL='DDEBF7'; PALE_GREEN='E2F0D9'
 PALE_YELLOW='FFF4CC'; PALE_ORANGE='FCE4D6'; PALE_RED='FCE4E4'
 LIGHT_GRAY='F2F4F7'; DARK='263238'
 
+def Font(**kw):
+ '''openpyxl Font with an explicit face: without one, LibreOffice and some
+ Excel builds fall back to a serif font.'''
+ from openpyxl.styles import Font as _F
+ kw.setdefault('name','Calibri')
+ return _F(**kw)
+
 def _metric_map(ws):
  return {str(ws.cell(r,1).value).strip():ws.cell(r,2).value for r in range(1,ws.max_row+1) if ws.cell(r,1).value not in (None,'')}
 
@@ -92,7 +99,7 @@ def _border():
  return Border(left=side,right=side,top=side,bottom=side)
 
 def _header(ws,row=1,start=1,end=None,color=NAVY):
- from openpyxl.styles import Alignment,Font,PatternFill
+ from openpyxl.styles import Alignment,PatternFill
  end=end or ws.max_column
  for c in range(start,end+1):
   cell=ws.cell(row,c); cell.fill=PatternFill('solid',fgColor=color); cell.font=Font(color=WHITE,bold=True)
@@ -114,7 +121,7 @@ def _fit_columns(ws,min_width=10,max_width=36,sample_rows=160):
   ws.column_dimensions[get_column_letter(col)].width=width
 
 def _style_schedule(ws):
- from openpyxl.styles import Alignment,Font,PatternFill
+ from openpyxl.styles import Alignment,PatternFill
  from openpyxl.utils import get_column_letter
  ws.sheet_view.showGridLines=False; ws.freeze_panes='G3'; ws.sheet_properties.tabColor=TEAL
  if ws.max_row<2: return
@@ -138,7 +145,7 @@ def _style_schedule(ws):
    elif c>=7 and text: cell.fill=PatternFill('solid',fgColor=PALE_GREEN); cell.font=Font(color='1F4E2A')
 
 def _style_coverage(ws):
- from openpyxl.styles import Alignment,Font,PatternFill
+ from openpyxl.styles import Alignment,PatternFill
  ws.sheet_view.showGridLines=False; ws.freeze_panes='A2'; ws.sheet_properties.tabColor=PURPLE
  _header(ws,1,1,ws.max_column,PURPLE); _safe_filter(ws,1); _fit_columns(ws,11,24)
  coverage_col=next((c for c in range(1,ws.max_column+1) if '%' in str(ws.cell(1,c).value or '')),None)
@@ -151,7 +158,7 @@ def _style_coverage(ws):
    cell.fill=PatternFill('solid',fgColor=color); cell.font=Font(bold=True,color=DARK)
 
 def _style_breaks(ws):
- from openpyxl.styles import Alignment,Font,PatternFill
+ from openpyxl.styles import Alignment,PatternFill
  ws.sheet_view.showGridLines=False; ws.freeze_panes='A2'; ws.sheet_properties.tabColor=TEAL
  _header(ws,1,1,ws.max_column,TEAL); _safe_filter(ws,1); _fit_columns(ws,12,34)
  headers={str(ws.cell(1,c).value or '').strip().lower():c for c in range(1,ws.max_column+1)}
@@ -175,7 +182,7 @@ def _style_audit(ws):
 def _build_dashboard(wb,ps,role,use):
  from openpyxl.chart import BarChart,Reference
  from openpyxl.chart.series import SeriesLabel
- from openpyxl.styles import Alignment,Font,PatternFill
+ from openpyxl.styles import Alignment,PatternFill
  if 'Read Me First' in wb.sheetnames: del wb['Read Me First']
  ws=wb.create_sheet('Read Me First',0); m=_metric_map(ps); active=_num(m.get('Active Intervals'))
  final_status=m.get('Final Status') or m.get('Production Quality Gate') or 'NOT REPORTED'; hard=_num(m.get('Hard Validation Failures'))
@@ -223,6 +230,7 @@ def _build_dashboard(wb,ps,role,use):
   for c in range(6,9): ws.cell(i,c).border=_border(); ws.cell(i,c).alignment=Alignment(vertical='center',wrap_text=True)
   ws.cell(i,6).fill=PatternFill('solid',fgColor=LIGHT_GRAY); ws.cell(i,6).font=Font(bold=True)
   if 'ratio' in label.lower(): ws.cell(i,7).number_format='0.0%'
+  elif 'fte' in label.lower(): ws.cell(i,7).number_format='#,##0.0'
  ws.merge_cells('A28:H28'); ws['A28']='How to use this workbook'; ws['A28'].fill=PatternFill('solid',fgColor=NAVY); ws['A28'].font=Font(color=WHITE,bold=True,size=13)
  instructions=[('1','Schedule = the week to publish; OFF and leave cells are colour-coded. Break Plan shows each person\'s shift and breaks per day.'),('2','Break Schedule lists every break; investigate WARN/REVIEW rows before release.'),('3','FT Wise After Breaks = interval coverage, colour-coded (red below 80%, amber below 90%).'),('4','Production Summary and Validation Log hold every measure. The audit and input tabs are hidden, not deleted: right-click any tab > Unhide.'),('5',f"This result uses a {_count_text(m.get('Interval Minutes'))}-minute grid. The engine supports both 30- and 60-minute workbooks.")]
  for i,(step,note) in enumerate(instructions,29):
@@ -238,7 +246,7 @@ def _build_break_plan(wb):
 
  Read from the Schedule and Break Schedule tabs the workbook already carries;
  a view, not a second source. Returns None when either tab is missing."""
- from openpyxl.styles import Alignment,Font,PatternFill
+ from openpyxl.styles import Alignment,PatternFill
  from openpyxl.formatting.rule import FormulaRule
  from openpyxl.utils import get_column_letter
  if 'Schedule' not in wb.sheetnames or 'Break Schedule' not in wb.sheetnames: return None
@@ -322,7 +330,7 @@ def _arrange_tabs(wb):
  return hidden
 
 def _apply_output_theme(wb,ps,role,use):
- from openpyxl.styles import Alignment,Font,PatternFill
+ from openpyxl.styles import Alignment,PatternFill
  dashboard=_build_dashboard(wb,ps,role,use)
  plan=_build_break_plan(wb) if role!='BEST_BEFORE_BREAKS_SCHEDULE' else None
  for ws in wb.worksheets:
@@ -390,7 +398,7 @@ def roles(pareto):
  return out
 def clean_book(src,dst,role,use,pareto,ident):
  from openpyxl import load_workbook
- from openpyxl.styles import Alignment,Font,PatternFill
+ from openpyxl.styles import Alignment,PatternFill
  from openpyxl.workbook.properties import CalcProperties
  dst.parent.mkdir(parents=True,exist_ok=True)
  with tempfile.TemporaryDirectory() as td:

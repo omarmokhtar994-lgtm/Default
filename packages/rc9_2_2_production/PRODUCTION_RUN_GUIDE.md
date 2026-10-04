@@ -62,7 +62,40 @@ publish.
 
 ### 3.1 Start from the updated format
 
-**Option A (simplest):** copy the shipped workbook for the same program from
+**Recommended: the ready-to-edit weekly workbook.** `inputs/ready_to_edit/`
+holds one per program (`Cricut_Voice_WEEKLY_INPUT.xlsx`, `Cricut_Chat_WEEKLY_INPUT.xlsx`,
+`NMG_SP_WEEKLY_INPUT.xlsx`, `NMG_EN_WEEKLY_INPUT.xlsx`, `NMG_EN_AND_SP_WEEKLY_INPUT.xlsx`,
+`GDI_28HC_24_7_WEEKLY_INPUT.xlsx`, `AE_AR_B2B_WEEKLY_INPUT.xlsx`). Each one reads,
+to the engine, exactly like the shipped workbook it came from (a test compares
+every parsed field). What is different is how it works for you:
+
+- It opens on **Start Here**: the weekly checklist with links to each tab and
+  live quick checks (roster matches the headcount, no repeated names, demand
+  entered, shrinkage between 0% and 99%, every Preference / Fixed / previous-week
+  name on the roster or listed as departed). Each check turns green or red as
+  you type. The run still re-checks everything; Start Here is a help, not the
+  authority.
+- **Every cell accepts only what the scheduler can use.** Settings are dropdowns
+  or number limits inside the engine's own range (Target 0-100%, breaks 15/30/45/60
+  minutes, different shifts 1-7, ...); a value outside is refused when typed.
+  Names on Preference and Fixed Request come from the roster; day cells offer
+  OFF, Leave and the shifts in the Shift Library; demand takes numbers of 0 or
+  more; shrinkage 0-99%; language hours real times. Two cells only warn instead
+  of refusing, because the engine accepts more than a list can name: a
+  previous-week name that is not on this week's roster (someone who left - also
+  list them in Known Departed Associates) and a previous-Saturday shift no
+  longer in the library.
+- Every setting has one line of help beside it, and appears as a tip when the
+  cell is selected.
+- Tabs are colour-coded: orange = update every week, blue = settings, grey =
+  reference. Engine tuning, the lists behind the dropdowns, the demand tabs for
+  the interval sizes you do not use and the old notes are **hidden, not
+  deleted** (right-click a tab > Unhide).
+
+Changing `Interval Minutes`: unhide the matching `FT Wise` and `Shrinkage` tabs
+and pick them in `Requirements Source` / `Shrinkage Source`.
+
+**Option A:** copy the shipped workbook for the same program from
 the package's `inputs/` folder. Replace the roster, demand, shrinkage,
 preferences and previous-week data with this week's.
 
@@ -82,9 +115,13 @@ baselines the release is measured against). That layout has **no
 cannot limit when each language works, or set different language hours per day.
 To get those controls, convert the copy with Option B, then follow 3.7.
 
-**Option B:** convert your existing (older-layout) workbook. This carries every
-value across unchanged, adds the new rows at their defaults, and makes every
-dropdown reject typed values. Keep your original as a backup.
+**Option B:** convert your existing (older-layout) workbook into the same
+friendly layout as the ready-to-edit workbooks. This carries every value across
+unchanged (including a value written under another name the engine reads, such
+as `Leave` for `Leave Enabled`), adds the new rows at their defaults, and
+restricts every cell. The builder then proves it: it parses both workbooks with
+the engine and refuses to write the new one if anything the engine reads would
+change (`VERIFIED: ...` or `REFUSED: ...`). Keep your original as a backup.
 
 ```
 python3 tools/build_input_template.py OLD_WORKBOOK.xlsx NEW_WORKBOOK.xlsx
@@ -220,7 +257,11 @@ validator and the metric parity check, the run now:
   A rule violation, or a coverage figure that differs from the engine's,
   blocks release (`FAIL_CLEAN_ROOM`). A layout it cannot read is recorded as
   `NOT_CHECKED` in `CLEAN_ROOM_CHECK.json` and does not block.
-- validates every alternative export (`MAX_TARGET`, `MAX_FLOOR`, `BALANCED`).
+- validates every alternative export (`MAX_TARGET`, `MAX_FLOOR`, `BALANCED`,
+  `MORE_CONSISTENT`). Each is first given the same eight-tab layout and Break
+  Plan as the published schedule, so the workbook validated is the one you
+  open; a layout failure is recorded (`presentation` in
+  `UNIVERSAL_RUN_STATUS.json`) and never blocks the export.
   Each verdict is in `INDEPENDENT_VALIDATION_<ROLE>.json` and in
   `UNIVERSAL_RUN_STATUS.json`. These do not affect the main schedule's release.
 
@@ -435,7 +476,7 @@ Results are in `DRIVE_RESULTS/<YOUR WORKBOOK NAME>/`.
 | File | Use |
 |---|---|
 | `BUSINESS_OUTCOME.txt` | **Read first.** It must say `Independent validation: PASS` and `Production eligible: True`. |
-| `production/*_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx` | **The schedule to publish:** shifts and breaks. It opens with *Read Me First*; the *Production Summary* sheet gives target and floor coverage. |
+| `production/*_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx` | **The schedule to publish:** shifts and breaks. It opens on eight tabs: *Read Me First* (status, coverage, risks), *Schedule*, *Break Plan* (each person's shift and breaks per day in one grid), *Break Schedule*, *FT Wise After Breaks*, *Coverage Before Breaks*, *Production Summary* and *Validation Log*, plus *No-Break Exceptions* when there is one. The 40+ audit and input tabs are kept, hidden (right-click a tab > Unhide). |
 | `production/*_BEST_BEFORE_BREAKS_SCHEDULE.xlsx` | For review only (coverage before breaks). Not for publishing. |
 | `packages/*_01_PRODUCTION_ONLY.zip` | The schedule, its validation and the input snapshot in one file, for sending on. |
 | `INDEPENDENT_VALIDATION.json` / `.csv` | The validator's full report. |

@@ -51,7 +51,10 @@ All evidence is in this folder; `WORKING_NOTES.md` is the running log.
 > - **New findings:**
 >   - **F-33:** OR-Tools corrupts Stage 2's shared balance expressions. It is fixed for the shortfall pass and **open for normal runs**: the pre-registered A/B of the fix did not pass.
 >   - **F-34:** the Stage-1 window ignored the configured slice. Fixed; identical at the default.
-> - **F-21 (C3):** the AE_IT Stage-1 shape test (10 runs) is in progress.
+> - **F-21 (C3):** the AE_IT Stage-1 shape test (10 valid runs) reads **UNRESOLVED** under its pre-registered rule.
+>   - A 240 s Stage-1 slice gives +1.4 floor and +2.0 target on average (88.2 / 73.8 against 86.8 / 71.8), but not the +2 / ≥ 90 the rule required.
+>   - It is available as a per-workbook option. No default changes, and F-21 stays open.
+>   - Before breaks, S240 reaches RC5's floor (91), so the rest of the gap sits in break placement (F-33).
 > - **Good inputs are unaffected:**
 >   - all 111 repository workbooks parse identically;
 >   - the Stage-1 and Stage-2 models of every packaged and real-run workbook are constraint-for-constraint identical to Phase B;
@@ -355,6 +358,9 @@ Each probe below was ACCEPTED or WARNED by the contract unless stated.
 #### F-21 · P2 · Regression (known, measured) — AE_IT after-break floor
 - AE_IT: −4.0 floor intervals versus RC5 (CI −5.2 to −2.7), traded for +4 target and about 13 fewer concurrency violations per run (`experiments/rc5_vs_final/RESULT.md`).
 - The cause is in Stage-1 search; three single-factor causes were refuted (`evidence/aeit_floor_cause/RESULT.md`). Still open.
+- Phase C3 (`phase_c/C3_SCORE.json`): with the Stage-1 window sized for its slice (F-34), `Stage 1 Minimum Slice Seconds = 240` gives +1.4 floor and +2.0 target over 5 paired seeds.
+  - The pre-registered read is UNRESOLVED (the CAUSE bar was +2 and ≥ 90).
+  - S240's before-break floor equals RC5's (91), so part of the gap is Stage-1 shape and the rest is break placement (F-33).
 
 #### F-22 · P2 · Design risk — complexity
 - About 12 interacting repair and recovery phases and about 70 module-level feature flags; `run_case` is 3,845 lines. See section F.

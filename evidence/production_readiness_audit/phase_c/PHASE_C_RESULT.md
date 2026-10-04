@@ -147,7 +147,44 @@ Volume Weighted is **not** the default. Making it the default needs two things (
 
 ## C3: AE_IT after-break floor, Stage-1 shape (`C3_RULE.txt`, `c3_runs/`)
 
-**In progress.** The ten runs (5 seeds × 2 arms, QUICK 3600 s) are running on the frozen engine of `f326be4`. This section is filled in when they finish.
+**Setup:**
+- Both arms ran on the frozen engine of `f326be4`: QUICK 3600 s, 2 workers, seeds 9000–9004.
+- Two runs at a time, each pinned to its own core pair.
+- The S240 workbook is the original plus one Engine Defaults row, `Stage 1 Minimum Slice Seconds = 240`.
+- **All 10 runs are valid:** exit 0, validator PASS, parity PASS.
+- **Restart:** the container was reclaimed while idle during the seed 9003 pair. That pair was rerun from scratch. The resumable driver skips only runs with a finished record, so no partial run is counted.
+
+| Seed | DEFAULT target / floor (Stage-1 profiles) | S240 target / floor (Stage-1 profiles) | Floor Δ |
+|---|---|---|---|
+| 9000 | 76 / 87 (11) | 75 / 88 (4) | +1 |
+| 9001 | 74 / 86 (10) | 73 / 88 (3) | +2 |
+| 9002 | 70 / 86 (11) | 73 / 90 (3) | +4 |
+| 9003 | 73 / 88 (10) | 75 / 87 (3) | −1 |
+| 9004 | 66 / 87 (10) | 73 / 88 (4) | +1 |
+| **Mean** | **71.8 / 86.8** | **73.8 / 88.2** | **+1.4** |
+
+Other means, DEFAULT → S240:
+- before-break floor 90 → 91;
+- severe floor gaps 20.2 → 19.4;
+- break-concurrency violations 1.0 → 2.4.
+
+For reference, RC5's 6-seed means were 68.2 target / 91.5 floor.
+
+**Read (pre-registered): UNRESOLVED.**
+- **Why not CAUSE:** that needed an S240 floor of at least 90 and at least +2 over DEFAULT. S240 reached 88.2 and +1.4.
+- **Why not NOT THE CAUSE:** that needed +1 or less.
+
+**What the numbers do say, short of the rule's bar:**
+- The deeper Stage-1 slice moves AE_IT in the right direction on both measures: +1.4 floor and +2.0 target on average.
+- It is steadier: target ranges 73–75 against 66–76.
+- Before breaks it reaches RC5's floor level (91). About 3 floor intervals are still lost when breaks are placed.
+- So Stage-1 shape explains part of the gap to RC5, not all of it. The rest is in break placement, which is where F-33's corrupted balance terms act.
+
+**Decision, as pre-registered:**
+- No default changes.
+- `Stage 1 Minimum Slice Seconds = 240` is documented as an AE_IT option, with its measured effect: +1.4 floor, +2.0 target, +1.4 concurrency violations.
+- Choosing it is a business decision.
+- F-21 stays open. The remaining candidate is break placement (F-33).
 
 ## Real workbook end to end (`real_run_voice_language_hours/`)
 

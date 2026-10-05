@@ -28,3 +28,18 @@ Both versions still miss about 34 FTE while overstaffing about 42 FTE elsewhere:
 
 The third workbook (`... - Copy - Copy - Copy.xlsx`, sha 85955a0e) was refused before solving:
 HARD_DUPLICATE_EMPLOYEE_ID 716522 on rows 11 and 14.
+
+## AE IT Choice: the same test, run twice
+
+`AE_IT_Choice_WEEKLY_INPUT - Copy - Copy.xlsx`: sha c1d9ca1c = target 100% (22:39 zip), sha 3d05243a =
+target 90% (22:48 zip). Parsed with the engine: the only difference is `target_ratio`. 8 associates,
+287 FTE demand; staffed effective FTE is 266.4 in every schedule (about 21 FTE below demand).
+
+| Workbook | Schedule | >=100% | >=90% | >=80% | <70% | FTE short | FTE over |
+|---|---|---|---|---|---|---|---|
+| T100 | published s9000 / s9001 | 63 / 67 | 70 / 75 | 76 / 77 | 32 / 33 | 52.4 / 53.5 | 31.8 / 32.9 |
+| T100 | MAX_FLOOR s9000 / s9001 | 27 / 25 | 67 / 69 | 97 / 96 | 12 / 12 | 40.6 / 40.1 | 20.0 / 19.5 |
+| T90 | published s9000 / s9001 | 23 / 24 | 81 / 83 | 90 / 89 | 19 / 14 | 40.7 / 39.6 | 20.1 / 19.0 |
+
+Same mechanism, stronger: with fewer people than demand, target 100% leaves a third of the week's
+hours below 70%. The 12-13 deep holes left even in MAX_FLOOR are the real staffing gap.

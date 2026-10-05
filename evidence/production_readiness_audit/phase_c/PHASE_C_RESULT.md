@@ -360,6 +360,12 @@ The first build was refused by that gate. The new coverage-measure test read the
 
 `engine/RELEASE_IDENTITY_RC9_2_2.json` -> `status`: **PILOT_APPROVED_PARALLEL_RUN**, approved by **Omar Mokhtar**, 2026-10-05 05:45 Egypt time (was `RELEASE_CANDIDATE_NO_GO_PENDING_SCENARIO_AND_QUALITY_REVIEW`; history kept in `status_history`). Scope: the parallel-run week, where the engine's schedules are compared with the manually produced ones on the same inputs. `PRODUCTION_APPROVED` follows a successful parallel week. The status is a recorded decision; no code reads it, and the engine file (`9f91e56c…`) is unchanged. Package rebuilt with this status: `RC9_2_2_PRODUCTION_PACKAGE.zip`, 1,864 files, 16.22 MB, sha256 `a3fc3ab2b60b5f89b1acb33f5c628deba2ef42062896b14482f22a7e2b75d2de`; gate PASS staged and from a clean extract, 1,432 tests (2 skipped) (`CLEAN_EXTRACT_GATE_PILOT.txt`). This supersedes the `8c58c392…` package.
 
+## F-37 (pilot): workbook names with spaces lost every seed
+
+Two pilot runs (`AE_AR_Choice_WEEKLY_INPUT - Copy.xlsx`, `AE_IT_Choice_WEEKLY_INPUT - Copy - Copy.xlsx`, QUICK, 2 seeds) reported "no seed produced a validated final schedule". All four seeds had validated, production-eligible schedules: the runner stores runs under `safe_id` (spaces become `_`) and the portfolio and the Colab wrapper looked for the raw name. The schedules were recovered with the portfolio's own selection (seed 9001 for both: AE AR 92/168 at target, AE IT 67/112) and re-validated here (validator PASS, clean-room 0 violations). Fixed in `RUN_PORTFOLIO.py` and `runners/rc921_runner.py`; tests written first (`F37_TESTS_BEFORE_FIX.txt`); the AE IT workbook, under its original name, rerun through the fixed Colab path publishes its winner (`f37_rerun/`).
+
+Package after the fix: 1,872 files, 16.23 MB, sha256 `912c6acee67a0f1149625f672675bf9d25f9306fabe591121e2d13182f33509e`; gate PASS staged and from a clean extract, 61 suites, 1,436 tests (2 skipped) (`CLEAN_EXTRACT_GATE_F37.txt`). Engine file unchanged (`9f91e56c…`); status PILOT_APPROVED_PARALLEL_RUN. Supersedes `a3fc3ab2…`.
+
 ## Still open after Phase C
 
 - **F-33** for normal runs: the corrected Stage-2 objective needs re-tuning and a new A/B before it ships.

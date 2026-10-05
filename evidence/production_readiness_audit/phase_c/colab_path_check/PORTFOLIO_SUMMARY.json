@@ -1,0 +1,120 @@
+{
+  "schedule_id": "CRICUT_VOICE_WEEKLY_INPUT",
+  "seeds": [
+    9000,
+    9001
+  ],
+  "preset": null,
+  "diversify_profiles": false,
+  "passthrough_arguments": [
+    "--input",
+    "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/extract_final/RC9_2_2_PRODUCTION_PACKAGE/inputs/ready_to_edit/Cricut_Voice_WEEKLY_INPUT.xlsx",
+    "--mode",
+    "QUICK",
+    "--time-limit",
+    "600",
+    "--stage",
+    "FULL_SCHEDULE",
+    "--coverage-objective-weighting",
+    "VOLUME_WEIGHTED",
+    "--num-workers",
+    "2"
+  ],
+  "after_breaks_winner_seed": 9001,
+  "before_breaks_winner_seed": 9001,
+  "after_ranking_measure": "VOLUME_WEIGHTED",
+  "after_ranking": [
+    "req_covered_at_target",
+    "after_target",
+    "after_floor",
+    "after90",
+    "after80",
+    "after_severe_overage_count",
+    "after_avoidable_overage_fte_sum"
+  ],
+  "before_ranking": [
+    "best_before_target",
+    "best_before_floor"
+  ],
+  "eligibility": "return code 0, validator PASS, 0 hard failures, parity PASS, production_eligible TRUE",
+  "best": {
+    "after": {
+      "seed": 9001,
+      "file": "AFTER_BREAKS_BEST__S9001__CRICUT_VOICE_WEEKLY_INPUT_S9001_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx",
+      "source": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/colab_sim/results/_seeds/CRICUT_VOICE_WEEKLY_INPUT/seeds/CRICUT_VOICE_WEEKLY_INPUT_S9001/production/CRICUT_VOICE_WEEKLY_INPUT_S9001_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx",
+      "sha256": "d28a0d7a6e50f4c7254b2a597053d3d17f498aa3015cd7982b0465980b82f245",
+      "run_dir": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/colab_sim/results/_seeds/CRICUT_VOICE_WEEKLY_INPUT/seeds/CRICUT_VOICE_WEEKLY_INPUT_S9001",
+      "validation_sha256": "3b21126d47bb079ffe2bba6ec741b7dfe0ff6cce6c2de4724ac4f85d7403ea84"
+    },
+    "before": {
+      "seed": 9001,
+      "file": "BEFORE_BREAKS_BEST__S9001__CRICUT_VOICE_WEEKLY_INPUT_S9001_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx",
+      "source": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/colab_sim/results/_seeds/CRICUT_VOICE_WEEKLY_INPUT/seeds/CRICUT_VOICE_WEEKLY_INPUT_S9001/production/CRICUT_VOICE_WEEKLY_INPUT_S9001_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx",
+      "sha256": "f5a4c7440f4924025ce189d0a02d94e71f0909dc2584d80cef803adfbdd3dd16",
+      "run_dir": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/colab_sim/results/_seeds/CRICUT_VOICE_WEEKLY_INPUT/seeds/CRICUT_VOICE_WEEKLY_INPUT_S9001"
+    }
+  },
+  "runs": [
+    {
+      "run_dir": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/colab_sim/results/_seeds/CRICUT_VOICE_WEEKLY_INPUT/seeds/CRICUT_VOICE_WEEKLY_INPUT_S9000",
+      "return_code": 0,
+      "finished": true,
+      "after_eligible": true,
+      "summary": {
+        "after_target": "239",
+        "after_floor": "248",
+        "after90": "241",
+        "after80": "248",
+        "after_severe_overage_count": "202",
+        "after_avoidable_overage_fte_sum": "591.54907426",
+        "best_before_target": "247",
+        "best_before_floor": "254",
+        "before_target": "242",
+        "before_floor": "250",
+        "status": "PASS_WITH_QUALITY_WARNINGS",
+        "production_eligible": "TRUE",
+        "req_covered_at_target": 1508.0
+      },
+      "coverage_measure": "volume_weighted",
+      "validation": {
+        "status": "PASS",
+        "hard_fail_count": 0,
+        "metric_parity": "PASS"
+      },
+      "final_workbook": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/colab_sim/results/_seeds/CRICUT_VOICE_WEEKLY_INPUT/seeds/CRICUT_VOICE_WEEKLY_INPUT_S9000/production/CRICUT_VOICE_WEEKLY_INPUT_S9000_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx",
+      "before_workbook": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/colab_sim/results/_seeds/CRICUT_VOICE_WEEKLY_INPUT/seeds/CRICUT_VOICE_WEEKLY_INPUT_S9000/production/CRICUT_VOICE_WEEKLY_INPUT_S9000_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx",
+      "seed": 9000
+    },
+    {
+      "run_dir": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/colab_sim/results/_seeds/CRICUT_VOICE_WEEKLY_INPUT/seeds/CRICUT_VOICE_WEEKLY_INPUT_S9001",
+      "return_code": 0,
+      "finished": true,
+      "after_eligible": true,
+      "summary": {
+        "after_target": "242",
+        "after_floor": "249",
+        "after90": "242",
+        "after80": "249",
+        "after_severe_overage_count": "202",
+        "after_avoidable_overage_fte_sum": "585.64771229",
+        "best_before_target": "248",
+        "best_before_floor": "253",
+        "before_target": "244",
+        "before_floor": "250",
+        "status": "PASS_WITH_QUALITY_WARNINGS",
+        "production_eligible": "TRUE",
+        "req_covered_at_target": 1545.0
+      },
+      "coverage_measure": "volume_weighted",
+      "validation": {
+        "status": "PASS",
+        "hard_fail_count": 0,
+        "metric_parity": "PASS"
+      },
+      "final_workbook": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/colab_sim/results/_seeds/CRICUT_VOICE_WEEKLY_INPUT/seeds/CRICUT_VOICE_WEEKLY_INPUT_S9001/production/CRICUT_VOICE_WEEKLY_INPUT_S9001_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx",
+      "before_workbook": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/colab_sim/results/_seeds/CRICUT_VOICE_WEEKLY_INPUT/seeds/CRICUT_VOICE_WEEKLY_INPUT_S9001/production/CRICUT_VOICE_WEEKLY_INPUT_S9001_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx",
+      "seed": 9001
+    }
+  ],
+  "status": "OK"
+}

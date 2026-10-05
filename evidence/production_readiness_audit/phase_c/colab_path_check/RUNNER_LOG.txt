@@ -1,0 +1,25 @@
+[01:16:10] package : RC9_2_2_PRODUCTION_PACKAGE
+[01:16:10] engine  : L6.3.2.8-RC9.2.2-PRODUCTION-HARDENED-RC6
+[01:16:10] sha256  : 9f91e56c95e4dac257903e3b…
+[01:16:10] host    : Linux-6.18.44-fc-v70-x86_64-with-glibc2.39 | cpus=4 | python=3.11.15
+[01:16:10] checking pinned runtime and CP-SAT compatibility
+[01:16:13] runtime check PASS
+[01:16:13] running the offline gate (run_tests.sh)
+[01:29:30]    GATE PASS — 60 suite(s), 1432 tests (2 skipped) + 2 selfchecks + cross-module call signatures + undefined-name sweep
+[01:29:30] ad-hoc scenario CRICUT_VOICE_WEEKLY_INPUT from $SCRATCH/extract_final/RC9_2_2_PRODUCTION_PACKAGE/inputs/ready_to_edit/Cricut_Voice_WEEKLY_INPUT.xlsx
+[01:29:30] this workbook is not in SCENARIOS.json, so gates 2 and 9 will report NOT_COMPARABLE - there is no RC9.1 baseline to compare it against
+[01:29:30] START CRICUT_VOICE_WEEKLY_INPUT  seeds=2 (base 9000)  side-by-side=2  workers/seed=2  budget/seed=600s
+[01:39:44] DONE  CRICUT_VOICE_WEEKLY_INPUT  exit=0  wall=613.6s  after-breaks winner seed=9001  before-breaks winner seed=9001
+[01:39:44] scoring release gates
+case                      status                     G4     G5              G8          
+-----------------------------------------------------------------------------------------
+CRICUT_VOICE_WEEKLY_INPUT PASS_WITH_QUALITY_WARNINGS PASS_P PASS_DELTA_ONLY PASS        
+
+CRICUT_VOICE_WEEKLY_INPUT:
+    gate 4 PASS_PROTECTED_NOT_EVALUATED quality_benchmark=PASS, protected_benchmark=NOT_CONFIGURED; no protected minimum was configured, so the protected tier was never checked, skeleton retention -4 (248 -> 244, basis: best shippable skeleton)
+    gate 5 PASS_DELTA_ONLY_NO_ABSOLUTE_STANDARD target -2, floor -1 of 264 active; 0 exceptions (minimum proven); after-break target 242/264 = 91.7%; no absolute after-break minimum is configured, so only the break-stage delta was checked - add a 'Minimum After Break Target Ratio' row to the workbook's Instructions (Setup) sheet to hold an absolute standard
+    gate 8 PASS                   0 hard failures on FINAL_AFTER_BREAKS
+
+written: $SCRATCH/colab_sim/results/_gate_report/RC9_2_1_RELEASE_GATE_REPORT.csv
+gates 2 and 9 are decided against evidence/RC9_1_BASELINE.json (consolidated RC9.1 metrics, before-break only). A case is only compared when its input sha256, active-interval count and target ratio all match the baseline row; otherwise it is reported as NOT_COMPARABLE rather than compared.
+

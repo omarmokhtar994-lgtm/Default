@@ -217,6 +217,18 @@ def depth_plan(args, row: dict) -> tuple:
     return mode, budget, requested or 1
 
 
+def ad_hoc_scenario_id(name: str) -> str:
+    """The scenario id for your own workbook, already in the engine's folder form.
+
+    Audit F-37: the production runner stores a run under its safe_id (spaces and
+    other characters become "_"), and this wrapper and RUN_PORTFOLIO looked for
+    the raw name. "AE_AR_Choice_WEEKLY_INPUT - Copy.xlsx" ran two good seeds and
+    reported no schedule. Same rule as RUN_UNIVERSAL_PRODUCTION.safe_id."""
+    raw = str(name or "schedule").upper()[:60]
+    cleaned = "".join(ch if ch.isalnum() or ch in "_.-" else "_" for ch in raw)
+    return cleaned.strip("_") or "SCHEDULE"
+
+
 def run_one(root: Path, results_root: Path, row: dict, args) -> dict:
     scenario = row["scenario_id"]
     # The wrapper creates <output-root>/<schedule-id>/ itself, so output-root is
@@ -500,7 +512,7 @@ def main() -> int:
         if not workbook.is_file():
             log(f"no such workbook: {workbook}")
             return 2
-        scenario_id = args.only.strip().upper() or workbook.stem.upper()[:60]
+        scenario_id = ad_hoc_scenario_id(args.only.strip() or workbook.stem)
         log(f"ad-hoc scenario {scenario_id} from {workbook}")
         log("this workbook is not in SCENARIOS.json, so gates 2 and 9 will report "
             "NOT_COMPARABLE - there is no RC9.1 baseline to compare it against")

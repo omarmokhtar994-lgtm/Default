@@ -1,0 +1,77 @@
+EEF[portfolio] seed 9000 finished rc=0 in 0s
+F[portfolio] seed 9000 finished rc=0 in 0s
+F[portfolio] seed 9000 finished rc=0 in 0s
+F[portfolio] seed 9000 finished rc=0 in 0s
+[portfolio] seed 9000 finished rc=0 in 0s
+FE
+======================================================================
+ERROR: test_an_ad_hoc_workbook_name_becomes_the_runners_folder_name (tests_staged.test_rc9_2_41_workbook_names_with_spaces.TheColabWrapperUsesTheSameName.test_an_ad_hoc_workbook_name_becomes_the_runners_folder_name) (stem='AE_AR_Choice_WEEKLY_INPUT - Copy')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_41_workbook_names_with_spaces.py", line 85, in test_an_ad_hoc_workbook_name_becomes_the_runners_folder_name
+    sid = wrapper.ad_hoc_scenario_id(stem)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'rc921_c41' has no attribute 'ad_hoc_scenario_id'
+
+======================================================================
+ERROR: test_an_ad_hoc_workbook_name_becomes_the_runners_folder_name (tests_staged.test_rc9_2_41_workbook_names_with_spaces.TheColabWrapperUsesTheSameName.test_an_ad_hoc_workbook_name_becomes_the_runners_folder_name) (stem='AE_IT_Choice_WEEKLY_INPUT - Copy - Copy')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_41_workbook_names_with_spaces.py", line 85, in test_an_ad_hoc_workbook_name_becomes_the_runners_folder_name
+    sid = wrapper.ad_hoc_scenario_id(stem)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'rc921_c41' has no attribute 'ad_hoc_scenario_id'
+
+======================================================================
+ERROR: test_the_portfolio_names_folders_exactly_as_the_runner_does (tests_staged.test_rc9_2_41_workbook_names_with_spaces.TheSeedIsFoundWhereTheRunnerWroteIt.test_the_portfolio_names_folders_exactly_as_the_runner_does)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_41_workbook_names_with_spaces.py", line 70, in test_the_portfolio_names_folders_exactly_as_the_runner_does
+    self.assertEqual(PORTFOLIO.safe_id(name), RUNNER.safe_id(name), name)
+                     ^^^^^^^^^^^^^^^^^
+AttributeError: module 'portfolio_c41' has no attribute 'safe_id'
+
+======================================================================
+FAIL: test_a_seed_that_exits_0_without_its_folder_is_named_not_hidden (tests_staged.test_rc9_2_41_workbook_names_with_spaces.TheSeedIsFoundWhereTheRunnerWroteIt.test_a_seed_that_exits_0_without_its_folder_is_named_not_hidden)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_41_workbook_names_with_spaces.py", line 75, in test_a_seed_that_exits_0_without_its_folder_is_named_not_hidden
+    self.assertEqual(result.get("problem"), "RUN_FOLDER_MISSING")
+AssertionError: None != 'RUN_FOLDER_MISSING'
+
+======================================================================
+FAIL: test_run_seed_returns_the_folder_the_runner_creates (tests_staged.test_rc9_2_41_workbook_names_with_spaces.TheSeedIsFoundWhereTheRunnerWroteIt.test_run_seed_returns_the_folder_the_runner_creates) (name='AE_AR_CHOICE_WEEKLY_INPUT - COPY')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_41_workbook_names_with_spaces.py", line 66, in test_run_seed_returns_the_folder_the_runner_creates
+    self.assertTrue(run_dir.is_dir(), f"{run_dir} is not where the runner wrote")
+AssertionError: False is not true : /tmp/tmpa4k93l1x/seeds/AE_AR_CHOICE_WEEKLY_INPUT - COPY_S9000 is not where the runner wrote
+
+======================================================================
+FAIL: test_run_seed_returns_the_folder_the_runner_creates (tests_staged.test_rc9_2_41_workbook_names_with_spaces.TheSeedIsFoundWhereTheRunnerWroteIt.test_run_seed_returns_the_folder_the_runner_creates) (name='AE_IT_CHOICE_WEEKLY_INPUT - COPY - COPY')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_41_workbook_names_with_spaces.py", line 66, in test_run_seed_returns_the_folder_the_runner_creates
+    self.assertTrue(run_dir.is_dir(), f"{run_dir} is not where the runner wrote")
+AssertionError: False is not true : /tmp/tmp1kat3ndb/seeds/AE_IT_CHOICE_WEEKLY_INPUT - COPY - COPY_S9000 is not where the runner wrote
+
+======================================================================
+FAIL: test_run_seed_returns_the_folder_the_runner_creates (tests_staged.test_rc9_2_41_workbook_names_with_spaces.TheSeedIsFoundWhereTheRunnerWroteIt.test_run_seed_returns_the_folder_the_runner_creates) (name='Voice week 42 (final)')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_41_workbook_names_with_spaces.py", line 66, in test_run_seed_returns_the_folder_the_runner_creates
+    self.assertTrue(run_dir.is_dir(), f"{run_dir} is not where the runner wrote")
+AssertionError: False is not true : /tmp/tmp8ztqg8aw/seeds/Voice week 42 (final)_S9000 is not where the runner wrote
+
+======================================================================
+FAIL: test_run_seed_returns_the_folder_the_runner_creates (tests_staged.test_rc9_2_41_workbook_names_with_spaces.TheSeedIsFoundWhereTheRunnerWroteIt.test_run_seed_returns_the_folder_the_runner_creates) (name='NMG EN&SP')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_41_workbook_names_with_spaces.py", line 66, in test_run_seed_returns_the_folder_the_runner_creates
+    self.assertTrue(run_dir.is_dir(), f"{run_dir} is not where the runner wrote")
+AssertionError: False is not true : /tmp/tmp605wvup7/seeds/NMG EN&SP_S9000 is not where the runner wrote
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.009s
+
+FAILED (failures=5, errors=3)

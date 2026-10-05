@@ -100,11 +100,26 @@ def _num(value: Any) -> float:
         return 0.0
 
 
+def safe_id(value: str) -> str:
+    """The folder name RUN_UNIVERSAL_PRODUCTION gives a schedule id (its own safe_id).
+
+    Audit F-37: the runner stores a run under this name - spaces and other
+    characters become "_" - and this portfolio used to look for the raw name. A
+    workbook called "... - Copy.xlsx" then lost every seed: each exited 0 with a
+    validated schedule and the run reported none. Kept identical to the runner's
+    function (a test compares the two)."""
+    cleaned = ''.join(ch if ch.isalnum() or ch in '_.-' else '_' for ch in str(value or 'schedule'))
+    return cleaned.strip('_') or 'schedule'
+
+
 def read_seed_result(run_dir: Path, return_code: Optional[int] = None) -> Dict[str, Any]:
     """Collect one seed run's outcome from its own artifacts and its exit code."""
     out: Dict[str, Any] = {"run_dir": str(run_dir), "return_code": return_code,
                            "finished": False, "after_eligible": False}
-    summaries = sorted(glob.glob(str(run_dir / "*_summary.csv")))
+    if not Path(run_dir).is_dir():
+        out["problem"] = "RUN_FOLDER_MISSING"  # F-37: never read as "no schedule"
+        return out
+    summaries = sorted(glob.glob(glob.escape(str(run_dir)) + "/*_summary.csv"))
     if not summaries:
         return out
     with open(summaries[0], encoding="utf-8") as fh:
@@ -123,7 +138,7 @@ def read_seed_result(run_dir: Path, return_code: Optional[int] = None) -> Dict[s
     parity = (validation.get("metric_parity") or {}).get("status")
     out["summary"]["req_covered_at_target"] = requirement_covered_at_target(validation, summary.get("target_ratio"))
     out["coverage_measure"] = "interval_count"
-    for audit_path in sorted(glob.glob(str(run_dir / "*solver_audit.json"))):
+    for audit_path in sorted(glob.glob(glob.escape(str(run_dir)) + "/*solver_audit.json")):
         try:
             measure = (json.loads(Path(audit_path).read_text(encoding="utf-8")).get("coverage_measure") or {})
         except (OSError, json.JSONDecodeError):
@@ -134,9 +149,9 @@ def read_seed_result(run_dir: Path, return_code: Optional[int] = None) -> Dict[s
         "hard_fail_count": validation.get("hard_fail_count"),
         "metric_parity": parity,
     }
-    out["final_workbook"] = next(iter(sorted(glob.glob(str(run_dir / "production" / "*_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx")))), None)
-    out["before_workbook"] = next(iter(sorted(glob.glob(str(run_dir / "production" / "*_BEST_BEFORE_BREAKS_SCHEDULE.xlsx")))), None) \
-        or next(iter(sorted(glob.glob(str(run_dir / "*_BEST_BEFORE_BREAKS_SCHEDULE.xlsx")))), None)
+    out["final_workbook"] = next(iter(sorted(glob.glob(glob.escape(str(run_dir)) + "/production/*_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"))), None)
+    out["before_workbook"] = next(iter(sorted(glob.glob(glob.escape(str(run_dir)) + "/production/*_BEST_BEFORE_BREAKS_SCHEDULE.xlsx"))), None) \
+        or next(iter(sorted(glob.glob(glob.escape(str(run_dir)) + "/*_BEST_BEFORE_BREAKS_SCHEDULE.xlsx"))), None)
     out["after_eligible"] = bool(
         return_code == 0
         and out["final_workbook"]
@@ -187,7 +202,7 @@ def seed_list(count: int, base: int, explicit: Optional[str]) -> List[int]:
 
 def run_seed(seed: int, schedule_id: str, seeds_root: Path, passthrough: List[str],
              log_dir: Path) -> Tuple[Path, int]:
-    run_id = f"{schedule_id}_S{seed}"
+    run_id = safe_id(f"{schedule_id}_S{seed}")
     cmd = [sys.executable, str(RUNNER), *passthrough,
            "--output-root", str(seeds_root), "--schedule-id", run_id,
            "--solver-random-seed", str(seed), "--overwrite"]
@@ -195,7 +210,10 @@ def run_seed(seed: int, schedule_id: str, seeds_root: Path, passthrough: List[st
     with open(log_dir / f"{run_id}.log", "w", encoding="utf-8") as log:
         rc = subprocess.call(cmd, stdout=log, stderr=subprocess.STDOUT)
     print(f"[portfolio] seed {seed} finished rc={rc} in {time.time() - started:.0f}s", flush=True)
-    return seeds_root / run_id, rc
+    run_dir = seeds_root / run_id
+    if rc == 0 and not run_dir.is_dir():
+        print(f"[portfolio] seed {seed} exited 0 but its run folder {run_dir} does not exist", flush=True)
+    return run_dir, rc
 
 
 def _sha256(path: Path) -> str:
@@ -261,6 +279,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         seeds = seed_list(count, args.base_seed, args.seed_list)
     except ValueError as exc:
         p.error(str(exc))
+    args.schedule_id = safe_id(args.schedule_id)  # F-37: the runner's own folder naming
     case_root = args.output_root / args.schedule_id
     seeds_root = case_root / "seeds"
     seeds_root.mkdir(parents=True, exist_ok=True)
@@ -294,7 +313,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         "eligibility": "return code 0, validator PASS, 0 hard failures, parity PASS, production_eligible TRUE",
         "best": best_manifest,
         "runs": results,
-        "status": "OK" if winners["after"] else "NO_VALIDATED_FINAL_SCHEDULE",
+        "status": ("OK" if winners["after"] else
+                   "NO_VALIDATED_FINAL_SCHEDULE_RUN_FOLDER_MISSING"
+                   if any(r.get("problem") == "RUN_FOLDER_MISSING" and r.get("return_code") == 0 for r in results)
+                   else "NO_VALIDATED_FINAL_SCHEDULE"),
     }
     (case_root / "PORTFOLIO_SUMMARY.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     with open(case_root / "PORTFOLIO_SUMMARY.csv", "w", newline="", encoding="utf-8") as fh:
@@ -314,6 +336,10 @@ def main(argv: Optional[List[str]] = None) -> int:
               f"best before-breaks: seed {b['seed'] if b else None} "
               f"{(b or {}).get('summary', {}).get('best_before_target')}", flush=True)
         return 0
+    if summary["status"] == "NO_VALIDATED_FINAL_SCHEDULE_RUN_FOLDER_MISSING":
+        print("[portfolio] a seed exited 0 but its run folder was not found; its schedule was not read. "
+              "This is a runner defect, not a scheduling result: see PORTFOLIO_SUMMARY.json", flush=True)
+        return 1
     print("[portfolio] no seed produced a validated final schedule", flush=True)
     return 1
 

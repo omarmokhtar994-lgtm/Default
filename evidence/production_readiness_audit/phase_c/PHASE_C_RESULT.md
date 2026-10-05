@@ -307,6 +307,20 @@ For reference, RC5's 6-seed means were 68.2 target / 91.5 floor.
 | Engine elapsed | 3,448 s of 3,600 |
 | Outcome text | "Hard-valid final schedule generated with declared operational warnings", with the same four warnings as Phase B |
 
+## Final end to end: friendly input, release engine, new output layout (`e2e_friendly_voice/`)
+
+The Voice language-hours workbook, converted by the new template builder (`VERIFIED`: the engine reads the same contract), run through the production runner on the release engine `9f91e56c…`: QUICK 3600 s, 4 workers, seed 9000.
+
+| Check | Result |
+|---|---|
+| Runner exit code | **0**, `PASS_WITH_QUALITY_WARNINGS`, production eligible |
+| Independent validator (published schedule) | **PASS**, 0 hard failures, parity **PASS**; 245 / 264 intervals at target, 254 at floor |
+| Clean-room checker | **PASS**, 0 violations, 0 disagreements with the engine |
+| MORE_CONSISTENT_CANDIDATE | Written, validator **PASS**, coverage no worse on every measure, **approved**; named in `BUSINESS_OUTCOME.txt`: start-time movement 66 h -> 53 h, distinct start times 60 -> 59. The selected schedule is unchanged. |
+| MAX_TARGET, MAX_FLOOR | Validator **PASS**, 0 hard failures |
+| Output layout | Published schedule and all three alternatives: 8 visible tabs (Read Me First, Schedule, Break Plan, Break Schedule, FT Wise After Breaks, Coverage Before Breaks, Production Summary, Validation Log), every other tab kept hidden (57 in total). The before-breaks review workbook shows 7 (no Break Plan: it has no breaks). Presentation `APPLIED` on every alternative, before its validation. |
+| Coverage measure line | `Coverage measure: Interval Count (workbook)` |
+
 ## Gate (`GATE_RUN.txt`)
 
 **Final gate (`GATE_RUN_FINAL.txt`), after F-35's published polish, F-36 and the friendly workbooks:** `./run_tests.sh` on engine `9f91e56c…`: **GATE PASS, 60 suites, 1,432 tests (2 skipped)**. The floor in `GATE_MINIMUMS.json` was raised from 1,395 to 1,432 (+9 more-consistent workbook, +6 F-36, +14 friendly input, +8 friendly output); max_skips 2 -> 3 because the Start Here live-check test skips on a machine without LibreOffice (written reason in the file).

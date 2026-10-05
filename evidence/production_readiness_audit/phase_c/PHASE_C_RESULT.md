@@ -346,6 +346,9 @@ One engine change was made for a test rather than re-pinning it:
 
 ## Package
 
+**Final package (2026-10-05):** `dist/RC9_2_2_PRODUCTION_PACKAGE.zip`, 1,858 files, 16.19 MB, sha256 `8c58c392f5de839833317a9a47bbb7f85a3bb39fea70de7ac24d6e15707db367`, engine `9f91e56c…`. The builder's own gate on the staged copy: **PASS, 60 suites, 1,432 tests (2 skipped)**. `./run_tests.sh` from a clean extract of the zip: **GATE PASS, 60 suites, 1,432 tests (2 skipped)** (`CLEAN_EXTRACT_GATE_FINAL.txt`). Ships the ready-to-edit weekly workbooks in `inputs/ready_to_edit/`; the seven shipped workbooks are byte-for-byte unchanged (manifest hashes checked by the gate).
+
+
 `dist/RC9_2_2_PRODUCTION_PACKAGE.zip`, sha256 `50919d4758bb82a7d9ba574cc6723a425dab89963cdad94d0d0d389d82d2711f`, 1,733 files (rebuilt with the F-35 fix; the first Phase C package was `750cb6ca…`), built by `tools/build_production_package.py` from commit-ready sources. The checks run on it:
 - the builder's own gate on the staged copy: PASS;
 - `./run_tests.sh` from a clean extract of the zip: **GATE PASS, 56 suites, 1,395 tests** (2 skipped);

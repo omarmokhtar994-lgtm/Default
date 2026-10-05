@@ -1,0 +1,117 @@
+{
+  "schedule_id": "AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY",
+  "seeds": [
+    9000,
+    9001
+  ],
+  "preset": null,
+  "diversify_profiles": false,
+  "passthrough_arguments": [
+    "--input",
+    "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/f37_in/AE_IT_Choice_WEEKLY_INPUT - Copy - Copy.xlsx",
+    "--mode",
+    "QUICK",
+    "--time-limit",
+    "600",
+    "--stage",
+    "FULL_SCHEDULE",
+    "--num-workers",
+    "2"
+  ],
+  "after_breaks_winner_seed": 9001,
+  "before_breaks_winner_seed": 9000,
+  "after_ranking_measure": "INTERVAL_COUNT",
+  "after_ranking": [
+    "after_target",
+    "after_floor",
+    "after90",
+    "after80",
+    "after_severe_overage_count",
+    "after_avoidable_overage_fte_sum"
+  ],
+  "before_ranking": [
+    "best_before_target",
+    "best_before_floor"
+  ],
+  "eligibility": "return code 0, validator PASS, 0 hard failures, parity PASS, production_eligible TRUE",
+  "best": {
+    "after": {
+      "seed": 9001,
+      "file": "AFTER_BREAKS_BEST__S9001__AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY_S9001_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx",
+      "source": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/f37_results/_seeds/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY/seeds/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY_S9001/production/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY_S9001_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx",
+      "sha256": "30c82d53e689d6c5b29f0874b6fdd052d1265e7482a3d0f630d1d831963964b6",
+      "run_dir": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/f37_results/_seeds/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY/seeds/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY_S9001",
+      "validation_sha256": "83bb7e5bcdb8f3e2c27be7c2c2c27aa238407dc76b848b55509df45f430c1c7e"
+    },
+    "before": {
+      "seed": 9000,
+      "file": "BEFORE_BREAKS_BEST__S9000__AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY_S9000_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx",
+      "source": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/f37_results/_seeds/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY/seeds/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY_S9000/production/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY_S9000_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx",
+      "sha256": "391568c4e5ebbf99608500552898f0952bd5d0212ef599c644db9be29b5a9157",
+      "run_dir": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/f37_results/_seeds/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY/seeds/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY_S9000"
+    }
+  },
+  "runs": [
+    {
+      "run_dir": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/f37_results/_seeds/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY/seeds/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY_S9000",
+      "return_code": 0,
+      "finished": true,
+      "after_eligible": true,
+      "summary": {
+        "after_target": "64",
+        "after_floor": "73",
+        "after90": "72",
+        "after80": "73",
+        "after_severe_overage_count": "11",
+        "after_avoidable_overage_fte_sum": "7.875",
+        "best_before_target": "68",
+        "best_before_floor": "84",
+        "before_target": "64",
+        "before_floor": "75",
+        "status": "PASS_WITH_QUALITY_WARNINGS",
+        "production_eligible": "TRUE",
+        "req_covered_at_target": 168.0
+      },
+      "coverage_measure": "interval_count",
+      "validation": {
+        "status": "PASS",
+        "hard_fail_count": 0,
+        "metric_parity": "PASS"
+      },
+      "final_workbook": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/f37_results/_seeds/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY/seeds/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY_S9000/production/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY_S9000_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx",
+      "before_workbook": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/f37_results/_seeds/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY/seeds/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY_S9000/production/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY_S9000_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx",
+      "seed": 9000
+    },
+    {
+      "run_dir": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/f37_results/_seeds/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY/seeds/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY_S9001",
+      "return_code": 0,
+      "finished": true,
+      "after_eligible": true,
+      "summary": {
+        "after_target": "68",
+        "after_floor": "77",
+        "after90": "75",
+        "after80": "77",
+        "after_severe_overage_count": "8",
+        "after_avoidable_overage_fte_sum": "9.45",
+        "best_before_target": "68",
+        "best_before_floor": "77",
+        "before_target": "68",
+        "before_floor": "77",
+        "status": "PASS_WITH_QUALITY_WARNINGS",
+        "production_eligible": "TRUE",
+        "req_covered_at_target": 180.0
+      },
+      "coverage_measure": "interval_count",
+      "validation": {
+        "status": "PASS",
+        "hard_fail_count": 0,
+        "metric_parity": "PASS"
+      },
+      "final_workbook": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/f37_results/_seeds/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY/seeds/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY_S9001/production/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY_S9001_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx",
+      "before_workbook": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/f37_results/_seeds/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY/seeds/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY_S9001/production/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY_S9001_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx",
+      "seed": 9001
+    }
+  ],
+  "status": "OK"
+}

@@ -1,0 +1,22 @@
+{
+  "generated_utc": "2026-10-05T23:05:03.833119+00:00",
+  "package": "RC9_2_2_PRODUCTION_PACKAGE",
+  "engine_sha256": "9f91e56c95e4dac257903e3b5ff5dd56ec8b29c879aee6c6a36c25baa0428b2a",
+  "ad_hoc_input": "$SCRATCH/f37_in/AE_IT_Choice_WEEKLY_INPUT - Copy - Copy.xlsx",
+  "runs": [
+    {
+      "scenario_id": "AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY",
+      "exit_code": 0,
+      "wall_sec": 570.7,
+      "budget_sec": 600,
+      "seeds": 2,
+      "side_by_side": 2,
+      "workers_per_seed": 2,
+      "after_breaks_winner_seed": 9001,
+      "before_breaks_winner_seed": 9000,
+      "published_case": "$SCRATCH/f37_results/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY",
+      "overran_budget": false,
+      "log": "$SCRATCH/f37_results/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY.log"
+    }
+  ]
+}

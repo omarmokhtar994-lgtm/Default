@@ -1,0 +1,23 @@
+[22:55:26] package : RC9_2_2_PRODUCTION_PACKAGE
+[22:55:26] engine  : L6.3.2.8-RC9.2.2-PRODUCTION-HARDENED-RC6
+[22:55:26] sha256  : 9f91e56c95e4dac257903e3b…
+[22:55:26] host    : Linux-6.18.44-fc-v70-x86_64-with-glibc2.39 | cpus=4 | python=3.11.15
+[22:55:26] checking pinned runtime and CP-SAT compatibility
+[22:55:33] runtime check PASS
+[22:55:33] ad-hoc scenario AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY from $SCRATCH/f37_in/AE_IT_Choice_WEEKLY_INPUT - Copy - Copy.xlsx
+[22:55:33] this workbook is not in SCENARIOS.json, so gates 2 and 9 will report NOT_COMPARABLE - there is no RC9.1 baseline to compare it against
+[22:55:33] START AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY  seeds=2 (base 9000)  side-by-side=2  workers/seed=2  budget/seed=600s
+[23:05:03] DONE  AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY  exit=0  wall=570.7s  after-breaks winner seed=9001  before-breaks winner seed=9000
+[23:05:03] scoring release gates
+case                                    status                     G4     G5              G8          
+-------------------------------------------------------------------------------------------------------
+AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY PASS_WITH_QUALITY_WARNINGS PASS_P FAIL            PASS        
+
+AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY:
+    gate 4 PASS_PROTECTED_NOT_EVALUATED quality_benchmark=PASS, protected_benchmark=NOT_CONFIGURED; no protected minimum was configured, so the protected tier was never checked
+    gate 5 FAIL                   14 language reserve quarters lost to breaks; after-break target 68/112 = 60.7%; UNKNOWN: summary carries no break-capacity measurement
+    gate 8 PASS                   0 hard failures on FINAL_AFTER_BREAKS
+
+written: $SCRATCH/f37_results/_gate_report/RC9_2_1_RELEASE_GATE_REPORT.csv
+gates 2 and 9 are decided against evidence/RC9_1_BASELINE.json (consolidated RC9.1 metrics, before-break only). A case is only compared when its input sha256, active-interval count and target ratio all match the baseline row; otherwise it is reported as NOT_COMPARABLE rather than compared.
+

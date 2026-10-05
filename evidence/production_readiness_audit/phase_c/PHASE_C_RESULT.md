@@ -356,6 +356,10 @@ One engine change was made for a test rather than re-pinning it:
 
 The first build was refused by that gate. The new coverage-measure test read the runners from the repository layout (`packages/rc9_2_2_production/runners`), which the package does not have (it ships them at `runners/`). The test now resolves either layout, as the other runner tests do. No shipped code changed.
 
+## Release status
+
+`engine/RELEASE_IDENTITY_RC9_2_2.json` -> `status`: **PILOT_APPROVED_PARALLEL_RUN**, approved by **Omar Mokhtar**, 2026-10-05 05:45 Egypt time (was `RELEASE_CANDIDATE_NO_GO_PENDING_SCENARIO_AND_QUALITY_REVIEW`; history kept in `status_history`). Scope: the parallel-run week, where the engine's schedules are compared with the manually produced ones on the same inputs. `PRODUCTION_APPROVED` follows a successful parallel week. The status is a recorded decision; no code reads it, and the engine file (`9f91e56c…`) is unchanged.
+
 ## Still open after Phase C
 
 - **F-33** for normal runs: the corrected Stage-2 objective needs re-tuning and a new A/B before it ships.

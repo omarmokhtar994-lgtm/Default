@@ -358,7 +358,7 @@ The first build was refused by that gate. The new coverage-measure test read the
 
 ## Release status
 
-`engine/RELEASE_IDENTITY_RC9_2_2.json` -> `status`: **PILOT_APPROVED_PARALLEL_RUN**, approved by **Omar Mokhtar**, 2026-10-05 05:45 Egypt time (was `RELEASE_CANDIDATE_NO_GO_PENDING_SCENARIO_AND_QUALITY_REVIEW`; history kept in `status_history`). Scope: the parallel-run week, where the engine's schedules are compared with the manually produced ones on the same inputs. `PRODUCTION_APPROVED` follows a successful parallel week. The status is a recorded decision; no code reads it, and the engine file (`9f91e56c…`) is unchanged.
+`engine/RELEASE_IDENTITY_RC9_2_2.json` -> `status`: **PILOT_APPROVED_PARALLEL_RUN**, approved by **Omar Mokhtar**, 2026-10-05 05:45 Egypt time (was `RELEASE_CANDIDATE_NO_GO_PENDING_SCENARIO_AND_QUALITY_REVIEW`; history kept in `status_history`). Scope: the parallel-run week, where the engine's schedules are compared with the manually produced ones on the same inputs. `PRODUCTION_APPROVED` follows a successful parallel week. The status is a recorded decision; no code reads it, and the engine file (`9f91e56c…`) is unchanged. Package rebuilt with this status: `RC9_2_2_PRODUCTION_PACKAGE.zip`, 1,864 files, 16.22 MB, sha256 `a3fc3ab2b60b5f89b1acb33f5c628deba2ef42062896b14482f22a7e2b75d2de`; gate PASS staged and from a clean extract, 1,432 tests (2 skipped) (`CLEAN_EXTRACT_GATE_PILOT.txt`). This supersedes the `8c58c392…` package.
 
 ## Still open after Phase C
 

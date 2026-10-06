@@ -56,7 +56,11 @@
     "workbook": "PUB_SDB_R7_SKILL2/production/PUB_SDB_R7_SKILL2_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"
   },
   "PUB_SDB_R7_SKILL3": {
-    "status": "NO_PUBLISHED_SCHEDULE"
+    "active": 630,
+    "hit": 520,
+    "under_slots": 402,
+    "over_slots": 770,
+    "workbook": "PUB_SDB_R7_SKILL3/production/PUB_SDB_R7_SKILL3_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"
   },
   "PUB_SDB_R10_SKILL1": {
     "active": 504,

@@ -1,6 +1,6 @@
 # Public benchmark: Bonutti et al. (2017) shift-design instances through the engine
 
-Status: 10 of 11 cases complete; R7 skill 3 pending (this file is updated when it lands).
+Status: all 11 cases complete (R5 reruns on the current engine queued; see note).
 
 ## Why this set
 
@@ -56,13 +56,13 @@ understaffed and overstaffed slot-units.
 | R6 skill 2 | 45 | 47 | 644 | 536 / 533 | 537 (83.4%) | 432 / 786 | PASS | 0 |
 | R7 skill 1 | 36 | 38 | 630 | 448 / 448 | 450 (71.4%) | 582 / 654 | PASS | 0 |
 | R7 skill 2 | 32 | 35 | 630 | 518 / 518 | 518 (82.2%) | 314 / 656 | PASS | 0 |
-| R7 skill 3 | 31 | 34 | 630 | pending | pending | - | - | - |
+| R7 skill 3 | 31 | 34 | 630 | 522 / 522 | 520 (82.5%) | 402 / 770 | PASS | 0 |
 | R10 skill 1 | 19 | 21 | 504 | 294 / 292 | 306 (60.7%) | 556 / 740 | PASS | 0 |
 | R10 skill 2 | 18 | 20 | 504 | 314 / 308 | 320 (63.5%) | 456 / 646 | PASS | 0 |
 
 The authors' validator, run on the engine's merged weeks, reproduces the
 under/overstaffing sums exactly: R1 606 / 1,648, R5 518 / 1,608, R6 798 /
-1,502, R10 1,012 / 1,386 slot-units (published optima: 0 / 0).
+1,502, R7 1,298 / 2,080, R10 1,012 / 1,386 slot-units (published optima: 0 / 0).
 
 \* R5: the engine finished (exit 0, validator PASS); the packager refused
 because the engine file was edited mid-run (Phase D3a commit) and its identity
@@ -77,14 +77,17 @@ Recorded in `evidence/phase_d/D_PLAN.md` (incident log).
 3. **The loss is in choosing shifts and days off, not in breaks.** Before and
    after breaks differ by 0-6 intervals in every case; the skeleton itself is
    short.
-4. **The metric is not the problem (D2a).** Given the proven-perfect week, the
+4. **Seeding works (D2b).** Seeded with the proven-perfect week, the engine
+   keeps it: R10 skill 1 504/504 before and after breaks, validator PASS
+   (unseeded 294/292). A better starting week means a better schedule.
+5. **The metric is not the problem (D2a).** Given the proven-perfect week, the
    engine's own `calculate_metrics` scores it 602/602 (R1 skill 2) and 504/504
    (R10 skill 1) with 0 break-cap violations. The shortfall is search.
-5. **A concrete cause on these instances (D3a).** The engine's aggregate
+6. **A concrete cause on these instances (D3a).** The engine's aggregate
    day/shift-count guide refused every case here because the shifts are not all
    540 minutes. Phase D3a makes it optional for mixed lengths; its A/B is
    pre-registered and queued.
-6. **Relevance to real programs is limited and was measured.** These instances
+7. **Relevance to real programs is limited and was measured.** These instances
    offer 90-141 shift options; the 7 real programs offer 1-24, all 9 h, and
    the guide already runs on them. AE_AR_B2B's ceiling is 168/168 and the
    engine reaches 167.

@@ -19,6 +19,13 @@ of these, the rule wins.
 
 ## Installed skills and how they apply here
 
+Load the matching skill (Skill tool) at the start of each step it covers;
+following it from memory does not count. Typical triggers: a defect or a
+result below expectation -> systematic-debugging; any engine change ->
+cpsat-engine-modeling + test-driven-development; before reporting a result or
+verdict -> verification-before-completion; before a long full-CPU run ->
+python-performance-optimization.
+
 - systematic-debugging, test-driven-development, verification-before-completion:
   the default way to fix defects (root cause, failing test first, evidence before
   claiming done).

@@ -222,6 +222,23 @@ Investigated with systematic-debugging, read-only/low priority beside queue2.
   pinned engine week (expect ~176), then the full-CPU Chat seed trial with all
   shifts and the workbook's variety limit.
 
+### Correction and second finding (2026-10-06 ~18:30 Egypt)
+
+The entry above overstated the break cap as "the" root cause. Measured since:
+* With the exact cap (reified encoding) the pinned-week solve returned UNKNOWN
+  in 120 s (1 worker): the cap was right but the encoding hurt search. Re-encoded
+  as a table lookup on the staffed count (`engine_break_cap` + `AddElement`);
+  the cap test stays green (same oracle: the engine's function).
+* Pinned week, table cap, 1 worker, 120 s per phase: 132 after breaks (was 126).
+* The engine's own week and breaks checked against the seed model without a
+  solver: 128/128 person-day break sets are legal seed patterns, 0 quarters over
+  the cap, and the model's formula scores it 176 = the engine. So the model now
+  contains the engine's solution at the same score.
+* Therefore: cap = real modelling bug (the old cap made the engine's week
+  infeasible in the seed model); the remaining 132 vs 176 is search (1 worker:
+  no LNS; ~19k break-count variables). Next: the same pinned solve with 2-4
+  workers and the engine solution as a hint, then the free-week trial.
+
 ## D3a verdict (2026-10-06 ~13:20 Egypt)
 
 Intervals at target after breaks, production settings, control = same

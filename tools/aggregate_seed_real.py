@@ -71,11 +71,14 @@ def candidates(E, p, max_shifts: int, guide_seconds: float) -> Tuple[List[int], 
 
 
 def build(E, wb: Path, out_dir: Path, max_shifts: int, time_limit: float, workers: int,
-          all_shifts: bool = False, fix_week: Dict[str, List[str]] = None, week_mode: str = "pin") -> Dict[str, Any]:
+          all_shifts: bool = False, fix_week: Dict[str, List[str]] = None, week_mode: str = "pin",
+          hint_breaks: List[Tuple[str, int, str, str, int]] = None) -> Dict[str, Any]:
     """Per-associate variant. Diagnostics: all_shifts uses the whole shift library as
     candidates; fix_week (name -> 7 day cells) pins x/off to a given week so the model
     scores that week under its own metric (e.g. the engine's result); with
-    week_mode="hint" the week is only a solution hint (a known-valid start)."""
+    week_mode="hint" the week is only a solution hint (a known-valid start).
+    hint_breaks (name, day, shift label, start HH:MM, minutes) completes that hint
+    with the break-count variables (a CP-SAT hint is reliable only when complete)."""
     from ortools.sat.python import cp_model
     t0 = time.time()
     p = E.parse_input(wb)
@@ -182,6 +185,7 @@ def build(E, wb: Path, out_dir: Path, max_shifts: int, time_limit: float, worker
     onfloor = {c: [[] for _ in range(7 * 96)] for c in classes}
     onbreak_total = [[] for _ in range(7 * 96)]
     zlist = []
+    zmap = {}
     for c in classes:
         members = [a for a in range(A) if cls_of[a] == c]
         for d in range(D):
@@ -191,7 +195,7 @@ def build(E, wb: Path, out_dir: Path, max_shifts: int, time_limit: float, worker
                 zs = []
                 for pt in legal:
                     z = m.NewIntVar(0, len(members), f"z{classes.index(c)}_{d}_{j}_{pt.index if pt else 'nb'}")
-                    zs.append(z); zlist.append(z)
+                    zs.append(z); zlist.append(z); zmap[(c, d, j, pt.index if pt else None)] = z
                     broken = set(pt.broken_offsets) if pt else set()
                     base = d * 96 + sh.start_min // 15
                     for o in range(sh.duration_q):
@@ -203,6 +207,36 @@ def build(E, wb: Path, out_dir: Path, max_shifts: int, time_limit: float, worker
                         else:
                             onfloor[c][t].append(z)
                 m.Add(sum(zs) == cnt)
+    if hint_breaks and fix_week and week_mode == "hint":
+        a_of = {E.norm(assoc.name): a for a, assoc in enumerate(p.associates)}
+        j_of = {E.norm(sh.label): j for j, sh in enumerate(shifts)}
+        offs: Dict[Tuple[int, int], set] = {}
+        for name, d, label, start, minutes in hint_breaks:
+            a, j = a_of[E.norm(name)], j_of[E.norm(label)]
+            h, mi = (int(v) for v in str(start).split(":")[:2])
+            o0 = ((h * 60 + mi - shifts[j].start_min) % 1440) // 15
+            offs.setdefault((a, d), set()).update(o0 + k for k in range(int(minutes) // 15))
+        counts: Dict[Any, int] = {}
+        unmatched = 0
+        for a, assoc in enumerate(p.associates):
+            cells = fix_week.get(E.norm(assoc.name)) or []
+            for d in range(min(D, len(cells))):
+                j = j_of.get(E.norm(str(cells[d] or "")))
+                if j is None:
+                    continue
+                got = frozenset(offs.get((a, d), set()))
+                pt = next((pt for pt in patterns if pt.duration_q == shifts[j].duration_q
+                           and frozenset(pt.broken_offsets) == got), None)
+                if pt is None:
+                    unmatched += 1
+                    continue
+                key = (cls_of[a], d, j, pt.index)
+                counts[key] = counts.get(key, 0) + 1
+        for key, z in zmap.items():
+            m.AddHint(z, counts.get(key, 0))
+        info_breaks = {"hinted_break_sets": sum(counts.values()), "unmatched_break_sets": unmatched}
+    else:
+        info_breaks = {}
     prior = [len(E.prior_covering_associates(p, q)) for q in range(7 * 96)]
     ratio, absolute = float(p.break_max_concurrent_ratio), int(p.break_max_concurrent_absolute)
     for t in range(7 * 96):
@@ -248,7 +282,7 @@ def build(E, wb: Path, out_dir: Path, max_shifts: int, time_limit: float, worker
     sv.parameters.num_workers = workers
     sv.parameters.random_seed = 1
     st1 = sv.Solve(m)
-    info = {"workbook": wb.name, "associates": A, "pinned_cells": pinned, "week_mode": week_mode if fix_week else None, "candidate_shifts": [sh.label for sh in shifts],
+    info = {"workbook": wb.name, "associates": A, "pinned_cells": pinned, "week_mode": week_mode if fix_week else None, **info_breaks, "candidate_shifts": [sh.label for sh in shifts],
             "language_classes": len(classes), "phase1": {"status": sv.StatusName(st1), "seconds": round(sv.WallTime(), 1)}, **ginfo}
     if st1 not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         info["status"] = "NO_SEED"
@@ -578,6 +612,8 @@ def main() -> int:
     ap.add_argument("--all-shifts", action="store_true", help="per-associate: every library shift is a candidate")
     ap.add_argument("--fix-week-from", type=Path, help="per-associate diagnostic: pin the week in this workbook's "
                     "'Final Schedule' (or 'Schedule') sheet and score it under the seed model's metric")
+    ap.add_argument("--hint-breaks-from", type=Path, help="with --week-mode hint: also hint the breaks in "
+                    "this workbook's 'Break Schedule' sheet (complete hint)")
     ap.add_argument("--week-mode", choices=("pin", "hint"), default="pin",
                     help="with --fix-week-from: pin the week (diagnostic) or only hint it (warm start)")
     ap.add_argument("workbooks", nargs="+", type=Path)
@@ -593,11 +629,17 @@ def main() -> int:
         hdr = [str(v or "").strip() for v in rows[h]]
         nc, dc = hdr.index("SF Name") if "SF Name" in hdr else hdr.index("Name"), [hdr.index(dn) for dn in DAY_COLS]
         fix = {E.norm(str(r[nc])): [r[c] for c in dc] for r in rows[h + 1:] if r[nc]}
+    brk = None
+    if a.hint_breaks_from:
+        import openpyxl
+        ws = openpyxl.load_workbook(a.hint_breaks_from, read_only=True)["Break Schedule"]
+        brk = [(r[0], DAY_COLS.index(r[1]), r[2], r[4], int(r[5])) for r in ws.iter_rows(min_row=2, values_only=True)
+               if r[0] and r[6] == "Scheduled"]
     report = {}
     for wb in a.workbooks:
         row = (build_grouped(E, wb, a.out_dir, a.max_shifts, a.time_limit, a.workers, a.variety_cap)
                if a.variant == "grouped" else build(E, wb, a.out_dir, a.max_shifts, a.time_limit, a.workers,
-                                                  a.all_shifts, fix, a.week_mode))
+                                                  a.all_shifts, fix, a.week_mode, brk))
         report[wb.name] = row
         print(json.dumps(row, default=str), flush=True)
         a.out_dir.mkdir(parents=True, exist_ok=True)

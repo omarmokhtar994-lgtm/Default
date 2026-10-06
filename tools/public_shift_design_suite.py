@@ -504,6 +504,7 @@ def cyclic_score(req, shifts, breaks) -> Dict[str, Any]:
 
 def cmd_score(a) -> int:
     runs = Path(a.runs)
+    a.out_dir.mkdir(parents=True, exist_ok=True)
     table = {}
     for iid in TRANSLATED:
         inst = parse_instance(a.instances / (iid + ".txt"))
@@ -540,7 +541,6 @@ def cmd_score(a) -> int:
                 tot = "/".join(str(sum(counts[d][sk] for d in range(DAYS))) for sk in range(inst["skills"]))
                 lines.append("E%d ( %s ) %s-%s %d %s %s [%s]" % (j + 1, tname, S.hhmm(st), endtxt, ln, btxt, cnt, tot))
             (a.out_dir / ("%s-engine.txt" % iid)).write_text("\n".join(lines) + "\n")
-    a.out_dir.mkdir(parents=True, exist_ok=True)
     (a.out_dir / "engine_cyclic_scores.json").write_text(json.dumps(table, indent=2))
     for k, v in table.items():
         print(k, v)

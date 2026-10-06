@@ -1,7 +1,7 @@
 {
   "PUB_SDB_R10_SKILL1.xlsx": {
     "workbook": "PUB_SDB_R10_SKILL1.xlsx",
-    "status": "FEASIBLE",
+    "status": "OPTIMAL",
     "candidate_shifts": [
       "01:00 - 10:30",
       "03:00 - 12:30",
@@ -14,15 +14,15 @@
       "19:00 - 04:30",
       "22:30 - 08:00"
     ],
-    "tour_types": 3526,
+    "tour_types": 2786,
     "associates": 21,
-    "model_hits": 493,
+    "model_hits": 504,
     "model_bound": 504,
-    "solve_seconds": 80.0,
+    "solve_seconds": 0.5,
     "phase1": {
-      "status": "FEASIBLE",
-      "seconds": 80.0,
-      "shortfall_zero_intervals": 491
+      "status": "OPTIMAL",
+      "seconds": 48.0,
+      "shortfall_zero_intervals": 504
     },
     "guide_status": "OPTIMAL",
     "guide_shift_totals": {
@@ -39,13 +39,13 @@
       "114": 8,
       "140": 1
     },
-    "seed_from_phase": 2,
-    "seed_model_hits": 493,
+    "seed_from_phase": 1,
+    "seed_model_hits": 504,
     "seed_workbook": "PUB_SDB_R10_SKILL1_AGGSEED.xlsx",
     "carry_in_rest_conflicts": 0,
     "seed_valid_cells": 147,
     "seed_invalid_cells": 0,
-    "total_seconds": 161.6
+    "total_seconds": 50.2
   },
   "PUB_SDB_R10_SKILL2.xlsx": {
     "workbook": "PUB_SDB_R10_SKILL2.xlsx",
@@ -62,15 +62,15 @@
       "18:30 - 04:00",
       "22:30 - 08:00"
     ],
-    "tour_types": 3364,
+    "tour_types": 2604,
     "associates": 20,
-    "model_hits": 496,
+    "model_hits": 498,
     "model_bound": 504,
     "solve_seconds": 80.0,
     "phase1": {
       "status": "FEASIBLE",
       "seconds": 80.0,
-      "shortfall_zero_intervals": 496
+      "shortfall_zero_intervals": 498
     },
     "guide_status": "OPTIMAL",
     "guide_shift_totals": {
@@ -88,7 +88,7 @@
       "130": 3
     },
     "seed_from_phase": 1,
-    "seed_model_hits": 496,
+    "seed_model_hits": 498,
     "seed_workbook": "PUB_SDB_R10_SKILL2_AGGSEED.xlsx",
     "carry_in_rest_conflicts": 0,
     "seed_valid_cells": 140,
@@ -109,14 +109,14 @@
       "16:00 - 02:00",
       "22:30 - 08:30"
     ],
-    "tour_types": 3411,
+    "tour_types": 2891,
     "associates": 28,
     "model_hits": 602,
     "model_bound": 602,
-    "solve_seconds": 0.6,
+    "solve_seconds": 0.7,
     "phase1": {
       "status": "OPTIMAL",
-      "seconds": 5.1,
+      "seconds": 3.0,
       "shortfall_zero_intervals": 602
     },
     "guide_status": "OPTIMAL",
@@ -137,7 +137,7 @@
     "carry_in_rest_conflicts": 0,
     "seed_valid_cells": 196,
     "seed_invalid_cells": 0,
-    "total_seconds": 7.0
+    "total_seconds": 4.9
   },
   "PUB_SDB_R1_SKILL2.xlsx": {
     "workbook": "PUB_SDB_R1_SKILL2.xlsx",
@@ -154,14 +154,14 @@
       "16:00 - 02:00",
       "22:30 - 08:30"
     ],
-    "tour_types": 4336,
+    "tour_types": 3696,
     "associates": 33,
     "model_hits": 602,
     "model_bound": 602,
-    "solve_seconds": 0.8,
+    "solve_seconds": 0.7,
     "phase1": {
       "status": "OPTIMAL",
-      "seconds": 24.1,
+      "seconds": 7.5,
       "shortfall_zero_intervals": 602
     },
     "guide_status": "OPTIMAL",
@@ -183,7 +183,7 @@
     "carry_in_rest_conflicts": 0,
     "seed_valid_cells": 231,
     "seed_invalid_cells": 0,
-    "total_seconds": 26.1
+    "total_seconds": 9.3
   },
   "PUB_SDB_R5_SKILL1.xlsx": {
     "workbook": "PUB_SDB_R5_SKILL1.xlsx",
@@ -200,14 +200,14 @@
       "23:00 - 09:00",
       "23:30 - 09:30"
     ],
-    "tour_types": 4498,
+    "tour_types": 3878,
     "associates": 38,
     "model_hits": 628,
     "model_bound": 628,
-    "solve_seconds": 0.7,
+    "solve_seconds": 0.6,
     "phase1": {
       "status": "OPTIMAL",
-      "seconds": 5.8,
+      "seconds": 6.2,
       "shortfall_zero_intervals": 628
     },
     "guide_status": "OPTIMAL",
@@ -234,7 +234,7 @@
     "carry_in_rest_conflicts": 0,
     "seed_valid_cells": 266,
     "seed_invalid_cells": 0,
-    "total_seconds": 7.7
+    "total_seconds": 8.2
   },
   "PUB_SDB_R5_SKILL2.xlsx": {
     "workbook": "PUB_SDB_R5_SKILL2.xlsx",
@@ -251,14 +251,14 @@
       "22:30 - 08:30",
       "23:30 - 09:30"
     ],
-    "tour_types": 4336,
+    "tour_types": 3696,
     "associates": 48,
     "model_hits": 630,
     "model_bound": 630,
-    "solve_seconds": 0.7,
+    "solve_seconds": 0.8,
     "phase1": {
       "status": "OPTIMAL",
-      "seconds": 7.6,
+      "seconds": 8.8,
       "shortfall_zero_intervals": 630
     },
     "guide_status": "OPTIMAL",
@@ -286,7 +286,7 @@
     "carry_in_rest_conflicts": 0,
     "seed_valid_cells": 336,
     "seed_invalid_cells": 0,
-    "total_seconds": 9.5
+    "total_seconds": 10.8
   },
   "PUB_SDB_R6_SKILL1.xlsx": {
     "workbook": "PUB_SDB_R6_SKILL1.xlsx",
@@ -303,14 +303,14 @@
       "23:00 - 09:00",
       "23:30 - 09:30"
     ],
-    "tour_types": 4336,
+    "tour_types": 3696,
     "associates": 40,
     "model_hits": 644,
     "model_bound": 644,
-    "solve_seconds": 0.7,
+    "solve_seconds": 0.6,
     "phase1": {
       "status": "OPTIMAL",
-      "seconds": 5.1,
+      "seconds": 5.7,
       "shortfall_zero_intervals": 644
     },
     "guide_status": "OPTIMAL",
@@ -333,7 +333,7 @@
     "carry_in_rest_conflicts": 0,
     "seed_valid_cells": 280,
     "seed_invalid_cells": 0,
-    "total_seconds": 7.0
+    "total_seconds": 7.6
   },
   "PUB_SDB_R6_SKILL2.xlsx": {
     "workbook": "PUB_SDB_R6_SKILL2.xlsx",
@@ -350,14 +350,14 @@
       "23:00 - 09:00",
       "23:30 - 09:30"
     ],
-    "tour_types": 4336,
+    "tour_types": 3696,
     "associates": 47,
     "model_hits": 644,
     "model_bound": 644,
-    "solve_seconds": 0.7,
+    "solve_seconds": 0.6,
     "phase1": {
       "status": "OPTIMAL",
-      "seconds": 7.9,
+      "seconds": 8.9,
       "shortfall_zero_intervals": 644
     },
     "guide_status": "OPTIMAL",
@@ -382,7 +382,7 @@
     "carry_in_rest_conflicts": 0,
     "seed_valid_cells": 329,
     "seed_invalid_cells": 0,
-    "total_seconds": 10.0
+    "total_seconds": 10.7
   },
   "PUB_SDB_R7_SKILL1.xlsx": {
     "workbook": "PUB_SDB_R7_SKILL1.xlsx",
@@ -399,14 +399,14 @@
       "15:30 - 01:30",
       "23:30 - 09:30"
     ],
-    "tour_types": 4984,
+    "tour_types": 4424,
     "associates": 38,
     "model_hits": 630,
     "model_bound": 630,
-    "solve_seconds": 1.2,
+    "solve_seconds": 0.8,
     "phase1": {
       "status": "OPTIMAL",
-      "seconds": 18.5,
+      "seconds": 9.0,
       "shortfall_zero_intervals": 630
     },
     "guide_status": "OPTIMAL",
@@ -431,7 +431,7 @@
     "carry_in_rest_conflicts": 0,
     "seed_valid_cells": 266,
     "seed_invalid_cells": 0,
-    "total_seconds": 21.3
+    "total_seconds": 11.5
   },
   "PUB_SDB_R7_SKILL2.xlsx": {
     "workbook": "PUB_SDB_R7_SKILL2.xlsx",
@@ -448,14 +448,14 @@
       "22:00 - 08:00",
       "22:30 - 08:30"
     ],
-    "tour_types": 4498,
+    "tour_types": 3878,
     "associates": 35,
     "model_hits": 630,
     "model_bound": 630,
-    "solve_seconds": 0.7,
+    "solve_seconds": 0.6,
     "phase1": {
       "status": "OPTIMAL",
-      "seconds": 7.5,
+      "seconds": 9.8,
       "shortfall_zero_intervals": 630
     },
     "guide_status": "OPTIMAL",
@@ -479,7 +479,7 @@
     "carry_in_rest_conflicts": 0,
     "seed_valid_cells": 245,
     "seed_invalid_cells": 0,
-    "total_seconds": 9.8
+    "total_seconds": 11.7
   },
   "PUB_SDB_R7_SKILL3.xlsx": {
     "workbook": "PUB_SDB_R7_SKILL3.xlsx",
@@ -496,14 +496,14 @@
       "22:00 - 08:00",
       "23:00 - 09:00"
     ],
-    "tour_types": 4336,
+    "tour_types": 3696,
     "associates": 34,
     "model_hits": 630,
     "model_bound": 630,
     "solve_seconds": 0.6,
     "phase1": {
       "status": "OPTIMAL",
-      "seconds": 6.5,
+      "seconds": 5.1,
       "shortfall_zero_intervals": 630
     },
     "guide_status": "OPTIMAL",
@@ -528,6 +528,6 @@
     "carry_in_rest_conflicts": 0,
     "seed_valid_cells": 238,
     "seed_invalid_cells": 0,
-    "total_seconds": 8.3
+    "total_seconds": 7.0
   }
 }

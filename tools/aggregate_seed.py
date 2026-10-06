@@ -93,8 +93,8 @@ def tour_patterns(p, shifts) -> List[Tuple[int, Tuple[Optional[int], ...]]]:
             for d, j in zip(work, combo):
                 row[d] = j
             ok = True
-            for d in range(6):  # within the week; Saturday -> next Sunday is next week's
-                a, b = row[d], row[d + 1]
+            for d in range(7):  # the engine also checks Saturday -> Sunday of the same week (cyclic)
+                a, b = row[d], row[(d + 1) % 7]
                 if a is not None and b is not None:
                     s1, s2 = shifts[a], shifts[b]
                     if 1440 + s2.start_min - (s1.start_min + s1.duration_min) < rest_min:

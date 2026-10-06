@@ -174,3 +174,10 @@ seed 9000, two runs at a time, all 7 real workbooks. Rule = D4 items 1, 2, 3, 5:
 Before any A/B: if the seed model's own predicted intervals-at-target are not
 above the engine's latest result for a workbook, that workbook is reported as
 "no headroom found" and the A/B still runs (to test for harm).
+
+* 2026-10-06 ~11:35 Egypt, before any seeded run: reading the engine's Stage-1
+  model showed it also enforces rest from Saturday to the same week's Sunday
+  (cyclic). The seed builder only checked Sunday-Saturday, so seeds could hold
+  tours the engine rejects. Fixed (the check now wraps) and all 11 seeds
+  regenerated before queue2 started: 10 OPTIMAL at the model bound, R10 skill 2
+  498/504. queue2 holds only the regenerated seeds.

@@ -181,3 +181,16 @@ above the engine's latest result for a workbook, that workbook is reported as
   tours the engine rejects. Fixed (the check now wraps) and all 11 seeds
   regenerated before queue2 started: 10 OPTIMAL at the model bound, R10 skill 2
   498/504. queue2 holds only the regenerated seeds.
+
+## D3 stage 2 first trials (2026-10-06 ~12:15 Egypt; tool only, low priority, 1 worker)
+
+`tools/aggregate_seed_real.py` (experimental). Seeds load cleanly (0 invalid
+cells) but are not yet better than the engine:
+* NMG SP: seed model 112/126 vs engine ~121 (no headroom found);
+* Cricut Chat, per-associate variant: 112/242; grouped variant (4 groups,
+  1,390 legal tours, soft break cap): 113/242, vs engine 174-178 (C4 control).
+Not a modelling error proven either way: both solves stopped FEASIBLE at the
+time limit with the solver at the lowest priority beside two engine runs, and
+the seed restricts variety to 2 and candidates to the guide's 12 shifts.
+Paused until the machine is free and the stage-1 A/B has reported. No real
+workbook A/B runs until a seed beats the engine's own result in the model.

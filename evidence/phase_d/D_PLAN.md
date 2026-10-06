@@ -295,6 +295,26 @@ The entry above overstated the break cap as "the" root cause. Measured since:
   "build a week from nothing". Written before a test (experimental tool option,
   disclosed).
 
+### Complete-hint result and Chat check (pre-registered 2026-10-06 ~20:25 Egypt, before the runs)
+
+Complete hint (engine C4 Chat final week + its 128 break sets, all matched;
+`--week-mode hint --hint-breaks-from`), 4 workers, 900 + 900 s, peak RSS
+1.8 GB: SEED, model 179/242 after breaks vs engine 176; 0 invalid seed cells.
+The seed is derived from the engine's own output, so it tests "improve the
+engine's week", not "build a week from the workbook alone".
+
+Check (exploratory, one seed each, run side by side, 2 workers each):
+* T: Cricut Chat input + the model's week (179) in the Schedule sheet;
+* C2: Cricut Chat input + the engine's own final week (C4, seed 9000) in the
+  Schedule sheet, i.e. a second engine pass without the model;
+both through the production runner, QUICK 3,600 s, 2 workers, seed 9000.
+Reference: C4 control 176 after breaks / 233 floor.
+The model step earns integration design work only if T exit 0, validator PASS,
+0 hard failures, T after-target > max(C2, 176), and T floor >= C2 floor - 1.
+Otherwise: recorded, no further work on stage 2 in this form. Either way the
+compute is stated: T and C2 both cost two engine runs; T adds ~30 min of
+4-worker model time.
+
 ## D3a verdict (2026-10-06 ~13:20 Egypt)
 
 Intervals at target after breaks, production settings, control = same

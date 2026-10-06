@@ -22,6 +22,34 @@ import build_synthetic_suite as S  # noqa: E402
 DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
 
+def engine_break_selection(E, p, sk, week_path: Path):
+    """The engine's own breaks from an output workbook's 'Break Schedule' sheet,
+    as {(associate, day): pattern index}; break sets matching no legal pattern
+    map to None and are listed in the second return value."""
+    import openpyxl
+    patterns = E.generate_break_patterns(p)
+    by_offsets = {(pt.duration_q, frozenset(pt.broken_offsets)): pt.index for pt in patterns}
+    a_of = {E.norm(x.name): i for i, x in enumerate(p.associates)}
+    ws = openpyxl.load_workbook(week_path, read_only=True)["Break Schedule"]
+    offs = {}
+    for r in ws.iter_rows(min_row=2, values_only=True):
+        if not r[0] or r[6] != "Scheduled":
+            continue
+        ai, d = a_of[E.norm(r[0])], DAYS.index(r[1])
+        sh = p.shifts[sk.selected_shift_index[ai][d]]
+        h, mi = (int(v) for v in str(r[4]).split(":")[:2])
+        o0 = ((h * 60 + mi - sh.start_min) % 1440) // 15
+        offs.setdefault((ai, d), set()).update(o0 + k for k in range(int(r[5]) // 15))
+    selected, unmatched = {}, []
+    for (ai, d), o in offs.items():
+        sh = p.shifts[sk.selected_shift_index[ai][d]]
+        idx = by_offsets.get((sh.duration_q, frozenset(o)))
+        if idx is None:
+            unmatched.append((p.associates[ai].name, DAYS[d]))
+        selected[(ai, d)] = idx
+    return selected, unmatched
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--engine", type=Path, required=True)
@@ -37,28 +65,11 @@ def main() -> int:
     if sk is None or sk.diagnostics.get("invalid_seed_cells"):
         raise SystemExit(f"week not readable: {None if sk is None else sk.diagnostics}")
     patterns = E.generate_break_patterns(p)
-    by_offsets = {(pt.duration_q, frozenset(pt.broken_offsets)): pt.index for pt in patterns}
     a_of = {E.norm(x.name): i for i, x in enumerate(p.associates)}
     selected = {}
     unmatched = []
     if a.engine_breaks:
-        import openpyxl
-        ws = openpyxl.load_workbook(a.week, read_only=True)["Break Schedule"]
-        offs = {}
-        for r in ws.iter_rows(min_row=2, values_only=True):
-            if not r[0] or r[6] != "Scheduled":
-                continue
-            ai, d = a_of[E.norm(r[0])], DAYS.index(r[1])
-            sh = p.shifts[sk.selected_shift_index[ai][d]]
-            h, mi = (int(v) for v in str(r[4]).split(":")[:2])
-            o0 = ((h * 60 + mi - sh.start_min) % 1440) // 15
-            offs.setdefault((ai, d), set()).update(o0 + k for k in range(int(r[5]) // 15))
-        for (ai, d), o in offs.items():
-            sh = p.shifts[sk.selected_shift_index[ai][d]]
-            idx = by_offsets.get((sh.duration_q, frozenset(o)))
-            if idx is None:
-                unmatched.append((p.associates[ai].name, DAYS[d]))
-            selected[(ai, d)] = idx
+        selected, unmatched = engine_break_selection(E, p, sk, a.week)
     else:
         for e in json.loads(a.plan.read_text()):
             ai = a_of[E.norm(e["name"])]

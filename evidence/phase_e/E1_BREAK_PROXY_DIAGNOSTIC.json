@@ -1,0 +1,951 @@
+{
+ "runs": 88,
+ "summary": {
+  "flat": {
+   "mae": 24.966,
+   "mean_signed": -24.352,
+   "spearman_with_after": 0.817
+  },
+  "window": {
+   "mae": 23.818,
+   "mean_signed": -23.818,
+   "spearman_with_after": 0.919
+  }
+ },
+ "rows": [
+  {
+   "run": "S01_BASELINE",
+   "input": "S01_BASELINE.xlsx",
+   "before_target": 84,
+   "after_target": 83,
+   "unmatched_break_sets": 0,
+   "pred_flat": 54,
+   "pred_window": 64
+  },
+  {
+   "run": "S01_BASELINE_R2",
+   "input": "S01_BASELINE.xlsx",
+   "before_target": 84,
+   "after_target": 84,
+   "unmatched_break_sets": 0,
+   "pred_flat": 54,
+   "pred_window": 64
+  },
+  {
+   "run": "S01_BASELINE_R3",
+   "input": "S01_BASELINE.xlsx",
+   "before_target": 84,
+   "after_target": 84,
+   "unmatched_break_sets": 0,
+   "pred_flat": 54,
+   "pred_window": 64
+  },
+  {
+   "run": "S02_DEMAND_SLIGHTLY_ABOVE_CAPACITY",
+   "input": "S02_DEMAND_SLIGHTLY_ABOVE_CAPACITY.xlsx",
+   "before_target": 78,
+   "after_target": 76,
+   "unmatched_break_sets": 0,
+   "pred_flat": 42,
+   "pred_window": 39
+  },
+  {
+   "run": "S03_DEMAND_MASSIVELY_ABOVE_CAPACITY",
+   "input": "S03_DEMAND_MASSIVELY_ABOVE_CAPACITY.xlsx",
+   "before_target": 0,
+   "after_target": 0,
+   "unmatched_break_sets": 0,
+   "pred_flat": 0,
+   "pred_window": 0
+  },
+  {
+   "run": "S08_24x7_WEEK_BOUNDARY",
+   "input": "S08_24x7_WEEK_BOUNDARY.xlsx",
+   "before_target": 168,
+   "after_target": 168,
+   "unmatched_break_sets": 0,
+   "pred_flat": 165,
+   "pred_window": 168
+  },
+  {
+   "run": "S12_OVERLAPPING_SKILLS",
+   "input": "S12_OVERLAPPING_SKILLS.xlsx",
+   "before_target": 84,
+   "after_target": 84,
+   "unmatched_break_sets": 0,
+   "pred_flat": 54,
+   "pred_window": 64
+  },
+  {
+   "run": "S14_DUPLICATE_PREFERENCE_ROW",
+   "input": "S14_DUPLICATE_PREFERENCE_ROW.xlsx",
+   "before_target": 84,
+   "after_target": 84,
+   "unmatched_break_sets": 0,
+   "pred_flat": 54,
+   "pred_window": 64
+  },
+  {
+   "run": "S01_BASELINE",
+   "input": "S01_BASELINE.xlsx",
+   "before_target": 84,
+   "after_target": 84,
+   "unmatched_break_sets": 0,
+   "pred_flat": 54,
+   "pred_window": 64
+  },
+  {
+   "run": "S02_DEMAND_SLIGHTLY_ABOVE_CAPACITY",
+   "input": "S02_DEMAND_SLIGHTLY_ABOVE_CAPACITY.xlsx",
+   "before_target": 78,
+   "after_target": 76,
+   "unmatched_break_sets": 0,
+   "pred_flat": 42,
+   "pred_window": 40
+  },
+  {
+   "run": "S03_DEMAND_MASSIVELY_ABOVE_CAPACITY",
+   "input": "S03_DEMAND_MASSIVELY_ABOVE_CAPACITY.xlsx",
+   "before_target": 0,
+   "after_target": 0,
+   "unmatched_break_sets": 0,
+   "pred_flat": 0,
+   "pred_window": 0
+  },
+  {
+   "run": "S06_FULL_WEEK_LEAVE",
+   "input": "S06_FULL_WEEK_LEAVE.xlsx",
+   "before_target": 84,
+   "after_target": 83,
+   "unmatched_break_sets": 0,
+   "pred_flat": 51,
+   "pred_window": 62
+  },
+  {
+   "run": "S07_SIX_LEAVE_DAYS",
+   "input": "S07_SIX_LEAVE_DAYS.xlsx",
+   "before_target": 84,
+   "after_target": 84,
+   "unmatched_break_sets": 0,
+   "pred_flat": 51,
+   "pred_window": 62
+  },
+  {
+   "run": "S08_24x7_WEEK_BOUNDARY",
+   "input": "S08_24x7_WEEK_BOUNDARY.xlsx",
+   "before_target": 168,
+   "after_target": 168,
+   "unmatched_break_sets": 0,
+   "pred_flat": 168,
+   "pred_window": 168
+  },
+  {
+   "run": "S12_OVERLAPPING_SKILLS",
+   "input": "S12_OVERLAPPING_SKILLS.xlsx",
+   "before_target": 84,
+   "after_target": 84,
+   "unmatched_break_sets": 0,
+   "pred_flat": 54,
+   "pred_window": 64
+  },
+  {
+   "run": "S01_BASELINE",
+   "input": "S01_BASELINE.xlsx",
+   "before_target": 84,
+   "after_target": 84,
+   "unmatched_break_sets": 0,
+   "pred_flat": 54,
+   "pred_window": 64
+  },
+  {
+   "run": "S06_FULL_WEEK_LEAVE",
+   "input": "S06_FULL_WEEK_LEAVE.xlsx",
+   "before_target": 84,
+   "after_target": 84,
+   "unmatched_break_sets": 0,
+   "pred_flat": 51,
+   "pred_window": 62
+  },
+  {
+   "run": "S08_24x7_WEEK_BOUNDARY",
+   "input": "S08_24x7_WEEK_BOUNDARY.xlsx",
+   "before_target": 168,
+   "after_target": 168,
+   "unmatched_break_sets": 0,
+   "pred_flat": 166,
+   "pred_window": 168
+  },
+  {
+   "run": "AEIT_9002_NOCAP",
+   "input": "AE_IT_B2B_NO_CONCURRENCY_CAP.xlsx",
+   "before_target": 77,
+   "after_target": 76,
+   "unmatched_break_sets": 0,
+   "pred_flat": 71,
+   "pred_window": 58
+  },
+  {
+   "run": "AEIT_9002_S240",
+   "input": "AE_IT_B2B_SLICE240.xlsx",
+   "before_target": 85,
+   "after_target": 72,
+   "unmatched_break_sets": 0,
+   "pred_flat": 59,
+   "pred_window": 54
+  },
+  {
+   "run": "AEIT_9004_NOCAP",
+   "input": "AE_IT_B2B_NO_CONCURRENCY_CAP.xlsx",
+   "before_target": 81,
+   "after_target": 78,
+   "unmatched_break_sets": 0,
+   "pred_flat": 76,
+   "pred_window": 64
+  },
+  {
+   "run": "AEIT_9004_S240",
+   "input": "AE_IT_B2B_SLICE240.xlsx",
+   "before_target": 82,
+   "after_target": 69,
+   "unmatched_break_sets": 0,
+   "pred_flat": 55,
+   "pred_window": 51
+  },
+  {
+   "run": "FINAL_AEIT_9002_R",
+   "input": "AE_IT_B2B.xlsx",
+   "before_target": 77,
+   "after_target": 71,
+   "unmatched_break_sets": 0,
+   "pred_flat": 75,
+   "pred_window": 62
+  },
+  {
+   "run": "C3_DEFAULT_9000",
+   "input": "AE_IT_B2B.xlsx",
+   "before_target": 81,
+   "after_target": 76,
+   "unmatched_break_sets": 0,
+   "pred_flat": 74,
+   "pred_window": 63
+  },
+  {
+   "run": "C3_DEFAULT_9001",
+   "input": "AE_IT_B2B.xlsx",
+   "before_target": 81,
+   "after_target": 74,
+   "unmatched_break_sets": 0,
+   "pred_flat": 68,
+   "pred_window": 61
+  },
+  {
+   "run": "C3_DEFAULT_9002",
+   "input": "AE_IT_B2B.xlsx",
+   "before_target": 74,
+   "after_target": 70,
+   "unmatched_break_sets": 0,
+   "pred_flat": 73,
+   "pred_window": 60
+  },
+  {
+   "run": "C3_DEFAULT_9003",
+   "input": "AE_IT_B2B.xlsx",
+   "before_target": 78,
+   "after_target": 73,
+   "unmatched_break_sets": 0,
+   "pred_flat": 73,
+   "pred_window": 61
+  },
+  {
+   "run": "C3_DEFAULT_9004",
+   "input": "AE_IT_B2B.xlsx",
+   "before_target": 82,
+   "after_target": 66,
+   "unmatched_break_sets": 0,
+   "pred_flat": 56,
+   "pred_window": 52
+  },
+  {
+   "run": "C3_S240_9000",
+   "input": "AE_IT_B2B_S240.xlsx",
+   "before_target": 82,
+   "after_target": 75,
+   "unmatched_break_sets": 0,
+   "pred_flat": 75,
+   "pred_window": 63
+  },
+  {
+   "run": "C3_S240_9001",
+   "input": "AE_IT_B2B_S240.xlsx",
+   "before_target": 84,
+   "after_target": 73,
+   "unmatched_break_sets": 0,
+   "pred_flat": 64,
+   "pred_window": 58
+  },
+  {
+   "run": "C3_S240_9002",
+   "input": "AE_IT_B2B_S240.xlsx",
+   "before_target": 79,
+   "after_target": 73,
+   "unmatched_break_sets": 0,
+   "pred_flat": 76,
+   "pred_window": 63
+  },
+  {
+   "run": "C3_S240_9003",
+   "input": "AE_IT_B2B_S240.xlsx",
+   "before_target": 82,
+   "after_target": 75,
+   "unmatched_break_sets": 0,
+   "pred_flat": 71,
+   "pred_window": 61
+  },
+  {
+   "run": "C3_S240_9004",
+   "input": "AE_IT_B2B_S240.xlsx",
+   "before_target": 79,
+   "after_target": 73,
+   "unmatched_break_sets": 0,
+   "pred_flat": 76,
+   "pred_window": 63
+  },
+  {
+   "run": "C4AB_AEIT_VOLUME_9000",
+   "input": "AE_IT_B2B.xlsx",
+   "before_target": 76,
+   "after_target": 73,
+   "unmatched_break_sets": 0,
+   "pred_flat": 76,
+   "pred_window": 63
+  },
+  {
+   "run": "C4AB_AEIT_VOLUME_9001",
+   "input": "AE_IT_B2B.xlsx",
+   "before_target": 76,
+   "after_target": 75,
+   "unmatched_break_sets": 0,
+   "pred_flat": 76,
+   "pred_window": 64
+  },
+  {
+   "run": "C4AB_AEIT_VOLUME_9002",
+   "input": "AE_IT_B2B.xlsx",
+   "before_target": 76,
+   "after_target": 70,
+   "unmatched_break_sets": 0,
+   "pred_flat": 47,
+   "pred_window": 42
+  },
+  {
+   "run": "C4AB_CHAT_INTERVAL_9000",
+   "input": "Cricut_Chat_RC9_1_READY_SKELETON.xlsx",
+   "before_target": 191,
+   "after_target": 176,
+   "unmatched_break_sets": 0,
+   "pred_flat": 92,
+   "pred_window": 106
+  },
+  {
+   "run": "C4AB_CHAT_INTERVAL_9001",
+   "input": "Cricut_Chat_RC9_1_READY_SKELETON.xlsx",
+   "before_target": 194,
+   "after_target": 174,
+   "unmatched_break_sets": 0,
+   "pred_flat": 95,
+   "pred_window": 107
+  },
+  {
+   "run": "C4AB_CHAT_INTERVAL_9002",
+   "input": "Cricut_Chat_RC9_1_READY_SKELETON.xlsx",
+   "before_target": 197,
+   "after_target": 178,
+   "unmatched_break_sets": 0,
+   "pred_flat": 93,
+   "pred_window": 108
+  },
+  {
+   "run": "C4AB_CHAT_VOLUME_9000",
+   "input": "Cricut_Chat_RC9_1_READY_SKELETON.xlsx",
+   "before_target": 184,
+   "after_target": 165,
+   "unmatched_break_sets": 0,
+   "pred_flat": 97,
+   "pred_window": 108
+  },
+  {
+   "run": "C4AB_CHAT_VOLUME_9001",
+   "input": "Cricut_Chat_RC9_1_READY_SKELETON.xlsx",
+   "before_target": 186,
+   "after_target": 171,
+   "unmatched_break_sets": 0,
+   "pred_flat": 95,
+   "pred_window": 99
+  },
+  {
+   "run": "C4AB_CHAT_VOLUME_9002",
+   "input": "Cricut_Chat_RC9_1_READY_SKELETON.xlsx",
+   "before_target": 189,
+   "after_target": 175,
+   "unmatched_break_sets": 0,
+   "pred_flat": 106,
+   "pred_window": 114
+  },
+  {
+   "run": "C4AB_GDI_INTERVAL_9000",
+   "input": "GDI_REAL28_RC9_1_24_7_FINAL_READY.xlsx",
+   "before_target": 151,
+   "after_target": 148,
+   "unmatched_break_sets": 0,
+   "pred_flat": 120,
+   "pred_window": 119
+  },
+  {
+   "run": "C4AB_GDI_INTERVAL_9001",
+   "input": "GDI_REAL28_RC9_1_24_7_FINAL_READY.xlsx",
+   "before_target": 153,
+   "after_target": 144,
+   "unmatched_break_sets": 0,
+   "pred_flat": 106,
+   "pred_window": 106
+  },
+  {
+   "run": "C4AB_GDI_INTERVAL_9002",
+   "input": "GDI_REAL28_RC9_1_24_7_FINAL_READY.xlsx",
+   "before_target": 153,
+   "after_target": 146,
+   "unmatched_break_sets": 0,
+   "pred_flat": 116,
+   "pred_window": 114
+  },
+  {
+   "run": "C4AB_GDI_VOLUME_9000",
+   "input": "GDI_REAL28_RC9_1_24_7_FINAL_READY.xlsx",
+   "before_target": 151,
+   "after_target": 146,
+   "unmatched_break_sets": 0,
+   "pred_flat": 115,
+   "pred_window": 113
+  },
+  {
+   "run": "C4AB_GDI_VOLUME_9001",
+   "input": "GDI_REAL28_RC9_1_24_7_FINAL_READY.xlsx",
+   "before_target": 149,
+   "after_target": 148,
+   "unmatched_break_sets": 0,
+   "pred_flat": 125,
+   "pred_window": 121
+  },
+  {
+   "run": "C4AB_GDI_VOLUME_9002",
+   "input": "GDI_REAL28_RC9_1_24_7_FINAL_READY.xlsx",
+   "before_target": 153,
+   "after_target": 147,
+   "unmatched_break_sets": 0,
+   "pred_flat": 113,
+   "pred_window": 115
+  },
+  {
+   "run": "C4AB_NMGSP_INTERVAL_9000",
+   "input": "NMG_SP_RC9_1_READY_FIXED.xlsx",
+   "before_target": 126,
+   "after_target": 121,
+   "unmatched_break_sets": 0,
+   "pred_flat": 125,
+   "pred_window": 114
+  },
+  {
+   "run": "C4AB_NMGSP_INTERVAL_9001",
+   "input": "NMG_SP_RC9_1_READY_FIXED.xlsx",
+   "before_target": 126,
+   "after_target": 121,
+   "unmatched_break_sets": 0,
+   "pred_flat": 125,
+   "pred_window": 114
+  },
+  {
+   "run": "C4AB_NMGSP_VOLUME_9000",
+   "input": "NMG_SP_RC9_1_READY_FIXED.xlsx",
+   "before_target": 126,
+   "after_target": 124,
+   "unmatched_break_sets": 0,
+   "pred_flat": 125,
+   "pred_window": 114
+  },
+  {
+   "run": "C4AB_NMGSP_VOLUME_9001",
+   "input": "NMG_SP_RC9_1_READY_FIXED.xlsx",
+   "before_target": 126,
+   "after_target": 124,
+   "unmatched_break_sets": 0,
+   "pred_flat": 125,
+   "pred_window": 114
+  },
+  {
+   "run": "C4AB_VOICE_INTERVAL_9000",
+   "input": "Cricut_Voice_RC9_1_READY_SKELETON.xlsx",
+   "before_target": 248,
+   "after_target": 245,
+   "unmatched_break_sets": 0,
+   "pred_flat": 226,
+   "pred_window": 230
+  },
+  {
+   "run": "C4AB_VOICE_INTERVAL_9001",
+   "input": "Cricut_Voice_RC9_1_READY_SKELETON.xlsx",
+   "before_target": 247,
+   "after_target": 245,
+   "unmatched_break_sets": 0,
+   "pred_flat": 223,
+   "pred_window": 223
+  },
+  {
+   "run": "C4AB_VOICE_INTERVAL_9002",
+   "input": "Cricut_Voice_RC9_1_READY_SKELETON.xlsx",
+   "before_target": 247,
+   "after_target": 245,
+   "unmatched_break_sets": 0,
+   "pred_flat": 227,
+   "pred_window": 230
+  },
+  {
+   "run": "C4AB_VOICE_VOLUME_9000",
+   "input": "Cricut_Voice_RC9_1_READY_SKELETON.xlsx",
+   "before_target": 247,
+   "after_target": 245,
+   "unmatched_break_sets": 0,
+   "pred_flat": 222,
+   "pred_window": 225
+  },
+  {
+   "run": "C4AB_VOICE_VOLUME_9001",
+   "input": "Cricut_Voice_RC9_1_READY_SKELETON.xlsx",
+   "before_target": 247,
+   "after_target": 246,
+   "unmatched_break_sets": 0,
+   "pred_flat": 225,
+   "pred_window": 229
+  },
+  {
+   "run": "C4AB_VOICE_VOLUME_9002",
+   "input": "Cricut_Voice_RC9_1_READY_SKELETON.xlsx",
+   "before_target": 248,
+   "after_target": 245,
+   "unmatched_break_sets": 0,
+   "pred_flat": 221,
+   "pred_window": 219
+  },
+  {
+   "run": "CHAT_C2_ENGINESEED",
+   "input": "CHAT_C2_ENGINESEED.xlsx",
+   "before_target": 192,
+   "after_target": 177,
+   "unmatched_break_sets": 0,
+   "pred_flat": 94,
+   "pred_window": 108
+  },
+  {
+   "run": "CHAT_T_MODELSEED",
+   "input": "CHAT_T_MODELSEED.xlsx",
+   "before_target": 196,
+   "after_target": 176,
+   "unmatched_break_sets": 0,
+   "pred_flat": 98,
+   "pred_window": 107
+  },
+  {
+   "run": "CRICUT_VOICE_WEEKLY_INPUT",
+   "input": "Cricut_Voice_WEEKLY_INPUT.xlsx",
+   "before_target": 244,
+   "after_target": 242,
+   "unmatched_break_sets": 0,
+   "pred_flat": 236,
+   "pred_window": 236
+  },
+  {
+   "run": "CRICUT_VOICE_WEEKLY_INPUT_S9000",
+   "input": "Cricut_Voice_WEEKLY_INPUT.xlsx",
+   "before_target": 242,
+   "after_target": 239,
+   "unmatched_break_sets": 0,
+   "pred_flat": 236,
+   "pred_window": 235
+  },
+  {
+   "run": "CRICUT_VOICE_WEEKLY_INPUT_S9001",
+   "input": "Cricut_Voice_WEEKLY_INPUT.xlsx",
+   "before_target": 244,
+   "after_target": 242,
+   "unmatched_break_sets": 0,
+   "pred_flat": 236,
+   "pred_window": 236
+  },
+  {
+   "run": "E2E_VOICE_FRIENDLY_9000",
+   "input": "Cricut_Voice_LANGUAGE_HOURS_FRIENDLY.xlsx",
+   "before_target": 247,
+   "after_target": 245,
+   "unmatched_break_sets": 0,
+   "pred_flat": 219,
+   "pred_window": 220
+  },
+  {
+   "run": "CRICUT_CHAT",
+   "input": "Cricut_Chat_RC9_1_READY_SKELETON.xlsx",
+   "before_target": 201,
+   "after_target": 166,
+   "unmatched_break_sets": 0,
+   "pred_flat": 92,
+   "pred_window": 107
+  },
+  {
+   "run": "SYNTH_H1_24X7_OVERNIGHT",
+   "input": "SYNTH_H1_24x7_OVERNIGHT.xlsx",
+   "before_target": 168,
+   "after_target": 143,
+   "unmatched_break_sets": 0,
+   "pred_flat": 68,
+   "pred_window": 72
+  },
+  {
+   "run": "AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY",
+   "input": "AE_IT_Choice_WEEKLY_INPUT - Copy - Copy.xlsx",
+   "before_target": 68,
+   "after_target": 68,
+   "unmatched_break_sets": 0,
+   "pred_flat": 68,
+   "pred_window": 62
+  },
+  {
+   "run": "AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY_S9000",
+   "input": "AE_IT_Choice_WEEKLY_INPUT - Copy - Copy.xlsx",
+   "before_target": 64,
+   "after_target": 64,
+   "unmatched_break_sets": 0,
+   "pred_flat": 64,
+   "pred_window": 56
+  },
+  {
+   "run": "AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY_S9001",
+   "input": "AE_IT_Choice_WEEKLY_INPUT - Copy - Copy.xlsx",
+   "before_target": 68,
+   "after_target": 68,
+   "unmatched_break_sets": 0,
+   "pred_flat": 68,
+   "pred_window": 62
+  },
+  {
+   "run": "CRICUT_VOICE_LANGUAGE_HOURS",
+   "input": "Cricut_Voice_LANGUAGE_HOURS.xlsx",
+   "before_target": 249,
+   "after_target": 243,
+   "unmatched_break_sets": 0,
+   "pred_flat": 221,
+   "pred_window": 225
+  },
+  {
+   "run": "CRICUT_VOICE_LANGUAGE_HOURS_S9000",
+   "input": "Cricut_Voice_LANGUAGE_HOURS.xlsx",
+   "before_target": 246,
+   "after_target": 242,
+   "unmatched_break_sets": 0,
+   "pred_flat": 224,
+   "pred_window": 224
+  },
+  {
+   "run": "CRICUT_VOICE_LANGUAGE_HOURS_S9001",
+   "input": "Cricut_Voice_LANGUAGE_HOURS.xlsx",
+   "before_target": 249,
+   "after_target": 243,
+   "unmatched_break_sets": 0,
+   "pred_flat": 221,
+   "pred_window": 225
+  },
+  {
+   "run": "VOICE_ALLROWS2",
+   "input": "VOICE_LANG_WINDOWS_TEST2.xlsx",
+   "before_target": 248,
+   "after_target": 245,
+   "unmatched_break_sets": 0,
+   "pred_flat": 222,
+   "pred_window": 225
+  },
+  {
+   "run": "VOICE_FINAL_SHEET",
+   "input": "Cricut_Voice_LANGUAGE_HOURS.xlsx",
+   "before_target": 250,
+   "after_target": 247,
+   "unmatched_break_sets": 0,
+   "pred_flat": 221,
+   "pred_window": 224
+  },
+  {
+   "run": "C4AB_VOICE_INTERVAL_9001",
+   "input": "Cricut_Voice_RC9_1_READY_SKELETON.xlsx",
+   "before_target": 247,
+   "after_target": 245,
+   "unmatched_break_sets": 0,
+   "pred_flat": 223,
+   "pred_window": 223
+  },
+  {
+   "run": "qr_CHAT_POLISH",
+   "input": "Cricut_Chat_RC9_1_READY_SKELETON.xlsx",
+   "before_target": 193,
+   "after_target": 173,
+   "unmatched_break_sets": 0,
+   "pred_flat": 98,
+   "pred_window": 109
+  },
+  {
+   "run": "qr_S02_DEMAND_SLIGHTLY_ABOVE_CAPACITY",
+   "input": "S02_DEMAND_SLIGHTLY_ABOVE_CAPACITY.xlsx",
+   "before_target": 78,
+   "after_target": 76,
+   "unmatched_break_sets": 0,
+   "pred_flat": 42,
+   "pred_window": 39
+  },
+  {
+   "run": "qr_S08_24x7_WEEK_BOUNDARY",
+   "input": "S08_24x7_WEEK_BOUNDARY.xlsx",
+   "before_target": 168,
+   "after_target": 168,
+   "unmatched_break_sets": 0,
+   "pred_flat": 165,
+   "pred_window": 168
+  },
+  {
+   "run": "qr_S12_OVERLAPPING_SKILLS",
+   "input": "S12_OVERLAPPING_SKILLS.xlsx",
+   "before_target": 84,
+   "after_target": 84,
+   "unmatched_break_sets": 0,
+   "pred_flat": 54,
+   "pred_window": 64
+  },
+  {
+   "run": "qr_VOICE_POLISH",
+   "input": "Cricut_Voice_LANGUAGE_HOURS.xlsx",
+   "before_target": 249,
+   "after_target": 245,
+   "unmatched_break_sets": 0,
+   "pred_flat": 220,
+   "pred_window": 221
+  },
+  {
+   "run": "VOICE_PHASE_A",
+   "input": "Cricut_Voice_LANGUAGE_HOURS.xlsx",
+   "before_target": 250,
+   "after_target": 248,
+   "unmatched_break_sets": 0,
+   "pred_flat": 221,
+   "pred_window": 225
+  },
+  {
+   "run": "VOICE_PHASE_B",
+   "input": "Cricut_Voice_LANGUAGE_HOURS.xlsx",
+   "before_target": 250,
+   "after_target": 248,
+   "unmatched_break_sets": 0,
+   "pred_flat": 221,
+   "pred_window": 223
+  },
+  {
+   "run": "VOICE_PHASE_C",
+   "input": "Cricut_Voice_LANGUAGE_HOURS.xlsx",
+   "before_target": 250,
+   "after_target": 248,
+   "unmatched_break_sets": 0,
+   "pred_flat": 220,
+   "pred_window": 225
+  },
+  {
+   "run": "AEIT_POLISH",
+   "input": "AE_IT_B2B.xlsx",
+   "before_target": 82,
+   "after_target": 74,
+   "unmatched_break_sets": 0,
+   "pred_flat": 67,
+   "pred_window": 60
+  },
+  {
+   "run": "CHAT_POLISH",
+   "input": "Cricut_Chat_RC9_1_READY_SKELETON.xlsx",
+   "before_target": 193,
+   "after_target": 173,
+   "unmatched_break_sets": 0,
+   "pred_flat": 98,
+   "pred_window": 109
+  },
+  {
+   "run": "VOICE_POLISH",
+   "input": "Cricut_Voice_LANGUAGE_HOURS.xlsx",
+   "before_target": 249,
+   "after_target": 245,
+   "unmatched_break_sets": 0,
+   "pred_flat": 220,
+   "pred_window": 221
+  },
+  {
+   "run": "S01_VOLUME",
+   "input": "S01_BASELINE.xlsx",
+   "before_target": 84,
+   "after_target": 84,
+   "unmatched_break_sets": 0,
+   "pred_flat": 54,
+   "pred_window": 64
+  },
+  {
+   "run": "VOICE_VOLUME",
+   "input": "Cricut_Voice_LANGUAGE_HOURS.xlsx",
+   "before_target": 250,
+   "after_target": 248,
+   "unmatched_break_sets": 0,
+   "pred_flat": 218,
+   "pred_window": 221
+  }
+ ],
+ "errors": [
+  {
+   "run": ".",
+   "error": "FileNotFoundError: .: no final workbook or input snapshot"
+  },
+  {
+   "run": "/home/user/Default/evidence/production_readiness_audit/phase_c/e2e_friendly_voice",
+   "error": "FileNotFoundError: /home/user/Default/evidence/production_readiness_audit/phase_c/e2e_friendly_voice: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/RECOVERED_SCHEDULES/AE_AR_CHOICE_seed9001_WINNER",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/RECOVERED_SCHEDULES/AE_AR_CHOICE_seed9001_WINNER: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/RECOVERED_SCHEDULES/AE_IT_CHOICE_seed9001_WINNER",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/RECOVERED_SCHEDULES/AE_IT_CHOICE_seed9001_WINNER: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/chk/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/language_hours",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/chk/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/language_hours: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/colab_sim/results/CRICUT_VOICE_WEEKLY_INPUT/PORTFOLIO",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/colab_sim/results/CRICUT_VOICE_WEEKLY_INPUT/PORTFOLIO: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/colab_sim/results/_seeds/CRICUT_VOICE_WEEKLY_INPUT/PORTFOLIO_BEST",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/colab_sim/results/_seeds/CRICUT_VOICE_WEEKLY_INPUT/PORTFOLIO_BEST: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/extract_f37/RC9_2_2_PRODUCTION_PACKAGE/evidence/production_readiness_audit/phase_c/e2e_friendly_voice",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/extract_f37/RC9_2_2_PRODUCTION_PACKAGE/evidence/production_readiness_audit/phase_c/e2e_friendly_voice: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/extract_f37/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/language_hours",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/extract_f37/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/language_hours: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/extract_f37/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/parity_blank_breaks",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/extract_f37/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/parity_blank_breaks: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/extract_final/RC9_2_2_PRODUCTION_PACKAGE/evidence/production_readiness_audit/phase_c/e2e_friendly_voice",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/extract_final/RC9_2_2_PRODUCTION_PACKAGE/evidence/production_readiness_audit/phase_c/e2e_friendly_voice: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/extract_final/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/language_hours",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/extract_final/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/language_hours: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/extract_final/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/parity_blank_breaks",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/extract_final/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/parity_blank_breaks: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/extract_pilot/RC9_2_2_PRODUCTION_PACKAGE/evidence/production_readiness_audit/phase_c/e2e_friendly_voice",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/extract_pilot/RC9_2_2_PRODUCTION_PACKAGE/evidence/production_readiness_audit/phase_c/e2e_friendly_voice: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/extract_pilot/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/language_hours",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/extract_pilot/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/language_hours: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/extract_pilot/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/parity_blank_breaks",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/extract_pilot/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/parity_blank_breaks: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/f37_pkg/RC9_2_2_PRODUCTION_PACKAGE/evidence/production_readiness_audit/phase_c/e2e_friendly_voice",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/f37_pkg/RC9_2_2_PRODUCTION_PACKAGE/evidence/production_readiness_audit/phase_c/e2e_friendly_voice: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/f37_pkg/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/language_hours",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/f37_pkg/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/language_hours: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/f37_pkg/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/parity_blank_breaks",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/f37_pkg/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/parity_blank_breaks: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/f37_results/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY/PORTFOLIO",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/f37_results/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY/PORTFOLIO: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/f37_results/_seeds/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY/PORTFOLIO_BEST",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/f37_results/_seeds/AE_IT_CHOICE_WEEKLY_INPUT_-_COPY_-_COPY/PORTFOLIO_BEST: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/final/MyDrive/RESULTS/CRICUT_VOICE_LANGUAGE_HOURS/PORTFOLIO",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/final/MyDrive/RESULTS/CRICUT_VOICE_LANGUAGE_HOURS/PORTFOLIO: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/final/MyDrive/RESULTS/_seeds/CRICUT_VOICE_LANGUAGE_HOURS/PORTFOLIO_BEST",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/final/MyDrive/RESULTS/_seeds/CRICUT_VOICE_LANGUAGE_HOURS/PORTFOLIO_BEST: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/final/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/language_hours",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/final/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/language_hours: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/incident/357d9894-RC922_RESULTS_20261005_224024/_seeds",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/incident/357d9894-RC922_RESULTS_20261005_224024/_seeds: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/incident/840decac-RC922_RESULTS_20261005_223905/_seeds",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/incident/840decac-RC922_RESULTS_20261005_223905/_seeds: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/pkgA/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/language_hours",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/pkgA/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/language_hours: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/pkgA/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/parity_blank_breaks",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/pkgA/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/parity_blank_breaks: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/pkgB/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/language_hours",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/pkgB/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/language_hours: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/pkgB/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/parity_blank_breaks",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/pkgB/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/parity_blank_breaks: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/pkgC/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/language_hours",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/pkgC/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/language_hours: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/pkgC/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/parity_blank_breaks",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/pkgC/RC9_2_2_PRODUCTION_PACKAGE/fixtures/real_runs/parity_blank_breaks: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/t90/01a0711d-RC922_RESULTS_20261005_232454/_seeds",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/t90/01a0711d-RC922_RESULTS_20261005_232454/_seeds: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/t90/7ed7dcf4-RC922_RESULTS_20261005_224842/_seeds",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/t90/7ed7dcf4-RC922_RESULTS_20261005_224842/_seeds: no final workbook or input snapshot"
+  },
+  {
+   "run": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/t90/e184be5e-RC922_RESULTS_20261005_232522/_seeds",
+   "error": "FileNotFoundError: /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/t90/e184be5e-RC922_RESULTS_20261005_232522/_seeds: no final workbook or input snapshot"
+  }
+ ]
+}

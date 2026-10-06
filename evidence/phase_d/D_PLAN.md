@@ -315,6 +315,27 @@ Otherwise: recorded, no further work on stage 2 in this form. Either way the
 compute is stated: T and C2 both cost two engine runs; T adds ~30 min of
 4-worker model time.
 
+### Chat check verdict (2026-10-06 ~21:25 Egypt): FAIL, stage 2 stops in this form
+
+Production runner, QUICK 3,600 s, 2 workers, seed 9000, run side by side:
+
+| run | before target | after target | after floor | exit | validator |
+|---|---|---|---|---|---|
+| C4 control (no seed) | 191 | 176 | 233 | 0 | PASS |
+| C2: engine's own week as seed | 192 | 177 | 230 | 0 | PASS, 0 hard |
+| T: model week (179 in model) | 196 | 176 | 232 | 0 | PASS, 0 hard |
+
+Rule: T after-target must exceed max(C2, 176) = 177; T has 176. FAIL. (Exit,
+validator, hard failures and floor conditions hold.)
+
+Reading: the model's week is better before breaks (196 vs 191-192), but the
+engine's break stage loses 20 intervals on it (15 on C2). The seed carries only
+the week; the model's own break plan (179 in the model) is not passed to the
+engine. One seed per arm: exploratory, not a measured effect size.
+Recorded and closed here: no further stage-2 work in this form. A separate
+lead, not pursued without its own pre-registration: the engine's break stage
+may leave intervals on the table (model 179-180 vs engine 176 on the same week).
+
 ## D3a verdict (2026-10-06 ~13:20 Egypt)
 
 Intervals at target after breaks, production settings, control = same

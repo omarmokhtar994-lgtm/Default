@@ -1,0 +1,24 @@
+{
+  "PUB_SDB_R1_SKILL2": {
+    "associates": 33,
+    "reference_status": "OPTIMAL",
+    "active": null,
+    "engine_after_target": 602,
+    "engine_before_target": 602,
+    "break_patterns_unmatched": 0,
+    "break_concurrency_violations": 0,
+    "zero_quarters": 0,
+    "workbook": "PUB_SDB_R1_SKILL2_PERFECT_SEED.xlsx"
+  },
+  "PUB_SDB_R10_SKILL1": {
+    "associates": 21,
+    "reference_status": "OPTIMAL",
+    "active": null,
+    "engine_after_target": 504,
+    "engine_before_target": 504,
+    "break_patterns_unmatched": 0,
+    "break_concurrency_violations": 0,
+    "zero_quarters": 0,
+    "workbook": "PUB_SDB_R10_SKILL1_PERFECT_SEED.xlsx"
+  }
+}

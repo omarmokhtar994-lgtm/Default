@@ -413,6 +413,7 @@ def _full_cover_feasible(cp_model, c, opt, n, relax, a):
     tours = tour_patterns(shifts, relax)
     m = cp_model.CpModel()
     tv = [m.NewIntVar(0, n, "t%d" % i) for i in range(len(tours))]
+    zvars = {}
     m.Add(sum(tv) == n)
     on_cov = [[] for _ in range(WEEK)]
     brk_cov = [[] for _ in range(WEEK)]
@@ -423,6 +424,7 @@ def _full_cover_feasible(cp_model, c, opt, n, relax, a):
             zs = []
             for b in break_offsets(sh):
                 z = m.NewIntVar(0, n, "z%d_%d_%s" % (d, j, b))
+                zvars[(d, j, b)] = z
                 zs.append(z)
                 base = d * SLOTS + sh["start"] // 15
                 for o in range(sh["len"] // 15):
@@ -447,7 +449,108 @@ def _full_cover_feasible(cp_model, c, opt, n, relax, a):
     sv.parameters.num_workers = a.workers
     sv.parameters.random_seed = 1
     st = sv.Solve(m)
+    if getattr(a, "want_solution", False) and st in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        tour_counts = [(tours[i], sv.Value(v)) for i, v in enumerate(tv) if sv.Value(v)]
+        breaks_by_day_shift = {}
+        for d in range(DAYS):
+            for j, key in enumerate(shifts):
+                for b in break_offsets(libsh[key]):
+                    z = zvars[(d, j, b)]
+                    if sv.Value(z):
+                        breaks_by_day_shift.setdefault((d, j), []).extend([b] * sv.Value(z))
+        return sv.StatusName(st), round(sv.WallTime(), 1), {"shifts": shifts, "tours": tour_counts,
+                                                             "breaks": breaks_by_day_shift}
     return sv.StatusName(st), round(sv.WallTime(), 1)
+
+
+# ------------------------------------------------------------------------- perfect
+def cmd_perfect(a) -> int:
+    """Diagnostic D2a: hand the engine a proven-perfect week and score it.
+
+    For each case: solve the full-cover model at the proven minimum roster,
+    turn the tour counts into one weekly tour per associate, and write an
+    engine workbook whose Schedule sheet carries that week (read by the
+    engine's --use-input-schedule-as-seed path) and whose previous Saturday is
+    each associate's own Saturday shift (the cyclic steady state, so the
+    engine's non-cyclic week is the same week). The plan is then scored with
+    the engine's own calculate_metrics. If the engine's metric reports every
+    active interval at target, the metric agrees the plan is perfect, and any
+    shortfall in a seeded run is the search or a later stage, not the metric.
+    """
+    from ortools.sat.python import cp_model
+    E = S.load_engine(a.engine)
+    ref = json.loads(a.reference.read_text())
+    rosters = {k: v["min_roster"] for k, v in ref.items() if v.get("min_roster")}
+    a.out_dir.mkdir(parents=True, exist_ok=True)
+    a.want_solution = True
+    report = {}
+    for iid in TRANSLATED:
+        inst = parse_instance(a.instances / (iid + ".txt"))
+        opt = parse_solution(a.solutions / (iid + "-opt.txt"), inst["skills"])
+        for c in cases_for(a.instances, a.solutions, iid, rosters):
+            if a.only and c["id"] not in a.only.split(","):
+                continue
+            n = c["associates"]
+            res = _full_cover_feasible(cp_model, c, opt, n, set(), a)
+            if len(res) != 3:
+                report[c["id"]] = {"status": res[0], "note": "no full-cover plan at the proven roster"}
+                continue
+            status, secs, sol = res
+            shifts = sol["shifts"]
+            # One tour per associate.
+            week = []
+            for (k, row), cnt in sol["tours"]:
+                week.extend([row] * cnt)
+            assert len(week) == n, (len(week), n)
+            # Break starts per associate-day, dealt from the (day, shift) pools.
+            pools = {key: list(v) for key, v in sol["breaks"].items()}
+            brk = {}
+            for w, row in enumerate(week):
+                for d, j in enumerate(row):
+                    if j is not None and (d, j) in pools:
+                        brk[(w, d)] = pools[(d, j)].pop()
+            labels = [[label(*shifts[j]) if j is not None else "OFF" for j in row] for row in week]
+            c["previous_saturday"] = {w: labels[w][6] for w in range(n) if labels[w][6] != "OFF"}
+            out = a.out_dir / (c["id"] + "_PERFECT_SEED.xlsx")
+            S.build_workbook(a.template, out, c, E, c["demand"])
+            import openpyxl
+            wb = openpyxl.load_workbook(out)
+            ws = wb["Schedule"]
+            for w in range(n):
+                for d in range(DAYS):
+                    ws.cell(3 + w, 7 + d).value = labels[w][d]
+            wb.save(out)
+            # Score with the engine's own metric.
+            parsed = E.parse_input(out)
+            patterns = E.generate_break_patterns(parsed)
+            by_label = {E.norm(sh.label): sh for sh in parsed.shifts}
+            assignment = [["OFF"] * 7 for _ in range(n)]
+            sel_idx = [[None] * 7 for _ in range(n)]
+            selected = {}
+            for w in range(n):
+                for d in range(DAYS):
+                    if labels[w][d] == "OFF":
+                        continue
+                    sh = by_label[E.norm(labels[w][d])]
+                    assignment[w][d] = sh.label
+                    sel_idx[w][d] = sh.index
+                    if (w, d) in brk:
+                        q = brk[(w, d)] // 15
+                        match = [pt for pt in patterns if pt.duration_q == sh.duration_q and pt.breaks[0][0] == q]
+                        selected[(w, d)] = match[0].index if match else None
+            skel = E.SkeletonSolution("perfect", "PERFECT", 0.0, 0.0, assignment, sel_idx, {})
+            met = E.calculate_metrics(parsed, skel, selected, patterns)
+            unmatched = sum(1 for v in selected.values() if v is None)
+            row = {"associates": n, "reference_status": status, "active": met.get("active_intervals"),
+                   "engine_after_target": met.get("after_target"), "engine_before_target": met.get("before_target"),
+                   "break_patterns_unmatched": unmatched,
+                   "break_concurrency_violations": met.get("break_concurrency_violation_count"),
+                   "zero_quarters": len(met.get("zero_qslots", []) or []) if isinstance(met.get("zero_qslots"), list) else met.get("zero_qslot_count"),
+                   "workbook": out.name}
+            report[c["id"]] = row
+            print(c["id"], json.dumps(row), flush=True)
+    (a.out_dir / "PERFECT_SEED_SCORES.json").write_text(json.dumps(report, indent=2))
+    return 0
 
 
 # --------------------------------------------------------------------------- score
@@ -550,16 +653,20 @@ def cmd_score(a) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("build", "bound", "reference", "score"):
+    for name in ("build", "bound", "reference", "perfect", "score"):
         p = sub.add_parser(name)
         p.add_argument("--instances", type=Path, required=True)
         p.add_argument("--solutions", type=Path, required=True)
-        if name == "build":
+        if name in ("build", "perfect"):
             p.add_argument("--engine", type=Path, required=True)
             p.add_argument("--template", type=Path, required=True)
             p.add_argument("--out-dir", type=Path, required=True)
             p.add_argument("--reference", type=Path, required=True,
                            help="reference JSON: each case is built at its smallest proven full-cover roster")
+        if name == "perfect":
+            p.add_argument("--time-limit", type=float, default=300)
+            p.add_argument("--workers", type=int, default=1)
+            p.add_argument("--only", default="")
         if name in ("bound", "reference"):
             p.add_argument("--out", type=Path, required=True)
             p.add_argument("--time-limit", type=float, default=300)
@@ -571,7 +678,7 @@ def main() -> int:
             p.add_argument("--runs", type=Path, required=True)
             p.add_argument("--out-dir", type=Path, required=True)
     a = ap.parse_args()
-    return {"build": cmd_build, "bound": cmd_bound, "reference": cmd_reference, "score": cmd_score}[a.cmd](a)
+    return {"build": cmd_build, "bound": cmd_bound, "reference": cmd_reference, "perfect": cmd_perfect, "score": cmd_score}[a.cmd](a)
 
 
 if __name__ == "__main__":

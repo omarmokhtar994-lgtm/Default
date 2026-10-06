@@ -1,10 +1,28 @@
 {
-  "case": "PUB_SDB_R10_SKILL1_PERFECTSEED",
-  "return_code": 0,
-  "metrics": {
-    "before_target": "504",
-    "after_target": "504",
-    "after_floor": "504",
-    "before_floor": "504"
+  "PUB_SDB_R10_SKILL1_PERFECTSEED": {
+    "return_code": 0,
+    "seeded": {
+      "before_target": "504",
+      "after_target": "504",
+      "after_floor": "504"
+    },
+    "unseeded_control": {
+      "before_target": "294",
+      "after_target": "292",
+      "after_floor": "346"
+    }
+  },
+  "PUB_SDB_R1_SKILL2_PERFECTSEED": {
+    "return_code": 0,
+    "seeded": {
+      "before_target": "602",
+      "after_target": "602",
+      "after_floor": "602"
+    },
+    "unseeded_control": {
+      "before_target": "468",
+      "after_target": "466",
+      "after_floor": "508"
+    }
   }
 }

@@ -44,6 +44,7 @@ from typing import Any, Dict, List, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import build_synthetic_suite as S  # noqa: E402
+from aggregate_seed import add_break_cap  # noqa: E402
 
 SCALE = 10_000
 DAY_COLS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
@@ -69,13 +70,19 @@ def candidates(E, p, max_shifts: int, guide_seconds: float) -> Tuple[List[int], 
     return sorted(set(chosen)), {"guide_status": g.get("status"), "guide_shift_totals": totals}
 
 
-def build(E, wb: Path, out_dir: Path, max_shifts: int, time_limit: float, workers: int) -> Dict[str, Any]:
+def build(E, wb: Path, out_dir: Path, max_shifts: int, time_limit: float, workers: int,
+          all_shifts: bool = False, fix_week: Dict[str, List[str]] = None) -> Dict[str, Any]:
+    """Per-associate variant. Diagnostics: all_shifts uses the whole shift library as
+    candidates; fix_week (name -> 7 day cells) pins x/off to a given week so the model
+    scores that week under its own metric (e.g. the engine's result)."""
     from ortools.sat.python import cp_model
     t0 = time.time()
     p = E.parse_input(wb)
     if p.use_11h_3off:
         return {"workbook": wb.name, "status": "REFUSED", "reason": "11H/3OFF out of scope"}
     cand, ginfo = candidates(E, p, max_shifts, min(45.0, time_limit / 4))
+    if all_shifts:
+        cand = [sh.index for sh in p.shifts]
     shifts = [p.shifts[i] for i in cand]
     A, D, J = len(p.associates), 7, len(shifts)
     qpi = p.qslots_per_interval
@@ -141,6 +148,20 @@ def build(E, wb: Path, out_dir: Path, max_shifts: int, time_limit: float, worker
                         m.Add(x[a, d, j1] + x[a, (d + 1) % 7, j2] <= 1)
         if p.fixed_enabled and assoc.nesting_group:
             nest.setdefault(E.norm(assoc.nesting_group), []).append(a)
+    pinned = 0
+    for a, assoc in enumerate(p.associates):
+        cells = (fix_week or {}).get(E.norm(assoc.name))
+        if not cells:
+            continue
+        for d in range(D):
+            v = str(cells[d] or "").strip()
+            js = [j for j, sh in enumerate(shifts) if E.norm(sh.label) == E.norm(v)]
+            if js:
+                m.Add(x[a, d, js[0]] == 1); pinned += 1
+            elif E.preference_kind(v) == "off":
+                m.Add(off[a, d] == 1); pinned += 1
+            elif E.preference_kind(v) == "shift":
+                raise ValueError(f"fix_week: {assoc.name} day {d} shift {v!r} is not a candidate")
     for members in nest.values():
         for b in members[1:]:
             for d in range(D):
@@ -182,8 +203,7 @@ def build(E, wb: Path, out_dir: Path, max_shifts: int, time_limit: float, worker
         if onbreak_total[t]:
             b = sum(onbreak_total[t])
             f = sum(sum(onfloor[c][t]) for c in classes)
-            m.Add(b <= absolute)
-            m.Add(100 * b <= int(round(ratio * 100)) * (b + f + prior[t]))
+            add_break_cap(m, b, b + f + prior[t], ratio, absolute)
     rows = []
     for d in range(D):
         for i in range(p.intervals_per_day):
@@ -222,7 +242,7 @@ def build(E, wb: Path, out_dir: Path, max_shifts: int, time_limit: float, worker
     sv.parameters.num_workers = workers
     sv.parameters.random_seed = 1
     st1 = sv.Solve(m)
-    info = {"workbook": wb.name, "associates": A, "candidate_shifts": [sh.label for sh in shifts],
+    info = {"workbook": wb.name, "associates": A, "pinned_cells": pinned, "candidate_shifts": [sh.label for sh in shifts],
             "language_classes": len(classes), "phase1": {"status": sv.StatusName(st1), "seconds": round(sv.WallTime(), 1)}, **ginfo}
     if st1 not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         info["status"] = "NO_SEED"
@@ -430,8 +450,7 @@ def build_grouped(E, wb: Path, out_dir: Path, max_shifts: int, time_limit: float
         if onbreak_total[t]:
             b = sum(onbreak_total[t]); f = sum(sum(onfloor[c][t]) for c in classes)
             sl = m.NewIntVar(0, len(p.associates), f"cs{t}")
-            m.Add(b <= absolute + sl)
-            m.Add(100 * b <= int(round(ratio * 100)) * (b + f + prior[t]) + 100 * sl)
+            add_break_cap(m, b, b + f + prior[t], ratio, absolute, slack=sl)
             cap_slack.append(sl)
     rows = []
     for d in range(7):
@@ -549,13 +568,27 @@ def main() -> int:
     ap.add_argument("--workers", type=int, default=2)
     ap.add_argument("--variant", choices=("grouped", "per-associate"), default="grouped")
     ap.add_argument("--variety-cap", type=int, default=2)
+    ap.add_argument("--all-shifts", action="store_true", help="per-associate: every library shift is a candidate")
+    ap.add_argument("--fix-week-from", type=Path, help="per-associate diagnostic: pin the week in this workbook's "
+                    "'Final Schedule' (or 'Schedule') sheet and score it under the seed model's metric")
     ap.add_argument("workbooks", nargs="+", type=Path)
     a = ap.parse_args()
     E = S.load_engine(a.engine)
+    fix = None
+    if a.fix_week_from:
+        import openpyxl
+        book = openpyxl.load_workbook(a.fix_week_from, read_only=True)
+        ws = book["Final Schedule"] if "Final Schedule" in book.sheetnames else book["Schedule"]
+        rows = list(ws.iter_rows(values_only=True))
+        h = next(i for i, r in enumerate(rows) if "Sun" in [str(v or "").strip() for v in r])
+        hdr = [str(v or "").strip() for v in rows[h]]
+        nc, dc = hdr.index("SF Name") if "SF Name" in hdr else hdr.index("Name"), [hdr.index(dn) for dn in DAY_COLS]
+        fix = {E.norm(str(r[nc])): [r[c] for c in dc] for r in rows[h + 1:] if r[nc]}
     report = {}
     for wb in a.workbooks:
         row = (build_grouped(E, wb, a.out_dir, a.max_shifts, a.time_limit, a.workers, a.variety_cap)
-               if a.variant == "grouped" else build(E, wb, a.out_dir, a.max_shifts, a.time_limit, a.workers))
+               if a.variant == "grouped" else build(E, wb, a.out_dir, a.max_shifts, a.time_limit, a.workers,
+                                                  a.all_shifts, fix))
         report[wb.name] = row
         print(json.dumps(row, default=str), flush=True)
         a.out_dir.mkdir(parents=True, exist_ok=True)

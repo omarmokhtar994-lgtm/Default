@@ -44,6 +44,21 @@ from typing import Any, Dict, List, Optional, Tuple
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import build_synthetic_suite as S  # noqa: E402
 
+
+def add_break_cap(m, b, staffed, ratio: float, absolute: int, slack=None) -> None:
+    """Concurrent-break cap on one quarter: breaks `b` among `staffed` heads (on
+    floor + on break + carry-in), equal to the engine's maximum_concurrent_breaks:
+    min(staffed - 1, max(1, floor(ratio * staffed)), max(1, absolute)), 0 when
+    staffed <= 1. `slack` (IntVar) lets b exceed that cap by at most slack."""
+    sl = 0 if slack is None else slack
+    m.Add(b <= max(1, int(absolute)) + sl)
+    some = m.NewBoolVar("")  # b >= 1 (beyond slack) needs someone left working
+    m.Add(b <= sl).OnlyEnforceIf(some.Not())
+    m.Add(b + 1 <= staffed + sl).OnlyEnforceIf(some)
+    many = m.NewBoolVar("")  # beyond the guaranteed one break, the ratio applies
+    m.Add(b <= 1 + sl).OnlyEnforceIf(many.Not())
+    m.Add(100 * b <= int(round(ratio * 100)) * staffed + 100 * sl).OnlyEnforceIf(many)
+
 SCALE = 10_000
 DAY_COLS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
@@ -150,8 +165,7 @@ def build_seed(E, wb: Path, out_dir: Path, max_shifts: int, time_limit: float, w
     for t in range(7 * 96):
         if onbreak[t]:
             b, f = sum(onbreak[t]), sum(onfloor[t])
-            m.Add(b <= absolute)
-            m.Add(100 * b <= int(round(ratio * 100)) * (b + f + prior[t]))
+            add_break_cap(m, b, b + f + prior[t], ratio, absolute)
     # Phase 1: minimise total shortfall (linear, LP-friendly); zero shortfall
     # means every active interval is at target. Phase 2: maximise intervals at
     # target, hinted with phase 1's solution, for the rest of the budget.

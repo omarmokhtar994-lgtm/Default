@@ -195,6 +195,33 @@ the seed restricts variety to 2 and candidates to the guide's 12 shifts.
 Paused until the machine is free and the stage-1 A/B has reported. No real
 workbook A/B runs until a seed beats the engine's own result in the model.
 
+## D3 stage 2 root cause (2026-10-06 ~16:45 Egypt; tools only, engine untouched)
+
+Investigated with systematic-debugging, read-only/low priority beside queue2.
+* The engine's Cricut Chat week (C4 control, seed 9000: 191 before / 176
+  after breaks) is outside the seed model's search space: 42 of its 128
+  shift-days use shifts outside the 12 guide candidates, and 19 of 27
+  associates work 3 different shifts (workbook limit 3; grouped seed cap 2).
+* Pinned to that week (new diagnostic `--fix-week-from`, `--all-shifts`), the
+  seed model scored it 126 after breaks, while its own coverage formula gives
+  191 before breaks (= engine). The model's coverage is right; its breaks
+  were wrong.
+* Root cause: the seed models' concurrent-break cap was `ratio x staffed`
+  only. The engine's `maximum_concurrent_breaks` guarantees one break from 2
+  staffed heads: min(staffed - 1, max(1, floor(ratio x staffed)),
+  max(1, absolute)). At ratio 0.3 the seed forbade every break with 2-3 heads
+  on floor (night hours), and with ratio 1.0 it allowed everyone on break.
+  Same formula in all three sites (stage-1 tool, both stage-2 variants).
+* Fix: one shared `add_break_cap` in `tools/aggregate_seed.py`, exact to the
+  engine's rule. Failing first: `tests_staged/test_rc9_2_44_seed_break_cap.py`
+  (28 mismatches before the fix, `scratchpad` red log), green after.
+  The diagnostic options were written before a test (disclosed).
+* queue2 (stage-1 A/B) is unaffected: its seeds were generated before this
+  fix, from the conservative cap, and the A/B stands on those seeds.
+* Next, after queue2 (no CPU contention with measured runs): re-score the
+  pinned engine week (expect ~176), then the full-CPU Chat seed trial with all
+  shifts and the workbook's variety limit.
+
 ## D3a verdict (2026-10-06 ~13:20 Egypt)
 
 Intervals at target after breaks, production settings, control = same

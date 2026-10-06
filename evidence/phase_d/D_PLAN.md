@@ -125,3 +125,18 @@ public cases). A/B: the treatment is the same workbook plus the generated seed;
 the control is the existing benchmark run. The D4 rule applies to the public
 part. Real programs (languages, leave, preferences) need class-aware
 aggregation (stage 2), pre-registered separately before its code.
+
+## D3 stage-1 A/B (pre-registered 2026-10-06 ~10:50 Egypt, before any seeded run)
+
+Seeds: `tools/aggregate_seed.py --max-shifts 10 --time-limit 160 --workers 1`
+on the 11 public workbooks, from the workbook alone. Treatment: the same
+workbook with the seed in its Schedule sheet, production runner, QUICK 3,600 s,
+2 workers, seed 9000, two runs at a time. Control: the benchmark runs (R5: the
+clean reruns on the current engine).
+
+Promote stage 1 to engine integration (stage 2 design) only if ALL hold:
+1. every treatment run: exit 0, validator PASS, 0 hard failures;
+2. no case loses more than 1% of its active intervals at target vs control;
+3. summed intervals at target over the 11 cases close at least 25% of the
+   combined gap between control and the proven 100%.
+Otherwise: document, keep as a tool, root-cause before any further step.

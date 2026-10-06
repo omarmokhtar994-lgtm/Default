@@ -60,3 +60,28 @@ Default-on only if ALL hold:
 
 If 1-3 and 5 pass but 4 fails: keep the flag, default off, documented.
 If 1, 2 or 5 fails: keep default off, root-cause, report.
+
+## D3a (added 2026-10-06 ~07:15 Egypt time, before its code exists)
+
+Finding: the engine already has an aggregate day/shift-count guide
+(`aggregate_pattern_mix_guidance`, HiGHS MILP, before breaks) that steers
+Stage-1 through day and shift-count targets. It refuses any workbook whose
+shifts are not all 540 minutes (`SKIPPED_UNSUPPORTED_MIXED_PATTERN`). Both
+scored public cases (R1, R10: 7.5-10 h shifts) ran without it. Its constraints
+(per-day counts, OFF pairs or OFF days, coverage via
+`shift_covers_week_qslot`) use each shift's real length, so the 540 guard
+looks unnecessary while `strict_off` holds and 11H/3OFF is off.
+
+Change: a workbook/engine switch "Aggregate Guide Mixed Durations" (default
+No) that lifts only the 540-minute condition. All-9 h workbooks (every real
+program, every synthetic case) take the identical code path either way.
+
+Decision rule:
+1. A test proves the 7 real workbooks and the synthetic cases get the same
+   guide status and targets with the switch on and off.
+2. Treatment runs on public R1 skill 2, R10 skill 1 and R5 skill 1 (switch on;
+   same seed, budget and workers as the benchmark control runs, two at a time):
+   validator PASS, parity PASS, 0 hard failures on every run.
+3. Default becomes Yes only if the summed intervals at target over those cases
+   beat the control sum and no case loses more than 1% of its active intervals.
+   Otherwise the switch stays, default No, with the result documented.

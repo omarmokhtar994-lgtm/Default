@@ -72,7 +72,8 @@ def candidates(E, p, max_shifts: int, guide_seconds: float) -> Tuple[List[int], 
 
 def build(E, wb: Path, out_dir: Path, max_shifts: int, time_limit: float, workers: int,
           all_shifts: bool = False, fix_week: Dict[str, List[str]] = None, week_mode: str = "pin",
-          hint_breaks: List[Tuple[str, int, str, str, int]] = None, export_breaks: Path = None) -> Dict[str, Any]:
+          hint_breaks: List[Tuple[str, int, str, str, int]] = None, export_breaks: Path = None,
+          min_floor_hits: int = 0) -> Dict[str, Any]:
     """Per-associate variant. Diagnostics: all_shifts uses the whole shift library as
     candidates; fix_week (name -> 7 day cells) pins x/off to a given week so the model
     scores that week under its own metric (e.g. the engine's result); with
@@ -80,7 +81,9 @@ def build(E, wb: Path, out_dir: Path, max_shifts: int, time_limit: float, worker
     hint_breaks (name, day, shift label, start HH:MM, minutes) completes that hint
     with the break-count variables (a CP-SAT hint is reliable only when complete).
     export_breaks writes the chosen week and break plan (break counts dealt to the
-    class's associates working that shift) as JSON, for scoring with the engine."""
+    class's associates working that shift) as JSON, for scoring with the engine.
+    min_floor_hits: at least that many intervals at the floor ratio after breaks
+    (the engine protects the floor; a target-only objective trades it away)."""
     from ortools.sat.python import cp_model
     t0 = time.time()
     p = E.parse_input(wb)
@@ -246,7 +249,7 @@ def build(E, wb: Path, out_dir: Path, max_shifts: int, time_limit: float, worker
             b = sum(onbreak_total[t])
             f = sum(sum(onfloor[c][t]) for c in classes)
             add_break_cap(m, b, b + f + prior[t], ratio, absolute)
-    rows = []
+    rows, floor_rows = [], []
     for d in range(D):
         for i in range(p.intervals_per_day):
             if not p.active[d][i]:
@@ -259,6 +262,7 @@ def build(E, wb: Path, out_dir: Path, max_shifts: int, time_limit: float, worker
             qs = [d * 96 + i * qpi + k for k in range(qpi)]
             lhs = coef * sum(sum(onfloor[c][q]) for c in classes for q in qs) + coef * sum(prior[q] for q in qs)
             rows.append((lhs, int(math.ceil(need * SCALE - 1e-6))))
+            floor_rows.append((lhs, int(math.ceil(need * float(p.floor_ratio) / max(p.target_ratio, 1e-9) * SCALE - 1e-6))))
     lang_short = []
     for t in range(7 * 96):
         d, minute = t // 96, (t % 96) * 15
@@ -278,6 +282,13 @@ def build(E, wb: Path, out_dir: Path, max_shifts: int, time_limit: float, worker
         m.Add(s_ >= rhs - lhs)
         short.append(s_)
     lang_w = SCALE * 100
+    if min_floor_hits:
+        fh = []
+        for k, (lhs, rhs) in enumerate(floor_rows):
+            b = m.NewBoolVar(f"f{k}")
+            m.Add(lhs >= rhs).OnlyEnforceIf(b)
+            fh.append(b)
+        m.Add(sum(fh) >= int(min_floor_hits))
     m.Minimize(lang_w * sum(lang_short) + sum(short))
     sv = cp_model.CpSolver()
     sv.parameters.max_time_in_seconds = time_limit * 0.5
@@ -632,6 +643,7 @@ def main() -> int:
                     "'Final Schedule' (or 'Schedule') sheet and score it under the seed model's metric")
     ap.add_argument("--hint-breaks-from", type=Path, help="with --fix-week-from: also hint the breaks in "
                     "this workbook's 'Break Schedule' sheet (complete hint)")
+    ap.add_argument("--min-floor-hits", type=int, default=0, help="per-associate: keep at least N intervals at floor")
     ap.add_argument("--export-breaks", type=Path, help="per-associate: write the chosen week + break plan as JSON")
     ap.add_argument("--week-mode", choices=("pin", "hint"), default="pin",
                     help="with --fix-week-from: pin the week (diagnostic) or only hint it (warm start)")
@@ -658,7 +670,8 @@ def main() -> int:
     for wb in a.workbooks:
         row = (build_grouped(E, wb, a.out_dir, a.max_shifts, a.time_limit, a.workers, a.variety_cap)
                if a.variant == "grouped" else build(E, wb, a.out_dir, a.max_shifts, a.time_limit, a.workers,
-                                                  a.all_shifts, fix, a.week_mode, brk, a.export_breaks))
+                                                  a.all_shifts, fix, a.week_mode, brk, a.export_breaks,
+                                                  a.min_floor_hits))
         report[wb.name] = row
         print(json.dumps(row, default=str), flush=True)
         a.out_dir.mkdir(parents=True, exist_ok=True)

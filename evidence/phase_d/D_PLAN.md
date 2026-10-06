@@ -336,6 +336,26 @@ Recorded and closed here: no further stage-2 work in this form. A separate
 lead, not pursued without its own pre-registration: the engine's break stage
 may leave intervals on the table (model 179-180 vs engine 176 on the same week).
 
+### Break-stage lead checked (2026-10-06 ~21:55 Egypt): closed, no headroom shown
+
+Measurement only (no engine change). Week = the T run's final week (engine:
+196 before, 176 at target / 232 at floor after breaks). Model places the breaks
+(pinned week, engine breaks as a complete hint, 4 workers, 450 + 450 s); plan
+scored by `tools/score_break_plan.py`, the engine's own calculate_metrics,
+calibrated to reproduce the engine's figures exactly.
+
+| breaks by | at target | at floor | cap violations |
+|---|---|---|---|
+| engine | 176 | 232 | 0 |
+| model, target only | 184 | 205 | 0 |
+| model, floor >= 232 | 171 | 232 | 0 |
+
+The 179-184 "lead" was bought with the floor (-27), which the engine protects
+by design. Holding the floor, the model did worse than the engine (its phase 2
+starts from its own phase-1 solution, so the engine's hinted plan was not kept).
+No evidence that the engine's break stage leaves intervals on this week.
+Closed; nothing to pre-register.
+
 ## D3a verdict (2026-10-06 ~13:20 Egypt)
 
 Intervals at target after breaks, production settings, control = same

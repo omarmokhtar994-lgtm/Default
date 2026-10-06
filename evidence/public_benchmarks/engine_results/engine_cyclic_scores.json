@@ -1,0 +1,75 @@
+{
+  "PUB_SDB_R1_SKILL1": {
+    "active": 602,
+    "hit": 552,
+    "under_slots": 98,
+    "over_slots": 764,
+    "workbook": "PUB_SDB_R1_SKILL1/production/PUB_SDB_R1_SKILL1_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"
+  },
+  "PUB_SDB_R1_SKILL2": {
+    "active": 602,
+    "hit": 444,
+    "under_slots": 508,
+    "over_slots": 884,
+    "workbook": "PUB_SDB_R1_SKILL2/production/PUB_SDB_R1_SKILL2_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"
+  },
+  "PUB_SDB_R5_SKILL1": {
+    "active": 630,
+    "hit": 545,
+    "under_slots": 280,
+    "over_slots": 860,
+    "workbook": "PUB_SDB_R5_SKILL1/production/PUB_SDB_R5_SKILL1_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"
+  },
+  "PUB_SDB_R5_SKILL2": {
+    "active": 630,
+    "hit": 524,
+    "under_slots": 238,
+    "over_slots": 748,
+    "workbook": "PUB_SDB_R5_SKILL2/production/PUB_SDB_R5_SKILL2_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"
+  },
+  "PUB_SDB_R6_SKILL1": {
+    "active": 644,
+    "hit": 534,
+    "under_slots": 366,
+    "over_slots": 716,
+    "workbook": "PUB_SDB_R6_SKILL1/production/PUB_SDB_R6_SKILL1_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"
+  },
+  "PUB_SDB_R6_SKILL2": {
+    "active": 644,
+    "hit": 537,
+    "under_slots": 432,
+    "over_slots": 786,
+    "workbook": "PUB_SDB_R6_SKILL2/production/PUB_SDB_R6_SKILL2_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"
+  },
+  "PUB_SDB_R7_SKILL1": {
+    "active": 630,
+    "hit": 450,
+    "under_slots": 582,
+    "over_slots": 654,
+    "workbook": "PUB_SDB_R7_SKILL1/production/PUB_SDB_R7_SKILL1_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"
+  },
+  "PUB_SDB_R7_SKILL2": {
+    "active": 630,
+    "hit": 518,
+    "under_slots": 314,
+    "over_slots": 656,
+    "workbook": "PUB_SDB_R7_SKILL2/production/PUB_SDB_R7_SKILL2_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"
+  },
+  "PUB_SDB_R7_SKILL3": {
+    "status": "NO_PUBLISHED_SCHEDULE"
+  },
+  "PUB_SDB_R10_SKILL1": {
+    "active": 504,
+    "hit": 306,
+    "under_slots": 556,
+    "over_slots": 740,
+    "workbook": "PUB_SDB_R10_SKILL1/production/PUB_SDB_R10_SKILL1_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"
+  },
+  "PUB_SDB_R10_SKILL2": {
+    "active": 504,
+    "hit": 320,
+    "under_slots": 456,
+    "over_slots": 646,
+    "workbook": "PUB_SDB_R10_SKILL2/production/PUB_SDB_R10_SKILL2_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"
+  }
+}

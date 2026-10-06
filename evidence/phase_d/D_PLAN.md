@@ -356,6 +356,22 @@ starts from its own phase-1 solution, so the engine's hinted plan was not kept).
 No evidence that the engine's break stage leaves intervals on this week.
 Closed; nothing to pre-register.
 
+## D1 second pass (2026-10-06 ~22:25 Egypt): inconclusive by method
+
+* Staff-capacity bound (at most 5 shifts per associate x on-floor quarters,
+  each interval's head-quarters to hit target, cheapest first): equals the
+  active count for 6 of 7 programs; NMG EN+SP 244 of 252. Chat is the tightest
+  in capacity (4,320 available vs 4,222 demanded) but not bounded by it.
+* Relaxed exact model (`tools/real_program_bounds.py`), Chat, 4 workers,
+  1,800 s, peak RSS 646 MB: best relaxed plan 211, proven bound still 242
+  (`D1_BOUNDS_SECOND_PASS_CHAT.json`). Engine: 176. The 211 relaxes languages,
+  rest, variety, leave, fixed, caps and per-associate days, so it is not a
+  reachable target, and the bound proves nothing.
+* Reading: hit-count objectives have weak LP relaxations; more CPU on this model
+  will not prove a useful ceiling. D1 stops here without a tighter method
+  (e.g. a shift-shape bound that keeps 9-hour blocks). AE_AR_B2B remains the
+  only program with a proven ceiling (168, engine 167).
+
 ## D3a verdict (2026-10-06 ~13:20 Egypt)
 
 Intervals at target after breaks, production settings, control = same

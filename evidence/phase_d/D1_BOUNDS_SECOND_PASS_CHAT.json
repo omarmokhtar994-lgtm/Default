@@ -1,0 +1,16 @@
+{
+  "Cricut_Chat_WEEKLY_INPUT.xlsx": {
+    "workbook": "Cricut_Chat_WEEKLY_INPUT.xlsx",
+    "associates": 27,
+    "shifts": 24,
+    "interval_minutes": 30,
+    "target_ratio": 1.0,
+    "active_intervals": 242,
+    "status": "FEASIBLE",
+    "best_feasible_hits": 211,
+    "upper_bound": 242,
+    "solve_seconds": 1800.0,
+    "total_seconds": 1800.8,
+    "relaxed": "languages, coverage split, rest, variety, preferences, leave, fixed, opening, overage caps, break-concurrency caps, blank rule, per-associate day assignment"
+  }
+}

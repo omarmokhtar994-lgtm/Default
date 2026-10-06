@@ -1,6 +1,6 @@
 # Public benchmark: Bonutti et al. (2017) shift-design instances through the engine
 
-Status: all 11 cases complete (R5 reruns on the current engine queued; see note).
+Status: all 11 cases complete, including clean R5 reruns (see note).
 
 ## Why this set
 
@@ -66,8 +66,11 @@ under/overstaffing sums exactly: R1 606 / 1,648, R5 518 / 1,608, R6 798 /
 
 \* R5: the engine finished (exit 0, validator PASS); the packager refused
 because the engine file was edited mid-run (Phase D3a commit) and its identity
-check caught the mismatch. Both cases are rerun on the current engine.
-Recorded in `evidence/phase_d/D_PLAN.md` (incident log).
+check caught the mismatch. Both cases were rerun on the current engine and
+packaged normally (exit 0, validator PASS): R5 skill 1 542 / 536, R5 skill 2
+536 at target after breaks (before / after for skill 1). Recorded in
+`evidence/phase_d/D_PLAN.md` (incident log). The two runs of each case differ
+by 9-12 intervals, which is the run-to-run spread to expect at this budget.
 
 ## What it shows
 

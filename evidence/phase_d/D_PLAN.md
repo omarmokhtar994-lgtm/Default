@@ -280,6 +280,21 @@ The entry above overstated the break cap as "the" root cause. Measured since:
   no LNS; ~19k break-count variables). Next: the same pinned solve with 2-4
   workers and the engine solution as a hint, then the free-week trial.
 
+### Full-CPU trials (2026-10-06 ~19:25-20:10 Egypt, machine free)
+
+* Pinned engine Chat week, table cap, 4 workers, 240 s per phase: phase 2 found
+  break placements the model scores at 180 after breaks (engine shipped 176 for
+  the same week). Lead only: the model's breaks are not exported or checked by
+  `calculate_metrics` and the validator yet. Peak RSS 1.1 GB.
+* Free week (all 24 shifts, workbook variety limit, exact cap), 4 workers,
+  900 s phase 1: UNKNOWN, no seed (peak RSS 1.7 GB). Finding any valid week is
+  the hard part: every shift needs a legal break under a per-quarter cap.
+  Third search failure on this model, so no more tweaks of the free search.
+* Next experiment: the same model warm-started from the engine's week as a
+  hint only (`--week-mode hint`), i.e. "improve the engine's week" rather than
+  "build a week from nothing". Written before a test (experimental tool option,
+  disclosed).
+
 ## D3a verdict (2026-10-06 ~13:20 Egypt)
 
 Intervals at target after breaks, production settings, control = same

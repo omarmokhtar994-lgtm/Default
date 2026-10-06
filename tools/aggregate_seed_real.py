@@ -71,10 +71,11 @@ def candidates(E, p, max_shifts: int, guide_seconds: float) -> Tuple[List[int], 
 
 
 def build(E, wb: Path, out_dir: Path, max_shifts: int, time_limit: float, workers: int,
-          all_shifts: bool = False, fix_week: Dict[str, List[str]] = None) -> Dict[str, Any]:
+          all_shifts: bool = False, fix_week: Dict[str, List[str]] = None, week_mode: str = "pin") -> Dict[str, Any]:
     """Per-associate variant. Diagnostics: all_shifts uses the whole shift library as
     candidates; fix_week (name -> 7 day cells) pins x/off to a given week so the model
-    scores that week under its own metric (e.g. the engine's result)."""
+    scores that week under its own metric (e.g. the engine's result); with
+    week_mode="hint" the week is only a solution hint (a known-valid start)."""
     from ortools.sat.python import cp_model
     t0 = time.time()
     p = E.parse_input(wb)
@@ -156,7 +157,12 @@ def build(E, wb: Path, out_dir: Path, max_shifts: int, time_limit: float, worker
         for d in range(D):
             v = str(cells[d] or "").strip()
             js = [j for j, sh in enumerate(shifts) if E.norm(sh.label) == E.norm(v)]
-            if js:
+            if week_mode == "hint":
+                for j in range(J):
+                    m.AddHint(x[a, d, j], 1 if js and j == js[0] else 0)
+                m.AddHint(off[a, d], 1 if not js and E.preference_kind(v) == "off" else 0)
+                pinned += 1
+            elif js:
                 m.Add(x[a, d, js[0]] == 1); pinned += 1
             elif E.preference_kind(v) == "off":
                 m.Add(off[a, d] == 1); pinned += 1
@@ -242,7 +248,7 @@ def build(E, wb: Path, out_dir: Path, max_shifts: int, time_limit: float, worker
     sv.parameters.num_workers = workers
     sv.parameters.random_seed = 1
     st1 = sv.Solve(m)
-    info = {"workbook": wb.name, "associates": A, "pinned_cells": pinned, "candidate_shifts": [sh.label for sh in shifts],
+    info = {"workbook": wb.name, "associates": A, "pinned_cells": pinned, "week_mode": week_mode if fix_week else None, "candidate_shifts": [sh.label for sh in shifts],
             "language_classes": len(classes), "phase1": {"status": sv.StatusName(st1), "seconds": round(sv.WallTime(), 1)}, **ginfo}
     if st1 not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         info["status"] = "NO_SEED"
@@ -250,6 +256,7 @@ def build(E, wb: Path, out_dir: Path, max_shifts: int, time_limit: float, worker
     p1_zero = [sv.Value(s_) == 0 for s_ in short]
     info["phase1"].update(shortfall_zero_intervals=sum(p1_zero), language_shortfall=sum(sv.Value(v) for v in lang_short))
     p1_x = {k: sv.Value(v) for k, v in x.items()}
+    m.clear_hints()
     for v in list(x.values()) + list(off.values()) + zlist:
         m.AddHint(v, sv.Value(v))
     for v in lang_short:
@@ -571,6 +578,8 @@ def main() -> int:
     ap.add_argument("--all-shifts", action="store_true", help="per-associate: every library shift is a candidate")
     ap.add_argument("--fix-week-from", type=Path, help="per-associate diagnostic: pin the week in this workbook's "
                     "'Final Schedule' (or 'Schedule') sheet and score it under the seed model's metric")
+    ap.add_argument("--week-mode", choices=("pin", "hint"), default="pin",
+                    help="with --fix-week-from: pin the week (diagnostic) or only hint it (warm start)")
     ap.add_argument("workbooks", nargs="+", type=Path)
     a = ap.parse_args()
     E = S.load_engine(a.engine)
@@ -588,7 +597,7 @@ def main() -> int:
     for wb in a.workbooks:
         row = (build_grouped(E, wb, a.out_dir, a.max_shifts, a.time_limit, a.workers, a.variety_cap)
                if a.variant == "grouped" else build(E, wb, a.out_dir, a.max_shifts, a.time_limit, a.workers,
-                                                  a.all_shifts, fix))
+                                                  a.all_shifts, fix, a.week_mode))
         report[wb.name] = row
         print(json.dumps(row, default=str), flush=True)
         a.out_dir.mkdir(parents=True, exist_ok=True)

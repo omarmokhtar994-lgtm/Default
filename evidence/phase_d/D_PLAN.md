@@ -140,3 +140,37 @@ Promote stage 1 to engine integration (stage 2 design) only if ALL hold:
 3. summed intervals at target over the 11 cases close at least 25% of the
    combined gap between control and the proven 100%.
 Otherwise: document, keep as a tool, root-cause before any further step.
+
+## D3 stage 2: real programs (pre-registered 2026-10-06 ~11:00 Egypt, before its code)
+
+Real workbooks add, per `real profile` (7 ready-to-edit workbooks): leave and
+hard-OFF days (e.g. AE_AR_B2B 13 leave, 20 hard OFF), fixed shifts and fixed
+OFF (Cricut Voice 75 + 30, NMG EN 150 + 60), language minimums (GDI UK and
+Bilingual/French, NMG EN+SP Spanish, single-language English minimum 1
+elsewhere), carry-in on up to 21 associates, separate OFF days (Voice), and
+2-3 different shifts per week.
+
+Design (tool only, no engine change):
+* associates grouped by signature (language, per-day availability from leave
+  / hard OFF / fixed cells, fixed shift cells, last Saturday's shift);
+* each group gets only the tours it may legally work (its OFF rule, its fixed
+  cells, its unavailable days, rest after its own carry-in, at most the
+  workbook's number of different shifts, capped at 2 for the seed);
+* candidate shifts from the engine's aggregate guide plus every fixed shift;
+* integer count per (group, tour); break counts per (language class, day,
+  shift, pattern); language minimums enforced on on-floor eligible heads;
+  shortfall-first then intervals-at-target, the engine's metric;
+* groups dealt to their own associates.
+
+A/B (real programs): control = current engine without a seed; treatment = same
+workbook with the stage-2 seed. Production runner, QUICK 3,600 s, 2 workers,
+seed 9000, two runs at a time, all 7 real workbooks. Rule = D4 items 1, 2, 3, 5:
+1. every treatment run exit 0, validator PASS, parity PASS, 0 hard failures,
+   no new refusal;
+2. no workbook loses more than 1 interval at target AND none loses more than 1
+   interval at floor versus its control;
+3. summed intervals at target over the 7 is at least the control sum;
+5. peak RAM within 20% of control, wall time within budget.
+Before any A/B: if the seed model's own predicted intervals-at-target are not
+above the engine's latest result for a workbook, that workbook is reported as
+"no headroom found" and the A/B still runs (to test for harm).

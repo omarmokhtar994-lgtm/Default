@@ -85,3 +85,14 @@ Decision rule:
 3. Default becomes Yes only if the summed intervals at target over those cases
    beat the control sum and no case loses more than 1% of its active intervals.
    Otherwise the switch stays, default No, with the result documented.
+
+## Incident log
+
+* 2026-10-06 ~07:30 Egypt: the D3a engine commit landed while public-benchmark
+  runs R5 skill 1 and 2 were in flight (started ~06:25 on the previous engine).
+  The packager's identity check then refused to package R5 skill 1 ("Validated
+  engine identity does not match the production manifest"); the engine result
+  itself was valid (exit 0, validator PASS, 545/630 at target). The guard did
+  its job; the cause was editing the engine mid-run. Both R5 cases are rerun on
+  the current engine (queue1 *_RERUN), and they are the D3a control for R5.
+  Rule adopted: no engine edits while a measured run is in flight.

@@ -826,6 +826,10 @@ class ParsedInput:
     # None = the engine default (SHIFT_CONSISTENCY_POLISH_ENABLED); Yes/No in
     # the workbook's "Shift Consistency Polish" row overrides it.
     shift_consistency_polish: Optional[bool] = None
+    # Phase D3a: "Aggregate Guide Mixed Durations" = Yes lets the aggregate
+    # day/shift guide run when shifts are not all 540 minutes. Default No keeps
+    # the old refusal; all-9 h workbooks take the same path either way.
+    aggregate_guide_mixed_durations: bool = False
     coverage_split_rules: List[CoverageSplitRule] = field(default_factory=list)
     coverage_split_source: str = "ABSENT"
     coverage_split_gate_mode: str = "hard"
@@ -1464,6 +1468,7 @@ BOOLEAN_INSTRUCTION_ALIASES: Tuple[Tuple[str, ...], ...] = (
     ("Logic-Based Break Feedback Enabled", "Break Feasibility Cut Feedback Enabled"),
     ("Skill Allocation Audit Enabled", "Distinct Skill Allocation Audit Enabled"),
     ("Shift Consistency Polish", "Consistency Polish"),
+    ("Aggregate Guide Mixed Durations",),
 )
 
 
@@ -3527,6 +3532,7 @@ def parse_input(
     use_preferences = yes(_instruction_get(im, ["Use Preferences", "Preferences"], "Yes"), True)
     _polish_raw = _instruction_get(im, ["Shift Consistency Polish", "Consistency Polish"], None)
     shift_consistency_polish = None if _polish_raw in (None, "") else yes(_polish_raw, False)
+    aggregate_guide_mixed_durations = yes(_instruction_get(im, ["Aggregate Guide Mixed Durations"], "No"), False)
     max_diff = int(round(to_float(_instruction_get(im, ["Count of Different Shifts Per week", "Max Different Shifts per Week"], 3), 3)))
     rest = to_float(_instruction_get(im, ["Difference Between Shifts", "Rest Gap Hours", "Minimum Rest Gap"], 12), 12)
     opening_enabled = yes(_instruction_get(im, ["Opening Guard Enabled"], "No"), False)
@@ -4074,6 +4080,7 @@ def parse_input(
         language_windows=language_windows,
         language_working_window_mode=language_working_window_mode,
         shift_consistency_polish=shift_consistency_polish,
+        aggregate_guide_mixed_durations=aggregate_guide_mixed_durations,
         coverage_split_rules=coverage_split_rules,
         coverage_split_source=coverage_split_source,
         coverage_split_gate_mode=coverage_split_gate_mode,
@@ -4159,6 +4166,15 @@ def parse_input(
 
 
 def input_contract_payload(parsed: ParsedInput) -> Dict[str, Any]:
+    payload = _input_contract_payload_core(parsed)
+    # D3a: recorded only when on, so every existing contract keeps its exact
+    # fingerprint; turning the switch on is a visible contract change.
+    if getattr(parsed, "aggregate_guide_mixed_durations", False):
+        payload["aggregate_guide_mixed_durations"] = True
+    return payload
+
+
+def _input_contract_payload_core(parsed: ParsedInput) -> Dict[str, Any]:
     return {
         "roster_count": len(parsed.associates),
         "instructed_headcount": parsed.instructed_headcount,
@@ -6506,7 +6522,9 @@ def aggregate_pattern_mix_guidance(parsed: ParsedInput, time_limit_sec: float = 
             "elapsed_sec": round(time.time() - started, 6),
             "evidence_level": "SEARCH_GUIDANCE_ONLY_NOT_RELEASE_PROOF",
         }
-    if not parsed.strict_off or parsed.use_11h_3off or any(shift.duration_min != 540 for shift in parsed.shifts):
+    mixed_allowed = bool(getattr(parsed, "aggregate_guide_mixed_durations", False))
+    if not parsed.strict_off or parsed.use_11h_3off or (
+            not mixed_allowed and any(shift.duration_min != 540 for shift in parsed.shifts)):
         return {
             "status": "SKIPPED_UNSUPPORTED_MIXED_PATTERN",
             "reason": "Aggregate guide currently supports exact 9H/2OFF contracts; named CP-SAT still runs normally.",

@@ -1,0 +1,8 @@
+D3a rule part 1: real workbooks take the identical path (engine at HEAD before vs working tree after)
+AE_AR_B2B_WEEKLY_INPUT.xlsx          durations=[540] switch=False contract_fingerprint_unchanged=True path=identical (all 540 min)
+Cricut_Chat_WEEKLY_INPUT.xlsx        durations=[540] switch=False contract_fingerprint_unchanged=True path=identical (all 540 min)
+Cricut_Voice_WEEKLY_INPUT.xlsx       durations=[540] switch=False contract_fingerprint_unchanged=True path=identical (all 540 min)
+GDI_28HC_24_7_WEEKLY_INPUT.xlsx      durations=[540] switch=False contract_fingerprint_unchanged=True path=identical (all 540 min)
+NMG_EN_AND_SP_WEEKLY_INPUT.xlsx      durations=[540] switch=False contract_fingerprint_unchanged=True path=identical (all 540 min)
+NMG_EN_WEEKLY_INPUT.xlsx             durations=[540] switch=False contract_fingerprint_unchanged=True path=identical (all 540 min)
+NMG_SP_WEEKLY_INPUT.xlsx             durations=[540] switch=False contract_fingerprint_unchanged=True path=identical (all 540 min)

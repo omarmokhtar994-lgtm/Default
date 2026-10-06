@@ -96,3 +96,32 @@ Decision rule:
   its job; the cause was editing the engine mid-run. Both R5 cases are rerun on
   the current engine (queue1 *_RERUN), and they are the D3a control for R5.
   Rule adopted: no engine edits while a measured run is in flight.
+
+## D2b result (2026-10-06 ~10:20 Egypt)
+
+R10 skill 1 at its proven roster (21), production settings, seeded through
+`--use-input-schedule-as-seed` with the proven-perfect week (147/147 seed cells
+valid): engine exit 0, validator PASS, **504/504 at target before and after
+breaks** (control run without a seed: 294 / 292). Reading (pre-registered):
+seeding works, so a better seed means a better schedule. D3 goes ahead.
+
+## D3 approach (recorded before any D3 code)
+
+Stage 1 of D3 changes no engine file. `tools/aggregate_seed.py` builds a seed
+week from a workbook alone (no published solution, no benchmark data):
+
+1. candidate shifts = the shifts the engine's own aggregate guide gives a
+   positive count (guide run with the D3a switch where shifts are mixed), so
+   the tour space stays small;
+2. an exact aggregated model over legal weekly tours (OFF pattern, 12 h rest,
+   at most the workbook's number of different shifts) and break starts from the
+   engine's own legal patterns, maximising intervals at target in the engine's
+   metric (shrinkage, target, carry-in), cyclic week;
+3. tours dealt to associates; the week is written into the Schedule sheet,
+   which the engine reads as a seed (a hint, never a constraint).
+
+Stage 1 scope: single-language workbooks without leave or fixed requests (the
+public cases). A/B: the treatment is the same workbook plus the generated seed;
+the control is the existing benchmark run. The D4 rule applies to the public
+part. Real programs (languages, leave, preferences) need class-aware
+aggregation (stage 2), pre-registered separately before its code.

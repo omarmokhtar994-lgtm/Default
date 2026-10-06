@@ -1,0 +1,10 @@
+{
+  "case": "PUB_SDB_R10_SKILL1_PERFECTSEED",
+  "return_code": 0,
+  "metrics": {
+    "before_target": "504",
+    "after_target": "504",
+    "after_floor": "504",
+    "before_floor": "504"
+  }
+}

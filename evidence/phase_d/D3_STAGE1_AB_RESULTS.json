@@ -1,0 +1,310 @@
+{
+  "rule": "evidence/phase_d/D_PLAN.md, D3 stage-1 A/B (pre-registered 2026-10-06 ~10:50 Egypt)",
+  "settings": "production runner, QUICK 3600 s, 2 workers, seed 9000, two runs at a time",
+  "cases": {
+    "R1_SKILL1": {
+      "control": {
+        "run": "PUB_SDB_R1_SKILL1",
+        "return_code": 0,
+        "hard_valid_artifact": true,
+        "validator": "PASS",
+        "hard_fail_count": 0,
+        "before_target": 554,
+        "after_target": 554,
+        "after_floor": 580,
+        "active": 602,
+        "engine_sha256": "9f91e56c95e4dac257903e3b5ff5dd56ec8b29c879aee6c6a36c25baa0428b2a"
+      },
+      "seeded": {
+        "run": "PUB_SDB_R1_SKILL1_AGGSEED",
+        "return_code": 0,
+        "hard_valid_artifact": true,
+        "validator": "PASS",
+        "hard_fail_count": 0,
+        "before_target": 602,
+        "after_target": 602,
+        "after_floor": 602,
+        "active": 602,
+        "engine_sha256": "2262ac7a3fa630e5fd34c19983ee301b2a37eb08775e3ea8c2acd64d32c01b66"
+      },
+      "delta_after_target": 48
+    },
+    "R1_SKILL2": {
+      "control": {
+        "run": "PUB_SDB_R1_SKILL2",
+        "return_code": 0,
+        "hard_valid_artifact": true,
+        "validator": "PASS",
+        "hard_fail_count": 0,
+        "before_target": 468,
+        "after_target": 466,
+        "after_floor": 508,
+        "active": 602,
+        "engine_sha256": "9f91e56c95e4dac257903e3b5ff5dd56ec8b29c879aee6c6a36c25baa0428b2a"
+      },
+      "seeded": {
+        "run": "PUB_SDB_R1_SKILL2_AGGSEED",
+        "return_code": 0,
+        "hard_valid_artifact": true,
+        "validator": "PASS",
+        "hard_fail_count": 0,
+        "before_target": 600,
+        "after_target": 600,
+        "after_floor": 602,
+        "active": 602,
+        "engine_sha256": "2262ac7a3fa630e5fd34c19983ee301b2a37eb08775e3ea8c2acd64d32c01b66"
+      },
+      "delta_after_target": 134
+    },
+    "R5_SKILL1": {
+      "control": {
+        "run": "PUB_SDB_R5_SKILL1_RERUN",
+        "return_code": 0,
+        "hard_valid_artifact": true,
+        "validator": "PASS",
+        "hard_fail_count": 0,
+        "before_target": 542,
+        "after_target": 536,
+        "after_floor": 594,
+        "active": 630,
+        "engine_sha256": "2262ac7a3fa630e5fd34c19983ee301b2a37eb08775e3ea8c2acd64d32c01b66"
+      },
+      "seeded": {
+        "run": "PUB_SDB_R5_SKILL1_AGGSEED",
+        "return_code": 0,
+        "hard_valid_artifact": true,
+        "validator": "PASS",
+        "hard_fail_count": 0,
+        "before_target": 626,
+        "after_target": 626,
+        "after_floor": 630,
+        "active": 630,
+        "engine_sha256": "2262ac7a3fa630e5fd34c19983ee301b2a37eb08775e3ea8c2acd64d32c01b66"
+      },
+      "delta_after_target": 90
+    },
+    "R5_SKILL2": {
+      "control": {
+        "run": "PUB_SDB_R5_SKILL2_RERUN",
+        "return_code": 0,
+        "hard_valid_artifact": true,
+        "validator": "PASS",
+        "hard_fail_count": 0,
+        "before_target": 536,
+        "after_target": 536,
+        "after_floor": 602,
+        "active": 630,
+        "engine_sha256": "2262ac7a3fa630e5fd34c19983ee301b2a37eb08775e3ea8c2acd64d32c01b66"
+      },
+      "seeded": {
+        "run": "PUB_SDB_R5_SKILL2_AGGSEED",
+        "return_code": 0,
+        "hard_valid_artifact": true,
+        "validator": "PASS",
+        "hard_fail_count": 0,
+        "before_target": 618,
+        "after_target": 618,
+        "after_floor": 630,
+        "active": 630,
+        "engine_sha256": "2262ac7a3fa630e5fd34c19983ee301b2a37eb08775e3ea8c2acd64d32c01b66"
+      },
+      "delta_after_target": 82
+    },
+    "R6_SKILL1": {
+      "control": {
+        "run": "PUB_SDB_R6_SKILL1",
+        "return_code": 0,
+        "hard_valid_artifact": true,
+        "validator": "PASS",
+        "hard_fail_count": 0,
+        "before_target": 526,
+        "after_target": 526,
+        "after_floor": 592,
+        "active": 644,
+        "engine_sha256": "2262ac7a3fa630e5fd34c19983ee301b2a37eb08775e3ea8c2acd64d32c01b66"
+      },
+      "seeded": {
+        "run": "PUB_SDB_R6_SKILL1_AGGSEED",
+        "return_code": 0,
+        "hard_valid_artifact": true,
+        "validator": "PASS",
+        "hard_fail_count": 0,
+        "before_target": 644,
+        "after_target": 644,
+        "after_floor": 644,
+        "active": 644,
+        "engine_sha256": "2262ac7a3fa630e5fd34c19983ee301b2a37eb08775e3ea8c2acd64d32c01b66"
+      },
+      "delta_after_target": 118
+    },
+    "R6_SKILL2": {
+      "control": {
+        "run": "PUB_SDB_R6_SKILL2",
+        "return_code": 0,
+        "hard_valid_artifact": true,
+        "validator": "PASS",
+        "hard_fail_count": 0,
+        "before_target": 536,
+        "after_target": 533,
+        "after_floor": 587,
+        "active": 644,
+        "engine_sha256": "2262ac7a3fa630e5fd34c19983ee301b2a37eb08775e3ea8c2acd64d32c01b66"
+      },
+      "seeded": {
+        "run": "PUB_SDB_R6_SKILL2_AGGSEED",
+        "return_code": 0,
+        "hard_valid_artifact": true,
+        "validator": "PASS",
+        "hard_fail_count": 0,
+        "before_target": 644,
+        "after_target": 644,
+        "after_floor": 644,
+        "active": 644,
+        "engine_sha256": "2262ac7a3fa630e5fd34c19983ee301b2a37eb08775e3ea8c2acd64d32c01b66"
+      },
+      "delta_after_target": 111
+    },
+    "R7_SKILL1": {
+      "control": {
+        "run": "PUB_SDB_R7_SKILL1",
+        "return_code": 0,
+        "hard_valid_artifact": true,
+        "validator": "PASS",
+        "hard_fail_count": 0,
+        "before_target": 448,
+        "after_target": 448,
+        "after_floor": 546,
+        "active": 630,
+        "engine_sha256": "2262ac7a3fa630e5fd34c19983ee301b2a37eb08775e3ea8c2acd64d32c01b66"
+      },
+      "seeded": {
+        "run": "PUB_SDB_R7_SKILL1_AGGSEED",
+        "return_code": 0,
+        "hard_valid_artifact": true,
+        "validator": "PASS",
+        "hard_fail_count": 0,
+        "before_target": 608,
+        "after_target": 608,
+        "after_floor": 630,
+        "active": 630,
+        "engine_sha256": "2262ac7a3fa630e5fd34c19983ee301b2a37eb08775e3ea8c2acd64d32c01b66"
+      },
+      "delta_after_target": 160
+    },
+    "R7_SKILL2": {
+      "control": {
+        "run": "PUB_SDB_R7_SKILL2",
+        "return_code": 0,
+        "hard_valid_artifact": true,
+        "validator": "PASS",
+        "hard_fail_count": 0,
+        "before_target": 518,
+        "after_target": 518,
+        "after_floor": 590,
+        "active": 630,
+        "engine_sha256": "2262ac7a3fa630e5fd34c19983ee301b2a37eb08775e3ea8c2acd64d32c01b66"
+      },
+      "seeded": {
+        "run": "PUB_SDB_R7_SKILL2_AGGSEED",
+        "return_code": 0,
+        "hard_valid_artifact": true,
+        "validator": "PASS",
+        "hard_fail_count": 0,
+        "before_target": 594,
+        "after_target": 594,
+        "after_floor": 612,
+        "active": 630,
+        "engine_sha256": "2262ac7a3fa630e5fd34c19983ee301b2a37eb08775e3ea8c2acd64d32c01b66"
+      },
+      "delta_after_target": 76
+    },
+    "R7_SKILL3": {
+      "control": {
+        "run": "PUB_SDB_R7_SKILL3",
+        "return_code": 0,
+        "hard_valid_artifact": true,
+        "validator": "PASS",
+        "hard_fail_count": 0,
+        "before_target": 522,
+        "after_target": 522,
+        "after_floor": 568,
+        "active": 630,
+        "engine_sha256": "2262ac7a3fa630e5fd34c19983ee301b2a37eb08775e3ea8c2acd64d32c01b66"
+      },
+      "seeded": {
+        "run": "PUB_SDB_R7_SKILL3_AGGSEED",
+        "return_code": 0,
+        "hard_valid_artifact": true,
+        "validator": "PASS",
+        "hard_fail_count": 0,
+        "before_target": 610,
+        "after_target": 610,
+        "after_floor": 618,
+        "active": 630,
+        "engine_sha256": "2262ac7a3fa630e5fd34c19983ee301b2a37eb08775e3ea8c2acd64d32c01b66"
+      },
+      "delta_after_target": 88
+    },
+    "R10_SKILL1": {
+      "control": {
+        "run": "PUB_SDB_R10_SKILL1",
+        "return_code": 0,
+        "hard_valid_artifact": true,
+        "validator": "PASS",
+        "hard_fail_count": 0,
+        "before_target": 294,
+        "after_target": 292,
+        "after_floor": 346,
+        "active": 504,
+        "engine_sha256": "9f91e56c95e4dac257903e3b5ff5dd56ec8b29c879aee6c6a36c25baa0428b2a"
+      },
+      "seeded": {
+        "run": "PUB_SDB_R10_SKILL1_AGGSEED",
+        "return_code": 0,
+        "hard_valid_artifact": true,
+        "validator": "PASS",
+        "hard_fail_count": 0,
+        "before_target": 504,
+        "after_target": 504,
+        "after_floor": 504,
+        "active": 504,
+        "engine_sha256": "2262ac7a3fa630e5fd34c19983ee301b2a37eb08775e3ea8c2acd64d32c01b66"
+      },
+      "delta_after_target": 212
+    },
+    "R10_SKILL2": {
+      "control": {
+        "run": "PUB_SDB_R10_SKILL2",
+        "return_code": 0,
+        "hard_valid_artifact": true,
+        "validator": "PASS",
+        "hard_fail_count": 0,
+        "before_target": 314,
+        "after_target": 308,
+        "after_floor": 352,
+        "active": 504,
+        "engine_sha256": "9f91e56c95e4dac257903e3b5ff5dd56ec8b29c879aee6c6a36c25baa0428b2a"
+      },
+      "seeded": {
+        "run": "PUB_SDB_R10_SKILL2_AGGSEED",
+        "return_code": 0,
+        "hard_valid_artifact": true,
+        "validator": "PASS",
+        "hard_fail_count": 0,
+        "before_target": 504,
+        "after_target": 504,
+        "after_floor": 504,
+        "active": 504,
+        "engine_sha256": "2262ac7a3fa630e5fd34c19983ee301b2a37eb08775e3ea8c2acd64d32c01b66"
+      },
+      "delta_after_target": 196
+    }
+  },
+  "sum": {
+    "control": 5239,
+    "seeded": 6554,
+    "active": 6650,
+    "gap_closed": 0.932
+  },
+  "verdict": "PASS (rules 1, 2, 3 all hold)"
+}

@@ -101,3 +101,13 @@ The engine's own week rules cost 2-4 people per case against the benchmark's
 free daily counts (`N` vs `ceil`). That is a property of the rules (two
 adjacent OFF days, 12 h rest, at most 2 different shifts), proven exactly,
 not an engine weakness.
+
+## Seeded runs (Phase D3 stage 1, 2026-10-06)
+
+The same 11 cases, same production settings, with a starting week from
+`tools/aggregate_seed.py` (aggregated tour-pattern model, built from the
+workbook alone) in the Schedule sheet: 6,554 intervals at target after breaks
+versus 5,239 unseeded, of 6,650 (98.6% vs 78.8%); 6 of 11 cases reach 100%.
+Every run exit 0, validator PASS. Per case and caveats:
+`evidence/phase_d/D_PLAN.md` (D3 stage-1 verdict).
+

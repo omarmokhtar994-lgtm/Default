@@ -141,6 +141,47 @@ Promote stage 1 to engine integration (stage 2 design) only if ALL hold:
    combined gap between control and the proven 100%.
 Otherwise: document, keep as a tool, root-cause before any further step.
 
+## D3 stage-1 verdict (2026-10-06 ~19:20 Egypt): PASS
+
+Intervals at target after breaks, production runner, QUICK 3,600 s, 2 workers,
+seed 9000; control = benchmark runs (R5: clean reruns). Data:
+`D3_STAGE1_AB_RESULTS.json`.
+
+| case | control | seeded | delta | active |
+|---|---|---|---|---|
+| R1 skill 1 | 554 | 602 | +48 | 602 |
+| R1 skill 2 | 466 | 600 | +134 | 602 |
+| R5 skill 1 | 536 | 626 | +90 | 630 |
+| R5 skill 2 | 536 | 618 | +82 | 630 |
+| R6 skill 1 | 526 | 644 | +118 | 644 |
+| R6 skill 2 | 533 | 644 | +111 | 644 |
+| R7 skill 1 | 448 | 608 | +160 | 630 |
+| R7 skill 2 | 518 | 594 | +76 | 630 |
+| R7 skill 3 | 522 | 610 | +88 | 630 |
+| R10 skill 1 | 292 | 504 | +212 | 504 |
+| R10 skill 2 | 308 | 504 | +196 | 504 |
+| sum | 5,239 | 6,554 | +1,315 | 6,650 |
+
+1. every seeded run exit 0, validator PASS, 0 hard failures: yes (11/11);
+2. no case loses more than 1%: yes (no case loses at all);
+3. gap closed: 1,315 of 1,411 = 93.2% (needed 25%).
+
+Caveats, stated with the result:
+* The seed costs extra compute outside the engine budget (~160 s, 1 worker,
+  per case; about 4% of the 3,600 s run).
+* Controls R1, R6, R7 skills 1-2, R10 ran on engine 9f91e56 (before D3a); the
+  seeded runs and the other controls on 2262ac7. The difference is the D3a
+  switch, default off; the treatment workbooks have it off (checked), and with
+  it off the guide refuses these workbooks on both engines.
+* Seeds were built before the break-cap fix (conservative cap); the A/B stands
+  on those seeds.
+* Scope: single-language public workbooks without leave or fixed requests.
+  It says nothing yet about real programs (stage 2, below).
+
+Next per this rule: engine integration design, pre-registered before code,
+failing test first, and real programs only once a stage-2 seed beats the
+engine in the model.
+
 ## D3 stage 2: real programs (pre-registered 2026-10-06 ~11:00 Egypt, before its code)
 
 Real workbooks add, per `real profile` (7 ready-to-edit workbooks): leave and

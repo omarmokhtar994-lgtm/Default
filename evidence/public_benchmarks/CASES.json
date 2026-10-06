@@ -1,0 +1,276 @@
+{
+  "source": "Bonutti, Ceschia, De Cesco, Musliu & Schaerf, Annals of OR 252(2):365-382 (2017); https://bitbucket.org/satt/shift-design @ e3d4bf6",
+  "not_translated": {
+    "R2": "optimum uses Morning-Short (30-minute break, 60-minute margins) beside 60-minute/120 types",
+    "R3": "optimum uses Afternoon-Short (30/60) beside 60/120 types",
+    "R4": "optimum uses Afternoon-Short (30/60) beside 60/120 types",
+    "R8": "optimum uses Afternoon-Short (30/60) beside 60/120 types",
+    "R9": "optimum uses no-break Short shifts beside a 60-minute Long type with its own margins"
+  },
+  "cases": [
+    {
+      "id": "PUB_SDB_R1_SKILL1",
+      "instance": "R1",
+      "skill": 0,
+      "tier": "benchmark",
+      "associates": 28,
+      "duties_in_published_optimum": 116,
+      "purpose": "Bonutti et al. R1, skill 1, as a 28-person weekly roster",
+      "workbook": "PUB_SDB_R1_SKILL1.xlsx",
+      "source": "Bonutti, Ceschia, De Cesco, Musliu & Schaerf, Annals of OR 252(2):365-382 (2017); https://bitbucket.org/satt/shift-design @ e3d4bf6",
+      "shifts_in_library": 90,
+      "active_slots": 602,
+      "contract_status": "PASS",
+      "contract_failures": [],
+      "parsed_shifts": 90,
+      "parsed_break_sets": [
+        [
+          [
+            4,
+            "Lunch"
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "PUB_SDB_R1_SKILL2",
+      "instance": "R1",
+      "skill": 1,
+      "tier": "benchmark",
+      "associates": 33,
+      "duties_in_published_optimum": 148,
+      "purpose": "Bonutti et al. R1, skill 2, as a 33-person weekly roster",
+      "workbook": "PUB_SDB_R1_SKILL2.xlsx",
+      "source": "Bonutti, Ceschia, De Cesco, Musliu & Schaerf, Annals of OR 252(2):365-382 (2017); https://bitbucket.org/satt/shift-design @ e3d4bf6",
+      "shifts_in_library": 90,
+      "active_slots": 602,
+      "contract_status": "PASS",
+      "contract_failures": [],
+      "parsed_shifts": 90,
+      "parsed_break_sets": [
+        [
+          [
+            4,
+            "Lunch"
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "PUB_SDB_R5_SKILL1",
+      "instance": "R5",
+      "skill": 0,
+      "tier": "benchmark",
+      "associates": 38,
+      "duties_in_published_optimum": 166,
+      "purpose": "Bonutti et al. R5, skill 1, as a 38-person weekly roster",
+      "workbook": "PUB_SDB_R5_SKILL1.xlsx",
+      "source": "Bonutti, Ceschia, De Cesco, Musliu & Schaerf, Annals of OR 252(2):365-382 (2017); https://bitbucket.org/satt/shift-design @ e3d4bf6",
+      "shifts_in_library": 90,
+      "active_slots": 630,
+      "contract_status": "PASS",
+      "contract_failures": [],
+      "parsed_shifts": 90,
+      "parsed_break_sets": [
+        [
+          [
+            4,
+            "Lunch"
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "PUB_SDB_R5_SKILL2",
+      "instance": "R5",
+      "skill": 1,
+      "tier": "benchmark",
+      "associates": 48,
+      "duties_in_published_optimum": 222,
+      "purpose": "Bonutti et al. R5, skill 2, as a 48-person weekly roster",
+      "workbook": "PUB_SDB_R5_SKILL2.xlsx",
+      "source": "Bonutti, Ceschia, De Cesco, Musliu & Schaerf, Annals of OR 252(2):365-382 (2017); https://bitbucket.org/satt/shift-design @ e3d4bf6",
+      "shifts_in_library": 90,
+      "active_slots": 630,
+      "contract_status": "PASS",
+      "contract_failures": [],
+      "parsed_shifts": 90,
+      "parsed_break_sets": [
+        [
+          [
+            4,
+            "Lunch"
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "PUB_SDB_R6_SKILL1",
+      "instance": "R6",
+      "skill": 0,
+      "tier": "benchmark",
+      "associates": 40,
+      "duties_in_published_optimum": 186,
+      "purpose": "Bonutti et al. R6, skill 1, as a 40-person weekly roster",
+      "workbook": "PUB_SDB_R6_SKILL1.xlsx",
+      "source": "Bonutti, Ceschia, De Cesco, Musliu & Schaerf, Annals of OR 252(2):365-382 (2017); https://bitbucket.org/satt/shift-design @ e3d4bf6",
+      "shifts_in_library": 90,
+      "active_slots": 644,
+      "contract_status": "PASS",
+      "contract_failures": [],
+      "parsed_shifts": 90,
+      "parsed_break_sets": [
+        [
+          [
+            4,
+            "Lunch"
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "PUB_SDB_R6_SKILL2",
+      "instance": "R6",
+      "skill": 1,
+      "tier": "benchmark",
+      "associates": 47,
+      "duties_in_published_optimum": 221,
+      "purpose": "Bonutti et al. R6, skill 2, as a 47-person weekly roster",
+      "workbook": "PUB_SDB_R6_SKILL2.xlsx",
+      "source": "Bonutti, Ceschia, De Cesco, Musliu & Schaerf, Annals of OR 252(2):365-382 (2017); https://bitbucket.org/satt/shift-design @ e3d4bf6",
+      "shifts_in_library": 90,
+      "active_slots": 644,
+      "contract_status": "PASS",
+      "contract_failures": [],
+      "parsed_shifts": 90,
+      "parsed_break_sets": [
+        [
+          [
+            4,
+            "Lunch"
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "PUB_SDB_R7_SKILL1",
+      "instance": "R7",
+      "skill": 0,
+      "tier": "benchmark",
+      "associates": 38,
+      "duties_in_published_optimum": 178,
+      "purpose": "Bonutti et al. R7, skill 1, as a 38-person weekly roster",
+      "workbook": "PUB_SDB_R7_SKILL1.xlsx",
+      "source": "Bonutti, Ceschia, De Cesco, Musliu & Schaerf, Annals of OR 252(2):365-382 (2017); https://bitbucket.org/satt/shift-design @ e3d4bf6",
+      "shifts_in_library": 90,
+      "active_slots": 630,
+      "contract_status": "PASS",
+      "contract_failures": [],
+      "parsed_shifts": 90,
+      "parsed_break_sets": [
+        [
+          [
+            4,
+            "Lunch"
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "PUB_SDB_R7_SKILL2",
+      "instance": "R7",
+      "skill": 1,
+      "tier": "benchmark",
+      "associates": 35,
+      "duties_in_published_optimum": 158,
+      "purpose": "Bonutti et al. R7, skill 2, as a 35-person weekly roster",
+      "workbook": "PUB_SDB_R7_SKILL2.xlsx",
+      "source": "Bonutti, Ceschia, De Cesco, Musliu & Schaerf, Annals of OR 252(2):365-382 (2017); https://bitbucket.org/satt/shift-design @ e3d4bf6",
+      "shifts_in_library": 90,
+      "active_slots": 630,
+      "contract_status": "PASS",
+      "contract_failures": [],
+      "parsed_shifts": 90,
+      "parsed_break_sets": [
+        [
+          [
+            4,
+            "Lunch"
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "PUB_SDB_R7_SKILL3",
+      "instance": "R7",
+      "skill": 2,
+      "tier": "benchmark",
+      "associates": 34,
+      "duties_in_published_optimum": 151,
+      "purpose": "Bonutti et al. R7, skill 3, as a 34-person weekly roster",
+      "workbook": "PUB_SDB_R7_SKILL3.xlsx",
+      "source": "Bonutti, Ceschia, De Cesco, Musliu & Schaerf, Annals of OR 252(2):365-382 (2017); https://bitbucket.org/satt/shift-design @ e3d4bf6",
+      "shifts_in_library": 90,
+      "active_slots": 630,
+      "contract_status": "PASS",
+      "contract_failures": [],
+      "parsed_shifts": 90,
+      "parsed_break_sets": [
+        [
+          [
+            4,
+            "Lunch"
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "PUB_SDB_R10_SKILL1",
+      "instance": "R10",
+      "skill": 0,
+      "tier": "benchmark",
+      "associates": 21,
+      "duties_in_published_optimum": 95,
+      "purpose": "Bonutti et al. R10, skill 1, as a 21-person weekly roster",
+      "workbook": "PUB_SDB_R10_SKILL1.xlsx",
+      "source": "Bonutti, Ceschia, De Cesco, Musliu & Schaerf, Annals of OR 252(2):365-382 (2017); https://bitbucket.org/satt/shift-design @ e3d4bf6",
+      "shifts_in_library": 141,
+      "active_slots": 504,
+      "contract_status": "PASS",
+      "contract_failures": [],
+      "parsed_shifts": 141,
+      "parsed_break_sets": [
+        [
+          [
+            4,
+            "Lunch"
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "PUB_SDB_R10_SKILL2",
+      "instance": "R10",
+      "skill": 1,
+      "tier": "benchmark",
+      "associates": 20,
+      "duties_in_published_optimum": 89,
+      "purpose": "Bonutti et al. R10, skill 2, as a 20-person weekly roster",
+      "workbook": "PUB_SDB_R10_SKILL2.xlsx",
+      "source": "Bonutti, Ceschia, De Cesco, Musliu & Schaerf, Annals of OR 252(2):365-382 (2017); https://bitbucket.org/satt/shift-design @ e3d4bf6",
+      "shifts_in_library": 141,
+      "active_slots": 504,
+      "contract_status": "PASS",
+      "contract_failures": [],
+      "parsed_shifts": 141,
+      "parsed_break_sets": [
+        [
+          [
+            4,
+            "Lunch"
+          ]
+        ]
+      ]
+    }
+  ]
+}

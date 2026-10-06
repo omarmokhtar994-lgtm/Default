@@ -1,0 +1,343 @@
+{
+  "PUB_SDB_R1_SKILL1": {
+    "relaxed": [],
+    "ceil_duties_over_5": 24,
+    "tries": {
+      "24": {
+        "status": "INFEASIBLE",
+        "seconds": 0.5
+      },
+      "25": {
+        "status": "INFEASIBLE",
+        "seconds": 0.2
+      },
+      "26": {
+        "status": "INFEASIBLE",
+        "seconds": 0.3
+      },
+      "27": {
+        "status": "INFEASIBLE",
+        "seconds": 0.9
+      },
+      "28": {
+        "status": "OPTIMAL",
+        "seconds": 2.1
+      }
+    },
+    "min_roster": 28,
+    "active_slots": 602,
+    "shifts_allowed": [
+      "06:00 - 14:30",
+      "12:30 - 21:30",
+      "13:30 - 22:00",
+      "22:30 - 08:00",
+      "23:00 - 07:00"
+    ]
+  },
+  "PUB_SDB_R1_SKILL2": {
+    "relaxed": [],
+    "ceil_duties_over_5": 30,
+    "tries": {
+      "30": {
+        "status": "INFEASIBLE",
+        "seconds": 0.2
+      },
+      "31": {
+        "status": "INFEASIBLE",
+        "seconds": 0.2
+      },
+      "32": {
+        "status": "INFEASIBLE",
+        "seconds": 0.3
+      },
+      "33": {
+        "status": "OPTIMAL",
+        "seconds": 0.8
+      }
+    },
+    "min_roster": 33,
+    "active_slots": 602,
+    "shifts_allowed": [
+      "06:00 - 14:30",
+      "12:30 - 21:30",
+      "13:30 - 22:00",
+      "22:30 - 08:00",
+      "23:00 - 07:00"
+    ]
+  },
+  "PUB_SDB_R5_SKILL1": {
+    "relaxed": [],
+    "ceil_duties_over_5": 34,
+    "tries": {
+      "34": {
+        "status": "INFEASIBLE",
+        "seconds": 0.4
+      },
+      "35": {
+        "status": "INFEASIBLE",
+        "seconds": 0.5
+      },
+      "36": {
+        "status": "INFEASIBLE",
+        "seconds": 1.3
+      },
+      "37": {
+        "status": "INFEASIBLE",
+        "seconds": 10.8
+      },
+      "38": {
+        "status": "OPTIMAL",
+        "seconds": 2.7
+      }
+    },
+    "min_roster": 38,
+    "active_slots": 630,
+    "shifts_allowed": [
+      "07:30 - 17:00",
+      "13:30 - 21:30",
+      "14:30 - 00:00",
+      "15:30 - 23:30",
+      "15:30 - 00:00",
+      "22:30 - 07:00",
+      "23:00 - 07:00",
+      "23:00 - 08:00"
+    ]
+  },
+  "PUB_SDB_R5_SKILL2": {
+    "relaxed": [],
+    "ceil_duties_over_5": 45,
+    "tries": {
+      "45": {
+        "status": "INFEASIBLE",
+        "seconds": 0.5
+      },
+      "46": {
+        "status": "INFEASIBLE",
+        "seconds": 0.5
+      },
+      "47": {
+        "status": "INFEASIBLE",
+        "seconds": 2.3
+      },
+      "48": {
+        "status": "OPTIMAL",
+        "seconds": 17.3
+      }
+    },
+    "min_roster": 48,
+    "active_slots": 630,
+    "shifts_allowed": [
+      "07:30 - 17:00",
+      "13:30 - 21:30",
+      "14:30 - 00:00",
+      "15:30 - 23:30",
+      "15:30 - 00:00",
+      "22:30 - 07:00",
+      "23:00 - 07:00",
+      "23:00 - 08:00"
+    ]
+  },
+  "PUB_SDB_R6_SKILL1": {
+    "relaxed": [],
+    "ceil_duties_over_5": 38,
+    "tries": {
+      "38": {
+        "status": "INFEASIBLE",
+        "seconds": 0.3
+      },
+      "39": {
+        "status": "INFEASIBLE",
+        "seconds": 1.1
+      },
+      "40": {
+        "status": "OPTIMAL",
+        "seconds": 0.5
+      }
+    },
+    "min_roster": 40,
+    "active_slots": 644,
+    "shifts_allowed": [
+      "06:00 - 14:30",
+      "07:30 - 16:00",
+      "14:30 - 00:00",
+      "22:00 - 07:30",
+      "22:30 - 07:00",
+      "23:30 - 07:30"
+    ]
+  },
+  "PUB_SDB_R6_SKILL2": {
+    "relaxed": [],
+    "ceil_duties_over_5": 45,
+    "tries": {
+      "45": {
+        "status": "INFEASIBLE",
+        "seconds": 0.3
+      },
+      "46": {
+        "status": "INFEASIBLE",
+        "seconds": 0.3
+      },
+      "47": {
+        "status": "OPTIMAL",
+        "seconds": 0.7
+      }
+    },
+    "min_roster": 47,
+    "active_slots": 644,
+    "shifts_allowed": [
+      "06:00 - 14:30",
+      "07:30 - 16:00",
+      "14:30 - 00:00",
+      "22:00 - 07:30",
+      "22:30 - 07:00",
+      "23:30 - 07:30"
+    ]
+  },
+  "PUB_SDB_R7_SKILL1": {
+    "relaxed": [],
+    "ceil_duties_over_5": 36,
+    "tries": {
+      "36": {
+        "status": "INFEASIBLE",
+        "seconds": 0.4
+      },
+      "37": {
+        "status": "INFEASIBLE",
+        "seconds": 0.8
+      },
+      "38": {
+        "status": "OPTIMAL",
+        "seconds": 3.7
+      }
+    },
+    "min_roster": 38,
+    "active_slots": 630,
+    "shifts_allowed": [
+      "06:00 - 15:30",
+      "07:00 - 16:00",
+      "13:00 - 22:00",
+      "13:30 - 23:00",
+      "14:30 - 23:00",
+      "15:30 - 00:00",
+      "23:00 - 08:00"
+    ]
+  },
+  "PUB_SDB_R7_SKILL2": {
+    "relaxed": [],
+    "ceil_duties_over_5": 32,
+    "tries": {
+      "32": {
+        "status": "INFEASIBLE",
+        "seconds": 0.4
+      },
+      "33": {
+        "status": "INFEASIBLE",
+        "seconds": 0.4
+      },
+      "34": {
+        "status": "INFEASIBLE",
+        "seconds": 0.5
+      },
+      "35": {
+        "status": "OPTIMAL",
+        "seconds": 3.3
+      }
+    },
+    "min_roster": 35,
+    "active_slots": 630,
+    "shifts_allowed": [
+      "06:00 - 15:30",
+      "07:00 - 16:00",
+      "13:00 - 22:00",
+      "13:30 - 23:00",
+      "14:30 - 23:00",
+      "15:30 - 00:00",
+      "23:00 - 08:00"
+    ]
+  },
+  "PUB_SDB_R7_SKILL3": {
+    "relaxed": [],
+    "ceil_duties_over_5": 31,
+    "tries": {
+      "31": {
+        "status": "INFEASIBLE",
+        "seconds": 0.4
+      },
+      "32": {
+        "status": "INFEASIBLE",
+        "seconds": 0.4
+      },
+      "33": {
+        "status": "INFEASIBLE",
+        "seconds": 0.6
+      },
+      "34": {
+        "status": "OPTIMAL",
+        "seconds": 4.5
+      }
+    },
+    "min_roster": 34,
+    "active_slots": 630,
+    "shifts_allowed": [
+      "06:00 - 15:30",
+      "07:00 - 16:00",
+      "13:00 - 22:00",
+      "13:30 - 23:00",
+      "14:30 - 23:00",
+      "15:30 - 00:00",
+      "23:00 - 08:00"
+    ]
+  },
+  "PUB_SDB_R10_SKILL1": {
+    "relaxed": [],
+    "ceil_duties_over_5": 19,
+    "tries": {
+      "19": {
+        "status": "INFEASIBLE",
+        "seconds": 0.2
+      },
+      "20": {
+        "status": "INFEASIBLE",
+        "seconds": 0.2
+      },
+      "21": {
+        "status": "OPTIMAL",
+        "seconds": 0.6
+      }
+    },
+    "min_roster": 21,
+    "active_slots": 504,
+    "shifts_allowed": [
+      "03:00 - 12:30",
+      "04:00 - 13:30",
+      "06:00 - 13:30",
+      "17:30 - 02:00"
+    ]
+  },
+  "PUB_SDB_R10_SKILL2": {
+    "relaxed": [],
+    "ceil_duties_over_5": 18,
+    "tries": {
+      "18": {
+        "status": "INFEASIBLE",
+        "seconds": 0.2
+      },
+      "19": {
+        "status": "INFEASIBLE",
+        "seconds": 0.2
+      },
+      "20": {
+        "status": "OPTIMAL",
+        "seconds": 0.4
+      }
+    },
+    "min_roster": 20,
+    "active_slots": 504,
+    "shifts_allowed": [
+      "03:00 - 12:30",
+      "04:00 - 13:30",
+      "06:00 - 13:30",
+      "17:30 - 02:00"
+    ]
+  }
+}

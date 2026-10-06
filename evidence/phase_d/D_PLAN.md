@@ -194,3 +194,21 @@ time limit with the solver at the lowest priority beside two engine runs, and
 the seed restricts variety to 2 and candidates to the guide's 12 shifts.
 Paused until the machine is free and the stage-1 A/B has reported. No real
 workbook A/B runs until a seed beats the engine's own result in the model.
+
+## D3a verdict (2026-10-06 ~13:20 Egypt)
+
+Intervals at target after breaks, production settings, control = same
+workbook with the switch off on the current engine behaviour (R5: clean rerun):
+
+| case | control | switch on | delta | active | loss > 1%? |
+|---|---|---|---|---|---|
+| R10 skill 1 | 292 | 278 | -14 | 504 | yes (2.8%) |
+| R1 skill 2 | 466 | 462 | -4 | 602 | no (0.7%) |
+| R5 skill 1 | 536 (rerun) | 554 | +18 | 630 | no |
+| sum | 1,294 | 1,294 | 0 | | |
+
+All runs exit 0, validator PASS. Rule 3 needs the sum to beat control (it ties)
+and no case to lose more than 1% (R10 loses 2.8%). **Verdict: the switch stays,
+default No.** Reading: a before-break count target helps one case and hurts
+another; it is not a reliable signal. The seeded runs (D3 stage 1) test a
+different signal, a complete break-aware week.

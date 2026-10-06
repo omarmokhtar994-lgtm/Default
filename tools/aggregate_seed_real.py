@@ -72,13 +72,15 @@ def candidates(E, p, max_shifts: int, guide_seconds: float) -> Tuple[List[int], 
 
 def build(E, wb: Path, out_dir: Path, max_shifts: int, time_limit: float, workers: int,
           all_shifts: bool = False, fix_week: Dict[str, List[str]] = None, week_mode: str = "pin",
-          hint_breaks: List[Tuple[str, int, str, str, int]] = None) -> Dict[str, Any]:
+          hint_breaks: List[Tuple[str, int, str, str, int]] = None, export_breaks: Path = None) -> Dict[str, Any]:
     """Per-associate variant. Diagnostics: all_shifts uses the whole shift library as
     candidates; fix_week (name -> 7 day cells) pins x/off to a given week so the model
     scores that week under its own metric (e.g. the engine's result); with
     week_mode="hint" the week is only a solution hint (a known-valid start).
     hint_breaks (name, day, shift label, start HH:MM, minutes) completes that hint
-    with the break-count variables (a CP-SAT hint is reliable only when complete)."""
+    with the break-count variables (a CP-SAT hint is reliable only when complete).
+    export_breaks writes the chosen week and break plan (break counts dealt to the
+    class's associates working that shift) as JSON, for scoring with the engine."""
     from ortools.sat.python import cp_model
     t0 = time.time()
     p = E.parse_input(wb)
@@ -207,7 +209,7 @@ def build(E, wb: Path, out_dir: Path, max_shifts: int, time_limit: float, worker
                         else:
                             onfloor[c][t].append(z)
                 m.Add(sum(zs) == cnt)
-    if hint_breaks and fix_week and week_mode == "hint":
+    if hint_breaks and fix_week:
         a_of = {E.norm(assoc.name): a for a, assoc in enumerate(p.associates)}
         j_of = {E.norm(sh.label): j for j, sh in enumerate(shifts)}
         offs: Dict[Tuple[int, int], set] = {}
@@ -290,6 +292,7 @@ def build(E, wb: Path, out_dir: Path, max_shifts: int, time_limit: float, worker
     p1_zero = [sv.Value(s_) == 0 for s_ in short]
     info["phase1"].update(shortfall_zero_intervals=sum(p1_zero), language_shortfall=sum(sv.Value(v) for v in lang_short))
     p1_x = {k: sv.Value(v) for k, v in x.items()}
+    p1_z = {k: sv.Value(z) for k, z in zmap.items()}
     m.clear_hints()
     for v in list(x.values()) + list(off.values()) + zlist:
         m.AddHint(v, sv.Value(v))
@@ -312,6 +315,21 @@ def build(E, wb: Path, out_dir: Path, max_shifts: int, time_limit: float, worker
     p2_hits = sum(sv2.Value(h) for h in hits) if p2_ok else -1
     use1 = info["phase1"]["shortfall_zero_intervals"] >= p2_hits
     chosen = p1_x if use1 else {k: sv2.Value(v) for k, v in x.items()}
+    if export_breaks:
+        zv = p1_z if use1 else {k: sv2.Value(z) for k, z in zmap.items()}
+        plan = []
+        for (c, d, j, pidx), n in sorted(zv.items(), key=lambda kv: str(kv[0])):
+            if n <= 0:
+                continue
+            members = [a for a in range(A) if cls_of[a] == c and chosen[a, d, j]
+                       and not any(e["a"] == a and e["day"] == d for e in plan)]
+            if len(members) < n:
+                raise RuntimeError(f"break counts exceed workers at class {c} day {d} shift {shifts[j].label}")
+            for a in members[:n]:
+                plan.append({"a": a, "name": p.associates[a].name, "day": d, "shift": shifts[j].label, "pattern": pidx})
+        export_breaks.parent.mkdir(parents=True, exist_ok=True)
+        export_breaks.write_text(json.dumps(plan, indent=1))
+        info["exported_breaks"] = len(plan)
     info.update(status="SEED", seed_from_phase=1 if use1 else 2,
                 seed_model_hits=info["phase1"]["shortfall_zero_intervals"] if use1 else p2_hits,
                 phase2={"status": sv2.StatusName(st2), "hits": p2_hits}, active_intervals=sum(
@@ -612,8 +630,9 @@ def main() -> int:
     ap.add_argument("--all-shifts", action="store_true", help="per-associate: every library shift is a candidate")
     ap.add_argument("--fix-week-from", type=Path, help="per-associate diagnostic: pin the week in this workbook's "
                     "'Final Schedule' (or 'Schedule') sheet and score it under the seed model's metric")
-    ap.add_argument("--hint-breaks-from", type=Path, help="with --week-mode hint: also hint the breaks in "
+    ap.add_argument("--hint-breaks-from", type=Path, help="with --fix-week-from: also hint the breaks in "
                     "this workbook's 'Break Schedule' sheet (complete hint)")
+    ap.add_argument("--export-breaks", type=Path, help="per-associate: write the chosen week + break plan as JSON")
     ap.add_argument("--week-mode", choices=("pin", "hint"), default="pin",
                     help="with --fix-week-from: pin the week (diagnostic) or only hint it (warm start)")
     ap.add_argument("workbooks", nargs="+", type=Path)
@@ -639,7 +658,7 @@ def main() -> int:
     for wb in a.workbooks:
         row = (build_grouped(E, wb, a.out_dir, a.max_shifts, a.time_limit, a.workers, a.variety_cap)
                if a.variant == "grouped" else build(E, wb, a.out_dir, a.max_shifts, a.time_limit, a.workers,
-                                                  a.all_shifts, fix, a.week_mode, brk))
+                                                  a.all_shifts, fix, a.week_mode, brk, a.export_breaks))
         report[wb.name] = row
         print(json.dumps(row, default=str), flush=True)
         a.out_dir.mkdir(parents=True, exist_ok=True)

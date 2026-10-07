@@ -10,6 +10,18 @@
   </div>
   {% set opts = run_options(run) %}
   <p class="byline">{{ run.mode|capitalize if run.mode != 'SMOKE' else 'Readiness check' }} run, started by {{ run.by_name }} on {{ when(run.created) }} (Egypt time). Settings: {% if opts %}{% for k, v in opts.items() %}{{ k|replace('_', ' ')|capitalize }} {{ option_labels[v] }}{% if not loop.last %}; {% endif %}{% endfor %}{% else %}followed the workbook{% endif %}.</p>
+  <p class="byline tagline">{% if run.program %}Program <a href="{{ url_for('program', name=run.program) }}">{{ run.program }}</a>{% else %}No program set{% endif %}{% if run.week_start %}, week of {{ run.week_start }}{% else %}, no schedule week set{% endif %}.</p>
+  {% if user.id == run.user_id or user.is_admin %}
+  <details class="advanced tag">
+    <summary>{{ 'Change' if run.program else 'Set' }} the program and week</summary>
+    <form class="tagrow" method="post" action="{{ url_for('run_tag', run_id=run.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Program <input name="program" type="text" maxlength="80" value="{{ run.program }}"></label>
+      <label>Schedule week <input name="week_start" type="date" value="{{ run.week_start }}"></label>
+      <button type="submit">Save</button>
+    </form>
+  </details>
+  {% endif %}
   <p class="live" hidden>Connection lost: showing the last known state. Retrying.</p>
 
   <div class="run-top">

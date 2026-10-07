@@ -6,15 +6,17 @@ import os
 import re
 import secrets
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 from flask import Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file, session, url_for
 from werkzeug.utils import secure_filename
 
+from .analytics import program_weeks, team
 from .eta import queue_plan
 from .auth import admin_required, check_csrf, csrf_token, load_user, login_required
+from .program_page import build, overview, weeks_to_show
 from .runs import MODES, OPTION_LABELS, RESUMABLE, RunQueue, parse_options, run_options
 from .store import Store
 
@@ -121,6 +123,12 @@ def week_sunday(text: str) -> Optional[str]:
     return (day - timedelta(days=(day.weekday() + 1) % 7)).isoformat()
 
 
+def next_sunday(today: Optional[date] = None) -> str:
+    """The Sunday after today (Egypt time): the week a schedule is usually built for."""
+    today = today or datetime.now(EGYPT).date()
+    return (today + timedelta(days=(6 - today.weekday()) % 7 or 7)).isoformat()
+
+
 def clean_program(text: str) -> str:
     return " ".join((text or "").split())[:80]
 
@@ -174,6 +182,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
             "default-src 'self'; style-src 'self' https://fonts.googleapis.com; "
             "font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; frame-ancestors 'none'")
         return response
+
+    @app.template_filter("num")
+    def _num(value: float) -> str:
+        value = round(float(value), 1)
+        return str(int(value)) if value.is_integer() else str(value)
 
     @app.context_processor
     def _globals() -> Dict[str, Any]:
@@ -286,10 +299,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
         active = [r for r in runs if r["status"] in ("GATE", "RUNNING", "SCORING")]
         waiting = sorted((r for r in runs if r["status"] == "QUEUED"), key=lambda r: r["created"])
         latest = next((r for r in runs if r["status"] in ("DONE", "REVIEW") and summaries.get(r["id"])), None)
+        known = sorted({r["program"] for r in runs if r.get("program")}, key=str.lower)
         return render_template("dashboard.html", runs=runs, queue=queue, plan=plan, summaries=summaries,
                                active=active, waiting=waiting, latest=latest,
                                latest_summary=summaries.get(latest["id"]) if latest else None,
-                               now=time.time())
+                               now=time.time(), known_programs=known, next_sunday=next_sunday())
 
     # ------------------------------------------------------------- runs
     def _queue() -> RunQueue:
@@ -394,6 +408,31 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                                week_start=week_start)
             flash("Program and week saved.")
         return redirect(url_for("run_detail", run_id=run_id))
+
+    # ------------------------------------------------------------- analytics
+    def _all_runs() -> list:
+        return app.extensions["store"].list_runs(limit=100000)
+
+    @app.route("/programs")
+    @login_required
+    def programs():  # type: ignore[no-untyped-def]
+        return render_template("programs.html", rows=overview(program_weeks(_all_runs())))
+
+    @app.route("/programs/<path:name>")
+    @login_required
+    def program(name: str):  # type: ignore[no-untyped-def]
+        history = program_weeks(_all_runs()).get(name)
+        if not history:
+            abort(404)
+        n = weeks_to_show(request.args.get("weeks", "12"))
+        shown = history if n is None else history[-n:]
+        return render_template("program.html", name=name, view=build(shown, history), weeks=n,
+                               total=len(history), ranges=(4, 8, 12, 26, 52))
+
+    @app.route("/team")
+    @login_required
+    def team_page():  # type: ignore[no-untyped-def]
+        return render_template("team.html", people=team(_all_runs()))
 
     @app.route("/runs/<run_id>/stop", methods=["POST"])
     @login_required

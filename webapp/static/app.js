@@ -4,6 +4,31 @@
 // last known state stays on screen). Reloads once the run ends, so the wall,
 // findings and downloads appear. The dashboard refreshes every 30 s while
 // something is running or waiting.
+// Chart tips: any mark with data-tip shows it on hover, or on tap on a phone.
+// The same numbers are in each chart's table view.
+(function () {
+  "use strict";
+  var marks = document.querySelectorAll("[data-tip]");
+  if (!marks.length) { return; }
+  var tip = document.createElement("div");
+  tip.className = "tip";
+  tip.hidden = true;
+  document.body.appendChild(tip);
+  function show(e) {
+    var text = e.target.getAttribute && e.target.getAttribute("data-tip");
+    if (!text) { tip.hidden = true; return; }
+    tip.textContent = text;
+    tip.hidden = false;
+    var x = Math.min(e.clientX + 14, window.innerWidth - tip.offsetWidth - 8);
+    var y = e.clientY - tip.offsetHeight - 12;
+    tip.style.left = Math.max(8, x) + "px";
+    tip.style.top = (y < 8 ? e.clientY + 18 : y) + "px";
+  }
+  document.addEventListener("pointermove", show);
+  document.addEventListener("pointerdown", show);
+  document.addEventListener("scroll", function () { tip.hidden = true; }, { passive: true });
+})();
+
 (function () {
   "use strict";
   var run = document.querySelector("article.run");

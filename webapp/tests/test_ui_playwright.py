@@ -4,6 +4,7 @@
 Skips with a clear message where Playwright or Chromium is missing (the
 server needs neither). Screenshots go to evidence/phase_i/screens/."""
 import os
+import re
 import sys
 import tempfile
 import threading
@@ -12,7 +13,7 @@ from pathlib import Path
 
 from werkzeug.serving import make_server
 
-from webapp.tests.test_runs import make_app
+from webapp.tests.test_runs import make_app, seed_week
 
 # Phase J (owner-approved control-room redesign): screenshots of the new look.
 SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_j" / "screens"
@@ -173,6 +174,104 @@ class InTheBrowser(unittest.TestCase):
         page.get_by_role("link", name="People").click()
         expect(page.get_by_role("heading", name="People")).to_be_visible()
         page.screenshot(path=str(SCREENS / "08_people.png"), full_page=True)
+
+
+# Phase K: the program history pages. Own app, so these weeks stay off the
+# Phase J screenshots. The weeks are the real Phase I run's figures varied
+# per week (test data; the page draws whatever the runs stored).
+K_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_k" / "screens"
+HISTORY = [  # week, associates, after, before, at 90%, efficiency, over h, under h, hours, short cells
+    ("2026-08-09", 9, 96, 118, 110, 66, 61.0, 6.5, 360, ["Tue 20:30", "Thu 20:30", "Sat 14:00", "Mon 20:30"]),
+    ("2026-08-16", 9, 99, 120, 112, 68, 58.5, 5.0, 360, ["Tue 20:30", "Thu 21:00", "Mon 20:30"]),
+    ("2026-08-23", 8, 97, 119, 113, 71, 49.0, 5.5, 320, ["Tue 20:30", "Thu 20:30", "Fri 09:00"]),
+    ("2026-08-30", 8, 101, 121, 115, 72, 47.5, 4.5, 320, ["Tue 20:30", "Thu 20:30"]),
+    ("2026-09-06", 8, 103, 122, 117, 73, 46.0, 4.0, 320, ["Tue 21:00", "Thu 20:30", "Mon 20:30"]),
+    ("2026-09-13", 8, 100, 123, 116, 72, 47.0, 4.5, 320, ["Tue 20:30", "Wed 13:00"]),
+    ("2026-09-20", 8, 104, 124, 118, 74, 44.5, 3.5, 320, ["Tue 20:30", "Thu 20:30", "Mon 20:30"]),
+    ("2026-09-27", 8, 102, 125, 119, 74, 44.0, 3.5, 320, ["Tue 20:30", "Thu 21:00"]),
+    ("2026-10-04", 8, 105, 125, 120, 75, 43.0, 3.0, 320, ["Tue 20:30", "Thu 20:30", "Mon 20:30"]),
+]
+
+
+def seed_history(store):
+    for week, people, after, before, at90, eff, over, under, hours, cells in HISTORY:
+        seed_week(store, "NMG Spanish", week, associates=people, fully_covered=after, before_full=before, at_90=at90,
+                  efficiency={"pct": eff, "over_hours": over, "under_hours": under}, productive_hours=hours,
+                  slack_hours=hours - 207.4, short_cells=cells)
+    seed_week(store, "NMG Spanish", "2026-10-11", outcome="REVIEW")  # the real run's own figures: 7 people, 107 of 126
+    seed_week(store, "AE/AR B2B", "2026-10-04", associates=14, fully_covered=118, before_full=126)
+    seed_week(store, "AE/AR B2B", "2026-10-11", associates=15, fully_covered=121, before_full=126)
+
+
+@unittest.skipIf(sync_playwright is None, "Playwright is not installed here; UI tests skipped")
+class TheProgramPagesInTheBrowser(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app, cls.store, _, _ = make_app(start_worker=False)
+        cls.store.add_user("omar", "Omar Mokhtar", "Owner-pass-123", is_admin=True, must_change=False)
+        seed_history(cls.store)
+        cls.server = make_server("127.0.0.1", 0, cls.app, threaded=True)
+        cls.base = f"http://127.0.0.1:{cls.server.server_port}"
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.pw = sync_playwright().start()
+        launch = {"headless": True}
+        if os.path.exists(CHROMIUM):
+            launch["executable_path"] = CHROMIUM
+        try:
+            cls.browser = cls.pw.chromium.launch(**launch)
+        except Exception as exc:  # pragma: no cover
+            cls.pw.stop()
+            cls.server.shutdown()
+            raise unittest.SkipTest(f"Chromium could not start: {exc}")
+        K_SCREENS.mkdir(parents=True, exist_ok=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.pw.stop()
+        cls.server.shutdown()
+
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+
+    def test_program_analytics_page(self):
+        page = self.page(height=900)
+        self.sign_in(page)
+        page.get_by_role("link", name="Programs").click()
+        expect(page.get_by_role("heading", name="Programs")).to_be_visible()
+        page.wait_for_timeout(600)  # the page-to-page crossfade
+        page.screenshot(path=str(K_SCREENS / "01_programs.png"), full_page=True)
+        page.get_by_role("link", name="NMG Spanish").click()
+        expect(page.get_by_role("heading", name="What happened")).to_be_visible()
+        page.wait_for_timeout(600)
+        expect(page.get_by_text("Associates: 7 this week, down 1 from 8 in the week of 04 Oct.")).to_be_visible()
+        bar = page.locator("section[aria-labelledby=c-people] rect.hit").last
+        bar.hover()
+        expect(page.locator(".tip")).to_have_text("11 Oct: 7 associates (down 1)")
+        page.screenshot(path=str(K_SCREENS / "06_chart_tip.png"))
+        page.mouse.move(1, 1)
+        page.evaluate("window.scrollTo(0, 0)")  # the sticky header would otherwise sit mid-page in a full-page shot
+        page.screenshot(path=str(K_SCREENS / "02_program_history.png"), full_page=True)
+        page.locator("section[aria-labelledby=c-cover] summary").click()
+        expect(page.locator("section[aria-labelledby=c-cover] table")).to_be_visible()
+
+    def test_program_page_on_a_phone(self):
+        page = self.page(width=390, height=844)
+        self.sign_in(page)
+        page.goto(self.base + "/programs/NMG%20Spanish")
+        self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), 390)
+        page.screenshot(path=str(K_SCREENS / "03_program_phone.png"), full_page=True)
+
+    def test_team_page_and_upload_fields(self):
+        page = self.page()
+        self.sign_in(page)
+        expect(page.get_by_label("Program")).to_be_visible()
+        expect(page.get_by_label("Schedule week")).to_have_value(re.compile(r"\d{4}-\d{2}-\d{2}"))
+        page.screenshot(path=str(K_SCREENS / "04_new_run_with_program.png"))
+        page.get_by_role("link", name="Team", exact=True).click()
+        expect(page.get_by_role("heading", name="Team", exact=True)).to_be_visible()
+        page.wait_for_timeout(600)
+        page.screenshot(path=str(K_SCREENS / "05_team.png"), full_page=True)
 
 
 if __name__ == "__main__":

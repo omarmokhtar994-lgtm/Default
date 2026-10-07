@@ -18,6 +18,8 @@
   {% if user %}
   <nav aria-label="Main">
     <a href="{{ url_for('home') }}">Runs</a>
+    <a href="{{ url_for('programs') }}">Programs</a>
+    <a href="{{ url_for('team_page') }}">Team</a>
     {% if user.is_admin %}<a href="{{ url_for('admin_users') }}">People</a>{% endif %}
     <a href="{{ url_for('change_password') }}" title="Change your password">{{ user.display_name }}</a>
     <form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="link">Sign out</button></form>

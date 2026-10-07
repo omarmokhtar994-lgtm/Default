@@ -95,6 +95,11 @@ def _date(week: str) -> str:
     return datetime.strptime(week, "%Y-%m-%d").strftime("%d %b")
 
 
+def _half_hours(n: int, one: str = "", many: str = "") -> str:
+    words = f"{n} half-hour" + ("" if n == 1 else "s")
+    return f"{words} {one if n == 1 else many}".rstrip()
+
+
 def recurring(weeks: List[dict], last: int = 8) -> Dict[str, Any]:
     recent = weeks[-last:]
     counts: Counter = Counter()
@@ -167,7 +172,7 @@ def suggestions(m: dict) -> List[dict]:
                                                "hours would keep them covered."})
     if causes.get("capacity", {}).get("count"):
         c = causes["capacity"]
-        out.append({"level": "capacity", "text": f"{c['count']} half-hours cannot reach 100% even if everyone who "
+        out.append({"level": "capacity", "text": f"{_half_hours(c['count'])} cannot reach 100% even if everyone who "
                                                  f"can work then did (for example {', '.join(c['examples'][:3])}): "
                                                  "add people available at those hours, or shift start times that "
                                                  "cover them."})
@@ -177,7 +182,7 @@ def suggestions(m: dict) -> List[dict]:
                                                  + (f": about {add} more people (the scheduler's estimate)." if add else ".")})
     if causes.get("rules", {}).get("count"):
         c = causes["rules"]
-        out.append({"level": "rules", "text": f"{c['count']} half-hours are short although enough people exist "
+        out.append({"level": "rules", "text": f"{_half_hours(c['count'], 'is', 'are')} short although enough people exist "
                                               f"(for example {', '.join(c['examples'][:3])}): rest rules, days off or "
                                               "the shift start times on offer keep them elsewhere. More start-time "
                                               "options or flexible days off would help."})

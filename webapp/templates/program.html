@@ -1,0 +1,86 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{% extends "base.html" %}{% from "_macros.html" import change with context %}
+{% block title %}{{ name }}: program history on Team Scheduler{% endblock %}
+{% block content %}{% set latest = view.latest %}
+<div class="phead">
+  <div>
+    <p class="crumb"><a href="{{ url_for('programs') }}">Programs</a></p>
+    <h1>{{ name }}</h1>
+    <p class="byline">{{ total }} week{{ 's' if total != 1 }} on record. Latest: the week of {{ latest.week }}, from <a href="{{ url_for('run_detail', run_id=latest.run_id) }}">{{ latest.workbook }}</a> ({{ latest.mode|lower }} run by {{ latest.by_name }}{% if latest.runs_that_week > 1 %}; the latest of {{ latest.runs_that_week }} runs that week{% endif %}).</p>
+  </div>
+  <form class="range" method="get" action="{{ url_for('program', name=name) }}">
+    <label>Show
+      <select name="weeks">
+        {% for n in ranges %}<option value="{{ n }}"{% if weeks == n %} selected{% endif %}>Last {{ n }} weeks</option>{% endfor %}
+        <option value="all"{% if weeks is none %} selected{% endif %}>All weeks</option>
+        {% if weeks is not none and weeks not in ranges %}<option value="{{ weeks }}" selected>Last {{ weeks }} weeks</option>{% endif %}
+      </select></label>
+    <button type="submit" class="quiet">Show</button>
+  </form>
+</div>
+
+<section class="tiles" aria-label="The latest week">
+  {% for name_, t in view.tiles %}
+  <p class="tile"><span class="tile-label">{{ name_ }}</span>
+    <b>{% if t.value is not none %}{{ t.value }}{{ t.unit }}{% else %}–{% endif %}</b>
+    {% if t.delta is not none %}{{ change(t.delta, ' points' if t.unit == '%' else '', t.good) }} <small class="dim">from last week</small>{% endif %}</p>
+  {% endfor %}
+</section>
+
+<div class="pgrid">
+  <section class="panel readout" aria-labelledby="what-h">
+    <h2 id="what-h">What happened</h2>
+    <ul class="says">{% for i in view.insights %}<li class="{{ i.level }}">{{ i.text }}</li>{% endfor %}</ul>
+  </section>
+  <section class="panel advice" aria-labelledby="better-h">
+    <h2 id="better-h">What would get closer to 100%</h2>
+    {% if view.suggestions %}
+    <ul class="says">{% for s in view.suggestions %}<li class="{{ s.level }}">{{ s.text }}</li>{% endfor %}</ul>
+    {% else %}<p class="empty">Nothing to suggest: every half-hour was fully covered this week.</p>{% endif %}
+    <p class="note">Estimates come from the scheduler's own capacity check and the validator's half-hour figures; they do not account for shift lengths, days off or language rules.</p>
+  </section>
+</div>
+
+<div class="charts">
+  {% for c in view.charts %}
+  <section class="panel chart-panel" aria-labelledby="c-{{ c.id }}">
+    <h2 id="c-{{ c.id }}">{{ c.title }}</h2>
+    <p class="note">{{ c.note }}</p>
+    <div class="chart-scroll">{{ c.svg }}</div>
+    <details class="tableview">
+      <summary>Show as table</summary>
+      {% if c.rows %}
+      <table class="runs small"><thead><tr>{% for h in c.head %}<th>{{ h }}</th>{% endfor %}</tr></thead>
+        <tbody>{% for row in c.rows %}<tr>{% for v in row %}<td>{{ '–' if v is none else v }}</td>{% endfor %}</tr>{% endfor %}</tbody></table>
+      {% else %}<p class="empty">No rows.</p>{% endif %}
+    </details>
+  </section>
+  {% endfor %}
+</div>
+
+<section class="panel" aria-labelledby="weeks-h">
+  <h2 id="weeks-h">Week by week</h2>
+  <div class="scroll">
+  <table class="runs weeks">
+    <thead><tr><th>Week</th><th>Associates</th><th>After breaks</th><th>Before breaks</th><th>At 90% or more</th><th>Efficiency</th><th>Hours over need</th><th>Hours under need</th><th>Run</th></tr></thead>
+    <tbody>
+    {% for w in view.table %}
+    <tr>
+      <td class="when">{{ w.week }}{% if w.basis != 'set' %}<br><small>from the run date</small>{% endif %}</td>
+      <td>{{ w.f.associates if w.f.associates is not none else '–' }} {{ change(w.d.associates) }}</td>
+      <td>{{ w.f.after_pct }}% {{ change(w.d.after_pct, ' points', 'up') }}</td>
+      <td>{{ w.f.before_pct }}% {{ change(w.d.before_pct, ' points', 'up') }}</td>
+      <td>{{ w.f.at90_pct }}%</td>
+      <td>{% if w.f.efficiency is not none %}{{ w.f.efficiency }}%{% else %}–{% endif %}</td>
+      <td>{{ w.f.over_hours if w.f.over_hours is not none else '–' }}</td>
+      <td>{{ w.f.under_hours if w.f.under_hours is not none else '–' }}</td>
+      <td><a href="{{ url_for('run_detail', run_id=w.run_id) }}">{{ w.workbook }}</a><br><small>by {{ w.by }}{% if w.runs > 1 %}; latest of {{ w.runs }} runs{% endif %}</small></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="byline">Weeks start on Sunday. A week marked "from the run date" had no schedule week set; set it on the run's page.</p>
+</section>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='app.js') }}" defer></script>{% endblock %}

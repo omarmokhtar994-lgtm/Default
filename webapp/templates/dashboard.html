@@ -32,6 +32,14 @@
       <label class="drop">This week's workbook (.xlsx, up to 25 MB)
         <input type="file" name="workbook" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
       </label>
+      <div class="tagrow">
+        <label>Program
+          <input name="program" type="text" list="known-programs" maxlength="80" autocomplete="off" placeholder="For example NMG Spanish">
+          <datalist id="known-programs">{% for p in known_programs %}<option value="{{ p }}">{% endfor %}</datalist></label>
+        <label>Schedule week
+          <input name="week_start" type="date" value="{{ next_sunday }}"></label>
+      </div>
+      <p class="hint">The program and week put this run on the program's history page. Any date in the week works; it is stored as the Sunday that starts it.</p>
       <fieldset class="modes">
         <legend>How long to search</legend>
         <label class="mode"><input type="radio" name="mode" value="QUICK" checked> Quick

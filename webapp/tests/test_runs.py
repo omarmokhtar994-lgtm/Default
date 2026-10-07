@@ -437,6 +437,85 @@ class TheProgramTags(unittest.TestCase):
         self.assertEqual((run["program"], run["week_start"], run["metrics"]), ("", "", ""))
 
 
+def seed_week(store, program, week, outcome="DONE", by=1, n=[0], **changes):
+    """A finished run with stored figures, as a run of the real Phase I workbook would leave."""
+    from webapp.results import metrics, summarize
+    m = metrics(summarize(Path(__file__).with_name("fixtures") / "real_run"))
+    m.update(changes, outcome=outcome)
+    n[0] += 1
+    run_id = f"{n[0]:012x}"
+    store.add_run(run_id, by, f"{program}_{week}.xlsx", "QUICK", outcome, program=program, week_start=week)
+    store.update_run(run_id, metrics=json.dumps(m), started=time.time() - 3600, finished=time.time())
+    return run_id
+
+
+class TheAnalyticsPages(unittest.TestCase):
+    """Phase K task 5: programs, one program's history, the team."""
+
+    def setUp(self):
+        self.app, self.store, *_ = make_app(start_worker=False)
+        self.client = client_for(self.app)
+        seed_week(self.store, "NMG", "2026-09-27", associates=8, fully_covered=100)
+        seed_week(self.store, "NMG", "2026-10-04", associates=8, fully_covered=102)
+        seed_week(self.store, "NMG", "2026-10-11")  # the real run: 7 associates, 107 of 126
+        seed_week(self.store, "AE/AR <B2B>", "2026-10-11", outcome="REVIEW", associates=12)
+
+    def page(self, url):
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200, url)
+        return html.unescape(response.get_data(as_text=True))
+
+    def test_programs_page_lists_programs_with_latest_figures(self):
+        body = self.page("/programs")
+        self.assertIn("NMG", body)
+        self.assertIn("3 weeks", body)
+        self.assertIn("85%", body)  # 107 of 126 after breaks, the latest NMG week
+        self.assertRegex(body, r"7\s*<[^>]*>\s*down 1")  # associates with the change from last week
+
+    def test_program_page_shows_history_insights_and_suggestions(self):
+        body = self.page("/programs/NMG")
+        self.assertIn("Associates: 7 this week, down 1 from 8 in the week of 04 Oct.", body)
+        self.assertIn("Fully covered before breaks: 99%, so breaks cost 14 points this week.", body)
+        self.assertIn("at 90% it is met in 96%", body)
+        for chart in ("Associates per week", "Coverage before and after breaks", "Hours available and needed",
+                      "What stops 100%", "If the interval target were lower", "Hours that keep coming up short"):
+            self.assertIn(chart, body)
+        self.assertEqual(body.count('<details class="tableview">'), 6)
+        self.assertIn("2026-10-11", body)  # the week-by-week table
+
+    def test_program_weeks_filter_limits_the_history(self):
+        body = self.page("/programs/NMG?weeks=2")
+        self.assertNotIn("27 Sep", body)
+        self.assertIn("04 Oct", body)
+
+    def test_program_names_are_escaped_and_url_safe(self):
+        raw = self.client.get("/programs").get_data(as_text=True)
+        self.assertNotIn("<B2B>", raw)
+        self.assertIn("/programs/AE/AR%20%3CB2B%3E", raw)
+        self.assertIn("12", self.page("/programs/AE/AR%20%3CB2B%3E"))
+        self.assertEqual(self.client.get("/programs/Nothing").status_code, 404)
+
+    def test_team_page(self):
+        body = self.page("/team")
+        self.assertIn("Sara", body)
+        self.assertRegex(body, r"Sara</td>\s*<td>4</td>")
+
+    def test_analytics_need_login(self):
+        anonymous = self.app.test_client()
+        for url in ("/programs", "/programs/NMG", "/team"):
+            self.assertEqual(anonymous.get(url).status_code, 302, url)
+
+    def test_upload_form_offers_program_and_week(self):
+        body = self.page("/")
+        self.assertIn('name="program"', body)
+        self.assertIn('<option value="NMG">', body)
+        self.assertIn('name="week_start" type="date"', body)
+
+    def test_run_page_lets_the_owner_tag_the_run(self):
+        run_id = seed_week(self.store, "", "")
+        self.assertIn(f'action="/runs/{run_id}/tag"', self.page(f"/runs/{run_id}"))
+
+
 class Access(unittest.TestCase):
     def test_downloads_need_login(self):
         app, store, *_ = make_app()

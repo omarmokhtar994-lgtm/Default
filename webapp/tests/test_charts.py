@@ -4,7 +4,7 @@ allows scripts from the site only, and these need none to draw)."""
 import re
 import unittest
 
-from webapp.charts import AQUA, BLUE, ORANGE, columns, heat, hbars, lines
+from webapp.charts import AQUA, BLUE, ORANGE, columns, heat, hbars, lines, spark
 
 
 def bars(svg):
@@ -62,6 +62,21 @@ class TheCharts(unittest.TestCase):
         svg = str(heat(["Tue", "Thu"], ["20", "21"], [[3, 0], [1, None]], tip_unit=" of 4 weeks"))
         self.assertIn('data-tip="Tue 20: 3 of 4 weeks"', svg)
         self.assertEqual(len(re.findall(r'class="cell', svg)), 4)
+
+    def test_percent_columns_can_stop_at_100(self):
+        svg = str(columns(["100%", "90%"], [85, 96], unit="%", y_max=100))
+        self.assertIn(">100</text>", svg)
+        self.assertNotIn(">200</text>", svg)
+
+    def test_spark_marks_the_latest_value_and_skips_gaps(self):
+        svg = str(spark([80, None, 85, 90], label="After breaks, last 4 weeks"))
+        self.assertIn('class="spark"', svg)
+        self.assertEqual(svg.count("<circle"), 1)  # the latest week only
+        self.assertEqual(svg.count(" M"), 1)  # the gap starts a second segment
+        self.assertIn('aria-label="After breaks, last 4 weeks"', svg)
+
+    def test_spark_with_fewer_than_two_values_draws_nothing(self):
+        self.assertEqual(str(spark([None, 85])), "")
 
 
 if __name__ == "__main__":

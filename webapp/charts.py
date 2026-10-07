@@ -41,7 +41,7 @@ def _svg(height: int, label: str, body: List[str]) -> Markup:
                   f'preserveAspectRatio="xMidYMid meet">' + "".join(body) + "</svg>")
 
 
-def _nice(top: float) -> float:
+def nice(top: float) -> float:
     if top <= 0:
         return 1
     step = 10 ** math.floor(math.log10(top))
@@ -57,14 +57,14 @@ def _every(n: int, room: int) -> int:
 
 def columns(labels: Sequence[str], values: Sequence[Optional[float]], unit: str = "",
             deltas: Optional[Sequence[Optional[float]]] = None, colour: str = BLUE,
-            label: str = "Column chart") -> Markup:
+            label: str = "Column chart", y_max: Optional[float] = None) -> Markup:
     """One column per label, from a zero baseline; the change from the previous
     column is in the tip."""
     if not labels or all(v is None for v in values):
         return EMPTY
     h, left, right, top, bottom = 220, 44, 12, 22, 30
     plot_w, plot_h = W - left - right, h - top - bottom
-    y_max = _nice(max(v for v in values if v is not None) * 1.1)
+    y_max = y_max or nice(max(v for v in values if v is not None) * 1.1)
     slot = plot_w / len(labels)
     bar = min(BAR_MAX, slot * 0.6)
     base = top + plot_h
@@ -163,7 +163,7 @@ def hbars(rows: Sequence[Tuple[str, float, str]], unit: str = "", label: str = "
     """Horizontal bars, longest first as given; values written at the bar end."""
     if not rows:
         return EMPTY
-    row_h, left, right = 30, 200, 70
+    row_h, left, right = 30, 290, 50
     h = row_h * len(rows) + 8
     top_value = max(v for _, v, _ in rows) or 1
     plot_w = W - left - right
@@ -211,3 +211,29 @@ def heat(rows: Sequence[str], cols: Sequence[str], grid: Sequence[Sequence[Optio
             out.append(f'<rect class="cell" x="{x:.1f}" y="{y:.1f}" width="{cell - gap:.1f}" height="{cell - gap:.1f}" '
                        f'rx="3" fill="{HEAT[level]}" data-tip="{escape(f"{name} {col}: {v}{tip_unit}")}"/>')
     return _svg(h, label, out)
+
+
+def spark(values: Sequence[Optional[float]], colour: str = AQUA, label: str = "Trend") -> Markup:
+    """A word-sized trend line for tables; the latest value gets a dot."""
+    points = [(i, v) for i, v in enumerate(values) if v is not None]
+    if len(points) < 2:
+        return Markup("")
+    w, h, pad = 96, 26, 4
+    low, high = min(v for _, v in points), max(v for _, v in points)
+    span = (high - low) or 1
+    step = (w - 2 * pad) / max(1, len(values) - 1)
+
+    def xy(i: int, v: float) -> str:
+        return f"{pad + i * step:.1f} {h - pad - (h - 2 * pad) * (v - low) / span:.1f}"
+
+    path, pen = [], "M"
+    for i, v in enumerate(values):
+        if v is None:
+            pen = "M"
+            continue
+        path.append(pen + xy(i, v))
+        pen = "L"
+    x, y = xy(*points[-1]).split()
+    return Markup(f'<svg class="spark" viewBox="0 0 {w} {h}" role="img" aria-label="{escape(label)}">'
+                  f'<path d="{" ".join(path)}" stroke="{colour}" fill="none"/>'
+                  f'<circle cx="{x}" cy="{y}" r="3" fill="{colour}"/></svg>')

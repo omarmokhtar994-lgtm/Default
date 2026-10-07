@@ -1,0 +1,31 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{% extends "base.html" %}{% from "_macros.html" import change with context %}
+{% block title %}Programs on Team Scheduler{% endblock %}
+{% block content %}
+<h1>Programs</h1>
+<p class="byline">Each program's latest week, and how it has moved over the last 12 weeks. A week counts the latest finished run for that program and week (Approved or Needs review).</p>
+<section class="panel" aria-label="Programs">
+  {% if rows %}
+  <div class="scroll">
+  <table class="runs programs">
+    <thead><tr><th>Program</th><th>Latest week</th><th>Associates</th><th>Covered after breaks</th><th>Before breaks</th><th>Efficiency</th></tr></thead>
+    <tbody>
+    {% for r in rows %}{% set f = r.latest.f %}{% set d = r.latest.delta %}
+    <tr>
+      <td><a href="{{ url_for('program', name=r.name) }}">{{ r.name }}</a><br><small>{{ r.weeks }} week{{ 's' if r.weeks != 1 }} on record</small></td>
+      <td class="when">{{ r.latest.week }}</td>
+      <td class="cov">{{ f.associates if f.associates is not none else '–' }} {{ change(d.associates) }}<span class="trend">{{ r.spark_people }}</span></td>
+      <td class="cov">{{ f.after_pct }}% {{ change(d.after_pct, ' points', 'up') }}<span class="trend">{{ r.spark_after }}</span></td>
+      <td class="cov">{{ f.before_pct }}%</td>
+      <td class="cov">{% if f.efficiency is not none %}{{ f.efficiency }}%{% else %}<span class="dim">–</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="empty">No finished runs yet. Write the program name when you start a run, and each week's figures appear here.</p>
+  {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='app.js') }}" defer></script>{% endblock %}

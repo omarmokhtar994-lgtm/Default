@@ -1,0 +1,35 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{% extends "base.html" %}
+{% block title %}Team on Team Scheduler{% endblock %}
+{% block content %}
+<h1>Team</h1>
+<p class="byline">Every run each person has started, and how it ended. Average time counts finished runs only.</p>
+<section class="panel" aria-label="Runs per person">
+  {% if people %}
+  <div class="scroll">
+  <table class="runs team">
+    <thead><tr><th>Person</th><th>Runs</th><th>Approved</th><th>Needs review</th><th>Not approved</th><th>Rejected</th><th>Other</th><th>Programs</th><th>Average time</th><th>Last run</th></tr></thead>
+    <tbody>
+    {% for p in people %}
+    <tr>
+      <td>{{ p.name }}</td>
+      <td>{{ p.runs }}</td>
+      <td>{{ p.approved }}</td>
+      <td>{{ p.review }}</td>
+      <td>{{ p.not_approved }}</td>
+      <td>{{ p.rejected }}</td>
+      <td>{{ p.other }}</td>
+      <td>{% for name in p.programs %}<a href="{{ url_for('program', name=name) }}">{{ name }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</td>
+      <td>{% if p.avg_minutes is not none %}{{ duration(p.avg_minutes) }}{% else %}<span class="dim">–</span>{% endif %}</td>
+      <td class="when">{{ when(p.last) }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="byline">"Other" counts runs still waiting or running, stopped, interrupted, and readiness checks. Times are Egypt time.</p>
+  {% else %}
+  <p class="empty">No runs yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

@@ -93,6 +93,10 @@ class TheSuggestions(unittest.TestCase):
         self.assertIn("40.5 staffed hours above need", texts)
         self.assertIn("Sat 00:00", texts)
 
+    def test_one_half_hour_is_singular(self):
+        texts = " ".join(s["text"] for s in suggestions(REAL))  # the real run: 1 half-hour short for rules
+        self.assertIn("1 half-hour is short although enough people exist", texts)
+
 
 class TheTeam(unittest.TestCase):
     def test_team_activity_per_user(self):

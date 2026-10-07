@@ -64,3 +64,13 @@
 {%- endmacro %}
 
 {% macro pct(part, whole) -%}{{ ((part * 100 / whole)|round|int) if whole else 0 }}%{%- endmacro %}
+
+{# The change from the week before, in words; coloured only when the
+   direction is good or bad for the measure (good = 'up' or 'down'). #}
+{% macro change(delta, unit='', good=none) -%}
+{%- if delta is not none -%}
+{%- set unit = ' point' if unit == ' points' and delta in (1, -1) else unit -%}
+{%- set mood = '' if good is none or delta == 0 else ('good' if (delta > 0) == (good == 'up') else 'bad') -%}
+<small class="chg {{ 'up' if delta > 0 else 'down' if delta < 0 else 'flat' }} {{ mood }}">{% if delta > 0 %}up {{ delta|num }}{{ unit }}{% elif delta < 0 %}down {{ (-delta)|num }}{{ unit }}{% else %}unchanged{% endif %}</small>
+{%- endif -%}
+{%- endmacro %}

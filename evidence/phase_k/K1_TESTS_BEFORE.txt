@@ -1,0 +1,9 @@
+ERROR: test_breaks_cause (webapp.tests.test_results.TheAnalyses.test_breaks_cause)
+ERROR: test_capacity_cause_from_the_engine_bound (webapp.tests.test_results.TheAnalyses.test_capacity_cause_from_the_engine_bound)
+ERROR: test_day_coverage_has_seven_days (webapp.tests.test_results.TheAnalyses.test_day_coverage_has_seven_days)
+ERROR: test_efficiency_counts_over_and_under (webapp.tests.test_results.TheAnalyses.test_efficiency_counts_over_and_under)
+ERROR: test_metrics_hold_no_names (webapp.tests.test_results.TheAnalyses.test_metrics_hold_no_names)
+ERROR: test_restriction_causes_add_up (webapp.tests.test_results.TheAnalyses.test_restriction_causes_add_up)
+ERROR: test_target_counts_match_the_validator (webapp.tests.test_results.TheAnalyses.test_target_counts_match_the_validator)
+Ran 7 tests in 0.021s
+FAILED (errors=7)

@@ -176,6 +176,90 @@ def _staffing(case: Path, rows: List[dict], step: int) -> Optional[dict]:
                 **adds, **{"class": str(bench.get("capacity_class") or "")})
 
 
+TARGET_STEPS = (100, 95, 90, 85, 80)
+CAUSES = (
+    ("capacity", "Not enough people can work then"),
+    ("breaks", "Breaks take it below 100%"),
+    ("weekly_hours", "Not enough weekly hours overall"),
+    ("rules", "Shift patterns and rules keep people elsewhere"),
+)
+
+
+def _audit(case: Path) -> dict:
+    audit_file = next(iter(sorted(case.glob("*solver_audit.json"))), None)
+    return ((_load(audit_file) if audit_file else None) or {}).get("capacity_diagnostics") or {}
+
+
+def _analyses(rows: List[dict], step: int, cap: dict) -> Dict[str, Any]:
+    """What-if targets, schedule efficiency, per-day coverage and the causes
+    of every half-hour below 100% after breaks, from the validator's rows and
+    the engine's own per-half-hour capacity bound."""
+    pct = lambda r, key: float(r.get(key, 0)) + 1e-9
+    targets = [{"pct": t, "after": sum(pct(r, "after_pct") >= t / 100 for r in rows),
+                "before": sum(pct(r, "before_pct") >= t / 100 for r in rows)} for t in TARGET_STEPS]
+    hours = step / 60.0
+    required = sum(float(r.get("required", 0)) for r in rows) * hours
+    under = sum(max(0.0, float(r.get("required", 0)) - float(r.get("after_effective", 0))) for r in rows) * hours
+    over = sum(max(0.0, float(r.get("after_effective", 0)) - float(r.get("required", 0))) for r in rows) * hours
+    efficiency = {"pct": max(0, int(round((1 - (under + over) / required) * 100))) if required else None,
+                  "under_hours": round(under, 1), "over_hours": round(over, 1)}
+    day_coverage = []
+    for index, day in enumerate(DAYS):
+        mine = [r for r in rows if int(r["day_index"]) == index]
+        day_coverage.append({
+            "day": day,
+            "after_pct": int(round(100 * sum(pct(r, "after_pct") >= 1 for r in mine) / len(mine))) if mine else None,
+            "before_pct": int(round(100 * sum(pct(r, "before_pct") >= 1 for r in mine) / len(mine))) if mine else None})
+    bounds = {(b.get("day"), b.get("time")): b for b in cap.get("interval_capacity_upper_bounds") or []}
+    weekly_short = float(cap.get("productive_minus_target_lower_bound", 0) or 0) < 0
+    found: Dict[str, List[str]] = {key: [] for key, _ in CAUSES}
+    for r in sorted(rows, key=lambda r: (int(r["day_index"]), _minutes(r["interval"]))):
+        if pct(r, "after_pct") >= 1:
+            continue
+        where = f"{DAYS[int(r['day_index'])]} {r['interval']}"
+        bound = bounds.get((DAYS[int(r["day_index"])], r["interval"]))
+        cause = "rules"
+        if bound is not None:
+            shrink = float(bound.get("shrinkage", 0) or 0)
+            need = math.ceil(float(r.get("required", 0)) / max(1e-9, 1 - shrink) - 1e-9)
+            if int(bound.get("maximum_possible_raw_min", need)) < need:
+                cause = "capacity"
+        if cause == "rules" and pct(r, "before_pct") >= 1:
+            cause = "breaks"
+        elif cause == "rules" and weekly_short:
+            cause = "weekly_hours"
+        found[cause].append(where)
+    restrictions = {"total": sum(len(v) for v in found.values()),
+                    "causes": [{"key": key, "label": label, "count": len(found[key]), "examples": found[key][:4]}
+                               for key, label in CAUSES]}
+    short_cells = [f"{DAYS[int(r['day_index'])]} {r['interval']}" for r in rows if pct(r, "after_pct") < 1]
+    return {"targets": targets, "efficiency": efficiency, "day_coverage": day_coverage,
+            "restrictions": restrictions, "short_cells": short_cells}
+
+
+def metrics(summary: Dict[str, Any]) -> Dict[str, Any]:
+    """The compact, names-free figures kept on the run row (they outlive the
+    run's files, which are deleted after 30 days)."""
+    n, st = summary["numbers"], summary.get("staffing") or {}
+    before = {t["pct"]: t["before"] for t in summary.get("targets", [])}
+    return {
+        "interval_minutes": summary["interval_minutes"], "active": n["active"],
+        "fully_covered": n["fully_covered"], "at_90": n["at_90"], "floor_gaps": n["floor_gaps"],
+        "losses_from_breaks": n["losses_from_breaks"], "before_full": before.get(100), "before_90": before.get(90),
+        "associates": st.get("roster"), "productive_hours": st.get("productive_hours"),
+        "target_hours": st.get("target_hours"), "slack_hours": st.get("slack_hours"),
+        "headroom_pct": st.get("headroom_pct"), "capacity_class": st.get("class"),
+        "add_for_target": st.get("add_for_target"), "add_for_floor": st.get("add_for_floor"),
+        "add_for_breaks": st.get("add_for_breaks"), "release_estimate": st.get("release_estimate"),
+        "per_person_hours": st.get("per_person_hours"), "target_ratio": st.get("target_ratio"),
+        "short_windows": st.get("short_windows", []), "over_windows": st.get("over_windows", []),
+        "efficiency": summary.get("efficiency"), "targets": summary.get("targets"),
+        "day_coverage": summary.get("day_coverage"), "restrictions": summary.get("restrictions"),
+        "short_cells": summary.get("short_cells", []), "findings": len(summary.get("findings", [])),
+        "hard_fail_count": summary.get("hard_fail_count", 0),
+    }
+
+
 def summarize(results_dir: Path) -> Optional[Dict[str, Any]]:
     case = _case_dir(Path(results_dir))
     if case is None:
@@ -211,4 +295,4 @@ def summarize(results_dir: Path) -> Optional[Dict[str, Any]]:
     findings += [_finding(w, "review") for w in data.get("warnings") or []]
     return {"case": case.name, "interval_minutes": step, "days": DAYS, "slots": slots, "cells": cells,
             "numbers": numbers, "findings": findings, "hard_fail_count": int(data.get("hard_fail_count", 0)),
-            "staffing": _staffing(case, rows, step)}
+            "staffing": _staffing(case, rows, step), **_analyses(rows, step, _audit(case))}

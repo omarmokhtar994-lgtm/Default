@@ -147,3 +147,70 @@ class TheStaffingSuggestions(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheAnalyses(unittest.TestCase):
+    """Phase K task 1: what stops 100%, what-if targets, schedule efficiency."""
+
+    def plant(self, root, row_index, **row):
+        def change(data):
+            data["interval_rows"][row_index].update(row)
+        rewrite_validation(root, change)
+
+    def test_target_counts_match_the_validator(self):
+        s = summarize(copy_real())
+        got = {t["pct"]: t["after"] for t in s["targets"]}
+        self.assertEqual([t["pct"] for t in s["targets"]], [100, 95, 90, 85, 80])
+        self.assertEqual((got[100], got[90]), (107, 121))  # the validator's own after_100 / after_90
+        self.assertTrue(all(t["before"] >= 0 for t in s["targets"]))
+
+    def test_restriction_causes_add_up(self):
+        r = summarize(copy_real())["restrictions"]
+        self.assertEqual(r["total"], 126 - 107)
+        self.assertEqual(sum(c["count"] for c in r["causes"]), r["total"])
+        self.assertEqual({c["key"] for c in r["causes"]} <= {"capacity", "breaks", "weekly_hours", "rules"}, True)
+
+    def test_capacity_cause_from_the_engine_bound(self):
+        root = copy_real()
+        data = json.loads((root / CASE / "INDEPENDENT_VALIDATION.json").read_text())
+        i, row = next((i, r) for i, r in enumerate(data["interval_rows"]) if r["after_pct"] < 1)
+        audit = next((root / CASE).glob("*solver_audit.json"))
+        a = json.loads(audit.read_text())
+        for b in a["capacity_diagnostics"]["interval_capacity_upper_bounds"]:
+            if b["day"] == row["day"] and b["time"] == row["interval"]:
+                b["maximum_possible_raw_min"] = 0
+        audit.write_text(json.dumps(a))
+        causes = {c["key"]: c for c in summarize(root)["restrictions"]["causes"]}
+        self.assertIn(f"{row['day']} {row['interval']}", " ".join(causes["capacity"]["examples"]))
+
+    def test_breaks_cause(self):
+        root = copy_real()
+        self.plant(root, 0, before_pct=1.2, after_pct=0.8, severe_overage=False)
+        causes = {c["key"]: c for c in summarize(root)["restrictions"]["causes"]}
+        self.assertGreaterEqual(causes["breaks"]["count"], 1)
+
+    def test_efficiency_counts_over_and_under(self):
+        root = copy_real()
+
+        def two_rows(data):
+            base = dict(data["interval_rows"][0], severe_overage=False, before_pct=1.0)
+            data["interval_rows"] = [dict(base, interval="10:00", interval_index=20, required=2.0, after_effective=3.0, after_pct=1.5),
+                                     dict(base, interval="10:30", interval_index=21, required=2.0, after_effective=1.0, after_pct=0.5)]
+        rewrite_validation(root, two_rows)
+        e = summarize(root)["efficiency"]
+        self.assertEqual((e["over_hours"], e["under_hours"], e["pct"]), (0.5, 0.5, 50))
+
+    def test_day_coverage_has_seven_days(self):
+        d = summarize(copy_real())["day_coverage"]
+        self.assertEqual([x["day"] for x in d], ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"])
+        self.assertTrue(all(0 <= x["after_pct"] <= 100 for x in d))
+
+    def test_metrics_hold_no_names(self):
+        from webapp.results import metrics
+        m = metrics(summarize(copy_real()))
+        dump = json.dumps(m)
+        self.assertNotIn("candidate", dump)
+        self.assertEqual(m["associates"], 7)
+        self.assertEqual((m["fully_covered"], m["active"]), (107, 126))
+        self.assertIn("restrictions", m)
+        self.assertLess(len(dump), 20000)

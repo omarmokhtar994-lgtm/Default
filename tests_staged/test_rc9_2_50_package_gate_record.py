@@ -49,8 +49,11 @@ def tiny_repo() -> Path:
     is not usable here: this suite also runs inside the built package, which
     has no packages/ tree (Phase G: building from the real ROOT failed there)."""
     root = Path(tempfile.mkdtemp()) / "repo"
-    for tree in ("engine/_tools", "tools", "tests", "tests_staged", "fixtures", "evidence",
-                 "packages/rc9_2_2_production/inputs", "packages/rc9_2_2_production/runners"):
+    # The trees come from the builder's own TREES list. A hand-copied list
+    # went stale when Phase I added webapp/ and deploy/ to the package (the
+    # builder then refused with "missing required tree: webapp"); the contract
+    # pinned here, that the gate record is written, did not change.
+    for tree in ["engine/_tools"] + [src for src, _ in load().TREES if src != "engine"]:
         (root / tree).mkdir(parents=True)
         (root / tree / "README.txt").write_text("x", encoding="utf-8")
     engine = root / "engine" / "_tools" / "l632_universal_scheduler.py"

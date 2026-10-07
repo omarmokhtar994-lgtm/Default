@@ -44,8 +44,8 @@ def engine_said(run: Dict[str, Any]) -> Dict[str, str]:
 
 def label(run: Dict[str, Any]) -> str:
     """The word shown for a run's state (a passed readiness check built no schedule)."""
-    if run["status"] == "DONE" and run.get("mode") == "SMOKE":
-        return "Ready"
+    if run.get("mode") == "SMOKE" and run["status"] in ("DONE", "FAILED"):
+        return "Ready to run" if run["status"] == "DONE" else "Not ready"
     if run["status"] == "FAILED":
         said = engine_said(run)
         if cannot_schedule(said.get("code", ""), said.get("category", "")):
@@ -338,7 +338,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return render_template("dashboard.html", runs=runs, queue=queue, plan=plan, summaries=summaries,
                                active=active, waiting=waiting, latest=latest,
                                latest_summary=summaries.get(latest["id"]) if latest else None,
-                               now=time.time(), known_programs=known, next_sunday=next_sunday())
+                               now=time.time(), known_programs=known,
+                               prefill_program=clean_program(request.args.get("program", "")),
+                               prefill_week=week_sunday(request.args.get("week", "")) or next_sunday())
 
     # ------------------------------------------------------------- runs
     def _queue() -> RunQueue:
@@ -398,7 +400,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                has_zip=queue.zip_path(run_id).is_file(),
                                has_schedule=queue.final_schedule(run_id) is not None,
                                has_shortfall=queue.shortfall_schedule(run_id) is not None,
-                               resumable=run["status"] in RESUMABLE and not fixed_input,
+                               resumable=run["status"] in RESUMABLE and not fixed_input and run["mode"] != "SMOKE",
                                summary=queue.summary(run_id), said=said,
                                why=outcome_view(found) if found else None,
                                eta=_plan(app.extensions["store"].list_runs()).get(run_id), now=time.time())
@@ -484,6 +486,21 @@ def create_app(config: Dict[str, Any]) -> Flask:
     @login_required
     def team_page():  # type: ignore[no-untyped-def]
         return render_template("team.html", people=team(_all_runs()))
+
+    @app.route("/runs/<run_id>/start", methods=["POST"])
+    @login_required
+    def run_start(run_id: str):  # type: ignore[no-untyped-def]
+        """Start a run of this run's workbook (after a readiness check: the real run)."""
+        run = _run_or_404(run_id)
+        mode = request.form.get("mode", "")
+        if run["status"] in IN_FLIGHT or mode not in MODES:
+            flash("Pick Quick, Deep or Overnight to start the run.")
+            return redirect(url_for("run_detail", run_id=run_id))
+        new_id = _queue().start_from(run_id, g.user["id"], mode)
+        if new_id is None:
+            flash("The workbook of this check is no longer on the server (files are kept 30 days). Upload it again.")
+            return redirect(url_for("run_detail", run_id=run_id))
+        return redirect(url_for("run_detail", run_id=new_id))
 
     @app.route("/runs/<run_id>/stop", methods=["POST"])
     @login_required

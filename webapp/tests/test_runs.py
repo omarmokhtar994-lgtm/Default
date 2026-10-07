@@ -129,11 +129,17 @@ class RunningAndResults(unittest.TestCase):
     def test_readiness_check_says_ready_not_approved(self):
         app, store, *_ = make_app()
         client = client_for(app)
-        run_id = run_id_of(upload(client, mode="SMOKE"))
+        # Re-pinned in Phase L: a readiness check is judged by the engine's own
+        # outcome (DIAGNOSTICS_ONLY_COMPLETE), because the real runner exits 2
+        # for every readiness check (its release scoring fails a run that builds
+        # no schedule; owner: "smoke showing not approved regularly"). The fake
+        # writes that outcome for READY workbooks; the word is the approved
+        # sample's "Ready to run".
+        run_id = run_id_of(upload(client, name="READY_week.xlsx", mode="SMOKE"))
         run = wait(store, run_id)
         self.assertEqual(run["status"], "DONE")
         page = client.get(f"/runs/{run_id}").get_data(as_text=True)
-        self.assertIn(">Ready<", page)
+        self.assertIn(">Ready to run<", page)
         self.assertNotIn(">Approved<", page)
 
     def test_summary_saved_when_a_run_finishes(self):
@@ -614,6 +620,85 @@ class TheEngineOutcome(unittest.TestCase):
         self.assertIn("Not approved", body)
         self.assertIn("the engine wrote no outcome", body)
         self.assertIn(f'action="/runs/{run_id}/resume"', body)
+
+
+class TheReadinessCheck(unittest.TestCase):
+    """Phase L task 2: a readiness check says Ready to run or Not ready (never
+    Not approved), and a ready one starts the real run from the same workbook."""
+
+    def ready_run(self, **fields):
+        app, store, data, _ = make_app()
+        client = client_for(app)
+        run_id = run_id_of(upload(client, name="READY_week.xlsx", mode="SMOKE", **fields))
+        wait(store, run_id)
+        return app, store, client, run_id
+
+    def test_readiness_judged_by_engine_outcome(self):
+        app, store, client, run_id = self.ready_run()
+        run = store.get_run(run_id)
+        self.assertEqual((run["status"], run["exit_code"]), ("DONE", 2))  # the runner's 2 is its release scoring
+        self.assertIn(">Ready to run<", client.get(f"/runs/{run_id}").get_data(as_text=True))
+
+    def test_readiness_not_ready_shows_reason(self):
+        app, store, *_ = make_app()
+        client = client_for(app)
+        run_id = run_id_of(upload(client, name="NOTREADY_week.xlsx", mode="SMOKE"))
+        run = wait(store, run_id)
+        self.assertEqual(run["status"], "FAILED")
+        body = html.unescape(client.get(f"/runs/{run_id}").get_data(as_text=True))
+        self.assertIn(">Not ready<", body)
+        self.assertIn("Why it is not ready", body)
+        self.assertNotIn("/resume", body)
+
+    def test_readiness_without_an_outcome_is_not_ready(self):
+        app, store, *_ = make_app()
+        client = client_for(app)
+        run_id = run_id_of(upload(client, name="plain_week.xlsx", mode="SMOKE"))
+        self.assertEqual(wait(store, run_id)["status"], "FAILED")  # fail closed: no outcome, no "ready"
+
+    def test_readiness_page_offers_start_not_resume(self):
+        app, store, client, run_id = self.ready_run()
+        body = client.get(f"/runs/{run_id}").get_data(as_text=True)
+        self.assertIn(f'action="/runs/{run_id}/start"', body)
+        for mode in ("QUICK", "DEEP", "OVERNIGHT"):
+            self.assertIn(f'name="mode" value="{mode}"', body)
+        self.assertIn("Start the run", body)
+        self.assertNotIn("/resume", body)
+
+    def test_start_from_readiness_queues_the_same_workbook(self):
+        app, store, client, run_id = self.ready_run(program="NMG", week_start="2026-10-11", language_window="ALL_ROWS")
+        response = client.post(f"/runs/{run_id}/start", data={"csrf_token": token(client), "mode": "QUICK"})
+        new_id = run_id_of(response)
+        self.assertNotEqual(new_id, run_id)
+        new, old = store.get_run(new_id), store.get_run(run_id)
+        self.assertEqual((new["mode"], new["program"], new["week_start"], new["options"], new["workbook"]),
+                         ("QUICK", "NMG", "2026-10-11", old["options"], "READY_week.xlsx"))
+        queue = app.extensions["runs"]
+        self.assertEqual(queue.input_path(new_id).read_bytes(), queue.input_path(run_id).read_bytes())
+
+    def test_start_takes_only_a_real_run_mode(self):
+        app, store, client, run_id = self.ready_run()
+        before = len(store.list_runs())
+        client.post(f"/runs/{run_id}/start", data={"csrf_token": token(client), "mode": "SMOKE_OR_WHATEVER"})
+        self.assertEqual(len(store.list_runs()), before)
+
+    def test_start_needs_the_input(self):
+        app, store, client, run_id = self.ready_run()
+        import shutil
+        shutil.rmtree(app.extensions["runs"].input_path(run_id).parent)
+        before = len(store.list_runs())
+        response = client.post(f"/runs/{run_id}/start", data={"csrf_token": token(client), "mode": "QUICK"},
+                               follow_redirects=True)
+        self.assertEqual(len(store.list_runs()), before)
+        self.assertIn("The workbook of this check is no longer on the server", html.unescape(response.get_data(as_text=True)))
+
+    def test_corrected_upload_link_prefills_program_and_week(self):
+        app, *_ = make_app(start_worker=False)
+        client = client_for(app)
+        body = client.get("/?program=NMG%20Spanish&week=2026-10-11").get_data(as_text=True)
+        self.assertIn('name="program" type="text" list="known-programs" maxlength="80" autocomplete="off" '
+                      'placeholder="For example NMG Spanish" value="NMG Spanish"', body)
+        self.assertIn('name="week_start" type="date" value="2026-10-11"', body)
 
 
 class Access(unittest.TestCase):

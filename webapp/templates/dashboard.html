@@ -24,7 +24,7 @@
 </section>
 
 <div class="board">
-  <section class="panel newrun" aria-labelledby="newrun-h">
+  <section class="panel newrun" id="newrun" aria-labelledby="newrun-h">
     <h2 id="newrun-h">New run</h2>
     {% if queue %}
     <form method="post" action="{{ url_for('submit_run') }}" enctype="multipart/form-data">
@@ -34,10 +34,10 @@
       </label>
       <div class="tagrow">
         <label>Program
-          <input name="program" type="text" list="known-programs" maxlength="80" autocomplete="off" placeholder="For example NMG Spanish">
+          <input name="program" type="text" list="known-programs" maxlength="80" autocomplete="off" placeholder="For example NMG Spanish" value="{{ prefill_program }}">
           <datalist id="known-programs">{% for p in known_programs %}<option value="{{ p }}">{% endfor %}</datalist></label>
         <label>Schedule week
-          <input name="week_start" type="date" value="{{ next_sunday }}"></label>
+          <input name="week_start" type="date" value="{{ prefill_week }}"></label>
       </div>
       <p class="hint">The program and week put this run on the program's history page. Any date in the week works; it is stored as the Sunday that starts it.</p>
       <fieldset class="modes">

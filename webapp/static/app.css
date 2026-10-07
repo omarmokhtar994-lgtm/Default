@@ -328,6 +328,9 @@ form.inline button { margin-bottom: 14px; }
 .who th { text-align: left; color: var(--dim); font-weight: 600; padding: 6px 12px 6px 0; border-bottom: 1px solid var(--rail); }
 .who td { padding: 6px 12px 6px 0; border-bottom: 1px solid var(--rail); }
 .more { color: var(--dim); font-size: 14px; margin: 8px 0 0; }
+.startrow { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+.startrow .mode { margin: 0; flex: 1 1 200px; }
+.why form { margin-top: 14px; }
 
 /* ------------------------------------------------------------ program history */
 .tagrow { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 12px; }

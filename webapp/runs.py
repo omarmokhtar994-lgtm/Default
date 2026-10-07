@@ -196,6 +196,21 @@ class RunQueue:
         self._wake.set()
         return True
 
+    def start_from(self, run_id: str, user_id: int, mode: str) -> Optional[str]:
+        """A new run of the same workbook, program, week and settings (for
+        example the real run after a readiness check). None if the workbook is
+        no longer on the server or the mode is not a run mode."""
+        run = self.store.get_run(run_id)
+        source = self.input_path(run_id)
+        if run is None or source is None or mode not in MODES:
+            return None
+        incoming = self.runs_root / "_incoming"
+        incoming.mkdir(exist_ok=True)
+        copy = incoming / f"{secrets.token_hex(8)}.upload"
+        shutil.copyfile(source, copy)
+        return self.submit(user_id, copy, mode, run["workbook"], run_options(run) or None,
+                           program=run.get("program") or "", week_start=run.get("week_start") or "")
+
     def stop(self, run_id: str) -> bool:
         """Ask a running run to stop safely (SIGINT keeps its checkpoints),
         then end its whole process group if it has not stopped in 30 s."""
@@ -291,13 +306,16 @@ class RunQueue:
         if self._stopped(run_id, code):
             return
         self.store.update_run(run_id, status="SCORING", exit_code=code, message="Scoring the release gates.")
-        verdict = self._score(run_id)
+        # A readiness check builds no schedule, so release scoring has nothing to judge.
+        verdict = "" if run["mode"] == "SMOKE" else self._score(run_id)
         self._save_summary(run_id)
         self._zip(run_id)
         found = engine_outcome.read(results)
         if found is not None:  # kept on the row: the files go after 30 days
             self.store.update_run(run_id, engine_outcome=json.dumps(engine_outcome.compact(found)))
-        if code == 0:
+        if run["mode"] == "SMOKE":
+            status, message = readiness(found)
+        elif code == 0:
             status, message = outcome(run["mode"], verdict)
         else:
             status = "FAILED"
@@ -427,13 +445,24 @@ def run_options(run: Dict[str, Any]) -> Dict[str, str]:
     return {k: v for k, v in raw.items() if k in OPTIONS and v in OPTIONS[k][1]}
 
 
+def readiness(found: Optional[Dict[str, Any]]) -> tuple:
+    """(status, message) for a readiness check, from the engine's own outcome.
+
+    Not from the runner's exit code: the runner also scores release gates,
+    which a run that builds no schedule always fails, so every readiness
+    check used to read "Not approved". No outcome at all is "not ready"."""
+    if found and found.get("outcome_code") == engine_outcome.READY:
+        return "DONE", ("Ready to run: the workbook was read, every input check passed, and the hard rules "
+                        "can all be met together. Nothing was scheduled yet.")
+    if found:
+        return "FAILED", str(found.get("headline") or "Not ready")
+    return "FAILED", "Not ready: the engine wrote no outcome for this check. The log below says why."
+
+
 def outcome(mode: str, verdict: str) -> tuple:
     """(status, message) for a run whose runner exited 0. The runner exits 0
     for RELEASABLE and for REVIEW_REQUIRED alike (only NOT_RELEASABLE fails
     it), so the label follows the run-level release verdict, never a guess."""
-    if mode == "SMOKE":
-        return "DONE", ("Readiness check passed: the workbook and its hard rules are consistent. "
-                        "No schedule was built; choose Quick to build one.")
     run_line = next((line for line in verdict.splitlines() if line.startswith("RELEASE VERDICT (run):")), "")
     words = run_line.split(":", 1)[1].split() if run_line else []
     level = words[0] if words else ""  # the verdict word; a note may follow it

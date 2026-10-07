@@ -24,7 +24,23 @@
   {% endif %}
   <p class="live" hidden>Connection lost: showing the last known state. Retrying.</p>
 
-  {% if why and run.status == 'FAILED' %}
+  {% if run.mode == 'SMOKE' and run.status == 'DONE' %}
+  <section class="panel why ready" aria-labelledby="why-h">
+    <h2 id="why-h">This workbook can be scheduled</h2>
+    <p class="lead">The workbook was read, every input check passed, and the hard rules can all be met together. Nothing was scheduled yet.</p>
+    <form method="post" action="{{ url_for('run_start', run_id=run.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <fieldset class="modes"><legend>Start the real run with this same workbook</legend>
+        <div class="startrow">
+          <label class="mode"><input type="radio" name="mode" value="QUICK" checked> Quick<small>About 1 hour. Recommended for every week.</small></label>
+          <label class="mode"><input type="radio" name="mode" value="DEEP"> Deep<small>About 2 hours. Closes more gaps.</small></label>
+          <label class="mode"><input type="radio" name="mode" value="OVERNIGHT"> Overnight<small>About 3 hours. Start it in the evening.</small></label>
+        </div>
+      </fieldset>
+      <button class="primary" type="submit">Start the run</button>
+    </form>
+  </section>
+  {% elif why and run.status == 'FAILED' %}
   <section class="panel why" aria-labelledby="why-h">
     <h2 id="why-h">{{ 'Why it is not ready' if run.mode == 'SMOKE' else 'Why it stopped' }}</h2>
     <p class="lead"><b>{{ why.headline.rstrip('.') }}.</b> {{ why.summary }}</p>
@@ -82,7 +98,7 @@
     </section>
   </div>
 
-  {% if run.message and not (why and run.status == 'FAILED') %}<p class="message" data-status="{{ run.status }}">{{ run.message.splitlines()[0] }}</p>{% endif %}
+  {% if run.message and not (why and run.status == 'FAILED') and not (run.mode == 'SMOKE' and run.status == 'DONE') %}<p class="message" data-status="{{ run.status }}">{{ run.message.splitlines()[0] }}</p>{% endif %}
   {% if run.status == 'REJECTED' %}<pre class="message-full">{{ run.message }}</pre><p class="byline">Fix the cells named above in your workbook, save it, and upload it again. Nothing was run.</p>{% endif %}
 
   <div class="actions">
@@ -92,6 +108,9 @@
     {% if has_zip %}<a class="button" href="{{ url_for('run_download', run_id=run.id) }}">Download all results (.zip)</a>{% endif %}
     {% if run.status in in_flight and run.status != 'CHECKING' %}
     <form method="post" action="{{ url_for('run_stop', run_id=run.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit">Stop</button></form>
+    {% endif %}
+    {% if run.mode == 'SMOKE' and run.status in ('STOPPED', 'INTERRUPTED') %}
+    <form method="post" action="{{ url_for('run_start', run_id=run.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="mode" value="SMOKE"><button class="primary" type="submit">Run the check again</button></form>
     {% endif %}
     {% if resumable %}
     <form method="post" action="{{ url_for('run_resume', run_id=run.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="primary" type="submit">Resume</button></form>

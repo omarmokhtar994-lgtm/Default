@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ run.workbook }}</h1>
+<p class="status" data-status="{{ run.status }}">{{ status_words.get(run.status, run.status) }}</p>
+<p>{{ run.mode }} · started by {{ run.by_name }}{% if run.exit_code is not none %} · runner exit code {{ run.exit_code }}{% endif %}</p>
+{% if run.message %}<pre class="message">{{ run.message }}</pre>{% endif %}
+{% if run.verdict %}<pre class="verdict">{{ run.verdict }}</pre>{% endif %}
+<div class="actions">
+  {% if has_schedule %}<a href="{{ url_for('run_schedule', run_id=run.id) }}">Download the schedule</a>{% endif %}
+  {% if has_zip %}<a href="{{ url_for('run_download', run_id=run.id) }}">Download all results (.zip)</a>{% endif %}
+  {% if run.status in ('QUEUED', 'GATE', 'RUNNING', 'SCORING') %}
+  <form method="post" action="{{ url_for('run_stop', run_id=run.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit">Stop</button></form>
+  {% endif %}
+  {% if resumable %}
+  <form method="post" action="{{ url_for('run_resume', run_id=run.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit">Resume</button></form>
+  {% endif %}
+</div>
+{% if log %}<pre class="log">{{ log }}</pre>{% endif %}
+{% endblock %}

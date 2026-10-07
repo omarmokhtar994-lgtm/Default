@@ -3,18 +3,25 @@
 from __future__ import annotations
 
 import os
+import re
 import secrets
 from datetime import timedelta
 from pathlib import Path
 from typing import Any, Dict
 
-from flask import Flask, abort, flash, g, redirect, render_template, request, session, url_for
+from flask import Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file, session, url_for
+from werkzeug.utils import secure_filename
 
 from .auth import admin_required, check_csrf, csrf_token, load_user, login_required
+from .runs import MODES, RESUMABLE, RunQueue
 from .store import Store
 
 COPYRIGHT = "© 2026 Omar Mokhtar. All rights reserved."
 MIN_PASSWORD = 10
+RUN_ID = re.compile(r"^[0-9a-f]{12}$")
+STATUS_WORDS = {"CHECKING": "Checking", "REJECTED": "Rejected", "QUEUED": "Queued", "GATE": "Safety gate",
+                "RUNNING": "Running", "SCORING": "Scoring", "DONE": "Approved", "FAILED": "Not approved",
+                "STOPPED": "Stopped", "INTERRUPTED": "Interrupted", "EXPIRED": "Expired"}
 
 
 def _secret_key(data_dir: Path) -> str:
@@ -49,6 +56,15 @@ def create_app(config: Dict[str, Any]) -> Flask:
     )
     app.config.update({k: v for k, v in config.items() if k not in {"SECRET_KEY"}})
     app.extensions["store"] = Store(data_dir / "scheduler.db")
+    if config.get("PACKAGE_ROOT"):
+        queue = RunQueue(app.extensions["store"], Path(config["PACKAGE_ROOT"]),
+                         Path(config.get("RUNS_DIR") or data_dir / "runs"),
+                         runner_cmd=config.get("RUNNER_CMD"), parallel=int(config.get("PARALLEL", 1)),
+                         check_cmd=config.get("CHECK_CMD"), score_cmd=config.get("SCORE_CMD"),
+                         gate_cmd=config.get("GATE_CMD"))
+        app.extensions["runs"] = queue
+        if config.get("START_WORKER", True):
+            queue.start()
 
     @app.before_request
     def _before() -> None:
@@ -68,7 +84,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
 
     @app.context_processor
     def _globals() -> Dict[str, Any]:
-        return {"csrf_token": csrf_token, "copyright": COPYRIGHT, "user": g.get("user")}
+        return {"csrf_token": csrf_token, "copyright": COPYRIGHT, "user": g.get("user"),
+                "status_words": STATUS_WORDS, "modes": MODES}
 
     # ------------------------------------------------------------- sign in/out
     @app.route("/login", methods=["GET", "POST"])
@@ -164,6 +181,94 @@ def create_app(config: Dict[str, Any]) -> Flask:
         runs = app.extensions.get("runs")
         return render_template("dashboard.html", runs=app.extensions["store"].list_runs(),
                                queue=runs)
+
+    # ------------------------------------------------------------- runs
+    def _queue() -> RunQueue:
+        queue = app.extensions.get("runs")
+        if queue is None:
+            abort(404)
+        return queue
+
+    def _run_or_404(run_id: str) -> Dict[str, Any]:
+        run = app.extensions["store"].get_run(run_id) if RUN_ID.match(run_id) else None
+        if run is None:
+            abort(404)
+        return run
+
+    @app.route("/runs", methods=["POST"])
+    @login_required
+    def submit_run():  # type: ignore[no-untyped-def]
+        queue = _queue()
+        upload = request.files.get("workbook")
+        mode = request.form.get("mode", "QUICK")
+        name = os.path.basename((upload.filename or "") if upload else "")
+        if not name.lower().endswith(".xlsx") or mode not in MODES:
+            flash("Upload an Excel workbook (.xlsx) and pick a mode.")
+            return redirect(url_for("home"))
+        incoming = queue.runs_root / "_incoming"
+        incoming.mkdir(exist_ok=True)
+        path = incoming / f"{secrets.token_hex(8)}.upload"
+        upload.save(path)
+        with path.open("rb") as handle:
+            is_zip = handle.read(4) == b"PK\x03\x04"  # every .xlsx is a zip file
+        if not is_zip:
+            path.unlink()
+            flash("Upload an Excel workbook (.xlsx): that file is not one.")
+            return redirect(url_for("home"))
+        run_id = queue.submit(g.user["id"], path, mode, name)
+        return redirect(url_for("run_detail", run_id=run_id))
+
+    @app.route("/runs/<run_id>")
+    @login_required
+    def run_detail(run_id: str):  # type: ignore[no-untyped-def]
+        run = _run_or_404(run_id)
+        queue = _queue()
+        return render_template("run.html", run=run, log=queue.log_tail(run_id),
+                               has_zip=queue.zip_path(run_id).is_file(),
+                               has_schedule=queue.final_schedule(run_id) is not None,
+                               resumable=run["status"] in RESUMABLE)
+
+    @app.route("/runs/<run_id>/status.json")
+    @login_required
+    def run_status(run_id: str):  # type: ignore[no-untyped-def]
+        run = _run_or_404(run_id)
+        return jsonify(status=run["status"], label=STATUS_WORDS.get(run["status"], run["status"]),
+                       message=run["message"], verdict=run["verdict"], exit_code=run["exit_code"],
+                       log=_queue().log_tail(run_id, 40))
+
+    @app.route("/runs/<run_id>/download")
+    @login_required
+    def run_download(run_id: str):  # type: ignore[no-untyped-def]
+        run = _run_or_404(run_id)
+        path = _queue().zip_path(run_id)
+        if not path.is_file():
+            abort(404)
+        stem = os.path.splitext(secure_filename(run["workbook"]))[0] or "results"
+        return send_file(path, as_attachment=True, download_name=f"{stem}_results_{run_id}.zip")
+
+    @app.route("/runs/<run_id>/schedule")
+    @login_required
+    def run_schedule(run_id: str):  # type: ignore[no-untyped-def]
+        _run_or_404(run_id)
+        path = _queue().final_schedule(run_id)
+        if path is None:
+            abort(404)
+        return send_file(path, as_attachment=True, download_name=path.name)
+
+    @app.route("/runs/<run_id>/stop", methods=["POST"])
+    @login_required
+    def run_stop(run_id: str):  # type: ignore[no-untyped-def]
+        _run_or_404(run_id)
+        flash("Stopping safely; checkpoints are kept." if _queue().stop(run_id) else "This run is not running.")
+        return redirect(url_for("run_detail", run_id=run_id))
+
+    @app.route("/runs/<run_id>/resume", methods=["POST"])
+    @login_required
+    def run_resume(run_id: str):  # type: ignore[no-untyped-def]
+        _run_or_404(run_id)
+        flash("Queued again; it continues from its checkpoints." if _queue().resume(run_id)
+              else "This run cannot be resumed.")
+        return redirect(url_for("run_detail", run_id=run_id))
 
     @app.errorhandler(400)
     @app.errorhandler(403)

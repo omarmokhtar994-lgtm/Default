@@ -1,8 +1,18 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Runs</h1>
-<table class="runs"><thead><tr><th>Workbook</th><th>By</th><th>Status</th></tr></thead><tbody>
-{% for run in runs %}<tr><td>{{ run.workbook }}</td><td>{{ run.by_name }}</td><td>{{ run.status }}</td></tr>
-{% else %}<tr><td colspan="3">No runs yet.</td></tr>{% endfor %}
+{% if queue %}
+<form class="upload" method="post" action="{{ url_for('submit_run') }}" enctype="multipart/form-data">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Weekly workbook (.xlsx) <input type="file" name="workbook" accept=".xlsx" required></label>
+  <label>Mode <select name="mode">{% for m in modes %}<option value="{{ m }}"{% if m == 'QUICK' %} selected{% endif %}>{{ m }}</option>{% endfor %}</select></label>
+  <button type="submit">Check and run</button>
+</form>
+{% else %}
+<p>Runs are not set up on this server yet.</p>
+{% endif %}
+<table class="runs"><thead><tr><th>Workbook</th><th>Mode</th><th>By</th><th>Status</th></tr></thead><tbody>
+{% for run in runs %}<tr><td><a href="{{ url_for('run_detail', run_id=run.id) }}">{{ run.workbook }}</a></td><td>{{ run.mode }}</td><td>{{ run.by_name }}</td><td>{{ status_words.get(run.status, run.status) }}</td></tr>
+{% else %}<tr><td colspan="4">No runs yet.</td></tr>{% endfor %}
 </tbody></table>
 {% endblock %}

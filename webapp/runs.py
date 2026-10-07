@@ -1,0 +1,338 @@
+# © 2026 Omar Mokhtar. All rights reserved.
+"""Run queue: check an uploaded workbook, queue it, run the production runner,
+score the release gates, zip the results, and expire them after 30 days.
+
+Statuses: CHECKING -> REJECTED | QUEUED -> GATE -> RUNNING -> SCORING ->
+DONE | FAILED; a run can also end STOPPED (owner pressed Stop), INTERRUPTED
+(the server restarted during it) or EXPIRED (files deleted after 30 days).
+STOPPED, INTERRUPTED and FAILED runs can be resumed from their checkpoints.
+
+The website never judges a schedule itself: DONE means the runner exited 0
+(its independent validator approved the schedule); anything else is shown as
+not approved, with the runner's exit code and the release verdict lines.
+"""
+from __future__ import annotations
+
+import os
+import secrets
+import shutil
+import signal
+import subprocess
+import sys
+import threading
+import time
+import zipfile
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from werkzeug.utils import secure_filename
+
+from . import gate
+from .store import Store
+
+KEEP_DAYS = 30
+ACTIVE = ("GATE", "RUNNING", "SCORING")
+RESUMABLE = ("STOPPED", "INTERRUPTED", "FAILED")
+MODES = ("QUICK", "DEEP", "SMOKE")
+# Same automatic seeds as the Colab notebooks (measured, evidence/seed_portfolio_ab):
+# None = the runner's own default (DEEP: best of 4).
+AUTO_SEEDS = {"QUICK": 2, "DEEP": None, "SMOKE": 1}
+CHECK_TIMEOUT_SECONDS = 300
+SCORE_TIMEOUT_SECONDS = 1800
+STOP_GRACE_SECONDS = 30
+FINAL_SCHEDULE_SUFFIX = "_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"
+
+
+class RunQueue:
+    def __init__(self, store: Store, package_root: Path, runs_root: Path, runner_cmd: Optional[List[str]] = None,
+                 parallel: int = 1, check_cmd: Optional[List[str]] = None, score_cmd: Optional[List[str]] = None,
+                 gate_cmd: Optional[List[str]] = None):
+        self.store = store
+        self.package_root = Path(package_root)
+        self.runs_root = Path(runs_root)
+        self.runs_root.mkdir(parents=True, exist_ok=True)
+        self.gate_dir = self.runs_root / "_gate"
+        self.parallel = max(1, int(parallel))
+        py = [sys.executable]
+        self.runner_cmd = runner_cmd or py + ["-u", str(self.package_root / "runners" / "rc922_runner.py")]
+        self.check_cmd = check_cmd or py + [str(self.package_root / "tools" / "check_input_workbook.py")]
+        self.score_cmd = score_cmd or py + [str(self.package_root / "tools" / "release_gate_report.py")]
+        self.gate_cmd = gate_cmd or ["bash", "run_tests.sh"]
+        self._lock = threading.Lock()
+        self._wake = threading.Event()
+        self._procs: Dict[str, subprocess.Popen] = {}
+        self._stopping: set = set()
+        self._threads: List[threading.Thread] = []
+        self.recover()
+
+    # ------------------------------------------------------------ paths
+    def run_dir(self, run_id: str) -> Path:
+        return self.runs_root / run_id
+
+    def results_dir(self, run_id: str) -> Path:
+        return self.run_dir(run_id) / "results"
+
+    def log_path(self, run_id: str) -> Path:
+        return self.run_dir(run_id) / "run.log"
+
+    def zip_path(self, run_id: str) -> Path:
+        return self.run_dir(run_id) / "results.zip"
+
+    def input_path(self, run_id: str) -> Optional[Path]:
+        found = sorted((self.run_dir(run_id) / "input").glob("*.xlsx"))
+        return found[0] if found else None
+
+    def final_schedule(self, run_id: str) -> Optional[Path]:
+        results = self.results_dir(run_id)
+        if not results.is_dir():
+            return None
+        found = [p for p in results.rglob(f"*{FINAL_SCHEDULE_SUFFIX}") if "debug" not in p.parts]
+        return min(found, key=lambda p: (len(p.parts), str(p))) if found else None
+
+    def log_tail(self, run_id: str, lines: int = 80) -> str:
+        path = self.log_path(run_id)
+        if not path.is_file():
+            return ""
+        with path.open("rb") as handle:
+            handle.seek(0, os.SEEK_END)
+            handle.seek(max(0, handle.tell() - 64 * 1024))
+            text = handle.read().decode("utf-8", errors="replace")
+        return "\n".join(text.splitlines()[-lines:])
+
+    # ------------------------------------------------------------ lifecycle
+    def recover(self) -> None:
+        """After a restart: runs that were in flight are INTERRUPTED (resumable);
+        QUEUED runs stay queued and are picked up by the worker."""
+        for run in self.store.runs_with_status("CHECKING", *ACTIVE):
+            self.store.update_run(run["id"], status="INTERRUPTED", finished=time.time(),
+                                  message="The server restarted during this run. "
+                                          "Press Resume to continue from its checkpoints.")
+
+    def start(self) -> None:
+        for n in range(self.parallel):
+            thread = threading.Thread(target=self._worker, name=f"run-worker-{n}", daemon=True)
+            thread.start()
+            self._threads.append(thread)
+        cleaner = threading.Thread(target=self._cleaner, name="run-cleaner", daemon=True)
+        cleaner.start()
+        self._threads.append(cleaner)
+        self._wake.set()
+
+    def submit(self, user_id: int, upload_path: Path, mode: str, workbook_name: str) -> str:
+        """Check the uploaded workbook now (seconds) and queue it if accepted."""
+        if mode not in MODES:
+            raise ValueError(f"unknown mode {mode!r}")
+        run_id = secrets.token_hex(6)
+        safe = secure_filename(workbook_name) or "workbook.xlsx"
+        if not safe.lower().endswith(".xlsx"):
+            safe += ".xlsx"
+        target = self.run_dir(run_id) / "input" / safe
+        target.parent.mkdir(parents=True)
+        shutil.move(str(upload_path), target)
+        self.store.add_run(run_id, user_id, workbook_name, mode, "CHECKING")
+        try:
+            proc = subprocess.run(self.check_cmd + [str(target)], cwd=str(self.package_root),
+                                  capture_output=True, text=True, timeout=CHECK_TIMEOUT_SECONDS)
+            output = ((proc.stdout or "") + (proc.stderr or "")).strip()
+            accepted = proc.returncode == 0
+        except subprocess.TimeoutExpired:
+            output, accepted = f"The workbook check did not finish within {CHECK_TIMEOUT_SECONDS} s.", False
+        except OSError as exc:
+            output, accepted = f"The workbook check could not start: {exc}", False
+        self.log_path(run_id).write_text(output + "\n", encoding="utf-8")
+        if accepted:
+            self.store.update_run(run_id, status="QUEUED", message="Workbook accepted; waiting for its turn.")
+            self._wake.set()
+        else:
+            self.store.update_run(run_id, status="REJECTED", finished=time.time(),
+                                  message=output[-4000:] or "The workbook check refused this file.")
+        return run_id
+
+    def resume(self, run_id: str) -> bool:
+        run = self.store.get_run(run_id)
+        if run is None or run["status"] not in RESUMABLE or self.input_path(run_id) is None:
+            return False
+        self.store.update_run(run_id, status="QUEUED", resume=1, exit_code=None, finished=None,
+                              message="Resuming from checkpoints; waiting for its turn.")
+        self._wake.set()
+        return True
+
+    def stop(self, run_id: str) -> bool:
+        """Ask a running run to stop safely (SIGINT keeps its checkpoints),
+        then end its whole process group if it has not stopped in 30 s."""
+        run = self.store.get_run(run_id)
+        if run is None:
+            return False
+        if run["status"] == "QUEUED":
+            self.store.update_run(run_id, status="STOPPED", finished=time.time(),
+                                  message="Stopped before it started. Press Resume to queue it again.")
+            return True
+        with self._lock:
+            proc = self._procs.get(run_id)
+            if run["status"] not in ACTIVE:
+                return False
+            self._stopping.add(run_id)
+        if proc is not None and proc.poll() is None:
+            _signal_group(proc, signal.SIGINT)
+            threading.Thread(target=_escalate, args=(proc,), daemon=True).start()
+        return True
+
+    # ------------------------------------------------------------ the work
+    def runner_command(self, run: Dict[str, Any], skip_guards: bool) -> List[str]:
+        run_id = run["id"]
+        cmd = list(self.runner_cmd) + [
+            "--package-root", str(self.package_root),
+            "--results-root", str(self.results_dir(run_id)),
+            "--mode", run["mode"],
+            "--stage", "FULL_SCHEDULE",
+            "--num-workers", str(max(1, (os.cpu_count() or 1) // self.parallel)),
+        ]
+        seeds = AUTO_SEEDS[run["mode"]]
+        if seeds:
+            cmd += ["--seeds", str(seeds)]
+        cmd += ["--input", str(self.input_path(run_id))]
+        if skip_guards:
+            cmd += ["--skip-guards"]
+        cmd += ["--resume"]  # as the notebooks: a rerun continues from checkpoints
+        return cmd
+
+    def _claim(self) -> Optional[Dict[str, Any]]:
+        with self._lock:
+            queued = self.store.runs_with_status("QUEUED")
+            if not queued:
+                return None
+            run = queued[0]
+            self.store.update_run(run["id"], status="GATE", started=time.time(),
+                                  message="Checking the installed package (safety gate).")
+            return self.store.get_run(run["id"])
+
+    def _worker(self) -> None:
+        while True:
+            run = self._claim()
+            if run is None:
+                self._wake.wait(5)
+                self._wake.clear()
+                continue
+            try:
+                self._execute(run)
+            except Exception as exc:  # the worker must survive; the run shows why it failed
+                self.store.update_run(run["id"], status="FAILED", finished=time.time(),
+                                      message=f"The website hit an error running this: {exc!r}")
+            finally:
+                with self._lock:
+                    self._procs.pop(run["id"], None)
+                    self._stopping.discard(run["id"])
+
+    def _execute(self, run: Dict[str, Any]) -> None:
+        run_id = run["id"]
+        try:
+            stamp = gate.ensure(self.package_root, self.gate_dir, self.gate_cmd)
+        except gate.GateFailed as exc:
+            self.store.update_run(run_id, status="FAILED", finished=time.time(),
+                                  message=f"Not started: {exc}\nNo run can start until the safety gate passes.")
+            return
+        if self._stopped(run_id):
+            return
+        cmd = self.runner_command(run, skip_guards=passed(stamp))
+        results = self.results_dir(run_id)
+        results.mkdir(parents=True, exist_ok=True)
+        with self.log_path(run_id).open("a", encoding="utf-8") as log:
+            log.write("\n$ " + " ".join(cmd) + "\n")
+            log.flush()
+            proc = subprocess.Popen(cmd, cwd=str(self.package_root), stdout=log, stderr=subprocess.STDOUT,
+                                    start_new_session=(os.name == "posix"))
+            with self._lock:
+                self._procs[run_id] = proc
+            self.store.update_run(run_id, status="RUNNING", message="Building the schedule.")
+            code = proc.wait()
+        if self._stopped(run_id, code):
+            return
+        self.store.update_run(run_id, status="SCORING", exit_code=code, message="Scoring the release gates.")
+        verdict = self._score(run_id)
+        self._zip(run_id)
+        if code == 0:
+            status, message = "DONE", "Approved: the independent validator passed this schedule."
+        else:
+            status = "FAILED"
+            message = (f"Not approved: the runner exited with code {code}. "
+                       "The log below and the files in the download say why.")
+        self.store.update_run(run_id, status=status, exit_code=code, verdict=verdict,
+                              finished=time.time(), message=message)
+
+    def _stopped(self, run_id: str, code: Optional[int] = None) -> bool:
+        with self._lock:
+            stopping = run_id in self._stopping
+        if stopping:
+            if self.results_dir(run_id).is_dir():
+                self._zip(run_id)
+            self.store.update_run(run_id, status="STOPPED", exit_code=code, finished=time.time(),
+                                  message="Stopped. Its checkpoints are kept: press Resume to continue.")
+        return stopping
+
+    def _score(self, run_id: str) -> str:
+        results = self.results_dir(run_id)
+        cmd = self.score_cmd + [str(results), "--out-dir", str(results / "_gate_report")]
+        try:
+            proc = subprocess.run(cmd, cwd=str(self.package_root), capture_output=True, text=True,
+                                  timeout=SCORE_TIMEOUT_SECONDS)
+            output = (proc.stdout or "") + (proc.stderr or "")
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            output = f"release gate scoring did not complete: {exc}\n"
+        with self.log_path(run_id).open("a", encoding="utf-8") as log:
+            log.write("\n" + output)
+        lines = [line.strip() for line in output.splitlines() if line.startswith("RELEASE VERDICT")]
+        return "\n".join(lines) or "No release verdict was produced (see the log)."
+
+    def _zip(self, run_id: str) -> None:
+        target = self.zip_path(run_id)
+        partial = target.with_suffix(".zip.part")
+        with zipfile.ZipFile(partial, "w", zipfile.ZIP_DEFLATED) as archive:
+            for path in sorted(self.results_dir(run_id).rglob("*")):
+                if path.is_file():
+                    archive.write(path, path.relative_to(self.results_dir(run_id)))
+            if self.log_path(run_id).is_file():
+                archive.write(self.log_path(run_id), "run.log")
+        partial.replace(target)
+
+    # ------------------------------------------------------------ retention
+    def cleanup(self, now: Optional[float] = None) -> int:
+        """Delete the files of runs older than 30 days; the row stays as EXPIRED."""
+        cutoff = (time.time() if now is None else now) - KEEP_DAYS * 86400
+        expired = 0
+        for run in self.store.list_runs(limit=1_000_000):
+            if run["status"] in ("EXPIRED", "QUEUED", "CHECKING") + ACTIVE or run["created"] >= cutoff:
+                continue
+            shutil.rmtree(self.run_dir(run["id"]), ignore_errors=True)
+            self.store.update_run(run["id"], status="EXPIRED",
+                                  message=f"Files deleted after {KEEP_DAYS} days.")
+            expired += 1
+        return expired
+
+    def _cleaner(self) -> None:
+        while True:
+            try:
+                self.cleanup()
+            except Exception as exc:  # keep cleaning tomorrow; say why today failed
+                print(f"run cleanup failed: {exc!r}", file=sys.stderr, flush=True)
+            time.sleep(3600)
+
+
+def passed(stamp: Optional[dict]) -> bool:
+    return bool(stamp) and stamp.get("status") == "PASS"
+
+
+def _signal_group(proc: subprocess.Popen, sig: int) -> None:
+    try:
+        if os.name == "posix":
+            os.killpg(os.getpgid(proc.pid), sig)
+        else:
+            proc.send_signal(sig)
+    except (ProcessLookupError, PermissionError):
+        pass
+
+
+def _escalate(proc: subprocess.Popen) -> None:
+    try:
+        proc.wait(timeout=STOP_GRACE_SECONDS)
+    except subprocess.TimeoutExpired:
+        _signal_group(proc, signal.SIGTERM)

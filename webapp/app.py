@@ -73,6 +73,7 @@ def _secret_key(data_dir: Path) -> str:
     return path.read_text(encoding="utf-8").strip()
 
 
+THEMES = ("light", "dark")  # no cookie: follow the device's setting
 EGYPT = timezone(timedelta(hours=3))  # owner's rule: times in Egypt time (UTC+3)
 
 
@@ -190,10 +191,29 @@ def create_app(config: Dict[str, Any]) -> Flask:
 
     @app.context_processor
     def _globals() -> Dict[str, Any]:
+        theme = request.cookies.get("theme", "")
         return {"csrf_token": csrf_token, "copyright": COPYRIGHT, "user": g.get("user"),
+                "theme": theme if theme in THEMES else "",
                 "status_words": STATUS_WORDS, "label": label, "modes": MODES, "stages": stages, "in_flight": IN_FLIGHT,
                 "when": _when, "run_options": run_options, "option_labels": OPTION_LABELS,
                 "eta_text": eta_text, "duration": duration, "clock": _clock}
+
+    # ------------------------------------------------------------- theme
+    @app.route("/theme", methods=["POST"])
+    def set_theme():  # type: ignore[no-untyped-def]
+        """Light, dark, or the device's own setting ("system"); kept in a cookie
+        so the page is drawn in that theme from the first byte."""
+        back = request.form.get("next") or "/"
+        if not back.startswith("/") or back.startswith("//"):
+            back = "/"  # only ever back to this site
+        response = redirect(back)
+        choice = request.form.get("theme", "")
+        if choice in THEMES:
+            response.set_cookie("theme", choice, max_age=365 * 86400, httponly=True, samesite="Lax",
+                                secure=bool(config.get("HTTPS", True)))
+        else:
+            response.delete_cookie("theme")
+        return response
 
     # ------------------------------------------------------------- sign in/out
     @app.route("/login", methods=["GET", "POST"])

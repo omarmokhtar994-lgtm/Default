@@ -4,6 +4,18 @@
 // last known state stays on screen). Reloads once the run ends, so the wall,
 // findings and downloads appear. The dashboard refreshes every 30 s while
 // something is running or waiting.
+// The look: with no choice saved the page follows the device, so the switch
+// offers the other one.
+(function () {
+  "use strict";
+  var button = document.querySelector("[data-theme-toggle]");
+  if (!button || document.documentElement.getAttribute("data-theme")) { return; }
+  if (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) {
+    button.value = "dark";
+    button.textContent = "Dark look";
+  }
+})();
+
 // Chart tips: any mark with data-tip shows it on hover, or on tap on a phone.
 // The same numbers are in each chart's table view.
 (function () {

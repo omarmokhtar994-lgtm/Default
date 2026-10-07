@@ -527,6 +527,39 @@ class TheAnalyticsPages(unittest.TestCase):
         self.assertIn(f'action="/runs/{run_id}/tag"', self.page(f"/runs/{run_id}"))
 
 
+class TheThemes(unittest.TestCase):
+    """Phase L: light or dark, the person's choice; the system's choice until they pick."""
+
+    def test_theme_cookie_sets_the_page_theme(self):
+        app, *_ = make_app(start_worker=False)
+        client = client_for(app)
+        self.assertNotIn("data-theme=", client.get("/").get_data(as_text=True).split(">", 2)[1])
+        response = client.post("/theme", data={"csrf_token": token(client), "theme": "light", "next": "/programs"})
+        self.assertEqual(response.headers["Location"], "/programs")
+        self.assertIn("theme=light", response.headers["Set-Cookie"])
+        self.assertIn('<html lang="en" data-theme="light">', client.get("/").get_data(as_text=True))
+        client.post("/theme", data={"csrf_token": token(client), "theme": "system"})
+        self.assertIn('<html lang="en">', client.get("/").get_data(as_text=True))
+
+    def test_theme_toggle_needs_csrf(self):
+        app, *_ = make_app(start_worker=False)
+        client = client_for(app)
+        self.assertEqual(client.post("/theme", data={"theme": "light"}).status_code, 400)
+
+    def test_theme_only_returns_to_this_site(self):
+        app, *_ = make_app(start_worker=False)
+        client = client_for(app)
+        response = client.post("/theme", data={"csrf_token": token(client), "theme": "dark",
+                                                "next": "https://evil.example/"})
+        self.assertEqual(response.headers["Location"], "/")
+
+    def test_sign_in_page_follows_the_theme_too(self):
+        app, *_ = make_app(start_worker=False)
+        client = app.test_client()
+        client.set_cookie("theme", "light")
+        self.assertIn('data-theme="light"', client.get("/login").get_data(as_text=True))
+
+
 class Access(unittest.TestCase):
     def test_downloads_need_login(self):
         app, store, *_ = make_app()

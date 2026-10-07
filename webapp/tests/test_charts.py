@@ -68,6 +68,17 @@ class TheCharts(unittest.TestCase):
         self.assertIn(">100</text>", svg)
         self.assertNotIn(">200</text>", svg)
 
+    def test_marks_use_series_classes_not_colours(self):
+        """Phase L: marks name their series, the stylesheet colours them, so a
+        chart follows the light or dark theme (no colour baked into the SVG)."""
+        svgs = [columns(["a", "b"], [1, 2]), lines(["a", "b"], [("x", BLUE, [1, 2]), ("y", ORANGE, [2, 1])]),
+                hbars([("r", 3, BLUE)]), heat(["Sun"], ["00", "01"], [[0, 2]]), spark([1, 2, 3])]
+        for svg in map(str, svgs):
+            self.assertNotRegex(svg, r'(fill|stroke)="#')
+        self.assertIn('data-series="blue"', str(svgs[0]))
+        self.assertIn('data-series="orange"', str(svgs[1]))
+        self.assertIn('data-level="4"', str(svgs[3]))
+
     def test_spark_marks_the_latest_value_and_skips_gaps(self):
         svg = str(spark([80, None, 85, 90], label="After breaks, last 4 weeks"))
         self.assertIn('class="spark"', svg)

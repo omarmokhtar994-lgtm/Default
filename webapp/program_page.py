@@ -12,9 +12,6 @@ from . import charts
 from .analytics import _date, insights, recurring, share, suggestions
 from .results import DAYS
 
-CAUSE_COLOURS = {"capacity": charts.BLUE, "breaks": charts.AQUA, "weekly_hours": charts.ORANGE,
-                 "rules": charts.YELLOW}  # fixed per cause: a filter never repaints one
-
 
 def _hours(value: Optional[float]) -> Optional[int]:
     return None if value is None else int(round(value))
@@ -58,7 +55,7 @@ def build(weeks: List[dict], all_weeks: List[dict]) -> Dict[str, Any]:
 
     restr = m.get("restrictions") or {}
     causes = sorted(restr.get("causes") or [], key=lambda c: -c["count"])
-    chart_causes = charts.hbars([(c["label"], c["count"], CAUSE_COLOURS.get(c["key"], charts.BLUE)) for c in causes],
+    chart_causes = charts.hbars([(c["label"], c["count"], charts.BLUE) for c in causes],  # one measure; each bar is labelled
                                 unit=" half-hours", label="Half-hours below 100% by reason") if restr.get("total") else charts.EMPTY
 
     active = m.get("active") or 0

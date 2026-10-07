@@ -55,8 +55,10 @@ class InTheBrowser(unittest.TestCase):
         cls.pw.stop()
         cls.server.shutdown()
 
-    def page(self, width=1280, height=860):
-        page = self.browser.new_page(viewport={"width": width, "height": height})
+    def page(self, width=1280, height=860, scheme="dark"):
+        # Phase L: the site follows the device's light or dark setting until the
+        # person picks one; headless Chromium reports "light", so say which.
+        page = self.browser.new_page(viewport={"width": width, "height": height}, color_scheme=scheme)
         self.addCleanup(page.close)
         return page
 
@@ -131,6 +133,30 @@ class InTheBrowser(unittest.TestCase):
         page.wait_for_timeout(800)
         page.screenshot(path=str(SCREENS / "11_dashboard_latest_wall.png"), full_page=True)
 
+    def test_light_theme_run_page(self):
+        """Phase L: the light look, chosen with the switch in the header."""
+        page = self.page(height=1100)
+        self.sign_in(page)
+        page.get_by_role("button", name="Light look").click()
+        expect(page.locator("html")).to_have_attribute("data-theme", "light")
+        real = self.workbook.with_name("REAL_light.xlsx")
+        real.write_bytes(b"PK\x03\x04 real")
+        page.locator("input[type=file]").set_input_files(str(real))
+        page.get_by_role("button", name="Check and run").click()
+        expect(page.locator(".status-word")).to_have_text("Approved", timeout=20000)
+        expect(page.locator(".grid.after .cell")).to_have_count(126)
+        background = page.evaluate("getComputedStyle(document.body).backgroundColor")
+        self.assertEqual(background, "rgb(234, 239, 245)")
+        page.wait_for_timeout(800)
+        L_SCREENS.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(L_SCREENS / "light_run_page.png"), full_page=True)
+        page.goto(self.base + "/")
+        page.mouse.move(0, 0)
+        page.wait_for_timeout(800)
+        page.screenshot(path=str(L_SCREENS / "light_home.png"), full_page=True)
+        page.get_by_role("button", name="Dark look").click()
+        expect(page.locator("html")).to_have_attribute("data-theme", "dark")
+
     def test_advanced_options_fold(self):
         page = self.page()
         self.sign_in(page)
@@ -180,6 +206,7 @@ class InTheBrowser(unittest.TestCase):
 # Phase J screenshots. The weeks are the real Phase I run's figures varied
 # per week (test data; the page draws whatever the runs stored).
 K_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_k" / "screens"
+L_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_l" / "screens"
 HISTORY = [  # week, associates, after, before, at 90%, efficiency, over h, under h, hours, short cells
     ("2026-08-09", 9, 96, 118, 110, 66, 61.0, 6.5, 360, ["Tue 20:30", "Thu 20:30", "Sat 14:00", "Mon 20:30"]),
     ("2026-08-16", 9, 99, 120, 112, 68, 58.5, 5.0, 360, ["Tue 20:30", "Thu 21:00", "Mon 20:30"]),
@@ -254,6 +281,22 @@ class TheProgramPagesInTheBrowser(unittest.TestCase):
         page.screenshot(path=str(K_SCREENS / "02_program_history.png"), full_page=True)
         page.locator("section[aria-labelledby=c-cover] summary").click()
         expect(page.locator("section[aria-labelledby=c-cover] table")).to_be_visible()
+
+    def test_light_theme_pages(self):
+        page = self.page(height=900)
+        page.context.add_cookies([{"name": "theme", "value": "light", "url": self.base}])
+        self.sign_in(page)
+        L_SCREENS.mkdir(parents=True, exist_ok=True)
+        page.goto(self.base + "/programs/NMG%20Spanish")
+        expect(page.get_by_role("heading", name="What happened")).to_be_visible()
+        fill = page.evaluate("getComputedStyle(document.querySelector('.chart rect.bar')).fill")
+        self.assertEqual(fill, "rgb(42, 120, 214)")  # the light step of the blue series
+        page.wait_for_timeout(600)
+        page.screenshot(path=str(L_SCREENS / "light_program_history.png"), full_page=True)
+        page.goto(self.base + "/programs")
+        page.wait_for_timeout(600)
+        page.screenshot(path=str(L_SCREENS / "light_programs.png"), full_page=True)
+        page.goto(self.base + "/login")
 
     def test_program_page_on_a_phone(self):
         page = self.page(width=390, height=844)

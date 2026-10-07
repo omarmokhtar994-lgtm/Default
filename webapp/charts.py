@@ -4,9 +4,11 @@
 No chart library: the page's CSP allows scripts from the site only, and an
 SVG drawn here needs no script to show. Every mark carries a ``data-tip``
 (the site's tooltip shows it on hover or tap; the numbers are also in each
-chart's table view). Series colours are the palette validated on the dark
-surface #15243A; text uses the page's ink colours through CSS classes, never
-a series colour. Labels and names are escaped.
+chart's table view). Marks name their series (``data-series``) and heat
+cells their level (``data-level``); the stylesheet colours them for the light
+or the dark theme, with the palette validated on each theme's surface
+(evidence/phase_l/PALETTE_CHECKS.txt). Text uses the page's ink colours,
+never a series colour. Labels and names are escaped.
 """
 from __future__ import annotations
 
@@ -15,8 +17,7 @@ from typing import List, Optional, Sequence, Tuple
 
 from markupsafe import Markup, escape
 
-BLUE, AQUA, ORANGE, YELLOW = "#3987e5", "#199e70", "#d95926", "#c98500"
-HEAT = ("#1f3350", "#4a3a2c", "#7a4224", "#a94b22", "#d95926")  # one hue, faint to strong
+BLUE, AQUA, ORANGE, YELLOW = "blue", "aqua", "orange", "yellow"  # series names; app.css colours them
 W, BAR_MAX, RADIUS = 640, 24, 4
 EMPTY = Markup('<p class="chart-empty">No data yet</p>')
 
@@ -85,10 +86,10 @@ def columns(labels: Sequence[str], values: Sequence[Optional[float]], unit: str 
         tip = f"{name}: {_num(value)}{unit}{_change(deltas[i] if deltas else None)}"
         if bh:
             out.append(f'<rect class="bar" x="{x:.1f}" y="{base - bh:.1f}" width="{bar:.1f}" height="{bh:.1f}" '
-                       f'rx="{RADIUS}" fill="{colour}"/>')
+                       f'rx="{RADIUS}" data-series="{colour}"/>')
             if bh > RADIUS:  # square foot: the bar sits on the baseline, only its data end is rounded
                 out.append(f'<rect x="{x:.1f}" y="{base - RADIUS:.1f}" width="{bar:.1f}" height="{RADIUS}" '
-                           f'fill="{colour}"/>')
+                           f'data-series="{colour}"/>')
         if len(labels) <= 12:
             out.append(f'<text class="val" x="{cx:.1f}" y="{base - bh - 6:.1f}" text-anchor="middle">'
                        f'{_num(value)}</text>')
@@ -139,11 +140,11 @@ def lines(labels: Sequence[str], series: Sequence[Tuple[str, str, Sequence[Optio
             x, y = xy(i, v)
             path.append(f"{pen}{x:.1f} {y:.1f}")
             pen = "L"
-        out.append(f'<path class="line" d="{" ".join(path)}" stroke="{colour}" fill="none"/>')
+        out.append(f'<path class="line" d="{" ".join(path)}" data-series="{colour}"/>')
         for i, v in enumerate(vals):
             if v is not None:
                 x, y = xy(i, v)
-                out.append(f'<circle class="dot" cx="{x:.1f}" cy="{y:.1f}" r="4" fill="{colour}" '
+                out.append(f'<circle class="dot" cx="{x:.1f}" cy="{y:.1f}" r="4" data-series="{colour}" '
                            f'data-tip="{escape(f"{labels[i]}: {s} {_num(v)}{unit}")}"/>')
         last = max((i for i, v in enumerate(vals) if v is not None), default=None)
         if last is not None:
@@ -152,7 +153,7 @@ def lines(labels: Sequence[str], series: Sequence[Tuple[str, str, Sequence[Optio
     if legend:
         x, items = left, []
         for s, colour, _ in series:
-            items.append(f'<line x1="{x}" x2="{x + 18}" y1="12" y2="12" stroke="{colour}" stroke-width="3"/>'
+            items.append(f'<line x1="{x}" x2="{x + 18}" y1="12" y2="12" data-series="{colour}"/>'
                          f'<text class="leg" x="{x + 24}" y="16">{escape(s)}</text>')
             x += 40 + 8 * len(s)
         out.append('<g class="legend">' + "".join(items) + "</g>")
@@ -174,7 +175,7 @@ def hbars(rows: Sequence[Tuple[str, float, str]], unit: str = "", label: str = "
         out.append(f'<text class="ax lbl" x="{left - 10}" y="{y + 19}" text-anchor="end">{escape(name)}</text>')
         if bw:
             out.append(f'<rect class="bar" x="{left}" y="{y + 6}" width="{max(bw, 2):.1f}" height="16" '
-                       f'rx="{RADIUS}" fill="{colour}"/>')
+                       f'rx="{RADIUS}" data-series="{colour}"/>')
         out.append(f'<text class="val" x="{left + bw + 8:.1f}" y="{y + 19}">{_num(value)}</text>'
                    f'<rect class="hit" x="0" y="{y}" width="{W}" height="{row_h}" '
                    f'data-tip="{escape(f"{name}: {_num(value)}{unit}")}"/>')
@@ -209,7 +210,7 @@ def heat(rows: Sequence[str], cols: Sequence[str], grid: Sequence[Sequence[Optio
                 continue
             level = 0 if not v or not top_value else min(4, 1 + int(3 * (v - 1) / max(1, top_value - 1) + 0.5))
             out.append(f'<rect class="cell" x="{x:.1f}" y="{y:.1f}" width="{cell - gap:.1f}" height="{cell - gap:.1f}" '
-                       f'rx="3" fill="{HEAT[level]}" data-tip="{escape(f"{name} {col}: {v}{tip_unit}")}"/>')
+                       f'rx="3" data-level="{level}" data-tip="{escape(f"{name} {col}: {v}{tip_unit}")}"/>')
     return _svg(h, label, out)
 
 
@@ -235,5 +236,5 @@ def spark(values: Sequence[Optional[float]], colour: str = AQUA, label: str = "T
         pen = "L"
     x, y = xy(*points[-1]).split()
     return Markup(f'<svg class="spark" viewBox="0 0 {w} {h}" role="img" aria-label="{escape(label)}">'
-                  f'<path d="{" ".join(path)}" stroke="{colour}" fill="none"/>'
-                  f'<circle cx="{x}" cy="{y}" r="3" fill="{colour}"/></svg>')
+                  f'<path d="{" ".join(path)}" data-series="{colour}"/>'
+                  f'<circle cx="{x}" cy="{y}" r="3" data-series="{colour}"/></svg>')

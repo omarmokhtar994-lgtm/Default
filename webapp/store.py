@@ -42,7 +42,10 @@ create table if not exists runs (
     started real,
     finished real,
     resume integer not null default 0,
-    options text not null default ''
+    options text not null default '',
+    program text not null default '',
+    week_start text not null default '',
+    metrics text not null default ''
 );
 """
 
@@ -59,8 +62,10 @@ class Store:
             db.executescript(SCHEMA)
             # Databases created before Phase J have no options column: add it.
             columns = {row["name"] for row in db.execute("pragma table_info(runs)")}
-            if "options" not in columns:
-                db.execute("alter table runs add column options text not null default ''")
+            # Databases from earlier versions lack the later columns: add them.
+            for name in ("options", "program", "week_start", "metrics"):
+                if name not in columns:
+                    db.execute(f"alter table runs add column {name} text not null default ''")
 
     def _db(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path, timeout=30)
@@ -126,11 +131,11 @@ class Store:
 
     # ------------------------------------------------------------------- runs
     def add_run(self, run_id: str, user_id: int, workbook: str, mode: str, status: str, message: str = "",
-                options: str = "") -> None:
+                options: str = "", program: str = "", week_start: str = "") -> None:
         with self._db() as db:
-            db.execute("insert into runs (id, user_id, workbook, mode, status, message, created, options)"
-                       " values (?, ?, ?, ?, ?, ?, ?, ?)",
-                       (run_id, user_id, workbook, mode, status, message, time.time(), options))
+            db.execute("insert into runs (id, user_id, workbook, mode, status, message, created, options,"
+                       " program, week_start) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                       (run_id, user_id, workbook, mode, status, message, time.time(), options, program, week_start))
 
     def update_run(self, run_id: str, **fields: Any) -> None:
         if not fields:

@@ -30,7 +30,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from werkzeug.utils import secure_filename
 
 from . import gate
-from .results import summarize
+from .results import metrics, summarize
 from .store import Store
 
 KEEP_DAYS = 30
@@ -146,7 +146,7 @@ class RunQueue:
         self._wake.set()
 
     def submit(self, user_id: int, upload_path: Path, mode: str, workbook_name: str,
-               options: Optional[Dict[str, str]] = None) -> str:
+               options: Optional[Dict[str, str]] = None, program: str = "", week_start: str = "") -> str:
         """Check the uploaded workbook now (seconds) and queue it if accepted."""
         if mode not in MODES:
             raise ValueError(f"unknown mode {mode!r}")
@@ -158,7 +158,7 @@ class RunQueue:
         target.parent.mkdir(parents=True)
         shutil.move(str(upload_path), target)
         self.store.add_run(run_id, user_id, workbook_name, mode, "CHECKING",
-                           options=json.dumps(options) if options else "")
+                           options=json.dumps(options) if options else "", program=program, week_start=week_start)
         try:
             proc = subprocess.run(self.check_cmd + [str(target)], cwd=str(self.package_root),
                                   capture_output=True, text=True, timeout=CHECK_TIMEOUT_SECONDS)
@@ -333,6 +333,9 @@ class RunQueue:
             return
         if summary is not None:
             self.summary_path(run_id).write_text(json.dumps(summary), encoding="utf-8")
+            # The compact figures live on the run row, so a program's history
+            # outlives the run's files (deleted after 30 days).
+            self.store.update_run(run_id, metrics=json.dumps(metrics(summary)))
 
     def summary(self, run_id: str) -> Optional[Dict[str, Any]]:
         try:

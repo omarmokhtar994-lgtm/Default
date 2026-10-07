@@ -366,6 +366,76 @@ class TheAdvancedOptions(unittest.TestCase):
         self.assertEqual(run["options"], "")
 
 
+class TheProgramTags(unittest.TestCase):
+    """Phase K task 2: program and week on every run; figures kept after the files expire."""
+
+    def test_upload_records_program_and_week(self):
+        app, store, *_ = make_app(start_worker=False)
+        client = client_for(app)
+        run_id = run_id_of(upload(client, program="NMG Spanish", week_start="2026-10-11"))
+        run = store.get_run(run_id)
+        self.assertEqual((run["program"], run["week_start"]), ("NMG Spanish", "2026-10-11"))
+
+    def test_week_must_be_a_date(self):
+        app, store, *_ = make_app(start_worker=False)
+        client = client_for(app)
+        upload(client, program="NMG", week_start="next week")
+        self.assertEqual(store.list_runs(), [])
+
+    def test_metrics_saved_when_a_run_finishes(self):
+        app, store, *_ = make_app()
+        client = client_for(app)
+        run_id = run_id_of(upload(client, name="REAL_week.xlsx", program="NMG", week_start="2026-10-11"))
+        wait(store, run_id)
+        m = json.loads(store.get_run(run_id)["metrics"])
+        self.assertEqual((m["associates"], m["fully_covered"], m["active"]), (7, 107, 126))
+
+    def test_history_survives_file_expiry(self):
+        app, store, data, _ = make_app()
+        client = client_for(app)
+        run_id = run_id_of(upload(client, name="REAL_week.xlsx", program="NMG", week_start="2026-10-11"))
+        wait(store, run_id)
+        app.extensions["runs"].cleanup(now=time.time() + 31 * 86400)
+        run = store.get_run(run_id)
+        self.assertEqual(run["status"], "EXPIRED")
+        self.assertEqual(json.loads(run["metrics"])["fully_covered"], 107)
+
+    def test_untagged_runs_can_be_tagged(self):
+        app, store, *_ = make_app(start_worker=False)
+        store.add_user("lina", "Lina", "Lina-pass-12", must_change=False)
+        client = client_for(app)
+        run_id = run_id_of(upload(client))
+        other = app.test_client()
+        tok = TOKEN.search(other.get("/login").get_data(as_text=True)).group(1)
+        other.post("/login", data={"username": "lina", "password": "Lina-pass-12", "csrf_token": tok})
+        refused = other.post(f"/runs/{run_id}/tag", data={"csrf_token": token(other), "program": "X",
+                                                          "week_start": "2026-10-11"})
+        self.assertEqual(refused.status_code, 403)
+        client.post(f"/runs/{run_id}/tag", data={"csrf_token": token(client), "program": "NMG",
+                                                 "week_start": "2026-10-11"})
+        run = store.get_run(run_id)
+        self.assertEqual((run["program"], run["week_start"]), ("NMG", "2026-10-11"))
+
+    def test_old_database_gains_analytics_columns(self):
+        import sqlite3
+        data = Path(tempfile.mkdtemp())
+        db = sqlite3.connect(data / "scheduler.db")
+        db.executescript("""create table users (id integer primary key, username text unique not null,
+            display_name text not null, password_hash text not null, is_admin integer not null default 0,
+            active integer not null default 1, must_change integer not null default 1,
+            failed integer not null default 0, locked_until real not null default 0, created real not null);
+            create table runs (id text primary key, user_id integer not null, workbook text not null,
+            mode text not null, status text not null, message text not null default '', exit_code integer,
+            verdict text not null default '', created real not null, started real, finished real,
+            resume integer not null default 0, options text not null default '');
+            insert into users values (1,'sara','Sara','x',0,1,0,0,0,0);
+            insert into runs (id,user_id,workbook,mode,status,created) values ('abcabcabcabc',1,'w.xlsx','QUICK','DONE',0);""")
+        db.commit()
+        db.close()
+        run = Store(data / "scheduler.db").get_run("abcabcabcabc")
+        self.assertEqual((run["program"], run["week_start"], run["metrics"]), ("", "", ""))
+
+
 class Access(unittest.TestCase):
     def test_downloads_need_login(self):
         app, store, *_ = make_app()

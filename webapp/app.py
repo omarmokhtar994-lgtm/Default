@@ -112,6 +112,19 @@ def username_problem(username: str) -> str:
     return "" if username and plain.isalnum() and plain.isascii() else USERNAME_RULE
 
 
+def week_sunday(text: str) -> Optional[str]:
+    """The Sunday that starts the week of a YYYY-MM-DD date, or None if it is not a date."""
+    try:
+        day = datetime.strptime(text.strip(), "%Y-%m-%d").date()
+    except ValueError:
+        return None
+    return (day - timedelta(days=(day.weekday() + 1) % 7)).isoformat()
+
+
+def clean_program(text: str) -> str:
+    return " ".join((text or "").split())[:80]
+
+
 def password_problem(new: str, confirm: str, username: str) -> str:
     if len(new) < MIN_PASSWORD:
         return f"Use at least {MIN_PASSWORD} characters."
@@ -305,6 +318,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if problem:
             flash(problem)
             return redirect(url_for("home"))
+        program = clean_program(request.form.get("program", ""))
+        week = request.form.get("week_start", "").strip()
+        week_start = week_sunday(week) if week else ""
+        if week_start is None:
+            flash("Give the schedule week as a date (the Sunday it starts).")
+            return redirect(url_for("home"))
         incoming = queue.runs_root / "_incoming"
         incoming.mkdir(exist_ok=True)
         path = incoming / f"{secrets.token_hex(8)}.upload"
@@ -315,7 +334,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             path.unlink()
             flash("Upload an Excel workbook (.xlsx): that file is not one.")
             return redirect(url_for("home"))
-        run_id = queue.submit(g.user["id"], path, mode, name, options)
+        run_id = queue.submit(g.user["id"], path, mode, name, options, program=program, week_start=week_start)
         return redirect(url_for("run_detail", run_id=run_id))
 
     @app.route("/runs/<run_id>")
@@ -359,6 +378,22 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if path is None:
             abort(404)
         return send_file(path, as_attachment=True, download_name=path.name)
+
+    @app.route("/runs/<run_id>/tag", methods=["POST"])
+    @login_required
+    def run_tag(run_id: str):  # type: ignore[no-untyped-def]
+        run = _run_or_404(run_id)
+        if run["user_id"] != g.user["id"] and not g.user["is_admin"]:
+            abort(403)
+        week = request.form.get("week_start", "").strip()
+        week_start = week_sunday(week) if week else ""
+        if week_start is None:
+            flash("Give the schedule week as a date (the Sunday it starts).")
+        else:
+            app.extensions["store"].update_run(run_id, program=clean_program(request.form.get("program", "")),
+                                               week_start=week_start)
+            flash("Program and week saved.")
+        return redirect(url_for("run_detail", run_id=run_id))
 
     @app.route("/runs/<run_id>/stop", methods=["POST"])
     @login_required

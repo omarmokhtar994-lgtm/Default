@@ -1,0 +1,8 @@
+ERROR: test_history_survives_file_expiry (webapp.tests.test_runs.TheProgramTags.test_history_survives_file_expiry)
+ERROR: test_metrics_saved_when_a_run_finishes (webapp.tests.test_runs.TheProgramTags.test_metrics_saved_when_a_run_finishes)
+ERROR: test_old_database_gains_analytics_columns (webapp.tests.test_runs.TheProgramTags.test_old_database_gains_analytics_columns)
+ERROR: test_upload_records_program_and_week (webapp.tests.test_runs.TheProgramTags.test_upload_records_program_and_week)
+FAIL: test_untagged_runs_can_be_tagged (webapp.tests.test_runs.TheProgramTags.test_untagged_runs_can_be_tagged)
+FAIL: test_week_must_be_a_date (webapp.tests.test_runs.TheProgramTags.test_week_must_be_a_date)
+Ran 6 tests in 3.082s
+FAILED (failures=2, errors=4)

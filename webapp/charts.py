@@ -163,7 +163,7 @@ def hbars(rows: Sequence[Tuple[str, float, str]], unit: str = "", label: str = "
     """Horizontal bars, longest first as given; values written at the bar end."""
     if not rows:
         return EMPTY
-    row_h, left, right = 30, 290, 50
+    row_h, left, right = 30, 330, 50
     h = row_h * len(rows) + 8
     top_value = max(v for _, v, _ in rows) or 1
     plot_w = W - left - right

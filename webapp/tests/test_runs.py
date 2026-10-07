@@ -401,6 +401,17 @@ class TheProgramTags(unittest.TestCase):
         self.assertEqual(run["status"], "EXPIRED")
         self.assertEqual(json.loads(run["metrics"])["fully_covered"], 107)
 
+    def test_runs_finished_before_the_update_join_the_history(self):
+        app, store, *_ = make_app()
+        client = client_for(app)
+        run_id = run_id_of(upload(client, name="REAL_week.xlsx"))
+        wait(store, run_id)
+        store.update_run(run_id, metrics="")  # as a run finished before program history existed
+        self.assertEqual(app.extensions["runs"].backfill(), 1)
+        m = json.loads(store.get_run(run_id)["metrics"])
+        self.assertEqual((m["fully_covered"], m["outcome"]), (107, "DONE"))
+        self.assertEqual(app.extensions["runs"].backfill(), 0)  # once only
+
     def test_untagged_runs_can_be_tagged(self):
         app, store, *_ = make_app(start_worker=False)
         store.add_user("lina", "Lina", "Lina-pass-12", must_change=False)

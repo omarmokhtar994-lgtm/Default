@@ -379,7 +379,23 @@ class RunQueue:
             expired += 1
         return expired
 
+    def backfill(self) -> int:
+        """Runs that finished before program history existed (no stored
+        figures) get them from their files, while the files are still there."""
+        filled = 0
+        for run in self.store.list_runs(limit=1_000_000):
+            if run["status"] not in ("DONE", "REVIEW") or run.get("metrics") or not self.results_dir(run["id"]).is_dir():
+                continue
+            self._save_summary(run["id"])
+            self._stamp_outcome(run["id"], run["status"])
+            filled += bool((self.store.get_run(run["id"]) or {}).get("metrics"))
+        return filled
+
     def _cleaner(self) -> None:
+        try:
+            self.backfill()
+        except Exception as exc:  # history for older runs is a convenience; say why it failed
+            print(f"history backfill failed: {exc!r}", file=sys.stderr, flush=True)
         while True:
             try:
                 self.cleanup()

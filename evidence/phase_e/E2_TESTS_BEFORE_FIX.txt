@@ -1,0 +1,131 @@
+EEEEEEEEEEEEE.E
+======================================================================
+ERROR: test_every_real_interval_target_and_floor (tests_staged.test_rc9_2_46_exact_coverage_units.ExactUnitsAgreeWithTheMetric.test_every_real_interval_target_and_floor)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_46_exact_coverage_units.py", line 88, in test_every_real_interval_target_and_floor
+    got = min_heads_for(E.coverage_hit_threshold_units(p, d, i, ratio), c)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'E' has no attribute 'coverage_hit_threshold_units'
+
+======================================================================
+ERROR: test_hand_checked_chat_monday_1730 (tests_staged.test_rc9_2_46_exact_coverage_units.ExactUnitsAgreeWithTheMetric.test_hand_checked_chat_monday_1730)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_46_exact_coverage_units.py", line 68, in test_hand_checked_chat_monday_1730
+    self.assertEqual(E.coverage_hit_threshold_units(p, 0, 0, 1.0), 91 * 23)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'E' has no attribute 'coverage_hit_threshold_units'
+
+======================================================================
+ERROR: test_hand_checked_exact_tie_counts_as_a_hit (tests_staged.test_rc9_2_46_exact_coverage_units.ExactUnitsAgreeWithTheMetric.test_hand_checked_exact_tie_counts_as_a_hit)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_46_exact_coverage_units.py", line 73, in test_hand_checked_exact_tie_counts_as_a_hit
+    self.assertEqual(E.coverage_hit_threshold_units(p, 0, 0, 0.75), 87 * 15)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'E' has no attribute 'coverage_hit_threshold_units'
+
+======================================================================
+ERROR: test_qpi_1_and_4 (tests_staged.test_rc9_2_46_exact_coverage_units.ExactUnitsAgreeWithTheMetric.test_qpi_1_and_4)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_46_exact_coverage_units.py", line 96, in test_qpi_1_and_4
+    self.assertEqual(min_heads_for(E.coverage_hit_threshold_units(p, 0, 0, 0.9), c),
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'E' has no attribute 'coverage_hit_threshold_units'
+
+======================================================================
+ERROR: test_zero_effective_capacity_stays_unreachable (tests_staged.test_rc9_2_46_exact_coverage_units.ExactUnitsAgreeWithTheMetric.test_zero_effective_capacity_stays_unreachable)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_46_exact_coverage_units.py", line 101, in test_zero_effective_capacity_stays_unreachable
+    self.assertGreater(E.coverage_hit_threshold_units(p, 0, 0, 0.8), 0)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'E' has no attribute 'coverage_hit_threshold_units'
+
+======================================================================
+ERROR: test_default_off_on_every_ready_workbook (tests_staged.test_rc9_2_46_exact_coverage_units.TheSwitchDefaultsOffAndChangesNothingThen.test_default_off_on_every_ready_workbook) (workbook='AE_AR_B2B_WEEKLY_INPUT.xlsx')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_46_exact_coverage_units.py", line 56, in test_default_off_on_every_ready_workbook
+    self.assertFalse(E.parse_input(wb).exact_coverage_units)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ParsedInput' object has no attribute 'exact_coverage_units'
+
+======================================================================
+ERROR: test_default_off_on_every_ready_workbook (tests_staged.test_rc9_2_46_exact_coverage_units.TheSwitchDefaultsOffAndChangesNothingThen.test_default_off_on_every_ready_workbook) (workbook='Cricut_Chat_WEEKLY_INPUT.xlsx')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_46_exact_coverage_units.py", line 56, in test_default_off_on_every_ready_workbook
+    self.assertFalse(E.parse_input(wb).exact_coverage_units)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ParsedInput' object has no attribute 'exact_coverage_units'
+
+======================================================================
+ERROR: test_default_off_on_every_ready_workbook (tests_staged.test_rc9_2_46_exact_coverage_units.TheSwitchDefaultsOffAndChangesNothingThen.test_default_off_on_every_ready_workbook) (workbook='Cricut_Voice_WEEKLY_INPUT.xlsx')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_46_exact_coverage_units.py", line 56, in test_default_off_on_every_ready_workbook
+    self.assertFalse(E.parse_input(wb).exact_coverage_units)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ParsedInput' object has no attribute 'exact_coverage_units'
+
+======================================================================
+ERROR: test_default_off_on_every_ready_workbook (tests_staged.test_rc9_2_46_exact_coverage_units.TheSwitchDefaultsOffAndChangesNothingThen.test_default_off_on_every_ready_workbook) (workbook='GDI_28HC_24_7_WEEKLY_INPUT.xlsx')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_46_exact_coverage_units.py", line 56, in test_default_off_on_every_ready_workbook
+    self.assertFalse(E.parse_input(wb).exact_coverage_units)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ParsedInput' object has no attribute 'exact_coverage_units'
+
+======================================================================
+ERROR: test_default_off_on_every_ready_workbook (tests_staged.test_rc9_2_46_exact_coverage_units.TheSwitchDefaultsOffAndChangesNothingThen.test_default_off_on_every_ready_workbook) (workbook='NMG_EN_AND_SP_WEEKLY_INPUT.xlsx')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_46_exact_coverage_units.py", line 56, in test_default_off_on_every_ready_workbook
+    self.assertFalse(E.parse_input(wb).exact_coverage_units)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ParsedInput' object has no attribute 'exact_coverage_units'
+
+======================================================================
+ERROR: test_default_off_on_every_ready_workbook (tests_staged.test_rc9_2_46_exact_coverage_units.TheSwitchDefaultsOffAndChangesNothingThen.test_default_off_on_every_ready_workbook) (workbook='NMG_EN_WEEKLY_INPUT.xlsx')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_46_exact_coverage_units.py", line 56, in test_default_off_on_every_ready_workbook
+    self.assertFalse(E.parse_input(wb).exact_coverage_units)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ParsedInput' object has no attribute 'exact_coverage_units'
+
+======================================================================
+ERROR: test_default_off_on_every_ready_workbook (tests_staged.test_rc9_2_46_exact_coverage_units.TheSwitchDefaultsOffAndChangesNothingThen.test_default_off_on_every_ready_workbook) (workbook='NMG_SP_WEEKLY_INPUT.xlsx')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_46_exact_coverage_units.py", line 56, in test_default_off_on_every_ready_workbook
+    self.assertFalse(E.parse_input(wb).exact_coverage_units)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ParsedInput' object has no attribute 'exact_coverage_units'
+
+======================================================================
+ERROR: test_legacy_units_are_unchanged_when_the_switch_is_off (tests_staged.test_rc9_2_46_exact_coverage_units.TheSwitchDefaultsOffAndChangesNothingThen.test_legacy_units_are_unchanged_when_the_switch_is_off)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_46_exact_coverage_units.py", line 61, in test_legacy_units_are_unchanged_when_the_switch_is_off
+    self.assertEqual(E.coverage_hit_threshold_units(p, 0, 0, ratio), E.ceil_units(req * ratio) * qpi)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'E' has no attribute 'coverage_hit_threshold_units'
+
+======================================================================
+ERROR: test_yes_turns_it_on_and_the_contract_records_it (tests_staged.test_rc9_2_46_exact_coverage_units.TheSwitchIsAnInstruction.test_yes_turns_it_on_and_the_contract_records_it)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_46_exact_coverage_units.py", line 120, in test_yes_turns_it_on_and_the_contract_records_it
+    self.assertTrue(p.exact_coverage_units)
+                    ^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ParsedInput' object has no attribute 'exact_coverage_units'
+
+----------------------------------------------------------------------
+Ran 9 tests in 1.316s
+
+FAILED (errors=14)

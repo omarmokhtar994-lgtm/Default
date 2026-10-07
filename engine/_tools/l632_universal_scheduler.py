@@ -527,6 +527,34 @@ def scaled_coverage_threshold(
     ))
 
 
+def coverage_hit_threshold_units(parsed: Any, day: int, interval: int, ratio: float) -> int:
+    """Hit threshold for one interval in Stage-1 / guide coverage units
+    (heads x round((1 - shrinkage) x 100), summed over the interval's quarters).
+
+    Legacy (switch off): ceil(req x ratio x 100) x qpi, which can disagree with
+    calculate_metrics by one head-quarter. Exact (Exact Coverage Units = Yes):
+    c x n*, where c = round((1 - shrinkage) x 100) is the coefficient every head
+    carries in this interval and n* the metric's smallest head-quarter count
+    with (eff x n / qpi) / req + 1e-9 >= ratio, so "coverage >= threshold"
+    holds exactly when the metric counts a hit, in the same units (no
+    objective magnitude changes). Zero effective capacity keeps the legacy
+    (unreachable) threshold.
+    """
+    req = float(parsed.requirements[day][interval] or 0.0)
+    qpi = int(parsed.qslots_per_interval)
+    legacy = ceil_units(req * ratio) * qpi
+    if not getattr(parsed, "exact_coverage_units", False) or req <= 0:
+        return legacy
+    eff = 1.0 - float(parsed.shrinkage[day][interval])
+    c = int(round(eff * 100))
+    if eff <= 0 or c <= 0:
+        return legacy
+    n = max(0, int(math.floor(ratio * req * qpi / eff)) - 2)
+    while (eff * n / qpi) / req + 1e-9 < ratio:
+        n += 1
+    return c * n
+
+
 def ensure_parent(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -830,6 +858,10 @@ class ParsedInput:
     # day/shift guide run when shifts are not all 540 minutes. Default No keeps
     # the old refusal; all-9 h workbooks take the same path either way.
     aggregate_guide_mixed_durations: bool = False
+    # Phase E (F-E1): "Exact Coverage Units" = Yes makes Stage 1 and the
+    # aggregate guide decide interval hits exactly as calculate_metrics does
+    # (coverage_hit_threshold_units). Default No keeps the percent thresholds.
+    exact_coverage_units: bool = False
     coverage_split_rules: List[CoverageSplitRule] = field(default_factory=list)
     coverage_split_source: str = "ABSENT"
     coverage_split_gate_mode: str = "hard"
@@ -1469,6 +1501,7 @@ BOOLEAN_INSTRUCTION_ALIASES: Tuple[Tuple[str, ...], ...] = (
     ("Skill Allocation Audit Enabled", "Distinct Skill Allocation Audit Enabled"),
     ("Shift Consistency Polish", "Consistency Polish"),
     ("Aggregate Guide Mixed Durations",),
+    ("Exact Coverage Units",),
 )
 
 
@@ -3533,6 +3566,7 @@ def parse_input(
     _polish_raw = _instruction_get(im, ["Shift Consistency Polish", "Consistency Polish"], None)
     shift_consistency_polish = None if _polish_raw in (None, "") else yes(_polish_raw, False)
     aggregate_guide_mixed_durations = yes(_instruction_get(im, ["Aggregate Guide Mixed Durations"], "No"), False)
+    exact_coverage_units = yes(_instruction_get(im, ["Exact Coverage Units"], "No"), False)
     max_diff = int(round(to_float(_instruction_get(im, ["Count of Different Shifts Per week", "Max Different Shifts per Week"], 3), 3)))
     rest = to_float(_instruction_get(im, ["Difference Between Shifts", "Rest Gap Hours", "Minimum Rest Gap"], 12), 12)
     opening_enabled = yes(_instruction_get(im, ["Opening Guard Enabled"], "No"), False)
@@ -4081,6 +4115,7 @@ def parse_input(
         language_working_window_mode=language_working_window_mode,
         shift_consistency_polish=shift_consistency_polish,
         aggregate_guide_mixed_durations=aggregate_guide_mixed_durations,
+        exact_coverage_units=exact_coverage_units,
         coverage_split_rules=coverage_split_rules,
         coverage_split_source=coverage_split_source,
         coverage_split_gate_mode=coverage_split_gate_mode,
@@ -4171,6 +4206,8 @@ def input_contract_payload(parsed: ParsedInput) -> Dict[str, Any]:
     # fingerprint; turning the switch on is a visible contract change.
     if getattr(parsed, "aggregate_guide_mixed_durations", False):
         payload["aggregate_guide_mixed_durations"] = True
+    if getattr(parsed, "exact_coverage_units", False):
+        payload["exact_coverage_units"] = True
     return payload
 
 
@@ -6692,7 +6729,7 @@ def aggregate_pattern_mix_guidance(parsed: ParsedInput, time_limit_sec: float = 
             (severe_ratio, severe_hit_index[d, i]),
             (parsed.target_ratio, target_hit_index[d, i]),
         ):
-            threshold = ceil_units(req * ratio) * qpi
+            threshold = coverage_hit_threshold_units(parsed, d, i, ratio)
             row = dict(coefficients)
             row[hit_index] = row.get(hit_index, 0.0) - threshold
             add_constraint(row, -prior, float('inf'))
@@ -7736,10 +7773,10 @@ def build_skeleton(
                 # all qpi quarter slots, exactly matching calculate_metrics interval truth.
                 # This fixes the RC8.7 half-fix where thresholds were scaled but coverage
                 # still used only the first quarter-slot of each interval.
-                floor_units = ceil_units(req * parsed.floor_ratio) * qpi
-                hard_floor_units = ceil_units(req * float(parsed.hard_floor_ratio or parsed.floor_ratio)) * qpi
-                target_units = ceil_units(req * parsed.target_ratio) * qpi
-                full_units = ceil_units(req) * qpi
+                floor_units = coverage_hit_threshold_units(parsed, d, i, parsed.floor_ratio)
+                hard_floor_units = coverage_hit_threshold_units(parsed, d, i, float(parsed.hard_floor_ratio or parsed.floor_ratio))
+                target_units = coverage_hit_threshold_units(parsed, d, i, parsed.target_ratio)
+                full_units = coverage_hit_threshold_units(parsed, d, i, 1.0)
                 if hard.hard_floor and parsed.floor_mode == "hard":
                     at_least(eff, hard_floor_units, "hard_floor", d, i * parsed.interval_minutes,
                              unit="coverage_units")
@@ -7762,7 +7799,7 @@ def build_skeleton(
                     stage1_floor_hit_by_interval[d, i] = floor_hit
                     if profile.get("floor_miss", 0):
                         objective_terms.append(volume_weight(parsed, profile["floor_miss"], d, i) * (1 - floor_hit))
-                severe_units = ceil_units(req * max(0.0, parsed.floor_ratio - 0.10)) * qpi
+                severe_units = coverage_hit_threshold_units(parsed, d, i, max(0.0, parsed.floor_ratio - 0.10))
                 if profile.get("severe_miss", 0) or quality_shape_enabled:
                     severe_hit = model.NewBoolVar(f"stage1_severe_hit_{d}_{i}")
                     model.Add(objective_coverage >= severe_units).OnlyEnforceIf(severe_hit)
@@ -7788,7 +7825,7 @@ def build_skeleton(
                     tier_weight = int(profile.get(f"protected{tier_pct}_miss", 0) or 0)
                     if tier_pct not in minimum_tier_hits and tier_weight <= 0:
                         continue
-                    tier_units = ceil_units(req * tier_ratio) * qpi + max(0, observed_break_load)
+                    tier_units = coverage_hit_threshold_units(parsed, d, i, tier_ratio) + max(0, observed_break_load)
                     tier_hit = model.NewBoolVar(f"stage1_tier_{tier_pct}_hit_{d}_{i}")
                     model.Add(objective_coverage >= tier_units).OnlyEnforceIf(tier_hit)
                     model.Add(objective_coverage <= tier_units - 1).OnlyEnforceIf(tier_hit.Not())

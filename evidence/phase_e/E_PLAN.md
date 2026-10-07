@@ -30,3 +30,33 @@ times (restore_productive 4.6, aggregate_floor_binding 1.7,
 floor_gate_hunter_productive 0.8, quality_convergence 0.3, daily_floor_balanced
 0). This feeds Task 3's treatment (before-basis profiles first); it is not
 itself a decision.
+
+## Task 2 / F-E1: exact coverage units (pre-registered 2026-10-07 ~00:15, before any A/B run)
+
+Change: switch "Exact Coverage Units" (default No). On: Stage 1
+(`build_skeleton`: floor, hard floor, severe, target, full and tier hit
+thresholds) and the aggregate guide use `coverage_hit_threshold_units` =
+c x n*, the metric's own minimum head-quarters in the existing units. Stage 2
+was already exact (audit F-1). Out of scope, recorded: next-Sunday horizon
+terms, overage caps, `critical_exception_cells` (hard-floor mode).
+Failing-first evidence: `E2_TESTS_BEFORE_FIX.txt` (14 errors: field and
+function missing); after: 9/9 tests pass.
+
+Design (revised before any run, because one seed per arm cannot see a
+few-interval effect when Chat alone spreads 155-179 between runs):
+* AE_AR_B2B and GDI have 0 threshold mismatches, so their models are
+  identical with the switch on or off; checked deterministically (every
+  threshold equal), not run.
+* A/B on the 5 programs with mismatches (Cricut Chat, Cricut Voice, NMG EN,
+  NMG SP, NMG EN+SP); control = switch absent, treatment = "Exact Coverage
+  Units" = Yes; same engine file; production runner, QUICK 3,600 s, 2 workers;
+  seeds 9000 and 9001 for both arms (20 runs), control and treatment of one
+  program and seed side by side.
+
+The default flips to Yes only if ALL hold:
+1. every treatment run exit 0, validator PASS, 0 hard failures, no new refusal;
+2. per program, the treatment's mean over the two seeds loses at most 1
+   interval at target and at most 1 at floor (after breaks) versus control;
+3. summed intervals at target after breaks over the 10 treatment runs >=
+   the 10 control runs.
+Otherwise the switch stays, default No, and the result is recorded.

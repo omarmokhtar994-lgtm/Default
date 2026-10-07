@@ -99,3 +99,43 @@ So 0.4 only loosens quarters with 5-13 people staffed (from 14 up the cap is 4
 under both ratios). The ratio change cuts concurrency warnings 9 -> 1 but
 recovers only 2 of the 19 target intervals lost to breaks; a larger effect
 would need the absolute cap or the break windows changed (owner's call).
+
+## Pair 5: Cricut Chat, ratio 0.4 vs control repeat (landed 10:57)
+
+| | control (07:01) | control repeat | ratio 0.4 |
+|---|---|---|---|
+| at target after breaks | 167 | 172 | 170 |
+| at floor after breaks | 229 | 228 | 229 |
+| at target / floor before breaks | 182 / 242 | 187 / 239 | 183 / 238 |
+| target / floor losses from breaks | 15 / 13 | 15 / 11 | 13 / 9 |
+| break concurrency warnings | 4 | 4 | 0 |
+| validator | PASS | PASS | PASS |
+| release verdict | REVIEW_REQUIRED (gate 5) | REVIEW_REQUIRED (gate 5) | REVIEW_REQUIRED (gate 5) |
+
+Noise: the two identical Chat controls (same workbook, seed and settings,
+time-limited search under machine load) differ by 5 at target (167 vs 172).
+Reading, ratio 0.4 against its paired control (the repeat): -2 at target, so
+**no gain measured**. The 0.4 ratio again removes the concurrency warnings and
+loses fewer intervals to breaks, but the week chosen before breaks decides the
+total. Chat also caps concurrent breaks at 4, so 0.4 loosens only quarters
+with 5-13 people staffed.
+
+## Final summary (all 10 runs, 2026-10-07 06:02-10:58 Egypt)
+
+| question | program | at target | at floor | reading |
+|---|---|---|---|---|
+| :30 starts | Chat | +9 (vs 167; +4 vs the repeat 172) | -3 | no gain measured (floor rule) |
+| :30 starts | Voice | 0 | +1 | no gain measured |
+| :30 starts | NMG EN+SP | -1 | +2 | no gain measured |
+| ratio 0.4 | AE IT B2B | +2 | -1 | inconclusive |
+| ratio 0.4 | Chat | -2 (vs the repeat) | +1 | no gain measured |
+
+* No arm met the pre-registered "worth considering" bar. Both switches stay at
+  their shipped defaults; each remains available per program.
+* Chat's run-to-run spread on identical settings is at least 5 at target, so
+  single-seed differences under 5 are noise, as the rule assumed.
+* Raising the break ratio consistently reduces concurrency warnings
+  (AE IT B2B 9 -> 1, Chat 4 -> 0) without measurably more coverage, because
+  the absolute cap of 4 and the week chosen before breaks dominate.
+* Defect found and fixed: the validator rejected every :30 run (shifts
+  cross-check). All three :30 schedules re-validate PASS with the fix.

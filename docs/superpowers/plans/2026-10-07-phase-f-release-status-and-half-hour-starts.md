@@ -29,7 +29,7 @@
 
 ---
 
-### Task F1: release verdict
+### Task 1: (F1) release verdict
 
 **Files:**
 - Modify: `tools/release_gate_report.py` (new `release_verdict`, `main()` writes `RELEASE_VERDICT.json` and returns the exit code)
@@ -55,7 +55,7 @@
 - [ ] Step 3: implement; print a one-line banner per case and overall.
 - [ ] Step 4: tests pass; full gate green; commit.
 
-### Task F2: optional half-hour starts (detailed in its own brief when F1 is done)
+### Task 2: (F2) optional half-hour starts (detailed in its own brief when F1 is done)
 
 Decisions fixed now:
 - Instruction "Allow Half-Hour Starts" (Yes/No, default No; in `BOOLEAN_INSTRUCTION_ALIASES`; contract key only when on).
@@ -70,10 +70,10 @@ Decisions fixed now:
   - validator accepts the flagged shifts.
 - Measurement after merge: 3 programs, off vs on, production runner. The rule is written before the runs.
 
-### Task F3: shortfall test reproduction (no engine change)
+### Task 3: (F3) shortfall test reproduction (no engine change)
 
 - [ ] Run `tests_staged/test_rc9_2_32_phase_c_shortfall.py` repeatedly under Colab-like CPU (2 cores pinned with `taskset`, competing load) and record which shortfall days appear. The report decides: engine regression, or an over-specific test (time-limited search outcome). The test is not edited unless the evidence shows its contract was wrong, and then only with a written reason.
 
-### Task F4: Stage-1 probe with production-like start (no engine change)
+### Task 4: (F4) Stage-1 probe with production-like start (no engine change)
 
 - [ ] Give `tools/stage1_ab_probe.py` the production warm start: each arm first runs the hard-feasibility probe, and the measured profile is hinted with it. Drop programs where the probe is infeasible under production hard rules (record them). Re-register Task 3's rule before any run, then run it.

@@ -25,7 +25,7 @@ import threading
 import time
 import zipfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from werkzeug.utils import secure_filename
 
@@ -36,10 +36,34 @@ from .store import Store
 KEEP_DAYS = 30
 ACTIVE = ("GATE", "RUNNING", "SCORING")
 RESUMABLE = ("STOPPED", "INTERRUPTED", "FAILED")
-MODES = ("QUICK", "DEEP", "SMOKE")
+MODES = ("QUICK", "DEEP", "OVERNIGHT", "SMOKE")
 # Same automatic seeds as the Colab notebooks (measured, evidence/seed_portfolio_ab):
-# None = the runner's own default (DEEP: best of 4).
-AUTO_SEEDS = {"QUICK": 2, "DEEP": None, "SMOKE": 1}
+# None = the runner's own default (DEEP: best of 4, OVERNIGHT: best of 6).
+AUTO_SEEDS = {"QUICK": 2, "DEEP": None, "OVERNIGHT": None, "SMOKE": 1}
+# The Colab notebooks' advanced settings. "workbook" (or nothing) = what the
+# workbook's Instructions sheet says, and no flag is passed.
+OPTIONS = {
+    "language_window": ("--language-working-window", ("OFF", "MINIMUM_ROWS", "ALL_ROWS", "REQUIRED_LANGUAGE_ONLY")),
+    "coverage_measure": ("--coverage-objective-weighting", ("INTERVAL_COUNT", "VOLUME_WEIGHTED")),
+    "stage": ("--stage", ("FULL_SCHEDULE", "BEFORE_BREAKS_ONLY")),
+}
+OPTION_LABELS = {"OFF": "Off", "MINIMUM_ROWS": "Minimum rows", "ALL_ROWS": "All rows",
+                 "REQUIRED_LANGUAGE_ONLY": "Required language only", "INTERVAL_COUNT": "Interval count",
+                 "VOLUME_WEIGHTED": "Volume weighted", "FULL_SCHEDULE": "Full schedule",
+                 "BEFORE_BREAKS_ONLY": "Before breaks only"}
+
+
+def parse_options(form) -> Tuple[Dict[str, str], str]:
+    """(options, problem) from the upload form; only listed values are accepted."""
+    chosen: Dict[str, str] = {}
+    for name, (_, allowed) in OPTIONS.items():
+        value = (form.get(name) or "workbook").strip()
+        if value == "workbook" or (name == "stage" and value == "FULL_SCHEDULE"):
+            continue
+        if value not in allowed:
+            return {}, f"Choose one of the listed options for {name.replace('_', ' ')}."
+        chosen[name] = value
+    return chosen, ""
 CHECK_TIMEOUT_SECONDS = 300
 SCORE_TIMEOUT_SECONDS = 1800
 STOP_GRACE_SECONDS = 30
@@ -121,7 +145,8 @@ class RunQueue:
         self._threads.append(cleaner)
         self._wake.set()
 
-    def submit(self, user_id: int, upload_path: Path, mode: str, workbook_name: str) -> str:
+    def submit(self, user_id: int, upload_path: Path, mode: str, workbook_name: str,
+               options: Optional[Dict[str, str]] = None) -> str:
         """Check the uploaded workbook now (seconds) and queue it if accepted."""
         if mode not in MODES:
             raise ValueError(f"unknown mode {mode!r}")
@@ -132,7 +157,8 @@ class RunQueue:
         target = self.run_dir(run_id) / "input" / safe
         target.parent.mkdir(parents=True)
         shutil.move(str(upload_path), target)
-        self.store.add_run(run_id, user_id, workbook_name, mode, "CHECKING")
+        self.store.add_run(run_id, user_id, workbook_name, mode, "CHECKING",
+                           options=json.dumps(options) if options else "")
         try:
             proc = subprocess.run(self.check_cmd + [str(target)], cwd=str(self.package_root),
                                   capture_output=True, text=True, timeout=CHECK_TIMEOUT_SECONDS)
@@ -187,9 +213,13 @@ class RunQueue:
             "--package-root", str(self.package_root),
             "--results-root", str(self.results_dir(run_id)),
             "--mode", run["mode"],
-            "--stage", "FULL_SCHEDULE",
             "--num-workers", str(max(1, (os.cpu_count() or 1) // self.parallel)),
         ]
+        options = run_options(run)
+        cmd += ["--stage", options.get("stage", "FULL_SCHEDULE")]
+        for name in ("language_window", "coverage_measure"):
+            if name in options:
+                cmd += [OPTIONS[name][0], options[name]]
         seeds = AUTO_SEEDS[run["mode"]]
         if seeds:
             cmd += ["--seeds", str(seeds)]
@@ -338,6 +368,15 @@ class RunQueue:
             except Exception as exc:  # keep cleaning tomorrow; say why today failed
                 print(f"run cleanup failed: {exc!r}", file=sys.stderr, flush=True)
             time.sleep(3600)
+
+
+def run_options(run: Dict[str, Any]) -> Dict[str, str]:
+    """The run's advanced settings; anything not listed is ignored (fail closed)."""
+    try:
+        raw = json.loads(run.get("options") or "{}")
+    except ValueError:
+        return {}
+    return {k: v for k, v in raw.items() if k in OPTIONS and v in OPTIONS[k][1]}
 
 
 def outcome(mode: str, verdict: str) -> tuple:

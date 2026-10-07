@@ -54,9 +54,9 @@ def token(client):
     return TOKEN.search(client.get("/").get_data(as_text=True)).group(1)
 
 
-def upload(client, name="week42.xlsx", data=b"PK\x03\x04 fake workbook", mode="QUICK"):
+def upload(client, name="week42.xlsx", data=b"PK\x03\x04 fake workbook", mode="QUICK", **fields):
     return client.post("/runs", data={"csrf_token": token(client), "mode": mode,
-                                      "workbook": (io.BytesIO(data), name)},
+                                      "workbook": (io.BytesIO(data), name), **fields},
                        content_type="multipart/form-data", follow_redirects=False)
 
 
@@ -238,6 +238,62 @@ class Retention(unittest.TestCase):
         self.assertEqual(store.get_run(run_id)["status"], "EXPIRED")
         self.assertFalse((data / "runs" / run_id).exists())
         self.assertEqual(client.get(f"/runs/{run_id}/download").status_code, 404)
+
+
+class TheAdvancedOptions(unittest.TestCase):
+    """Phase J task 6: the Colab notebook's settings, folded under the mode."""
+
+    def argv(self, data, run_id):
+        return " ".join(json.loads((data / "runs" / run_id / "results" / "argv.json").read_text())["argv"])
+
+    def test_advanced_options_reach_the_runner(self):
+        app, store, data, _ = make_app()
+        client = client_for(app)
+        run_id = run_id_of(upload(client, mode="OVERNIGHT", language_window="ALL_ROWS",
+                                  coverage_measure="VOLUME_WEIGHTED", stage="BEFORE_BREAKS_ONLY"))
+        wait(store, run_id)
+        argv = self.argv(data, run_id)
+        for needle in ("--mode OVERNIGHT", "--language-working-window ALL_ROWS",
+                       "--coverage-objective-weighting VOLUME_WEIGHTED", "--stage BEFORE_BREAKS_ONLY"):
+            self.assertIn(needle, argv)
+        page = client.get(f"/runs/{run_id}").get_data(as_text=True)
+        self.assertIn("All rows", page)
+
+    def test_follow_the_workbook_adds_no_flags(self):
+        app, store, data, _ = make_app()
+        client = client_for(app)
+        run_id = run_id_of(upload(client, language_window="workbook", coverage_measure="workbook"))
+        wait(store, run_id)
+        argv = self.argv(data, run_id)
+        self.assertNotIn("--language-working-window", argv)
+        self.assertNotIn("--coverage-objective-weighting", argv)
+        self.assertIn("--stage FULL_SCHEDULE", argv)
+
+    def test_unknown_option_values_are_refused(self):
+        app, store, *_ = make_app(start_worker=False)
+        client = client_for(app)
+        upload(client, language_window="EVERYTHING")
+        self.assertEqual(store.list_runs(), [])
+        self.assertIn("Choose one of the listed options", client.get("/").get_data(as_text=True))
+
+    def test_old_database_gains_the_options_column(self):
+        import sqlite3
+        data = Path(tempfile.mkdtemp())
+        db = sqlite3.connect(data / "scheduler.db")
+        db.executescript("""create table users (id integer primary key, username text unique not null,
+            display_name text not null, password_hash text not null, is_admin integer not null default 0,
+            active integer not null default 1, must_change integer not null default 1,
+            failed integer not null default 0, locked_until real not null default 0, created real not null);
+            create table runs (id text primary key, user_id integer not null, workbook text not null,
+            mode text not null, status text not null, message text not null default '', exit_code integer,
+            verdict text not null default '', created real not null, started real, finished real,
+            resume integer not null default 0);
+            insert into users values (1,'sara','Sara','x',0,1,0,0,0,0);
+            insert into runs (id,user_id,workbook,mode,status,created) values ('abcabcabcabc',1,'w.xlsx','QUICK','DONE',0);""")
+        db.commit()
+        db.close()
+        run = Store(data / "scheduler.db").get_run("abcabcabcabc")
+        self.assertEqual(run["options"], "")
 
 
 class Access(unittest.TestCase):

@@ -1,0 +1,5 @@
+ERROR: test_advanced_options_reach_the_runner (webapp.tests.test_runs.TheAdvancedOptions.test_advanced_options_reach_the_runner)
+ERROR: test_old_database_gains_the_options_column (webapp.tests.test_runs.TheAdvancedOptions.test_old_database_gains_the_options_column)
+FAIL: test_unknown_option_values_are_refused (webapp.tests.test_runs.TheAdvancedOptions.test_unknown_option_values_are_refused)
+Ran 4 tests in 31.303s
+FAILED (failures=1, errors=2)

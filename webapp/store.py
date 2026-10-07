@@ -41,7 +41,8 @@ create table if not exists runs (
     created real not null,
     started real,
     finished real,
-    resume integer not null default 0
+    resume integer not null default 0,
+    options text not null default ''
 );
 """
 
@@ -56,6 +57,10 @@ class Store:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._db() as db:
             db.executescript(SCHEMA)
+            # Databases created before Phase J have no options column: add it.
+            columns = {row["name"] for row in db.execute("pragma table_info(runs)")}
+            if "options" not in columns:
+                db.execute("alter table runs add column options text not null default ''")
 
     def _db(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path, timeout=30)
@@ -120,10 +125,12 @@ class Store:
             db.execute("update users set active = ? where id = ?", (int(active), user_id))
 
     # ------------------------------------------------------------------- runs
-    def add_run(self, run_id: str, user_id: int, workbook: str, mode: str, status: str, message: str = "") -> None:
+    def add_run(self, run_id: str, user_id: int, workbook: str, mode: str, status: str, message: str = "",
+                options: str = "") -> None:
         with self._db() as db:
-            db.execute("insert into runs (id, user_id, workbook, mode, status, message, created)"
-                       " values (?, ?, ?, ?, ?, ?, ?)", (run_id, user_id, workbook, mode, status, message, time.time()))
+            db.execute("insert into runs (id, user_id, workbook, mode, status, message, created, options)"
+                       " values (?, ?, ?, ?, ?, ?, ?, ?)",
+                       (run_id, user_id, workbook, mode, status, message, time.time(), options))
 
     def update_run(self, run_id: str, **fields: Any) -> None:
         if not fields:

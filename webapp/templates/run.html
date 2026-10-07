@@ -9,6 +9,7 @@
     <p class="status-word" data-status="{{ run.status }}" aria-live="polite">{{ label(run) }}</p>
   </div>
   <p class="byline">{{ run.mode|capitalize if run.mode != 'SMOKE' else 'Readiness check' }} run, started by {{ run.by_name }} on {{ when(run.created) }} (Egypt time){% if run.exit_code is not none %}. Runner exit code {{ run.exit_code }} (0 means the independent validator passed it){% endif %}.</p>
+  {% set opts = run_options(run) %}<p class="byline">Settings: {% if opts %}{% for k, v in opts.items() %}{{ k|replace('_', ' ')|capitalize }} {{ option_labels[v] }}{% if not loop.last %}; {% endif %}{% endfor %}{% else %}followed the workbook{% endif %}.</p>
   {{ stagebar(run) }}
   {% if run.message %}<pre class="message" data-status="{{ run.status }}">{{ run.message }}</pre>{% endif %}
   {% if run.status == 'REJECTED' %}<p class="byline">Fix the cells named above in your workbook, save it, and upload it again. Nothing was run.</p>{% endif %}

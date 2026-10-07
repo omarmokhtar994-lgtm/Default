@@ -13,7 +13,7 @@ from flask import Flask, abort, flash, g, jsonify, redirect, render_template, re
 from werkzeug.utils import secure_filename
 
 from .auth import admin_required, check_csrf, csrf_token, load_user, login_required
-from .runs import MODES, RESUMABLE, RunQueue
+from .runs import MODES, OPTION_LABELS, RESUMABLE, RunQueue, parse_options, run_options
 from .store import Store
 
 COPYRIGHT = "© 2026 Omar Mokhtar. All rights reserved."
@@ -132,7 +132,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
     def _globals() -> Dict[str, Any]:
         return {"csrf_token": csrf_token, "copyright": COPYRIGHT, "user": g.get("user"),
                 "status_words": STATUS_WORDS, "label": label, "modes": MODES, "stages": stages, "in_flight": IN_FLIGHT,
-                "when": _when}
+                "when": _when, "run_options": run_options, "option_labels": OPTION_LABELS}
 
     # ------------------------------------------------------------- sign in/out
     @app.route("/login", methods=["GET", "POST"])
@@ -252,6 +252,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if not name.lower().endswith(".xlsx") or mode not in MODES:
             flash("Upload an Excel workbook (.xlsx) and pick a mode.")
             return redirect(url_for("home"))
+        options, problem = parse_options(request.form)
+        if problem:
+            flash(problem)
+            return redirect(url_for("home"))
         incoming = queue.runs_root / "_incoming"
         incoming.mkdir(exist_ok=True)
         path = incoming / f"{secrets.token_hex(8)}.upload"
@@ -262,7 +266,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             path.unlink()
             flash("Upload an Excel workbook (.xlsx): that file is not one.")
             return redirect(url_for("home"))
-        run_id = queue.submit(g.user["id"], path, mode, name)
+        run_id = queue.submit(g.user["id"], path, mode, name, options)
         return redirect(url_for("run_detail", run_id=run_id))
 
     @app.route("/runs/<run_id>")

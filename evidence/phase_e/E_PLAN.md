@@ -113,3 +113,26 @@ target90_restore_champion first and the two lowest-yield profiles that
 usually run dropped (QUICK 3,600 s, 2 workers, seed 9000); adopt only if
 neither loses more than 1 interval at target or floor after breaks, every run
 exit 0, validator PASS, 0 hard failures.
+
+### Task 2 Stage A verdict (2026-10-07 ~05:50): FAIL; switch stays, default No; no Stage B
+
+Data: `E2_STAGE_A_PROBE.json` (84 solves). Rule 1 failed: on Cricut Chat
+(target_floor_pareto_master, seeds 9000 and 9002) the off arm returned a week
+and the on arm returned UNKNOWN at 45 s. Rules 2 and 3 held on the 21 pairs
+with a week in both arms (sum 3,842 on vs 3,806 off; per-program mean
+dTarget: GDI +6.67, Voice +1.33, NMG EN+SP +1.33, NMG SP 0; no program below
+-1). Per the rule: no production runs; recorded as not adopted.
+
+Probe fidelity, stated with the result (not used to re-score it): only 21 of
+42 pairs were usable. NMG EN was INFEASIBLE in both arms under the probe's
+hard configuration (production reaches a schedule through its fallback
+passes); AE_AR_B2B, Chat (restore_champion) and GDI (restore_champion) found
+no week in 45 s from a cold start (production hints later profiles from
+earlier ones). A probe without production's warm start and fallback is not a
+faithful Stage-1 stand-in for those programs. The positive signal on the
+usable pairs is an observation, not evidence for adoption; any re-test needs a
+new pre-registration with a fixed probe, written before it runs.
+
+Consequence for Task 3: its pre-registered probe has the same cold-start bias
+and would favour the longer slice simply by finding a first week; it is not run
+as written. Its design is revised (below) before any run.

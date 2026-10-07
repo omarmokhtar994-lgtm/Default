@@ -690,9 +690,15 @@ class RunStageAndDepthComeFromTheBusinessContract(unittest.TestCase):
     def test_the_break_stage_post_processing_is_skipped(self):
         """Polisher and packager need artifacts only the break stage produces."""
         runner = self._runner()
+        # Re-pinned in Phase H (tests_staged/test_rc9_2_53_one_output_look.py):
+        # a third break-stage step, publish_top_level_copies, is gated the same
+        # way; the contract (every break-stage post-processing step is skipped
+        # for skeleton-only runs) is unchanged.
         self.assertEqual(
-            runner.count("not diagnostics_only and not skeleton_only"), 2,
-            "both the polisher and the packager must be gated on skeleton_only")
+            runner.count("not diagnostics_only and not skeleton_only"), 3,
+            "the polisher, the packager and the top-level copies must be gated on skeleton_only")
+        gate = runner.index("    if not diagnostics_only and not skeleton_only:\n        run_status['top_level_copies']")
+        self.assertLess(gate, runner.index("publish_top_level_copies(case_root)"))
 
     def test_a_before_breaks_run_is_validated_against_its_own_output(self):
         runner = self._runner()

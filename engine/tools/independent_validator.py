@@ -620,6 +620,7 @@ _XC_SWITCHES = (
     ("leave_enabled", ("Leave", "Leave Days", "Leave Enabled"), True),
     ("hard_off", ("Hard OFF Preferences", "Hard OFF", "OFF Preferences Hard"), True),
     ("strict_off", ("Strict 2 OFF", "Strict Two OFF", "Strict OFF Count"), True),
+    ("allow_half_hour_starts", ("Allow Half-Hour Starts", "Allow Half Hour Starts"), False),
 )
 
 
@@ -710,6 +711,12 @@ def _xc_contract_crosscheck(wb, parsed) -> Tuple[Dict[str, str], List[Dict[str, 
                 if m and int(m.group(1)) < 24 and int(m.group(3)) < 24:
                     start, end = int(m.group(1)) * 60 + int(m.group(2)), int(m.group(3)) * 60 + int(m.group(4))
                     catalog.add((start, (end - start) % 1440 or 1440))
+    # Phase F: "Allow Half-Hour Starts" = Yes in the workbook itself adds, per
+    # on-the-hour shift, the same length starting 30 minutes later. Derived
+    # here from the raw cells, never from the parse's own flag.
+    half_key = next((norm(k) for k in ("Allow Half-Hour Starts", "Allow Half Hour Starts") if norm(k) in cells), None)
+    if half_key is not None and _xc_squash(cells[half_key]) in _XC_YES:
+        catalog |= {((start + 30) % 1440, length) for start, length in catalog if start % 60 == 0}
     if not catalog:
         checks["shifts"] = "NOT_CHECKED"
         not_checked.append({"check": "shifts", "reason": "no shift sheet with start/end times"})

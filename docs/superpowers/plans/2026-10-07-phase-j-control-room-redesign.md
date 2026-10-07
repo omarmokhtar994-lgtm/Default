@@ -8,7 +8,7 @@
 
 **Tech Stack:** as Phase I (Flask, Jinja2, plain CSS/JS, Playwright tests).
 
-**Spec:** `webapp/DESIGN.md` (v2) and `docs/NEXT_PACKAGE_BACKLOG.md` items 1-2. Owner, 2026-10-07: "Control room (dark)", keep "Team Scheduler".
+**Spec:** `webapp/DESIGN.md` (v2) and `docs/NEXT_PACKAGE_BACKLOG.md` items 1-2. Owner, 2026-10-07: "Control room (dark)", keep "Team Scheduler"; "Go ahead" to the 9 research additions and the Advanced options fold; plus "show how many hours pending until we start running that file, how many schedules are queued now, when is your turn, current status of the run, suggestions for the HC to achieve what you have requested if we are overstaffed or understaffed".
 
 ## Global Constraints
 
@@ -25,6 +25,7 @@
 - A validation file with unknown warning types: shown as a readable sentence, never dropped (`test_unknown_warning_type_is_still_listed`).
 - A phone at 390 px: no horizontal page scroll; the wall scrolls inside its panel (`test_mobile_width_has_no_horizontal_scroll`).
 - The admin username prompt given "Omar Mokhtar": refused with the rule, asked again (`test_usernames_with_spaces_are_refused`).
+- A database created by Phase I (no options column) after the update: the column is added, old runs show "followed the workbook" (`test_old_database_gains_the_options_column`).
 
 ---
 
@@ -50,6 +51,25 @@
 
 - [ ] Failing tests: `test_usernames_with_spaces_are_refused` (manage refuses "omar mokhtar" with the People-page rule), `test_install_asks_again_after_a_mismatch` (install.sh wraps create-admin in a retry loop of at most 3 tries, no `set -e` exit on the first mismatch; the username prompt re-asks on a refused name).
 - [ ] Implement; pass; commit.
+
+### Task 4: queue position and start estimates
+
+**Files:** `webapp/eta.py`, `webapp/app.py`, templates; Test `webapp/tests/test_eta.py`.
+
+**Interfaces:** `expected_minutes(mode: str, cpus: int, history: list[float]) -> int` (median of the last 5 finished runs of that mode when there are at least 2; otherwise the runner's own plan: seeds per mode {SMOKE 1, QUICK 2, DEEP 4, OVERNIGHT 6} run side by side in rounds of max(1, min(seeds, cpus // 2)), 60 min per round (SMOKE: 15 min), + 10 min export/validation); `queue_plan(runs: list[dict], now: float, cpus: int, gate_pending: bool) -> dict[run_id, {"position": int, "ahead": int, "starts_in_min": int, "starts_at": float, "basis": str}]` (current run's remaining = max(5, expected - elapsed); + 30 min once if the safety gate has no PASS stamp).
+- [ ] Failing tests: `test_quick_on_four_cores_is_one_round`, `test_history_overrides_the_plan`, `test_second_in_line_waits_for_the_running_one`, `test_gate_time_is_added_once_when_not_yet_passed`. Implement; show "2 runs ahead of you, starts in about 1 h 20 min (around 23:40 Egypt time), estimate based on ..." on the run page and the dashboard's Now strip.
+
+### Task 5: headcount suggestions from the engine's capacity figures
+
+**Files:** `webapp/results.py`; Test `webapp/tests/test_results.py`.
+
+**Interfaces:** `summarize()` gains `staffing`: `{"roster": int, "productive_hours": float, "target_hours": float, "slack_hours": float, "headroom_pct": int, "class": str, "add_for_target": int, "add_for_floor": int, "add_for_breaks": int, "per_person_hours": float, "release_estimate": int, "headline": str, "short_windows": [...], "over_windows": [...]}` read from `*solver_audit.json` (`capacity_diagnostics`) and `UNIVERSAL_RUN_STATUS.json` (`additional_headcount_for_breaks`); windows grouped from consecutive interval rows (after_pct below the configured target ratio; severe_overage).
+- [ ] Failing tests: `test_staffing_from_the_real_run` (7 people, 280 h, 207 h needed, 0 to add, release_estimate 1 = floor(72.6 / 40)), `test_understaffed_case_names_people_to_add` (synthetic audit with estimated_additional_hc_for_target 2), `test_windows_group_consecutive_half_hours`. Every suggestion is labelled an estimate with its basis.
+
+### Task 6: Advanced options fold (the Colab settings)
+
+**Files:** `webapp/store.py` (runs.options JSON text, added by migration), `webapp/runs.py`, `webapp/app.py`, dashboard template; Test `webapp/tests/test_runs.py`.
+- [ ] Failing tests: `test_advanced_options_reach_the_runner` (ALL_ROWS gives `--language-working-window ALL_ROWS`; VOLUME_WEIGHTED gives `--coverage-objective-weighting VOLUME_WEIGHTED`; BEFORE_BREAKS_ONLY gives `--stage BEFORE_BREAKS_ONLY`; OVERNIGHT mode accepted), `test_follow_the_workbook_adds_no_flags`, `test_unknown_option_values_are_refused`, `test_old_database_gains_the_options_column`.
 
 ### Finish
 

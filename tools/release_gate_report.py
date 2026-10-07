@@ -497,6 +497,45 @@ def evaluate(case: Path, baseline: dict | None = None) -> dict:
     }
 
 
+VERDICT_RANK = {"RELEASABLE": 0, "REVIEW_REQUIRED": 1, "NOT_RELEASABLE": 2}
+
+
+def release_verdict(row: dict) -> dict:
+    """One plain verdict per case from its gate rows (Phase F; external audit P0-01/P0-03).
+
+    The owner has not yet named mandatory gates, so the default never hides or
+    blocks a schedule: independent validation failed or never ran ->
+    NOT_RELEASABLE; gate 4 or gate 5 FAIL -> REVIEW_REQUIRED; checks that were
+    not evaluated are listed, never read as a pass, and do not change the
+    verdict on their own; otherwise RELEASABLE.
+    """
+    g4 = str(row.get("gate4_quality_retention") or "")
+    g5 = str(row.get("gate5_break_regression") or "")
+    g8 = str(row.get("gate8_independent_validation") or "")
+    failed, not_evaluated, notes = [], [], []
+    if g8 == "FAIL":
+        failed.append("gate 8 independent validation: hard-rule failures")
+    elif g8 != "PASS":
+        failed.append(f"gate 8 independent validation not run ({g8 or 'missing'})")
+    if g4 == "FAIL":
+        failed.append("gate 4 quality retention FAIL")
+    elif g4 == "PASS_PROTECTED_NOT_EVALUATED":
+        not_evaluated.append("gate 4 protected tier: no protected minimum configured")
+    if g5 == "FAIL":
+        failed.append("gate 5 break regression FAIL")
+    elif g5 == "PASS_DELTA_ONLY_NO_ABSOLUTE_STANDARD":
+        not_evaluated.append("gate 5 absolute after-break standard: none configured")
+    if "UNKNOWN:" in str(row.get("gate5_detail") or ""):
+        notes.append("gate 5 break-capacity attribution unknown")
+    if g8 != "PASS":
+        verdict = "NOT_RELEASABLE"
+    elif g4 == "FAIL" or g5 == "FAIL":
+        verdict = "REVIEW_REQUIRED"
+    else:
+        verdict = "RELEASABLE"
+    return {"verdict": verdict, "failed": failed, "not_evaluated": not_evaluated, "notes": notes}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -531,7 +570,17 @@ def main() -> int:
         print(f"    gate 5 {r['gate5_break_regression']:22} {r['gate5_detail']}")
         print(f"    gate 8 {r['gate8_independent_validation']:22} {r['gate8_detail']}")
     print()
+    verdicts = {r["case"]: release_verdict(r) for r in rows}
+    overall = max((v["verdict"] for v in verdicts.values()), key=VERDICT_RANK.__getitem__)
+    verdict_path = args.out_dir / "RELEASE_VERDICT.json"
+    verdict_path.write_text(json.dumps({"verdict": overall, "cases": verdicts}, indent=2), encoding="utf-8")
+    for case, v in verdicts.items():
+        print(f"RELEASE VERDICT {case}: {v['verdict']}"
+              + (f" - failed: {'; '.join(v['failed'])}" if v["failed"] else "")
+              + (f" - not evaluated: {'; '.join(v['not_evaluated'])}" if v["not_evaluated"] else ""))
+    print(f"RELEASE VERDICT (run): {overall}")
     print(f"written: {csv_path}")
+    print(f"written: {verdict_path}")
     if load_rc9_1_baseline():
         print("gates 2 and 9 are decided against evidence/RC9_1_BASELINE.json "
               "(consolidated RC9.1 metrics, before-break only). A case is only "
@@ -542,7 +591,9 @@ def main() -> int:
         print("gates 2 and 9 require evidence/RC9_1_BASELINE.json or the RC9.1 "
               "engine source (sha da21c3ba…); every other column is populated so "
               "the comparison becomes a diff when they arrive.")
-    return 0
+    # Exit 3 only when a schedule is not releasable (validation failed or never
+    # ran); REVIEW_REQUIRED keeps exit 0 so the runner keeps every artifact.
+    return 3 if overall == "NOT_RELEASABLE" else 0
 
 
 if __name__ == "__main__":

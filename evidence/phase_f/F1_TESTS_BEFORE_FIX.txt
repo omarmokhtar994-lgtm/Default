@@ -1,0 +1,140 @@
+case status                     G4     G5              G8          
+-----------------------------------------------------------------
+A PASS                       PASS   PASS_DELTA_ONLY PASS        
+B PASS                       PASS   PASS_DELTA_ONLY FAIL        
+
+A:
+    gate 4 PASS                   quality_benchmark=PASS, protected_benchmark=PASS
+    gate 5 PASS_DELTA_ONLY_NO_ABSOLUTE_STANDARD target -2, floor -1 of 168 active; 0 exceptions; after-break target 164/168 = 97.6%; no absolute after-break minimum is configured, so only the break-stage delta was checked - add a 'Minimum After Break Target Ratio' row to the workbook's Instructions (Setup) sheet to hold an absolute standard
+    gate 8 PASS                   0 hard failures on FINAL_AFTER_BREAKS
+B:
+    gate 4 PASS                   quality_benchmark=PASS, protected_benchmark=PASS
+    gate 5 PASS_DELTA_ONLY_NO_ABSOLUTE_STANDARD target -2, floor -1 of 168 active; 0 exceptions; after-break target 164/168 = 97.6%; no absolute after-break minimum is configured, so only the break-stage delta was checked - add a 'Minimum After Break Target Ratio' row to the workbook's Instructions (Setup) sheet to hold an absolute standard
+    gate 8 FAIL                   2 hard failures on FINAL_AFTER_BREAKS
+
+written: /tmp/tmpz7f3nbtz/out/RC9_2_1_RELEASE_GATE_REPORT.csv
+gates 2 and 9 are decided against evidence/RC9_1_BASELINE.json (consolidated RC9.1 metrics, before-break only). A case is only compared when its input sha256, active-interval count and target ratio all match the baseline row; otherwise it is reported as NOT_COMPARABLE rather than compared.
+Ecase status                     G4     G5              G8          
+-----------------------------------------------------------------
+A PASS                       PASS   PASS_DELTA_ONLY PASS        
+
+A:
+    gate 4 PASS                   quality_benchmark=PASS, protected_benchmark=PASS
+    gate 5 PASS_DELTA_ONLY_NO_ABSOLUTE_STANDARD target -2, floor -1 of 168 active; 0 exceptions; after-break target 164/168 = 97.6%; no absolute after-break minimum is configured, so only the break-stage delta was checked - add a 'Minimum After Break Target Ratio' row to the workbook's Instructions (Setup) sheet to hold an absolute standard
+    gate 8 PASS                   0 hard failures on FINAL_AFTER_BREAKS
+
+written: /tmp/tmposa_3g28/out/RC9_2_1_RELEASE_GATE_REPORT.csv
+gates 2 and 9 are decided against evidence/RC9_1_BASELINE.json (consolidated RC9.1 metrics, before-break only). A case is only compared when its input sha256, active-interval count and target ratio all match the baseline row; otherwise it is reported as NOT_COMPARABLE rather than compared.
+EEEEEEEEE
+======================================================================
+ERROR: test_main_exits_3_only_for_not_releasable_and_reports_the_worst_case (tests_staged.test_rc9_2_47_release_verdict.TheReportWritesTheVerdictAndExitCode.test_main_exits_3_only_for_not_releasable_and_reports_the_worst_case)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_47_release_verdict.py", line 119, in test_main_exits_3_only_for_not_releasable_and_reports_the_worst_case
+    rc, verdict = self._run(("A", "PASS"), ("B", "FAIL"))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Default/tests_staged/test_rc9_2_47_release_verdict.py", line 110, in _run
+    return rc, json.loads((out / "RELEASE_VERDICT.json").read_text())
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/pathlib.py", line 1058, in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/pathlib.py", line 1044, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/tmp/tmpz7f3nbtz/out/RELEASE_VERDICT.json'
+
+======================================================================
+ERROR: test_main_writes_the_verdict_file_and_exits_0_when_releasable (tests_staged.test_rc9_2_47_release_verdict.TheReportWritesTheVerdictAndExitCode.test_main_writes_the_verdict_file_and_exits_0_when_releasable)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_47_release_verdict.py", line 113, in test_main_writes_the_verdict_file_and_exits_0_when_releasable
+    rc, verdict = self._run(("A", "PASS"))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Default/tests_staged/test_rc9_2_47_release_verdict.py", line 110, in _run
+    return rc, json.loads((out / "RELEASE_VERDICT.json").read_text())
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/pathlib.py", line 1058, in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/pathlib.py", line 1044, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/tmp/tmposa_3g28/out/RELEASE_VERDICT.json'
+
+======================================================================
+ERROR: test_a_validator_failure_outranks_a_quality_failure (tests_staged.test_rc9_2_47_release_verdict.TheVerdictPolicy.test_a_validator_failure_outranks_a_quality_failure)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_47_release_verdict.py", line 75, in test_a_validator_failure_outranks_a_quality_failure
+    self.assertEqual(GATE.release_verdict(row(g5="FAIL", g8="FAIL"))["verdict"], "NOT_RELEASABLE")
+                     ^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'release_gate_report_f1' has no attribute 'release_verdict'
+
+======================================================================
+ERROR: test_all_gates_pass_is_releasable (tests_staged.test_rc9_2_47_release_verdict.TheVerdictPolicy.test_all_gates_pass_is_releasable)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_47_release_verdict.py", line 45, in test_all_gates_pass_is_releasable
+    v = GATE.release_verdict(row())
+        ^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'release_gate_report_f1' has no attribute 'release_verdict'
+
+======================================================================
+ERROR: test_delta_only_break_gate_is_listed_not_evaluated (tests_staged.test_rc9_2_47_release_verdict.TheVerdictPolicy.test_delta_only_break_gate_is_listed_not_evaluated)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_47_release_verdict.py", line 63, in test_delta_only_break_gate_is_listed_not_evaluated
+    v = GATE.release_verdict(row(g5="PASS_DELTA_ONLY_NO_ABSOLUTE_STANDARD"))
+        ^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'release_gate_report_f1' has no attribute 'release_verdict'
+
+======================================================================
+ERROR: test_gate4_fail_is_review_required (tests_staged.test_rc9_2_47_release_verdict.TheVerdictPolicy.test_gate4_fail_is_review_required)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_47_release_verdict.py", line 55, in test_gate4_fail_is_review_required
+    self.assertEqual(GATE.release_verdict(row(g4="FAIL"))["verdict"], "REVIEW_REQUIRED")
+                     ^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'release_gate_report_f1' has no attribute 'release_verdict'
+
+======================================================================
+ERROR: test_gate5_fail_is_review_required_and_named (tests_staged.test_rc9_2_47_release_verdict.TheVerdictPolicy.test_gate5_fail_is_review_required_and_named)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_47_release_verdict.py", line 50, in test_gate5_fail_is_review_required_and_named
+    v = GATE.release_verdict(row(g5="FAIL"))
+        ^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'release_gate_report_f1' has no attribute 'release_verdict'
+
+======================================================================
+ERROR: test_unconfigured_protected_tier_alone_stays_releasable_but_is_listed_not_evaluated (tests_staged.test_rc9_2_47_release_verdict.TheVerdictPolicy.test_unconfigured_protected_tier_alone_stays_releasable_but_is_listed_not_evaluated)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_47_release_verdict.py", line 58, in test_unconfigured_protected_tier_alone_stays_releasable_but_is_listed_not_evaluated
+    v = GATE.release_verdict(row(g4="PASS_PROTECTED_NOT_EVALUATED"))
+        ^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'release_gate_report_f1' has no attribute 'release_verdict'
+
+======================================================================
+ERROR: test_validator_fail_is_not_releasable (tests_staged.test_rc9_2_47_release_verdict.TheVerdictPolicy.test_validator_fail_is_not_releasable)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_47_release_verdict.py", line 68, in test_validator_fail_is_not_releasable
+    self.assertEqual(GATE.release_verdict(row(g8="FAIL"))["verdict"], "NOT_RELEASABLE")
+                     ^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'release_gate_report_f1' has no attribute 'release_verdict'
+
+======================================================================
+ERROR: test_validator_never_run_is_not_releasable (tests_staged.test_rc9_2_47_release_verdict.TheVerdictPolicy.test_validator_never_run_is_not_releasable)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_47_release_verdict.py", line 71, in test_validator_never_run_is_not_releasable
+    v = GATE.release_verdict(row(g8="NO_EVIDENCE"))
+        ^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'release_gate_report_f1' has no attribute 'release_verdict'
+
+----------------------------------------------------------------------
+Ran 10 tests in 0.067s
+
+FAILED (errors=10)

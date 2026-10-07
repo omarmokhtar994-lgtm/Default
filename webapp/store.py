@@ -45,7 +45,8 @@ create table if not exists runs (
     options text not null default '',
     program text not null default '',
     week_start text not null default '',
-    metrics text not null default ''
+    metrics text not null default '',
+    engine_outcome text not null default ''
 );
 """
 
@@ -63,7 +64,7 @@ class Store:
             # Databases created before Phase J have no options column: add it.
             columns = {row["name"] for row in db.execute("pragma table_info(runs)")}
             # Databases from earlier versions lack the later columns: add them.
-            for name in ("options", "program", "week_start", "metrics"):
+            for name in ("options", "program", "week_start", "metrics", "engine_outcome"):
                 if name not in columns:
                     db.execute(f"alter table runs add column {name} text not null default ''")
 

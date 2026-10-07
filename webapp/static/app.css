@@ -310,6 +310,25 @@ form.inline { display: grid; grid-template-columns: repeat(auto-fit, minmax(180p
 form.inline .check { display: flex; gap: 8px; align-items: center; }
 form.inline button { margin-bottom: 14px; }
 
+/* ------------------------------------------------------------ why a run stopped (the engine's own words) */
+.why { border-left: 3px solid var(--gap); margin: 0 0 22px; }
+.why.ready { border-left-color: var(--covered); }
+.why.quiet { border-left-color: var(--rail); }
+.why h2 { margin-bottom: 8px; }
+.why h3 { margin: 18px 0 8px; }
+.why .lead { font-size: 18px; margin: 0 0 4px; max-width: 75ch; }
+.blockers { margin: 0; padding-left: 20px; }
+.blockers li { margin: 4px 0; max-width: 80ch; }
+.fix { list-style: none; counter-reset: step; margin: 0; padding: 0; }
+.fix > li { counter-increment: step; position: relative; padding: 12px 0 12px 46px; border-top: 1px solid var(--rail); max-width: 90ch; }
+.fix > li::before { content: counter(step); position: absolute; left: 0; top: 10px; width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center; font: 700 16px var(--display); background: var(--gap-soft); color: var(--gap-ink); }
+.why.ready .fix > li::before { background: var(--accent-soft); color: var(--accent-ink); }
+.who { width: 100%; border-collapse: collapse; font-size: 14px; }
+.who th { text-align: left; color: var(--dim); font-weight: 600; padding: 6px 12px 6px 0; border-bottom: 1px solid var(--rail); }
+.who td { padding: 6px 12px 6px 0; border-bottom: 1px solid var(--rail); }
+.more { color: var(--dim); font-size: 14px; margin: 8px 0 0; }
+
 /* ------------------------------------------------------------ program history */
 .tagrow { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 12px; }
 .tagrow + .hint { margin-top: -6px; }

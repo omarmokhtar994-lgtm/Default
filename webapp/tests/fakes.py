@@ -20,15 +20,26 @@ def runner(argv):
     print("[run] fake runner started", flush=True)
     delay = 3.0 if "SLOW" in stem else 0.2
     time.sleep(delay)
-    (case / f"{stem}_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx").write_bytes(b"schedule")
+    if "SHORTFALL" in stem:  # no schedule meets every hard rule: one for review instead
+        (case / f"{stem}_L6_3_2_3_HARD_RULE_SHORTFALL_SCHEDULE.xlsx").write_bytes(b"shortfall")
+    else:
+        (case / f"{stem}_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx").write_bytes(b"schedule")
     if "REAL" in stem:  # the trimmed validator/audit files of the Phase I real run
         import shutil
         real = Path(__file__).with_name("fixtures") / "real_run" / "NMG_SP_RC9_1_READY_FIXED"
         for f in real.iterdir():
             shutil.copy(f, case / f.name)
     (case / f"{stem}_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx").write_bytes(b"before")
+    # Phase L: the engine's own outcome, copied from real runs (names replaced).
+    # The real runner exits 2 for a readiness check too: it scores release
+    # gates, which a run that builds no schedule always fails.
+    outcomes = Path(__file__).with_name("fixtures") / "outcomes"
+    kind = next((k for k in ("NOTREADY", "READY", "CONFLICT", "SHORTFALL") if k in stem), None)
+    if kind:
+        source = {"NOTREADY": "conflict", "READY": "ready", "CONFLICT": "conflict", "SHORTFALL": "shortfall"}[kind]
+        (case / "BUSINESS_OUTCOME.json").write_bytes((outcomes / f"{source}.json").read_bytes())
     print("[run] fake runner done", flush=True)
-    return 2 if "FAILS" in stem else 0
+    return 2 if "FAILS" in stem or kind else 0
 
 
 def check(argv):

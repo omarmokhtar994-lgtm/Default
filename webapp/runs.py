@@ -30,6 +30,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from werkzeug.utils import secure_filename
 
 from . import gate
+from . import outcome as engine_outcome
 from .results import metrics, summarize
 from .store import Store
 
@@ -68,6 +69,7 @@ CHECK_TIMEOUT_SECONDS = 300
 SCORE_TIMEOUT_SECONDS = 1800
 STOP_GRACE_SECONDS = 30
 FINAL_SCHEDULE_SUFFIX = "_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"
+SHORTFALL_SCHEDULE_SUFFIX = "_HARD_RULE_SHORTFALL_SCHEDULE.xlsx"
 
 
 class RunQueue:
@@ -114,6 +116,14 @@ class RunQueue:
         if not results.is_dir():
             return None
         found = [p for p in results.rglob(f"*{FINAL_SCHEDULE_SUFFIX}") if "debug" not in p.parts]
+        return min(found, key=lambda p: (len(p.parts), str(p))) if found else None
+
+    def shortfall_schedule(self, run_id: str) -> Optional[Path]:
+        """The schedule the engine attaches when no schedule meets every hard rule."""
+        results = self.results_dir(run_id)
+        if not results.is_dir():
+            return None
+        found = [p for p in results.rglob(f"*{SHORTFALL_SCHEDULE_SUFFIX}") if "debug" not in p.parts]
         return min(found, key=lambda p: (len(p.parts), str(p))) if found else None
 
     def log_tail(self, run_id: str, lines: int = 80) -> str:
@@ -284,12 +294,16 @@ class RunQueue:
         verdict = self._score(run_id)
         self._save_summary(run_id)
         self._zip(run_id)
+        found = engine_outcome.read(results)
+        if found is not None:  # kept on the row: the files go after 30 days
+            self.store.update_run(run_id, engine_outcome=json.dumps(engine_outcome.compact(found)))
         if code == 0:
             status, message = outcome(run["mode"], verdict)
         else:
             status = "FAILED"
-            message = (f"Not approved: the runner exited with code {code}. "
-                       "The log below and the files in the download say why.")
+            message = (str(found.get("headline") or "") if found else "") or (
+                f"Not approved: the runner exited with code {code} and the engine wrote no outcome. "
+                "The log below and the files in the download say why.")
         self.store.update_run(run_id, status=status, exit_code=code, verdict=verdict,
                               finished=time.time(), message=message)
         self._stamp_outcome(run_id, status)

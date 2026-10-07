@@ -24,6 +24,40 @@
   {% endif %}
   <p class="live" hidden>Connection lost: showing the last known state. Retrying.</p>
 
+  {% if why and run.status == 'FAILED' %}
+  <section class="panel why" aria-labelledby="why-h">
+    <h2 id="why-h">{{ 'Why it is not ready' if run.mode == 'SMOKE' else 'Why it stopped' }}</h2>
+    <p class="lead"><b>{{ why.headline.rstrip('.') }}.</b> {{ why.summary }}</p>
+    {% if why.blockers %}
+    <h3>What blocks it</h3>
+    <ul class="blockers">{% for b in why.blockers %}<li>{{ b }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% if why.actions %}
+    <h3>What to change in the input workbook</h3>
+    <ol class="fix">{% for a in why.actions %}<li>{{ a }}</li>{% endfor %}
+      <li>Save the workbook and upload it again. A readiness check takes minutes and says whether it can be scheduled before you start a full run.</li></ol>
+    {% endif %}
+    {% if why.people %}
+    <h3>Who and when</h3>
+    <div class="scroll"><table class="who"><thead><tr><th>Associate</th><th>Days</th><th>Shift</th><th>Limit</th></tr></thead><tbody>
+      {% for p in why.people %}<tr><td>{{ p.associate }}</td><td>{{ p.days }}</td><td>{{ p.shift }}</td><td>{{ p.window }}</td></tr>{% endfor %}
+    </tbody></table></div>
+    {% if why.people_rows > why.people|length %}<p class="more">{{ why.people_rows - why.people|length }} more rows are in the download (BUSINESS_OUTCOME.txt).</p>{% endif %}
+    {% endif %}
+    {% if why.shortfalls %}
+    <h3>Coverage it could not meet</h3>
+    <ul class="blockers">{% for r in why.shortfalls %}<li>{{ r }}</li>{% endfor %}</ul>
+    {% if why.shortfalls_total > why.shortfalls|length %}<p class="more">{{ why.shortfalls_total - why.shortfalls|length }} more are on the schedule's Shortfalls sheet.</p>{% endif %}
+    {% endif %}
+  </section>
+  {% elif said.headline and run.status in ('FAILED', 'EXPIRED') %}
+  <section class="panel why{% if run.status == 'EXPIRED' %} quiet{% endif %}" aria-labelledby="why-h">
+    <h2 id="why-h">What the engine said</h2>
+    <p class="lead">{{ said.headline.rstrip('.') }}.</p>
+    {% if run.status == 'EXPIRED' %}<p class="dim">The details were in the run's files, which are deleted after 30 days.</p>{% endif %}
+  </section>
+  {% endif %}
+
   <div class="run-top">
     <section class="panel progress" aria-label="Progress">
       {{ ring(run) }}
@@ -48,11 +82,13 @@
     </section>
   </div>
 
-  {% if run.message %}<p class="message" data-status="{{ run.status }}">{{ run.message.splitlines()[0] }}</p>{% endif %}
+  {% if run.message and not (why and run.status == 'FAILED') %}<p class="message" data-status="{{ run.status }}">{{ run.message.splitlines()[0] }}</p>{% endif %}
   {% if run.status == 'REJECTED' %}<pre class="message-full">{{ run.message }}</pre><p class="byline">Fix the cells named above in your workbook, save it, and upload it again. Nothing was run.</p>{% endif %}
 
   <div class="actions">
-    {% if has_schedule %}<a class="button primary" href="{{ url_for('run_schedule', run_id=run.id) }}">Download the schedule</a>{% endif %}
+    {% if why and why.cannot_schedule %}<a class="button primary" href="{{ url_for('home', program=run.program or none, week=run.week_start or none) }}#newrun">Upload the corrected workbook</a>{% endif %}
+    {% if has_schedule %}<a class="button{% if not (why and why.cannot_schedule) %} primary{% endif %}" href="{{ url_for('run_schedule', run_id=run.id) }}">Download the schedule</a>{% endif %}
+    {% if has_shortfall %}<a class="button" href="{{ url_for('run_shortfall', run_id=run.id) }}">Download the shortfall schedule (for review)</a>{% endif %}
     {% if has_zip %}<a class="button" href="{{ url_for('run_download', run_id=run.id) }}">Download all results (.zip)</a>{% endif %}
     {% if run.status in in_flight and run.status != 'CHECKING' %}
     <form method="post" action="{{ url_for('run_stop', run_id=run.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit">Stop</button></form>

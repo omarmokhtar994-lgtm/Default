@@ -1,0 +1,127 @@
+{
+ "schema_version": 1,
+ "engine_release": "L6.3.2.8-RC9.2.2-PRODUCTION-HARDENED-RC6",
+ "technical_status": "FAIL_PRE_SOLVER_CONTRACT",
+ "technical_return_code": 2,
+ "production_eligible": false,
+ "outcome_code": "HARD_RULE_SHORTFALL_SCHEDULE_FOR_REVIEW",
+ "outcome_category": "ACTION_REQUIRED",
+ "headline": "No schedule meets every hard rule; a shortfall schedule is attached for review and must not be published as is",
+ "plain_language_summary": "Zero Active Interval Provably Impossible. A shortfall schedule was produced (S04_ONE_IMPOSSIBLE_INTERVAL_L6_3_2_3_HARD_RULE_SHORTFALL_SCHEDULE.xlsx). It meets every person rule (rest, OFF days, leave, fixed requests, breaks) and misses only these coverage minimums: Nobody on the floor after breaks: 4 quarter(s). Every missed quarter is listed on its Shortfalls sheet.",
+ "requested": {
+  "failure_code": "ZERO_ACTIVE_INTERVAL_PROVABLY_IMPOSSIBLE",
+  "evidence": {
+   "code": "ZERO_ACTIVE_INTERVAL_PROVABLY_IMPOSSIBLE",
+   "day": "Sun",
+   "time": "03:00"
+  }
+ },
+ "best_proven": {},
+ "gap": {},
+ "resource_findings": [
+  {
+   "code": "ZERO_ACTIVE_INTERVAL_PROVABLY_IMPOSSIBLE",
+   "day": "Sun",
+   "time": "03:00"
+  },
+  {
+   "code": "ZERO_ACTIVE_INTERVAL_PROVABLY_IMPOSSIBLE",
+   "day": "Sun",
+   "time": "03:00"
+  }
+ ],
+ "affected_examples": [],
+ "recommended_actions": [
+  "Correct the listed workbook contract issue and rerun the schedule.",
+  "Review the shortfall schedule: use it only after the business has accepted each listed shortfall, or add qualified staff and rerun."
+ ],
+ "technical_reference": {
+  "return_code_meaning": "The numeric return code is retained for automation only. Use this business outcome as the primary user-facing result."
+ },
+ "shortfall_schedule": {
+  "status": "EXPORTED",
+  "workbook": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/advC/runs/S04_ONE_IMPOSSIBLE_INTERVAL/S04_ONE_IMPOSSIBLE_INTERVAL_L6_3_2_3_HARD_RULE_SHORTFALL_SCHEDULE.xlsx",
+  "reason": "contract_capacity_proof",
+  "artifact_type": "HARD_RULE_SHORTFALL_SCHEDULE",
+  "families": {
+   "zero_coverage": 4
+  },
+  "shortfall_count": 4,
+  "releasable": false
+ },
+ "shortfall_rows": [
+  {
+   "day": "Sun",
+   "time": "03:00",
+   "meaning": "Nobody on the floor after breaks",
+   "rule": "",
+   "required": 1,
+   "short_by": 1,
+   "unit": "people"
+  },
+  {
+   "day": "Sun",
+   "time": "03:15",
+   "meaning": "Nobody on the floor after breaks",
+   "rule": "",
+   "required": 1,
+   "short_by": 1,
+   "unit": "people"
+  },
+  {
+   "day": "Sun",
+   "time": "03:30",
+   "meaning": "Nobody on the floor after breaks",
+   "rule": "",
+   "required": 1,
+   "short_by": 1,
+   "unit": "people"
+  },
+  {
+   "day": "Sun",
+   "time": "03:45",
+   "meaning": "Nobody on the floor after breaks",
+   "rule": "",
+   "required": 1,
+   "short_by": 1,
+   "unit": "people"
+  }
+ ],
+ "independent_validation": {
+  "status": "NOT_RUN",
+  "return_code": null,
+  "workbook": null,
+  "json": null,
+  "csv": null,
+  "quality_gate_status": null,
+  "coverage_quality_gate_status": null,
+  "metric_parity": null,
+  "clean_room": null,
+  "alternative_exports": null,
+  "shortfall_schedule": {
+   "workbook": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/advC/runs/S04_ONE_IMPOSSIBLE_INTERVAL/S04_ONE_IMPOSSIBLE_INTERVAL_L6_3_2_3_HARD_RULE_SHORTFALL_SCHEDULE.xlsx",
+   "json": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/advC/runs/S04_ONE_IMPOSSIBLE_INTERVAL/SHORTFALL_SCHEDULE_VALIDATION.json",
+   "return_code": 2,
+   "validator_failure_types": [
+    "ZERO_STAFF_ACTIVE"
+   ],
+   "listed": {
+    "zero_coverage": 4
+   },
+   "outside_declared_families": [],
+   "count_mismatches": [],
+   "status": "SHORTFALLS_CONFIRMED",
+   "clean_room": {
+    "status": "PASS",
+    "json": "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/advC/runs/S04_ONE_IMPOSSIBLE_INTERVAL/SHORTFALL_CLEAN_ROOM_CHECK.json",
+    "checker": "/home/user/Default/tools/clean_room_check.py",
+    "return_code": 0,
+    "violation_count": 0,
+    "violations_by_rule": {},
+    "engine_mismatches": [],
+    "validator_mismatches": [],
+    "input_issues": []
+   }
+  }
+ }
+}

@@ -560,6 +560,62 @@ class TheThemes(unittest.TestCase):
         self.assertIn('data-theme="light"', client.get("/login").get_data(as_text=True))
 
 
+class TheEngineOutcome(unittest.TestCase):
+    """Phase L task 1: why a run stopped and what to change, on its own page."""
+
+    def test_failed_run_page_shows_why_and_what_to_change(self):
+        app, store, *_ = make_app()
+        client = client_for(app)
+        run_id = run_id_of(upload(client, name="CONFLICT_week.xlsx"))
+        run = wait(store, run_id)
+        self.assertEqual(run["status"], "FAILED")
+        self.assertEqual(run["message"], "No schedule satisfies all hard rules together")
+        body = html.unescape(client.get(f"/runs/{run_id}").get_data(as_text=True))
+        self.assertIn("Can't be scheduled", body)
+        self.assertIn("Why it stopped", body)
+        self.assertIn("What to change in the input workbook", body)
+        self.assertIn("widen that language's Coverage Start/End in Language Setup", body)
+        self.assertIn("Associate 1 (English)", body)
+        self.assertIn("Mon to Thu", body)
+        self.assertNotIn("tools/check_input_workbook.py", body.split("Technical details")[0])
+        self.assertNotIn('action="/runs/%s/resume"' % run_id, body)  # the same file would fail the same way
+        self.assertIn("Upload the corrected workbook", body)
+
+    def test_outcome_survives_file_expiry(self):
+        app, store, *_ = make_app()
+        client = client_for(app)
+        run_id = run_id_of(upload(client, name="CONFLICT_week.xlsx"))
+        wait(store, run_id)
+        app.extensions["runs"].cleanup(now=time.time() + 31 * 86400)
+        self.assertEqual(json.loads(store.get_run(run_id)["engine_outcome"])["headline"],
+                         "No schedule satisfies all hard rules together")
+        self.assertIn("No schedule satisfies all hard rules together",
+                      html.unescape(client.get(f"/runs/{run_id}").get_data(as_text=True)))
+
+    def test_shortfall_schedule_offered_for_review(self):
+        app, store, *_ = make_app()
+        client = client_for(app)
+        run_id = run_id_of(upload(client, name="SHORTFALL_week.xlsx"))
+        wait(store, run_id)
+        body = html.unescape(client.get(f"/runs/{run_id}").get_data(as_text=True))
+        self.assertIn("Sun 03:00: Nobody on the floor after breaks, needs 1, short by 1", body)
+        self.assertIn("Download the shortfall schedule (for review)", body)
+        self.assertNotIn(">Download the schedule<", body)
+        got = client.get(f"/runs/{run_id}/shortfall")
+        self.assertEqual(got.data, b"shortfall")
+
+    def test_crash_without_outcome_keeps_resume(self):
+        app, store, *_ = make_app()
+        client = client_for(app)
+        run_id = run_id_of(upload(client, name="FAILS_week.xlsx"))
+        run = wait(store, run_id)
+        self.assertEqual(run["status"], "FAILED")
+        body = html.unescape(client.get(f"/runs/{run_id}").get_data(as_text=True))
+        self.assertIn("Not approved", body)
+        self.assertIn("the engine wrote no outcome", body)
+        self.assertIn(f'action="/runs/{run_id}/resume"', body)
+
+
 class Access(unittest.TestCase):
     def test_downloads_need_login(self):
         app, store, *_ = make_app()

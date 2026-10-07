@@ -2,6 +2,7 @@
 """The team scheduler website: Flask application factory and routes."""
 from __future__ import annotations
 
+import json
 import os
 import re
 import secrets
@@ -15,6 +16,7 @@ from werkzeug.utils import secure_filename
 
 from .analytics import program_weeks, team
 from .eta import queue_plan
+from .outcome import cannot_schedule, read as read_outcome, view as outcome_view
 from .auth import admin_required, check_csrf, csrf_token, load_user, login_required
 from .program_page import build, overview, weeks_to_show
 from .runs import MODES, OPTION_LABELS, RESUMABLE, RunQueue, parse_options, run_options
@@ -31,10 +33,23 @@ STAGES = ("Check", "Safety gate", "Schedule", "Scoring", "Result")
 IN_FLIGHT = ("CHECKING", "QUEUED", "GATE", "RUNNING", "SCORING")
 
 
+def engine_said(run: Dict[str, Any]) -> Dict[str, str]:
+    """The engine's outcome kept on the run row (code, category, headline), or {}."""
+    try:
+        data = json.loads(run.get("engine_outcome") or "")
+    except ValueError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
 def label(run: Dict[str, Any]) -> str:
     """The word shown for a run's state (a passed readiness check built no schedule)."""
     if run["status"] == "DONE" and run.get("mode") == "SMOKE":
         return "Ready"
+    if run["status"] == "FAILED":
+        said = engine_said(run)
+        if cannot_schedule(said.get("code", ""), said.get("category", "")):
+            return "Can't be scheduled"
     return STATUS_WORDS.get(run["status"], run["status"])
 
 
@@ -59,7 +74,7 @@ def stages(run: Dict[str, Any]) -> list:
     elif state == "halted":
         labels[2] = STATUS_WORDS[status]
     elif status == "FAILED" and at == 4:
-        labels[4] = "Not approved"
+        labels[4] = label(run)
     elif status == "REJECTED":
         labels[0] = "Rejected"
     return [(labels[i], "done" if i < at else state if i == at else "") for i in range(len(STAGES))]
@@ -376,10 +391,16 @@ def create_app(config: Dict[str, Any]) -> Flask:
     def run_detail(run_id: str):  # type: ignore[no-untyped-def]
         run = _run_or_404(run_id)
         queue = _queue()
+        said = engine_said(run)
+        found = read_outcome(queue.results_dir(run_id))
+        fixed_input = cannot_schedule(said.get("code", ""), said.get("category", ""))
         return render_template("run.html", run=run, log=queue.log_tail(run_id),
                                has_zip=queue.zip_path(run_id).is_file(),
                                has_schedule=queue.final_schedule(run_id) is not None,
-                               resumable=run["status"] in RESUMABLE, summary=queue.summary(run_id),
+                               has_shortfall=queue.shortfall_schedule(run_id) is not None,
+                               resumable=run["status"] in RESUMABLE and not fixed_input,
+                               summary=queue.summary(run_id), said=said,
+                               why=outcome_view(found) if found else None,
                                eta=_plan(app.extensions["store"].list_runs()).get(run_id), now=time.time())
 
     @app.route("/runs/<run_id>/status.json")
@@ -409,6 +430,16 @@ def create_app(config: Dict[str, Any]) -> Flask:
     def run_schedule(run_id: str):  # type: ignore[no-untyped-def]
         _run_or_404(run_id)
         path = _queue().final_schedule(run_id)
+        if path is None:
+            abort(404)
+        return send_file(path, as_attachment=True, download_name=path.name)
+
+    @app.route("/runs/<run_id>/shortfall")
+    @login_required
+    def run_shortfall(run_id: str):  # type: ignore[no-untyped-def]
+        """The engine's shortfall schedule, for review only (it misses listed minimums)."""
+        _run_or_404(run_id)
+        path = _queue().shortfall_schedule(run_id)
         if path is None:
             abort(404)
         return send_file(path, as_attachment=True, download_name=path.name)

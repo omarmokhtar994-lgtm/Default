@@ -1,0 +1,39 @@
+{
+ "schema_version": 1,
+ "engine_release": "L6.3.2.8-RC9.2.2-PRODUCTION-HARDENED-RC6",
+ "technical_status": "PASS_DIAGNOSTICS_ONLY",
+ "technical_return_code": 2,
+ "production_eligible": false,
+ "outcome_code": "DIAGNOSTICS_ONLY_COMPLETE",
+ "outcome_category": "REVIEW_ONLY",
+ "headline": "Diagnostics completed; no schedule was produced",
+ "plain_language_summary": "This was a diagnostics-only run: the workbook was read and checked and the hard rules were tested for satisfiability, but no shifts or breaks were scheduled, so there was nothing to validate.",
+ "requested": {},
+ "best_proven": {},
+ "gap": {},
+ "resource_findings": [],
+ "affected_examples": [],
+ "recommended_actions": [
+  "Rerun at QUICK depth or deeper to produce a schedule."
+ ],
+ "technical_reference": {
+  "return_code_meaning": "The numeric return code is retained for automation only. Use this business outcome as the primary user-facing result."
+ },
+ "coverage_measure": {
+  "mode": "interval_count",
+  "source": "workbook"
+ },
+ "independent_validation": {
+  "status": "NOT_RUN",
+  "return_code": null,
+  "workbook": null,
+  "json": null,
+  "csv": null,
+  "quality_gate_status": null,
+  "coverage_quality_gate_status": null,
+  "metric_parity": null,
+  "clean_room": null,
+  "alternative_exports": null,
+  "shortfall_schedule": null
+ }
+}

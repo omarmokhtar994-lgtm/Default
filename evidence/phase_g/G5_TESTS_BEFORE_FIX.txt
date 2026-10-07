@@ -1,0 +1,7 @@
+test_switch_off_cells_unchanged (tests_staged.test_rc9_2_52_exception_cells_threshold.DefaultIsUnchanged.test_switch_off_cells_unchanged) ... ok
+test_metric_agrees_the_cell_is_tight (tests_staged.test_rc9_2_52_exception_cells_threshold.ExactUnitsMarkTheRealFloorMiss.test_metric_agrees_the_cell_is_tight) ... ok
+test_switch_on_uses_exact_threshold (tests_staged.test_rc9_2_52_exception_cells_threshold.ExactUnitsMarkTheRealFloorMiss.test_switch_on_uses_exact_threshold) ... FAIL
+FAIL: test_switch_on_uses_exact_threshold (tests_staged.test_rc9_2_52_exception_cells_threshold.ExactUnitsMarkTheRealFloorMiss.test_switch_on_uses_exact_threshold)
+AssertionError: [] is not true
+Ran 3 tests in 0.424s
+FAILED (failures=1)

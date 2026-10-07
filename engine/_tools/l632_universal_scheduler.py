@@ -9032,7 +9032,9 @@ def critical_exception_cells(parsed: ParsedInput, skeleton: SkeletonSolution) ->
                     eff = int(round((1.0 - parsed.shrinkage[d][i]) * 100))
                     base = (len(covering) + prior_count) * eff * qpi
                     hard_floor_ratio = float(parsed.hard_floor_ratio or parsed.floor_ratio)
-                    if base - eff < ceil_units(req * hard_floor_ratio) * qpi:
+                    # Phase G: the same hit threshold as build_skeleton (exact c x n*
+                    # with Exact Coverage Units; the legacy expression otherwise).
+                    if base - eff < coverage_hit_threshold_units(parsed, d, i, hard_floor_ratio):
                         for a, sd, _ in covering:
                             critical.add((a, sd))
                             reasons.append({"associate": parsed.associates[a].name, "day": DAY_NAMES[sd], "rule": f"explicit hard floor {hard_floor_ratio:.1%} tightness at {DAY_NAMES[d]} {hhmm(minute)}"})

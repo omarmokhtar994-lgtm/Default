@@ -136,7 +136,10 @@ class EveryRunnerPassesItOn(unittest.TestCase):
         for name in ("RC922_Colab_A_NO_DRIVE.ipynb", "RC922_Colab_B_WITH_DRIVE.ipynb"):
             with self.subTest(notebook=name):
                 cells = json.loads((RUNNERS / name).read_text())["cells"]
-                run = next("".join(c["source"]) for c in cells if "#@title 5. Run" in "".join(c["source"]))
+                # Re-pinned in Phase H (tests_staged/test_rc9_2_55_colab_three_steps.py):
+                # the notebooks now have three steps, so the Run cell's title is
+                # "3. Run" (was "5. Run"); the choice it must offer is unchanged.
+                run = next("".join(c["source"]) for c in cells if "#@title 3. Run" in "".join(c["source"]))
                 self.assertIn('COVERAGE_MEASURE = "workbook" #@param ["workbook", "INTERVAL_COUNT", "VOLUME_WEIGHTED"]', run)
                 self.assertIn('cmd += ["--coverage-objective-weighting", COVERAGE_MEASURE]', run)
 

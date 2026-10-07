@@ -66,6 +66,13 @@ class TheReasonIsNamed(unittest.TestCase):
         self.assertIn("ran out of time", text)
         self.assertIn("shortfall schedule", text)
 
+    # Phase H dry run: a SMOKE (diagnostics-only) run read "reason not
+    # recorded", although its outcome says no schedule was asked for.
+    def test_diagnostics_only_run_is_named(self):
+        text = notes(no_schedule("REVIEW_ONLY", "DIAGNOSTICS_ONLY_COMPLETE", "PASS_DIAGNOSTICS_ONLY"))
+        self.assertIn("diagnostics-only", text)
+        self.assertNotIn("reason not recorded", text)
+
     def test_missing_outcome_is_named_unknown(self):
         self.assertIn("reason not recorded", notes(no_schedule()))
 

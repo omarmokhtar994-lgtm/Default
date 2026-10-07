@@ -543,7 +543,10 @@ def release_verdict(row: dict) -> dict:
         technical = str(row.get("technical_status") or "")
         attached = ("; a shortfall schedule listing every gap is attached for review"
                     if code == "HARD_RULE_SHORTFALL_SCHEDULE_FOR_REVIEW" else "")
-        if code == "HARD_RULE_COMBINATION_INFEASIBLE" or technical == "FAIL_HARD_CONTRACT_INFEASIBLE":
+        if code == "DIAGNOSTICS_ONLY_COMPLETE" or technical == "PASS_DIAGNOSTICS_ONLY":
+            notes.append("no schedule: diagnostics-only run (SMOKE) - it checks the workbook and the hard "
+                         "rules and never builds a schedule; run QUICK or DEEP for one")
+        elif code == "HARD_RULE_COMBINATION_INFEASIBLE" or technical == "FAIL_HARD_CONTRACT_INFEASIBLE":
             notes.append("no schedule: the hard rules contradict each other (proven)" + attached)
         elif category == "SEARCH_INCOMPLETE" or technical in {"FAIL_HARD_CONTRACT_UNKNOWN",
                                                                "FAIL_STAGE2_TIME_BUDGET_EXHAUSTED"}:

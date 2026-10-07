@@ -211,6 +211,8 @@ button.quiet { padding: 6px 10px; font-size: 13px; }
 .drop input[type=file] { display: block; width: 100%; margin-top: 8px; font: inherit; font-size: 13px; color: var(--dim); }
 .drop .chosen { font-weight: 600; color: var(--accent-ink); overflow-wrap: anywhere; }
 .drop .chosen.bad { color: var(--gap-ink); }
+.tmpl { padding: 10px 12px; margin: 0 0 14px; border: 1px solid var(--rail); border-radius: 6px; font-size: 13px; color: var(--dim); }
+.tmpl a { font-weight: 600; }
 .crumbs { display: flex; gap: 10px; align-items: center; margin: 0 0 16px; }
 .crumbs a { padding: 6px 12px; border: 1px solid var(--rail); border-radius: 4px; color: var(--paper); text-decoration: none; font-size: 14px; }
 .crumbs a:hover { border-color: var(--accent-ink); color: var(--accent-ink); }

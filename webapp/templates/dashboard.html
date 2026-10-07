@@ -29,6 +29,9 @@
     {% if queue %}
     <form method="post" action="{{ url_for('submit_run') }}" enctype="multipart/form-data">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <p class="tmpl">Need a fresh workbook?
+        <a href="{{ url_for('workbook', name='Scheduler_Input_Blank.xlsx') }}">Blank input workbook</a> (every tab and dropdown, no people or demand) or
+        <a href="{{ url_for('workbook', name='Scheduler_Input_Example.xlsx') }}">filled example</a> (made-up people and demand that schedule cleanly).</p>
       <div class="drop" data-drop>
         <b>Drop this week's workbook here</b>
         <label>or choose a file (.xlsx, up to 25 MB)

@@ -722,6 +722,23 @@ class TheWayAround(unittest.TestCase):
         self.assertIn('<a href="/">Home</a>', home)  # the menu's first item
 
 
+class TheCleanWorkbooks(unittest.TestCase):
+    """Phase L task 4: a blank and an example input workbook, from the home page."""
+
+    def test_only_the_two_workbooks_download(self):
+        app, *_ = make_app(start_worker=False)
+        client = client_for(app)
+        home = client.get("/").get_data(as_text=True)
+        for name in ("Scheduler_Input_Blank.xlsx", "Scheduler_Input_Example.xlsx"):
+            self.assertIn(f'href="/workbooks/{name}"', home)
+            got = client.get(f"/workbooks/{name}")
+            self.assertEqual((got.status_code, got.data[:2]), (200, b"PK"), name)
+            self.assertIn("attachment", got.headers["Content-Disposition"])
+        for bad in ("other.xlsx", "..%2Fapp.py", "Scheduler_Input_Blank.xlsx.bak"):
+            self.assertEqual(client.get(f"/workbooks/{bad}").status_code, 404, bad)
+        self.assertEqual(app.test_client().get("/workbooks/Scheduler_Input_Blank.xlsx").status_code, 302)
+
+
 class Access(unittest.TestCase):
     def test_downloads_need_login(self):
         app, store, *_ = make_app()

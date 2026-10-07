@@ -88,6 +88,7 @@ def _secret_key(data_dir: Path) -> str:
     return path.read_text(encoding="utf-8").strip()
 
 
+WORKBOOKS = ("Scheduler_Input_Blank.xlsx", "Scheduler_Input_Example.xlsx")
 BACK = {"program": "programs"}  # where Back goes without browser history; every other page: home
 THEMES = ("light", "dark")  # no cookie: follow the device's setting
 EGYPT = timezone(timedelta(hours=3))  # owner's rule: times in Egypt time (UTC+3)
@@ -489,6 +490,14 @@ def create_app(config: Dict[str, Any]) -> Flask:
     @login_required
     def team_page():  # type: ignore[no-untyped-def]
         return render_template("team.html", people=team(_all_runs()))
+
+    @app.route("/workbooks/<name>")
+    @login_required
+    def workbook(name: str):  # type: ignore[no-untyped-def]
+        """The clean input workbooks (tools/build_web_workbooks.py); nothing else."""
+        if name not in WORKBOOKS:
+            abort(404)
+        return send_file(Path(__file__).with_name("workbooks") / name, as_attachment=True, download_name=name)
 
     @app.route("/runs/<run_id>/start", methods=["POST"])
     @login_required

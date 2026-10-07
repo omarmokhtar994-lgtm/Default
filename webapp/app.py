@@ -48,7 +48,7 @@ def stages(run: Dict[str, Any]) -> list:
         # No runner exit code: it never started (safety gate or website error).
         at, state = (1, "failed") if run.get("exit_code") is None else (4, "failed")
     if at is None:
-        return [(label, "") for label in STAGES]
+        return [(name, "") for name in STAGES]
     labels = list(STAGES)
     if status == "QUEUED":
         labels[1] = "Queued"
@@ -281,7 +281,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         run = _run_or_404(run_id)
         return jsonify(status=run["status"], label=label(run),
                        message=run["message"], verdict=run["verdict"], exit_code=run["exit_code"],
-                       stages=[{"label": label, "state": state} for label, state in stages(run)],
+                       stages=[{"label": name, "state": state} for name, state in stages(run)],
                        final=run["status"] not in IN_FLIGHT, log=_queue().log_tail(run_id, 80))
 
     @app.route("/runs/<run_id>/download")

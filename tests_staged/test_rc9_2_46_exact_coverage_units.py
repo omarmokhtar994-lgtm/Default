@@ -28,7 +28,12 @@ sys.path.insert(0, str(REPO / "tools"))
 import build_synthetic_suite as B  # noqa: E402
 
 E = B.load_engine(ROOT / "engine" / "_tools" / "l632_universal_scheduler.py")
-READY = REPO / "packages" / "rc9_2_2_production" / "inputs" / "ready_to_edit"
+# Repo layout or package layout (inputs/ at the package root). Phase G: the
+# repo-only path made this suite check zero workbooks (vacuous pass) inside the built package; the
+# lookup changed, not the contract.
+READY = next(p for p in (REPO / "inputs", REPO / "packages" / "rc9_2_2_production" / "inputs")
+             if p.is_dir()) / "ready_to_edit"
+READY_BOOKS = sorted(READY.glob("*.xlsx"))
 SWITCH = "Exact Coverage Units"
 
 
@@ -51,7 +56,8 @@ def stub(req, shrink, qpi, exact):
 
 class TheSwitchDefaultsOffAndChangesNothingThen(unittest.TestCase):
     def test_default_off_on_every_ready_workbook(self):
-        for wb in sorted(READY.glob("*.xlsx")):
+        self.assertGreaterEqual(len(READY_BOOKS), 7, READY)
+        for wb in READY_BOOKS:
             with self.subTest(workbook=wb.name):
                 self.assertFalse(E.parse_input(wb).exact_coverage_units)
 
@@ -73,7 +79,8 @@ class ExactUnitsAgreeWithTheMetric(unittest.TestCase):
         self.assertEqual(E.coverage_hit_threshold_units(p, 0, 0, 0.75), 87 * 15)
 
     def test_every_real_interval_target_and_floor(self):
-        for wb in sorted(READY.glob("*.xlsx")):
+        self.assertGreaterEqual(len(READY_BOOKS), 7, READY)
+        for wb in READY_BOOKS:
             p = copy.copy(E.parse_input(wb))
             p.exact_coverage_units = True
             qpi = p.qslots_per_interval

@@ -22,7 +22,11 @@ import break_proxy_diagnostic as D  # noqa: E402
 import build_synthetic_suite as B  # noqa: E402
 
 E = B.load_engine(ROOT / "engine" / "_tools" / "l632_universal_scheduler.py")
-CHAT = REPO / "packages" / "rc9_2_2_production" / "inputs" / "ready_to_edit" / "Cricut_Chat_WEEKLY_INPUT.xlsx"
+# Repo layout or package layout (inputs/ at the package root). Phase G: the
+# repo-only path made this suite fail to import inside the built package; the
+# lookup changed, not the contract.
+CHAT = next(p for p in (REPO / "inputs", REPO / "packages" / "rc9_2_2_production" / "inputs")
+            if p.is_dir()) / "ready_to_edit" / "Cricut_Chat_WEEKLY_INPUT.xlsx"
 P = E.parse_input(CHAT)
 NINE_H = next(s for s in P.shifts if s.duration_min == 540)
 

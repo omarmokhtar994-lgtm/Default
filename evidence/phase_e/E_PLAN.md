@@ -61,3 +61,32 @@ The default flips to Yes only if ALL hold:
 3. summed intervals at target after breaks over the 14 treatment runs >=
    the 14 control runs.
 Otherwise the switch stays, default No, and the result is recorded.
+
+### Task 2 design replaced at the owner's request (2026-10-07 ~04:55, before any run)
+
+The owner asked for fewer, shorter runs without losing quality. The switch only
+changes Stage 1's (and the guide's) hit thresholds, so the direct effect is
+measured on Stage 1 itself; the 28 production hours mostly measure Stage 2,
+repairs and selection noise around it. Replaces the 28-run design above.
+
+Stage A (probe, `tools/stage1_ab_probe.py`): the 7 ready-to-edit programs x the
+two profiles that shipped most schedules in 98 saved runs
+(target90_restore_champion, target_floor_pareto_master) x seeds 9000, 9001,
+9002 x arms off/on = 84 Stage-1 solves at the production slice (45 s,
+2 workers, production hard rules, the guide as production passes it, no hint),
+two at a time (~35 min). Each week scored by calculate_metrics before breaks.
+Pairs: (program, profile, seed).
+
+Stage A passes only if ALL hold:
+1. every "on" solve returns a week (OPTIMAL/FEASIBLE) wherever "off" does;
+2. per program, the mean over its 6 pairs loses at most 1 interval at target
+   and at most 1 at floor (before breaks);
+3. summed before-target over the 42 "on" solves >= the 42 "off" solves.
+
+Stage B (only if A passes): one production-runner pair per program for the 2
+programs with the largest Stage-A gain (QUICK 3,600 s, 2 workers, seed 9000,
+side by side, ~2 h); default flips to Yes only if neither loses more than 1
+interval at target or floor after breaks, every run exit 0, validator PASS,
+0 hard failures. If A fails: switch stays, default No, no production runs.
+Limitation stated now: Stage A measures weeks before breaks; Stage B is the
+check on what ships.

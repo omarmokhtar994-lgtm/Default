@@ -298,7 +298,14 @@ class ChildDiesWithItsParent(Base):
             child = None
             for _ in range(600):
                 for tid in os.listdir(f"/proc/{proc.pid}/task"):
-                    kids = open(f"/proc/{proc.pid}/task/{tid}/children").read().split()
+                    # A thread can exit between listdir and open (threads come
+                    # and go while the engine imports). Phase G: that race
+                    # crashed this test once under full-gate load before it
+                    # reached its assertion; a vanished thread has no children.
+                    try:
+                        kids = open(f"/proc/{proc.pid}/task/{tid}/children").read().split()
+                    except FileNotFoundError:
+                        continue
                     if kids:
                         child = int(kids[0])
                 if child:
@@ -307,11 +314,17 @@ class ChildDiesWithItsParent(Base):
             self.assertIsNotNone(child, "isolated solve never forked")
             proc.kill()
             proc.wait()
+            def running(pid):
+                # Same race: the process can be reaped between a check and the read.
+                try:
+                    return open(f"/proc/{pid}/stat").read().split()[2] != "Z"
+                except FileNotFoundError:
+                    return False
             for _ in range(50):
-                if not os.path.exists(f"/proc/{child}") or open(f"/proc/{child}/stat").read().split()[2] == "Z":
+                if not running(child):
                     break
                 time.sleep(0.1)
-            alive = os.path.exists(f"/proc/{child}") and open(f"/proc/{child}/stat").read().split()[2] != "Z"
+            alive = running(child)
             self.assertFalse(alive, "orphaned solve still running")
         finally:
             if proc.poll() is None:

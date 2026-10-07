@@ -41,9 +41,24 @@ def main(argv: Optional[List[str]] = None, ask: Callable[[str], str] = getpass.g
         p.add_argument("--name", default="")
     for name in ("reset-password", "disable-user", "enable-user"):
         sub.add_parser(name).add_argument("username")
+    sub.add_parser("has-admin", help="exit 0 if an admin exists (used by the installer)")
+    gate_cmd = sub.add_parser("check-package", help="run the safety gate for the installed package now")
+    gate_cmd.add_argument("--package-root", type=Path, required=True)
     args = ap.parse_args(argv)
 
     store = Store(args.data_dir / "scheduler.db")
+    if args.command == "has-admin":
+        return 0 if any(u["is_admin"] for u in store.list_users()) else 1
+    if args.command == "check-package":
+        from . import gate
+        print("Running the safety gate for this package (15-30 minutes)...", flush=True)
+        try:
+            stamp = gate.ensure(args.package_root, args.data_dir / "runs" / "_gate", ["bash", "run_tests.sh"])
+        except gate.GateFailed as exc:
+            print(f"SAFETY GATE FAILED: {exc}", file=sys.stderr)
+            return 1
+        print(f"Safety gate passed: {stamp['summary']}")
+        return 0
     username = args.username.strip().lower()
     existing = next((u for u in store.list_users() if u["username"] == username), None)
 

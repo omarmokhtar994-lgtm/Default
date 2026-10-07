@@ -1,0 +1,17 @@
+# © 2026 Omar Mokhtar. All rights reserved.
+# Caddy gets and renews the HTTPS certificate for this name by itself.
+{{DOMAIN}} {
+	encode gzip
+	request_body {
+		max_size 26MB
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	reverse_proxy 127.0.0.1:8080 {
+		transport http {
+			response_header_timeout 10m
+		}
+	}
+}

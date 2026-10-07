@@ -1,0 +1,40 @@
+# © 2026 Omar Mokhtar. All rights reserved.
+# Team Scheduler website (Waitress on 127.0.0.1:8080; Caddy serves HTTPS).
+# Installed by deploy/install.sh to /etc/systemd/system/scheduler-web.service.
+[Unit]
+Description=Team Scheduler website
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=scheduler
+Group=scheduler
+WorkingDirectory={{APP_DIR}}/package
+Environment=SCHEDULER_DATA_DIR={{DATA_DIR}}
+Environment=SCHEDULER_PACKAGE_ROOT={{APP_DIR}}/package
+Environment=SCHEDULER_PORT=8080
+Environment=SCHEDULER_PARALLEL=1
+Environment=PATH={{APP_DIR}}/venv/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PYTHON={{APP_DIR}}/venv/bin/python
+Environment=PYTHONUNBUFFERED=1
+ExecStart={{APP_DIR}}/venv/bin/python -m webapp.serve
+Restart=on-failure
+RestartSec=5
+# Stopping the service stops every solver it started (they share its cgroup);
+# runs in flight show as Interrupted and can be resumed.
+KillMode=control-group
+TimeoutStopSec=60
+# Hardening: the service can write only its data folder and the package
+# (the safety gate writes Python caches there).
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths={{DATA_DIR}} {{APP_DIR}}/package
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+
+[Install]
+WantedBy=multi-user.target

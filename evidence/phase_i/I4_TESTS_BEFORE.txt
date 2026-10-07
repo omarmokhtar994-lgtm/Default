@@ -1,0 +1,10 @@
+ERROR: test_caddy_uses_sslip_domain_and_only_proxies_to_localhost (webapp.tests.test_deploy.TheScripts.test_caddy_uses_sslip_domain_and_only_proxies_to_localhost)
+ERROR: test_firewall_opens_80_and_443_only (webapp.tests.test_deploy.TheScripts.test_firewall_opens_80_and_443_only)
+ERROR: test_install_creates_admin_interactively_never_with_a_default_password (webapp.tests.test_deploy.TheScripts.test_install_creates_admin_interactively_never_with_a_default_password)
+ERROR: test_install_pins_the_solver (webapp.tests.test_deploy.TheScripts.test_install_pins_the_solver)
+ERROR: test_service_runs_waitress_on_localhost_only (webapp.tests.test_deploy.TheScripts.test_service_runs_waitress_on_localhost_only)
+ERROR: test_config_from_environment (webapp.tests.test_deploy.TheServerEntry.test_config_from_environment)
+FAIL: test_dry_run_renders_service_and_caddy (webapp.tests.test_deploy.TheDryRun.test_dry_run_renders_service_and_caddy)
+FAIL: test_install_script_is_valid_bash (webapp.tests.test_deploy.TheScripts.test_install_script_is_valid_bash)
+Ran 9 tests in 0.007s
+FAILED (failures=2, errors=6, skipped=1)

@@ -1,0 +1,12 @@
+# webapp.serve rehearsal (2026-10-07 21:29 Egypt time), clean venv from deploy/requirements.txt
+Team Scheduler on http://127.0.0.1:8091 (data /tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/srvdata, package /home/user/Default/dist/RC9_2_2_PRODUCTION_PACKAGE)
+--- GET /login (HEAD lines)
+HTTP/1.1 200 OK
+Content-Security-Policy: default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; frame-ancestors 'none'
+Server: TeamScheduler
+Set-Cookie: session=eyJjc3JmIjoiTDNLMzhzU3lyekgxMGw1anN6cktvajBhTjE0bkktYkVVWW53aG9UdU8tUSJ9.asaPiw.zQh5ZPZmUaP55ZZ9HJPKXxfh6NA; Secure; HttpOnly; Path=/; SameSite=Lax
+X-Frame-Options: DENY
+© 2026 Omar Mokhtar. All rights reserved.
+--- GET / (not signed in)
+302 -> http://127.0.0.1:8091/login?next=/
+--- listening sockets

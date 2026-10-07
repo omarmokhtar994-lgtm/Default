@@ -1,0 +1,57 @@
+
+==> Installing system packages (Python, firewall tools, Caddy)
+[dry run] apt-get update -y
+[dry run] apt-get install -y python3 python3-venv python3-pip unzip curl gpg iptables-persistent netfilter-persistent debian-keyring debian-archive-keyring apt-transport-https
+[dry run] bash -c curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/gpg.key | gpg --batch --yes --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+[dry run] bash -c curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt > /etc/apt/sources.list.d/caddy-stable.list
+[dry run] apt-get update -y
+[dry run] apt-get install -y caddy
+
+==> Creating the 'scheduler' service account and folders
+[dry run] useradd --system --home-dir /var/lib/scheduler --shell /usr/sbin/nologin scheduler
+[dry run] install -d -o scheduler -g scheduler -m 750 /var/lib/scheduler
+[dry run] install -d -m 755 /opt/scheduler
+
+==> Copying the package to /opt/scheduler/package
+[dry run] rm -rf /opt/scheduler/package.new
+[dry run] cp -a /home/user/Default /opt/scheduler/package.new
+[dry run] rm -rf /opt/scheduler/package.new/results
+[dry run] rm -rf /opt/scheduler/package.previous
+[dry run] mv /opt/scheduler/package /opt/scheduler/package.previous
+[dry run] mv /opt/scheduler/package.new /opt/scheduler/package
+[dry run] chown -R scheduler:scheduler /opt/scheduler/package
+
+==> Creating the Python environment with the pinned solver (a few minutes)
+[dry run] python3 -m venv /opt/scheduler/venv
+[dry run] /opt/scheduler/venv/bin/pip install --quiet --upgrade pip
+[dry run] /opt/scheduler/venv/bin/pip install --quiet -r /opt/scheduler/package/deploy/requirements.txt
+[dry run] /opt/scheduler/venv/bin/python /opt/scheduler/package/tools/runtime_environment_check.py
+
+==> Web address: https://129-151-1-2.sslip.io
+
+==> Opening ports 80 and 443 in the server firewall (nothing else)
+[dry run] iptables -I INPUT 1 -p tcp --dport 80 -m conntrack --ctstate NEW -j ACCEPT
+[dry run] iptables -I INPUT 1 -p tcp --dport 443 -m conntrack --ctstate NEW -j ACCEPT
+[dry run] netfilter-persistent save
+
+==> Create your admin account
+Now type the admin password twice (at least 10 characters; it is not shown).
+[dry run] runuser -u scheduler -- env PYTHONPATH=/opt/scheduler/package PATH=/opt/scheduler/venv/bin:/root/.local/bin:/root/.cargo/bin:/usr/local/go/bin:/opt/node22/bin:/opt/maven/bin:/opt/gradle/bin:/opt/rbenv/bin:/root/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/root/.ccr/sessions/4fee2b6e31bad06da33a603838d32dcc/bin python -m webapp.manage --data-dir /var/lib/scheduler create-admin omar --name Omar Mokhtar
+
+==> Starting the website
+[dry run] systemctl daemon-reload
+[dry run] systemctl enable --now scheduler-web
+[dry run] systemctl restart scheduler-web
+[dry run] systemctl enable caddy
+[dry run] systemctl restart caddy
+
+Team Scheduler is installed.
+
+  Open:     https://129-151-1-2.sslip.io
+  Sign in:  with the admin username and password you just chose.
+  Add your team on the People page; each person chooses their own password
+  at first sign-in. Results are kept 30 days.
+
+If the page does not open, check that ports 80 and 443 are open in the
+Oracle Cloud console (Networking > your VCN > Security List > Ingress rules):
+see deploy/ORACLE_SETUP_GUIDE.md.

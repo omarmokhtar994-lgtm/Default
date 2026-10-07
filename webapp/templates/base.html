@@ -1,19 +1,24 @@
 <!doctype html>
+{# © 2026 Omar Mokhtar. All rights reserved. #}
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Team Scheduler{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600&family=Bricolage+Grotesque:opsz,wght@12..96,700&display=swap">
 <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+<link rel="icon" href="{{ url_for('static', filename='mark.svg') }}" type="image/svg+xml">
 </head>
 <body>
 <header class="top">
-  <a class="brand" href="{{ url_for('home') }}">Team Scheduler</a>
+  <a class="brand" href="{{ url_for('home') }}"><img class="brand-mark" src="{{ url_for('static', filename='mark.svg') }}" alt="">Team Scheduler</a>
   {% if user %}
-  <nav>
+  <nav aria-label="Main">
     <a href="{{ url_for('home') }}">Runs</a>
     {% if user.is_admin %}<a href="{{ url_for('admin_users') }}">People</a>{% endif %}
-    <a href="{{ url_for('change_password') }}">{{ user.display_name }}</a>
+    <a href="{{ url_for('change_password') }}" title="Change your password">{{ user.display_name }}</a>
     <form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="link">Sign out</button></form>
   </nav>
   {% endif %}
@@ -23,5 +28,6 @@
 {% block content %}{% endblock %}
 </main>
 <footer class="foot">{{ copyright }}</footer>
+{% block scripts %}{% endblock %}
 </body>
 </html>

@@ -1,0 +1,6 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{% macro stagebar(run, small=False) -%}
+<ol class="stagebar{% if small %} small{% endif %}" aria-label="Progress: {{ status_words.get(run.status, run.status) }}" data-run="{{ run.id }}">
+{%- for label, state in stages(run) %}<li class="{{ state }}"><span>{{ label }}</span></li>{% endfor -%}
+</ol>
+{%- endmacro %}

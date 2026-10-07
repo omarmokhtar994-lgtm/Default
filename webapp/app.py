@@ -5,9 +5,9 @@ from __future__ import annotations
 import os
 import re
 import secrets
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from flask import Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file, session, url_for
 from werkzeug.utils import secure_filename
@@ -22,6 +22,35 @@ RUN_ID = re.compile(r"^[0-9a-f]{12}$")
 STATUS_WORDS = {"CHECKING": "Checking", "REJECTED": "Rejected", "QUEUED": "Queued", "GATE": "Safety gate",
                 "RUNNING": "Running", "SCORING": "Scoring", "DONE": "Approved", "FAILED": "Not approved",
                 "STOPPED": "Stopped", "INTERRUPTED": "Interrupted", "EXPIRED": "Expired"}
+STAGES = ("Check", "Safety gate", "Schedule", "Scoring", "Result")
+IN_FLIGHT = ("CHECKING", "QUEUED", "GATE", "RUNNING", "SCORING")
+
+
+def stages(run: Dict[str, Any]) -> list:
+    """(label, state) for the five stage-bar segments; state is one of
+    done | active | waiting | failed | halted | ok | '' (not reached)."""
+    status = run["status"]
+    if status in ("DONE", "EXPIRED"):
+        return [(label, "done") for label in STAGES[:-1]] + [("Approved" if status == "DONE" else "Expired",
+                                                              "ok" if status == "DONE" else "done")]
+    at, state = {"CHECKING": (0, "active"), "REJECTED": (0, "failed"), "QUEUED": (1, "waiting"),
+                 "GATE": (1, "active"), "RUNNING": (2, "active"), "SCORING": (3, "active"),
+                 "STOPPED": (2, "halted"), "INTERRUPTED": (2, "halted")}.get(status, (None, ""))
+    if status == "FAILED":
+        # No runner exit code: it never started (safety gate or website error).
+        at, state = (1, "failed") if run.get("exit_code") is None else (4, "failed")
+    if at is None:
+        return [(label, "") for label in STAGES]
+    labels = list(STAGES)
+    if status == "QUEUED":
+        labels[1] = "Queued"
+    elif state == "halted":
+        labels[2] = STATUS_WORDS[status]
+    elif status == "FAILED" and at == 4:
+        labels[4] = "Not approved"
+    elif status == "REJECTED":
+        labels[0] = "Rejected"
+    return [(labels[i], "done" if i < at else state if i == at else "") for i in range(len(STAGES))]
 
 
 def _secret_key(data_dir: Path) -> str:
@@ -30,6 +59,15 @@ def _secret_key(data_dir: Path) -> str:
         path.write_text(secrets.token_urlsafe(48), encoding="utf-8")
         os.chmod(path, 0o600)
     return path.read_text(encoding="utf-8").strip()
+
+
+EGYPT = timezone(timedelta(hours=3))  # owner's rule: times in Egypt time (UTC+3)
+
+
+def _when(epoch: Optional[float]) -> str:
+    if not epoch:
+        return ""
+    return datetime.fromtimestamp(epoch, EGYPT).strftime("%a %d %b, %H:%M")
 
 
 def password_problem(new: str, confirm: str, username: str) -> str:
@@ -85,7 +123,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
     @app.context_processor
     def _globals() -> Dict[str, Any]:
         return {"csrf_token": csrf_token, "copyright": COPYRIGHT, "user": g.get("user"),
-                "status_words": STATUS_WORDS, "modes": MODES}
+                "status_words": STATUS_WORDS, "modes": MODES, "stages": stages, "in_flight": IN_FLIGHT,
+                "when": _when}
 
     # ------------------------------------------------------------- sign in/out
     @app.route("/login", methods=["GET", "POST"])
@@ -234,7 +273,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         run = _run_or_404(run_id)
         return jsonify(status=run["status"], label=STATUS_WORDS.get(run["status"], run["status"]),
                        message=run["message"], verdict=run["verdict"], exit_code=run["exit_code"],
-                       log=_queue().log_tail(run_id, 40))
+                       stages=[{"label": label, "state": state} for label, state in stages(run)],
+                       final=run["status"] not in IN_FLIGHT, log=_queue().log_tail(run_id, 80))
 
     @app.route("/runs/<run_id>/download")
     @login_required

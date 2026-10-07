@@ -1,19 +1,32 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% from "_macros.html" import stagebar with context %}
+{% block title %}{{ run.workbook }} on Team Scheduler{% endblock %}
 {% block content %}
-<h1>{{ run.workbook }}</h1>
-<p class="status" data-status="{{ run.status }}">{{ status_words.get(run.status, run.status) }}</p>
-<p>{{ run.mode }} · started by {{ run.by_name }}{% if run.exit_code is not none %} · runner exit code {{ run.exit_code }}{% endif %}</p>
-{% if run.message %}<pre class="message">{{ run.message }}</pre>{% endif %}
-{% if run.verdict %}<pre class="verdict">{{ run.verdict }}</pre>{% endif %}
-<div class="actions">
-  {% if has_schedule %}<a href="{{ url_for('run_schedule', run_id=run.id) }}">Download the schedule</a>{% endif %}
-  {% if has_zip %}<a href="{{ url_for('run_download', run_id=run.id) }}">Download all results (.zip)</a>{% endif %}
-  {% if run.status in ('QUEUED', 'GATE', 'RUNNING', 'SCORING') %}
-  <form method="post" action="{{ url_for('run_stop', run_id=run.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit">Stop</button></form>
-  {% endif %}
-  {% if resumable %}
-  <form method="post" action="{{ url_for('run_resume', run_id=run.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit">Resume</button></form>
-  {% endif %}
-</div>
-{% if log %}<pre class="log">{{ log }}</pre>{% endif %}
+<article class="run" data-run="{{ run.id }}" data-final="{{ 'no' if run.status in in_flight else 'yes' }}"
+         data-status-url="{{ url_for('run_status', run_id=run.id) }}">
+  <div class="runhead">
+    <h1>{{ run.workbook }}</h1>
+    <p class="status-word" data-status="{{ run.status }}" aria-live="polite">{{ status_words.get(run.status, run.status) }}</p>
+  </div>
+  <p class="byline">{{ run.mode|capitalize if run.mode != 'SMOKE' else 'Readiness check' }} run, started by {{ run.by_name }} on {{ when(run.created) }} (Egypt time){% if run.exit_code is not none %}. Runner exit code {{ run.exit_code }} (0 means approved){% endif %}.</p>
+  {{ stagebar(run) }}
+  {% if run.message %}<pre class="message" data-status="{{ run.status }}">{{ run.message }}</pre>{% endif %}
+  {% if run.status == 'REJECTED' %}<p class="byline">Fix the cells named above in your workbook, save it, and upload it again. Nothing was run.</p>{% endif %}
+  {% if run.verdict %}<pre class="verdict">{{ run.verdict }}</pre>{% endif %}
+  <div class="actions">
+    {% if has_schedule %}<a class="button primary" href="{{ url_for('run_schedule', run_id=run.id) }}">Download the schedule</a>{% endif %}
+    {% if has_zip %}<a class="button" href="{{ url_for('run_download', run_id=run.id) }}">Download all results (.zip)</a>{% endif %}
+    {% if run.status in in_flight and run.status != 'CHECKING' %}
+    <form method="post" action="{{ url_for('run_stop', run_id=run.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit">Stop</button></form>
+    {% endif %}
+    {% if resumable %}
+    <form method="post" action="{{ url_for('run_resume', run_id=run.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="primary" type="submit">Resume</button></form>
+    {% endif %}
+  </div>
+  {% if has_schedule %}<p class="byline">The schedule file is the one to publish; its Read Me First tab shows its status. The zip has the before-breaks review copy, the alternatives and every validation report.</p>{% endif %}
+  <details class="log"{% if run.status in in_flight %} open{% endif %}>
+    <summary>Full log</summary>
+    <pre class="log">{{ log or "Nothing logged yet." }}</pre>
+  </details>
+</article>
 {% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='app.js') }}" defer></script>{% endblock %}

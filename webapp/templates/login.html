@@ -1,13 +1,35 @@
-{% extends "base.html" %}{% block title %}Sign in · Team Scheduler{% endblock %}
+{% extends "base.html" %}{% block title %}Sign in to Team Scheduler{% endblock %}
 {% block content %}
-<section class="login">
-  <h1>Sign in</h1>
-  {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
-  <form method="post">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label>Username <input name="username" autocomplete="username" required autofocus></label>
-    <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
-    <button class="primary">Sign in</button>
-  </form>
-</section>
+{# A week of shift blocks: rows are days (the week starts Sunday), x is the 24-hour day. #}
+{% set week = [("Sun", [(7,9,0),(9,9,1),(14,9,2)]), ("Mon", [(6,9,0),(10,9,1),(15,9,2)]),
+               ("Tue", [(8,9,0),(11,9,1),(12,11,2)]), ("Wed", [(7,9,0),(9,9,1),(16,8,2)]),
+               ("Thu", [(6,9,0),(12,9,1),(14,9,2)]), ("Fri", [(9,9,0),(10,9,1)]),
+               ("Sat", [(8,9,0),(13,9,1)])] %}
+<div class="login-wrap">
+  <section class="login-art">
+    <h1>Weekly schedules, built and checked for your team</h1>
+    <p>Upload the week's workbook, and the scheduler covers every 30-minute interval it can, places the breaks, and has every schedule independently checked before you download it.</p>
+    <svg class="week" viewBox="0 0 664 300" role="img" aria-label="A week of shift blocks from Sunday to Saturday">
+      {% for h in range(0, 25, 6) %}
+      <line class="grid" x1="{{ 56 + h * 24 }}" y1="8" x2="{{ 56 + h * 24 }}" y2="276"/>
+      <text class="hour" x="{{ 56 + h * 24 }}" y="294" text-anchor="middle">{{ '%02d' % h }}:00</text>
+      {% endfor %}
+      {% for day, shifts in week %}{% set y = 12 + loop.index0 * 38 %}
+      <text class="day" x="0" y="{{ y + 19 }}">{{ day }}</text>
+      {% for start, length, lane in shifts %}
+      <rect class="s{{ lane }}" x="{{ 56 + start * 24 }}" y="{{ y + lane * 10 }}" width="{{ length * 24 - 2 }}" height="8" rx="3"/>
+      {% endfor %}{% endfor %}
+    </svg>
+  </section>
+  <section class="login">
+    <h2>Sign in</h2>
+    {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Username <input name="username" autocomplete="username" autocapitalize="none" required autofocus></label>
+      <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+      <button class="primary">Sign in</button>
+    </form>
+  </section>
+</div>
 {% endblock %}

@@ -1,0 +1,12 @@
+ERROR: test_dashboard_upload_run_flow (webapp.tests.test_ui_playwright.InTheBrowser.test_dashboard_upload_run_flow)
+playwright._impl._errors.Error: Locator.check: Error: Not a checkbox or radio button
+FAIL: test_keyboard_focus_visible (webapp.tests.test_ui_playwright.InTheBrowser.test_keyboard_focus_visible)
+AssertionError: 1 not greater than or equal to 2
+FAIL: test_login_page_renders_with_copyright (webapp.tests.test_ui_playwright.InTheBrowser.test_login_page_renders_with_copyright)
+AssertionError: Locator expected to be visible
+Error: element(s) not found 
+FAIL: test_rejected_workbook_says_what_to_fix (webapp.tests.test_ui_playwright.InTheBrowser.test_rejected_workbook_says_what_to_fix)
+AssertionError: Locator expected to have text 'Rejected'
+Error: element(s) not found 
+Ran 6 tests in 16.275s
+FAILED (failures=3, errors=1)

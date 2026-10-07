@@ -1,0 +1,16 @@
+Phase H task 4 (owner approved 2026-10-07: "Yes" to the Colab shortfall-test fix)
+Pre-registered before any measurement, 2026-10-07 ~19:55 Egypt.
+
+Change: run_shortfall_pass gains deterministic_time (default None = unchanged
+production behaviour). When set, its three solves (minimum-shortfall skeleton,
+coverage skeleton, elastic breaks) get 0.4 / 0.3 / 0.3 of it as CP-SAT
+max_deterministic_time; the wall time_limit stays as an outer cap.
+
+Choosing the test's budget D:
+1. Candidates D in {10, 20, 40}, smallest first. Unloaded, 2 cores pinned
+   (taskset -c 0,1): run the shortfall test 5 times; the first D with 5/5 PASS
+   and median wall <= 90 s is chosen.
+2. Confirm with that D: 10 runs on the same 2 cores with two busy-loop
+   processes pinned to them (the G2 Colab-like load). Accept only 10/10 PASS.
+3. If no candidate meets 1 and 2, nothing ships and the result is reported.
+The test's assertions are not changed; only its call uses the budget.

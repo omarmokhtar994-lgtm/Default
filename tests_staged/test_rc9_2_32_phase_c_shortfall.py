@@ -171,8 +171,14 @@ class C1ShortfallPass(unittest.TestCase):
     def test_the_pass_exports_a_listed_non_releasable_schedule(self):
         path, parsed = build(S04)
         out = path.parent / "case_L6_3_2_3_HARD_RULE_SHORTFALL_SCHEDULE.xlsx"
+        # Phase H (owner-approved; evidence/phase_h/H4_DETERMINISTIC_BUDGET.md):
+        # a solver-work budget instead of 40 s wall clock, so a slow or busy
+        # machine (Colab: 3 of 10 failures) does the same search. Chosen by the
+        # pre-registered rule: 5/5 unloaded, 10/10 under 2-core load. The
+        # assertions below are unchanged.
         record = E.run_shortfall_pass(parsed, path, out, {}, E.capacity_diagnostics(parsed),
-                                      time_limit=40, workers=2, log=io.StringIO(), random_seed=9000)
+                                      time_limit=600, workers=2, log=io.StringIO(), random_seed=9000,
+                                      deterministic_time=10.0)
         self.assertEqual(record["status"], "EXPORTED", record)
         self.assertTrue(out.exists())
         self.assertFalse(record["releasable"])
@@ -194,6 +200,49 @@ class C1ShortfallPass(unittest.TestCase):
         check = runner.validate_shortfall_schedule(path, out, None, out.parent / "SHORTFALL_VALIDATION.json")
         self.assertEqual(check["status"], "SHORTFALLS_CONFIRMED", check)
         self.assertEqual(check["validator_failure_types"], ["ZERO_STAFF_ACTIVE"])
+
+
+class TheShortfallPassCanRunOnASolverWorkBudget(unittest.TestCase):
+    """Phase H (evidence/phase_g/G2_SHORTFALL_REPRO.md): on a slow, busy
+    2-core machine (Colab) the 40 s wall-clock pass did less search and the
+    export test failed 3 of 10 times. An optional solver-work budget
+    (CP-SAT max_deterministic_time) makes the amount of search independent of
+    machine speed. Default None: production behaviour unchanged."""
+
+    def test_the_limit_is_applied_only_when_set(self):
+        cp_model = E.import_cp_sat()
+        solver = cp_model.CpSolver()
+        self.assertIsNone(E.configure_solver_limits(solver).get("max_deterministic_time"))
+        old = E.SOLVER_DETERMINISTIC_TIME
+        E.SOLVER_DETERMINISTIC_TIME = 7.5
+        try:
+            solver = cp_model.CpSolver()
+            self.assertEqual(E.configure_solver_limits(solver)["max_deterministic_time"], 7.5)
+            self.assertEqual(solver.parameters.max_deterministic_time, 7.5)
+        finally:
+            E.SOLVER_DETERMINISTIC_TIME = old
+
+    def test_the_pass_splits_its_budget_and_restores_the_default(self):
+        seen = []
+        real_build, real_breaks = E.build_skeleton, E.solve_breaks
+
+        def spy_build(*a, **kw):
+            seen.append(("stage1", E.SOLVER_DETERMINISTIC_TIME))
+            return real_build(*a, **kw)
+
+        def spy_breaks(*a, **kw):
+            seen.append(("stage2", E.SOLVER_DETERMINISTIC_TIME))
+            return real_breaks(*a, **kw)
+        path, parsed = build(S04)
+        E.build_skeleton, E.solve_breaks = spy_build, spy_breaks
+        try:
+            E.run_shortfall_pass(parsed, path, path.parent / "case_SHORTFALL.xlsx", {}, E.capacity_diagnostics(parsed),
+                                 time_limit=600, workers=2, log=io.StringIO(), random_seed=9000,
+                                 deterministic_time=10.0)
+        finally:
+            E.build_skeleton, E.solve_breaks = real_build, real_breaks
+        self.assertEqual(seen, [("stage1", 4.0), ("stage1", 3.0), ("stage2", 3.0)])
+        self.assertIsNone(E.SOLVER_DETERMINISTIC_TIME)
 
 
 class C1NextSundayFloorIsCoverageQuality(unittest.TestCase):

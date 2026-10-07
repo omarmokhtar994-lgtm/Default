@@ -5062,6 +5062,11 @@ def status_name(cp_model: Any, solver: Any, status: int) -> str:
 
 
 SOLVER_MAX_MEMORY_MB: Optional[int] = 6000
+# Phase H: optional CP-SAT work budget (max_deterministic_time) for the next
+# solves; None = wall-clock limits only (production default). Set by
+# run_shortfall_pass(deterministic_time=...) around each of its solves, so the
+# amount of search does not depend on how fast or busy the machine is.
+SOLVER_DETERMINISTIC_TIME: Optional[float] = None
 JOINT_MIN_AVAILABLE_MEMORY_MB = 2048
 JOINT_MIN_AVAILABLE_MEMORY_SHARE = 0.15
 
@@ -5119,7 +5124,11 @@ def configure_solver_limits(solver: Any) -> Dict[str, Any]:
     applied: Dict[str, Any] = {
         "max_memory_in_mb": None,
         "relative_gap_limit": None,
+        "max_deterministic_time": None,
     }
+    if SOLVER_DETERMINISTIC_TIME is not None:
+        solver.parameters.max_deterministic_time = float(SOLVER_DETERMINISTIC_TIME)
+        applied["max_deterministic_time"] = float(SOLVER_DETERMINISTIC_TIME)
 
     if SOLVER_MAX_MEMORY_MB:
         try:
@@ -8571,6 +8580,7 @@ def run_shortfall_pass(
     parsed: ParsedInput, input_path: Path, output_path: Path, audit: Dict[str, Any],
     capacity: Dict[str, Any], time_limit: float, workers: int, log: Any,
     random_seed: int = 0, skeleton: Optional[SkeletonSolution] = None, pattern_width: int = 115,
+    deterministic_time: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Audit F-06: the best schedule that meets every PERSON rule, with every
     coverage minimum it cannot meet named.
@@ -8588,18 +8598,36 @@ def run_shortfall_pass(
     ``skeleton`` and only step 3 runs. The workbook is exported as
     HARD_RULE_SHORTFALL_SCHEDULE with a Shortfalls sheet. It is never
     releasable.
+
+    ``deterministic_time`` (Phase H, default None): a CP-SAT work budget split
+    0.4 / 0.3 / 0.3 over the three solves, so the search done is the same on a
+    slow or busy machine; ``time_limit`` stays the outer wall-clock cap.
     """
+    budget = None if deterministic_time is None else float(deterministic_time)
+
+    def with_budget(share: float, solve: Any, *args: Any, **kwargs: Any) -> Any:
+        global SOLVER_DETERMINISTIC_TIME
+        if budget is None:
+            return solve(*args, **kwargs)
+        previous = SOLVER_DETERMINISTIC_TIME
+        SOLVER_DETERMINISTIC_TIME = round(budget * share, 6)
+        try:
+            return solve(*args, **kwargs)
+        finally:
+            SOLVER_DETERMINISTIC_TIME = previous
+
     started = time.time()
     deadline = started + max(10.0, float(time_limit))
     record: Dict[str, Any] = {
         "status": "NOT_RUN", "releasable": False, "workbook": None, "artifact_type": SHORTFALL_ARTIFACT_TYPE,
         "shortfalls": [], "families": {}, "person_rule_failures": [],
         "time_limit_sec": round(float(time_limit), 1),
+        "deterministic_time": budget,
     }
     elastic = HardConfig(elastic=True)
     if skeleton is None:
-        probe = build_skeleton(parsed, None, elastic, max(5.0, 0.4 * (deadline - time.time())),
-                               workers, log, random_seed=random_seed)
+        probe = with_budget(0.4, build_skeleton, parsed, None, elastic, max(5.0, 0.4 * (deadline - time.time())),
+                            workers, log, random_seed=random_seed)
         record["stage1_minimum_shortfall_status"] = probe.cp_status
         if probe.cp_status == "INFEASIBLE":
             # Every coverage minimum is elastic here, so only the person rules
@@ -8615,15 +8643,17 @@ def run_shortfall_pass(
         skeleton = probe
         if deadline - time.time() > 20:
             profile = skeleton_profiles(["target_priority_balanced"])[0]
-            refined = build_skeleton(parsed, profile, elastic, max(5.0, 0.5 * (deadline - time.time())),
-                                     workers, log, random_seed=random_seed, hint_skeleton=probe,
-                                     elastic_cap=cap)
+            refined = with_budget(0.3, build_skeleton, parsed, profile, elastic,
+                                  max(5.0, 0.5 * (deadline - time.time())),
+                                  workers, log, random_seed=random_seed, hint_skeleton=probe,
+                                  elastic_cap=cap)
             record["stage1_coverage_status"] = refined.cp_status
             if refined.cp_status in {"OPTIMAL", "FEASIBLE"}:
                 skeleton = refined
         record["stage1_minimum_weighted_shortfall"] = cap
     ensure_before_break_metrics(parsed, skeleton)
-    breaks = solve_breaks(
+    breaks = with_budget(
+        0.3, solve_breaks,
         parsed, skeleton, pattern_width, bool(parsed.allow_no_break_exceptions),
         max(5.0, deadline - time.time() - 5.0), workers, log,
         exception_cap=parsed.max_no_break_exceptions if parsed.allow_no_break_exceptions else None,

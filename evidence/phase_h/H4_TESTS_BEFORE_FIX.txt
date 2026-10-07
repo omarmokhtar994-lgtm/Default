@@ -1,0 +1,6 @@
+ERROR: test_the_limit_is_applied_only_when_set (tests_staged.test_rc9_2_32_phase_c_shortfall.TheShortfallPassCanRunOnASolverWorkBudget.test_the_limit_is_applied_only_when_set)
+AttributeError: module 'l632_universal_scheduler' has no attribute 'SOLVER_DETERMINISTIC_TIME'
+ERROR: test_the_pass_splits_its_budget_and_restores_the_default (tests_staged.test_rc9_2_32_phase_c_shortfall.TheShortfallPassCanRunOnASolverWorkBudget.test_the_pass_splits_its_budget_and_restores_the_default)
+TypeError: run_shortfall_pass() got an unexpected keyword argument 'deterministic_time'
+Ran 2 tests in 0.883s
+FAILED (errors=2)

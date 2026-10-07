@@ -1,0 +1,21 @@
+Phase I follow-up: shortfall test budget (tests_staged/test_rc9_2_32, C1ShortfallPass
+.test_the_pass_exports_a_listed_non_releasable_schedule). Pre-registered 2026-10-07
+~23:35 Egypt, before any measurement under this rule.
+
+Why: with the Phase H budget D = 10 the test failed in the safety gate on the
+owner's Oracle ARM server (aarch64, Python 3.12, numpy 2.5.3: extra zero-coverage
+interval Sat 15:30 besides the planted Sun 03:xx hour), and 1 of 15 runs failed
+here on x86 (14 passed: 4 pinned to 2 cores, 10 on 4 cores; seen before this rule
+was written). The H4 rule (5/5 at the smallest candidate) cannot detect a failure
+rate near 1 in 15, so it is replaced, not re-applied.
+
+Rule:
+1. Candidates D in {20, 40, 80}, smallest first. Tool: tools/shortfall_budget_probe.py
+   (runs the unchanged test method, only the budget replaced; 2 cores pinned).
+2. Per platform, step 1: 20 runs unloaded; the candidate needs 20/20 PASS and
+   median wall <= 120 s. Step 2: 10 runs with two busy-loop processes pinned to the
+   same 2 cores; needs 10/10 PASS.
+3. Platforms: this x86 container and the owner's ARM server. The shipped D is the
+   largest of the per-platform choices (each platform must also pass it).
+4. If no candidate meets 1-3 on a platform, nothing ships and the result is
+   reported. The test's assertions are not changed; only the budget in its call.

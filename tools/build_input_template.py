@@ -95,6 +95,8 @@ SETUP_LAYOUT = [
     ("Shift & OFF", [
         ("Allowed Shift Durations Hours", DURATION_LIST),
         ("Use 11H/3OFF", YES_NO),
+        # Phase H (owner, 2026-10-07): at most N associates on 11H/3OFF; blank = no limit.
+        ("Max 11H/3OFF Associates", None),
         ("Strict OFF Count", YES_NO),
         ("Separate OFF Days", YES_NO),
         ("Rest Gap Hours", None),
@@ -207,6 +209,7 @@ ENGINE_NAMES = {
     "Rest Gap Hours": ["Difference Between Shifts", "Rest Gap Hours", "Minimum Rest Gap"],
     "Count of Different Shifts Per week": ["Count of Different Shifts Per week", "Max Different Shifts per Week"],
     "Allow Half-Hour Starts": ["Allow Half-Hour Starts", "Allow Half Hour Starts"],
+    "Max 11H/3OFF Associates": ["Max 11H/3OFF Associates", "Maximum 11H/3OFF Associates", "Max 11H 3OFF Associates"],
     "Fixed Request Use": ["Fixed Request Use", "Use Fixed Requests", "Fixed/Nesting Enabled", "Use Fixed/Nesting"],
     "Hard OFF Preferences": ["Hard OFF Preferences", "Hard OFF", "OFF Preferences Hard"],
     "Leave Enabled": ["Leave", "Leave Days", "Leave Enabled"],
@@ -279,6 +282,7 @@ NUMBER_RULES = {
     "Minimum Per Interval": ("decimal", 0, 1, "0%"),
     "Rest Gap Hours": ("decimal", 0, 24, "0.##"),
     "Count of Different Shifts Per week": ("whole", 1, 7, "0"),
+    "Max 11H/3OFF Associates": ("whole", 1, 5000, "0"),
     "Known Departed Associates": ("textLength", None, 2000, None),
     "Opening Minimum FTE": ("whole", 0, 500, "0"),
     "Opening Guard Intervals": ("whole", 0, 96, "0"),
@@ -328,6 +332,7 @@ HELP = {
     "Separate OFF Days": "Yes = a person's OFF days may be apart. No = they must be together.",
     "Rest Gap Hours": "Minimum hours between the end of one shift and the start of the next.",
     "Count of Different Shifts Per week": "Most different shifts one person may get in a week (1 to 7).",
+    "Max 11H/3OFF Associates": "Used only when Use 11H/3OFF is Yes: the most associates who may work the 11-hour, three-OFF-day pattern this week (e.g. 2). Blank = no limit.",
     "Allow Half-Hour Starts": "Yes = each shift may also start 30 minutes later, used only where full-hour starts cannot cover demand; marked in the output. Blank or No = full-hour starts only.",
     "Fixed Request Use": "Yes = apply the Fixed Request tab.",
     "Hard OFF Preferences": "Yes = OFF requests on the Preference tab are always granted.",

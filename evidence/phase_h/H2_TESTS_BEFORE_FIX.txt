@@ -1,0 +1,45 @@
+test_limit_below_forced_long_associates_is_named (tests_staged.test_rc9_2_54_11h_associate_limit.TheContractNamesAnImpossibleLimit.test_limit_below_forced_long_associates_is_named) ... FAIL
+test_default_is_no_limit_and_contract_unchanged (tests_staged.test_rc9_2_54_11h_associate_limit.TheInstruction.test_default_is_no_limit_and_contract_unchanged) ... ERROR
+test_limit_values (tests_staged.test_rc9_2_54_11h_associate_limit.TheInstruction.test_limit_values) ... 
+  test_limit_values (tests_staged.test_rc9_2_54_11h_associate_limit.TheInstruction.test_limit_values) (raw='2') ... ERROR
+  test_limit_values (tests_staged.test_rc9_2_54_11h_associate_limit.TheInstruction.test_limit_values) (raw='2.0') ... ERROR
+  test_limit_values (tests_staged.test_rc9_2_54_11h_associate_limit.TheInstruction.test_limit_values) (raw=' 2 ') ... ERROR
+  test_limit_values (tests_staged.test_rc9_2_54_11h_associate_limit.TheInstruction.test_limit_values) (raw=2) ... ERROR
+  test_limit_values (tests_staged.test_rc9_2_54_11h_associate_limit.TheInstruction.test_limit_values) (raw='two') ... FAIL
+  test_limit_values (tests_staged.test_rc9_2_54_11h_associate_limit.TheInstruction.test_limit_values) (raw='0') ... FAIL
+  test_limit_values (tests_staged.test_rc9_2_54_11h_associate_limit.TheInstruction.test_limit_values) (raw='-1') ... FAIL
+  test_limit_values (tests_staged.test_rc9_2_54_11h_associate_limit.TheInstruction.test_limit_values) (raw='1.5') ... FAIL
+test_limit_caps_the_long_pattern (tests_staged.test_rc9_2_54_11h_associate_limit.TheLimitBindsInTheSolve.test_limit_caps_the_long_pattern) ... STAGE1 target90_restore_champion status=OPTIMAL elapsed=0.82s
+test_limit_without_11h_mode_is_inert (tests_staged.test_rc9_2_54_11h_associate_limit.TheLimitBindsInTheSolve.test_limit_without_11h_mode_is_inert) ... STAGE1 target90_restore_champion status=OPTIMAL elapsed=0.15s
+test_summary_rows (tests_staged.test_rc9_2_54_11h_associate_limit.TheOutputReportsIt.test_summary_rows) ... STAGE1 target90_restore_champion status=OPTIMAL elapsed=0.80s
+test_validator_fails_a_week_over_the_limit (tests_staged.test_rc9_2_54_11h_associate_limit.TheValidatorChecksTheLimit.test_validator_fails_a_week_over_the_limit) ... STAGE1 target90_restore_champion status=OPTIMAL elapsed=0.81s
+ERROR: test_default_is_no_limit_and_contract_unchanged (tests_staged.test_rc9_2_54_11h_associate_limit.TheInstruction.test_default_is_no_limit_and_contract_unchanged)
+AttributeError: 'ParsedInput' object has no attribute 'max_11h_associates'
+ERROR: test_limit_values (tests_staged.test_rc9_2_54_11h_associate_limit.TheInstruction.test_limit_values) (raw='2')
+AttributeError: 'ParsedInput' object has no attribute 'max_11h_associates'
+ERROR: test_limit_values (tests_staged.test_rc9_2_54_11h_associate_limit.TheInstruction.test_limit_values) (raw='2.0')
+AttributeError: 'ParsedInput' object has no attribute 'max_11h_associates'
+ERROR: test_limit_values (tests_staged.test_rc9_2_54_11h_associate_limit.TheInstruction.test_limit_values) (raw=' 2 ')
+AttributeError: 'ParsedInput' object has no attribute 'max_11h_associates'
+ERROR: test_limit_values (tests_staged.test_rc9_2_54_11h_associate_limit.TheInstruction.test_limit_values) (raw=2)
+AttributeError: 'ParsedInput' object has no attribute 'max_11h_associates'
+ERROR: test_limit_without_11h_mode_is_inert (tests_staged.test_rc9_2_54_11h_associate_limit.TheLimitBindsInTheSolve.test_limit_without_11h_mode_is_inert)
+AttributeError: module 'E' has no attribute 'long_mode_summary_rows'
+ERROR: test_summary_rows (tests_staged.test_rc9_2_54_11h_associate_limit.TheOutputReportsIt.test_summary_rows)
+AttributeError: module 'E' has no attribute 'long_mode_summary_rows'
+FAIL: test_limit_below_forced_long_associates_is_named (tests_staged.test_rc9_2_54_11h_associate_limit.TheContractNamesAnImpossibleLimit.test_limit_below_forced_long_associates_is_named)
+AssertionError: [] is not true : []
+FAIL: test_limit_values (tests_staged.test_rc9_2_54_11h_associate_limit.TheInstruction.test_limit_values) (raw='two')
+AssertionError: False is not true
+FAIL: test_limit_values (tests_staged.test_rc9_2_54_11h_associate_limit.TheInstruction.test_limit_values) (raw='0')
+AssertionError: False is not true
+FAIL: test_limit_values (tests_staged.test_rc9_2_54_11h_associate_limit.TheInstruction.test_limit_values) (raw='-1')
+AssertionError: False is not true
+FAIL: test_limit_values (tests_staged.test_rc9_2_54_11h_associate_limit.TheInstruction.test_limit_values) (raw='1.5')
+AssertionError: False is not true
+FAIL: test_limit_caps_the_long_pattern (tests_staged.test_rc9_2_54_11h_associate_limit.TheLimitBindsInTheSolve.test_limit_caps_the_long_pattern)
+AssertionError: 6 not less than or equal to 1
+FAIL: test_validator_fails_a_week_over_the_limit (tests_staged.test_rc9_2_54_11h_associate_limit.TheValidatorChecksTheLimit.test_validator_fails_a_week_over_the_limit)
+AssertionError: '11H_ASSOCIATE_LIMIT_EXCEEDED' not found in set()
+Ran 7 tests in 9.673s
+FAILED (failures=7, errors=7)

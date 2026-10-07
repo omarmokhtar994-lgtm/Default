@@ -877,6 +877,9 @@ class ParsedInput:
     # twin for every on-the-hour library shift, flagged half_hour_fallback and
     # charged a small Stage-1 penalty so it is used only where it helps.
     allow_half_hour_starts: bool = False
+    # Phase H (owner, 2026-10-07): "Max 11H/3OFF Associates" caps how many
+    # associates may work the 11H/3OFF pattern in the week. None = no limit.
+    max_11h_associates: Optional[int] = None
     coverage_split_rules: List[CoverageSplitRule] = field(default_factory=list)
     coverage_split_source: str = "ABSENT"
     coverage_split_gate_mode: str = "hard"
@@ -2081,6 +2084,66 @@ def _parse_duration_set(
                 "Set Use 11H/3OFF to Yes or remove the long durations.")
         values = {v for v in values if v < 630} or {540}
     return values, use11
+
+
+MAX_11H_ASSOCIATES_KEYS = ("Max 11H/3OFF Associates", "Maximum 11H/3OFF Associates", "Max 11H 3OFF Associates")
+
+
+def parse_11h_associate_limit(raw: Any, parser_warnings: Optional[List[str]] = None) -> Optional[int]:
+    """Phase H: blank = no limit; a whole number >= 1 = at most that many
+    associates on the 11H/3OFF pattern this week. Anything else is a named
+    input error (never silently read as no limit)."""
+    if raw is None or str(raw).strip() == "":
+        return None
+    try:
+        value = float(str(raw).strip())
+    except ValueError:
+        value = None
+    if value is None or value != int(value) or value < 1:
+        if parser_warnings is not None:
+            parser_warnings.append(
+                f"HARD_INVALID_11H_ASSOCIATE_LIMIT:value={raw!r}; Max 11H/3OFF Associates must be a whole "
+                "number of associates (1 or more), or blank for no limit")
+        return None
+    return int(value)
+
+
+def add_11h_associate_limit(model: Any, parsed: Any, long_mode: Dict[int, Any]) -> None:
+    """Phase H: at most "Max 11H/3OFF Associates" associates work the 11H/3OFF
+    pattern this week. A hard rule; validate_input_contract names a limit below
+    the associates who are forced long, so this never makes a week silently
+    infeasible."""
+    limit = getattr(parsed, "max_11h_associates", None)
+    if limit is not None and getattr(parsed, "use_11h_3off", False):
+        model.Add(sum(long_mode.values()) <= int(limit))
+
+
+def forced_long_mode_associates(parsed: Any) -> List[str]:
+    """Associates who can only work the 11H/3OFF pattern: every legal shift is
+    long and they work at least one day, or a fixed request names a long shift."""
+    long_only = not any(s.duration_min < LONG_SHIFT_MIN_DURATION_MIN for s in parsed.shifts)
+    by_label = {norm(s.label): s for s in parsed.shifts}
+    forced = []
+    for assoc in parsed.associates:
+        fixed = list(getattr(assoc, "fixed_schedule", []) or [])
+        fixed_long = parsed.fixed_enabled and any(
+            preference_kind(v) == "shift" and by_label.get(norm(v)) is not None
+            and by_label[norm(v)].duration_min >= LONG_SHIFT_MIN_DURATION_MIN for v in fixed)
+        works = any(preference_kind(v) != "leave" for v in (list(assoc.preferences or []) + [""] * 7)[:7])
+        if fixed_long or (long_only and works):
+            forced.append(assoc.name)
+    return forced
+
+
+def long_mode_summary_rows(parsed: Any, skeleton: Any) -> List[List[Any]]:
+    """Production Summary rows for the 11H/3OFF pattern; none when it is off."""
+    if not getattr(parsed, "use_11h_3off", False):
+        return []
+    used = {a for a, _, si in scheduled_cells(skeleton)
+            if parsed.shifts[si].duration_min >= LONG_SHIFT_MIN_DURATION_MIN}
+    limit = getattr(parsed, "max_11h_associates", None)
+    return [["Max 11H/3OFF Associates", limit if limit is not None else "No limit"],
+            ["11H/3OFF Associates Used", len(used)]]
 
 
 def add_half_hour_twins(shifts: List[Shift], allowed_start_min: Optional[int] = None,
@@ -3634,6 +3697,8 @@ def parse_input(
     aggregate_guide_mixed_durations = yes(_instruction_get(im, ["Aggregate Guide Mixed Durations"], "No"), False)
     exact_coverage_units = yes(_instruction_get(im, ["Exact Coverage Units"], "No"), False)
     allow_half_hour_starts = yes(_instruction_get(im, ["Allow Half-Hour Starts", "Allow Half Hour Starts"], "No"), False)
+    max_11h_associates = parse_11h_associate_limit(
+        _instruction_get(im, list(MAX_11H_ASSOCIATES_KEYS), None), parser_warnings)
     max_diff = int(round(to_float(_instruction_get(im, ["Count of Different Shifts Per week", "Max Different Shifts per Week"], 3), 3)))
     rest = to_float(_instruction_get(im, ["Difference Between Shifts", "Rest Gap Hours", "Minimum Rest Gap"], 12), 12)
     opening_enabled = yes(_instruction_get(im, ["Opening Guard Enabled"], "No"), False)
@@ -4184,6 +4249,7 @@ def parse_input(
         aggregate_guide_mixed_durations=aggregate_guide_mixed_durations,
         exact_coverage_units=exact_coverage_units,
         allow_half_hour_starts=allow_half_hour_starts,
+        max_11h_associates=max_11h_associates,
         coverage_split_rules=coverage_split_rules,
         coverage_split_source=coverage_split_source,
         coverage_split_gate_mode=coverage_split_gate_mode,
@@ -4278,6 +4344,8 @@ def input_contract_payload(parsed: ParsedInput) -> Dict[str, Any]:
         payload["exact_coverage_units"] = True
     if getattr(parsed, "allow_half_hour_starts", False):
         payload["allow_half_hour_starts"] = True
+    if getattr(parsed, "max_11h_associates", None) is not None:
+        payload["max_11h_associates"] = int(parsed.max_11h_associates)
     return payload
 
 
@@ -4624,6 +4692,17 @@ def validate_input_contract(parsed: ParsedInput, feasibility: Optional[Dict[str,
         failures.append({"code":"LONG_SHIFT_PRESENT_WHEN_11H_PROHIBITED","examples":long_shifts[:20]})
     if parsed.use_11h_3off and not long_shifts:
         failures.append({"code":"11H_MODE_ENABLED_WITHOUT_LONG_SHIFT","detail":"Use 11H/3OFF is enabled but the legal Shift Library has no long shift."})
+    limit_11h = getattr(parsed, "max_11h_associates", None)
+    if parsed.use_11h_3off and limit_11h is not None:
+        forced = forced_long_mode_associates(parsed)
+        if len(forced) > limit_11h:
+            failures.append({
+                "code": "11H_ASSOCIATE_LIMIT_BELOW_FORCED",
+                "detail": (f"Max 11H/3OFF Associates is {limit_11h}, but {len(forced)} associates must work the "
+                           "11H/3OFF pattern (a fixed 11-hour shift, or a Shift Library with only long shifts). "
+                           "Raise the limit or change those requests."),
+                "examples": forced[:20],
+            })
     active_count = sum(sum(1 for value in day if value) for day in parsed.active)
     if active_count <= 0:
         failures.append({"code": "NO_ACTIVE_DEMAND", "detail": "No positive requirement intervals were parsed."})
@@ -7556,6 +7635,8 @@ def build_skeleton(
             long_mode[a] = model.NewConstant(1)
         else:
             long_mode[a] = model.NewConstant(0)
+        if a == A - 1:
+            add_11h_associate_limit(model, parsed, long_mode)
         for s in range(S):
             y[a, s] = model.NewBoolVar(f"y_{a}_{s}")
         for d in range(D):
@@ -14796,6 +14877,7 @@ def write_output_workbook(
         )],
         ["Shift Start Step Minutes", parsed.shift_start_step_minutes],
         *half_hour_summary_rows(parsed, skeleton),
+        *long_mode_summary_rows(parsed, skeleton),
         ["Blank Requirement Mode", parsed.blank_requirement_mode],
         ["Blank Requirement Rule", parsed.blank_requirement_text],
         ["Demand Fit Guard Mode", parsed.demand_fit_guard_mode],
@@ -16470,6 +16552,8 @@ def solve_joint_shift_off_language_break_refinement(
             long_mode[a] = model.NewConstant(1)
         else:
             long_mode[a] = model.NewConstant(0)
+        if a == A - 1:
+            add_11h_associate_limit(model, parsed, long_mode)
         for s_index in range(S):
             y[a, s_index] = model.NewBoolVar(f"joint_y_{a}_{s_index}")
         for d in range(D):

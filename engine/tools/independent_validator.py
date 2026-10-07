@@ -696,6 +696,23 @@ def _xc_contract_crosscheck(wb, parsed) -> Tuple[Dict[str, str], List[Dict[str, 
     if wrong:
         mismatches.append({"check": "contract_numbers", "examples": wrong})
 
+    # Phase H: the 11H/3OFF associate limit, read from the raw cell.
+    raw_limit=next((cells[norm(k)] for k in ("Max 11H/3OFF Associates","Maximum 11H/3OFF Associates",
+                                            "Max 11H 3OFF Associates") if norm(k) in cells), None)
+    expected_limit=None
+    if raw_limit not in (None,""):
+        try:
+            value=float(str(raw_limit).strip())
+            expected_limit=int(value) if value==int(value) and value>=1 else "INVALID"
+        except ValueError:
+            expected_limit="INVALID"
+    parsed_limit=getattr(parsed,"max_11h_associates",None)
+    if expected_limit!="INVALID" and expected_limit!=parsed_limit:
+        checks["max_11h_associates"]="FAIL"
+        mismatches.append({"check":"max_11h_associates","workbook":expected_limit,"parsed":parsed_limit})
+    else:
+        checks["max_11h_associates"]="PASS"
+
     # Every shift the engine may assign exists in the workbook with that start and length.
     catalog = set()
     for ws in wb.worksheets:
@@ -1031,6 +1048,17 @@ def validate(input_path: Path, output_path: Path, engine_path: Path,
             failures.append({"type":"CYCLIC_REST_VIOLATION","associate":assoc.name,"from":"Sat","to":"Sun","from_shift":sat.label,"to_shift":sun.label})
         if sun and not eng.previous_saturday_compatible(assoc.previous_saturday,sun,parsed.rest_gap_hours):
             failures.append({"type":"PREVIOUS_SATURDAY_REST_VIOLATION","associate":assoc.name,"previous_saturday":assoc.previous_saturday,"sunday":sun.label})
+
+    # Phase H: "Max 11H/3OFF Associates" -- counted from the exported week.
+    limit_11h=getattr(parsed,"max_11h_associates",None)
+    if limit_11h is not None:
+        long_names=[assoc.name for a,assoc in enumerate(parsed.associates)
+                    if any((shift_map.get(norm(value)) is not None
+                            and shift_map[norm(value)].duration_min>=eng.LONG_SHIFT_MIN_DURATION_MIN)
+                           for value in matrix[a])]
+        if len(long_names)>limit_11h:
+            failures.append({"type":"11H_ASSOCIATE_LIMIT_EXCEEDED","maximum":limit_11h,
+                             "actual":len(long_names),"associates":long_names[:20]})
 
     # Flexible nesting groups are equal-schedule constraints.  Exact fixed rows
     # deliberately have their nesting tag cleared by the parser because their

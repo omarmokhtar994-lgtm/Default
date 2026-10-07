@@ -17,7 +17,7 @@
   <a class="brand" href="{{ url_for('home') }}"><svg class="brand-mark" viewBox="0 0 28 20" aria-hidden="true"><rect x="0" y="1" width="16" height="5" rx="1.5" class="m1"/><rect x="6" y="8" width="16" height="5" rx="1.5" class="m2"/><rect x="12" y="15" width="16" height="5" rx="1.5" class="m3"/></svg>Team Scheduler</a>
   {% if user %}
   <nav aria-label="Main">
-    <a href="{{ url_for('home') }}">Runs</a>
+    <a href="{{ url_for('home') }}">Home</a>
     <a href="{{ url_for('programs') }}">Programs</a>
     <a href="{{ url_for('team_page') }}">Team</a>
     {% if user.is_admin %}<a href="{{ url_for('admin_users') }}">People</a>{% endif %}
@@ -33,6 +33,7 @@
   {% endif %}
 </header>
 <main>
+{% if user and back %}<p class="crumbs"><a href="{{ back }}" data-back>‹ Back</a><a class="home" href="{{ url_for('home') }}">Home</a></p>{% endif %}
 {% with messages = get_flashed_messages() %}{% for m in messages %}<p class="flash" role="status">{{ m }}</p>{% endfor %}{% endwith %}
 {% block content %}{% endblock %}
 </main>

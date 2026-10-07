@@ -16,6 +16,61 @@
   }
 })();
 
+// Back goes to the page you came from when you came from this site; the
+// link's own address (the page's parent) is the fallback.
+(function () {
+  "use strict";
+  var back = document.querySelector("[data-back]");
+  if (!back) { return; }
+  back.addEventListener("click", function (e) {
+    if (document.referrer.indexOf(window.location.origin + "/") === 0 && window.history.length > 1) {
+      e.preventDefault();
+      window.history.back();
+    }
+  });
+})();
+
+// The upload area takes a dropped workbook (Excel .xlsx only); the file
+// button still works the usual way.
+(function () {
+  "use strict";
+  var zone = document.querySelector("[data-drop]");
+  if (!zone) { return; }
+  var input = zone.querySelector("input[type=file]");
+  var chosen = zone.querySelector(".chosen");
+  function show(text, bad) {
+    chosen.textContent = text;
+    chosen.classList.toggle("bad", !!bad);
+  }
+  input.addEventListener("change", function () {
+    if (input.files.length) { show(input.files[0].name); }
+  });
+  ["dragenter", "dragover"].forEach(function (kind) {
+    zone.addEventListener(kind, function (e) { e.preventDefault(); zone.classList.add("over"); });
+  });
+  ["dragleave", "drop"].forEach(function (kind) {
+    zone.addEventListener(kind, function () { zone.classList.remove("over"); });
+  });
+  zone.addEventListener("drop", function (e) {
+    e.preventDefault();
+    var files = e.dataTransfer && e.dataTransfer.files;
+    if (!files || !files.length) { return; }
+    if (!/\.xlsx$/i.test(files[0].name)) {
+      show(files[0].name + " is not an Excel workbook (.xlsx)." +
+           (input.files.length ? " Still chosen: " + input.files[0].name : ""), true);
+      return;
+    }
+    input.files = files;
+    show(files[0].name);
+  });
+  // A file dropped anywhere else would open in the browser and leave the site.
+  ["dragover", "drop"].forEach(function (kind) {
+    document.addEventListener(kind, function (e) {
+      if (!zone.contains(e.target)) { e.preventDefault(); }
+    });
+  });
+})();
+
 // Chart tips: any mark with data-tip shows it on hover, or on tap on a phone.
 // The same numbers are in each chart's table view.
 (function () {

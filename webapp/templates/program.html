@@ -4,7 +4,6 @@
 {% block content %}{% set latest = view.latest %}
 <div class="phead">
   <div>
-    <p class="crumb"><a href="{{ url_for('programs') }}">Programs</a></p>
     <h1>{{ name }}</h1>
     <p class="byline">{{ total }} week{{ 's' if total != 1 }} on record. Latest: the week of {{ latest.week }}, from <a href="{{ url_for('run_detail', run_id=latest.run_id) }}">{{ latest.workbook }}</a> ({{ latest.mode|lower }} run by {{ latest.by_name }}{% if latest.runs_that_week > 1 %}; the latest of {{ latest.runs_that_week }} runs that week{% endif %}).</p>
   </div>

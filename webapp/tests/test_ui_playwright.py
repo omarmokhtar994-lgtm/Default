@@ -157,6 +157,33 @@ class InTheBrowser(unittest.TestCase):
         page.get_by_role("button", name="Dark look").click()
         expect(page.locator("html")).to_have_attribute("data-theme", "dark")
 
+    def drop(self, page, name, data=b"PK\x03\x04 dropped"):
+        """Drop a file on the upload area the way a browser does (DataTransfer)."""
+        handle = page.evaluate_handle(
+            """([name, bytes]) => { const t = new DataTransfer();
+                 t.items.add(new File([new Uint8Array(bytes)], name)); return t; }""", [name, list(data)])
+        for kind in ("dragenter", "dragover", "drop"):
+            page.dispatch_event("[data-drop]", kind, {"dataTransfer": handle})
+
+    def test_drop_a_workbook_onto_the_upload_area(self):
+        page = self.page()
+        self.sign_in(page)
+        self.drop(page, "REAL_dropped.xlsx")
+        expect(page.locator("[data-drop] .chosen")).to_have_text("REAL_dropped.xlsx")
+        self.assertEqual(page.evaluate("document.querySelector('input[type=file]').files[0].name"), "REAL_dropped.xlsx")
+        L_SCREENS.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(L_SCREENS / "home_dropped_file.png"))
+        page.get_by_role("button", name="Check and run").click()
+        expect(page.locator("h1")).to_have_text("REAL_dropped.xlsx")
+
+    def test_drop_rejects_other_files(self):
+        page = self.page()
+        self.sign_in(page)
+        self.drop(page, "REAL_first.xlsx")
+        self.drop(page, "notes.pdf")
+        expect(page.locator("[data-drop] .chosen")).to_contain_text("notes.pdf is not an Excel workbook")
+        self.assertEqual(page.evaluate("document.querySelector('input[type=file]').files[0].name"), "REAL_first.xlsx")
+
     def test_advanced_options_fold(self):
         page = self.page()
         self.sign_in(page)

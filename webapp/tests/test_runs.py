@@ -701,6 +701,27 @@ class TheReadinessCheck(unittest.TestCase):
         self.assertIn('name="week_start" type="date" value="2026-10-11"', body)
 
 
+class TheWayAround(unittest.TestCase):
+    """Phase L task 3: Back and Home on every page but home."""
+
+    def test_every_page_has_back_and_home(self):
+        app, store, *_ = make_app(start_worker=False)
+        store.add_user("omar", "Omar", "Owner-pass-123", is_admin=True, must_change=False)
+        client = app.test_client()
+        tok = TOKEN.search(client.get("/login").get_data(as_text=True)).group(1)
+        client.post("/login", data={"username": "omar", "password": "Owner-pass-123", "csrf_token": tok})
+        run_id = seed_week(store, "NMG", "2026-10-11")
+        parents = {f"/runs/{run_id}": "/", "/programs/NMG": "/programs", "/programs": "/", "/team": "/",
+                   "/admin/users": "/", "/account/password": "/"}
+        for url, parent in parents.items():
+            body = client.get(url).get_data(as_text=True)
+            self.assertIn(f'<a href="{parent}" data-back>', body, url)
+            self.assertIn('<a class="home" href="/">Home</a>', body, url)
+        home = client.get("/").get_data(as_text=True)
+        self.assertNotIn("data-back", home)
+        self.assertIn('<a href="/">Home</a>', home)  # the menu's first item
+
+
 class Access(unittest.TestCase):
     def test_downloads_need_login(self):
         app, store, *_ = make_app()

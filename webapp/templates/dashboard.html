@@ -29,9 +29,12 @@
     {% if queue %}
     <form method="post" action="{{ url_for('submit_run') }}" enctype="multipart/form-data">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <label class="drop">This week's workbook (.xlsx, up to 25 MB)
-        <input type="file" name="workbook" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
-      </label>
+      <div class="drop" data-drop>
+        <b>Drop this week's workbook here</b>
+        <label>or choose a file (.xlsx, up to 25 MB)
+          <input type="file" name="workbook" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required></label>
+        <span class="chosen" aria-live="polite"></span>
+      </div>
       <div class="tagrow">
         <label>Program
           <input name="program" type="text" list="known-programs" maxlength="80" autocomplete="off" placeholder="For example NMG Spanish" value="{{ prefill_program }}">

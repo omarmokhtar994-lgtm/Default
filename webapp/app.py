@@ -88,6 +88,7 @@ def _secret_key(data_dir: Path) -> str:
     return path.read_text(encoding="utf-8").strip()
 
 
+BACK = {"program": "programs"}  # where Back goes without browser history; every other page: home
 THEMES = ("light", "dark")  # no cookie: follow the device's setting
 EGYPT = timezone(timedelta(hours=3))  # owner's rule: times in Egypt time (UTC+3)
 
@@ -207,8 +208,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
     @app.context_processor
     def _globals() -> Dict[str, Any]:
         theme = request.cookies.get("theme", "")
+        endpoint = request.endpoint or ""
+        back = None if endpoint in ("home", "login", "static") else url_for(BACK.get(endpoint, "home"))
         return {"csrf_token": csrf_token, "copyright": COPYRIGHT, "user": g.get("user"),
-                "theme": theme if theme in THEMES else "",
+                "theme": theme if theme in THEMES else "", "back": back,
                 "status_words": STATUS_WORDS, "label": label, "modes": MODES, "stages": stages, "in_flight": IN_FLIGHT,
                 "when": _when, "run_options": run_options, "option_labels": OPTION_LABELS,
                 "eta_text": eta_text, "duration": duration, "clock": _clock}

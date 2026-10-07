@@ -77,3 +77,17 @@ Decisions fixed now:
 ### Task 4: (F4) Stage-1 probe with production-like start (no engine change)
 
 - [ ] Give `tools/stage1_ab_probe.py` the production warm start: each arm first runs the hard-feasibility probe, and the measured profile is hinted with it. Drop programs where the probe is infeasible under production hard rules (record them). Re-register Task 3's rule before any run, then run it.
+
+### Order change (owner, 2026-10-07 ~06:40 Egypt)
+
+Do Task 2 (:30 starts) next, then Task 5 (break-rule what-if); Tasks 3 and 4 are
+deferred (cleanup / small expected value).
+
+### Task 5: (F5) break-rule what-if (measurement only, no engine change)
+
+- [ ] For Cricut Chat and AE IT B2B, copy the workbook and change one break rule
+  at a time (concurrent-break ratio 0.3 -> 0.4; widen break windows by one
+  quarter each side), run the production runner (QUICK 3,600 s, 2 workers,
+  seed 9000), and report intervals at target and floor after breaks versus
+  the unchanged control. The owner decides any rule change; nothing is
+  changed in the real workbooks.

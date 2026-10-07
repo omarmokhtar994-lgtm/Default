@@ -76,3 +76,26 @@ No program met the pre-registered "worth considering" bar. Chat traded +9
 target for -3 floor; Voice and NMG EN+SP were level. Recommendation for the
 owner: keep "Allow Half-Hour Starts" off by default (as shipped); it stays
 available per program.
+
+## Pair 4: AE IT B2B, concurrent-break ratio 0.3 vs 0.4 (landed 09:58)
+
+Workbook: the owner's own AE IT B2B snapshot from the 2026-10-05 T90 run,
+copied; only "Maximum Concurrent Break Ratio" changed (0.3 -> 0.4).
+
+| | control (0.3) | ratio 0.4 |
+|---|---|---|
+| at target after breaks | 93 | 95 (+2) |
+| at floor after breaks | 104 | 103 (-1) |
+| at target / floor before breaks | 112 / 112 | 112 / 112 |
+| target / floor losses from breaks | 19 / 8 | 17 / 9 |
+| break concurrency warnings | 9 | 1 |
+| validator | PASS | PASS |
+| release verdict | REVIEW_REQUIRED (gate 5) | REVIEW_REQUIRED (gate 5) |
+
+Reading: +2 at target, so **inconclusive** (a second seed would be needed).
+Scope note: the same workbook also sets "Maximum Concurrent Breaks" = 4, and
+the engine's cap per quarter is min(staffed - 1, floor(ratio x staffed), 4).
+So 0.4 only loosens quarters with 5-13 people staffed (from 14 up the cap is 4
+under both ratios). The ratio change cuts concurrency warnings 9 -> 1 but
+recovers only 2 of the 19 target intervals lost to breaks; a larger effect
+would need the absolute cap or the break windows changed (owner's call).

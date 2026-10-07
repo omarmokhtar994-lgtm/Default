@@ -163,6 +163,14 @@ class RunningAndResults(unittest.TestCase):
         self.assertEqual(wait(store, run_id)["status"], "STOPPED")
 
 
+class TheVerdictLabel(unittest.TestCase):
+    def test_label_reads_the_verdict_word_not_its_note(self):
+        from webapp.runs import outcome
+        self.assertEqual(outcome("QUICK", "RELEASE VERDICT (run): RELEASABLE - gate 5: none configured")[0], "DONE")
+        self.assertEqual(outcome("QUICK", "RELEASE VERDICT (run): REVIEW_REQUIRED - gate 5 behind")[0], "REVIEW")
+        self.assertEqual(outcome("QUICK", "no verdict line")[0], "REVIEW")
+
+
 class RestartAndResume(unittest.TestCase):
     def test_restart_marks_running_as_interrupted(self):
         app, store, data, _ = make_app(start_worker=False)

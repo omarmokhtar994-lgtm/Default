@@ -326,7 +326,8 @@ def outcome(mode: str, verdict: str) -> tuple:
         return "DONE", ("Readiness check passed: the workbook and its hard rules are consistent. "
                         "No schedule was built; choose Quick to build one.")
     run_line = next((line for line in verdict.splitlines() if line.startswith("RELEASE VERDICT (run):")), "")
-    level = run_line.split(":", 1)[1].strip() if run_line else ""
+    words = run_line.split(":", 1)[1].split() if run_line else []
+    level = words[0] if words else ""  # the verdict word; a note may follow it
     if level == "RELEASABLE":
         return "DONE", "Approved: the independent validator passed this schedule and its release verdict is RELEASABLE."
     return "REVIEW", ("The independent validator passed this schedule, but its release verdict is "

@@ -35,3 +35,18 @@ derives still fail. The fix is held in a separate worktree and merged, gated
 and pushed only after the last measured run, so every arm runs on the same code.
 Re-validation of the shipped production copy of F_CHAT_HALF with the fixed
 validator: PASS, 0 hard failures.
+
+## Pair 2: Cricut Voice, control vs :30 starts (landed 08:00)
+
+| | control | :30 starts on |
+|---|---|---|
+| at target after breaks | 245 | 245 (0) |
+| at floor after breaks | 253 | 254 (+1) |
+| at target / floor before breaks | 247 / 253 | 247 / 254 |
+| :30 shift-days used | - | 1 (Thu 17:30 - 02:30) |
+| validator, as run | PASS | FAIL (same "shifts" defect as pair 1) |
+| validator, re-run with the fix | - | PASS, 0 hard failures |
+| release verdict, as run | RELEASABLE (gates 4/5 absolute not evaluated) | NOT_RELEASABLE (gate 8 only) |
+
+Reading: same target, +1 floor, so **no gain measured**. The engine used one
+:30 shift-day; :00 starts already cover Voice.

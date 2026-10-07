@@ -52,7 +52,7 @@ def _basis(mode: str, history: Dict[str, List[float]], cpus: int) -> str:
     if len(recent) >= 2:
         return f"based on the last {len(recent)} {mode.lower()} runs on this server"
     seeds = SEEDS.get(mode, 2)
-    return f"based on the run plan ({seeds} search{'es' if seeds > 1 else ''} of up to 1 h on {cpus} cores)"
+    return f"based on the run plan: {seeds} search{'es' if seeds > 1 else ''} of up to 1 h on {cpus} cores"
 
 
 def queue_plan(runs: List[dict], now: float, cpus: int, gate_pending: bool) -> Dict[str, dict]:

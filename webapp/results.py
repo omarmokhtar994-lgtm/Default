@@ -197,6 +197,7 @@ def summarize(results_dir: Path) -> Optional[Dict[str, Any]]:
         cells[int(row["day_index"])][_minutes(row["interval"]) // step] = {
             "cls": _cell_class(row), "pct": pct, "people": people,
             "before_pct": int(round(float(row.get("before_pct", 0)) * 100)),
+            "before_cls": _cell_class({"after_pct": row.get("before_pct", 0)}),
             "title": (f"{DAYS[int(row['day_index'])]} {row['interval']}: {pct}% of need after breaks, "
                       f"{_people(people)} on the floor (needs {float(row.get('required', 0)):g}, "
                       f"has {float(row.get('after_effective', 0)):.2g})"),

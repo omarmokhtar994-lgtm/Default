@@ -1,6 +1,66 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
+
 {% macro stagebar(run, small=False) -%}
 <ol class="stagebar{% if small %} small{% endif %}" aria-label="Progress: {{ label(run) }}" data-run="{{ run.id }}">
 {%- for name, state in stages(run) %}<li class="{{ state }}"><span>{{ name }}</span></li>{% endfor -%}
 </ol>
 {%- endmacro %}
+
+{# Five arcs, one per stage (Check, Safety gate, Schedule, Scoring, Result).
+   It shows the stage and nothing else: the runner reports no percentage. #}
+{% macro ring(run, size="big") -%}
+{% set parts = stages(run) %}
+<div class="ring {{ size }}" data-run="{{ run.id }}">
+  <svg viewBox="0 0 120 120" role="img" aria-label="Progress: {{ label(run) }}">
+    <circle class="track" cx="60" cy="60" r="48"/>
+    {% for name, state in parts %}
+    <circle class="arc {{ state }}" data-i="{{ loop.index0 }}" cx="60" cy="60" r="48"
+            stroke-dasharray="56.3 245.3" stroke-dashoffset="{{ -(loop.index0 * 60.32) + 75.4 }}"/>
+    {% endfor %}
+  </svg>
+  <span class="ring-word" data-status="{{ run.status }}">{{ label(run) }}</span>
+</div>
+{% if size == "big" %}
+<ol class="ring-steps">
+  {% for name, state in parts %}<li class="{{ state or 'todo' }}" data-i="{{ loop.index0 }}">{{ name }}</li>{% endfor %}
+</ol>
+{% endif %}
+{%- endmacro %}
+
+{% macro grid(summary, which) -%}
+{% set n = summary.slots|length %}
+<div class="grid g{{ n }} {{ which }}" role="img" aria-label="Coverage {{ 'after' if which == 'after' else 'before' }} breaks: one cell per {{ summary.interval_minutes }} minutes, Sunday to Saturday">
+  <span class="corner"></span>
+  {% for slot in summary.slots %}<span class="hour">{% if slot.endswith(':00') and (slot[:2]|int) % 3 == 0 %}{{ slot[:2] }}{% endif %}</span>{% endfor %}
+  {% for day in summary.days %}{% set d = loop.index0 %}
+  <span class="day">{{ day }}</span>
+  {% for c in summary.cells[d] %}{% if c %}{% if which == 'after' %}<span class="cell {{ c.cls }}" title="{{ c.title }}"></span>{% else %}<span class="cell {{ c.before_cls }}" title="{{ day }} {{ summary.slots[loop.index0] }}: {{ c.before_pct }}% of need before breaks"></span>{% endif %}{% else %}<span class="nocell"></span>{% endif %}{% endfor %}
+  {% endfor %}
+</div>
+{%- endmacro %}
+
+{# The week wall: built only from the run's own validator file. #}
+{% macro wall(summary, key, pair=True) -%}
+<figure class="wall">
+  {% if pair %}
+  <fieldset class="view" aria-label="Which schedule to show">
+    <label><input type="radio" name="view-{{ key }}" value="after" checked> After breaks (published)</label>
+    <label><input type="radio" name="view-{{ key }}" value="before"> Before breaks</label>
+  </fieldset>
+  {% endif %}
+  <div class="wall-scroll">
+    {{ grid(summary, 'after') }}
+    {% if pair %}{{ grid(summary, 'before') }}{% endif %}
+  </div>
+  <figcaption class="legend">
+    <span><i class="key covered"></i>Fully covered</span>
+    <span><i class="key short"></i>90 to 99%</span>
+    <span><i class="key gap"></i>Under 90%</span>
+    <span><i class="key over"></i>Over-staffed</span>
+    <span><i class="key none"></i>No requirement</span>
+    <span class="rule">Each cell is {{ summary.interval_minutes }} minutes, as checked by the independent validator.</span>
+  </figcaption>
+</figure>
+{%- endmacro %}
+
+{% macro pct(part, whole) -%}{{ ((part * 100 / whole)|round|int) if whole else 0 }}%{%- endmacro %}

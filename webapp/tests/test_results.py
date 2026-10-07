@@ -63,6 +63,8 @@ class TheSummary(unittest.TestCase):
         self.assertEqual(got, ["over", "short", "gap", "covered"])
         first = s["cells"][rows[0]["day_index"]][slot[rows[0]["interval"]]]
         self.assertEqual(first["pct"], 140)
+        # Before breaks: same thresholds on before_pct; over-staffing is only flagged after breaks.
+        self.assertIn(first["before_cls"], ("covered", "short", "gap"))
         self.assertIn(f"{rows[0]['day']} {rows[0]['interval']}", first["title"])
 
     def test_wall_columns_follow_the_interval_length(self):

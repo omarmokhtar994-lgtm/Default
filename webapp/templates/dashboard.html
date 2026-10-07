@@ -1,8 +1,30 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
-{% extends "base.html" %}{% from "_macros.html" import stagebar with context %}
+{% extends "base.html" %}{% from "_macros.html" import stagebar, ring, wall, pct with context %}
 {% block content %}
+<section class="now" aria-labelledby="now-h">
+  <h2 id="now-h" class="sr-only">Now</h2>
+  {% if active %}{% set r = active[0] %}{% set e = plan.get(r.id) %}
+  {{ ring(r, "small") }}
+  <div class="now-text">
+    <a class="now-title" href="{{ url_for('run_detail', run_id=r.id) }}">{{ r.workbook }}</a>
+    <p>{{ label(r) }} for {{ duration((now - (r.started or now)) / 60) }}{% if e %}; about {{ duration(e.finishes_in_min) }} left, {{ e.basis }}{% endif %}. Started by {{ r.by_name }}.</p>
+  </div>
+  {% else %}
+  <div class="now-text">
+    <p class="now-title idle">Nothing running</p>
+    <p>{% if waiting %}The next workbook in line starts in a moment.{% else %}A new run starts as soon as its workbook passes the check.{% endif %}</p>
+  </div>
+  {% endif %}
+  <div class="now-queue">
+    <p class="big">{{ waiting|length }} waiting</p>
+    {% for w in waiting[:3] %}{% set e = plan.get(w.id) %}
+    <p><a href="{{ url_for('run_detail', run_id=w.id) }}">{{ w.workbook }}</a>{% if e %}: starts in about {{ duration(e.starts_in_min) }} ({{ clock(e.starts_at) }}){% endif %}</p>
+    {% endfor %}
+  </div>
+</section>
+
 <div class="board">
-  <section class="newrun" aria-labelledby="newrun-h">
+  <section class="panel newrun" aria-labelledby="newrun-h">
     <h2 id="newrun-h">New run</h2>
     {% if queue %}
     <form method="post" action="{{ url_for('submit_run') }}" enctype="multipart/form-data">
@@ -13,38 +35,79 @@
       <fieldset class="modes">
         <legend>How long to search</legend>
         <label class="mode"><input type="radio" name="mode" value="QUICK" checked> Quick
-          <small>About 1 to 2 hours. Recommended for every week.</small></label>
+          <small>About 1 hour on this server. Recommended for every week.</small></label>
         <label class="mode"><input type="radio" name="mode" value="DEEP"> Deep
-          <small>About 2 to 4 hours. For weeks where gaps remain that you want closed.</small></label>
+          <small>About 2 hours. For weeks where gaps remain that you want closed.</small></label>
+        <label class="mode"><input type="radio" name="mode" value="OVERNIGHT"> Overnight
+          <small>About 3 hours. The longest search; start it in the evening.</small></label>
         <label class="mode"><input type="radio" name="mode" value="SMOKE"> Readiness check
           <small>Minutes. Checks the workbook and its rules; builds no schedule.</small></label>
       </fieldset>
+      <details class="advanced">
+        <summary>Advanced options</summary>
+        <p class="hint">Leave these on "Follow the workbook" unless you want to override what its Instructions sheet says for this run only.</p>
+        <label>Language working window
+          <select name="language_window">
+            <option value="workbook" selected>Follow the workbook</option>
+            <option value="OFF">Off</option><option value="MINIMUM_ROWS">Minimum rows</option>
+            <option value="ALL_ROWS">All rows</option><option value="REQUIRED_LANGUAGE_ONLY">Required language only</option>
+          </select></label>
+        <label>Coverage measure
+          <select name="coverage_measure">
+            <option value="workbook" selected>Follow the workbook</option>
+            <option value="INTERVAL_COUNT">Interval count (interval compliance)</option>
+            <option value="VOLUME_WEIGHTED">Volume weighted (service level)</option>
+          </select></label>
+        <label>What to build
+          <select name="stage">
+            <option value="FULL_SCHEDULE" selected>Full schedule with breaks</option>
+            <option value="BEFORE_BREAKS_ONLY">Before breaks only</option>
+          </select></label>
+      </details>
       <button class="primary" type="submit">Check and run</button>
     </form>
     {% else %}
     <p>Runs are not set up on this server yet. Ask your admin.</p>
     {% endif %}
   </section>
-  <section aria-labelledby="runs-h">
-    <h2 id="runs-h">Runs</h2>
-    {% if runs %}
-    <table class="runs">
-      <thead><tr><th>Workbook</th><th class="by-h">By</th><th class="when-h">Started</th><th>Progress</th></tr></thead>
-      <tbody>
-      {% for run in runs %}
-      <tr>
-        <td><a href="{{ url_for('run_detail', run_id=run.id) }}">{{ run.workbook }}</a><br><small>{{ label(run) }}, {{ run.mode|lower }}</small></td>
-        <td class="by">{{ run.by_name }}</td>
-        <td class="when">{{ when(run.created) }}</td>
-        <td class="bar">{{ stagebar(run, small=True) }}</td>
-      </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-    <p class="byline">Results are kept for 30 days, then their files are deleted.</p>
+
+  <section class="panel latest" aria-labelledby="latest-h">
+    {% if latest_summary %}{% set n = latest_summary.numbers %}
+    <h2 id="latest-h">Latest schedule: <a href="{{ url_for('run_detail', run_id=latest.id) }}">{{ latest.workbook }}</a></h2>
+    <div class="numbers">
+      <p><b>{{ pct(n.fully_covered, n.active) }}</b> of half-hours fully covered after breaks</p>
+      <p><b>{{ n.floor_gaps }}</b> below the floor</p>
+      <p><b>{{ latest_summary.findings|length }}</b> to review</p>
+    </div>
+    {{ wall(latest_summary, "latest", pair=False) }}
     {% else %}
-    <p class="empty">No runs yet. Choose this week's workbook on the left and press Check and run.</p>
+    <h2 id="latest-h">Latest schedule</h2>
+    <p class="empty">The week's coverage appears here after the first finished run: every half-hour, coloured by how well it is covered.</p>
     {% endif %}
   </section>
 </div>
+
+<section class="panel runs-panel" aria-labelledby="runs-h">
+  <h2 id="runs-h">Runs</h2>
+  {% if runs %}
+  <table class="runs">
+    <thead><tr><th>Workbook</th><th class="by-h">By</th><th class="when-h">Started</th><th>Progress</th><th class="cov-h">Covered</th></tr></thead>
+    <tbody>
+    {% for run in runs %}{% set s = summaries.get(run.id) %}
+    <tr>
+      <td><a href="{{ url_for('run_detail', run_id=run.id) }}">{{ run.workbook }}</a><br><small>{{ label(run) }}, {{ run.mode|lower }}</small></td>
+      <td class="by">{{ run.by_name }}</td>
+      <td class="when">{{ when(run.created) }}</td>
+      <td class="bar">{{ stagebar(run, small=True) }}</td>
+      <td class="cov">{% if s %}{{ pct(s.numbers.fully_covered, s.numbers.active) }}{% else %}<span class="dim">no data</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p class="byline">Results are kept for 30 days, then their files are deleted. Times are Egypt time.</p>
+  {% else %}
+  <p class="empty">No runs yet. Choose this week's workbook above and press Check and run.</p>
+  {% endif %}
+</section>
 {% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='app.js') }}" defer></script>{% endblock %}

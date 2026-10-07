@@ -14,7 +14,8 @@ from werkzeug.serving import make_server
 
 from webapp.tests.test_runs import make_app
 
-SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_i" / "screens"
+# Phase J (owner-approved control-room redesign): screenshots of the new look.
+SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_j" / "screens"
 CHROMIUM = "/opt/pw-browsers/chromium"
 
 try:
@@ -64,6 +65,7 @@ class InTheBrowser(unittest.TestCase):
         page.get_by_label("Password").fill(password)
         page.get_by_role("button", name="Sign in").click()
         page.wait_for_url(self.base + "/")
+        page.wait_for_timeout(600)  # let the page-to-page crossfade finish before any screenshot
 
     def test_login_page_renders_with_copyright(self):
         page = self.page()
@@ -81,7 +83,9 @@ class InTheBrowser(unittest.TestCase):
         page.get_by_label("Quick").check()
         page.get_by_role("button", name="Check and run").click()
         page.wait_for_url(self.base + "/runs/*")
-        expect(page.locator(".stagebar")).to_be_visible()
+        # Re-pinned in Phase J: the owner-approved redesign shows the run's stages as a ring
+        # on the run page (the thin bar stays in the runs list, checked below).
+        expect(page.locator(".progress .ring")).to_be_visible()
         # The page follows the run by itself, without a reload, until it ends.
         expect(page.locator(".status-word")).to_have_text("Approved", timeout=20000)
         expect(page.get_by_role("link", name="Download the schedule")).to_be_visible()
@@ -100,9 +104,39 @@ class InTheBrowser(unittest.TestCase):
         page.get_by_role("button", name="Check and run").click()
         page.wait_for_url(self.base + "/runs/*")
         expect(page.locator(".status-word")).to_have_text("Running", timeout=15000)
-        expect(page.locator(".stagebar li.active")).to_have_count(1)
+        expect(page.locator(".ring .arc.active")).to_have_count(1)  # Phase J: ring replaces the run-page bar
         page.screenshot(path=str(SCREENS / "09_run_in_progress.png"), full_page=True)
         expect(page.locator(".status-word")).to_have_text("Approved", timeout=20000)
+
+    def test_run_page_shows_the_week_wall(self):
+        page = self.page(height=1100)
+        self.sign_in(page)
+        real = self.workbook.with_name("REAL_week42.xlsx")
+        real.write_bytes(b"PK\x03\x04 real")
+        page.locator("input[type=file]").set_input_files(str(real))
+        page.get_by_role("button", name="Check and run").click()
+        expect(page.locator(".status-word")).to_have_text("Approved", timeout=20000)
+        expect(page.locator(".grid.after .cell")).to_have_count(126)
+        expect(page.locator(".grid.before")).to_be_hidden()
+        page.get_by_text("Before breaks", exact=True).click()
+        expect(page.locator(".grid.before")).to_be_visible()
+        page.get_by_text("After breaks (published)").click()
+        expect(page.get_by_role("heading", name="Headcount suggestions")).to_be_visible()
+        page.wait_for_timeout(800)  # let the wall's one-time fade-in finish before the screenshot
+        page.screenshot(path=str(SCREENS / "10_run_wall_and_headcount.png"), full_page=True)
+        page.goto(self.base + "/")
+        expect(page.locator(".latest .grid .cell")).to_have_count(126)
+        page.mouse.move(0, 0)
+        page.wait_for_timeout(800)
+        page.screenshot(path=str(SCREENS / "11_dashboard_latest_wall.png"), full_page=True)
+
+    def test_advanced_options_fold(self):
+        page = self.page()
+        self.sign_in(page)
+        expect(page.get_by_label("Language working window")).to_be_hidden()
+        page.get_by_text("Advanced options").click()
+        expect(page.get_by_label("Language working window")).to_be_visible()
+        page.screenshot(path=str(SCREENS / "12_advanced_options.png"), full_page=True)
 
     def test_rejected_workbook_says_what_to_fix(self):
         page = self.page()

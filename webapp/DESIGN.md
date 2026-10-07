@@ -77,8 +77,8 @@ A 7 x 48 grid (Sunday first; one cell per half-hour) built from the run's own
 by after-breaks coverage against its requirement (Gap < floor, Short <
 target, Covered at target, Over above the cap); half-hours with no
 requirement are dark. Hovering or focusing a cell says "Mon 14:30 - 6 of 6
-needed". On a run page the cells light up once, row by row (the single
-orchestrated motion; off under reduced motion). The dashboard shows the wall
+needed". On a run page the cells fade in once (the single orchestrated motion; off
+under reduced motion); pages crossfade where the browser supports it. The dashboard shows the wall
 of the latest finished schedule. Nothing on the wall is ever invented: a run
 without validation data shows a sentence saying why, not a pattern.
 

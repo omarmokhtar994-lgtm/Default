@@ -1,5 +1,5 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
-{% extends "base.html" %}{% from "_macros.html" import stagebar with context %}
+{% extends "base.html" %}{% from "_macros.html" import ring, wall, pct with context %}
 {% block title %}{{ run.workbook }} on Team Scheduler{% endblock %}
 {% block content %}
 <article class="run" data-run="{{ run.id }}" data-final="{{ 'no' if run.status in in_flight else 'yes' }}"
@@ -8,12 +8,37 @@
     <h1>{{ run.workbook }}</h1>
     <p class="status-word" data-status="{{ run.status }}" aria-live="polite">{{ label(run) }}</p>
   </div>
-  <p class="byline">{{ run.mode|capitalize if run.mode != 'SMOKE' else 'Readiness check' }} run, started by {{ run.by_name }} on {{ when(run.created) }} (Egypt time){% if run.exit_code is not none %}. Runner exit code {{ run.exit_code }} (0 means the independent validator passed it){% endif %}.</p>
-  {% set opts = run_options(run) %}<p class="byline">Settings: {% if opts %}{% for k, v in opts.items() %}{{ k|replace('_', ' ')|capitalize }} {{ option_labels[v] }}{% if not loop.last %}; {% endif %}{% endfor %}{% else %}followed the workbook{% endif %}.</p>
-  {{ stagebar(run) }}
-  {% if run.message %}<pre class="message" data-status="{{ run.status }}">{{ run.message }}</pre>{% endif %}
-  {% if run.status == 'REJECTED' %}<p class="byline">Fix the cells named above in your workbook, save it, and upload it again. Nothing was run.</p>{% endif %}
-  {% if run.verdict %}<pre class="verdict">{{ run.verdict }}</pre>{% endif %}
+  {% set opts = run_options(run) %}
+  <p class="byline">{{ run.mode|capitalize if run.mode != 'SMOKE' else 'Readiness check' }} run, started by {{ run.by_name }} on {{ when(run.created) }} (Egypt time). Settings: {% if opts %}{% for k, v in opts.items() %}{{ k|replace('_', ' ')|capitalize }} {{ option_labels[v] }}{% if not loop.last %}; {% endif %}{% endfor %}{% else %}followed the workbook{% endif %}.</p>
+  <p class="live" hidden>Connection lost: showing the last known state. Retrying.</p>
+
+  <div class="run-top">
+    <section class="panel progress" aria-label="Progress">
+      {{ ring(run) }}
+      <p class="eta">{% if run.status == 'QUEUED' and eta %}{{ eta_text(eta) }}{% elif run.status in ('GATE', 'RUNNING', 'SCORING') %}Running for {{ duration((now - (run.started or now)) / 60) }}{% if eta %}; about {{ duration(eta.finishes_in_min) }} left, {{ eta.basis }}{% endif %}.{% endif %}</p>
+      <p class="fresh" hidden></p>
+    </section>
+    <section class="panel coverage" aria-labelledby="cov-h">
+      <h2 id="cov-h">Coverage</h2>
+      {% if summary %}{% set n = summary.numbers %}
+      <div class="numbers">
+        <p><b>{{ pct(n.fully_covered, n.active) }}</b> {{ n.fully_covered }} of {{ n.active }} half-hours fully covered after breaks</p>
+        <p><b>{{ n.at_90 }}</b> at 90% or more</p>
+        <p><b>{{ n.floor_gaps }}</b> below the floor</p>
+        <p><b>{{ n.losses_from_breaks }}</b> lost to breaks</p>
+      </div>
+      {{ wall(summary, run.id) }}
+      {% elif run.status in in_flight %}
+      <p class="empty">Coverage appears here when the run finishes: every half-hour of the week, coloured by how well it is covered.</p>
+      {% else %}
+      <p class="empty">No coverage data for this run: the independent validator's report was not produced (a rejected workbook, a readiness check, a stopped run, or no schedule).</p>
+      {% endif %}
+    </section>
+  </div>
+
+  {% if run.message %}<p class="message" data-status="{{ run.status }}">{{ run.message.splitlines()[0] }}</p>{% endif %}
+  {% if run.status == 'REJECTED' %}<pre class="message-full">{{ run.message }}</pre><p class="byline">Fix the cells named above in your workbook, save it, and upload it again. Nothing was run.</p>{% endif %}
+
   <div class="actions">
     {% if has_schedule %}<a class="button primary" href="{{ url_for('run_schedule', run_id=run.id) }}">Download the schedule</a>{% endif %}
     {% if has_zip %}<a class="button" href="{{ url_for('run_download', run_id=run.id) }}">Download all results (.zip)</a>{% endif %}
@@ -24,9 +49,35 @@
     <form method="post" action="{{ url_for('run_resume', run_id=run.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="primary" type="submit">Resume</button></form>
     {% endif %}
   </div>
-  {% if has_schedule %}<p class="byline">The schedule file is the one to publish; its Read Me First tab shows its status. The zip has the before-breaks review copy, the alternatives and every validation report.</p>{% endif %}
-  <details class="log"{% if run.status in in_flight %} open{% endif %}>
-    <summary>Full log</summary>
+
+  {% if summary %}
+  <div class="run-bottom">
+    <section class="panel" aria-labelledby="check-h">
+      <h2 id="check-h">What to check</h2>
+      {% if summary.findings %}
+      <ul class="findings">{% for f in summary.findings %}<li class="{{ f.level }}"><span class="badge">{{ 'Gap' if f.level == 'gap' else 'Review' }}</span>{{ f.text }}</li>{% endfor %}</ul>
+      {% else %}<p>The independent validator raised no warnings for this schedule.</p>{% endif %}
+    </section>
+    {% if summary.staffing %}{% set st = summary.staffing %}
+    <section class="panel staffing" aria-labelledby="hc-h">
+      <h2 id="hc-h">Headcount suggestions</h2>
+      <p class="headline">{{ st.headline }}</p>
+      <p class="facts">{{ st.roster }} people scheduled, {{ st.productive_hours|round|int }} productive hours available; at least {{ st.target_hours|round|int }} needed for the target ({{ (st.target_ratio * 100)|round|int }}% of demand).{% if st.add_for_breaks %} Breaks alone need about {{ st.add_for_breaks }} more.{% endif %}</p>
+      {% if st.short_windows %}<h3>Short of the target</h3>
+      <ul class="windows">{% for w in st.short_windows %}<li>{{ w.day }} {{ w.start }} to {{ w.end }}: short by {{ w.people_short }} {{ 'person' if w.people_short == 1 else 'people' }} (lowest {{ w.lowest_pct }}% of need)</li>{% endfor %}</ul>{% endif %}
+      {% if st.over_windows %}<h3>Over-staffed</h3>
+      <ul class="windows">{% for w in st.over_windows %}<li>{{ w.day }} {{ w.start }} to {{ w.end }}: up to {{ w.people_over }} more than needed{% if w.people_over == 0 %} (less than one person's worth){% endif %}</li>{% endfor %}</ul>{% endif %}
+      <p class="note">Estimates from the scheduler's own capacity check and the validator's half-hour figures. They do not account for shift lengths, days off or language rules, so treat them as a starting point.</p>
+    </section>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <details class="tech"{% if run.status in in_flight %} open{% endif %}>
+    <summary>Technical details</summary>
+    {% if run.exit_code is not none %}<p>Runner exit code {{ run.exit_code }} (0 means the independent validator passed the schedule).</p>{% endif %}
+    {% if run.message %}<pre>{{ run.message }}</pre>{% endif %}
+    {% if run.verdict %}<pre class="verdict">{{ run.verdict }}</pre>{% endif %}
     <pre class="log">{{ log or "Nothing logged yet." }}</pre>
   </details>
 </article>

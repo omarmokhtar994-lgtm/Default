@@ -240,6 +240,76 @@ class Retention(unittest.TestCase):
         self.assertEqual(client.get(f"/runs/{run_id}/download").status_code, 404)
 
 
+class TheControlRoomPages(unittest.TestCase):
+    """Phase J task 2 (server side): what the redesigned pages say."""
+
+    def test_run_page_shows_the_week_wall_and_numbers(self):
+        app, store, *_ = make_app()
+        client = client_for(app)
+        run_id = run_id_of(upload(client, name="REAL_week.xlsx"))
+        wait(store, run_id)
+        page = html.unescape(client.get(f"/runs/{run_id}").get_data(as_text=True))
+        self.assertEqual(page.count('class="cell '), 2 * 126)  # after and before breaks, same places
+        self.assertIn("107 of 126 half-hours fully covered", page)
+        self.assertIn("Fri 21:30: 2 people on break at the same time", page)
+        self.assertIn("about 73 spare productive hours", page)
+        self.assertIn("Tue 20:30", page)
+
+    def test_run_without_validation_says_why(self):
+        app, store, *_ = make_app()
+        client = client_for(app)
+        run_id = run_id_of(upload(client))
+        wait(store, run_id)
+        page = client.get(f"/runs/{run_id}").get_data(as_text=True)
+        self.assertNotIn('class="cell ', page)
+        self.assertIn("No coverage data for this run", page)
+
+    def test_technical_details_are_folded(self):
+        app, store, *_ = make_app()
+        client = client_for(app)
+        run_id = run_id_of(upload(client, name="FAILS.xlsx"))
+        wait(store, run_id)
+        page = client.get(f"/runs/{run_id}").get_data(as_text=True)
+        self.assertRegex(page, r'<details class="tech">')
+        self.assertIn("Not approved", page)
+
+    def test_queue_position_and_start_estimate_are_shown(self):
+        app, store, *_ = make_app()
+        client = client_for(app)
+        first = run_id_of(upload(client, name="SLOW_a.xlsx"))
+        wait(store, first, {"RUNNING"})
+        second = run_id_of(upload(client, name="week45.xlsx"))
+        page = client.get(f"/runs/{second}").get_data(as_text=True)
+        self.assertIn("1 run ahead of you", page)
+        self.assertIn("Starts in about", page)
+        self.assertIn("Egypt time", page)
+        board = client.get("/").get_data(as_text=True)
+        self.assertIn("1 waiting", board)
+        wait(store, second)
+
+    def test_dashboard_shows_the_latest_wall(self):
+        app, store, *_ = make_app()
+        client = client_for(app)
+        wait(store, run_id_of(upload(client, name="REAL_week.xlsx")))
+        board = html.unescape(client.get("/").get_data(as_text=True))
+        self.assertIn("Latest schedule", board)
+        self.assertEqual(board.count('class="cell '), 126)
+        self.assertIn("85%", board)  # 107 of 126 fully covered
+
+    def test_server_error_page_is_friendly(self):
+        app, store, *_ = make_app(start_worker=False)
+
+        def boom():
+            raise RuntimeError("unexpected")
+        app.add_url_rule("/boom", "boom", boom)
+        app.testing = False
+        app.config["PROPAGATE_EXCEPTIONS"] = False
+        response = client_for(app).get("/boom")
+        self.assertEqual(response.status_code, 500)
+        self.assertIn("Something went wrong on our side. Your runs are safe. Tell your admin.",
+                      html.unescape(response.get_data(as_text=True)))
+
+
 class TheAdvancedOptions(unittest.TestCase):
     """Phase J task 6: the Colab notebook's settings, folded under the mode."""
 

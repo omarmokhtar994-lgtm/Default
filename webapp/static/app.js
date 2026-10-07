@@ -1,44 +1,82 @@
 // © 2026 Omar Mokhtar. All rights reserved.
-// Follows a run's status while it is in flight; reloads once it ends so the
-// download and resume buttons appear. Nothing else runs in the browser.
+// Follows a run while it is in flight: stage ring, status word, place in line,
+// how fresh the data is, and a clear notice when the connection drops (the
+// last known state stays on screen). Reloads once the run ends, so the wall,
+// findings and downloads appear. The dashboard refreshes every 30 s while
+// something is running or waiting.
 (function () {
   "use strict";
   var run = document.querySelector("article.run");
-  if (!run || run.dataset.final === "yes") { return; }
+  if (!run) {
+    if (document.querySelector(".now .ring") || /[1-9]\d* waiting/.test((document.querySelector(".now-queue .big") || {}).textContent || "")) {
+      setTimeout(function () { window.location.reload(); }, 30000);
+    }
+    return;
+  }
+  if (run.dataset.final === "yes") { return; }
   var url = run.dataset.statusUrl;
   var word = run.querySelector(".status-word");
-  var bar = run.querySelector(".stagebar");
-  var log = run.querySelector("pre.log");
+  var ringWord = run.querySelector(".ring-word");
+  var arcs = run.querySelectorAll(".ring .arc");
+  var steps = run.querySelectorAll(".ring-steps li");
+  var eta = run.querySelector(".progress .eta");
+  var fresh = run.querySelector(".progress .fresh");
+  var live = run.querySelector(".live");
+  var log = run.querySelector("details.tech pre.log");
+  var message = run.querySelector("p.message");
+  var lastGood = null;
+
+  function ago() {
+    if (!lastGood || !fresh) { return; }
+    var s = Math.round((Date.now() - lastGood) / 1000);
+    fresh.hidden = false;
+    fresh.textContent = s < 5 ? "Updated just now" : "Updated " + s + " s ago";
+  }
+
+  function minutes(m) {
+    m = Math.max(0, Math.round(m));
+    if (m < 60) { return m + " min"; }
+    var h = Math.floor(m / 60), r = m % 60;
+    return h + " h" + (r ? " " + (r < 10 ? "0" : "") + r + " min" : "");
+  }
 
   function draw(s) {
     word.textContent = s.label;
     word.dataset.status = s.status;
+    if (ringWord) { ringWord.textContent = s.label; ringWord.dataset.status = s.status; }
     s.stages.forEach(function (stage, i) {
-      var li = bar.children[i];
-      if (!li) { return; }
-      li.className = stage.state;
-      li.firstChild.textContent = stage.label;
+      if (arcs[i]) { arcs[i].setAttribute("class", "arc " + stage.state); }
+      if (steps[i]) { steps[i].className = stage.state || "todo"; steps[i].textContent = stage.label; }
     });
-    bar.setAttribute("aria-label", "Progress: " + s.label);
-    if (log && s.log) {
-      var atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 8;
-      log.textContent = s.log;
-      if (atBottom) { log.scrollTop = log.scrollHeight; }
+    if (eta) {
+      if (s.status === "QUEUED" && s.eta_text) {
+        eta.textContent = s.eta_text;
+      } else if (s.started && s.eta) {
+        eta.textContent = "Running for " + minutes((s.server_time - s.started) / 60) + "; about " +
+          minutes(s.eta.finishes_in_min) + " left, " + s.eta.basis + ".";
+      }
     }
+    if (log && s.log) { log.textContent = s.log; }
+    if (message && s.message) { message.textContent = s.message.split("\n")[0]; message.dataset.status = s.status; }
   }
 
   function poll() {
     fetch(url, { credentials: "same-origin", headers: { "Accept": "application/json" } })
       .then(function (r) {
-        if (r.status === 302 || r.redirected) { window.location.reload(); return null; }
-        return r.ok ? r.json() : null;
+        if (r.redirected) { window.location.reload(); return null; }
+        if (!r.ok) { throw new Error("HTTP " + r.status); }
+        return r.json();
       })
       .then(function (s) {
-        if (!s) { setTimeout(poll, 8000); return; }
+        if (!s) { return; }
+        lastGood = Date.now();
+        live.hidden = true;
         draw(s);
+        ago();
         if (s.final) { window.location.reload(); } else { setTimeout(poll, 3000); }
       })
-      .catch(function () { setTimeout(poll, 8000); });
+      .catch(function () { live.hidden = false; setTimeout(poll, 8000); });
   }
+  setInterval(ago, 1000);
   setTimeout(poll, 1500);
 })();

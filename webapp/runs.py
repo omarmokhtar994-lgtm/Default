@@ -317,6 +317,10 @@ class RunQueue:
         lines = [line.strip() for line in output.splitlines() if line.startswith("RELEASE VERDICT")]
         return "\n".join(lines) or "No release verdict was produced (see the log)."
 
+    def gate_pending(self) -> bool:
+        """True while the installed package has no PASS stamp (the next run runs the gate)."""
+        return gate.passed_stamp(self.gate_dir, self.package_root) is None
+
     def summary_path(self, run_id: str) -> Path:
         return self.run_dir(run_id) / "summary.json"
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import secrets
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -12,6 +13,7 @@ from typing import Any, Dict, Optional
 from flask import Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file, session, url_for
 from werkzeug.utils import secure_filename
 
+from .eta import queue_plan
 from .auth import admin_required, check_csrf, csrf_token, load_user, login_required
 from .runs import MODES, OPTION_LABELS, RESUMABLE, RunQueue, parse_options, run_options
 from .store import Store
@@ -78,6 +80,30 @@ def _when(epoch: Optional[float]) -> str:
     return datetime.fromtimestamp(epoch, EGYPT).strftime("%a %d %b, %H:%M")
 
 
+def duration(minutes: float) -> str:
+    minutes = max(0, int(round(minutes)))
+    if minutes < 60:
+        return f"{minutes} min"
+    hours, rest = divmod(minutes, 60)
+    return f"{hours} h" + (f" {rest:02d} min" if rest else "")
+
+
+def _clock(epoch: float) -> str:
+    return datetime.fromtimestamp(epoch, EGYPT).strftime("%H:%M")
+
+
+def eta_text(eta: Optional[dict]) -> str:
+    """One plain sentence about a run's place in line (empty for the running one)."""
+    if not eta or eta["position"] == 0:
+        return ""
+    ahead = eta["ahead"]
+    lead = "Next in line" if ahead == 0 else f"{ahead} run{'s' if ahead != 1 else ''} ahead of you"
+    if eta["starts_in_min"] <= 0:
+        return f"{lead}. Starts now."
+    return (f"{lead}. Starts in about {duration(eta['starts_in_min'])} "
+            f"(around {_clock(eta['starts_at'])} Egypt time), {eta['basis']}.")
+
+
 def password_problem(new: str, confirm: str, username: str) -> str:
     if len(new) < MIN_PASSWORD:
         return f"Use at least {MIN_PASSWORD} characters."
@@ -132,7 +158,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
     def _globals() -> Dict[str, Any]:
         return {"csrf_token": csrf_token, "copyright": COPYRIGHT, "user": g.get("user"),
                 "status_words": STATUS_WORDS, "label": label, "modes": MODES, "stages": stages, "in_flight": IN_FLIGHT,
-                "when": _when, "run_options": run_options, "option_labels": OPTION_LABELS}
+                "when": _when, "run_options": run_options, "option_labels": OPTION_LABELS,
+                "eta_text": eta_text, "duration": duration, "clock": _clock}
 
     # ------------------------------------------------------------- sign in/out
     @app.route("/login", methods=["GET", "POST"])
@@ -222,12 +249,26 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return redirect(url_for("admin_users"))
 
     # ------------------------------------------------------------- home
+    def _plan(runs: list) -> Dict[str, dict]:
+        queue = app.extensions.get("runs")
+        if queue is None:
+            return {}
+        return queue_plan(runs, time.time(), os.cpu_count() or 1, queue.gate_pending())
+
     @app.route("/")
     @login_required
     def home():  # type: ignore[no-untyped-def]
-        runs = app.extensions.get("runs")
-        return render_template("dashboard.html", runs=app.extensions["store"].list_runs(),
-                               queue=runs)
+        queue = app.extensions.get("runs")
+        runs = app.extensions["store"].list_runs()
+        plan = _plan(runs)
+        summaries = {r["id"]: queue.summary(r["id"]) for r in runs} if queue else {}
+        active = [r for r in runs if r["status"] in ("GATE", "RUNNING", "SCORING")]
+        waiting = sorted((r for r in runs if r["status"] == "QUEUED"), key=lambda r: r["created"])
+        latest = next((r for r in runs if r["status"] in ("DONE", "REVIEW") and summaries.get(r["id"])), None)
+        return render_template("dashboard.html", runs=runs, queue=queue, plan=plan, summaries=summaries,
+                               active=active, waiting=waiting, latest=latest,
+                               latest_summary=summaries.get(latest["id"]) if latest else None,
+                               now=time.time())
 
     # ------------------------------------------------------------- runs
     def _queue() -> RunQueue:
@@ -277,16 +318,20 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return render_template("run.html", run=run, log=queue.log_tail(run_id),
                                has_zip=queue.zip_path(run_id).is_file(),
                                has_schedule=queue.final_schedule(run_id) is not None,
-                               resumable=run["status"] in RESUMABLE)
+                               resumable=run["status"] in RESUMABLE, summary=queue.summary(run_id),
+                               eta=_plan(app.extensions["store"].list_runs()).get(run_id), now=time.time())
 
     @app.route("/runs/<run_id>/status.json")
     @login_required
     def run_status(run_id: str):  # type: ignore[no-untyped-def]
         run = _run_or_404(run_id)
+        eta = _plan(app.extensions["store"].list_runs()).get(run_id)
         return jsonify(status=run["status"], label=label(run),
                        message=run["message"], verdict=run["verdict"], exit_code=run["exit_code"],
                        stages=[{"label": name, "state": state} for name, state in stages(run)],
-                       final=run["status"] not in IN_FLIGHT, log=_queue().log_tail(run_id, 80))
+                       final=run["status"] not in IN_FLIGHT, log=_queue().log_tail(run_id, 80),
+                       eta=eta, eta_text=eta_text(eta) if eta else "", started=run["started"],
+                       server_time=time.time())
 
     @app.route("/runs/<run_id>/download")
     @login_required
@@ -321,6 +366,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
         flash("Queued again; it continues from its checkpoints." if _queue().resume(run_id)
               else "This run cannot be resumed.")
         return redirect(url_for("run_detail", run_id=run_id))
+
+    @app.errorhandler(500)
+    def _server_error(err):  # type: ignore[no-untyped-def]
+        return render_template("error.html", code=500,
+                               message="Something went wrong on our side. Your runs are safe. Tell your admin."), 500
 
     @app.errorhandler(400)
     @app.errorhandler(403)

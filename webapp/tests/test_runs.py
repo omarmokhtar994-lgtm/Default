@@ -20,7 +20,7 @@ from webapp.store import Store
 
 FAKES = Path(__file__).with_name("fakes.py")
 TOKEN = re.compile(r'name="csrf_token" value="([^"]+)"')
-FINAL = {"DONE", "FAILED", "REJECTED", "INTERRUPTED", "STOPPED", "EXPIRED"}
+FINAL = {"DONE", "REVIEW", "FAILED", "REJECTED", "INTERRUPTED", "STOPPED", "EXPIRED"}
 
 
 def make_app(start_worker=True, gate_fails=False, **extra):
@@ -110,6 +110,31 @@ class RunningAndResults(unittest.TestCase):
         self.assertTrue(any(n.endswith("_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx") for n in names), names)
         schedule = client.get(f"/runs/{run_id}/schedule")
         self.assertEqual((schedule.status_code, schedule.data), (200, b"schedule"))
+
+    def test_review_required_verdict_is_never_shown_as_approved(self):
+        # The runner exits 0 for RELEASABLE and for REVIEW_REQUIRED (only
+        # NOT_RELEASABLE fails it), so the run's label follows the verdict.
+        app, store, *_ = make_app()
+        client = client_for(app)
+        run_id = run_id_of(upload(client, name="REVIEW_week.xlsx"))
+        run = wait(store, run_id, FINAL | {"REVIEW"})
+        self.assertEqual((run["status"], run["exit_code"]), ("REVIEW", 0))
+        page = html.unescape(client.get(f"/runs/{run_id}").get_data(as_text=True))
+        self.assertIn("Needs review", page)
+        self.assertNotIn(">Approved<", page)
+        self.assertIn("REVIEW_REQUIRED", page)
+        self.assertEqual(client.get(f"/runs/{run_id}/schedule").status_code, 200)
+        self.assertIn("Needs review", client.get("/").get_data(as_text=True))
+
+    def test_readiness_check_says_ready_not_approved(self):
+        app, store, *_ = make_app()
+        client = client_for(app)
+        run_id = run_id_of(upload(client, mode="SMOKE"))
+        run = wait(store, run_id)
+        self.assertEqual(run["status"], "DONE")
+        page = client.get(f"/runs/{run_id}").get_data(as_text=True)
+        self.assertIn(">Ready<", page)
+        self.assertNotIn(">Approved<", page)
 
     def test_failed_runner_exit_code_is_shown(self):
         app, store, *_ = make_app()

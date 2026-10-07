@@ -144,13 +144,14 @@ fieldset.modes legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
 .status-word { font: 700 31px/1 var(--display); letter-spacing: -0.02em; }
 .status-word[data-status=DONE] { color: var(--green); }
 .status-word[data-status=FAILED], .status-word[data-status=REJECTED] { color: var(--red); }
-.status-word[data-status=RUNNING], .status-word[data-status=GATE], .status-word[data-status=SCORING],
+.status-word[data-status=REVIEW], .status-word[data-status=RUNNING], .status-word[data-status=GATE], .status-word[data-status=SCORING],
 .status-word[data-status=QUEUED], .status-word[data-status=CHECKING] { color: #8A5A0E; }
 .byline { color: var(--ink-soft); margin: 0 0 20px; }
 .message, .verdict { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; margin: 20px 0 0; padding: 14px 16px;
   background: var(--paper); border-left: 4px solid var(--mist); border-radius: 0 var(--radius) var(--radius) 0; }
 .message[data-status=DONE] { border-left-color: var(--green); }
 .message[data-status=FAILED], .message[data-status=REJECTED] { border-left-color: var(--red); }
+.message[data-status=REVIEW] { border-left-color: var(--amber); }
 .actions { display: flex; gap: 12px; flex-wrap: wrap; margin: 24px 0; }
 .actions form { margin: 0; }
 details.log { margin-top: 8px; }

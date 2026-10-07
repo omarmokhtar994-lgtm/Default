@@ -33,7 +33,7 @@
       <tbody>
       {% for run in runs %}
       <tr>
-        <td><a href="{{ url_for('run_detail', run_id=run.id) }}">{{ run.workbook }}</a><br><small>{{ status_words.get(run.status, run.status) }}, {{ run.mode|lower }}</small></td>
+        <td><a href="{{ url_for('run_detail', run_id=run.id) }}">{{ run.workbook }}</a><br><small>{{ label(run) }}, {{ run.mode|lower }}</small></td>
         <td class="by">{{ run.by_name }}</td>
         <td class="when">{{ when(run.created) }}</td>
         <td class="bar">{{ stagebar(run, small=True) }}</td>

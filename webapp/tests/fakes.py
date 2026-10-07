@@ -37,9 +37,11 @@ def check(argv):
 
 def score(argv):
     results = Path(argv[0])
-    for case in sorted(p for p in results.iterdir() if p.is_dir() and not p.name.startswith("_")):
-        print(f"RELEASE VERDICT {case.name}: RELEASABLE")
-    print("RELEASE VERDICT (run): RELEASABLE")
+    cases = sorted(p for p in results.iterdir() if p.is_dir() and not p.name.startswith("_"))
+    verdict = "REVIEW_REQUIRED" if any("REVIEW" in c.name for c in cases) else "RELEASABLE"
+    for case in cases:
+        print(f"RELEASE VERDICT {case.name}: {verdict}")
+    print(f"RELEASE VERDICT (run): {verdict}")
     return 0
 
 

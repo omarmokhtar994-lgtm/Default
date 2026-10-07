@@ -3,7 +3,8 @@
 score the release gates, zip the results, and expire them after 30 days.
 
 Statuses: CHECKING -> REJECTED | QUEUED -> GATE -> RUNNING -> SCORING ->
-DONE | FAILED; a run can also end STOPPED (owner pressed Stop), INTERRUPTED
+DONE | REVIEW | FAILED (REVIEW: validated, but the release verdict asks for a
+person's review before publishing); a run can also end STOPPED (owner pressed Stop), INTERRUPTED
 (the server restarted during it) or EXPIRED (files deleted after 30 days).
 STOPPED, INTERRUPTED and FAILED runs can be resumed from their checkpoints.
 
@@ -251,7 +252,7 @@ class RunQueue:
         verdict = self._score(run_id)
         self._zip(run_id)
         if code == 0:
-            status, message = "DONE", "Approved: the independent validator passed this schedule."
+            status, message = outcome(run["mode"], verdict)
         else:
             status = "FAILED"
             message = (f"Not approved: the runner exited with code {code}. "
@@ -315,6 +316,22 @@ class RunQueue:
             except Exception as exc:  # keep cleaning tomorrow; say why today failed
                 print(f"run cleanup failed: {exc!r}", file=sys.stderr, flush=True)
             time.sleep(3600)
+
+
+def outcome(mode: str, verdict: str) -> tuple:
+    """(status, message) for a run whose runner exited 0. The runner exits 0
+    for RELEASABLE and for REVIEW_REQUIRED alike (only NOT_RELEASABLE fails
+    it), so the label follows the run-level release verdict, never a guess."""
+    if mode == "SMOKE":
+        return "DONE", ("Readiness check passed: the workbook and its hard rules are consistent. "
+                        "No schedule was built; choose Quick to build one.")
+    run_line = next((line for line in verdict.splitlines() if line.startswith("RELEASE VERDICT (run):")), "")
+    level = run_line.split(":", 1)[1].strip() if run_line else ""
+    if level == "RELEASABLE":
+        return "DONE", "Approved: the independent validator passed this schedule and its release verdict is RELEASABLE."
+    return "REVIEW", ("The independent validator passed this schedule, but its release verdict is "
+                      f"{level or 'missing'}: a person must review it before it is published. "
+                      "The verdict lines below and the schedule's Read Me First tab say what to check.")
 
 
 def passed(stamp: Optional[dict]) -> bool:

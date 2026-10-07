@@ -20,19 +20,27 @@ COPYRIGHT = "© 2026 Omar Mokhtar. All rights reserved."
 MIN_PASSWORD = 10
 RUN_ID = re.compile(r"^[0-9a-f]{12}$")
 STATUS_WORDS = {"CHECKING": "Checking", "REJECTED": "Rejected", "QUEUED": "Queued", "GATE": "Safety gate",
-                "RUNNING": "Running", "SCORING": "Scoring", "DONE": "Approved", "FAILED": "Not approved",
+                "RUNNING": "Running", "SCORING": "Scoring", "DONE": "Approved", "REVIEW": "Needs review",
+                "FAILED": "Not approved",
                 "STOPPED": "Stopped", "INTERRUPTED": "Interrupted", "EXPIRED": "Expired"}
 STAGES = ("Check", "Safety gate", "Schedule", "Scoring", "Result")
 IN_FLIGHT = ("CHECKING", "QUEUED", "GATE", "RUNNING", "SCORING")
+
+
+def label(run: Dict[str, Any]) -> str:
+    """The word shown for a run's state (a passed readiness check built no schedule)."""
+    if run["status"] == "DONE" and run.get("mode") == "SMOKE":
+        return "Ready"
+    return STATUS_WORDS.get(run["status"], run["status"])
 
 
 def stages(run: Dict[str, Any]) -> list:
     """(label, state) for the five stage-bar segments; state is one of
     done | active | waiting | failed | halted | ok | '' (not reached)."""
     status = run["status"]
-    if status in ("DONE", "EXPIRED"):
-        return [(label, "done") for label in STAGES[:-1]] + [("Approved" if status == "DONE" else "Expired",
-                                                              "ok" if status == "DONE" else "done")]
+    if status in ("DONE", "REVIEW", "EXPIRED"):
+        last = {"DONE": "ok", "REVIEW": "waiting", "EXPIRED": "done"}[status]
+        return [(name, "done") for name in STAGES[:-1]] + [(label(run), last)]
     at, state = {"CHECKING": (0, "active"), "REJECTED": (0, "failed"), "QUEUED": (1, "waiting"),
                  "GATE": (1, "active"), "RUNNING": (2, "active"), "SCORING": (3, "active"),
                  "STOPPED": (2, "halted"), "INTERRUPTED": (2, "halted")}.get(status, (None, ""))
@@ -123,7 +131,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
     @app.context_processor
     def _globals() -> Dict[str, Any]:
         return {"csrf_token": csrf_token, "copyright": COPYRIGHT, "user": g.get("user"),
-                "status_words": STATUS_WORDS, "modes": MODES, "stages": stages, "in_flight": IN_FLIGHT,
+                "status_words": STATUS_WORDS, "label": label, "modes": MODES, "stages": stages, "in_flight": IN_FLIGHT,
                 "when": _when}
 
     # ------------------------------------------------------------- sign in/out
@@ -271,7 +279,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
     @login_required
     def run_status(run_id: str):  # type: ignore[no-untyped-def]
         run = _run_or_404(run_id)
-        return jsonify(status=run["status"], label=STATUS_WORDS.get(run["status"], run["status"]),
+        return jsonify(status=run["status"], label=label(run),
                        message=run["message"], verdict=run["verdict"], exit_code=run["exit_code"],
                        stages=[{"label": label, "state": state} for label, state in stages(run)],
                        final=run["status"] not in IN_FLIGHT, log=_queue().log_tail(run_id, 80))

@@ -665,6 +665,23 @@ class TheReadinessCheck(unittest.TestCase):
         self.assertIn("Start the run", body)
         self.assertNotIn("/resume", body)
 
+    def test_old_readiness_checks_are_read_again_at_startup(self):
+        """Checks finished under the old rule (runner exit code) read "Not approved";
+        their engine outcome is read again when the website starts."""
+        app, store, client, run_id = self.ready_run()
+        store.update_run(run_id, status="FAILED", engine_outcome="",
+                         message="Not approved: the runner exited with code 2.")  # as the old rule left it
+        not_ready = run_id_of(upload(client, name="NOTREADY_old.xlsx", mode="SMOKE"))
+        wait(store, not_ready)
+        store.update_run(not_ready, engine_outcome="")
+        self.assertEqual(app.extensions["runs"].backfill_outcomes(), 2)
+        run = store.get_run(run_id)
+        self.assertEqual(run["status"], "DONE")
+        self.assertTrue(run["message"].startswith("Ready to run"))
+        self.assertEqual(store.get_run(not_ready)["status"], "FAILED")
+        self.assertEqual(json.loads(store.get_run(not_ready)["engine_outcome"])["code"], "HARD_RULE_COMBINATION_INFEASIBLE")
+        self.assertEqual(app.extensions["runs"].backfill_outcomes(), 0)  # once only
+
     def test_start_from_readiness_queues_the_same_workbook(self):
         app, store, client, run_id = self.ready_run(program="NMG", week_start="2026-10-11", language_window="ALL_ROWS")
         response = client.post(f"/runs/{run_id}/start", data={"csrf_token": token(client), "mode": "QUICK"})

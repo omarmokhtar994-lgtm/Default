@@ -184,6 +184,42 @@ class InTheBrowser(unittest.TestCase):
         expect(page.locator("[data-drop] .chosen")).to_contain_text("notes.pdf is not an Excel workbook")
         self.assertEqual(page.evaluate("document.querySelector('input[type=file]').files[0].name"), "REAL_first.xlsx")
 
+    def upload_as(self, page, name, mode="Quick"):
+        page.goto(self.base + "/")
+        path = self.workbook.with_name(name)
+        path.write_bytes(b"PK\x03\x04 fake")
+        page.locator("input[type=file]").set_input_files(str(path))
+        page.get_by_label(mode, exact=False).first.check()
+        page.get_by_role("button", name="Check and run").click()
+
+    def test_failed_run_says_why_and_what_to_change(self):
+        page = self.page(height=1000)
+        self.sign_in(page)
+        self.upload_as(page, "CONFLICT_English.xlsx")
+        expect(page.locator(".status-word")).to_have_text("Can't be scheduled", timeout=20000)
+        expect(page.get_by_role("heading", name="What to change in the input workbook")).to_be_visible()
+        page.mouse.move(0, 0)
+        page.wait_for_timeout(600)
+        L_SCREENS.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(L_SCREENS / "failed_run_fix_list.png"), full_page=True)
+        page.get_by_role("link", name="Upload the corrected workbook").click()
+        expect(page.locator("#newrun")).to_be_visible()
+
+    def test_ready_check_starts_the_real_run(self):
+        page = self.page(height=900)
+        self.sign_in(page)
+        self.upload_as(page, "READY_Spanish.xlsx", mode="Readiness check")
+        expect(page.locator(".status-word")).to_have_text("Ready to run", timeout=20000)
+        expect(page.get_by_role("button", name="Resume")).to_have_count(0)
+        page.mouse.move(0, 0)
+        page.wait_for_timeout(600)
+        page.screenshot(path=str(L_SCREENS / "ready_check_start.png"), full_page=True)
+        page.get_by_label("Deep").check()
+        page.get_by_role("button", name="Start the run").click()
+        expect(page.locator(".byline").first).to_contain_text("Deep run")
+        page.get_by_role("link", name="‹ Back").click()
+        expect(page.locator(".status-word")).to_have_text("Ready to run")
+
     def test_advanced_options_fold(self):
         page = self.page()
         self.sign_in(page)

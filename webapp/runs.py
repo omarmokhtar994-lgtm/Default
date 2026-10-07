@@ -423,7 +423,30 @@ class RunQueue:
             filled += bool((self.store.get_run(run["id"]) or {}).get("metrics"))
         return filled
 
+    def backfill_outcomes(self) -> int:
+        """Runs finished before the engine's outcome was kept on the row get it
+        from their files. A readiness check judged by the old rule (the
+        runner's exit code, which is 2 for every readiness check) is judged
+        again by the engine's own outcome."""
+        filled = 0
+        for run in self.store.list_runs(limit=1_000_000):
+            if run.get("engine_outcome") or run["status"] in ACTIVE + ("QUEUED", "CHECKING", "EXPIRED"):
+                continue
+            found = engine_outcome.read(self.results_dir(run["id"]))
+            if found is None:
+                continue
+            fields: Dict[str, Any] = {"engine_outcome": json.dumps(engine_outcome.compact(found))}
+            if run["mode"] == "SMOKE" and run["status"] in ("DONE", "FAILED"):
+                fields["status"], fields["message"] = readiness(found)
+            self.store.update_run(run["id"], **fields)
+            filled += 1
+        return filled
+
     def _cleaner(self) -> None:
+        try:
+            self.backfill_outcomes()
+        except Exception as exc:  # a convenience for older runs; say why it failed
+            print(f"outcome backfill failed: {exc!r}", file=sys.stderr, flush=True)
         try:
             self.backfill()
         except Exception as exc:  # history for older runs is a convenience; say why it failed

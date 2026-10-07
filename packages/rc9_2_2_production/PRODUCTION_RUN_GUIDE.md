@@ -129,7 +129,7 @@ change (`VERIFIED: ...` or `REFUSED: ...`). Keep your original as a backup.
 python3 tools/build_input_template.py OLD_WORKBOOK.xlsx NEW_WORKBOOK.xlsx
 ```
 
-In Colab, add a cell after step 3 of the notebook:
+In Colab, add a cell after step 1 (Setup) of the notebook:
 
 ```
 !python3 {PACKAGE_ROOT}/tools/build_input_template.py "/content/drive/MyDrive/schedules/old.xlsx" "/content/drive/MyDrive/schedules/new.xlsx"
@@ -310,6 +310,8 @@ opening minimums on next Sunday stay hard.
 | `Break Set For Shifts Of N Hours Or More` = `15, 30, 15, 15` | Shifts of N hours or more get these breaks, in this order (30 minutes or more is a lunch). Several rows may be given; the largest threshold a shift reaches wins. The validator and the clean-room checker read the same rows. | Absent: every shift gets the global break set |
 | `Coverage Objective Weighting` = `Interval Count` or `Volume Weighted` (a dropdown in the Coverage section of a template-built workbook) | What "better coverage" means for this program. **Interval Count**: the share of intervals at target; choose it for a program accountable for interval compliance. **Volume Weighted**: each interval's miss weighs by its requirement, and schedules are ranked first by the requirement covered at target; choose it for a program accountable for service level (busy intervals matter more). The two trade against each other: Volume Weighted can give up quiet intervals to cover a peak. The Colab run cell can override it per run (`COVERAGE_MEASURE`). With several seeds (QUICK keeps the best of 2), the best seed is picked by the same measure: by requirement covered at target, recomputed by the independent validator, for Volume Weighted, and by intervals at target as before for Interval Count (`PORTFOLIO_SUMMARY.json` → `after_ranking_measure`). The first lines of `BUSINESS_OUTCOME.txt` say which measure was used and where it came from (workbook, run override, or default). | `Interval Count` |
 | `Stage 1 Minimum Slice Seconds` (Engine Defaults) | The Stage-1 search time per profile. The planner now funds the Stage-1 window for this slice (up to 45 % of the run); it used to size the window for 45 s whatever was set. Measured on AE_IT_B2B (5 paired seeds, QUICK): `240` gave +1.4 after-break floor and +2.0 target intervals, with 1.4 more break-concurrency violations; a per-workbook option, not a default. | 45 |
+| `Allow Half-Hour Starts` = `Yes` (Shift & OFF section) | Each full-hour shift may also start 30 minutes later, used only where full-hour starts cannot cover demand; every :30 shift-day is listed in Production Summary. Measured (Phase F, `evidence/phase_f/F_MEASUREMENTS.md`): no gain on Chat, Voice or NMG EN+SP, so keep it off unless a program needs it. | No |
+| `Max 11H/3OFF Associates` = a whole number, e.g. `2` (Shift & OFF section) | Used only when `Use 11H/3OFF` is Yes: at most this many associates work the 11-hour, three-OFF-day pattern this week; everyone else works the 9-hour week. Blank = no limit. A limit below the associates who must work long (a fixed 11-hour request, or a library with only long shifts) is refused before solving with `11H_ASSOCIATE_LIMIT_BELOW_FORCED`; the validator fails any week over the limit (`11H_ASSOCIATE_LIMIT_EXCEEDED`). Production Summary shows the limit and how many associates used the pattern. | No limit |
 
 **Choosing the coverage measure: what Volume Weighted did on each program.**
 Measured on five real programs, three seeds each (two for NMG Spanish), QUICK
@@ -446,33 +448,35 @@ so a disconnect does not lose a finished schedule. Use
 `RC922_Colab_A_NO_DRIVE.ipynb` only for short runs; it asks you to upload the
 ZIP and download the results.
 
+The notebook has three steps. Run them in order; each is one click.
+
 1. Open the notebook in Colab (File → Upload notebook).
    *Runtime → Change runtime type: CPU*, and High-RAM if offered.
-2. **Step 1 (Environment):** run it. It installs the pinned solver, scipy and ruff,
-   and prints the versions.
-3. **Step 2 (Drive):** run it and allow access. It finds
-   `RC9_2_2_PRODUCTION_PACKAGE.zip` in MyDrive, `Colab Notebooks`, `Downloads`
-   or one folder down. Otherwise, set `ZIP_PATH` to its full path.
-4. **Step 3 (Extract):** run it. Set `DRIVE_RESULTS` to where the results
-   should go (default `MyDrive/RC922_RC5/RESULTS`).
-5. **Step 4 (Verify):** run it. It prints the engine release and sha256.
-6. **Step 4b (Check your workbook):** set `WORKBOOK_TO_CHECK`, for example
-   `/content/drive/MyDrive/schedules/week42.xlsx`, and run. Continue only on
-   `ACCEPTED`.
-7. **Step 5 (Run):** set:
-   - `MY_WORKBOOK` = the same path as in 4b;
-   - `MODE = QUICK` (recommended) or `DEEP`;
-   - leave `SEEDS = 0` (automatic: 2 seeds for QUICK, 4 for DEEP), `SINGLE_LONG_RUN = False`, `SKIP_GUARDS = False`;
-   - leave `LANGUAGE_WORKING_WINDOW = workbook` (it uses your Instructions sheet);
-   - leave `COVERAGE_MEASURE = workbook` to use the workbook's Coverage Objective
-     Weighting, or pick `INTERVAL_COUNT` (interval-compliance programs) or
-     `VOLUME_WEIGHTED` (service-level programs) for this run (3.5d).
+2. **Step 1 (Setup):** run it and allow Drive access. It installs the pinned
+   solver, finds `RC9_2_2_PRODUCTION_PACKAGE.zip` in MyDrive, `Colab Notebooks`,
+   `Downloads` or one folder down (otherwise set `ZIP_PATH` to its full path),
+   and prints the engine release and sha256. Results go to `DRIVE_RESULTS`
+   (default `MyDrive/RC922_RC5/RESULTS`). In the no-Drive notebook a button
+   asks for the package ZIP instead.
+3. **Step 2 (Your workbook):** run it and click **Choose Files** to upload your
+   filled-in weekly workbook(s); in the Drive notebook you can instead paste
+   their Drive paths into `WORKBOOKS_ON_DRIVE`. Each workbook is checked in
+   seconds: **ACCEPTED**, or **REJECTED** with the cell to fix (fix it and run
+   step 2 again).
+4. **Step 3 (Run):** pick `MODE = QUICK` (recommended) or `DEEP` and run it.
+   The advanced options below `MODE` are folded and usually stay as they are:
+   `SEEDS = 0` (automatic: 2 seeds for QUICK, 4 for DEEP),
+   `LANGUAGE_WORKING_WINDOW = workbook`, `COVERAGE_MEASURE = workbook` (or
+   `INTERVAL_COUNT` / `VOLUME_WEIGHTED` for this run, 3.5d), `RESUME` ticked,
+   `SINGLE_LONG_RUN` and `SKIP_GUARDS` unticked.
 
-   Run it and keep the tab open. It prints the safety-gate result, then the
-   run's progress, then `exit code: 0` for an approved schedule.
-8. **Step 6 (Gates):** optional. For your own workbook, gates 2 and 9 say
-   `NOT_COMPARABLE`. That is expected: there is no RC9.1 baseline for your
-   data, and it does not affect approval.
+   Keep the tab open. For each workbook it prints the safety-gate result, the
+   run's progress and `exit code 0` for an approved schedule; then it scores the
+   release gates and prints one **RELEASE VERDICT** line per workbook. The
+   no-Drive notebook then downloads the results ZIP; the Drive notebook writes
+   a ZIP beside the Drive results (everything is already in `DRIVE_RESULTS`).
+   For your own workbook, gates 2 and 9 say `NOT_COMPARABLE`: there is no
+   RC9.1 baseline for your data, and it does not affect approval.
 
 **How long it takes** (plus the 15–30 min safety gate at the start):
 
@@ -485,8 +489,8 @@ ZIP and download the results.
 On free Colab, keep the tab visible; idle sessions disconnect.
 
 **If Colab disconnects:**
-- Re-open the notebook and run steps 1–4 again.
-- Run step 5 with `RESUME` ticked.
+- Re-open the notebook and run steps 1 and 2 again.
+- Run step 3 with `RESUME` ticked (the default).
 - A schedule already published to Drive is kept. The runner will not overwrite
   it unless you tick `OVERWRITE`.
 
@@ -500,7 +504,9 @@ Results are in `DRIVE_RESULTS/<YOUR WORKBOOK NAME>/`.
 |---|---|
 | `BUSINESS_OUTCOME.txt` | **Read first.** It must say `Independent validation: PASS` and `Production eligible: True`. |
 | `production/*_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx` | **The schedule to publish:** shifts and breaks. It opens on eight tabs: *Read Me First* (status, coverage, risks), *Schedule*, *Break Plan* (each person's shift and breaks per day in one grid), *Break Schedule*, *FT Wise After Breaks*, *Coverage Before Breaks*, *Production Summary* and *Validation Log*, plus *No-Break Exceptions* when there is one. The 40+ audit and input tabs are kept, hidden (right-click a tab > Unhide). |
-| `production/*_BEST_BEFORE_BREAKS_SCHEDULE.xlsx` | For review only (coverage before breaks). Not for publishing. |
+| `production/*_BEST_BEFORE_BREAKS_SCHEDULE.xlsx` | For review only: the shift and OFF week before breaks. It opens on five tabs: *Read Me First* (Before Target / Before Floor), *Schedule*, *Coverage Before Breaks*, *Production Summary* and *Validation Log*. Not for publishing. |
+| `*_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx`, `*_BEST_BEFORE_BREAKS_SCHEDULE.xlsx` (top of the folder) | Byte-identical copies of the two `production/` files above, so the first file you open has the same look. The raw engine copies are kept under `debug/raw_engine_output/`. |
+| `*_HARD_RULE_SHORTFALL_SCHEDULE.xlsx` (only when no week meets every hard rule) | Not releasable. Same look as the schedule, with a *Shortfalls* tab listing every missed coverage minimum. |
 | `packages/*_01_PRODUCTION_ONLY.zip` | The schedule, its validation and the input snapshot in one file, for sending on. |
 | `INDEPENDENT_VALIDATION.json` / `.csv` | The validator's full report. |
 | `PORTFOLIO/PORTFOLIO_SUMMARY.csv` | Every seed, its exit code and scores. The published run is the best validated seed. |

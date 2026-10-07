@@ -104,6 +104,14 @@ def eta_text(eta: Optional[dict]) -> str:
             f"(around {_clock(eta['starts_at'])} Egypt time), {eta['basis']}.")
 
 
+USERNAME_RULE = "Usernames use letters, numbers, dots, dashes or underscores, with no spaces."
+
+
+def username_problem(username: str) -> str:
+    plain = username.replace(".", "").replace("_", "").replace("-", "")
+    return "" if username and plain.isalnum() and plain.isascii() else USERNAME_RULE
+
+
 def password_problem(new: str, confirm: str, username: str) -> str:
     if len(new) < MIN_PASSWORD:
         return f"Use at least {MIN_PASSWORD} characters."
@@ -211,8 +219,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if request.method == "POST":
             username = request.form.get("username", "").strip().lower()
             password = request.form.get("password", "")
-            if not username or not username.replace(".", "").replace("_", "").replace("-", "").isalnum():
-                error = "Usernames use letters, numbers, dots, dashes or underscores."
+            if username_problem(username):
+                error = USERNAME_RULE
             elif any(u["username"] == username for u in store.list_users()):
                 error = f"{username} already exists."
             elif len(password) < MIN_PASSWORD:

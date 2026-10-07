@@ -160,3 +160,17 @@ class TheAdminTool(unittest.TestCase):
         self.assertNotEqual(manage.main(["--data-dir", str(data), "create-admin", "omar"],
                                         ask=lambda prompt: next(answers)), 0)
         self.assertEqual(Store(data / "scheduler.db").list_users(), [])
+
+
+class TheUsernameRule(unittest.TestCase):
+    """Phase J task 3: at the first install the owner typed "Omar Mokhtar" as the
+    admin username; the tool must refuse it with the People page's rule."""
+
+    def test_usernames_with_spaces_are_refused(self):
+        from webapp import manage
+        data = Path(tempfile.mkdtemp())
+        answers = iter(["Owner-pass-123", "Owner-pass-123"])
+        for command in ("create-admin", "add-user"):
+            rc = manage.main(["--data-dir", str(data), command, "Omar Mokhtar"], ask=lambda prompt: next(answers))
+            self.assertNotEqual(rc, 0)
+        self.assertEqual(Store(data / "scheduler.db").list_users(), [])

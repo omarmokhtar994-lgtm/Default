@@ -4,7 +4,7 @@ Recorded 2026-10-07, 23:00 Egypt time, after the first install on the Oracle
 server (https://84-13-140-126.sslip.io). The owner asked to keep this list for
 the next package; nothing here is built yet.
 
-## Agreed with the owner
+## Agreed with the owner (built in Phase J, 2026-10-08: see docs/superpowers/plans/2026-10-07-phase-j-control-room-redesign.md)
 
 1. **Friendlier errors on the run page.**
    - *Not approved* and *Needs review* show the reason in one or two plain
@@ -28,7 +28,7 @@ the next package; nothing here is built yet.
 - Site name shown on the pages ("Team Scheduler"): owner to give a name.
 - Web address: DuckDNS (free) or an own domain; re-run the installer with
   `DOMAIN=<name>` (documented in the chat, not yet in the guide).
-- Design refresh if the owner wants something fancier after using it.
+- Design refresh: done in Phase J (control room, owner's choice).
 - Two runs at once: only after measuring memory and time on the 4-core server.
   The runner sizes its seed plan from `os.cpu_count()`, not `--num-workers`,
   so two runs would each plan for 4 cores; cap that first.

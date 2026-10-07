@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 from typing import Callable, List, Optional
 
-from .app import MIN_PASSWORD, password_problem
+from .app import MIN_PASSWORD, password_problem, username_problem
 from .store import Store
 
 
@@ -63,6 +63,9 @@ def main(argv: Optional[List[str]] = None, ask: Callable[[str], str] = getpass.g
     existing = next((u for u in store.list_users() if u["username"] == username), None)
 
     if args.command in ("create-admin", "add-user"):
+        if username_problem(username):
+            print(f"{args.username!r}: {username_problem(username)}", file=sys.stderr)
+            return 1
         if existing is not None:
             print(f"{username} already exists.", file=sys.stderr)
             return 1

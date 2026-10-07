@@ -70,6 +70,23 @@ class TheScripts(unittest.TestCase):
             manage.main(["--data-dir", tempfile.mkdtemp(), "create-admin", "x", "--password", "y"])
 
 
+class TheAdminPrompt(unittest.TestCase):
+    """Phase J task 3: at the first install a password typo ended the installer
+    (set -e on create-admin). It now asks again (3 tries) and re-asks a username
+    with spaces."""
+
+    def test_install_asks_again_after_a_mismatch(self):
+        text = INSTALL.read_text(encoding="utf-8")
+        self.assertRegex(text, r"for attempt in 1 2 3; do")
+        self.assertRegex(text, r"if as_scheduler python -m webapp\.manage[^\n]*create-admin")
+        self.assertRegex(text, r"\^\[a-z0-9\._-\]\+\$")  # same rule as the People page
+
+    def test_dry_run_refuses_a_username_with_spaces(self):
+        proc, _ = dry_run(ADMIN_USER="Omar Mokhtar")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("no spaces", proc.stdout + proc.stderr)
+
+
 class TheDryRun(unittest.TestCase):
     def test_dry_run_renders_service_and_caddy(self):
         proc, out = dry_run()

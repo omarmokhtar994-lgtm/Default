@@ -109,10 +109,25 @@ if [ "$DRY_RUN" = 1 ] || ! runuser -u scheduler -- env PYTHONPATH="$APP_DIR/pack
   say "Create your admin account"
   ADMIN_USER="${ADMIN_USER:-}"
   ADMIN_NAME="${ADMIN_NAME:-}"
-  [ -n "$ADMIN_USER" ] || read -rp "Admin username (for example omar): " ADMIN_USER
+  while :; do
+    [ -n "$ADMIN_USER" ] || read -rp "Admin username, one word (for example omar): " ADMIN_USER
+    ADMIN_USER="$(printf '%s' "$ADMIN_USER" | tr 'A-Z' 'a-z')"
+    if [[ "$ADMIN_USER" =~ ^[a-z0-9._-]+$ ]]; then break; fi
+    echo "Usernames use letters, numbers, dots, dashes or underscores, with no spaces. Your full name comes next."
+    [ "$DRY_RUN" != 1 ] || fail "ADMIN_USER must be one word with no spaces."
+    ADMIN_USER=""
+  done
   [ -n "$ADMIN_NAME" ] || read -rp "Your name as the team should see it: " ADMIN_NAME
-  echo "Now type the admin password twice (at least 10 characters; it is not shown)."
-  as_scheduler python -m webapp.manage --data-dir "$DATA_DIR" create-admin "$ADMIN_USER" --name "$ADMIN_NAME"
+  created=0
+  for attempt in 1 2 3; do
+    echo "Now type the admin password twice (at least 10 characters; it is not shown)."
+    if as_scheduler python -m webapp.manage --data-dir "$DATA_DIR" create-admin "$ADMIN_USER" --name "$ADMIN_NAME"; then
+      created=1
+      break
+    fi
+    echo "That did not work (see the line above). Try again ($attempt of 3)."
+  done
+  [ "$created" = 1 ] || fail "the admin account was not created. Run the installer again: everything else is kept."
 else
   say "An admin account already exists: keeping it"
 fi

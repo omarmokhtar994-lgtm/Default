@@ -1,0 +1,5 @@
+FAIL: test_usernames_with_spaces_are_refused (webapp.tests.test_auth.TheUsernameRule.test_usernames_with_spaces_are_refused)
+FAIL: test_dry_run_refuses_a_username_with_spaces (webapp.tests.test_deploy.TheAdminPrompt.test_dry_run_refuses_a_username_with_spaces)
+FAIL: test_install_asks_again_after_a_mismatch (webapp.tests.test_deploy.TheAdminPrompt.test_install_asks_again_after_a_mismatch)
+Ran 3 tests in 0.157s
+FAILED (failures=3)

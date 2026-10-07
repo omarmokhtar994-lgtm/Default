@@ -172,6 +172,15 @@ OVERAGE_CEIL_TOLERANCE = 1e-9
 # it named and publish whether it truncated the candidate pool so coverage
 # claims remain honest.
 MAX_RETAINED_STAGE1_SKELETONS = 16
+# Phase F: Stage-1 cost of one shift-day on a :30 twin ("Allow Half-Hour Starts").
+# Owner rule: :30 only where :00 starts cannot cover demand. Sized between the
+# two ranges it must separate (skeleton_profiles, 2026-10-07): moving a shift by
+# 30 minutes shifts at most ~2 head-quarters, worth at most ~2.8e6 in overage
+# and balance terms (extreme_overage <= 14,000 per unit); one interval reaching
+# target or floor is worth >= 8e7 (min target_miss / floor_miss). 1e7 lets a
+# twin win only by changing hits, never by trimming overage. A flat 1,000 let
+# overage terms pick twins on a week the :00 shifts covered exactly.
+HALF_HOUR_FALLBACK_PENALTY = 10_000_000
 RC8_STRICT_BLANK_RULE_ALIAS = True
 RC8_CYCLIC_ACTIVE_WINDOW_AUDIT = True
 RC8_ARTIFACT_VERIFICATION_SEMANTICS = True
@@ -690,6 +699,8 @@ class Shift:
     start_min: int
     end_min: int
     duration_min: int
+    # Phase F: a :30 twin added by "Allow Half-Hour Starts" (a marked fallback).
+    half_hour_fallback: bool = False
 
     @property
     def start_hour(self) -> int:
@@ -862,6 +873,10 @@ class ParsedInput:
     # aggregate guide decide interval hits exactly as calculate_metrics does
     # (coverage_hit_threshold_units). Default No keeps the percent thresholds.
     exact_coverage_units: bool = False
+    # Phase F (owner, 2026-10-07): "Allow Half-Hour Starts" = Yes adds a :30
+    # twin for every on-the-hour library shift, flagged half_hour_fallback and
+    # charged a small Stage-1 penalty so it is used only where it helps.
+    allow_half_hour_starts: bool = False
     coverage_split_rules: List[CoverageSplitRule] = field(default_factory=list)
     coverage_split_source: str = "ABSENT"
     coverage_split_gate_mode: str = "hard"
@@ -1502,6 +1517,7 @@ BOOLEAN_INSTRUCTION_ALIASES: Tuple[Tuple[str, ...], ...] = (
     ("Shift Consistency Polish", "Consistency Polish"),
     ("Aggregate Guide Mixed Durations",),
     ("Exact Coverage Units",),
+    ("Allow Half-Hour Starts", "Allow Half Hour Starts"),
 )
 
 
@@ -2065,6 +2081,54 @@ def _parse_duration_set(
                 "Set Use 11H/3OFF to Yes or remove the long durations.")
         values = {v for v in values if v < 630} or {540}
     return values, use11
+
+
+def add_half_hour_twins(shifts: List[Shift], allowed_start_min: Optional[int] = None,
+                        allowed_start_end: Optional[int] = None) -> List[Shift]:
+    """Phase F: every on-the-hour shift gets a twin starting 30 minutes later,
+    same length, flagged half_hour_fallback. The workbook's start window still
+    applies; its start step does not (the twin is the explicit exception the
+    switch allows). Existing labels are never duplicated."""
+    seen = {norm(s.label) for s in shifts}
+    out = list(shifts)
+    for s in shifts:
+        if s.start_min % 60:
+            continue
+        st = (s.start_min + 30) % 1440
+        en = (st + s.duration_min) % 1440
+        label = f"{hhmm(st)} - {hhmm(en)}"
+        if norm(label) in seen or not minute_in_inclusive_window(st, allowed_start_min, allowed_start_end):
+            continue
+        seen.add(norm(label))
+        out.append(Shift(len(out), label, st, en, s.duration_min, half_hour_fallback=True))
+    out.sort(key=lambda item: (item.duration_min, item.start_min, item.label))
+    for i, shift in enumerate(out):
+        shift.index = i
+    return out
+
+
+def half_hour_fallback_usage(parsed: Any, skeleton: Any) -> Dict[str, Any]:
+    """Phase F output marking: the shift-days of a week that use a :30 twin."""
+    rows = []
+    for a, d, si in scheduled_cells(skeleton):
+        sh = parsed.shifts[si]
+        if getattr(sh, "half_hour_fallback", False):
+            rows.append({"associate": parsed.associates[a].name, "day": DAY_NAMES[d], "shift": sh.label})
+    return {"enabled": bool(getattr(parsed, "allow_half_hour_starts", False)), "shift_days": len(rows), "rows": rows}
+
+
+def half_hour_summary_rows(parsed: Any, skeleton: Any) -> List[List[Any]]:
+    """Production Summary rows marking :30 twins; none when the switch is off,
+    so default outputs are unchanged."""
+    if not getattr(parsed, "allow_half_hour_starts", False):
+        return []
+    usage = half_hour_fallback_usage(parsed, skeleton)
+    listed = "; ".join(f"{r['associate']} {r['day']} {r['shift']}" for r in usage["rows"][:60])
+    if len(usage["rows"]) > 60:
+        listed += f"; ... {len(usage['rows']) - 60} more"
+    return [["Half-Hour Starts Allowed", "Yes"],
+            ["Half-Hour Fallback Shift-Days", usage["shift_days"]],
+            ["Half-Hour Fallback Shifts", listed or "None used"]]
 
 
 def _parse_shifts(
@@ -3546,6 +3610,8 @@ def parse_input(
     start_step = max(1, int(round(to_float(_instruction_get(im, ["Shift Start Step Minutes", "Shift Start Step"], 1), 1))))
     allowed_start_source = "Instructions" if allowed_start_min is not None and allowed_start_end is not None else "Unrestricted"
     shifts = _parse_shifts(wb, allowed_durations, allowed_start_min, allowed_start_end, start_step, parser_warnings)
+    if yes(_instruction_get(im, ["Allow Half-Hour Starts", "Allow Half Hour Starts"], "No"), False):
+        shifts = add_half_hour_twins(shifts, allowed_start_min, allowed_start_end)
     requirements, shrinkage, active, req_dates, interval, req_sheet, shr_sheet = _parse_requirement_table(
         wb, im, parser_warnings
     )
@@ -3567,6 +3633,7 @@ def parse_input(
     shift_consistency_polish = None if _polish_raw in (None, "") else yes(_polish_raw, False)
     aggregate_guide_mixed_durations = yes(_instruction_get(im, ["Aggregate Guide Mixed Durations"], "No"), False)
     exact_coverage_units = yes(_instruction_get(im, ["Exact Coverage Units"], "No"), False)
+    allow_half_hour_starts = yes(_instruction_get(im, ["Allow Half-Hour Starts", "Allow Half Hour Starts"], "No"), False)
     max_diff = int(round(to_float(_instruction_get(im, ["Count of Different Shifts Per week", "Max Different Shifts per Week"], 3), 3)))
     rest = to_float(_instruction_get(im, ["Difference Between Shifts", "Rest Gap Hours", "Minimum Rest Gap"], 12), 12)
     opening_enabled = yes(_instruction_get(im, ["Opening Guard Enabled"], "No"), False)
@@ -4116,6 +4183,7 @@ def parse_input(
         shift_consistency_polish=shift_consistency_polish,
         aggregate_guide_mixed_durations=aggregate_guide_mixed_durations,
         exact_coverage_units=exact_coverage_units,
+        allow_half_hour_starts=allow_half_hour_starts,
         coverage_split_rules=coverage_split_rules,
         coverage_split_source=coverage_split_source,
         coverage_split_gate_mode=coverage_split_gate_mode,
@@ -4208,6 +4276,8 @@ def input_contract_payload(parsed: ParsedInput) -> Dict[str, Any]:
         payload["aggregate_guide_mixed_durations"] = True
     if getattr(parsed, "exact_coverage_units", False):
         payload["exact_coverage_units"] = True
+    if getattr(parsed, "allow_half_hour_starts", False):
+        payload["allow_half_hour_starts"] = True
     return payload
 
 
@@ -7679,6 +7749,14 @@ def build_skeleton(
             model.Add(sum(y[a, s] for s in range(S)) <= parsed.max_different_shifts)
         if profile["shift_variety"]:
             objective_terms.append(profile["shift_variety"] * sum(y[a, s] for s in range(S)))
+        half_hour = [shift.index for shift in parsed.shifts if shift.half_hour_fallback]
+        if half_hour:
+            # Phase F: a :30 twin costs HALF_HOUR_FALLBACK_PENALTY per shift-day,
+            # more than any overage, balance or preference gain and less than one
+            # interval reaching target or floor, so it is used only where it
+            # changes coverage hits.
+            objective_terms.append(HALF_HOUR_FALLBACK_PENALTY * sum(
+                x[a, d, s] for d in range(D) for s in half_hour))
         if hard.rest:
             for shift in parsed.shifts:
                 if not previous_saturday_compatible(assoc.previous_saturday, shift, parsed.rest_gap_hours):
@@ -14715,6 +14793,7 @@ def write_output_workbook(
             else f"{hhmm(parsed.allowed_shift_start_min)} - {hhmm(parsed.allowed_shift_start_end)}"
         )],
         ["Shift Start Step Minutes", parsed.shift_start_step_minutes],
+        *half_hour_summary_rows(parsed, skeleton),
         ["Blank Requirement Mode", parsed.blank_requirement_mode],
         ["Blank Requirement Rule", parsed.blank_requirement_text],
         ["Demand Fit Guard Mode", parsed.demand_fit_guard_mode],

@@ -1,0 +1,62 @@
+STAGE1 target90_restore_champion status=OPTIMAL elapsed=3.95s
+ESTAGE1 target90_restore_champion status=OPTIMAL elapsed=0.58s
+STAGE1 target90_restore_champion status=OPTIMAL elapsed=0.54s
+EFFE
+======================================================================
+ERROR: test_no_twin_when_full_hour_shifts_cover_exactly (tests_staged.test_rc9_2_48_half_hour_starts.StageOneUsesTwinsOnlyWhereTheyHelp.test_no_twin_when_full_hour_shifts_cover_exactly)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_48_half_hour_starts.py", line 90, in test_no_twin_when_full_hour_shifts_cover_exactly
+    self.assertEqual(E.half_hour_fallback_usage(p, sk)["shift_days"], 0)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'E' has no attribute 'half_hour_fallback_usage'
+
+======================================================================
+ERROR: test_twin_used_when_only_a_half_hour_start_covers (tests_staged.test_rc9_2_48_half_hour_starts.StageOneUsesTwinsOnlyWhereTheyHelp.test_twin_used_when_only_a_half_hour_start_covers)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_48_half_hour_starts.py", line 103, in test_twin_used_when_only_a_half_hour_start_covers
+    self.assertGreater(E.half_hour_fallback_usage(on, sk_on)["shift_days"], 0)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'E' has no attribute 'half_hour_fallback_usage'
+
+======================================================================
+ERROR: test_default_off_and_library_unchanged (tests_staged.test_rc9_2_48_half_hour_starts.TheSwitchDefaultsOff.test_default_off_and_library_unchanged)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_48_half_hour_starts.py", line 67, in test_default_off_and_library_unchanged
+    self.assertFalse(p.allow_half_hour_starts)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ParsedInput' object has no attribute 'allow_half_hour_starts'
+
+======================================================================
+FAIL: test_yes_adds_one_flagged_twin_per_on_the_hour_shift (tests_staged.test_rc9_2_48_half_hour_starts.TheSwitchAddsFlaggedTwins.test_yes_adds_one_flagged_twin_per_on_the_hour_shift)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_48_half_hour_starts.py", line 79, in test_yes_adds_one_flagged_twin_per_on_the_hour_shift
+    self.assertEqual(labels(p), ["08:00 - 17:00", "08:30 - 17:30", "12:00 - 21:00", "12:30 - 21:30"])
+AssertionError: Lists differ: ['08:00 - 17:00', '12:00 - 21:00'] != ['08:00 - 17:00', '08:30 - 17:30', '12:00 - 21:00', '12:30 - 21:30']
+
+First differing element 1:
+'12:00 - 21:00'
+'08:30 - 17:30'
+
+Second list contains 2 additional elements.
+First extra element 2:
+'12:00 - 21:00'
+
+- ['08:00 - 17:00', '12:00 - 21:00']
++ ['08:00 - 17:00', '08:30 - 17:30', '12:00 - 21:00', '12:30 - 21:30']
+
+======================================================================
+FAIL: test_contract_key_only_when_on (tests_staged.test_rc9_2_48_half_hour_starts.TheSwitchDefaultsOff.test_contract_key_only_when_on)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Default/tests_staged/test_rc9_2_48_half_hour_starts.py", line 73, in test_contract_key_only_when_on
+    self.assertTrue(E.input_contract_payload(E.parse_input(workbook("Yes"))).get("allow_half_hour_starts"))
+AssertionError: None is not true
+
+----------------------------------------------------------------------
+Ran 5 tests in 7.955s
+
+FAILED (failures=2, errors=3)

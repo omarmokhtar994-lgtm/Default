@@ -99,6 +99,8 @@ SETUP_LAYOUT = [
         ("Separate OFF Days", YES_NO),
         ("Rest Gap Hours", None),
         ("Count of Different Shifts Per week", None),
+        # Phase F (owner, 2026-10-07): optional :30 starts as a marked fallback.
+        ("Allow Half-Hour Starts", YES_NO),
     ]),
     ("Requests", [
         ("Fixed Request Use", YES_NO),
@@ -204,6 +206,7 @@ ENGINE_NAMES = {
     "Separate OFF Days": ["Separate OFF Days", "Separate Off Days", "Allow Separate OFF Days"],
     "Rest Gap Hours": ["Difference Between Shifts", "Rest Gap Hours", "Minimum Rest Gap"],
     "Count of Different Shifts Per week": ["Count of Different Shifts Per week", "Max Different Shifts per Week"],
+    "Allow Half-Hour Starts": ["Allow Half-Hour Starts", "Allow Half Hour Starts"],
     "Fixed Request Use": ["Fixed Request Use", "Use Fixed Requests", "Fixed/Nesting Enabled", "Use Fixed/Nesting"],
     "Hard OFF Preferences": ["Hard OFF Preferences", "Hard OFF", "OFF Preferences Hard"],
     "Leave Enabled": ["Leave", "Leave Days", "Leave Enabled"],
@@ -325,6 +328,7 @@ HELP = {
     "Separate OFF Days": "Yes = a person's OFF days may be apart. No = they must be together.",
     "Rest Gap Hours": "Minimum hours between the end of one shift and the start of the next.",
     "Count of Different Shifts Per week": "Most different shifts one person may get in a week (1 to 7).",
+    "Allow Half-Hour Starts": "Yes = each shift may also start 30 minutes later, used only where full-hour starts cannot cover demand; marked in the output. Blank or No = full-hour starts only.",
     "Fixed Request Use": "Yes = apply the Fixed Request tab.",
     "Hard OFF Preferences": "Yes = OFF requests on the Preference tab are always granted.",
     "Leave Enabled": "Yes = Leave on the Preference tab is honoured.",

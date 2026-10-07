@@ -1,0 +1,14 @@
+FAIL: test_every_website_and_deploy_source_file_carries_it (tests_staged.test_rc9_2_56_package_ships_website.TheCopyright.test_every_website_and_deploy_source_file_carries_it)
+AssertionError: Lists differ: ['webapp/templates/dashboard.html', 'webap[178 chars].py'] != []
+'webapp/templates/dashboard.html'
+- ['webapp/templates/dashboard.html',
+-  'webapp/templates/login.html',
+-  'webapp/templates/password.html',
+-  'webapp/templates/run.html',
+-  'webapp/templates/admin_users.html',
+-  'webapp/templates/error.html',
+-  'webapp/tests/__init__.py']
+FAIL: test_builder_ships_the_website_and_its_installer (tests_staged.test_rc9_2_56_package_ships_website.ThePackage.test_builder_ships_the_website_and_its_installer)
+AssertionError: None != 'webapp'
+Ran 3 tests in 0.009s
+FAILED (failures=2)

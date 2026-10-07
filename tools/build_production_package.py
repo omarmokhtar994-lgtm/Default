@@ -39,6 +39,10 @@ TREES = [
     ("evidence", "evidence"),
     ("packages/rc9_2_2_production/inputs", "inputs"),
     ("packages/rc9_2_2_production/runners", "runners"),
+    # The team website and its one-command server installer (Phase I), so a
+    # server is set up from the same ZIP whose gate result is in MANIFEST.json.
+    ("webapp", "webapp"),
+    ("deploy", "deploy"),
 ]
 FILES = [
     ("run_tests.sh", "run_tests.sh"),

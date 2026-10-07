@@ -44,6 +44,9 @@ from typing import Any, Dict, List, Optional, Tuple
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import build_synthetic_suite as S  # noqa: E402
 
+SCALE = 10_000
+DAY_COLS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+
 
 def engine_break_cap(staffed: int, ratio: float, absolute: int) -> int:
     """The engine's maximum_concurrent_breaks for one quarter, restated."""

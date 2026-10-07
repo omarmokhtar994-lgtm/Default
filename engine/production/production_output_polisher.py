@@ -449,14 +449,19 @@ def engine_copy(root,pat):
  polished file at the top level and keeps the engine copy under
  debug/raw_engine_output/ (Phase H); a resumed run must polish that copy again,
  never the already-polished one."""
- raw=sorted((Path(root)/RAW_ENGINE_OUTPUT).glob(pat))
+ top=sorted(Path(root).glob(pat)); raw=sorted((Path(root)/RAW_ENGINE_OUTPUT).glob(pat))
+ if len(top)==1:
+  prod=Path(root)/'production'/top[0].name
+  # A top-level file that is not the published copy is fresh engine output
+  # (first run, or an OVERWRITE rerun that left an older raw copy behind).
+  if not prod.is_file() or top[0].read_bytes()!=prod.read_bytes(): return top[0]
  return raw[0] if len(raw)==1 else one(root,pat)
 def publish(root):
  root=root.resolve(); summary=read_csv(one(root,'*.l6_3_2_3_summary.csv')); pareto=json.loads(one(root,'*_PARETO_EXPORT_MANIFEST.json').read_text()); cid=Path(summary.get('output','')).name.split('_L6_3_2_3_',1)[0]; prod=root/'production'; prod.mkdir(exist_ok=True); ident=run_identity(root)
  if ident['identity_source']=='FALLBACK_LITERALS' or not all(ident.get(k) for k in ('engine_sha256','contract_sha256','run_id','input_sha256')):
   raise RuntimeError('Complete run identity is required before production artifact preparation')
  before=clean_book(engine_copy(root,'*_BEST_BEFORE_BREAKS_SCHEDULE.xlsx'),prod/f'{cid}_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx','BEST_BEFORE_BREAKS_SCHEDULE','REVIEW ONLY - strongest legal shift/OFF skeleton before breaks; not operational',pareto,ident)
- final=clean_book(engine_copy(root,'*_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx') if sorted((root/RAW_ENGINE_OUTPUT).glob('*_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx')) else one_of(root,'*_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx','*_RECOMMENDED_FINAL_AFTER_BREAKS_SCHEDULE.xlsx'),prod/f'{cid}_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx','BEST_FINAL_AFTER_BREAKS_SCHEDULE','PREPARED OUTPUT - not operational until the independent validation seal and production package exist',pareto,ident)
+ final=clean_book(engine_copy(root,'*_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx') if sorted(root.glob('*_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx'))+sorted((root/RAW_ENGINE_OUTPUT).glob('*_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx')) else one_of(root,'*_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx','*_RECOMMENDED_FINAL_AFTER_BREAKS_SCHEDULE.xlsx'),prod/f'{cid}_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx','BEST_FINAL_AFTER_BREAKS_SCHEDULE','PREPARED OUTPUT - not operational until the independent validation seal and production package exist',pareto,ident)
  manifest={'release':ident['release'],'identity_source':ident['identity_source'],'contract_sha256':ident['contract_sha256'],'run_id':ident['run_id'],'input_sha256':ident['input_sha256'],'approval_status':'PENDING_INDEPENDENT_VALIDATION','production_ready':False,'generated_utc':datetime.now(timezone.utc).isoformat(),'case':cid,'solver':{'version':ident['solver'],'week_boundary_patch_commit':ident['commit'],'engine_sha256':ident['engine_sha256'],'optimization_logic_changed':True,'change_scope':'RC9.2.2 production hardening: protected-tier champion selection, exact-workbook validation, and fail-closed publication without client/case branching'},'two_artifact_contract':{'BEST_BEFORE_BREAKS_SCHEDULE':before,'BEST_FINAL_AFTER_BREAKS_SCHEDULE':final},'candidate_role_rows':roles(pareto),'source_status':summary.get('status','')}
  mp=prod/'PRODUCTION_ARTIFACT_MANIFEST.json'; mp.write_text(json.dumps(manifest,indent=2),encoding='utf-8')
  print(json.dumps({'status':'PREPARED_PENDING_INDEPENDENT_VALIDATION','case':cid,'manifest':str(mp),'before':before,'final':final},indent=2))

@@ -156,6 +156,20 @@ class AResumedRunPolishesTheEngineCopy(unittest.TestCase):
         src = POLISHER.engine_copy(root, "*_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx")
         self.assertEqual(src, root / "debug" / "raw_engine_output" / names[1])
 
+    # Final review (Phase H): an OVERWRITE rerun leaves the previous run's raw
+    # copy under debug/raw_engine_output/ while the engine writes a fresh one at
+    # the top level. The fresh one must be polished and kept, never the stale one.
+    def test_a_rerun_polishes_the_fresh_engine_copy_not_the_stale_one(self):
+        root, names = case_root()
+        RUNNER.publish_top_level_copies(root)
+        fresh = b"fresh engine copy of the rerun"
+        (root / names[1]).write_bytes(fresh)
+        self.assertEqual(POLISHER.engine_copy(root, "*_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"), root / names[1])
+        (root / "production" / names[1]).write_bytes(b"polished rerun")
+        RUNNER.publish_top_level_copies(root)
+        self.assertEqual((root / "debug" / "raw_engine_output" / names[1]).read_bytes(), fresh)
+        self.assertEqual((root / names[1]).read_bytes(), b"polished rerun")
+
     def test_a_first_run_reads_the_top_level_file(self):
         root, names = case_root(with_production=False)
         self.assertEqual(POLISHER.engine_copy(root, "*_BEST_BEFORE_BREAKS_SCHEDULE.xlsx"), root / names[0])

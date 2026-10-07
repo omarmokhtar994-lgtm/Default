@@ -1652,9 +1652,12 @@ def publish_top_level_copies(case_root: Path) -> list:
             polished = case_root / 'production' / top.name
             if not polished.is_file():
                 continue
+            if top.read_bytes() == polished.read_bytes():
+                continue  # already the published copy (a resumed run that wrote nothing new)
+            # Fresh engine output, also on an OVERWRITE rerun: it replaces any
+            # older raw copy, so a later resume polishes this run's own output.
             raw_dir.mkdir(parents=True, exist_ok=True)
-            if not (raw_dir / top.name).exists():
-                shutil.move(str(top), str(raw_dir / top.name))
+            shutil.move(str(top), str(raw_dir / top.name))
             shutil.copy2(polished, top)
             replaced.append(top.name)
     return replaced

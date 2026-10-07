@@ -50,3 +50,29 @@ validator: PASS, 0 hard failures.
 
 Reading: same target, +1 floor, so **no gain measured**. The engine used one
 :30 shift-day; :00 starts already cover Voice.
+
+## Pair 3: NMG EN+SP, control vs :30 starts (landed 09:00)
+
+| | control | :30 starts on |
+|---|---|---|
+| at target after breaks | 174 | 173 (-1) |
+| at floor after breaks | 214 | 216 (+2) |
+| at target / floor before breaks | 194 / 232 | 188 / 227 |
+| :30 shift-days used | - | 17 |
+| validator, as run | PASS | FAIL (same "shifts" defect, 10 twins listed) |
+| validator, re-run with the fix | - | PASS, 0 hard failures |
+| release verdict, as run | REVIEW_REQUIRED (gate 4: engine quality benchmark WARN; gate 5) | NOT_RELEASABLE (gate 8; gate 5) |
+
+Reading: -1 at target, so **no gain measured**. The engine used 17 :30
+shift-days, yet after breaks the result is level with the control and before
+breaks it is lower (188 vs 194). The wider library gave the time-limited search
+more choices without a better week. Gate 4 differs between the arms because
+the engine's own quality benchmark was WARN on the control and PASS on the :30
+arm; both have no protected minimum configured.
+
+## :30 starts summary (pairs 1-3)
+
+No program met the pre-registered "worth considering" bar. Chat traded +9
+target for -3 floor; Voice and NMG EN+SP were level. Recommendation for the
+owner: keep "Allow Half-Hour Starts" off by default (as shipped); it stays
+available per program.

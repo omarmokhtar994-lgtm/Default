@@ -1,0 +1,1973 @@
+[
+ {
+  "family": "aeit_floor_cause",
+  "case": "AEIT_9002_NOCAP",
+  "program": "AE IT B2B",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "aeit_floor_cause",
+  "case": "AEIT_9002_S240",
+  "program": "AE IT B2B",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "aeit_floor_cause",
+  "case": "AEIT_9004_NOCAP",
+  "program": "AE IT B2B",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "aeit_floor_cause",
+  "case": "AEIT_9004_S240",
+  "program": "AE IT B2B",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "aeit_floor_cause",
+  "case": "FINAL_AEIT_9002_R",
+  "program": "AE IT B2B",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "f16_single_run_deep",
+  "case": "CRICUT_CHAT",
+  "program": "Cricut Chat",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "f16_single_run_deep",
+  "case": "SYNTH_H1_24X7_OVERNIGHT",
+  "program": "synthetic H1 24x7",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "language_hours",
+  "case": "VOICE_ALLROWS2",
+  "program": "Cricut Voice",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "language_hours",
+  "case": "VOICE_CONFLICT_MSG2",
+  "program": "Cricut Voice",
+  "verdict": "NOT_RELEASABLE",
+  "failed": [
+   "gate 8 independent validation not run (NO_EVIDENCE)"
+  ],
+  "not_evaluated": [],
+  "notes": [
+   "no schedule: the hard rules contradict each other (proven)"
+  ]
+ },
+ {
+  "family": "language_hours",
+  "case": "VOICE_FINAL_SHEET",
+  "program": "Cricut Voice",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/break_load_feedback_ab",
+  "case": "AR_FBL_9000",
+  "program": "AE AR B2B",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/break_load_feedback_ab",
+  "case": "AR_FBL_9001",
+  "program": "AE AR B2B",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/break_load_feedback_ab",
+  "case": "CHAT_FBL_9000",
+  "program": "Cricut Chat",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/break_load_feedback_ab",
+  "case": "CHAT_FBL_9001",
+  "program": "Cricut Chat",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/break_load_feedback_ab",
+  "case": "H1_FBL_9000",
+  "program": "synthetic H1 24x7",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/break_load_feedback_ab",
+  "case": "H1_FBL_9001",
+  "program": "synthetic H1 24x7",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/break_load_feedback_ab",
+  "case": "H3_FBL_9000",
+  "program": "synthetic H3",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/break_load_feedback_ab",
+  "case": "H3_FBL_9001",
+  "program": "synthetic H3",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/break_load_feedback_ab",
+  "case": "M2_FBL_9000",
+  "program": "synthetic M2",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/break_load_feedback_ab",
+  "case": "M2_FBL_9001",
+  "program": "synthetic M2",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/break_load_feedback_ab",
+  "case": "NMGSP_FBL_9000",
+  "program": "NMG SP",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/break_load_feedback_ab",
+  "case": "NMGSP_FBL_9001",
+  "program": "NMG SP",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/break_load_feedback_ab",
+  "case": "VOICE_FBL_9000",
+  "program": "Cricut Voice",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/break_load_feedback_ab",
+  "case": "VOICE_FBL_9001",
+  "program": "Cricut Voice",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e",
+  "case": "AR_CUR",
+  "program": "AE AR B2B",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e",
+  "case": "AR_NEW",
+  "program": "AE AR B2B",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e",
+  "case": "CHAT_CUR",
+  "program": "Cricut Chat",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e",
+  "case": "CHAT_NEW",
+  "program": "Cricut Chat",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e",
+  "case": "H1_CUR",
+  "program": "synthetic H1 24x7",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 4 quality retention FAIL"
+  ],
+  "not_evaluated": [
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e",
+  "case": "H1_NEW",
+  "program": "synthetic H1 24x7",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e",
+  "case": "H3_CUR",
+  "program": "synthetic H3",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e",
+  "case": "H3_NEW",
+  "program": "synthetic H3",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e",
+  "case": "M2_CUR",
+  "program": "synthetic M2",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e",
+  "case": "M2_NEW",
+  "program": "synthetic M2",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e",
+  "case": "NMGSP_CUR",
+  "program": "NMG SP",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e",
+  "case": "NMGSP_NEW",
+  "program": "NMG SP",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e",
+  "case": "VOICE_CUR",
+  "program": "Cricut Voice",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e",
+  "case": "VOICE_NEW",
+  "program": "Cricut Voice",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600",
+  "case": "AR_CUR_9000",
+  "program": "AE AR B2B",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600",
+  "case": "AR_NEW_9000",
+  "program": "AE AR B2B",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600",
+  "case": "CHAT_CUR_9000",
+  "program": "Cricut Chat",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600",
+  "case": "CHAT_NEW_9000",
+  "program": "Cricut Chat",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600",
+  "case": "H1_CUR_9000",
+  "program": "synthetic H1 24x7",
+  "verdict": "NOT_RELEASABLE",
+  "failed": [
+   "gate 8 independent validation not run (NO_EVIDENCE)"
+  ],
+  "not_evaluated": [],
+  "notes": [
+   "no schedule: reason not recorded (see BUSINESS_OUTCOME / audit)"
+  ]
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600",
+  "case": "H1_NEW_9000",
+  "program": "synthetic H1 24x7",
+  "verdict": "NOT_RELEASABLE",
+  "failed": [
+   "gate 8 independent validation not run (NO_EVIDENCE)"
+  ],
+  "not_evaluated": [],
+  "notes": [
+   "no schedule: reason not recorded (see BUSINESS_OUTCOME / audit)"
+  ]
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600",
+  "case": "H3_CUR_9000",
+  "program": "synthetic H3",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600",
+  "case": "H3_NEW_9000",
+  "program": "synthetic H3",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600",
+  "case": "M2_CUR_9000",
+  "program": "synthetic M2",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600",
+  "case": "M2_NEW_9000",
+  "program": "synthetic M2",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600",
+  "case": "NMGSP_CUR_9000",
+  "program": "NMG SP",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600",
+  "case": "NMGSP_NEW_9000",
+  "program": "NMG SP",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600",
+  "case": "VOICE_CUR_9000",
+  "program": "Cricut Voice",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600",
+  "case": "VOICE_NEW_9000",
+  "program": "Cricut Voice",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600b",
+  "case": "AR_CUR_9000",
+  "program": "AE AR B2B",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600b",
+  "case": "AR_CUR_9001",
+  "program": "AE AR B2B",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600b",
+  "case": "AR_NEW_9000",
+  "program": "AE AR B2B",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600b",
+  "case": "AR_NEW_9001",
+  "program": "AE AR B2B",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600b",
+  "case": "CHAT_CUR_9000",
+  "program": "Cricut Chat",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600b",
+  "case": "CHAT_CUR_9001",
+  "program": "Cricut Chat",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600b",
+  "case": "CHAT_NEW_9000",
+  "program": "Cricut Chat",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600b",
+  "case": "CHAT_NEW_9001",
+  "program": "Cricut Chat",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600b",
+  "case": "H1_CUR_9000",
+  "program": "synthetic H1 24x7",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600b",
+  "case": "H1_CUR_9001",
+  "program": "synthetic H1 24x7",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600b",
+  "case": "H1_NEW_9000",
+  "program": "synthetic H1 24x7",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600b",
+  "case": "H1_NEW_9001",
+  "program": "synthetic H1 24x7",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600b",
+  "case": "H3_CUR_9000",
+  "program": "synthetic H3",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600b",
+  "case": "H3_CUR_9001",
+  "program": "synthetic H3",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600b",
+  "case": "H3_NEW_9000",
+  "program": "synthetic H3",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600b",
+  "case": "H3_NEW_9001",
+  "program": "synthetic H3",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600b",
+  "case": "M2_CUR_9000",
+  "program": "synthetic M2",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600b",
+  "case": "M2_CUR_9001",
+  "program": "synthetic M2",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600b",
+  "case": "M2_NEW_9000",
+  "program": "synthetic M2",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600b",
+  "case": "M2_NEW_9001",
+  "program": "synthetic M2",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600b",
+  "case": "NMGSP_CUR_9000",
+  "program": "NMG SP",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600b",
+  "case": "NMGSP_CUR_9001",
+  "program": "NMG SP",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600b",
+  "case": "NMGSP_NEW_9000",
+  "program": "NMG SP",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600b",
+  "case": "NMGSP_NEW_9001",
+  "program": "NMG SP",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600b",
+  "case": "VOICE_CUR_9000",
+  "program": "Cricut Voice",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600b",
+  "case": "VOICE_CUR_9001",
+  "program": "Cricut Voice",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600b",
+  "case": "VOICE_NEW_9000",
+  "program": "Cricut Voice",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/dnbs_e2e_3600b",
+  "case": "VOICE_NEW_9001",
+  "program": "Cricut Voice",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/profile_diversity_ab",
+  "case": "AR_ROT_9001",
+  "program": "AE AR B2B",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/profile_diversity_ab",
+  "case": "CHAT_ROT_9001",
+  "program": "Cricut Chat",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/profile_diversity_ab",
+  "case": "H1_ROT_9001",
+  "program": "synthetic H1 24x7",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/profile_diversity_ab",
+  "case": "H3_ROT_9001",
+  "program": "synthetic H3",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/profile_diversity_ab",
+  "case": "M2_ROT_9001",
+  "program": "synthetic M2",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/profile_diversity_ab",
+  "case": "NMGSP_ROT_9001",
+  "program": "NMG SP",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/profile_diversity_ab",
+  "case": "VOICE_ROT_9001",
+  "program": "Cricut Voice",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/s2par_e2e",
+  "case": "AR_CUR",
+  "program": "AE AR B2B",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/s2par_e2e",
+  "case": "AR_NEW",
+  "program": "AE AR B2B",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/s2par_e2e",
+  "case": "CHAT_CUR",
+  "program": "Cricut Chat",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 4 quality retention FAIL"
+  ],
+  "not_evaluated": [
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/s2par_e2e",
+  "case": "CHAT_NEW",
+  "program": "Cricut Chat",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/s2par_e2e",
+  "case": "H3_CUR",
+  "program": "synthetic H3",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 4 quality retention FAIL",
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/s2par_e2e",
+  "case": "H3_NEW",
+  "program": "synthetic H3",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/s2par_e2e",
+  "case": "M2_CUR",
+  "program": "synthetic M2",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 4 quality retention FAIL"
+  ],
+  "not_evaluated": [
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/s2par_e2e",
+  "case": "M2_NEW",
+  "program": "synthetic M2",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/s2par_e2e",
+  "case": "NMGSP_CUR",
+  "program": "NMG SP",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/s2par_e2e",
+  "case": "NMGSP_NEW",
+  "program": "NMG SP",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/s2par_e2e",
+  "case": "VOICE_CUR",
+  "program": "Cricut Voice",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/s2par_e2e",
+  "case": "VOICE_NEW",
+  "program": "Cricut Voice",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "AR_T1800_9000",
+  "program": "AE AR B2B",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "AR_T1800_9001",
+  "program": "AE AR B2B",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "AR_T900_9000",
+  "program": "AE AR B2B",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "AR_T900_9001",
+  "program": "AE AR B2B",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "AR_T900_9002",
+  "program": "AE AR B2B",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "AR_T900_9003",
+  "program": "AE AR B2B",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "CHAT_DEEP_9000",
+  "program": "Cricut Chat",
+  "verdict": "NOT_RELEASABLE",
+  "failed": [
+   "gate 8 independent validation not run (NO_EVIDENCE)"
+  ],
+  "not_evaluated": [],
+  "notes": [
+   "no schedule: reason not recorded (see BUSINESS_OUTCOME / audit)"
+  ]
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "CHAT_T1800_9000",
+  "program": "Cricut Chat",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "CHAT_T1800_9001",
+  "program": "Cricut Chat",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "CHAT_T3600_9002",
+  "program": "Cricut Chat",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "CHAT_T3600_9003",
+  "program": "Cricut Chat",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "CHAT_T900_9000",
+  "program": "Cricut Chat",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "CHAT_T900_9001",
+  "program": "Cricut Chat",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "CHAT_T900_9002",
+  "program": "Cricut Chat",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "CHAT_T900_9003",
+  "program": "Cricut Chat",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "H1_DEEP_9000",
+  "program": "synthetic H1 24x7",
+  "verdict": "NOT_RELEASABLE",
+  "failed": [
+   "gate 8 independent validation not run (NO_EVIDENCE)"
+  ],
+  "not_evaluated": [],
+  "notes": [
+   "no schedule: reason not recorded (see BUSINESS_OUTCOME / audit)"
+  ]
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "H1_T1800_9000",
+  "program": "synthetic H1 24x7",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "H1_T1800_9001",
+  "program": "synthetic H1 24x7",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "H1_T3600_9002",
+  "program": "synthetic H1 24x7",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "H1_T3600_9003",
+  "program": "synthetic H1 24x7",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "H1_T900_9000",
+  "program": "synthetic H1 24x7",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 4 quality retention FAIL"
+  ],
+  "not_evaluated": [
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "H1_T900_9001",
+  "program": "synthetic H1 24x7",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "H1_T900_9002",
+  "program": "synthetic H1 24x7",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 4 quality retention FAIL",
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "H1_T900_9003",
+  "program": "synthetic H1 24x7",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "H3_T1800_9000",
+  "program": "synthetic H3",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "H3_T1800_9001",
+  "program": "synthetic H3",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "H3_T900_9000",
+  "program": "synthetic H3",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "H3_T900_9001",
+  "program": "synthetic H3",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "H3_T900_9002",
+  "program": "synthetic H3",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "H3_T900_9003",
+  "program": "synthetic H3",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "M2_T1800_9000",
+  "program": "synthetic M2",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "M2_T1800_9001",
+  "program": "synthetic M2",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "M2_T900_9000",
+  "program": "synthetic M2",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "M2_T900_9001",
+  "program": "synthetic M2",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "M2_T900_9002",
+  "program": "synthetic M2",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "M2_T900_9003",
+  "program": "synthetic M2",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "NMGSP_DEEP_9000",
+  "program": "NMG SP",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "NMGSP_T1800_9000",
+  "program": "NMG SP",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "NMGSP_T1800_9001",
+  "program": "NMG SP",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "NMGSP_T3600_9002",
+  "program": "NMG SP",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "NMGSP_T3600_9003",
+  "program": "NMG SP",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "NMGSP_T900_9000",
+  "program": "NMG SP",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "NMGSP_T900_9001",
+  "program": "NMG SP",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "NMGSP_T900_9002",
+  "program": "NMG SP",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "NMGSP_T900_9003",
+  "program": "NMG SP",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "VOICE_DEEP_9000",
+  "program": "Cricut Voice",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "VOICE_DEEP_9000_OOM_KILLED_CONTAMINATED",
+  "program": "Cricut Voice",
+  "verdict": "NOT_RELEASABLE",
+  "failed": [
+   "gate 8 independent validation not run (NO_EVIDENCE)"
+  ],
+  "not_evaluated": [],
+  "notes": [
+   "no schedule: reason not recorded (see BUSINESS_OUTCOME / audit)"
+  ]
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "VOICE_T1800_9000",
+  "program": "Cricut Voice",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "VOICE_T1800_9001",
+  "program": "Cricut Voice",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "VOICE_T3600_9002",
+  "program": "Cricut Voice",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "VOICE_T3600_9003",
+  "program": "Cricut Voice",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "VOICE_T900_9000",
+  "program": "Cricut Voice",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "VOICE_T900_9001",
+  "program": "Cricut Voice",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "VOICE_T900_9002",
+  "program": "Cricut Voice",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "raw_runs/seed_portfolio_ab",
+  "case": "VOICE_T900_9003",
+  "program": "Cricut Voice",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "shift_consistency",
+  "case": "AEIT_POLISH",
+  "program": "AE IT B2B",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "shift_consistency",
+  "case": "CHAT_POLISH",
+  "program": "Cricut Chat",
+  "verdict": "REVIEW_REQUIRED",
+  "failed": [
+   "gate 5 break regression FAIL"
+  ],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured"
+  ],
+  "notes": []
+ },
+ {
+  "family": "shift_consistency",
+  "case": "VOICE_POLISH",
+  "program": "Cricut Voice",
+  "verdict": "RELEASABLE",
+  "failed": [],
+  "not_evaluated": [
+   "gate 4 protected tier: no protected minimum configured",
+   "gate 5 absolute after-break standard: none configured"
+  ],
+  "notes": []
+ }
+]

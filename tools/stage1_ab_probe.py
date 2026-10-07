@@ -9,6 +9,7 @@ selection that a production run wraps around it.
 
 Arms: "off" = workbook as is; "on" = the same parse with one instruction
 attribute set (e.g. exact_coverage_units=True), equivalent to the workbook row.
+Time mode (--seconds-on): no attribute; "on" only gets a longer Stage-1 slice.
 
     python3 tools/stage1_ab_probe.py --engine ENGINE --out OUT.json --attr exact_coverage_units \
         --profiles target90_restore_champion,target_floor_pareto_master --seeds 9000,9001,9002 \
@@ -32,7 +33,7 @@ def _solve(args):
     import build_synthetic_suite as S
     E = S.load_engine(Path(engine))
     p = E.parse_input(Path(wb))
-    if arm == "on":
+    if arm == "on" and attr:
         p = copy.copy(p)
         setattr(p, attr, True)
     guide = E.aggregate_pattern_mix_guidance(p, time_limit_sec=30.0)
@@ -54,7 +55,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--engine", required=True)
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--attr", required=True)
+    ap.add_argument("--attr", default="")
+    ap.add_argument("--seconds-on", type=float, default=None,
+                    help="time mode: the 'on' arm's Stage-1 seconds (no attribute is set)")
     ap.add_argument("--profiles", required=True)
     ap.add_argument("--seeds", default="9000,9001,9002")
     ap.add_argument("--seconds", type=float, default=45.0)
@@ -62,7 +65,10 @@ def main() -> int:
     ap.add_argument("--parallel", type=int, default=2)
     ap.add_argument("workbooks", nargs="+")
     a = ap.parse_args()
-    jobs = [(a.engine, wb, a.attr, arm, pr, int(s), a.seconds, a.workers)
+    if not a.attr and a.seconds_on is None:
+        ap.error("give --attr or --seconds-on")
+    secs = {"off": a.seconds, "on": a.seconds_on if a.seconds_on is not None else a.seconds}
+    jobs = [(a.engine, wb, a.attr, arm, pr, int(s), secs[arm], a.workers)
             for wb in a.workbooks for pr in a.profiles.split(",") for s in a.seeds.split(",") for arm in ("off", "on")]
     rows = []
     with ProcessPoolExecutor(max_workers=a.parallel) as ex:

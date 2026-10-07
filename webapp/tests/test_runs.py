@@ -389,6 +389,7 @@ class TheProgramTags(unittest.TestCase):
         wait(store, run_id)
         m = json.loads(store.get_run(run_id)["metrics"])
         self.assertEqual((m["associates"], m["fully_covered"], m["active"]), (7, 107, 126))
+        self.assertEqual(m["outcome"], "DONE")  # kept with the figures: the status is lost on expiry
 
     def test_history_survives_file_expiry(self):
         app, store, data, _ = make_app()

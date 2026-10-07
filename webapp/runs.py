@@ -292,6 +292,7 @@ class RunQueue:
                        "The log below and the files in the download say why.")
         self.store.update_run(run_id, status=status, exit_code=code, verdict=verdict,
                               finished=time.time(), message=message)
+        self._stamp_outcome(run_id, status)
 
     def _stopped(self, run_id: str, code: Optional[int] = None) -> bool:
         with self._lock:
@@ -336,6 +337,16 @@ class RunQueue:
             # The compact figures live on the run row, so a program's history
             # outlives the run's files (deleted after 30 days).
             self.store.update_run(run_id, metrics=json.dumps(metrics(summary)))
+
+    def _stamp_outcome(self, run_id: str, status: str) -> None:
+        """Keep the run's outcome with its figures (the status becomes EXPIRED later)."""
+        run = self.store.get_run(run_id) or {}
+        try:
+            figures = json.loads(run.get("metrics") or "")
+        except ValueError:
+            return
+        figures["outcome"] = status
+        self.store.update_run(run_id, metrics=json.dumps(figures))
 
     def summary(self, run_id: str) -> Optional[Dict[str, Any]]:
         try:

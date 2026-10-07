@@ -13,8 +13,10 @@ not pass, and prints the sha256 of the result so a run can be tied back to it.
 from __future__ import annotations
 
 import argparse
+import datetime
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -62,6 +64,23 @@ def name_is_legacy_notebook(name: str) -> bool:
     return name.startswith("RC921_") and name.endswith(".ipynb")
 
 
+GATE_PASS_LINE = re.compile(r"GATE PASS\b.*?(\d+) tests \((\d+) skipped\)")
+
+
+def gate_record(stdout: str, returncode: int) -> dict:
+    """The staged gate's result as shipped in MANIFEST.json (audit P0-02: the
+    package used to carry only an older gate log). A non-zero return code is a
+    FAIL whatever the text says."""
+    lines = [ln for ln in stdout.strip().splitlines() if ln.strip()]
+    result_line = next((ln for ln in reversed(lines) if ln.startswith("GATE ")), lines[-1] if lines else "")
+    match = GATE_PASS_LINE.search(result_line)
+    passed = returncode == 0 and match is not None
+    return {"status": "PASS" if passed else "FAIL",
+            "tests": int(match.group(1)) if match else None,
+            "skipped": int(match.group(2)) if match else None,
+            "result_line": result_line}
+
+
 def build(output_dir: Path) -> Path:
     staging = output_dir / NAME
     if staging.exists():
@@ -86,7 +105,10 @@ def build(output_dir: Path) -> Path:
     gate = subprocess.run(["bash", "run_tests.sh"], cwd=staging,
                           capture_output=True, text=True)
     print(gate.stdout.strip().splitlines()[-1] if gate.stdout.strip() else "(no output)")
-    if gate.returncode != 0:
+    # Ship the gate that ran on these exact files, in full, beside them.
+    (staging / "PACKAGE_GATE_RESULT.txt").write_text(gate.stdout, encoding="utf-8")
+    gate_result = gate_record(gate.stdout, gate.returncode)
+    if gate.returncode != 0 or gate_result["status"] != "PASS":
         print(gate.stdout[-4000:], file=sys.stderr)
         raise SystemExit("refusing to package: the staged gate did not pass")
 
@@ -123,6 +145,8 @@ def build(output_dir: Path) -> Path:
 
     manifest = {
         "package": NAME,
+        "built_utc": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "gate": gate_result,
         "engine_sha256": hashlib.sha256(
             (staging / "engine" / "_tools" / "l632_universal_scheduler.py").read_bytes()
         ).hexdigest(),

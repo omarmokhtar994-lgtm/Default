@@ -1,0 +1,13 @@
+test_a_failing_gate_leaves_no_package (tests_staged.test_rc9_2_50_package_gate_record.TheBuilderShipsTheRecord.test_a_failing_gate_leaves_no_package) ... ── running the offline gate inside the staged package
+test_builder_writes_the_record_into_the_package (tests_staged.test_rc9_2_50_package_gate_record.TheBuilderShipsTheRecord.test_builder_writes_the_record_into_the_package) ... ── running the offline gate inside the staged package
+ERROR
+test_a_failing_gate_is_recorded_as_fail (tests_staged.test_rc9_2_50_package_gate_record.TheGateRecord.test_a_failing_gate_is_recorded_as_fail) ... ERROR
+test_pass_line_is_parsed (tests_staged.test_rc9_2_50_package_gate_record.TheGateRecord.test_pass_line_is_parsed) ... ERROR
+ERROR: test_builder_writes_the_record_into_the_package (tests_staged.test_rc9_2_50_package_gate_record.TheBuilderShipsTheRecord.test_builder_writes_the_record_into_the_package)
+FileNotFoundError: [Errno 2] No such file or directory: '/tmp/tmp52nklhfl/RC9_2_2_PRODUCTION_PACKAGE/PACKAGE_GATE_RESULT.txt'
+ERROR: test_a_failing_gate_is_recorded_as_fail (tests_staged.test_rc9_2_50_package_gate_record.TheGateRecord.test_a_failing_gate_is_recorded_as_fail)
+AttributeError: module 'build_production_package_g1' has no attribute 'gate_record'
+ERROR: test_pass_line_is_parsed (tests_staged.test_rc9_2_50_package_gate_record.TheGateRecord.test_pass_line_is_parsed)
+AttributeError: module 'build_production_package_g1' has no attribute 'gate_record'
+Ran 4 tests in 1.959s
+FAILED (errors=3)

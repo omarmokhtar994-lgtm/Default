@@ -1577,10 +1577,14 @@ def main() -> int:
         # Audit F-06: no releasable schedule, but the engine produced one that
         # meets every person rule and lists its missed minimums. Check it
         # independently; it never changes the (non-zero) return code.
+        # Phase H: the same look as every other schedule, applied before the
+        # validator reads it, so the workbook validated is the one shipped.
+        shortfall_presentation = present_alternative(shortfall_books[0], 'HARD_RULE_SHORTFALL_SCHEDULE')
         check = validate_shortfall_schedule(input_path, shortfall_books[0], args.language_working_window,
                                             case_root / 'SHORTFALL_SCHEDULE_VALIDATION.json')
         check['clean_room'] = run_clean_room_gate(input_path, shortfall_books[0], audit,
                                                   case_root / 'SHORTFALL_CLEAN_ROOM_CHECK.json')
+        check['presentation'] = shortfall_presentation
         independent_validation['shortfall_schedule'] = check
         print(f"[run] shortfall schedule (not releasable): {check.get('status')}", flush=True)
         if rc == 0:
@@ -1626,8 +1630,35 @@ def main() -> int:
             run_status['return_code'] = rc
             run_status['packager_return_code'] = pkg_rc
             status_path.write_text(json.dumps(run_status, indent=2, default=str), encoding='utf-8')
+    if not diagnostics_only and not skeleton_only:
+        run_status['top_level_copies'] = publish_top_level_copies(case_root)
+        status_path.write_text(json.dumps(run_status, indent=2, default=str), encoding='utf-8')
     print(json.dumps(run_status, indent=2, default=str), flush=True)
     return rc
+
+TOP_LEVEL_SCHEDULES = ('*_BEST_BEFORE_BREAKS_SCHEDULE.xlsx', '*_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx')
+
+
+def publish_top_level_copies(case_root: Path) -> list:
+    """Phase H: the schedule files a user opens at the top of the run folder are
+    the polished production files (byte-identical to what was validated and
+    packaged), not the raw engine copies with every input tab showing. The raw
+    copies move to debug/raw_engine_output/, where a resumed run's polisher reads
+    them. A file without a production counterpart is left as it is."""
+    replaced = []
+    raw_dir = case_root / 'debug' / 'raw_engine_output'
+    for pattern in TOP_LEVEL_SCHEDULES:
+        for top in sorted(case_root.glob(pattern)):
+            polished = case_root / 'production' / top.name
+            if not polished.is_file():
+                continue
+            raw_dir.mkdir(parents=True, exist_ok=True)
+            if not (raw_dir / top.name).exists():
+                shutil.move(str(top), str(raw_dir / top.name))
+            shutil.copy2(polished, top)
+            replaced.append(top.name)
+    return replaced
+
 
 # Audit F-06. Each Shortfalls-sheet rule, and where the independent validator
 # reports the same miss: (failure type, count field or None = one row each).
@@ -1732,6 +1763,8 @@ ALTERNATIVE_USE = {
     'SAFER_BALANCED_CANDIDATE': 'ALTERNATIVE - safer balanced trade-off; validated on its own',
     'MORE_CONSISTENT_CANDIDATE': 'ALTERNATIVE - the same week with steadier start times; '
                                  'offered only if its coverage is no worse',
+    'HARD_RULE_SHORTFALL_SCHEDULE': 'NOT RELEASABLE - meets every person rule; every missed coverage '
+                                    'minimum is listed on its Shortfalls sheet',
 }
 
 

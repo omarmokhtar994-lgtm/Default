@@ -54,6 +54,15 @@ OUTPUT_STYLE_VERSION='RC9.2.2-OUTPUT-UX-RC2'
 # twins - stays in the workbook, hidden, so the evidence behind the schedule is
 # one right-click away and nothing the validator reads is removed.
 VISIBLE=['Read Me First','Schedule','Break Plan','Break Schedule','FT Wise After Breaks','Coverage Before Breaks','Production Summary','Validation Log']
+# Phase H: no break is placed in the before-breaks artifact, so its Break
+# Schedule is empty and its 'FT Wise After Breaks' repeats the before numbers.
+# Those tabs are hidden there (kept, never deleted) and the front page says Before.
+BEFORE_ROLE='BEST_BEFORE_BREAKS_SCHEDULE'
+BEFORE_VISIBLE=['Read Me First','Schedule','Coverage Before Breaks','Production Summary','Validation Log']
+# The shortfall schedule (no week meets every hard rule) shows its Shortfalls
+# list beside the week, and its front page says it is not releasable.
+SHORTFALL_ROLE='HARD_RULE_SHORTFALL_SCHEDULE'
+SHORTFALL_VISIBLE=VISIBLE[:2]+['Shortfalls']+VISIBLE[2:]
 ORDER=['Read Me First','Schedule','Break Schedule','FT Wise After Breaks','Coverage Before Breaks','Production Summary','Validation Log','No-Break Exceptions','Break Spacing Audit','Interval Coverage Audit','Overage Audit','Next Sunday Carry-Out Audit','Canonical Contract','Rule Checks','Rest Gap Audit','Language Skill Audit','Language Reserve Summary','Skill Allocation Audit','Whole Week Balance Audit','Employee Quality Audit','Feasibility Certificate','Language Setup','Preference','Instructions','Fixed Shift Requests','Candidate Leaderboard','Target Tradeoff Audit','Feasibility Report','Blank Interval Audit','Shift Demand Fit Audit','Overnight Audit','Cyclic Sunday Audit']
 TECH={'Final Schedule','Break Schedule Active','Daily Interval Review','FT Wise Active','FT Wise After Breaks Active','Scheduler Engine','Previous Engine','Balanced Scenario Schedule','Future Use','Implementation Notes','Formula Fix Notes','Review Runs','Balance Change Log','Benchmark Comparison','Dynamic Interval Guide','Constraint Isolation','Day Tail Fit Audit'}
 
@@ -89,7 +98,7 @@ def _coverage_text(hits,active):
 
 def _status_fill(status):
  s=str(status or '').upper()
- if any(x in s for x in ('FAIL','BLOCK','NO-GO')): return PALE_RED
+ if any(x in s for x in ('FAIL','BLOCK','NO-GO','NOT RELEASABLE')): return PALE_RED
  if any(x in s for x in ('WARN','MONITOR','PENDING','REVIEW')): return PALE_ORANGE
  return PALE_GREEN
 
@@ -187,6 +196,7 @@ def _build_dashboard(wb,ps,role,use):
  ws=wb.create_sheet('Read Me First',0); m=_metric_map(ps); active=_num(m.get('Active Intervals'))
  final_status=m.get('Final Status') or m.get('Production Quality Gate') or 'NOT REPORTED'; hard=_num(m.get('Hard Validation Failures'))
  if role=='BEST_BEFORE_BREAKS_SCHEDULE': decision='REVIEW ONLY'
+ elif role==SHORTFALL_ROLE: decision='NOT RELEASABLE'
  elif hard>0 or 'FAIL' in str(final_status).upper(): decision='BLOCKED'
  elif 'WARN' in str(final_status).upper() or str(m.get('Production Quality Gate','')).upper()=='WARN': decision='GO WITH MONITORING'
  else: decision='GO — VALIDATE SEAL'
@@ -194,7 +204,8 @@ def _build_dashboard(wb,ps,role,use):
  for col,width in {'A':25,'B':19,'C':19,'D':15,'E':4,'F':24,'G':19,'H':22}.items(): ws.column_dimensions[col].width=width
  ws.merge_cells('A1:H1'); ws['A1']='RC9.2.2  |  Schedule Control Center'; ws['A1'].fill=PatternFill('solid',fgColor=NAVY); ws['A1'].font=Font(color=WHITE,bold=True,size=20); ws['A1'].alignment=Alignment(vertical='center'); ws.row_dimensions[1].height=42
  ws.merge_cells('A2:H2'); ws['A2']=f'{role}  •  {use}  •  {OUTPUT_STYLE_VERSION}'; ws['A2'].fill=PatternFill('solid',fgColor=PURPLE); ws['A2'].font=Font(color=WHITE,italic=True); ws['A2'].alignment=Alignment(vertical='center',wrap_text=True); ws.row_dimensions[2].height=32
- cards=[('A4','B4','A5','B6','Schedule Status',decision,_status_fill(decision)),('C4','D4','C5','D6','Interval Grid',f"{_count_text(m.get('Interval Minutes'))} minutes",PALE_BLUE),('F4','F4','F5','F6','After Target',_coverage_text(m.get('After Target Hits'),active),PALE_GREEN),('G4','H4','G5','H6','After Floor',_coverage_text(m.get('After Floor Hits'),active),PALE_TEAL)]
+ before=role==BEFORE_ROLE; stage='Before' if before else 'After'
+ cards=[('A4','B4','A5','B6','Schedule Status',decision,_status_fill(decision)),('C4','D4','C5','D6','Interval Grid',f"{_count_text(m.get('Interval Minutes'))} minutes",PALE_BLUE),('F4','F4','F5','F6',f'{stage} Target',_coverage_text(m.get(f'{stage} Target Hits'),active),PALE_GREEN),('G4','H4','G5','H6',f'{stage} Floor',_coverage_text(m.get(f'{stage} Floor Hits'),active),PALE_TEAL)]
  for l1,l2,v1,v2,label,value,color in cards:
   ws.merge_cells(f'{l1}:{l2}'); ws.merge_cells(f'{v1}:{v2}'); ws[l1]=label; ws[v1]=value
   ws[l1].fill=PatternFill('solid',fgColor=NAVY); ws[l1].font=Font(color=WHITE,bold=True); ws[l1].alignment=Alignment(horizontal='center')
@@ -203,17 +214,18 @@ def _build_dashboard(wb,ps,role,use):
    for cell in row: cell.border=_border()
  ws['A8']='Coverage Attainment'; ws['A8'].font=Font(bold=True,size=14,color=NAVY)
  rows=[('100%',m.get('Before 100%'),m.get('After 100%')),('90%',m.get('Before 90%'),m.get('After 90%')),('80%',m.get('Before 80%'),m.get('After 80%')),('Target',m.get('Before Target Hits'),m.get('After Target Hits')),('Floor',m.get('Before Floor Hits'),m.get('After Floor Hits'))]
- for c,v in enumerate(('Threshold','Before breaks','After breaks','Change'),1): ws.cell(9,c).value=v
- _header(ws,9,1,4,PURPLE)
- for i,(label,before,after) in enumerate(rows,10):
-  b=_num(before); a=_num(after); ws.cell(i,1).value=label; ws.cell(i,2).value=b; ws.cell(i,3).value=a; ws.cell(i,4).value=a-b
-  for c in range(1,5): ws.cell(i,c).border=_border(); ws.cell(i,c).alignment=Alignment(horizontal='center')
-  ws.cell(i,3).fill=PatternFill('solid',fgColor=PALE_GREEN if a>=b else PALE_YELLOW)
- chart=BarChart(); chart.type='col'; chart.style=10; chart.title='Coverage: Before vs After Breaks'; chart.y_axis.title='Intervals'; chart.height=5.1; chart.width=9.6
- chart.add_data(Reference(ws,min_col=2,max_col=3,min_row=9,max_row=14),titles_from_data=True); chart.set_categories(Reference(ws,min_col=1,min_row=10,max_row=14)); chart.legend.position='b'; ws.add_chart(chart,'F8')
- if len(chart.series)>=2:
-  chart.series[0].tx=SeriesLabel(v='Before breaks')
-  chart.series[1].tx=SeriesLabel(v='After breaks')
+ heads=('Threshold','Before breaks') if before else ('Threshold','Before breaks','After breaks','Change')
+ for c,v in enumerate(heads,1): ws.cell(9,c).value=v
+ _header(ws,9,1,len(heads),PURPLE)
+ for i,(label,b_raw,a_raw) in enumerate(rows,10):
+  b=_num(b_raw); a=_num(a_raw); ws.cell(i,1).value=label; ws.cell(i,2).value=b
+  if not before: ws.cell(i,3).value=a; ws.cell(i,4).value=a-b
+  for c in range(1,len(heads)+1): ws.cell(i,c).border=_border(); ws.cell(i,c).alignment=Alignment(horizontal='center')
+  if not before: ws.cell(i,3).fill=PatternFill('solid',fgColor=PALE_GREEN if a>=b else PALE_YELLOW)
+ chart=BarChart(); chart.type='col'; chart.style=10; chart.title='Coverage before breaks' if before else 'Coverage: Before vs After Breaks'; chart.y_axis.title='Intervals'; chart.height=5.1; chart.width=9.6
+ chart.add_data(Reference(ws,min_col=2,max_col=2 if before else 3,min_row=9,max_row=14),titles_from_data=True); chart.set_categories(Reference(ws,min_col=1,min_row=10,max_row=14)); chart.legend.position='b'; ws.add_chart(chart,'F8')
+ if chart.series: chart.series[0].tx=SeriesLabel(v='Before breaks')
+ if len(chart.series)>=2: chart.series[1].tx=SeriesLabel(v='After breaks')
  ws['A16']='Risk & Exception Snapshot'; ws['A16'].font=Font(bold=True,size=14,color=NAVY)
  for c,v in enumerate(('Check','Count','Status','Operational note'),1): ws.cell(17,c).value=v
  _header(ws,17,1,4,TEAL)
@@ -224,7 +236,7 @@ def _build_dashboard(wb,ps,role,use):
   for c in range(1,5): ws.cell(i,c).border=_border(); ws.cell(i,c).alignment=Alignment(vertical='center',wrap_text=True)
   ws.cell(i,3).fill=PatternFill('solid',fgColor=_status_fill(status)); ws.cell(i,3).font=Font(bold=True)
  ws['F17']='Run Configuration'; ws['F17'].font=Font(bold=True,size=14,color=NAVY)
- cfg=[('Roster count',m.get('Roster Count')),('Legal shift count',m.get('Legal Shift Count')),('Target ratio',m.get('Target Ratio')),('Floor ratio',m.get('Floor Ratio')),('After target overage FTE',m.get('After Target Overage FTE Sum')),('After avoidable overage FTE',m.get('After Avoidable Overage FTE Sum')),('Final engine status',final_status),('Production quality gate',m.get('Production Quality Gate'))]
+ cfg=[('Roster count',m.get('Roster Count')),('Legal shift count',m.get('Legal Shift Count')),('Target ratio',m.get('Target Ratio')),('Floor ratio',m.get('Floor Ratio')),(f'{stage} target overage FTE',m.get(f'{stage} Target Overage FTE Sum')),(f'{stage} avoidable overage FTE',m.get(f'{stage} Avoidable Overage FTE Sum')),('Final engine status',final_status),('Production quality gate',m.get('Production Quality Gate'))]
  for i,(label,value) in enumerate(cfg,18):
   ws.cell(i,6).value=label; ws.merge_cells(start_row=i,start_column=7,end_row=i,end_column=8); ws.cell(i,7).value=value
   for c in range(6,9): ws.cell(i,c).border=_border(); ws.cell(i,c).alignment=Alignment(vertical='center',wrap_text=True)
@@ -232,7 +244,7 @@ def _build_dashboard(wb,ps,role,use):
   if 'ratio' in label.lower(): ws.cell(i,7).number_format='0.0%'
   elif 'fte' in label.lower(): ws.cell(i,7).number_format='#,##0.0'
  ws.merge_cells('A28:H28'); ws['A28']='How to use this workbook'; ws['A28'].fill=PatternFill('solid',fgColor=NAVY); ws['A28'].font=Font(color=WHITE,bold=True,size=13)
- instructions=[('1','Schedule = the week to publish; OFF and leave cells are colour-coded. Break Plan shows each person\'s shift and breaks per day.'),('2','Break Schedule lists every break; investigate WARN/REVIEW rows before release.'),('3','FT Wise After Breaks = interval coverage, colour-coded (red below 80%, amber below 90%).'),('4','Production Summary and Validation Log hold every measure. The audit and input tabs are hidden, not deleted: right-click any tab > Unhide.'),('5',f"This result uses a {_count_text(m.get('Interval Minutes'))}-minute grid. The engine supports both 30- and 60-minute workbooks.")]
+ instructions=[('1','Schedule = the shift and OFF week before breaks; OFF and leave cells are colour-coded. No break is placed in this workbook: it is for review, not for publishing.'),('2','Coverage Before Breaks = interval coverage of this week before any break is taken.'),('3','The after-breaks workbook from the same run is the one to publish; it adds Break Plan, Break Schedule and FT Wise After Breaks.'),('4','Production Summary and Validation Log hold every measure. The audit and input tabs are hidden, not deleted: right-click any tab > Unhide.'),('5',f"This result uses a {_count_text(m.get('Interval Minutes'))}-minute grid. The engine supports both 30- and 60-minute workbooks.")] if before else [('1','Schedule = the week to publish; OFF and leave cells are colour-coded. Break Plan shows each person\'s shift and breaks per day.'),('2','Break Schedule lists every break; investigate WARN/REVIEW rows before release.'),('3','FT Wise After Breaks = interval coverage, colour-coded (red below 80%, amber below 90%).'),('4','Production Summary and Validation Log hold every measure. The audit and input tabs are hidden, not deleted: right-click any tab > Unhide.'),('5',f"This result uses a {_count_text(m.get('Interval Minutes'))}-minute grid. The engine supports both 30- and 60-minute workbooks.")]
  for i,(step,note) in enumerate(instructions,29):
   ws.cell(i,1).value=step; ws.cell(i,1).fill=PatternFill('solid',fgColor=TEAL); ws.cell(i,1).font=Font(color=WHITE,bold=True); ws.cell(i,1).alignment=Alignment(horizontal='center')
   ws.merge_cells(start_row=i,start_column=2,end_row=i,end_column=8); ws.cell(i,2).value=note; ws.cell(i,2).alignment=Alignment(wrap_text=True,vertical='center'); ws.cell(i,2).fill=PatternFill('solid',fgColor='F8FAFC')
@@ -309,10 +321,10 @@ def _has_exceptions(wb):
  ws=wb['No-Break Exceptions']
  return any(str(ws.cell(r,1).value or '').strip() for r in range(2,ws.max_row+1))
 
-def _arrange_tabs(wb):
+def _arrange_tabs(wb,role=None):
  """Planner tabs first and visible; every other tab kept, hidden. Returns the hidden count."""
- visible=[n for n in VISIBLE if n in wb.sheetnames]
- if _has_exceptions(wb): visible.insert(visible.index('Break Schedule')+1 if 'Break Schedule' in visible else len(visible),'No-Break Exceptions')
+ visible=[n for n in {BEFORE_ROLE:BEFORE_VISIBLE,SHORTFALL_ROLE:SHORTFALL_VISIBLE}.get(role,VISIBLE) if n in wb.sheetnames]
+ if role!=BEFORE_ROLE and _has_exceptions(wb): visible.insert(visible.index('Break Schedule')+1 if 'Break Schedule' in visible else len(visible),'No-Break Exceptions')
  by={ws.title:ws for ws in wb.worksheets}; ordered=[by[n] for n in visible]; used=set(visible)
  ordered+=[by[n] for n in ORDER if n in by and n not in used]; used|={n for n in ORDER if n in by}
  ordered+=[ws for ws in wb.worksheets if ws.title not in used]; wb._sheets=ordered
@@ -360,7 +372,7 @@ def present_in_place(path,role,use):
  if 'Production Summary' not in wb.sheetnames or 'Schedule' not in wb.sheetnames:
   wb.close(); return None
  _apply_output_theme(wb,wb['Production Summary'],role,use)
- hidden=_arrange_tabs(wb)
+ hidden=_arrange_tabs(wb,role)
  tmp=path.with_name(path.stem+'.presenting.xlsx'); wb.save(tmp); wb.close()
  with zipfile.ZipFile(tmp) as z:
   bad=z.testzip()
@@ -422,7 +434,7 @@ def clean_book(src,dst,role,use,pareto,ident):
   ps.sheet_view.showGridLines=False; ps.freeze_panes='A2'; ps.column_dimensions['A'].width=38; ps.column_dimensions['B'].width=105; ps.column_dimensions['G'].width=72
   for cell in ps[1]: cell.fill=PatternFill('solid',fgColor='1F4E78'); cell.font=Font(color='FFFFFF',bold=True); cell.alignment=Alignment(horizontal='center')
   _apply_output_theme(wb,ps,role,use)
-  _arrange_tabs(wb)
+  _arrange_tabs(wb,role)
   if getattr(wb,'calculation',None) is None: wb.calculation=CalcProperties(calcMode='auto')
   wb.calculation.fullCalcOnLoad=True; wb.calculation.forceFullCalc=True; wb.save(dst); wb.close()
  with zipfile.ZipFile(dst) as z:
@@ -431,12 +443,20 @@ def clean_book(src,dst,role,use,pareto,ident):
  wb=load_workbook(dst,read_only=True); names=wb.sheetnames; wb.close()
  if not {'Production Summary','Schedule','Canonical Contract'}.issubset(names): raise RuntimeError('Required sheet missing')
  return {'path':str(dst),'size_bytes':dst.stat().st_size,'sha256':sha(dst),'sheet_count':len(names),'xlsx_zip_test':'PASS','reopen_test':'PASS'}
+RAW_ENGINE_OUTPUT='debug/raw_engine_output'
+def engine_copy(root,pat):
+ """The engine's own workbook for this pattern. After a run, the runner puts the
+ polished file at the top level and keeps the engine copy under
+ debug/raw_engine_output/ (Phase H); a resumed run must polish that copy again,
+ never the already-polished one."""
+ raw=sorted((Path(root)/RAW_ENGINE_OUTPUT).glob(pat))
+ return raw[0] if len(raw)==1 else one(root,pat)
 def publish(root):
  root=root.resolve(); summary=read_csv(one(root,'*.l6_3_2_3_summary.csv')); pareto=json.loads(one(root,'*_PARETO_EXPORT_MANIFEST.json').read_text()); cid=Path(summary.get('output','')).name.split('_L6_3_2_3_',1)[0]; prod=root/'production'; prod.mkdir(exist_ok=True); ident=run_identity(root)
  if ident['identity_source']=='FALLBACK_LITERALS' or not all(ident.get(k) for k in ('engine_sha256','contract_sha256','run_id','input_sha256')):
   raise RuntimeError('Complete run identity is required before production artifact preparation')
- before=clean_book(one(root,'*_BEST_BEFORE_BREAKS_SCHEDULE.xlsx'),prod/f'{cid}_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx','BEST_BEFORE_BREAKS_SCHEDULE','REVIEW ONLY - strongest legal shift/OFF skeleton before breaks; not operational',pareto,ident)
- final=clean_book(one_of(root,'*_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx','*_RECOMMENDED_FINAL_AFTER_BREAKS_SCHEDULE.xlsx'),prod/f'{cid}_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx','BEST_FINAL_AFTER_BREAKS_SCHEDULE','PREPARED OUTPUT - not operational until the independent validation seal and production package exist',pareto,ident)
+ before=clean_book(engine_copy(root,'*_BEST_BEFORE_BREAKS_SCHEDULE.xlsx'),prod/f'{cid}_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx','BEST_BEFORE_BREAKS_SCHEDULE','REVIEW ONLY - strongest legal shift/OFF skeleton before breaks; not operational',pareto,ident)
+ final=clean_book(engine_copy(root,'*_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx') if sorted((root/RAW_ENGINE_OUTPUT).glob('*_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx')) else one_of(root,'*_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx','*_RECOMMENDED_FINAL_AFTER_BREAKS_SCHEDULE.xlsx'),prod/f'{cid}_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx','BEST_FINAL_AFTER_BREAKS_SCHEDULE','PREPARED OUTPUT - not operational until the independent validation seal and production package exist',pareto,ident)
  manifest={'release':ident['release'],'identity_source':ident['identity_source'],'contract_sha256':ident['contract_sha256'],'run_id':ident['run_id'],'input_sha256':ident['input_sha256'],'approval_status':'PENDING_INDEPENDENT_VALIDATION','production_ready':False,'generated_utc':datetime.now(timezone.utc).isoformat(),'case':cid,'solver':{'version':ident['solver'],'week_boundary_patch_commit':ident['commit'],'engine_sha256':ident['engine_sha256'],'optimization_logic_changed':True,'change_scope':'RC9.2.2 production hardening: protected-tier champion selection, exact-workbook validation, and fail-closed publication without client/case branching'},'two_artifact_contract':{'BEST_BEFORE_BREAKS_SCHEDULE':before,'BEST_FINAL_AFTER_BREAKS_SCHEDULE':final},'candidate_role_rows':roles(pareto),'source_status':summary.get('status','')}
  mp=prod/'PRODUCTION_ARTIFACT_MANIFEST.json'; mp.write_text(json.dumps(manifest,indent=2),encoding='utf-8')
  print(json.dumps({'status':'PREPARED_PENDING_INDEPENDENT_VALIDATION','case':cid,'manifest':str(mp),'before':before,'final':final},indent=2))

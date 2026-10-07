@@ -132,7 +132,11 @@ class AlternativesArePresentedBeforeTheyAreValidated(unittest.TestCase):
     def test_the_published_schedule_uses_the_same_arrangement(self):
         source = (ROOT / "engine" / "production" / "production_output_polisher.py").read_text()
         clean = source[source.index("def clean_book("):source.index("def publish(")]
-        self.assertIn("_arrange_tabs(wb)", clean)
+        # Re-pinned in Phase H (tests_staged/test_rc9_2_53_one_output_look.py):
+        # the arrangement now takes the role, so the before-breaks and shortfall
+        # schedules get their own visible tabs; the published schedule still goes
+        # through the same _arrange_tabs.
+        self.assertIn("_arrange_tabs(wb,role)", clean)
 
 
 if __name__ == "__main__":

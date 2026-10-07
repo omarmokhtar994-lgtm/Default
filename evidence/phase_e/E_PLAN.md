@@ -90,3 +90,26 @@ interval at target or floor after breaks, every run exit 0, validator PASS,
 0 hard failures. If A fails: switch stays, default No, no production runs.
 Limitation stated now: Stage A measures weeks before breaks; Stage B is the
 check on what ships.
+
+## Task 3 / F-E2: Stage-1 time on the profiles that ship (pre-registered 2026-10-07 ~05:05, before any run)
+
+Question: does giving the most-shipped profile more of the Stage-1 budget
+produce better weeks? (98 saved runs: target90_restore_champion shipped 42.2,
+target_floor_pareto_master 12.7; most others ~0-5, several never ran.)
+
+Stage A (probe, `tools/stage1_ab_probe.py` with a time arm): the 7 programs x
+seeds 9000, 9001, 9002, target90_restore_champion at 45 s (today's slice) vs
+135 s (the time of the two lowest-yield profiles that usually run, added to
+it), 2 workers, production hard rules and guide, no hint; scored by
+calculate_metrics before breaks. ~32 min.
+
+Stage A passes only if: per program, the 135 s mean loses nothing at target or
+floor versus 45 s, AND the summed before-target over the 21 pairs gains at
+least 7 (one interval per program on average). Otherwise: record that more
+time on the champion does not pay, and close F-E2 without production runs.
+Stage B (only if A passes): one production pair per program for the 2
+programs with the largest gain, today's profile list vs the list with
+target90_restore_champion first and the two lowest-yield profiles that
+usually run dropped (QUICK 3,600 s, 2 workers, seed 9000); adopt only if
+neither loses more than 1 interval at target or floor after breaks, every run
+exit 0, validator PASS, 0 hard failures.

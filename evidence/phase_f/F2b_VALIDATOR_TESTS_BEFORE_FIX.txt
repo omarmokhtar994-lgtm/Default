@@ -1,0 +1,29 @@
+test_switch_on_untouched_parse_crosschecks_clean (tests_staged.test_rc9_2_49_validator_half_hour_twins.TwinsFromTheSwitchAreAccepted.test_switch_on_untouched_parse_crosschecks_clean) ... FAIL
+test_parsed_switch_disagreeing_with_the_workbook_fails (tests_staged.test_rc9_2_49_validator_half_hour_twins.ValidationIsNotWeakened.test_parsed_switch_disagreeing_with_the_workbook_fails) ... FAIL
+test_switch_off_a_twin_still_fails (tests_staged.test_rc9_2_49_validator_half_hour_twins.ValidationIsNotWeakened.test_switch_off_a_twin_still_fails) ... ok
+test_switch_on_a_shift_no_rule_derives_still_fails (tests_staged.test_rc9_2_49_validator_half_hour_twins.ValidationIsNotWeakened.test_switch_on_a_shift_no_rule_derives_still_fails) ... ok
+test_switch_on_a_twin_of_a_different_length_still_fails (tests_staged.test_rc9_2_49_validator_half_hour_twins.ValidationIsNotWeakened.test_switch_on_a_twin_of_a_different_length_still_fails) ... ok
+
+======================================================================
+FAIL: test_switch_on_untouched_parse_crosschecks_clean (tests_staged.test_rc9_2_49_validator_half_hour_twins.TwinsFromTheSwitchAreAccepted.test_switch_on_untouched_parse_crosschecks_clean)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/wt_valfix/tests_staged/test_rc9_2_49_validator_half_hour_twins.py", line 63, in test_switch_on_untouched_parse_crosschecks_clean
+    self.assertEqual(result["checks"]["shifts"], "PASS", result["mismatches"])
+AssertionError: 'FAIL' != 'PASS'
+- FAIL
++ PASS
+ : [{'check': 'shifts', 'not_in_workbook': ['08:30 - 17:30', '12:30 - 21:30']}]
+
+======================================================================
+FAIL: test_parsed_switch_disagreeing_with_the_workbook_fails (tests_staged.test_rc9_2_49_validator_half_hour_twins.ValidationIsNotWeakened.test_parsed_switch_disagreeing_with_the_workbook_fails)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/claude-0/-home-user-Default/57e8acb4-ab5e-5113-8a50-dec0489e4e6a/scratchpad/wt_valfix/tests_staged/test_rc9_2_49_validator_half_hour_twins.py", line 87, in test_parsed_switch_disagreeing_with_the_workbook_fails
+    self.assertIn("request_switches", {m["check"] for m in crosscheck(book, p)["mismatches"]})
+AssertionError: 'request_switches' not found in set()
+
+----------------------------------------------------------------------
+Ran 5 tests in 2.373s
+
+FAILED (failures=2)

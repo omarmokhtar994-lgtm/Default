@@ -23,7 +23,23 @@ the next package; nothing here is built yet.
    - `deploy/install.sh` stops when the two passwords differ (set -e on the
      create-admin step); it should ask again instead.
 
+## Built in Phase K (2026-10-08: see docs/superpowers/plans/2026-10-08-phase-k-program-analytics.md)
+
+- Program name and schedule week on every run (upload form; editable on the
+  run page by its owner or an admin). Runs finished before the update get
+  their figures from their files when the website starts.
+- Programs page (latest week per program with 12-week trends), a program's
+  history page (associates per week, coverage before and after breaks, hours
+  available and needed, what stops 100%, what a lower interval target would
+  meet, hours that keep coming up short, written insights and suggestions,
+  week-by-week table) and a Team page (runs per person and how they ended).
+
 ## Offered, waiting for the owner
+
+- AI-written summaries on the program page (the owner chose rule-based
+  insights first). Needs an Anthropic API key on the server, kept in a
+  root-only file; only aggregate figures would be sent, never names.
+
 
 - Site name shown on the pages ("Team Scheduler"): owner to give a name.
 - Web address: DuckDNS (free) or an own domain; re-run the installer with

@@ -32,30 +32,30 @@
 
 **Files:** `webapp/results.py`; Test `webapp/tests/test_results.py`.
 **Produces:** `summarize()` adds `targets` (list of `{"pct": int, "after": int, "before": int}` for 100/95/90/85/80), `efficiency` (`{"pct": int, "under_hours": float, "over_hours": float}`; efficiency = 1 - (under + over FTE-hours) / required FTE-hours over active half-hours), `day_coverage` (7 x `{"day", "after_pct", "before_pct"}` share fully covered), `restrictions` (`{"total": int, "causes": [{"key", "label", "count", "examples": [str]}]}` over half-hours below 100% after breaks; keys `capacity` (engine's upper bound of people who could be there, ceil(required / (1 - shrinkage)) needed, below it), `breaks` (fully covered before breaks), `weekly_hours` (aggregate productive hours below target hours), `rules` (the rest: rest, days off, start times, language windows)), and `metrics(summary) -> dict` (compact, names-free).
-- [ ] Tests: `test_target_counts_match_the_validator` (100% -> 107, 90% -> 121, equal to the validator's own counts), `test_restriction_causes_add_up` (sum = 126 - 107), `test_capacity_cause_from_the_engine_bound` (planted bound below need), `test_breaks_cause` (before >= 100%, after < 100%), `test_efficiency_counts_over_and_under`, `test_metrics_hold_no_names`.
+- [x] Tests: `test_target_counts_match_the_validator` (100% -> 107, 90% -> 121, equal to the validator's own counts), `test_restriction_causes_add_up` (sum = 126 - 107), `test_capacity_cause_from_the_engine_bound` (planted bound below need), `test_breaks_cause` (before >= 100%, after < 100%), `test_efficiency_counts_over_and_under`, `test_metrics_hold_no_names`.
 
 ### Task 2: program and week on every run, metrics kept
 
 **Files:** `webapp/store.py` (columns `program`, `week_start`, `metrics`; migration), `webapp/runs.py` (store metrics at finish; keep on expiry), `webapp/app.py` (upload fields, tag edit `POST /runs/<id>/tag` for the run's owner or an admin), templates; Test `webapp/tests/test_runs.py`.
-- [ ] Tests: `test_upload_records_program_and_week`, `test_metrics_saved_when_a_run_finishes`, `test_history_survives_file_expiry`, `test_untagged_runs_can_be_tagged` (owner or admin only, 403 otherwise), `test_old_database_gains_analytics_columns`.
+- [x] Tests: `test_upload_records_program_and_week`, `test_metrics_saved_when_a_run_finishes`, `test_history_survives_file_expiry`, `test_untagged_runs_can_be_tagged` (owner or admin only, 403 otherwise), `test_old_database_gains_analytics_columns`.
 
 ### Task 3: analytics
 
 **Files:** `webapp/analytics.py`; Test `webapp/tests/test_analytics.py`.
 **Produces:** `program_weeks(runs) -> dict[program, list[week]]`; `week` rows hold the metrics, run id, runs that week, deltas vs previous week; `insights(weeks) -> list[str]`; `suggestions(week) -> list[dict(level, text)]`; `recurring(weeks) -> grid` (weeks short per day and hour); `team(runs) -> list[dict]` per user.
-- [ ] Tests: `test_latest_run_counts_for_the_week`, `test_one_week_has_no_deltas`, `test_associates_trend_sentence` ("7 -> 6, down 1"), `test_coverage_before_and_after_trend_sentences`, `test_recurring_short_hours_counted_across_weeks`, `test_target_suggestion_names_the_90_percent_share`, `test_team_activity_per_user`.
+- [x] Tests: `test_latest_run_counts_for_the_week`, `test_one_week_has_no_deltas`, `test_associates_trend_sentence` ("7 -> 6, down 1"), `test_coverage_before_and_after_trend_sentences`, `test_recurring_short_hours_counted_across_weeks`, `test_target_suggestion_names_the_90_percent_share`, `test_team_activity_per_user`.
 
 ### Task 4: charts
 
 **Files:** `webapp/charts.py`; Test `webapp/tests/test_charts.py`.
 **Produces:** `columns(labels, values, unit, deltas=None)`, `lines(labels, series: list[(name, colour, values)], y_max=100, unit="%")`, `hbars(rows: list[(label, value, colour)])`, `heat(rows, cols, grid)` -> SVG `Markup`; each mark carries `data-tip`; values escaped.
-- [ ] Tests: `test_columns_have_one_bar_per_week_and_capped_width`, `test_lines_have_a_legend_for_two_series`, `test_labels_are_escaped`, `test_empty_series_says_no_data`.
+- [x] Tests: `test_columns_have_one_bar_per_week_and_capped_width`, `test_lines_have_a_legend_for_two_series`, `test_labels_are_escaped`, `test_empty_series_says_no_data`.
 
 ### Task 5: pages
 
 **Files:** templates `programs.html`, `program.html`, `team.html`; `webapp/static/app.css`, `app.js` (tooltip); nav; Test `test_runs.py`, `test_ui_playwright.py`.
-- [ ] Tests: `test_programs_page_lists_programs_with_latest_figures`, `test_program_page_shows_history_insights_and_suggestions`, `test_program_names_are_escaped_and_url_safe`, `test_team_page`, browser `test_program_analytics_page` with screenshots.
+- [x] Tests: `test_programs_page_lists_programs_with_latest_figures`, `test_program_page_shows_history_insights_and_suggestions`, `test_program_names_are_escaped_and_url_safe`, `test_team_page`, browser `test_program_analytics_page` with screenshots.
 
 ### Finish
 
-- [ ] Website suite, full gate, package, push, send screenshots and package.
+- [x] Website suite, full gate, package, push, send screenshots and package.

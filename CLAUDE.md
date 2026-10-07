@@ -41,5 +41,9 @@ python-performance-optimization.
   fail-closed validation and review checklists; apply to code being changed, not
   as repo-wide refactors (no type-hint or style sweeps without a request).
 - python-performance-optimization: profiling CPU/memory (the engine has OOM history).
+- frontend-design (anthropics/skills, Apache-2.0): visual design of any web UI
+  (the team scheduler website): plan palette/type/layout first, avoid templated defaults.
+- webapp-testing (anthropics/skills, Apache-2.0): Playwright checks and screenshots of
+  the website before reporting it done.
 - find-skills: discovering more skills (skills.sh search is blocked by the
   network policy here; browse the source repos on GitHub instead).

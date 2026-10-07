@@ -173,12 +173,17 @@ class C1ShortfallPass(unittest.TestCase):
         out = path.parent / "case_L6_3_2_3_HARD_RULE_SHORTFALL_SCHEDULE.xlsx"
         # Phase H (owner-approved; evidence/phase_h/H4_DETERMINISTIC_BUDGET.md):
         # a solver-work budget instead of 40 s wall clock, so a slow or busy
-        # machine (Colab: 3 of 10 failures) does the same search. Chosen by the
-        # pre-registered rule: 5/5 unloaded, 10/10 under 2-core load. The
-        # assertions below are unchanged.
+        # machine (Colab: 3 of 10 failures) does the same search.
+        # Re-pinned 10 -> 40 (2026-10-08): with 10 the refinement and break
+        # solves stop short of their best answer about 1 run in 10 (4/40 on
+        # x86; it failed the safety gate on the owner's ARM server), leaving
+        # one extra uncovered half-hour (evidence/phase_i/I7_ROOT_CAUSE.md).
+        # Chosen by the rule pre-registered in I7_SHORTFALL_BUDGET_RULE.txt:
+        # 20 failed 1/20; 40 passed 20/20 unloaded and 10/10 under load.
+        # The assertions below are unchanged.
         record = E.run_shortfall_pass(parsed, path, out, {}, E.capacity_diagnostics(parsed),
                                       time_limit=600, workers=2, log=io.StringIO(), random_seed=9000,
-                                      deterministic_time=10.0)
+                                      deterministic_time=40.0)
         self.assertEqual(record["status"], "EXPORTED", record)
         self.assertTrue(out.exists())
         self.assertFalse(record["releasable"])

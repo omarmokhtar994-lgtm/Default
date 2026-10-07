@@ -1,0 +1,24 @@
+{% extends "base.html" %}{% block title %}People · Team Scheduler{% endblock %}
+{% block content %}
+<h1>People</h1>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+<table class="people"><thead><tr><th>Username</th><th>Name</th><th>Role</th><th>State</th><th></th></tr></thead><tbody>
+{% for u in users %}<tr>
+  <td>{{ u.username }}</td><td>{{ u.display_name }}</td><td>{{ 'Admin' if u.is_admin else 'Member' }}</td>
+  <td>{{ 'Active' if u.active else 'Switched off' }}</td>
+  <td class="actions">
+    {% for action, label in ([('disable','Switch off')] if u.active else [('enable','Switch on')]) + [('reset','Reset password')] %}
+    <form method="post" action="{{ url_for('admin_user_action', user_id=u.id, action=action) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="quiet">{{ label }}</button></form>
+    {% endfor %}
+  </td></tr>{% endfor %}
+</tbody></table>
+<h2>Add a person</h2>
+<form method="post" class="inline">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Username <input name="username" required></label>
+  <label>Name <input name="display_name"></label>
+  <label>Temporary password <input name="password" type="text" minlength="10" required></label>
+  <label class="check"><input type="checkbox" name="is_admin"> Admin</label>
+  <button class="primary">Add person</button>
+</form>
+{% endblock %}

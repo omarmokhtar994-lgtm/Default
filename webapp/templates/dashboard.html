@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Runs</h1>
+<table class="runs"><thead><tr><th>Workbook</th><th>By</th><th>Status</th></tr></thead><tbody>
+{% for run in runs %}<tr><td>{{ run.workbook }}</td><td>{{ run.by_name }}</td><td>{{ run.status }}</td></tr>
+{% else %}<tr><td colspan="3">No runs yet.</td></tr>{% endfor %}
+</tbody></table>
+{% endblock %}

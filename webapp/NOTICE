@@ -1,0 +1,11 @@
+Team Scheduler website and RC9.2.2 scheduling engine
+© 2026 Omar Mokhtar. All rights reserved.
+
+This software, its source code, engine, documentation and design are the
+property of Omar Mokhtar. No part may be copied, distributed, modified,
+published or used outside the owner's authorised team without the owner's
+prior written permission.
+
+Third-party components keep their own licences: Flask, Werkzeug, Jinja2 and
+Waitress (BSD-style), Google OR-Tools (Apache-2.0), openpyxl (MIT), SciPy
+(BSD), Caddy (Apache-2.0).

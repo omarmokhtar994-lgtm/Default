@@ -1,0 +1,12 @@
+FAIL: test_break_search_ran_out_is_named_the_same_way (tests_staged.test_rc9_2_51_verdict_no_schedule_reason.TheReasonIsNamed.test_break_search_ran_out_is_named_the_same_way)
+AssertionError: 'ran out of time' not found in ''
+FAIL: test_missing_outcome_is_named_unknown (tests_staged.test_rc9_2_51_verdict_no_schedule_reason.TheReasonIsNamed.test_missing_outcome_is_named_unknown)
+AssertionError: 'reason not recorded' not found in ''
+FAIL: test_proven_contradiction_is_named (tests_staged.test_rc9_2_51_verdict_no_schedule_reason.TheReasonIsNamed.test_proven_contradiction_is_named)
+AssertionError: 'contradict' not found in ''
+FAIL: test_search_ran_out_is_named (tests_staged.test_rc9_2_51_verdict_no_schedule_reason.TheReasonIsNamed.test_search_ran_out_is_named)
+AssertionError: 'ran out of time' not found in ''
+FAIL: test_report_reads_business_outcome_from_the_case (tests_staged.test_rc9_2_51_verdict_no_schedule_reason.TheReportReadsTheOutcomeFile.test_report_reads_business_outcome_from_the_case)
+AssertionError: 'ran out of time' not found in ''
+Ran 7 tests in 0.005s
+FAILED (failures=5)

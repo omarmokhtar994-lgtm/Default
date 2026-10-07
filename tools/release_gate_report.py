@@ -274,6 +274,9 @@ def evaluate(case: Path, baseline: dict | None = None) -> dict:
     summary = read_summary(case)
     identity = read_json(case / "UNIVERSAL_RUN_IDENTITY.json")
     validation = read_json(case / "INDEPENDENT_VALIDATION.json")
+    # The engine's (runner-reconciled) reason for the outcome; the debug copy
+    # is all a run that never reached reconciliation leaves behind.
+    outcome = read_json(case / "BUSINESS_OUTCOME.json") or read_json(case / "debug" / "BUSINESS_OUTCOME.json")
     if baseline is None:
         baseline = load_rc9_1_baseline()
 
@@ -494,6 +497,8 @@ def evaluate(case: Path, baseline: dict | None = None) -> dict:
         "gate8_independent_validation": gate8, "gate8_detail": gate8_why,
         "gate2_vs_rc9_1": gate2, "gate2_detail": gate2_why,
         "gate9_vs_rc9_1": gate2, "gate9_detail": gate2_why,
+        "outcome_category": str(outcome.get("outcome_category") or ""),
+        "outcome_code": str(outcome.get("outcome_code") or ""),
     }
 
 
@@ -527,6 +532,17 @@ def release_verdict(row: dict) -> dict:
         not_evaluated.append("gate 5 absolute after-break standard: none configured")
     if "UNKNOWN:" in str(row.get("gate5_detail") or ""):
         notes.append("gate 5 break-capacity attribution unknown")
+    if g8 == "NO_EVIDENCE":
+        # Audit P1-03: an exhausted search is not a proof that the week is
+        # impossible; say which one this run is, from the engine's own outcome.
+        category = str(row.get("outcome_category") or "")
+        code = str(row.get("outcome_code") or "")
+        if code == "HARD_RULE_COMBINATION_INFEASIBLE":
+            notes.append("no schedule: the hard rules contradict each other (proven)")
+        elif category == "SEARCH_INCOMPLETE":
+            notes.append("no schedule: the search ran out of time; this is not proof the week is impossible")
+        else:
+            notes.append("no schedule: reason not recorded (see BUSINESS_OUTCOME / audit)")
     if g8 != "PASS":
         verdict = "NOT_RELEASABLE"
     elif g4 == "FAIL" or g5 == "FAIL":
@@ -577,7 +593,8 @@ def main() -> int:
     for case, v in verdicts.items():
         print(f"RELEASE VERDICT {case}: {v['verdict']}"
               + (f" - failed: {'; '.join(v['failed'])}" if v["failed"] else "")
-              + (f" - not evaluated: {'; '.join(v['not_evaluated'])}" if v["not_evaluated"] else ""))
+              + (f" - not evaluated: {'; '.join(v['not_evaluated'])}" if v["not_evaluated"] else "")
+              + (f" - {'; '.join(v['notes'])}" if v["notes"] else ""))
     print(f"RELEASE VERDICT (run): {overall}")
     print(f"written: {csv_path}")
     print(f"written: {verdict_path}")

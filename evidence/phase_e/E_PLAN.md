@@ -44,19 +44,20 @@ function missing); after: 9/9 tests pass.
 
 Design (revised before any run, because one seed per arm cannot see a
 few-interval effect when Chat alone spreads 155-179 between runs):
-* AE_AR_B2B and GDI have 0 threshold mismatches, so their models are
-  identical with the switch on or off; checked deterministically (every
-  threshold equal), not run.
-* A/B on the 5 programs with mismatches (Cricut Chat, Cricut Voice, NMG EN,
-  NMG SP, NMG EN+SP); control = switch absent, treatment = "Exact Coverage
-  Units" = Yes; same engine file; production runner, QUICK 3,600 s, 2 workers;
-  seeds 9000 and 9001 for both arms (20 runs), control and treatment of one
-  program and seed side by side.
+* Correction (2026-10-07 ~04:35, still before any run): AE_AR_B2B and GDI
+  have the same hit decisions either way, but their threshold numbers differ
+  (672/672 and 527/624 comparisons), which changes deficit-term magnitudes, so
+  their models are not identical. They are included in the A/B.
+* A/B on all 7 ready-to-edit programs; control = switch absent, treatment =
+  "Exact Coverage Units" = Yes (one row added to Engine Defaults; parser
+  warnings identical in both arms); same engine file; production runner,
+  QUICK 3,600 s, 2 workers; seeds 9000 and 9001 for both arms (28 runs),
+  control and treatment of one program and seed side by side.
 
 The default flips to Yes only if ALL hold:
 1. every treatment run exit 0, validator PASS, 0 hard failures, no new refusal;
 2. per program, the treatment's mean over the two seeds loses at most 1
    interval at target and at most 1 at floor (after breaks) versus control;
-3. summed intervals at target after breaks over the 10 treatment runs >=
-   the 10 control runs.
+3. summed intervals at target after breaks over the 14 treatment runs >=
+   the 14 control runs.
 Otherwise the switch stays, default No, and the result is recorded.

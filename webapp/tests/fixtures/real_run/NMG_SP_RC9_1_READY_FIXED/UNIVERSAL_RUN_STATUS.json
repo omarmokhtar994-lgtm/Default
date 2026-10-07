@@ -1,0 +1,13 @@
+{
+ "_fixture_note": "Trimmed copy of the Phase I real end-to-end run (2026-10-07, NMG_SP, QUICK 240 s/seed): keys the website reads; paths removed.",
+ "mode": "QUICK",
+ "stage": "FULL_SCHEDULE",
+ "return_code": 0,
+ "metrics": {
+  "current_headcount": "7",
+  "headcount_needed_for_breaks": "7",
+  "additional_headcount_for_breaks": "0",
+  "capacity_class": "CAPACITY_AMPLE",
+  "target_capacity_slack_hours": "72.6223"
+ }
+}

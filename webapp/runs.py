@@ -14,6 +14,7 @@ not approved, with the runner's exit code and the release verdict lines.
 """
 from __future__ import annotations
 
+import json
 import os
 import secrets
 import shutil
@@ -29,6 +30,7 @@ from typing import Any, Dict, List, Optional
 from werkzeug.utils import secure_filename
 
 from . import gate
+from .results import summarize
 from .store import Store
 
 KEEP_DAYS = 30
@@ -250,6 +252,7 @@ class RunQueue:
             return
         self.store.update_run(run_id, status="SCORING", exit_code=code, message="Scoring the release gates.")
         verdict = self._score(run_id)
+        self._save_summary(run_id)
         self._zip(run_id)
         if code == 0:
             status, message = outcome(run["mode"], verdict)
@@ -283,6 +286,25 @@ class RunQueue:
             log.write("\n" + output)
         lines = [line.strip() for line in output.splitlines() if line.startswith("RELEASE VERDICT")]
         return "\n".join(lines) or "No release verdict was produced (see the log)."
+
+    def summary_path(self, run_id: str) -> Path:
+        return self.run_dir(run_id) / "summary.json"
+
+    def _save_summary(self, run_id: str) -> None:
+        try:
+            summary = summarize(self.results_dir(run_id))
+        except Exception as exc:  # a summary is a convenience; the run's own files stay authoritative
+            with self.log_path(run_id).open("a", encoding="utf-8") as log:
+                log.write(f"\n(website) could not read the run summary: {exc!r}\n")
+            return
+        if summary is not None:
+            self.summary_path(run_id).write_text(json.dumps(summary), encoding="utf-8")
+
+    def summary(self, run_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            return json.loads(self.summary_path(run_id).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
 
     def _zip(self, run_id: str) -> None:
         target = self.zip_path(run_id)

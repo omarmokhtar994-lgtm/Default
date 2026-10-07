@@ -21,6 +21,11 @@ def runner(argv):
     delay = 3.0 if "SLOW" in stem else 0.2
     time.sleep(delay)
     (case / f"{stem}_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx").write_bytes(b"schedule")
+    if "REAL" in stem:  # the trimmed validator/audit files of the Phase I real run
+        import shutil
+        real = Path(__file__).with_name("fixtures") / "real_run" / "NMG_SP_RC9_1_READY_FIXED"
+        for f in real.iterdir():
+            shutil.copy(f, case / f.name)
     (case / f"{stem}_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx").write_bytes(b"before")
     print("[run] fake runner done", flush=True)
     return 2 if "FAILS" in stem else 0

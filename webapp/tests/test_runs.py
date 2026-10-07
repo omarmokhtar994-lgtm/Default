@@ -136,6 +136,18 @@ class RunningAndResults(unittest.TestCase):
         self.assertIn(">Ready<", page)
         self.assertNotIn(">Approved<", page)
 
+    def test_summary_saved_when_a_run_finishes(self):
+        app, store, data, _ = make_app()
+        client = client_for(app)
+        run_id = run_id_of(upload(client, name="REAL_week.xlsx"))
+        wait(store, run_id)
+        saved = json.loads((data / "runs" / run_id / "summary.json").read_text())
+        self.assertEqual(saved["numbers"]["fully_covered"], 107)
+        self.assertEqual(app.extensions["runs"].summary(run_id)["staffing"]["roster"], 7)
+        plain = run_id_of(upload(client, name="week44.xlsx"))
+        wait(store, plain)
+        self.assertIsNone(app.extensions["runs"].summary(plain))
+
     def test_failed_runner_exit_code_is_shown(self):
         app, store, *_ = make_app()
         client = client_for(app)

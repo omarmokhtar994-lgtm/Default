@@ -1,0 +1,604 @@
+{
+ "_fixture_note": "Trimmed copy of the Phase I real end-to-end run (2026-10-07, NMG_SP, QUICK 240 s/seed): keys the website reads; paths removed.",
+ "capacity_diagnostics": {
+  "status": "PASS",
+  "diagnostic_scope": "optimistic upper bounds before weekly CP-SAT coupling",
+  "coverage_benchmark": {
+   "capacity_class": "CAPACITY_AMPLE",
+   "benchmark_eligible": true,
+   "target_capacity_slack_hours": 72.6223,
+   "target_capacity_slack_ratio": 0.350193,
+   "max_attainable_target_ratio": 1.0,
+   "configured_target_ratio": 0.9,
+   "leave_days_deducted": 0,
+   "estimated_additional_hc_for_target": 0,
+   "headline": "Capacity-ample: 73 spare productive hours on 207 needed (35% headroom). Coverage differences on this scenario reflect the optimiser, not the roster."
+  },
+  "break_resilience": {
+   "status": "PASS",
+   "method": "optimistic paid-capacity proof plus conservative break-adjusted and weekly redundancy warnings",
+   "daily_skill_windows": [
+    {
+     "day": "Sun",
+     "day_index": 0,
+     "group": "Spanish",
+     "minimum": 1,
+     "active_required_minutes": 540,
+     "required_productive_minutes": 540,
+     "eligible_count": 6,
+     "eligible_associates": [
+      "Emad Abdelqader",
+      "Amr Elgamal",
+      "Waseem Mohamed",
+      "Jana Amer",
+      "Associate 001",
+      "Associate 002"
+     ],
+     "optimistic_paid_capacity_minutes": 2940,
+     "paid_capacity_slack_minutes": 2400,
+     "break_adjusted_capacity_warning_minutes": 2580,
+     "break_adjusted_slack_minutes": 2040,
+     "estimated_additional_qualified_worker_days": 0,
+     "prior_saturday_carry_in_paid_minutes": 420,
+     "prior_saturday_carry_in_eligible_associates": [
+      "Amr Elgamal",
+      "Asmaa Eldokhmesy",
+      "Emad Abdelqader",
+      "Jana Amer"
+     ],
+     "status": "PASS",
+     "associate_capacity": [
+      {
+       "associate": "Emad Abdelqader",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 0
+      },
+      {
+       "associate": "Amr Elgamal",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 0
+      },
+      {
+       "associate": "Waseem Mohamed",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 0
+      },
+      {
+       "associate": "Jana Amer",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 0
+      },
+      {
+       "associate": "Associate 001",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 0
+      },
+      {
+       "associate": "Associate 002",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 0
+      }
+     ]
+    },
+    {
+     "day": "Mon",
+     "day_index": 1,
+     "group": "Spanish",
+     "minimum": 1,
+     "active_required_minutes": 540,
+     "required_productive_minutes": 540,
+     "eligible_count": 7,
+     "eligible_associates": [
+      "Emad Abdelqader",
+      "Amr Elgamal",
+      "Waseem Mohamed",
+      "Jana Amer",
+      "Asmaa Eldokhmesy",
+      "Associate 001",
+      "Associate 002"
+     ],
+     "optimistic_paid_capacity_minutes": 2940,
+     "paid_capacity_slack_minutes": 2400,
+     "break_adjusted_capacity_warning_minutes": 2520,
+     "break_adjusted_slack_minutes": 1980,
+     "estimated_additional_qualified_worker_days": 0,
+     "prior_saturday_carry_in_paid_minutes": 0,
+     "prior_saturday_carry_in_eligible_associates": [],
+     "status": "PASS",
+     "associate_capacity": [
+      {
+       "associate": "Emad Abdelqader",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 1
+      },
+      {
+       "associate": "Amr Elgamal",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 1
+      },
+      {
+       "associate": "Waseem Mohamed",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 1
+      },
+      {
+       "associate": "Jana Amer",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 1
+      },
+      {
+       "associate": "Asmaa Eldokhmesy",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 1
+      },
+      {
+       "associate": "Associate 001",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 1
+      },
+      {
+       "associate": "Associate 002",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 1
+      }
+     ]
+    },
+    {
+     "day": "Tue",
+     "day_index": 2,
+     "group": "Spanish",
+     "minimum": 1,
+     "active_required_minutes": 540,
+     "required_productive_minutes": 540,
+     "eligible_count": 7,
+     "eligible_associates": [
+      "Emad Abdelqader",
+      "Amr Elgamal",
+      "Waseem Mohamed",
+      "Jana Amer",
+      "Asmaa Eldokhmesy",
+      "Associate 001",
+      "Associate 002"
+     ],
+     "optimistic_paid_capacity_minutes": 2940,
+     "paid_capacity_slack_minutes": 2400,
+     "break_adjusted_capacity_warning_minutes": 2520,
+     "break_adjusted_slack_minutes": 1980,
+     "estimated_additional_qualified_worker_days": 0,
+     "prior_saturday_carry_in_paid_minutes": 0,
+     "prior_saturday_carry_in_eligible_associates": [],
+     "status": "PASS",
+     "associate_capacity": [
+      {
+       "associate": "Emad Abdelqader",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 2
+      },
+      {
+       "associate": "Amr Elgamal",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 2
+      },
+      {
+       "associate": "Waseem Mohamed",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 2
+      },
+      {
+       "associate": "Jana Amer",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 2
+      },
+      {
+       "associate": "Asmaa Eldokhmesy",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 2
+      },
+      {
+       "associate": "Associate 001",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 2
+      },
+      {
+       "associate": "Associate 002",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 2
+      }
+     ]
+    },
+    {
+     "day": "Wed",
+     "day_index": 3,
+     "group": "Spanish",
+     "minimum": 1,
+     "active_required_minutes": 540,
+     "required_productive_minutes": 540,
+     "eligible_count": 7,
+     "eligible_associates": [
+      "Emad Abdelqader",
+      "Amr Elgamal",
+      "Waseem Mohamed",
+      "Jana Amer",
+      "Asmaa Eldokhmesy",
+      "Associate 001",
+      "Associate 002"
+     ],
+     "optimistic_paid_capacity_minutes": 2940,
+     "paid_capacity_slack_minutes": 2400,
+     "break_adjusted_capacity_warning_minutes": 2520,
+     "break_adjusted_slack_minutes": 1980,
+     "estimated_additional_qualified_worker_days": 0,
+     "prior_saturday_carry_in_paid_minutes": 0,
+     "prior_saturday_carry_in_eligible_associates": [],
+     "status": "PASS",
+     "associate_capacity": [
+      {
+       "associate": "Emad Abdelqader",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 3
+      },
+      {
+       "associate": "Amr Elgamal",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 3
+      },
+      {
+       "associate": "Waseem Mohamed",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 3
+      },
+      {
+       "associate": "Jana Amer",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 3
+      },
+      {
+       "associate": "Asmaa Eldokhmesy",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 3
+      },
+      {
+       "associate": "Associate 001",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 3
+      },
+      {
+       "associate": "Associate 002",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 3
+      }
+     ]
+    },
+    {
+     "day": "Thu",
+     "day_index": 4,
+     "group": "Spanish",
+     "minimum": 1,
+     "active_required_minutes": 540,
+     "required_productive_minutes": 540,
+     "eligible_count": 7,
+     "eligible_associates": [
+      "Emad Abdelqader",
+      "Amr Elgamal",
+      "Waseem Mohamed",
+      "Jana Amer",
+      "Asmaa Eldokhmesy",
+      "Associate 001",
+      "Associate 002"
+     ],
+     "optimistic_paid_capacity_minutes": 2940,
+     "paid_capacity_slack_minutes": 2400,
+     "break_adjusted_capacity_warning_minutes": 2520,
+     "break_adjusted_slack_minutes": 1980,
+     "estimated_additional_qualified_worker_days": 0,
+     "prior_saturday_carry_in_paid_minutes": 0,
+     "prior_saturday_carry_in_eligible_associates": [],
+     "status": "PASS",
+     "associate_capacity": [
+      {
+       "associate": "Emad Abdelqader",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 4
+      },
+      {
+       "associate": "Amr Elgamal",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 4
+      },
+      {
+       "associate": "Waseem Mohamed",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 4
+      },
+      {
+       "associate": "Jana Amer",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 4
+      },
+      {
+       "associate": "Asmaa Eldokhmesy",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 4
+      },
+      {
+       "associate": "Associate 001",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 4
+      },
+      {
+       "associate": "Associate 002",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 4
+      }
+     ]
+    },
+    {
+     "day": "Fri",
+     "day_index": 5,
+     "group": "Spanish",
+     "minimum": 1,
+     "active_required_minutes": 540,
+     "required_productive_minutes": 540,
+     "eligible_count": 7,
+     "eligible_associates": [
+      "Emad Abdelqader",
+      "Amr Elgamal",
+      "Waseem Mohamed",
+      "Jana Amer",
+      "Asmaa Eldokhmesy",
+      "Associate 001",
+      "Associate 002"
+     ],
+     "optimistic_paid_capacity_minutes": 2940,
+     "paid_capacity_slack_minutes": 2400,
+     "break_adjusted_capacity_warning_minutes": 2520,
+     "break_adjusted_slack_minutes": 1980,
+     "estimated_additional_qualified_worker_days": 0,
+     "prior_saturday_carry_in_paid_minutes": 0,
+     "prior_saturday_carry_in_eligible_associates": [],
+     "status": "PASS",
+     "associate_capacity": [
+      {
+       "associate": "Emad Abdelqader",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 5
+      },
+      {
+       "associate": "Amr Elgamal",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 5
+      },
+      {
+       "associate": "Waseem Mohamed",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 5
+      },
+      {
+       "associate": "Jana Amer",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 5
+      },
+      {
+       "associate": "Asmaa Eldokhmesy",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 5
+      },
+      {
+       "associate": "Associate 001",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 5
+      },
+      {
+       "associate": "Associate 002",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 5
+      }
+     ]
+    },
+    {
+     "day": "Sat",
+     "day_index": 6,
+     "group": "Spanish",
+     "minimum": 1,
+     "active_required_minutes": 540,
+     "required_productive_minutes": 540,
+     "eligible_count": 7,
+     "eligible_associates": [
+      "Emad Abdelqader",
+      "Amr Elgamal",
+      "Waseem Mohamed",
+      "Jana Amer",
+      "Asmaa Eldokhmesy",
+      "Associate 001",
+      "Associate 002"
+     ],
+     "optimistic_paid_capacity_minutes": 2940,
+     "paid_capacity_slack_minutes": 2400,
+     "break_adjusted_capacity_warning_minutes": 2520,
+     "break_adjusted_slack_minutes": 1980,
+     "estimated_additional_qualified_worker_days": 0,
+     "prior_saturday_carry_in_paid_minutes": 0,
+     "prior_saturday_carry_in_eligible_associates": [],
+     "status": "PASS",
+     "associate_capacity": [
+      {
+       "associate": "Emad Abdelqader",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 6
+      },
+      {
+       "associate": "Amr Elgamal",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 6
+      },
+      {
+       "associate": "Waseem Mohamed",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 6
+      },
+      {
+       "associate": "Jana Amer",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 6
+      },
+      {
+       "associate": "Asmaa Eldokhmesy",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 6
+      },
+      {
+       "associate": "Associate 001",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 6
+      },
+      {
+       "associate": "Associate 002",
+       "paid_overlap_minutes_upper_bound": 420,
+       "break_adjusted_overlap_minutes_warning_bound": 360,
+       "best_shift": "17:00 - 02:00",
+       "best_shift_day": 6
+      }
+     ]
+    }
+   ],
+   "weekly_skill_redundancy": [
+    {
+     "group": "Spanish",
+     "minimum": 1,
+     "active_days": 7,
+     "break_resilient_worker_days_required": 14,
+     "available_qualified_worker_days_upper_bound": 35,
+     "worker_day_buffer_shortage": 0,
+     "eligible_associates": [
+      "Amr Elgamal",
+      "Asmaa Eldokhmesy",
+      "Associate 001",
+      "Associate 002",
+      "Emad Abdelqader",
+      "Jana Amer",
+      "Waseem Mohamed"
+     ],
+     "workdays_per_associate_upper_bound": 5,
+     "status": "PASS"
+    }
+   ],
+   "hard_failures": [],
+   "warnings": []
+  },
+  "roster_count": 7,
+  "legal_shift_count": 1,
+  "interval_minutes": 30,
+  "active_intervals": 126,
+  "leave_days": 0,
+  "estimated_working_shifts": 35,
+  "productive_hours_available": 280.0,
+  "target_hours_lower_bound": 207.377724556198,
+  "floor_hours_lower_bound": 172.81477046349838,
+  "hard_floor_hours_lower_bound": 0.0,
+  "productive_minus_target_lower_bound": 72.62227544380201,
+  "productive_minus_floor_lower_bound": 107.18522953650162,
+  "productive_minus_hard_floor_lower_bound": 280.0,
+  "maximum_achievable_target_intervals_upper_bound": 126,
+  "maximum_achievable_floor_intervals_upper_bound": 126,
+  "provably_unreachable_target_interval_count": 0,
+  "provably_unreachable_floor_interval_count": 0,
+  "estimated_additional_hc_for_aggregate_target": 0,
+  "estimated_additional_hc_for_aggregate_floor": 0,
+  "target_attainability_status": "NOT_PROVEN_UNREACHABLE",
+  "floor_attainability_status": "NOT_PROVEN_UNREACHABLE"
+ }
+}

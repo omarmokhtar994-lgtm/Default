@@ -27,10 +27,10 @@ def load():
 GATE = load()
 
 
-def no_schedule(category="", code=""):
+def no_schedule(category="", code="", technical=""):
     return {"case": "CASE", "gate4_quality_retention": "NO_EVIDENCE", "gate5_break_regression": "NO_EVIDENCE",
             "gate5_detail": "no summary produced", "gate8_independent_validation": "NO_EVIDENCE",
-            "outcome_category": category, "outcome_code": code}
+            "outcome_category": category, "outcome_code": code, "technical_status": technical}
 
 
 def notes(row):
@@ -50,6 +50,21 @@ class TheReasonIsNamed(unittest.TestCase):
         text = notes(no_schedule("INPUT_OR_POLICY_ACTION_REQUIRED", "HARD_RULE_COMBINATION_INFEASIBLE"))
         self.assertIn("contradict", text)
         self.assertIn("proven", text)
+
+    # Final review (Phase G): an exported shortfall schedule overwrites the
+    # outcome code with HARD_RULE_SHORTFALL_SCHEDULE_FOR_REVIEW; the reason
+    # survives only in technical_status, and the note must still name it.
+    def test_shortfall_schedule_after_a_proven_contradiction(self):
+        text = notes(no_schedule("ACTION_REQUIRED", "HARD_RULE_SHORTFALL_SCHEDULE_FOR_REVIEW",
+                                 "FAIL_HARD_CONTRACT_INFEASIBLE"))
+        self.assertIn("contradict", text)
+        self.assertIn("shortfall schedule", text)
+
+    def test_shortfall_schedule_after_the_search_ran_out(self):
+        text = notes(no_schedule("ACTION_REQUIRED", "HARD_RULE_SHORTFALL_SCHEDULE_FOR_REVIEW",
+                                 "FAIL_HARD_CONTRACT_UNKNOWN"))
+        self.assertIn("ran out of time", text)
+        self.assertIn("shortfall schedule", text)
 
     def test_missing_outcome_is_named_unknown(self):
         self.assertIn("reason not recorded", notes(no_schedule()))

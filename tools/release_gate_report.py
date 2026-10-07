@@ -499,6 +499,7 @@ def evaluate(case: Path, baseline: dict | None = None) -> dict:
         "gate9_vs_rc9_1": gate2, "gate9_detail": gate2_why,
         "outcome_category": str(outcome.get("outcome_category") or ""),
         "outcome_code": str(outcome.get("outcome_code") or ""),
+        "technical_status": str(outcome.get("technical_status") or ""),
     }
 
 
@@ -535,14 +536,21 @@ def release_verdict(row: dict) -> dict:
     if g8 == "NO_EVIDENCE":
         # Audit P1-03: an exhausted search is not a proof that the week is
         # impossible; say which one this run is, from the engine's own outcome.
+        # An exported shortfall schedule replaces the outcome code, so the
+        # proven/ran-out reason is read from technical_status as well.
         category = str(row.get("outcome_category") or "")
         code = str(row.get("outcome_code") or "")
-        if code == "HARD_RULE_COMBINATION_INFEASIBLE":
-            notes.append("no schedule: the hard rules contradict each other (proven)")
-        elif category == "SEARCH_INCOMPLETE":
-            notes.append("no schedule: the search ran out of time; this is not proof the week is impossible")
+        technical = str(row.get("technical_status") or "")
+        attached = ("; a shortfall schedule listing every gap is attached for review"
+                    if code == "HARD_RULE_SHORTFALL_SCHEDULE_FOR_REVIEW" else "")
+        if code == "HARD_RULE_COMBINATION_INFEASIBLE" or technical == "FAIL_HARD_CONTRACT_INFEASIBLE":
+            notes.append("no schedule: the hard rules contradict each other (proven)" + attached)
+        elif category == "SEARCH_INCOMPLETE" or technical in {"FAIL_HARD_CONTRACT_UNKNOWN",
+                                                               "FAIL_STAGE2_TIME_BUDGET_EXHAUSTED"}:
+            notes.append("no schedule: the search ran out of time; this is not proof the week is impossible"
+                         + attached)
         else:
-            notes.append("no schedule: reason not recorded (see BUSINESS_OUTCOME / audit)")
+            notes.append("no schedule: reason not recorded (see BUSINESS_OUTCOME / audit)" + attached)
     if g8 != "PASS":
         verdict = "NOT_RELEASABLE"
     elif g4 == "FAIL" or g5 == "FAIL":

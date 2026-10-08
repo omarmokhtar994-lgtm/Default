@@ -1519,6 +1519,59 @@ class TheNewLayout(unittest.TestCase):
         self.assertIn("AE/AR B2B", cards)
 
 
+class TheLobFilters(unittest.TestCase):
+    """Phase Q: filters go by program, then LOB: a whole program means all of its LOBs (that the person may
+    open); the programs list groups LOBs under their program."""
+
+    def setUp(self):
+        from webapp.programs import ProgramBook
+        self.app, self.store, *_ = make_app(start_worker=False)
+        self.store.add_user("omar", "Omar", "Owner-pass-123", is_admin=True, must_change=False)
+        seed_week(self.store, "AE/AR B2B", "2026-10-11")
+        seed_week(self.store, "NMG", "2026-10-11")
+        book = ProgramBook(self.store)
+        book.sync()
+        self.ae = book.add_program("AE")
+        book.adopt("AE/AR B2B", self.ae, "AR B2B")
+        book.add_lob(self.ae, "IT")
+        for n, key in enumerate(("AE/AR B2B", "AE IT", "NMG"), start=1):
+            self.store.add_activity(program=key, shift_date="2026-10-14", associate=f"Associate 00{n}",
+                                    kind="Training", start=600, end_min=660, user_id=1)
+        self.admin = sign_in(self.app, "omar", "Owner-pass-123")
+        nmg = next(p["id"] for p in book.tree() if p["name"] == "NMG")
+        lina = self.store.add_user("lina", "Lina", "Lina-pass-123", must_change=False)
+        self.store.set_user_programs(lina, [nmg])
+        self.lina = sign_in(self.app, "lina", "Lina-pass-123")
+
+    def csv(self, client, pick):
+        got = client.get(f"/exports/download?from=2026-10-14&to=2026-10-14&kind=activities&format=csv&pick={pick}")
+        self.assertEqual(got.status_code, 200)
+        return got.get_data(as_text=True)
+
+    def test_a_whole_program_or_one_lob(self):
+        body = self.csv(self.admin, f"group:{self.ae}")
+        self.assertIn("Associate 001", body)
+        self.assertIn("Associate 002", body)
+        self.assertNotIn("Associate 003", body)
+        body = self.csv(self.admin, "key:AE IT")
+        self.assertEqual(("Associate 001" in body, "Associate 002" in body), (False, True))
+        page = html.unescape(self.admin.get("/exports").get_data(as_text=True))
+        self.assertIn('<optgroup label="AE">', page)
+        self.assertIn(f'<option value="group:{self.ae}">All of AE</option>', page)
+        self.assertIn('<option value="key:AE/AR B2B">AE, AR B2B</option>', page)
+
+    def test_others_programs_stay_closed(self):
+        self.assertEqual(self.lina.get(f"/exports/download?from=2026-10-14&to=2026-10-14&kind=activities"
+                                       f"&format=csv&pick=group:{self.ae}").status_code, 403)
+        self.assertEqual(self.lina.get("/exports/download?from=2026-10-14&to=2026-10-14&kind=activities"
+                                       "&format=csv&pick=key:AE IT").status_code, 403)
+        self.assertNotIn('label="AE"', self.lina.get("/exports").get_data(as_text=True))
+
+    def test_programs_list_groups_lobs(self):
+        page = html.unescape(self.admin.get("/programs").get_data(as_text=True))
+        self.assertRegex(page, r'(?s)<th[^>]*class="group"[^>]*>AE</th>.*AE, AR B2B')
+
+
 class TheStartDate(unittest.TestCase):
     """Phase P: the schedule's first date is picked from Sundays and Mondays when uploading (some programs
     start on Monday), kept as picked, and changed by an admin from the run page."""

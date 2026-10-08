@@ -887,7 +887,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
     @app.route("/programs")
     @login_required
     def programs():  # type: ignore[no-untyped-def]
-        return render_template("programs.html", rows=overview(program_weeks(_all_runs())))
+        group = {k: p["name"] for p in ProgramBook(app.extensions["store"]).tree() for k in p["units"]}
+        rows = overview(program_weeks(_all_runs()))
+        for r in rows:  # each LOB under its program
+            r["group"] = group.get(r["name"], r["name"])
+        rows.sort(key=lambda r: (r["group"].casefold(), r["name"].casefold()))
+        return render_template("programs.html", rows=rows)
 
     @app.route("/programs/<path:name>")
     @login_required
@@ -1365,10 +1370,20 @@ def create_app(config: Dict[str, Any]) -> Flask:
         today = datetime.now(EGYPT).date()
         start = _date(request.args.get("from", "")) or today.replace(day=1)
         end = _date(request.args.get("to", "")) or today
-        program = clean_program(request.args.get("program", "")) or None
-        if program is None and _access().keys() is not None:
+        pick = request.args.get("pick", "")
+        kind, _, value = pick.partition(":")
+        program = clean_program(value if kind == "key" else request.args.get("program", "")) or None
+        if program is not None and not _access().can_open(program):
+            abort(403)
+        if kind == "group":  # a whole program: all of its LOBs
+            found = next((p for p in _access().programs() if str(p["id"]) == value), None)
+            if found is None:
+                abort(403)
+            program = sorted(found["units"])
+        elif program is None and _access().keys() is not None:
             program = sorted(_access().keys())  # "all programs" means all of this person's programs
-        return {"start": start, "end": end, "program": program, "user_id": request.args.get("user", type=int),
+        return {"start": start, "end": end, "program": program, "pick": pick,
+                "user_id": request.args.get("user", type=int),
                 "measure": request.args.get("measure", "") if request.args.get("measure", "") in MEASURES else "interval"}
 
     def _exports_page(error: str = "", status: int = 200):  # type: ignore[no-untyped-def]

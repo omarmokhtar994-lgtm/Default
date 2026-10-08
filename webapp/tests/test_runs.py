@@ -885,6 +885,21 @@ class TheSchedulesPage(unittest.TestCase):
         self.assertIn("/schedules?v=", kept["url"])
         self.assertNotEqual(kept["schedule_id"], self.tool)
 
+    def test_slot_swap_checked_then_kept(self):
+        body = html.unescape(self.client.get(f"/runs/{self.run_id}/schedules").get_data(as_text=True))
+        self.assertIn("Slot 1 · English", body)
+        got = self.post(f"/schedules/{self.tool}/swap-check", first="Associate 005", second="Associate 006").get_json()
+        self.assertIn(got["severity"], ("ok", "yellow", "red"))
+        refused = self.post(f"/schedules/{self.tool}/swap", first="Associate 005", second="Associate 005", reason="x")
+        self.assertEqual(refused.status_code, 400)
+        kept = self.post(f"/schedules/{self.tool}/swap", first="Associate 005", second="Associate 006",
+                         reason="swap requested").get_json()
+        week = json.loads(self.store.get_schedule(kept["schedule_id"])["week"])
+        self.assertEqual([a["name"] for a in week["associates"] if a["slot"] in ("5", "6")],
+                         ["Associate 006", "Associate 005"])
+        page = html.unescape(self.client.get(kept["url"]).get_data(as_text=True))
+        self.assertIn("Associate 005 moved from Slot 5 to Slot 6 (slot swap)", page)
+
     def test_in_use_only_for_owner_or_admin(self):
         other = self.app.test_client()
         tok = TOKEN.search(other.get("/login").get_data(as_text=True)).group(1)
@@ -912,6 +927,90 @@ class TheSchedulesPage(unittest.TestCase):
 
     def test_links_to_the_schedules(self):
         self.assertIn(f'href="/runs/{self.run_id}/schedules"', self.client.get(f"/runs/{self.run_id}").get_data(as_text=True))
+
+
+class TheDayPage(unittest.TestCase):
+    """Phase N task 4: the day from the schedule in use, attendance and actual breaks."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app, cls.store, *_ = make_app(VALIDATOR_ROOT=str(REPO))
+        cls.client = client_for(cls.app)
+        cls.run_id = versioned_run(cls.app, cls.store, cls.client, program="AE/AR B2B", week_start="2026-10-11")
+        cls.url = "/day?program=AE/AR+B2B&date=2026-10-14"
+
+    def post(self, url, **data):
+        return self.client.post(url, data={"csrf_token": token(self.client), "program": "AE/AR B2B",
+                                           "date": "2026-10-14", **data})
+
+    def page(self):
+        return html.unescape(self.client.get(self.url).get_data(as_text=True))
+
+    def test_day_page_shows_lanes_rows_and_tiles(self):
+        body = self.page()
+        self.assertIn("AE/AR B2B, Wednesday 14 Oct: the day", body)
+        self.assertIn("No version is marked in use for this week", body)
+        self.assertIn('data-name="Associate 001" data-date="2026-10-14"', body)
+        for row in ("Needed on the floor", "Planned on the floor", "On the floor now", "Plus / minus (hours)",
+                    "English on the floor", "On shift today", "Short of demand"):
+            self.assertIn(row, body)
+        self.assertIn('href="/day"', body)  # the menu's Today
+
+    def test_status_kept_or_refused_with_a_reason(self):
+        refused = self.post("/day/attendance", associate="Associate 001", status="Late")
+        self.assertEqual((refused.status_code, refused.get_json()["error"]), (400, "Give the time they arrived."))
+        refused = self.post("/day/attendance", associate="Associate 001", status="Late", to="22:00")
+        self.assertIn("outside Associate 001's shift", refused.get_json()["error"])
+        self.assertEqual(self.post("/day/attendance", associate="Associate 001", status="Late", to="13:00").get_json(),
+                         {"ok": True})
+        body = self.page()
+        self.assertRegex(body, r'<option value="Late" selected>Late</option>')
+        self.assertIn("Late, arrived 13:00", body)  # the day's log
+
+    def test_break_moved_or_refused(self):
+        refused = self.post("/day/break", associate="Associate 008", idx="1", at="13:07")
+        self.assertEqual(refused.status_code, 400)
+        self.assertIn("5-minute steps", refused.get_json()["error"])
+        self.assertEqual(self.post("/day/break", associate="Associate 008", idx="1", at="13:05").get_json(), {"ok": True})
+        body = self.page()
+        self.assertRegex(body, r'class="brk moved"[^>]*data-name="Associate 008"[^>]*data-idx="1"')
+        self.assertIn("Lunch moved 12:30 to 13:05", body)
+        self.assertEqual(self.post("/day/break", associate="Associate 008", idx="1", at="").get_json(), {"ok": True})
+        self.assertIn("Lunch back to plan (12:30)", self.page())
+
+    def test_bad_requests_answer_plainly(self):
+        self.assertEqual(self.post("/day/break", associate="Associate 008", idx="x", at="13:05").status_code, 400)
+        self.assertEqual(self.post("/day/attendance", associate="Nobody", status="Sick").status_code, 400)
+        got = self.client.post("/day/attendance", data={"csrf_token": token(self.client), "program": "AE/AR B2B",
+                                                        "date": "14-10-2026", "associate": "Associate 001",
+                                                        "status": "Sick"})
+        self.assertEqual((got.status_code, got.get_json()["error"]), (400, "Pick a day."))
+
+    def test_measure_and_billable_aux(self):
+        self.assertEqual(self.post("/day/attendance", associate="Associate 012", status="Coaching", **{"from": "10:00"},
+                                   to="11:00", billable="1").get_json(), {"ok": True})
+        body = self.page()
+        self.assertIn("Coaching (billable) 10:00 to 11:00", body)
+        self.assertRegex(body, r'<option value="interval" selected>Interval compliance</option>')
+        self.assertIn('<option value="sl">Service level</option>', body)
+        sl = html.unescape(self.client.get(self.url + "&measure=sl").get_data(as_text=True))
+        self.assertRegex(sl, r'<option value="sl" selected>Service level</option>')
+        self.assertEqual(self.client.get(self.url + "&measure=weekly").status_code, 200)  # unknown: the default
+
+    def test_slot_ids_and_the_interval_board(self):
+        body = self.page()
+        self.assertIn("Slot 1", body)
+        board = html.unescape(self.client.get(self.url + "&view=board").get_data(as_text=True))
+        for column in ("Interval", "Needed", "On the floor", "Buffer (h:mm)", "Status", "Lunch", "Short breaks",
+                       "Late, early, aux", "Unplanned leave", "Languages"):
+            self.assertIn(column, board)
+        self.assertRegex(board, r'class="chip[^"]*"[^>]*data-name="Associate 008"[^>]*data-idx="1"')
+
+    def test_week_without_a_schedule_and_defaults(self):
+        body = html.unescape(self.client.get("/day?program=AE/AR+B2B&date=2026-11-04").get_data(as_text=True))
+        self.assertIn("No schedule for AE/AR B2B in the week of 01 Nov", body)
+        self.assertEqual(self.client.get("/day").status_code, 200)
+        self.assertEqual(self.client.get("/day?date=not-a-date").status_code, 200)
 
 
 class Access(unittest.TestCase):

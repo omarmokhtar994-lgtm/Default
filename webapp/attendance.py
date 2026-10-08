@@ -16,7 +16,7 @@ import time
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
-from .day import AUX, MEASURES, STATUSES, TIMED, BreakRefused, check_break, day_view, planned, read_inputs
+from .day import AUX, MEASURES, STATUSES, TIMED, BreakRefused, advice, check_break, day_view, planned, read_inputs
 from .schedules import EGYPT, KEEP_DAYS, ScheduleBook
 from .versions import DAYS, shift_span
 
@@ -178,6 +178,18 @@ class DayBook:
                                         kind=plan[idx]["kind"], start=m, user_id=user_id)
             what = f"{plan[idx]['kind']} moved {hm(was)} to {hm(m)}"
         self.store.add_day_log(program=program, shift_date=on.isoformat(), associate=name, what=what, user_id=user_id)
+
+    def break_advice(self, program: str, on: date, name: str, idx: int, at: str,
+                     measure: str = "interval") -> Dict[str, Any]:
+        """Gap warnings for a proposed break time and the best times for that break today."""
+        _, week, span = self._shift(program, on, name)
+        if idx not in {b["idx"] for b in planned(week, day_index(on), name)}:
+            raise BreakRefused("That break is not on the plan.")
+        m = _clock(at)
+        if m is None:
+            raise ValueError("The break time must be like 13:05.")
+        page = self.page(program, on, measure)
+        return advice(page["view"], page["inputs"], name, idx, m + (1440 if m < span[0] else 0))
 
     # ------------------------------------------------------------- retention
     def cleanup(self, now: Optional[float] = None) -> int:

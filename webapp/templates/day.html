@@ -1,0 +1,150 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{% extends "base.html" %}
+{% block title %}The day: {{ program or 'no program' }} on Team Scheduler{% endblock %}
+{% block content %}
+{% set absent_states = ['Unplanned leave', 'Sick'] %}
+{% set unit = {15: 'quarter-hours', 30: 'half-hours', 60: 'hours'} %}
+<div class="phead"><div>
+  <h1>{% if program %}{{ program }}, {{ on.strftime('%A %d %b') }}: the day{% else %}The day{% endif %}</h1>
+  {% if page %}<p class="byline">{% if page.note %}{{ page.note }}{% else %}From the schedule in use (<a href="{{ url_for('run_schedules', run_id=page.version.run_id, v=page.version.id) }}">{{ page.version.label }}</a>).{% endif %}
+    Attendance and breaks set here are kept for this day; the schedule itself does not change.</p>{% endif %}
+</div>
+  <form class="sel" method="get" action="{{ url_for('day_page') }}">
+    <label>Program
+      <select name="program" data-autosubmit>{% for p in programs %}<option value="{{ p }}"{% if p == program %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
+    <label>Day <input type="date" name="date" value="{{ on.isoformat() }}" data-autosubmit></label>
+    <input type="hidden" name="measure" value="{{ measure }}"><input type="hidden" name="view" value="{{ tab }}">
+    <p class="daynav"><a href="{{ url_for('day_page', program=program, date=earlier.isoformat(), measure=measure, view=tab) }}">‹ {{ earlier.strftime('%a %d %b') }}</a>
+      <a href="{{ url_for('day_page', program=program, date=later.isoformat(), measure=measure, view=tab) }}">{{ later.strftime('%a %d %b') }} ›</a></p>
+    <noscript><button type="submit">Show</button></noscript>
+  </form>
+</div>
+
+{% if not programs %}
+<p class="empty panel">No schedules yet. When a run finishes, its schedule is kept here; mark one in use from the run's Schedules page.</p>
+{% elif not page %}
+<p class="empty panel">No schedule for {{ program }} in the week of {{ week_of.strftime('%d %b') }}. Pick another day, or run this week and mark a version in use from the run's Schedules page.</p>
+{% else %}
+{% set v = page.view %}{% set t = v.tiles %}
+<section class="tiles" aria-label="The day in numbers">
+  <p class="tile"><span class="tile-label">On shift today</span><b>{{ t.present }} of {{ t.planned }}</b>
+    <small class="dim">{{ t.absent }} unplanned leave or sick{% if t.late_early %}, {{ t.late_early }} late or left early{% endif %}{% if t.aux %}, {{ t.aux }} in aux{% endif %}</small></p>
+  <p class="tile"><span class="tile-label">Short of demand</span><b>{{ '−' if t.short_hours else '' }}{{ t.short_hours|num }} h</b>
+    <small class="dim">across {{ t.short_intervals }} {{ unit.get(v.interval, 'intervals') }}; the plan was {{ '−' if t.plan_short_hours else '' }}{{ t.plan_short_hours|num }} h</small></p>
+  <p class="tile"><span class="tile-label">Above demand</span><b>+{{ t.over_hours|num }} h</b>
+    <small class="dim">room to take breaks or cover gaps{% if t.moved %}; {{ t.moved }} break{{ 's' if t.moved != 1 }} moved today{% endif %}</small></p>
+  <p class="tile"><span class="tile-label">Languages</span><b>{{ t.language_gaps }} gap{{ 's' if t.language_gaps != 1 }}</b>
+    <small class="dim">{{ unit.get(v.interval, 'intervals') }} with nobody for a language</small></p>
+</section>
+
+<div class="daybar">
+  <nav class="tabs" aria-label="Views">
+    <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='timeline') }}"{% if tab == 'timeline' %} class="on" aria-current="page"{% endif %}>Timeline</a>
+    <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='board') }}"{% if tab == 'board' %} class="on" aria-current="page"{% endif %}>Interval board</a>
+  </nav>
+  <form class="sel" method="get" action="{{ url_for('day_page') }}">
+    <input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="view" value="{{ tab }}">
+    <label>Measure
+      <select name="measure" data-autosubmit>{% for key, name in measures.items() %}<option value="{{ key }}"{% if key == measure %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+    <noscript><button type="submit">Show</button></noscript>
+  </form>
+  <p class="dim measure-note">{% if measure == 'interval' %}Billable aux (for example billable coaching) stays on the floor; breaks, absences and non-billable aux do not.{% else %}Anyone in aux, on a break or away is off the queue.{% endif %}</p>
+</div>
+{% if page.stale %}<p class="notice">{{ page.stale }} break move{{ 's' if page.stale != 1 }} recorded earlier no longer match{{ 'es' if page.stale == 1 }} the schedule in use (it changed since), so {{ 'it is' if page.stale == 1 else 'they are' }} not counted.</p>{% endif %}
+<p id="day-status" class="notice" role="status" hidden></p>
+
+<div data-day data-program="{{ program }}" data-step="{{ v.interval }}" data-measure="{{ measure }}"
+     data-att-url="{{ url_for('day_attendance') }}" data-break-url="{{ url_for('day_break') }}" data-advice-url="{{ url_for('day_break_advice') }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<svg class="defs" aria-hidden="true" focusable="false" width="0" height="0"><defs><pattern id="hatch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="10" class="hatch-line"/></pattern><pattern id="hatch-ok" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="10" class="hatch-line ok"/></pattern></defs></svg>
+
+{% if tab == 'timeline' %}
+<section class="panel" aria-labelledby="floor-h">
+  <h2 id="floor-h">Who is on the floor</h2>
+  <p class="note">Shifts in blue, breaks in amber. Drag a break to move it in 5-minute steps, or select it and press Enter to type the time; the dashed outline is where the engine planned it. Set attendance on the left.</p>
+  <div class="tl-scroll"><div class="tl cols-{{ v.cells|length }}">
+    <div class="tl-row tl-axis" aria-hidden="true"><span></span><div class="tl-ticks">{% for h in range(0, 24, 2) %}<span>{{ '%02d'|format(h) }}</span>{% endfor %}</div></div>
+    {% for lane in v.lanes %}{% set own = lane.segments|selectattr('offset', 'equalto', 0)|list %}{% set seg = own[0] if own else lane.segments[0] %}{% set d = on if seg.offset == 0 else earlier %}
+    <div class="tl-row tl-lane">
+      <div class="tl-who"><b title="{{ lane.name }}">{{ lane.name }}</b>{% if lane.slot %}<span class="tl-tag">Slot {{ lane.slot }}</span>{% endif %}<span class="tl-tag">{{ lane.language[:3]|upper }}</span>
+        <select class="att{% if seg.status in absent_states %} gone{% elif seg.status != 'Present' %} away{% endif %}" data-name="{{ lane.name }}" data-date="{{ d.isoformat() }}" data-shift="{{ seg.label }}" aria-label="Attendance for {{ lane.name }}, shift {{ seg.label }}{% if seg.offset != 0 %} (started yesterday){% endif %}">
+          {% for s in statuses if s not in aux %}<option value="{{ s }}"{% if s == seg.status %} selected{% endif %}>{{ s }}</option>{% endfor %}
+          {% for s in aux %}<option value="{{ s }}|1"{% if s == seg.status and seg.billable %} selected{% endif %}>{{ s }} (billable)</option><option value="{{ s }}|0"{% if s == seg.status and not seg.billable %} selected{% endif %}>{{ s }} (non-billable)</option>{% endfor %}
+        </select></div>
+      <svg class="tl-track" viewBox="0 0 1440 30" preserveAspectRatio="none" role="img" aria-label="{{ lane.name }}: {% for s in lane.segments %}{{ s.label }}{% if s.offset != 0 %} from yesterday{% endif %}{{ ', ' if not loop.last }}{% endfor %}">
+        {% for s in lane.segments %}{% set x0 = [s.start, 0]|max %}{% set x1 = [s.end, 1440]|min %}{% set d = on if s.offset == 0 else earlier %}
+        <rect class="tl-bar{% if s.status in absent_states %} gone{% endif %}" x="{{ x0 }}" y="8" width="{{ x1 - x0 }}" height="14" rx="3"/>
+        {% if s.away[1] > s.away[0] and s.status not in absent_states %}{% set a0 = [s.away[0], 0]|max %}{% set a1 = [s.away[1], 1440]|min %}<rect class="tl-away{% if s.billable and measure == 'interval' %} billable{% endif %}" x="{{ a0 }}" y="8" width="{{ [a1 - a0, 0]|max }}" height="14" fill="url(#{{ 'hatch-ok' if s.billable and measure == 'interval' else 'hatch' }})"><title>{{ s.status }}{% if s.billable %} (billable{{ ', still on the floor' if measure == 'interval' }}){% endif %} {{ hm(s.away[0]) }} to {{ hm(s.away[1]) }}</title></rect>{% endif %}
+        {% if s.status in absent_states %}<rect class="tl-away gone" x="{{ x0 }}" y="8" width="{{ x1 - x0 }}" height="14" fill="url(#hatch)"><title>{{ s.status }}</title></rect>{% else %}
+        {% for b in s.breaks %}{% if b.moved %}<rect class="tl-ghost" x="{{ b.planned_start }}" y="5" width="{{ b.minutes }}" height="20" rx="2"/>{% endif %}
+        <rect class="brk{% if b.moved %} moved{% endif %}" data-name="{{ lane.name }}" data-date="{{ d.isoformat() }}" data-idx="{{ b.idx }}" data-kind="{{ b.kind }}" data-minutes="{{ b.minutes }}" data-start="{{ hm(b.start) }}" data-planned="{{ hm(b.planned_start) }}" data-shift="{{ s.label }}" x="{{ b.start }}" y="5" width="{{ b.minutes }}" height="20" rx="2" tabindex="0" role="button" aria-label="{{ lane.name }}, {{ b.kind }} {{ hm(b.start) }}, {{ b.minutes }} minutes{% if b.moved %}, moved from {{ hm(b.planned_start) }}{% endif %}: press Enter to move"><title>{{ b.kind }} {{ hm(b.start) }} ({{ b.minutes }} min){% if b.moved %}, planned {{ hm(b.planned_start) }}{% endif %}</title></rect>
+        {% endfor %}{% endif %}{% endfor %}
+      </svg>
+    </div>{% endfor %}
+    <div class="tl-row tl-num"><span class="tl-lbl">Needed on the floor</span><div class="tl-cells">{% for c in v.cells %}<span class="tc n">{{ c.need if c.pm is not none else '' }}</span>{% endfor %}</div></div>
+    <div class="tl-row tl-num"><span class="tl-lbl">Planned on the floor</span><div class="tl-cells">{% for c in v.cells %}<span class="tc n">{{ c.plan|num if c.plan else '' }}</span>{% endfor %}</div></div>
+    <div class="tl-row tl-num"><span class="tl-lbl">On the floor now</span><div class="tl-cells">{% for c in v.cells %}<span class="tc {{ c.cls }}">{{ c.now|num if (c.now or c.pm is not none) else '' }}</span>{% endfor %}</div></div>
+    <div class="tl-row tl-num"><span class="tl-lbl">Plus / minus (hours)</span><div class="tl-cells">{% for c in v.cells %}<span class="tc {{ c.cls }}" title="{{ hm(c.t) }}: {{ c.pm|hmm }}">{% if c.pm is not none %}{{ '+' if c.pm >= 0 else '' }}{{ '%.1f'|format(c.pm) }}{% endif %}</span>{% endfor %}</div></div>
+    {% for l in v.languages %}<div class="tl-row tl-num"><span class="tl-lbl">{{ l.name }} on the floor</span><div class="tl-cells">{% for c in l.cells %}<span class="tc {{ c.cls }}">{{ c.count if c.count is not none else '' }}</span>{% endfor %}</div></div>{% endfor %}
+  </div></div>
+  <p class="legend2"><span><i class="k ok"></i>Enough people</span><span><i class="k warn"></i>Short by less than one person</span><span><i class="k bad"></i>Short by a person or more</span><span><i class="k moved"></i>Break moved here</span><span><i class="k ghost"></i>Where the engine planned it</span><span><i class="k away"></i>Away (late, aux, leave)</span></p>
+</section>
+{% else %}
+<section class="panel" aria-labelledby="board-h">
+  <h2 id="board-h">Interval board</h2>
+  <p class="note">Each row is one {{ unit.get(v.interval, 'interval')[:-1] }}: who goes on a break in it, who is late, leaves early or is in aux, and whether the floor still holds. Drag a break to another row, or click it to set the time in 5-minute steps; you see the warnings and the best times before anything is kept.</p>
+  {% set gone = [] %}{% for lane in v.lanes %}{% for s in lane.segments if s.offset == 0 and s.status in absent_states %}{% set _ = gone.append(lane.name ~ ' (' ~ s.status|lower ~ ')') %}{% endfor %}{% endfor %}
+  {% if gone %}<p class="board-gone">Not on the floor today: <b>{{ gone|join(', ') }}</b>.</p>{% endif %}
+  <div class="rb-scroll"><div class="rb" role="table" aria-label="Interval board">
+    <div class="rb-row rb-head" role="row"><span role="columnheader">Interval</span><span role="columnheader">Needed</span><span role="columnheader">On the floor</span><span role="columnheader">Buffer (h:mm)</span><span role="columnheader">Cover</span><span role="columnheader">Status</span><span role="columnheader">Unplanned leave</span><span role="columnheader">On break</span><span role="columnheader">Lunch</span><span role="columnheader">Short breaks</span><span role="columnheader">Late, early, aux</span><span role="columnheader">Languages</span></div>
+    {% for r in rows %}
+    <div class="rb-row rb-{{ r.state }}" role="row" data-t="{{ r.t }}">
+      <span class="rb-c rb-t" role="cell"><b>{{ r.start }}</b><small>to {{ r.end }}</small><span class="rb-ticks">{% for x in r.slots %}<i class="tk {{ 'none' if r.required <= 0 else ('ok' if x >= r.required else ('warn' if x > r.required - 1 else 'bad')) }}" title="{{ hm(r.t + 5 * loop.index0) }}: {{ x }} on the floor"></i>{% endfor %}</span></span>
+      <span class="rb-c rb-n" role="cell">{{ r.need if r.pm is not none else '–' }}</span>
+      <span class="rb-c rb-n" role="cell">{{ r.now|num }}<small>plan {{ r.plan|num }}</small></span>
+      <span class="rb-c rb-n rb-buf {{ r.state }}" role="cell">{{ r.pm|hmm if r.pm is not none else '–' }}{% if r.plan_pm is not none %}<small>plan {{ r.plan_pm|hmm }}</small>{% endif %}</span>
+      <span class="rb-c rb-n" role="cell">{{ r.cover ~ '%' if r.cover is not none else '–' }}</span>
+      <span class="rb-c" role="cell"><span class="st {{ r.state }}">{{ r.label }}</span>{% if r.why %}<small class="rb-why">{{ r.why }}</small>{% endif %}</span>
+      <span class="rb-c rb-n{% if r.absent %} rb-gone{% endif %}" role="cell">{{ r.absent }}</span>
+      <span class="rb-c rb-n" role="cell">{{ r.breaks }}</span>
+      {% for kind in ('lunch', 'short') %}<span class="rb-c rb-chips" role="cell">{% for c in r[kind] %}<button type="button" class="chip{% if c.moved %} moved{% endif %}" draggable="true" data-name="{{ c.name }}" data-date="{{ (on if c.offset == 0 else earlier).isoformat() }}" data-idx="{{ c.idx }}" data-kind="{{ c.kind }}" data-minutes="{{ c.minutes }}" data-start="{{ c.start }}" data-planned="{{ c.planned }}" title="{{ c.name }}{% if c.slot %}, slot {{ c.slot }}{% endif %}: {{ c.kind }} {{ c.start }}, {{ c.minutes }} minutes"><small>{{ c.short }}</small><b>{{ c.name }}</b><em>{{ c.start }}</em>{% if c.moved %}<s>was {{ c.planned }}</s>{% endif %}</button>{% else %}<span class="none">–</span>{% endfor %}</span>{% endfor %}
+      <span class="rb-c rb-chips" role="cell">{% for e in r.events %}<span class="chip ev"><b>{{ e.name }}</b><em>{{ e.text }}</em></span>{% else %}<span class="none">–</span>{% endfor %}{% if r.aux %}<small class="rb-why">{{ r.aux }} in aux</small>{% endif %}</span>
+      <span class="rb-c rb-chips" role="cell">{% for l in r.langs %}<span class="lang {{ l.cls }}">{{ l.name }} {{ l.count }}</span>{% else %}<span class="none">–</span>{% endfor %}</span>
+    </div>{% endfor %}
+  </div></div>
+  <p class="legend2"><span><i class="tk ok"></i><i class="tk warn"></i><i class="tk bad"></i> each 5 minutes: enough, short by less than one person, short by more</span><span><i class="k moved"></i>Break moved by an RTA</span></p>
+</section>
+{% endif %}
+
+<section class="panel" aria-labelledby="daylog-h">
+  <h2 id="daylog-h">Changes today</h2>
+  {% if page.log %}<ul class="log">{% for e in page.log|reverse %}<li><b>{{ e.by_name }}</b>, {{ clock(e.at) }}: {{ e.associate }}, {{ e.what }}</li>{% endfor %}</ul>
+  {% else %}<p class="empty">Nothing recorded yet for this day.</p>{% endif %}
+</section>
+
+<dialog id="break-dialog" class="dlg" aria-labelledby="brk-h">
+  <form method="dialog" class="dlg-form">
+    <h2 id="brk-h">Move a break</h2>
+    <p class="dim" data-who></p>
+    <div class="stepper"><button type="button" data-step="-5">− 5 min</button><input type="time" name="at" step="300" aria-label="Break starts at" required><button type="button" data-step="5">+ 5 min</button></div>
+    <div class="dlg-result" aria-live="polite"></div>
+    <div class="fits" hidden><p class="dim">Where this break fits best today:</p><ul></ul></div>
+    <p class="dlg-ask" hidden><b>Keep this time anyway?</b></p>
+    <div class="btns"><button class="primary" type="button" data-keep>Save</button><button type="button" data-plan>Back to plan</button><button type="button" data-cancel>Cancel</button></div>
+  </form>
+</dialog>
+
+<dialog id="att-dialog" class="dlg" aria-labelledby="att-h">
+  <form method="dialog" class="dlg-form">
+    <h2 id="att-h">Attendance</h2>
+    <p class="dim" data-who></p>
+    <label data-from>From <input type="time" name="from"></label>
+    <label data-to>To <input type="time" name="to"></label>
+    <p class="note" data-hint></p>
+    <div class="dlg-result" aria-live="polite"></div>
+    <div class="btns"><button class="primary" type="button" data-keep>Save</button><button type="button" data-cancel>Cancel</button></div>
+  </form>
+</dialog>
+</div>
+{% endif %}
+{% endblock %}

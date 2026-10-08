@@ -474,3 +474,90 @@ class TheSchedulesInTheBrowser(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipIf(sync_playwright is None, "Playwright is not installed here; UI tests skipped")
+class TheDayInTheBrowser(unittest.TestCase):
+    """Phase N task 4: the day page: attendance, moving a break with its warning, the board, slot swaps."""
+
+    setUpClass = classmethod(TheSchedulesInTheBrowser.setUpClass.__func__)
+    tearDownClass = classmethod(TheSchedulesInTheBrowser.tearDownClass.__func__)
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+    url = "/day?program=AE/AR+B2B&date=2026-10-14"
+
+    def test_day_page(self):
+        page = self.page(width=1500, height=1000)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        page.goto(self.base + self.url)
+        page.wait_for_load_state("load")
+        expect(page.locator("h1")).to_have_text("AE/AR B2B, Wednesday 14 Oct: the day")
+        # attendance: unplanned leave counts at once; a late login asks for the arrival time
+        page.select_option('select.att[data-name="Associate 013"]', "Unplanned leave")
+        expect(page.locator(".log")).to_contain_text("Associate 013, Unplanned leave", timeout=15000)  # reloaded
+        page.wait_for_load_state("load")  # the reloaded page's script is attached
+        page.select_option('select.att[data-name="Associate 001"]', "Late")
+        expect(page.locator("#att-dialog")).to_be_visible()
+        page.fill("#att-dialog input[name=to]", "13:00")
+        page.locator("#att-dialog [data-keep]").click()
+        expect(page.locator(".log")).to_contain_text("Associate 001, Late, arrived 13:00", timeout=15000)
+        page.wait_for_load_state("load")  # the reloaded page's script is attached
+        expect(page.locator('select.att[data-name="Associate 001"]')).to_have_value("Late")
+        page.select_option('select.att[data-name="Associate 012"]', "Coaching|1")
+        page.fill("#att-dialog input[name=from]", "10:00")
+        page.fill("#att-dialog input[name=to]", "11:00")
+        page.locator("#att-dialog [data-keep]").click()
+        expect(page.locator(".log")).to_contain_text("Coaching (billable) 10:00 to 11:00", timeout=15000)
+        expect(page.locator('select.att[data-name="Associate 012"]')).to_have_value("Coaching|1")
+        page.wait_for_load_state("load")  # the reloaded page's script is attached
+        # a break: Enter opens the dialog; a time too close to Break 1 warns before it is kept
+        lunch = page.locator('rect.brk[data-name="Associate 008"][data-idx="1"]')
+        lunch.focus()
+        page.keyboard.press("Enter")
+        expect(page.locator("#break-dialog")).to_be_visible()
+        page.fill("#break-dialog input[name=at]", "10:30")  # Break 1 ends 10:00: 30 minutes apart
+        page.locator("#break-dialog input[name=at]").dispatch_event("change")
+        expect(page.locator("#break-dialog .sevlist li").first).to_contain_text("minimum gap between breaks", timeout=15000)
+        expect(page.locator("#break-dialog .fits li").first).to_be_visible()
+        page.screenshot(path=str(N_SCREENS / "day_break_warning.png"))
+        page.locator("#break-dialog [data-keep]").click()
+        expect(page.locator('rect.brk.moved[data-name="Associate 008"]')).to_have_count(1, timeout=15000)
+        page.wait_for_load_state("load")  # the reloaded page's script is attached
+        page.mouse.move(1, 1)
+        page.evaluate("window.scrollTo(0, 0)")  # the fixed header stays at the top of a full-page shot
+        page.screenshot(path=str(N_SCREENS / "day_timeline.png"), full_page=True)
+        # dragging a break on the timeline opens the same dialog with the new time
+        other = page.locator('rect.brk[data-name="Associate 021"][data-idx="2"]')
+        box = other.bounding_box()
+        page.mouse.move(box["x"] + 2, box["y"] + box["height"] / 2)
+        page.mouse.down()
+        page.mouse.move(box["x"] + 40, box["y"] + box["height"] / 2, steps=5)
+        page.mouse.up()
+        expect(page.locator("#break-dialog")).to_be_visible()
+        self.assertNotEqual(page.locator("#break-dialog input[name=at]").input_value(), "15:30")
+        page.locator("#break-dialog [data-cancel]").click()
+        # the interval board, in service-level terms
+        page.goto(self.base + self.url + "&view=board&measure=sl")
+        page.wait_for_load_state("load")
+        expect(page.locator(".rb-row.rb-head")).to_contain_text("Buffer (h:mm)")
+        expect(page.locator('button.chip.moved[data-name="Associate 008"]')).to_be_visible()
+        page.evaluate("window.scrollTo(0, 0)")
+        page.screenshot(path=str(N_SCREENS / "day_board.png"), full_page=True)
+        self.assertEqual(errors, [])
+
+    def test_slot_swap_in_the_browser(self):
+        page = self.page(width=1440, height=950)
+        self.sign_in(page)
+        page.goto(f"{self.base}/runs/{self.run_id}/schedules")
+        page.wait_for_load_state("load")
+        page.get_by_role("button", name="Swap slots").click()
+        page.select_option("#swap-dialog select[name=first]", "Associate 009")
+        page.select_option("#swap-dialog select[name=second]", "Associate 010")
+        expect(page.locator("#swap-h")).to_contain_text("This swap", timeout=30000)
+        page.screenshot(path=str(N_SCREENS / "slot_swap.png"))
+        page.fill("#swap-dialog input[name=reason]", "Both asked for it")
+        page.get_by_role("button", name="Yes, swap them").click()
+        page.wait_for_url("**/schedules?v=*", timeout=30000)
+        expect(page.locator(".log")).to_contain_text("Associate 009 moved from Slot 9 to Slot 10 (slot swap)")

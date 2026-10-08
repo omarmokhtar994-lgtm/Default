@@ -55,6 +55,12 @@ class TheWorkbooks(unittest.TestCase):
         people = read_week(AFTER)["associates"]
         self.assertEqual([(a["slot"], a["name"]) for a in people[:2]], [("1", "Associate 001"), ("2", "Associate 002")])
 
+    def test_slot_formulas_read_as_numbers(self):
+        # this workbook's later slots are formulas (=A34+1); they read as the slot number, also after an edit
+        for path in (AFTER, self.edited()):
+            slots = [a["slot"] for a in read_week(path)["associates"]]
+            self.assertEqual(slots, [str(n) for n in range(1, len(slots) + 1)])
+
     def test_swap_slots_moves_the_people_not_the_shifts(self):
         before = read_week(AFTER)
         out = self.tmp / "swapped.xlsx"

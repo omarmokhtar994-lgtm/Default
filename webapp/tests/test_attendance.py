@@ -103,6 +103,20 @@ class TheAttendance(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.days.page("AE/AR B2B", WED, "weekly")
 
+    def test_break_advice_warns_on_gaps_and_ranks_the_best_times(self):
+        # Wednesday 12:00 - 21:00: Break 1 13:45-14:00, Lunch 16:30, Break 2 19:30; gaps 60 to 210 minutes
+        advice = self.days.break_advice("AE/AR B2B", WED, "Associate 001", 1, "14:30")
+        self.assertEqual(advice["warnings"], ["Break 1 ends and Lunch starts 30 minutes apart; this program's "
+                                              "minimum gap between breaks is 60 minutes.",
+                                              "Lunch ends and Break 2 starts 270 minutes apart; this program's "
+                                              "normal maximum gap between breaks is 210 minutes."])
+        fits = advice["fits"]
+        self.assertTrue(0 < len(fits) <= 3)
+        for fit in fits:  # Lunch between Break 1 and Break 2, within the 60 to 210 minute gaps
+            self.assertTrue("15:30" <= fit["start"] <= "17:30", fit)
+        self.assertEqual([f["buffer"] for f in fits], sorted((f["buffer"] for f in fits), reverse=True))
+        self.assertEqual(self.days.break_advice("AE/AR B2B", WED, "Associate 001", 1, "16:30")["warnings"], [])
+
     def test_unknown_status_or_person_refused(self):
         with self.assertRaises(ValueError):
             self.days.set_status("AE/AR B2B", WED, "Associate 001", "Holiday", self.sara)

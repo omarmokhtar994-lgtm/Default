@@ -23,6 +23,7 @@
   {% elif current.in_use %}<p class="inuse">This is the schedule in use for the week.</p>{% endif %}
   <a class="button" href="{{ url_for('schedule_download', schedule_id=current.id) }}">Download (.xlsx)</a>
   <a class="button" href="{{ url_for('schedule_week', schedule_id=current.id) }}">Week view of this version</a>
+  <button type="button" class="button" data-swap-open>Swap slots</button>
 </div>
 
 {% set m = view.marks %}
@@ -35,7 +36,7 @@
       <thead><tr><th scope="col"><span class="sr-only">Associate</span></th>{% for d in days %}<th scope="col">{{ d }}{% if m.days.get(d) %} <i class="dot {{ m.days[d] }}" title="{{ 'A rule is broken' if m.days[d] == 'red' else 'A warning' }} on this day"></i>{% endif %}</th>{% endfor %}</tr></thead>
       <tbody>
       {% for a in view.week.associates %}{% set tool_days = view.tool_days.get(a.name, []) %}
-      <tr><th scope="row"><b>{{ a.name }}</b><small>{{ a.language }}{% if a.tl %} · {{ a.tl }}{% endif %}</small></th>
+      <tr><th scope="row"><b>{{ a.name }}</b><small>{% if a.slot %}Slot {{ a.slot }} · {% endif %}{{ a.language }}{% if a.tl %} · {{ a.tl }}{% endif %}</small></th>
         {% for d in days %}{% set value = a.days[loop.index0] %}{% set was = tool_days[loop.index0] if tool_days|length > loop.index0 else value %}{% set sev = m.cells.get(a.name ~ '|' ~ d) or m.cells.get(a.name ~ '|*') %}
         <td><button type="button" class="ed{% if value != was %} changed{% endif %}{% if sev %} sev-{{ sev }}{% endif %}{% if value == 'OFF' %} off{% elif value == 'Leave' %} leave{% endif %}" data-name="{{ a.name }}" data-day="{{ d }}" data-value="{{ value }}">{% if sev %}<span class="flag {{ sev }}">{{ 'rule broken' if sev == 'red' else 'warning' }}</span>{% endif %}{{ value or '–' }}{% if value != was %}<s>{{ was }}</s>{% endif %}</button></td>
         {% endfor %}
@@ -61,7 +62,7 @@
     <section class="panel" aria-labelledby="log-h">
       <h2 id="log-h">Changes in this version</h2>
       {% if view.changes %}
-      <ul class="log">{% for c in view.changes|reverse %}<li><b>{{ c.by_name }}</b>, {{ when(c.at) }}: {{ c.associate }}, {{ c.day }} {{ c.old }} → {{ c.new }}{% if c.reason %}. "{{ c.reason }}"{% endif %}{% if c.severity in ('red', 'yellow') %} <span class="tagsev {{ c.severity }}">{{ 'rule broken' if c.severity == 'red' else 'warning' }}</span>{% endif %}</li>{% endfor %}</ul>
+      <ul class="log">{% for c in view.changes|reverse %}<li><b>{{ c.by_name }}</b>, {{ when(c.at) }}: {% if c.day == 'Week' %}{{ c.associate }} moved from {{ c.old }} to {{ c.new }} (slot swap){% else %}{{ c.associate }}, {{ c.day }} {{ c.old }} → {{ c.new }}{% endif %}{% if c.reason %}. "{{ c.reason }}"{% endif %}{% if c.severity in ('red', 'yellow') %} <span class="tagsev {{ c.severity }}">{{ 'rule broken' if c.severity == 'red' else 'warning' }}</span>{% endif %}</li>{% endfor %}</ul>
       {% else %}<p class="empty">No changes: this is the tool's schedule.</p>{% endif %}
     </section>
   </aside>
@@ -77,6 +78,18 @@
     <label class="dlg-reason">Reason (kept in the change log)<input name="reason" type="text" maxlength="300" placeholder="For example: swap requested by the associate"></label>
     <p class="dlg-ask" hidden><b>Keep this change?</b></p>
     <div class="btns"><button class="primary" type="button" data-keep disabled>Yes, keep it</button><button type="button" data-cancel>No, undo it</button></div>
+  </form>
+</dialog>
+<dialog id="swap-dialog" class="dlg" aria-labelledby="swap-h" data-check-url="{{ url_for('schedule_swap_check', schedule_id=current.id) }}" data-swap-url="{{ url_for('schedule_swap', schedule_id=current.id) }}">
+  <form method="dialog" class="dlg-form">
+    <h2 id="swap-h">Swap slots</h2>
+    <p class="dim">Two people swap their whole weeks: each slot keeps its shifts and breaks and takes the other person. Pick by name or slot number.</p>
+    {% for field, label in (('first', 'First person'), ('second', 'Second person')) %}<label>{{ label }}
+      <select name="{{ field }}"><option value="">Choose…</option>{% for a in view.week.associates %}<option value="{{ a.name }}">{% if a.slot %}Slot {{ a.slot }} · {% endif %}{{ a.name }} · {{ a.language }}</option>{% endfor %}</select></label>{% endfor %}
+    <div class="dlg-result" aria-live="polite"></div>
+    <label class="dlg-reason">Reason (kept in the change log)<input name="reason" type="text" maxlength="300" placeholder="For example: swap requested by both associates"></label>
+    <p class="dlg-ask" hidden><b>Keep this swap?</b></p>
+    <div class="btns"><button class="primary" type="button" data-keep disabled>Yes, swap them</button><button type="button" data-cancel>No, cancel</button></div>
   </form>
 </dialog>
 {% endif %}

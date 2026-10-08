@@ -15,6 +15,8 @@ from flask import Flask, abort, flash, g, jsonify, redirect, render_template, re
 from werkzeug.utils import secure_filename
 
 from .analytics import program_weeks, team
+from .attendance import DayBook, hm, week_start
+from .day import AUX, MEASURES, STATUSES, BreakRefused, board
 from .eta import queue_plan
 from .outcome import cannot_schedule, read as read_outcome, view as outcome_view
 from .auth import admin_required, check_csrf, csrf_token, load_user, login_required
@@ -199,6 +201,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                             Path(config.get("VALIDATOR_ROOT") or config["PACKAGE_ROOT"]))
         app.extensions["schedules"] = book
         queue.schedules = book
+        app.extensions["days"] = queue.days = DayBook(app.extensions["store"], book)
         if config.get("START_WORKER", True):
             queue.start()
 
@@ -231,6 +234,14 @@ def create_app(config: Dict[str, Any]) -> Flask:
             return json.loads(text or "{}")
         except ValueError:
             return {}
+
+    @app.template_filter("hmm")
+    def _hmm(hours: Optional[float]) -> str:
+        """Signed hours as h:mm, the way RTA sheets show buffers: +0:38, -1:12."""
+        if hours is None:
+            return ""
+        minutes = round(abs(float(hours)) * 60)
+        return f"{'+' if hours >= 0 else '−'}{minutes // 60}:{minutes % 60:02d}"
 
     @app.template_filter("num")
     def _num(value: float) -> str:
@@ -616,6 +627,32 @@ def create_app(config: Dict[str, Any]) -> Flask:
             return jsonify(error=str(exc)), 400
         return jsonify(schedule_id=saved, url=url_for("run_schedules", run_id=row["run_id"], v=saved))
 
+    @app.route("/schedules/<int:schedule_id>/swap-check", methods=["POST"])
+    @login_required
+    def schedule_swap_check(schedule_id: int):  # type: ignore[no-untyped-def]
+        _version_or_404(schedule_id)
+        try:
+            found = _book().check_swap(schedule_id, request.form.get("first", ""), request.form.get("second", ""))
+        except ValueError as exc:
+            return jsonify(error=str(exc)), 400
+        return jsonify(severity=found["severity"],
+                       added=[{"severity": p["severity"], "text": p["text"]} for p in found["added"]])
+
+    @app.route("/schedules/<int:schedule_id>/swap", methods=["POST"])
+    @login_required
+    def schedule_swap(schedule_id: int):  # type: ignore[no-untyped-def]
+        row = _version_or_404(schedule_id)
+        first, second = request.form.get("first", ""), request.form.get("second", "")
+        reason = " ".join(request.form.get("reason", "").split())[:300]
+        book = _book()
+        try:
+            if not reason and book.check_swap(schedule_id, first, second)["added"]:
+                return jsonify(error="This swap breaks a rule or adds a warning: give a reason to keep it."), 400
+            saved = book.swap(schedule_id, g.user["id"], first, second, reason)
+        except ValueError as exc:
+            return jsonify(error=str(exc)), 400
+        return jsonify(schedule_id=saved, url=url_for("run_schedules", run_id=row["run_id"], v=saved))
+
     @app.route("/schedules/<int:schedule_id>/in-use", methods=["POST"])
     @login_required
     def schedule_in_use(schedule_id: int):  # type: ignore[no-untyped-def]
@@ -650,6 +687,85 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                programs=sorted(history, key=str.lower),
                                weeks=[w["week"] for w in reversed(history.get(row["program"], []))],
                                figures=kept_figures(run or {}), version=row)
+
+    # ------------------------------------------------------------- the day (Phase N)
+    def _days() -> DayBook:
+        days = app.extensions.get("days")
+        if days is None:
+            abort(404)
+        return days
+
+    def _date(text: str) -> Optional[date]:
+        try:
+            return datetime.strptime((text or "").strip(), "%Y-%m-%d").date()
+        except ValueError:
+            return None
+
+    @app.route("/day")
+    @login_required
+    def day_page():  # type: ignore[no-untyped-def]
+        """A program's day from the schedule in use: who is on the floor, attendance, actual breaks."""
+        days = _days()
+        programs = days.programs()
+        on = _date(request.args.get("date", "")) or datetime.now(EGYPT).date()
+        program = clean_program(request.args.get("program", ""))
+        if not program and programs:
+            program = next((p for p in programs if days.version(p, on)[0]), programs[0])
+        measure = request.args.get("measure", "")
+        measure = measure if measure in MEASURES else "interval"
+        tab = "board" if request.args.get("view") == "board" else "timeline"
+        page = days.page(program, on, measure) if program else None
+        return render_template("day.html", page=page, program=program, programs=programs, on=on, measure=measure,
+                               measures=MEASURES, tab=tab, statuses=STATUSES, aux=sorted(AUX), hm=hm,
+                               rows=board(page["view"]) if page and tab == "board" else None, week_of=week_start(on),
+                               earlier=on - timedelta(days=1), later=on + timedelta(days=1))
+
+    def _day_form():  # type: ignore[no-untyped-def]
+        on = _date(request.form.get("date", ""))
+        if on is None:
+            raise ValueError("Pick a day.")
+        return clean_program(request.form.get("program", "")), on, request.form.get("associate", "").strip()
+
+    def _break_idx() -> int:
+        try:
+            return int(request.form.get("idx", ""))
+        except ValueError:
+            raise ValueError("Pick a break.") from None
+
+    @app.route("/day/attendance", methods=["POST"])
+    @login_required
+    def day_attendance():  # type: ignore[no-untyped-def]
+        try:
+            program, on, name = _day_form()
+            _days().set_status(program, on, name, request.form.get("status", ""), g.user["id"],
+                               start=request.form.get("from", ""), end=request.form.get("to", ""),
+                               billable=request.form.get("billable") == "1")
+        except ValueError as exc:
+            return jsonify(error=str(exc)), 400
+        return jsonify(ok=True)
+
+    @app.route("/day/break", methods=["POST"])
+    @login_required
+    def day_break():  # type: ignore[no-untyped-def]
+        try:
+            program, on, name = _day_form()
+            at = request.form.get("at", "").strip() or None
+            _days().move_break(program, on, name, _break_idx(), at, g.user["id"])
+        except ValueError as exc:  # BreakRefused is a ValueError
+            return jsonify(error=str(exc)), 400
+        return jsonify(ok=True)
+
+    @app.route("/day/break-advice", methods=["POST"])
+    @login_required
+    def day_break_advice():  # type: ignore[no-untyped-def]
+        measure = request.form.get("measure", "")
+        try:
+            program, on, name = _day_form()
+            found = _days().break_advice(program, on, name, _break_idx(), request.form.get("at", ""),
+                                         measure if measure in MEASURES else "interval")
+        except ValueError as exc:
+            return jsonify(error=str(exc)), 400
+        return jsonify(found)
 
     @app.route("/team")
     @login_required

@@ -128,7 +128,14 @@ def read_inputs(path: Path) -> Dict[str, Any]:
         for row in ws.iter_rows(min_row=3, values_only=True):
             if len(row) > 3 and row[1] and shift_span(row[3]):
                 previous.append({"name": str(row[1]).strip(), "language": str(row[2] or "").strip(), "shift": str(row[3])})
-    found = {"interval": step if 1440 % step == 0 else 30, "required": demand,
+    gaps = {}
+    for key, names in (("gap_min", ("break absolute minimum gap minutes",)),
+                       ("gap_max", ("break normal maximum gap minutes",))):
+        try:
+            gaps[key] = int(float(_instruction(wb, names)))
+        except (TypeError, ValueError):
+            gaps[key] = None  # not set for this program: no gap warning is made up
+    found = {"interval": step if 1440 % step == 0 else 30, "required": demand, **gaps,
              "languages": _languages(wb), "previous_saturday": previous}
     while len(_CACHE) >= KEEP:
         _CACHE.pop(next(iter(_CACHE)))
@@ -331,3 +338,131 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
     order = sorted(lanes.values(), key=first)
     return {"interval": step, "measure": measure, "lanes": order, "cells": cells, "languages": languages,
             "tiles": tiles}
+
+
+def _hm(minute: int) -> str:
+    minute %= 1440
+    return f"{minute // 60:02d}:{minute % 60:02d}"
+
+
+def advice(view: Dict[str, Any], inputs: Dict[str, Any], name: str, idx: int, start: int) -> Dict[str, Any]:
+    """For moving break ``idx`` of ``name``'s shift that starts this day to ``start`` (minutes
+    from this day's midnight): the gap warnings (the program's Break Absolute Minimum / Normal
+    Maximum Gap Minutes, end of one break to start of the next), and up to three best starts
+    (one per interval) that keep the breaks in order, off each other and within the gaps,
+    ranked by the buffer of the tightest interval the break touches."""
+    seg = next(s for l in view["lanes"] if l["name"] == name for s in l["segments"] if s["offset"] == 0)
+    me = next(b for b in seg["breaks"] if b["idx"] == idx)
+    others = [b for b in seg["breaks"] if b["idx"] != idx]
+    lo_gap, hi_gap = inputs.get("gap_min"), inputs.get("gap_max")
+
+    def gaps(m: int) -> List[Tuple[str, str, int]]:
+        seq = sorted([(b["start"], b["minutes"], b["kind"]) for b in others] + [(m, me["minutes"], me["kind"])])
+        return [(a[2], b[2], b[0] - (a[0] + a[1])) for a, b in zip(seq, seq[1:])]
+
+    warnings = []
+    for a, b, gap in gaps(start):
+        if lo_gap is not None and gap < lo_gap:
+            warnings.append(f"{a} ends and {b} starts {gap} minutes apart; this program's minimum gap "
+                            f"between breaks is {lo_gap} minutes.")
+        elif hi_gap is not None and gap > hi_gap:
+            warnings.append(f"{a} ends and {b} starts {gap} minutes apart; this program's normal maximum "
+                            f"gap between breaks is {hi_gap} minutes.")
+    step = view["interval"]
+    base = [x for c in view["cells"] for x in c["slots"]]
+    required = {c["t"]: c["required"] for c in view["cells"]}
+    counts_away = not (seg["billable"] and view["measure"] == "interval")
+
+    def free(t: int) -> bool:  # on the floor at t, this break aside
+        if not seg["start"] <= t < seg["end"] or (counts_away and seg["away"][0] <= t < seg["away"][1]):
+            return False
+        return not any(b["start"] <= t < b["start"] + b["minutes"] for b in others)
+
+    def tightest(m: int) -> Optional[float]:
+        slots = list(base)
+        for t in range(me["start"], me["start"] + me["minutes"], STEP):
+            if 0 <= t < 1440 and free(t):
+                slots[t // STEP] += 1
+        for t in range(m, m + me["minutes"], STEP):
+            if 0 <= t < 1440 and free(t):
+                slots[t // STEP] -= 1
+        found = []
+        for t0 in range(m - m % step, m + me["minutes"], step):
+            r = required.get(t0, 0.0)
+            if r > 0:
+                here = slots[t0 // STEP:(t0 + step) // STEP]
+                found.append((sum(here) / len(here) - r) * step / 60)
+        return min(found) if found else None
+
+    before = [b for b in others if b["idx"] < idx]
+    after = [b for b in others if b["idx"] > idx]
+    lo = max([b["start"] + b["minutes"] + (lo_gap or 0) for b in before] + [seg["start"]])
+    hi = min([b["start"] - (lo_gap or 0) - me["minutes"] for b in after] + [seg["end"] - me["minutes"]])
+    best: Dict[int, Tuple[float, int]] = {}
+    for m in range(lo + (-lo) % STEP, min(hi, 1440 - me["minutes"]) + 1, STEP):  # after midnight: next day's page
+        if hi_gap is not None and any(g > hi_gap for _, _, g in gaps(m)):
+            continue
+        worst = tightest(m)
+        key = m - m % step
+        if worst is not None and (key not in best or worst > best[key][0]):
+            best[key] = (worst, m)
+    ranked = sorted(best.values(), key=lambda x: (-x[0], x[1]))[:3]
+    return {"warnings": warnings, "fits": [{"start": _hm(m), "end": _hm(m + me["minutes"]), "buffer": round(w, 2)}
+                                           for w, m in ranked]}
+
+
+def _short(kind: str) -> str:
+    """Break 1 -> B1, Lunch -> L, anything else: its initials."""
+    if kind.lower().startswith("break "):
+        return "B" + kind.split()[-1]
+    return "L" if kind.lower() == "lunch" else "".join(w[0] for w in kind.split()).upper()[:3]
+
+
+def board(view: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """The interval board: one row per interval with demand or people on shift: buffer, status,
+    the breaks starting in it (lunch and short breaks), late / early / aux starting in it, and
+    the counts (unplanned leave, on break, aux)."""
+    step = view["interval"]
+    rows = []
+    for c in view["cells"]:
+        t = c["t"]
+        if c["required"] <= 0 and not c["plan"] and not c["now"]:
+            continue
+        lunch, short, events = [], [], []
+        for lane in view["lanes"]:
+            for seg in lane["segments"]:
+                if seg["status"] in ABSENT:
+                    continue  # not on shift today: nothing to plot
+                for b in seg["breaks"]:
+                    if t <= b["start"] < t + step:
+                        chip = {"name": lane["name"], "slot": lane["slot"], "offset": seg["offset"], "idx": b["idx"],
+                                "kind": b["kind"], "short": _short(b["kind"]), "start": _hm(b["start"]),
+                                "planned": _hm(b["planned_start"]), "moved": b["moved"], "minutes": b["minutes"]}
+                        (lunch if b["kind"].lower() == "lunch" else short).append(chip)
+                lo, hi = seg["away"]
+                st = seg["status"]
+                if st == "Late" and t <= seg["start"] < t + step:
+                    events.append({"name": lane["name"], "text": f"late login, in at {_hm(hi)}"})
+                elif st == "Left early" and t <= lo < t + step:
+                    events.append({"name": lane["name"], "text": f"early leave at {_hm(lo)}"})
+                elif st in AUX and lo < hi and t <= lo < t + step:
+                    events.append({"name": lane["name"], "text": f"{st} {_hm(lo)} to {_hm(hi)}, "
+                                                                 f"{'billable' if seg['billable'] else 'non-billable'}"})
+        if c["pm"] is None:
+            state, label, why = "none", "No demand", ""
+        else:
+            room = c["low"] - c["need"]
+            if room >= 1:
+                state, label, why = "good", "Good buffer", f"room for {room} more on break"
+            elif room >= 0:
+                state, label, why = "tight", "Tight", "on target, no room for another break"
+            else:
+                more = c["need"] - c["low"]
+                state, label, why = "short", "Short", f"{more} more {'person' if more == 1 else 'people'} needed at the lowest point"
+        langs = [{"name": l["name"], "count": cell["count"], "cls": cell["cls"]}
+                 for l in view["languages"] for cell in l["cells"] if cell["t"] == t and cell["count"] is not None]
+        rows.append({**c, "end": _hm(t + step), "start": _hm(t), "state": state, "label": label, "why": why,
+                     "cover": round(c["now"] / c["required"] * 100) if c["required"] > 0 else None,
+                     "lunch": sorted(lunch, key=lambda x: x["start"]), "short": sorted(short, key=lambda x: x["start"]),
+                     "events": events, "langs": langs})
+    return rows

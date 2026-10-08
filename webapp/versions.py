@@ -125,6 +125,30 @@ def _breaks(wb) -> List[dict]:
     return out
 
 
+_REF = re.compile(r"^=\s*\$?([A-Z]{1,3})\$?(\d+)\s*([+-])\s*(\d+)\s*$")
+
+
+def _slot(ws, r: int, c: int) -> str:
+    """A slot number; a simple formula such as =A30+1 (common in Slot columns, and kept
+    without a cached value when a file is saved by a script) is followed to its number.
+    Anything else is shown as written."""
+    from openpyxl.utils import column_index_from_string
+    shown = str(ws.cell(r, c).value or "").strip()
+    total, seen = 0.0, set()
+    while (r, c) not in seen:
+        seen.add((r, c))
+        value = ws.cell(r, c).value
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            number = float(value) + total
+            return str(int(number)) if number.is_integer() else str(number)
+        found = _REF.match(str(value or "").strip())
+        if not found:
+            break
+        total += (1 if found.group(3) == "+" else -1) * float(found.group(4))
+        r, c = int(found.group(2)), column_index_from_string(found.group(1))
+    return shown
+
+
 def read_week(path: Path) -> Dict[str, Any]:
     """The week in a schedule workbook: people, their seven days, breaks, the shifts on offer."""
     wb = load_workbook(path)
@@ -140,7 +164,8 @@ def read_week(path: Path) -> Dict[str, Any]:
         if not name:
             continue
         cell = lambda key: str(ws.cell(r, cols[key]).value or "").strip() if key in cols else ""  # noqa: E731
-        associates.append({"name": name, "slot": cell("slot"), "emp_id": cell("emp id"), "language": cell("language"),
+        associates.append({"name": name, "slot": _slot(ws, r, cols["slot"]) if "slot" in cols else "",
+                           "emp_id": cell("emp id"), "language": cell("language"),
                            "tl": cell("tl"), "days": [str(ws.cell(r, c).value or "").strip() for c in day_cols]})
     breaks = _breaks(wb)
     return {"associates": associates, "breaks": breaks, "shifts": _library(wb), "settings": _settings(wb),

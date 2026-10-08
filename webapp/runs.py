@@ -94,6 +94,7 @@ class RunQueue:
         self._stopping: set = set()
         self._threads: List[threading.Thread] = []
         self.schedules = None  # the ScheduleBook (Phase N), set by the website
+        self.days = None  # the DayBook (attendance and actual breaks), set by the website
         self.recover()
 
     # ------------------------------------------------------------ paths
@@ -501,6 +502,8 @@ class RunQueue:
                 self.cleanup()
                 if self.schedules is not None:
                     self.schedules.cleanup()
+                if self.days is not None:
+                    self.days.cleanup()
             except Exception as exc:  # keep cleaning tomorrow; say why today failed
                 print(f"run cleanup failed: {exc!r}", file=sys.stderr, flush=True)
             time.sleep(3600)

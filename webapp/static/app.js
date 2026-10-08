@@ -71,15 +71,16 @@
   });
 })();
 
-// Week view: picking another program shows its weeks (the latest is chosen).
+// Pickers that show their choice at once (program, week, day, measure). Picking
+// another program on the week view shows its weeks (the latest is chosen).
 (function () {
   "use strict";
-  var pick = document.querySelector("[data-autosubmit]");
-  if (!pick) { return; }
-  pick.addEventListener("change", function () {
-    var week = pick.form.querySelector("select[name=week]");
-    if (week) { week.disabled = true; }
-    pick.form.submit();
+  Array.prototype.forEach.call(document.querySelectorAll("[data-autosubmit]"), function (pick) {
+    pick.addEventListener("change", function () {
+      var week = pick.form.querySelector("select[name=week]");
+      if (week && pick.name === "program") { week.disabled = true; }
+      pick.form.submit();
+    });
   });
 })();
 
@@ -178,6 +179,268 @@
         if (!saved._ok) { keep.disabled = false; result.textContent = saved.error || "Not saved."; return; }
         window.location.href = saved.url;
       });
+  });
+})();
+
+// Slot swap: two people swap whole weeks. Checked on a copy first; its problems are
+// shown before the swap is kept (Yes) or dropped (No), like a shift change.
+(function () {
+  "use strict";
+  var open = document.querySelector("[data-swap-open]");
+  var dialog = document.getElementById("swap-dialog");
+  if (!open || !dialog || typeof dialog.showModal !== "function") { if (open) { open.hidden = true; } return; }
+  var token = document.querySelector("input[name=csrf_token]");
+  var first = dialog.querySelector("select[name=first]");
+  var second = dialog.querySelector("select[name=second]");
+  var reason = dialog.querySelector("input[name=reason]");
+  var result = dialog.querySelector(".dlg-result");
+  var ask = dialog.querySelector(".dlg-ask");
+  var keep = dialog.querySelector("[data-keep]");
+  var title = dialog.querySelector("#swap-h");
+  var needsReason = false, seq = 0;
+
+  function post(url, fields) {
+    var body = new URLSearchParams(fields);
+    body.append("csrf_token", token ? token.value : "");
+    return fetch(url, { method: "POST", credentials: "same-origin", body: body, headers: { "Accept": "application/json" } })
+      .then(function (r) { return r.json().then(function (d) { d._ok = r.ok; return d; }); });
+  }
+  function check() {
+    keep.disabled = true;
+    ask.hidden = true;
+    dialog.classList.remove("red", "yellow");
+    if (!first.value || !second.value || first.value === second.value) {
+      title.textContent = "Swap slots";
+      result.textContent = first.value && first.value === second.value ? "Pick two different people." : "Pick two people.";
+      return;
+    }
+    var mine = ++seq;
+    title.textContent = "Checking this swap…";
+    result.textContent = "The independent validator is checking the week (a few seconds).";
+    post(dialog.dataset.checkUrl, { first: first.value, second: second.value }).then(function (found) {
+      if (mine !== seq) { return; }
+      if (!found._ok) { title.textContent = "This swap cannot be made"; result.textContent = found.error || ""; return; }
+      result.textContent = "";
+      var reds = 0, list = document.createElement("ul");
+      list.className = "sevlist";
+      (found.added || []).forEach(function (p) {
+        var li = document.createElement("li"), b = document.createElement("b");
+        li.className = p.severity;
+        reds += p.severity === "red" ? 1 : 0;
+        b.textContent = p.severity === "red" ? "Rule broken: " : "Warning: ";
+        li.appendChild(b);
+        li.appendChild(document.createTextNode(p.text));
+        list.appendChild(li);
+      });
+      var yellows = (found.added || []).length - reds;
+      title.textContent = reds ? "This swap breaks " + reds + " rule" + (reds === 1 ? "" : "s")
+        : yellows ? "This swap adds " + yellows + " warning" + (yellows === 1 ? "" : "s") : "This swap adds no problems";
+      dialog.classList.toggle("red", reds > 0);
+      dialog.classList.toggle("yellow", !reds && yellows > 0);
+      if (list.childNodes.length) { result.appendChild(list); }
+      needsReason = list.childNodes.length > 0;
+      ask.hidden = !needsReason;
+      keep.disabled = false;
+    }).catch(function () { if (mine === seq) { result.textContent = "The check did not answer: try again."; } });
+  }
+  open.addEventListener("click", function () {
+    first.value = ""; second.value = ""; reason.value = "";
+    check();
+    dialog.showModal();
+    first.focus();
+  });
+  first.addEventListener("change", check);
+  second.addEventListener("change", check);
+  dialog.querySelector("[data-cancel]").addEventListener("click", function () { seq++; dialog.close(); });
+  keep.addEventListener("click", function () {
+    if (needsReason && !reason.value.trim()) { reason.focus(); reason.setAttribute("aria-invalid", "true"); return; }
+    keep.disabled = true;
+    post(dialog.dataset.swapUrl, { first: first.value, second: second.value, reason: reason.value.trim() })
+      .then(function (saved) {
+        if (!saved._ok) { keep.disabled = false; result.textContent = saved.error || "Not saved."; return; }
+        window.location.href = saved.url;
+      });
+  });
+})();
+
+// The day: attendance, and breaks moved in 5-minute steps. A drag (timeline or
+// board) or a click opens the break dialog with the new time, its gap warnings and
+// the best times for that break; nothing is kept until Save (Yes).
+(function () {
+  "use strict";
+  var root = document.querySelector("[data-day]");
+  if (!root) { return; }
+  var token = root.querySelector("input[name=csrf_token]");
+  var step = parseInt(root.dataset.step, 10) || 30;
+  var status = document.getElementById("day-status");
+
+  function post(url, fields) {
+    var body = new URLSearchParams(fields);
+    body.append("csrf_token", token ? token.value : "");
+    body.append("program", root.dataset.program);
+    return fetch(url, { method: "POST", credentials: "same-origin", body: body, headers: { "Accept": "application/json" } })
+      .then(function (r) { return r.json().then(function (d) { d._ok = r.ok; return d; }); });
+  }
+  function toMin(hhmm) { var p = (hhmm || "0:0").split(":"); return parseInt(p[0], 10) * 60 + parseInt(p[1], 10); }
+  function toHm(m) { m = ((m % 1440) + 1440) % 1440; return ("0" + Math.floor(m / 60)).slice(-2) + ":" + ("0" + (m % 60)).slice(-2); }
+  function say(text) { if (status) { status.textContent = text; status.hidden = !text; } }
+
+  // ---- attendance
+  var att = document.getElementById("att-dialog");
+  Array.prototype.forEach.call(root.querySelectorAll("select.att"), function (sel) {
+    var was = sel.value;
+    sel.addEventListener("change", function () {
+      var parts = sel.value.split("|"), state = parts[0];
+      var fields = { date: sel.dataset.date, associate: sel.dataset.name, status: state, billable: parts[1] === "1" ? "1" : "" };
+      if (state !== "Late" && state !== "Left early" && parts.length < 2) {
+        post(root.dataset.attUrl, fields).then(function (r) {
+          if (r._ok) { window.location.reload(); return; }
+          sel.value = was; say(r.error || "That was not saved.");
+        });
+        return;
+      }
+      if (!att || typeof att.showModal !== "function") { sel.value = was; return; }
+      var from = att.querySelector("[data-from]"), to = att.querySelector("[data-to]");
+      var hint = att.querySelector("[data-hint]"), result = att.querySelector(".dlg-result");
+      att.querySelector("#att-h").textContent = state === "Late" ? "Late login" : state === "Left early" ? "Early leave" :
+        state + (parts[1] === "1" ? " (billable)" : " (non-billable)");
+      att.querySelector("[data-who]").textContent = sel.dataset.name + ", shift " + sel.dataset.shift;
+      from.hidden = state === "Late";
+      to.hidden = state === "Left early";
+      from.firstChild.textContent = state === "Left early" ? "Left at " : "From ";
+      to.firstChild.textContent = state === "Late" ? "Arrived at " : "To ";
+      hint.textContent = state === "Late" || state === "Left early" ? "" : "Leave both empty for the whole shift.";
+      from.querySelector("input").value = ""; to.querySelector("input").value = ""; result.textContent = "";
+      att.dataset.pending = JSON.stringify(fields);
+      att.showModal();
+      (state === "Late" ? to : from).querySelector("input").focus();
+      att.onclose = function () { if (att.returnValue !== "saved") { sel.value = was; } att.returnValue = ""; };
+    });
+  });
+  if (att) {
+    att.querySelector("[data-cancel]").addEventListener("click", function () { att.close("cancel"); });
+    att.querySelector("[data-keep]").addEventListener("click", function () {
+      var fields = JSON.parse(att.dataset.pending || "{}");
+      fields.from = att.querySelector("input[name=from]").value;
+      fields.to = att.querySelector("input[name=to]").value;
+      post(root.dataset.attUrl, fields).then(function (r) {
+        if (r._ok) { att.close("saved"); window.location.reload(); return; }
+        att.querySelector(".dlg-result").textContent = r.error || "That was not saved.";
+      });
+    });
+  }
+
+  // ---- breaks
+  var dlg = document.getElementById("break-dialog");
+  if (!dlg || typeof dlg.showModal !== "function") { return; }
+  var input = dlg.querySelector("input[name=at]"), result = dlg.querySelector(".dlg-result");
+  var fits = dlg.querySelector(".fits"), ask = dlg.querySelector(".dlg-ask"), keep = dlg.querySelector("[data-keep]");
+  var current = null, seq = 0, warned = false;
+
+  function advise() {
+    var mine = ++seq;
+    result.textContent = "Checking…";
+    fits.hidden = true;
+    post(root.dataset.adviceUrl, { date: current.date, associate: current.name, idx: current.idx, at: input.value,
+                                   measure: root.dataset.measure }).then(function (found) {
+      if (mine !== seq) { return; }
+      result.textContent = "";
+      if (!found._ok) { result.textContent = found.error || ""; warned = false; ask.hidden = true; keep.textContent = "Save"; return; }
+      var list = document.createElement("ul");
+      list.className = "sevlist";
+      (found.warnings || []).forEach(function (w) {
+        var li = document.createElement("li"), b = document.createElement("b");
+        li.className = "yellow"; b.textContent = "Warning: ";
+        li.appendChild(b); li.appendChild(document.createTextNode(w)); list.appendChild(li);
+      });
+      if (list.childNodes.length) { result.appendChild(list); }
+      warned = list.childNodes.length > 0;
+      dlg.classList.toggle("yellow", warned);
+      ask.hidden = !warned;
+      keep.textContent = warned ? "Yes, keep " + input.value : "Save " + input.value;
+      var ul = fits.querySelector("ul");
+      ul.textContent = "";
+      (found.fits || []).forEach(function (f) {
+        var li = document.createElement("li"), b = document.createElement("button");
+        b.type = "button";
+        var m = Math.round(Math.abs(f.buffer) * 60);
+        b.textContent = f.start + " to " + f.end + ": " + (f.buffer >= 0 ? "+" : "−") + Math.floor(m / 60) + ":" +
+          ("0" + (m % 60)).slice(-2) + " buffer at its tightest";
+        b.addEventListener("click", function () { input.value = f.start; advise(); });
+        li.appendChild(b); ul.appendChild(li);
+      });
+      fits.hidden = !(found.fits || []).length;
+    }).catch(function () { if (mine === seq) { result.textContent = "The check did not answer: try again."; } });
+  }
+  function openBreak(el, at) {
+    current = { name: el.dataset.name, date: el.dataset.date, idx: el.dataset.idx };
+    dlg.querySelector("#brk-h").textContent = "Move " + el.dataset.name + "'s " + el.dataset.kind;
+    dlg.querySelector("[data-who]").textContent = el.dataset.minutes + " minutes" +
+      (el.dataset.shift ? " · shift " + el.dataset.shift : "") + " · planned " + el.dataset.planned +
+      (el.dataset.start !== el.dataset.planned ? " · now " + el.dataset.start : "");
+    input.value = at || el.dataset.start;
+    keep.disabled = false;
+    dlg.showModal();
+    input.focus();
+    advise();
+  }
+  dlg.querySelectorAll("[data-step]").forEach(function (b) {
+    b.addEventListener("click", function () { input.value = toHm(toMin(input.value) + parseInt(b.dataset.step, 10)); advise(); });
+  });
+  input.addEventListener("change", advise);
+  dlg.querySelector("[data-cancel]").addEventListener("click", function () { seq++; dlg.close(); });
+  function save(at) {
+    keep.disabled = true;
+    post(root.dataset.breakUrl, { date: current.date, associate: current.name, idx: current.idx, at: at })
+      .then(function (r) {
+        if (r._ok) { window.location.reload(); return; }
+        keep.disabled = false; result.textContent = r.error || "That was not saved.";
+      });
+  }
+  keep.addEventListener("click", function () { save(input.value); });
+  dlg.querySelector("[data-plan]").addEventListener("click", function () { save(""); });
+
+  // timeline: drag a break sideways (5-minute steps), or Enter / click to type the time
+  Array.prototype.forEach.call(root.querySelectorAll("rect.brk"), function (rect) {
+    rect.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openBreak(rect); }
+    });
+    rect.addEventListener("pointerdown", function (e) {
+      var svg = rect.ownerSVGElement, box = svg.getBoundingClientRect(), x0 = parseFloat(rect.getAttribute("x"));
+      var startX = e.clientX, moved = 0;
+      rect.setPointerCapture(e.pointerId);
+      function move(ev) {
+        moved = Math.round((ev.clientX - startX) / box.width * 1440 / 5) * 5;
+        rect.setAttribute("x", x0 + moved);
+      }
+      function up() {
+        rect.removeEventListener("pointermove", move);
+        rect.removeEventListener("pointerup", up);
+        rect.setAttribute("x", x0);
+        openBreak(rect, moved ? toHm(toMin(rect.dataset.start) + moved) : null);
+      }
+      rect.addEventListener("pointermove", move);
+      rect.addEventListener("pointerup", up);
+    });
+  });
+
+  // board: drag a break chip to another row (same minute within the interval), or click it
+  var dragged = null;
+  Array.prototype.forEach.call(root.querySelectorAll("button.chip[data-idx]"), function (chip) {
+    chip.addEventListener("click", function () { openBreak(chip); });
+    chip.addEventListener("dragstart", function (e) { dragged = chip; e.dataTransfer.setData("text/plain", chip.dataset.name); });
+  });
+  Array.prototype.forEach.call(root.querySelectorAll(".rb-row[data-t]"), function (row) {
+    row.addEventListener("dragover", function (e) { if (dragged) { e.preventDefault(); row.classList.add("drop"); } });
+    row.addEventListener("dragleave", function () { row.classList.remove("drop"); });
+    row.addEventListener("drop", function (e) {
+      e.preventDefault();
+      row.classList.remove("drop");
+      if (!dragged) { return; }
+      var start = toMin(dragged.dataset.start);
+      openBreak(dragged, toHm(parseInt(row.dataset.t, 10) + start % step));
+      dragged = null;
+    });
   });
 })();
 

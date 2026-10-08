@@ -18,7 +18,7 @@ from werkzeug.utils import secure_filename
 from .adherence import interval_shrinkage, person_day, team as team_figures
 from .analytics import program_weeks, team
 from .attendance import ACTIVITY_KINDS, DayBook, hm, tomorrow_unchecked, week_start
-from .day import AUX, MEASURES, STATUSES, BreakRefused, board
+from .day import ABSENT as ABSENT_STATES, AUX, MEASURES, STATUSES, BreakRefused, board
 from .coach import actual_shrinkage, corrected_tab
 from .eta import queue_plan
 from .handover import note as handover_note
@@ -232,10 +232,38 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if config.get("START_WORKER", True):
             queue.start()
 
+    OPEN_TO_ALL = {"static", "login", "logout", "set_theme", "change_password", "home", "submit_run", "run_tag",
+                   "program_rename", "program_setup", "workbook"}
+
     @app.before_request
     def _before() -> None:
         check_csrf()
         load_user()
+        # Phase Q: a program page opens only for people with that program (New schedule is open to everyone).
+        if g.get("user") and request.endpoint not in OPEN_TO_ALL:
+            key = (request.view_args or {}).get("name") if request.endpoint == "program" else \
+                clean_program(request.values.get("program", ""))
+            if key and not _access().can_open(key):
+                abort(403)
+
+    def _access() -> Access:
+        if "access" not in g:
+            g.access = Access(app.extensions["store"], g.user)
+        return g.access
+
+    def _can_see_run(run: Dict[str, Any]) -> bool:
+        if run.get("user_id") == g.user["id"]:
+            return True
+        return _access().can_open(run["program"]) if run.get("program") else _access().everything()
+
+    def _visible(rows: list, key: str = "program") -> list:
+        """Rows (runs, versions, ...) of the programs this person may open."""
+        keys = _access().keys()
+        return rows if keys is None else [r for r in rows if r.get(key) in keys or r.get("user_id") == g.user["id"]]
+
+    def _my_programs(names: list) -> list:
+        keys = _access().keys()
+        return names if keys is None else [n for n in names if n in keys]
 
     @app.after_request
     def _headers(response):  # type: ignore[no-untyped-def]
@@ -299,6 +327,48 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 "status_words": STATUS_WORDS, "label": label, "modes": MODES, "stages": stages, "in_flight": IN_FLIGHT,
                 "when": _when, "run_options": run_options, "option_labels": OPTION_LABELS,
                 "eta_text": eta_text, "duration": duration, "clock": _clock}
+
+    NAV_ACTIVE = {"home": "home", "overview_page": "overview", "day_page": "day", "week_page": "week",
+                  "run_week": "week", "run_schedules": "schedules", "program": "analysis", "programs": "programs",
+                  "exports_page": "exports", "team_page": "team", "admin_users": "people", "program_setup": "setup"}
+    PROGRAM_PAGES = {"overview": "/overview?program={key}", "day": "/day?program={key}", "week": "/week?program={key}",
+                     "schedules": "/schedules?program={key}", "analysis": "/programs/{key}"}
+
+    def _unit_choices(programs: list) -> list:
+        """Each program with its LOBs as (key, name) pairs, for the left menu's picker."""
+        out = []
+        for p in programs:
+            choices = [(l["key"], l["name"]) for l in p["lobs"]]
+            if p["key"] in p["units"]:
+                choices.append((p["key"], p["name"] if not p["lobs"] else f"{p['name']} (whole program)"))
+            if choices:
+                out.append({"name": p["name"], "choices": choices})
+        return out
+
+    @app.context_processor
+    def _left_menu() -> Dict[str, Any]:
+        """The left menu: the program (and LOB) open, its pages, and what this person may manage. The program
+        last opened is remembered, so the menu keeps it on pages that are not about one program."""
+        user = g.get("user")
+        if not user or request.endpoint in ("login", "static"):
+            return {}
+        access = _access()
+        if request.endpoint == "program":
+            key = (request.view_args or {}).get("name", "")
+        else:
+            key = clean_program(request.args.get("program", ""))
+        if key and access.can_open(key) and access.book.unit(key):
+            session["unit"] = key
+        else:
+            key = session.get("unit", "")
+            if not key or not access.can_open(key) or not access.book.unit(key):
+                units = [k for p in access.programs() for k in p["units"]]
+                key = units[0] if units else ""
+        active = NAV_ACTIVE.get(request.endpoint or "", "")
+        target = PROGRAM_PAGES.get(active, PROGRAM_PAGES["overview"])
+        return {"nav_units": _unit_choices(access.programs()), "nav_unit": key,
+                "nav_label": access.book.label(key) if key else "", "nav_active": active, "nav_target": target,
+                "user_role": role(user)}
 
     # ------------------------------------------------------------- theme
     @app.route("/theme", methods=["POST"])
@@ -493,22 +563,41 @@ def create_app(config: Dict[str, Any]) -> Flask:
     @login_required
     def home():  # type: ignore[no-untyped-def]
         queue = app.extensions.get("runs")
-        runs = app.extensions["store"].list_runs()
-        plan = _plan(runs)
+        everyone = app.extensions["store"].list_runs()
+        plan = _plan(everyone)  # the queue is shared: waiting times count every run
+        runs = _visible(everyone)
         summaries = {r["id"]: queue.summary(r["id"]) for r in runs} if queue else {}
         active = [r for r in runs if r["status"] in ("GATE", "RUNNING", "SCORING")]
         waiting = sorted((r for r in runs if r["status"] == "QUEUED"), key=lambda r: r["created"])
         latest = next((r for r in runs if r["status"] in ("DONE", "REVIEW") and summaries.get(r["id"])), None)
         known = sorted({r["program"] for r in runs if r.get("program")}, key=str.lower)
         prefill = start_date(request.args.get("week", "")) or next_sunday()
-        upload_programs, upload_keys = _upload_choices(runs)
-        return render_template("dashboard.html", upload_programs=upload_programs, upload_keys=upload_keys, runs=runs, queue=queue, plan=plan, summaries=summaries,
+        upload_programs, upload_keys = _upload_choices(everyone)
+        cards = _program_cards(runs)
+        return render_template("dashboard.html", upload_programs=upload_programs, upload_keys=upload_keys,
+                               program_cards=cards, runs=runs, queue=queue, plan=plan, summaries=summaries,
                                active=active, waiting=waiting, latest=latest,
                                latest_summary=summaries.get(latest["id"]) if latest else None,
                                now=time.time(), known_programs=known,
                                prefill_program=clean_program(request.args.get("program", "")),
                                prefill_week=prefill, start_options=start_choices(prefill, prefill),
                                usual_start=usual_start_days(runs))
+
+    WEEKDAYS = ("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+
+    def _program_cards(runs: list) -> list:
+        """Home: this person's programs, each LOB with its latest schedule week."""
+        history = program_weeks(runs)
+        usual = usual_start_days(runs)
+        cards = []
+        for p in _access().programs():
+            units = [{"key": key, "text": next((l["name"] for l in p["lobs"] if l["key"] == key), p["name"]),
+                      "latest": (history.get(key) or [None])[-1]} for key in p["units"]]
+            if not units:
+                continue
+            day = p["start_day"] if p["saved"] else usual.get(units[0]["key"], 0)
+            cards.append({"name": p["name"], "units": units, "starts": WEEKDAYS[day]})
+        return cards
 
     def _upload_choices(runs: list) -> Tuple[list, set]:
         """New schedule is open to everyone for any program: each program with its LOBs, and the defaults
@@ -546,6 +635,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         run = app.extensions["store"].get_run(run_id) if RUN_ID.match(run_id) else None
         if run is None:
             abort(404)
+        if not _can_see_run(run):
+            abort(403)
         return run
 
     @app.route("/runs", methods=["POST"])
@@ -775,7 +866,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
 
     # ------------------------------------------------------------- analytics
     def _all_runs() -> list:
-        return app.extensions["store"].list_runs(limit=100000)
+        """Every run this person may see (all of them for admins and people with every program)."""
+        return _visible(app.extensions["store"].list_runs(limit=100000))
 
     @app.route("/programs")
     @login_required
@@ -843,6 +935,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
         row = app.extensions["store"].get_schedule(schedule_id)
         if row is None:
             abort(404)
+        run = app.extensions["store"].get_run(row["run_id"]) or {"program": row["program"]}
+        if not _can_see_run(run):
+            abort(403)
         return row
 
     def _may_set_in_use(row: Dict[str, Any]) -> bool:
@@ -971,12 +1066,57 @@ def create_app(config: Dict[str, Any]) -> Flask:
         except ValueError:
             return None
 
+    @app.route("/overview")
+    @login_required
+    def overview_page():  # type: ignore[no-untyped-def]
+        """A program's day at a glance; breaks, attendance and cover are on RTA (the day page)."""
+        days = _days()
+        programs = _my_programs(days.programs())
+        today = datetime.now(EGYPT)
+        on = _date(request.args.get("date", "")) or today.date()
+        program = clean_program(request.args.get("program", "")) or (programs[0] if programs else "")
+        page, problem, ahead, attention = None, "", [], {}
+        if program:
+            try:
+                page = days.page(program, on)
+            except ValueError as exc:
+                problem = str(exc)
+        if page:
+            v = page["view"]
+            cells = [c for c in v["cells"] if c["pm"] is not None]
+            now = today.hour * 60 + today.minute if on == today.date() else -1
+            ahead = [c for c in cells if c["t"] + v["interval"] > now][:6]
+            short = [c for c in cells if c["pm"] < 0 and c["t"] + v["interval"] > now]
+            attention = {
+                "short": short, "worst": min(short, key=lambda c: c["pm"]) if short else None,
+                "absent": [(l["name"], s["status"]) for l in v["lanes"] for s in l["segments"]
+                           if s["offset"] == 0 and s["status"] in ABSENT_STATES],
+                "late": [(l["name"], s["status"], s.get("to") if s["status"] == "Late" else s.get("from"))
+                         for l in v["lanes"] for s in l["segments"]
+                         if s["offset"] == 0 and s["status"] in ("Late", "Left early")]}
+        return render_template("overview.html", page=page, problem=problem, program=program, programs=programs,
+                               on=on, ahead=ahead, attention=attention, week_of=week_start(on),
+                               label=ProgramBook(app.extensions["store"]).label(program) if program else "")
+
+    @app.route("/schedules")
+    @login_required
+    def schedules_for():  # type: ignore[no-untyped-def]
+        """A program's newest schedule versions (the menu's Schedules)."""
+        program = clean_program(request.args.get("program", ""))
+        rows = sorted((v for v in app.extensions["store"].list_schedules(program=program)),
+                      key=lambda v: (v["week_start"], v["created"]), reverse=True) if program else []
+        if not rows:
+            flash(f"There are no schedule versions for {program or 'this program'} yet: they appear when a run "
+                  "finishes.")
+            return redirect(url_for("home"))
+        return redirect(url_for("run_schedules", run_id=rows[0]["run_id"]))
+
     @app.route("/day")
     @login_required
     def day_page():  # type: ignore[no-untyped-def]
         """A program's day from the schedule in use: who is on the floor, attendance, actual breaks."""
         days = _days()
-        programs = days.programs()
+        programs = _my_programs(days.programs())
         on = _date(request.args.get("date", "")) or datetime.now(EGYPT).date()
         program = clean_program(request.args.get("program", ""))
         if not program and programs:
@@ -1117,7 +1257,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         found = re.match(r"^([01]?\d|2[0-3]):([0-5]\d)$", at)
         now = int(found.group(1)) * 60 + int(found.group(2)) if found else clock.hour * 60 + clock.minute
         days = _days()
-        programs = days.programs()
+        programs = _my_programs(days.programs())
         program = clean_program(request.args.get("program", "")) or (programs[0] if programs else "")
         page = days.page(program, on) if program else None
         board_now = None
@@ -1211,6 +1351,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         start = _date(request.args.get("from", "")) or today.replace(day=1)
         end = _date(request.args.get("to", "")) or today
         program = clean_program(request.args.get("program", "")) or None
+        if program is None and _access().keys() is not None:
+            program = sorted(_access().keys())  # "all programs" means all of this person's programs
         return {"start": start, "end": end, "program": program, "user_id": request.args.get("user", type=int),
                 "measure": request.args.get("measure", "") if request.args.get("measure", "") in MEASURES else "interval"}
 
@@ -1235,12 +1377,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
         counts = {k: (len(rows), max(rows, key=lambda r: r.get("at") or r.get("created") or 0) if rows else None)
                   for k, rows in found.items()}
         return render_template("exports.html", kinds=EXPORT_KINDS, counts=counts, presets=presets, error=error,
-                               programs=_days().programs() if app.extensions.get("days") else [],
+                               programs=_my_programs(_days().programs()) if app.extensions.get("days") else [],
                                users=store.list_users(), measures=MEASURES, **a), status
 
     def _coach_args() -> Dict[str, Any]:
         days = _days()
-        programs = days.programs()
+        programs = _my_programs(days.programs())
         today = datetime.now(EGYPT).date()
         program = clean_program(request.args.get("program", "")) or (programs[0] if programs else "")
         start = _date(request.args.get("from", "")) or today - timedelta(days=27)
@@ -1284,7 +1426,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                             a["program"], a["user_id"], g.user["display_name"], a["measure"])
         except ValueError as exc:  # said on the page
             return _exports_page(str(exc), 400)
-        _record("exported", subject=name, program=a["program"] or "",
+        _record("exported", subject=name, program=a["program"] if isinstance(a["program"], str) else "",
                 detail=f"{a['start']} to {a['end']}: {', '.join(k for k in EXPORT_KINDS if k in kinds)}")
         return send_file(io.BytesIO(data), mimetype=mime, as_attachment=True, download_name=name)
 

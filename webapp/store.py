@@ -469,11 +469,24 @@ class Store:
                        for table in ("attendance", "actual_breaks", "activities", "day_log"))
 
     # ------------------------------------------------------------- ranges for exports
-    def _between(self, sql: str, args: List[Any], program: Optional[str], user_id: Optional[int], table: str,
+    @staticmethod
+    def _program_filter(column: str, program: Any) -> Tuple[str, List[Any]]:
+        """" and <column> = ?" for one program, "in (...)" for several (none matches nothing), "" for all."""
+        if program is None:
+            return "", []
+        if isinstance(program, str):
+            return f" and {column} = ?", [program]
+        names = sorted(set(program))
+        if not names:
+            return " and 0", []
+        return f" and {column} in ({', '.join('?' for _ in names)})", names
+
+    def _between(self, sql: str, args: List[Any], program: Any, user_id: Optional[int], table: str,
                  order: str) -> List[Dict[str, Any]]:
-        if program is not None:
-            sql += f" and {table}.program = ?"
-            args.append(program)
+        """``program``: one name, several (a list or set), or None for every program."""
+        extra, more = self._program_filter(f"{table}.program", program)
+        sql += extra
+        args.extend(more)
         if user_id is not None:
             sql += f" and {table}.user_id = ?"
             args.append(user_id)
@@ -504,9 +517,9 @@ class Store:
                " on schedules.id = schedule_changes.schedule_id left join users on users.id = schedule_changes.user_id"
                " where schedule_changes.at >= ? and schedule_changes.at < ?")
         args: List[Any] = [start, end]
-        if program is not None:
-            sql += " and schedules.program = ?"
-            args.append(program)
+        extra, more = self._program_filter("schedules.program", program)
+        sql += extra
+        args.extend(more)
         if user_id is not None:
             sql += " and schedule_changes.user_id = ?"
             args.append(user_id)
@@ -531,9 +544,10 @@ class Store:
                     kinds: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         """Events with ``start <= at < end``, oldest first, with the name of who did them."""
         where, args = ["events.at >= ?", "events.at < ?"], [start, end]
-        if program is not None:
-            where.append("events.program = ?")
-            args.append(program)
+        extra, more = self._program_filter("events.program", program)
+        if extra:
+            where.append(extra[len(" and "):])
+            args.extend(more)
         if user_id is not None:
             where.append("events.user_id = ?")
             args.append(user_id)

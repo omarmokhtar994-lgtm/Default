@@ -39,7 +39,8 @@ def make_app(start_worker=True, gate_fails=False, **extra):
     config.update(extra)
     app = create_app(config)
     store = Store(data / "scheduler.db")
-    store.add_user("sara", "Sara", "Sara-pass-1", must_change=False)
+    sara = store.add_user("sara", "Sara", "Sara-pass-1", must_change=False)
+    store.update_user(sara, all_programs=1)  # Phase Q: sara sees every program, as people from before programs do
     return app, store, data, gate_marker
 
 
@@ -959,6 +960,16 @@ class TheDayPage(unittest.TestCase):
     def page(self):
         return html.unescape(self.client.get(self.url).get_data(as_text=True))
 
+    def test_overview_and_rta_are_separate(self):
+        body = html.unescape(self.client.get("/overview?program=AE/AR+B2B&date=2026-10-14").get_data(as_text=True))
+        for words in ("On shift today", "Short of demand", "Next six hours", "Needs attention", "Open RTA",
+                      "Handover note"):
+            self.assertIn(words, body)
+        self.assertIn("/day?program=AE/AR+B2B&date=2026-10-14", body)
+        got = self.client.get("/schedules?program=AE/AR+B2B")
+        self.assertEqual(got.status_code, 302)
+        self.assertRegex(got.headers["Location"], r"/runs/[0-9a-f]{12}/schedules$")
+
     def test_day_page_shows_lanes_rows_and_tiles(self):
         body = self.page()
         self.assertIn("AE/AR B2B, Wednesday 14 Oct: the day", body)
@@ -1393,6 +1404,115 @@ class TheProgramSetup(unittest.TestCase):
         self.post(action="add_program", name="ae")
         self.assertIn("There is already a program called ae.",
                       html.unescape(self.admin.get("/setup/programs").get_data(as_text=True)))
+
+
+class TheProgramAccess(unittest.TestCase):
+    """Phase Q: people open only their programs' pages (403 otherwise); New schedule stays open to everyone
+    for any program, and their own runs stay theirs."""
+
+    def setUp(self):
+        from webapp.programs import ProgramBook
+        self.app, self.store, *_ = make_app(start_worker=False)
+        self.sara = client_for(self.app)
+        self.ae = run_id_of(upload(self.sara, name="AE_week.xlsx", program="AE/AR B2B", week_start="2026-10-11"))
+        self.nmg = run_id_of(upload(self.sara, name="NMG_week.xlsx", program="NMG", week_start="2026-10-12"))
+        book = ProgramBook(self.store)
+        book.sync()
+        nmg = next(p["id"] for p in book.tree() if p["name"] == "NMG")
+        lina = self.store.add_user("lina", "Lina", "Lina-pass-123", must_change=False)
+        self.store.set_user_programs(lina, [nmg])
+        self.lina = sign_in(self.app, "lina", "Lina-pass-123")
+
+    def test_other_programs_are_refused(self):
+        for url in ("/day?program=AE/AR+B2B&date=2026-10-14", "/week?program=AE/AR+B2B&week=2026-10-11",
+                    "/programs/AE/AR%20B2B", f"/runs/{self.ae}", f"/runs/{self.ae}/schedules",
+                    f"/runs/{self.ae}/download", "/coach?program=AE/AR+B2B",
+                    "/day/handover?program=AE/AR+B2B&date=2026-10-14", "/day/wallboard?program=AE/AR+B2B",
+                    "/exports/download?program=AE/AR+B2B&from=2026-10-11&to=2026-10-17&kind=attendance"):
+            self.assertEqual(self.lina.get(url).status_code, 403, url)
+        got = self.lina.post("/day/attendance", data={"csrf_token": token(self.lina), "program": "AE/AR B2B",
+                                                       "date": "2026-10-14", "associate": "Associate 001",
+                                                       "status": "Sick"})
+        self.assertEqual(got.status_code, 403)
+
+    def test_own_programs_and_runs_open(self):
+        self.assertEqual(self.lina.get("/day?program=NMG&date=2026-10-14").status_code, 200)
+        self.assertEqual(self.lina.get(f"/runs/{self.nmg}").status_code, 200)
+        home = html.unescape(self.lina.get("/").get_data(as_text=True))
+        self.assertIn("NMG_week.xlsx", home)
+        self.assertNotIn("AE_week.xlsx", home)
+        exports = html.unescape(self.lina.get("/exports").get_data(as_text=True))
+        self.assertNotIn('value="AE/AR B2B"', exports)
+        mine = run_id_of(upload(self.lina, name="Lina_AE.xlsx", program="AE/AR B2B", week_start="2026-10-18"))
+        self.assertEqual(self.lina.get(f"/runs/{mine}").status_code, 200)  # New schedule: any program, her run
+
+    def test_all_programs_means_all_of_yours(self):
+        self.store.add_activity(program="AE/AR B2B", shift_date="2026-10-14", associate="Associate 001",
+                                kind="Training", start=600, end_min=660, user_id=1)
+        self.store.add_activity(program="NMG", shift_date="2026-10-14", associate="Associate 002",
+                                kind="Training", start=600, end_min=660, user_id=1)
+        got = self.lina.get("/exports/download?from=2026-10-14&to=2026-10-14&kind=activities&format=csv")
+        self.assertEqual(got.status_code, 200)
+        body = got.get_data(as_text=True)
+        self.assertIn("Associate 002", body)
+        self.assertNotIn("Associate 001", body)
+        from openpyxl import load_workbook
+        got = self.lina.get("/exports/download?from=2026-10-14&to=2026-10-14&kind=activities")
+        about = dict(r[:2] for r in load_workbook(io.BytesIO(got.data))["About this export"].iter_rows(values_only=True))
+        self.assertEqual(about["Programs"], "NMG")  # all of hers
+
+
+class TheNewLayout(unittest.TestCase):
+    """Phase Q: a slim top bar (name, look, Settings, Sign out); every page in the left menu; Home starts
+    from the person's programs."""
+
+    def setUp(self):
+        from webapp.programs import ProgramBook
+        self.app, self.store, *_ = make_app(start_worker=False)
+        self.store.add_user("omar", "Omar", "Owner-pass-123", is_admin=True, must_change=False)
+        seed_week(self.store, "NMG", "2026-10-11")
+        seed_week(self.store, "AE/AR B2B", "2026-10-11")
+        book = ProgramBook(self.store)
+        book.sync()
+        lina = self.store.add_user("lina", "Lina", "Lina-pass-123", must_change=False)
+        self.store.set_user_programs(lina, [next(p["id"] for p in book.tree() if p["name"] == "NMG")])
+        self.sara, self.lina = client_for(self.app), sign_in(self.app, "lina", "Lina-pass-123")
+        self.admin = sign_in(self.app, "omar", "Owner-pass-123")
+
+    def part(self, body, tag, cls):
+        found = re.search(rf'<{tag} class="{cls}"[^>]*>(.*?)</{tag}>', body, re.S)
+        self.assertIsNotNone(found, f"{tag}.{cls}")
+        return html.unescape(found.group(1))
+
+    def test_top_bar_has_only_account_things(self):
+        top = self.part(self.sara.get("/").get_data(as_text=True), "header", "top")
+        self.assertIn("Sara", top)
+        self.assertRegex(top, r"(Light|Dark) look")
+        for words in (">Settings<", "Sign out"):
+            self.assertIn(words, top)
+        for word in ("Programs", "Weeks", "Exports", "Team", "People", "Today"):
+            self.assertNotIn(f">{word}<", top)
+
+    def test_left_menu_has_the_program_pages(self):
+        side = self.part(self.sara.get("/day?program=NMG&date=2026-10-14").get_data(as_text=True), "aside", "leftnav")
+        for words in ("New schedule", ">Home<", ">Overview<", ">RTA<", ">Weeks<", ">Schedules<", ">Analysis<",
+                      ">Programs<", ">Exports<", ">Team<"):
+            self.assertIn(words, side)
+        self.assertIn('href="/overview?program=NMG"', side)
+        self.assertIn('aria-current="page">RTA</a>', side)
+        self.assertIn('<option value="NMG" selected>NMG</option>', side)
+        self.assertNotIn(">People<", side)  # planners manage nobody
+        side = self.part(self.admin.get("/").get_data(as_text=True), "aside", "leftnav")
+        for words in (">People<", ">LOBs and defaults<"):
+            self.assertIn(words, side)
+
+    def test_home_starts_from_my_programs(self):
+        cards = self.part(self.lina.get("/").get_data(as_text=True), "section", "programs-home")
+        self.assertIn("NMG", cards)
+        self.assertNotIn("AE/AR B2B", cards)
+        self.assertIn('href="/overview?program=NMG"', cards)
+        cards = self.part(self.sara.get("/").get_data(as_text=True), "section", "programs-home")
+        self.assertIn("AE/AR B2B", cards)
 
 
 class TheStartDate(unittest.TestCase):

@@ -114,7 +114,19 @@ def _activity(store, days, weeks, start, end, program, user_id, measure):
         yield [r["shift_date"], r["program"], r["associate"], r["what"], r["by_name"], _when(r["at"])]
 
 
+def _programs_said(program) -> str:
+    """The About tab's line: one program, a person's own, none, or all."""
+    if program is None:
+        return "All programs"
+    if isinstance(program, str):
+        return program
+    return ", ".join(sorted(program)) or "None (no programs assigned)"
+
+
 def _programs(days, program):
+    """One program, several (a person's own), or every program with schedules."""
+    if isinstance(program, (list, tuple, set, frozenset)):
+        return sorted(program)
     return [program] if program else days.programs()
 
 
@@ -266,7 +278,7 @@ def build(store, days, start: date, end: date, kinds: List[str], fmt: str = "xls
     wb = Workbook(write_only=True)
     bold = Font(bold=True)
     about = wb.create_sheet("About this export")
-    for key, value in (("Period", f"{start:%d %b %Y} to {end:%d %b %Y}"), ("Programs", program or "All programs"),
+    for key, value in (("Period", f"{start:%d %b %Y} to {end:%d %b %Y}"), ("Programs", _programs_said(program)),
                        ("Changes by", who or "Anyone"), ("Measure", MEASURES[measure]),
                        ("Items", ", ".join(KINDS[k] for k in ordered)), ("Downloaded by", by),
                        ("Downloaded at", datetime.now(EGYPT).strftime("%Y-%m-%d %H:%M")),

@@ -1,0 +1,61 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{% extends "base.html" %}
+{% block title %}{{ label or 'Overview' }}: overview on Team Scheduler{% endblock %}
+{% block content %}
+{% set unit = {15: 'quarter-hours', 30: 'half-hours', 60: 'hours'} %}
+<div class="phead"><div>
+  <h1>{% if program %}{{ label }}: {{ on.strftime('%A %d %b') }}{% else %}Overview{% endif %}</h1>
+  <p class="byline">The day at a glance. Breaks, attendance and cover are on <a href="{{ url_for('day_page', program=program, date=on.isoformat()) }}">RTA</a>.</p>
+</div>
+  <form class="sel" method="get" action="{{ url_for('overview_page') }}">
+    <input type="hidden" name="program" value="{{ program }}">
+    <label>Day <input type="date" name="date" value="{{ on.isoformat() }}"></label>
+    <button type="submit" class="quiet">Show</button>
+  </form>
+</div>
+{% if not programs %}
+<p class="empty panel">No schedules for your programs yet. When a run finishes, its schedule is kept here.</p>
+{% elif problem %}
+<p class="empty panel" role="alert">{{ problem }}</p>
+{% elif not page %}
+<p class="empty panel">No schedule for {{ label }} in the week of {{ week_of.strftime('%d %b') }}. Pick another day, or start a new schedule for that week.</p>
+{% else %}
+{% set v = page.view %}{% set t = v.tiles %}
+<section class="tiles" aria-label="The day in numbers">
+  <p class="tile"><span class="tile-label">On shift today</span><b>{{ t.present }} of {{ t.planned }}</b>
+    <small class="dim">{{ t.absent }} unplanned leave or sick{% if t.late_early %}, {{ t.late_early }} late or left early{% endif %}{% if t.aux %}, {{ t.aux }} in aux{% endif %}</small></p>
+  <p class="tile"><span class="tile-label">Short of demand</span><b>{{ '−' if t.short_hours else '' }}{{ t.short_hours|num }} h</b>
+    <small class="dim">across {{ t.short_intervals }} {{ unit.get(v.interval, 'intervals') }}; the plan was {{ '−' if t.plan_short_hours else '' }}{{ t.plan_short_hours|num }} h</small></p>
+  <p class="tile"><span class="tile-label">Above demand</span><b>+{{ t.over_hours|num }} h</b>
+    <small class="dim">room to take breaks or cover gaps{% if t.moved %}; {{ t.moved }} break{{ 's' if t.moved != 1 }} moved today{% endif %}</small></p>
+  <p class="tile"><span class="tile-label">Languages</span><b>{{ t.language_gaps }} gap{{ 's' if t.language_gaps != 1 }}</b>
+    <small class="dim">{{ unit.get(v.interval, 'intervals') }} with nobody for a language</small></p>
+</section>
+
+<h2>Next six {{ unit.get(v.interval, 'intervals') }}</h2>
+{% if ahead %}<div class="ahead">{% for c in ahead %}
+  <a class="ahead-cell {{ c.cls }}" href="{{ url_for('day_page', program=program, date=on.isoformat(), view='board', cover=c.t if c.pm < 0 else none) }}#row-{{ c.t }}">
+    <small>{{ '%02d:%02d'|format(c.t // 60, c.t % 60) }}</small><b>{{ c.pm|hmm }}</b><small>need {{ c.need }}, on {{ c.now|num }}</small></a>
+{% endfor %}</div>{% else %}<p class="empty">Nothing more is needed today.</p>{% endif %}
+
+<div class="two-col">
+  <section class="panel" aria-labelledby="att-h">
+    <h2 id="att-h">Needs attention</h2>
+    <ul class="att-list">
+      {% if attention.worst %}{% set w = attention.worst %}<li><b>{{ '%02d:%02d'|format(w.t // 60, w.t % 60) }} is the tightest: {{ w.pm|hmm }}</b>, {{ attention.short|length }} short {{ unit.get(v.interval, 'intervals') if attention.short|length != 1 else unit.get(v.interval, 'intervals')[:-1] }} still to come. <a href="{{ url_for('day_page', program=program, date=on.isoformat(), view='board', cover=w.t) }}#row-{{ w.t }}">Add cover in RTA</a></li>
+      {% else %}<li>No short {{ unit.get(v.interval, 'intervals') }} still to come.</li>{% endif %}
+      {% if attention.absent %}<li><b>{{ attention.absent|length }} not on the floor:</b> {% for n, st in attention.absent %}{{ n }} ({{ st|lower }}){{ ', ' if not loop.last }}{% endfor %}</li>{% endif %}
+      {% for n, st, at in attention.late %}<li><b>{{ n }}</b> {{ 'late, in at' if st == 'Late' else 'left early at' }} {{ '%02d:%02d'|format(at // 60, at % 60) if at is not none else '' }}</li>{% endfor %}
+    </ul>
+  </section>
+  <section class="panel" aria-labelledby="go-h">
+    <h2 id="go-h">Shortcuts</h2>
+    <ul class="att-list">
+      <li><a href="{{ url_for('day_page', program=program, date=on.isoformat()) }}">Open RTA</a>: the interval board, timeline, breaks, attendance and cover</li>
+      <li><a href="{{ url_for('day_handover', program=program, date=on.isoformat()) }}">Handover note</a> for the next shift</li>
+      <li><a href="{{ url_for('day_wallboard', program=program, date=on.isoformat()) }}">Wallboard</a> for the floor screen</li>
+    </ul>
+  </section>
+</div>
+{% endif %}
+{% endblock %}

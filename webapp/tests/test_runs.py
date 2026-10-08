@@ -1437,6 +1437,34 @@ class TheProgramSetup(unittest.TestCase):
         from webapp.programs import ProgramBook
         return next(p for p in ProgramBook(self.store).tree() if p["name"] == name)
 
+    def test_setup_page_offers_move_and_delete(self):
+        """Phase R task 2: a stray program's data moves into its LOB, then it can be deleted; an empty LOB
+        can be deleted; nothing with data under it can (owner, 2026-10-08: move first, then delete)."""
+        from webapp.programs import ProgramBook
+        book = ProgramBook(self.store)
+        saks = book.add_program("SAKS")
+        tier2 = book.add_lob(saks, "NMG Tier 2")
+        book.add_lob(saks, "SAKS Tier 1")
+        run_id_of(upload(self.sara, program="SAKS, NMG Tier 2", week_start="2026-10-18"))
+        page = html.unescape(self.admin.get("/setup/programs").get_data(as_text=True))
+        self.assertIn("Move all of it into", page)
+        self.assertRegex(page, r'<button[^>]*value="delete_program"[^>]*disabled')  # the stray still has its run
+        self.assertIn("still has 1 run", page)
+        stray = self.program("SAKS, NMG Tier 2")
+        tier1 = next(l for l in self.store.list_lobs() if l["key"] == "SAKS SAKS Tier 1")
+        self.post(action="delete_lob", lob_id=str(tier1["id"]))
+        self.assertNotIn("SAKS SAKS Tier 1", [l["key"] for l in self.store.list_lobs()])
+        refused = self.admin.post("/setup/programs", data={"csrf_token": token(self.admin), "action": "delete_program",
+                                                           "program_id": str(stray["id"])}, follow_redirects=True)
+        self.assertIn("still has 1 run", html.unescape(refused.get_data(as_text=True)))
+        self.admin.post("/programs/rename", data={"csrf_token": token(self.admin), "old": "SAKS, NMG Tier 2",
+                                                  "new": tier2, "confirm": "1", "reason": "into its LOB"})
+        self.post(action="delete_program", program_id=str(stray["id"]))
+        self.assertNotIn("SAKS, NMG Tier 2", [p["name"] for p in ProgramBook(self.store).tree()])
+        kinds = [e["kind"] for e in self.store.list_events(0, time.time() + 1)]
+        self.assertIn("program_deleted", kinds)
+        self.assertIn("lob_deleted", kinds)
+
     def test_set_up_a_program_and_use_it(self):
         self.assertEqual(self.sara.get("/setup/programs").status_code, 403)
         run_id = run_id_of(upload(self.sara, program="AE/AR B2B", week_start="2026-10-11"))

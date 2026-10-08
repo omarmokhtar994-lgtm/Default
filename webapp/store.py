@@ -270,6 +270,23 @@ class Store:
             db.execute("delete from user_programs where program_id = ?", (program_id,))
             db.execute("delete from programs where id = ?", (program_id,))
 
+    def delete_program_row(self, program_id: int) -> None:
+        """A program row and who was assigned to it (its LOBs are deleted first, by the caller)."""
+        with self._db() as db:
+            db.execute("delete from user_programs where program_id = ?", (program_id,))
+            db.execute("delete from programs where id = ?", (program_id,))
+
+    def delete_lob_row(self, lob_id: int) -> None:
+        with self._db() as db:
+            db.execute("delete from lobs where id = ?", (lob_id,))
+
+    def key_usage(self, key: str) -> Dict[str, int]:
+        """What is stored under a program key: runs, schedule versions and day records per table."""
+        with self._db() as db:
+            found = {name: db.execute(f"select count(*) from {table} where program = ?", (key,)).fetchone()[0]
+                     for name, table in (("runs", "runs"), ("versions", "schedules"), *self.DAY_TABLES)}
+        return found
+
     def latest_weeks(self) -> Dict[str, str]:
         """Each program key's latest schedule start date (from its kept versions)."""
         with self._db() as db:

@@ -16,11 +16,21 @@
 {% for p in programs %}
 <section class="panel setup-program" aria-labelledby="p{{ p.id }}-h">
   <h2 id="p{{ p.id }}-h">{{ p.name }}</h2>
+  {% set used = blockers.get(p.key) %}
+  {% if used %}{% set targets = [] %}{% for g in unit_groups %}{% for key, text in g.choices if key != p.key %}{% set _ = targets.append((g.name, key, text)) %}{% endfor %}{% endfor %}
+  <div class="setup-move">
+    <p>{{ used }}</p>
+    {% if targets %}<form method="post" action="{{ url_for('program_rename') }}" class="tagrow"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="old" value="{{ p.key }}">
+      <label>Move all of it into <select name="new" required>{% for g in unit_groups %}{% set mine = g.choices|rejectattr(0, 'equalto', p.key)|list %}{% if mine %}<optgroup label="{{ g.name }}">{% for key, text in mine %}<option value="{{ key }}">{{ text }}</option>{% endfor %}</optgroup>{% endif %}{% endfor %}</select></label>
+      <button type="submit">Check the move</button></form>
+    <p class="hint">You see what moves, and anything that clashes, before it is saved.</p>{% endif %}
+  </div>{% endif %}
   <div class="setup-cols">
     <div>
       <h3>LOBs</h3>
       {% if p.lobs %}<ul class="setup-lobs">{% for l in p.lobs %}<li><b>{{ l.name }}</b> <small>{{ l.key }}</small>
-        <details class="advanced"><summary>Rename</summary><form method="post" class="tagrow"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="rename_lob"><input type="hidden" name="lob_id" value="{{ l.id }}"><label>New name <input name="name" maxlength="80" required value="{{ l.name }}"></label><button>Rename</button></form></details></li>{% endfor %}</ul>
+        <details class="advanced"><summary>Rename</summary><form method="post" class="tagrow"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="rename_lob"><input type="hidden" name="lob_id" value="{{ l.id }}"><label>New name <input name="name" maxlength="80" required value="{{ l.name }}"></label><button>Rename</button></form></details>
+        <form method="post" class="setup-delete"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="lob_id" value="{{ l.id }}"><button type="submit" class="link danger" name="action" value="delete_lob"{% if blockers.get(l.key) %} disabled aria-describedby="lob{{ l.id }}-why"{% endif %}>Delete LOB</button>{% if blockers.get(l.key) %} <small id="lob{{ l.id }}-why">{{ blockers.get(l.key) }}</small>{% endif %}</form></li>{% endfor %}</ul>
       {% else %}<p class="empty">No LOBs: the program is scheduled as one.</p>{% endif %}
       <form method="post" class="tagrow"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="add_lob"><input type="hidden" name="program_id" value="{{ p.id }}">
         <label>New LOB <input name="name" maxlength="80" required></label><button>Add LOB</button></form>
@@ -41,6 +51,8 @@
       <h3>People on {{ p.name }}</h3>
       <p>{{ people.get(p.id)|join(', ') or 'Nobody yet.' }} <a href="{{ url_for('admin_users') }}">People</a></p>
       <details class="advanced"><summary>Rename {{ p.name }}</summary><form method="post" class="tagrow"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="rename_program"><input type="hidden" name="program_id" value="{{ p.id }}"><label>New name <input name="name" maxlength="80" required value="{{ p.name }}"></label><button>Rename</button></form></details>
+      {% set why = 'Delete or move its LOBs first.' if p.lobs else blockers.get(p.key) %}
+      <form method="post" class="setup-delete"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program_id" value="{{ p.id }}"><button type="submit" class="danger" name="action" value="delete_program"{% if why %} disabled aria-describedby="p{{ p.id }}-why"{% endif %}>Delete program</button>{% if why %} <small id="p{{ p.id }}-why">{{ why }}</small>{% endif %}</form>
     </div>
   </div>
 </section>

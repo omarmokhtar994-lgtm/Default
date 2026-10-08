@@ -783,3 +783,11 @@ body.wall { background: var(--night); color: var(--paper); padding: 2vh 2.5vw; m
 .rta-sum b { color: var(--dim); font-weight: 600; margin-right: 4px; }
 .setup-program .tagrow + .hint { margin-top: 6px; }
 .programs .group-row th { text-align: left; padding-top: 14px; color: var(--dim); font-size: 13px; }
+
+/* Phase R: moving a stray program's data, and deleting empty programs and LOBs */
+.setup-move { border-left: 3px solid var(--short); background: var(--short-soft); border-radius: 4px; padding: 12px 14px; margin: 0 0 14px; }
+.setup-move p { margin: 0 0 8px; }
+.setup-delete { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 8px 0 0; }
+.setup-delete small { color: var(--dim); }
+button.danger, .button.danger { color: var(--gap-ink); border-color: var(--gap); }
+button.danger:disabled { opacity: .55; cursor: not-allowed; }

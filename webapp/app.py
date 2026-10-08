@@ -841,6 +841,20 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 elif action == "rename_lob":
                     book.rename(None, request.form.get("lob_id", type=int), name)
                     said = "Renamed the LOB."
+                elif action == "delete_program":
+                    gone = book.delete_program(pid)
+                    said = f"Deleted program {gone}."
+                    _record("program_deleted", subject=gone, detail=said)
+                    flash(said)
+                    return redirect(url_for("program_setup"))
+                elif action == "delete_lob":
+                    lob_id = request.form.get("lob_id", type=int)
+                    owner = next((l["program_id"] for l in store.list_lobs() if l["id"] == lob_id), None)
+                    gone = book.delete_lob(lob_id)
+                    said = f"Deleted LOB {gone}" + (f" of {book.program(owner)['name']}." if owner else ".")
+                    _record("lob_deleted", subject=gone, detail=said)
+                    flash(said)
+                    return redirect(url_for("program_setup"))
                 else:
                     abort(400)
                 _record("program_set_up", subject=request.form.get("key") or name, detail=said)
@@ -854,7 +868,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
             for pid in store.user_program_ids(u["id"]):
                 people.setdefault(pid, []).append(u["display_name"] + (" (supervisor)" if u["is_supervisor"] else ""))
         loose = [p for p in tree if not p["lobs"]]  # names that can be put in a program as a LOB
+        blockers = {k: book.blocker(n, k) for p in tree for n, k in [(p["name"], p["key"])] +
+                    [(l["name"], l["key"]) for l in p["lobs"]]}
         return render_template("program_setup.html", programs=tree, people=people, loose=loose, modes=MODES,
+                               blockers=blockers, unit_groups=_unit_choices(tree),
                                days=["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"])
 
     @app.route("/programs/rename", methods=["POST"])

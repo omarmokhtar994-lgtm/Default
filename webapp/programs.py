@@ -137,3 +137,42 @@ class ProgramBook:
         if any(p["name"].casefold() == name.casefold() and p["id"] != program_id for p in self.store.list_programs()):
             raise ValueError(f"There is already a program called {name}.")
         self.store.update_program(program_id, name=name)
+
+    def usage(self, key: str) -> Dict[str, int]:
+        return self.store.key_usage(key)
+
+    def blocker(self, name: str, key: str) -> str:
+        """Why ``name`` cannot be deleted yet (what is stored under its key), or "" when nothing is."""
+        used = self.usage(key)
+        records = sum(n for k, n in used.items() if k not in ("runs", "versions"))
+        parts = [f"{used['runs']} run{'s' if used['runs'] != 1 else ''}" if used["runs"] else "",
+                 f"{used['versions']} schedule version{'s' if used['versions'] != 1 else ''}" if used["versions"] else "",
+                 f"{records} day record{'s' if records != 1 else ''}" if records else ""]
+        parts = [p for p in parts if p]
+        if not parts:
+            return ""
+        listed = parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
+        return f"{name} still has {listed}: move them into a program or LOB first."
+
+    def _refuse_if_used(self, name: str, key: str) -> None:
+        said = self.blocker(name, key)
+        if said:
+            raise ValueError(said)
+
+    def delete_lob(self, lob_id: int) -> str:
+        """Delete a LOB nothing is stored under; returns its name."""
+        lob = next((l for l in self.store.list_lobs() if l["id"] == lob_id), None)
+        if lob is None:
+            raise ValueError("There is no such LOB.")
+        self._refuse_if_used(lob["name"], lob["key"])
+        self.store.delete_lob_row(lob_id)
+        return lob["name"]
+
+    def delete_program(self, program_id: int) -> str:
+        """Delete a program without LOBs that nothing is stored under; returns its name."""
+        program = self.program(program_id)
+        if program["lobs"]:
+            raise ValueError("Delete or move its LOBs first.")
+        self._refuse_if_used(program["name"], program["key"])
+        self.store.delete_program_row(program_id)
+        return program["name"]

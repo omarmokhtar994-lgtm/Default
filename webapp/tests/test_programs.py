@@ -144,5 +144,62 @@ class TheAccess(TheRegistry):
         self.assertEqual(sorted(p["name"] for p in admin.grantable()), ["AE/AR B2B", "NMG"])
 
 
+class TheDeletes(TheRegistry):
+    """Phase R task 2: a program or LOB is deleted only once nothing is stored under it; a stray program's
+    data is moved into its LOB first (owner, 2026-10-08: move first, then delete)."""
+    test_sync_registers_existing_keys = test_add_lob_makes_a_unit = test_adopt_keeps_the_key_and_its_data = None
+    test_program_without_lobs_is_one_unit = test_defaults_and_display_names = None
+
+    def lob(self, key):
+        return next(l for l in self.store.list_lobs() if l["key"] == key)
+
+    def test_delete_empty_lob(self):
+        ae = self.programs.add_program("AE")
+        self.programs.add_lob(ae, "IT")
+        self.assertEqual(self.programs.delete_lob(self.lob("AE IT")["id"]), "IT")
+        self.assertEqual(self.program("AE")["lobs"], [])
+
+    def test_delete_lob_with_data_is_refused_with_counts(self):
+        ae = self.programs.add_program("AE")
+        self.programs.adopt("AE/AR B2B", ae, "AR B2B")
+        self.days.set_status("AE/AR B2B", WED, "Associate 001", "Sick", self.omar)
+        self.assertEqual(self.programs.usage("AE/AR B2B")["runs"], 1)
+        with self.assertRaises(ValueError) as said:
+            self.programs.delete_lob(self.lob("AE/AR B2B")["id"])
+        self.assertIn("still has 1 run", str(said.exception))
+        self.assertIn("day record", str(said.exception))
+        self.assertIn("AE/AR B2B", [l["key"] for l in self.store.list_lobs()])
+
+    def test_delete_program_with_lobs_is_refused(self):
+        ae = self.programs.add_program("AE")
+        self.programs.add_lob(ae, "IT")
+        with self.assertRaises(ValueError) as said:
+            self.programs.delete_program(ae)
+        self.assertIn("Delete or move its LOBs first.", str(said.exception))
+
+    def test_move_then_delete_stray_program(self):
+        from webapp.run_admin import apply_rename
+        saks = self.programs.add_program("SAKS")
+        key = self.programs.add_lob(saks, "NMG Tier 2")
+        self.store.add_run("cccccccccccc", self.omar, "stray.xlsx", "QUICK", "DONE", program="SAKS, NMG Tier 2",
+                           week_start="2026-10-18")
+        self.programs.sync()
+        stray = self.program("SAKS, NMG Tier 2")
+        with self.assertRaises(ValueError):
+            self.programs.delete_program(stray["id"])  # its run is still filed under it
+        apply_rename(self.store, "SAKS, NMG Tier 2", key, self.omar, "into its LOB")
+        self.assertEqual(self.programs.delete_program(stray["id"]), "SAKS, NMG Tier 2")
+        self.programs.sync()  # nothing is filed under the stray name now, so it does not come back
+        self.assertNotIn("SAKS, NMG Tier 2", [p["name"] for p in self.programs.tree()])
+        self.assertEqual(self.store.get_run("cccccccccccc")["program"], key)
+
+    def test_deleting_a_program_drops_its_assignments(self):
+        gdi = self.programs.add_program("GDI")
+        uid = self.store.add_user("lina", "Lina", "Lina-pass-123", must_change=False)
+        self.store.set_user_programs(uid, [gdi])
+        self.programs.delete_program(gdi)
+        self.assertEqual(self.store.user_program_ids(uid), [])
+
+
 if __name__ == "__main__":
     unittest.main()

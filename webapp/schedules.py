@@ -128,7 +128,10 @@ class ScheduleBook:
         tool = self.lineage(schedule_id)[-1]
         base = self._problems(tool, edited) if tool["id"] != row["id"] else found
         new = added(base, found) if tool["id"] != row["id"] else []
+        keys = {p["key"] for p in new}
+        tool_days = {a["name"]: a["days"] for a in json.loads(tool["week"] or "{}").get("associates", [])}
         return {"row": row, "week": json.loads(row["week"] or "{}"), "problems": found, "added": new,
+                "inherited": [p for p in found if p["key"] not in keys], "tool_days": tool_days, "tool": tool,
                 "marks": marks(new, edited=edited), "edited": sorted(edited),
                 "metrics": json.loads(row["checks"] or "{}").get("metrics") or {},
                 "changes": [c for r in reversed(self.lineage(schedule_id)) for c in self.store.list_changes(r["id"])]}

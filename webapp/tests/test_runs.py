@@ -840,6 +840,80 @@ class TheKeptSchedules(unittest.TestCase):
         self.assertEqual(json.loads(versions[0]["checks"])["status"], "PASS")
 
 
+class TheSchedulesPage(unittest.TestCase):
+    """Phase N task 3: versions, edits with their warning, in use, downloads."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app, cls.store, *_ = make_app(VALIDATOR_ROOT=str(REPO))
+        cls.store.add_user("lina", "Lina", "Lina-pass-12", must_change=False)
+        cls.client = client_for(cls.app)
+        cls.run_id = versioned_run(cls.app, cls.store, cls.client, program="AE/AR B2B", week_start="2026-10-11")
+        cls.tool = cls.app.extensions["schedules"].versions(cls.run_id)[0]["id"]
+
+    def post(self, url, client=None, **data):
+        client = client or self.client
+        return client.post(url, data={"csrf_token": token(client), **data})
+
+    def test_schedules_page_lists_versions_and_marks(self):
+        body = html.unescape(self.client.get(f"/runs/{self.run_id}/schedules").get_data(as_text=True))
+        self.assertIn("AE/AR B2B, week of 11 Oct: schedules", body)
+        self.assertIn("Tool, after breaks", body)
+        self.assertIn('data-name="Associate 001" data-day="Wed" data-value="12:00 - 21:00"', body)
+        self.assertIn('<option value="21:00 - 06:00">', body)
+        draft = self.app.extensions["schedules"].change(self.tool, 1, "Associate 001", "Wed", "21:00 - 06:00", "swap")
+        body = html.unescape(self.client.get(f"/runs/{self.run_id}/schedules?v={draft}").get_data(as_text=True))
+        self.assertRegex(body, r'class="ed changed sev-red"[^>]*data-name="Associate 001" data-day="Wed"')
+        self.assertIn('class="dot red"', body)
+        self.assertIn("rests only 6 hours", body)
+        self.assertIn("swap", body)  # the change log
+
+    def test_check_returns_new_problems_only(self):
+        got = self.post(f"/schedules/{self.tool}/check", associate="Associate 001", day="Wed", value="21:00 - 06:00").get_json()
+        self.assertEqual(got["severity"], "red")
+        self.assertEqual(len(got["added"]), 3)
+        self.assertTrue(any("rests only 6 hours" in p["text"] for p in got["added"]))
+        same = self.post(f"/schedules/{self.tool}/check", associate="Associate 001", day="Wed", value="12:00 - 21:00").get_json()
+        self.assertEqual((same["severity"], same["added"]), ("ok", []))
+
+    def test_change_needs_a_reason_when_it_breaks_rules(self):
+        refused = self.post(f"/schedules/{self.tool}/change", associate="Associate 004", day="Wed", value="21:00 - 06:00")
+        self.assertEqual(refused.status_code, 400)
+        self.assertIn("reason", refused.get_json()["error"])
+        kept = self.post(f"/schedules/{self.tool}/change", associate="Associate 004", day="Wed", value="21:00 - 06:00",
+                         reason="cover for a colleague").get_json()
+        self.assertIn("/schedules?v=", kept["url"])
+        self.assertNotEqual(kept["schedule_id"], self.tool)
+
+    def test_in_use_only_for_owner_or_admin(self):
+        other = self.app.test_client()
+        tok = TOKEN.search(other.get("/login").get_data(as_text=True)).group(1)
+        other.post("/login", data={"username": "lina", "password": "Lina-pass-12", "csrf_token": tok})
+        self.assertEqual(self.post(f"/schedules/{self.tool}/in-use", client=other).status_code, 403)
+        self.assertEqual(self.post(f"/schedules/{self.tool}/in-use").status_code, 302)
+        self.assertEqual(self.app.extensions["schedules"].in_use("AE/AR B2B", "2026-10-11")["id"], self.tool)
+
+    def test_download_a_version(self):
+        tool = self.client.get(f"/schedules/{self.tool}/download")
+        self.assertEqual((tool.status_code, tool.data[:2]), (200, b"PK"))
+        draft = self.app.extensions["schedules"].change(self.tool, 1, "Associate 002", "Sun", "OFF", "leave")
+        got = self.client.get(f"/schedules/{draft}/download")
+        from openpyxl import load_workbook
+        book = load_workbook(io.BytesIO(got.data))
+        self.assertEqual(book.sheetnames[0], "Version Notes")
+        notes = [c for row in book["Version Notes"].iter_rows(values_only=True) for c in row if c]
+        self.assertIn("Associate 002", " ".join(map(str, notes)))
+        self.assertIn("attachment", got.headers["Content-Disposition"])
+
+    def test_week_view_of_a_version(self):
+        body = html.unescape(self.client.get(f"/schedules/{self.tool}/week").get_data(as_text=True))
+        self.assertIn("Tool, after breaks", body)
+        self.assertIn("Achieved every hour", body)  # this program's demand is hourly
+
+    def test_links_to_the_schedules(self):
+        self.assertIn(f'href="/runs/{self.run_id}/schedules"', self.client.get(f"/runs/{self.run_id}").get_data(as_text=True))
+
+
 class Access(unittest.TestCase):
     def test_downloads_need_login(self):
         app, store, *_ = make_app()

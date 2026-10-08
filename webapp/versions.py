@@ -354,3 +354,50 @@ def marks(found: List[Dict[str, Any]], week: Optional[Dict[str, Any]] = None,
         for d in p["days"]:
             put(days, d, p["severity"])
     return {"cells": cells, "days": days}
+
+
+def with_notes(path: Path, view: Dict[str, Any]) -> "io.BytesIO":
+    """The version's workbook with a first tab saying what changed, who, why, and what the checks found."""
+    import io
+    from datetime import datetime, timedelta, timezone
+
+    from openpyxl.styles import Font
+
+    egypt = timezone(timedelta(hours=3))
+    wb = load_workbook(path)
+    ws = wb.create_sheet("Version Notes", 0)
+    row = view["row"]
+    bold = Font(bold=True)
+    lines = [
+        ("Version notes", ""),
+        ("Version", row["label"]),
+        ("In use", "Yes" if row["in_use"] else "No"),
+        ("Checked by the independent validator", f"{len(view['added'])} problem(s) added by the edits"),
+        ("Note", "The Schedule and Break Schedule tabs hold this version. The audit tabs after them describe "
+                 "the tool's original schedule."),
+        ("", ""),
+    ]
+    for r, (a, b) in enumerate(lines, start=1):
+        ws.cell(r, 1, a).font = bold
+        ws.cell(r, 2, b)
+    r = len(lines) + 1
+    ws.cell(r, 1, "Problems the edits added").font = bold
+    for p in view["added"] or [{"severity": "", "text": "None"}]:
+        r += 1
+        ws.cell(r, 1, {"red": "Rule broken", "yellow": "Warning"}.get(p["severity"], ""))
+        ws.cell(r, 2, p["text"])
+    r += 2
+    for c, head in enumerate(("When (Egypt time)", "Who", "Associate", "Day", "From", "To", "Reason", "Severity"), 1):
+        ws.cell(r, c, head).font = bold
+    for change in view["changes"]:
+        r += 1
+        when = datetime.fromtimestamp(change["at"], egypt).strftime("%a %d %b %Y, %H:%M")
+        for c, v in enumerate((when, change["by_name"], change["associate"], change["day"], change["old"],
+                               change["new"], change["reason"], change["severity"]), 1):
+            ws.cell(r, c, v)
+    ws.column_dimensions["A"].width = 30
+    ws.column_dimensions["B"].width = 70
+    out = io.BytesIO()
+    wb.save(out)
+    out.seek(0)
+    return out

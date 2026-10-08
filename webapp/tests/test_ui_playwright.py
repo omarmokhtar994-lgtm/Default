@@ -13,7 +13,7 @@ from pathlib import Path
 
 from werkzeug.serving import make_server
 
-from webapp.tests.test_runs import make_app, seed_week
+from webapp.tests.test_runs import REPO, make_app, seed_week, versioned_run
 
 # Phase J (owner-approved control-room redesign): screenshots of the new look.
 SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_j" / "screens"
@@ -404,6 +404,72 @@ class TheProgramPagesInTheBrowser(unittest.TestCase):
         expect(page.get_by_role("heading", name="Team", exact=True)).to_be_visible()
         page.wait_for_timeout(600)
         page.screenshot(path=str(K_SCREENS / "05_team.png"), full_page=True)
+
+
+N_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_n" / "screens"
+
+
+@unittest.skipIf(sync_playwright is None, "Playwright is not installed here; UI tests skipped")
+class TheSchedulesInTheBrowser(unittest.TestCase):
+    """Phase N: edit a shift, see the warning, keep it, see the marks."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app, cls.store, _, _ = make_app(VALIDATOR_ROOT=str(REPO))
+        cls.store.add_user("omar", "Omar Mokhtar", "Owner-pass-123", is_admin=True, must_change=False)
+        from webapp.tests.test_runs import client_for
+        cls.run_id = versioned_run(cls.app, cls.store, client_for(cls.app), program="AE/AR B2B", week_start="2026-10-11")
+        cls.server = make_server("127.0.0.1", 0, cls.app, threaded=True)
+        cls.base = f"http://127.0.0.1:{cls.server.server_port}"
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.pw = sync_playwright().start()
+        launch = {"headless": True}
+        if os.path.exists(CHROMIUM):
+            launch["executable_path"] = CHROMIUM
+        cls.browser = cls.pw.chromium.launch(**launch)
+        N_SCREENS.mkdir(parents=True, exist_ok=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.pw.stop()
+        cls.server.shutdown()
+
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+
+    def test_edit_with_warning_and_marks(self):
+        page = self.page(width=1440, height=950)
+        self.sign_in(page)
+        page.goto(f"{self.base}/runs/{self.run_id}/schedules")
+        page.wait_for_load_state("load")
+        page.locator('button.ed[data-name="Associate 001"][data-day="Wed"]').click()
+        page.select_option("#edit-dialog select[name=value]", "21:00 - 06:00")
+        expect(page.locator("#dlg-h")).to_have_text("This change breaks 2 rules", timeout=30000)
+        expect(page.locator("#edit-dialog .sevlist li")).to_have_count(3)
+        page.screenshot(path=str(N_SCREENS / "edit_warning.png"))
+        page.get_by_role("button", name="Yes, keep it").click()
+        expect(page.locator("#edit-dialog input[name=reason]")).to_have_attribute("aria-invalid", "true")
+        page.fill("#edit-dialog input[name=reason]", "Swap requested by the associate")
+        page.get_by_role("button", name="Yes, keep it").click()
+        page.wait_for_url("**/schedules?v=*", timeout=30000)
+        cell = page.locator('button.ed[data-name="Associate 001"][data-day="Wed"]')
+        expect(cell).to_have_class("ed changed sev-red")
+        expect(page.locator(".vbar a.cur")).to_contain_text("Version 2")
+        page.mouse.move(1, 1)
+        page.wait_for_timeout(500)
+        page.screenshot(path=str(N_SCREENS / "edit_marked.png"), full_page=True)
+
+    def test_a_change_without_problems_needs_no_reason(self):
+        page = self.page(width=1440, height=950)
+        self.sign_in(page)
+        page.goto(f"{self.base}/runs/{self.run_id}/schedules")
+        page.wait_for_load_state("load")
+        page.locator('button.ed[data-name="Associate 002"][data-day="Mon"]').click()
+        page.select_option("#edit-dialog select[name=value]", "09:00 - 18:00")
+        expect(page.locator("#dlg-h")).to_contain_text("This change", timeout=30000)
+        page.get_by_role("button", name="No, undo it").click()
+        expect(page.locator("#edit-dialog")).not_to_be_visible()
 
 
 if __name__ == "__main__":

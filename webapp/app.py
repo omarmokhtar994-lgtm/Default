@@ -20,6 +20,7 @@ from .outcome import cannot_schedule, read as read_outcome, view as outcome_view
 from .auth import admin_required, check_csrf, csrf_token, load_user, login_required
 from .program_page import build, overview, weeks_to_show
 from .schedules import ScheduleBook
+from .versions import DAYS, with_notes
 from .runs import MODES, OPTION_LABELS, RESUMABLE, RunQueue, parse_options, run_options
 from .store import Store
 from .week import view as week_view
@@ -223,6 +224,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
             return datetime.strptime(iso, "%Y-%m-%d").strftime("%d %b")
         except (TypeError, ValueError):
             return iso or ""
+
+    @app.template_filter("fromjson")
+    def _fromjson(text: str) -> Any:
+        try:
+            return json.loads(text or "{}")
+        except ValueError:
+            return {}
 
     @app.template_filter("num")
     def _num(value: float) -> str:
@@ -544,6 +552,104 @@ def create_app(config: Dict[str, Any]) -> Flask:
         row = next((w for w in rows if w["week"] == week), None)
         run = app.extensions["store"].get_run(row["run_id"]) if row else None
         return _week_page(run, side, program, week, history)
+
+    # ------------------------------------------------------------- schedule versions (Phase N)
+    def _book() -> ScheduleBook:
+        book = app.extensions.get("schedules")
+        if book is None:
+            abort(404)
+        return book
+
+    def _version_or_404(schedule_id: int) -> Dict[str, Any]:
+        row = app.extensions["store"].get_schedule(schedule_id)
+        if row is None:
+            abort(404)
+        return row
+
+    def _may_set_in_use(row: Dict[str, Any]) -> bool:
+        run = app.extensions["store"].get_run(row["run_id"]) or {}
+        return bool(g.user["is_admin"]) or run.get("user_id") == g.user["id"]
+
+    @app.route("/runs/<run_id>/schedules")
+    @login_required
+    def run_schedules(run_id: str):  # type: ignore[no-untyped-def]
+        run = _run_or_404(run_id)
+        book, queue = _book(), _queue()
+        versions = book.versions(run_id)
+        if not versions and run["status"] in ("DONE", "REVIEW") and run["mode"] != "SMOKE":
+            queue.keep_schedules(run_id)  # a run finished before versions existed, files still here
+            versions = book.versions(run_id)
+        chosen = request.args.get("v", type=int)
+        current = next((v for v in versions if v["id"] == chosen), None) or next(
+            (v for v in versions if v["in_use"]), None) or (versions[0] if versions else None)
+        view = book.view(current["id"]) if current else None
+        counts = {v["id"]: book.view(v["id"]) for v in versions} if versions else {}
+        return render_template("schedules.html", run=run, versions=versions, current=current, view=view,
+                               counts=counts, may_set_in_use=bool(current) and _may_set_in_use(current),
+                               days=DAYS)
+
+    @app.route("/schedules/<int:schedule_id>/check", methods=["POST"])
+    @login_required
+    def schedule_check(schedule_id: int):  # type: ignore[no-untyped-def]
+        _version_or_404(schedule_id)
+        try:
+            found = _book().check(schedule_id, request.form.get("associate", ""), request.form.get("day", ""),
+                                  request.form.get("value", ""))
+        except ValueError as exc:
+            return jsonify(error=str(exc)), 400
+        return jsonify(severity=found["severity"],
+                       added=[{"severity": p["severity"], "text": p["text"]} for p in found["added"]],
+                       metrics={k: found["metrics"].get(k) for k in ("active_intervals", "after_100", "before_100")})
+
+    @app.route("/schedules/<int:schedule_id>/change", methods=["POST"])
+    @login_required
+    def schedule_change(schedule_id: int):  # type: ignore[no-untyped-def]
+        row = _version_or_404(schedule_id)
+        name, day, value = (request.form.get(k, "") for k in ("associate", "day", "value"))
+        reason = " ".join(request.form.get("reason", "").split())[:300]
+        book = _book()
+        try:
+            if not reason and book.check(schedule_id, name, day, value)["added"]:
+                return jsonify(error="This change breaks a rule or adds a warning: give a reason to keep it."), 400
+            saved = book.change(schedule_id, g.user["id"], name, day, value, reason)
+        except ValueError as exc:
+            return jsonify(error=str(exc)), 400
+        return jsonify(schedule_id=saved, url=url_for("run_schedules", run_id=row["run_id"], v=saved))
+
+    @app.route("/schedules/<int:schedule_id>/in-use", methods=["POST"])
+    @login_required
+    def schedule_in_use(schedule_id: int):  # type: ignore[no-untyped-def]
+        row = _version_or_404(schedule_id)
+        if not _may_set_in_use(row):
+            abort(403)
+        _book().set_in_use(schedule_id, g.user["id"])
+        flash(f"{row['label']} is now the schedule in use.")
+        return redirect(url_for("run_schedules", run_id=row["run_id"], v=schedule_id))
+
+    @app.route("/schedules/<int:schedule_id>/download")
+    @login_required
+    def schedule_download(schedule_id: int):  # type: ignore[no-untyped-def]
+        row = _version_or_404(schedule_id)
+        book = _book()
+        stem = secure_filename(f"{row['program'] or row['run_id']}_{row['week_start']}_{row['label']}") or "schedule"
+        if row["kind"] != "edited":
+            return send_file(book.path(schedule_id), as_attachment=True, download_name=f"{stem}.xlsx")
+        return send_file(with_notes(book.path(schedule_id), book.view(schedule_id)), as_attachment=True,
+                         download_name=f"{stem}.xlsx")
+
+    @app.route("/schedules/<int:schedule_id>/week")
+    @login_required
+    def schedule_week(schedule_id: int):  # type: ignore[no-untyped-def]
+        row = _version_or_404(schedule_id)
+        intervals = json.loads(row["checks"] or "{}").get("intervals") or []
+        side = "before" if request.args.get("side") == "before" else "after"
+        run = app.extensions["store"].get_run(row["run_id"])
+        history = program_weeks(_all_runs())
+        return render_template("week.html", run=run, view=week_view(intervals, side) if intervals else None,
+                               side=side, program=row["program"], week=row["week_start"],
+                               programs=sorted(history, key=str.lower),
+                               weeks=[w["week"] for w in reversed(history.get(row["program"], []))],
+                               figures=kept_figures(run or {}), version=row)
 
     @app.route("/team")
     @login_required

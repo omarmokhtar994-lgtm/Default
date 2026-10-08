@@ -83,6 +83,104 @@
   });
 })();
 
+// Schedule editor: click a shift, pick the new one; the change is checked on a
+// copy first and its problems are shown before it is kept (Yes) or dropped (No).
+(function () {
+  "use strict";
+  var grid = document.querySelector("table.edgrid");
+  var dialog = document.getElementById("edit-dialog");
+  if (!grid || !dialog || typeof dialog.showModal !== "function") { return; }
+  var token = document.querySelector("input[name=csrf_token]");
+  var select = dialog.querySelector("select[name=value]");
+  var reason = dialog.querySelector("input[name=reason]");
+  var result = dialog.querySelector(".dlg-result");
+  var ask = dialog.querySelector(".dlg-ask");
+  var keep = dialog.querySelector("[data-keep]");
+  var who = dialog.querySelector("[data-who]");
+  var title = dialog.querySelector("#dlg-h");
+  var cell = null, needsReason = false, seq = 0;
+
+  function post(url, fields) {
+    var body = new URLSearchParams(fields);
+    body.append("csrf_token", token ? token.value : "");
+    return fetch(url, { method: "POST", credentials: "same-origin", body: body,
+                        headers: { "Accept": "application/json" } })
+      .then(function (r) { return r.json().then(function (d) { d._ok = r.ok; return d; }); });
+  }
+
+  function show(found) {
+    result.textContent = "";
+    var list = document.createElement("ul");
+    list.className = "sevlist";
+    (found.added || []).forEach(function (p) {
+      var li = document.createElement("li");
+      li.className = p.severity;
+      var b = document.createElement("b");
+      b.textContent = (p.severity === "red" ? "Rule broken: " : "Warning: ");
+      li.appendChild(b);
+      li.appendChild(document.createTextNode(p.text));
+      list.appendChild(li);
+    });
+    var reds = (found.added || []).filter(function (p) { return p.severity === "red"; }).length;
+    var yellows = (found.added || []).length - reds;
+    title.textContent = reds ? "This change breaks " + reds + " rule" + (reds === 1 ? "" : "s")
+      : yellows ? "This change adds " + yellows + " warning" + (yellows === 1 ? "" : "s") : "This change adds no problems";
+    dialog.classList.toggle("red", reds > 0);
+    dialog.classList.toggle("yellow", !reds && yellows > 0);
+    if (list.childNodes.length) { result.appendChild(list); }
+    needsReason = list.childNodes.length > 0;
+    ask.hidden = !needsReason;
+    keep.disabled = false;
+  }
+
+  function check() {
+    var mine = ++seq;
+    keep.disabled = true;
+    title.textContent = "Checking this change…";
+    result.textContent = "The independent validator is checking the week (a few seconds).";
+    if (select.value === cell.dataset.value) {
+      title.textContent = "No change";
+      result.textContent = "This is the shift already planned.";
+      return;
+    }
+    post(grid.dataset.checkUrl, { associate: cell.dataset.name, day: cell.dataset.day, value: select.value })
+      .then(function (found) {
+        if (mine !== seq) { return; }
+        if (!found._ok) { title.textContent = "This change cannot be made"; result.textContent = found.error || ""; return; }
+        show(found);
+      })
+      .catch(function () { if (mine === seq) { result.textContent = "The check did not answer: try again."; } });
+  }
+
+  grid.addEventListener("click", function (e) {
+    var b = e.target.closest("button.ed");
+    if (!b) { return; }
+    cell = b;
+    who.textContent = b.dataset.name + ", " + b.dataset.day + ": now " + (b.dataset.value || "nothing");
+    select.value = b.dataset.value;
+    reason.value = "";
+    ask.hidden = true;
+    keep.disabled = true;
+    dialog.classList.remove("red", "yellow");
+    title.textContent = "Change a shift";
+    result.textContent = "Pick the new shift.";
+    dialog.showModal();
+    select.focus();
+  });
+  select.addEventListener("change", check);
+  dialog.querySelector("[data-cancel]").addEventListener("click", function () { seq++; dialog.close(); });
+  keep.addEventListener("click", function () {
+    if (needsReason && !reason.value.trim()) { reason.focus(); reason.setAttribute("aria-invalid", "true"); return; }
+    keep.disabled = true;
+    post(grid.dataset.changeUrl, { associate: cell.dataset.name, day: cell.dataset.day, value: select.value,
+                                   reason: reason.value.trim() })
+      .then(function (saved) {
+        if (!saved._ok) { keep.disabled = false; result.textContent = saved.error || "Not saved."; return; }
+        window.location.href = saved.url;
+      });
+  });
+})();
+
 // Chart tips: any mark with data-tip shows it on hover, or on tap on a phone.
 // The same numbers are in each chart's table view.
 (function () {

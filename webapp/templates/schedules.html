@@ -1,0 +1,83 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{% extends "base.html" %}
+{% block title %}Schedules: {{ run.program or run.workbook }} on Team Scheduler{% endblock %}
+{% block content %}
+<div class="phead"><div>
+  <h1>{% if run.program and run.week_start %}{{ run.program }}, week of {{ run.week_start|day_month }}: schedules{% else %}{{ run.workbook }}: schedules{% endif %}</h1>
+  <p class="byline">Pick a version to view or edit. The tool's own schedules never change; every edit is saved in a new version with who changed what and why.</p>
+</div></div>
+
+{% if not versions %}
+<p class="empty panel">No schedules kept for this run: a readiness check, a run that did not finish, or a run whose files were already deleted.</p>
+{% else %}
+<nav class="vbar" aria-label="Versions">
+  {% for v in versions %}{% set c = counts[v.id] %}{% set reds = c.added|selectattr('severity', 'equalto', 'red')|list|length %}{% set yellows = c.added|selectattr('severity', 'equalto', 'yellow')|list|length %}
+  <a href="{{ url_for('run_schedules', run_id=run.id, v=v.id) }}"{% if v.id == current.id %} class="cur" aria-current="true"{% endif %}>{{ v.label }}
+    <small>{% if v.in_use %}<span class="use">In use</span> · {% endif %}{% if v.kind == 'edited' %}{{ c.changes|length }} change{{ 's' if c.changes|length != 1 }} · {% if reds %}<span class="r">{{ reds }} rule{{ 's' if reds != 1 }} broken</span>{% elif yellows %}<span class="y">{{ yellows }} warning{{ 's' if yellows != 1 }}</span>{% else %}all checks pass{% endif %}{% else %}{{ 'from the run' if v.kind == 'tool_after' else 'no breaks yet' }}{% endif %}</small></a>
+  {% endfor %}
+</nav>
+
+<div class="actions">
+  {% if may_set_in_use and not current.in_use %}
+  <form method="post" action="{{ url_for('schedule_in_use', schedule_id=current.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="primary" type="submit">Set as the schedule in use</button></form>
+  {% elif current.in_use %}<p class="inuse">This is the schedule in use for the week.</p>{% endif %}
+  <a class="button" href="{{ url_for('schedule_download', schedule_id=current.id) }}">Download (.xlsx)</a>
+  <a class="button" href="{{ url_for('schedule_week', schedule_id=current.id) }}">Week view of this version</a>
+</div>
+
+{% set m = view.marks %}
+<div class="side">
+  <section class="panel" aria-labelledby="shifts-h">
+    <h2 id="shifts-h">Shifts</h2>
+    <p class="note">Click a shift to change it. Choices come from this program's Shift Library, plus OFF and Leave. Changed shifts are outlined, with the tool's shift under the new one{% if current.kind != 'edited' or current.in_use %}; a change here starts a new version{% endif %}.</p>
+    <div class="scroll">
+    <table class="edgrid" data-check-url="{{ url_for('schedule_check', schedule_id=current.id) }}" data-change-url="{{ url_for('schedule_change', schedule_id=current.id) }}">
+      <thead><tr><th scope="col"><span class="sr-only">Associate</span></th>{% for d in days %}<th scope="col">{{ d }}{% if m.days.get(d) %} <i class="dot {{ m.days[d] }}" title="{{ 'A rule is broken' if m.days[d] == 'red' else 'A warning' }} on this day"></i>{% endif %}</th>{% endfor %}</tr></thead>
+      <tbody>
+      {% for a in view.week.associates %}{% set tool_days = view.tool_days.get(a.name, []) %}
+      <tr><th scope="row"><b>{{ a.name }}</b><small>{{ a.language }}{% if a.tl %} · {{ a.tl }}{% endif %}</small></th>
+        {% for d in days %}{% set value = a.days[loop.index0] %}{% set was = tool_days[loop.index0] if tool_days|length > loop.index0 else value %}{% set sev = m.cells.get(a.name ~ '|' ~ d) or m.cells.get(a.name ~ '|*') %}
+        <td><button type="button" class="ed{% if value != was %} changed{% endif %}{% if sev %} sev-{{ sev }}{% endif %}{% if value == 'OFF' %} off{% elif value == 'Leave' %} leave{% endif %}" data-name="{{ a.name }}" data-day="{{ d }}" data-value="{{ value }}">{% if sev %}<span class="flag {{ sev }}">{{ 'rule broken' if sev == 'red' else 'warning' }}</span>{% endif %}{{ value or '–' }}{% if value != was %}<s>{{ was }}</s>{% endif %}</button></td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+  <aside>
+    <section class="panel checks" aria-labelledby="checks-h">
+      <h2 id="checks-h">Checks</h2>
+      <p class="note">The independent validator, run on this version.</p>
+      {% if current.kind == 'edited' %}
+        {% if view.added %}<h3>Added by the edits</h3>
+        <ul class="sevlist">{% for p in view.added %}<li class="{{ p.severity }}"><b>{{ 'Rule broken' if p.severity == 'red' else 'Warning' }}:</b> {{ p.text }}</li>{% endfor %}</ul>
+        {% else %}<p>The edits added no problems.</p>{% endif %}
+      {% endif %}
+      {% set met = view.metrics %}{% if met.active_intervals %}<p><b>{{ met.after_100 }} of {{ met.active_intervals }}</b> intervals fully covered after breaks{% if current.kind == 'edited' %} (the tool's version: {{ (view.tool.checks|fromjson).metrics.after_100 }}){% endif %}.</p>{% endif %}
+      {% if view.inherited %}<details class="tableview"><summary>Already in the tool's schedule ({{ view.inherited|length }})</summary>
+        <ul class="sevlist quiet">{% for p in view.inherited %}<li class="{{ p.severity }}">{{ p.text }}</li>{% endfor %}</ul></details>{% endif %}
+    </section>
+    <section class="panel" aria-labelledby="log-h">
+      <h2 id="log-h">Changes in this version</h2>
+      {% if view.changes %}
+      <ul class="log">{% for c in view.changes|reverse %}<li><b>{{ c.by_name }}</b>, {{ when(c.at) }}: {{ c.associate }}, {{ c.day }} {{ c.old }} → {{ c.new }}{% if c.reason %}. "{{ c.reason }}"{% endif %}{% if c.severity in ('red', 'yellow') %} <span class="tagsev {{ c.severity }}">{{ 'rule broken' if c.severity == 'red' else 'warning' }}</span>{% endif %}</li>{% endfor %}</ul>
+      {% else %}<p class="empty">No changes: this is the tool's schedule.</p>{% endif %}
+    </section>
+  </aside>
+</div>
+
+<dialog id="edit-dialog" class="dlg" aria-labelledby="dlg-h">
+  <form method="dialog" class="dlg-form">
+    <h2 id="dlg-h">Change a shift</h2>
+    <p class="dim" data-who></p>
+    <label>New shift
+      <select name="value">{% for s in view.week.shifts %}<option value="{{ s }}">{{ s }}</option>{% endfor %}</select></label>
+    <div class="dlg-result" aria-live="polite"></div>
+    <label class="dlg-reason">Reason (kept in the change log)<input name="reason" type="text" maxlength="300" placeholder="For example: swap requested by the associate"></label>
+    <p class="dlg-ask" hidden><b>Keep this change?</b></p>
+    <div class="btns"><button class="primary" type="button" data-keep disabled>Yes, keep it</button><button type="button" data-cancel>No, undo it</button></div>
+  </form>
+</dialog>
+{% endif %}
+{% endblock %}

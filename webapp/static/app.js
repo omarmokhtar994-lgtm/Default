@@ -560,3 +560,31 @@
   setInterval(ago, 1000);
   setTimeout(poll, 1500);
 })();
+
+// The upload form's start date: picking a known program preselects the next
+// date on that program's usual first weekday (Sunday or Monday), until the
+// person picks a date themselves.
+(function () {
+  "use strict";
+  var select = document.querySelector("select[name=week_start][data-start-days]");
+  var program = document.querySelector("input[name=program]");
+  if (!select || !program) { return; }
+  var usual = {};
+  try { usual = JSON.parse(select.getAttribute("data-start-days") || "{}"); } catch (e) { usual = {}; }
+  var from = select.getAttribute("data-today") || "";
+  var touched = false;
+  select.addEventListener("change", function () { touched = true; });
+  function follow() {
+    if (touched || !Object.prototype.hasOwnProperty.call(usual, program.value)) { return; }
+    var day = String(usual[program.value]);
+    var current = select.value || from;
+    var around = new Date(current + "T00:00:00");
+    var options = Array.prototype.slice.call(select.options);
+    var pick = options.filter(function (o) {
+      return o.getAttribute("data-day") === day && o.value && Math.abs(new Date(o.value + "T00:00:00") - around) < 4 * 86400000;
+    })[0];
+    if (pick) { select.value = pick.value; }
+  }
+  program.addEventListener("change", follow);
+  program.addEventListener("input", follow);
+})();

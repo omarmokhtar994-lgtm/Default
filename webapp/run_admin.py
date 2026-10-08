@@ -14,13 +14,15 @@ from typing import Any, Dict, List, Optional
 
 from .attendance import pick_version
 
-FIELDS = {"program": "Program", "week_start": "Schedule week", "user_id": "Submitted by", "workbook": "Workbook"}
+FIELDS = {"program": "Program", "week_start": "Schedule starts", "user_id": "Submitted by", "workbook": "Workbook"}
 
 
 def _shown(store, key: str, value: Any) -> str:
     if key == "user_id":
         person = store.get_user(value) if value is not None else None
         return person["display_name"] if person else "nobody"
+    if key == "week_start" and value:
+        return f"{date.fromisoformat(value):%a %d %b %Y}"
     return value or "none"
 
 
@@ -32,13 +34,11 @@ def _check(store, new: Dict[str, Any]) -> None:
     if len(new.get("program") or "") > 80:
         raise ValueError("Keep the program name to 80 characters.")
     week = new.get("week_start")
-    if week:
+    if week:  # the schedule's first date: any weekday (Sunday, or Monday for programs starting then)
         try:
-            sunday = date.fromisoformat(week)
+            date.fromisoformat(week)
         except ValueError:
-            raise ValueError("Give the schedule week as a date (the Sunday it starts).") from None
-        if sunday.weekday() != 6:
-            raise ValueError("The schedule week starts on a Sunday.")
+            raise ValueError("Pick the date the schedule starts.") from None
     if "user_id" in new and store.get_user(new["user_id"]) is None:
         raise ValueError("Pick someone on the team.")
     if "workbook" in new and not (1 <= len((new["workbook"] or "").strip()) <= 120):

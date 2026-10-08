@@ -10,7 +10,7 @@ import secrets
 import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from flask import Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file, session, url_for
 from werkzeug.utils import secure_filename
@@ -152,13 +152,32 @@ def username_problem(username: str) -> str:
     return "" if username and plain.isalnum() and plain.isascii() else USERNAME_RULE
 
 
-def week_sunday(text: str) -> Optional[str]:
-    """The Sunday that starts the week of a YYYY-MM-DD date, or None if it is not a date."""
+def start_date(text: str) -> Optional[str]:
+    """A schedule's first date as given (YYYY-MM-DD, any weekday), or None if it is not a date."""
     try:
-        day = datetime.strptime(text.strip(), "%Y-%m-%d").date()
+        return datetime.strptime((text or "").strip(), "%Y-%m-%d").date().isoformat()
     except ValueError:
         return None
-    return (day - timedelta(days=(day.weekday() + 1) % 7)).isoformat()
+
+
+def start_choices(around: str = "", keep: str = "") -> List[Tuple[str, str, int]]:
+    """The start dates offered in a dropdown: Sundays and Mondays from 4 weeks before ``around`` (today
+    when not given) to 10 weeks after, plus ``keep``; (value, label, weekday with Sunday 0), in date order."""
+    centre = date.fromisoformat(around) if start_date(around) else datetime.now(EGYPT).date()
+    days = {centre + timedelta(days=n) for n in range(-28, 71)}
+    picked = {d for d in days if d.weekday() in (6, 0)}
+    if start_date(keep):
+        picked.add(date.fromisoformat(keep))
+    return [(d.isoformat(), f"{d:%a %d %b %Y}", (d.weekday() + 1) % 7) for d in sorted(picked)]
+
+
+def usual_start_days(runs: List[Dict[str, Any]]) -> Dict[str, int]:
+    """Each program's usual first weekday (Sunday 0), from its latest run with a start date."""
+    found: Dict[str, int] = {}
+    for r in sorted(runs, key=lambda r: r["created"]):
+        if r.get("program") and start_date(r.get("week_start") or ""):
+            found[r["program"]] = (date.fromisoformat(r["week_start"]).weekday() + 1) % 7
+    return found
 
 
 def next_sunday(today: Optional[date] = None) -> str:
@@ -226,6 +245,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
             "default-src 'self'; style-src 'self' https://fonts.googleapis.com; "
             "font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; frame-ancestors 'none'")
         return response
+
+    @app.template_filter("start_day")
+    def _start_day(iso: str) -> str:
+        """A schedule's first date in words: Monday 12 Oct."""
+        found = start_date(iso or "")
+        return f"{date.fromisoformat(found):%A %d %b}" if found else (iso or "")
 
     @app.template_filter("day_month")
     def _day_month(iso: str) -> str:
@@ -392,12 +417,14 @@ def create_app(config: Dict[str, Any]) -> Flask:
         waiting = sorted((r for r in runs if r["status"] == "QUEUED"), key=lambda r: r["created"])
         latest = next((r for r in runs if r["status"] in ("DONE", "REVIEW") and summaries.get(r["id"])), None)
         known = sorted({r["program"] for r in runs if r.get("program")}, key=str.lower)
+        prefill = start_date(request.args.get("week", "")) or next_sunday()
         return render_template("dashboard.html", runs=runs, queue=queue, plan=plan, summaries=summaries,
                                active=active, waiting=waiting, latest=latest,
                                latest_summary=summaries.get(latest["id"]) if latest else None,
                                now=time.time(), known_programs=known,
                                prefill_program=clean_program(request.args.get("program", "")),
-                               prefill_week=week_sunday(request.args.get("week", "")) or next_sunday())
+                               prefill_week=prefill, start_options=start_choices(prefill, prefill),
+                               usual_start=usual_start_days(runs))
 
     # ------------------------------------------------------------- runs
     def _queue() -> RunQueue:
@@ -436,9 +463,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
             return redirect(url_for("home"))
         program = clean_program(request.form.get("program", ""))
         week = request.form.get("week_start", "").strip()
-        week_start = week_sunday(week) if week else ""
+        week_start = start_date(week) if week else ""
         if week_start is None:
-            flash("Give the schedule week as a date (the Sunday it starts).")
+            flash("Pick the date the schedule starts.")
             return redirect(url_for("home"))
         incoming = queue.runs_root / "_incoming"
         incoming.mkdir(exist_ok=True)
@@ -478,6 +505,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                summary=queue.summary(run_id), said=said,
                                why=outcome_view(found) if found else None,
                                eta=_plan(store.list_runs()).get(run_id), now=time.time(), people=people,
+                               start_options=start_choices(run["week_start"], run["week_start"]),
                                known_programs=sorted({r["program"] for r in store.list_runs(limit=100000)
                                                       if r["program"]}, key=str.lower), **extra)
 
@@ -536,9 +564,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
             abort(403)
         store = app.extensions["store"]
         week = request.form.get("week_start", "").strip()
-        week_start = week_sunday(week) if week else ""
+        week_start = start_date(week) if week else ""
         if week_start is None:
-            flash("Give the schedule week as a date (the Sunday it starts).")
+            flash("Pick the date the schedule starts.")
             return redirect(url_for("run_detail", run_id=run_id))
         new: Dict[str, Any] = {"program": clean_program(request.form.get("program", "")), "week_start": week_start}
         if "user_id" in request.form:
@@ -637,14 +665,17 @@ def create_app(config: Dict[str, Any]) -> Flask:
         history = program_weeks(_all_runs())
         side = "before" if request.args.get("side") == "before" else "after"
         program = clean_program(request.args.get("program", ""))
-        week = week_sunday(request.args.get("week", "")) or ""
+        week = start_date(request.args.get("week", "")) or ""
         if not program and history:
             latest = max((w for rows in history.values() for w in rows), key=lambda w: w["finished"] or 0)
             program, week = latest["program"], latest["week"]
         rows = history.get(program, [])
         if program and not week and rows:
             week = rows[-1]["week"]
-        row = next((w for w in rows if w["week"] == week), None)
+        row = next((w for w in rows if w["week"] == week), None) or next(  # else the week holding that date
+            (w for w in reversed(rows) if week and start_date(w["week"]) and
+             0 <= (date.fromisoformat(week) - date.fromisoformat(w["week"])).days <= 6), None)
+        week = row["week"] if row else week
         run = app.extensions["store"].get_run(row["run_id"]) if row else None
         return _week_page(run, side, program, week, history)
 

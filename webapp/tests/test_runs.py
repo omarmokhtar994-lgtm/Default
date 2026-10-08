@@ -715,7 +715,9 @@ class TheReadinessCheck(unittest.TestCase):
         body = client.get("/?program=NMG%20Spanish&week=2026-10-11").get_data(as_text=True)
         self.assertIn('name="program" type="text" list="known-programs" maxlength="80" autocomplete="off" '
                       'placeholder="For example NMG Spanish" value="NMG Spanish"', body)
-        self.assertIn('name="week_start" type="date" value="2026-10-11"', body)
+        # Re-pinned in Phase P (owner, 2026-10-08): the week is now a start-date dropdown (Sundays and Mondays),
+        # so the prefilled date is the selected option rather than a date box's value.
+        self.assertRegex(body, r'<option value="2026-10-11" data-day="0" selected>Sun 11 Oct 2026</option>')
 
 
 class TheWayAround(unittest.TestCase):
@@ -1263,6 +1265,46 @@ class TheRunDetails(unittest.TestCase):
         self.assertEqual(self.store.get_run(self.run_id)["program"], "AE-AR B2B")
 
 
+class TheStartDate(unittest.TestCase):
+    """Phase P: the schedule's first date is picked from Sundays and Mondays when uploading (some programs
+    start on Monday), kept as picked, and changed by an admin from the run page."""
+
+    def setUp(self):
+        self.app, self.store, *_ = make_app(start_worker=False)
+        self.store.add_user("omar", "Omar", "Owner-pass-123", is_admin=True, must_change=False)
+        self.client = client_for(self.app)
+        self.admin = sign_in(self.app, "omar", "Owner-pass-123")
+
+    def test_upload_keeps_the_chosen_start(self):
+        body = html.unescape(self.client.get("/?program=NMG&week=2026-10-12").get_data(as_text=True))
+        self.assertIn('<select name="week_start"', body)
+        self.assertIn('<option value="2026-10-12" data-day="1" selected>Mon 12 Oct 2026</option>', body)
+        self.assertIn('<option value="2026-10-11" data-day="0">Sun 11 Oct 2026</option>', body)
+        run_id = run_id_of(upload(self.client, program="NMG", week_start="2026-10-12"))
+        self.assertEqual(self.store.get_run(run_id)["week_start"], "2026-10-12")  # kept as picked, not moved to Sunday
+        page = html.unescape(self.client.get(f"/runs/{run_id}").get_data(as_text=True))
+        self.assertIn("starts Monday 12 Oct", page)
+
+    def test_admin_moves_the_start_to_monday(self):
+        run_id = run_id_of(upload(self.client, program="NMG", week_start="2026-10-11"))
+        page = html.unescape(self.admin.get(f"/runs/{run_id}").get_data(as_text=True))
+        self.assertIn('<option value="2026-10-11" data-day="0" selected>Sun 11 Oct 2026</option>', page)
+        self.assertIn('<option value="2026-10-12" data-day="1">Mon 12 Oct 2026</option>', page)
+        got = self.admin.post(f"/runs/{run_id}/tag", data={"csrf_token": token(self.admin), "program": "NMG",
+                                                            "week_start": "2026-10-12", "reason": "starts Monday"})
+        self.assertEqual(got.status_code, 302)
+        self.assertEqual(self.store.get_run(run_id)["week_start"], "2026-10-12")
+        self.assertIn("starts Monday 12 Oct", html.unescape(self.admin.get(f"/runs/{run_id}").get_data(as_text=True)))
+
+    def test_a_date_that_is_not_a_date_is_refused(self):
+        got = self.client.post("/runs", data={"csrf_token": token(self.client), "mode": "QUICK", "program": "NMG",
+                                              "week_start": "next week",
+                                              "workbook": (io.BytesIO(b"PK\x03\x04 x"), "w.xlsx")},
+                               content_type="multipart/form-data", follow_redirects=True)
+        self.assertIn("Pick the date the schedule starts.", html.unescape(got.get_data(as_text=True)))
+        self.assertEqual(self.store.list_runs(), [])
+
+
 class TheRunDetailsCheck(unittest.TestCase):
     """A change that leaves day records on a week without its schedule is shown first and needs a reason."""
 
@@ -1276,7 +1318,7 @@ class TheRunDetailsCheck(unittest.TestCase):
         post = lambda **data: sara.post(f"/runs/{run_id}/tag", data={  # noqa: E731
             "csrf_token": token(sara), "program": "AE/AR B2B", "week_start": "2026-10-18", **data})
         page = html.unescape(post().get_data(as_text=True))
-        for words in ("Check before saving", "Schedule week", "2026-10-11 → 2026-10-18", "stay on their dates",
+        for words in ("Check before saving", "Schedule starts", "Sun 11 Oct 2026 → Sun 18 Oct 2026", "stay on their dates",
                       "no schedule", "rename the program instead"):
             self.assertIn(words, page)
         self.assertEqual(store.get_run(run_id)["week_start"], "2026-10-11")  # nothing yet

@@ -42,10 +42,13 @@
         <label>Program
           <input name="program" type="text" list="known-programs" maxlength="80" autocomplete="off" placeholder="For example NMG Spanish" value="{{ prefill_program }}">
           <datalist id="known-programs">{% for p in known_programs %}<option value="{{ p }}">{% endfor %}</datalist></label>
-        <label>Schedule week
-          <input name="week_start" type="date" value="{{ prefill_week }}"></label>
+        <label>Schedule starts
+          <select name="week_start" data-start-days="{{ usual_start|tojson|forceescape }}" data-today="{{ start_options[0][0] if not prefill_week else prefill_week }}">
+            <option value=""{% if not prefill_week %} selected{% endif %}>Not set</option>
+            {% for value, label, day in start_options %}<option value="{{ value }}" data-day="{{ day }}"{% if value == prefill_week %} selected{% endif %}>{{ label }}</option>{% endfor %}
+          </select></label>
       </div>
-      <p class="hint">The program and week put this run on the program's history page. Any date in the week works; it is stored as the Sunday that starts it.</p>
+      <p class="hint">The first day of this schedule: the Sunday, or the Monday for programs that start on Monday. Each date reads its own weekday's column. The program and start date put this run on the program's history page.</p>
       <fieldset class="modes">
         <legend>How long to search</legend>
         <label class="mode"><input type="radio" name="mode" value="QUICK" checked> Quick

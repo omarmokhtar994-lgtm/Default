@@ -20,7 +20,7 @@ from openpyxl.cell import WriteOnlyCell
 from openpyxl.styles import Font
 
 from .adherence import person_day
-from .day import ABSENT, AUX, MEASURES, planned
+from .day import ABSENT, AUX, CALLED_IN, MEASURES, pattern_breaks, planned
 from .versions import DAYS
 
 EGYPT = timezone(timedelta(hours=3))
@@ -120,15 +120,21 @@ def _breaks(store, days, weeks, start, end, program, user_id, measure):
             start.isoformat(), end.isoformat(), p)}
         status = {(r["shift_date"], r["associate"]): r["status"] for r in store.attendance_between(
             start.isoformat(), end.isoformat(), p)}
+        called = {(r["shift_date"], r["associate"]): r["note"] for r in store.activities_between(
+            start.isoformat(), end.isoformat(), p) if r["kind"] == CALLED_IN}
         for day in _dates(start, end):
             week = weeks.week(p, day)
             for a in week.get("associates", []):
                 state = status.get((day.isoformat(), a["name"]), "Present")
-                for b in planned(week, _day_index(day), a["name"]):
+                shift, plan = a["days"][_day_index(day)], planned(week, _day_index(day), a["name"])
+                label = called.get((day.isoformat(), a["name"]))
+                if not plan and label:  # a day off cancelled: the plan's breaks for the shift they came in for
+                    shift, plan = f"{label} (called in)", pattern_breaks(week, _day_index(day), label)
+                for b in plan:
                     m = moved.get((day.isoformat(), a["name"], b["idx"]))
                     m = m if m and m["kind"] == b["kind"] else None  # a move kept against another plan is not this break
                     taken = "" if state in ABSENT else _hm(m["start"] if m else b["start"])
-                    yield [day.isoformat(), p, a["name"], a.get("slot", ""), a["days"][_day_index(day)], b["kind"],
+                    yield [day.isoformat(), p, a["name"], a.get("slot", ""), shift, b["kind"],
                            b["minutes"], _hm(b["start"]), taken, m["by_name"] if m else "", _when(m["at"]) if m else "",
                            state]
 
@@ -192,8 +198,8 @@ def _worked(store, days, weeks, start, end, program, user_id, measure):
 def _summary(store, days, weeks, start, end, program, user_id, measure):
     from .handover import note  # the handover note's numbers, one row per program and day
     yield ["Date", "Program", "Planned", "Present", "Absent", "Late or early", "In aux", "Breaks moved", "Overtime min",
-           "VTO min", "Hours short", "Hours short in the plan", "Hours above", "Tightest (hours)", "Language gaps",
-           "Adherence %", "Conformance %", "Changes recorded"]
+           "VTO min", "Called in min", "Hours short", "Hours short in the plan", "Hours above", "Tightest (hours)",
+           "Language gaps", "Adherence %", "Conformance %", "Changes recorded"]
     for p in _programs(days, program):
         for day in _dates(start, end):
             try:
@@ -204,8 +210,9 @@ def _summary(store, days, weeks, start, end, program, user_id, measure):
                 continue
             n = found["numbers"]
             yield [day.isoformat(), p, n["planned"], n["present"], n["absent"], n["late_early"], n["aux"], n["moved"],
-                   n["overtime_minutes"], n["vto_minutes"], n["short_hours"], n["plan_short_hours"], n["over_hours"],
-                   n["tightest"], n["language_gaps"], n["adherence"], n["conformance"], n["changes"]]
+                   n["overtime_minutes"], n["vto_minutes"], n["called_in_minutes"], n["short_hours"],
+                   n["plan_short_hours"], n["over_hours"], n["tightest"], n["language_gaps"], n["adherence"],
+                   n["conformance"], n["changes"]]
 
 
 TABLES: Dict[str, Callable] = {"attendance": _attendance, "activities": _activities, "activity": _activity,

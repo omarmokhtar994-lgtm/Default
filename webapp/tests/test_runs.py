@@ -1099,6 +1099,38 @@ class TheDayPage(unittest.TestCase):
         self.assertIn("Associate 021", body)  # lunch 12:30 to 13:00: on break at 12:40
         self.assertEqual(self.app.test_client().get("/day/wallboard?program=AE/AR+B2B").status_code, 302)
 
+    def test_add_cover_from_the_board(self):
+        body = html.unescape(self.client.get(self.url + "&view=board&cover=840").get_data(as_text=True))
+        for words in ("Cover 14:00 to 15:00", "Overtime", "Day off cancelled", "Add cover"):
+            self.assertIn(words, body)
+        offered = re.search(r"Associate 002: (\d\d:\d\d) - (\d\d:\d\d)", body)  # off on Wednesday
+        self.assertIsNotNone(offered)
+        lo, hi = offered.groups()
+        self.assertTrue(lo <= "14:00" and "15:00" <= hi)
+        got = self.client.post("/day/activity", data={"csrf_token": token(self.client), "program": "AE/AR B2B",
+                                                      "date": "2026-10-14", "associate": "Associate 002",
+                                                      "kind": "Called in", "from": lo, "to": hi,
+                                                      "view": "board", "cover": "840"})
+        self.assertEqual(got.status_code, 303)
+        self.assertIn("cover=840", got.headers["Location"])
+        page = self.page()
+        self.assertIn(f"{lo} - {hi} (called in)", page)
+        self.assertIn(f"Day off cancelled: called in {lo} - {hi}", page)
+
+    def test_saturday_says_when_sunday_is_not_checked(self):
+        note = "Next week's schedule is not here yet, so the rest gap to Sunday is not checked"
+        self.assertNotIn(note, html.unescape(self.client.get(self.url + "&view=board&cover=840").get_data(as_text=True)))
+        saturday = "/day?program=AE/AR+B2B&date=2026-10-17"
+        self.assertIn(note, html.unescape(self.client.get(saturday + "&view=board&cover=840").get_data(as_text=True)))
+        self.assertIn(note, html.unescape(self.client.get(saturday + "&view=cover").get_data(as_text=True)))
+        got = self.client.post("/day/activity", data={"csrf_token": token(self.client), "program": "AE/AR B2B",
+                                                      "date": "2026-10-17", "associate": "Associate 002",
+                                                      "kind": "Overtime", "from": "18:00", "to": "19:00",
+                                                      "view": "board", "cover": "1080"}, follow_redirects=True)
+        body = html.unescape(got.get_data(as_text=True))
+        self.assertIn("Recorded: Associate 002, overtime.", body)
+        self.assertIn(note, body)
+
     def test_week_without_a_schedule_and_defaults(self):
         body = html.unescape(self.client.get("/day?program=AE/AR+B2B&date=2026-11-04").get_data(as_text=True))
         self.assertIn("No schedule for AE/AR B2B in the week of 01 Nov", body)

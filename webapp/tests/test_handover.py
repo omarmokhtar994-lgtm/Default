@@ -56,6 +56,16 @@ class TheHandover(unittest.TestCase):
         self.assertEqual(n["numbers"]["short_hours"], page["view"]["tiles"]["short_hours"])
         self.assertEqual(n["short"], [(c["t"], c["pm"]) for c in page["view"]["cells"] if c["pm"] is not None and c["pm"] < 0])
 
+    def test_a_called_in_day_off_is_in_the_note(self):
+        self.days.add_activity("AE/AR B2B", WED, "Associate 002", "Called in", "12:00", "21:00", self.sara)
+        n = note(self.days, "AE/AR B2B", WED)
+        self.assertIn(("Associate 002", "Day off cancelled: called in 12:00 - 21:00"),
+                      [(a["name"], a["text"]) for a in n["activities"]])
+        self.assertEqual(n["numbers"]["called_in_minutes"], 9 * 60)
+        data, *_ = build(self.store, self.days, WED, WED, ["summary"], by="Omar")
+        rows = list(load_workbook(io.BytesIO(data))["Daily summary"].iter_rows(values_only=True))
+        self.assertEqual(dict(zip(rows[0], rows[1]))["Called in min"], 9 * 60)
+
     def test_watch_tomorrow_from_the_plan(self):
         n = note(self.days, "AE/AR B2B", WED)
         page = self.days.page("AE/AR B2B", date(2026, 10, 15))

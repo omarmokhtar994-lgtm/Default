@@ -20,6 +20,7 @@
     <div><dt>Team adherence</dt><dd>{{ k.adherence if k.adherence is not none else '–' }}%</dd></div>
     <div><dt>Team conformance</dt><dd>{{ k.conformance if k.conformance is not none else '–' }}%</dd></div>
     <div><dt>Overtime / VTO</dt><dd>{{ k.overtime_minutes }} / {{ k.vto_minutes }} min</dd></div>
+    {% if k.called_in_minutes %}<div><dt>Called in on a day off</dt><dd>{{ k.called_in_minutes }} min</dd></div>{% endif %}
     <div><dt>Language gaps</dt><dd>{{ k.language_gaps }}</dd></div>
   </dl>
 </section>

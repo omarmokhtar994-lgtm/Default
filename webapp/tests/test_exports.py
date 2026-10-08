@@ -93,6 +93,17 @@ class TheExports(unittest.TestCase):
         self.assertEqual((lunch["Planned"], lunch["Taken"], lunch["Moved by"]), ("12:30", "13:05", "Lina"))
         self.assertTrue(all(r["Taken"] == r["Planned"] for r in rows if r["Break"] != "Lunch"))
 
+    def test_a_called_in_day_off_is_listed_with_its_breaks(self):
+        # Associate 002 is off on Wednesday; called in 12:00 - 21:00 takes that shift's planned breaks
+        self.days.add_activity("AE/AR B2B", WED, "Associate 002", "Called in", "12:00", "21:00", self.sara)
+        self.days.move_break("AE/AR B2B", WED, "Associate 002", 1, "17:00", self.lina)
+        data, *_ = self.export(kinds=["breaks"])
+        rows = [r for r in self.sheet(data, "Breaks planned vs taken") if r["Associate"] == "Associate 002"]
+        self.assertEqual([(r["Shift"], r["Break"], r["Planned"], r["Taken"], r["Moved by"]) for r in rows],
+                         [("12:00 - 21:00 (called in)", "Break 1", "13:45", "13:45", None),  # an empty cell
+                          ("12:00 - 21:00 (called in)", "Lunch", "16:30", "17:00", "Lina"),
+                          ("12:00 - 21:00 (called in)", "Break 2", "19:30", "19:30", None)])
+
     def test_schedule_changes_and_versions(self):
         draft = self.book.change(self.tool["id"], self.lina, "Associate 001", "Wed", "10:00 - 19:00", "swap asked")
         self.book.set_in_use(draft, self.sara)

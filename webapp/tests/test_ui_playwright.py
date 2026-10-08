@@ -639,3 +639,33 @@ class TheFloorToolsInTheBrowser(unittest.TestCase):
         wall.wait_for_load_state("load")
         expect(wall.locator(".wall-row")).to_have_count(4)
         wall.screenshot(path=str(O_SCREENS / "wallboard.png"))
+
+    def test_the_board_adds_cover(self):  # runs after test_every_floor_tool, so its screenshots stay as they were
+        page = self.page(width=1500, height=1000)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        self.go(page, self.day + "&view=board", errors)
+        row = page.locator(".rb-row[data-t='900']")  # 15:00, short: seven are on unplanned leave
+        row.get_by_role("link", name="Add cover").click()
+        page.wait_for_load_state("load")
+        panel = page.locator("#cover")
+        expect(panel.locator("h3")).to_contain_text("Cover 15:00 to 16:00")
+        expect(panel.get_by_role("heading", name="Day off cancelled")).to_be_visible()
+        offer = panel.locator("form:has(input[name='kind'][value='Called in']) button").first
+        expect(offer).to_be_visible()
+        top = page.locator("header.top").bounding_box()["height"]
+        self.assertGreater(row.bounding_box()["y"], top - 1)  # the row lands below the header, its panel under it
+        self.assertGreater(panel.bounding_box()["y"], row.bounding_box()["y"])
+        page.wait_for_load_state("networkidle")
+        page.screenshot(path=str(O_SCREENS / "board_add_cover.png"))  # the panel below the header, the board under it
+        who, shift = offer.inner_text().split(":", 1)
+        shift = shift.split("·")[0].strip()
+        offer.click()
+        page.wait_for_load_state("load")
+        self.assertIn("cover=900", page.url)
+        expect(page.locator(".flash, .flashes").first).to_contain_text(f"Recorded: {who}, day off cancelled (called in).")
+        self.go(page, self.day, errors)
+        expect(page.locator(".tl-tag.called")).to_have_attribute("title", f"Day off cancelled: called in {shift}")
+        expect(page.get_by_text(f"Day off cancelled: called in {shift}").first).to_be_visible()
+        page.screenshot(path=str(O_SCREENS / "called_in_timeline.png"), full_page=True)

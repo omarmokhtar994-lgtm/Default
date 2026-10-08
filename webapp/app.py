@@ -17,7 +17,7 @@ from werkzeug.utils import secure_filename
 
 from .adherence import interval_shrinkage, person_day, team as team_figures
 from .analytics import program_weeks, team
-from .attendance import ACTIVITY_KINDS, DayBook, hm, week_start
+from .attendance import ACTIVITY_KINDS, SUNDAY_UNCHECKED, DayBook, hm, week_start
 from .day import AUX, MEASURES, STATUSES, BreakRefused, board
 from .coach import actual_shrinkage, corrected_tab
 from .eta import queue_plan
@@ -762,6 +762,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if page and tab == "cover":
             cover = days.offers(page, from_now)
         proposal = days.replan(page, from_now) if page and tab == "replan" else None
+        cover_panel = None
+        if page and tab == "board" and request.args.get("cover", type=int) is not None:
+            try:
+                cover_panel = days.cover_offers(page, request.args.get("cover", type=int))
+            except ValueError as exc:
+                flash(str(exc))
         if page and tab == "adherence":
             v = page["view"]
             people = sorted((person_day(v, l["name"]) for l in v["lanes"] if any(x["offset"] == 0 for x in l["segments"])),
@@ -770,7 +776,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             shrink = interval_shrinkage(v, page["inputs"], page["day"])
         return render_template("day.html", page=page, problem=problem, program=program, programs=programs, on=on,
                                people=people, whole=whole, shrink=shrink, finder=finder, cover=cover,
-                               proposal=proposal, from_now=from_now,
+                               proposal=proposal, from_now=from_now, cover_panel=cover_panel,
+                               sunday_unchecked=SUNDAY_UNCHECKED,
                                activity_kinds=ACTIVITY_KINDS,
                                measure=measure,
                                measures=MEASURES, tab=tab, statuses=STATUSES, aux=sorted(AUX), hm=hm,
@@ -812,9 +819,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
             return jsonify(error=str(exc)), 400
         return jsonify(ok=True)
 
-    def _back_to_day(program: str, on: Optional[date], view: str):  # type: ignore[no-untyped-def]
+    def _back_to_day(program: str, on: Optional[date], view: str, cover: str = ""):  # type: ignore[no-untyped-def]
         args = {"program": program, "date": on.isoformat() if on else None,
-                "view": view if view in ("board", "adherence", "meeting", "cover", "replan") else None}
+                "view": view if view in ("board", "adherence", "meeting", "cover", "replan") else None,
+                "cover": cover if cover.isdigit() and view == "board" else None}
+        if args["cover"]:
+            args["_anchor"] = f"row-{args['cover']}"
         return redirect(url_for("day_page", **{k: v for k, v in args.items() if v}), code=303)
 
     @app.route("/day/replan/apply", methods=["POST"])
@@ -900,10 +910,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
             _days().add_activity(program, on, name, kind, request.form.get("from", ""), request.form.get("to", ""),
                                  g.user["id"], billable=request.form.get("billable") == "1",
                                  note=request.form.get("note", ""))
-            flash(f"Recorded: {name}, {kind.lower()}.")
+            flash(f"Recorded: {name}, {'day off cancelled (called in)' if kind == 'Called in' else kind.lower()}.")
+            if kind in ("Overtime", "Called in") and _days().next_week_unknown(program, on):
+                flash(SUNDAY_UNCHECKED)
         except ValueError as exc:
             flash(str(exc))
-        return _back_to_day(program, on, request.form.get("view", ""))
+        return _back_to_day(program, on, request.form.get("view", ""), request.form.get("cover", ""))
 
     @app.route("/day/activity/cancel", methods=["POST"])
     @login_required

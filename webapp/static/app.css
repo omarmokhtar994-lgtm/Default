@@ -692,3 +692,19 @@ body.wall { background: var(--night); color: var(--paper); padding: 2vh 2.5vw; m
 .wall-lists li.bad, .wall-lists li.warn { color: var(--gap-ink); }
 .wall-none, .wall-empty { color: var(--dim); font-size: 2.4vh; }
 @media (max-width: 900px) { .wall-rows { grid-template-columns: repeat(2, minmax(0, 1fr)); } .wall-lists { grid-template-columns: 1fr; } }
+
+/* add cover from the board; called-in shifts */
+[data-day] .addcover { display: inline-block; margin-top: 6px; font-size: 12px; font-weight: 600; }
+[data-day] .cover-panel { border: 1px solid var(--covered); border-radius: 10px; padding: 14px 16px; margin: 0 0 14px; background: var(--console-2); }
+[data-day] .cover-panel h3 { margin: 0 0 8px; } [data-day] .cover-panel h3 small { color: var(--dim); font-weight: 400; font-size: 13px; margin-left: 8px; }
+[data-day] .cover-panel h4 { margin: 0 0 4px; }
+[data-day] .cover-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+@media (max-width: 900px) { [data-day] .cover-cols { grid-template-columns: 1fr; } }
+[data-day] .tl-bar.called { stroke: var(--covered); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.legend2 .k.called { background: var(--c-blue); box-shadow: 0 0 0 2px var(--covered); }
+[data-day] .tl-who .tl-tag.called + select.att { min-width: 96px; flex-shrink: 1; }  /* the select gives way, not the name */
+[data-day] .tl-who:has(.tl-tag.called) b { flex-shrink: 0; }
+[data-day] .tl-tag.called { border-color: var(--covered); color: var(--covered); }
+[data-day] .rb-row { scroll-margin-top: 72px; }
+[data-day] .rb-cover .cover-panel { margin: 0; }
+[data-day] .warn-note { color: var(--short-ink); }

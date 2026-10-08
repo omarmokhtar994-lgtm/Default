@@ -8,8 +8,8 @@ import math
 import unittest
 from pathlib import Path
 
-from webapp.day import (BreakRefused, check_break, day_view, meeting_slots, overtime_offers, read_inputs, replan,
-                        vto_offers)
+from webapp.day import (BreakRefused, check_break, day_view, dayoff_offers, meeting_slots, overtime_offers,
+                        pattern_breaks, read_inputs, replan, vto_offers)
 from webapp.versions import DAYS, read_week, shift_span
 
 REPO = Path(__file__).resolve().parents[2]
@@ -288,6 +288,42 @@ class TheDay(unittest.TestCase):
                 if m["idx"] in (a["idx"], b["idx"]):
                     gap = b["start"] - (a["start"] + a["minutes"])
                     self.assertTrue(INPUTS["gap_min"] <= gap <= INPUTS["gap_max"], (m["name"], a["kind"], b["kind"], gap))
+
+    def off_person(self):
+        return next(a for a in WEEK["associates"] if a["days"][WED].strip().upper() == "OFF")
+
+    def test_a_called_in_day_off_counts_with_the_plans_breaks(self):
+        a, shift = self.off_person(), "16:00 - 01:00"
+        lo, hi = shift_span(shift)
+        acts = {(0, a["name"]): [{"kind": "Called in", "start": lo, "end": hi, "billable": True, "label": shift}]}
+        v = day_view(WEEK, INPUTS, WED, {}, {}, activities=acts)
+        seg = self.own(v, a["name"])
+        self.assertEqual((seg["start"], seg["end"], seg["called_in"]), (lo, hi, True))
+        pattern = pattern_breaks(WEEK, WED, shift)
+        self.assertTrue(pattern)  # the plan has this shift on Wednesday: its breaks are copied
+        self.assertEqual([(b["kind"], b["start"], b["minutes"]) for b in seg["breaks"]],
+                         [(b["kind"], b["start"], b["minutes"]) for b in pattern])
+        clear = next(t for t in range(lo, 1440, 30)
+                     if not any(b["start"] < t + 30 and t < b["start"] + b["minutes"] for b in pattern))
+        hhmm = f"{clear // 60:02d}:{clear % 60:02d}"
+        self.assertEqual(at(v, hhmm)["now"], at(self.view(), hhmm)["now"] + 1)
+        self.assertEqual(at(v, hhmm)["plan"], at(self.view(), hhmm)["plan"])  # not in the plan
+
+    def test_day_off_offers_cover_the_interval_and_keep_the_rest_gap(self):
+        v = self.view()
+        offers = dayoff_offers(v, WEEK, WED, 12, 20 * 60)
+        self.assertTrue(offers)
+        for o in offers:
+            a = next(x for x in WEEK["associates"] if x["name"] == o["name"])
+            self.assertEqual(a["days"][WED].strip().upper(), "OFF")
+            self.assertIn(o["shift"], WEEK["shifts"])
+            lo, hi = shift_span(o["shift"])
+            self.assertTrue(lo <= 20 * 60 and 20 * 60 + 30 <= hi)
+            prv, nxt = shift_span(a["days"][WED - 1]), shift_span(a["days"][WED + 1])
+            if prv:
+                self.assertGreaterEqual(lo + 1440 - prv[1], 12 * 60)
+            if nxt:
+                self.assertGreaterEqual(nxt[0] + 1440 - hi, 12 * 60)
 
     def test_tiles_sum_the_cells(self):
         v = self.view()

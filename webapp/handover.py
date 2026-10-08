@@ -20,6 +20,8 @@ def _own(view: Dict[str, Any]) -> List[tuple]:
 
 
 def _activity_text(kind: str, lo: int, hi: int, billable: bool) -> str:
+    if kind == "Called in":
+        return f"Day off cancelled: called in {_hm(lo)} - {_hm(hi)}"
     if kind == "Overtime":
         return f"Overtime {_hm(lo)} to {_hm(hi)}"
     if kind == "VTO":
@@ -79,6 +81,7 @@ def note(days, program: str, on: date, measure: str = "interval") -> Optional[Di
             "numbers": {"planned": tiles["planned"], "present": tiles["present"], "absent": tiles["absent"],
                         "late_early": tiles["late_early"], "aux": tiles["aux"], "moved": tiles["moved"],
                         "overtime_minutes": tiles["overtime"], "vto_minutes": tiles["vto"],
+                        "called_in_minutes": tiles["called_in"],
                         "short_hours": tiles["short_hours"], "plan_short_hours": tiles["plan_short_hours"],
                         "over_hours": tiles["over_hours"], "tightest": min(pms) if pms else None,
                         "language_gaps": tiles["language_gaps"], "adherence": whole["adherence"],

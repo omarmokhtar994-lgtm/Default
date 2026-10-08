@@ -170,7 +170,7 @@ def _segments(week: Dict[str, Any], inputs: Dict[str, Any], day: int) -> List[Di
                 span = shift_span(p["shift"])
                 if span and span[1] > 1440:
                     out.append({"name": p["name"], "slot": "", "language": p["language"], "offset": -1,
-                                "label": p["shift"],
+                                "called_in": False, "label": p["shift"],
                                 "start": span[0] - 1440, "end": span[1] - 1440, "planned": []})
             continue
         for a in week.get("associates", []):
@@ -181,9 +181,53 @@ def _segments(week: Dict[str, Any], inputs: Dict[str, Any], day: int) -> List[Di
             if end <= 0 or start >= 1440:
                 continue
             out.append({"name": a["name"], "slot": a.get("slot", ""), "language": a["language"], "offset": offset,
-                        "label": a["days"][d],
+                        "called_in": False, "label": a["days"][d],
                         "start": start, "end": end,
                         "planned": [{**b, "start": b["start"] + 1440 * offset} for b in planned(week, d, a["name"])]})
+    return out
+
+
+CALLED_IN = "Called in"  # a day off cancelled: the person works a shift from the Shift Library
+
+
+def pattern_breaks(week: Dict[str, Any], d: int, label: str) -> List[Dict[str, Any]]:
+    """The breaks the plan gives this shift: copied from someone working the same shift that day,
+    else on another day of the week; none when nobody works it."""
+    span = shift_span(label)
+    if not span:
+        return []
+    order = [d] + [x for x in range(7) if x != d]
+    for day in order:
+        for a in week.get("associates", []):
+            if _norm(a["days"][day]) != _norm(label):
+                continue
+            mine = planned(week, day, a["name"])
+            if mine:
+                own = shift_span(a["days"][day])
+                return [{**b, "start": span[0] + (b["start"] - own[0])} for b in mine]
+    return []
+
+
+def _called_in(week: Dict[str, Any], day: int, activities: Optional[Dict[Tuple[int, str], List[Dict[str, Any]]]],
+               existing: set) -> List[Dict[str, Any]]:
+    """Segments for people called in on a day off (this day, or yesterday's overnight shift)."""
+    people = {a["name"]: a for a in week.get("associates", [])}
+    out = []
+    for (offset, name), acts in (activities or {}).items():
+        d = day + offset
+        if d < 0 or (offset, name) in existing:
+            continue
+        for a in acts:
+            if a["kind"] != CALLED_IN:
+                continue
+            label = a.get("label") or f"{_hm(a['start'])} - {_hm(a['end'])}"
+            start, end = a["start"] + 1440 * offset, a["end"] + 1440 * offset
+            if end <= 0 or start >= 1440:
+                continue
+            person = people.get(name, {})
+            out.append({"name": name, "slot": person.get("slot", ""), "language": person.get("language", ""),
+                        "offset": offset, "called_in": True, "label": f"{label} (called in)", "start": start, "end": end,
+                        "planned": [{**b, "start": b["start"] + 1440 * offset} for b in pattern_breaks(week, d, label)]})
     return out
 
 
@@ -207,16 +251,21 @@ def _away(seg: Dict[str, Any], mark: Optional[Dict[str, Any]]) -> Tuple[int, int
 
 
 def check_break(week: Dict[str, Any], day: int, offset: int, name: str, idx: int, start: int,
-                actual: Dict[Tuple[int, str, int], int], inputs: Optional[Dict[str, Any]] = None) -> None:
+                actual: Dict[Tuple[int, str, int], int], inputs: Optional[Dict[str, Any]] = None,
+                segment: Optional[Dict[str, Any]] = None) -> None:
     """Refuse a break that leaves the shift, overlaps another break, or is not on a 5-minute step.
-    ``start`` is minutes from the shift's own day's midnight."""
+    ``start`` is minutes from the shift's own day's midnight. ``segment`` (start, end, label,
+    planned) is given for a shift that is not in the plan (a day off called in)."""
     if start % STEP:
         raise BreakRefused("Breaks move in 5-minute steps.")
-    segs = [s for s in _segments(week, inputs or {"previous_saturday": []}, day + offset if offset == -1 else day)
-            if s["name"] == name and s["offset"] == 0]
-    if not segs:
-        raise BreakRefused(f"{name} has no shift that day.")
-    seg = segs[0]
+    if segment is not None:
+        seg = segment
+    else:
+        segs = [s for s in _segments(week, inputs or {"previous_saturday": []}, day + offset if offset == -1 else day)
+                if s["name"] == name and s["offset"] == 0]
+        if not segs:
+            raise BreakRefused(f"{name} has no shift that day.")
+        seg = segs[0]
     mine = {b["idx"]: b for b in seg["planned"]}
     if idx not in mine:
         raise BreakRefused("That break is not on the plan.")
@@ -250,7 +299,9 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
     plan = [[] for _ in range(slots)]
     lanes: Dict[str, Dict[str, Any]] = {}
     pieces = []
-    for seg in _segments(week, inputs, day):
+    segments = _segments(week, inputs, day)
+    segments += _called_in(week, day, activities, {(x["offset"], x["name"]) for x in segments})
+    for seg in segments:
         mark = attendance.get((seg["offset"], seg["name"])) or {}
         status = mark.get("status", PRESENT)
         billable = status in AUX and bool(mark.get("billable"))
@@ -271,8 +322,9 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
             in_shift = seg["start"] <= t < seg["end"]
             if not in_shift and not any(a <= t < b for a, b in extra):
                 continue
-            if in_shift and not any(b["planned_start"] <= t < b["planned_start"] + b["minutes"] for b in breaks):
-                plan[i].append(seg)
+            if in_shift and not seg["called_in"] and not any(
+                    b["planned_start"] <= t < b["planned_start"] + b["minutes"] for b in breaks):
+                plan[i].append(seg)  # the plan: the schedule as made (a called-in day off is not in it)
             if status in ABSENT or any(b["start"] <= t < b["start"] + b["minutes"] for b in breaks):
                 continue
             if (counts_away and away[0] <= t < away[1]) or any(a <= t < b for a, b in off):
@@ -281,7 +333,8 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
         pieces.append((seg, status, away, breaks, acts))
         lane = lanes.setdefault(seg["name"], {"name": seg["name"], "slot": seg["slot"], "language": seg["language"],
                                               "segments": []})
-        lane["segments"].append({"offset": seg["offset"], "label": seg["label"], "start": seg["start"],
+        lane["segments"].append({"offset": seg["offset"], "called_in": seg["called_in"], "label": seg["label"],
+                                 "start": seg["start"],
                                  "end": seg["end"], "status": status, "billable": billable,
                                  "from": mark.get("from"), "to": mark.get("to"), "away": away, "breaks": breaks,
                                  "activities": acts})
@@ -353,6 +406,8 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
              "moved": sum(1 for seg, st, away, br, ac in pieces for b in br if b["moved"]),
              "overtime": sum(a["end"] - a["start"] for seg, st, away, br, ac in pieces for a in ac if a["kind"] == "Overtime"),
              "vto": sum(a["end"] - a["start"] for seg, st, away, br, ac in pieces for a in ac if a["kind"] == "VTO"),
+             "called_in": sum(seg["end"] - seg["start"] for seg, st, away, br, ac in pieces
+                              if seg["called_in"] and seg["offset"] == 0 and st not in ABSENT),
              "short_hours": round(short, 1), "plan_short_hours": round(plan_short, 1),
              "short_intervals": sum(1 for c in cells if c["pm"] is not None and c["pm"] < 0),
              "over_hours": round(over, 1), "language_gaps": sum(l["gaps"] for l in languages)}
@@ -476,7 +531,8 @@ def board(view: Dict[str, Any]) -> List[Dict[str, Any]]:
                                                                  f"{'billable' if seg['billable'] else 'non-billable'}"})
                 for a in seg.get("activities", []):
                     if t <= a["start"] < t + step:
-                        text = (f"overtime {_hm(a['start'])} to {_hm(a['end'])}" if a["kind"] == "Overtime" else
+                        text = (f"called in on a day off, {_hm(a['start'])} to {_hm(a['end'])}" if a["kind"] == CALLED_IN else
+                                f"overtime {_hm(a['start'])} to {_hm(a['end'])}" if a["kind"] == "Overtime" else
                                 f"VTO from {_hm(a['start'])}" if a["kind"] == "VTO" else
                                 f"{a['kind'].lower()} {_hm(a['start'])} to {_hm(a['end'])}, "
                                 f"{'billable' if a.get('billable') else 'non-billable'}")
@@ -518,7 +574,7 @@ def _busy(seg: Dict[str, Any], t: int, margin: int = 0) -> bool:
         return True
     if any(b["start"] - margin <= t < b["start"] + b["minutes"] + margin for b in seg["breaks"]):
         return True
-    return any(a["start"] <= t < a["end"] for a in seg.get("activities", []) if a["kind"] != "Overtime")
+    return any(a["start"] <= t < a["end"] for a in seg.get("activities", []) if a["kind"] not in ("Overtime", CALLED_IN))
 
 
 def _tightest(view: Dict[str, Any], slots: List[float], lo: int, hi: int) -> Optional[float]:
@@ -564,24 +620,36 @@ def meeting_slots(view: Dict[str, Any], names: List[str], minutes: int, earliest
     return [{k: v for k, v in x.items() if k != "score"} for x in ranked]
 
 
+def _either_side(week: Dict[str, Any], day: int, name: str, near: Optional[Dict[str, Any]]) -> Tuple[Any, Any]:
+    """The person's working spans the day before and after: from ``near`` (worked out across the week's
+    edges, with call-ins and overtime) when given, else from this week's schedule."""
+    if near is not None:
+        return near["prev"].get(name), near["next"].get(name)
+    a = next(x for x in week.get("associates", []) if x["name"] == name)
+    return (shift_span(a["days"][day - 1]) if day > 0 else None, shift_span(a["days"][day + 1]) if day < 6 else None)
+
+
 def overtime_offers(view: Dict[str, Any], week: Dict[str, Any], day: int, rest_hours: float = 12,
-                    after: int = 0) -> List[Dict[str, Any]]:
-    """For each short interval (from ``after``): people present that day whose shift ends just
-    before it or starts just after it, offered to stay on or come in early (at most 2 hours),
-    keeping the rest gap to the previous and next day's shifts; the shortest offers first."""
+                    after: int = 0, only: Optional[int] = None, near: Optional[Dict[str, Any]] = None
+                    ) -> List[Dict[str, Any]]:
+    """For each short interval (from ``after``), or only the interval at ``only``: people present that day
+    whose shift ends just before it or starts just after it, offered to stay on or come in early (at most
+    2 hours), keeping the rest gap to the previous and next day's work; the shortest offers first."""
     step = view["interval"]
     rest = int(rest_hours * 60)
     out = []
     for c in view["cells"]:
-        if c["pm"] is None or c["pm"] >= 0 or c["t"] < after:
+        if only is not None:
+            if c["t"] != only:
+                continue
+        elif c["pm"] is None or c["pm"] >= 0 or c["t"] < after:
             continue
         t, offers = c["t"], []
         for a in week.get("associates", []):
             seg = _own(view, a["name"])
             if seg is None or seg["status"] != PRESENT or any(x["kind"] == "VTO" for x in seg.get("activities", [])):
                 continue
-            nxt = shift_span(a["days"][day + 1]) if day < 6 else None
-            prv = shift_span(a["days"][day - 1]) if day > 0 else None
+            prv, nxt = _either_side(week, day, a["name"], near)
             if seg["end"] <= t and t + step - seg["end"] <= OVERTIME_MAX:
                 lo, hi = seg["end"], t + step
             elif seg["start"] >= t + step and seg["start"] - t <= OVERTIME_MAX:
@@ -595,7 +663,8 @@ def overtime_offers(view: Dict[str, Any], week: Dict[str, Any], day: int, rest_h
             offers.append({"name": a["name"], "start": lo, "end": hi,
                            "text": f"stay {_hm(lo)} to {_hm(hi)}" if lo == seg["end"] else f"start {_hm(lo)} instead of {_hm(hi)}"})
         offers.sort(key=lambda o: (o["end"] - o["start"], o["name"]))
-        out.append({"t": t, "buffer": c["pm"], "short": math.ceil(c["required"] - c["now"] - 1e-9), "offers": offers[:3]})
+        out.append({"t": t, "buffer": c["pm"], "short": max(0, math.ceil(c["required"] - c["now"] - 1e-9)),
+                    "offers": offers[:3] if only is None else offers[:6]})
     return out
 
 
@@ -789,3 +858,36 @@ def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: i
                               "from": original[key], "to": starts[key]})
     return {"moves": moves, "before": {"tightest": before_score[0], "short_hours": -before_score[1]},
             "after": {"tightest": current[0], "short_hours": -current[1]}}
+
+
+def dayoff_offers(view: Dict[str, Any], week: Dict[str, Any], day: int, rest_hours: float, t: int,
+                  top: int = 5, near: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """People off this day who could be called in on a Shift Library shift covering the interval at
+    ``t``, keeping the rest gap to the day before and after; for each person the shift covering the most
+    short intervals (then the one centred on ``t``); those covering most first."""
+    step = view["interval"]
+    rest = int(rest_hours * 60)
+    short = {c["t"] for c in view["cells"] if c["pm"] is not None and c["pm"] < 0}
+    working = {l["name"] for l in view["lanes"] for s in l["segments"] if s["offset"] == 0}
+    out = []
+    for a in week.get("associates", []):
+        if _norm(a["days"][day]) != "off" or a["name"] in working:
+            continue
+        prv, nxt = _either_side(week, day, a["name"], near)
+        best = None
+        for label in week.get("shifts", []):
+            span = shift_span(label)
+            if not span or not (span[0] <= t and t + step <= span[1]):
+                continue
+            if rest and ((prv and span[0] + 1440 - prv[1] < rest) or (nxt and nxt[0] + 1440 - span[1] < rest)):
+                continue
+            covers = sum(1 for k in short if span[0] <= k and k + step <= span[1])
+            rank = (covers, -abs((span[0] + span[1]) / 2 - (t + step / 2)))
+            if best is None or rank > best[0]:
+                best = (rank, label, span, covers)
+        if best:
+            _, label, span, covers = best
+            out.append({"name": a["name"], "slot": a.get("slot", ""), "language": a["language"], "shift": label,
+                        "start": span[0], "end": span[1], "covers": covers})
+    out.sort(key=lambda o: (-o["covers"], o["name"]))
+    return out[:top]

@@ -20,6 +20,7 @@ from webapp.tests.test_schedules import AFTER, INPUT, REPO
 
 WED = date(2026, 10, 14)  # the run's week starts Sunday 11 October
 SAT = date(2026, 10, 17)
+SUN, MON, TUE, THU = date(2026, 10, 11), date(2026, 10, 12), date(2026, 10, 13), date(2026, 10, 15)
 
 
 class TheAttendance(unittest.TestCase):
@@ -165,6 +166,86 @@ class TheAttendance(unittest.TestCase):
         with self.assertRaises(ValueError):  # Associate 013 is now busy then: nobody is booked
             self.days.book_session("AE/AR B2B", WED, ["Associate 012", "Associate 013"], slot["start"], 30, "Meeting", self.sara)
         self.assertEqual(self.acts("Associate 012"), [])
+
+    def test_a_day_off_called_in_works_like_any_shift(self):
+        # Associate 002: Tuesday 09:00 - 18:00, off on Wednesday
+        self.days.add_activity("AE/AR B2B", WED, "Associate 002", "Called in", "12:00", "21:00", self.sara)
+        page = self.days.page("AE/AR B2B", WED)
+        seg = self.lane(page, "Associate 002")["segments"][0]
+        self.assertEqual((seg["label"], seg["called_in"], [b["kind"] for b in seg["breaks"]]),
+                         ("12:00 - 21:00 (called in)", True, ["Break 1", "Lunch", "Break 2"]))
+        self.assertEqual(page["log"][-1]["what"], "Day off cancelled: called in 12:00 - 21:00")
+        self.days.move_break("AE/AR B2B", WED, "Associate 002", 1, "17:00", self.sara)  # its lunch, planned 16:30
+        self.days.set_status("AE/AR B2B", WED, "Associate 002", "Late", self.sara, end="12:30")
+        seg = self.lane(self.days.page("AE/AR B2B", WED), "Associate 002")["segments"][0]
+        self.assertEqual((seg["breaks"][1]["start"], seg["breaks"][1]["moved"], seg["status"]), (17 * 60, True, "Late"))
+        self.assertEqual(self.days.page("AE/AR B2B", WED)["stale"], 0)
+        self.assertIn("gap", " ".join(self.days.break_advice("AE/AR B2B", WED, "Associate 002", 1, "14:15")["warnings"]))
+
+    def test_calling_in_keeps_the_rules(self):
+        with self.assertRaises(ValueError):  # works that day: overtime instead
+            self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Called in", "12:00", "21:00", self.sara)
+        with self.assertRaises(ValueError):  # not a Shift Library shift
+            self.days.add_activity("AE/AR B2B", WED, "Associate 002", "Called in", "12:05", "21:05", self.sara)
+        with self.assertRaises(ValueError):  # Tuesday 23:00 - 08:00 leaves 1 hour's rest before 09:00
+            self.days.add_activity("AE/AR B2B", WED, "Associate 004", "Called in", "09:00", "18:00", self.sara)
+        self.days.add_activity("AE/AR B2B", WED, "Associate 002", "Called in", "12:00", "21:00", self.sara)
+        with self.assertRaises(ValueError):  # once a day
+            self.days.add_activity("AE/AR B2B", WED, "Associate 002", "Called in", "09:00", "18:00", self.sara)
+
+    def test_the_rest_gap_reaches_across_the_week_and_what_was_added(self):
+        # Sunday: no schedule is kept for the week before, so the previous Saturday comes from the input
+        with self.assertRaises(ValueError) as refused:  # Associate 001: Saturday 16:00 - 01:00
+            self.days.add_activity("AE/AR B2B", SUN, "Associate 001", "Called in", "09:00", "18:00", self.sara)
+        self.assertIn("would rest 8 hours after the previous shift", str(refused.exception))
+        self.days.add_activity("AE/AR B2B", SUN, "Associate 001", "Called in", "13:00", "22:00", self.sara)
+        with self.assertRaises(ValueError) as refused:  # Associate 010: Saturday 18:00 - 03:00, Sunday from 16:00
+            self.days.add_activity("AE/AR B2B", SUN, "Associate 010", "Overtime", "14:00", "16:00", self.sara)
+        self.assertIn("would rest 11 hours after the previous shift", str(refused.exception))
+        # a call-in is a shift for the days either side: Associate 002 is off Wednesday and Thursday
+        self.days.add_activity("AE/AR B2B", WED, "Associate 002", "Called in", "15:00", "00:00", self.sara)
+        with self.assertRaises(ValueError) as refused:
+            self.days.add_activity("AE/AR B2B", THU, "Associate 002", "Called in", "09:00", "18:00", self.sara)
+        self.assertIn("would rest 9 hours after the previous shift", str(refused.exception))
+        # and overtime lengthens the shift: Associate 003 works Monday 09:00 - 18:00, off on Tuesday
+        self.days.add_activity("AE/AR B2B", MON, "Associate 003", "Overtime", "18:00", "20:00", self.sara)
+        with self.assertRaises(ValueError) as refused:
+            self.days.add_activity("AE/AR B2B", TUE, "Associate 003", "Called in", "07:00", "16:00", self.sara)
+        self.assertIn("would rest 11 hours after the previous shift", str(refused.exception))
+        self.days.add_activity("AE/AR B2B", TUE, "Associate 003", "Called in", "08:00", "17:00", self.sara)
+        # the other way: Associate 018 (Monday 09:00 - 18:00, off Tuesday) called in at 06:00 has exactly 12 hours
+        self.days.add_activity("AE/AR B2B", TUE, "Associate 018", "Called in", "06:00", "15:00", self.sara)
+        with self.assertRaises(ValueError) as refused:
+            self.days.add_activity("AE/AR B2B", MON, "Associate 018", "Overtime", "18:00", "19:00", self.sara)
+        self.assertIn("would rest 11 hours before the next shift", str(refused.exception))
+
+    def test_board_offers_keep_the_rest_gap_across_the_week(self):
+        page = self.days.page("AE/AR B2B", SUN)
+        cover = self.days.cover_offers(page, 9 * 60)
+        offered = [o["name"] for o in cover["dayoff"]]
+        self.assertTrue(offered)
+        # Associate 001 (Saturday to 01:00) and 012 (to 02:00) cannot start by 09:00 with 12 hours' rest
+        self.assertFalse({"Associate 001", "Associate 012"} & set(offered))
+        cover = self.days.cover_offers(page, 14 * 60)
+        self.assertNotIn("Associate 010", [o["name"] for o in cover["overtime"]])  # 14:00 leaves 11 hours
+
+    def test_cancelling_a_call_in_leaves_nothing_behind(self):
+        called = self.days.add_activity("AE/AR B2B", WED, "Associate 002", "Called in", "12:00", "21:00", self.sara)
+        training = self.days.add_activity("AE/AR B2B", WED, "Associate 002", "Training", "15:00", "16:00", self.sara)
+        self.days.set_status("AE/AR B2B", WED, "Associate 002", "Late", self.sara, end="12:30")
+        self.days.move_break("AE/AR B2B", WED, "Associate 002", 1, "17:00", self.sara)
+        with self.assertRaises(ValueError) as refused:  # its records would be left on a day off
+            self.days.cancel_activity("AE/AR B2B", WED, called, self.sara)
+        self.assertEqual(str(refused.exception), "Associate 002 still has a training 15:00 to 16:00, the status Late "
+                         "and a moved Lunch on this shift: cancel or set those back first.")
+        self.days.cancel_activity("AE/AR B2B", WED, training, self.sara)
+        self.days.set_status("AE/AR B2B", WED, "Associate 002", "Present", self.sara)
+        self.days.move_break("AE/AR B2B", WED, "Associate 002", 1, None, self.sara)
+        self.days.cancel_activity("AE/AR B2B", WED, called, self.sara)
+        page = self.days.page("AE/AR B2B", WED)
+        self.assertEqual(page["log"][-1]["what"], "Call-in cancelled: back to the day off (was 12:00 - 21:00)")
+        self.assertNotIn("Associate 002", [l["name"] for l in page["view"]["lanes"]])  # off again: no lane
+        self.assertEqual(page["view"]["tiles"]["called_in"], 0)
 
     def test_unknown_status_or_person_refused(self):
         with self.assertRaises(ValueError):

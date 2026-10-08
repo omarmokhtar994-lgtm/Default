@@ -685,8 +685,13 @@ def overtime_offers(view: Dict[str, Any], week: Dict[str, Any], day: int, rest_h
                 continue
             if any(x["start"] < hi and lo < x["end"] for x in seg.get("activities", [])):
                 continue
-            offers.append({"name": a["name"], "start": lo, "end": hi,
-                           "text": f"stay {_hm(lo)} to {_hm(hi)}" if lo == seg["end"] else f"start {_hm(lo)} instead of {_hm(hi)}"})
+            side = "after" if lo == seg["end"] else "before"
+            if side == "after":  # the longest the rules allow: 2 hours, the rest gap to tomorrow
+                most = OVERTIME_MAX if not nxt else min(OVERTIME_MAX, nxt[0] + 1440 - rest - seg["end"])
+            else:
+                most = OVERTIME_MAX if not prv else min(OVERTIME_MAX, seg["start"] - (prv[1] - 1440 + rest))
+            offers.append({"name": a["name"], "start": lo, "end": hi, "side": side, "max": most,
+                           "text": f"stay {_hm(lo)} to {_hm(hi)}" if side == "after" else f"start {_hm(lo)} instead of {_hm(hi)}"})
         offers.sort(key=lambda o: (o["end"] - o["start"], o["name"]))
         out.append({"t": t, "buffer": c["pm"], "short": max(0, math.ceil(c["required"] - c["now"] - 1e-9)),
                     "offers": offers[:3] if only is None else offers[:6]})

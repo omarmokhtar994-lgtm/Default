@@ -242,6 +242,26 @@ class TheDay(unittest.TestCase):
                 if prv:
                     self.assertGreaterEqual(o["start"] + 1440 - prv[1], 12 * 60)
 
+    def test_overtime_offer_says_side_and_max(self):
+        """Phase R task 6: each offer says whether it is after or before the shift and the longest overtime
+        the rules allow there (2 hours, less where the rest gap to the next or previous shift is shorter)."""
+        v = self.view({(0, someone(WED, 20 * 60)[0]["name"]): {"status": "Unplanned leave"}})
+        seen = 0
+        for row in overtime_offers(v, WEEK, WED, rest_hours=12):
+            for o in row["offers"]:
+                seen += 1
+                seg = self.own(v, o["name"])
+                self.assertEqual(o["side"], "after" if o["start"] == seg["end"] else "before")
+                self.assertLessEqual(o["end"] - o["start"], o["max"])
+                self.assertLessEqual(o["max"], 120)
+                a = next(x for x in WEEK["associates"] if x["name"] == o["name"])
+                nxt, prv = shift_span(a["days"][WED + 1]), shift_span(a["days"][WED - 1])
+                if o["side"] == "after" and nxt:
+                    self.assertGreaterEqual(nxt[0] + 1440 - (seg["end"] + o["max"]), 12 * 60)
+                if o["side"] == "before" and prv:
+                    self.assertGreaterEqual(seg["start"] - o["max"] + 1440 - prv[1], 12 * 60)
+        self.assertTrue(seen)
+
     def test_vto_keeps_need_and_languages(self):
         v = self.view()
         for row in vto_offers(v):

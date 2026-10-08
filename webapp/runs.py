@@ -39,6 +39,8 @@ RECORD_DAYS = 395  # the record of actions: 13 months, like schedules and attend
 ACTIVE = ("GATE", "RUNNING", "SCORING")
 RESUMABLE = ("STOPPED", "INTERRUPTED", "FAILED")
 MODES = ("QUICK", "DEEP", "OVERNIGHT", "SMOKE")
+READY = "READY"  # a ready schedule uploaded without the engine (Phase R); never queued
+READY_DONE = "Ready schedule uploaded; the engine did not run. Plan its breaks from its schedule."
 # Same automatic seeds as the Colab notebooks (measured, evidence/seed_portfolio_ab):
 # None = the runner's own default (DEEP: best of 4, OVERNIGHT: best of 6).
 AUTO_SEEDS = {"QUICK": 2, "DEEP": None, "OVERNIGHT": None, "SMOKE": 1}
@@ -208,6 +210,40 @@ class RunQueue:
         else:
             self.store.update_run(run_id, status="REJECTED", finished=time.time(),
                                   message=output[-4000:] or "The workbook check refused this file.")
+        return run_id
+
+    def submit_ready(self, user_id: int, upload_path: Path, workbook_name: str, program: str = "",
+                     week_start: str = "") -> str:
+        """A ready schedule (Phase R): the input workbook with its Schedule tab filled. Checked here in
+        seconds and kept as the run's version 1; the engine does not run, so nothing is queued."""
+        from .ready import check_ready
+        run_id = secrets.token_hex(6)
+        safe = secure_filename(workbook_name) or "workbook.xlsx"
+        if not safe.lower().endswith(".xlsx"):
+            safe += ".xlsx"
+        target = self.run_dir(run_id) / "input" / safe
+        target.parent.mkdir(parents=True)
+        shutil.move(str(upload_path), target)
+        self.store.add_run(run_id, user_id, workbook_name, READY, "CHECKING", program=program, week_start=week_start)
+        problems = check_ready(target)
+        if not problems and self.schedules is None:
+            problems = ["Schedules are not kept on this server, so a ready schedule cannot be used here."]
+        if not problems:
+            try:
+                versions = self.schedules.ensure_ready(self.store.get_run(run_id), target)
+            except Exception as exc:  # said on the run page, with the file kept for a look
+                problems = [f"The ready schedule could not be kept: {exc}"]
+            else:
+                people = len(json.loads(versions[0]["week"] or "{}").get("associates", []))
+        if problems:
+            shown = problems[:25] + ([f"…and {len(problems) - 25} more."] if len(problems) > 25 else [])
+            self.log_path(run_id).write_text("Ready schedule check:\n" + "\n".join(problems) + "\n", encoding="utf-8")
+            self.store.update_run(run_id, status="REJECTED", finished=time.time(), message="\n".join(shown))
+            return run_id
+        now = time.time()
+        self.log_path(run_id).write_text(f"Ready schedule check: accepted, {people} people. The engine did not run.\n",
+                                         encoding="utf-8")
+        self.store.update_run(run_id, status="DONE", started=now, finished=now, message=READY_DONE)
         return run_id
 
     def resume(self, run_id: str) -> bool:

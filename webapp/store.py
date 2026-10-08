@@ -6,6 +6,7 @@ passwords lock the account for 15 minutes; a successful login clears it.
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 import time
 from datetime import date, timedelta
@@ -48,6 +49,14 @@ create table if not exists lobs (
     key text unique not null,
     created real not null,
     unique (program_id, name)
+);
+create table if not exists break_drafts (
+    schedule_id integer not null,
+    day text not null,
+    rows text not null,
+    user_id integer,
+    updated real not null,
+    primary key (schedule_id, day)
 );
 create table if not exists user_programs (
     user_id integer not null,
@@ -269,6 +278,23 @@ class Store:
                        " from user_programs where program_id = ?", (into, program_id))
             db.execute("delete from user_programs where program_id = ?", (program_id,))
             db.execute("delete from programs where id = ?", (program_id,))
+
+    # ------------------------------------------------------------- a week's breaks being planned (Phase R)
+    def set_break_draft(self, schedule_id: int, day: str, rows: Dict[str, List[Optional[int]]], user_id: int) -> None:
+        with self._db() as db:
+            db.execute("insert into break_drafts (schedule_id, day, rows, user_id, updated) values (?, ?, ?, ?, ?)"
+                       " on conflict (schedule_id, day) do update set rows = excluded.rows,"
+                       " user_id = excluded.user_id, updated = excluded.updated",
+                       (schedule_id, day, json.dumps(rows), user_id, time.time()))
+
+    def get_break_draft(self, schedule_id: int) -> Dict[str, Dict[str, List[Optional[int]]]]:
+        with self._db() as db:
+            return {r["day"]: json.loads(r["rows"]) for r in db.execute(
+                "select day, rows from break_drafts where schedule_id = ? order by day", (schedule_id,))}
+
+    def clear_break_draft(self, schedule_id: int) -> None:
+        with self._db() as db:
+            db.execute("delete from break_drafts where schedule_id = ?", (schedule_id,))
 
     def delete_program_row(self, program_id: int) -> None:
         """A program row and who was assigned to it (its LOBs are deleted first, by the caller)."""

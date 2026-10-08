@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
+import sys
 import shutil
 import tempfile
 import threading
@@ -23,12 +25,18 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from .versions import DAYS, added, apply_change, marks, problems, read_week, swap_slots, validate
+from .versions import (DAYS, added, apply_change, marks, problems, read_week, shift_span, swap_slots, validate,
+                       write_breaks)
 
 KEEP_DAYS = 395  # 13 months after the schedule's week (owner, 2026-10-08)
 EGYPT = timezone(timedelta(hours=3))
 RANK = {"ok": 0, "yellow": 1, "red": 2}
 WEEK = "Week"  # the change log's day for a slot swap
+
+
+def _working_cells(week: Dict[str, Any]) -> Set[Tuple[str, str]]:
+    """Every (person, day) with a shift in a week."""
+    return {(a["name"], DAYS[i]) for a in week.get("associates", []) for i, v in enumerate(a["days"]) if shift_span(v)}
 
 
 def worst(found: List[Dict[str, Any]]) -> str:
@@ -95,6 +103,26 @@ class ScheduleBook:
                 number += 1
             return self.store.list_schedules(run_id=run["id"])
 
+    def ensure_ready(self, run: Dict[str, Any], input_path: Path) -> List[Dict[str, Any]]:
+        """A ready schedule's workbook kept as the run's version 1 (kind "ready"); checked like any other."""
+        with self._lock(run["id"]):
+            existing = self.store.list_schedules(run_id=run["id"])
+            if existing:
+                return existing
+            folder = self.root / run["id"]
+            folder.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(input_path, self.input_path(run["id"]))
+            target = folder / "ready.xlsx"
+            shutil.copyfile(input_path, target)
+            week = read_week(target)
+            result = self._check(run["id"], target)
+            result["problems"] = problems(result, _working_cells(week), week["settings"])
+            self.store.add_schedule(run_id=run["id"], program=run.get("program") or "",
+                                    week_start=run.get("week_start") or "", kind="ready", number=1,
+                                    label="Ready schedule (uploaded)", file=f"{run['id']}/ready.xlsx",
+                                    week=json.dumps(week), checks=json.dumps(result))
+            return self.store.list_schedules(run_id=run["id"])
+
     def versions(self, run_id: str) -> List[Dict[str, Any]]:
         return self.store.list_schedules(run_id=run_id)
 
@@ -113,7 +141,10 @@ class ScheduleBook:
 
     def edited_cells(self, schedule_id: int) -> Set[Tuple[str, str]]:
         cells: Set[Tuple[str, str]] = set()
-        for row in self.lineage(schedule_id):
+        lineage = self.lineage(schedule_id)
+        if lineage and lineage[-1]["kind"] == "ready":  # its breaks are planned on the website, so every
+            cells |= _working_cells(json.loads(lineage[-1]["week"] or "{}"))  # missing one is "planned next"
+        for row in lineage:
             for c in self.store.list_changes(row["id"]):  # a slot swap ("Week") changes all seven days
                 cells |= {(c["associate"], d) for d in (DAYS if c["day"] == WEEK else [c["day"]])}
         return cells
@@ -234,6 +265,73 @@ class ScheduleBook:
                                       old=f"Slot {mine}", new=f"Slot {theirs}", reason=reason, severity=worst(new),
                                       problems=json.dumps([p["text"] for p in new]))
             return int(row["id"])
+
+    # ------------------------------------------------------------- a week's breaks (Phase R)
+    def break_rules(self, schedule_id: int) -> Dict[str, Any]:
+        """The break rules of a version's workbook, read by the engine's own parser in a subprocess (as the
+        validator is) and kept with the run, since every version of a run shares its input."""
+        row = self.store.get_schedule(schedule_id)
+        cache = self.root / row["run_id"] / "break_rules.json"
+        if cache.is_file():
+            return json.loads(cache.read_text(encoding="utf-8"))
+        cmd = [sys.executable, str(Path(__file__).with_name("break_rules_cli.py")), "--input",
+               str(self.input_path(row["run_id"])), "--engine",
+               str(Path(self.package_root) / "engine" / "_tools" / "l632_universal_scheduler.py")]
+        try:
+            proc = subprocess.run(cmd, cwd=str(self.package_root), capture_output=True, text=True, timeout=120)
+            found = json.loads((proc.stdout or "").strip().splitlines()[-1])
+        except (OSError, ValueError, IndexError, subprocess.TimeoutExpired):
+            detail = (getattr(locals().get("proc"), "stderr", "") or "").strip().splitlines()
+            raise ValueError("The break rules could not be read from this schedule's workbook"
+                             + (f": {detail[-1]}" if detail else ".")) from None
+        cache.write_text(json.dumps(found), encoding="utf-8")
+        return found
+
+    def save_breaks(self, schedule_id: int, user_id: int, plan: Dict[str, Dict[str, List[Optional[int]]]],
+                    reason: str, use: bool = False) -> Tuple[int, List[str]]:
+        """Write the planned breaks (day -> person -> starts) as a new version (or into a draft not in use),
+        checked like any edit; one change row per person and day. Returns the version and what was left out
+        (people not working that day), said in plain words. ``use`` also marks the version in use."""
+        from .break_plan import hm, slots_for
+        first = self.store.get_schedule(schedule_id)
+        if first is None:
+            raise KeyError(schedule_id)
+        rules = self.break_rules(schedule_id)
+        left_out: List[str] = []
+        with self._lock(first["run_id"]):
+            row = self.store.get_schedule(schedule_id)
+            week = json.loads(row["week"] or "{}")
+            shifts = {a["name"]: a["days"] for a in week.get("associates", [])}
+            rows, changes = {}, []
+            for day in DAYS:
+                for name, starts in sorted((plan.get(day) or {}).items()):
+                    if name not in shifts:
+                        left_out.append(f"{name}, {day}: not on this schedule, so these breaks were left out.")
+                        continue
+                    label = shifts[name][DAYS.index(day)]
+                    span = shift_span(label)
+                    if not span:
+                        if any(s is not None for s in starts):
+                            left_out.append(f"{name}, {day}: no shift that day ({label}), so these breaks were left out.")
+                        continue
+                    entries = [(kind, s, minutes) for (kind, minutes), s in zip(slots_for(rules, span[1] - span[0]), starts)
+                               if s is not None]
+                    old = ", ".join(f"{b['kind']} {b['start']}" for b in week.get("breaks", [])
+                                    if b["associate"] == name and b["day"] == day) or "no breaks"
+                    new_text = ", ".join(f"{kind} {hm(s)}" for kind, s, _ in entries) or "no breaks"
+                    if old != new_text:
+                        rows[(name, day)] = (label, entries)
+                        changes.append((name, day, old, new_text))
+            if not rows:
+                return int(row["id"]), left_out
+            row, added_now = self._save(row, user_id, lambda src, dst: write_breaks(src, dst, rows), set(rows))
+            for name, day, old, new_text in changes:
+                self.store.add_change(schedule_id=row["id"], user_id=user_id, associate=name, day=day, old=old,
+                                      new=new_text, reason=reason, severity=worst(added_now),
+                                      problems=json.dumps([p["text"] for p in added_now]))
+        if use:
+            self.set_in_use(int(row["id"]), user_id)
+        return int(row["id"]), left_out
 
     def set_in_use(self, schedule_id: int, user_id: int) -> None:
         row = self.store.get_schedule(schedule_id)

@@ -252,6 +252,38 @@ def apply_change(src: Path, dst: Path, name: str, day: str, value: str) -> None:
     wb.save(dst)
 
 
+BREAK_HEADERS = ("Associate", "Day", "Shift", "Break Type", "Start", "Duration Minutes", "Status")
+
+
+def write_breaks(src: Path, dst: Path, rows: Dict[Tuple[str, str], Tuple[str, List[Tuple[str, int, int]]]]) -> None:
+    """Replace the breaks of each (person, day) in ``rows`` with ``(shift label, [(kind, start minute, minutes)])``
+    on every Break Schedule tab (Phase R); a workbook without one (a ready schedule) gets the engine's tab."""
+    wb = load_workbook(src)
+    tabs = [t for t in BREAK_TABS if t in wb.sheetnames]
+    if not tabs:
+        ws = wb.create_sheet("Break Schedule")
+        ws.append(list(BREAK_HEADERS))
+        tabs = ["Break Schedule"]
+    keys = {(_norm(n), _norm(d)) for n, d in rows}
+    for tab in tabs:
+        ws = wb[tab]
+        head, cols = _header(ws, ("associate",))
+        doomed = [r for r in range(head + 1, ws.max_row + 1)
+                  if (_norm(ws.cell(r, cols["associate"]).value), _norm(ws.cell(r, cols["day"]).value)) in keys]
+        for r in reversed(doomed):
+            ws.delete_rows(r)
+        for (name, day), (label, entries) in rows.items():
+            for kind, start, minutes in entries:
+                values = {"associate": name, "day": day, "shift": label, "break type": kind,
+                          "start": f"{(start // 60) % 24:02d}:{start % 60:02d}", "duration minutes": minutes,
+                          "status": "Scheduled"}
+                r = ws.max_row + 1
+                for key, c in cols.items():
+                    if key in values:
+                        ws.cell(r, c).value = values[key]
+    wb.save(dst)
+
+
 def validate(input_path: Path, schedule_path: Path, package_root: Path,
              options: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     """The independent validator on one version; about 3 seconds."""

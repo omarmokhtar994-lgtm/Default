@@ -894,3 +894,98 @@ class TheRtaActionsInTheBrowser(unittest.TestCase):
         expect(page.locator("p.flash")).to_contain_text("Cancelled.")
         self.assertEqual(self.store.list_activities("AE/AR B2B", ["2026-10-16"]), [])
         self.assertEqual(errors, [])
+
+
+class ThePhaseRInTheBrowser(unittest.TestCase):
+    """Phase R task 9: every new screen in a real browser, saved for the owner, and no sideways scroll on a phone."""
+
+    setUpClass_base = classmethod(TheSchedulesInTheBrowser.setUpClass.__func__)
+    tearDownClass = classmethod(TheSchedulesInTheBrowser.tearDownClass.__func__)
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+
+    @classmethod
+    def setUpClass(cls):
+        import io
+        from webapp.programs import ProgramBook
+        from webapp.tests.test_ready import make_ready
+        from webapp.tests.test_runs import client_for, run_id_of, token
+        cls.setUpClass_base()
+        R_SCREENS.mkdir(parents=True, exist_ok=True)
+        book = ProgramBook(cls.store)
+        book.sync()
+        saks = book.add_program("SAKS")
+        book.add_lob(saks, "NMG Tier 1")
+        cls.tier2 = book.add_lob(saks, "NMG Tier 2")
+        book.add_lob(saks, "SAKS Tier 1")
+        cls.stray = seed_week(cls.store, "SAKS, NMG Tier 2", "2026-10-18")
+        book.sync()
+        client = client_for(cls.app)
+        ready = make_ready(Path(tempfile.mkdtemp()) / "ready.xlsx").read_bytes()
+        cls.ready_run = run_id_of(client.post("/runs", data={
+            "csrf_token": token(client), "kind": "ready", "program": cls.tier2, "week_start": "2026-10-11",
+            "workbook": (io.BytesIO(ready), "SAKS_week_ready.xlsx")}, content_type="multipart/form-data"))
+        cls.ready_version = cls.app.extensions["schedules"].versions(cls.ready_run)[0]
+
+    def go(self, page, url, errors):
+        page.goto(self.base + url)
+        page.wait_for_load_state("load")
+        page.wait_for_timeout(500)
+        self.assertEqual(errors, [])
+
+    def test_phase_r_screens(self):
+        page = self.page(width=1440, height=900, scheme="light")
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        self.go(page, f"/?program={self.tier2.replace(' ', '+')}", errors)
+        expect(page.locator("section.programs-home article.pcard")).to_have_count(1)
+        expect(page.locator("section.programs-home h1")).to_have_text("SAKS")
+        page.screenshot(path=str(R_SCREENS / "home_picked.png"))
+        self.go(page, "/day?program=AE/AR+B2B&date=2026-10-16&view=board&cover=1260", errors)
+        panel = page.locator("#cover")
+        expect(panel.locator("form.ot-offer").first).to_be_visible()
+        panel.scroll_into_view_if_needed()
+        panel.screenshot(path=str(R_SCREENS / "ot_lengths.png"))
+        self.go(page, "/day?program=AE/AR+B2B&date=2026-10-14&view=cover", errors)
+        vto = page.locator("section[aria-labelledby=vto-h]")
+        expect(vto.locator("form.vto-offer").first).to_be_visible()
+        vto.screenshot(path=str(R_SCREENS / "vto_stretch.png"))
+        self.go(page, "/setup/programs", errors)
+        stray = page.locator("section.setup-program", has=page.locator("h2", has_text="SAKS, NMG Tier 2"))
+        expect(stray).to_contain_text("Move all of it into")
+        stray.screenshot(path=str(R_SCREENS / "programs_move_delete.png"))
+        self.go(page, f"/runs/{self.stray}", errors)
+        page.get_by_text("Edit details").click()
+        page.locator("details.tag").screenshot(path=str(R_SCREENS / "edit_details.png"))
+        self.go(page, "/", errors)
+        page.locator("input[name=kind][value=ready]").check()
+        expect(page.locator("fieldset[data-build-only]")).to_be_hidden()
+        expect(page.locator("[data-submit-label]")).to_have_text("Check and upload")
+        page.locator("#newrun").screenshot(path=str(R_SCREENS / "upload_ready.png"))
+        self.go(page, f"/runs/{self.ready_run}", errors)
+        expect(page.locator("section.ready-run")).to_contain_text("Ready schedule uploaded")
+        page.get_by_role("link", name="Plan breaks").click()
+        page.wait_for_load_state("load")
+        page.locator(".bp-days").get_by_role("button", name="Wed").click()
+        page.wait_for_load_state("load")
+        expect(page.locator(".bp-grid")).to_contain_text("Not placed yet")
+        page.get_by_role("button", name="Suggest times for the empty ones").click()
+        page.wait_for_load_state("load")
+        expect(page.locator("p.flash")).to_contain_text("Suggested times for the empty breaks on Wed")
+        expect(page.locator(".bp-grid")).not_to_contain_text("Not placed yet")
+        page.wait_for_timeout(500)
+        page.screenshot(path=str(R_SCREENS / "plan_breaks.png"), full_page=True)
+        self.assertEqual(errors, [])
+
+    def test_a_phone_has_no_sideways_scroll(self):
+        phone = self.page(width=390, height=844)
+        errors = []
+        phone.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(phone)
+        for url in ("/day?program=AE/AR+B2B&date=2026-10-14&view=board&add=600",
+                    f"/schedules/{self.ready_version['id']}/breaks?day=Wed", "/setup/programs"):
+            self.go(phone, url, errors)
+            self.assertLessEqual(phone.evaluate("document.scrollingElement.scrollWidth"), 390, url)
+        self.go(phone, "/day?program=AE/AR+B2B&date=2026-10-14&view=board&add=600", errors)
+        phone.screenshot(path=str(R_SCREENS / "phone_add.png"))

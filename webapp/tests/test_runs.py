@@ -1073,6 +1073,39 @@ class TheDayPage(unittest.TestCase):
         finally:
             days.cancel_activity("AE/AR B2B", on, made, 1)
 
+    def test_cover_panel_offers_overtime_lengths(self):
+        """Phase R task 6: overtime offers come with a length to pick (15 minutes to the most the rules allow)."""
+        body = html.unescape(self.client.get("/day?program=AE/AR+B2B&date=2026-10-16&view=board&cover=1260")
+                             .get_data(as_text=True))
+        panel = body[body.index('id="cover"'):]
+        forms = [f for f in re.findall(r'(?s)<form[^>]*class="ot-offer"[^>]*>.*?</form>', panel) if "Associate 001" in f]
+        self.assertEqual(len(forms), 1, "Associate 001 (12:00 - 21:00, off on Saturday) can stay on")
+        options = re.findall(r'<option value="([0-9:|]+)"( selected)?>', forms[0])
+        self.assertEqual(options[0][0], "21:00|21:15")
+        self.assertEqual(options[-1][0], "21:00|23:00")
+        self.assertIn(("21:00|22:00", " selected"), options)
+
+    def test_record_overtime_with_span(self):
+        got = self.post("/day/activity", date="2026-10-16", associate="Associate 001", kind="Overtime",
+                        span="21:00|21:45", view="board")
+        self.assertEqual(got.status_code, 303)
+        acts = self.store.list_activities("AE/AR B2B", ["2026-10-16"])
+        try:
+            self.assertEqual([(a["kind"], a["start"], a["end_min"]) for a in acts], [("Overtime", 1260, 1305)])
+        finally:
+            from datetime import date
+            for a in acts:
+                self.app.extensions["days"].cancel_activity("AE/AR B2B", date(2026, 10, 16), a["id"], 1)
+
+    def test_vto_offers_pick_from_and_to(self):
+        body = html.unescape(self.client.get(self.url + "&view=cover").get_data(as_text=True))
+        vto = body[body.index('id="vto-h"'):]
+        form = re.search(r'(?s)<form[^>]*class="vto-offer"[^>]*>.*?</form>', vto)
+        self.assertIsNotNone(form)
+        self.assertRegex(form.group(0), r'<select name="from"')
+        self.assertRegex(form.group(0), r'<select name="to"')
+        self.assertRegex(form.group(0), r'>Add VTO</button>')
+
     def test_overview_and_rta_are_separate(self):
         body = html.unescape(self.client.get("/overview?program=AE/AR+B2B&date=2026-10-14").get_data(as_text=True))
         for words in ("On shift today", "Short of demand", "Next six hours", "Needs attention", "Open RTA",

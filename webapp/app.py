@@ -18,7 +18,8 @@ from werkzeug.utils import secure_filename
 from .adherence import interval_shrinkage, person_day, team as team_figures
 from .analytics import program_weeks, team
 from .attendance import ACTIVITY_KINDS, ADD_KINDS, DayBook, hm, tomorrow_unchecked, week_start
-from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, board
+from .break_plan import check_row, floor, slots_for, suggest
+from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, board, read_inputs
 from .coach import actual_shrinkage, corrected_tab
 from .eta import queue_plan
 from .handover import note as handover_note
@@ -30,7 +31,7 @@ from .auth import admin_required, check_csrf, csrf_token, load_user, login_requi
 from .program_page import build, overview, weeks_to_show
 from .run_admin import PICK_UNIT, apply_rename, apply_run_change, preview_rename, preview_run_change, unit_keys
 from .schedules import ScheduleBook
-from .versions import DAYS, with_notes
+from .versions import DAYS, shift_span, with_notes
 from .runs import MODES, OPTION_LABELS, RESUMABLE, RunQueue, parse_options, run_options
 from .store import Store
 from .week import view as week_view
@@ -668,12 +669,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
     def submit_run():  # type: ignore[no-untyped-def]
         queue = _queue()
         upload = request.files.get("workbook")
-        mode = request.form.get("mode", "QUICK")
+        ready = request.form.get("kind") == "ready"  # a ready schedule: no engine run (Phase R)
+        mode = "QUICK" if ready else request.form.get("mode", "QUICK")
         name = os.path.basename((upload.filename or "") if upload else "")
         if not name.lower().endswith(".xlsx") or mode not in MODES:
             flash("Upload an Excel workbook (.xlsx) and pick a mode.")
             return redirect(url_for("home"))
-        options, problem = parse_options(request.form)
+        options, problem = parse_options(request.form) if not ready else ({}, "")
         if problem:
             flash(problem)
             return redirect(url_for("home"))
@@ -693,6 +695,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
             path.unlink()
             flash("Upload an Excel workbook (.xlsx): that file is not one.")
             return redirect(url_for("home"))
+        if ready:
+            run_id = queue.submit_ready(g.user["id"], path, name, program=program, week_start=week_start)
+            _record("run_uploaded", app.extensions["store"].get_run(run_id), detail="ready schedule")
+            return redirect(url_for("run_detail", run_id=run_id))
         run_id = queue.submit(g.user["id"], path, mode, name, options, program=program, week_start=week_start)
         _record("run_uploaded", app.extensions["store"].get_run(run_id), detail=mode)
         return redirect(url_for("run_detail", run_id=run_id))
@@ -723,7 +729,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                eta=_plan(store.list_runs()).get(run_id), now=time.time(), people=people,
                                start_options=start_choices(run["week_start"], run["week_start"]),
                                unit_label=ProgramBook(store).label(run["program"]) if run["program"] else "",
-                               unit_groups=_unit_choices(ProgramBook(store).tree()), **extra)
+                               unit_groups=_unit_choices(ProgramBook(store).tree()),
+                               ready_version=(_book().versions(run_id) or [None])[0] if run["mode"] == "READY" else None,
+                               **extra)
 
     @app.route("/runs/<run_id>/status.json")
     @login_required
@@ -1013,6 +1021,128 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return render_template("schedules.html", run=run, versions=versions, current=current, view=view,
                                counts=counts, may_set_in_use=bool(current) and _may_set_in_use(current),
                                days=DAYS)
+
+    # ------------------------------------------------------------- a week's breaks (Phase R)
+    def _clock_of(text: str, span: Tuple[int, int]) -> Optional[int]:
+        found = re.match(r"^([01]?\d|2[0-3]):([0-5]\d)$", (text or "").strip())
+        if not found:
+            return None
+        m = int(found.group(1)) * 60 + int(found.group(2))
+        return m + 1440 if m < span[0] and span[1] > 1440 else m  # after midnight: the overnight shift's
+
+    def _typed_breaks(week: Dict[str, Any], d: int, rules: Dict[str, Any]) -> Optional[Dict[str, list]]:
+        """The grid's times for one day, or None when the form carried no grid."""
+        if "rows" not in request.form:
+            return None
+        shifts = {a["name"]: a["days"][d] for a in week.get("associates", [])}
+        typed: Dict[str, list] = {}
+        for i in range(min(request.form.get("rows", 0, type=int), 2000)):
+            name = request.form.get(f"who-{i}", "")
+            span = shift_span(shifts.get(name, ""))
+            if not span:
+                continue
+            typed[name] = [_clock_of(request.form.get(f"at-{i}-{k}", ""), span)
+                           for k in range(len(slots_for(rules, span[1] - span[0])))]
+        return typed
+
+    @app.route("/schedules/<int:schedule_id>/breaks", methods=["GET", "POST"])
+    @login_required
+    def plan_breaks(schedule_id: int):  # type: ignore[no-untyped-def]
+        """Plan a week's breaks: a grid per day, Suggest for the empty ones, saved as a new version."""
+        row = _version_or_404(schedule_id)
+        store, book = app.extensions["store"], _book()
+        day = request.values.get("day", "")
+        week = json.loads(row["week"] or "{}")
+        if day not in DAYS:
+            day = next((DAYS[i] for i in range(7) if any(shift_span(a["days"][i]) for a in week.get("associates", []))),
+                       DAYS[0])
+        d = DAYS.index(day)
+        try:
+            rules = book.break_rules(schedule_id)
+        except ValueError as exc:
+            flash(str(exc))
+            return redirect(url_for("run_schedules", run_id=row["run_id"], v=schedule_id))
+        inputs = read_inputs(book.input_path(row["run_id"]))
+        if request.method == "POST":
+            action = request.form.get("action", "keep")
+            typed = _typed_breaks(week, d, rules)
+            if typed is not None:
+                store.set_break_draft(schedule_id, day, typed, g.user["id"])
+            draft = store.get_break_draft(schedule_id)
+            current = draft.get(day) or _version_breaks(week, d, rules)
+            go = request.form.get("go", "") if request.form.get("go", "") in DAYS else day
+            if action == "suggest":
+                store.set_break_draft(schedule_id, day, suggest(week, inputs, rules, d, current), g.user["id"])
+                flash(f"Suggested times for the empty breaks on {day}. Nothing is kept until you save.")
+            elif action == "copy":
+                shifts = {a["name"]: a["days"] for a in week.get("associates", [])}
+                copied = 0
+                for other in DAYS:
+                    if other == day:
+                        continue
+                    rows = draft.get(other) or _version_breaks(week, DAYS.index(other), rules)
+                    for name, starts in current.items():
+                        label = shifts.get(name, [""] * 7)[d]
+                        if shifts.get(name) and shifts[name][DAYS.index(other)] == label and shift_span(label):
+                            rows[name] = [None if s is None else s for s in starts]
+                            copied += 1
+                    store.set_break_draft(schedule_id, other, rows, g.user["id"])
+                flash(f"Copied {day}'s times to {copied} other day{'s' if copied != 1 else ''} with the same shift. "
+                      "Nothing is kept until you save.")
+            elif action == "discard":
+                store.clear_break_draft(schedule_id)
+                flash("Your unsaved times were dropped.")
+            elif action == "save":
+                reason = " ".join(request.form.get("reason", "").split())[:200] or "Breaks planned"
+                use = request.form.get("use") == "1" and _may_set_in_use(row)
+                try:
+                    saved, left_out = book.save_breaks(schedule_id, g.user["id"], draft, reason, use=use)
+                except ValueError as exc:
+                    flash(str(exc))
+                    return redirect(url_for("plan_breaks", schedule_id=schedule_id, day=day), code=303)
+                store.clear_break_draft(schedule_id)
+                made = book.lineage(saved)[0]
+                flash("Nothing changed." if saved == schedule_id else
+                      f"Saved as {made['label']}{' and in use for this week' if use else ''}.")
+                for line in left_out:
+                    flash(line)
+                return redirect(url_for("plan_breaks", schedule_id=saved, day=day), code=303)
+            return redirect(url_for("plan_breaks", schedule_id=schedule_id, day=go), code=303)
+        draft = store.get_break_draft(schedule_id)
+        current = draft.get(day) or _version_breaks(week, d, rules)
+        people = []
+        for a in sorted(week.get("associates", []), key=lambda a: ((shift_span(a["days"][d]) or (0, 0))[0], a["name"])):
+            span = shift_span(a["days"][d])
+            if not span:
+                continue
+            slots = slots_for(rules, span[1] - span[0])
+            starts = (list(current.get(a["name"]) or []) + [None] * len(slots))[:len(slots)]
+            level, text = check_row(rules, a["days"][d], starts)
+            people.append({"name": a["name"], "label": a["days"][d], "slots": list(zip(slots, starts)),
+                           "level": level, "text": text})
+        columns = max((p["slots"] for p in people), key=len, default=[])
+        run = store.get_run(row["run_id"]) or {}
+        return render_template("breaks.html", row=row, run=run, day=day, days=DAYS, people=people, rules=rules,
+                               columns=[(k, m) for (k, m), _ in columns], strip=floor(week, inputs, d, current, rules),
+                               interval=inputs["interval"], drafted=sorted(draft, key=DAYS.index),
+                               may_set_in_use=_may_set_in_use(row), hm=hm)
+
+    def _version_breaks(week: Dict[str, Any], d: int, rules: Dict[str, Any]) -> Dict[str, list]:
+        """The breaks a version already has on day ``d``, as the grid's starts per person."""
+        out: Dict[str, list] = {}
+        for a in week.get("associates", []):
+            span = shift_span(a["days"][d])
+            if not span:
+                continue
+            slots = slots_for(rules, span[1] - span[0])
+            mine = {b["kind"]: b for b in week.get("breaks", []) if b["associate"] == a["name"] and b["day"] == DAYS[d]}
+            starts = []
+            for kind, _ in slots:
+                b = mine.get(kind)
+                m = _clock_of(b["start"], span) if b else None
+                starts.append(m)
+            out[a["name"]] = starts
+        return out
 
     @app.route("/schedules/<int:schedule_id>/check", methods=["POST"])
     @login_required
@@ -1368,7 +1498,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
             if on is None:
                 raise ValueError("Pick a day.")
             name, kind = request.form.get("associate", "").strip(), request.form.get("kind", "")
-            _days().add_activity(program, on, name, kind, request.form.get("from", ""), request.form.get("to", ""),
+            start, _, end = request.form.get("span", "").partition("|")  # a picked length ("21:00|21:45")
+            if not request.form.get("span"):
+                start, end = request.form.get("from", ""), request.form.get("to", "")
+            _days().add_activity(program, on, name, kind, start, end,
                                  g.user["id"], billable=request.form.get("billable") == "1",
                                  note=request.form.get("note", ""))
             flash(f"Recorded: {name}, {'day off cancelled (called in)' if kind == 'Called in' else kind.lower()}.")

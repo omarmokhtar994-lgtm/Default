@@ -1,0 +1,45 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{% extends "base.html" %}
+{% block title %}Plan breaks: {{ row.program|unit if row.program else run.workbook }} on Team Scheduler{% endblock %}
+{% block content %}
+{% set full = {'Sun': 'Sunday', 'Mon': 'Monday', 'Tue': 'Tuesday', 'Wed': 'Wednesday', 'Thu': 'Thursday', 'Fri': 'Friday', 'Sat': 'Saturday'} %}
+<div class="phead"><div>
+  <h1>{{ row.program|unit if row.program else run.workbook }}: plan breaks</h1>
+  <p class="byline">{{ row.label }}{% if row.week_start %}, starts {{ row.week_start|start_day }}{% endif %}. Each shift takes {% for m, k in rules.segments %}{{ k }} ({{ m }} min){{ ', ' if not loop.last }}{% endfor %}, as the workbook's rules say{% if rules.min_gap %}, at least {{ rules.min_gap }} minutes apart{% endif %}. Breaks start on 15-minute steps. Nothing is kept until you save; saving makes a new version, checked like every other.</p>
+</div><a class="button" href="{{ url_for('run_schedules', run_id=row.run_id, v=row.id) }}">Back to the schedule</a></div>
+
+<form method="post" class="breakplan">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="day" value="{{ day }}">
+  <input type="hidden" name="rows" value="{{ people|length }}">
+  <nav class="bp-days" aria-label="Days of the week">{% for dd in days %}<button type="submit" name="go" value="{{ dd }}"{% if dd == day %} class="on" aria-current="page"{% endif %}>{{ dd }}{% if dd in drafted and dd != day %} <small>unsaved</small>{% endif %}</button>{% endfor %}</nav>
+
+  <section class="panel" aria-labelledby="bp-h">
+    <h2 id="bp-h">{{ full[day] }} with these breaks</h2>
+    {% if people %}
+    <p class="note">Each {{ 'hour' if interval == 60 else ('half-hour' if interval == 30 else 'interval') }} above (green) or below demand with the breaks as they stand. Press Update after typing to see it again.</p>
+    <div class="bp-strip" role="img" aria-label="The floor against demand through {{ full[day] }}">{% for c in strip %}<span class="{{ c.cls }}" title="{{ hm(c.t) }}: {{ c.pm|hmm if c.pm is not none else 'no demand' }}">{% if c.pm is not none %}{{ '+' if c.pm >= 0 else '−' }}{{ '%.1f'|format(c.pm|abs) }}{% endif %}</span>{% endfor %}</div>
+    <div class="bp-hours" aria-hidden="true">{% for c in strip %}<span>{{ hm(c.t)[:2] if c.t % 120 == 0 else '' }}</span>{% endfor %}</div>
+    <div class="bp-scroll"><table class="adh-t bp-grid">
+      <thead><tr><th scope="col">Associate</th><th scope="col">Shift</th>{% for k, m in columns %}<th scope="col">{{ k }}, {{ m }} min</th>{% endfor %}<th scope="col">Check</th></tr></thead>
+      <tbody>{% for p in people %}{% set i = loop.index0 %}
+        <tr><td><b>{{ p.name }}</b><input type="hidden" name="who-{{ i }}" value="{{ p.name }}"></td><td>{{ p.label }}</td>
+          {% for (kind, minutes), start in p.slots %}<td><input type="time" step="900" name="at-{{ i }}-{{ loop.index0 }}" value="{{ hm(start) if start is not none else '' }}" aria-label="{{ p.name }}, {{ kind }}"></td>{% endfor %}
+          {% for _ in range(columns|length - p.slots|length) %}<td class="dim">–</td>{% endfor %}
+          <td class="bp-check {{ p.level }}">{{ p.text }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    <div class="bp-actions">
+      <button type="submit" name="action" value="keep">Update</button>
+      <button type="submit" name="action" value="suggest">Suggest times for the empty ones</button>
+      <button type="submit" name="action" value="copy">Copy {{ full[day] }}'s times to days with the same shift</button>
+    </div>
+    <div class="bp-save">
+      <label>What changed (kept with the version) <input name="reason" maxlength="200" placeholder="For example: breaks planned for the week"></label>
+      {% if may_set_in_use %}<label class="exp-kind"><input type="checkbox" name="use" value="1" checked><span>Use it for this week (RTA reads it)</span></label>{% endif %}
+      <button type="submit" name="action" value="save" class="primary">Save as a new version</button>
+      {% if drafted %}<button type="submit" name="action" value="discard" class="link danger">Drop unsaved times</button>{% endif %}
+    </div>
+    {% else %}<p class="empty">Nobody works on {{ full[day] }} in this schedule. Pick another day.</p>{% endif %}
+  </section>
+</form>
+{% endblock %}

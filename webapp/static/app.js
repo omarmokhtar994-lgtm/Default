@@ -444,6 +444,14 @@
   });
 })();
 
+// Print buttons (the handover note).
+(function () {
+  "use strict";
+  Array.prototype.forEach.call(document.querySelectorAll("[data-print]"), function (b) {
+    b.addEventListener("click", function () { window.print(); });
+  });
+})();
+
 // Chart tips: any mark with data-tip shows it on hover, or on tap on a phone.
 // The same numbers are in each chart's table view.
 (function () {

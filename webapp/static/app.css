@@ -652,3 +652,20 @@ svg.defs { position: absolute; width: 0; height: 0; }
 .coach-t td.up { background: var(--gap-soft); } .coach-t td.up b { color: var(--gap-ink); }
 .coach-t td.down { background: var(--accent-soft); } .coach-t td.down b { color: var(--accent-ink); }
 .coach-t td.kept { opacity: .55; } .coach-t td.none { background: transparent; }
+
+/* handover note (prints on one sheet) */
+.handover { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.handover .nums { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 18px; margin: 0; }
+.handover .nums dt { color: var(--dim); font-size: 13px; } .handover .nums dd { margin: 0; font: 700 20px var(--display); }
+.handover .nums dd small { font: 400 12px var(--body, inherit); color: var(--dim); }
+.handover .pill { display: inline-block; margin: 0 6px 6px 0; padding: 2px 8px; border-radius: 10px; background: var(--console-2); font-size: 12px; }
+.handover .pill.bad { background: var(--gap-soft); color: var(--gap-ink); }
+.handover-tools { display: flex; gap: 8px; align-items: center; }
+.daynav a + a { margin-left: 0; }
+@media (max-width: 800px) { .handover { grid-template-columns: 1fr; } }
+@media print {
+  header.top, .crumbs, .noprint, footer { display: none !important; }
+  body { background: #fff !important; color: #000 !important; }
+  .panel, .handover .pill { background: #fff !important; color: #000 !important; border: 1px solid #999 !important; box-shadow: none !important; }
+  .handover .nums dt, .byline, .empty { color: #333 !important; }
+}

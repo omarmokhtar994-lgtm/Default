@@ -1,0 +1,50 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{% extends "base.html" %}
+{% block title %}Handover: {{ program }} {{ on.strftime('%d %b') }} on Team Scheduler{% endblock %}
+{% block content %}
+<div class="phead"><div>
+  <h1>Handover: {{ program }}, {{ on.strftime('%A %d %b') }}</h1>
+  {% if n %}<p class="byline">{{ n.note or 'From the schedule in use (' ~ n.version.label ~ ').' }} {{ measures[measure] }}. Written from what was recorded on the day page.</p>{% endif %}
+</div>
+  <p class="noprint handover-tools"><a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat()) }}">Back to the day</a> <button type="button" class="primary" data-print>Print</button></p>
+</div>
+{% if problem %}<p class="empty panel">{{ problem }}</p>{% else %}
+{% set k = n.numbers %}
+<div class="handover">
+<section class="panel"><h2>In numbers</h2>
+  <dl class="nums">
+    <div><dt>On shift</dt><dd>{{ k.present }} of {{ k.planned }}</dd></div>
+    <div><dt>Hours short</dt><dd>{{ k.short_hours|num }} h <small>(plan {{ k.plan_short_hours|num }} h)</small></dd></div>
+    <div><dt>Hours above</dt><dd>{{ k.over_hours|num }} h</dd></div>
+    <div><dt>Tightest interval</dt><dd>{{ k.tightest|hmm if k.tightest is not none else '–' }}</dd></div>
+    <div><dt>Team adherence</dt><dd>{{ k.adherence if k.adherence is not none else '–' }}%</dd></div>
+    <div><dt>Team conformance</dt><dd>{{ k.conformance if k.conformance is not none else '–' }}%</dd></div>
+    <div><dt>Overtime / VTO</dt><dd>{{ k.overtime_minutes }} / {{ k.vto_minutes }} min</dd></div>
+    <div><dt>Language gaps</dt><dd>{{ k.language_gaps }}</dd></div>
+  </dl>
+</section>
+<section class="panel"><h2>Who was not on the floor</h2>
+  {% if n.absent or n.late_early %}<ul class="log">{% for p in n.absent %}<li><b>{{ p.name }}</b>: {{ p.status|lower }} ({{ p.shift }})</li>{% endfor %}{% for p in n.late_early %}<li><b>{{ p.name }}</b>: {{ p.text }}</li>{% endfor %}</ul>
+  {% else %}<p class="empty">Everyone on shift was in, on time.</p>{% endif %}
+</section>
+<section class="panel"><h2>Aux, meetings, overtime and VTO</h2>
+  {% if n.activities %}<ul class="log">{% for a in n.activities %}<li><b>{{ a.name }}</b>: {{ a.text }}</li>{% endfor %}</ul>{% else %}<p class="empty">None recorded.</p>{% endif %}
+</section>
+<section class="panel"><h2>Breaks moved</h2>
+  {% if n.moves %}<ul class="log">{% for m in n.moves %}<li><b>{{ m.name }}</b>: {{ m.what }}{% if m.by %} (by {{ m.by }}){% endif %}</li>{% endfor %}</ul>{% else %}<p class="empty">Every break as planned.</p>{% endif %}
+</section>
+<section class="panel"><h2>Short intervals</h2>
+  {% if n.short %}<p class="chips-line">{% for t, pm in n.short %}<span class="pill bad">{{ hm(t) }} {{ pm|hmm }}</span>{% endfor %}</p>{% else %}<p class="empty">No interval was short.</p>{% endif %}
+  {% for g in n.language_gaps %}<p><b>{{ g.language }}</b> uncovered at {{ g.times|join(', ') }}</p>{% endfor %}
+</section>
+<section class="panel"><h2>Watch tomorrow ({{ n.tomorrow.date.strftime('%A %d %b') }})</h2>
+  {% if not n.tomorrow.planned %}<p class="empty">No schedule for tomorrow yet.</p>
+  {% else %}
+  {% if n.tomorrow.short %}<p>Short in the plan already ({{ n.tomorrow.plan_short_hours|num }} h): {% for t, pm in n.tomorrow.short %}<span class="pill bad">{{ hm(t) }} {{ pm|hmm }}</span>{% endfor %}</p>{% else %}<p>The plan covers every interval.</p>{% endif %}
+  {% if n.tomorrow.absent %}<p>Already marked: {% for p in n.tomorrow.absent %}<b>{{ p.name }}</b> ({{ p.status|lower }}){{ ', ' if not loop.last }}{% endfor %}.</p>{% endif %}
+  {% for g in n.tomorrow.language_gaps if g.times %}<p><b>{{ g.language }}</b> uncovered in the plan at {{ g.times|join(', ') }}</p>{% endfor %}
+  {% endif %}
+</section>
+</div>
+{% endif %}
+{% endblock %}

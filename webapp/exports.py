@@ -28,7 +28,7 @@ MAX_DAYS = 400
 KINDS = {"attendance": "Attendance", "activities": "Activities", "activity": "Day activity",
          "breaks": "Breaks planned vs taken",
          "changes": "Schedule changes and swaps", "versions": "Versions and in use", "runs": "Runs",
-         "worked": "Worked hours and adherence", "record": "Other actions"}
+         "worked": "Worked hours and adherence", "summary": "Daily summary", "record": "Other actions"}
 VERSION_EVENTS = {"version_created": "New version", "set_in_use": "Set in use"}
 OTHER_EVENTS = {"run_uploaded": "Run uploaded", "run_started": "Run started", "run_stopped": "Run stopped",
                 "run_resumed": "Run resumed", "downloaded": "Downloaded", "exported": "Exported",
@@ -189,9 +189,29 @@ def _worked(store, days, weeks, start, end, program, user_id, measure):
                        r["overtime"], r["adherence"], r["conformance"]]
 
 
+def _summary(store, days, weeks, start, end, program, user_id, measure):
+    from .handover import note  # the handover note's numbers, one row per program and day
+    yield ["Date", "Program", "Planned", "Present", "Absent", "Late or early", "In aux", "Breaks moved", "Overtime min",
+           "VTO min", "Hours short", "Hours short in the plan", "Hours above", "Tightest (hours)", "Language gaps",
+           "Adherence %", "Conformance %", "Changes recorded"]
+    for p in _programs(days, program):
+        for day in _dates(start, end):
+            try:
+                found = note(days, p, day, measure)
+            except ValueError:
+                continue
+            if found is None:
+                continue
+            n = found["numbers"]
+            yield [day.isoformat(), p, n["planned"], n["present"], n["absent"], n["late_early"], n["aux"], n["moved"],
+                   n["overtime_minutes"], n["vto_minutes"], n["short_hours"], n["plan_short_hours"], n["over_hours"],
+                   n["tightest"], n["language_gaps"], n["adherence"], n["conformance"], n["changes"]]
+
+
 TABLES: Dict[str, Callable] = {"attendance": _attendance, "activities": _activities, "activity": _activity,
                                "breaks": _breaks,
                                "changes": _changes, "versions": _versions, "runs": _runs, "worked": _worked,
+                               "summary": _summary,
                                "record": _record}
 
 

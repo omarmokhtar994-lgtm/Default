@@ -1081,6 +1081,14 @@ class TheDayPage(unittest.TestCase):
         self.assertEqual(got.status_code, 303)
         self.assertIn("Lunch moved 12:30 to 12:55 (autopilot)", self.page())
 
+    def test_handover_note_page(self):
+        body = html.unescape(self.client.get("/day/handover?program=AE/AR+B2B&date=2026-10-14").get_data(as_text=True))
+        for words in ("Handover: AE/AR B2B, Wednesday 14 Oct", "In numbers", "Who was not on the floor",
+                      "Breaks moved", "Watch tomorrow (Thursday 15 Oct)", "Print"):
+            self.assertIn(words, body)
+        self.assertIn('href="/day/handover?program=AE/AR+B2B&amp;date=2026-10-14"',
+                      self.client.get(self.url).get_data(as_text=True))
+
     def test_week_without_a_schedule_and_defaults(self):
         body = html.unescape(self.client.get("/day?program=AE/AR+B2B&date=2026-11-04").get_data(as_text=True))
         self.assertIn("No schedule for AE/AR B2B in the week of 01 Nov", body)

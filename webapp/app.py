@@ -21,6 +21,7 @@ from .attendance import ACTIVITY_KINDS, DayBook, hm, week_start
 from .day import AUX, MEASURES, STATUSES, BreakRefused, board
 from .coach import actual_shrinkage, corrected_tab
 from .eta import queue_plan
+from .handover import note as handover_note
 from .exports import KINDS as EXPORT_KINDS, build as build_export
 from .outcome import cannot_schedule, read as read_outcome, view as outcome_view
 from .auth import admin_required, check_csrf, csrf_token, load_user, login_required
@@ -833,6 +834,22 @@ def create_app(config: Dict[str, Any]) -> Flask:
         except ValueError as exc:
             flash(f"Stopped: {exc} The moves before it were kept; open the autopilot again for a fresh proposal.")
         return _back_to_day(program, on, "")
+
+    @app.route("/day/handover")
+    @login_required
+    def day_handover():  # type: ignore[no-untyped-def]
+        """The shift handover note: printable, one page."""
+        on = _date(request.args.get("date", "")) or datetime.now(EGYPT).date()
+        program = clean_program(request.args.get("program", ""))
+        measure = request.args.get("measure", "") if request.args.get("measure", "") in MEASURES else "interval"
+        try:
+            found = handover_note(_days(), program, on, measure) if program else None
+        except ValueError as exc:
+            found, problem = None, str(exc)
+        else:
+            problem = "" if found else f"No schedule for {program or 'this program'} on {on:%d %b}."
+        return render_template("handover.html", n=found, problem=problem, program=program, on=on, hm=hm,
+                               measures=MEASURES, measure=measure)
 
     @app.route("/day/activity", methods=["POST"])
     @login_required

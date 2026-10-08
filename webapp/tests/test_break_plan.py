@@ -5,6 +5,7 @@ The rules come from the engine's own parser (break set per shift length, windows
 subprocess as the validator does. A grid per day holds each shift's breaks; Suggest fills empty ones inside the
 rules where the floor has most room; saving makes a new version, checked like every other."""
 import json
+import re
 import shutil
 import tempfile
 import unittest
@@ -192,6 +193,19 @@ class TheBreakPlanPage(unittest.TestCase):
     def test_breaks_page_access_is_checked(self):
         self.assertEqual(self.lina.get(self.url()).status_code, 403)
         self.assertEqual(self.admin.get(self.url()).status_code, 200)
+
+    def test_the_menu_follows_the_schedule(self):
+        import html
+        page = html.unescape(self.admin.get("/?program=GDI").get_data(as_text=True))  # the menu was on GDI
+        page = html.unescape(self.admin.get(self.url()).get_data(as_text=True))
+        self.assertIn(f'<option value="{self.key}" selected>SAKS, NMG Tier 2</option>', page)
+
+    def test_switching_days_without_typing_keeps_no_draft(self):
+        import html
+        page = html.unescape(self.admin.get(self.url("Thu")).get_data(as_text=True))
+        fields = dict(re.findall(r'name="(who-\d+|at-\d+-\d+|rows)" value="([^"]*)"', page))
+        self.admin.post(self.url("Thu"), data={"csrf_token": self.token(self.admin), "day": "Thu", "go": "Fri", **fields})
+        self.assertNotIn("Thu", self.store.get_break_draft(self.version["id"]))
 
     def test_grid_suggest_keep_and_save(self):
         import html

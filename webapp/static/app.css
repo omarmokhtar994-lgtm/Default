@@ -509,7 +509,7 @@ main:has([data-day]) { max-width: 1560px; }  /* the board and the lanes need the
 .daybar { display: flex; gap: 18px; align-items: flex-end; flex-wrap: wrap; margin: 0 0 14px; }
 .daybar .sel { margin: 0; }
 .daybar .measure-note { margin: 0 0 6px; font-size: 13px; max-width: 46ch; }
-.tabs { display: flex; gap: 4px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; }  /* wraps on a phone (Phase R) */
 .tabs a { padding: 8px 16px; border: 1px solid var(--rail); border-radius: 8px; color: var(--dim); text-decoration: none; font-weight: 600; }
 .tabs a.on { background: var(--accent-soft); color: var(--paper); border-color: var(--covered); }
 .tabs a:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
@@ -833,3 +833,24 @@ dialog.dlg.add-dlg { width: 620px; }
 /* Phase R: a ready schedule */
 .ready-run { border-left: 3px solid var(--covered); }
 .ready-run .acts { display: flex; flex-wrap: wrap; gap: 10px; }
+/* Phase R: planning a week's breaks */
+.bp-days { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
+.bp-days button { padding: 6px 12px; border: 1px solid var(--rail); border-radius: 6px; background: none; color: var(--paper);
+  font-weight: 600; cursor: pointer; }
+.bp-days button.on { background: var(--accent-soft); border-color: var(--accent-ink); color: var(--accent-ink); }
+.bp-days small { color: var(--short-ink); font-weight: 400; }
+.bp-strip { display: flex; gap: 2px; margin: 8px 0 2px; }
+.bp-strip span { flex: 1 1 0; min-width: 0; height: 34px; border-radius: 3px; display: grid; place-items: center; overflow: hidden;
+  font: 600 11px/1 var(--text); color: var(--on-accent); background: var(--empty-cell); }
+.bp-strip .ok { background: var(--covered); } .bp-strip .warn { background: var(--short); } .bp-strip .bad { background: var(--gap); color: #fff; }
+.bp-strip .none { color: var(--dim); }
+.bp-hours { display: flex; gap: 2px; margin: 0 0 14px; font-size: 11px; color: var(--dim); }
+.bp-hours span { flex: 1 1 0; min-width: 0; overflow: visible; white-space: nowrap; }
+.bp-scroll { overflow-x: auto; max-width: 100%; }
+.bp-grid input[type=time] { width: 8.5em; }
+.bp-grid td.bp-check { min-width: 14em; }
+.bp-check.ok { color: var(--accent-ink); } .bp-check.warn { color: var(--short-ink); } .bp-check.none { color: var(--dim); }
+.bp-actions, .bp-save { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; }
+.bp-save label:first-child { flex: 1 1 18em; }
+.bp-save label:first-child input { width: 100%; }
+@media (max-width: 560px) { .bp-strip span { font-size: 0; } }

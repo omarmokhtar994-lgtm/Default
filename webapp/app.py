@@ -368,8 +368,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if not user or request.endpoint in ("login", "static"):
             return {}
         access = _access()
+        args = request.view_args or {}
         if request.endpoint == "program":
-            key = (request.view_args or {}).get("name", "")
+            key = args.get("name", "")
+        elif "schedule_id" in args or "run_id" in args:  # a run's or version's own pages follow its program
+            found = (app.extensions["store"].get_schedule(args["schedule_id"]) if "schedule_id" in args
+                     else app.extensions["store"].get_run(args["run_id"]))
+            key = (found or {}).get("program") or ""
         else:
             key = clean_program(request.args.get("program", ""))
         if key and access.can_open(key) and access.book.unit(key):
@@ -1066,9 +1071,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if request.method == "POST":
             action = request.form.get("action", "keep")
             typed = _typed_breaks(week, d, rules)
-            if typed is not None:
-                store.set_break_draft(schedule_id, day, typed, g.user["id"])
             draft = store.get_break_draft(schedule_id)
+            if typed is not None and typed != (draft.get(day) or _version_breaks(week, d, rules)):
+                store.set_break_draft(schedule_id, day, typed, g.user["id"])  # only what was changed is kept
+                draft = store.get_break_draft(schedule_id)
             current = draft.get(day) or _version_breaks(week, d, rules)
             go = request.form.get("go", "") if request.form.get("go", "") in DAYS else day
             if action == "suggest":

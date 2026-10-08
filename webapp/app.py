@@ -894,6 +894,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                     [(l["name"], l["key"]) for l in p["lobs"]]}
         return render_template("program_setup.html", programs=tree, people=people, loose=loose, modes=MODES,
                                blockers=blockers, unit_groups=_unit_choices(tree),
+                               look_alike={p["key"]: book.look_alike(p["id"]) for p in tree if not p["lobs"]},
                                days=["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"])
 
     @app.route("/programs/rename", methods=["POST"])

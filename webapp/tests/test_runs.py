@@ -1613,6 +1613,20 @@ class TheProgramSetup(unittest.TestCase):
         self.assertIn("program_deleted", kinds)
         self.assertIn("lob_deleted", kinds)
 
+    def test_a_stray_program_offers_its_lob_first(self):
+        """Phase R: 'SAKS, NMG Tier 2' reads as SAKS's LOB NMG Tier 2, so that is the move offered first."""
+        from webapp.programs import ProgramBook
+        book = ProgramBook(self.store)
+        book.add_program("AE")
+        saks = book.add_program("SAKS")
+        book.add_lob(saks, "NMG Tier 1")
+        tier2 = book.add_lob(saks, "NMG Tier 2")
+        run_id_of(upload(self.sara, program="SAKS, NMG Tier 2", week_start="2026-10-18"))
+        page = html.unescape(self.admin.get("/setup/programs").get_data(as_text=True))
+        self.assertIn(f'<option value="{tier2}" selected>SAKS, NMG Tier 2</option>', page)
+        self.assertIn("SAKS, NMG Tier 2 looks like SAKS's LOB NMG Tier 2.", page)
+        self.assertIn("SAKS, NMG Tier 2 still has 1 run: move it into a program or LOB first.", page)
+
     def test_set_up_a_program_and_use_it(self):
         self.assertEqual(self.sara.get("/setup/programs").status_code, 403)
         run_id = run_id_of(upload(self.sara, program="AE/AR B2B", week_start="2026-10-11"))

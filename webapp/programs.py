@@ -152,7 +152,18 @@ class ProgramBook:
         if not parts:
             return ""
         listed = parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
-        return f"{name} still has {listed}: move them into a program or LOB first."
+        it = "it" if sum(used.values()) == 1 else "them"
+        return f"{name} still has {listed}: move {it} into a program or LOB first."
+
+    def look_alike(self, program_id: int) -> Optional[Dict[str, Any]]:
+        """The LOB a program without LOBs reads as ("SAKS, NMG Tier 2" is SAKS's LOB NMG Tier 2), if any."""
+        mine = self.program(program_id)
+        name = " ".join(mine["name"].replace(",", " ").split()).casefold()
+        for p in self.tree():
+            for l in p["lobs"]:
+                if p["id"] != program_id and " ".join(f"{p['name']} {l['name']}".split()).casefold() == name:
+                    return {"key": l["key"], "program": p["name"], "lob": l["name"]}
+        return None
 
     def _refuse_if_used(self, name: str, key: str) -> None:
         said = self.blocker(name, key)

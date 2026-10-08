@@ -18,10 +18,12 @@
   <h2 id="p{{ p.id }}-h">{{ p.name }}</h2>
   {% set used = blockers.get(p.key) %}
   {% if used %}{% set targets = [] %}{% for g in unit_groups %}{% for key, text in g.choices if key != p.key %}{% set _ = targets.append((g.name, key, text)) %}{% endfor %}{% endfor %}
+  {% set alike = look_alike.get(p.key) %}
   <div class="setup-move">
+    {% if alike %}<p><b>{{ p.name }} looks like {{ alike.program }}'s LOB {{ alike.lob }}.</b></p>{% endif %}
     <p>{{ used }}</p>
     {% if targets %}<form method="post" action="{{ url_for('program_rename') }}" class="tagrow"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="old" value="{{ p.key }}">
-      <label>Move all of it into <select name="new" required>{% for g in unit_groups %}{% set mine = g.choices|rejectattr(0, 'equalto', p.key)|list %}{% if mine %}<optgroup label="{{ g.name }}">{% for key, text in mine %}<option value="{{ key }}">{{ text }}</option>{% endfor %}</optgroup>{% endif %}{% endfor %}</select></label>
+      <label>Move all of it into <select name="new" required>{% for g in unit_groups %}{% set mine = g.choices|rejectattr(0, 'equalto', p.key)|list %}{% if mine %}<optgroup label="{{ g.name }}">{% for key, text in mine %}<option value="{{ key }}"{% if alike and key == alike.key %} selected{% endif %}>{{ text }}</option>{% endfor %}</optgroup>{% endif %}{% endfor %}</select></label>
       <button type="submit">Check the move</button></form>
     <p class="hint">You see what moves, and anything that clashes, before it is saved.</p>{% endif %}
   </div>{% endif %}

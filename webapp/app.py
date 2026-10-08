@@ -23,7 +23,7 @@ from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES,
 from .coach import actual_shrinkage, corrected_tab
 from .eta import queue_plan
 from .handover import note as handover_note
-from .exports import KINDS as EXPORT_KINDS, build as build_export
+from .exports import KINDS as EXPORT_KINDS, MAX_DAYS as MAX_EXPORT_DAYS, build as build_export
 from .outcome import cannot_schedule, read as read_outcome, view as outcome_view
 from .access import Access, role
 from .programs import ProgramBook
@@ -1623,7 +1623,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
     def _export_args() -> Dict[str, Any]:
         today = datetime.now(EGYPT).date()
         start = _date(request.args.get("from", "")) or today.replace(day=1)
-        end = _date(request.args.get("to", "")) or today
+        end = _date(request.args.get("to", ""))
         pick = request.args.get("pick", "")
         kind, _, value = pick.partition(":")
         program = clean_program(value if kind == "key" else request.args.get("program", "")) or None
@@ -1636,6 +1636,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
             program = sorted(found["units"])
         elif program is None and _access().keys() is not None:
             program = sorted(_access().keys())  # "all programs" means all of this person's programs
+        if end is None:  # to the latest day anything was recorded for, when that is after today (owner, 2026-10-09:
+            # changes made for a schedule that starts next week did not show in the default period)
+            latest = _date(app.extensions["store"].latest_record_date(program) or "")
+            end = min(max(today, latest or today), start + timedelta(days=MAX_EXPORT_DAYS - 1))
         return {"start": start, "end": end, "program": program, "pick": pick,
                 "user_id": request.args.get("user", type=int),
                 "measure": request.args.get("measure", "") if request.args.get("measure", "") in MEASURES else "interval"}
@@ -1648,6 +1652,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         first = today.replace(day=1)
         last_month_end = first - timedelta(days=1)
         presets = [("Today", today, today), ("This week", sunday, sunday + timedelta(days=6)),
+                   ("Next week", sunday + timedelta(days=7), sunday + timedelta(days=13)),
                    ("This month", first, today), ("Last month", last_month_end.replace(day=1), last_month_end)]
         lo = datetime(a["start"].year, a["start"].month, a["start"].day, tzinfo=EGYPT).timestamp()
         hi = datetime(a["end"].year, a["end"].month, a["end"].day, tzinfo=EGYPT).timestamp() + 86400

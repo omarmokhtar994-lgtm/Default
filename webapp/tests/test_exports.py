@@ -93,6 +93,18 @@ class TheExports(unittest.TestCase):
         self.assertEqual((lunch["Planned"], lunch["Taken"], lunch["Moved by"]), ("12:30", "13:05", "Lina"))
         self.assertTrue(all(r["Taken"] == r["Planned"] for r in rows if r["Break"] != "Lunch"))
 
+    def test_breaks_added_on_the_day_are_in_the_breaks_sheet(self):
+        """Phase R (owner, 2026-10-09: "changes in breaks ... not reflecting in the exports"): a break or lunch
+        added in RTA is listed with the planned ones: not planned, taken at its time, who added it."""
+        self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Break", "15:00", "15:15", self.lina)
+        data, *_ = self.export(kinds=["breaks"])
+        rows = [r for r in self.sheet(data, "Breaks planned vs taken") if r["Associate"] == "Associate 001"
+                and r["Taken"] == "15:00"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual((rows[0]["Break"], rows[0]["Minutes"], rows[0]["Planned"], rows[0]["Moved by"]),
+                         ("Break", 15, None, "Lina"))
+        self.assertTrue(rows[0]["Status"].endswith("added on the day"))
+
     def test_a_called_in_day_off_is_listed_with_its_breaks(self):
         # Associate 002 is off on Wednesday; called in 12:00 - 21:00 takes that shift's planned breaks
         self.days.add_activity("AE/AR B2B", WED, "Associate 002", "Called in", "12:00", "21:00", self.sara)

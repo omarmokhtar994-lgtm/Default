@@ -20,7 +20,7 @@ from openpyxl.cell import WriteOnlyCell
 from openpyxl.styles import Font
 
 from .adherence import person_day
-from .day import ABSENT, AUX, CALLED_IN, MEASURES, pattern_breaks, planned
+from .day import ABSENT, AUX, CALLED_IN, EXTRA_BREAKS, MEASURES, pattern_breaks, planned
 from .versions import DAYS
 
 EGYPT = timezone(timedelta(hours=3))
@@ -139,8 +139,12 @@ def _breaks(store, days, weeks, start, end, program, user_id, measure):
             start.isoformat(), end.isoformat(), p)}
         status = {(r["shift_date"], r["associate"]): r["status"] for r in store.attendance_between(
             start.isoformat(), end.isoformat(), p)}
-        called = {(r["shift_date"], r["associate"]): r["note"] for r in store.activities_between(
-            start.isoformat(), end.isoformat(), p) if r["kind"] == CALLED_IN}
+        acts = store.activities_between(start.isoformat(), end.isoformat(), p)
+        called = {(r["shift_date"], r["associate"]): r["note"] for r in acts if r["kind"] == CALLED_IN}
+        added: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}  # breaks and lunches added on the day in RTA
+        for r in acts:
+            if r["kind"] in EXTRA_BREAKS:
+                added.setdefault((r["shift_date"], r["associate"]), []).append(r)
         for day in _dates(start, end):
             week = weeks.week(p, day)
             for a in week.get("associates", []):
@@ -156,6 +160,9 @@ def _breaks(store, days, weeks, start, end, program, user_id, measure):
                     yield [day.isoformat(), p, a["name"], a.get("slot", ""), shift, b["kind"],
                            b["minutes"], _hm(b["start"]), taken, m["by_name"] if m else "", _when(m["at"]) if m else "",
                            state]
+                for r in added.get((day.isoformat(), a["name"]), []):
+                    yield [day.isoformat(), p, a["name"], a.get("slot", ""), shift, r["kind"], r["end_min"] - r["start"],
+                           "", _hm(r["start"]), r["by_name"], _when(r["at"]), f"{state}, added on the day"]
 
 
 def _changes(store, days, weeks, start, end, program, user_id, measure):

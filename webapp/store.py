@@ -548,6 +548,17 @@ class Store:
                              " left join users on users.id = attendance.user_id where shift_date between ? and ?",
                              [start, end], program, user_id, "attendance", "shift_date, program, associate")
 
+    def latest_record_date(self, program: Any = None) -> Optional[str]:
+        """The latest shift date anything was recorded for on the day (attendance, break moves, activities)."""
+        found = []
+        with self._db() as db:
+            for table in ("attendance", "actual_breaks", "activities"):
+                extra, args = self._program_filter(f"{table}.program", program)
+                row = db.execute(f"select max(shift_date) from {table} where 1 = 1{extra}", args).fetchone()
+                if row and row[0]:
+                    found.append(row[0])
+        return max(found) if found else None
+
     def actual_breaks_between(self, start: str, end: str, program: Optional[str] = None) -> List[Dict[str, Any]]:
         return self._between("select actual_breaks.*, coalesce(users.display_name, '') as by_name from actual_breaks"
                              " left join users on users.id = actual_breaks.user_id where shift_date between ? and ?",

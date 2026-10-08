@@ -1802,6 +1802,33 @@ class TheHomeFollowsThePicker(unittest.TestCase):
         self.assertIn('data-target="/?program={key}"', body)
 
 
+class TheExportRange(unittest.TestCase):
+    """Phase R (owner, 2026-10-09: "changes in breaks and auxs not reflecting in the exports"): the export's
+    period reaches the latest day anything was recorded, so changes made for a schedule that starts after today
+    are in it by default; "Next week" is one click."""
+
+    def setUp(self):
+        from datetime import datetime, timedelta
+        from webapp.schedules import EGYPT
+        self.app, self.store, *_ = make_app(start_worker=False)
+        self.store.add_user("omar", "Omar", "Owner-pass-123", is_admin=True, must_change=False)
+        self.admin = sign_in(self.app, "omar", "Owner-pass-123")
+        self.today = datetime.now(EGYPT).date()
+        self.later = self.today + timedelta(days=5)
+        self.store.set_attendance(program="NMG", shift_date=self.later.isoformat(), associate="Associate 001",
+                                  status="Sick", from_min=None, to_min=None, billable=0, user_id=1)
+
+    def test_the_period_reaches_the_latest_record(self):
+        page = html.unescape(self.admin.get("/exports").get_data(as_text=True))
+        self.assertIn(f'name="to" value="{self.later.isoformat()}"', page)
+
+    def test_next_week_is_a_preset(self):
+        from datetime import timedelta
+        sunday = self.today - timedelta(days=(self.today.weekday() + 1) % 7) + timedelta(days=7)
+        page = html.unescape(self.admin.get("/exports").get_data(as_text=True))
+        self.assertIn(f'from={sunday.isoformat()}&to={(sunday + timedelta(days=6)).isoformat()}">Next week</a>', page)
+
+
 class TheLobFilters(unittest.TestCase):
     """Phase Q: filters go by program, then LOB: a whole program means all of its LOBs (that the person may
     open); the programs list groups LOBs under their program."""

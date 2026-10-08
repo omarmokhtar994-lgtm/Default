@@ -839,6 +839,15 @@ class TheKeptSchedules(unittest.TestCase):
         self.assertEqual([(v["kind"], v["program"]) for v in versions], [("tool_after", "AE/AR B2B")])
         self.assertEqual(json.loads(versions[0]["checks"])["status"], "PASS")
 
+    def test_a_finished_run_has_kept_its_schedules_already(self):
+        # "finished" means the run's work is over: its versions are kept before the status says
+        # so (a clean-up starting the moment a run reads finished must not race the copy)
+        app, store, *_ = make_app(VALIDATOR_ROOT=str(REPO))
+        client = client_for(app)
+        run_id = run_id_of(upload(client, name="VERSIONED_week.xlsx", data=B3_INPUT.read_bytes()))
+        wait(store, run_id)
+        self.assertTrue(app.extensions["schedules"].versions(run_id))
+
 
 class TheSchedulesPage(unittest.TestCase):
     """Phase N task 3: versions, edits with their warning, in use, downloads."""

@@ -343,11 +343,13 @@ class RunQueue:
             message = (str(found.get("headline") or "") if found else "") or (
                 f"Not approved: the runner exited with code {code} and the engine wrote no outcome. "
                 "The log below and the files in the download say why.")
+        if status in ("DONE", "REVIEW") and run["mode"] != "SMOKE":
+            # before the status says finished: a finished run's work is over (clean-up may follow at once)
+            self.store.update_run(run_id, message="Keeping the schedules as versions.")
+            self.keep_schedules(run_id)
         self.store.update_run(run_id, status=status, exit_code=code, verdict=verdict,
                               finished=time.time(), message=message)
         self._stamp_outcome(run_id, status)
-        if status in ("DONE", "REVIEW") and run["mode"] != "SMOKE":
-            self.keep_schedules(run_id)
 
     def _stopped(self, run_id: str, code: Optional[int] = None) -> bool:
         with self._lock:

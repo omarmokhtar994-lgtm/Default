@@ -1408,6 +1408,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                   for k, rows in found.items()}
         return render_template("exports.html", kinds=EXPORT_KINDS, counts=counts, presets=presets, error=error,
                                programs=_my_programs(_days().programs()) if app.extensions.get("days") else [],
+                               pick_tree=_access().programs(), everything=_access().everything(),
                                users=store.list_users(), measures=MEASURES, **a), status
 
     def _coach_args() -> Dict[str, Any]:

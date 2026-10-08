@@ -397,7 +397,9 @@ class TheProgramPagesInTheBrowser(unittest.TestCase):
     def test_team_page_and_upload_fields(self):
         page = self.page()
         self.sign_in(page)
-        expect(page.get_by_label("Program")).to_be_visible()
+        # Re-pinned in Phase Q (owner, 2026-10-08): the left menu has its own Program and LOB picker now, so the
+        # upload form's field is looked for inside the upload form.
+        expect(page.locator("form[action='/runs']").get_by_label("Program and LOB")).to_be_visible()
         # Re-pinned in Phase P (owner, 2026-10-08): "Schedule week" became the "Schedule starts" dropdown;
         # its value is still the chosen date.
         expect(page.get_by_label("Schedule starts")).to_have_value(re.compile(r"\d{4}-\d{2}-\d{2}"))

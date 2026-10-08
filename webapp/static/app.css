@@ -782,3 +782,4 @@ body.wall { background: var(--night); color: var(--paper); padding: 2vh 2.5vw; m
 .rta-sum { display: flex; flex-wrap: wrap; gap: 6px 22px; align-items: baseline; background: var(--console); border-radius: 8px; padding: 10px 14px; margin: 0 0 16px; }
 .rta-sum b { color: var(--dim); font-weight: 600; margin-right: 4px; }
 .setup-program .tagrow + .hint { margin-top: 6px; }
+.programs .group-row th { text-align: left; padding-top: 14px; color: var(--dim); font-size: 13px; }

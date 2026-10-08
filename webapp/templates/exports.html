@@ -16,7 +16,9 @@
     <div class="exp-row"><label>From <input type="date" name="from" value="{{ start.isoformat() }}" required></label>
       <label>To <input type="date" name="to" value="{{ end.isoformat() }}" required></label></div>
     <div class="exp-row"><label>Program
-      <select name="program"><option value="">All programs</option>{% for p in programs %}<option value="{{ p }}"{% if p == program %} selected{% endif %}>{{ p|unit }}</option>{% endfor %}</select></label>
+      <select name="pick"><option value="">{{ 'All programs' if everything else 'All my programs' }}</option>
+        {% for p in pick_tree %}{% if p.lobs %}<optgroup label="{{ p.name }}"><option value="group:{{ p.id }}"{% if pick == 'group:' ~ p.id %} selected{% endif %}>All of {{ p.name }}</option>{% for k in p.units %}<option value="key:{{ k }}"{% if pick == 'key:' ~ k or (program is string and program == k) %} selected{% endif %}>{{ k|unit }}</option>{% endfor %}</optgroup>
+        {% else %}{% for k in p.units %}<option value="key:{{ k }}"{% if pick == 'key:' ~ k or (program is string and program == k) %} selected{% endif %}>{{ k|unit }}</option>{% endfor %}{% endif %}{% endfor %}</select></label>
       <label>Changes by
       <select name="user"><option value="">Anyone</option>{% for u in users %}<option value="{{ u.id }}"{% if u.id == user_id %} selected{% endif %}>{{ u.display_name }}</option>{% endfor %}</select></label>
       <label>Measure

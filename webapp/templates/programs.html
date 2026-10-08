@@ -11,6 +11,7 @@
     <thead><tr><th>Program</th><th>Latest week</th><th>Associates</th><th>Covered after breaks</th><th>Before breaks</th><th>Efficiency</th></tr></thead>
     <tbody>
     {% for r in rows %}{% set f = r.latest.f %}{% set d = r.latest.delta %}
+    {% if (loop.first or r.group != loop.previtem.group) and r.group != r.name|unit %}<tr class="group-row"><th colspan="6" class="group" scope="rowgroup">{{ r.group }}</th></tr>{% endif %}
     <tr>
       <td><a href="{{ url_for('program', name=r.name) }}">{{ r.name|unit }}</a><br><small>{{ r.weeks }} week{{ 's' if r.weeks != 1 }} on record</small></td>
       <td class="when">{{ r.latest.week }}</td>

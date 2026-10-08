@@ -34,6 +34,19 @@ the next package; nothing here is built yet.
   meet, hours that keep coming up short, written insights and suggestions,
   week-by-week table) and a Team page (runs per person and how they ended).
 
+## Built in Phase L (2026-10-08: see docs/superpowers/plans/2026-10-08-phase-l-run-page-fixes-and-themes.md)
+
+- A failed run's page says why it stopped and what to change in the input
+  workbook, in the engine's own words (no need to open the zip); "Can't be
+  scheduled" when the input must change; the shortfall schedule is offered
+  for review.
+- Readiness checks say "Ready to run" or "Not ready" (never "Not approved");
+  a ready check starts the real run (Quick, Deep or Overnight) from the same
+  workbook.
+- Back and Home on every page; the workbook can be dropped on the upload area.
+- Blank and example input workbooks download from the home page.
+- Light and dark looks (the device's setting until a person picks one).
+
 ## Offered, waiting for the owner
 
 - AI-written summaries on the program page (the owner chose rule-based

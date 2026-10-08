@@ -19,6 +19,7 @@ from .eta import queue_plan
 from .outcome import cannot_schedule, read as read_outcome, view as outcome_view
 from .auth import admin_required, check_csrf, csrf_token, load_user, login_required
 from .program_page import build, overview, weeks_to_show
+from .schedules import ScheduleBook
 from .runs import MODES, OPTION_LABELS, RESUMABLE, RunQueue, parse_options, run_options
 from .store import Store
 from .week import view as week_view
@@ -192,6 +193,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
                          check_cmd=config.get("CHECK_CMD"), score_cmd=config.get("SCORE_CMD"),
                          gate_cmd=config.get("GATE_CMD"))
         app.extensions["runs"] = queue
+        # Schedule versions are checked with the installed package's independent validator.
+        book = ScheduleBook(app.extensions["store"], data_dir,
+                            Path(config.get("VALIDATOR_ROOT") or config["PACKAGE_ROOT"]))
+        app.extensions["schedules"] = book
+        queue.schedules = book
         if config.get("START_WORKER", True):
             queue.start()
 

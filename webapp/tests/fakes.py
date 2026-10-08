@@ -20,7 +20,12 @@ def runner(argv):
     print("[run] fake runner started", flush=True)
     delay = 3.0 if "SLOW" in stem else 0.2
     time.sleep(delay)
-    if "SHORTFALL" in stem:  # no schedule meets every hard rule: one for review instead
+    if "VERSIONED" in stem:  # a real schedule workbook (Phase N): the B3 AE/AR week, names "Associate 001"...
+        import shutil
+        real = Path(__file__).resolve().parents[2] / "fixtures" / "real_runs" / "week_boundary" / "B3_ARB2B_S30"
+        shutil.copy(real / "production" / "B3_ARB2B_S30_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx",
+                    case / f"{stem}_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx")
+    elif "SHORTFALL" in stem:  # no schedule meets every hard rule: one for review instead
         (case / f"{stem}_L6_3_2_3_HARD_RULE_SHORTFALL_SCHEDULE.xlsx").write_bytes(b"shortfall")
     else:
         (case / f"{stem}_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx").write_bytes(b"schedule")

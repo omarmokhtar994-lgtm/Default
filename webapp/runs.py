@@ -70,6 +70,7 @@ SCORE_TIMEOUT_SECONDS = 1800
 STOP_GRACE_SECONDS = 30
 FINAL_SCHEDULE_SUFFIX = "_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"
 SHORTFALL_SCHEDULE_SUFFIX = "_HARD_RULE_SHORTFALL_SCHEDULE.xlsx"
+BEFORE_SCHEDULE_SUFFIX = "_BEST_BEFORE_BREAKS_SCHEDULE.xlsx"
 
 
 class RunQueue:
@@ -92,6 +93,7 @@ class RunQueue:
         self._procs: Dict[str, subprocess.Popen] = {}
         self._stopping: set = set()
         self._threads: List[threading.Thread] = []
+        self.schedules = None  # the ScheduleBook (Phase N), set by the website
         self.recover()
 
     # ------------------------------------------------------------ paths
@@ -117,6 +119,24 @@ class RunQueue:
             return None
         found = [p for p in results.rglob(f"*{FINAL_SCHEDULE_SUFFIX}") if "debug" not in p.parts]
         return min(found, key=lambda p: (len(p.parts), str(p))) if found else None
+
+    def before_schedule(self, run_id: str) -> Optional[Path]:
+        results = self.results_dir(run_id)
+        if not results.is_dir():
+            return None
+        found = [p for p in results.rglob(f"*{BEFORE_SCHEDULE_SUFFIX}") if "debug" not in p.parts]
+        return min(found, key=lambda p: (len(p.parts), str(p))) if found else None
+
+    def keep_schedules(self, run_id: str) -> None:
+        """Copy the run's schedules in as versions (Phase N); a failure here never fails the run."""
+        if self.schedules is None:
+            return
+        try:
+            self.schedules.ensure(self.store.get_run(run_id), self.input_path(run_id), self.final_schedule(run_id),
+                                  self.before_schedule(run_id))
+        except Exception as exc:  # the run's own files stay authoritative; say why the copy failed
+            with self.log_path(run_id).open("a", encoding="utf-8") as log:
+                log.write(f"\n(website) could not keep this run's schedules as versions: {exc!r}\n")
 
     def shortfall_schedule(self, run_id: str) -> Optional[Path]:
         """The schedule the engine attaches when no schedule meets every hard rule."""
@@ -325,6 +345,8 @@ class RunQueue:
         self.store.update_run(run_id, status=status, exit_code=code, verdict=verdict,
                               finished=time.time(), message=message)
         self._stamp_outcome(run_id, status)
+        if status in ("DONE", "REVIEW") and run["mode"] != "SMOKE":
+            self.keep_schedules(run_id)
 
     def _stopped(self, run_id: str, code: Optional[int] = None) -> bool:
         with self._lock:
@@ -449,7 +471,23 @@ class RunQueue:
             filled += 1
         return filled
 
+    def backfill_schedules(self) -> int:
+        """Finished runs from before Phase N keep their schedules as versions, while their files exist."""
+        kept = 0
+        if self.schedules is None:
+            return kept
+        for run in self.store.list_runs(limit=1_000_000):
+            if run["status"] in ("DONE", "REVIEW") and run["mode"] != "SMOKE" and not self.schedules.versions(run["id"]) \
+                    and self.final_schedule(run["id"]) is not None:
+                self.keep_schedules(run["id"])
+                kept += bool(self.schedules.versions(run["id"]))
+        return kept
+
     def _cleaner(self) -> None:
+        try:
+            self.backfill_schedules()
+        except Exception as exc:  # versions for older runs are a convenience; say why it failed
+            print(f"schedule backfill failed: {exc!r}", file=sys.stderr, flush=True)
         try:
             self.backfill_outcomes()
         except Exception as exc:  # a convenience for older runs; say why it failed
@@ -461,6 +499,8 @@ class RunQueue:
         while True:
             try:
                 self.cleanup()
+                if self.schedules is not None:
+                    self.schedules.cleanup()
             except Exception as exc:  # keep cleaning tomorrow; say why today failed
                 print(f"run cleanup failed: {exc!r}", file=sys.stderr, flush=True)
             time.sleep(3600)

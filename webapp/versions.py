@@ -156,7 +156,7 @@ def apply_change(src: Path, dst: Path, name: str, day: str, value: str) -> None:
     if _norm(value) not in allowed:
         raise ValueError(f"{value!r} is not in this program's Shift Library (or OFF / Leave)")
     value = allowed[_norm(value)]
-    written = 0
+    written, unchanged = 0, False
     for tab in SCHEDULE_TABS:
         if tab not in wb.sheetnames:
             continue
@@ -165,12 +165,13 @@ def apply_change(src: Path, dst: Path, name: str, day: str, value: str) -> None:
         name_col, day_col = _name_col(cols), cols.get(_norm(day))
         for r in range(row + 1, ws.max_row + 1):
             if _norm(ws.cell(r, name_col).value) == _norm(name):
+                unchanged = unchanged or _norm(ws.cell(r, day_col).value) == _norm(value)
                 ws.cell(r, day_col).value = value
                 written += 1
                 break
     if not written:
         raise ValueError(f"{name!r} is not on this schedule")
-    for tab in BREAK_TABS:
+    for tab in BREAK_TABS if not unchanged else ():  # the same shift keeps its breaks
         if tab not in wb.sheetnames:
             continue
         ws = wb[tab]

@@ -48,6 +48,36 @@ create table if not exists runs (
     metrics text not null default '',
     engine_outcome text not null default ''
 );
+create table if not exists schedules (
+    id integer primary key autoincrement,
+    run_id text not null,
+    program text not null default '',
+    week_start text not null default '',
+    kind text not null,
+    number integer not null,
+    label text not null,
+    base_id integer,
+    user_id integer,
+    created real not null,
+    updated real not null,
+    in_use integer not null default 0,
+    file text not null,
+    week text not null default '',
+    checks text not null default ''
+);
+create table if not exists schedule_changes (
+    id integer primary key autoincrement,
+    schedule_id integer not null,
+    user_id integer not null,
+    at real not null,
+    associate text not null,
+    day text not null,
+    old text not null,
+    new text not null,
+    reason text not null default '',
+    severity text not null default '',
+    problems text not null default ''
+);
 """
 
 
@@ -137,6 +167,61 @@ class Store:
             db.execute("insert into runs (id, user_id, workbook, mode, status, message, created, options,"
                        " program, week_start) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                        (run_id, user_id, workbook, mode, status, message, time.time(), options, program, week_start))
+
+    # ------------------------------------------------------------- schedule versions
+    def add_schedule(self, **fields: Any) -> int:
+        fields.setdefault("created", time.time())
+        fields.setdefault("updated", fields["created"])
+        names = ", ".join(fields)
+        marks = ", ".join("?" for _ in fields)
+        with self._db() as db:
+            return int(db.execute(f"insert into schedules ({names}) values ({marks})", tuple(fields.values())).lastrowid)
+
+    def get_schedule(self, schedule_id: int) -> Optional[Dict[str, Any]]:
+        with self._db() as db:
+            row = db.execute("select schedules.*, users.display_name as by_name from schedules left join users"
+                             " on users.id = schedules.user_id where schedules.id = ?", (schedule_id,)).fetchone()
+        return dict(row) if row else None
+
+    def list_schedules(self, run_id: Optional[str] = None, program: Optional[str] = None,
+                       week_start: Optional[str] = None) -> List[Dict[str, Any]]:
+        where, args = [], []
+        for column, value in (("run_id", run_id), ("program", program), ("week_start", week_start)):
+            if value is not None:
+                where.append(f"schedules.{column} = ?")
+                args.append(value)
+        sql = ("select schedules.*, users.display_name as by_name from schedules left join users"
+               " on users.id = schedules.user_id" + (" where " + " and ".join(where) if where else "")
+               + " order by schedules.number")
+        with self._db() as db:
+            return [dict(r) for r in db.execute(sql, args)]
+
+    def update_schedule(self, schedule_id: int, **fields: Any) -> None:
+        if not fields:
+            return
+        names = ", ".join(f"{k} = ?" for k in fields)
+        with self._db() as db:
+            db.execute(f"update schedules set {names} where id = ?", (*fields.values(), schedule_id))
+
+    def delete_schedule(self, schedule_id: int) -> None:
+        with self._db() as db:
+            db.execute("delete from schedule_changes where schedule_id = ?", (schedule_id,))
+            db.execute("delete from schedules where id = ?", (schedule_id,))
+
+    def add_change(self, **fields: Any) -> int:
+        fields.setdefault("at", time.time())
+        names = ", ".join(fields)
+        marks = ", ".join("?" for _ in fields)
+        with self._db() as db:
+            return int(db.execute(f"insert into schedule_changes ({names}) values ({marks})",
+                                  tuple(fields.values())).lastrowid)
+
+    def list_changes(self, schedule_id: int) -> List[Dict[str, Any]]:
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                "select schedule_changes.*, users.display_name as by_name from schedule_changes join users"
+                " on users.id = schedule_changes.user_id where schedule_id = ? order by schedule_changes.id",
+                (schedule_id,))]
 
     def update_run(self, run_id: str, **fields: Any) -> None:
         if not fields:

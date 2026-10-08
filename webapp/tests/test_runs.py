@@ -814,6 +814,32 @@ class TheWeekPage(unittest.TestCase):
         self.assertIn(f'href="/runs/{run_id}/week"', self.page(client, "/programs/NMG"))
 
 
+REPO = Path(__file__).resolve().parents[2]
+B3_INPUT = REPO / "fixtures" / "real_runs" / "week_boundary" / "B3_ARB2B_S30" / "input_snapshot" / "AE_AR_B2B_SLICE30.xlsx"
+
+
+def versioned_run(app, store, client, **fields):
+    """A finished run whose files are a real schedule week (fake runner, real workbooks)."""
+    run_id = run_id_of(upload(client, name="VERSIONED_week.xlsx", data=B3_INPUT.read_bytes(), **fields))
+    wait(store, run_id)
+    end = time.time() + 60
+    while time.time() < end and not app.extensions["schedules"].versions(run_id):
+        time.sleep(0.2)
+    return run_id
+
+
+class TheKeptSchedules(unittest.TestCase):
+    """Phase N task 2: a finished run's schedules are kept as versions."""
+
+    def test_finished_run_keeps_its_schedules(self):
+        app, store, *_ = make_app(VALIDATOR_ROOT=str(REPO))
+        client = client_for(app)
+        run_id = versioned_run(app, store, client, program="AE/AR B2B", week_start="2026-10-11")
+        versions = app.extensions["schedules"].versions(run_id)
+        self.assertEqual([(v["kind"], v["program"]) for v in versions], [("tool_after", "AE/AR B2B")])
+        self.assertEqual(json.loads(versions[0]["checks"])["status"], "PASS")
+
+
 class Access(unittest.TestCase):
     def test_downloads_need_login(self):
         app, store, *_ = make_app()

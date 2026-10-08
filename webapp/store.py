@@ -472,11 +472,37 @@ class Store:
         """How many day records a program holds for shift dates ``start`` to ``end``."""
         counts = {}
         with self._db() as db:
-            for key, table in (("attendance", "attendance"), ("breaks", "actual_breaks"),
-                               ("activities", "activities"), ("log", "day_log")):
-                counts[key] = db.execute(f"select count(*) from {table} where program = ? and shift_date between ? and ?",
-                                         (program, start, end)).fetchone()[0]
+            for key, table in self.DAY_TABLES:
+                counts[key] = db.execute(f"select count(*) from {table} where program = ?"
+                                         " and shift_date between ? and ?", (program, start, end)).fetchone()[0]
         return counts
+
+    DAY_TABLES = (("attendance", "attendance"), ("breaks", "actual_breaks"), ("activities", "activities"),
+                  ("log", "day_log"))
+
+    def rename_program(self, old: str, new: str, stop_in_use: List[int]) -> Dict[str, int]:
+        """Move everything kept under program ``old`` to ``new`` in one transaction (runs, versions and day
+        records; past events keep the name they had). Rows moved per table."""
+        moved = {}
+        with self._db() as db:
+            for schedule_id in stop_in_use:
+                db.execute("update schedules set in_use = 0 where id = ?", (schedule_id,))
+            for key, table in (("runs", "runs"), ("versions", "schedules"), *self.DAY_TABLES):
+                moved[key] = db.execute(f"update {table} set program = ? where program = ?", (new, old)).rowcount
+        return moved
+
+    def program_clashes(self, old: str, new: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """Attendance and moved breaks kept under both names for the same person, day (and break)."""
+        with self._db() as db:
+            found = [dict(r, what="attendance") for r in db.execute(
+                "select a.shift_date, a.associate from attendance a join attendance b on b.program = ?"
+                " and b.shift_date = a.shift_date and b.associate = a.associate where a.program = ?"
+                " order by a.shift_date, a.associate limit ?", (new, old, limit))]
+            found += [dict(r, what="break") for r in db.execute(
+                "select a.shift_date, a.associate, a.kind from actual_breaks a join actual_breaks b on b.program = ?"
+                " and b.shift_date = a.shift_date and b.associate = a.associate and b.idx = a.idx"
+                " where a.program = ? order by a.shift_date, a.associate limit ?", (new, old, limit))]
+        return found[:limit]
 
     def get_run(self, run_id: str) -> Optional[Dict[str, Any]]:
         with self._db() as db:

@@ -12,7 +12,7 @@ from datetime import date
 from pathlib import Path
 
 from webapp.attendance import DayBook
-from webapp.run_admin import apply_run_change, preview_run_change
+from webapp.run_admin import apply_rename, apply_run_change, preview_rename, preview_run_change
 from webapp.schedules import ScheduleBook
 from webapp.store import Store
 from webapp.tests.test_schedules import AFTER, INPUT, REPO
@@ -103,6 +103,74 @@ class TheRunChange(unittest.TestCase):
         self.assertEqual(preview_run_change(self.store, self.a, {"program": "AE/AR B2B"})["changes"], [])
         with self.assertRaises(ValueError):
             apply_run_change(self.store, self.a, {"program": "AE/AR B2B"}, self.sara, "")
+
+
+class TheProgramRename(TheRunChange):
+    """Renaming a program moves its runs, versions and day records; past events keep the name they had."""
+    test_versions_move_with_the_run = test_in_use_at_the_target_wins = test_day_records_stay_and_are_listed = None
+    test_clearing_program_and_week = test_change_is_recorded = test_nothing_to_change = None
+
+    def merge_ready(self):
+        """Run B becomes AE-AR B2B for the week of 11 October, so both programs hold that week."""
+        apply_run_change(self.store, self.b, {"program": "AE-AR B2B", "week_start": "2026-10-11"}, self.sara, "")
+
+    def test_rename_moves_everything(self):
+        self.days.set_status("AE/AR B2B", WED, "Associate 001", "Sick", self.sara)
+        self.days.move_break("AE/AR B2B", WED, "Associate 008", 1, "13:05", self.sara)
+        self.days.add_activity("AE/AR B2B", WED, "Associate 008", "Training", "09:00", "10:00", self.sara)
+        self.book.set_in_use(self.book.versions("aaaaaaaaaaaa")[0]["id"], self.sara)
+        found = preview_rename(self.store, "AE/AR B2B", "AE-AR B2B")
+        self.assertEqual((found["merge"], found["runs"], found["versions"]), (False, 2, 2))  # one version each
+        self.assertEqual(found["records"], {"attendance": 1, "breaks": 1, "activities": 1, "log": 3})
+        self.assertEqual((found["stop_in_use"], found["clashes"]), ([], []))
+        apply_rename(self.store, "AE/AR B2B", "AE-AR B2B", self.sara, "new name")
+        self.assertEqual({r["program"] for r in self.store.list_runs()}, {"AE-AR B2B"})
+        self.assertEqual({v["program"] for v in self.store.list_schedules()}, {"AE-AR B2B"})
+        page = self.days.page("AE-AR B2B", WED)
+        lane = next(l for l in page["view"]["lanes"] if l["name"] == "Associate 001")
+        self.assertEqual(lane["segments"][0]["status"], "Sick")
+        self.assertEqual(len(page["log"]), 3)
+        events = {e["kind"]: e for e in self.store.list_events(0, 1e12)}
+        self.assertEqual(events["set_in_use"]["program"], "AE/AR B2B")  # history keeps the name it had
+        self.assertEqual((events["program_renamed"]["program"], events["program_renamed"]["subject"]),
+                         ("AE-AR B2B", "AE/AR B2B"))
+        self.assertIn("Reason: new name", events["program_renamed"]["detail"])
+
+    def test_case_only_rename_is_not_a_merge(self):
+        found = preview_rename(self.store, "AE/AR B2B", "ae/ar b2b")
+        self.assertFalse(found["merge"])
+        apply_rename(self.store, "AE/AR B2B", "ae/ar b2b", self.sara, "")
+        self.assertEqual({r["program"] for r in self.store.list_runs()}, {"ae/ar b2b"})
+
+    def test_merge_keeps_the_target_in_use(self):
+        self.merge_ready()
+        mine, theirs = (self.book.versions(r)[0] for r in ("aaaaaaaaaaaa", "bbbbbbbbbbbb"))
+        self.book.set_in_use(mine["id"], self.sara)
+        self.book.set_in_use(theirs["id"], self.sara)
+        found = preview_rename(self.store, "AE/AR B2B", "AE-AR B2B")
+        self.assertTrue(found["merge"])
+        self.assertEqual([(s["week"], s["label"]) for s in found["stop_in_use"]], [("2026-10-11", mine["label"])])
+        apply_rename(self.store, "AE/AR B2B", "AE-AR B2B", self.sara, "one program")
+        in_use = [v["id"] for v in self.store.list_schedules(program="AE-AR B2B", week_start="2026-10-11") if v["in_use"]]
+        self.assertEqual(in_use, [theirs["id"]])
+
+    def test_merge_refused_on_clashing_records(self):
+        self.merge_ready()
+        self.days.set_status("AE/AR B2B", WED, "Associate 001", "Sick", self.sara)
+        self.days.set_status("AE-AR B2B", WED, "Associate 001", "Late", self.sara, end="13:00")
+        found = preview_rename(self.store, "AE/AR B2B", "AE-AR B2B")
+        self.assertEqual(len(found["clashes"]), 1)
+        self.assertIn("Associate 001", found["clashes"][0])
+        self.assertIn("14 Oct", found["clashes"][0])
+        with self.assertRaises(ValueError):
+            apply_rename(self.store, "AE/AR B2B", "AE-AR B2B", self.sara, "")
+        self.assertEqual(self.store.get_run("aaaaaaaaaaaa")["program"], "AE/AR B2B")  # nothing changed
+
+    def test_rename_refusals(self):
+        for old, new in (("AE/AR B2B", ""), ("AE/AR B2B", "  "), ("AE/AR B2B", "AE/AR B2B"), ("Nobody", "X"),
+                         ("AE/AR B2B", "x" * 81)):
+            with self.assertRaises(ValueError, msg=(old, new)):
+                preview_rename(self.store, old, new)
 
 
 if __name__ == "__main__":

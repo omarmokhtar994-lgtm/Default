@@ -1,5 +1,6 @@
 # © 2026 Omar Mokhtar. All rights reserved.
-"""Correcting a run's details (program, schedule week, who submitted it, workbook name).
+"""Correcting a run's details (program, schedule week, who submitted it, workbook name), and
+renaming or merging a program.
 
 A run's schedule versions carry its program and week, so they move with it. What
 a change would do is worked out before it is made: a version that stops being in
@@ -83,7 +84,8 @@ def preview_run_change(store, run: Dict[str, Any], new: Dict[str, Any]) -> Dict[
             after, _ = pick_version(left)
             found["old_records"] = _week_records(store, old_p, old_w)
             found["old_week_after"] = _name(store, after)
-            found["old_affected"] = (before or {}).get("id") != (after or {}).get("id") and any(found["old_records"].values())
+            found["old_affected"] = (before or {}).get("id") != (after or {}).get("id") and \
+                any(found["old_records"].values())
         if new_p and new_w:
             stopped = {s["id"] for s in found["stop_in_use"]}
             moved = [{**v, "in_use": 0 if v["id"] in stopped else v["in_use"]} for v in mine]
@@ -110,4 +112,48 @@ def apply_run_change(store, run: Dict[str, Any], new: Dict[str, Any], user_id: i
     new_p, new_w = found["new"]
     store.add_event(kind="run_details_changed", user_id=user_id, program=new_p, week_start=new_w, run_id=run["id"],
                     subject=found["changed"].get("workbook", run.get("workbook") or ""), detail="; ".join(said))
+    return found
+
+
+def preview_rename(store, old: str, new: str) -> Dict[str, Any]:
+    """What renaming program ``old`` to ``new`` would do (a merge when ``new`` is already a program)."""
+    new = " ".join((new or "").split())
+    if not new:
+        raise ValueError("Give the new program name.")
+    if len(new) > 80:
+        raise ValueError("Keep the program name to 80 characters.")
+    if new == old:
+        raise ValueError("That is already its name.")
+    runs = [r for r in store.list_runs(limit=1000000) if r["program"] == old]
+    if not runs:
+        raise ValueError(f"There is no program called {old}.")
+    versions = store.list_schedules(program=old)
+    theirs = {v["week_start"]: v for v in store.list_schedules(program=new) if v["in_use"] and v["week_start"]}
+    stop = [{"id": v["id"], "week": v["week_start"], "label": v["label"]} for v in versions
+            if v["in_use"] and v["week_start"] in theirs]
+    clashes = []
+    for c in store.program_clashes(old, new):
+        day = date.fromisoformat(c["shift_date"]).strftime("%d %b")
+        clashes.append(f"both have attendance for {c['associate']} on {day}" if c["what"] == "attendance" else
+                       f"both have {c['associate']}'s {c['kind']} moved on {day}")
+    return {"old": old, "new": new, "merge": any(r["program"] == new for r in store.list_runs(limit=1000000)),
+            "runs": len(runs), "versions": len(versions),
+            "records": store.day_record_counts(old, "0000-01-01", "9999-12-31"),
+            "stop_in_use": stop, "clashes": clashes}
+
+
+def apply_rename(store, old: str, new: str, user_id: int, reason: str) -> Dict[str, Any]:
+    """Rename (or merge) program ``old`` into ``new`` and keep it in the record; refused on clashing records."""
+    found = preview_rename(store, old, new)
+    if found["clashes"]:
+        raise ValueError("These cannot be merged while " + "; ".join(found["clashes"]) +
+                         ". Set one of each back on the day page first.")
+    moved = store.rename_program(old, found["new"], [s["id"] for s in found["stop_in_use"]])
+    said = [f"{old} → {found['new']}" + (" (merged)" if found["merge"] else ""),
+            f"{moved['runs']} runs, {moved['versions']} versions, "
+            f"{sum(moved[k] for k in ('attendance', 'breaks', 'activities', 'log'))} day records moved"]
+    said += [f"{s['label']} for the week of {s['week']} no longer in use" for s in found["stop_in_use"]]
+    if (reason or "").strip():
+        said.append(f"Reason: {reason.strip()}")
+    store.add_event(kind="program_renamed", user_id=user_id, program=found["new"], subject=old, detail="; ".join(said))
     return found

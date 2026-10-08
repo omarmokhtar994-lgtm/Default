@@ -25,6 +25,7 @@ from .versions import DAYS, shift_span
 
 HHMM = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
 FALLBACK = "No version is marked in use for this week, so this is the tool's own schedule."
+FALLBACK_READY = "No version is marked in use for this week, so this is the uploaded ready schedule."
 ACTIVITY_KINDS = sorted(AUX) + list(EXTRA_BREAKS) + ["Overtime", "VTO", CALLED_IN]
 # What RTA's "+ Add" offers in an interval (owner, 2026-10-08), grouped as the dialog shows them.
 ADD_KINDS = {"Off the floor": ["Break", "Lunch", "Coaching", "Meeting", "Training", "System issue"],
@@ -66,7 +67,9 @@ def pick_version(versions: List[Dict[str, Any]]) -> Tuple[Optional[Dict[str, Any
     if chosen:
         return chosen, ""
     tools = sorted((v for v in versions if v["kind"] != "edited"), key=order, reverse=True)
-    return (tools[0], FALLBACK) if tools else (None, "")
+    if not tools:
+        return None, ""
+    return tools[0], (FALLBACK_READY if tools[0]["kind"] == "ready" else FALLBACK)
 
 
 def tomorrow_unchecked(on: date) -> str:

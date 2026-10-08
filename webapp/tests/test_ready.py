@@ -147,6 +147,8 @@ class TheReadyUpload(unittest.TestCase):
                             .get_data(as_text=True))
         self.assertIn("On shift today", day)
         self.assertIn("Associate 001", day)
+        self.assertIn("so this is the uploaded ready schedule", day)  # not "the tool's own": the engine never ran
+        self.assertNotIn("tool's own schedule", day)
 
     def test_ready_workbook_with_unknown_shift_is_rejected(self):
         target = self.dir / "bad.xlsx"

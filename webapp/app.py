@@ -851,6 +851,43 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return render_template("handover.html", n=found, problem=problem, program=program, on=on, hm=hm,
                                measures=MEASURES, measure=measure)
 
+    @app.route("/day/wallboard")
+    @login_required
+    def day_wallboard():  # type: ignore[no-untyped-def]
+        """For the floor's screen: now and the next three intervals, breaks now and next; reloads every minute."""
+        clock = datetime.now(EGYPT)
+        on = _date(request.args.get("date", "")) or clock.date()
+        at = request.args.get("at", "")
+        found = re.match(r"^([01]?\d|2[0-3]):([0-5]\d)$", at)
+        now = int(found.group(1)) * 60 + int(found.group(2)) if found else clock.hour * 60 + clock.minute
+        days = _days()
+        programs = days.programs()
+        program = clean_program(request.args.get("program", "")) or (programs[0] if programs else "")
+        page = days.page(program, on) if program else None
+        board_now = None
+        if page:
+            v = page["view"]
+            step = v["interval"]
+            first = now - now % step
+            rows = [c for c in board(v) if first <= c["t"] < first + 4 * step]
+            on_break, soon = [], []
+            for lane in v["lanes"]:
+                for seg in lane["segments"]:
+                    if seg["status"] in ("Unplanned leave", "Sick"):
+                        continue
+                    for b in seg["breaks"]:
+                        if b["start"] <= now < b["start"] + b["minutes"]:
+                            on_break.append({"name": lane["name"], "kind": b["kind"], "until": b["start"] + b["minutes"]})
+                        elif now < b["start"] <= now + 30:
+                            soon.append({"name": lane["name"], "kind": b["kind"], "at": b["start"]})
+            langs = [{"name": lang["name"], "count": next((c["count"] for c in lang["cells"] if c["t"] == first), None),
+                      "cls": next((c["cls"] for c in lang["cells"] if c["t"] == first), "none")} for lang in v["languages"]]
+            board_now = {"rows": rows, "on_break": sorted(on_break, key=lambda x: x["until"]),
+                         "soon": sorted(soon, key=lambda x: x["at"]), "langs": [x for x in langs if x["count"] is not None],
+                         "tiles": v["tiles"]}
+        return render_template("wallboard.html", w=board_now, program=program, on=on, now=now, hm=hm,
+                               live=not found and on == clock.date())
+
     @app.route("/day/activity", methods=["POST"])
     @login_required
     def day_activity():  # type: ignore[no-untyped-def]

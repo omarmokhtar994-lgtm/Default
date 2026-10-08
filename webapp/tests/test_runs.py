@@ -1089,6 +1089,16 @@ class TheDayPage(unittest.TestCase):
         self.assertIn('href="/day/handover?program=AE/AR+B2B&amp;date=2026-10-14"',
                       self.client.get(self.url).get_data(as_text=True))
 
+    def test_wallboard(self):
+        body = html.unescape(self.client.get("/day/wallboard?program=AE/AR+B2B&date=2026-10-14&at=12:40").get_data(as_text=True))
+        self.assertIn("data-wallboard", body)
+        for words in ("AE/AR B2B", "12:40", "Now", "12:00 to 13:00", "13:00 to 14:00", "15:00 to 16:00",
+                      "On break now", "Next 30 minutes", "English"):
+            self.assertIn(words, body)
+        self.assertNotIn("16:00 to 17:00", body)  # now and the next three only
+        self.assertIn("Associate 021", body)  # lunch 12:30 to 13:00: on break at 12:40
+        self.assertEqual(self.app.test_client().get("/day/wallboard?program=AE/AR+B2B").status_code, 302)
+
     def test_week_without_a_schedule_and_defaults(self):
         body = html.unescape(self.client.get("/day?program=AE/AR+B2B&date=2026-11-04").get_data(as_text=True))
         self.assertIn("No schedule for AE/AR B2B in the week of 01 Nov", body)

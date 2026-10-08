@@ -1,0 +1,30 @@
+{# © 2026 Omar Mokhtar. All rights reserved. For the floor's screen: big type, no controls. #}
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ program }}: wallboard</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+<link rel="icon" href="{{ url_for('static', filename='mark.svg') }}" type="image/svg+xml">
+</head>
+<body class="wall" data-wallboard data-live="{{ 'yes' if live else 'no' }}">
+<header class="wall-head"><h1>{{ program }}</h1><p class="wall-clock">{{ on.strftime('%a %d %b') }} · <b>{{ hm(now) }}</b>{% if not live %} <small>(not live)</small>{% endif %}</p></header>
+{% if not w %}<p class="wall-empty">No schedule for {{ program or 'this program' }} today.</p>{% else %}
+<section class="wall-rows">
+  {% for r in w.rows %}<article class="wall-row rb-{{ r.state }}">
+    <p class="wall-when">{% if loop.first %}<span class="wall-now">Now</span>{% endif %}{{ r.start }} to {{ r.end }}</p>
+    <p class="wall-buf {{ r.state }}">{{ r.pm|hmm if r.pm is not none else '–' }}</p>
+    <p class="wall-st"><span class="st {{ r.state }}">{{ r.label }}</span><small>{{ r.why }}</small></p>
+    <p class="wall-fig">{{ r.now|num }} <small>on the floor · need {{ r.need }}</small></p>
+  </article>{% endfor %}
+</section>
+<section class="wall-lists">
+  <div><h2>On break now</h2>{% if w.on_break %}<ul>{% for b in w.on_break %}<li><b>{{ b.name }}</b> {{ b.kind }} until {{ hm(b.until) }}</li>{% endfor %}</ul>{% else %}<p class="wall-none">Nobody</p>{% endif %}</div>
+  <div><h2>Next 30 minutes</h2>{% if w.soon %}<ul>{% for b in w.soon %}<li><b>{{ hm(b.at) }}</b> {{ b.name }} · {{ b.kind }}</li>{% endfor %}</ul>{% else %}<p class="wall-none">No breaks due</p>{% endif %}</div>
+  <div><h2>Languages now</h2>{% if w.langs %}<ul>{% for l in w.langs %}<li class="{{ l.cls }}"><b>{{ l.name }}</b> {{ l.count }}</li>{% endfor %}</ul>{% else %}<p class="wall-none">No language hours now</p>{% endif %}</div>
+</section>
+{% endif %}
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

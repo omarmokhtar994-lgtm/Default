@@ -444,6 +444,13 @@
   });
 })();
 
+// Wallboard: reload every minute while it shows today live.
+(function () {
+  "use strict";
+  var wall = document.querySelector("[data-wallboard]");
+  if (wall && wall.dataset.live === "yes") { setTimeout(function () { window.location.reload(); }, 60000); }
+})();
+
 // Print buttons (the handover note).
 (function () {
   "use strict";

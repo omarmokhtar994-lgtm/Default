@@ -11,7 +11,7 @@ import io
 import shutil
 import tempfile
 import unittest
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from openpyxl import load_workbook
@@ -19,7 +19,7 @@ from openpyxl import load_workbook
 from webapp.adherence import person_day
 from webapp.attendance import DayBook
 from webapp.exports import KINDS, build
-from webapp.schedules import ScheduleBook
+from webapp.schedules import EGYPT, ScheduleBook
 from webapp.store import Store
 from webapp.tests.test_schedules import AFTER, INPUT, REPO
 
@@ -107,7 +107,7 @@ class TheExports(unittest.TestCase):
     def test_schedule_changes_and_versions(self):
         draft = self.book.change(self.tool["id"], self.lina, "Associate 001", "Wed", "10:00 - 19:00", "swap asked")
         self.book.set_in_use(draft, self.sara)
-        today = date.today()
+        today = datetime.now(EGYPT).date()  # exports count days in Egypt time; the server clock is UTC
         data, *_ = self.export(start=today, end=today, kinds=["changes", "versions"])
         change = self.sheet(data, "Schedule changes and swaps")[0]
         self.assertEqual((change["Associate"], change["Day"], change["Old"], change["New"], change["Reason"], change["By"]),
@@ -133,7 +133,7 @@ class TheExports(unittest.TestCase):
 
     def test_text_is_never_a_formula(self):
         self.book.change(self.tool["id"], self.lina, "Associate 002", "Sun", "OFF", '=HYPERLINK("http://x","click")')
-        today = date.today()
+        today = datetime.now(EGYPT).date()  # exports count days in Egypt time; the server clock is UTC
         data, *_ = self.export(start=today, end=today, kinds=["changes"])
         ws = load_workbook(io.BytesIO(data))["Schedule changes and swaps"]
         cell = next(c for row in ws.iter_rows() for c in row if str(c.value).startswith("=HYPERLINK"))

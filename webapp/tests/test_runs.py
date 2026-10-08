@@ -1398,10 +1398,13 @@ class TheRunDetails(unittest.TestCase):
         self.assertIn("Details saved.", page)
         self.assertIn("<h1>AR week 42.xlsx</h1>", page)
         self.assertIn("started by Lina", page)
-        from datetime import date as day
+        from datetime import datetime
         from openpyxl import load_workbook
         from webapp.exports import build
-        data, *_ = build(self.store, self.app.extensions["days"], day.today(), day.today(), ["record"], by="Omar")
+        from webapp.schedules import EGYPT
+        today = datetime.now(EGYPT).date()  # exports count days in Egypt time; the server clock is UTC (the test
+        # read the UTC date and failed every day from 00:00 to 03:00 Egypt time)
+        data, *_ = build(self.store, self.app.extensions["days"], today, today, ["record"], by="Omar")
         rows = list(load_workbook(io.BytesIO(data))["Other actions"].iter_rows(values_only=True))
         changed = [dict(zip(rows[0], r)) for r in rows[1:] if "Run details changed" in r]
         self.assertEqual(len(changed), 1)

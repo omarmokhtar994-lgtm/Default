@@ -180,7 +180,7 @@ class TheBreakPlanPage(unittest.TestCase):
         lina = cls.store.add_user("lina", "Lina", "Lina-pass-123", must_change=False)
         cls.store.set_user_programs(lina, [gdi])
         cls.lina = sign_in(cls.app, "lina", "Lina-pass-123")
-        cls.token = token
+        cls.token = staticmethod(token)
 
     @classmethod
     def tearDownClass(cls):

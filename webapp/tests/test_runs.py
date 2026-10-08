@@ -526,7 +526,8 @@ class TheAnalyticsPages(unittest.TestCase):
         body = self.page("/")
         self.assertIn('name="program"', body)
         self.assertIn('<option value="NMG">', body)
-        self.assertIn('name="week_start" type="date"', body)
+        # Re-pinned in Phase P (owner, 2026-10-08): the week is now a start-date dropdown (Sundays and Mondays).
+        self.assertIn('<select name="week_start"', body)
 
     def test_run_page_lets_the_owner_tag_the_run(self):
         run_id = seed_week(self.store, "", "")

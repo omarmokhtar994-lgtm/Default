@@ -398,7 +398,9 @@ class TheProgramPagesInTheBrowser(unittest.TestCase):
         page = self.page()
         self.sign_in(page)
         expect(page.get_by_label("Program")).to_be_visible()
-        expect(page.get_by_label("Schedule week")).to_have_value(re.compile(r"\d{4}-\d{2}-\d{2}"))
+        # Re-pinned in Phase P (owner, 2026-10-08): "Schedule week" became the "Schedule starts" dropdown;
+        # its value is still the chosen date.
+        expect(page.get_by_label("Schedule starts")).to_have_value(re.compile(r"\d{4}-\d{2}-\d{2}"))
         page.screenshot(path=str(K_SCREENS / "04_new_run_with_program.png"))
         page.get_by_role("link", name="Team", exact=True).click()
         expect(page.get_by_role("heading", name="Team", exact=True)).to_be_visible()

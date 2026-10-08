@@ -1029,6 +1029,65 @@ class TheDayPage(unittest.TestCase):
         self.assertEqual(self.client.get("/day?date=not-a-date").status_code, 200)
 
 
+class TheRecord(unittest.TestCase):
+    """Phase O task 1: runs, downloads and people admin are recorded with who and when."""
+
+    def events(self, store):
+        return [(e["kind"], e["by_name"], e["subject"]) for e in store.list_events(0, time.time() + 60)]
+
+    def test_upload_stop_resume_recorded(self):
+        app, store, *_ = make_app(start_worker=False)
+        client = client_for(app)
+        run_id = run_id_of(upload(client, name="week42.xlsx"))
+        client.post(f"/runs/{run_id}/stop", data={"csrf_token": token(client)})
+        client.post(f"/runs/{run_id}/resume", data={"csrf_token": token(client)})
+        self.assertEqual(self.events(store), [("run_uploaded", "Sara", "week42.xlsx"), ("run_stopped", "Sara", "week42.xlsx"),
+                                              ("run_resumed", "Sara", "week42.xlsx")])
+        self.assertEqual({e["run_id"] for e in store.list_events(0, time.time() + 60)}, {run_id})
+
+    def test_downloads_recorded(self):
+        app, store, *_ = make_app()
+        client = client_for(app)
+        run_id = run_id_of(upload(client))
+        wait(store, run_id)
+        self.assertEqual(client.get(f"/runs/{run_id}/download").status_code, 200)
+        kind, by, subject = self.events(store)[-1]
+        self.assertEqual((kind, by), ("downloaded", "Sara"))
+        self.assertTrue(subject.endswith(".zip"))
+
+    def test_people_admin_recorded_without_passwords(self):
+        app, store, *_ = make_app(start_worker=False)
+        store.add_user("omar", "Omar", "Owner-pass-123", is_admin=True, must_change=False)
+        client = app.test_client()
+        tok = TOKEN.search(client.get("/login").get_data(as_text=True)).group(1)
+        client.post("/login", data={"username": "omar", "password": "Owner-pass-123", "csrf_token": tok})
+        client.post("/admin/users", data={"csrf_token": token(client), "username": "lina", "display_name": "Lina",
+                                          "password": "Lina-temp-pass-1"})
+        lina = next(u for u in store.list_users() if u["username"] == "lina")["id"]
+        for action in ("disable", "enable", "reset"):
+            client.post(f"/admin/users/{lina}/{action}", data={"csrf_token": token(client)})
+        self.assertEqual(self.events(store), [("user_added", "Omar", "lina"), ("user_disabled", "Omar", "lina"),
+                                              ("user_enabled", "Omar", "lina"), ("password_reset", "Omar", "lina")])
+        everything = " ".join(str(v) for e in store.list_events(0, time.time() + 60) for v in e.values())
+        self.assertNotIn("Lina-temp-pass-1", everything)
+
+    def test_run_files_kept_30_to_60_days(self):
+        from webapp import serve
+        base = {"SCHEDULER_DATA_DIR": "/var/lib/scheduler"}
+        self.assertEqual(serve.config_from_env(base)["RUN_FILES_DAYS"], 30)
+        self.assertEqual(serve.config_from_env({**base, "SCHEDULER_RUN_FILES_DAYS": "60"})["RUN_FILES_DAYS"], 60)
+        for bad in ("29", "61", "forever"):
+            with self.assertRaises(SystemExit):
+                serve.config_from_env({**base, "SCHEDULER_RUN_FILES_DAYS": bad})
+        app, store, data, _ = make_app(RUN_FILES_DAYS=45)
+        client = client_for(app)
+        run_id = run_id_of(upload(client))
+        wait(store, run_id)
+        queue = app.extensions["runs"]
+        self.assertEqual(queue.cleanup(now=time.time() + 44 * 86400), 0)
+        self.assertEqual(queue.cleanup(now=time.time() + 46 * 86400), 1)
+
+
 class Access(unittest.TestCase):
     def test_downloads_need_login(self):
         app, store, *_ = make_app()

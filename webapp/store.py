@@ -101,6 +101,19 @@ create table if not exists actual_breaks (
     at real not null,
     primary key (program, shift_date, associate, idx)
 );
+create table if not exists events (
+    id integer primary key autoincrement,
+    at real not null,
+    user_id integer,
+    kind text not null,
+    program text not null default '',
+    week_start text not null default '',
+    run_id text not null default '',
+    schedule_id integer,
+    subject text not null default '',
+    detail text not null default ''
+);
+create index if not exists events_at on events (at);
 create table if not exists day_log (
     id integer primary key autoincrement,
     program text not null,
@@ -305,6 +318,36 @@ class Store:
         with self._db() as db:
             return sum(db.execute(f"delete from {table} where shift_date < ?", (shift_date,)).rowcount
                        for table in ("attendance", "actual_breaks", "day_log"))
+
+    # ------------------------------------------------------------- the record (actions not in another log)
+    def add_event(self, **fields: Any) -> None:
+        fields.setdefault("at", time.time())
+        names = ", ".join(fields)
+        marks = ", ".join("?" for _ in fields)
+        with self._db() as db:
+            db.execute(f"insert into events ({names}) values ({marks})", tuple(fields.values()))
+
+    def list_events(self, start: float, end: float, program: Optional[str] = None, user_id: Optional[int] = None,
+                    kinds: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        """Events with ``start <= at < end``, oldest first, with the name of who did them."""
+        where, args = ["events.at >= ?", "events.at < ?"], [start, end]
+        if program is not None:
+            where.append("events.program = ?")
+            args.append(program)
+        if user_id is not None:
+            where.append("events.user_id = ?")
+            args.append(user_id)
+        if kinds:
+            where.append(f"events.kind in ({', '.join('?' for _ in kinds)})")
+            args.extend(kinds)
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                "select events.*, coalesce(users.display_name, '') as by_name from events left join users"
+                " on users.id = events.user_id where " + " and ".join(where) + " order by events.at, events.id", args)]
+
+    def delete_events_before(self, at: float) -> int:
+        with self._db() as db:
+            return db.execute("delete from events where at < ?", (at,)).rowcount
 
     def update_run(self, run_id: str, **fields: Any) -> None:
         if not fields:

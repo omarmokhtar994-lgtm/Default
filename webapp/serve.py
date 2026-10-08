@@ -22,8 +22,12 @@ def config_from_env(env: Mapping[str, str]) -> Dict[str, Any]:
     data_dir = env.get("SCHEDULER_DATA_DIR", "").strip()
     if not data_dir:
         sys.exit("SCHEDULER_DATA_DIR is not set: the website needs a folder for its users and runs.")
+    days = env.get("SCHEDULER_RUN_FILES_DAYS", "30").strip()
+    if not days.isdigit() or not 30 <= int(days) <= 60:
+        sys.exit(f"SCHEDULER_RUN_FILES_DAYS is {days!r}: run files are kept 30 to 60 days; give a number in that range.")
     return {
         "DATA_DIR": data_dir,
+        "RUN_FILES_DAYS": int(days),
         "PACKAGE_ROOT": env.get("SCHEDULER_PACKAGE_ROOT", "").strip() or None,
         "PORT": int(env.get("SCHEDULER_PORT", "8080")),
         "PARALLEL": int(env.get("SCHEDULER_PARALLEL", "1")),

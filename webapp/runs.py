@@ -34,7 +34,8 @@ from . import outcome as engine_outcome
 from .results import metrics, summarize
 from .store import Store
 
-KEEP_DAYS = 30
+KEEP_DAYS = 30  # run files, by default (SCHEDULER_RUN_FILES_DAYS: 30 to 60)
+RECORD_DAYS = 395  # the record of actions: 13 months, like schedules and attendance
 ACTIVE = ("GATE", "RUNNING", "SCORING")
 RESUMABLE = ("STOPPED", "INTERRUPTED", "FAILED")
 MODES = ("QUICK", "DEEP", "OVERNIGHT", "SMOKE")
@@ -76,8 +77,9 @@ BEFORE_SCHEDULE_SUFFIX = "_BEST_BEFORE_BREAKS_SCHEDULE.xlsx"
 class RunQueue:
     def __init__(self, store: Store, package_root: Path, runs_root: Path, runner_cmd: Optional[List[str]] = None,
                  parallel: int = 1, check_cmd: Optional[List[str]] = None, score_cmd: Optional[List[str]] = None,
-                 gate_cmd: Optional[List[str]] = None):
+                 gate_cmd: Optional[List[str]] = None, keep_days: int = KEEP_DAYS):
         self.store = store
+        self.keep_days = keep_days  # run files (zips, results); the run's row and figures stay
         self.package_root = Path(package_root)
         self.runs_root = Path(runs_root)
         self.runs_root.mkdir(parents=True, exist_ok=True)
@@ -424,15 +426,15 @@ class RunQueue:
 
     # ------------------------------------------------------------ retention
     def cleanup(self, now: Optional[float] = None) -> int:
-        """Delete the files of runs older than 30 days; the row stays as EXPIRED."""
-        cutoff = (time.time() if now is None else now) - KEEP_DAYS * 86400
+        """Delete the files of runs older than ``keep_days`` (30 to 60); the row stays as EXPIRED."""
+        cutoff = (time.time() if now is None else now) - self.keep_days * 86400
         expired = 0
         for run in self.store.list_runs(limit=1_000_000):
             if run["status"] in ("EXPIRED", "QUEUED", "CHECKING") + ACTIVE or run["created"] >= cutoff:
                 continue
             shutil.rmtree(self.run_dir(run["id"]), ignore_errors=True)
             self.store.update_run(run["id"], status="EXPIRED",
-                                  message=f"Files deleted after {KEEP_DAYS} days.")
+                                  message=f"Files deleted after {self.keep_days} days.")
             expired += 1
         return expired
 
@@ -506,6 +508,7 @@ class RunQueue:
                     self.schedules.cleanup()
                 if self.days is not None:
                     self.days.cleanup()
+                self.store.delete_events_before(time.time() - RECORD_DAYS * 86400)
             except Exception as exc:  # keep cleaning tomorrow; say why today failed
                 print(f"run cleanup failed: {exc!r}", file=sys.stderr, flush=True)
             time.sleep(3600)

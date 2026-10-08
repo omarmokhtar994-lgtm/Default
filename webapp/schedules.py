@@ -170,7 +170,11 @@ class ScheduleBook:
                                          label=f"Version {number}: {user.get('display_name', 'someone')}'s edit",
                                          base_id=row["id"], user_id=user_id, file=f"{row['run_id']}/{name}",
                                          week=row["week"], checks=row["checks"])
-        return self.store.get_schedule(new_id)
+        made = self.store.get_schedule(new_id)
+        self.store.add_event(kind="version_created", user_id=user_id, program=row["program"],
+                             week_start=row["week_start"], run_id=row["run_id"], schedule_id=new_id,
+                             subject=made["label"], detail=f"copied from {row['label']}")
+        return made
 
     def _save(self, row: Dict[str, Any], user_id: int, edit, cells: Set[Tuple[str, str]]) -> Tuple[Dict[str, Any], List]:
         """Apply an edit to ``row`` (a new draft unless it is a draft not in use), re-check it and
@@ -236,10 +240,14 @@ class ScheduleBook:
         with self._lock(row["run_id"]):
             scope = (self.store.list_schedules(program=row["program"], week_start=row["week_start"])
                      if row["program"] and row["week_start"] else self.store.list_schedules(run_id=row["run_id"]))
+            before = [v["label"] for v in scope if v["in_use"] and v["id"] != schedule_id]
             for v in scope:
                 if v["in_use"]:
                     self.store.update_schedule(v["id"], in_use=0)
             self.store.update_schedule(schedule_id, in_use=1)
+            self.store.add_event(kind="set_in_use", user_id=user_id, program=row["program"],
+                                 week_start=row["week_start"], run_id=row["run_id"], schedule_id=schedule_id,
+                                 subject=row["label"], detail=f"instead of {before[0]}" if before else "")
 
     # ------------------------------------------------------------- retention
     def cleanup(self, now: Optional[float] = None) -> int:

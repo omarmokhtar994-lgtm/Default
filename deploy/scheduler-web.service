@@ -15,6 +15,9 @@ Environment=SCHEDULER_DATA_DIR={{DATA_DIR}}
 Environment=SCHEDULER_PACKAGE_ROOT={{APP_DIR}}/package
 Environment=SCHEDULER_PORT=8080
 Environment=SCHEDULER_PARALLEL=1
+Environment=SCHEDULER_RUN_FILES_DAYS=30
+# Your own settings (kept across updates), for example SCHEDULER_RUN_FILES_DAYS=60 (30 to 60):
+EnvironmentFile=-/etc/scheduler/settings.env
 Environment=PATH={{APP_DIR}}/venv/bin:/usr/local/bin:/usr/bin:/bin
 Environment=PYTHON={{APP_DIR}}/venv/bin/python
 Environment=PYTHONUNBUFFERED=1

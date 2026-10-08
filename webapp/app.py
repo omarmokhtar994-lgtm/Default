@@ -194,7 +194,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                          Path(config.get("RUNS_DIR") or data_dir / "runs"),
                          runner_cmd=config.get("RUNNER_CMD"), parallel=int(config.get("PARALLEL", 1)),
                          check_cmd=config.get("CHECK_CMD"), score_cmd=config.get("SCORE_CMD"),
-                         gate_cmd=config.get("GATE_CMD"))
+                         gate_cmd=config.get("GATE_CMD"), keep_days=int(config.get("RUN_FILES_DAYS", 30)))
         app.extensions["runs"] = queue
         # Schedule versions are checked with the installed package's independent validator.
         book = ScheduleBook(app.extensions["store"], data_dir,
@@ -335,6 +335,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             else:
                 store.add_user(username, request.form.get("display_name", ""), password,
                                is_admin=request.form.get("is_admin") == "on", must_change=True)
+                _record("user_added", subject=username,
+                        detail="admin" if request.form.get("is_admin") == "on" else "")  # never the password
                 flash(f"Added {username}. They choose their own password at first sign-in.")
                 return redirect(url_for("admin_users"))
         return render_template("admin_users.html", users=store.list_users(), error=error)
@@ -350,13 +352,16 @@ def create_app(config: Dict[str, Any]) -> Flask:
             flash("You cannot switch off your own account.")
         elif action == "disable":
             store.set_active(user_id, False)
+            _record("user_disabled", subject=target["username"])
             flash(f"{target['username']} is switched off.")
         elif action == "enable":
             store.set_active(user_id, True)
+            _record("user_enabled", subject=target["username"])
             flash(f"{target['username']} is switched on.")
         elif action == "reset":
             temporary = secrets.token_urlsafe(9)
             store.set_password(user_id, temporary, must_change=True)
+            _record("password_reset", subject=target["username"])  # never the password itself
             flash(f"Temporary password for {target['username']}: {temporary} "
                   "(shown once; they choose their own at next sign-in).")
         else:
@@ -395,6 +400,14 @@ def create_app(config: Dict[str, Any]) -> Flask:
             abort(404)
         return queue
 
+    def _record(kind: str, run: Optional[Dict[str, Any]] = None, **fields: Any) -> None:
+        """Keep who did what and when (listed by Exports); a run fills in its program, week and workbook."""
+        if run is not None:
+            fields = {"run_id": run["id"], "program": run.get("program") or "", "week_start": run.get("week_start") or "",
+                      "subject": run.get("workbook") or "", **fields}
+        user = g.get("user")
+        app.extensions["store"].add_event(kind=kind, user_id=user["id"] if user else None, **fields)
+
     def _run_or_404(run_id: str) -> Dict[str, Any]:
         run = app.extensions["store"].get_run(run_id) if RUN_ID.match(run_id) else None
         if run is None:
@@ -432,6 +445,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             flash("Upload an Excel workbook (.xlsx): that file is not one.")
             return redirect(url_for("home"))
         run_id = queue.submit(g.user["id"], path, mode, name, options, program=program, week_start=week_start)
+        _record("run_uploaded", app.extensions["store"].get_run(run_id), detail=mode)
         return redirect(url_for("run_detail", run_id=run_id))
 
     @app.route("/runs/<run_id>")
@@ -472,25 +486,28 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if not path.is_file():
             abort(404)
         stem = os.path.splitext(secure_filename(run["workbook"]))[0] or "results"
+        _record("downloaded", run, subject=f"{stem}_results_{run_id}.zip")
         return send_file(path, as_attachment=True, download_name=f"{stem}_results_{run_id}.zip")
 
     @app.route("/runs/<run_id>/schedule")
     @login_required
     def run_schedule(run_id: str):  # type: ignore[no-untyped-def]
-        _run_or_404(run_id)
+        run = _run_or_404(run_id)
         path = _queue().final_schedule(run_id)
         if path is None:
             abort(404)
+        _record("downloaded", run, subject=path.name)
         return send_file(path, as_attachment=True, download_name=path.name)
 
     @app.route("/runs/<run_id>/shortfall")
     @login_required
     def run_shortfall(run_id: str):  # type: ignore[no-untyped-def]
         """The engine's shortfall schedule, for review only (it misses listed minimums)."""
-        _run_or_404(run_id)
+        run = _run_or_404(run_id)
         path = _queue().shortfall_schedule(run_id)
         if path is None:
             abort(404)
+        _record("downloaded", run, subject=path.name)
         return send_file(path, as_attachment=True, download_name=path.name)
 
     @app.route("/runs/<run_id>/tag", methods=["POST"])
@@ -669,6 +686,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         row = _version_or_404(schedule_id)
         book = _book()
         stem = secure_filename(f"{row['program'] or row['run_id']}_{row['week_start']}_{row['label']}") or "schedule"
+        _record("downloaded", program=row["program"], week_start=row["week_start"], run_id=row["run_id"],
+                schedule_id=schedule_id, subject=f"{stem}.xlsx")
         if row["kind"] != "edited":
             return send_file(book.path(schedule_id), as_attachment=True, download_name=f"{stem}.xlsx")
         return send_file(with_notes(book.path(schedule_id), book.view(schedule_id)), as_attachment=True,
@@ -796,23 +815,30 @@ def create_app(config: Dict[str, Any]) -> Flask:
             return redirect(url_for("run_detail", run_id=run_id))
         new_id = _queue().start_from(run_id, g.user["id"], mode)
         if new_id is None:
-            flash("The workbook of this check is no longer on the server (files are kept 30 days). Upload it again.")
+            flash(f"The workbook of this check is no longer on the server (files are kept {_queue().keep_days} days). "
+                  "Upload it again.")
             return redirect(url_for("run_detail", run_id=run_id))
+        _record("run_started", app.extensions["store"].get_run(new_id), detail=f"{mode}, from the check {run_id}")
         return redirect(url_for("run_detail", run_id=new_id))
 
     @app.route("/runs/<run_id>/stop", methods=["POST"])
     @login_required
     def run_stop(run_id: str):  # type: ignore[no-untyped-def]
-        _run_or_404(run_id)
-        flash("Stopping safely; checkpoints are kept." if _queue().stop(run_id) else "This run is not running.")
+        run = _run_or_404(run_id)
+        stopped = _queue().stop(run_id)
+        if stopped:
+            _record("run_stopped", run)
+        flash("Stopping safely; checkpoints are kept." if stopped else "This run is not running.")
         return redirect(url_for("run_detail", run_id=run_id))
 
     @app.route("/runs/<run_id>/resume", methods=["POST"])
     @login_required
     def run_resume(run_id: str):  # type: ignore[no-untyped-def]
-        _run_or_404(run_id)
-        flash("Queued again; it continues from its checkpoints." if _queue().resume(run_id)
-              else "This run cannot be resumed.")
+        run = _run_or_404(run_id)
+        resumed = _queue().resume(run_id)
+        if resumed:
+            _record("run_resumed", run)
+        flash("Queued again; it continues from its checkpoints." if resumed else "This run cannot be resumed.")
         return redirect(url_for("run_detail", run_id=run_id))
 
     @app.errorhandler(500)

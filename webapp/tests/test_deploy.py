@@ -50,6 +50,14 @@ class TheScripts(unittest.TestCase):
         self.assertIn("User=scheduler", service)
         self.assertNotIn("0.0.0.0", service + Path(serve.__file__).read_text(encoding="utf-8"))
 
+    def test_settings_survive_updates(self):
+        # the service file is rewritten by every update; the owner's own settings live in a file it never touches
+        service = (DEPLOY / "scheduler-web.service").read_text(encoding="utf-8")
+        self.assertIn("Environment=SCHEDULER_RUN_FILES_DAYS=30", service)
+        self.assertIn("EnvironmentFile=-/etc/scheduler/settings.env", service)
+        self.assertLess(service.index("SCHEDULER_RUN_FILES_DAYS=30"), service.index("EnvironmentFile="))
+        self.assertNotIn("settings.env", (DEPLOY / "update.sh").read_text(encoding="utf-8"))
+
     def test_caddy_uses_sslip_domain_and_only_proxies_to_localhost(self):
         caddy = (DEPLOY / "Caddyfile.template").read_text(encoding="utf-8")
         self.assertIn("{{DOMAIN}}", caddy)

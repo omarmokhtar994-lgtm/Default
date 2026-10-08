@@ -449,6 +449,35 @@ class Store:
         with self._db() as db:
             db.execute(f"update runs set {names} where id = ?", (*fields.values(), run_id))
 
+    RUN_DETAILS = ("program", "week_start", "user_id", "workbook")
+
+    def move_run(self, run_id: str, fields: Dict[str, Any], stop_in_use: List[int]) -> None:
+        """Change a run's details in one transaction: its versions take its program and week, and the
+        versions in ``stop_in_use`` stop being in use."""
+        unknown = set(fields) - set(self.RUN_DETAILS)
+        if unknown:
+            raise ValueError(f"Not a run detail: {', '.join(sorted(unknown))}.")
+        with self._db() as db:
+            if fields:
+                names = ", ".join(f"{k} = ?" for k in fields)
+                db.execute(f"update runs set {names} where id = ?", (*fields.values(), run_id))
+            moved = {k: v for k, v in fields.items() if k in ("program", "week_start")}
+            if moved:
+                names = ", ".join(f"{k} = ?" for k in moved)
+                db.execute(f"update schedules set {names} where run_id = ?", (*moved.values(), run_id))
+            for schedule_id in stop_in_use:
+                db.execute("update schedules set in_use = 0 where id = ?", (schedule_id,))
+
+    def day_record_counts(self, program: str, start: str, end: str) -> Dict[str, int]:
+        """How many day records a program holds for shift dates ``start`` to ``end``."""
+        counts = {}
+        with self._db() as db:
+            for key, table in (("attendance", "attendance"), ("breaks", "actual_breaks"),
+                               ("activities", "activities"), ("log", "day_log")):
+                counts[key] = db.execute(f"select count(*) from {table} where program = ? and shift_date between ? and ?",
+                                         (program, start, end)).fetchone()[0]
+        return counts
+
     def get_run(self, run_id: str) -> Optional[Dict[str, Any]]:
         with self._db() as db:
             row = db.execute("select runs.*, users.display_name as by_name from runs join users"

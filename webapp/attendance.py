@@ -46,6 +46,17 @@ def _clock(text: str) -> Optional[int]:
     return int(found.group(1)) * 60 + int(found.group(2)) if found else None
 
 
+def pick_version(versions: List[Dict[str, Any]]) -> Tuple[Optional[Dict[str, Any]], str]:
+    """Which of a week's versions the day is read from: the one in use, else the newest tool schedule
+    (after breaks first), with a note saying so; (None, "") when there is none."""
+    chosen = next((v for v in versions if v["in_use"]), None)
+    if chosen:
+        return chosen, ""
+    tools = sorted((v for v in versions if v["kind"] != "edited"),
+                   key=lambda v: (v["kind"] != "tool_after", -v["created"]))
+    return (tools[0], FALLBACK) if tools else (None, "")
+
+
 SUNDAY_UNCHECKED = ("Next week's schedule is not here yet, so the rest gap to Sunday is not checked: "
                     "check Sunday's start by hand.")
 
@@ -61,13 +72,7 @@ class DayBook:
 
     def version(self, program: str, on: date) -> Tuple[Optional[Dict[str, Any]], str]:
         """The version in use for the week holding ``on``, else the tool's own (after breaks first)."""
-        start = week_start(on).isoformat()
-        chosen = self.book.in_use(program, start)
-        if chosen:
-            return chosen, ""
-        tools = [v for v in self.store.list_schedules(program=program, week_start=start) if v["kind"] != "edited"]
-        tools.sort(key=lambda v: (v["kind"] != "tool_after", -v["created"]))
-        return (tools[0], FALLBACK) if tools else (None, "")
+        return pick_version(self.store.list_schedules(program=program, week_start=week_start(on).isoformat()))
 
     def _week(self, row: Dict[str, Any]) -> Dict[str, Any]:
         return json.loads(row["week"] or "{}")

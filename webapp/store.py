@@ -319,6 +319,57 @@ class Store:
             return sum(db.execute(f"delete from {table} where shift_date < ?", (shift_date,)).rowcount
                        for table in ("attendance", "actual_breaks", "day_log"))
 
+    # ------------------------------------------------------------- ranges for exports
+    def _between(self, sql: str, args: List[Any], program: Optional[str], user_id: Optional[int], table: str,
+                 order: str) -> List[Dict[str, Any]]:
+        if program is not None:
+            sql += f" and {table}.program = ?"
+            args.append(program)
+        if user_id is not None:
+            sql += f" and {table}.user_id = ?"
+            args.append(user_id)
+        with self._db() as db:
+            return [dict(r) for r in db.execute(sql + " order by " + order, args)]
+
+    def attendance_between(self, start: str, end: str, program: Optional[str] = None,
+                           user_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        return self._between("select attendance.*, coalesce(users.display_name, '') as by_name from attendance"
+                             " left join users on users.id = attendance.user_id where shift_date between ? and ?",
+                             [start, end], program, user_id, "attendance", "shift_date, program, associate")
+
+    def actual_breaks_between(self, start: str, end: str, program: Optional[str] = None) -> List[Dict[str, Any]]:
+        return self._between("select actual_breaks.*, coalesce(users.display_name, '') as by_name from actual_breaks"
+                             " left join users on users.id = actual_breaks.user_id where shift_date between ? and ?",
+                             [start, end], program, None, "actual_breaks", "shift_date, program, associate, idx")
+
+    def day_log_between(self, start: str, end: str, program: Optional[str] = None,
+                        user_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        return self._between("select day_log.*, coalesce(users.display_name, '') as by_name from day_log"
+                             " left join users on users.id = day_log.user_id where shift_date between ? and ?",
+                             [start, end], program, user_id, "day_log", "day_log.shift_date, day_log.id")
+
+    def changes_between(self, start: float, end: float, program: Optional[str] = None,
+                        user_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        sql = ("select schedule_changes.*, schedules.program, schedules.week_start, schedules.label,"
+               " coalesce(users.display_name, '') as by_name from schedule_changes join schedules"
+               " on schedules.id = schedule_changes.schedule_id left join users on users.id = schedule_changes.user_id"
+               " where schedule_changes.at >= ? and schedule_changes.at < ?")
+        args: List[Any] = [start, end]
+        if program is not None:
+            sql += " and schedules.program = ?"
+            args.append(program)
+        if user_id is not None:
+            sql += " and schedule_changes.user_id = ?"
+            args.append(user_id)
+        with self._db() as db:
+            return [dict(r) for r in db.execute(sql + " order by schedule_changes.at, schedule_changes.id", args)]
+
+    def runs_between(self, start: float, end: float, program: Optional[str] = None,
+                     user_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        return self._between("select runs.*, coalesce(users.display_name, '') as by_name from runs left join users"
+                             " on users.id = runs.user_id where runs.created >= ? and runs.created < ?",
+                             [start, end], program, user_id, "runs", "runs.created")
+
     # ------------------------------------------------------------- the record (actions not in another log)
     def add_event(self, **fields: Any) -> None:
         fields.setdefault("at", time.time())

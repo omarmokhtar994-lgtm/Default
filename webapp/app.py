@@ -2,6 +2,7 @@
 """The team scheduler website: Flask application factory and routes."""
 from __future__ import annotations
 
+import io
 import json
 import os
 import re
@@ -19,6 +20,7 @@ from .analytics import program_weeks, team
 from .attendance import DayBook, hm, week_start
 from .day import AUX, MEASURES, STATUSES, BreakRefused, board
 from .eta import queue_plan
+from .exports import KINDS as EXPORT_KINDS, build as build_export
 from .outcome import cannot_schedule, read as read_outcome, view as outcome_view
 from .auth import admin_required, check_csrf, csrf_token, load_user, login_required
 from .program_page import build, overview, weeks_to_show
@@ -800,6 +802,59 @@ def create_app(config: Dict[str, Any]) -> Flask:
         except ValueError as exc:
             return jsonify(error=str(exc)), 400
         return jsonify(found)
+
+    # ------------------------------------------------------------- exports (Phase O)
+    def _export_args() -> Dict[str, Any]:
+        today = datetime.now(EGYPT).date()
+        start = _date(request.args.get("from", "")) or today.replace(day=1)
+        end = _date(request.args.get("to", "")) or today
+        program = clean_program(request.args.get("program", "")) or None
+        return {"start": start, "end": end, "program": program, "user_id": request.args.get("user", type=int),
+                "measure": request.args.get("measure", "") if request.args.get("measure", "") in MEASURES else "interval"}
+
+    def _exports_page(error: str = "", status: int = 200):  # type: ignore[no-untyped-def]
+        store = app.extensions["store"]
+        a = _export_args()
+        today = datetime.now(EGYPT).date()
+        sunday = today - timedelta(days=(today.weekday() + 1) % 7)
+        first = today.replace(day=1)
+        last_month_end = first - timedelta(days=1)
+        presets = [("Today", today, today), ("This week", sunday, sunday + timedelta(days=6)),
+                   ("This month", first, today), ("Last month", last_month_end.replace(day=1), last_month_end)]
+        lo = datetime(a["start"].year, a["start"].month, a["start"].day, tzinfo=EGYPT).timestamp()
+        hi = datetime(a["end"].year, a["end"].month, a["end"].day, tzinfo=EGYPT).timestamp() + 86400
+        found = {
+            "attendance": store.attendance_between(a["start"].isoformat(), a["end"].isoformat(), a["program"], a["user_id"]),
+            "activity": store.day_log_between(a["start"].isoformat(), a["end"].isoformat(), a["program"], a["user_id"]),
+            "changes": store.changes_between(lo, hi, a["program"], a["user_id"]),
+            "versions": store.list_events(lo, hi, a["program"], a["user_id"], ["version_created", "set_in_use"]),
+            "runs": store.runs_between(lo, hi, a["program"], a["user_id"]),
+        }
+        counts = {k: (len(rows), max(rows, key=lambda r: r.get("at") or r.get("created") or 0) if rows else None)
+                  for k, rows in found.items()}
+        return render_template("exports.html", kinds=EXPORT_KINDS, counts=counts, presets=presets, error=error,
+                               programs=_days().programs() if app.extensions.get("days") else [],
+                               users=store.list_users(), measures=MEASURES, **a), status
+
+    @app.route("/exports")
+    @login_required
+    def exports_page():  # type: ignore[no-untyped-def]
+        return _exports_page()
+
+    @app.route("/exports/download")
+    @login_required
+    def exports_download():  # type: ignore[no-untyped-def]
+        a = _export_args()
+        kinds = request.args.getlist("kind")
+        fmt = request.args.get("format", "xlsx")
+        try:
+            data, name, mime = build_export(app.extensions["store"], _days(), a["start"], a["end"], kinds, fmt,
+                                            a["program"], a["user_id"], g.user["display_name"], a["measure"])
+        except ValueError as exc:  # said on the page
+            return _exports_page(str(exc), 400)
+        _record("exported", subject=name, program=a["program"] or "",
+                detail=f"{a['start']} to {a['end']}: {', '.join(k for k in EXPORT_KINDS if k in kinds)}")
+        return send_file(io.BytesIO(data), mimetype=mime, as_attachment=True, download_name=name)
 
     @app.route("/team")
     @login_required

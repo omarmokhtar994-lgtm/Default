@@ -1097,6 +1097,49 @@ class TheRecord(unittest.TestCase):
         self.assertEqual(queue.cleanup(now=time.time() + 46 * 86400), 1)
 
 
+class TheExportsPage(unittest.TestCase):
+    """Phase O task 2: the Exports page and its downloads."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app, cls.store, *_ = make_app(VALIDATOR_ROOT=str(REPO))
+        cls.client = client_for(cls.app)
+        cls.run_id = versioned_run(cls.app, cls.store, cls.client, program="AE/AR B2B", week_start="2026-10-11")
+        cls.client.post("/day/attendance", data={"csrf_token": token(cls.client), "program": "AE/AR B2B",
+                                                 "date": "2026-10-14", "associate": "Associate 001", "status": "Sick"})
+
+    def test_page_lists_the_period(self):
+        body = html.unescape(self.client.get("/exports?from=2026-10-01&to=2026-10-31").get_data(as_text=True))
+        for words in ("Exports", "What to export", "In this period", "Attendance", "Schedule changes and swaps",
+                      "Worked hours and adherence", 'name="kind" value="attendance" checked', 'href="/exports"'):
+            self.assertIn(words, body)
+        self.assertRegex(body, r"<td>Attendance</td><td class=\"n\">1</td><td>Sara, ")
+
+    def test_download_is_recorded(self):
+        got = self.client.get("/exports/download?from=2026-10-14&to=2026-10-14&kind=attendance&kind=activity"
+                              "&format=xlsx&measure=interval")
+        self.assertEqual(got.status_code, 200)
+        self.assertIn("attachment; filename=Team_Scheduler_2026-10-14_to_2026-10-14.xlsx",
+                      got.headers["Content-Disposition"])
+        from openpyxl import load_workbook
+        wb = load_workbook(io.BytesIO(got.data))
+        self.assertEqual(wb.sheetnames, ["About this export", "Attendance", "Day activity"])
+        last = self.store.list_events(0, time.time() + 60, kinds=["exported"])[-1]
+        self.assertEqual((last["by_name"], last["subject"]), ("Sara", "Team_Scheduler_2026-10-14_to_2026-10-14.xlsx"))
+
+    def test_a_request_it_cannot_answer_says_why(self):
+        got = self.client.get("/exports/download?from=2026-10-14&to=2026-10-01&kind=attendance&format=xlsx")
+        self.assertEqual(got.status_code, 400)
+        self.assertIn("The period ends before it starts.", got.get_data(as_text=True))
+        got = self.client.get("/exports/download?from=2026-10-14&to=2026-10-14&kind=attendance&kind=runs&format=csv")
+        self.assertIn("A CSV file holds one item", got.get_data(as_text=True))
+
+    def test_signed_out_cannot_export(self):
+        got = self.app.test_client().get("/exports/download?from=2026-10-14&to=2026-10-14&kind=attendance")
+        self.assertEqual(got.status_code, 302)
+        self.assertIn("/login", got.headers["Location"])
+
+
 class Access(unittest.TestCase):
     def test_downloads_need_login(self):
         app, store, *_ = make_app()

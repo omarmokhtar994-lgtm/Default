@@ -1,0 +1,40 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{% extends "base.html" %}
+{% block title %}Exports on Team Scheduler{% endblock %}
+{% block content %}
+{% set words = {'attendance': 'statuses with their times, who recorded them', 'activity': 'every status and break move, by whom', 'breaks': 'each planned break and when it was taken', 'changes': 'shift changes and slot swaps with reasons and warnings', 'versions': 'versions made and set in use', 'runs': 'runs uploaded, by whom, and how they ended', 'worked': 'scheduled and worked minutes, late, early, aux, adherence, conformance', 'record': 'downloads, exports, people added or switched off, password resets'} %}
+<div class="phead"><div>
+  <h1>Exports</h1>
+  <p class="byline">Everything recorded on the website for any period: who did what, and when (Egypt time). Records are kept 13 months; run files 30 to 60 days.</p>
+</div></div>
+{% if error %}<p class="notice" role="alert">{{ error }}</p>{% endif %}
+<div class="exp">
+<section class="panel" aria-labelledby="exp-h">
+  <h2 id="exp-h">What to export</h2>
+  <form method="get" action="{{ url_for('exports_download') }}" class="exp-form">
+    <p class="exp-presets">{% for label, a, b in presets %}<a href="{{ url_for('exports_page', **{'from': a.isoformat(), 'to': b.isoformat()}) }}"{% if a == start and b == end %} class="on" aria-current="true"{% endif %}>{{ label }}</a>{% endfor %}</p>
+    <div class="exp-row"><label>From <input type="date" name="from" value="{{ start.isoformat() }}" required></label>
+      <label>To <input type="date" name="to" value="{{ end.isoformat() }}" required></label></div>
+    <div class="exp-row"><label>Program
+      <select name="program"><option value="">All programs</option>{% for p in programs %}<option value="{{ p }}"{% if p == program %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
+      <label>Changes by
+      <select name="user"><option value="">Anyone</option>{% for u in users %}<option value="{{ u.id }}"{% if u.id == user_id %} selected{% endif %}>{{ u.display_name }}</option>{% endfor %}</select></label>
+      <label>Measure
+      <select name="measure">{% for key, name in measures.items() %}<option value="{{ key }}"{% if key == measure %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label></div>
+    <fieldset class="exp-kinds"><legend>Include</legend>
+      {% for key, name in kinds.items() %}<label class="exp-kind"><input type="checkbox" name="kind" value="{{ key }}"{% if key not in ('runs', 'record') %} checked{% endif %}><span><b>{{ name }}</b><small>{{ words[key] }}</small></span></label>{% endfor %}
+    </fieldset>
+    <fieldset class="exp-format"><legend>Format</legend>
+      <label><input type="radio" name="format" value="xlsx" checked> Excel, a tab per item</label>
+      <label><input type="radio" name="format" value="csv"> CSV, one item</label></fieldset>
+    <p><button class="primary" type="submit">Download</button></p>
+  </form>
+</section>
+<section class="panel" aria-labelledby="in-h">
+  <h2 id="in-h">In this period</h2>
+  <p class="note">{{ start.strftime('%d %b %Y') }} to {{ end.strftime('%d %b %Y') }}{% if program %}, {{ program }}{% endif %}. Breaks and worked hours are worked out when you download.</p>
+  <table class="adh-t exp-t"><thead><tr><th scope="col">Item</th><th scope="col" class="n">Rows</th><th scope="col">Last change</th></tr></thead>
+    <tbody>{% for key in ('attendance', 'activity', 'changes', 'versions', 'runs') %}{% set n, last = counts[key] %}<tr><td>{{ kinds[key] }}</td><td class="n">{{ n }}</td><td>{% if last %}{{ last.by_name }}, {{ when(last.at or last.created) }}{% else %}–{% endif %}</td></tr>{% endfor %}</tbody></table>
+</section>
+</div>
+{% endblock %}

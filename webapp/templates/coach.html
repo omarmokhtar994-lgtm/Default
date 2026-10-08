@@ -29,7 +29,7 @@
   <div class="scroll"><table class="coach-t">
     <thead><tr><th scope="col">Interval</th>{% for d in days %}<th scope="col">{{ d }}</th>{% endfor %}</tr></thead>
     <tbody>{% for t in range(0, 1440, found.interval) %}<tr><th scope="row">{{ hm(t) }}</th>{% for d in range(7) %}{% set c = rows[d].get(t) %}
-      {% if not c %}<td class="none"></td>{% else %}<td class="{{ 'kept' if c.kept_input else ('up' if c.actual > c.input + 0.05 else ('down' if c.actual < c.input - 0.05 else 'same')) }}" title="{{ c.days }} day{{ 's' if c.days != 1 }} recorded">{% if c.actual is not none %}<b>{{ (100 * c.actual)|round|int }}%</b>{% else %}–{% endif %}<small>{{ (100 * c.input)|round|int }}%</small></td>{% endif %}{% endfor %}</tr>{% endfor %}</tbody>
+      {% if not c %}<td class="none"></td>{% else %}<td class="{{ 'kept' if c.kept_input else ('up' if c.actual > c.input + 0.05 else ('down' if c.actual < c.input - 0.05 else 'same')) }}" title="{{ c.days }} day{{ 's' if c.days != 1 }} recorded">{% if c.actual is not none %}<b>{{ (100 * c.actual)|round|int }}%</b>{% else %}<b class="nodays">no days</b>{% endif %}<small>input {{ (100 * c.input)|round|int }}%</small></td>{% endif %}{% endfor %}</tr>{% endfor %}</tbody>
   </table></div>
 </section>
 {% endif %}

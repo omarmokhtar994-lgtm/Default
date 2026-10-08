@@ -530,6 +530,7 @@ class TheDayInTheBrowser(unittest.TestCase):
         page.screenshot(path=str(N_SCREENS / "day_timeline.png"), full_page=True)
         # dragging a break on the timeline opens the same dialog with the new time
         other = page.locator('rect.brk[data-name="Associate 021"][data-idx="2"]')
+        other.scroll_into_view_if_needed()  # below the fold since Phase O added the tabs and the autopilot button
         box = other.bounding_box()
         page.mouse.move(box["x"] + 2, box["y"] + box["height"] / 2)
         page.mouse.down()
@@ -561,3 +562,80 @@ class TheDayInTheBrowser(unittest.TestCase):
         page.get_by_role("button", name="Yes, swap them").click()
         page.wait_for_url("**/schedules?v=*", timeout=30000)
         expect(page.locator(".log")).to_contain_text("Associate 009 moved from Slot 9 to Slot 10 (slot swap)")
+
+
+O_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_o" / "screens"
+
+
+@unittest.skipIf(sync_playwright is None, "Playwright is not installed here; UI tests skipped")
+class TheFloorToolsInTheBrowser(unittest.TestCase):
+    """Phase O: exports, adherence, find a time, overtime and VTO, the autopilot, the coach, the handover, the wallboard."""
+
+    setUpClass_base = classmethod(TheSchedulesInTheBrowser.setUpClass.__func__)
+    tearDownClass = classmethod(TheSchedulesInTheBrowser.tearDownClass.__func__)
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+    day = "/day?program=AE/AR+B2B&date=2026-10-14"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.setUpClass_base()
+        O_SCREENS.mkdir(parents=True, exist_ok=True)
+        from datetime import date
+        days = cls.app.extensions["days"]
+        omar = next(u for u in cls.store.list_users() if u["username"] == "omar")["id"]
+        wed = date(2026, 10, 14)
+        week = days.page("AE/AR B2B", wed)["view"]
+        everyone = [l["name"] for l in week["lanes"] for s in l["segments"]
+                    if s["offset"] == 0 and s["start"] <= 13 * 60 and s["end"] >= 17 * 60]
+        afternoon, cls.free = everyone[:9], everyone[9:11]  # nine with records, two left free for a meeting
+        for name in afternoon[:7]:
+            days.set_status("AE/AR B2B", wed, name, "Unplanned leave", omar)
+        days.set_status("AE/AR B2B", wed, afternoon[7], "Late", omar, end="14:20")
+        days.add_activity("AE/AR B2B", wed, afternoon[8], "Coaching", "15:00", "15:30", omar, billable=True)
+
+    def go(self, page, url, errors):
+        page.goto(self.base + url)
+        page.wait_for_load_state("load")
+        page.mouse.move(1, 1)
+        page.evaluate("window.scrollTo(0, 0)")
+        self.assertEqual(errors, [])
+
+    def test_every_floor_tool(self):
+        page = self.page(width=1500, height=1000)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        self.go(page, "/exports?from=2026-10-11&to=2026-10-17", errors)
+        expect(page.locator("h1")).to_have_text("Exports")
+        page.screenshot(path=str(O_SCREENS / "exports.png"), full_page=True)
+        with page.expect_download() as got:
+            page.get_by_role("button", name="Download").click()
+        self.assertTrue(got.value.suggested_filename.endswith(".xlsx"))
+        self.go(page, self.day + "&view=adherence", errors)
+        expect(page.locator(".adh-t").first).to_be_visible()
+        page.screenshot(path=str(O_SCREENS / "adherence.png"), full_page=True)
+        who = "".join(f"&who={name.replace(' ', '+')}" for name in self.free)
+        self.go(page, self.day + "&view=meeting" + who + "&minutes=30&from=12:00&to=19:00", errors)
+        expect(page.locator(".fit-list li").first).to_be_visible()
+        page.screenshot(path=str(O_SCREENS / "find_a_time.png"), full_page=True)
+        self.go(page, self.day + "&view=cover", errors)
+        expect(page.locator("#ot-h")).to_be_visible()
+        page.screenshot(path=str(O_SCREENS / "overtime_vto.png"), full_page=True)
+        self.go(page, self.day + "&view=replan", errors)
+        expect(page.locator("#rp-h")).to_have_text("Fix the rest of the day's breaks")
+        page.screenshot(path=str(O_SCREENS / "autopilot.png"), full_page=True)
+        self.go(page, self.day + "&view=board", errors)
+        page.screenshot(path=str(O_SCREENS / "board_with_activities.png"), full_page=True)
+        self.go(page, "/coach?program=AE/AR+B2B&from=2026-10-11&to=2026-10-17", errors)
+        expect(page.locator(".coach-t")).to_be_visible()
+        page.screenshot(path=str(O_SCREENS / "coach.png"), full_page=True)
+        self.go(page, "/day/handover?program=AE/AR+B2B&date=2026-10-14", errors)
+        expect(page.locator("h1")).to_contain_text("Handover")
+        page.screenshot(path=str(O_SCREENS / "handover.png"), full_page=True)
+        wall = self.page(width=1600, height=900)
+        self.sign_in(wall)
+        wall.goto(self.base + "/day/wallboard?program=AE/AR+B2B&date=2026-10-14&at=14:10")
+        wall.wait_for_load_state("load")
+        expect(wall.locator(".wall-row")).to_have_count(4)
+        wall.screenshot(path=str(O_SCREENS / "wallboard.png"))

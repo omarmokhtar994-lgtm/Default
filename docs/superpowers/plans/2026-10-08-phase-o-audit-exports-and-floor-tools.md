@@ -15,7 +15,7 @@
 - Records (schedules, changes, attendance, breaks, day log, events) kept at least 12 months: 395 days, as today.
 - Run files (zips, results) kept `RUN_FILES_DAYS`, default 30, allowed 30 to 60; a value outside is refused at start-up (fail closed).
 - No engine change; protected workbooks untouched; Egypt time (UTC+3) in every export.
-- Samples before UI code (owner): exports page, adherence report, meeting finder, overtime / VTO.
+- Samples before UI code (owner): exports page, adherence report, meeting finder, overtime / VTO (sent 2026-10-08; owner answered "Be creative": build, adding Tasks 7–10).
 - Names in samples and new fixtures: "Associate NN".
 
 ## Review Focus
@@ -69,6 +69,28 @@ Rules: overtime only next to a short interval, at most 2 hours, keeps the rest g
 
 **Files:** `webapp/runs.py`, `deploy/` env file comment; test in `test_runs.py`.
 - [ ] Tests: `test_run_files_days_setting`, `test_run_files_days_outside_30_60_refused`.
+
+### Task 7: fix the rest of the day's breaks (autopilot)
+
+**Files:** `webapp/day.py` (`replan(view, inputs, now: int) -> {moves: [{name, idx, kind, start_from, start_to}], before: {tightest, short_hours}, after: {...}}`), routes `POST /day/replan` (preview) and `POST /day/replan/apply` (each move kept and logged "by autopilot, approved by <name>"), dialog on the day page.
+Rules: only breaks not yet started (start >= now) of people on shift and present; 5-minute steps; inside the shift; breaks keep their order; gaps within the program's minimum / normal maximum when set; no overlap. Greedy local search: repeatedly take the tightest interval and try moving a break out of it to where it raises the lowest buffer most; stop when nothing improves. Deterministic.
+- [ ] Tests (Voice day): `test_never_makes_the_tightest_worse`, `test_taken_breaks_never_move`, `test_rules_hold_after_replan`, `test_apply_logs_each_move`.
+
+### Task 8: shrinkage coach
+
+**Files:** `webapp/coach.py` (`actual_shrinkage(daybook, program, start, end) -> {weekday: {minute: (actual, input, days)}}`, `corrected_tab(...) -> BytesIO`), route `GET /coach?program=&from=&to=` and its download.
+Actual shrinkage per interval = 1 − on the floor ÷ people paid on shift (from recorded attendance, breaks taken and aux); averaged per weekday over the period; the suggested value is the actual average where at least 3 days were recorded, else the input's value (said so in the cell's note).
+- [ ] Tests: `test_average_per_weekday_and_interval`, `test_too_few_days_keeps_the_input`, `test_corrected_tab_has_the_input_layout`.
+
+### Task 9: shift handover note
+
+**Files:** `webapp/handover.py` (`note(daybook, program, day) -> dict`), `templates/handover.html` (printable), Exports tab "Daily summary".
+- [ ] Tests: `test_note_lists_absences_lates_moves_and_short_intervals`, `test_watch_tomorrow_from_the_plan`.
+
+### Task 10: wallboard
+
+**Files:** route `GET /day/wallboard?program=`, `templates/wallboard.html` (big type, refreshes every 60 s, no controls), now / next three intervals, on break now and in the next 30 minutes, language counts.
+- [ ] Tests: `test_wallboard_shows_now_and_next_intervals`, `test_wallboard_refreshes`.
 
 ### Later (not this phase; owner decides)
 

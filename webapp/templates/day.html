@@ -4,6 +4,17 @@
 {% block content %}
 {% set absent_states = ['Unplanned leave', 'Sick'] %}
 {% set unit = {15: 'quarter-hours', 30: 'half-hours', 60: 'hours'} %}
+{% macro hidden_day(view, cover=none) %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="view" value="{{ view }}">{% if cover is not none %}<input type="hidden" name="cover" value="{{ cover }}">{% endif %}{% endmacro %}
+{% macro dur(m) %}{% if m < 60 %}{{ m }} min{% else %}{{ m // 60 }} h{% if m % 60 %} {{ m % 60 }}{% endif %}{% endif %}{% endmacro %}
+{% macro overtime(o, view='cover', cover=none) %}{% set own = o.end - o.start %}<form method="post" action="{{ url_for('day_activity') }}" class="ot-offer">{{ hidden_day(view, cover) }}<input type="hidden" name="associate" value="{{ o.name }}"><input type="hidden" name="kind" value="Overtime">
+  <b>{{ o.name }}</b> <span class="dim">{{ 'shift ends ' ~ hm(o.start) if o.side == 'after' else 'shift starts ' ~ hm(o.end) }}</span>
+  <label>{{ 'After the shift' if o.side == 'after' else 'Before the shift' }} <select name="span">{% for m in ((range(15, o.max + 1, 15)|list) + [own])|unique|sort %}{% set a = o.start if o.side == 'after' else o.end - m %}{% set b = o.start + m if o.side == 'after' else o.end %}<option value="{{ hm(a) }}|{{ hm(b) }}"{% if m == own %} selected{% endif %}>{{ dur(m) }} ({{ hm(a) }} to {{ hm(b) }})</option>{% endfor %}</select></label>
+  <button type="submit">Add overtime</button></form>{% endmacro %}
+{% macro vto(o) %}<form method="post" action="{{ url_for('day_activity') }}" class="vto-offer">{{ hidden_day('cover') }}<input type="hidden" name="associate" value="{{ o.name }}"><input type="hidden" name="kind" value="VTO">
+  <b>{{ o.name }}</b> <span class="dim">shift ends {{ hm(o.end) }}</span>
+  <label>Off from <select name="from">{% for m in range(o.start, o.end, 15) %}<option value="{{ hm(m) }}"{% if m == o.start %} selected{% endif %}>{{ hm(m) }}</option>{% endfor %}</select></label>
+  <label>to <select name="to">{% for m in range(o.start + 15, o.end + 1, 15)|list + ([o.end] if (o.end - o.start) % 15 else []) %}<option value="{{ hm(m) }}"{% if m == o.end %} selected{% endif %}>{{ hm(m) }}{{ ' (end of shift)' if m == o.end }}</option>{% endfor %}</select></label>
+  <button type="submit">Add VTO</button></form>{% endmacro %}
 {% macro accept(name, kind, a, b, label, view='cover', cover=none) %}<form method="post" action="{{ url_for('day_activity') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="associate" value="{{ name }}"><input type="hidden" name="kind" value="{{ kind }}"><input type="hidden" name="from" value="{{ hm(a) }}"><input type="hidden" name="to" value="{{ hm(b) }}"><input type="hidden" name="view" value="{{ view }}">{% if cover is not none %}<input type="hidden" name="cover" value="{{ cover }}">{% endif %}<button type="submit" class="chip offer" title="Record that {{ name }} accepted">{{ name }}: {{ label }}</button></form>{% endmacro %}
 <div class="phead"><div>
   <h1>{% if program %}{{ program|unit }}, {{ on.strftime('%A %d %b') }}: the day{% else %}The day{% endif %}</h1>
@@ -143,14 +154,14 @@
   <p class="note">People whose shift ends just before a short interval, or starts just after it, could stay on or come in early: at most 2 hours, keeping the program's rest gap. Offer it, and when they accept, press their name: it counts on the floor and is logged.</p>
   {% if not cover.next_known %}<p class="note warn-note">{{ tomorrow_unchecked }}</p>{% endif %}
   {% if cover.overtime %}<table class="adh-t"><thead><tr><th scope="col">Interval</th><th scope="col" class="n">Buffer</th><th scope="col" class="n">People short</th><th scope="col">Who could cover (accepted → press)</th></tr></thead>
-  <tbody>{% for row in cover.overtime %}<tr><td><b>{{ hm(row.t) }}</b></td><td class="n bad">{{ row.buffer|hmm }}</td><td class="n">{{ row.short }}</td><td>{% for o in row.offers %}{{ accept(o.name, 'Overtime', o.start, o.end, o.text) }}{% else %}<span class="dim">nobody next to it within the rules</span>{% endfor %}</td></tr>{% endfor %}</tbody></table>
+  <tbody>{% for row in cover.overtime %}<tr><td><b>{{ hm(row.t) }}</b></td><td class="n bad">{{ row.buffer|hmm }}</td><td class="n">{{ row.short }}</td><td>{% for o in row.offers %}{{ overtime(o) }}{% else %}<span class="dim">nobody next to it within the rules</span>{% endfor %}</td></tr>{% endfor %}</tbody></table>
   {% else %}<p class="empty">No short intervals.</p>{% endif %}
 </section>
 <section class="panel" aria-labelledby="vto-h">
   <h2 id="vto-h">Above demand: offer voluntary time off</h2>
   <p class="note">Where the floor is comfortably above need, people whose shift ends within 2 hours could leave early, while every interval until then keeps its need at every 5 minutes and every language keeps its minimum.</p>
   {% if cover.vto %}<table class="adh-t"><thead><tr><th scope="col">From</th><th scope="col" class="n">Buffer</th><th scope="col" class="n">Room</th><th scope="col">Who could leave early (accepted → press)</th></tr></thead>
-  <tbody>{% for row in cover.vto %}<tr><td><b>{{ hm(row.t) }}</b></td><td class="n ok">{{ row.buffer|hmm }}</td><td class="n">{{ row.room }}</td><td>{% for o in row.offers %}{{ accept(o.name, 'VTO', o.start, o.end, o.text) }}{% endfor %}</td></tr>{% endfor %}</tbody></table>
+  <tbody>{% for row in cover.vto %}<tr><td><b>{{ hm(row.t) }}</b></td><td class="n ok">{{ row.buffer|hmm }}</td><td class="n">{{ row.room }}</td><td>{% for o in row.offers %}{{ vto(o) }}{% endfor %}</td></tr>{% endfor %}</tbody></table>
   {% else %}<p class="empty">No interval has room for VTO.</p>{% endif %}
 </section>
 <section class="panel" aria-labelledby="acts-h">
@@ -215,7 +226,7 @@
     {% if not cp.next_known %}<p class="note warn-note">{{ tomorrow_unchecked }}</p>{% endif %}
     <div class="cover-cols">
       <div><h4>Overtime</h4><p class="note">Stay on after the shift or come in early, up to 2 hours, keeping the rest gap. Press a name once they accept.</p>
-        {% for o in cp.overtime %}{{ accept(o.name, 'Overtime', o.start, o.end, o.text, 'board', cp.t) }}{% else %}<p class="empty">Nobody's shift ends just before or starts just after this {{ unit.get(v.interval, 'interval')[:-1] }} within the rules.</p>{% endfor %}</div>
+        {% for o in cp.overtime %}{{ overtime(o, 'board', cp.t) }}{% else %}<p class="empty">Nobody's shift ends just before or starts just after this {{ unit.get(v.interval, 'interval')[:-1] }} within the rules.</p>{% endfor %}</div>
       <div><h4>Day off cancelled</h4><p class="note">People off today who could come in on a Shift Library shift covering this {{ unit.get(v.interval, 'interval')[:-1] }}, keeping the rest gap to yesterday and tomorrow; those covering the most short intervals first. Their breaks follow the plan's for that shift.</p>
         {% for o in cp.dayoff %}{{ accept(o.name, 'Called in', o.start, o.end, o.shift ~ (' · covers ' ~ o.covers ~ ' short' if o.covers else '') ~ ' · ' ~ o.language[:3]|upper, 'board', cp.t) }}{% else %}<p class="empty">Nobody off today could come in for this {{ unit.get(v.interval, 'interval')[:-1] }} within the rest gap.</p>{% endfor %}</div>
     </div>

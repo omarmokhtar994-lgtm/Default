@@ -598,3 +598,13 @@ svg.defs { position: absolute; width: 0; height: 0; }
   [data-day] select.att { width: 90px; }
   .daybar { gap: 10px; }
 }
+
+/* adherence tab */
+[data-day] .adh { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+[data-day] .adh-t { width: 100%; border-collapse: collapse; font-size: 13px; }
+[data-day] .adh-t th { text-align: left; color: var(--dim); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--rail); }
+[data-day] .adh-t td { padding: 6px 8px; border-bottom: 1px solid var(--rail); }
+[data-day] .adh-t .n { text-align: right; font-variant-numeric: tabular-nums; }
+[data-day] .adh-t td.ok { color: var(--accent-ink); font-weight: 700; } [data-day] .adh-t td.warn { color: var(--short-ink); font-weight: 700; }
+[data-day] .adh-t td.bad { color: var(--gap-ink); font-weight: 700; } [data-day] .adh-t td.none { color: var(--dim); }
+@media (max-width: 1100px) { [data-day] .adh { grid-template-columns: 1fr; } }

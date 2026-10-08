@@ -128,6 +128,8 @@ def read_inputs(path: Path) -> Dict[str, Any]:
         for row in ws.iter_rows(min_row=3, values_only=True):
             if len(row) > 3 and row[1] and shift_span(row[3]):
                 previous.append({"name": str(row[1]).strip(), "language": str(row[2] or "").strip(), "shift": str(row[3])})
+    planned = _grid(wb, str(_instruction(wb, ("shrinkage source",)) or f"Shrinkage {step} Min"))
+    planned = {d: {t: (v / 100 if v > 1 else v) for t, v in col.items()} for d, col in planned.items()}
     gaps = {}
     for key, names in (("gap_min", ("break absolute minimum gap minutes",)),
                        ("gap_max", ("break normal maximum gap minutes",))):
@@ -135,7 +137,9 @@ def read_inputs(path: Path) -> Dict[str, Any]:
             gaps[key] = int(float(_instruction(wb, names)))
         except (TypeError, ValueError):
             gaps[key] = None  # not set for this program: no gap warning is made up
-    found = {"interval": step if 1440 % step == 0 else 30, "required": demand, **gaps,
+    # planned_shrinkage is only compared with what happened (adherence, the shrinkage coach); the
+    # day's own figures never use it (owner: actuals replace it)
+    found = {"interval": step if 1440 % step == 0 else 30, "required": demand, "planned_shrinkage": planned, **gaps,
              "languages": _languages(wb), "previous_saturday": previous}
     while len(_CACHE) >= KEEP:
         _CACHE.pop(next(iter(_CACHE)))

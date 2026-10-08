@@ -14,6 +14,7 @@ from typing import Any, Dict, Optional
 from flask import Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file, session, url_for
 from werkzeug.utils import secure_filename
 
+from .adherence import interval_shrinkage, person_day, team as team_figures
 from .analytics import program_weeks, team
 from .attendance import DayBook, hm, week_start
 from .day import AUX, MEASURES, STATUSES, BreakRefused, board
@@ -732,13 +733,22 @@ def create_app(config: Dict[str, Any]) -> Flask:
             program = next((p for p in programs if days.version(p, on)[0]), programs[0])
         measure = request.args.get("measure", "")
         measure = measure if measure in MEASURES else "interval"
-        tab = "board" if request.args.get("view") == "board" else "timeline"
+        tab = request.args.get("view", "")
+        tab = tab if tab in ("board", "adherence") else "timeline"
         problem = ""
         try:
             page = days.page(program, on, measure) if program else None
         except ValueError as exc:  # said on the page, not a server error
             page, problem = None, str(exc)
+        people = shrink = whole = None
+        if page and tab == "adherence":
+            v = page["view"]
+            people = sorted((person_day(v, l["name"]) for l in v["lanes"] if any(x["offset"] == 0 for x in l["segments"])),
+                            key=lambda r: (r["adherence"] is not None, r["adherence"] or 0, r["name"]))
+            whole = team_figures(people)
+            shrink = interval_shrinkage(v, page["inputs"], page["day"])
         return render_template("day.html", page=page, problem=problem, program=program, programs=programs, on=on,
+                               people=people, whole=whole, shrink=shrink,
                                measure=measure,
                                measures=MEASURES, tab=tab, statuses=STATUSES, aux=sorted(AUX), hm=hm,
                                rows=board(page["view"]) if page and tab == "board" else None, week_of=week_start(on),

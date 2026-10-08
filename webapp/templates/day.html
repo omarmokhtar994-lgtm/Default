@@ -43,6 +43,7 @@
   <nav class="tabs" aria-label="Views">
     <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='timeline') }}"{% if tab == 'timeline' %} class="on" aria-current="page"{% endif %}>Timeline</a>
     <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='board') }}"{% if tab == 'board' %} class="on" aria-current="page"{% endif %}>Interval board</a>
+    <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='adherence') }}"{% if tab == 'adherence' %} class="on" aria-current="page"{% endif %}>Adherence</a>
   </nav>
   <form class="sel" method="get" action="{{ url_for('day_page') }}">
     <input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="view" value="{{ tab }}">
@@ -91,6 +92,32 @@
   </div></div>
   <p class="legend2"><span><i class="k ok"></i>Enough people</span><span><i class="k warn"></i>Short by less than one person</span><span><i class="k bad"></i>Short by a person or more</span><span><i class="k moved"></i>Break moved here</span><span><i class="k ghost"></i>Where the engine planned it</span><span><i class="k away"></i>Away (late, aux, leave)</span></p>
 </section>
+{% elif tab == 'adherence' %}
+<section class="tiles" aria-label="Adherence in numbers">
+  <p class="tile"><span class="tile-label">Team adherence</span><b>{{ whole.adherence if whole.adherence is not none else '–' }}%</b><small class="dim">time-weighted over {{ whole.people }} shift{{ 's' if whole.people != 1 }}{% if whole.absent %}; {{ whole.absent }} absent, left out{% endif %}</small></p>
+  <p class="tile"><span class="tile-label">Team conformance</span><b>{{ whole.conformance if whole.conformance is not none else '–' }}%</b><small class="dim">worked against scheduled work time</small></p>
+  <p class="tile"><span class="tile-label">Late and early leave</span><b>{{ whole.late + whole.early }} min</b><small class="dim">{{ whole.late }} late, {{ whole.early }} left early</small></p>
+  <p class="tile"><span class="tile-label">Aux</span><b>{{ whole.aux_billable + whole.aux_unbillable }} min</b><small class="dim">{{ whole.aux_billable }} billable, {{ whole.aux_unbillable }} non-billable</small></p>
+</section>
+<div class="adh">
+<section class="panel" aria-labelledby="adh-h">
+  <h2 id="adh-h">By person (lowest first)</h2>
+  <p class="note">Adherence: time doing what the schedule says (working when planned to work, on a break when the break was planned). Conformance: time worked against time scheduled to work, whenever it happened. {{ 'Billable aux counts as work here.' if measure == 'interval' else 'Under service level, aux is time off the queue.' }}</p>
+  <div class="scroll"><table class="adh-t">
+    <thead><tr><th scope="col">Associate</th><th scope="col">Shift</th><th scope="col">Status</th><th scope="col" class="n">Scheduled</th><th scope="col" class="n">Worked</th><th scope="col" class="n">Late min</th><th scope="col" class="n">Early min</th><th scope="col" class="n">Aux billable</th><th scope="col" class="n">Aux non-billable</th><th scope="col" class="n">Out of schedule</th><th scope="col" class="n">Adherence</th><th scope="col" class="n">Conformance</th></tr></thead>
+    <tbody>{% for r in people %}<tr><td><b>{{ r.name }}</b></td><td>{{ r.shift }}</td><td>{{ r.status }}{% if r.billable %} (billable){% endif %}</td><td class="n">{{ '%d:%02d'|format(r.scheduled // 60, r.scheduled % 60) }}</td><td class="n">{{ '%d:%02d'|format(r.worked // 60, r.worked % 60) }}</td><td class="n">{{ r.late or '' }}</td><td class="n">{{ r.early or '' }}</td><td class="n">{{ r.aux_billable or '' }}</td><td class="n">{{ r.aux_unbillable or '' }}</td><td class="n">{{ r.out_of_schedule or '' }}</td>
+      {% for key in ('adherence', 'conformance') %}{% set p = r[key] %}<td class="n {{ 'none' if p is none else ('ok' if p >= 90 else ('warn' if p >= 80 else 'bad')) }}">{{ '–' if p is none else p ~ '%' }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+<section class="panel" aria-labelledby="shr-h">
+  <h2 id="shr-h">Actual shrinkage against your input</h2>
+  <p class="note">Each {{ unit.get(v.interval, 'interval')[:-1] }}: people paid on shift, people on the floor, and the share not on the floor, against the input's Shrinkage tab. Red: more than 5 points above plan. Over weeks, the shrinkage coach turns this into a corrected tab.</p>
+  <div class="scroll"><table class="adh-t">
+    <thead><tr><th scope="col">Interval</th><th scope="col" class="n">Paid on shift</th><th scope="col" class="n">On the floor</th><th scope="col" class="n">Actual</th><th scope="col" class="n">Input</th></tr></thead>
+    <tbody>{% for r in shrink %}<tr><td>{{ hm(r.t) }}</td><td class="n">{{ r.paid|num }}</td><td class="n">{{ r.on_floor|num }}</td><td class="n{% if r.actual > r.input + 0.05 %} bad{% endif %}">{{ (100 * r.actual)|round|int }}%</td><td class="n">{{ (100 * r.input)|round|int }}%</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+</div>
 {% else %}
 <section class="panel" aria-labelledby="board-h">
   <h2 id="board-h">Interval board</h2>

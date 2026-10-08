@@ -732,3 +732,88 @@ class TheRunDetailsInTheBrowser(unittest.TestCase):
         page.wait_for_timeout(600)  # let the page-to-page crossfade finish before the screenshot
         page.screenshot(path=str(P_SCREENS / "program_rename.png"), full_page=True)
         self.assertEqual(errors, [])
+
+
+Q_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_q" / "screens"
+
+
+class TheNewLayoutInTheBrowser(unittest.TestCase):
+    """Phase Q: the slim top bar and left menu, Home from the programs, Overview apart from RTA, People with
+    roles and programs, Programs and LOBs; and no sideways scroll on a phone."""
+
+    setUpClass_base = classmethod(TheSchedulesInTheBrowser.setUpClass.__func__)
+    tearDownClass = classmethod(TheSchedulesInTheBrowser.tearDownClass.__func__)
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+
+    @classmethod
+    def setUpClass(cls):
+        cls.setUpClass_base()
+        Q_SCREENS.mkdir(parents=True, exist_ok=True)
+        from datetime import date
+        from webapp.programs import ProgramBook
+        seed_week(cls.store, "NMG", "2026-10-12")
+        book = ProgramBook(cls.store)
+        book.sync()
+        ae = book.add_program("AE")
+        book.adopt("AE/AR B2B", ae, "AR B2B")
+        book.add_lob(ae, "IT")
+        nmg = next(p["id"] for p in book.tree() if p["name"] == "NMG")
+        book.set_defaults(nmg, 1, "QUICK", {})
+        sara = next(u for u in cls.store.list_users() if u["username"] == "sara")["id"]
+        for name in ("Associate 008", "Associate 021", "Associate 037"):
+            cls.app.extensions["days"].set_status("AE/AR B2B", date(2026, 10, 14), name, "Unplanned leave", sara)
+        sup = cls.store.add_user("associate.014", "Associate 014", "Sup-pass-1234", must_change=False)
+        cls.store.update_user(sup, is_supervisor=1)
+        cls.store.set_user_programs(sup, [ae])
+        planner = cls.store.add_user("associate.001", "Associate 001", "Plan-pass-1234", must_change=False)
+        cls.store.set_user_programs(planner, [ae, nmg])
+
+    def go(self, page, url, errors):
+        page.goto(self.base + url)
+        page.wait_for_load_state("load")
+        page.wait_for_timeout(500)
+        self.assertEqual(errors, [])
+
+    def test_the_new_layout(self):
+        page = self.page(width=1440, height=900)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        top = page.locator("header.top")
+        for words in ("Settings", "Sign out"):
+            expect(top).to_contain_text(words)
+        expect(top.get_by_role("link", name="Exports")).to_have_count(0)
+        expect(page.locator("section.programs-home article.pcard")).to_have_count(2)
+        page.screenshot(path=str(Q_SCREENS / "home.png"), full_page=True)
+        self.go(page, "/overview?program=AE/AR+B2B&date=2026-10-14", errors)
+        expect(page.locator("h1")).to_have_text("AE, AR B2B: Wednesday 14 Oct")
+        expect(page.locator("aside.leftnav a[aria-current=page]")).to_have_text("Overview")
+        page.screenshot(path=str(Q_SCREENS / "overview.png"), full_page=True)
+        page.locator("aside.leftnav").get_by_role("link", name="RTA").click()
+        page.wait_for_load_state("load")
+        page.wait_for_timeout(500)
+        expect(page.locator("p.rta-sum")).to_contain_text("On shift today")
+        page.screenshot(path=str(Q_SCREENS / "rta.png"))
+        self.go(page, "/admin/users", errors)
+        expect(page.locator("table.people")).to_contain_text("Supervisor")
+        page.screenshot(path=str(Q_SCREENS / "people.png"), full_page=True)
+        self.go(page, "/setup/programs", errors)
+        expect(page.locator("h1")).to_have_text("Programs and LOBs")
+        page.screenshot(path=str(Q_SCREENS / "programs_and_lobs.png"), full_page=True)
+        self.go(page, "/", errors)
+        page.locator("select[name=program]").select_option("NMG")  # NMG's saved defaults: Monday, Quick
+        self.assertEqual(page.locator("select[name=week_start] option:checked").get_attribute("data-day"), "1")
+
+    def test_a_phone_has_no_sideways_scroll(self):
+        phone = self.page(width=390, height=844)
+        errors = []
+        phone.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(phone)
+        for url in ("/", "/overview?program=AE/AR+B2B&date=2026-10-14", "/admin/users", "/setup/programs"):
+            self.go(phone, url, errors)
+            width = phone.evaluate("document.scrollingElement.scrollWidth")
+            self.assertLessEqual(width, 390, url)
+        expect(phone.locator("details[data-menu]")).not_to_have_attribute("open", "")
+        self.go(phone, "/", errors)
+        phone.screenshot(path=str(Q_SCREENS / "phone_home.png"), full_page=True)

@@ -741,7 +741,9 @@ class TheWayAround(unittest.TestCase):
             self.assertIn('<a class="home" href="/">Home</a>', body, url)
         home = client.get("/").get_data(as_text=True)
         self.assertNotIn("data-back", home)
-        self.assertIn('<a href="/">Home</a>', home)  # the menu's first item
+        # Re-pinned in Phase Q (owner, 2026-10-08): the menu moved to the left and marks the page open,
+        # so on Home its first item carries that mark.
+        self.assertIn('<a href="/" class="on" aria-current="page">Home</a>', home)  # the menu's first item
 
 
 class TheCleanWorkbooks(unittest.TestCase):
@@ -978,7 +980,9 @@ class TheDayPage(unittest.TestCase):
         for row in ("Needed on the floor", "Planned on the floor", "On the floor now", "Plus / minus (hours)",
                     "English on the floor", "On shift today", "Short of demand"):
             self.assertIn(row, body)
-        self.assertIn('href="/day"', body)  # the menu's Today
+        # Re-pinned in Phase Q (owner, 2026-10-08): the top bar's "Today" became the left menu's RTA, for the
+        # program open.
+        self.assertIn('href="/day?program=AE/AR+B2B&date=2026-10-14" class="on" aria-current="page">RTA</a>', body)
 
     def test_status_kept_or_refused_with_a_reason(self):
         refused = self.post("/day/attendance", associate="Associate 001", status="Late")
@@ -1392,8 +1396,8 @@ class TheProgramSetup(unittest.TestCase):
         self.assertIsNotNone(group)
         self.assertEqual(json.loads(html.unescape(group.group(1))), {"start_day": 1, "run_mode": "DEEP",
                                                                      "options": {"stage": "BEFORE_BREAKS_ONLY"}})
-        self.assertIn('<option value="AE/AR B2B">AR B2B</option>', group.group(2))
-        self.assertIn('<option value="AE IT">IT</option>', group.group(2))
+        self.assertIn('<option value="AE/AR B2B">AE, AR B2B</option>', group.group(2))  # program and LOB, even closed
+        self.assertIn('<option value="AE IT">AE, IT</option>', group.group(2))
         other = run_id_of(upload(self.sara, program="AE IT", week_start="2026-10-12"))
         self.assertEqual(self.store.get_run(other)["program"], "AE IT")
         page = html.unescape(self.sara.get(f"/runs/{run_id}").get_data(as_text=True))
@@ -1498,7 +1502,7 @@ class TheNewLayout(unittest.TestCase):
         for words in ("New schedule", ">Home<", ">Overview<", ">RTA<", ">Weeks<", ">Schedules<", ">Analysis<",
                       ">Programs<", ">Exports<", ">Team<"):
             self.assertIn(words, side)
-        self.assertIn('href="/overview?program=NMG"', side)
+        self.assertIn('href="/overview?program=NMG&date=2026-10-14"', side)  # the menu keeps the day
         self.assertIn('aria-current="page">RTA</a>', side)
         self.assertIn('<option value="NMG" selected>NMG</option>', side)
         self.assertNotIn(">People<", side)  # planners manage nobody

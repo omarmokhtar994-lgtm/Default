@@ -1,9 +1,9 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
 {% extends "base.html" %}
-{% block title %}Handover: {{ program }} {{ on.strftime('%d %b') }} on Team Scheduler{% endblock %}
+{% block title %}Handover: {{ program|unit }} {{ on.strftime('%d %b') }} on Team Scheduler{% endblock %}
 {% block content %}
 <div class="phead"><div>
-  <h1>Handover: {{ program }}, {{ on.strftime('%A %d %b') }}</h1>
+  <h1>Handover: {{ program|unit }}, {{ on.strftime('%A %d %b') }}</h1>
   {% if n %}<p class="byline">{{ n.note or 'From the schedule in use (' ~ n.version.label ~ ').' }} {{ measures[measure] }}. Written from what was recorded on the day page.</p>{% endif %}
 </div>
   <p class="noprint handover-tools"><a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat()) }}">Back to the day</a> <button type="button" class="primary" data-print>Print</button></p>

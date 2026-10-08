@@ -1,6 +1,19 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
 {% extends "base.html" %}{% from "_macros.html" import stagebar, ring, wall, pct, advanced_options with context %}
 {% block content %}
+<section class="programs-home" aria-labelledby="ph-h">
+  <div class="phead"><div><h1 id="ph-h">Your programs</h1>
+    <p class="byline">Pick a program to see its day, weeks and analysis. New schedule is open to everyone, for any program.</p></div>
+    <a class="button primary" href="#newrun">New schedule</a></div>
+  <div class="pcards">{% for c in program_cards %}
+    <article class="pcard"><h2>{{ c.name }}</h2>
+      <p class="lobs">{% for u in c.units %}<a class="lob" href="{{ url_for('overview_page', program=u.key) }}">{{ u.text }}</a>{% endfor %}</p>
+      <dl>{% for u in c.units %}<dt>{{ u.text }}</dt><dd>{% if u.latest %}latest schedule starts {{ u.latest|start_day }}{% else %}no schedule yet{% endif %}</dd>{% endfor %}
+        <dt>Starts on</dt><dd>{{ c.starts }}</dd></dl>
+      <div class="acts"><a class="button primary" href="{{ url_for('overview_page', program=c.units[0].key) }}">Open</a><a class="button" href="{{ url_for('home', program=c.units[0].key) }}#newrun">New schedule</a></div>
+    </article>{% else %}
+    <p class="empty">No programs are assigned to you yet: ask your supervisor or admin. You can still start a new schedule below.</p>{% endfor %}</div>
+</section>
 <section class="now" aria-labelledby="now-h">
   <h2 id="now-h" class="sr-only">Now</h2>
   {% if active %}{% set r = active[0] %}{% set e = plan.get(r.id) %}

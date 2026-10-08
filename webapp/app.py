@@ -276,6 +276,19 @@ def create_app(config: Dict[str, Any]) -> Flask:
             "font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; frame-ancestors 'none'")
         return response
 
+    @app.template_filter("unit")
+    def _unit_filter(key: Any) -> Any:
+        """A program key as people know it: "AE, AR B2B" for a LOB, the program's name otherwise."""
+        if not isinstance(key, str) or not key:
+            return key
+        if "unit_labels" not in g:
+            names = {}
+            for p in ProgramBook(app.extensions["store"]).tree():
+                names[p["key"]] = p["name"]
+                names.update({l["key"]: f"{p['name']}, {l['name']}" for l in p["lobs"]})
+            g.unit_labels = names
+        return g.unit_labels.get(key, key)
+
     @app.template_filter("records_text")
     def _records_text(counts: Dict[str, int]) -> str:
         """Day record counts in words, leaving out what is none: 1 attendance, 2 break moves."""
@@ -338,7 +351,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         """Each program with its LOBs as (key, name) pairs, for the left menu's picker."""
         out = []
         for p in programs:
-            choices = [(l["key"], l["name"]) for l in p["lobs"]]
+            choices = [(l["key"], f"{p['name']}, {l['name']}") for l in p["lobs"]]
             if p["key"] in p["units"]:
                 choices.append((p["key"], p["name"] if not p["lobs"] else f"{p['name']} (whole program)"))
             if choices:
@@ -366,7 +379,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 key = units[0] if units else ""
         active = NAV_ACTIVE.get(request.endpoint or "", "")
         target = PROGRAM_PAGES.get(active, PROGRAM_PAGES["overview"])
+        day = _date(request.args.get("date", ""))  # Overview and RTA keep the day being looked at
         return {"nav_units": _unit_choices(access.programs()), "nav_unit": key,
+                "nav_date": day.isoformat() if day else None,
                 "nav_label": access.book.label(key) if key else "", "nav_active": active, "nav_target": target,
                 "user_role": role(user)}
 
@@ -587,12 +602,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
 
     def _program_cards(runs: list) -> list:
         """Home: this person's programs, each LOB with its latest schedule week."""
-        history = program_weeks(runs)
+        latest = app.extensions["store"].latest_weeks()
         usual = usual_start_days(runs)
         cards = []
         for p in _access().programs():
             units = [{"key": key, "text": next((l["name"] for l in p["lobs"] if l["key"] == key), p["name"]),
-                      "latest": (history.get(key) or [None])[-1]} for key in p["units"]]
+                      "latest": latest.get(key)} for key in p["units"]]
             if not units:
                 continue
             day = p["start_day"] if p["saved"] else usual.get(units[0]["key"], 0)
@@ -607,7 +622,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         usual = usual_start_days(runs)
         out, keys = [], set()
         for p in book.tree():
-            choices = [(l["key"], l["name"]) for l in p["lobs"]]
+            choices = [(l["key"], f"{p['name']}, {l['name']}") for l in p["lobs"]]
             if p["key"] in p["units"]:
                 choices.append((p["key"], p["name"] if not p["lobs"] else f"{p['name']} (whole program)"))
             keys |= {k for k, _ in choices}

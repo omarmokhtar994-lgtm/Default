@@ -6,13 +6,13 @@
 {% set unit = {15: 'quarter-hours', 30: 'half-hours', 60: 'hours'} %}
 {% macro accept(name, kind, a, b, label, view='cover', cover=none) %}<form method="post" action="{{ url_for('day_activity') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="associate" value="{{ name }}"><input type="hidden" name="kind" value="{{ kind }}"><input type="hidden" name="from" value="{{ hm(a) }}"><input type="hidden" name="to" value="{{ hm(b) }}"><input type="hidden" name="view" value="{{ view }}">{% if cover is not none %}<input type="hidden" name="cover" value="{{ cover }}">{% endif %}<button type="submit" class="chip offer" title="Record that {{ name }} accepted">{{ name }}: {{ label }}</button></form>{% endmacro %}
 <div class="phead"><div>
-  <h1>{% if program %}{{ program }}, {{ on.strftime('%A %d %b') }}: the day{% else %}The day{% endif %}</h1>
+  <h1>{% if program %}{{ program|unit }}, {{ on.strftime('%A %d %b') }}: the day{% else %}The day{% endif %}</h1>
   {% if page %}<p class="byline">{% if page.note %}{{ page.note }}{% else %}From the schedule in use (<a href="{{ url_for('run_schedules', run_id=page.version.run_id, v=page.version.id) }}">{{ page.version.label }}</a>).{% endif %}
     Attendance and breaks set here are kept for this day; the schedule itself does not change.</p>{% endif %}
 </div>
   <form class="sel" method="get" action="{{ url_for('day_page') }}">
     <label>Program
-      <select name="program" data-autosubmit>{% for p in programs %}<option value="{{ p }}"{% if p == program %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
+      <select name="program" data-autosubmit>{% for p in programs %}<option value="{{ p }}"{% if p == program %} selected{% endif %}>{{ p|unit }}</option>{% endfor %}</select></label>
     <label>Day <input type="date" name="date" value="{{ on.isoformat() }}" data-autosubmit></label>
     <input type="hidden" name="measure" value="{{ measure }}"><input type="hidden" name="view" value="{{ tab }}">
     <p class="daynav">{% if program %}<a href="{{ url_for('day_handover', program=program, date=on.isoformat()) }}">Handover note</a><a href="{{ url_for('day_wallboard', program=program) }}">Wallboard</a>{% endif %}<a href="{{ url_for('day_page', program=program, date=earlier.isoformat(), measure=measure, view=tab) }}">‹ {{ earlier.strftime('%a %d %b') }}</a>
@@ -26,19 +26,10 @@
 {% elif problem %}
 <p class="empty panel" role="alert">{{ problem }}</p>
 {% elif not page %}
-<p class="empty panel">No schedule for {{ program }} in the week of {{ week_of.strftime('%d %b') }}. Pick another day, or run this week and mark a version in use from the run's Schedules page.</p>
+<p class="empty panel">No schedule for {{ program|unit }} in the week of {{ week_of.strftime('%d %b') }}. Pick another day, or run this week and mark a version in use from the run's Schedules page.</p>
 {% else %}
 {% set v = page.view %}{% set t = v.tiles %}
-<section class="tiles" aria-label="The day in numbers">
-  <p class="tile"><span class="tile-label">On shift today</span><b>{{ t.present }} of {{ t.planned }}</b>
-    <small class="dim">{{ t.absent }} unplanned leave or sick{% if t.late_early %}, {{ t.late_early }} late or left early{% endif %}{% if t.aux %}, {{ t.aux }} in aux{% endif %}</small></p>
-  <p class="tile"><span class="tile-label">Short of demand</span><b>{{ '−' if t.short_hours else '' }}{{ t.short_hours|num }} h</b>
-    <small class="dim">across {{ t.short_intervals }} {{ unit.get(v.interval, 'intervals') }}; the plan was {{ '−' if t.plan_short_hours else '' }}{{ t.plan_short_hours|num }} h</small></p>
-  <p class="tile"><span class="tile-label">Above demand</span><b>+{{ t.over_hours|num }} h</b>
-    <small class="dim">room to take breaks or cover gaps{% if t.moved %}; {{ t.moved }} break{{ 's' if t.moved != 1 }} moved today{% endif %}</small></p>
-  <p class="tile"><span class="tile-label">Languages</span><b>{{ t.language_gaps }} gap{{ 's' if t.language_gaps != 1 }}</b>
-    <small class="dim">{{ unit.get(v.interval, 'intervals') }} with nobody for a language</small></p>
-</section>
+<p class="rta-sum" aria-label="The day in numbers"><span><b>On shift today</b> {{ t.present }} of {{ t.planned }}{% if t.absent %} ({{ t.absent }} off){% endif %}</span><span><b>Short of demand</b> {{ '−' if t.short_hours else '' }}{{ t.short_hours|num }} h</span><span><b>Above demand</b> +{{ t.over_hours|num }} h</span><span><b>Languages</b> {{ t.language_gaps }} gap{{ 's' if t.language_gaps != 1 }}</span><a href="{{ url_for('overview_page', program=program, date=on.isoformat()) }}">Overview</a></p>
 
 <div class="daybar">
   <nav class="tabs" aria-label="Views">

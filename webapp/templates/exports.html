@@ -16,7 +16,7 @@
     <div class="exp-row"><label>From <input type="date" name="from" value="{{ start.isoformat() }}" required></label>
       <label>To <input type="date" name="to" value="{{ end.isoformat() }}" required></label></div>
     <div class="exp-row"><label>Program
-      <select name="program"><option value="">All programs</option>{% for p in programs %}<option value="{{ p }}"{% if p == program %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
+      <select name="program"><option value="">All programs</option>{% for p in programs %}<option value="{{ p }}"{% if p == program %} selected{% endif %}>{{ p|unit }}</option>{% endfor %}</select></label>
       <label>Changes by
       <select name="user"><option value="">Anyone</option>{% for u in users %}<option value="{{ u.id }}"{% if u.id == user_id %} selected{% endif %}>{{ u.display_name }}</option>{% endfor %}</select></label>
       <label>Measure
@@ -32,7 +32,7 @@
 </section>
 <section class="panel" aria-labelledby="in-h">
   <h2 id="in-h">In this period</h2>
-  <p class="note">{{ start.strftime('%d %b %Y') }} to {{ end.strftime('%d %b %Y') }}{% if program %}, {{ program }}{% endif %}. Breaks and worked hours are worked out when you download.</p>
+  <p class="note">{{ start.strftime('%d %b %Y') }} to {{ end.strftime('%d %b %Y') }}{% if program is string %}, {{ program|unit }}{% endif %}. Breaks and worked hours are worked out when you download.</p>
   <table class="adh-t exp-t"><thead><tr><th scope="col">Item</th><th scope="col" class="n">Rows</th><th scope="col">Last change</th></tr></thead>
     <tbody>{% for key in ('attendance', 'activity', 'changes', 'versions', 'runs') %}{% set n, last = counts[key] %}<tr><td>{{ kinds[key] }}</td><td class="n">{{ n }}</td><td>{% if last %}{{ last.by_name }}, {{ when(last.at or last.created) }}{% else %}–{% endif %}</td></tr>{% endfor %}</tbody></table>
 </section>

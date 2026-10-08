@@ -1,10 +1,10 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
 {% extends "base.html" %}{% from "_macros.html" import change with context %}
-{% block title %}{{ name }}: program history on Team Scheduler{% endblock %}
+{% block title %}{{ name|unit }}: program history on Team Scheduler{% endblock %}
 {% block content %}{% set latest = view.latest %}
 <div class="phead">
   <div>
-    <h1>{{ name }}</h1>
+    <h1>{{ name|unit }}</h1>
     <p class="byline">{{ total }} week{{ 's' if total != 1 }} on record. Latest: the week of {{ latest.week }}, from <a href="{{ url_for('run_detail', run_id=latest.run_id) }}">{{ latest.workbook }}</a> ({{ latest.mode|lower }} run by {{ latest.by_name }}{% if latest.runs_that_week > 1 %}; the latest of {{ latest.runs_that_week }} runs that week{% endif %}).</p>
   </div>
   <form class="range" method="get" action="{{ url_for('program', name=name) }}">

@@ -601,3 +601,18 @@
   }
   pick.addEventListener("change", apply);
 })();
+
+// The left menu: picking a program (and LOB) opens the same page for it; on a
+// phone the menu starts closed above the page.
+(function () {
+  "use strict";
+  var pick = document.querySelector("select[data-unit-pick]");
+  if (pick) {
+    pick.addEventListener("change", function () {
+      var target = pick.getAttribute("data-target") || "/overview?program={key}";
+      window.location = target.replace("{key}", encodeURIComponent(pick.value));
+    });
+  }
+  var menu = document.querySelector("details[data-menu]");
+  if (menu && window.matchMedia && window.matchMedia("(max-width: 900px)").matches) { menu.open = false; }
+})();

@@ -270,6 +270,12 @@ class Store:
             db.execute("delete from user_programs where program_id = ?", (program_id,))
             db.execute("delete from programs where id = ?", (program_id,))
 
+    def latest_weeks(self) -> Dict[str, str]:
+        """Each program key's latest schedule start date (from its kept versions)."""
+        with self._db() as db:
+            return {r[0]: r[1] for r in db.execute("select program, max(week_start) from schedules"
+                                                   " where program != '' and week_start != '' group by program")}
+
     def run_programs(self) -> List[str]:
         """Every program key a run was made under."""
         with self._db() as db:

@@ -4,12 +4,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ program }}: wallboard</title>
+<title>{{ program|unit }}: wallboard</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 <link rel="icon" href="{{ url_for('static', filename='mark.svg') }}" type="image/svg+xml">
 </head>
 <body class="wall" data-wallboard data-live="{{ 'yes' if live else 'no' }}">
-<header class="wall-head"><h1>{{ program }}</h1><p class="wall-clock">{{ on.strftime('%a %d %b') }} · <b>{{ hm(now) }}</b>{% if not live %} <small>(not live)</small>{% endif %}</p></header>
+<header class="wall-head"><h1>{{ program|unit }}</h1><p class="wall-clock">{{ on.strftime('%a %d %b') }} · <b>{{ hm(now) }}</b>{% if not live %} <small>(not live)</small>{% endif %}</p></header>
 {% if not w %}<p class="wall-empty">No schedule for {{ program or 'this program' }} today.</p>{% else %}
 <section class="wall-rows">
   {% for r in w.rows %}<article class="wall-row rb-{{ r.state }}">

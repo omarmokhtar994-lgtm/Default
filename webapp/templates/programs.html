@@ -12,7 +12,7 @@
     <tbody>
     {% for r in rows %}{% set f = r.latest.f %}{% set d = r.latest.delta %}
     <tr>
-      <td><a href="{{ url_for('program', name=r.name) }}">{{ r.name }}</a><br><small>{{ r.weeks }} week{{ 's' if r.weeks != 1 }} on record</small></td>
+      <td><a href="{{ url_for('program', name=r.name) }}">{{ r.name|unit }}</a><br><small>{{ r.weeks }} week{{ 's' if r.weeks != 1 }} on record</small></td>
       <td class="when">{{ r.latest.week }}</td>
       <td class="cov">{{ f.associates if f.associates is not none else '–' }} {{ change(d.associates) }}<span class="trend">{{ r.spark_people }}</span></td>
       <td class="cov">{{ f.after_pct }}% {{ change(d.after_pct, ' points', 'up') }}<span class="trend">{{ r.spark_after }}</span></td>

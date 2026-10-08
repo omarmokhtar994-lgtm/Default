@@ -1,13 +1,13 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
 {% extends "base.html" %}
-{% block title %}Shrinkage coach: {{ program }} on Team Scheduler{% endblock %}
+{% block title %}Shrinkage coach: {{ program|unit }} on Team Scheduler{% endblock %}
 {% block content %}
 <div class="phead"><div>
-  <h1>Shrinkage coach{% if program %}: {{ program }}{% endif %}</h1>
+  <h1>Shrinkage coach{% if program %}: {{ program|unit }}{% endif %}</h1>
   <p class="byline">What actually happened, interval by interval and weekday by weekday, against the Shrinkage tab you planned with. Only days someone recorded on the day page count; a value replaces yours once {{ found.min_days if found else 3 }} days of that weekday back it.</p>
 </div>
   <form class="sel" method="get" action="{{ url_for('coach_page') }}">
-    <label>Program <select name="program" data-autosubmit>{% for p in programs %}<option value="{{ p }}"{% if p == program %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
+    <label>Program <select name="program" data-autosubmit>{% for p in programs %}<option value="{{ p }}"{% if p == program %} selected{% endif %}>{{ p|unit }}</option>{% endfor %}</select></label>
     <label>From <input type="date" name="from" value="{{ start.isoformat() }}"></label>
     <label>To <input type="date" name="to" value="{{ end.isoformat() }}"></label>
     <button type="submit">Show</button>

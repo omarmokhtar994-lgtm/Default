@@ -2,9 +2,10 @@
 {% extends "base.html" %}{% from "_macros.html" import stagebar, ring, wall, pct, advanced_options with context %}
 {% block content %}
 <section class="programs-home" aria-labelledby="ph-h">
-  <div class="phead"><div><h1 id="ph-h">Your programs</h1>
-    <p class="byline">Pick a program to see its day, weeks and analysis. New schedule is open to everyone, for any program.</p></div>
+  <div class="phead"><div><h1 id="ph-h">{% if picked and program_cards %}{{ program_cards[0].name }}{% else %}Your programs{% endif %}</h1>
+    <p class="byline">{% if picked %}The program picked on the left: its LOBs, their latest weeks and the day each starts on.{% else %}Pick a program to see its day, weeks and analysis.{% endif %} New schedule is open to everyone, for any program.</p></div>
     <a class="button primary" href="#newrun">New schedule</a></div>
+  {% if other_programs %}<p class="home-scope"><span>Your other programs:</span>{% for o in other_programs %} <a class="lob" href="{{ url_for('home', program=o.key) }}">{{ o.name }}</a>{% endfor %} <a href="{{ url_for('home', all=1) }}">Show all my programs</a></p>{% endif %}
   <div class="pcards">{% for c in program_cards %}
     <article class="pcard"><h2>{{ c.name }}</h2>
       <p class="lobs">{% for u in c.units %}<a class="lob" href="{{ url_for('overview_page', program=u.key) }}">{{ u.text }}</a>{% endfor %}</p>

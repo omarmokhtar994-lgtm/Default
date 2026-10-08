@@ -345,7 +345,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                   "run_week": "week", "run_schedules": "schedules", "program": "analysis", "programs": "programs",
                   "exports_page": "exports", "team_page": "team", "admin_users": "people", "program_setup": "setup"}
     PROGRAM_PAGES = {"overview": "/overview?program={key}", "day": "/day?program={key}", "week": "/week?program={key}",
-                     "schedules": "/schedules?program={key}", "analysis": "/programs/{key}"}
+                     "schedules": "/schedules?program={key}", "analysis": "/programs/{key}",
+                     "home": "/?program={key}"}  # Home shows the program picked (owner, 2026-10-08)
 
     def _unit_choices(programs: list) -> list:
         """Each program with its LOBs as (key, name) pairs, for the left menu's picker."""
@@ -588,9 +589,14 @@ def create_app(config: Dict[str, Any]) -> Flask:
         known = sorted({r["program"] for r in runs if r.get("program")}, key=str.lower)
         prefill = start_date(request.args.get("week", "")) or next_sunday()
         upload_programs, upload_keys = _upload_choices(everyone)
-        cards = _program_cards(runs)
+        picked = None if request.args.get("all") == "1" else (_left_menu().get("nav_unit") or None)
+        cards = _program_cards(runs, picked)
+        everything = _program_cards(runs)
+        others = [{"name": c["name"], "key": c["units"][0]["key"]} for c in everything
+                  if not any(c["name"] == x["name"] for x in cards)] if picked else []
         return render_template("dashboard.html", upload_programs=upload_programs, upload_keys=upload_keys,
-                               program_cards=cards, runs=runs, queue=queue, plan=plan, summaries=summaries,
+                               program_cards=cards, other_programs=others, picked=picked,
+                               runs=runs, queue=queue, plan=plan, summaries=summaries,
                                active=active, waiting=waiting, latest=latest,
                                latest_summary=summaries.get(latest["id"]) if latest else None,
                                now=time.time(), known_programs=known,
@@ -600,8 +606,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
 
     WEEKDAYS = ("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
 
-    def _program_cards(runs: list) -> list:
-        """Home: this person's programs, each LOB with its latest schedule week."""
+    def _program_cards(runs: list, only: Optional[str] = None) -> list:
+        """Home: this person's programs (only the one holding unit ``only`` when given), each LOB with its
+        latest schedule week."""
         latest = app.extensions["store"].latest_weeks()
         usual = usual_start_days(runs)
         cards = []
@@ -609,6 +616,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             units = [{"key": key, "text": next((l["name"] for l in p["lobs"] if l["key"] == key), p["name"]),
                       "latest": latest.get(key)} for key in p["units"]]
             if not units:
+                continue
+            if only is not None and only not in p["units"]:
                 continue
             day = p["start_day"] if p["saved"] else usual.get(units[0]["key"], 0)
             cards.append({"name": p["name"], "units": units, "starts": WEEKDAYS[day]})

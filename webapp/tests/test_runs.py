@@ -1607,6 +1607,53 @@ class TheNewLayout(unittest.TestCase):
         self.assertIn("AE/AR B2B", cards)
 
 
+class TheHomeFollowsThePicker(unittest.TestCase):
+    """Phase R task 3: Home shows the program picked on the left, with links to the person's other programs
+    and to all of them; planners only ever see their own programs (owner, 2026-10-08)."""
+
+    def setUp(self):
+        from webapp.programs import ProgramBook
+        self.app, self.store, *_ = make_app(start_worker=False)
+        self.store.add_user("omar", "Omar", "Owner-pass-123", is_admin=True, must_change=False)
+        seed_week(self.store, "NMG", "2026-10-11")
+        seed_week(self.store, "AE/AR B2B", "2026-10-11")
+        book = ProgramBook(self.store)
+        book.sync()
+        lina = self.store.add_user("lina", "Lina", "Lina-pass-123", must_change=False)
+        self.store.set_user_programs(lina, [next(p["id"] for p in book.tree() if p["name"] == "NMG")])
+        self.lina = sign_in(self.app, "lina", "Lina-pass-123")
+        self.admin = sign_in(self.app, "omar", "Owner-pass-123")
+
+    def home(self, client, url="/"):
+        body = client.get(url).get_data(as_text=True)
+        found = re.search(r'<section class="programs-home"[^>]*>(.*?)</section>', body, re.S)
+        self.assertIsNotNone(found)
+        return body, html.unescape(found.group(1))
+
+    def test_home_shows_the_picked_program_only(self):
+        _, cards = self.home(self.admin, "/?program=NMG")
+        self.assertIn("<h2>NMG</h2>", cards)
+        self.assertNotIn("<h2>AE/AR B2B</h2>", cards)
+        self.assertRegex(cards, r'<a class="lob" href="/\?program=AE/AR\+B2B">AE/AR B2B</a>')
+        self.assertIn('href="/?all=1">Show all my programs</a>', cards)
+
+    def test_home_all_shows_every_program(self):
+        _, cards = self.home(self.admin, "/?all=1")
+        self.assertIn("<h2>NMG</h2>", cards)
+        self.assertIn("<h2>AE/AR B2B</h2>", cards)
+
+    def test_planner_home_never_lists_other_programs(self):
+        for url in ("/", "/?all=1", "/?program=AE/AR+B2B"):
+            _, cards = self.home(self.lina, url)
+            self.assertIn("<h2>NMG</h2>", cards)
+            self.assertNotIn("AE/AR B2B", cards)
+            self.assertNotIn("Show all my programs", cards)  # one program: nothing else to show
+
+    def test_menu_picker_on_home_stays_on_home(self):
+        body, _ = self.home(self.admin)
+        self.assertIn('data-target="/?program={key}"', body)
+
+
 class TheLobFilters(unittest.TestCase):
     """Phase Q: filters go by program, then LOB: a whole program means all of its LOBs (that the person may
     open); the programs list groups LOBs under their program."""

@@ -791,3 +791,5 @@ body.wall { background: var(--night); color: var(--paper); padding: 2vh 2.5vw; m
 .setup-delete small { color: var(--dim); }
 button.danger, .button.danger { color: var(--gap-ink); border-color: var(--gap); }
 button.danger:disabled { opacity: .55; cursor: not-allowed; }
+.home-scope { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0 0 16px; }
+.home-scope .lob { margin: 0; }

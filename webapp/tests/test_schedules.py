@@ -68,6 +68,34 @@ class TheVersions(unittest.TestCase):
         self.assertEqual(found["severity"], "red")
         self.assertEqual(self.book.check(self.tool["id"], "Associate 001", "Wed", "12:00 - 21:00")["added"], [])
 
+    def test_swap_checked_then_kept_logged_and_marked(self):
+        found = self.book.check_swap(self.tool["id"], "Associate 001", "Associate 002")
+        self.assertIn(found["severity"], ("ok", "yellow", "red"))
+        self.assertEqual(set(found), {"added", "severity", "problems", "metrics"})
+        before = self.book.path(self.tool["id"]).read_bytes()
+        draft = self.book.swap(self.tool["id"], self.sara, "Associate 001", "Associate 002", "family reasons")
+        self.assertNotEqual(draft, self.tool["id"])
+        self.assertEqual(self.book.path(self.tool["id"]).read_bytes(), before)
+        slots = {a["slot"]: a["name"] for a in json.loads(self.store.get_schedule(draft)["week"])["associates"]}
+        self.assertEqual((slots["1"], slots["2"]), ("Associate 002", "Associate 001"))
+        log = [(c["associate"], c["day"], c["old"], c["new"], c["reason"]) for c in self.store.list_changes(draft)]
+        self.assertEqual(log, [("Associate 001", "Week", "Slot 1", "Slot 2", "family reasons"),
+                               ("Associate 002", "Week", "Slot 2", "Slot 1", "family reasons")])
+        edited = self.book.edited_cells(draft)
+        self.assertEqual({d for n, d in edited if n == "Associate 001"}, {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"})
+        with self.assertRaises(ValueError):
+            self.book.check_swap(self.tool["id"], "Associate 001", "Nobody")
+
+    def test_refused_edit_leaves_no_empty_draft(self):
+        count = len(self.book.versions("aaaaaaaaaaaa"))
+        for bad in (lambda: self.book.change(self.tool["id"], self.sara, "Associate 001", "Wed", "25:00 - 26:00", "x"),
+                    lambda: self.book.change(self.tool["id"], self.sara, "Nobody", "Wed", "OFF", "x"),
+                    lambda: self.book.swap(self.tool["id"], self.sara, "Associate 001", "Nobody", "x"),
+                    lambda: self.book.swap(self.tool["id"], self.sara, "Associate 001", "Associate 001", "x")):
+            with self.assertRaises(ValueError):
+                bad()
+        self.assertEqual(len(self.book.versions("aaaaaaaaaaaa")), count)
+
     def test_one_version_in_use_per_program_week(self):
         a = self.book.change(self.tool["id"], self.sara, "Associate 001", "Wed", "10:00 - 19:00", "x")
         self.book.set_in_use(self.tool["id"], self.sara)

@@ -140,11 +140,54 @@ def read_week(path: Path) -> Dict[str, Any]:
         if not name:
             continue
         cell = lambda key: str(ws.cell(r, cols[key]).value or "").strip() if key in cols else ""  # noqa: E731
-        associates.append({"name": name, "emp_id": cell("emp id"), "language": cell("language"), "tl": cell("tl"),
-                           "days": [str(ws.cell(r, c).value or "").strip() for c in day_cols]})
+        associates.append({"name": name, "slot": cell("slot"), "emp_id": cell("emp id"), "language": cell("language"),
+                           "tl": cell("tl"), "days": [str(ws.cell(r, c).value or "").strip() for c in day_cols]})
     breaks = _breaks(wb)
     return {"associates": associates, "breaks": breaks, "shifts": _library(wb), "settings": _settings(wb),
             "stage": "after" if breaks else "before"}
+
+
+PERSON = ("emp id", "email", "sf name", "associate name", "name", "tl", "language")  # who sits in a slot
+
+
+def swap_slots(src: Path, dst: Path, first: str, second: str) -> None:
+    """Two people swap slots: each slot keeps its shifts and breaks and takes the other person
+    (Emp ID, Email, name, TL, language) on both schedule tabs; break rows follow the new names."""
+    if _norm(first) == _norm(second):
+        raise ValueError("Pick two different people to swap.")
+    wb = load_workbook(src)
+    found = 0
+    for tab in SCHEDULE_TABS:
+        if tab not in wb.sheetnames:
+            continue
+        ws = wb[tab]
+        row, cols = _header(ws, ("sf name", "associate name"))
+        name_col = _name_col(cols)
+        rows = {_norm(ws.cell(r, name_col).value): r for r in range(row + 1, ws.max_row + 1)}
+        missing = [n for n in (first, second) if _norm(n) not in rows]
+        if missing:
+            raise ValueError(f"{missing[0]!r} is not on this schedule")
+        a, b = rows[_norm(first)], rows[_norm(second)]
+        for key in PERSON:
+            if key in cols:
+                c = cols[key]
+                ws.cell(a, c).value, ws.cell(b, c).value = ws.cell(b, c).value, ws.cell(a, c).value
+        found += 1
+    if not found:
+        raise ValueError("no schedule tab to swap on")
+    for tab in BREAK_TABS:
+        if tab not in wb.sheetnames:
+            continue
+        ws = wb[tab]
+        row, cols = _header(ws, ("associate",))
+        c = cols["associate"]
+        for r in range(row + 1, ws.max_row + 1):
+            who = _norm(ws.cell(r, c).value)
+            if who == _norm(first):
+                ws.cell(r, c).value = second
+            elif who == _norm(second):
+                ws.cell(r, c).value = first
+    wb.save(dst)
 
 
 def apply_change(src: Path, dst: Path, name: str, day: str, value: str) -> None:

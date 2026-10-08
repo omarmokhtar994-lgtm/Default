@@ -23,11 +23,12 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from .versions import added, apply_change, marks, problems, read_week, validate
+from .versions import DAYS, added, apply_change, marks, problems, read_week, swap_slots, validate
 
 KEEP_DAYS = 395  # 13 months after the schedule's week (owner, 2026-10-08)
 EGYPT = timezone(timedelta(hours=3))
 RANK = {"ok": 0, "yellow": 1, "red": 2}
+WEEK = "Week"  # the change log's day for a slot swap
 
 
 def worst(found: List[Dict[str, Any]]) -> str:
@@ -113,7 +114,8 @@ class ScheduleBook:
     def edited_cells(self, schedule_id: int) -> Set[Tuple[str, str]]:
         cells: Set[Tuple[str, str]] = set()
         for row in self.lineage(schedule_id):
-            cells |= {(c["associate"], c["day"]) for c in self.store.list_changes(row["id"])}
+            for c in self.store.list_changes(row["id"]):  # a slot swap ("Week") changes all seven days
+                cells |= {(c["associate"], d) for d in (DAYS if c["day"] == WEEK else [c["day"]])}
         return cells
 
     def _problems(self, row: Dict[str, Any], edited: Set[Tuple[str, str]]) -> List[Dict[str, Any]]:
@@ -136,18 +138,27 @@ class ScheduleBook:
                 "metrics": json.loads(row["checks"] or "{}").get("metrics") or {},
                 "changes": [c for r in reversed(self.lineage(schedule_id)) for c in self.store.list_changes(r["id"])]}
 
-    def check(self, schedule_id: int, name: str, day: str, value: str) -> Dict[str, Any]:
-        """What one change would add, checked on a copy (nothing is saved)."""
+    def _trial(self, schedule_id: int, edit, cells: Set[Tuple[str, str]]) -> Dict[str, Any]:
+        """What an edit would add, checked on a copy (nothing is saved)."""
         row = self.store.get_schedule(schedule_id)
-        edited = self.edited_cells(schedule_id) | {(name, day)}
+        edited = self.edited_cells(schedule_id) | cells
         with tempfile.TemporaryDirectory() as tmp:
             trial = Path(tmp) / "trial.xlsx"
-            apply_change(self.path(schedule_id), trial, name, day, value)
+            edit(self.path(schedule_id), trial)
             result = self._check(row["run_id"], trial)
         settings = json.loads(row["week"] or "{}").get("settings") or {}
         now = problems(result, edited, settings)
         new = added(self._problems(row, edited), now)
         return {"added": new, "severity": worst(new), "problems": now, "metrics": result.get("metrics") or {}}
+
+    def check(self, schedule_id: int, name: str, day: str, value: str) -> Dict[str, Any]:
+        """What one change would add."""
+        return self._trial(schedule_id, lambda src, dst: apply_change(src, dst, name, day, value), {(name, day)})
+
+    def check_swap(self, schedule_id: int, first: str, second: str) -> Dict[str, Any]:
+        """What two people swapping slots would add."""
+        return self._trial(schedule_id, lambda src, dst: swap_slots(src, dst, first, second),
+                           {(n, d) for n in (first, second) for d in DAYS})
 
     def _draft_from(self, row: Dict[str, Any], user_id: int) -> Dict[str, Any]:
         number = max(v["number"] for v in self.store.list_schedules(run_id=row["run_id"])) + 1
@@ -161,6 +172,30 @@ class ScheduleBook:
                                          week=row["week"], checks=row["checks"])
         return self.store.get_schedule(new_id)
 
+    def _save(self, row: Dict[str, Any], user_id: int, edit, cells: Set[Tuple[str, str]]) -> Tuple[Dict[str, Any], List]:
+        """Apply an edit to ``row`` (a new draft unless it is a draft not in use), re-check it and
+        return the version saved in and what the edit added. The caller holds the run's lock."""
+        with tempfile.TemporaryDirectory() as tmp:  # a refused edit (ValueError) must not leave an empty draft
+            edit(self.root / row["file"], Path(tmp) / "trial.xlsx")
+        if row["kind"] != "edited" or row["in_use"]:
+            row = self._draft_from(row, user_id)
+        target = self.root / row["file"]
+        edited = self.edited_cells(row["id"]) | cells
+        before = self._problems(row, edited)
+        fd, tmp = tempfile.mkstemp(suffix=".xlsx", dir=str(target.parent))
+        os.close(fd)
+        try:
+            edit(target, Path(tmp))
+            os.replace(tmp, target)
+        finally:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+        week = read_week(target)
+        result = self._check(row["run_id"], target)
+        result["problems"] = problems(result, edited, week["settings"])
+        self.store.update_schedule(row["id"], week=json.dumps(week), checks=json.dumps(result), updated=time.time())
+        return row, added(before, result["problems"])
+
     def change(self, schedule_id: int, user_id: int, name: str, day: str, value: str, reason: str) -> int:
         """Apply one change; returns the version it was saved in (a new draft unless the
         version given is already a draft that is not in use)."""
@@ -169,33 +204,31 @@ class ScheduleBook:
             raise KeyError(schedule_id)
         with self._lock(first["run_id"]):
             row = self.store.get_schedule(schedule_id)
-            current = next((a["days"][["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].index(day)]
-                            for a in json.loads(row["week"] or "{}").get("associates", []) if a["name"] == name), None)
-            if current is not None and current.strip().casefold() == value.strip().casefold():
+            old = next((a["days"][DAYS.index(day)] for a in json.loads(row["week"] or "{}").get("associates", [])
+                        if a["name"] == name), None) if day in DAYS else None
+            if old is not None and old.strip().casefold() == value.strip().casefold():
                 return int(row["id"])  # nothing changes, nothing is logged
-            if row["kind"] != "edited" or row["in_use"]:
-                row = self._draft_from(row, user_id)
-            target = self.root / row["file"]
-            week = json.loads(row["week"] or "{}")
-            old = next((a["days"][["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].index(day)]
-                        for a in week.get("associates", []) if a["name"] == name), "")
-            edited_before = self.edited_cells(row["id"])
-            before = self._problems(row, edited_before | {(name, day)})
-            fd, tmp = tempfile.mkstemp(suffix=".xlsx", dir=str(target.parent))
-            os.close(fd)
-            try:
-                apply_change(target, Path(tmp), name, day, value)
-                os.replace(tmp, target)
-            finally:
-                if os.path.exists(tmp):
-                    os.unlink(tmp)
-            week = read_week(target)
-            result = self._check(row["run_id"], target)
-            result["problems"] = problems(result, edited_before | {(name, day)}, week["settings"])
-            new = added(before, result["problems"])
-            self.store.update_schedule(row["id"], week=json.dumps(week), checks=json.dumps(result), updated=time.time())
-            self.store.add_change(schedule_id=row["id"], user_id=user_id, associate=name, day=day, old=old, new=value,
-                                  reason=reason, severity=worst(new), problems=json.dumps([p["text"] for p in new]))
+            row, new = self._save(row, user_id, lambda src, dst: apply_change(src, dst, name, day, value),
+                                  {(name, day)})
+            self.store.add_change(schedule_id=row["id"], user_id=user_id, associate=name, day=day, old=old or "",
+                                  new=value, reason=reason, severity=worst(new),
+                                  problems=json.dumps([p["text"] for p in new]))
+            return int(row["id"])
+
+    def swap(self, schedule_id: int, user_id: int, first: str, second: str, reason: str) -> int:
+        """Two people swap slots (each keeps the other's shifts and breaks); logged once per person."""
+        start = self.store.get_schedule(schedule_id)
+        if start is None:
+            raise KeyError(schedule_id)
+        with self._lock(start["run_id"]):
+            row = self.store.get_schedule(schedule_id)
+            slot = {a["name"]: a.get("slot") or "?" for a in json.loads(row["week"] or "{}").get("associates", [])}
+            row, new = self._save(row, user_id, lambda src, dst: swap_slots(src, dst, first, second),
+                                  {(n, d) for n in (first, second) for d in DAYS})
+            for who, mine, theirs in ((first, slot.get(first), slot.get(second)), (second, slot.get(second), slot.get(first))):
+                self.store.add_change(schedule_id=row["id"], user_id=user_id, associate=who, day=WEEK,
+                                      old=f"Slot {mine}", new=f"Slot {theirs}", reason=reason, severity=worst(new),
+                                      problems=json.dumps([p["text"] for p in new]))
             return int(row["id"])
 
     def set_in_use(self, schedule_id: int, user_id: int) -> None:

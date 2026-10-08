@@ -4,6 +4,7 @@
 The real Voice week in the repository (English and International, 30-minute
 demand, Tuesday overnight shifts reaching into Wednesday). Names are read from
 the workbook, never written here."""
+import math
 import unittest
 from pathlib import Path
 
@@ -129,6 +130,47 @@ class TheDay(unittest.TestCase):
         inside = [c for c in intl["cells"] if c["count"] is not None]
         self.assertEqual(len(inside), 32)  # 00:00 to 16:00 in half-hours
         self.assertIsNone(next(c for c in rows["English"]["cells"] if c["t"] == 12 * 60)["count"])  # outside English hours
+
+    def test_need_is_the_raw_requirement_without_shrinkage(self):
+        # actuals replace the input's shrinkage: absences, breaks and aux are counted as they happen
+        cell = at(self.view(), "20:00")
+        required = INPUTS["required"][WED][20 * 60]
+        self.assertEqual(cell["need"], math.ceil(required))
+        self.assertAlmostEqual(cell["pm"], round((cell["now"] - required) * 0.5, 2))
+        self.assertNotIn("shrinkage", INPUTS)
+
+    def test_billable_aux_counts_for_intervals_but_not_for_service_level(self):
+        person, span = someone(WED, 20 * 60)
+        coaching = lambda billable: {(0, person["name"]): {"status": "Coaching", "from": 20 * 60, "to": 21 * 60,
+                                                           "billable": billable}}
+        plan = at(self.view(), "20:00")["plan"]
+        billable = coaching(True)
+        self.assertEqual(at(day_view(WEEK, INPUTS, WED, billable, {}, measure="interval"), "20:00")["now"], plan)
+        self.assertEqual(at(day_view(WEEK, INPUTS, WED, billable, {}, measure="sl"), "20:00")["now"], plan - 1)
+        unbillable = coaching(False)
+        self.assertEqual(at(day_view(WEEK, INPUTS, WED, unbillable, {}, measure="interval"), "20:00")["now"], plan - 1)
+        self.assertEqual(at(self.view(billable), "20:00")["aux"], 1)  # counted either way
+        self.assertEqual(at(self.view(billable), "21:00")["aux"], 0)
+
+    def test_counts_per_interval(self):
+        person, span = someone(WED, 20 * 60)
+        v = self.view({(0, person["name"]): {"status": "Unplanned leave"}})
+        self.assertEqual((at(v, "20:00")["absent"], at(v, "20:00")["aux"]), (1, 0))
+        b = next(b for b in WEEK["breaks"] if b["day"] == "Wed" and b["kind"] == "Lunch" and b["start"].endswith(":00"))
+        lanes = {l["name"]: l for l in self.view()["lanes"]}
+        idx = next(x["idx"] for s in lanes[b["associate"]]["segments"] if s["offset"] == 0 for x in s["breaks"]
+                   if x["kind"] == "Lunch")
+        start = minute(b["start"])
+        hhmm = lambda m: f"{m // 60:02d}:{m % 60:02d}"
+        moved = self.view(actual={(0, b["associate"], idx): start + 60})
+        self.assertEqual(at(moved, b["start"])["breaks"], at(self.view(), b["start"])["breaks"] - 1)
+        self.assertEqual(at(moved, hhmm(start + 60))["breaks"], at(self.view(), hhmm(start + 60))["breaks"] + 1)
+
+    def test_five_minute_ticks_per_interval(self):
+        cell = at(self.view(), "20:00")
+        self.assertEqual(len(cell["slots"]), 6)
+        self.assertEqual(cell["low"], min(cell["slots"]))
+        self.assertAlmostEqual(cell["now"], round(sum(cell["slots"]) / 6, 1))
 
     def test_tiles_sum_the_cells(self):
         v = self.view()

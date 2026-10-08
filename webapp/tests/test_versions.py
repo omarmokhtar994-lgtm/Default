@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from webapp.versions import apply_change, marks, problems, read_week, validate
+from webapp.versions import apply_change, marks, problems, read_week, swap_slots, validate
 
 REPO = Path(__file__).resolve().parents[2]
 AFTER_DIR = REPO / "fixtures" / "real_runs" / "week_boundary" / "B3_ARB2B_S30"
@@ -50,6 +50,36 @@ class TheWorkbooks(unittest.TestCase):
         final = load_workbook(self.tmp / "edited.xlsx")["Final Schedule"]
         self.assertEqual(next(r for r in final.iter_rows(min_row=3, values_only=True) if r[3] == "Associate 001")[9],
                          "21:00 - 06:00")
+
+    def test_slot_ids_are_read(self):
+        people = read_week(AFTER)["associates"]
+        self.assertEqual([(a["slot"], a["name"]) for a in people[:2]], [("1", "Associate 001"), ("2", "Associate 002")])
+
+    def test_swap_slots_moves_the_people_not_the_shifts(self):
+        before = read_week(AFTER)
+        out = self.tmp / "swapped.xlsx"
+        swap_slots(AFTER, out, "Associate 001", "Associate 002")
+        after = read_week(out)
+        old = {a["slot"]: a for a in before["associates"]}
+        new = {a["slot"]: a for a in after["associates"]}
+        # slot 1 keeps its shifts and now holds Associate 002 (with their Emp ID); slot 2 the reverse
+        self.assertEqual((new["1"]["name"], new["1"]["emp_id"], new["1"]["days"]),
+                         ("Associate 002", old["2"]["emp_id"], old["1"]["days"]))
+        self.assertEqual((new["2"]["name"], new["2"]["emp_id"], new["2"]["days"]),
+                         ("Associate 001", old["1"]["emp_id"], old["2"]["days"]))
+        # the breaks stay with the shifts: slot 1's breaks now carry Associate 002's name
+        mine = lambda week, name: sorted((b["day"], b["kind"], b["start"]) for b in week["breaks"] if b["associate"] == name)
+        self.assertEqual(mine(after, "Associate 002"), mine(before, "Associate 001"))
+        self.assertEqual(mine(after, "Associate 001"), mine(before, "Associate 002"))
+        from openpyxl import load_workbook
+        final = load_workbook(out)["Final Schedule"]
+        self.assertEqual(next(r for r in final.iter_rows(min_row=3, values_only=True) if r[0] == 1)[3], "Associate 002")
+
+    def test_swap_needs_two_different_people_on_the_schedule(self):
+        with self.assertRaises(ValueError):
+            swap_slots(AFTER, self.tmp / "x.xlsx", "Associate 001", "Associate 001")
+        with self.assertRaises(ValueError):
+            swap_slots(AFTER, self.tmp / "x.xlsx", "Associate 001", "Nobody")
 
     def test_unknown_associate_or_value_refused(self):
         with self.assertRaises(ValueError):

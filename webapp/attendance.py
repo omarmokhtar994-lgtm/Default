@@ -16,7 +16,7 @@ import time
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
-from .day import PRESENT, STATUSES, TIMED, BreakRefused, check_break, day_view, planned, read_inputs
+from .day import AUX, MEASURES, STATUSES, TIMED, BreakRefused, check_break, day_view, planned, read_inputs
 from .schedules import EGYPT, KEEP_DAYS, ScheduleBook
 from .versions import DAYS, shift_span
 
@@ -85,7 +85,8 @@ class DayBook:
         attendance, actual, stale = {}, {}, 0
         for offset, d in dates.items():
             for r in self.store.list_attendance(program, [d.isoformat()]):
-                attendance[(offset, r["associate"])] = {"status": r["status"], "from": r["from_min"], "to": r["to_min"]}
+                attendance[(offset, r["associate"])] = {"status": r["status"], "from": r["from_min"], "to": r["to_min"],
+                                                        "billable": bool(r["billable"])}
             source, _ = (row, "") if week_start(d) == week_start(on) else self.version(program, d)
             week = self._week(source) if source else {}
             for r in self.store.list_actual_breaks(program, [d.isoformat()]):
@@ -96,23 +97,26 @@ class DayBook:
                 actual[(offset, r["associate"], r["idx"])] = r["start"]
         return attendance, actual, stale
 
-    def page(self, program: str, on: date) -> Optional[Dict[str, Any]]:
+    def page(self, program: str, on: date, measure: str = "interval") -> Optional[Dict[str, Any]]:
+        if measure not in MEASURES:
+            raise ValueError(f"Unknown measure: {measure}.")
         row, note = self.version(program, on)
         if row is None:
             return None
         week = self._week(row)
         inputs = read_inputs(self.book.input_path(row["run_id"]))
         attendance, actual, stale = self._records(program, on, row)
-        view = day_view(week, inputs, day_index(on), attendance, actual)
+        view = day_view(week, inputs, day_index(on), attendance, actual, measure)
         return {"version": row, "note": note, "view": view, "stale": stale, "date": on,
                 "week_start": week_start(on).isoformat(), "day": day_index(on), "inputs": inputs,
                 "log": self.store.list_day_log(program, on.isoformat())}
 
     # ------------------------------------------------------------- what people record
     def set_status(self, program: str, on: date, name: str, status: str, user_id: int,
-                   start: str = "", end: str = "") -> None:
+                   start: str = "", end: str = "", billable: bool = False) -> None:
         """Record a status for the shift that starts on ``on``. Late needs the arrival (``end``),
-        Left early the leaving time (``start``); other timed statuses take an optional from/to."""
+        Left early the leaving time (``start``); an aux (Training, Coaching, Meeting, System issue)
+        takes an optional from/to and is billable or not."""
         if status not in STATUSES:
             raise ValueError(f"Unknown status: {status}.")
         _, _, span = self._shift(program, on, name)
@@ -142,12 +146,14 @@ class DayBook:
                 raise ValueError("Give both times, or neither for the whole shift.")
             if lo is not None and lo >= hi:
                 raise ValueError("The end time must be after the start time.")
-            what = f"{status} {hm(lo)} to {hm(hi)}" if lo is not None else f"{status}, whole shift"
+            kind = f"{status} ({'billable' if billable else 'non-billable'})"
+            what = f"{kind} {hm(lo)} to {hm(hi)}" if lo is not None else f"{kind}, whole shift"
         else:
             lo = hi = None
             what = status
         self.store.set_attendance(program=program, shift_date=on.isoformat(), associate=name, status=status,
-                                  from_min=lo, to_min=hi, user_id=user_id)
+                                  from_min=lo, to_min=hi, billable=int(bool(billable) and status in AUX),
+                                  user_id=user_id)
         self.store.add_day_log(program=program, shift_date=on.isoformat(), associate=name, what=what, user_id=user_id)
 
     def move_break(self, program: str, on: date, name: str, idx: int, at: Optional[str], user_id: int) -> None:

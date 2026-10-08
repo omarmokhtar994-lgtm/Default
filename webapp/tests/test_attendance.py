@@ -86,6 +86,23 @@ class TheAttendance(unittest.TestCase):
         self.assertEqual(self.lane(self.days.page("AE/AR B2B", WED), "Associate 001")["segments"][0]["away"],
                          (15 * 60, 16 * 60))
 
+    def test_aux_is_billable_or_not_and_the_measure_decides(self):
+        self.days.set_status("AE/AR B2B", WED, "Associate 001", "Coaching", self.sara, start="15:00", end="16:00",
+                             billable=True)
+        page = self.days.page("AE/AR B2B", WED)
+        seg = self.lane(page, "Associate 001")["segments"][0]
+        self.assertEqual((seg["status"], seg["billable"]), ("Coaching", True))
+        self.assertEqual(page["log"][-1]["what"], "Coaching (billable) 15:00 to 16:00")
+        cell = lambda measure: next(c for c in self.days.page("AE/AR B2B", WED, measure)["view"]["cells"]
+                                    if c["t"] == 15 * 60)
+        self.assertEqual(cell("interval")["now"], cell("interval")["plan"])  # billable: still on the floor
+        self.assertEqual(cell("sl")["now"], cell("sl")["plan"] - 1)  # any aux takes them off the queue
+        self.days.set_status("AE/AR B2B", WED, "Associate 001", "Coaching", self.sara, start="15:00", end="16:00")
+        self.assertEqual(self.days.page("AE/AR B2B", WED)["log"][-1]["what"], "Coaching (non-billable) 15:00 to 16:00")
+        self.assertEqual(cell("interval")["now"], cell("interval")["plan"] - 1)
+        with self.assertRaises(ValueError):
+            self.days.page("AE/AR B2B", WED, "weekly")
+
     def test_unknown_status_or_person_refused(self):
         with self.assertRaises(ValueError):
             self.days.set_status("AE/AR B2B", WED, "Associate 001", "Holiday", self.sara)

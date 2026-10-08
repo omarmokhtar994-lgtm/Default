@@ -85,6 +85,7 @@ create table if not exists attendance (
     status text not null,
     from_min integer,
     to_min integer,
+    billable integer not null default 0,
     user_id integer not null,
     at real not null,
     primary key (program, shift_date, associate)

@@ -643,3 +643,12 @@ svg.defs { position: absolute; width: 0; height: 0; }
 [data-day] .chip.offer:hover { background: var(--accent-soft); }
 [data-day] .adh-t td.bad { color: var(--gap-ink); font-weight: 700; }
 [data-day] .autopilot { float: right; margin: -38px 0 0; } @media (max-width: 720px) { [data-day] .autopilot { float: none; margin: 0 0 10px; } }
+
+/* shrinkage coach */
+.coach-t { border-collapse: separate; border-spacing: 2px; font-size: 12px; width: 100%; }
+.coach-t th { color: var(--dim); font-weight: 600; padding: 4px 6px; text-align: left; }
+.coach-t td { padding: 4px 6px; border-radius: 4px; background: var(--console-2); text-align: center; min-width: 64px; }
+.coach-t td b { display: block; font-size: 13px; } .coach-t td small { color: var(--dim); }
+.coach-t td.up { background: var(--gap-soft); } .coach-t td.up b { color: var(--gap-ink); }
+.coach-t td.down { background: var(--accent-soft); } .coach-t td.down b { color: var(--accent-ink); }
+.coach-t td.kept { opacity: .55; } .coach-t td.none { background: transparent; }

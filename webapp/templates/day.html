@@ -186,7 +186,7 @@
 </section>
 <section class="panel" aria-labelledby="shr-h">
   <h2 id="shr-h">Actual shrinkage against your input</h2>
-  <p class="note">Each {{ unit.get(v.interval, 'interval')[:-1] }}: people paid on shift, people on the floor, and the share not on the floor, against the input's Shrinkage tab. Red: more than 5 points above plan. Over weeks, the shrinkage coach turns this into a corrected tab.</p>
+  <p class="note">Each {{ unit.get(v.interval, 'interval')[:-1] }}: people paid on shift, people on the floor, and the share not on the floor, against the input's Shrinkage tab. Red: more than 5 points above plan. Over weeks, the <a href="{{ url_for('coach_page', program=program) }}">shrinkage coach</a> turns this into a corrected tab.</p>
   <div class="scroll"><table class="adh-t">
     <thead><tr><th scope="col">Interval</th><th scope="col" class="n">Paid on shift</th><th scope="col" class="n">On the floor</th><th scope="col" class="n">Actual</th><th scope="col" class="n">Input</th></tr></thead>
     <tbody>{% for r in shrink %}<tr><td>{{ hm(r.t) }}</td><td class="n">{{ r.paid|num }}</td><td class="n">{{ r.on_floor|num }}</td><td class="n{% if r.actual > r.input + 0.05 %} bad{% endif %}">{{ (100 * r.actual)|round|int }}%</td><td class="n">{{ (100 * r.input)|round|int }}%</td></tr>{% endfor %}</tbody>

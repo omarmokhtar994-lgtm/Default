@@ -1184,6 +1184,16 @@ class TheExportsPage(unittest.TestCase):
         got = self.client.get("/exports/download?from=2026-10-14&to=2026-10-14&kind=attendance&kind=runs&format=csv")
         self.assertIn("A CSV file holds one item", got.get_data(as_text=True))
 
+    def test_shrinkage_coach(self):
+        body = html.unescape(self.client.get("/coach?program=AE/AR+B2B&from=2026-10-11&to=2026-10-17").get_data(as_text=True))
+        for words in ("Shrinkage coach", "Days recorded", "Download the corrected tab", "Wed"):
+            self.assertIn(words, body)
+        got = self.client.get("/coach/download?program=AE/AR+B2B&from=2026-10-11&to=2026-10-17")
+        self.assertEqual(got.status_code, 200)
+        self.assertIn("Shrinkage_60_Min_AE_AR_B2B_2026-10-11_to_2026-10-17.xlsx", got.headers["Content-Disposition"])
+        last = self.store.list_events(0, time.time() + 60, kinds=["downloaded"])[-1]
+        self.assertEqual(last["subject"], "Shrinkage_60_Min_AE_AR_B2B_2026-10-11_to_2026-10-17.xlsx")
+
     def test_signed_out_cannot_export(self):
         got = self.app.test_client().get("/exports/download?from=2026-10-14&to=2026-10-14&kind=attendance")
         self.assertEqual(got.status_code, 302)

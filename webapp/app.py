@@ -19,6 +19,7 @@ from .adherence import interval_shrinkage, person_day, team as team_figures
 from .analytics import program_weeks, team
 from .attendance import ACTIVITY_KINDS, DayBook, hm, week_start
 from .day import AUX, MEASURES, STATUSES, BreakRefused, board
+from .coach import actual_shrinkage, corrected_tab
 from .eta import queue_plan
 from .exports import KINDS as EXPORT_KINDS, build as build_export
 from .outcome import cannot_schedule, read as read_outcome, view as outcome_view
@@ -924,6 +925,36 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return render_template("exports.html", kinds=EXPORT_KINDS, counts=counts, presets=presets, error=error,
                                programs=_days().programs() if app.extensions.get("days") else [],
                                users=store.list_users(), measures=MEASURES, **a), status
+
+    def _coach_args() -> Dict[str, Any]:
+        days = _days()
+        programs = days.programs()
+        today = datetime.now(EGYPT).date()
+        program = clean_program(request.args.get("program", "")) or (programs[0] if programs else "")
+        start = _date(request.args.get("from", "")) or today - timedelta(days=27)
+        end = _date(request.args.get("to", "")) or today
+        if end < start or (end - start).days > 400:
+            start, end = end - timedelta(days=27), end
+        return {"program": program, "programs": programs, "start": start, "end": end}
+
+    @app.route("/coach")
+    @login_required
+    def coach_page():  # type: ignore[no-untyped-def]
+        a = _coach_args()
+        found = actual_shrinkage(_days(), a["program"], a["start"], a["end"]) if a["program"] else None
+        return render_template("coach.html", found=found, days=DAYS, hm=hm, **a)
+
+    @app.route("/coach/download")
+    @login_required
+    def coach_download():  # type: ignore[no-untyped-def]
+        a = _coach_args()
+        if not a["program"]:
+            abort(404)
+        found = actual_shrinkage(_days(), a["program"], a["start"], a["end"])
+        name = secure_filename(f"Shrinkage_{found['interval']}_Min_{a['program']}_{a['start']}_to_{a['end']}.xlsx")
+        _record("downloaded", program=a["program"], subject=name)
+        return send_file(corrected_tab(found, a["program"]), as_attachment=True, download_name=name,
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     @app.route("/exports")
     @login_required

@@ -10,7 +10,7 @@
   </div>
   {% set opts = run_options(run) %}
   <p class="byline">{{ run.mode|capitalize if run.mode != 'SMOKE' else 'Readiness check' }} run, started by {{ run.by_name }} on {{ when(run.created) }} (Egypt time). Settings: {% if opts %}{% for k, v in opts.items() %}{{ k|replace('_', ' ')|capitalize }} {{ option_labels[v] }}{% if not loop.last %}; {% endif %}{% endfor %}{% else %}followed the workbook{% endif %}.</p>
-  <p class="byline tagline">{% if run.program %}Program <a href="{{ url_for('program', name=run.program) }}">{{ run.program }}</a>{% else %}No program set{% endif %}{% if run.week_start %}, starts {{ run.week_start|start_day }}{% else %}, no start date set{% endif %}.</p>
+  <p class="byline tagline">{% if run.program %}Program <a href="{{ url_for('program', name=run.program) }}">{{ unit_label or run.program }}</a>{% else %}No program set{% endif %}{% if run.week_start %}, starts {{ run.week_start|start_day }}{% else %}, no start date set{% endif %}.</p>
   {% if user.id == run.user_id or user.is_admin %}
   <details class="advanced tag{% if user.is_admin %} details-admin{% endif %}"{% if check %} open{% endif %}>
     <summary>{% if user.is_admin %}Edit details{% else %}{{ 'Change' if run.program else 'Set' }} the program and start date{% endif %}</summary>

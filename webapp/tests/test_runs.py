@@ -714,8 +714,9 @@ class TheReadinessCheck(unittest.TestCase):
         app, *_ = make_app(start_worker=False)
         client = client_for(app)
         body = client.get("/?program=NMG%20Spanish&week=2026-10-11").get_data(as_text=True)
-        self.assertIn('name="program" type="text" list="known-programs" maxlength="80" autocomplete="off" '
-                      'placeholder="For example NMG Spanish" value="NMG Spanish"', body)
+        # Re-pinned in Phase Q (owner, 2026-10-08): the program is picked from a Program and LOB dropdown now;
+        # a prefilled program is its selected option.
+        self.assertIn('<option value="NMG Spanish" selected>NMG Spanish</option>', body)
         # Re-pinned in Phase P (owner, 2026-10-08): the week is now a start-date dropdown (Sundays and Mondays),
         # so the prefilled date is the selected option rather than a date box's value.
         self.assertRegex(body, r'<option value="2026-10-11" data-day="0" selected>Sun 11 Oct 2026</option>')
@@ -1342,6 +1343,56 @@ class ThePeoplePage(unittest.TestCase):
     def test_planners_cannot_open_people(self):
         self.store.add_user("lina", "Lina", "Lina-pass-123", must_change=False)
         self.assertEqual(sign_in(self.app, "lina", "Lina-pass-123").get("/admin/users").status_code, 403)
+
+
+class TheProgramSetup(unittest.TestCase):
+    """Phase Q: an admin sets up programs, their LOBs and the defaults a new schedule starts from; the
+    upload form offers each program's LOBs and fills in its defaults."""
+
+    def setUp(self):
+        self.app, self.store, *_ = make_app(start_worker=False)
+        self.store.add_user("omar", "Omar", "Owner-pass-123", is_admin=True, must_change=False)
+        self.sara = client_for(self.app)
+        self.admin = sign_in(self.app, "omar", "Owner-pass-123")
+
+    def post(self, **data):
+        return self.admin.post("/setup/programs", data={"csrf_token": token(self.admin), **data})
+
+    def program(self, name):
+        from webapp.programs import ProgramBook
+        return next(p for p in ProgramBook(self.store).tree() if p["name"] == name)
+
+    def test_set_up_a_program_and_use_it(self):
+        self.assertEqual(self.sara.get("/setup/programs").status_code, 403)
+        run_id = run_id_of(upload(self.sara, program="AE/AR B2B", week_start="2026-10-11"))
+        self.assertEqual(self.post(action="add_program", name="AE").status_code, 302)
+        ae = self.program("AE")["id"]
+        self.post(action="add_lob", program_id=str(ae), name="IT")
+        self.post(action="adopt", program_id=str(ae), key="AE/AR B2B", name="AR B2B")
+        self.post(action="defaults", program_id=str(ae), start_day="1", run_mode="DEEP", stage="BEFORE_BREAKS_ONLY")
+        found = self.program("AE")
+        self.assertEqual([(l["name"], l["key"]) for l in found["lobs"]], [("AR B2B", "AE/AR B2B"), ("IT", "AE IT")])
+        self.assertEqual((found["start_day"], found["run_mode"], found["options"]), (1, "DEEP", {"stage": "BEFORE_BREAKS_ONLY"}))
+        page = html.unescape(self.admin.get("/setup/programs").get_data(as_text=True))
+        for words in ("Programs and LOBs", "AR B2B", "AE IT"):
+            self.assertIn(words, page)
+        form = self.sara.get("/").get_data(as_text=True)  # raw: the defaults are JSON inside an attribute
+        group = re.search(r'<optgroup label="AE" data-defaults="([^"]*)">(.*?)</optgroup>', form, re.S)
+        self.assertIsNotNone(group)
+        self.assertEqual(json.loads(html.unescape(group.group(1))), {"start_day": 1, "run_mode": "DEEP",
+                                                                     "options": {"stage": "BEFORE_BREAKS_ONLY"}})
+        self.assertIn('<option value="AE/AR B2B">AR B2B</option>', group.group(2))
+        self.assertIn('<option value="AE IT">IT</option>', group.group(2))
+        other = run_id_of(upload(self.sara, program="AE IT", week_start="2026-10-12"))
+        self.assertEqual(self.store.get_run(other)["program"], "AE IT")
+        page = html.unescape(self.sara.get(f"/runs/{run_id}").get_data(as_text=True))
+        self.assertIn("AE, AR B2B", page)  # the run page names program and LOB
+
+    def test_refusals_are_shown(self):
+        self.post(action="add_program", name="AE")
+        self.post(action="add_program", name="ae")
+        self.assertIn("There is already a program called ae.",
+                      html.unescape(self.admin.get("/setup/programs").get_data(as_text=True)))
 
 
 class TheStartDate(unittest.TestCase):

@@ -1,5 +1,5 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
-{% extends "base.html" %}{% from "_macros.html" import stagebar, ring, wall, pct with context %}
+{% extends "base.html" %}{% from "_macros.html" import stagebar, ring, wall, pct, advanced_options with context %}
 {% block content %}
 <section class="now" aria-labelledby="now-h">
   <h2 id="now-h" class="sr-only">Now</h2>
@@ -39,9 +39,12 @@
         <span class="chosen" aria-live="polite"></span>
       </div>
       <div class="tagrow">
-        <label>Program
-          <input name="program" type="text" list="known-programs" maxlength="80" autocomplete="off" placeholder="For example NMG Spanish" value="{{ prefill_program }}">
-          <datalist id="known-programs">{% for p in known_programs %}<option value="{{ p }}">{% endfor %}</datalist></label>
+        <label>Program and LOB
+          <select name="program" data-program-pick>
+            <option value=""{% if not prefill_program %} selected{% endif %}>Pick the program</option>
+            {% for p in upload_programs %}<optgroup label="{{ p.name }}" data-defaults="{{ p.defaults|tojson|forceescape }}">{% for key, text in p.choices %}<option value="{{ key }}"{% if key == prefill_program %} selected{% endif %}>{{ text }}</option>{% endfor %}</optgroup>
+            {% endfor %}{% if prefill_program and prefill_program not in upload_keys %}<option value="{{ prefill_program }}" selected>{{ prefill_program }}</option>{% endif %}
+          </select></label>
         <label>Schedule starts
           <select name="week_start" data-start-days="{{ usual_start|tojson|forceescape }}" data-today="{{ start_options[0][0] if not prefill_week else prefill_week }}">
             <option value=""{% if not prefill_week %} selected{% endif %}>Not set</option>
@@ -63,23 +66,7 @@
       <details class="advanced">
         <summary>Advanced options</summary>
         <p class="hint">Leave these on "Follow the workbook" unless you want to override what its Instructions sheet says for this run only.</p>
-        <label>Language working window
-          <select name="language_window">
-            <option value="workbook" selected>Follow the workbook</option>
-            <option value="OFF">Off</option><option value="MINIMUM_ROWS">Minimum rows</option>
-            <option value="ALL_ROWS">All rows</option><option value="REQUIRED_LANGUAGE_ONLY">Required language only</option>
-          </select></label>
-        <label>Coverage measure
-          <select name="coverage_measure">
-            <option value="workbook" selected>Follow the workbook</option>
-            <option value="INTERVAL_COUNT">Interval count (interval compliance)</option>
-            <option value="VOLUME_WEIGHTED">Volume weighted (service level)</option>
-          </select></label>
-        <label>What to build
-          <select name="stage">
-            <option value="FULL_SCHEDULE" selected>Full schedule with breaks</option>
-            <option value="BEFORE_BREAKS_ONLY">Before breaks only</option>
-          </select></label>
+        {{ advanced_options() }}
       </details>
       <button class="primary" type="submit">Check and run</button>
     </form>

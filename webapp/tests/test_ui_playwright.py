@@ -700,7 +700,7 @@ class TheRunDetailsInTheBrowser(unittest.TestCase):
         page.on("pageerror", lambda e: errors.append(str(e)))
         self.sign_in(page)
         starts = page.locator("select[name=week_start]")
-        page.locator("input[name=program]").fill("NMG")  # NMG starts on Mondays: its Monday is preselected
+        page.locator("select[name=program]").select_option("NMG")  # NMG starts on Mondays: its Monday is preselected
         self.assertEqual(starts.locator("option:checked").get_attribute("data-day"), "1")
         starts.scroll_into_view_if_needed()
         page.locator("form:has(select[name=week_start])").screenshot(path=str(P_SCREENS / "upload_start_date.png"))

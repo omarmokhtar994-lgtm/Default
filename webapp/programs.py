@@ -52,7 +52,8 @@ class ProgramBook:
             except ValueError:
                 options = {}
             out.append({"id": p["id"], "name": p["name"], "key": p["key"], "start_day": p["start_day"],
-                        "run_mode": p["run_mode"], "options": options, "lobs": mine, "units": units})
+                        "run_mode": p["run_mode"], "options": options, "saved": bool(p["options"]),
+                        "lobs": mine, "units": units})
         return out
 
     def program(self, program_id: int) -> Dict[str, Any]:

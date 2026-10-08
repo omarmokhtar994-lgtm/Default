@@ -728,3 +728,12 @@ body.wall { background: var(--night); color: var(--paper); padding: 2vh 2.5vw; m
 .role { display: inline-block; border: 1px solid var(--rail); border-radius: 4px; padding: 1px 8px; font-size: 13px; }
 .role-supervisor { border-color: var(--over); color: var(--over); }
 .role-admin { border-color: var(--short); color: var(--short-ink); }
+
+/* programs and LOBs */
+.setup-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }
+@media (max-width: 900px) { .setup-cols { grid-template-columns: minmax(0, 1fr); } }
+.setup-program h3 { font-size: 18px; margin: 4px 0 10px; }
+.setup-lobs { list-style: none; padding: 0; margin: 0 0 10px; }
+.setup-lobs li { padding: 6px 0; border-bottom: 1px solid var(--rail); }
+.setup-lobs small { color: var(--dim); margin-left: 6px; }
+.setup-defaults label { display: block; max-width: 360px; }

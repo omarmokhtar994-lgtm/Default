@@ -74,3 +74,15 @@
 <small class="chg {{ 'up' if delta > 0 else 'down' if delta < 0 else 'flat' }} {{ mood }}">{% if delta > 0 %}up {{ delta|num }}{{ unit }}{% elif delta < 0 %}down {{ (-delta)|num }}{{ unit }}{% else %}unchanged{% endif %}</small>
 {%- endif -%}
 {%- endmacro %}
+
+{# The run options a workbook's Instructions can be overridden with (upload form, program defaults). #}
+{% macro advanced_options(values={}) -%}
+  {% set fields = [
+    ("language_window", "Language working window", [("workbook", "Follow the workbook"), ("OFF", "Off"), ("MINIMUM_ROWS", "Minimum rows"), ("ALL_ROWS", "All rows"), ("REQUIRED_LANGUAGE_ONLY", "Required language only")]),
+    ("coverage_measure", "Coverage measure", [("workbook", "Follow the workbook"), ("INTERVAL_COUNT", "Interval count (interval compliance)"), ("VOLUME_WEIGHTED", "Volume weighted (service level)")]),
+    ("stage", "What to build", [("FULL_SCHEDULE", "Full schedule with breaks"), ("BEFORE_BREAKS_ONLY", "Before breaks only")]),
+  ] %}
+  {% for name, label, choices in fields %}<label>{{ label }}
+    <select name="{{ name }}">{% for value, text in choices %}<option value="{{ value }}"{% if values.get(name, choices[0][0]) == value %} selected{% endif %}>{{ text }}</option>{% endfor %}</select></label>
+  {% endfor %}
+{%- endmacro %}

@@ -561,30 +561,43 @@
   setTimeout(poll, 1500);
 })();
 
-// The upload form's start date: picking a known program preselects the next
-// date on that program's usual first weekday (Sunday or Monday), until the
-// person picks a date themselves.
+// The upload form: picking a program (and LOB) fills in what its program starts
+// from: the first weekday (Sunday or Monday), the run length and the advanced
+// options; a date or option the person picked themselves is kept.
 (function () {
   "use strict";
+  var pick = document.querySelector("select[data-program-pick]");
   var select = document.querySelector("select[name=week_start][data-start-days]");
-  var program = document.querySelector("input[name=program]");
-  if (!select || !program) { return; }
-  var usual = {};
-  try { usual = JSON.parse(select.getAttribute("data-start-days") || "{}"); } catch (e) { usual = {}; }
+  if (!pick || !select) { return; }
+  var form = pick.form;
+  var touched = {};
+  Array.prototype.forEach.call(form.querySelectorAll("select, input[type=radio]"), function (el) {
+    if (el !== pick) { el.addEventListener("change", function () { touched[el.name] = true; }); }
+  });
   var from = select.getAttribute("data-today") || "";
-  var touched = false;
-  select.addEventListener("change", function () { touched = true; });
-  function follow() {
-    if (touched || !Object.prototype.hasOwnProperty.call(usual, program.value)) { return; }
-    var day = String(usual[program.value]);
-    var current = select.value || from;
-    var around = new Date(current + "T00:00:00");
-    var options = Array.prototype.slice.call(select.options);
-    var pick = options.filter(function (o) {
-      return o.getAttribute("data-day") === day && o.value && Math.abs(new Date(o.value + "T00:00:00") - around) < 4 * 86400000;
-    })[0];
-    if (pick) { select.value = pick.value; }
+  function defaults() {
+    var option = pick.options[pick.selectedIndex];
+    var group = option && option.parentNode.tagName === "OPTGROUP" ? option.parentNode : null;
+    try { return JSON.parse((group && group.getAttribute("data-defaults")) || "{}"); } catch (e) { return {}; }
   }
-  program.addEventListener("change", follow);
-  program.addEventListener("input", follow);
+  function apply() {
+    var d = defaults();
+    if (d.start_day !== undefined && !touched.week_start) {
+      var around = new Date((select.value || from) + "T00:00:00");
+      var hit = Array.prototype.filter.call(select.options, function (o) {
+        return o.getAttribute("data-day") === String(d.start_day) && o.value &&
+          Math.abs(new Date(o.value + "T00:00:00") - around) < 4 * 86400000;
+      })[0];
+      if (hit) { select.value = hit.value; }
+    }
+    if (d.run_mode && !touched.mode) {
+      var radio = form.querySelector("input[name=mode][value=" + d.run_mode + "]");
+      if (radio) { radio.checked = true; }
+    }
+    Object.keys(d.options || {}).forEach(function (name) {
+      var field = form.querySelector("select[name=" + name + "]");
+      if (field && !touched[name]) { field.value = d.options[name]; }
+    });
+  }
+  pick.addEventListener("change", apply);
 })();

@@ -25,6 +25,7 @@ from .handover import note as handover_note
 from .exports import KINDS as EXPORT_KINDS, build as build_export
 from .outcome import cannot_schedule, read as read_outcome, view as outcome_view
 from .access import Access, role
+from .programs import ProgramBook
 from .auth import admin_required, check_csrf, csrf_token, load_user, login_required, manager_required
 from .program_page import build, overview, weeks_to_show
 from .run_admin import apply_rename, apply_run_change, preview_rename, preview_run_change
@@ -500,13 +501,31 @@ def create_app(config: Dict[str, Any]) -> Flask:
         latest = next((r for r in runs if r["status"] in ("DONE", "REVIEW") and summaries.get(r["id"])), None)
         known = sorted({r["program"] for r in runs if r.get("program")}, key=str.lower)
         prefill = start_date(request.args.get("week", "")) or next_sunday()
-        return render_template("dashboard.html", runs=runs, queue=queue, plan=plan, summaries=summaries,
+        upload_programs, upload_keys = _upload_choices(runs)
+        return render_template("dashboard.html", upload_programs=upload_programs, upload_keys=upload_keys, runs=runs, queue=queue, plan=plan, summaries=summaries,
                                active=active, waiting=waiting, latest=latest,
                                latest_summary=summaries.get(latest["id"]) if latest else None,
                                now=time.time(), known_programs=known,
                                prefill_program=clean_program(request.args.get("program", "")),
                                prefill_week=prefill, start_options=start_choices(prefill, prefill),
                                usual_start=usual_start_days(runs))
+
+    def _upload_choices(runs: list) -> Tuple[list, set]:
+        """New schedule is open to everyone for any program: each program with its LOBs, and the defaults
+        it starts from (a program's saved defaults, else the weekday its schedules usually start on)."""
+        book = ProgramBook(app.extensions["store"])
+        book.sync()
+        usual = usual_start_days(runs)
+        out, keys = [], set()
+        for p in book.tree():
+            choices = [(l["key"], l["name"]) for l in p["lobs"]]
+            if p["key"] in p["units"]:
+                choices.append((p["key"], p["name"] if not p["lobs"] else f"{p['name']} (whole program)"))
+            keys |= {k for k, _ in choices}
+            defaults = ({"start_day": p["start_day"], "run_mode": p["run_mode"], "options": p["options"]}
+                        if p["saved"] else ({"start_day": usual[p["key"]]} if p["key"] in usual else {}))
+            out.append({"name": p["name"], "choices": choices, "defaults": defaults})
+        return out, keys
 
     # ------------------------------------------------------------- runs
     def _queue() -> RunQueue:
@@ -588,6 +607,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                why=outcome_view(found) if found else None,
                                eta=_plan(store.list_runs()).get(run_id), now=time.time(), people=people,
                                start_options=start_choices(run["week_start"], run["week_start"]),
+                               unit_label=ProgramBook(store).label(run["program"]) if run["program"] else "",
                                known_programs=sorted({r["program"] for r in store.list_runs(limit=100000)
                                                       if r["program"]}, key=str.lower), **extra)
 
@@ -677,6 +697,57 @@ def create_app(config: Dict[str, Any]) -> Flask:
         except ValueError as exc:
             flash(str(exc))
         return redirect(url_for("run_detail", run_id=run_id))
+
+    ADVANCED_DEFAULTS = {"language_window": "workbook", "coverage_measure": "workbook", "stage": "FULL_SCHEDULE"}
+
+    @app.route("/setup/programs", methods=["GET", "POST"])
+    @admin_required
+    def program_setup():  # type: ignore[no-untyped-def]
+        """Programs and LOBs: add them, put an existing name in a program as a LOB, and set the defaults a
+        new schedule starts from. Keys never change, so nothing stored is rewritten."""
+        store = app.extensions["store"]
+        book = ProgramBook(store)
+        book.sync()
+        if request.method == "POST":
+            action, name = request.form.get("action", ""), request.form.get("name", "")
+            pid = request.form.get("program_id", type=int)
+            try:
+                if action == "add_program":
+                    book.add_program(name)
+                    said = f"Added program {' '.join(name.split())}."
+                elif action == "add_lob":
+                    said = f"Added LOB {book.add_lob(pid, name)}."
+                elif action == "adopt":
+                    key = request.form.get("key", "")
+                    book.adopt(key, pid, name)
+                    said = f"{key} is now {book.label(key)}."
+                elif action == "defaults":
+                    options = {k: request.form.get(k) for k, plain in ADVANCED_DEFAULTS.items()
+                               if request.form.get(k) and request.form.get(k) != plain}
+                    book.set_defaults(pid, request.form.get("start_day", type=int, default=-1),
+                                      request.form.get("run_mode", ""), options)
+                    said = f"Saved the defaults for {book.program(pid)['name']}."
+                elif action == "rename_program":
+                    book.rename(pid, None, name)
+                    said = f"Renamed to {book.program(pid)['name']}."
+                elif action == "rename_lob":
+                    book.rename(None, request.form.get("lob_id", type=int), name)
+                    said = "Renamed the LOB."
+                else:
+                    abort(400)
+                _record("program_set_up", subject=request.form.get("key") or name, detail=said)
+                flash(said)
+            except ValueError as exc:
+                flash(str(exc))
+            return redirect(url_for("program_setup"))
+        tree = book.tree()
+        people = {p["id"]: [] for p in tree}
+        for u in store.list_users():
+            for pid in store.user_program_ids(u["id"]):
+                people.setdefault(pid, []).append(u["display_name"] + (" (supervisor)" if u["is_supervisor"] else ""))
+        loose = [p for p in tree if not p["lobs"]]  # names that can be put in a program as a LOB
+        return render_template("program_setup.html", programs=tree, people=people, loose=loose, modes=MODES,
+                               days=["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"])
 
     @app.route("/programs/rename", methods=["POST"])
     @admin_required

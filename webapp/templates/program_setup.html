@@ -1,0 +1,48 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{% extends "base.html" %}{% from "_macros.html" import advanced_options with context %}
+{% block title %}Programs and LOBs on Team Scheduler{% endblock %}
+{% block content %}
+{% set run_names = {"QUICK": "Quick, about 1 hour", "DEEP": "Deep, about 2 hours", "OVERNIGHT": "Overnight, about 3 hours", "SMOKE": "Readiness check"} %}
+<div class="phead"><div>
+  <h1>Programs and LOBs</h1>
+  <p class="byline">Each program keeps its LOBs and the defaults a new schedule starts from. Names you change here change everywhere; what is stored is not touched.</p>
+</div></div>
+<section class="panel setup-add" aria-labelledby="addp-h">
+  <h2 id="addp-h">Add a program</h2>
+  <form method="post" class="tagrow"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="add_program">
+    <label>Program name <input name="name" maxlength="80" required placeholder="For example AE"></label>
+    <button type="submit">Add program</button></form>
+</section>
+{% for p in programs %}
+<section class="panel setup-program" aria-labelledby="p{{ p.id }}-h">
+  <h2 id="p{{ p.id }}-h">{{ p.name }}</h2>
+  <div class="setup-cols">
+    <div>
+      <h3>LOBs</h3>
+      {% if p.lobs %}<ul class="setup-lobs">{% for l in p.lobs %}<li><b>{{ l.name }}</b> <small>{{ l.key }}</small>
+        <details class="advanced"><summary>Rename</summary><form method="post" class="tagrow"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="rename_lob"><input type="hidden" name="lob_id" value="{{ l.id }}"><label>New name <input name="name" maxlength="80" required value="{{ l.name }}"></label><button>Rename</button></form></details></li>{% endfor %}</ul>
+      {% else %}<p class="empty">No LOBs: the program is scheduled as one.</p>{% endif %}
+      <form method="post" class="tagrow"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="add_lob"><input type="hidden" name="program_id" value="{{ p.id }}">
+        <label>New LOB <input name="name" maxlength="80" required></label><button>Add LOB</button></form>
+      {% set others = loose|rejectattr('id', 'equalto', p.id)|list %}
+      {% if others %}<form method="post" class="tagrow"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="adopt"><input type="hidden" name="program_id" value="{{ p.id }}">
+        <label>Put an existing name here <select name="key">{% for o in others %}<option value="{{ o.key }}">{{ o.name }}</option>{% endfor %}</select></label>
+        <label>as LOB <input name="name" maxlength="80" required></label><button>Put it here</button></form>
+        <p class="hint">Its runs, schedules and day records stay as they are; they now show as {{ p.name }} and that LOB.</p>{% endif %}
+    </div>
+    <div>
+      <h3>Defaults for a new schedule</h3>
+      <form method="post" class="setup-defaults"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="defaults"><input type="hidden" name="program_id" value="{{ p.id }}">
+        <label>Schedule starts on <select name="start_day">{% for d in days %}<option value="{{ loop.index0 }}"{% if loop.index0 == p.start_day %} selected{% endif %}>{{ d }}</option>{% endfor %}</select></label>
+        <label>Run length <select name="run_mode">{% for m in modes %}<option value="{{ m }}"{% if m == p.run_mode %} selected{% endif %}>{{ run_names.get(m, m) }}</option>{% endfor %}</select></label>
+        <details class="advanced"><summary>Advanced options</summary>{{ advanced_options(p.options) }}</details>
+        <button type="submit">Save defaults</button>{% if not p.saved %} <small>Not saved yet: new schedules start from the day its runs usually start on.</small>{% endif %}
+      </form>
+      <h3>People on {{ p.name }}</h3>
+      <p>{{ people.get(p.id)|join(', ') or 'Nobody yet.' }} <a href="{{ url_for('admin_users') }}">People</a></p>
+      <details class="advanced"><summary>Rename {{ p.name }}</summary><form method="post" class="tagrow"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="rename_program"><input type="hidden" name="program_id" value="{{ p.id }}"><label>New name <input name="name" maxlength="80" required value="{{ p.name }}"></label><button>Rename</button></form></details>
+    </div>
+  </div>
+</section>
+{% else %}<p class="empty panel">No programs yet. Add one above, or upload a schedule with a program name.</p>{% endfor %}
+{% endblock %}

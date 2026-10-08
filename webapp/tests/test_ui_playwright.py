@@ -328,7 +328,8 @@ class TheProgramPagesInTheBrowser(unittest.TestCase):
     def test_program_analytics_page(self):
         page = self.page(height=900)
         self.sign_in(page)
-        page.get_by_role("link", name="Programs").click()
+        # re-pinned (Phase R): Home also links "Show all my programs", so the menu's link is matched exactly
+        page.get_by_role("link", name="Programs", exact=True).click()
         expect(page.get_by_role("heading", name="Programs")).to_be_visible()
         page.wait_for_timeout(600)  # the page-to-page crossfade
         page.screenshot(path=str(K_SCREENS / "01_programs.png"), full_page=True)
@@ -726,11 +727,18 @@ class TheRunDetailsInTheBrowser(unittest.TestCase):
         self.assertEqual(self.store.get_run(self.run_id)["week_start"], "2026-10-11")  # nothing changed
         page.get_by_role("link", name="AE/AR B2B").first.click()
         page.wait_for_load_state("load")
-        page.get_by_text("Rename or merge this program").click()
-        page.locator("input[name=new]").fill("AE-AR B2B")
+        # re-pinned (Phase R): a program's data moves into a program or LOB picked from the list; typing a new
+        # name made stray programs (owner, 2026-10-08). Display names change under LOBs and defaults.
+        from webapp.programs import ProgramBook
+        book = ProgramBook(self.store)
+        target = book.add_lob(book.add_program("AE"), "AR B2B")
+        page.reload()
+        page.wait_for_load_state("load")
+        page.get_by_text("Move this program into another program or LOB").click()
+        page.locator("select[name=new]").select_option(target)
         page.get_by_role("button", name="Check what moves").click()
         page.wait_for_load_state("load")
-        expect(page.locator("h1")).to_have_text("Rename AE/AR B2B to AE-AR B2B")
+        expect(page.locator("h1")).to_have_text("Move AE/AR B2B into AE, AR B2B")
         page.wait_for_timeout(600)  # let the page-to-page crossfade finish before the screenshot
         page.screenshot(path=str(P_SCREENS / "program_rename.png"), full_page=True)
         self.assertEqual(errors, [])

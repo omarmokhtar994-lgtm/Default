@@ -61,6 +61,22 @@ class TheAdherence(unittest.TestCase):
         self.assertEqual((unbillable["aux_unbillable"], unbillable["worked"]),
                          (30, interval["worked"] - 30))
 
+    def test_a_booked_meeting_counts_like_aux(self):
+        person, span = someone(WED, 20 * 60)
+        acts = {(0, person["name"]): [{"kind": "Meeting", "start": 20 * 60, "end": 20 * 60 + 30, "billable": False}]}
+        row = person_day(day_view(WEEK, INPUTS, WED, {}, {}, activities=acts), person["name"])
+        self.assertEqual((row["aux_unbillable"], row["out_of_schedule"]), (30, 30))
+        self.assertEqual(row["worked"], row["scheduled_work"] - 30)
+
+    def test_vto_and_overtime_are_reported_apart(self):
+        person, span = someone(WED, 20 * 60)
+        acts = {(0, person["name"]): [{"kind": "VTO", "start": span[1] - 60, "end": span[1], "billable": False},
+                                      {"kind": "Overtime", "start": span[0] - 60, "end": span[0], "billable": True}]}
+        row = person_day(day_view(WEEK, INPUTS, WED, {}, {}, activities=acts), person["name"])
+        self.assertEqual((row["vto"], row["overtime"]), (60, 60))
+        self.assertEqual(row["scheduled"], span[1] - span[0] - 60)  # agreed time off leaves the schedule
+        self.assertEqual((row["adherence"], row["conformance"]), (100, 100))
+
     def test_absence_has_no_percentages_and_the_team_leaves_it_out(self):
         person, span = someone(WED, 20 * 60)
         v = view({(0, person["name"]): {"status": "Unplanned leave"}})

@@ -30,13 +30,23 @@ def person_day(view: Dict[str, Any], name: str) -> Dict[str, Any]:
     planned = [(b["planned_start"], b["planned_start"] + b["minutes"]) for b in seg["breaks"]]
     taken = [(b["start"], b["start"] + b["minutes"]) for b in seg["breaks"]]
     status, (lo, hi) = seg["status"], seg["away"]
-    billable_counts = seg["billable"] and view["measure"] == "interval"
+    interval = view["measure"] == "interval"
+    billable_counts = seg["billable"] and interval
+    acts = seg.get("activities", [])
+    vto = [(a["start"], a["end"]) for a in acts if a["kind"] == "VTO"]
+    aux = [a for a in acts if a["kind"] in AUX]
     out = {"name": name, "shift": seg["label"], "status": status, "billable": seg["billable"], "scheduled": 0,
            "worked": 0, "late": 0, "early": 0, "absent": 0, "aux_billable": 0, "aux_unbillable": 0,
-           "breaks_planned": sum(b - a for a, b in planned), "breaks_taken": 0, "out_of_schedule": 0}
+           "breaks_planned": 0, "breaks_taken": 0, "out_of_schedule": 0,
+           "vto": 0, "overtime": 0}
     for t in range(seg["start"], seg["end"], STEP):
+        if status not in ABSENT and any(a <= t < b for a, b in vto):
+            out["vto"] += STEP  # agreed time off: out of the schedule, not against it
+            continue
         out["scheduled"] += STEP
+        booked = next((a for a in aux if a["start"] <= t < a["end"]), None)
         due = "break" if any(a <= t < b for a, b in planned) else "work"
+        out["breaks_planned"] += STEP if due == "break" else 0
         if status in ABSENT:
             now = "away"
             out["absent"] += STEP
@@ -49,12 +59,18 @@ def person_day(view: Dict[str, Any], name: str) -> Dict[str, Any]:
         elif status in AUX and lo <= t < hi:
             now = "work" if billable_counts else "aux"
             out["aux_billable" if seg["billable"] else "aux_unbillable"] += STEP
+        elif booked is not None:
+            now = "work" if booked.get("billable") and interval else "aux"
+            out["aux_billable" if booked.get("billable") else "aux_unbillable"] += STEP
         else:
             now = "work"
         if now == "work":
             out["worked"] += STEP
         if now != due:
             out["out_of_schedule"] += STEP
+    if status not in ABSENT:
+        out["overtime"] = sum(max(0, min(a["end"], seg["start"]) - a["start"]) + max(0, a["end"] - max(a["start"], seg["end"]))
+                              for a in acts if a["kind"] == "Overtime")
     out["scheduled_work"] = out["scheduled"] - out["breaks_planned"]
     gone = status in ABSENT
     out["adherence"] = None if gone else _pct(out["scheduled"] - out["out_of_schedule"], out["scheduled"])

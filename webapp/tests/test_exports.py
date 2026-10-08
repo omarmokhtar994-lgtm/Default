@@ -112,6 +112,14 @@ class TheExports(unittest.TestCase):
         self.assertEqual((row["Late min"], row["Adherence %"], row["Conformance %"]),
                          (expected["late"], expected["adherence"], expected["conformance"]))
 
+    def test_activities_tab(self):
+        self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Training", "15:00", "16:00", self.lina, billable=True)
+        self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Overtime", "21:00", "22:00", self.sara)
+        data, *_ = self.export(kinds=["activities"])
+        rows = self.sheet(data, "Activities")
+        self.assertEqual([(r["Activity"], r["From"], r["To"], r["Minutes"], r["Billable"], r["Recorded by"]) for r in rows],
+                         [("Training", "15:00", "16:00", 60, "Yes", "Lina"), ("Overtime", "21:00", "22:00", 60, "Yes", "Sara")])
+
     def test_text_is_never_a_formula(self):
         self.book.change(self.tool["id"], self.lina, "Associate 002", "Sun", "OFF", '=HYPERLINK("http://x","click")')
         today = date.today()

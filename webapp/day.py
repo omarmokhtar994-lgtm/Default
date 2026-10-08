@@ -233,11 +233,15 @@ def check_break(week: Dict[str, Any], day: int, offset: int, name: str, idx: int
 
 def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
              attendance: Dict[Tuple[int, str], Dict[str, Any]],
-             actual: Dict[Tuple[int, str, int], int], measure: str = "interval") -> Dict[str, Any]:
-    """The day's lanes, interval cells, language rows and tiles. ``attendance`` and
-    ``actual`` are keyed by (day offset, name[, break index]): 0 for this day's
-    shifts, -1 for the previous day's; times are minutes from that shift's own
-    midnight. ``measure`` is "interval" (billable aux stays on the floor) or "sl"."""
+             actual: Dict[Tuple[int, str, int], int], measure: str = "interval",
+             activities: Optional[Dict[Tuple[int, str], List[Dict[str, Any]]]] = None) -> Dict[str, Any]:
+    """The day's lanes, interval cells, language rows and tiles. ``attendance``,
+    ``actual`` and ``activities`` are keyed by (day offset, name[, break index]):
+    0 for this day's shifts, -1 for the previous day's; times are minutes from that
+    shift's own midnight. ``measure`` is "interval" (billable aux stays on the
+    floor) or "sl". Activities: aux kinds (off the floor unless billable under
+    interval compliance), "VTO" (off the floor) and "Overtime" (on the floor
+    outside the shift; not in the plan)."""
     if measure not in MEASURES:
         raise ValueError(f"unknown measure {measure!r}")
     step = inputs["interval"]
@@ -252,6 +256,11 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
         billable = status in AUX and bool(mark.get("billable"))
         away = _away(seg, mark)
         counts_away = not (billable and measure == "interval")
+        acts = [{**a, "start": a["start"] + 1440 * seg["offset"], "end": a["end"] + 1440 * seg["offset"]}
+                for a in (activities or {}).get((seg["offset"], seg["name"]), [])]
+        off = [(a["start"], a["end"]) for a in acts
+               if a["kind"] == "VTO" or (a["kind"] in AUX and not (a.get("billable") and measure == "interval"))]
+        extra = [(a["start"], a["end"]) for a in acts if a["kind"] == "Overtime"]
         breaks = []
         for b in seg["planned"]:
             moved = actual.get((seg["offset"], seg["name"], b["idx"]))
@@ -259,21 +268,23 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
             breaks.append({**b, "planned_start": b["start"], "start": start, "moved": moved is not None})
         for i in range(slots):
             t = i * STEP
-            if not seg["start"] <= t < seg["end"]:
+            in_shift = seg["start"] <= t < seg["end"]
+            if not in_shift and not any(a <= t < b for a, b in extra):
                 continue
-            if not any(b["planned_start"] <= t < b["planned_start"] + b["minutes"] for b in breaks):
+            if in_shift and not any(b["planned_start"] <= t < b["planned_start"] + b["minutes"] for b in breaks):
                 plan[i].append(seg)
-            if any(b["start"] <= t < b["start"] + b["minutes"] for b in breaks):
+            if status in ABSENT or any(b["start"] <= t < b["start"] + b["minutes"] for b in breaks):
                 continue
-            if counts_away and away[0] <= t < away[1]:
+            if (counts_away and away[0] <= t < away[1]) or any(a <= t < b for a, b in off):
                 continue
             now[i].append(seg)
-        pieces.append((seg, status, away, breaks))
+        pieces.append((seg, status, away, breaks, acts))
         lane = lanes.setdefault(seg["name"], {"name": seg["name"], "slot": seg["slot"], "language": seg["language"],
                                               "segments": []})
         lane["segments"].append({"offset": seg["offset"], "label": seg["label"], "start": seg["start"],
                                  "end": seg["end"], "status": status, "billable": billable,
-                                 "from": mark.get("from"), "to": mark.get("to"), "away": away, "breaks": breaks})
+                                 "from": mark.get("from"), "to": mark.get("to"), "away": away, "breaks": breaks,
+                                 "activities": acts})
 
     def overlapping(lo: int, hi: int, t: int) -> bool:
         return lo < t + step and t < hi
@@ -286,13 +297,19 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
         ticks = [len(now[i]) for i in idx]
         here = sum(ticks) / len(ticks)
         planned_here = sum(len(plan[i]) for i in idx) / len(idx)
-        counts = {"absent": sum(1 for seg, st, away, br in pieces if st in ABSENT and overlapping(seg["start"], seg["end"], t)),
-                  "aux": sum(1 for seg, st, away, br in pieces if st in AUX and away[0] < away[1]
-                             and overlapping(away[0], away[1], t)),
-                  "late_early": sum(1 for seg, st, away, br in pieces if st in LATE_EARLY and away[0] < away[1]
+        counts = {"absent": sum(1 for seg, st, away, br, ac in pieces if st in ABSENT
+                                and overlapping(seg["start"], seg["end"], t)),
+                  "aux": sum(1 for seg, st, away, br, ac in pieces
+                             if (st in AUX and away[0] < away[1] and overlapping(away[0], away[1], t))
+                             or any(a["kind"] in AUX and overlapping(a["start"], a["end"], t) for a in ac)),
+                  "late_early": sum(1 for seg, st, away, br, ac in pieces if st in LATE_EARLY and away[0] < away[1]
                                     and overlapping(away[0], away[1], t)),
-                  "breaks": sum(1 for seg, st, away, br in pieces if st not in ABSENT
-                                and any(overlapping(b["start"], b["start"] + b["minutes"], t) for b in br))}
+                  "breaks": sum(1 for seg, st, away, br, ac in pieces if st not in ABSENT
+                                and any(overlapping(b["start"], b["start"] + b["minutes"], t) for b in br)),
+                  "overtime": sum(1 for seg, st, away, br, ac in pieces
+                                  if any(a["kind"] == "Overtime" and overlapping(a["start"], a["end"], t) for a in ac)),
+                  "vto": sum(1 for seg, st, away, br, ac in pieces
+                             if any(a["kind"] == "VTO" and overlapping(a["start"], a["end"], t) for a in ac))}
         cell = {"t": t, "required": r, "plan": round(planned_here, 1), "now": round(here, 1), "slots": ticks,
                 "low": min(ticks), **counts}
         if r <= 0:
@@ -321,16 +338,21 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
             cls = "bad" if count < rule["minimum"] else ("warn" if count == 0 else "lok")
             row.append({"t": t, "count": count, "cls": cls})
         languages.append({"name": rule["name"], "start": rule["start"], "end": rule["end"], "minimum": rule["minimum"],
-                          "cells": row, "gaps": sum(1 for c in row if c["cls"] in ("bad", "warn"))})
-    mine = [(seg, st) for seg, st, away, br in pieces if seg["offset"] == 0]
+                          "eligible": sorted(eligible), "cells": row,
+                          "gaps": sum(1 for c in row if c["cls"] in ("bad", "warn"))})
+    mine = [(seg, st) for seg, st, away, br, ac in pieces if seg["offset"] == 0]
+    with_aux = sum(1 for seg, st, away, br, ac in pieces if seg["offset"] == 0
+                   and (st in AUX or any(a["kind"] in AUX for a in ac)))
     absent = sum(1 for seg, st in mine if st in ABSENT)
     short = sum(-c["pm"] for c in cells if c["pm"] is not None and c["pm"] < 0)
     plan_short = sum(-c["plan_pm"] for c in cells if c["plan_pm"] is not None and c["plan_pm"] < 0)
     over = sum(c["pm"] for c in cells if c["pm"] is not None and c["pm"] > 0)
     tiles = {"planned": len(mine), "present": len(mine) - absent, "absent": absent,
              "late_early": sum(1 for seg, st in mine if st in LATE_EARLY),
-             "aux": sum(1 for seg, st in mine if st in AUX),
-             "moved": sum(1 for seg, st, away, br in pieces for b in br if b["moved"]),
+             "aux": with_aux,
+             "moved": sum(1 for seg, st, away, br, ac in pieces for b in br if b["moved"]),
+             "overtime": sum(a["end"] - a["start"] for seg, st, away, br, ac in pieces for a in ac if a["kind"] == "Overtime"),
+             "vto": sum(a["end"] - a["start"] for seg, st, away, br, ac in pieces for a in ac if a["kind"] == "VTO"),
              "short_hours": round(short, 1), "plan_short_hours": round(plan_short, 1),
              "short_intervals": sum(1 for c in cells if c["pm"] is not None and c["pm"] < 0),
              "over_hours": round(over, 1), "language_gaps": sum(l["gaps"] for l in languages)}
@@ -470,3 +492,141 @@ def board(view: Dict[str, Any]) -> List[Dict[str, Any]]:
                      "lunch": sorted(lunch, key=lambda x: x["start"]), "short": sorted(short, key=lambda x: x["start"]),
                      "events": events, "langs": langs})
     return rows
+
+
+# ---------------------------------------------------------------- meetings, overtime and VTO (Phase O)
+MEETING_MARGIN = 10  # minutes kept clear before and after a break
+OVERTIME_MAX = 120  # minutes of overtime offered next to a shift
+
+
+def _own(view: Dict[str, Any], name: str) -> Optional[Dict[str, Any]]:
+    return next((s for l in view["lanes"] if l["name"] == name for s in l["segments"] if s["offset"] == 0), None)
+
+
+def _busy(seg: Dict[str, Any], t: int, margin: int = 0) -> bool:
+    """On a break (with a margin), away, or in another activity at minute ``t``."""
+    if seg["status"] in ABSENT or not seg["start"] <= t < seg["end"]:
+        return True
+    if seg["away"][0] <= t < seg["away"][1]:
+        return True
+    if any(b["start"] - margin <= t < b["start"] + b["minutes"] + margin for b in seg["breaks"]):
+        return True
+    return any(a["start"] <= t < a["end"] for a in seg.get("activities", []) if a["kind"] != "Overtime")
+
+
+def _tightest(view: Dict[str, Any], slots: List[float], lo: int, hi: int) -> Optional[float]:
+    step = view["interval"]
+    found = []
+    for c in view["cells"]:
+        if c["required"] > 0 and c["t"] < hi and lo < c["t"] + step:
+            here = slots[c["t"] // STEP:(c["t"] + step) // STEP]
+            found.append((sum(here) / len(here) - c["required"]) * step / 60)
+    return min(found) if found else None
+
+
+def meeting_slots(view: Dict[str, Any], names: List[str], minutes: int, earliest: int, latest: int,
+                  billable: bool = False, top: int = 5) -> List[Dict[str, Any]]:
+    """The best start times (one per interval) when every person is on shift, present, not on a break
+    (10 minutes either side), away or in another activity, ranked by the floor's buffer at its
+    tightest once they are off the queue (a billable session under interval compliance keeps them on)."""
+    segs = {}
+    for name in names:
+        seg = _own(view, name)
+        if seg is None:
+            raise ValueError(f"{name} has no shift this day.")
+        segs[name] = seg
+    if minutes <= 0 or minutes % STEP:
+        raise ValueError("Pick a length in 5-minute steps.")
+    base = [x for c in view["cells"] for x in c["slots"]]
+    off_floor = 0 if (billable and view["measure"] == "interval") else len(names)
+    step = view["interval"]
+    best: Dict[int, Dict[str, Any]] = {}
+    for start in range(earliest + (-earliest) % STEP, latest - minutes + 1, STEP):
+        if any(_busy(seg, t, MEETING_MARGIN) for seg in segs.values() for t in range(start, start + minutes, STEP)):
+            continue
+        trial = list(base)
+        for t in range(start, start + minutes, STEP):
+            if 0 <= t < 1440:
+                trial[t // STEP] -= off_floor
+        tight = _tightest(view, trial, start, start + minutes)
+        score = tight if tight is not None else float("inf")
+        key = start - start % step
+        if key not in best or score > best[key]["score"]:
+            best[key] = {"start": start, "end": start + minutes, "tightest": tight, "score": score}
+    ranked = sorted(best.values(), key=lambda x: (-x["score"], x["start"]))[:top]
+    return [{k: v for k, v in x.items() if k != "score"} for x in ranked]
+
+
+def overtime_offers(view: Dict[str, Any], week: Dict[str, Any], day: int, rest_hours: float = 12,
+                    after: int = 0) -> List[Dict[str, Any]]:
+    """For each short interval (from ``after``): people present that day whose shift ends just
+    before it or starts just after it, offered to stay on or come in early (at most 2 hours),
+    keeping the rest gap to the previous and next day's shifts; the shortest offers first."""
+    step = view["interval"]
+    rest = int(rest_hours * 60)
+    out = []
+    for c in view["cells"]:
+        if c["pm"] is None or c["pm"] >= 0 or c["t"] < after:
+            continue
+        t, offers = c["t"], []
+        for a in week.get("associates", []):
+            seg = _own(view, a["name"])
+            if seg is None or seg["status"] != PRESENT or any(x["kind"] == "VTO" for x in seg.get("activities", [])):
+                continue
+            nxt = shift_span(a["days"][day + 1]) if day < 6 else None
+            prv = shift_span(a["days"][day - 1]) if day > 0 else None
+            if seg["end"] <= t and t + step - seg["end"] <= OVERTIME_MAX:
+                lo, hi = seg["end"], t + step
+            elif seg["start"] >= t + step and seg["start"] - t <= OVERTIME_MAX:
+                lo, hi = t, seg["start"]
+            else:
+                continue
+            if (nxt and nxt[0] + 1440 - hi < rest) or (prv and lo + 1440 - prv[1] < rest):
+                continue
+            if any(x["start"] < hi and lo < x["end"] for x in seg.get("activities", [])):
+                continue
+            offers.append({"name": a["name"], "start": lo, "end": hi,
+                           "text": f"stay {_hm(lo)} to {_hm(hi)}" if lo == seg["end"] else f"start {_hm(lo)} instead of {_hm(hi)}"})
+        offers.sort(key=lambda o: (o["end"] - o["start"], o["name"]))
+        out.append({"t": t, "buffer": c["pm"], "short": math.ceil(c["required"] - c["now"] - 1e-9), "offers": offers[:3]})
+    return out
+
+
+def vto_offers(view: Dict[str, Any], after: int = 0, top: int = 6) -> List[Dict[str, Any]]:
+    """Intervals comfortably above need (from ``after``): people present whose shift ends within 2 hours,
+    offered to leave at the start of the interval, while every interval until they would have left keeps
+    its need at every 5 minutes and every language keeps its minimum (and anyone it had)."""
+    step = view["interval"]
+    need = {c["t"]: c["need"] for c in view["cells"] if c["required"] > 0}
+    base = [x for c in view["cells"] for x in c["slots"]]
+    lang_of = {l["name"]: _norm(l["language"]) for l in view["lanes"]}
+    out = []
+    for c in view["cells"]:
+        t = c["t"]
+        if c["pm"] is None or c["low"] - c["need"] < 1 or t < after or len(out) >= top:
+            continue
+        candidates = sorted((seg["end"], l["name"]) for l in view["lanes"] for seg in l["segments"]
+                            if seg["offset"] == 0 and seg["status"] == PRESENT and seg["start"] < t < seg["end"]
+                            and seg["end"] - t <= OVERTIME_MAX and not seg.get("activities"))
+        trial, gone, taken = list(base), {}, []
+        for end, name in candidates:
+            ok = all(trial[x // STEP] - 1 >= need.get(x - x % step, 0) for x in range(t, min(end, 1440), STEP))
+            for lang in view["languages"]:
+                if lang_of.get(name) not in lang["eligible"]:
+                    continue
+                for cell in lang["cells"]:
+                    if cell["count"] is not None and t <= cell["t"] < end:
+                        left = cell["count"] - gone.get(lang["name"], 0) - 1
+                        if left < max(lang["minimum"], 1 if cell["count"] else 0):
+                            ok = False
+            if not ok:
+                continue
+            for x in range(t, min(end, 1440), STEP):
+                trial[x // STEP] -= 1
+            for lang in view["languages"]:
+                if lang_of.get(name) in lang["eligible"]:
+                    gone[lang["name"]] = gone.get(lang["name"], 0) + 1
+            taken.append({"name": name, "start": t, "end": end, "text": f"leave at {_hm(t)} instead of {_hm(end)}"})
+        if taken:
+            out.append({"t": t, "buffer": c["pm"], "room": c["low"] - c["need"], "offers": taken})
+    return out

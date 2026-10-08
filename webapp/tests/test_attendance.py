@@ -123,6 +123,49 @@ class TheAttendance(unittest.TestCase):
             self.days.page("AE/AR B2B", WED)
         self.assertIn("input workbook kept with Tool, after breaks is missing", str(said.exception))
 
+    def acts(self, name):
+        seg = self.lane(self.days.page("AE/AR B2B", WED), name)["segments"][0]
+        return [(a["kind"], a["start"], a["end"], a["billable"]) for a in seg["activities"]]
+
+    def test_activity_added_logged_and_cancelled(self):
+        made = self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Meeting", "15:00", "15:30", self.sara)
+        self.assertEqual(self.acts("Associate 001"), [("Meeting", 900, 930, False)])
+        self.assertEqual(self.days.page("AE/AR B2B", WED)["log"][-1]["what"], "Meeting 15:00 to 15:30 (non-billable)")
+        self.days.cancel_activity("AE/AR B2B", WED, made, self.sara)
+        self.assertEqual(self.acts("Associate 001"), [])
+        self.assertEqual(self.days.page("AE/AR B2B", WED)["log"][-1]["what"],
+                         "Cancelled: Meeting 15:00 to 15:30 (non-billable)")
+
+    def test_activity_rules(self):
+        with self.assertRaises(ValueError):  # Wednesday is 12:00 - 21:00
+            self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Training", "11:00", "12:00", self.sara)
+        self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Training", "15:00", "16:00", self.sara, billable=True)
+        with self.assertRaises(ValueError):  # on top of the training
+            self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Coaching", "15:30", "16:30", self.sara)
+        with self.assertRaises(ValueError):  # overtime must touch the shift
+            self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Overtime", "22:00", "23:00", self.sara)
+        with self.assertRaises(ValueError):  # at most 2 hours
+            self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Overtime", "21:00", "23:30", self.sara)
+        with self.assertRaises(ValueError):  # Tuesday 14:00 - 23:00: in at 09:00 leaves 10 hours' rest
+            self.days.add_activity("AE/AR B2B", WED, "Associate 013", "Overtime", "09:00", "11:00", self.sara)
+        with self.assertRaises(ValueError):  # Thursday 05:00 - 14:00: staying to 19:00 leaves 10 hours' rest
+            self.days.add_activity("AE/AR B2B", WED, "Associate 008", "Overtime", "17:00", "19:00", self.sara)
+        with self.assertRaises(ValueError):
+            self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Lunch party", "15:00", "16:00", self.sara)
+        self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Overtime", "21:00", "22:00", self.sara)
+        self.days.add_activity("AE/AR B2B", WED, "Associate 001", "VTO", "20:00", "21:00", self.sara)
+        self.assertEqual([a[0] for a in self.acts("Associate 001")], ["Training", "VTO", "Overtime"])
+
+    def test_booking_a_meeting_is_all_or_nothing(self):
+        slot = self.days.meeting_slots("AE/AR B2B", WED, ["Associate 001", "Associate 013"], 30, "13:00", "19:00")[0]
+        self.days.book_session("AE/AR B2B", WED, ["Associate 001", "Associate 013"], slot["start"], 30, "Training", self.sara,
+                       billable=True)
+        self.assertEqual(len(self.acts("Associate 001")), 1)
+        self.assertEqual(len(self.acts("Associate 013")), 1)
+        with self.assertRaises(ValueError):  # Associate 013 is now busy then: nobody is booked
+            self.days.book_session("AE/AR B2B", WED, ["Associate 012", "Associate 013"], slot["start"], 30, "Meeting", self.sara)
+        self.assertEqual(self.acts("Associate 012"), [])
+
     def test_unknown_status_or_person_refused(self):
         with self.assertRaises(ValueError):
             self.days.set_status("AE/AR B2B", WED, "Associate 001", "Holiday", self.sara)

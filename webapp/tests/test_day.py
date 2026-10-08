@@ -8,7 +8,7 @@ import math
 import unittest
 from pathlib import Path
 
-from webapp.day import BreakRefused, check_break, day_view, read_inputs
+from webapp.day import BreakRefused, check_break, day_view, meeting_slots, overtime_offers, read_inputs, vto_offers
 from webapp.versions import DAYS, read_week, shift_span
 
 REPO = Path(__file__).resolve().parents[2]
@@ -171,6 +171,85 @@ class TheDay(unittest.TestCase):
         self.assertEqual(len(cell["slots"]), 6)
         self.assertEqual(cell["low"], min(cell["slots"]))
         self.assertAlmostEqual(cell["now"], round(sum(cell["slots"]) / 6, 1))
+
+    def test_activities_take_people_off_the_floor(self):
+        person, span = someone(WED, 20 * 60)
+        plan = at(self.view(), "20:00")["plan"]
+        meeting = {(0, person["name"]): [{"kind": "Meeting", "start": 20 * 60, "end": 20 * 60 + 30, "billable": False}]}
+        self.assertEqual(at(day_view(WEEK, INPUTS, WED, {}, {}, activities=meeting), "20:00")["now"], plan - 1)
+        training = {(0, person["name"]): [{"kind": "Training", "start": 20 * 60, "end": 20 * 60 + 30, "billable": True}]}
+        self.assertEqual(at(day_view(WEEK, INPUTS, WED, {}, {}, activities=training), "20:00")["now"], plan)
+        self.assertEqual(at(day_view(WEEK, INPUTS, WED, {}, {}, measure="sl", activities=training), "20:00")["now"],
+                         plan - 1)
+        v = day_view(WEEK, INPUTS, WED, {}, {}, activities=meeting)
+        seg = next(s for l in v["lanes"] if l["name"] == person["name"] for s in l["segments"] if s["offset"] == 0)
+        self.assertEqual([(a["kind"], a["start"], a["end"]) for a in seg["activities"]], [("Meeting", 1200, 1230)])
+        self.assertEqual(at(v, "20:00")["aux"], 1)
+
+    def test_overtime_adds_floor_time_outside_the_shift(self):
+        person = next(a for a in WEEK["associates"] if (shift_span(a["days"][WED]) or (0, 0))[1] == 14 * 60)
+        before = at(self.view(), "14:00")
+        ot = {(0, person["name"]): [{"kind": "Overtime", "start": 14 * 60, "end": 15 * 60, "billable": True}]}
+        after = at(day_view(WEEK, INPUTS, WED, {}, {}, activities=ot), "14:00")
+        self.assertEqual((after["now"], after["plan"]), (before["now"] + 1, before["plan"]))
+
+    def test_vto_leaves_early(self):
+        person, span = someone(WED, 20 * 60)
+        vto = {(0, person["name"]): [{"kind": "VTO", "start": 20 * 60, "end": span[1], "billable": False}]}
+        v = day_view(WEEK, INPUTS, WED, {}, {}, activities=vto)
+        self.assertEqual(at(v, "20:00")["now"], at(self.view(), "20:00")["plan"] - 1)
+
+    def own(self, v, name):
+        return next(s for l in v["lanes"] if l["name"] == name for s in l["segments"] if s["offset"] == 0)
+
+    def test_meeting_slots_avoid_breaks_and_rank_by_the_tightest_buffer(self):
+        v = self.view()
+        team = [a["name"] for a in WEEK["associates"] if (shift_span(a["days"][WED]) or (0, 0))[0] == 17 * 60][:3]
+        slots = meeting_slots(v, team, 30, 17 * 60, 23 * 60)
+        self.assertTrue(slots)
+        self.assertEqual([x["tightest"] for x in slots], sorted((x["tightest"] for x in slots), reverse=True))
+        for x in slots:
+            self.assertEqual(x["start"] % 5, 0)
+            for name in team:
+                for b in self.own(v, name)["breaks"]:  # 10 minutes clear of every break
+                    self.assertTrue(x["end"] + 10 <= b["start"] or b["start"] + b["minutes"] + 10 <= x["start"], (name, x, b))
+        with self.assertRaises(ValueError):
+            meeting_slots(v, ["Nobody"], 30, 17 * 60, 23 * 60)
+
+    def test_a_booked_slot_is_no_longer_free(self):
+        team = [a["name"] for a in WEEK["associates"] if (shift_span(a["days"][WED]) or (0, 0))[0] == 17 * 60][:2]
+        first = meeting_slots(self.view(), team, 30, 17 * 60, 23 * 60)[0]
+        acts = {(0, n): [{"kind": "Meeting", "start": first["start"], "end": first["end"], "billable": False}] for n in team}
+        again = meeting_slots(day_view(WEEK, INPUTS, WED, {}, {}, activities=acts), team, 30, 17 * 60, 23 * 60)
+        self.assertFalse(any(x["start"] < first["end"] and first["start"] < x["end"] for x in again))
+
+    def test_overtime_only_next_to_short_intervals_and_inside_the_rules(self):
+        v = self.view({(0, someone(WED, 20 * 60)[0]["name"]): {"status": "Unplanned leave"}})
+        offers = overtime_offers(v, WEEK, WED, rest_hours=12)
+        short = {c["t"] for c in v["cells"] if c["pm"] is not None and c["pm"] < 0}
+        self.assertTrue(offers)
+        for row in offers:
+            self.assertIn(row["t"], short)
+            for o in row["offers"]:
+                seg = self.own(v, o["name"])
+                self.assertTrue(o["end"] == seg["start"] or o["start"] == seg["end"])  # next to the shift
+                self.assertLessEqual(o["end"] - o["start"], 120)
+                a = next(x for x in WEEK["associates"] if x["name"] == o["name"])
+                nxt, prv = shift_span(a["days"][WED + 1]), shift_span(a["days"][WED - 1])
+                if nxt:
+                    self.assertGreaterEqual(nxt[0] + 1440 - o["end"], 12 * 60)
+                if prv:
+                    self.assertGreaterEqual(o["start"] + 1440 - prv[1], 12 * 60)
+
+    def test_vto_keeps_need_and_languages(self):
+        v = self.view()
+        for row in vto_offers(v):
+            removed = {o["name"]: o for o in row["offers"]}
+            acts = {(0, n): [{"kind": "VTO", "start": o["start"], "end": o["end"], "billable": False}] for n, o in removed.items()}
+            after = day_view(WEEK, INPUTS, WED, {}, {}, activities=acts)
+            for c in after["cells"]:
+                if c["required"] > 0 and row["t"] <= c["t"] < max(o["end"] for o in row["offers"]):
+                    self.assertGreaterEqual(c["low"], c["need"], (row["t"], c["t"]))
 
     def test_tiles_sum_the_cells(self):
         v = self.view()

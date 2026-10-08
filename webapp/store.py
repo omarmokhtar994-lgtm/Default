@@ -114,6 +114,19 @@ create table if not exists events (
     detail text not null default ''
 );
 create index if not exists events_at on events (at);
+create table if not exists activities (
+    id integer primary key autoincrement,
+    program text not null,
+    shift_date text not null,
+    associate text not null,
+    kind text not null,
+    start integer not null,
+    end_min integer not null,
+    billable integer not null default 0,
+    note text not null default '',
+    user_id integer not null,
+    at real not null
+);
 create table if not exists day_log (
     id integer primary key autoincrement,
     program text not null,
@@ -300,6 +313,35 @@ class Store:
             return [dict(r) for r in db.execute(
                 f"select * from actual_breaks where program = ? and shift_date in ({marks})", (program, *dates))]
 
+    def add_activity(self, **fields: Any) -> int:
+        fields.setdefault("at", time.time())
+        names = ", ".join(fields)
+        marks = ", ".join("?" for _ in fields)
+        with self._db() as db:
+            return int(db.execute(f"insert into activities ({names}) values ({marks})", tuple(fields.values())).lastrowid)
+
+    def get_activity(self, activity_id: int) -> Optional[Dict[str, Any]]:
+        with self._db() as db:
+            row = db.execute("select * from activities where id = ?", (activity_id,)).fetchone()
+        return dict(row) if row else None
+
+    def delete_activity(self, activity_id: int) -> None:
+        with self._db() as db:
+            db.execute("delete from activities where id = ?", (activity_id,))
+
+    def list_activities(self, program: str, dates: List[str]) -> List[Dict[str, Any]]:
+        marks = ", ".join("?" for _ in dates)
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                f"select * from activities where program = ? and shift_date in ({marks}) order by start, id",
+                (program, *dates))]
+
+    def activities_between(self, start: str, end: str, program: Optional[str] = None,
+                           user_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        return self._between("select activities.*, coalesce(users.display_name, '') as by_name from activities"
+                             " left join users on users.id = activities.user_id where shift_date between ? and ?",
+                             [start, end], program, user_id, "activities", "shift_date, program, associate, start")
+
     def add_day_log(self, **fields: Any) -> None:
         fields.setdefault("at", time.time())
         names = ", ".join(fields)
@@ -317,7 +359,7 @@ class Store:
         """Delete attendance, actual breaks and their log for shift dates before the one given."""
         with self._db() as db:
             return sum(db.execute(f"delete from {table} where shift_date < ?", (shift_date,)).rowcount
-                       for table in ("attendance", "actual_breaks", "day_log"))
+                       for table in ("attendance", "actual_breaks", "activities", "day_log"))
 
     # ------------------------------------------------------------- ranges for exports
     def _between(self, sql: str, args: List[Any], program: Optional[str], user_id: Optional[int], table: str,

@@ -25,7 +25,8 @@ from .versions import DAYS
 
 EGYPT = timezone(timedelta(hours=3))
 MAX_DAYS = 400
-KINDS = {"attendance": "Attendance", "activity": "Day activity", "breaks": "Breaks planned vs taken",
+KINDS = {"attendance": "Attendance", "activities": "Activities", "activity": "Day activity",
+         "breaks": "Breaks planned vs taken",
          "changes": "Schedule changes and swaps", "versions": "Versions and in use", "runs": "Runs",
          "worked": "Worked hours and adherence", "record": "Other actions"}
 VERSION_EVENTS = {"version_created": "New version", "set_in_use": "Set in use"}
@@ -91,6 +92,14 @@ def _attendance(store, days, weeks, start, end, program, user_id, measure):
         yield [r["shift_date"], r["program"], r["associate"], person.get("slot", ""),
                (person.get("days") or [""] * 7)[_day_index(day)], r["status"], _hm(r["from_min"]), _hm(r["to_min"]),
                billable, r["by_name"], _when(r["at"])]
+
+
+def _activities(store, days, weeks, start, end, program, user_id, measure):
+    yield ["Shift date", "Program", "Associate", "Activity", "From", "To", "Minutes", "Billable", "Note", "Recorded by",
+           "Recorded at"]
+    for r in store.activities_between(start.isoformat(), end.isoformat(), program, user_id):
+        yield [r["shift_date"], r["program"], r["associate"], r["kind"], _hm(r["start"]), _hm(r["end_min"]),
+               r["end_min"] - r["start"], "Yes" if r["billable"] else "No", r["note"], r["by_name"], _when(r["at"])]
 
 
 def _activity(store, days, weeks, start, end, program, user_id, measure):
@@ -160,7 +169,8 @@ def _record(store, days, weeks, start, end, program, user_id, measure):
 def _worked(store, days, weeks, start, end, program, user_id, measure):
     yield ["Shift date", "Program", "Associate", "Slot", "Shift", "Status", "Scheduled min", "Scheduled work min",
            "Worked min", "Late min", "Early min", "Absent min", "Aux billable min", "Aux non-billable min",
-           "Breaks planned min", "Breaks taken min", "Out of schedule min", "Adherence %", "Conformance %"]
+           "Breaks planned min", "Breaks taken min", "Out of schedule min", "VTO min", "Overtime min", "Adherence %",
+           "Conformance %"]
     for p in _programs(days, program):
         for day in _dates(start, end):
             try:
@@ -175,11 +185,12 @@ def _worked(store, days, weeks, start, end, program, user_id, measure):
                 r = person_day(page["view"], lane["name"])
                 yield [day.isoformat(), p, lane["name"], lane.get("slot", ""), r["shift"], r["status"], r["scheduled"],
                        r["scheduled_work"], r["worked"], r["late"], r["early"], r["absent"], r["aux_billable"],
-                       r["aux_unbillable"], r["breaks_planned"], r["breaks_taken"], r["out_of_schedule"],
-                       r["adherence"], r["conformance"]]
+                       r["aux_unbillable"], r["breaks_planned"], r["breaks_taken"], r["out_of_schedule"], r["vto"],
+                       r["overtime"], r["adherence"], r["conformance"]]
 
 
-TABLES: Dict[str, Callable] = {"attendance": _attendance, "activity": _activity, "breaks": _breaks,
+TABLES: Dict[str, Callable] = {"attendance": _attendance, "activities": _activities, "activity": _activity,
+                               "breaks": _breaks,
                                "changes": _changes, "versions": _versions, "runs": _runs, "worked": _worked,
                                "record": _record}
 

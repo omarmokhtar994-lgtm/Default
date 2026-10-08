@@ -16,12 +16,14 @@ import time
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
-from .day import AUX, MEASURES, STATUSES, TIMED, BreakRefused, advice, check_break, day_view, planned, read_inputs
+from .day import (ABSENT, AUX, MEASURES, OVERTIME_MAX, STATUSES, STEP, TIMED, BreakRefused, _busy, advice,
+                  check_break, day_view, meeting_slots, planned, read_inputs)
 from .schedules import EGYPT, KEEP_DAYS, ScheduleBook
 from .versions import DAYS, shift_span
 
 HHMM = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
 FALLBACK = "No version is marked in use for this week, so this is the tool's own schedule."
+ACTIVITY_KINDS = sorted(AUX) + ["Overtime", "VTO"]
 
 
 def week_start(on: date) -> date:
@@ -82,8 +84,12 @@ class DayBook:
         """Attendance and actual breaks keyed for day_view: (offset, name[, idx]). A kept break move
         whose break no longer matches the plan (the version changed) is counted, not applied."""
         dates = {0: on, -1: on - timedelta(days=1)}
-        attendance, actual, stale = {}, {}, 0
+        attendance, actual, stale, acts = {}, {}, 0, {}
         for offset, d in dates.items():
+            for r in self.store.list_activities(program, [d.isoformat()]):
+                acts.setdefault((offset, r["associate"]), []).append(
+                    {"id": r["id"], "kind": r["kind"], "start": r["start"], "end": r["end_min"],
+                     "billable": bool(r["billable"]), "note": r["note"]})
             for r in self.store.list_attendance(program, [d.isoformat()]):
                 attendance[(offset, r["associate"])] = {"status": r["status"], "from": r["from_min"], "to": r["to_min"],
                                                         "billable": bool(r["billable"])}
@@ -95,7 +101,7 @@ class DayBook:
                     stale += 1
                     continue
                 actual[(offset, r["associate"], r["idx"])] = r["start"]
-        return attendance, actual, stale
+        return attendance, actual, stale, acts
 
     def page(self, program: str, on: date, measure: str = "interval") -> Optional[Dict[str, Any]]:
         if measure not in MEASURES:
@@ -109,8 +115,8 @@ class DayBook:
             raise ValueError(f"The input workbook kept with {row['label']} is missing, so the day cannot be worked "
                              "out. Run the week again, or ask the admin to restore the server's data folder.")
         inputs = read_inputs(source)
-        attendance, actual, stale = self._records(program, on, row)
-        view = day_view(week, inputs, day_index(on), attendance, actual, measure)
+        attendance, actual, stale, acts = self._records(program, on, row)
+        view = day_view(week, inputs, day_index(on), attendance, actual, measure, acts)
         return {"version": row, "note": note, "view": view, "stale": stale, "date": on,
                 "week_start": week_start(on).isoformat(), "day": day_index(on), "inputs": inputs,
                 "log": self.store.list_day_log(program, on.isoformat())}
@@ -194,6 +200,106 @@ class DayBook:
             raise ValueError("The break time must be like 13:05.")
         page = self.page(program, on, measure)
         return advice(page["view"], page["inputs"], name, idx, m + (1440 if m < span[0] else 0))
+
+    # ------------------------------------------------------------- activities: aux, meetings, overtime, VTO
+    @staticmethod
+    def _describe(kind: str, lo: int, hi: int, billable: bool) -> str:
+        if kind == "Overtime":
+            return f"Overtime {hm(lo)} to {hm(hi)}"
+        if kind == "VTO":
+            return f"VTO, left at {hm(lo)} instead of {hm(hi)}"
+        return f"{kind} {hm(lo)} to {hm(hi)} ({'billable' if billable else 'non-billable'})"
+
+    def add_activity(self, program: str, on: date, name: str, kind: str, start: str, end: str, user_id: int,
+                     billable: bool = False, note: str = "") -> int:
+        """Record an activity for the shift that starts on ``on``: an aux (inside the shift), VTO (to the end
+        of the shift) or overtime (touching the shift, at most 2 hours, keeping the rest gap)."""
+        if kind not in ACTIVITY_KINDS:
+            raise ValueError(f"Unknown activity: {kind}.")
+        _, week, span = self._shift(program, on, name)
+        lo, hi = _clock(start), _clock(end)
+        if lo is None or hi is None:
+            raise ValueError("Give the start and end like 13:05.")
+        lo += 1440 if lo < span[0] - OVERTIME_MAX else 0
+        hi += 1440 if hi <= lo else 0
+        if lo % STEP or hi % STEP:
+            raise ValueError("Activities go in 5-minute steps.")
+        status = next((r["status"] for r in self.store.list_attendance(program, [on.isoformat()])
+                       if r["associate"] == name), "Present")
+        if status in ABSENT:
+            raise ValueError(f"{name} is marked {status.lower()} for this shift.")
+        if kind == "Overtime":
+            if not (hi == span[0] or lo == span[1]):
+                raise ValueError(f"Overtime has to start when {name}'s shift ends ({hm(span[1])}) or end when it "
+                                 f"starts ({hm(span[0])}).")
+            if hi - lo > OVERTIME_MAX:
+                raise ValueError(f"Overtime is offered up to {OVERTIME_MAX // 60} hours.")
+            rest = int(float(week.get("settings", {}).get("rest_gap_hours") or 0) * 60)
+            person = next(a for a in week.get("associates", []) if a["name"] == name)
+            d = day_index(on)
+            nxt = shift_span(person["days"][d + 1]) if d < 6 else None
+            prv = shift_span(person["days"][d - 1]) if d > 0 else None
+            if rest and nxt and nxt[0] + 1440 - hi < rest:
+                raise ValueError(f"{name} would rest {(nxt[0] + 1440 - hi) / 60:g} hours before the next shift; "
+                                 f"the rule is {rest / 60:g}.")
+            if rest and prv and lo + 1440 - prv[1] < rest:
+                raise ValueError(f"{name} would rest {(lo + 1440 - prv[1]) / 60:g} hours after the previous shift; "
+                                 f"the rule is {rest / 60:g}.")
+        else:
+            if lo < span[0] or hi > span[1]:
+                raise ValueError(f"{kind} has to fall inside {name}'s shift ({hm(span[0])} to {hm(span[1])}).")
+            if kind == "VTO" and hi != span[1]:
+                raise ValueError(f"VTO runs to the end of the shift ({hm(span[1])}).")
+        for r in self.store.list_activities(program, [on.isoformat()]):
+            if r["associate"] == name and r["start"] < hi and lo < r["end_min"]:
+                raise ValueError(f"{name} already has {r['kind'].lower()} from {hm(r['start'])} to {hm(r['end_min'])}.")
+        billable = bool(billable) and kind in AUX or kind == "Overtime"
+        made = self.store.add_activity(program=program, shift_date=on.isoformat(), associate=name, kind=kind, start=lo,
+                                       end_min=hi, billable=int(billable), note=" ".join(note.split())[:200],
+                                       user_id=user_id)
+        self.store.add_day_log(program=program, shift_date=on.isoformat(), associate=name,
+                               what=self._describe(kind, lo, hi if kind != "VTO" else span[1], billable), user_id=user_id)
+        return made
+
+    def cancel_activity(self, program: str, on: date, activity_id: int, user_id: int) -> None:
+        row = self.store.get_activity(activity_id)
+        if row is None or row["program"] != program or row["shift_date"] != on.isoformat():
+            raise ValueError("That activity is not on this day.")
+        self.store.delete_activity(activity_id)
+        self.store.add_day_log(program=program, shift_date=on.isoformat(), associate=row["associate"], user_id=user_id,
+                               what="Cancelled: " + self._describe(row["kind"], row["start"], row["end_min"],
+                                                                   bool(row["billable"])))
+
+    def meeting_slots(self, program: str, on: date, names: List[str], minutes: int, earliest: str, latest: str,
+                      billable: bool = False, measure: str = "interval") -> List[Dict[str, Any]]:
+        lo, hi = _clock(earliest), _clock(latest)
+        if lo is None or hi is None or hi <= lo:
+            raise ValueError("Give the window like 13:00 to 19:00, the end after the start.")
+        if not names:
+            raise ValueError("Pick who is in it.")
+        page = self.page(program, on, measure)
+        if page is None:
+            raise ValueError("There is no schedule for this day.")
+        return meeting_slots(page["view"], names, minutes, lo, hi, billable)
+
+    def book_session(self, program: str, on: date, names: List[str], start: int, minutes: int, kind: str, user_id: int,
+             billable: bool = False) -> None:
+        """Book a session for everyone, or for nobody when anyone is not free then."""
+        if kind not in AUX:
+            raise ValueError(f"Book a meeting, training or coaching, not {kind}.")
+        page = self.page(program, on)
+        if page is None or not names:
+            raise ValueError("Pick who is in it on a day with a schedule.")
+        busy = []
+        for name in names:
+            seg = next((s for l in page["view"]["lanes"] if l["name"] == name for s in l["segments"]
+                        if s["offset"] == 0), None)
+            if seg is None or any(_busy(seg, t) for t in range(start, start + minutes, STEP)):
+                busy.append(name)
+        if busy:
+            raise ValueError(f"Not free then: {', '.join(busy)}. Nobody was booked.")
+        for name in names:
+            self.add_activity(program, on, name, kind, hm(start), hm(start + minutes), user_id, billable=billable)
 
     # ------------------------------------------------------------- retention
     def cleanup(self, now: Optional[float] = None) -> int:

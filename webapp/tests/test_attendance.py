@@ -117,6 +117,12 @@ class TheAttendance(unittest.TestCase):
         self.assertEqual([f["buffer"] for f in fits], sorted((f["buffer"] for f in fits), reverse=True))
         self.assertEqual(self.days.break_advice("AE/AR B2B", WED, "Associate 001", 1, "16:30")["warnings"], [])
 
+    def test_a_missing_input_workbook_is_said_plainly(self):
+        self.book.input_path("aaaaaaaaaaaa").unlink()
+        with self.assertRaises(ValueError) as said:
+            self.days.page("AE/AR B2B", WED)
+        self.assertIn("input workbook kept with Tool, after breaks is missing", str(said.exception))
+
     def test_unknown_status_or_person_refused(self):
         with self.assertRaises(ValueError):
             self.days.set_status("AE/AR B2B", WED, "Associate 001", "Holiday", self.sara)

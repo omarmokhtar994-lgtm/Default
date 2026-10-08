@@ -714,8 +714,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
         measure = request.args.get("measure", "")
         measure = measure if measure in MEASURES else "interval"
         tab = "board" if request.args.get("view") == "board" else "timeline"
-        page = days.page(program, on, measure) if program else None
-        return render_template("day.html", page=page, program=program, programs=programs, on=on, measure=measure,
+        problem = ""
+        try:
+            page = days.page(program, on, measure) if program else None
+        except ValueError as exc:  # said on the page, not a server error
+            page, problem = None, str(exc)
+        return render_template("day.html", page=page, problem=problem, program=program, programs=programs, on=on,
+                               measure=measure,
                                measures=MEASURES, tab=tab, statuses=STATUSES, aux=sorted(AUX), hm=hm,
                                rows=board(page["view"]) if page and tab == "board" else None, week_of=week_start(on),
                                earlier=on - timedelta(days=1), later=on + timedelta(days=1))

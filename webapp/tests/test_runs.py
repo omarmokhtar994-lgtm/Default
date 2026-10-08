@@ -1006,6 +1006,13 @@ class TheDayPage(unittest.TestCase):
             self.assertIn(column, board)
         self.assertRegex(board, r'class="chip[^"]*"[^>]*data-name="Associate 008"[^>]*data-idx="1"')
 
+    def test_a_broken_day_says_why(self):
+        from unittest import mock
+        with mock.patch.object(self.app.extensions["days"], "page", side_effect=ValueError("The input is missing.")):
+            got = self.client.get(self.url)
+        self.assertEqual(got.status_code, 200)
+        self.assertIn("The input is missing.", got.get_data(as_text=True))
+
     def test_week_without_a_schedule_and_defaults(self):
         body = html.unescape(self.client.get("/day?program=AE/AR+B2B&date=2026-11-04").get_data(as_text=True))
         self.assertIn("No schedule for AE/AR B2B in the week of 01 Nov", body)

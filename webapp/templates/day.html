@@ -22,6 +22,8 @@
 
 {% if not programs %}
 <p class="empty panel">No schedules yet. When a run finishes, its schedule is kept here; mark one in use from the run's Schedules page.</p>
+{% elif problem %}
+<p class="empty panel" role="alert">{{ problem }}</p>
 {% elif not page %}
 <p class="empty panel">No schedule for {{ program }} in the week of {{ week_of.strftime('%d %b') }}. Pick another day, or run this week and mark a version in use from the run's Schedules page.</p>
 {% else %}

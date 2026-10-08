@@ -104,7 +104,11 @@ class DayBook:
         if row is None:
             return None
         week = self._week(row)
-        inputs = read_inputs(self.book.input_path(row["run_id"]))
+        source = self.book.input_path(row["run_id"])
+        if not source.is_file():
+            raise ValueError(f"The input workbook kept with {row['label']} is missing, so the day cannot be worked "
+                             "out. Run the week again, or ask the admin to restore the server's data folder.")
+        inputs = read_inputs(source)
         attendance, actual, stale = self._records(program, on, row)
         view = day_view(week, inputs, day_index(on), attendance, actual, measure)
         return {"version": row, "note": note, "view": view, "stale": stale, "date": on,

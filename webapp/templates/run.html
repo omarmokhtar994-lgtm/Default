@@ -12,15 +12,41 @@
   <p class="byline">{{ run.mode|capitalize if run.mode != 'SMOKE' else 'Readiness check' }} run, started by {{ run.by_name }} on {{ when(run.created) }} (Egypt time). Settings: {% if opts %}{% for k, v in opts.items() %}{{ k|replace('_', ' ')|capitalize }} {{ option_labels[v] }}{% if not loop.last %}; {% endif %}{% endfor %}{% else %}followed the workbook{% endif %}.</p>
   <p class="byline tagline">{% if run.program %}Program <a href="{{ url_for('program', name=run.program) }}">{{ run.program }}</a>{% else %}No program set{% endif %}{% if run.week_start %}, week of {{ run.week_start }}{% else %}, no schedule week set{% endif %}.</p>
   {% if user.id == run.user_id or user.is_admin %}
-  <details class="advanced tag">
-    <summary>{{ 'Change' if run.program else 'Set' }} the program and week</summary>
+  <details class="advanced tag{% if user.is_admin %} details-admin{% endif %}"{% if check %} open{% endif %}>
+    <summary>{% if user.is_admin %}Edit details{% else %}{{ 'Change' if run.program else 'Set' }} the program and week{% endif %}</summary>
     <form class="tagrow" method="post" action="{{ url_for('run_tag', run_id=run.id) }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <label>Program <input name="program" type="text" maxlength="80" value="{{ run.program }}"></label>
+      <label>Program <input name="program" type="text" maxlength="80" value="{{ run.program }}" list="known-programs"></label>
+      <datalist id="known-programs">{% for p in known_programs %}<option value="{{ p }}">{% endfor %}</datalist>
       <label>Schedule week <input name="week_start" type="date" value="{{ run.week_start }}"></label>
+      {% if user.is_admin %}
+      <label>Submitted by <select name="user_id">{% for u in people %}<option value="{{ u.id }}"{% if u.id == run.user_id %} selected{% endif %}>{{ u.display_name }}</option>{% endfor %}</select></label>
+      <label>Workbook name <input name="workbook" type="text" maxlength="120" required value="{{ run.workbook }}"></label>
+      {% endif %}
+      <label class="why-field">Reason <input name="reason" type="text" maxlength="200" placeholder="Needed when the change moves a schedule in use or leaves day records behind"></label>
       <button type="submit">Save</button>
     </form>
+    <p class="hint">The run's schedule versions move with it. {% if user.is_admin %}To rename a program everywhere, day records included, use the program's page.{% endif %}</p>
   </details>
+  {% endif %}
+  {% if check %}{% set old_p, old_w = check.old %}{% set new_p, new_w = check.new %}
+  <section class="panel check-save" id="check" aria-labelledby="check-h">
+    <h2 id="check-h">Check before saving</h2>
+    <ul class="check-list">
+      {% for label, was, now in check.changes %}<li><b>{{ label }}</b>: {{ was }} → {{ now }}</li>{% endfor %}
+      {% for s in check.stop_in_use %}<li class="warn">{{ s.label }} stops being in use: {{ new_p }}, week of {{ new_w }} already uses {{ check.kept_by_target }}.</li>{% endfor %}
+      {% if check.old_affected %}{% set r = check.old_records %}<li class="warn">{{ r.attendance }} attendance, {{ r.breaks }} break moves and {{ r.activities }} activities kept for {{ old_p }} in the week of {{ old_w }} stay on their dates. That week is then read from {{ check.old_week_after or 'no schedule, so they will not show until one is added' }}. If the program name itself was wrong, rename the program instead: that moves the day records too.</li>{% endif %}
+      {% if check.target_affected %}{% set r = check.target_records %}<li class="warn">{{ r.attendance }} attendance, {{ r.breaks }} break moves and {{ r.activities }} activities already kept for {{ new_p }} in the week of {{ new_w }} will be read from {{ check.target_after }} instead of {{ check.target_before or 'no schedule' }}.</li>{% endif %}
+    </ul>
+    <form method="post" action="{{ url_for('run_tag', run_id=run.id) }}" class="check-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="confirm" value="1">
+      {% for key, value in posted.items() %}<input type="hidden" name="{{ key }}" value="{{ value if value is not none else '' }}">{% endfor %}
+      <label>Give a reason (kept in the record) <input name="reason" type="text" maxlength="200" required value="{{ reason }}"{% if reason_missing %} aria-invalid="true" aria-describedby="reason-err"{% endif %}></label>
+      {% if reason_missing %}<p class="error" id="reason-err">Give a reason.</p>{% endif %}
+      <div class="check-actions"><button type="submit" class="primary">Yes, save</button><a class="button" href="{{ url_for('run_detail', run_id=run.id) }}">No, keep as it was</a></div>
+    </form>
+  </section>
   {% endif %}
   <p class="live" hidden>Connection lost: showing the last known state. Retrying.</p>
 

@@ -26,6 +26,7 @@ from .exports import KINDS as EXPORT_KINDS, build as build_export
 from .outcome import cannot_schedule, read as read_outcome, view as outcome_view
 from .auth import admin_required, check_csrf, csrf_token, load_user, login_required
 from .program_page import build, overview, weeks_to_show
+from .run_admin import apply_rename, apply_run_change, preview_rename, preview_run_change
 from .schedules import ScheduleBook
 from .versions import DAYS, with_notes
 from .runs import MODES, OPTION_LABELS, RESUMABLE, RunQueue, parse_options, run_options
@@ -456,8 +457,15 @@ def create_app(config: Dict[str, Any]) -> Flask:
     @app.route("/runs/<run_id>")
     @login_required
     def run_detail(run_id: str):  # type: ignore[no-untyped-def]
-        run = _run_or_404(run_id)
+        return _run_page(_run_or_404(run_id))
+
+    def _run_page(run: Dict[str, Any], **extra: Any):  # type: ignore[no-untyped-def]
+        """The run page; ``extra`` carries a change to check before saving (run_tag)."""
+        run_id = run["id"]
         queue = _queue()
+        store = app.extensions["store"]
+        people = [u for u in store.list_users() if u["active"] or u["id"] == run["user_id"]] \
+            if g.user["is_admin"] else []
         said = engine_said(run)
         found = read_outcome(queue.results_dir(run_id))
         fixed_input = cannot_schedule(said.get("code", ""), said.get("category", ""))
@@ -469,7 +477,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                resumable=run["status"] in RESUMABLE and not fixed_input and run["mode"] != "SMOKE",
                                summary=queue.summary(run_id), said=said,
                                why=outcome_view(found) if found else None,
-                               eta=_plan(app.extensions["store"].list_runs()).get(run_id), now=time.time())
+                               eta=_plan(store.list_runs()).get(run_id), now=time.time(), people=people,
+                               known_programs=sorted({r["program"] for r in store.list_runs(limit=100000)
+                                                      if r["program"]}, key=str.lower), **extra)
 
     @app.route("/runs/<run_id>/status.json")
     @login_required
@@ -518,18 +528,69 @@ def create_app(config: Dict[str, Any]) -> Flask:
     @app.route("/runs/<run_id>/tag", methods=["POST"])
     @login_required
     def run_tag(run_id: str):  # type: ignore[no-untyped-def]
+        """Change a run's details: its submitter the program and week, an admin everything (who submitted
+        it, the workbook name too). Versions move with the run; consequences are shown before saving."""
         run = _run_or_404(run_id)
-        if run["user_id"] != g.user["id"] and not g.user["is_admin"]:
+        admin = bool(g.user["is_admin"])
+        if run["user_id"] != g.user["id"] and not admin:
             abort(403)
+        store = app.extensions["store"]
         week = request.form.get("week_start", "").strip()
         week_start = week_sunday(week) if week else ""
         if week_start is None:
             flash("Give the schedule week as a date (the Sunday it starts).")
-        else:
-            app.extensions["store"].update_run(run_id, program=clean_program(request.form.get("program", "")),
-                                               week_start=week_start)
-            flash("Program and week saved.")
+            return redirect(url_for("run_detail", run_id=run_id))
+        new: Dict[str, Any] = {"program": clean_program(request.form.get("program", "")), "week_start": week_start}
+        if "user_id" in request.form:
+            new["user_id"] = request.form.get("user_id", type=int)
+        if "workbook" in request.form:
+            new["workbook"] = " ".join(request.form.get("workbook", "").split())
+        for key in ("user_id", "workbook"):
+            if key in new and new[key] != run[key] and not admin:
+                abort(403)  # only an admin changes who submitted a run, or its name
+        if new.get("user_id", run["user_id"]) != run["user_id"]:
+            person = store.get_user(new["user_id"]) if new["user_id"] is not None else None
+            if person is None or not person["active"]:
+                flash("Pick someone on the team who is switched on.")
+                return redirect(url_for("run_detail", run_id=run_id))
+        reason = " ".join(request.form.get("reason", "").split())[:200]
+        try:
+            found = preview_run_change(store, run, new)
+            if not found["changes"]:
+                flash("Nothing changed: the details are the same.")
+                return redirect(url_for("run_detail", run_id=run_id))
+            confirmed = request.form.get("confirm") == "1"
+            if found["needs_check"] and not (confirmed and reason):
+                return _run_page(run, check=found, posted=new, reason=reason, reason_missing=confirmed)
+            apply_run_change(store, run, new, g.user["id"], reason)
+            flash("Details saved.")
+        except ValueError as exc:
+            flash(str(exc))
         return redirect(url_for("run_detail", run_id=run_id))
+
+    @app.route("/programs/rename", methods=["POST"])
+    @admin_required
+    def program_rename():  # type: ignore[no-untyped-def]
+        """Rename a program everywhere, or merge it into another: shown first, saved with a reason."""
+        store = app.extensions["store"]
+        old, new = request.form.get("old", ""), clean_program(request.form.get("new", ""))
+        reason = " ".join(request.form.get("reason", "").split())[:200]
+        known = program_weeks(_all_runs())
+        try:
+            found = preview_rename(store, old, new)
+            confirmed = request.form.get("confirm") == "1"
+            if confirmed and reason and not found["clashes"]:
+                apply_rename(store, old, new, g.user["id"], reason)
+                flash(f"{'Merged' if found['merge'] else 'Renamed'} {old} {'into' if found['merge'] else 'to'} "
+                      f"{found['new']}.")
+                known = program_weeks(_all_runs())
+                return redirect(url_for("program", name=found["new"]) if found["new"] in known else url_for("programs"))
+            return render_template("program_rename.html", found=found, reason=reason,
+                                   reason_missing=confirmed and not reason,
+                                   back=url_for("program", name=old) if old in known else url_for("programs"))
+        except ValueError as exc:
+            flash(str(exc))
+            return redirect(url_for("program", name=old) if old in known else url_for("programs"))
 
     # ------------------------------------------------------------- analytics
     def _all_runs() -> list:
@@ -548,8 +609,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
             abort(404)
         n = weeks_to_show(request.args.get("weeks", "12"))
         shown = history if n is None else history[-n:]
+        others = sorted({r["program"] for r in _all_runs() if r["program"] and r["program"] != name}, key=str.lower)
         return render_template("program.html", name=name, view=build(shown, history), weeks=n,
-                               total=len(history), ranges=(4, 8, 12, 26, 52))
+                               total=len(history), ranges=(4, 8, 12, 26, 52), others=others)
 
     def _week_page(run: Optional[Dict[str, Any]], side: str, program: str, week: str,
                    history: Dict[str, list]):  # type: ignore[no-untyped-def]

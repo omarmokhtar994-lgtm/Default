@@ -1197,6 +1197,97 @@ class TheRecord(unittest.TestCase):
         self.assertEqual(queue.cleanup(now=time.time() + 46 * 86400), 1)
 
 
+def sign_in(app, username, password):
+    client = app.test_client()
+    tok = TOKEN.search(client.get("/login").get_data(as_text=True)).group(1)
+    client.post("/login", data={"username": username, "password": password, "csrf_token": tok})
+    return client
+
+
+class TheRunDetails(unittest.TestCase):
+    """Phase P: an admin corrects any run's details and renames programs; a submitter fixes their own
+    run's program and week. Versions move with the run; consequences are shown before saving."""
+
+    def setUp(self):
+        self.app, self.store, *_ = make_app(start_worker=False)
+        self.omar = self.store.add_user("omar", "Omar", "Owner-pass-123", is_admin=True, must_change=False)
+        self.lina = self.store.add_user("lina", "Lina", "Lina-pass-12", must_change=False)
+        self.sara = sign_in(self.app, "sara", "Sara-pass-1")
+        self.admin = sign_in(self.app, "omar", "Owner-pass-123")
+        self.run_id = run_id_of(upload(self.sara, program="AE/AR B2B", week_start="2026-10-11"))
+
+    def post(self, client, url=None, **data):
+        return client.post(url or f"/runs/{self.run_id}/tag", data={"csrf_token": token(client), **data})
+
+    def test_admin_edits_every_detail(self):
+        page = html.unescape(self.admin.get(f"/runs/{self.run_id}").get_data(as_text=True))
+        for words in ("Edit details", 'name="user_id"', 'name="workbook"', '<option value="AE/AR B2B">'):
+            self.assertIn(words, page)
+        got = self.post(self.admin, program="AE/AR B2B", week_start="2026-10-11", user_id=str(self.lina),
+                        workbook="AR week 42.xlsx", reason="Lina built it")
+        self.assertEqual(got.status_code, 302)
+        page = html.unescape(self.admin.get(f"/runs/{self.run_id}").get_data(as_text=True))
+        self.assertIn("Details saved.", page)
+        self.assertIn("<h1>AR week 42.xlsx</h1>", page)
+        self.assertIn("started by Lina", page)
+        from datetime import date as day
+        from openpyxl import load_workbook
+        from webapp.exports import build
+        data, *_ = build(self.store, self.app.extensions["days"], day.today(), day.today(), ["record"], by="Omar")
+        rows = list(load_workbook(io.BytesIO(data))["Other actions"].iter_rows(values_only=True))
+        changed = [dict(zip(rows[0], r)) for r in rows[1:] if "Run details changed" in r]
+        self.assertEqual(len(changed), 1)
+        self.assertIn("Submitted by: Sara → Lina", " ".join(str(v) for v in changed[0].values()))
+
+    def test_submitter_edits_program_and_week_only(self):
+        page = html.unescape(self.sara.get(f"/runs/{self.run_id}").get_data(as_text=True))
+        self.assertNotIn('name="user_id"', page)
+        self.assertEqual(self.post(self.sara, program="NMG", week_start="2026-10-18").status_code, 302)
+        self.assertEqual((self.store.get_run(self.run_id)["program"], self.store.get_run(self.run_id)["week_start"]),
+                         ("NMG", "2026-10-18"))
+        self.assertEqual(self.post(self.sara, program="NMG", week_start="2026-10-18", workbook="x.xlsx").status_code, 403)
+        self.assertEqual(self.post(self.sara, program="NMG", week_start="2026-10-18",
+                                   user_id=str(self.lina)).status_code, 403)
+        self.assertEqual(self.store.get_run(self.run_id)["workbook"], "week42.xlsx")
+
+    def test_program_rename_page(self):
+        self.assertEqual(self.post(self.sara, "/programs/rename", old="AE/AR B2B", new="AE-AR B2B").status_code, 403)
+        page = html.unescape(self.post(self.admin, "/programs/rename", old="AE/AR B2B", new="AE-AR B2B")
+                             .get_data(as_text=True))
+        for words in ("Rename AE/AR B2B to AE-AR B2B", "1 run", "Give a reason"):
+            self.assertIn(words, page)
+        self.assertEqual(self.store.get_run(self.run_id)["program"], "AE/AR B2B")  # not yet
+        got = self.post(self.admin, "/programs/rename", old="AE/AR B2B", new="AE-AR B2B", confirm="1",
+                        reason="new name")
+        self.assertEqual(got.status_code, 302)
+        self.assertEqual(self.store.get_run(self.run_id)["program"], "AE-AR B2B")
+
+
+class TheRunDetailsCheck(unittest.TestCase):
+    """A change that leaves day records on a week without its schedule is shown first and needs a reason."""
+
+    def test_check_before_saving(self):
+        from datetime import date as day
+        app, store, *_ = make_app(VALIDATOR_ROOT=str(REPO))
+        sara = client_for(app)
+        run_id = versioned_run(app, store, sara, program="AE/AR B2B", week_start="2026-10-11")
+        app.extensions["days"].set_status("AE/AR B2B", day(2026, 10, 14), "Associate 001", "Sick",
+                                          store.list_users()[0]["id"])
+        post = lambda **data: sara.post(f"/runs/{run_id}/tag", data={  # noqa: E731
+            "csrf_token": token(sara), "program": "AE/AR B2B", "week_start": "2026-10-18", **data})
+        page = html.unescape(post().get_data(as_text=True))
+        for words in ("Check before saving", "Schedule week", "2026-10-11 → 2026-10-18", "stay on their dates",
+                      "no schedule", "rename the program instead"):
+            self.assertIn(words, page)
+        self.assertEqual(store.get_run(run_id)["week_start"], "2026-10-11")  # nothing yet
+        page = html.unescape(post(confirm="1").get_data(as_text=True))
+        self.assertIn("Give a reason.", page)
+        self.assertEqual(store.get_run(run_id)["week_start"], "2026-10-11")
+        self.assertEqual(post(confirm="1", reason="wrong week").status_code, 302)
+        self.assertEqual(store.get_run(run_id)["week_start"], "2026-10-18")
+        self.assertEqual({v["week_start"] for v in app.extensions["schedules"].versions(run_id)}, {"2026-10-18"})
+
+
 class TheExportsPage(unittest.TestCase):
     """Phase O task 2: the Exports page and its downloads."""
 

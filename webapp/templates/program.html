@@ -17,6 +17,19 @@
     <button type="submit" class="quiet">Show</button>
   </form>
 </div>
+{% if user.is_admin %}
+<details class="advanced tag rename">
+  <summary>Rename or merge this program</summary>
+  <form class="tagrow" method="post" action="{{ url_for('program_rename') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="old" value="{{ name }}">
+    <label>New name <input name="new" type="text" maxlength="80" required value="{{ name }}" list="other-programs"></label>
+    <datalist id="other-programs">{% for p in others %}<option value="{{ p }}">{% endfor %}</datalist>
+    <button type="submit">Check what moves</button>
+  </form>
+  <p class="hint">Its runs, schedule versions and day records move to the new name. Give another program's name to merge into it. Nothing changes until you confirm.</p>
+</details>
+{% endif %}
 
 <section class="tiles" aria-label="The latest week">
   {% for name_, t in view.tiles %}

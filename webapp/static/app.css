@@ -348,7 +348,10 @@ form.inline button { margin-bottom: 14px; }
 .tagrow + .hint { margin-top: -6px; }
 input[type=date] { color-scheme: dark; }
 details.tag { max-width: 640px; margin: 0 0 14px; }
-details.tag .tagrow { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; align-items: end; }
+details.tag .tagrow { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: end; }
+details.tag .why-field { grid-column: 1 / -1; }
+details.tag button { justify-self: start; }
+details.tag.details-admin { max-width: 760px; }
 details.tag button { margin-bottom: 14px; }
 .tagline a { color: var(--paper); font-weight: 600; }
 .crumb { margin: 0 0 6px; font-size: 14px; }
@@ -708,3 +711,12 @@ body.wall { background: var(--night); color: var(--paper); padding: 2vh 2.5vw; m
 [data-day] .rb-row { scroll-margin-top: 72px; }
 [data-day] .rb-cover .cover-panel { margin: 0; }
 [data-day] .warn-note { color: var(--short-ink); }
+
+/* checking a change before saving: run details, program rename */
+.check-save { border-color: var(--short); max-width: 860px; margin: 0 0 18px; }
+.check-save h2 { margin-top: 0; }
+.check-list { margin: 0 0 14px; padding-left: 20px; }
+.check-list li { margin: 0 0 6px; }
+.check-list li.warn { color: var(--short-ink); }
+.check-form label { display: block; max-width: 520px; }
+.check-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 10px; }

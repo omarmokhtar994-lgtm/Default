@@ -33,7 +33,8 @@ VERSION_EVENTS = {"version_created": "New version", "set_in_use": "Set in use"}
 OTHER_EVENTS = {"run_uploaded": "Run uploaded", "run_started": "Run started", "run_stopped": "Run stopped",
                 "run_resumed": "Run resumed", "downloaded": "Downloaded", "exported": "Exported",
                 "user_added": "Person added", "user_disabled": "Person switched off", "user_enabled": "Person switched on",
-                "password_reset": "Password reset"}
+                "password_reset": "Password reset", "run_details_changed": "Run details changed",
+                "program_renamed": "Program renamed"}
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 RISKY = ("=", "+", "-", "@", "\t", "\r")
 

@@ -8,7 +8,8 @@ import math
 import unittest
 from pathlib import Path
 
-from webapp.day import BreakRefused, check_break, day_view, meeting_slots, overtime_offers, read_inputs, vto_offers
+from webapp.day import (BreakRefused, check_break, day_view, meeting_slots, overtime_offers, read_inputs, replan,
+                        vto_offers)
 from webapp.versions import DAYS, read_week, shift_span
 
 REPO = Path(__file__).resolve().parents[2]
@@ -250,6 +251,43 @@ class TheDay(unittest.TestCase):
             for c in after["cells"]:
                 if c["required"] > 0 and row["t"] <= c["t"] < max(o["end"] for o in row["offers"]):
                     self.assertGreaterEqual(c["low"], c["need"], (row["t"], c["t"]))
+
+    def short_day(self):
+        gone = [a["name"] for a in WEEK["associates"] if (shift_span(a["days"][WED]) or (0, 0))[0] == 17 * 60][:2]
+        return {(0, n): {"status": "Unplanned leave"} for n in gone}
+
+    def applied(self, attendance, plan):
+        actual = {(0, m["name"], m["idx"]): m["to"] for m in plan["moves"]}
+        return day_view(WEEK, INPUTS, WED, attendance, actual), actual
+
+    def test_replan_never_makes_the_day_worse_and_says_so_truly(self):
+        att = self.short_day()
+        plan = replan(self.view(att), INPUTS)
+        self.assertTrue(plan["moves"])
+        self.assertGreaterEqual(plan["after"]["tightest"], plan["before"]["tightest"])
+        self.assertLessEqual(plan["after"]["short_hours"], plan["before"]["short_hours"])
+        after, _ = self.applied(att, plan)
+        self.assertAlmostEqual(plan["after"]["tightest"], min(c["pm"] for c in after["cells"] if c["pm"] is not None), places=2)
+        self.assertAlmostEqual(plan["after"]["short_hours"], after["tiles"]["short_hours"], places=1)
+
+    def test_replan_moves_only_breaks_not_started(self):
+        plan = replan(self.view(self.short_day()), INPUTS, now=18 * 60)
+        self.assertTrue(all(m["from"] >= 18 * 60 and m["to"] >= 18 * 60 for m in plan["moves"]))
+
+    def test_replan_keeps_every_rule(self):
+        att = self.short_day()
+        plan = replan(self.view(att), INPUTS)
+        after, actual = self.applied(att, plan)
+        for m in plan["moves"]:
+            seg = self.own(after, m["name"])
+            self.assertEqual(m["to"] % 5, 0)
+            brks = sorted(seg["breaks"], key=lambda b: b["idx"])
+            self.assertEqual([b["idx"] for b in sorted(brks, key=lambda b: b["start"])], [b["idx"] for b in brks])
+            self.assertTrue(seg["start"] <= brks[0]["start"] and brks[-1]["start"] + brks[-1]["minutes"] <= seg["end"])
+            for a, b in zip(brks, brks[1:]):  # the gaps next to a moved break keep the rules (the plan's own may not)
+                if m["idx"] in (a["idx"], b["idx"]):
+                    gap = b["start"] - (a["start"] + a["minutes"])
+                    self.assertTrue(INPUTS["gap_min"] <= gap <= INPUTS["gap_max"], (m["name"], a["kind"], b["kind"], gap))
 
     def test_tiles_sum_the_cells(self):
         v = self.view()

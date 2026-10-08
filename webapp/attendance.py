@@ -17,7 +17,7 @@ from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 from .day import (ABSENT, AUX, MEASURES, OVERTIME_MAX, STATUSES, STEP, TIMED, BreakRefused, _busy, advice,
-                  check_break, day_view, meeting_slots, overtime_offers, planned, read_inputs, vto_offers)
+                  check_break, day_view, meeting_slots, overtime_offers, planned, read_inputs, replan, vto_offers)
 from .schedules import EGYPT, KEEP_DAYS, ScheduleBook
 from .versions import DAYS, shift_span
 
@@ -166,7 +166,8 @@ class DayBook:
                                   user_id=user_id)
         self.store.add_day_log(program=program, shift_date=on.isoformat(), associate=name, what=what, user_id=user_id)
 
-    def move_break(self, program: str, on: date, name: str, idx: int, at: Optional[str], user_id: int) -> None:
+    def move_break(self, program: str, on: date, name: str, idx: int, at: Optional[str], user_id: int,
+                   suffix: str = "") -> None:
         """Move a break of the shift that starts on ``on`` to ``at`` (HH:MM), or back to the plan (None)."""
         row, week, span = self._shift(program, on, name)
         plan = {b["idx"]: b for b in planned(week, day_index(on), name)}
@@ -186,7 +187,7 @@ class DayBook:
             check_break(week, day_index(on), 0, name, idx, m, kept)
             self.store.set_actual_break(program=program, shift_date=on.isoformat(), associate=name, idx=idx,
                                         kind=plan[idx]["kind"], start=m, user_id=user_id)
-            what = f"{plan[idx]['kind']} moved {hm(was)} to {hm(m)}"
+            what = f"{plan[idx]['kind']} moved {hm(was)} to {hm(m)}{suffix}"
         self.store.add_day_log(program=program, shift_date=on.isoformat(), associate=name, what=what, user_id=user_id)
 
     def break_advice(self, program: str, on: date, name: str, idx: int, at: str,
@@ -288,6 +289,18 @@ class DayBook:
         rest = float(week.get("settings", {}).get("rest_gap_hours") or 0)
         return {"overtime": overtime_offers(page["view"], week, page["day"], rest, after),
                 "vto": vto_offers(page["view"], after)}
+
+    def replan(self, page: Dict[str, Any], now: int = 0) -> Dict[str, Any]:
+        """The autopilot's proposal for the breaks not yet started (nothing is kept)."""
+        return replan(page["view"], page["inputs"], now)
+
+    def apply_replan(self, program: str, on: date, moves: List[Tuple[str, int, int]], user_id: int) -> int:
+        """Keep the approved moves (each checked again: the day may have changed since the preview)."""
+        done = 0
+        for name, idx, start in moves:
+            self.move_break(program, on, name, idx, hm(start), user_id, suffix=" (autopilot)")
+            done += 1
+        return done
 
     def book_session(self, program: str, on: date, names: List[str], start: int, minutes: int, kind: str, user_id: int,
              billable: bool = False) -> None:

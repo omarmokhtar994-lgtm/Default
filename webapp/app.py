@@ -736,7 +736,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         measure = request.args.get("measure", "")
         measure = measure if measure in MEASURES else "interval"
         tab = request.args.get("view", "")
-        tab = tab if tab in ("board", "adherence", "meeting", "cover") else "timeline"
+        tab = tab if tab in ("board", "adherence", "meeting", "cover", "replan") else "timeline"
         problem = ""
         try:
             page = days.page(program, on, measure) if program else None
@@ -755,9 +755,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                                          finder["to"], finder["billable"], measure)
                 except ValueError as exc:
                     finder["error"] = str(exc)
+        clock_now = datetime.now(EGYPT)
+        from_now = clock_now.hour * 60 + clock_now.minute if clock_now.date() == on else 0
         if page and tab == "cover":
-            now = datetime.now(EGYPT)
-            cover = days.offers(page, now.hour * 60 + now.minute if now.date() == on else 0)
+            cover = days.offers(page, from_now)
+        proposal = days.replan(page, from_now) if page and tab == "replan" else None
         if page and tab == "adherence":
             v = page["view"]
             people = sorted((person_day(v, l["name"]) for l in v["lanes"] if any(x["offset"] == 0 for x in l["segments"])),
@@ -766,6 +768,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             shrink = interval_shrinkage(v, page["inputs"], page["day"])
         return render_template("day.html", page=page, problem=problem, program=program, programs=programs, on=on,
                                people=people, whole=whole, shrink=shrink, finder=finder, cover=cover,
+                               proposal=proposal, from_now=from_now,
                                activity_kinds=ACTIVITY_KINDS,
                                measure=measure,
                                measures=MEASURES, tab=tab, statuses=STATUSES, aux=sorted(AUX), hm=hm,
@@ -809,8 +812,26 @@ def create_app(config: Dict[str, Any]) -> Flask:
 
     def _back_to_day(program: str, on: Optional[date], view: str):  # type: ignore[no-untyped-def]
         args = {"program": program, "date": on.isoformat() if on else None,
-                "view": view if view in ("board", "adherence", "meeting", "cover") else None}
+                "view": view if view in ("board", "adherence", "meeting", "cover", "replan") else None}
         return redirect(url_for("day_page", **{k: v for k, v in args.items() if v}), code=303)
+
+    @app.route("/day/replan/apply", methods=["POST"])
+    @login_required
+    def day_replan_apply():  # type: ignore[no-untyped-def]
+        """Keep the autopilot's moves the user approved (each checked again)."""
+        program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
+        try:
+            if on is None:
+                raise ValueError("Pick a day.")
+            moves = []
+            for item in request.form.getlist("move"):
+                name, idx, start = item.rsplit("|", 2)
+                moves.append((name, int(idx), int(start)))
+            done = _days().apply_replan(program, on, moves, g.user["id"])
+            flash(f"Moved {done} break{'s' if done != 1 else ''}.")
+        except ValueError as exc:
+            flash(f"Stopped: {exc} The moves before it were kept; open the autopilot again for a fresh proposal.")
+        return _back_to_day(program, on, "")
 
     @app.route("/day/activity", methods=["POST"])
     @login_required

@@ -642,3 +642,4 @@ svg.defs { position: absolute; width: 0; height: 0; }
 [data-day] .chip.offer { cursor: pointer; border-color: var(--covered); }
 [data-day] .chip.offer:hover { background: var(--accent-soft); }
 [data-day] .adh-t td.bad { color: var(--gap-ink); font-weight: 700; }
+[data-day] .autopilot { float: right; margin: -38px 0 0; } @media (max-width: 720px) { [data-day] .autopilot { float: none; margin: 0 0 10px; } }

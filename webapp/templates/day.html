@@ -66,6 +66,7 @@
 {% if tab == 'timeline' %}
 <section class="panel" aria-labelledby="floor-h">
   <h2 id="floor-h">Who is on the floor</h2>
+  <p class="autopilot"><a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='replan') }}">Fix the rest of the day's breaks</a></p>
   <p class="note">Shifts in blue, breaks in amber. Drag a break to move it in 5-minute steps, or select it and press Enter to type the time; the dashed outline is where the engine planned it. Set attendance on the left.</p>
   <div class="tl-scroll"><div class="tl cols-{{ v.cells|length }}">
     <div class="tl-row tl-axis" aria-hidden="true"><span></span><div class="tl-ticks">{% for h in range(0, 24, 2) %}<span>{{ '%02d'|format(h) }}</span>{% endfor %}</div></div>
@@ -94,6 +95,25 @@
     {% for l in v.languages %}<div class="tl-row tl-num"><span class="tl-lbl">{{ l.name }} on the floor</span><div class="tl-cells">{% for c in l.cells %}<span class="tc {{ c.cls }}">{{ c.count if c.count is not none else '' }}</span>{% endfor %}</div></div>{% endfor %}
   </div></div>
   <p class="legend2"><span><i class="k ok"></i>Enough people</span><span><i class="k warn"></i>Short by less than one person</span><span><i class="k bad"></i>Short by a person or more</span><span><i class="k moved"></i>Break moved here</span><span><i class="k ghost"></i>Where the engine planned it</span><span><i class="k away"></i>Away (late, aux, leave)</span></p>
+</section>
+{% elif tab == 'replan' %}
+{% set pr = proposal %}
+<section class="panel" aria-labelledby="rp-h">
+  <h2 id="rp-h">Fix the rest of the day's breaks</h2>
+  <p class="note">The autopilot moves breaks that have not started{% if from_now %} (after {{ hm(from_now) }}){% endif %}, for people on shift and present, to lift the tightest interval and then cut the hours short. Each break stays inside its shift, in its order, on a 5-minute step, clear of the person's other breaks, away time and activities, with the gaps to its neighbours within this program's rules{% if page.inputs.gap_min %} ({{ page.inputs.gap_min }} to {{ page.inputs.gap_max }} minutes){% endif %}, and no language loses its last person or drops below its minimum. Nothing is kept until you apply it.</p>
+  <section class="tiles" aria-label="Before and after">
+    <p class="tile"><span class="tile-label">Tightest interval</span><b>{{ pr.after.tightest|hmm }}</b><small class="dim">now {{ pr.before.tightest|hmm }}</small></p>
+    <p class="tile"><span class="tile-label">Hours short</span><b>{{ pr.after.short_hours|num }} h</b><small class="dim">now {{ pr.before.short_hours|num }} h</small></p>
+    <p class="tile"><span class="tile-label">Breaks to move</span><b>{{ pr.moves|length }}</b><small class="dim">{{ 'nothing better within the rules' if not pr.moves else 'one click keeps them all' }}</small></p>
+  </section>
+  {% if pr.moves %}
+  <form method="post" action="{{ url_for('day_replan_apply') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}">
+    <table class="adh-t"><thead><tr><th scope="col">Associate</th><th scope="col">Break</th><th scope="col">From</th><th scope="col">To</th></tr></thead>
+      <tbody>{% for m in pr.moves %}<tr><td><b>{{ m.name }}</b><input type="hidden" name="move" value="{{ m.name }}|{{ m.idx }}|{{ m.to }}"></td><td>{{ m.kind }} ({{ m.minutes }} min)</td><td>{{ hm(m['from']) }}</td><td><b>{{ hm(m.to) }}</b></td></tr>{% endfor %}</tbody></table>
+    <p><button class="primary" type="submit">Apply all {{ pr.moves|length }}</button> <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure) }}">Cancel</a></p>
+  </form>
+  {% else %}<p class="empty">No single move makes the day better within the rules: the gaps left are staffing gaps (overtime can help: see Overtime and VTO).</p>{% endif %}
 </section>
 {% elif tab == 'meeting' %}
 <div class="adh">
@@ -176,6 +196,7 @@
 {% else %}
 <section class="panel" aria-labelledby="board-h">
   <h2 id="board-h">Interval board</h2>
+  <p class="autopilot"><a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='replan') }}">Fix the rest of the day's breaks</a></p>
   <p class="note">Each row is one {{ unit.get(v.interval, 'interval')[:-1] }}: who goes on a break in it, who is late, leaves early or is in aux, and whether the floor still holds. Drag a break to another row, or click it to set the time in 5-minute steps; you see the warnings and the best times before anything is kept.</p>
   {% set gone = [] %}{% for lane in v.lanes %}{% for s in lane.segments if s.offset == 0 and s.status in absent_states %}{% set _ = gone.append(lane.name ~ ' (' ~ s.status|lower ~ ')') %}{% endfor %}{% endfor %}
   {% if gone %}<p class="board-gone">Not on the floor today: <b>{{ gone|join(', ') }}</b>.</p>{% endif %}

@@ -1072,6 +1072,15 @@ class TheDayPage(unittest.TestCase):
                                                           "view": "cover"}, follow_redirects=True)
         self.assertIn("Overtime has to start when", html.unescape(refused.get_data(as_text=True)))
 
+    def test_autopilot_preview_and_apply(self):
+        body = html.unescape(self.client.get(self.url + "&view=replan").get_data(as_text=True))
+        for words in ("Fix the rest of the day's breaks", "Tightest interval", "Hours short"):
+            self.assertIn(words, body)
+        got = self.client.post("/day/replan/apply", data={"csrf_token": token(self.client), "program": "AE/AR B2B",
+                                                          "date": "2026-10-14", "move": ["Associate 021|1|775"]})
+        self.assertEqual(got.status_code, 303)
+        self.assertIn("Lunch moved 12:30 to 12:55 (autopilot)", self.page())
+
     def test_week_without_a_schedule_and_defaults(self):
         body = html.unescape(self.client.get("/day?program=AE/AR+B2B&date=2026-11-04").get_data(as_text=True))
         self.assertIn("No schedule for AE/AR B2B in the week of 01 Nov", body)

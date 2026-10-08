@@ -637,3 +637,155 @@ def vto_offers(view: Dict[str, Any], after: int = 0, top: int = 6) -> List[Dict[
         if taken:
             out.append({"t": t, "buffer": c["pm"], "room": c["low"] - c["need"], "offers": taken})
     return out
+
+
+# ---------------------------------------------------------------- the autopilot for the rest of the day's breaks
+def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: int = 400) -> Dict[str, Any]:
+    """Re-plot the breaks not yet started (people on shift and present, this day's shifts) to lift the
+    tightest interval, then to cut the hours short; each break stays inside its shift, in its order,
+    on a 5-minute step, clear of the person's other breaks, away time and activities, with the gaps to
+    its neighbours within the program's rules, and no language drops below its minimum (or loses its
+    last person). Greedy: the best single move each round, until nothing improves. Returns the moves
+    and the day before and after (tightest buffer and hours short, as the day page shows them)."""
+    step = view["interval"]
+    per = step // STEP
+    cells = view["cells"]
+    req = [c["required"] for c in cells]
+    slots = [x for c in cells for x in c["slots"]]
+    sums = [sum(slots[k * per:(k + 1) * per]) for k in range(len(cells))]
+    lo_gap, hi_gap = inputs.get("gap_min"), inputs.get("gap_max")
+    interval_mode = view["measure"] == "interval"
+
+    def pm(k: int, total: float) -> float:
+        return round((total / per - req[k]) * step / 60, 2)
+
+    def score(totals: List[float]) -> Tuple[float, float]:
+        values = [pm(k, totals[k]) for k in range(len(cells)) if req[k] > 0]
+        if not values:
+            return (0.0, 0.0)
+        return (min(values), -round(sum(-v for v in values if v < 0), 1))
+
+    people = [(lane, seg) for lane in view["lanes"] for seg in lane["segments"]
+              if seg["offset"] == 0 and seg["status"] not in ABSENT]
+    starts = {(lane["name"], b["idx"]): b["start"] for lane, seg in people for b in seg["breaks"]}
+    original = dict(starts)
+
+    def free(seg: Dict[str, Any], t: int) -> bool:  # on the floor at t, breaks aside
+        if not seg["start"] <= t < seg["end"]:
+            return False
+        if not (seg["billable"] and interval_mode) and seg["away"][0] <= t < seg["away"][1]:
+            return False
+        return not any(a["start"] <= t < a["end"] for a in seg.get("activities", [])
+                       if a["kind"] == "VTO" or (a["kind"] in AUX and not (a.get("billable") and interval_mode)))
+
+    # languages: per 5 minutes, people on the floor who count for each language (inside its hours)
+    langs = []
+    for lang in view["languages"]:
+        inside = {c["t"] for c in lang["cells"] if c["count"] is not None}
+        counts = [0] * len(slots)
+        langs.append({"eligible": set(lang["eligible"]), "minimum": lang["minimum"], "inside": inside, "counts": counts})
+    lang_of = {lane["name"]: _norm(lane["language"]) for lane in view["lanes"]}
+    for lane in view["lanes"]:
+        for seg in lane["segments"]:
+            for i in range(len(slots)):
+                t = i * STEP
+                on = (seg["status"] not in ABSENT and free(seg, t)
+                      and not any(b["start"] <= t < b["start"] + b["minutes"] for b in seg["breaks"]))
+                if on:
+                    for L in langs:
+                        if lang_of[lane["name"]] in L["eligible"]:
+                            L["counts"][i] += 1
+
+    def window(start: int, minutes: int) -> range:
+        return range(max(start, 0), min(start + minutes, 1440), STEP)
+
+    def positions(lane, seg, b) -> List[int]:
+        name = lane["name"]
+        others = sorted(((starts[(name, o["idx"])], o) for o in seg["breaks"] if o["idx"] != b["idx"]), key=lambda x: x[0])
+        before = [(s, o) for s, o in others if o["idx"] < b["idx"]]
+        after = [(s, o) for s, o in others if o["idx"] > b["idx"]]
+        lo = max(seg["start"], now)
+        hi = seg["end"] - b["minutes"]
+        if before:
+            prev_end = before[-1][0] + before[-1][1]["minutes"]
+            lo = max(lo, prev_end + (lo_gap or 0))
+            if hi_gap is not None:
+                hi = min(hi, prev_end + hi_gap)
+        if after:
+            nxt = after[0][0]
+            hi = min(hi, nxt - (lo_gap or 0) - b["minutes"])
+            if hi_gap is not None:
+                lo = max(lo, nxt - hi_gap - b["minutes"])
+        out = []
+        for s in range(lo + (-lo) % STEP, hi + 1, STEP):
+            if s == starts[(name, b["idx"])]:
+                continue
+            if not all(free(seg, t) for t in range(s, s + b["minutes"], STEP)):
+                continue
+            out.append(s)
+        return out
+
+    def delta(lane, seg, b, new: int) -> Dict[int, int]:
+        old = starts[(lane["name"], b["idx"])]
+        change: Dict[int, int] = {}
+        for t in window(old, b["minutes"]):
+            if free(seg, t) and not new <= t < new + b["minutes"]:
+                change[t // STEP] = change.get(t // STEP, 0) + 1
+        for t in window(new, b["minutes"]):
+            if free(seg, t) and not old <= t < old + b["minutes"]:
+                change[t // STEP] = change.get(t // STEP, 0) - 1
+        return change
+
+    def languages_hold(lane, change: Dict[int, int]) -> bool:
+        mine = lang_of[lane["name"]]
+        for L in langs:
+            if mine not in L["eligible"]:
+                continue
+            for i, d in change.items():
+                if d < 0 and (i * STEP - (i * STEP) % step) in L["inside"]:
+                    if L["counts"][i] + d < max(L["minimum"], 1):
+                        return False
+        return True
+
+    before_score = score(sums)
+    current = before_score
+    for _ in range(rounds):
+        tight = {k for k in range(len(cells)) if req[k] > 0 and pm(k, sums[k]) < step / 60}  # under one person spare
+        best = None
+        for lane, seg in people:
+            for b in seg["breaks"]:
+                key = (lane["name"], b["idx"])
+                start = starts[key]
+                if start < now or not any((start - start % step) // step <= k <= (start + b["minutes"] - 1) // step
+                                          for k in tight):
+                    continue
+                for new in positions(lane, seg, b):
+                    change = delta(lane, seg, b, new)
+                    if not change or not languages_hold(lane, change):
+                        continue
+                    totals = list(sums)
+                    for i, d in change.items():
+                        totals[i // per] += d
+                    candidate = score(totals)
+                    rank = (candidate, -abs(new - original[key]))
+                    if candidate > current and (best is None or rank > best[0]):
+                        best = (rank, lane, seg, b, new, change, totals)
+        if best is None:
+            break
+        _, lane, seg, b, new, change, totals = best
+        for i, d in change.items():
+            for L in langs:
+                if lang_of[lane["name"]] in L["eligible"]:
+                    L["counts"][i] += d
+        starts[(lane["name"], b["idx"])] = new
+        sums = totals
+        current = score(sums)
+    moves = []
+    for lane, seg in people:
+        for b in seg["breaks"]:
+            key = (lane["name"], b["idx"])
+            if starts[key] != original[key]:
+                moves.append({"name": lane["name"], "idx": b["idx"], "kind": b["kind"], "minutes": b["minutes"],
+                              "from": original[key], "to": starts[key]})
+    return {"moves": moves, "before": {"tightest": before_score[0], "short_hours": -before_score[1]},
+            "after": {"tightest": current[0], "short_hours": -current[1]}}

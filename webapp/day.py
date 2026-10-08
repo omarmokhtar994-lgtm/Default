@@ -161,11 +161,23 @@ def planned(week: Dict[str, Any], d: int, name: str) -> List[Dict[str, Any]]:
     return [{"idx": i, **b} for i, b in enumerate(sorted(found, key=lambda b: b["start"]))]
 
 
-def _segments(week: Dict[str, Any], inputs: Dict[str, Any], day: int) -> List[Dict[str, Any]]:
-    """Shift pieces touching this day: the day's own shifts and the previous day's overnight ones."""
+SAME_WEEK = "same week"  # day_view's default for the day before: this week's previous column (the input's tab on Sunday)
+
+
+def _yesterday(week: Dict[str, Any], day: int, before: Any) -> Optional[Tuple[Dict[str, Any], int]]:
+    """Where the day before is read from: (week, column), or None for the input's Previous week tab."""
+    if before == SAME_WEEK:
+        return (week, day - 1) if day > 0 else None
+    return before
+
+
+def _segments(week: Dict[str, Any], inputs: Dict[str, Any], day: int, before: Any = SAME_WEEK) -> List[Dict[str, Any]]:
+    """Shift pieces touching this day: the day's own shifts and the previous day's overnight ones (from
+    ``before``: the (week, column) holding the day before, or None for the input's carry-in tab)."""
     out = []
-    for offset, d in ((-1, day - 1), (0, day)):
-        if d < 0:  # Sunday: last Saturday's overnight shifts, from the Previous week scheduled tab
+    for offset in (-1, 0):
+        source, d = (week, day) if offset == 0 else (_yesterday(week, day, before) or (None, None))
+        if source is None:  # no schedule for the day before: overnight shifts from the Previous week scheduled tab
             for p in inputs.get("previous_saturday", []):
                 span = shift_span(p["shift"])
                 if span and span[1] > 1440:
@@ -173,7 +185,7 @@ def _segments(week: Dict[str, Any], inputs: Dict[str, Any], day: int) -> List[Di
                                 "called_in": False, "label": p["shift"],
                                 "start": span[0] - 1440, "end": span[1] - 1440, "planned": []})
             continue
-        for a in week.get("associates", []):
+        for a in source.get("associates", []):
             span = shift_span(a["days"][d])
             if not span:
                 continue
@@ -183,7 +195,7 @@ def _segments(week: Dict[str, Any], inputs: Dict[str, Any], day: int) -> List[Di
             out.append({"name": a["name"], "slot": a.get("slot", ""), "language": a["language"], "offset": offset,
                         "called_in": False, "label": a["days"][d],
                         "start": start, "end": end,
-                        "planned": [{**b, "start": b["start"] + 1440 * offset} for b in planned(week, d, a["name"])]})
+                        "planned": [{**b, "start": b["start"] + 1440 * offset} for b in planned(source, d, a["name"])]})
     return out
 
 
@@ -209,14 +221,14 @@ def pattern_breaks(week: Dict[str, Any], d: int, label: str) -> List[Dict[str, A
 
 
 def _called_in(week: Dict[str, Any], day: int, activities: Optional[Dict[Tuple[int, str], List[Dict[str, Any]]]],
-               existing: set) -> List[Dict[str, Any]]:
+               existing: set, before: Any = SAME_WEEK) -> List[Dict[str, Any]]:
     """Segments for people called in on a day off (this day, or yesterday's overnight shift)."""
-    people = {a["name"]: a for a in week.get("associates", [])}
     out = []
     for (offset, name), acts in (activities or {}).items():
-        d = day + offset
-        if d < 0 or (offset, name) in existing:
+        source, d = (week, day) if offset == 0 else (_yesterday(week, day, before) or (None, None))
+        if source is None or (offset, name) in existing:
             continue
+        people = {a["name"]: a for a in source.get("associates", [])}
         for a in acts:
             if a["kind"] != CALLED_IN:
                 continue
@@ -227,7 +239,7 @@ def _called_in(week: Dict[str, Any], day: int, activities: Optional[Dict[Tuple[i
             person = people.get(name, {})
             out.append({"name": name, "slot": person.get("slot", ""), "language": person.get("language", ""),
                         "offset": offset, "called_in": True, "label": f"{label} (called in)", "start": start, "end": end,
-                        "planned": [{**b, "start": b["start"] + 1440 * offset} for b in pattern_breaks(week, d, label)]})
+                        "planned": [{**b, "start": b["start"] + 1440 * offset} for b in pattern_breaks(source, d, label)]})
     return out
 
 
@@ -283,8 +295,10 @@ def check_break(week: Dict[str, Any], day: int, offset: int, name: str, idx: int
 def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
              attendance: Dict[Tuple[int, str], Dict[str, Any]],
              actual: Dict[Tuple[int, str, int], int], measure: str = "interval",
-             activities: Optional[Dict[Tuple[int, str], List[Dict[str, Any]]]] = None) -> Dict[str, Any]:
-    """The day's lanes, interval cells, language rows and tiles. ``attendance``,
+             activities: Optional[Dict[Tuple[int, str], List[Dict[str, Any]]]] = None,
+             before: Any = SAME_WEEK) -> Dict[str, Any]:
+    """The day's lanes, interval cells, language rows and tiles. ``before`` is where the day before is
+    read from: (week, column), None for the input's carry-in tab, or this week's previous column. ``attendance``,
     ``actual`` and ``activities`` are keyed by (day offset, name[, break index]):
     0 for this day's shifts, -1 for the previous day's; times are minutes from that
     shift's own midnight. ``measure`` is "interval" (billable aux stays on the
@@ -299,8 +313,8 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
     plan = [[] for _ in range(slots)]
     lanes: Dict[str, Dict[str, Any]] = {}
     pieces = []
-    segments = _segments(week, inputs, day)
-    segments += _called_in(week, day, activities, {(x["offset"], x["name"]) for x in segments})
+    segments = _segments(week, inputs, day, before)
+    segments += _called_in(week, day, activities, {(x["offset"], x["name"]) for x in segments}, before)
     for seg in segments:
         mark = attendance.get((seg["offset"], seg["name"])) or {}
         status = mark.get("status", PRESENT)

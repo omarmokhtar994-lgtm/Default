@@ -149,7 +149,7 @@
 <section class="panel" aria-labelledby="ot-h">
   <h2 id="ot-h">Short: offer overtime</h2>
   <p class="note">People whose shift ends just before a short interval, or starts just after it, could stay on or come in early: at most 2 hours, keeping the program's rest gap. Offer it, and when they accept, press their name: it counts on the floor and is logged.</p>
-  {% if not cover.next_known %}<p class="note warn-note">{{ sunday_unchecked }}</p>{% endif %}
+  {% if not cover.next_known %}<p class="note warn-note">{{ tomorrow_unchecked }}</p>{% endif %}
   {% if cover.overtime %}<table class="adh-t"><thead><tr><th scope="col">Interval</th><th scope="col" class="n">Buffer</th><th scope="col" class="n">People short</th><th scope="col">Who could cover (accepted → press)</th></tr></thead>
   <tbody>{% for row in cover.overtime %}<tr><td><b>{{ hm(row.t) }}</b></td><td class="n bad">{{ row.buffer|hmm }}</td><td class="n">{{ row.short }}</td><td>{% for o in row.offers %}{{ accept(o.name, 'Overtime', o.start, o.end, o.text) }}{% else %}<span class="dim">nobody next to it within the rules</span>{% endfor %}</td></tr>{% endfor %}</tbody></table>
   {% else %}<p class="empty">No short intervals.</p>{% endif %}
@@ -220,7 +220,7 @@
     {% if cover_panel and cover_panel.t == r.t %}{% set cp = cover_panel %}
     <div class="rb-cover" role="row"><div class="cover-panel" id="cover" role="cell" aria-labelledby="cover-h">
     <h3 id="cover-h">Cover {{ hm(cp.t) }} to {{ hm(cp.end) }} <small>buffer {{ cp.cell.pm|hmm if cp.cell.pm is not none else '–' }}, need {{ cp.cell.need }}, on the floor {{ cp.cell.now|num }}</small></h3>
-    {% if not cp.next_known %}<p class="note warn-note">{{ sunday_unchecked }}</p>{% endif %}
+    {% if not cp.next_known %}<p class="note warn-note">{{ tomorrow_unchecked }}</p>{% endif %}
     <div class="cover-cols">
       <div><h4>Overtime</h4><p class="note">Stay on after the shift or come in early, up to 2 hours, keeping the rest gap. Press a name once they accept.</p>
         {% for o in cp.overtime %}{{ accept(o.name, 'Overtime', o.start, o.end, o.text, 'board', cp.t) }}{% else %}<p class="empty">Nobody's shift ends just before or starts just after this {{ unit.get(v.interval, 'interval')[:-1] }} within the rules.</p>{% endfor %}</div>

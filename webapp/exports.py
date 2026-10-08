@@ -70,14 +70,16 @@ class _Weeks:
 
     def __init__(self, days):
         self.days = days
-        self.seen: Dict[Tuple[str, str], Dict[str, Any]] = {}
+        self.seen: Dict[int, Dict[str, Any]] = {}
 
     def week(self, program: str, day: date) -> Dict[str, Any]:
-        key = (program, (day - timedelta(days=_day_index(day))).isoformat())
-        if key not in self.seen:
-            row, _ = self.days.version(program, day)
-            self.seen[key] = json.loads(row["week"] or "{}") if row else {}
-        return self.seen[key]
+        """The week holding ``day`` (its start may be any weekday), read once per version."""
+        row, _ = self.days.version(program, day)
+        if row is None:
+            return {}
+        if row["id"] not in self.seen:
+            self.seen[row["id"]] = json.loads(row["week"] or "{}")
+        return self.seen[row["id"]]
 
     def person(self, program: str, day: date, name: str) -> Dict[str, Any]:
         return next((a for a in self.week(program, day).get("associates", []) if a["name"] == name), {})

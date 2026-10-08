@@ -75,3 +75,32 @@ Form rules: `run_tag` reads `program`, `week_start`, and for admins `user_id` (a
 - [ ] Step 2: run → FAIL.  Step 3: implement.  Step 4: run → PASS.
 - [ ] Step 5: browser test `TheRunDetailsInTheBrowser.test_edit_and_rename` with screenshots `evidence/phase_p/screens/run_edit_details.png`, `run_check_before_saving.png`, `program_rename.png`.
 - [ ] Step 6: full website suite, earlier phases' screenshots restored; commit; gate + package.
+
+---
+
+## Addendum (owner, 2026-10-08): the schedule's real start date
+
+"I need a drop down while submitting to choose the actual start date of the schedule because some programs starts on Monday not Sunday … this can be edited by admin … it will determine the first day for the schedule uploaded for example 11 October or 12 October."
+
+Facts: the input and the schedules label days Sun…Sat; the engine plans that Sun…Sat week, checks rest between neighbouring days including Saturday into Sunday, and applies the "Previous week scheduled" carry-in before Sunday. A run's `week_start` becomes the schedule's first date (any weekday; the form offers Sundays and Mondays). A date reads the column of its weekday name from the run whose seven days contain it.
+
+Global constraint added: engine untouched — what a Monday start means for the engine's week edges is reported to the owner, not changed.
+
+### Task 4: Dates map to the run that covers them
+
+**Files:** Modify `webapp/store.py` (`list_schedules(..., covering: Optional[str])`: `week_start` between covering−6 and covering), `webapp/attendance.py` (`pick_version` prefers in use, then the latest start, then tool after breaks, newest; `DayBook.version` uses `covering`; `_records` reads the previous date from the run that covers it; `page` passes the previous date's week to `day_view`; `page["week_start"]` is the run's start; `next_week_unknown(program, on)` is "no schedule covers tomorrow"; `NEXT_UNCHECKED` names tomorrow's weekday; `neighbours` falls back to the input's carry-in only when no run covers yesterday), `webapp/day.py` (`day_view(..., before=...)`, `_segments(..., before)`: `before` = (week, column) of the previous date, `None` = the input's carry-in tab, default = the legacy same-week rule), `webapp/exports.py` (`_Weeks` caches by version id, not by Sunday). Test `webapp/tests/test_attendance.py` (`TheStartDay`), `webapp/tests/test_day.py`, `webapp/tests/test_exports.py`.
+
+- [ ] Tests: `test_a_monday_start_covers_monday_to_sunday` (version for Mon 12 … Sun 18 is the run; Sun 11 and Mon 19 none); `test_the_last_day_takes_saturday_night_from_the_same_run` (Sun 18: Associate 004's Saturday 20:00 - 05:00 is carried in); `test_the_first_day_takes_last_night_from_the_run_before` (two Monday runs: Mon 19 carries in Sun 18's 23:00 - 08:00 for Associate 004, not the input tab's Associate 001); `test_the_first_day_without_a_run_before_uses_the_input_tab` (Mon 12: Associate 001's 16:00 - 01:00 from the tab; Associate 004's Sunday shift of the same run is not carried in); `test_overlapping_runs_latest_start_unless_in_use`; `test_tomorrow_unchecked_on_the_last_day` (Sun 18 True, Sat 17 False); exports `test_breaks_follow_a_monday_start`.
+- [ ] RED, implement, GREEN, commit.
+
+### Task 5: The start-date dropdown
+
+**Files:** Modify `webapp/app.py` (`start_choices(around: date, keep: str) -> List[Tuple[str, str]]`: Sundays and Mondays from 4 weeks back to 10 weeks ahead plus `keep`; upload and edit store the chosen date as given — no Sunday snapping; `?week=` prefill keeps its date), `webapp/templates/dashboard.html` and `run.html` (select "Schedule starts"), `webapp/static/app.js` (picking a known program preselects the next date on its usual start weekday until the person picks one), `webapp/run_admin.py` (any valid date; label "Schedule starts"). Test `webapp/tests/test_runs.py` (`TheStartDate`).
+
+- [ ] Tests: upload with `week_start=2026-10-12` keeps 2026-10-12; the form lists "Mon 12 Oct 2026" and "Sun 11 Oct 2026" with the prefilled one selected; the edit form offers the same and an admin moves a run to Monday 12; the run page says "starts Monday 12 Oct".
+- [ ] RED, implement, GREEN, commit.
+
+### Task 6: Verify and ship
+
+- [ ] Browser: upload form dropdown, Edit details, Check before saving, Rename (screens to `evidence/phase_p/screens/`).
+- [ ] Full website suite; earlier phases' screenshots restored; gate + package; engine and protected workbooks unchanged.

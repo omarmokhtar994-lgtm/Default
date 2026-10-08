@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import sqlite3
 import time
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -242,12 +243,18 @@ class Store:
         return dict(row) if row else None
 
     def list_schedules(self, run_id: Optional[str] = None, program: Optional[str] = None,
-                       week_start: Optional[str] = None) -> List[Dict[str, Any]]:
+                       week_start: Optional[str] = None, covering: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Versions by run, program and start date; ``covering`` (a YYYY-MM-DD date) keeps those whose
+        seven days hold that date."""
         where, args = [], []
         for column, value in (("run_id", run_id), ("program", program), ("week_start", week_start)):
             if value is not None:
                 where.append(f"schedules.{column} = ?")
                 args.append(value)
+        if covering is not None:
+            first = (date.fromisoformat(covering) - timedelta(days=6)).isoformat()
+            where.append("schedules.week_start between ? and ?")
+            args += [first, covering]
         sql = ("select schedules.*, users.display_name as by_name from schedules left join users"
                " on users.id = schedules.user_id" + (" where " + " and ".join(where) if where else "")
                + " order by schedules.number")

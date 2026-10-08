@@ -47,18 +47,21 @@ def _clock(text: str) -> Optional[int]:
 
 
 def pick_version(versions: List[Dict[str, Any]]) -> Tuple[Optional[Dict[str, Any]], str]:
-    """Which of a week's versions the day is read from: the one in use, else the newest tool schedule
-    (after breaks first), with a note saying so; (None, "") when there is none."""
-    chosen = next((v for v in versions if v["in_use"]), None)
+    """Which of the versions covering a day it is read from: one in use, else the newest tool schedule
+    (after breaks first), with a note saying so; (None, "") when there is none. Where two weeks overlap
+    (a program moving from Sunday to Monday starts), the later start counts."""
+    order = (lambda v: (v["week_start"], v["kind"] == "tool_after", v["created"]))
+    chosen = max((v for v in versions if v["in_use"]), key=order, default=None)
     if chosen:
         return chosen, ""
-    tools = sorted((v for v in versions if v["kind"] != "edited"),
-                   key=lambda v: (v["kind"] != "tool_after", -v["created"]))
+    tools = sorted((v for v in versions if v["kind"] != "edited"), key=order, reverse=True)
     return (tools[0], FALLBACK) if tools else (None, "")
 
 
-SUNDAY_UNCHECKED = ("Next week's schedule is not here yet, so the rest gap to Sunday is not checked: "
-                    "check Sunday's start by hand.")
+def tomorrow_unchecked(on: date) -> str:
+    """Said when no schedule holds the day after ``on`` (the last day of the latest week here)."""
+    day = f"{on + timedelta(days=1):%A}"
+    return f"Next week's schedule is not here yet, so the rest gap to {day} is not checked: check {day}'s start by hand."
 
 
 class DayBook:
@@ -72,7 +75,7 @@ class DayBook:
 
     def version(self, program: str, on: date) -> Tuple[Optional[Dict[str, Any]], str]:
         """The version in use for the week holding ``on``, else the tool's own (after breaks first)."""
-        return pick_version(self.store.list_schedules(program=program, week_start=week_start(on).isoformat()))
+        return pick_version(self.store.list_schedules(program=program, covering=on.isoformat()))
 
     def _week(self, row: Dict[str, Any]) -> Dict[str, Any]:
         return json.loads(row["week"] or "{}")
@@ -114,10 +117,8 @@ class DayBook:
         """Everyone's working spans the day before and the day after ``on``, across the week's edges: the
         week before falls back to the input's previous Saturday; a week after with no schedule is unknown."""
         before = on - timedelta(days=1)
-        saturday = None
-        if week_start(before) != week_start(on):
-            source = self.book.input_path(row["run_id"])
-            saturday = read_inputs(source)["previous_saturday"] if source.is_file() else None
+        source = self.book.input_path(row["run_id"])  # when no schedule holds the day before: the input's tab
+        saturday = read_inputs(source)["previous_saturday"] if source.is_file() else None
         prev, nxt = self._spans(program, before, saturday), self._spans(program, on + timedelta(days=1))
         return {"prev": prev or {}, "next": nxt or {}, "next_known": nxt is not None}
 
@@ -174,7 +175,7 @@ class DayBook:
             for r in self.store.list_attendance(program, [d.isoformat()]):
                 attendance[(offset, r["associate"])] = {"status": r["status"], "from": r["from_min"], "to": r["to_min"],
                                                         "billable": bool(r["billable"])}
-            source, _ = (row, "") if week_start(d) == week_start(on) else self.version(program, d)
+            source = row if d == on else self.version(program, d)[0]
             week = self._week(source) if source else {}
             for r in self.store.list_actual_breaks(program, [d.isoformat()]):
                 plan = {b["idx"]: b for b in self.plan_for(program, d, r["associate"], week)} if week else {}
@@ -197,9 +198,11 @@ class DayBook:
                              "out. Run the week again, or ask the admin to restore the server's data folder.")
         inputs = read_inputs(source)
         attendance, actual, stale, acts = self._records(program, on, row)
-        view = day_view(week, inputs, day_index(on), attendance, actual, measure, acts)
+        earlier, _ = self.version(program, on - timedelta(days=1))  # last night: the schedule holding yesterday
+        before = (self._week(earlier), day_index(on - timedelta(days=1))) if earlier else None
+        view = day_view(week, inputs, day_index(on), attendance, actual, measure, acts, before)
         return {"version": row, "note": note, "view": view, "stale": stale, "date": on,
-                "week_start": week_start(on).isoformat(), "day": day_index(on), "inputs": inputs,
+                "week_start": row["week_start"], "day": day_index(on), "inputs": inputs,
                 "log": self.store.list_day_log(program, on.isoformat())}
 
     # ------------------------------------------------------------- what people record
@@ -419,8 +422,8 @@ class DayBook:
                 "vto": vto_offers(page["view"], after), "next_known": near["next_known"]}
 
     def next_week_unknown(self, program: str, on: date) -> bool:
-        """A Saturday whose next week has no schedule here: the rest gap to Sunday cannot be checked."""
-        return day_index(on) == 6 and self.version(program, on + timedelta(days=1))[0] is None
+        """The last day of a schedule whose next one is not here: the rest gap to tomorrow cannot be checked."""
+        return self.version(program, on + timedelta(days=1))[0] is None
 
     def cover_offers(self, page: Dict[str, Any], t: int) -> Dict[str, Any]:
         """For one interval: overtime next to people's shifts, and people off that day who could be called in."""

@@ -17,7 +17,7 @@ from werkzeug.utils import secure_filename
 
 from .adherence import interval_shrinkage, person_day, team as team_figures
 from .analytics import program_weeks, team
-from .attendance import ACTIVITY_KINDS, SUNDAY_UNCHECKED, DayBook, hm, week_start
+from .attendance import ACTIVITY_KINDS, DayBook, hm, tomorrow_unchecked, week_start
 from .day import AUX, MEASURES, STATUSES, BreakRefused, board
 from .coach import actual_shrinkage, corrected_tab
 from .eta import queue_plan
@@ -839,7 +839,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return render_template("day.html", page=page, problem=problem, program=program, programs=programs, on=on,
                                people=people, whole=whole, shrink=shrink, finder=finder, cover=cover,
                                proposal=proposal, from_now=from_now, cover_panel=cover_panel,
-                               sunday_unchecked=SUNDAY_UNCHECKED,
+                               tomorrow_unchecked=tomorrow_unchecked(on) if on else "",
                                activity_kinds=ACTIVITY_KINDS,
                                measure=measure,
                                measures=MEASURES, tab=tab, statuses=STATUSES, aux=sorted(AUX), hm=hm,
@@ -974,7 +974,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                  note=request.form.get("note", ""))
             flash(f"Recorded: {name}, {'day off cancelled (called in)' if kind == 'Called in' else kind.lower()}.")
             if kind in ("Overtime", "Called in") and _days().next_week_unknown(program, on):
-                flash(SUNDAY_UNCHECKED)
+                flash(tomorrow_unchecked(on))
         except ValueError as exc:
             flash(str(exc))
         return _back_to_day(program, on, request.form.get("view", ""), request.form.get("cover", ""))

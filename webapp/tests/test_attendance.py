@@ -302,5 +302,85 @@ class TheAttendance(unittest.TestCase):
         self.assertEqual(self.store.list_attendance("AE/AR B2B", [WED.isoformat()]), [])
 
 
+class TheStartDay(unittest.TestCase):
+    """Phase P: a schedule's first date is chosen when it is uploaded (Sunday or Monday). A date reads the
+    column of its weekday from the run whose seven days hold it; last night's overnight shifts come from the
+    day before, in the same run or the run before (the input's carry-in tab when there is none)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.base = Path(tempfile.mkdtemp())
+        store = Store(cls.base / "scheduler.db")
+        cls.sara = store.add_user("sara", "Sara", "Sara-pass-1", must_change=False)
+        book = ScheduleBook(store, cls.base, REPO)
+        for run_id, program, start in (("cccccccccccc", "MON", "2026-10-12"), ("dddddddddddd", "MON", "2026-10-19"),
+                                       ("eeeeeeeeeeee", "MIX", "2026-10-11"), ("ffffffffffff", "MIX", "2026-10-12")):
+            store.add_run(run_id, cls.sara, "AR_week.xlsx", "QUICK", "DONE", program=program, week_start=start)
+            book.ensure(store.get_run(run_id), INPUT, AFTER, None)
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.base, True)
+
+    def setUp(self):
+        self.data = Path(tempfile.mkdtemp()) / "data"
+        self.addCleanup(shutil.rmtree, self.data.parent, True)
+        shutil.copytree(self.base, self.data)
+        self.store = Store(self.data / "scheduler.db")
+        self.book = ScheduleBook(self.store, self.data, REPO)
+        self.days = DayBook(self.store, self.book)
+
+    def run_of(self, program, on):
+        row, _ = self.days.version(program, on)
+        return row["run_id"] if row else None
+
+    def carried(self, program, on, name):
+        lane = next((l for l in self.days.page(program, on)["view"]["lanes"] if l["name"] == name), None)
+        return [(s["start"], s["end"]) for s in (lane or {}).get("segments", []) if s["offset"] == -1]
+
+    def test_a_monday_start_covers_monday_to_sunday(self):
+        for d in range(12, 19):
+            self.assertEqual(self.run_of("MON", date(2026, 10, d)), "cccccccccccc", d)
+        self.assertIsNone(self.run_of("MON", date(2026, 10, 11)))
+        self.assertEqual(self.run_of("MON", date(2026, 10, 19)), "dddddddddddd")
+        self.assertIsNone(self.run_of("MON", date(2026, 10, 26)))
+        page = self.days.page("MON", date(2026, 10, 18))
+        self.assertEqual((page["day"], page["week_start"]), (0, "2026-10-12"))  # Sunday's column, the run's start
+
+    def test_the_last_day_takes_saturday_night_from_the_same_run(self):
+        # Associate 004: Saturday 20:00 - 05:00 runs into Sunday 18 October, the run's last day
+        self.assertEqual(self.carried("MON", date(2026, 10, 18), "Associate 004"), [(20 * 60 - 1440, 5 * 60)])
+
+    def test_the_first_day_takes_last_night_from_the_run_before(self):
+        # Monday 19: Sunday 18 (the run before, Associate 004 23:00 - 08:00); not the input's carry-in tab
+        self.assertEqual(self.carried("MON", date(2026, 10, 19), "Associate 004"), [(23 * 60 - 1440, 8 * 60)])
+        self.assertEqual(self.carried("MON", date(2026, 10, 19), "Associate 001"), [])
+
+    def test_the_first_day_without_a_run_before_uses_the_input_tab(self):
+        # Monday 12 has no run for Sunday 11: the tab's Associate 001 16:00 - 01:00; never this run's own Sunday
+        self.assertEqual(self.carried("MON", date(2026, 10, 12), "Associate 001"), [(16 * 60 - 1440, 60)])
+        self.assertEqual(self.carried("MON", date(2026, 10, 12), "Associate 004"), [])
+
+    def test_overlapping_runs_latest_start_unless_in_use(self):
+        self.assertEqual(self.run_of("MIX", date(2026, 10, 11)), "eeeeeeeeeeee")
+        self.assertEqual(self.run_of("MIX", date(2026, 10, 14)), "ffffffffffff")  # the later start counts
+        self.book.set_in_use(self.book.versions("eeeeeeeeeeee")[0]["id"], self.sara)
+        self.assertEqual(self.run_of("MIX", date(2026, 10, 14)), "eeeeeeeeeeee")  # unless the other is in use
+
+    def test_tomorrow_unchecked_on_the_last_day(self):
+        self.assertTrue(self.days.next_week_unknown("MON", date(2026, 10, 25)))
+        self.assertFalse(self.days.next_week_unknown("MON", date(2026, 10, 24)))
+        self.assertFalse(self.days.next_week_unknown("MON", date(2026, 10, 18)))  # Monday 19 is covered
+
+    def test_breaks_export_follows_a_monday_start(self):
+        import io
+        from openpyxl import load_workbook
+        from webapp.exports import build
+        data, *_ = build(self.store, self.days, date(2026, 10, 11), date(2026, 10, 12), ["breaks"], program="MON",
+                         by="Omar")
+        rows = list(load_workbook(io.BytesIO(data))["Breaks planned vs taken"].iter_rows(values_only=True))
+        self.assertEqual({r[0] for r in rows[1:]}, {"2026-10-12"})
+
+
 if __name__ == "__main__":
     unittest.main()

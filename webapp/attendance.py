@@ -16,7 +16,8 @@ import time
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
-from .day import (ABSENT, AUX, CALLED_IN, MEASURES, OVERTIME_MAX, STATUSES, STEP, TIMED, BreakRefused, _busy, advice,
+from .day import (ABSENT, AUX, CALLED_IN, EXTRA_BREAKS, LATE_EARLY, MEASURES, OVERTIME_MAX, STATUSES, STEP, TIMED,
+                  BreakRefused, _busy, advice,
                   check_break, day_view, dayoff_offers, meeting_slots, overtime_offers, pattern_breaks, planned,
                   read_inputs, replan, vto_offers)
 from .schedules import EGYPT, KEEP_DAYS, ScheduleBook
@@ -24,7 +25,11 @@ from .versions import DAYS, shift_span
 
 HHMM = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
 FALLBACK = "No version is marked in use for this week, so this is the tool's own schedule."
-ACTIVITY_KINDS = sorted(AUX) + ["Overtime", "VTO", CALLED_IN]
+ACTIVITY_KINDS = sorted(AUX) + list(EXTRA_BREAKS) + ["Overtime", "VTO", CALLED_IN]
+# What RTA's "+ Add" offers in an interval (owner, 2026-10-08), grouped as the dialog shows them.
+ADD_KINDS = {"Off the floor": ["Break", "Lunch", "Coaching", "Meeting", "Training", "System issue"],
+             "Attendance": ["Unplanned leave", "Sick", "Late", "Left early"],
+             "Hours": ["Overtime", "VTO"]}
 
 
 def week_start(on: date) -> date:
@@ -39,6 +44,12 @@ def day_index(on: date) -> int:
 def hm(minute: int) -> str:
     minute %= 1440
     return f"{minute // 60:02d}:{minute % 60:02d}"
+
+
+def _signed(hours: float) -> str:
+    """+1:30 / −0:15 (hours as h:mm)."""
+    minutes = round(abs(hours) * 60)
+    return f"{'−' if hours < 0 else '+'}{minutes // 60}:{minutes % 60:02d}"
 
 
 def _clock(text: str) -> Optional[int]:
@@ -185,7 +196,9 @@ class DayBook:
                 actual[(offset, r["associate"], r["idx"])] = r["start"]
         return attendance, actual, stale, acts
 
-    def page(self, program: str, on: date, measure: str = "interval") -> Optional[Dict[str, Any]]:
+    def page(self, program: str, on: date, measure: str = "interval",
+             extra: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+        """The day; ``extra`` (from ``add_item(..., dry_run=True)``) is counted as if it were recorded."""
         if measure not in MEASURES:
             raise ValueError(f"Unknown measure: {measure}.")
         row, note = self.version(program, on)
@@ -198,6 +211,13 @@ class DayBook:
                              "out. Run the week again, or ask the admin to restore the server's data folder.")
         inputs = read_inputs(source)
         attendance, actual, stale, acts = self._records(program, on, row)
+        if extra and extra.get("status"):
+            attendance[(0, extra["name"])] = {"status": extra["status"], "from": extra["from"], "to": extra["to"],
+                                              "billable": extra["billable"]}
+        elif extra and extra.get("kind"):
+            acts.setdefault((0, extra["name"]), []).append(
+                {"id": 0, "kind": extra["kind"], "start": extra["start"], "end": extra["end"],
+                 "billable": extra["billable"], "note": "", "label": ""})
         earlier, _ = self.version(program, on - timedelta(days=1))  # last night: the schedule holding yesterday
         before = (self._week(earlier), day_index(on - timedelta(days=1))) if earlier else None
         view = day_view(week, inputs, day_index(on), attendance, actual, measure, acts, before)
@@ -207,7 +227,7 @@ class DayBook:
 
     # ------------------------------------------------------------- what people record
     def set_status(self, program: str, on: date, name: str, status: str, user_id: int,
-                   start: str = "", end: str = "", billable: bool = False) -> None:
+                   start: str = "", end: str = "", billable: bool = False, dry_run: bool = False) -> Dict[str, Any]:
         """Record a status for the shift that starts on ``on``. Late needs the arrival (``end``),
         Left early the leaving time (``start``); an aux (Training, Coaching, Meeting, System issue)
         takes an optional from/to and is billable or not."""
@@ -245,10 +265,15 @@ class DayBook:
         else:
             lo = hi = None
             what = status
+        record = {"name": name, "status": status, "from": lo, "to": hi, "billable": bool(billable) and status in AUX,
+                  "what": what, "span": span}
+        if dry_run:
+            return record
         self.store.set_attendance(program=program, shift_date=on.isoformat(), associate=name, status=status,
                                   from_min=lo, to_min=hi, billable=int(bool(billable) and status in AUX),
                                   user_id=user_id)
         self.store.add_day_log(program=program, shift_date=on.isoformat(), associate=name, what=what, user_id=user_id)
+        return record
 
     def move_break(self, program: str, on: date, name: str, idx: int, at: Optional[str], user_id: int,
                    suffix: str = "") -> None:
@@ -296,13 +321,16 @@ class DayBook:
         if kind == "Overtime":
             return f"Overtime {hm(lo)} to {hm(hi)}"
         if kind == "VTO":
-            return f"VTO, left at {hm(lo)} instead of {hm(hi)}"
+            return f"VTO {hm(lo)} to {hm(hi)}"  # any stretch of the shift (owner, 2026-10-08)
+        if kind in EXTRA_BREAKS:
+            return f"{kind} {hm(lo)} to {hm(hi)}"
         return f"{kind} {hm(lo)} to {hm(hi)} ({'billable' if billable else 'non-billable'})"
 
     def add_activity(self, program: str, on: date, name: str, kind: str, start: str, end: str, user_id: int,
-                     billable: bool = False, note: str = "") -> int:
-        """Record an activity for the shift that starts on ``on``: an aux (inside the shift), VTO (to the end
-        of the shift) or overtime (touching the shift, at most 2 hours, keeping the rest gap)."""
+                     billable: bool = False, note: str = "", dry_run: bool = False) -> Any:
+        """Record an activity for the shift that starts on ``on``: an aux, a break or lunch added on the day,
+        or VTO (each inside the shift), or overtime (touching the shift, at most 2 hours, keeping the rest
+        gap). Returns its id; with ``dry_run`` every check runs, nothing is kept, and the record is returned."""
         if kind not in ACTIVITY_KINDS:
             raise ValueError(f"Unknown activity: {kind}.")
         if kind == CALLED_IN:
@@ -330,18 +358,80 @@ class DayBook:
         else:
             if lo < span[0] or hi > span[1]:
                 raise ValueError(f"{kind} has to fall inside {name}'s shift ({hm(span[0])} to {hm(span[1])}).")
-            if kind == "VTO" and hi != span[1]:
-                raise ValueError(f"VTO runs to the end of the shift ({hm(span[1])}).")
+            if hi <= lo:
+                raise ValueError("The end time must be after the start time.")
+        if kind in EXTRA_BREAKS:  # not on top of a break the person already has (as planned or as moved)
+            page = self.page(program, on)
+            seg = next((x for l in page["view"]["lanes"] if l["name"] == name for x in l["segments"]
+                        if x["offset"] == 0), None) if page else None
+            for b in (seg or {}).get("breaks", []):
+                if b["start"] < hi and lo < b["start"] + b["minutes"]:
+                    raise ValueError(f"{name} is already on {b['kind'].lower()} from {hm(b['start'])} to "
+                                     f"{hm(b['start'] + b['minutes'])} then.")
         for r in self.store.list_activities(program, [on.isoformat()]):  # a call-in is the shift itself
             if r["associate"] == name and r["kind"] != CALLED_IN and r["start"] < hi and lo < r["end_min"]:
                 raise ValueError(f"{name} already has {r['kind'].lower()} from {hm(r['start'])} to {hm(r['end_min'])}.")
         billable = bool(billable) and kind in AUX or kind == "Overtime"
+        if dry_run:
+            return {"name": name, "kind": kind, "start": lo, "end": hi, "billable": billable,
+                    "what": self._describe(kind, lo, hi, billable)}
         made = self.store.add_activity(program=program, shift_date=on.isoformat(), associate=name, kind=kind, start=lo,
                                        end_min=hi, billable=int(billable), note=" ".join(note.split())[:200],
                                        user_id=user_id)
         self.store.add_day_log(program=program, shift_date=on.isoformat(), associate=name,
-                               what=self._describe(kind, lo, hi if kind != "VTO" else span[1], billable), user_id=user_id)
+                               what=self._describe(kind, lo, hi, billable), user_id=user_id)
         return made
+
+    def add_item(self, program: str, on: date, name: str, what: str, start: str, minutes: int, user_id: int,
+                 billable: bool = False, note: str = "", dry_run: bool = False) -> Dict[str, Any]:
+        """Anything RTA's "+ Add" offers: Unplanned leave or Sick (the whole shift); Late (``start`` is when
+        they arrived); Left early (``start`` is when they left); a break, lunch, aux, overtime or VTO from
+        ``start`` for ``minutes``. Returns what was recorded ("text") and the minutes it covers (lo, hi)."""
+        if what in ABSENT or what in LATE_EARLY:
+            arrived = start if what == "Late" else ""
+            left = start if what == "Left early" else ""
+            rec = self.set_status(program, on, name, what, user_id, start=left, end=arrived, dry_run=True)
+            span = rec["span"]
+            lo = span[0] if rec["from"] is None else rec["from"]
+            hi = span[1] if rec["to"] is None else rec["to"]
+            if not dry_run:
+                self.set_status(program, on, name, what, user_id, start=left, end=arrived)
+            return {"text": rec["what"], "lo": lo, "hi": hi, "record": rec}
+        if what not in ACTIVITY_KINDS or what == CALLED_IN:
+            raise ValueError(f"Unknown: {what}.")
+        lo = _clock(start)
+        if lo is None:
+            raise ValueError("Give the start like 13:05.")
+        if not isinstance(minutes, int) or minutes <= 0 or minutes % STEP:
+            raise ValueError("Pick a length in 5-minute steps.")
+        end = hm(lo + minutes)
+        rec = self.add_activity(program, on, name, what, start, end, user_id, billable=billable, note=note,
+                                dry_run=True)
+        if not dry_run:
+            self.add_activity(program, on, name, what, start, end, user_id, billable=billable, note=note)
+        return {"text": rec["what"], "lo": rec["start"], "hi": rec["end"], "record": rec}
+
+    def preview_item(self, program: str, on: date, name: str, what: str, start: str, minutes: int,
+                     billable: bool = False, measure: str = "interval") -> Dict[str, str]:
+        """What adding this would do to the floor, before anything is kept: the tightest buffer over the
+        intervals it touches, now and after. Refused the same way the real thing is (ValueError)."""
+        found = self.add_item(program, on, name, what, start, minutes, 0, billable=billable, dry_run=True)
+        lo, hi = found["lo"], found["hi"]
+        before = self.page(program, on, measure)["view"]
+        after = self.page(program, on, measure, extra=found["record"])["view"]
+        step = before["interval"]
+
+        def tightest(view: Dict[str, Any]) -> Optional[float]:
+            got = [c["pm"] for c in view["cells"] if c["pm"] is not None and c["t"] < hi and lo < c["t"] + step]
+            return min(got) if got else None
+
+        was, now = tightest(before), tightest(after)
+        said = f"{found['text']} ({hm(lo)} to {hm(hi)})"
+        if was is None or now is None:
+            return {"text": f"{said}: no demand is set for those intervals.", "level": "ok"}
+        level = "ok" if now >= 0 else ("warn" if now > -step / 60 else "bad")
+        return {"text": f"{said}: the floor at its tightest goes from {_signed(was)} to {_signed(now)}.",
+                "level": level}
 
     def _call_in(self, program: str, on: date, name: str, start: str, end: str, user_id: int, note: str = "") -> int:
         """A day off cancelled: the person works a Shift Library shift that day, keeping the rest gap."""

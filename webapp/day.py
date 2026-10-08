@@ -34,6 +34,7 @@ STATUSES = ["Present", "Unplanned leave", "Late", "Sick", "Left early", "Trainin
 ABSENT = {"Unplanned leave", "Sick"}  # the whole shift
 LATE_EARLY = {"Late", "Left early"}
 AUX = {"Training", "Coaching", "Meeting", "System issue"}  # billable or not, chosen when it is recorded
+EXTRA_BREAKS = ("Break", "Lunch")  # added on the day in RTA (owner, 2026-10-08): always off the floor
 TIMED = LATE_EARLY | AUX  # may carry a from/to time
 MEASURES = {"interval": "Interval compliance", "sl": "Service level"}
 KEEP = 8  # workbooks kept read
@@ -324,7 +325,8 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
         acts = [{**a, "start": a["start"] + 1440 * seg["offset"], "end": a["end"] + 1440 * seg["offset"]}
                 for a in (activities or {}).get((seg["offset"], seg["name"]), [])]
         off = [(a["start"], a["end"]) for a in acts
-               if a["kind"] == "VTO" or (a["kind"] in AUX and not (a.get("billable") and measure == "interval"))]
+               if a["kind"] == "VTO" or a["kind"] in EXTRA_BREAKS
+               or (a["kind"] in AUX and not (a.get("billable") and measure == "interval"))]
         extra = [(a["start"], a["end"]) for a in acts if a["kind"] == "Overtime"]
         breaks = []
         for b in seg["planned"]:
@@ -372,7 +374,9 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
                   "late_early": sum(1 for seg, st, away, br, ac in pieces if st in LATE_EARLY and away[0] < away[1]
                                     and overlapping(away[0], away[1], t)),
                   "breaks": sum(1 for seg, st, away, br, ac in pieces if st not in ABSENT
-                                and any(overlapping(b["start"], b["start"] + b["minutes"], t) for b in br)),
+                                and (any(overlapping(b["start"], b["start"] + b["minutes"], t) for b in br)
+                                     or any(a["kind"] in EXTRA_BREAKS and overlapping(a["start"], a["end"], t)
+                                            for a in ac))),
                   "overtime": sum(1 for seg, st, away, br, ac in pieces
                                   if any(a["kind"] == "Overtime" and overlapping(a["start"], a["end"], t) for a in ac)),
                   "vto": sum(1 for seg, st, away, br, ac in pieces
@@ -534,6 +538,13 @@ def board(view: Dict[str, Any]) -> List[Dict[str, Any]]:
                                 "kind": b["kind"], "short": _short(b["kind"]), "start": _hm(b["start"]),
                                 "planned": _hm(b["planned_start"]), "moved": b["moved"], "minutes": b["minutes"]}
                         (lunch if b["kind"].lower() == "lunch" else short).append(chip)
+                for a in seg.get("activities", []):  # added on the day: shown with the planned ones
+                    if a["kind"] in EXTRA_BREAKS and t <= a["start"] < t + step:
+                        chip = {"name": lane["name"], "slot": lane["slot"], "offset": seg["offset"], "idx": None,
+                                "kind": a["kind"], "short": _short(a["kind"]), "start": _hm(a["start"]),
+                                "planned": _hm(a["start"]), "moved": False, "minutes": a["end"] - a["start"],
+                                "added": True, "id": a.get("id")}
+                        (lunch if a["kind"] == "Lunch" else short).append(chip)
                 lo, hi = seg["away"]
                 st = seg["status"]
                 if st == "Late" and t <= seg["start"] < t + step:
@@ -544,10 +555,10 @@ def board(view: Dict[str, Any]) -> List[Dict[str, Any]]:
                     events.append({"name": lane["name"], "text": f"{st} {_hm(lo)} to {_hm(hi)}, "
                                                                  f"{'billable' if seg['billable'] else 'non-billable'}"})
                 for a in seg.get("activities", []):
-                    if t <= a["start"] < t + step:
+                    if t <= a["start"] < t + step and a["kind"] not in EXTRA_BREAKS:
                         text = (f"called in on a day off, {_hm(a['start'])} to {_hm(a['end'])}" if a["kind"] == CALLED_IN else
                                 f"overtime {_hm(a['start'])} to {_hm(a['end'])}" if a["kind"] == "Overtime" else
-                                f"VTO from {_hm(a['start'])}" if a["kind"] == "VTO" else
+                                f"VTO {_hm(a['start'])} to {_hm(a['end'])}" if a["kind"] == "VTO" else
                                 f"{a['kind'].lower()} {_hm(a['start'])} to {_hm(a['end'])}, "
                                 f"{'billable' if a.get('billable') else 'non-billable'}")
                         events.append({"name": lane["name"], "text": text})
@@ -759,7 +770,8 @@ def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: i
         if not (seg["billable"] and interval_mode) and seg["away"][0] <= t < seg["away"][1]:
             return False
         return not any(a["start"] <= t < a["end"] for a in seg.get("activities", [])
-                       if a["kind"] == "VTO" or (a["kind"] in AUX and not (a.get("billable") and interval_mode)))
+                       if a["kind"] == "VTO" or a["kind"] in EXTRA_BREAKS
+                       or (a["kind"] in AUX and not (a.get("billable") and interval_mode)))
 
     # languages: per 5 minutes, people on the floor who count for each language (inside its hours)
     langs = []

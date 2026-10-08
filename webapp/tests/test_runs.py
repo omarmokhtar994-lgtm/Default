@@ -965,6 +965,62 @@ class TheDayPage(unittest.TestCase):
     def page(self):
         return html.unescape(self.client.get(self.url).get_data(as_text=True))
 
+    def test_add_route_records_and_redirects_to_the_board_row(self):
+        """Phase R task 4: "+ Add" posts here; back to the board at that interval with what was kept."""
+        got = self.post("/day/add", date="2026-10-15", associate="Associate 001", what="Coaching", **{"from": "15:00"},
+                        minutes="30", billable="1", view="board", at="900")
+        self.assertEqual(got.status_code, 303)
+        self.assertIn("view=board", got.headers["Location"])
+        self.assertTrue(got.headers["Location"].endswith("#row-900"))
+        acts = self.store.list_activities("AE/AR B2B", ["2026-10-15"])
+        self.assertEqual([(a["associate"], a["kind"], a["start"], a["end_min"], a["billable"]) for a in acts],
+                         [("Associate 001", "Coaching", 900, 930, 1)])
+        page = html.unescape(self.client.get(got.headers["Location"]).get_data(as_text=True))
+        self.assertIn("Recorded: Associate 001, Coaching 15:00 to 15:30 (billable).", page)
+        from datetime import date
+        days = self.app.extensions["days"]
+        days.cancel_activity("AE/AR B2B", date(2026, 10, 15), acts[0]["id"], 1)
+        refused = self.post("/day/add", date="2026-10-15", associate="Associate 001", what="Late", **{"from": "22:00"},
+                            view="board", at="900")
+        page = html.unescape(self.client.get(refused.headers["Location"]).get_data(as_text=True))
+        self.assertIn("outside Associate 001's shift", page)
+
+    def test_wallboard_lists_breaks_added_on_the_day(self):
+        from datetime import date
+        days = self.app.extensions["days"]
+        made = days.add_activity("AE/AR B2B", date(2026, 10, 15), "Associate 001", "Break", "15:00", "15:15", 1)
+        try:
+            body = html.unescape(self.client.get("/day/wallboard?program=AE/AR+B2B&date=2026-10-15&at=15:05")
+                                 .get_data(as_text=True))
+            on_break = body[body.index("On break now"):body.index("Next 30 minutes")]
+            self.assertIn("<b>Associate 001</b> Break until 15:15", on_break)
+        finally:
+            days.cancel_activity("AE/AR B2B", date(2026, 10, 15), made, 1)
+
+    def test_add_preview_says_the_effect_or_why_not(self):
+        got = self.post("/day/add-preview", date="2026-10-15", associate="Associate 001", what="Break",
+                        **{"from": "15:00"}, minutes="15")
+        self.assertEqual(got.status_code, 200)
+        self.assertIn("the floor at its tightest goes from", got.get_json()["text"])
+        self.assertEqual(self.store.list_activities("AE/AR B2B", ["2026-10-15"]), [])
+        got = self.post("/day/add-preview", date="2026-10-15", associate="Associate 001", what="Late", **{"from": "22:00"})
+        self.assertEqual(got.status_code, 400)
+        self.assertIn("outside", got.get_json()["error"])
+
+    def test_undo_status_and_break(self):
+        from datetime import date
+        days, on = self.app.extensions["days"], date(2026, 10, 15)
+        days.set_status("AE/AR B2B", on, "Associate 001", "Sick", 1)
+        got = self.post("/day/undo", date="2026-10-15", associate="Associate 001", what="status", view="board")
+        self.assertEqual(got.status_code, 303)
+        self.assertEqual([r["status"] for r in self.store.list_attendance("AE/AR B2B", ["2026-10-15"])], ["Present"])
+        seg = next(x for l in days.page("AE/AR B2B", on)["view"]["lanes"] if l["name"] == "Associate 001"
+                   for x in l["segments"] if x["offset"] == 0)
+        b = seg["breaks"][0]
+        days.move_break("AE/AR B2B", on, "Associate 001", b["idx"], hm_(b["start"] + 15), 1)
+        self.post("/day/undo", date="2026-10-15", associate="Associate 001", what="break", idx=str(b["idx"]))
+        self.assertEqual(self.store.list_actual_breaks("AE/AR B2B", ["2026-10-15"]), [])
+
     def test_overview_and_rta_are_separate(self):
         body = html.unescape(self.client.get("/overview?program=AE/AR+B2B&date=2026-10-14").get_data(as_text=True))
         for words in ("On shift today", "Short of demand", "Next six hours", "Needs attention", "Open RTA",
@@ -1217,6 +1273,10 @@ class TheRecord(unittest.TestCase):
         queue = app.extensions["runs"]
         self.assertEqual(queue.cleanup(now=time.time() + 44 * 86400), 0)
         self.assertEqual(queue.cleanup(now=time.time() + 46 * 86400), 1)
+
+
+def hm_(minute):
+    return f"{(minute // 60) % 24:02d}:{minute % 60:02d}"
 
 
 def sign_in(app, username, password):

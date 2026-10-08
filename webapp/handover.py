@@ -25,7 +25,9 @@ def _activity_text(kind: str, lo: int, hi: int, billable: bool) -> str:
     if kind == "Overtime":
         return f"Overtime {_hm(lo)} to {_hm(hi)}"
     if kind == "VTO":
-        return f"VTO, left at {_hm(lo)}"
+        return f"VTO {_hm(lo)} to {_hm(hi)}"
+    if kind in ("Break", "Lunch"):  # added on the day in RTA
+        return f"{kind} {_hm(lo)} to {_hm(hi)}"
     return f"{kind} {_hm(lo)} to {_hm(hi)} ({'billable' if billable else 'non-billable'})"
 
 

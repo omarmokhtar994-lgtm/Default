@@ -11,7 +11,8 @@ import unittest
 from datetime import date
 from pathlib import Path
 
-from webapp.attendance import DayBook
+from webapp.attendance import DayBook, hm
+from webapp.day import board
 from webapp.day import BreakRefused
 from webapp.schedules import ScheduleBook
 from webapp.store import Store
@@ -300,6 +301,106 @@ class TheAttendance(unittest.TestCase):
         # the status, the break move and their two log lines
         self.assertEqual(self.days.cleanup(now=time.mktime((2027, 11, 20, 0, 0, 0, 0, 0, -1))), 4)
         self.assertEqual(self.store.list_attendance("AE/AR B2B", [WED.isoformat()]), [])
+
+
+class TheAddDialog(unittest.TestCase):
+    """Phase R task 4: RTA adds anything in an interval: a break or lunch, an aux, unplanned leave, sick,
+    late, left early, overtime or VTO (any stretch of the shift), with the same checks as before and a
+    preview that records nothing (owner, 2026-10-08)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.base = Path(tempfile.mkdtemp())
+        store = Store(cls.base / "scheduler.db")
+        cls.sara = store.add_user("sara", "Sara", "Sara-pass-1", must_change=False)
+        store.add_run("aaaaaaaaaaaa", cls.sara, "AR_week.xlsx", "QUICK", "DONE", program="AE/AR B2B",
+                      week_start="2026-10-11")
+        ScheduleBook(store, cls.base, REPO).ensure(store.get_run("aaaaaaaaaaaa"), INPUT, AFTER, None)
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.base, True)
+
+    def setUp(self):
+        self.data = Path(tempfile.mkdtemp()) / "data"
+        self.addCleanup(shutil.rmtree, self.data.parent, True)
+        shutil.copytree(self.base, self.data)
+        self.store = Store(self.data / "scheduler.db")
+        self.days = DayBook(self.store, ScheduleBook(self.store, self.data, REPO))
+
+    def seg(self, name="Associate 001", on=WED):
+        page = self.days.page("AE/AR B2B", on)
+        return next(s for l in page["view"]["lanes"] if l["name"] == name for s in l["segments"] if s["offset"] == 0)
+
+    def free_start(self, minutes, name="Associate 001"):
+        """The first time in the shift, an hour in, with no break or activity for ``minutes``."""
+        seg = self.seg(name)
+        busy = [(b["start"], b["start"] + b["minutes"]) for b in seg["breaks"]]
+        busy += [(a["start"], a["end"]) for a in seg["activities"]]
+        for t in range(seg["start"] + 60, seg["end"] - minutes, 5):
+            if all(t + minutes <= lo or hi <= t for lo, hi in busy):
+                return t
+        raise AssertionError("no free time")
+
+    def on_floor(self, t):
+        cell = next(c for c in self.days.page("AE/AR B2B", WED)["view"]["cells"] if c["t"] <= t < c["t"] + 30)
+        return cell["slots"][(t - cell["t"]) // 5]
+
+    def test_add_break_in_an_interval_takes_them_off_the_floor(self):
+        t = self.free_start(15)
+        before = self.on_floor(t)
+        got = self.days.add_item("AE/AR B2B", WED, "Associate 001", "Break", hm(t), 15, self.sara)
+        self.assertEqual(got["text"], f"Break {hm(t)} to {hm(t + 15)}")
+        self.assertEqual(self.on_floor(t), before - 1)
+        rows = board(self.days.page("AE/AR B2B", WED)["view"])
+        chip = next(c for r in rows for c in r["short"] if c["name"] == "Associate 001" and c.get("added"))
+        self.assertEqual((chip["kind"], chip["start"]), ("Break", hm(t)))
+
+    def test_add_unplanned_leave_from_the_dialog(self):
+        tiles = self.days.page("AE/AR B2B", WED)["view"]["tiles"]
+        got = self.days.add_item("AE/AR B2B", WED, "Associate 001", "Unplanned leave", "", 0, self.sara)
+        self.assertEqual(got["text"], "Unplanned leave")
+        self.assertEqual(self.days.page("AE/AR B2B", WED)["view"]["tiles"]["present"], tiles["present"] - 1)
+
+    def test_add_late_outside_shift_is_refused(self):
+        with self.assertRaises(ValueError) as said:  # Wednesday is 12:00 - 21:00
+            self.days.add_item("AE/AR B2B", WED, "Associate 001", "Late", "22:00", 0, self.sara)
+        self.assertIn("outside Associate 001's shift (12:00 to 21:00)", str(said.exception))
+        with self.assertRaises(ValueError) as said:
+            self.days.add_item("AE/AR B2B", WED, "Associate 001", "Late", "", 0, self.sara)
+        self.assertIn("Give the time they arrived.", str(said.exception))
+        self.assertEqual(self.store.list_attendance("AE/AR B2B", [WED.isoformat()]), [])
+
+    def test_add_overtime_with_a_chosen_length(self):
+        self.days.add_item("AE/AR B2B", WED, "Associate 001", "Overtime", "21:00", 45, self.sara)
+        acts = self.store.list_activities("AE/AR B2B", [WED.isoformat()])
+        self.assertEqual([(a["kind"], a["start"], a["end_min"]) for a in acts], [("Overtime", 1260, 1305)])
+
+    def test_vto_any_stretch_inside_the_shift(self):
+        got = self.days.add_item("AE/AR B2B", WED, "Associate 001", "VTO", "14:00", 60, self.sara)
+        self.assertEqual(got["text"], "VTO 14:00 to 15:00")
+        with self.assertRaises(ValueError):  # before the shift
+            self.days.add_item("AE/AR B2B", WED, "Associate 001", "VTO", "06:00", 60, self.sara)
+
+    def test_added_break_cannot_overlap_a_planned_break(self):
+        planned = self.seg()["breaks"][0]
+        with self.assertRaises(ValueError) as said:
+            self.days.add_item("AE/AR B2B", WED, "Associate 001", "Lunch", hm(planned["start"]), 30, self.sara)
+        self.assertIn(f"already on {planned['kind'].lower()}", str(said.exception))
+
+    def test_lengths_go_in_five_minute_steps(self):
+        with self.assertRaises(ValueError) as said:
+            self.days.add_item("AE/AR B2B", WED, "Associate 001", "Coaching", "15:00", 0, self.sara)
+        self.assertIn("Pick a length", str(said.exception))
+
+    def test_preview_changes_nothing_and_says_the_effect(self):
+        t = self.free_start(15)
+        found = self.days.preview_item("AE/AR B2B", WED, "Associate 001", "Break", hm(t), 15, False, "interval")
+        self.assertIn(f"{hm(t)} to {hm(t + 15)}", found["text"])
+        self.assertIn(found["level"], ("ok", "warn", "bad"))
+        self.assertEqual(self.store.list_activities("AE/AR B2B", [WED.isoformat()]), [])
+        with self.assertRaises(ValueError):  # refused the same way the real thing is
+            self.days.preview_item("AE/AR B2B", WED, "Associate 001", "Late", "22:00", 0, False, "interval")
 
 
 class TheStartDay(unittest.TestCase):

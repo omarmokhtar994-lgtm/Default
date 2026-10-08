@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from .day import ABSENT, AUX, LATE_EARLY, STEP
+from .day import ABSENT, AUX, EXTRA_BREAKS, LATE_EARLY, STEP
 
 
 def _pct(part: int, whole: int) -> Optional[int]:
@@ -29,6 +29,7 @@ def person_day(view: Dict[str, Any], name: str) -> Dict[str, Any]:
     seg = next(s for l in view["lanes"] if l["name"] == name for s in l["segments"] if s["offset"] == 0)
     planned = [(b["planned_start"], b["planned_start"] + b["minutes"]) for b in seg["breaks"]]
     taken = [(b["start"], b["start"] + b["minutes"]) for b in seg["breaks"]]
+    taken += [(a["start"], a["end"]) for a in seg.get("activities", []) if a["kind"] in EXTRA_BREAKS]  # added on the day
     status, (lo, hi) = seg["status"], seg["away"]
     interval = view["measure"] == "interval"
     billable_counts = seg["billable"] and interval

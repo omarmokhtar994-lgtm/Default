@@ -18,7 +18,7 @@ from werkzeug.utils import secure_filename
 from .adherence import interval_shrinkage, person_day, team as team_figures
 from .analytics import program_weeks, team
 from .attendance import ACTIVITY_KINDS, DayBook, hm, tomorrow_unchecked, week_start
-from .day import ABSENT as ABSENT_STATES, AUX, MEASURES, STATUSES, BreakRefused, board
+from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, board
 from .coach import actual_shrinkage, corrected_tab
 from .eta import queue_plan
 from .handover import note as handover_note
@@ -1323,7 +1323,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 for seg in lane["segments"]:
                     if seg["status"] in ("Unplanned leave", "Sick"):
                         continue
-                    for b in seg["breaks"]:
+                    added = [{"kind": a["kind"], "start": a["start"], "minutes": a["end"] - a["start"]}
+                             for a in seg.get("activities", []) if a["kind"] in EXTRA_BREAKS]  # added on the day
+                    for b in seg["breaks"] + added:
                         if b["start"] <= now < b["start"] + b["minutes"]:
                             on_break.append({"name": lane["name"], "kind": b["kind"], "until": b["start"] + b["minutes"]})
                         elif now < b["start"] <= now + 30:
@@ -1367,6 +1369,66 @@ def create_app(config: Dict[str, Any]) -> Flask:
         except ValueError as exc:
             flash(str(exc))
         return _back_to_day(program, on, request.form.get("view", ""))
+
+    def _add_fields():  # type: ignore[no-untyped-def]
+        program, on, name = _day_form()
+        minutes = request.form.get("minutes", "0")
+        return program, on, name, request.form.get("what", ""), request.form.get("from", "").strip(), \
+            int(minutes) if minutes.isdigit() else -1, request.form.get("billable") == "1"
+
+    def _to_row(program: str, on: Optional[date], view: str, at: str):  # type: ignore[no-untyped-def]
+        args = {"program": program, "date": on.isoformat() if on else None,
+                "view": view if view in ("board", "cover") else None}
+        if at.isdigit():
+            args["_anchor"] = f"row-{at}"
+        return redirect(url_for("day_page", **{k: v for k, v in args.items() if v}), code=303)
+
+    @app.route("/day/add", methods=["POST"])
+    @login_required
+    def day_add():  # type: ignore[no-untyped-def]
+        """RTA's "+ Add": anything in an interval (a break, lunch, aux, attendance, overtime or VTO)."""
+        program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
+        try:
+            program, on, name, what, start, minutes, billable = _add_fields()
+            found = _days().add_item(program, on, name, what, start, minutes, g.user["id"], billable=billable,
+                                     note=request.form.get("note", ""))
+            flash(f"Recorded: {name}, {found['text']}.")
+            if what == "Overtime" and _days().next_week_unknown(program, on):
+                flash(tomorrow_unchecked(on))
+        except ValueError as exc:
+            flash(str(exc))
+        return _to_row(program, on, request.form.get("view", "board"), request.form.get("at", ""))
+
+    @app.route("/day/add-preview", methods=["POST"])
+    @login_required
+    def day_add_preview():  # type: ignore[no-untyped-def]
+        measure = request.form.get("measure", "")
+        try:
+            program, on, name, what, start, minutes, billable = _add_fields()
+            found = _days().preview_item(program, on, name, what, start, minutes, billable,
+                                         measure if measure in MEASURES else "interval")
+        except ValueError as exc:
+            return jsonify(error=str(exc)), 400
+        return jsonify(found)
+
+    @app.route("/day/undo", methods=["POST"])
+    @login_required
+    def day_undo():  # type: ignore[no-untyped-def]
+        """From one person's day: a status back to Present, or a moved break back to the plan."""
+        program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
+        try:
+            program, on, name = _day_form()
+            if request.form.get("what") == "status":
+                _days().set_status(program, on, name, "Present", g.user["id"])
+                flash(f"{name} is back to present.")
+            elif request.form.get("what") == "break":
+                _days().move_break(program, on, name, _break_idx(), None, g.user["id"])
+                flash(f"{name}'s break is back to the plan.")
+            else:
+                abort(400)
+        except ValueError as exc:
+            flash(str(exc))
+        return _to_row(program, on, request.form.get("view", ""), request.form.get("at", ""))
 
     @app.route("/day/book", methods=["POST"])
     @login_required

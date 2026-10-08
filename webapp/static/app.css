@@ -417,6 +417,27 @@ details.tableview[open] summary { margin-bottom: 8px; }
 .tip { position: fixed; z-index: 20; pointer-events: none; padding: 6px 10px; border-radius: 4px; max-width: 280px;
   background: var(--paper); color: var(--night); font-size: 13px; font-weight: 600; box-shadow: 0 4px 14px var(--shadow); }
 
+/* ------------------------------------------------------------ the week view */
+.sel { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 16px; }
+.sel label { margin: 0; font-size: 13px; }
+.sel button { margin-bottom: 1px; }
+.sidepick a { font-weight: 600; font-size: 13px; padding: 6px 12px; border: 1px solid var(--rail); border-radius: 4px;
+  color: var(--paper); text-decoration: none; }
+.sidepick a[aria-current] { border-color: var(--accent-ink); color: var(--accent-ink); }
+.wkgrid { border-collapse: separate; border-spacing: 2px; width: 100%; min-width: 620px; font-size: 12px; }
+.wkgrid th { color: var(--dim); font-weight: 600; text-align: right; padding: 0 6px; white-space: nowrap; }
+.wkgrid thead th { text-align: center; font-size: 13px; }
+.wk { text-align: center; padding: 3px 2px; border-radius: 3px; font-weight: 700; color: #0E1A2B; }
+.wk small { display: block; font-weight: 400; font-size: 10px; opacity: .85; }
+.wk.covered { background: var(--covered); } .wk.short { background: var(--short); }
+.wk.gap { background: var(--gap); } .wk.over { background: var(--over); }
+.wk.none { background: var(--empty-cell); color: var(--dim); font-weight: 400; }
+.wk:hover { outline: 2px solid var(--paper); outline-offset: 1px; }
+.wkgrid .fold td { text-align: center; color: var(--dim); font-style: italic; padding: 6px; background: var(--empty-cell); border-radius: 3px; }
+.wkgrid tfoot td { text-align: center; color: var(--paper); font-weight: 700; padding-top: 6px; }
+.wk-tables { margin-top: 22px; }
+.runs .tot td { border-top: 2px solid var(--rail); white-space: nowrap; }
+
 /* ------------------------------------------------------------ small screens */
 @media (max-width: 900px) {
   main { padding: 18px 16px 40px; }

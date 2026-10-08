@@ -270,6 +270,7 @@ class InTheBrowser(unittest.TestCase):
 # per week (test data; the page draws whatever the runs stored).
 K_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_k" / "screens"
 L_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_l" / "screens"
+M_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_m" / "screens"
 HISTORY = [  # week, associates, after, before, at 90%, efficiency, over h, under h, hours, short cells
     ("2026-08-09", 9, 96, 118, 110, 66, 61.0, 6.5, 360, ["Tue 20:30", "Thu 20:30", "Sat 14:00", "Mon 20:30"]),
     ("2026-08-16", 9, 99, 120, 112, 68, 58.5, 5.0, 360, ["Tue 20:30", "Thu 21:00", "Mon 20:30"]),
@@ -360,6 +361,31 @@ class TheProgramPagesInTheBrowser(unittest.TestCase):
         page.wait_for_timeout(600)
         page.screenshot(path=str(L_SCREENS / "light_programs.png"), full_page=True)
         page.goto(self.base + "/login")
+
+    def test_week_view_page(self):
+        page = self.page(height=900)
+        self.sign_in(page)
+        page.get_by_role("link", name="Weeks", exact=True).click()
+        expect(page.locator("h1")).to_contain_text(", week of 11 Oct")
+        page.wait_for_load_state("load")  # the picker's script runs after the heading is on screen
+        page.select_option("select[name=program]", "NMG Spanish")
+        expect(page.locator("h1")).to_have_text("NMG Spanish, week of 11 Oct")
+        expect(page.get_by_role("heading", name="Where overtime is needed")).to_be_visible()
+        page.locator("td.wk.short").first.hover()
+        expect(page.locator(".tip")).to_contain_text("needed for 100%")
+        M_SCREENS.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(M_SCREENS / "week_view_tip.png"))
+        page.mouse.move(1, 1)
+        page.evaluate("window.scrollTo(0, 0)")
+        page.wait_for_timeout(500)
+        page.screenshot(path=str(M_SCREENS / "week_view.png"), full_page=True)
+        page.get_by_role("link", name="Before breaks").click()
+        expect(page.locator(".tile b").first).to_have_text("125 of 126")
+        phone = self.page(width=390, height=844)
+        self.sign_in(phone)
+        phone.goto(self.base + "/week?program=NMG%20Spanish&week=2026-10-11")
+        self.assertLessEqual(phone.evaluate("document.documentElement.scrollWidth"), 390)
+        phone.screenshot(path=str(M_SCREENS / "week_view_phone.png"), full_page=True)
 
     def test_program_page_on_a_phone(self):
         page = self.page(width=390, height=844)

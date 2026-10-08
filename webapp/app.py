@@ -21,6 +21,7 @@ from .auth import admin_required, check_csrf, csrf_token, load_user, login_requi
 from .program_page import build, overview, weeks_to_show
 from .runs import MODES, OPTION_LABELS, RESUMABLE, RunQueue, parse_options, run_options
 from .store import Store
+from .week import view as week_view
 
 COPYRIGHT = "© 2026 Omar Mokhtar. All rights reserved."
 MIN_PASSWORD = 10
@@ -37,6 +38,15 @@ def engine_said(run: Dict[str, Any]) -> Dict[str, str]:
     """The engine's outcome kept on the run row (code, category, headline), or {}."""
     try:
         data = json.loads(run.get("engine_outcome") or "")
+    except ValueError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def kept_figures(run: Dict[str, Any]) -> Dict[str, Any]:
+    """The compact figures kept on the run row, or {}."""
+    try:
+        data = json.loads(run.get("metrics") or "")
     except ValueError:
         return {}
     return data if isinstance(data, dict) else {}
@@ -200,6 +210,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
             "default-src 'self'; style-src 'self' https://fonts.googleapis.com; "
             "font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; frame-ancestors 'none'")
         return response
+
+    @app.template_filter("day_month")
+    def _day_month(iso: str) -> str:
+        try:
+            return datetime.strptime(iso, "%Y-%m-%d").strftime("%d %b")
+        except (TypeError, ValueError):
+            return iso or ""
 
     @app.template_filter("num")
     def _num(value: float) -> str:
@@ -404,6 +421,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                has_zip=queue.zip_path(run_id).is_file(),
                                has_schedule=queue.final_schedule(run_id) is not None,
                                has_shortfall=queue.shortfall_schedule(run_id) is not None,
+                               has_week=bool(kept_figures(run).get("intervals")),
                                resumable=run["status"] in RESUMABLE and not fixed_input and run["mode"] != "SMOKE",
                                summary=queue.summary(run_id), said=said,
                                why=outcome_view(found) if found else None,
@@ -485,6 +503,41 @@ def create_app(config: Dict[str, Any]) -> Flask:
         shown = history if n is None else history[-n:]
         return render_template("program.html", name=name, view=build(shown, history), weeks=n,
                                total=len(history), ranges=(4, 8, 12, 26, 52))
+
+    def _week_page(run: Optional[Dict[str, Any]], side: str, program: str, week: str,
+                   history: Dict[str, list]):  # type: ignore[no-untyped-def]
+        figures = kept_figures(run or {})
+        intervals = figures.get("intervals")
+        weeks = [w["week"] for w in reversed(history.get(program, []))]
+        return render_template("week.html", run=run, view=week_view(intervals, side) if intervals else None,
+                               side=side, program=program, week=week, programs=sorted(history, key=str.lower),
+                               weeks=weeks, figures=figures)
+
+    @app.route("/runs/<run_id>/week")
+    @login_required
+    def run_week(run_id: str):  # type: ignore[no-untyped-def]
+        run = _run_or_404(run_id)
+        side = "before" if request.args.get("side") == "before" else "after"
+        return _week_page(run, side, run.get("program") or "", run.get("week_start") or "",
+                          program_weeks(_all_runs()))
+
+    @app.route("/week")
+    @login_required
+    def week_page():  # type: ignore[no-untyped-def]
+        """A program's week: the run that counts for it (the latest finished, as on the program page)."""
+        history = program_weeks(_all_runs())
+        side = "before" if request.args.get("side") == "before" else "after"
+        program = clean_program(request.args.get("program", ""))
+        week = week_sunday(request.args.get("week", "")) or ""
+        if not program and history:
+            latest = max((w for rows in history.values() for w in rows), key=lambda w: w["finished"] or 0)
+            program, week = latest["program"], latest["week"]
+        rows = history.get(program, [])
+        if program and not week and rows:
+            week = rows[-1]["week"]
+        row = next((w for w in rows if w["week"] == week), None)
+        run = app.extensions["store"].get_run(row["run_id"]) if row else None
+        return _week_page(run, side, program, week, history)
 
     @app.route("/team")
     @login_required

@@ -73,7 +73,7 @@
       <td>{% if w.f.efficiency is not none %}{{ w.f.efficiency }}%{% else %}–{% endif %}</td>
       <td>{{ w.f.over_hours if w.f.over_hours is not none else '–' }}</td>
       <td>{{ w.f.under_hours if w.f.under_hours is not none else '–' }}</td>
-      <td><a href="{{ url_for('run_detail', run_id=w.run_id) }}">{{ w.workbook }}</a><br><small>by {{ w.by }}{% if w.runs > 1 %}; latest of {{ w.runs }} runs{% endif %}</small></td>
+      <td><a href="{{ url_for('run_detail', run_id=w.run_id) }}">{{ w.workbook }}</a><br><small>by {{ w.by }}{% if w.runs > 1 %}; latest of {{ w.runs }} runs{% endif %}; <a href="{{ url_for('run_week', run_id=w.run_id) }}">week view</a></small></td>
     </tr>
     {% endfor %}
     </tbody>

@@ -105,6 +105,7 @@
     {% if why and why.cannot_schedule %}<a class="button primary" href="{{ url_for('home', program=run.program or none, week=run.week_start or none) }}#newrun">Upload the corrected workbook</a>{% endif %}
     {% if has_schedule %}<a class="button{% if not (why and why.cannot_schedule) %} primary{% endif %}" href="{{ url_for('run_schedule', run_id=run.id) }}">Download the schedule</a>{% endif %}
     {% if has_shortfall %}<a class="button" href="{{ url_for('run_shortfall', run_id=run.id) }}">Download the shortfall schedule (for review)</a>{% endif %}
+    {% if has_week %}<a class="button" href="{{ url_for('run_week', run_id=run.id) }}">Week view: every interval, overtime and extra hours</a>{% endif %}
     {% if has_zip %}<a class="button" href="{{ url_for('run_download', run_id=run.id) }}">Download all results (.zip)</a>{% endif %}
     {% if run.status in in_flight and run.status != 'CHECKING' %}
     <form method="post" action="{{ url_for('run_stop', run_id=run.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit">Stop</button></form>

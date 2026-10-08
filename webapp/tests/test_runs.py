@@ -756,6 +756,64 @@ class TheCleanWorkbooks(unittest.TestCase):
         self.assertEqual(app.test_client().get("/workbooks/Scheduler_Input_Blank.xlsx").status_code, 302)
 
 
+class TheWeekPage(unittest.TestCase):
+    """Phase M task 2: one run's week, or a program's week, interval by interval."""
+
+    def finished(self, **fields):
+        app, store, *_ = make_app()
+        client = client_for(app)
+        run_id = run_id_of(upload(client, name="REAL_week.xlsx", **fields))
+        wait(store, run_id)
+        return app, store, client, run_id
+
+    def page(self, client, url):
+        response = client.get(url)
+        self.assertEqual(response.status_code, 200, url)
+        return html.unescape(response.get_data(as_text=True))
+
+    def test_week_view_for_a_run(self):
+        app, store, client, run_id = self.finished()
+        body = self.page(client, f"/runs/{run_id}/week")
+        for text in ("Achieved every 30 minutes", "Where overtime is needed", "Extra hours available",
+                     "107 of 126", "9.5 h", "24.5 h", "02:00 to 17:00"):
+            self.assertIn(text, body)
+        self.assertIn("125 of 126", self.page(client, f"/runs/{run_id}/week?side=before"))
+
+    def test_week_view_by_program_and_week(self):
+        app, store, client, run_id = self.finished(program="NMG", week_start="2026-10-11")
+        body = self.page(client, "/week?program=NMG&week=2026-10-11")
+        self.assertIn("NMG, week of 11 Oct", body)
+        self.assertIn("107 of 126", body)
+        self.assertIn('<option value="NMG" selected>', body)
+        self.assertIn('<option value="2026-10-11" selected>', body)
+        self.assertIn("107 of 126", self.page(client, "/week"))  # no choice yet: the latest program week
+
+    def test_week_view_survives_file_expiry(self):
+        app, store, client, run_id = self.finished()
+        app.extensions["runs"].cleanup(now=time.time() + 31 * 86400)
+        self.assertIn("107 of 126", self.page(client, f"/runs/{run_id}/week"))
+
+    def test_older_runs_gain_intervals(self):
+        app, store, client, run_id = self.finished()
+        m = json.loads(store.get_run(run_id)["metrics"])
+        self.assertIn("intervals", m)
+        del m["intervals"]
+        store.update_run(run_id, metrics=json.dumps(m))  # as a run finished before Phase M
+        self.assertEqual(app.extensions["runs"].backfill(), 1)
+        self.assertEqual(len(json.loads(store.get_run(run_id)["metrics"])["intervals"]), 126)  # intervals with demand
+
+    def test_unknown_week_says_so(self):
+        app, store, client, run_id = self.finished()
+        self.assertIn("No finished run for this program and week", self.page(client, "/week?program=Nope&week=2026-10-11"))
+        rejected = run_id_of(upload(client, name="bad.xlsx"))
+        self.assertIn("No interval figures for this run", self.page(client, f"/runs/{rejected}/week"))
+
+    def test_week_links_from_run_and_program_pages(self):
+        app, store, client, run_id = self.finished(program="NMG", week_start="2026-10-11")
+        self.assertIn(f'href="/runs/{run_id}/week"', self.page(client, f"/runs/{run_id}"))
+        self.assertIn(f'href="/runs/{run_id}/week"', self.page(client, "/programs/NMG"))
+
+
 class Access(unittest.TestCase):
     def test_downloads_need_login(self):
         app, store, *_ = make_app()

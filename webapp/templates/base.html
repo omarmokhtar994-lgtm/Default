@@ -19,6 +19,7 @@
   <nav aria-label="Main">
     <a href="{{ url_for('home') }}">Home</a>
     <a href="{{ url_for('programs') }}">Programs</a>
+    <a href="{{ url_for('week_page') }}">Weeks</a>
     <a href="{{ url_for('team_page') }}">Team</a>
     {% if user.is_admin %}<a href="{{ url_for('admin_users') }}">People</a>{% endif %}
     <a href="{{ url_for('change_password') }}" title="Change your password">{{ user.display_name }}</a>

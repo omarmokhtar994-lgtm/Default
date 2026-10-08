@@ -15,6 +15,8 @@ import math
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from .week import compact as week_compact
+
 DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 VALIDATION = "INDEPENDENT_VALIDATION.json"
 DEFAULT_TARGET_RATIO = 0.9
@@ -257,6 +259,7 @@ def metrics(summary: Dict[str, Any]) -> Dict[str, Any]:
         "day_coverage": summary.get("day_coverage"), "restrictions": summary.get("restrictions"),
         "short_cells": summary.get("short_cells", []), "findings": len(summary.get("findings", [])),
         "hard_fail_count": summary.get("hard_fail_count", 0),
+        "intervals": summary.get("intervals", []),  # counts and times per interval: the week view
     }
 
 
@@ -295,4 +298,5 @@ def summarize(results_dir: Path) -> Optional[Dict[str, Any]]:
     findings += [_finding(w, "review") for w in data.get("warnings") or []]
     return {"case": case.name, "interval_minutes": step, "days": DAYS, "slots": slots, "cells": cells,
             "numbers": numbers, "findings": findings, "hard_fail_count": int(data.get("hard_fail_count", 0)),
-            "staffing": _staffing(case, rows, step), **_analyses(rows, step, _audit(case))}
+            "staffing": _staffing(case, rows, step), **_analyses(rows, step, _audit(case)),
+            "intervals": week_compact(rows)}

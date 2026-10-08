@@ -71,6 +71,18 @@
   });
 })();
 
+// Week view: picking another program shows its weeks (the latest is chosen).
+(function () {
+  "use strict";
+  var pick = document.querySelector("[data-autosubmit]");
+  if (!pick) { return; }
+  pick.addEventListener("change", function () {
+    var week = pick.form.querySelector("select[name=week]");
+    if (week) { week.disabled = true; }
+    pick.form.submit();
+  });
+})();
+
 // Chart tips: any mark with data-tip shows it on hover, or on tap on a phone.
 // The same numbers are in each chart's table view.
 (function () {

@@ -412,11 +412,18 @@ class RunQueue:
         return expired
 
     def backfill(self) -> int:
-        """Runs that finished before program history existed (no stored
-        figures) get them from their files, while the files are still there."""
+        """Runs that finished before program history (Phase K) or the week view
+        (Phase M) existed get their figures from their files, while the files
+        are still there."""
         filled = 0
         for run in self.store.list_runs(limit=1_000_000):
-            if run["status"] not in ("DONE", "REVIEW") or run.get("metrics") or not self.results_dir(run["id"]).is_dir():
+            if run["status"] not in ("DONE", "REVIEW") or not self.results_dir(run["id"]).is_dir():
+                continue
+            try:
+                kept = json.loads(run.get("metrics") or "{}")
+            except ValueError:
+                kept = {}
+            if isinstance(kept, dict) and kept.get("intervals"):  # already has the week view's figures
                 continue
             self._save_summary(run["id"])
             self._stamp_outcome(run["id"], run["status"])

@@ -793,3 +793,34 @@ button.danger, .button.danger { color: var(--gap-ink); border-color: var(--gap);
 button.danger:disabled { opacity: .55; cursor: not-allowed; }
 .home-scope { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0 0 16px; }
 .home-scope .lob { margin: 0; }
+
+/* Phase R: RTA's "+ Add" and one person's day */
+.rb-add { display: inline-block; margin-top: 6px; padding: 1px 8px; font: 600 12px/1.5 var(--text); color: var(--accent-ink);
+  border: 1px dashed var(--accent-ink); border-radius: 4px; text-decoration: none; }
+.rb-add:hover, .rb-add:focus-visible { background: var(--accent-soft); border-style: solid; }
+a.chip { text-decoration: none; color: inherit; }
+.chip.added { border-style: dashed; }
+.chip.added s { text-decoration: none; color: var(--dim); }
+dialog.dlg.add-dlg { width: 620px; }
+.add-dlg label { display: block; margin: 0 0 10px; font-weight: 600; }
+.add-dlg label select, .add-dlg label input[type=time] { display: block; width: 100%; margin-top: 4px; font-weight: 400; }
+.add-dlg label.exp-kind { font-weight: 400; }
+.kinds { border: 0; padding: 0; margin: 4px 0 12px; display: flex; flex-wrap: wrap; gap: 6px; }
+.kinds legend { font-weight: 600; margin-bottom: 4px; }
+.kinds .grp { width: 100%; font-size: 13px; color: var(--dim); margin: 6px 0 0; }
+.add-dlg .kinds label.k { display: inline-flex; align-items: center; gap: 6px; margin: 0; border: 1px solid var(--rail);
+  border-radius: 16px; padding: 4px 12px; font-size: 14px; font-weight: 400; cursor: pointer; }
+.add-dlg .kinds label.k:has(input:checked) { background: var(--accent-soft); border-color: var(--accent-ink); color: var(--accent-ink); font-weight: 600; }
+.add-dlg .kinds label.k:focus-within { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+.dlg-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.effect { background: var(--console-2); border-left: 3px solid var(--rail); border-radius: 4px; padding: 8px 12px; font-size: 14px; margin: 4px 0 12px; }
+.effect.ok { border-left-color: var(--covered); } .effect.warn { border-left-color: var(--short); } .effect.bad { border-left-color: var(--gap); }
+.pp-list { list-style: none; padding: 0; margin: 6px 0 14px; }
+.pp-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--rail); }
+.pp-list small { display: block; color: var(--dim); font-size: 13px; }
+.pp-list .acts { display: flex; gap: 6px; flex-shrink: 0; margin: 0; }
+.pp-list .acts form { margin: 0; }
+.tl-who b a { color: inherit; text-decoration: underline dotted; text-underline-offset: 3px; }
+@media (max-width: 560px) { .dlg-grid { grid-template-columns: minmax(0, 1fr); } .pp-list li { flex-wrap: wrap; } }
+.add-dlg label select.att { display: block; width: 100%; max-width: none; height: auto; margin: 4px 0 0; padding: 8px 10px;
+  font: 400 15px/1.3 var(--text); }

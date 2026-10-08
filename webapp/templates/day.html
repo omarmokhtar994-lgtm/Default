@@ -51,7 +51,8 @@
 <p id="day-status" class="notice" role="status" hidden></p>
 
 <div data-day data-program="{{ program }}" data-step="{{ v.interval }}" data-measure="{{ measure }}"
-     data-att-url="{{ url_for('day_attendance') }}" data-break-url="{{ url_for('day_break') }}" data-advice-url="{{ url_for('day_break_advice') }}">
+     data-att-url="{{ url_for('day_attendance') }}" data-break-url="{{ url_for('day_break') }}" data-advice-url="{{ url_for('day_break_advice') }}"
+     data-person-url="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view=tab if tab in ('board',) else none) }}">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <svg class="defs" aria-hidden="true" focusable="false" width="0" height="0"><defs><pattern id="hatch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="10" class="hatch-line"/></pattern><pattern id="hatch-ok" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="10" class="hatch-line ok"/></pattern></defs></svg>
 
@@ -64,7 +65,7 @@
     <div class="tl-row tl-axis" aria-hidden="true"><span></span><div class="tl-ticks">{% for h in range(0, 24, 2) %}<span>{{ '%02d'|format(h) }}</span>{% endfor %}</div></div>
     {% for lane in v.lanes %}{% set own = lane.segments|selectattr('offset', 'equalto', 0)|list %}{% set seg = own[0] if own else lane.segments[0] %}{% set d = on if seg.offset == 0 else earlier %}
     <div class="tl-row tl-lane">
-      <div class="tl-who"><b title="{{ lane.name }}">{{ lane.name }}</b>{% if lane.slot %}<span class="tl-tag">Slot {{ lane.slot }}</span>{% endif %}<span class="tl-tag">{{ lane.language[:3]|upper }}</span>{% if seg.called_in %}<span class="tl-tag called" title="Day off cancelled: called in {{ seg.label[:-12] }}">Called in</span>{% endif %}
+      <div class="tl-who"><b title="{{ lane.name }}"><a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, who=lane.name) }}#person">{{ lane.name }}</a></b>{% if lane.slot %}<span class="tl-tag">Slot {{ lane.slot }}</span>{% endif %}<span class="tl-tag">{{ lane.language[:3]|upper }}</span>{% if seg.called_in %}<span class="tl-tag called" title="Day off cancelled: called in {{ seg.label[:-12] }}">Called in</span>{% endif %}
         <select class="att{% if seg.status in absent_states %} gone{% elif seg.status != 'Present' %} away{% endif %}" data-name="{{ lane.name }}" data-date="{{ d.isoformat() }}" data-shift="{{ seg.label }}" aria-label="Attendance for {{ lane.name }}, shift {{ seg.label }}{% if seg.offset != 0 %} (started yesterday){% endif %}">
           {% for s in statuses if s not in aux %}<option value="{{ s }}"{% if s == seg.status %} selected{% endif %}>{{ s }}</option>{% endfor %}
           {% for s in aux %}<option value="{{ s }}|1"{% if s == seg.status and seg.billable %} selected{% endif %}>{{ s }} (billable)</option><option value="{{ s }}|0"{% if s == seg.status and not seg.billable %} selected{% endif %}>{{ s }} (non-billable)</option>{% endfor %}
@@ -155,8 +156,8 @@
 <section class="panel" aria-labelledby="acts-h">
   <h2 id="acts-h">Activities on this day</h2>
   {% set listed = [] %}
-  <ul class="log">{% for lane in v.lanes %}{% for seg in lane.segments if seg.offset == 0 %}{% for a in seg.activities %}{% set _ = listed.append(1) %}<li><b>{{ lane.name }}, {% if a.kind == 'Called in' %}Day off cancelled: called in {{ hm(a.start) }} - {{ hm(a.end) }}{% elif a.kind == 'Overtime' %}Overtime {{ hm(a.start) }} to {{ hm(a.end) }}{% elif a.kind == 'VTO' %}VTO from {{ hm(a.start) }}{% else %}{{ a.kind }} {{ hm(a.start) }} to {{ hm(a.end) }} ({{ 'billable' if a.billable else 'non-billable' }}){% endif %}</b>
-    <form method="post" action="{{ url_for('day_activity_cancel') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="id" value="{{ a.id }}"><input type="hidden" name="view" value="cover"><button type="submit" class="link">Cancel</button></form></li>{% endfor %}{% endfor %}{% endfor %}</ul>
+  <ul class="log">{% for lane in v.lanes %}{% for seg in lane.segments if seg.offset == 0 %}{% for a in seg.activities %}{% set _ = listed.append(1) %}<li><b>{{ lane.name }}, {% if a.kind == 'Called in' %}Day off cancelled: called in {{ hm(a.start) }} - {{ hm(a.end) }}{% elif a.kind == 'Overtime' %}Overtime {{ hm(a.start) }} to {{ hm(a.end) }}{% elif a.kind == 'VTO' %}VTO {{ hm(a.start) }} to {{ hm(a.end) }}{% elif a.kind in ('Break', 'Lunch') %}{{ a.kind }} {{ hm(a.start) }} to {{ hm(a.end) }}, added today{% else %}{{ a.kind }} {{ hm(a.start) }} to {{ hm(a.end) }} ({{ 'billable' if a.billable else 'non-billable' }}){% endif %}</b>
+    <form method="post" action="{{ url_for('day_activity_cancel') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="id" value="{{ a.id }}"><input type="hidden" name="view" value="cover"><button type="submit" class="link danger">Delete</button></form></li>{% endfor %}{% endfor %}{% endfor %}</ul>
   {% if not listed %}<p class="empty">No meetings, training, overtime or VTO recorded for this day.</p>{% endif %}
 </section>
 {% elif tab == 'adherence' %}
@@ -196,7 +197,7 @@
     <div class="rb-row rb-head" role="row"><span role="columnheader">Interval</span><span role="columnheader">Needed</span><span role="columnheader">On the floor</span><span role="columnheader">Buffer (h:mm)</span><span role="columnheader">Cover</span><span role="columnheader">Status</span><span role="columnheader">Unplanned leave</span><span role="columnheader">On break</span><span role="columnheader">Lunch</span><span role="columnheader">Short breaks</span><span role="columnheader">Late, early, aux</span><span role="columnheader">Languages</span></div>
     {% for r in rows %}
     <div class="rb-row rb-{{ r.state }}" role="row" data-t="{{ r.t }}" id="row-{{ r.t }}">
-      <span class="rb-c rb-t" role="cell"><b>{{ r.start }}</b><small>to {{ r.end }}</small><span class="rb-ticks">{% for x in r.slots %}<i class="tk {{ 'none' if r.required <= 0 else ('ok' if x >= r.required else ('warn' if x > r.required - 1 else 'bad')) }}" title="{{ hm(r.t + 5 * loop.index0) }}: {{ x }} on the floor"></i>{% endfor %}</span></span>
+      <span class="rb-c rb-t" role="cell"><b>{{ r.start }}</b><small>to {{ r.end }}</small><a class="rb-add" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='board', add=r.t) }}#add">+ Add</a><span class="rb-ticks">{% for x in r.slots %}<i class="tk {{ 'none' if r.required <= 0 else ('ok' if x >= r.required else ('warn' if x > r.required - 1 else 'bad')) }}" title="{{ hm(r.t + 5 * loop.index0) }}: {{ x }} on the floor"></i>{% endfor %}</span></span>
       <span class="rb-c rb-n" role="cell">{{ r.need if r.pm is not none else '–' }}</span>
       <span class="rb-c rb-n" role="cell">{{ r.now|num }}<small>plan {{ r.plan|num }}</small></span>
       <span class="rb-c rb-n rb-buf {{ r.state }}" role="cell">{{ r.pm|hmm if r.pm is not none else '–' }}{% if r.plan_pm is not none %}<small>plan {{ r.plan_pm|hmm }}</small>{% endif %}</span>
@@ -204,8 +205,8 @@
       <span class="rb-c" role="cell"><span class="st {{ r.state }}">{{ r.label }}</span>{% if r.why %}<small class="rb-why">{{ r.why }}</small>{% endif %}{% if r.pm is not none %}<a class="addcover" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='board', cover=r.t) }}#row-{{ r.t }}">Add cover</a>{% endif %}</span>
       <span class="rb-c rb-n{% if r.absent %} rb-gone{% endif %}" role="cell">{{ r.absent }}</span>
       <span class="rb-c rb-n" role="cell">{{ r.breaks }}</span>
-      {% for kind in ('lunch', 'short') %}<span class="rb-c rb-chips" role="cell">{% for c in r[kind] %}<button type="button" class="chip{% if c.moved %} moved{% endif %}" draggable="true" data-name="{{ c.name }}" data-date="{{ (on if c.offset == 0 else earlier).isoformat() }}" data-idx="{{ c.idx }}" data-kind="{{ c.kind }}" data-minutes="{{ c.minutes }}" data-start="{{ c.start }}" data-planned="{{ c.planned }}" title="{{ c.name }}{% if c.slot %}, slot {{ c.slot }}{% endif %}: {{ c.kind }} {{ c.start }}, {{ c.minutes }} minutes"><small>{{ c.short }}</small><b>{{ c.name }}</b><em>{{ c.start }}</em>{% if c.moved %}<s>was {{ c.planned }}</s>{% endif %}</button>{% else %}<span class="none">–</span>{% endfor %}</span>{% endfor %}
-      <span class="rb-c rb-chips" role="cell">{% for e in r.events %}<span class="chip ev"><b>{{ e.name }}</b><em>{{ e.text }}</em></span>{% else %}<span class="none">–</span>{% endfor %}{% if r.aux %}<small class="rb-why">{{ r.aux }} in aux</small>{% endif %}</span>
+      {% for kind in ('lunch', 'short') %}<span class="rb-c rb-chips" role="cell">{% for c in r[kind] %}{% if c.added %}<a class="chip added" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='board', who=c.name) }}#person" title="{{ c.name }}: {{ c.kind }} {{ c.start }}, {{ c.minutes }} minutes, added today"><small>{{ c.short }}</small><b>{{ c.name }}</b><em>{{ c.start }}</em><s>added</s></a>{% else %}<button type="button" class="chip{% if c.moved %} moved{% endif %}" draggable="true" data-name="{{ c.name }}" data-date="{{ (on if c.offset == 0 else earlier).isoformat() }}" data-idx="{{ c.idx }}" data-kind="{{ c.kind }}" data-minutes="{{ c.minutes }}" data-start="{{ c.start }}" data-planned="{{ c.planned }}" title="{{ c.name }}{% if c.slot %}, slot {{ c.slot }}{% endif %}: {{ c.kind }} {{ c.start }}, {{ c.minutes }} minutes"><small>{{ c.short }}</small><b>{{ c.name }}</b><em>{{ c.start }}</em>{% if c.moved %}<s>was {{ c.planned }}</s>{% endif %}</button>{% endif %}{% else %}<span class="none">–</span>{% endfor %}</span>{% endfor %}
+      <span class="rb-c rb-chips" role="cell">{% for e in r.events %}<a class="chip ev" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='board', who=e.name) }}#person"><b>{{ e.name }}</b><em>{{ e.text }}</em></a>{% else %}<span class="none">–</span>{% endfor %}{% if r.aux %}<small class="rb-why">{{ r.aux }} in aux</small>{% endif %}</span>
       <span class="rb-c rb-chips" role="cell">{% for l in r.langs %}<span class="lang {{ l.cls }}">{{ l.name }} {{ l.count }}</span>{% else %}<span class="none">–</span>{% endfor %}</span>
     </div>
     {% if cover_panel and cover_panel.t == r.t %}{% set cp = cover_panel %}
@@ -241,9 +242,58 @@
     <div class="fits" hidden><p class="dim">Where this break fits best today:</p><ul></ul></div>
     <p class="dlg-ask" hidden><b>Keep this time anyway?</b></p>
     <div class="btns"><button class="primary" type="button" data-keep>Save</button><button type="button" data-plan>Back to plan</button><button type="button" data-cancel>Cancel</button></div>
+    <p><a href="#" data-person-link>Open this person's day</a></p>
   </form>
 </dialog>
 
+{% set close_url = url_for('day_page', program=program, date=on.isoformat(), measure=measure, view=tab if tab != 'timeline' else none) %}
+{% if add_panel %}{% set ap = add_panel %}
+<dialog id="add-dialog" class="dlg add-dlg" open aria-labelledby="add-h">
+  <form method="post" action="{{ url_for('day_add') }}" class="dlg-form" data-preview="{{ url_for('day_add_preview') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="view" value="{{ tab if tab != 'timeline' else 'board' }}"><input type="hidden" name="measure" value="{{ measure }}">
+    <input type="hidden" name="at" value="{{ ap.t }}">
+    <h2 id="add-h">Add to {{ hm(ap.t) }} to {{ hm(ap.end) }}</h2>
+    <p class="dim">{{ program|unit }}, {{ on.strftime('%A %d %b') }}.{% if ap.cell and ap.cell.pm is not none %} Right now this {{ unit.get(v.interval, 'interval')[:-1] }} is {{ ap.cell.pm|hmm }} against demand.{% endif %}</p>
+    {% if ap.people %}
+    <label>Who <select name="associate" required>{% for name, label, lang in ap.people %}<option value="{{ name }}"{% if name == ap.person %} selected{% endif %}>{{ name }}, {{ label }}, {{ lang[:3]|upper }}</option>{% endfor %}</select></label>
+    <fieldset class="kinds"><legend>What</legend>
+      {% for group, kinds in ap.kinds.items() %}<span class="grp">{{ group }}</span>{% for k in kinds %}<label class="k"><input type="radio" name="what" value="{{ k }}"{% if k == 'Break' %} checked{% endif %}> {{ k }}</label>{% endfor %}{% endfor %}
+    </fieldset>
+    <div class="dlg-grid">
+      <label data-from-label><span>From</span> <input type="time" name="from" value="{{ hm(ap.t) }}" step="300" required></label>
+      <label data-length><span>Length</span> <select name="minutes">{% for m in lengths %}<option value="{{ m }}"{% if m == 15 %} selected{% endif %}>{% if m < 60 %}{{ m }} min{% else %}{{ m // 60 }} h{% if m % 60 %} {{ m % 60 }}{% endif %}{% endif %}</option>{% endfor %}</select></label>
+    </div>
+    <label class="exp-kind" data-billable hidden><input type="checkbox" name="billable" value="1"><span>Billable (stays on the floor under interval compliance)</span></label>
+    <p class="effect" data-effect aria-live="polite">The effect on the floor shows here before anything is kept.</p>
+    <div class="btns"><button class="primary" type="submit">Add</button><a class="button" href="{{ close_url }}#row-{{ ap.t }}">Close</a></div>
+    {% else %}<p class="empty">Nobody has a shift starting this day.</p><div class="btns"><a class="button" href="{{ close_url }}">Close</a></div>{% endif %}
+  </form>
+</dialog>
+{% endif %}
+{% if person_panel %}{% set pp = person_panel %}{% set s = pp.seg %}
+<dialog id="person-dialog" class="dlg add-dlg" open aria-labelledby="pp-h">
+  <div class="dlg-form">
+    <h2 id="pp-h">{{ pp.lane.name }}</h2>
+    <p class="dim">{{ s.label }}{% if s.offset != 0 %} (started the day before){% endif %}, {{ pp.lane.language }}{% if pp.lane.slot %}, slot {{ pp.lane.slot }}{% endif %}, {{ pp.date.strftime('%A %d %b') }}.</p>
+    <label>Attendance <select class="att{% if s.status in absent_states %} gone{% elif s.status != 'Present' %} away{% endif %}" data-name="{{ pp.lane.name }}" data-date="{{ pp.date.isoformat() }}" data-shift="{{ s.label }}">
+      {% for st in statuses if st not in aux %}<option value="{{ st }}"{% if st == s.status %} selected{% endif %}>{{ st }}</option>{% endfor %}
+      {% for st in aux %}<option value="{{ st }}|1"{% if st == s.status and s.billable %} selected{% endif %}>{{ st }} (billable)</option><option value="{{ st }}|0"{% if st == s.status and not s.billable %} selected{% endif %}>{{ st }} (non-billable)</option>{% endfor %}
+    </select></label>
+    <h3>Recorded and planned</h3>
+    <ul class="pp-list">
+      {% if s.status != 'Present' %}<li><span><b>{% if s.status == 'Late' %}Late, arrived {{ hm(s.to) }}{% elif s.status == 'Left early' %}Left early at {{ hm(s['from']) }}{% elif s['from'] is not none and s.to is not none %}{{ s.status }} {{ hm(s['from']) }} to {{ hm(s.to) }}{% else %}{{ s.status }}{% endif %}</b><small>Attendance</small></span>
+        <form method="post" action="{{ url_for('day_undo') }}" class="acts"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ pp.date.isoformat() }}"><input type="hidden" name="associate" value="{{ pp.lane.name }}"><input type="hidden" name="what" value="status"><input type="hidden" name="view" value="{{ tab }}"><button type="submit">Set back to present</button></form></li>{% endif %}
+      {% for b in s.breaks %}<li><span><b>{{ b.kind }}</b> {{ hm(b.start) }} to {{ hm(b.start + b.minutes) }}<small>{% if b.moved %}Moved from {{ hm(b.planned_start) }}{% else %}From the schedule{% endif %}</small></span>
+        <span class="acts"><button type="button" class="chip-move" data-name="{{ pp.lane.name }}" data-date="{{ pp.date.isoformat() }}" data-idx="{{ b.idx }}" data-kind="{{ b.kind }}" data-minutes="{{ b.minutes }}" data-start="{{ hm(b.start) }}" data-planned="{{ hm(b.planned_start) }}" data-shift="{{ s.label }}">Move</button>
+        {% if b.moved %}<form method="post" action="{{ url_for('day_undo') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ pp.date.isoformat() }}"><input type="hidden" name="associate" value="{{ pp.lane.name }}"><input type="hidden" name="what" value="break"><input type="hidden" name="idx" value="{{ b.idx }}"><input type="hidden" name="view" value="{{ tab }}"><button type="submit">Back to plan</button></form>{% endif %}</span></li>{% endfor %}
+      {% for a in s.activities %}<li><span><b>{% if a.kind == 'Called in' %}Called in on a day off {{ hm(a.start) }} - {{ hm(a.end) }}{% elif a.kind in ('Overtime', 'VTO') %}{{ a.kind }} {{ hm(a.start) }} to {{ hm(a.end) }}{% elif a.kind in ('Break', 'Lunch') %}{{ a.kind }} {{ hm(a.start) }} to {{ hm(a.end) }}, added today{% else %}{{ a.kind }} {{ hm(a.start) }} to {{ hm(a.end) }}, {{ 'billable' if a.billable else 'non-billable' }}{% endif %}</b><small>Recorded on this day</small></span>
+        <form method="post" action="{{ url_for('day_activity_cancel') }}" class="acts"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ pp.date.isoformat() }}"><input type="hidden" name="id" value="{{ a.id }}"><input type="hidden" name="view" value="{{ tab }}"><button type="submit" class="danger">Delete</button></form></li>{% endfor %}
+      {% if s.status == 'Present' and not s.breaks and not s.activities %}<li><span>Nothing recorded and no breaks planned.</span></li>{% endif %}
+    </ul>
+    <div class="btns"><a class="button primary" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='board', add=pp.add_at, person=pp.lane.name) }}#add">+ Add something</a><a class="button" href="{{ close_url }}">Close</a></div>
+  </div>
+</dialog>
+{% endif %}
 <dialog id="att-dialog" class="dlg" aria-labelledby="att-h">
   <form method="dialog" class="dlg-form">
     <h2 id="att-h">Attendance</h2>

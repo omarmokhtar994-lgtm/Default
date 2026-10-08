@@ -426,7 +426,7 @@ class DayBook:
             return min(got) if got else None
 
         was, now = tightest(before), tightest(after)
-        said = f"{found['text']} ({hm(lo)} to {hm(hi)})"
+        said = found["text"] if hm(lo) in found["text"] else f"{found['text']} ({hm(lo)} to {hm(hi)})"
         if was is None or now is None:
             return {"text": f"{said}: no demand is set for those intervals.", "level": "ok"}
         level = "ok" if now >= 0 else ("warn" if now > -step / 60 else "bad")

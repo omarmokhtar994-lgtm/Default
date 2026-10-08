@@ -374,6 +374,10 @@
   }
   function openBreak(el, at) {
     current = { name: el.dataset.name, date: el.dataset.date, idx: el.dataset.idx };
+    var personLink = dlg.querySelector("[data-person-link]");
+    if (personLink && root.dataset.personUrl) {
+      personLink.href = root.dataset.personUrl + "&who=" + encodeURIComponent(el.dataset.name) + "#person";
+    }
     dlg.querySelector("#brk-h").textContent = "Move " + el.dataset.name + "'s " + el.dataset.kind;
     dlg.querySelector("[data-who]").textContent = el.dataset.minutes + " minutes" +
       (el.dataset.shift ? " · shift " + el.dataset.shift : "") + " · planned " + el.dataset.planned +
@@ -426,6 +430,13 @@
 
   // board: drag a break chip to another row (same minute within the interval), or click it
   var dragged = null;
+  Array.prototype.forEach.call(root.querySelectorAll("button.chip-move"), function (b) {  // from one person's day
+    b.addEventListener("click", function () {
+      var person = document.getElementById("person-dialog");
+      if (person && person.open) { person.close(); }
+      openBreak(b);
+    });
+  });
   Array.prototype.forEach.call(root.querySelectorAll("button.chip[data-idx]"), function (chip) {
     chip.addEventListener("click", function () { openBreak(chip); });
     chip.addEventListener("dragstart", function (e) { dragged = chip; e.dataTransfer.setData("text/plain", chip.dataset.name); });
@@ -615,4 +626,49 @@
   }
   var menu = document.querySelector("details[data-menu]");
   if (menu && window.matchMedia && window.matchMedia("(max-width: 900px)").matches) { menu.open = false; }
+})();
+
+// RTA's "+ Add" and one person's day (Phase R): drawn by the server as open dialogs, shown here as
+// modals. The Add dialog asks the server what the floor would look like before anything is kept.
+(function () {
+  "use strict";
+  ["add-dialog", "person-dialog"].forEach(function (id) {
+    var d = document.getElementById(id);
+    if (d && typeof d.showModal === "function") { d.close(); d.showModal(); }
+  });
+  var add = document.getElementById("add-dialog");
+  var form = add && add.querySelector("form[data-preview]");
+  if (!form || !form.querySelector("input[name=what]")) { return; }
+  var effect = form.querySelector("[data-effect]"), length = form.querySelector("[data-length]");
+  var billable = form.querySelector("[data-billable]"), from = form.querySelector("[data-from-label]");
+  var submit = form.querySelector("button[type=submit]"), minutes = form.querySelector("select[name=minutes]");
+  var whole = ["Unplanned leave", "Sick"], aux = ["Coaching", "Meeting", "Training", "System issue"];
+  var usual = { "Break": "15", "Lunch": "30", "Overtime": "60", "VTO": "60", "Coaching": "30", "Meeting": "30",
+                "Training": "60", "System issue": "15" };
+  var seq = 0;
+  function kind() { var c = form.querySelector("input[name=what]:checked"); return c ? c.value : ""; }
+  function shape(changedKind) {
+    var k = kind();
+    length.hidden = whole.indexOf(k) >= 0 || k === "Late" || k === "Left early";
+    billable.hidden = aux.indexOf(k) < 0;
+    from.hidden = whole.indexOf(k) >= 0;
+    from.querySelector("span").textContent = k === "Late" ? "Arrived at" : k === "Left early" ? "Left at" : "From";
+    if (changedKind && usual[k]) { minutes.value = usual[k]; }
+    submit.textContent = "Add " + k.toLowerCase();
+  }
+  function preview() {
+    var mine = ++seq;
+    fetch(form.dataset.preview, { method: "POST", credentials: "same-origin", body: new URLSearchParams(new FormData(form)),
+                                  headers: { "Accept": "application/json" } })
+      .then(function (r) { return r.json().then(function (d) { d._ok = r.ok; return d; }); })
+      .then(function (d) {
+        if (mine !== seq) { return; }
+        effect.textContent = d._ok ? d.text : (d.error || "That cannot be added.");
+        effect.className = "effect " + (d._ok ? d.level : "bad");
+      })
+      .catch(function () { if (mine === seq) { effect.textContent = "The effect could not be worked out; you can still add it."; } });
+  }
+  form.addEventListener("change", function (e) { shape(e.target.name === "what"); preview(); });
+  shape(true);
+  preview();
 })();

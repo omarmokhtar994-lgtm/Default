@@ -17,7 +17,7 @@ from werkzeug.utils import secure_filename
 
 from .adherence import interval_shrinkage, person_day, team as team_figures
 from .analytics import program_weeks, team
-from .attendance import ACTIVITY_KINDS, DayBook, hm, tomorrow_unchecked, week_start
+from .attendance import ACTIVITY_KINDS, ADD_KINDS, DayBook, hm, tomorrow_unchecked, week_start
 from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, board
 from .coach import actual_shrinkage, corrected_tab
 from .eta import queue_plan
@@ -1206,6 +1206,24 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 cover_panel = days.cover_offers(page, request.args.get("cover", type=int))
             except ValueError as exc:
                 flash(str(exc))
+        add_panel = person_panel = None
+        add_at = request.args.get("add", type=int)
+        if page and add_at is not None and 0 <= add_at < 1440:  # "+ Add" on an interval (Phase R)
+            step = page["view"]["interval"]
+            t = add_at - add_at % step
+            own = [(l, x) for l in page["view"]["lanes"] for x in l["segments"] if x["offset"] == 0]
+            own.sort(key=lambda p: (not (p[1]["start"] < t + step and t < p[1]["end"]), p[1]["start"], p[0]["name"]))
+            add_panel = {"t": t, "end": t + step, "kinds": ADD_KINDS, "person": request.args.get("person", ""),
+                         "people": [(l["name"], x["label"], l["language"]) for l, x in own],
+                         "cell": next((c for c in page["view"]["cells"] if c["t"] == t), None)}
+        who = request.args.get("who", "")
+        if page and who and add_panel is None:  # one person's day (Phase R)
+            lane = next((l for l in page["view"]["lanes"] if l["name"] == who), None)
+            if lane is not None:
+                seg = next((x for x in lane["segments"] if x["offset"] == 0), lane["segments"][0])
+                first = seg["start"] if seg["start"] >= from_now else from_now
+                person_panel = {"lane": lane, "seg": seg, "date": on if seg["offset"] == 0 else on - timedelta(days=1),
+                                "add_at": max(0, min(1439, first - first % page["view"]["interval"]))}
         if page and tab == "adherence":
             v = page["view"]
             people = sorted((person_day(v, l["name"]) for l in v["lanes"] if any(x["offset"] == 0 for x in l["segments"])),
@@ -1215,12 +1233,15 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return render_template("day.html", page=page, problem=problem, program=program, programs=programs, on=on,
                                people=people, whole=whole, shrink=shrink, finder=finder, cover=cover,
                                proposal=proposal, from_now=from_now, cover_panel=cover_panel,
+                               add_panel=add_panel, person_panel=person_panel, lengths=ADD_LENGTHS,
                                tomorrow_unchecked=tomorrow_unchecked(on) if on else "",
                                activity_kinds=ACTIVITY_KINDS,
                                measure=measure,
                                measures=MEASURES, tab=tab, statuses=STATUSES, aux=sorted(AUX), hm=hm,
                                rows=board(page["view"]) if page and tab == "board" else None, week_of=week_start(on),
                                earlier=on - timedelta(days=1), later=on + timedelta(days=1))
+
+    ADD_LENGTHS = (5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240)  # minutes offered by "+ Add"
 
     def _day_form():  # type: ignore[no-untyped-def]
         on = _date(request.form.get("date", ""))

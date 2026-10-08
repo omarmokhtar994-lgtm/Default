@@ -1021,6 +1021,58 @@ class TheDayPage(unittest.TestCase):
         self.post("/day/undo", date="2026-10-15", associate="Associate 001", what="break", idx=str(b["idx"]))
         self.assertEqual(self.store.list_actual_breaks("AE/AR B2B", ["2026-10-15"]), [])
 
+    def test_board_rows_offer_add(self):
+        """Phase R task 5: every interval of the board has "+ Add"."""
+        body = html.unescape(self.client.get(self.url + "&view=board").get_data(as_text=True))
+        self.assertRegex(body, r'<a class="rb-add" href="[^"]*add=600[^"]*#add">\+ Add</a>')
+
+    def test_add_dialog_lists_kinds_and_prefills_the_interval(self):
+        body = html.unescape(self.client.get(self.url + "&view=board&add=600").get_data(as_text=True))
+        dialog = body[body.index('<dialog id="add-dialog"'):]
+        dialog = dialog[:dialog.index("</dialog>")]
+        self.assertIn("Add to 10:00 to", dialog)
+        self.assertIn('action="/day/add"', dialog)
+        for kind in ("Break", "Lunch", "Coaching", "Meeting", "Training", "System issue", "Unplanned leave", "Sick",
+                     "Late", "Left early", "Overtime", "VTO"):
+            self.assertIn(f'name="what" value="{kind}"', dialog)
+        self.assertIn('name="from" value="10:00"', dialog)
+        self.assertIn('<input type="hidden" name="at" value="600">', dialog)
+        self.assertRegex(dialog, r'<option value="Associate \d+"')
+
+    def test_person_dialog_lists_records_with_delete(self):
+        from datetime import date
+        days, on = self.app.extensions["days"], date(2026, 10, 16)
+        made = days.add_activity("AE/AR B2B", on, "Associate 001", "Coaching", "15:00", "15:30", 1, billable=True)
+        days.set_status("AE/AR B2B", on, "Associate 001", "Late", 1, end="12:20")
+        try:
+            body = html.unescape(self.client.get("/day?program=AE/AR+B2B&date=2026-10-16&view=board&who=Associate+001")
+                                 .get_data(as_text=True))
+            dialog = body[body.index('<dialog id="person-dialog"'):]
+            dialog = dialog[:dialog.index("</dialog>")]
+            self.assertIn("<h2", dialog)
+            self.assertIn("Associate 001", dialog)
+            self.assertIn("Coaching 15:00 to 15:30, billable", dialog)
+            self.assertRegex(dialog, rf'(?s)action="/day/activity/cancel".*?name="id" value="{made}".*?>Delete</button>')
+            self.assertIn("Late, arrived 12:20", dialog)
+            self.assertRegex(dialog, r'(?s)action="/day/undo".*?name="what" value="status".*?>Set back to present</button>')
+            self.assertIn('select class="att', dialog)  # the attendance list, as on the timeline
+            self.assertRegex(dialog, r'href="[^"]*add=[^"]*person=Associate(\+|%20)001[^"]*#add">\+ Add something</a>')
+        finally:
+            days.cancel_activity("AE/AR B2B", on, made, 1)
+            days.set_status("AE/AR B2B", on, "Associate 001", "Present", 1)
+
+    def test_recorded_list_says_delete(self):
+        from datetime import date
+        days, on = self.app.extensions["days"], date(2026, 10, 16)
+        made = days.add_activity("AE/AR B2B", on, "Associate 001", "Overtime", "21:00", "22:00", 1)
+        try:
+            body = html.unescape(self.client.get("/day?program=AE/AR+B2B&date=2026-10-16&view=cover")
+                                 .get_data(as_text=True))
+            self.assertRegex(body, rf'(?s)name="id" value="{made}".*?class="link danger">Delete</button>')
+            self.assertNotIn('class="link">Cancel</button>', body)
+        finally:
+            days.cancel_activity("AE/AR B2B", on, made, 1)
+
     def test_overview_and_rta_are_separate(self):
         body = html.unescape(self.client.get("/overview?program=AE/AR+B2B&date=2026-10-14").get_data(as_text=True))
         for words in ("On shift today", "Short of demand", "Next six hours", "Needs attention", "Open RTA",

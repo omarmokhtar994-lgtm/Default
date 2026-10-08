@@ -786,7 +786,10 @@ class TheNewLayoutInTheBrowser(unittest.TestCase):
         for words in ("Settings", "Sign out"):
             expect(top).to_contain_text(words)
         expect(top.get_by_role("link", name="Exports")).to_have_count(0)
-        expect(page.locator("section.programs-home article.pcard")).to_have_count(2)
+        # re-pinned (Phase R): Home shows the program picked on the left (owner, 2026-10-08), with the others
+        # one link away; "Show all my programs" shows both cards
+        expect(page.locator("section.programs-home article.pcard")).to_have_count(1)
+        expect(page.locator("p.home-scope a.lob")).to_have_count(1)
         page.screenshot(path=str(Q_SCREENS / "home.png"), full_page=True)
         self.go(page, "/overview?program=AE/AR+B2B&date=2026-10-14", errors)
         expect(page.locator("h1")).to_have_text("AE, AR B2B: Wednesday 14 Oct")
@@ -819,3 +822,67 @@ class TheNewLayoutInTheBrowser(unittest.TestCase):
         expect(phone.locator("details[data-menu]")).not_to_have_attribute("open", "")
         self.go(phone, "/", errors)
         phone.screenshot(path=str(Q_SCREENS / "phone_home.png"), full_page=True)
+
+
+R_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_r" / "screens"
+
+
+class TheRtaActionsInTheBrowser(unittest.TestCase):
+    """Phase R task 5: "+ Add" on any interval of the board (with the effect shown first), and one person's
+    day with everything recorded and Delete."""
+
+    setUpClass_base = classmethod(TheSchedulesInTheBrowser.setUpClass.__func__)
+    tearDownClass = classmethod(TheSchedulesInTheBrowser.tearDownClass.__func__)
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+
+    @classmethod
+    def setUpClass(cls):
+        cls.setUpClass_base()
+        R_SCREENS.mkdir(parents=True, exist_ok=True)
+
+    def go(self, page, url, errors):
+        page.goto(self.base + url)
+        page.wait_for_load_state("load")
+        page.wait_for_timeout(500)
+        self.assertEqual(errors, [])
+
+    def test_add_a_break_from_the_board(self):
+        page = self.page(width=1440, height=900)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        self.go(page, "/day?program=AE/AR+B2B&date=2026-10-15&view=board", errors)
+        page.locator("#row-900 a.rb-add").click()
+        page.wait_for_load_state("load")
+        dialog = page.locator("#add-dialog")
+        expect(dialog).to_be_visible()
+        self.assertTrue(page.evaluate("document.getElementById('add-dialog').matches(':modal')"))
+        dialog.locator("select[name=associate]").select_option("Associate 001")  # Thursday 12:00 - 21:00
+        expect(dialog.locator("[data-effect]")).to_contain_text("the floor at its tightest")
+        page.wait_for_timeout(300)
+        page.screenshot(path=str(R_SCREENS / "board_add.png"))
+        dialog.get_by_role("button", name="Add break").click()
+        page.wait_for_load_state("load")
+        expect(page.locator("p.flash")).to_contain_text("Recorded: Associate 001, Break 15:00 to 15:15.")
+        expect(page.locator("#row-900 a.chip.added", has_text="Associate 001")).to_be_visible()
+        self.assertEqual(errors, [])
+
+    def test_delete_overtime_from_the_person_dialog(self):
+        from datetime import date
+        days = self.app.extensions["days"]
+        days.add_activity("AE/AR B2B", date(2026, 10, 16), "Associate 001", "Overtime", "21:00", "22:00", 1)
+        page = self.page(width=1440, height=900)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        self.go(page, "/day?program=AE/AR+B2B&date=2026-10-16&view=board&who=Associate+001", errors)
+        dialog = page.locator("#person-dialog")
+        expect(dialog).to_be_visible()
+        expect(dialog).to_contain_text("Overtime 21:00 to 22:00")
+        page.screenshot(path=str(R_SCREENS / "person.png"))
+        dialog.locator("li", has_text="Overtime 21:00 to 22:00").get_by_role("button", name="Delete").click()
+        page.wait_for_load_state("load")
+        expect(page.locator("p.flash")).to_contain_text("Cancelled.")
+        self.assertEqual(self.store.list_activities("AE/AR B2B", ["2026-10-16"]), [])
+        self.assertEqual(errors, [])

@@ -44,6 +44,8 @@
     <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='timeline') }}"{% if tab == 'timeline' %} class="on" aria-current="page"{% endif %}>Timeline</a>
     <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='board') }}"{% if tab == 'board' %} class="on" aria-current="page"{% endif %}>Interval board</a>
     <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='adherence') }}"{% if tab == 'adherence' %} class="on" aria-current="page"{% endif %}>Adherence</a>
+    <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='meeting') }}"{% if tab == 'meeting' %} class="on" aria-current="page"{% endif %}>Find a time</a>
+    <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='cover') }}"{% if tab == 'cover' %} class="on" aria-current="page"{% endif %}>Overtime and VTO</a>
   </nav>
   <form class="sel" method="get" action="{{ url_for('day_page') }}">
     <input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="view" value="{{ tab }}">
@@ -81,7 +83,8 @@
         {% if s.status in absent_states %}<rect class="tl-away gone" x="{{ x0 }}" y="8" width="{{ x1 - x0 }}" height="14" fill="url(#hatch)"><title>{{ s.status }}</title></rect>{% else %}
         {% for b in s.breaks %}{% if b.moved %}<rect class="tl-ghost" x="{{ b.planned_start }}" y="5" width="{{ b.minutes }}" height="20" rx="2"/>{% endif %}
         <rect class="brk{% if b.moved %} moved{% endif %}" data-name="{{ lane.name }}" data-date="{{ d.isoformat() }}" data-idx="{{ b.idx }}" data-kind="{{ b.kind }}" data-minutes="{{ b.minutes }}" data-start="{{ hm(b.start) }}" data-planned="{{ hm(b.planned_start) }}" data-shift="{{ s.label }}" x="{{ b.start }}" y="5" width="{{ b.minutes }}" height="20" rx="2" tabindex="0" role="button" aria-label="{{ lane.name }}, {{ b.kind }} {{ hm(b.start) }}, {{ b.minutes }} minutes{% if b.moved %}, moved from {{ hm(b.planned_start) }}{% endif %}: press Enter to move"><title>{{ b.kind }} {{ hm(b.start) }} ({{ b.minutes }} min){% if b.moved %}, planned {{ hm(b.planned_start) }}{% endif %}</title></rect>
-        {% endfor %}{% endif %}{% endfor %}
+        {% endfor %}{% endif %}
+        {% for a in s.activities %}{% set a0 = [a.start, 0]|max %}{% set a1 = [a.end, 1440]|min %}{% if a1 > a0 %}<rect class="tl-act {{ 'ot' if a.kind == 'Overtime' else ('vto' if a.kind == 'VTO' else 'aux') }}{% if a.billable and a.kind not in ('Overtime', 'VTO') %} billable{% endif %}" x="{{ a0 }}" y="{{ 8 if a.kind == 'Overtime' else 2 }}" width="{{ a1 - a0 }}" height="{{ 14 if a.kind == 'Overtime' else 4 }}"{% if a.kind != 'Overtime' %} fill="url(#{{ 'hatch-ok' if a.billable and measure == 'interval' else 'hatch' }})"{% endif %}><title>{{ a.kind }} {{ hm(a.start) }} to {{ hm(a.end) }}{% if a.kind not in ('Overtime', 'VTO') %} ({{ 'billable' if a.billable else 'non-billable' }}){% endif %}</title></rect>{% endif %}{% endfor %}{% endfor %}
       </svg>
     </div>{% endfor %}
     <div class="tl-row tl-num"><span class="tl-lbl">Needed on the floor</span><div class="tl-cells">{% for c in v.cells %}<span class="tc n">{{ c.need if c.pm is not none else '' }}</span>{% endfor %}</div></div>
@@ -91,6 +94,58 @@
     {% for l in v.languages %}<div class="tl-row tl-num"><span class="tl-lbl">{{ l.name }} on the floor</span><div class="tl-cells">{% for c in l.cells %}<span class="tc {{ c.cls }}">{{ c.count if c.count is not none else '' }}</span>{% endfor %}</div></div>{% endfor %}
   </div></div>
   <p class="legend2"><span><i class="k ok"></i>Enough people</span><span><i class="k warn"></i>Short by less than one person</span><span><i class="k bad"></i>Short by a person or more</span><span><i class="k moved"></i>Break moved here</span><span><i class="k ghost"></i>Where the engine planned it</span><span><i class="k away"></i>Away (late, aux, leave)</span></p>
+</section>
+{% elif tab == 'meeting' %}
+<div class="adh">
+<section class="panel" aria-labelledby="mt-h">
+  <h2 id="mt-h">Find a time</h2>
+  <p class="note">For a meeting, training or coaching: who, how long and between which times. Times are ranked by the floor's buffer at its tightest once these people are off the queue (a billable session keeps them on under interval compliance); times on top of anyone's break (10 minutes either side), aux or another activity are left out.</p>
+  <form method="get" action="{{ url_for('day_page') }}" class="exp-form">
+    <input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="measure" value="{{ measure }}"><input type="hidden" name="view" value="meeting">
+    <fieldset class="exp-kinds who-list"><legend>Who</legend>
+      {% for lane in v.lanes %}{% for seg in lane.segments if seg.offset == 0 and seg.status not in absent_states %}<label class="exp-kind"><input type="checkbox" name="who" value="{{ lane.name }}"{% if lane.name in finder.who %} checked{% endif %}><span><b>{{ lane.name }}</b><small>{% if lane.slot %}Slot {{ lane.slot }} · {% endif %}{{ seg.label }}</small></span></label>{% endfor %}{% endfor %}
+    </fieldset>
+    <div class="exp-row">
+      <label>How long <select name="minutes">{% for m in (15, 30, 45, 60, 90, 120) %}<option value="{{ m }}"{% if m == finder.minutes %} selected{% endif %}>{{ m }} min</option>{% endfor %}</select></label>
+      <label>From <input type="time" name="from" step="300" value="{{ finder['from'] }}"></label>
+      <label>To <input type="time" name="to" step="300" value="{{ finder['to'] }}"></label>
+      <label>Counts as <select name="kind">{% for k in ('Meeting', 'Training', 'Coaching') %}<option value="{{ k }}"{% if k == finder.kind %} selected{% endif %}>{{ k }}</option>{% endfor %}</select></label>
+    </div>
+    <label class="exp-kind"><input type="checkbox" name="billable" value="1"{% if finder.billable %} checked{% endif %}><span>Billable (stays on the floor under interval compliance)</span></label>
+    <p><button class="primary" type="submit">Find times</button></p>
+  </form>
+</section>
+<section class="panel" aria-labelledby="fits-h">
+  <h2 id="fits-h">Best times</h2>
+  {% if finder.error %}<p class="notice" role="alert">{{ finder.error }}</p>
+  {% elif finder.slots %}<ol class="fit-list">{% for x in finder.slots %}<li><span><b>{{ hm(x.start) }} to {{ hm(x.end) }}</b><small>buffer at its tightest after: <span class="{{ 'ok' if x.tightest is none or x.tightest >= 0 else 'bad' }}">{{ 'no demand then' if x.tightest is none else x.tightest|hmm }}</span></small></span>
+      <form method="post" action="{{ url_for('day_book') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}">{% for n in finder.who %}<input type="hidden" name="who" value="{{ n }}">{% endfor %}<input type="hidden" name="start" value="{{ x.start }}"><input type="hidden" name="minutes" value="{{ finder.minutes }}"><input type="hidden" name="kind" value="{{ finder.kind }}">{% if finder.billable %}<input type="hidden" name="billable" value="1">{% endif %}<button type="submit">Book</button></form></li>{% endfor %}</ol>
+  {% elif finder.who %}<p class="empty">No time fits: these people are never free together in that window.</p>
+  {% else %}<p class="empty">Pick who is in it, then Find times.</p>{% endif %}
+</section>
+</div>
+{% elif tab == 'cover' %}
+{% macro accept(name, kind, a, b, label) %}<form method="post" action="{{ url_for('day_activity') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="associate" value="{{ name }}"><input type="hidden" name="kind" value="{{ kind }}"><input type="hidden" name="from" value="{{ hm(a) }}"><input type="hidden" name="to" value="{{ hm(b) }}"><input type="hidden" name="view" value="cover"><button type="submit" class="chip offer" title="Record that {{ name }} accepted">{{ name }}: {{ label }}</button></form>{% endmacro %}
+<section class="panel" aria-labelledby="ot-h">
+  <h2 id="ot-h">Short: offer overtime</h2>
+  <p class="note">People whose shift ends just before a short interval, or starts just after it, could stay on or come in early: at most 2 hours, keeping the program's rest gap. Offer it, and when they accept, press their name: it counts on the floor and is logged.</p>
+  {% if cover.overtime %}<table class="adh-t"><thead><tr><th scope="col">Interval</th><th scope="col" class="n">Buffer</th><th scope="col" class="n">People short</th><th scope="col">Who could cover (accepted → press)</th></tr></thead>
+  <tbody>{% for row in cover.overtime %}<tr><td><b>{{ hm(row.t) }}</b></td><td class="n bad">{{ row.buffer|hmm }}</td><td class="n">{{ row.short }}</td><td>{% for o in row.offers %}{{ accept(o.name, 'Overtime', o.start, o.end, o.text) }}{% else %}<span class="dim">nobody next to it within the rules</span>{% endfor %}</td></tr>{% endfor %}</tbody></table>
+  {% else %}<p class="empty">No short intervals.</p>{% endif %}
+</section>
+<section class="panel" aria-labelledby="vto-h">
+  <h2 id="vto-h">Above demand: offer voluntary time off</h2>
+  <p class="note">Where the floor is comfortably above need, people whose shift ends within 2 hours could leave early, while every interval until then keeps its need at every 5 minutes and every language keeps its minimum.</p>
+  {% if cover.vto %}<table class="adh-t"><thead><tr><th scope="col">From</th><th scope="col" class="n">Buffer</th><th scope="col" class="n">Room</th><th scope="col">Who could leave early (accepted → press)</th></tr></thead>
+  <tbody>{% for row in cover.vto %}<tr><td><b>{{ hm(row.t) }}</b></td><td class="n ok">{{ row.buffer|hmm }}</td><td class="n">{{ row.room }}</td><td>{% for o in row.offers %}{{ accept(o.name, 'VTO', o.start, o.end, o.text) }}{% endfor %}</td></tr>{% endfor %}</tbody></table>
+  {% else %}<p class="empty">No interval has room for VTO.</p>{% endif %}
+</section>
+<section class="panel" aria-labelledby="acts-h">
+  <h2 id="acts-h">Activities on this day</h2>
+  {% set listed = [] %}
+  <ul class="log">{% for lane in v.lanes %}{% for seg in lane.segments if seg.offset == 0 %}{% for a in seg.activities %}{% set _ = listed.append(1) %}<li><b>{{ lane.name }}, {% if a.kind == 'Overtime' %}Overtime {{ hm(a.start) }} to {{ hm(a.end) }}{% elif a.kind == 'VTO' %}VTO from {{ hm(a.start) }}{% else %}{{ a.kind }} {{ hm(a.start) }} to {{ hm(a.end) }} ({{ 'billable' if a.billable else 'non-billable' }}){% endif %}</b>
+    <form method="post" action="{{ url_for('day_activity_cancel') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="id" value="{{ a.id }}"><input type="hidden" name="view" value="cover"><button type="submit" class="link">Cancel</button></form></li>{% endfor %}{% endfor %}{% endfor %}</ul>
+  {% if not listed %}<p class="empty">No meetings, training, overtime or VTO recorded for this day.</p>{% endif %}
 </section>
 {% elif tab == 'adherence' %}
 <section class="tiles" aria-label="Adherence in numbers">

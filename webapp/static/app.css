@@ -628,3 +628,17 @@ svg.defs { position: absolute; width: 0; height: 0; }
 .exp-t td { padding: 6px 8px; border-bottom: 1px solid var(--rail); }
 .exp-t .n { text-align: right; font-variant-numeric: tabular-nums; }
 @media (max-width: 900px) { .exp { grid-template-columns: 1fr; } }
+
+/* activities, the finder and offers */
+[data-day] .tl-act.ot { fill: var(--covered); opacity: .9; }
+[data-day] .tl-act.aux, [data-day] .tl-act.vto { stroke: var(--over); stroke-width: 1; vector-effect: non-scaling-stroke; }
+[data-day] .tl-act.aux.billable { stroke: var(--covered); }
+[data-day] .who-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0 12px; max-height: 340px; overflow: auto; }
+[data-day] .fit-list { list-style: none; padding: 0; margin: 0; }
+[data-day] .fit-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; background: var(--console-2); margin-bottom: 6px; }
+[data-day] .fit-list small { display: block; color: var(--dim); }
+[data-day] .fit-list .ok { color: var(--accent-ink); font-weight: 700; } [data-day] .fit-list .bad { color: var(--gap-ink); font-weight: 700; }
+[data-day] form.inline { display: inline; margin: 0; }
+[data-day] .chip.offer { cursor: pointer; border-color: var(--covered); }
+[data-day] .chip.offer:hover { background: var(--accent-soft); }
+[data-day] .adh-t td.bad { color: var(--gap-ink); font-weight: 700; }

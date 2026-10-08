@@ -474,6 +474,13 @@ def board(view: Dict[str, Any]) -> List[Dict[str, Any]]:
                 elif st in AUX and lo < hi and t <= lo < t + step:
                     events.append({"name": lane["name"], "text": f"{st} {_hm(lo)} to {_hm(hi)}, "
                                                                  f"{'billable' if seg['billable'] else 'non-billable'}"})
+                for a in seg.get("activities", []):
+                    if t <= a["start"] < t + step:
+                        text = (f"overtime {_hm(a['start'])} to {_hm(a['end'])}" if a["kind"] == "Overtime" else
+                                f"VTO from {_hm(a['start'])}" if a["kind"] == "VTO" else
+                                f"{a['kind'].lower()} {_hm(a['start'])} to {_hm(a['end'])}, "
+                                f"{'billable' if a.get('billable') else 'non-billable'}")
+                        events.append({"name": lane["name"], "text": text})
         if c["pm"] is None:
             state, label, why = "none", "No demand", ""
         else:

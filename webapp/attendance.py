@@ -17,7 +17,7 @@ from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 from .day import (ABSENT, AUX, MEASURES, OVERTIME_MAX, STATUSES, STEP, TIMED, BreakRefused, _busy, advice,
-                  check_break, day_view, meeting_slots, planned, read_inputs)
+                  check_break, day_view, meeting_slots, overtime_offers, planned, read_inputs, vto_offers)
 from .schedules import EGYPT, KEEP_DAYS, ScheduleBook
 from .versions import DAYS, shift_span
 
@@ -281,6 +281,13 @@ class DayBook:
         if page is None:
             raise ValueError("There is no schedule for this day.")
         return meeting_slots(page["view"], names, minutes, lo, hi, billable)
+
+    def offers(self, page: Dict[str, Any], after: int = 0) -> Dict[str, List[Dict[str, Any]]]:
+        """Overtime next to short intervals and VTO where the floor stays covered (from ``after``)."""
+        week = self._week(page["version"])
+        rest = float(week.get("settings", {}).get("rest_gap_hours") or 0)
+        return {"overtime": overtime_offers(page["view"], week, page["day"], rest, after),
+                "vto": vto_offers(page["view"], after)}
 
     def book_session(self, program: str, on: date, names: List[str], start: int, minutes: int, kind: str, user_id: int,
              billable: bool = False) -> None:

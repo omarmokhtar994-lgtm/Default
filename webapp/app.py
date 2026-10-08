@@ -17,7 +17,7 @@ from werkzeug.utils import secure_filename
 
 from .adherence import interval_shrinkage, person_day, team as team_figures
 from .analytics import program_weeks, team
-from .attendance import DayBook, hm, week_start
+from .attendance import ACTIVITY_KINDS, DayBook, hm, week_start
 from .day import AUX, MEASURES, STATUSES, BreakRefused, board
 from .eta import queue_plan
 from .exports import KINDS as EXPORT_KINDS, build as build_export
@@ -736,13 +736,28 @@ def create_app(config: Dict[str, Any]) -> Flask:
         measure = request.args.get("measure", "")
         measure = measure if measure in MEASURES else "interval"
         tab = request.args.get("view", "")
-        tab = tab if tab in ("board", "adherence") else "timeline"
+        tab = tab if tab in ("board", "adherence", "meeting", "cover") else "timeline"
         problem = ""
         try:
             page = days.page(program, on, measure) if program else None
         except ValueError as exc:  # said on the page, not a server error
             page, problem = None, str(exc)
         people = shrink = whole = None
+        finder: Dict[str, Any] = {}
+        cover = None
+        if page and tab == "meeting":
+            finder = {"who": request.args.getlist("who"), "minutes": request.args.get("minutes", 30, type=int),
+                      "from": request.args.get("from", "09:00"), "to": request.args.get("to", "18:00"),
+                      "kind": request.args.get("kind", "Meeting"), "billable": request.args.get("billable") == "1"}
+            if finder["who"]:
+                try:
+                    finder["slots"] = days.meeting_slots(program, on, finder["who"], finder["minutes"], finder["from"],
+                                                         finder["to"], finder["billable"], measure)
+                except ValueError as exc:
+                    finder["error"] = str(exc)
+        if page and tab == "cover":
+            now = datetime.now(EGYPT)
+            cover = days.offers(page, now.hour * 60 + now.minute if now.date() == on else 0)
         if page and tab == "adherence":
             v = page["view"]
             people = sorted((person_day(v, l["name"]) for l in v["lanes"] if any(x["offset"] == 0 for x in l["segments"])),
@@ -750,7 +765,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             whole = team_figures(people)
             shrink = interval_shrinkage(v, page["inputs"], page["day"])
         return render_template("day.html", page=page, problem=problem, program=program, programs=programs, on=on,
-                               people=people, whole=whole, shrink=shrink,
+                               people=people, whole=whole, shrink=shrink, finder=finder, cover=cover,
+                               activity_kinds=ACTIVITY_KINDS,
                                measure=measure,
                                measures=MEASURES, tab=tab, statuses=STATUSES, aux=sorted(AUX), hm=hm,
                                rows=board(page["view"]) if page and tab == "board" else None, week_of=week_start(on),
@@ -790,6 +806,58 @@ def create_app(config: Dict[str, Any]) -> Flask:
         except ValueError as exc:  # BreakRefused is a ValueError
             return jsonify(error=str(exc)), 400
         return jsonify(ok=True)
+
+    def _back_to_day(program: str, on: Optional[date], view: str):  # type: ignore[no-untyped-def]
+        args = {"program": program, "date": on.isoformat() if on else None,
+                "view": view if view in ("board", "adherence", "meeting", "cover") else None}
+        return redirect(url_for("day_page", **{k: v for k, v in args.items() if v}), code=303)
+
+    @app.route("/day/activity", methods=["POST"])
+    @login_required
+    def day_activity():  # type: ignore[no-untyped-def]
+        """Record an activity (aux, overtime, VTO) from a form; back to the day with what happened."""
+        program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
+        try:
+            if on is None:
+                raise ValueError("Pick a day.")
+            name, kind = request.form.get("associate", "").strip(), request.form.get("kind", "")
+            _days().add_activity(program, on, name, kind, request.form.get("from", ""), request.form.get("to", ""),
+                                 g.user["id"], billable=request.form.get("billable") == "1",
+                                 note=request.form.get("note", ""))
+            flash(f"Recorded: {name}, {kind.lower()}.")
+        except ValueError as exc:
+            flash(str(exc))
+        return _back_to_day(program, on, request.form.get("view", ""))
+
+    @app.route("/day/activity/cancel", methods=["POST"])
+    @login_required
+    def day_activity_cancel():  # type: ignore[no-untyped-def]
+        program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
+        try:
+            if on is None:
+                raise ValueError("Pick a day.")
+            _days().cancel_activity(program, on, request.form.get("id", 0, type=int), g.user["id"])
+            flash("Cancelled.")
+        except ValueError as exc:
+            flash(str(exc))
+        return _back_to_day(program, on, request.form.get("view", ""))
+
+    @app.route("/day/book", methods=["POST"])
+    @login_required
+    def day_book():  # type: ignore[no-untyped-def]
+        program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
+        who = request.form.getlist("who")
+        try:
+            if on is None:
+                raise ValueError("Pick a day.")
+            start, minutes = request.form.get("start", -1, type=int), request.form.get("minutes", 0, type=int)
+            kind = request.form.get("kind", "Meeting")
+            _days().book_session(program, on, who, start, minutes, kind, g.user["id"],
+                                 billable=request.form.get("billable") == "1")
+            flash(f"Booked: {kind.lower()} {hm(start)} to {hm(start + minutes)} for {', '.join(who)}.")
+        except ValueError as exc:
+            flash(str(exc))
+        return _back_to_day(program, on, "meeting")
 
     @app.route("/day/break-advice", methods=["POST"])
     @login_required

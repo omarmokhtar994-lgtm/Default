@@ -1031,6 +1031,47 @@ class TheDayPage(unittest.TestCase):
         self.assertRegex(body, r"Associate 021</b></td><td>08:00 - 17:00</td><td>Late</td>")
         self.assertIn("Adherence", body)  # the tab
 
+    def test_find_a_time_and_book_it(self):
+        url = (self.url + "&view=meeting&who=Associate+001&who=Associate+012&minutes=30&from=13:00&to=17:00"
+               "&kind=Training&billable=1")
+        body = html.unescape(self.client.get(url).get_data(as_text=True))
+        self.assertIn("Find a time", body)
+        starts = re.findall(r'name="start" value="(\d+)"', body)
+        self.assertTrue(starts)
+        got = self.client.post("/day/book", data={"csrf_token": token(self.client), "program": "AE/AR B2B",
+                                                  "date": "2026-10-14", "who": ["Associate 001", "Associate 012"],
+                                                  "start": starts[0], "minutes": "30", "kind": "Training", "billable": "1"})
+        self.assertEqual(got.status_code, 303)
+        page = self.page()
+        self.assertRegex(page, r'class="tl-act aux billable"')
+        self.assertIn("Associate 012, Training", page)
+        again = self.client.post("/day/book", data={"csrf_token": token(self.client), "program": "AE/AR B2B",
+                                                    "date": "2026-10-14", "who": ["Associate 001"], "start": starts[0],
+                                                    "minutes": "30", "kind": "Meeting"}, follow_redirects=True)
+        self.assertIn("Not free then: Associate 001. Nobody was booked.", html.unescape(again.get_data(as_text=True)))
+
+    def test_overtime_and_vto_tab(self):
+        body = html.unescape(self.client.get(self.url + "&view=cover").get_data(as_text=True))
+        for words in ("Short: offer overtime", "Above demand: offer voluntary time off", "Activities on this day"):
+            self.assertIn(words, body)
+        got = self.client.post("/day/activity", data={"csrf_token": token(self.client), "program": "AE/AR B2B",
+                                                      "date": "2026-10-14", "associate": "Associate 028",
+                                                      "kind": "Overtime", "from": "07:00", "to": "09:00", "view": "cover"})
+        self.assertEqual(got.status_code, 303)
+        self.assertIn("view=cover", got.headers["Location"])
+        body = html.unescape(self.client.get(self.url + "&view=cover").get_data(as_text=True))
+        self.assertIn("Associate 028, Overtime 07:00 to 09:00", body)
+        made = re.search(r'Associate 028, Overtime 07:00 to 09:00</b>\s*<form[^>]*>(?:<input[^>]*>)*?<input type="hidden" '
+                         r'name="id" value="(\d+)"', body).group(1)
+        self.client.post("/day/activity/cancel", data={"csrf_token": token(self.client), "program": "AE/AR B2B",
+                                                       "date": "2026-10-14", "id": made, "view": "cover"})
+        self.assertIn("Cancelled: Overtime 07:00 to 09:00", self.page())
+        refused = self.client.post("/day/activity", data={"csrf_token": token(self.client), "program": "AE/AR B2B",
+                                                          "date": "2026-10-14", "associate": "Associate 028",
+                                                          "kind": "Overtime", "from": "10:00", "to": "11:00",
+                                                          "view": "cover"}, follow_redirects=True)
+        self.assertIn("Overtime has to start when", html.unescape(refused.get_data(as_text=True)))
+
     def test_week_without_a_schedule_and_defaults(self):
         body = html.unescape(self.client.get("/day?program=AE/AR+B2B&date=2026-11-04").get_data(as_text=True))
         self.assertIn("No schedule for AE/AR B2B in the week of 01 Nov", body)

@@ -1,19 +1,19 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
 {% extends "base.html" %}
-{% block title %}{{ 'Merge' if found.merge else 'Rename' }} {{ found.old }} on Team Scheduler{% endblock %}
+{% block title %}Move {{ found.old|unit }} on Team Scheduler{% endblock %}
 {% block content %}{% set r = found.records %}
 <div class="phead"><div>
-  <h1>{% if found.merge %}Merge {{ found.old }} into {{ found.new }}{% else %}Rename {{ found.old }} to {{ found.new }}{% endif %}</h1>
+  <h1>Move {{ found.old|unit }} into {{ found.new|unit }}</h1>
   <p class="byline">Nothing has changed yet. This is what would move.</p>
 </div></div>
 <section class="panel check-save" aria-labelledby="ren-h">
-  <h2 id="ren-h">What moves to {{ found.new }}</h2>
+  <h2 id="ren-h">What moves into {{ found.new|unit }}</h2>
   <ul class="check-list">
     <li>{{ found.runs }} run{{ 's' if found.runs != 1 }} and {{ found.versions }} schedule version{{ 's' if found.versions != 1 }}</li>
     <li>Day records: {{ r|records_text }}</li>
-    {% if found.merge %}<li>{{ found.new }} already exists, so the two become one program.</li>{% endif %}
-    {% for s in found.stop_in_use %}<li class="warn">{{ s.label }} for the week starting {{ s.week|start_day }} stops being in use: {{ found.new }} already uses its own for that week.</li>{% endfor %}
-    <li>The record of past actions keeps the name they had; this {{ 'merge' if found.merge else 'rename' }} is added to it.</li>
+    {% if found.merge %}<li>{{ found.new|unit }} already has schedules of its own; the two are kept together from now on.</li>{% endif %}
+    {% for s in found.stop_in_use %}<li class="warn">{{ s.label }} for the week starting {{ s.week|start_day }} stops being in use: {{ found.new|unit }} already uses its own for that week.</li>{% endfor %}
+    <li>The record of past actions keeps the name they had; this move is added to it.</li>
   </ul>
   {% if found.clashes %}
   <p class="error" role="alert">These cannot be merged while {{ found.clashes|join('; ') }}. Set one of each back on the day page first.</p>
@@ -26,7 +26,7 @@
     <input type="hidden" name="confirm" value="1">
     <label>Give a reason (kept in the record) <input name="reason" type="text" maxlength="200" required value="{{ reason }}"{% if reason_missing %} aria-invalid="true" aria-describedby="reason-err"{% endif %}></label>
     {% if reason_missing %}<p class="error" id="reason-err">Give a reason.</p>{% endif %}
-    <div class="check-actions"><button type="submit" class="primary">Yes, {{ 'merge' if found.merge else 'rename' }}</button><a class="button" href="{{ back }}">No, keep as it was</a></div>
+    <div class="check-actions"><button type="submit" class="primary">Yes, move it</button><a class="button" href="{{ back }}">No, keep as it was</a></div>
   </form>
   {% endif %}
 </section>

@@ -28,7 +28,7 @@ from .access import Access, role
 from .programs import ProgramBook
 from .auth import admin_required, check_csrf, csrf_token, load_user, login_required, manager_required
 from .program_page import build, overview, weeks_to_show
-from .run_admin import apply_rename, apply_run_change, preview_rename, preview_run_change
+from .run_admin import PICK_UNIT, apply_rename, apply_run_change, preview_rename, preview_run_change, unit_keys
 from .schedules import ScheduleBook
 from .versions import DAYS, with_notes
 from .runs import MODES, OPTION_LABELS, RESUMABLE, RunQueue, parse_options, run_options
@@ -714,8 +714,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                eta=_plan(store.list_runs()).get(run_id), now=time.time(), people=people,
                                start_options=start_choices(run["week_start"], run["week_start"]),
                                unit_label=ProgramBook(store).label(run["program"]) if run["program"] else "",
-                               known_programs=sorted({r["program"] for r in store.list_runs(limit=100000)
-                                                      if r["program"]}, key=str.lower), **extra)
+                               unit_groups=_unit_choices(ProgramBook(store).tree()), **extra)
 
     @app.route("/runs/<run_id>/status.json")
     @login_required
@@ -777,6 +776,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
             flash("Pick the date the schedule starts.")
             return redirect(url_for("run_detail", run_id=run_id))
         new: Dict[str, Any] = {"program": clean_program(request.form.get("program", "")), "week_start": week_start}
+        if new["program"] and new["program"] != run["program"] and new["program"] not in unit_keys(store):
+            flash(PICK_UNIT)  # picked from the list; a typed name would start a stray program
+            return redirect(url_for("run_detail", run_id=run_id))
         if "user_id" in request.form:
             new["user_id"] = request.form.get("user_id", type=int)
         if "workbook" in request.form:
@@ -864,12 +866,14 @@ def create_app(config: Dict[str, Any]) -> Flask:
         reason = " ".join(request.form.get("reason", "").split())[:200]
         known = program_weeks(_all_runs())
         try:
+            if new not in unit_keys(store):
+                raise ValueError(PICK_UNIT)  # moved into a program or LOB that is set up, never a typed name
             found = preview_rename(store, old, new)
             confirmed = request.form.get("confirm") == "1"
             if confirmed and reason and not found["clashes"]:
                 apply_rename(store, old, new, g.user["id"], reason)
-                flash(f"{'Merged' if found['merge'] else 'Renamed'} {old} {'into' if found['merge'] else 'to'} "
-                      f"{found['new']}.")
+                book = ProgramBook(store)
+                flash(f"Moved {book.label(old)} into {book.label(found['new'])}.")
                 known = program_weeks(_all_runs())
                 return redirect(url_for("program", name=found["new"]) if found["new"] in known else url_for("programs"))
             return render_template("program_rename.html", found=found, reason=reason,
@@ -902,9 +906,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
             abort(404)
         n = weeks_to_show(request.args.get("weeks", "12"))
         shown = history if n is None else history[-n:]
-        others = sorted({r["program"] for r in _all_runs() if r["program"] and r["program"] != name}, key=str.lower)
+        groups = [{**p, "choices": [(k, t) for k, t in p["choices"] if k != name]}
+                  for p in _unit_choices(ProgramBook(app.extensions["store"]).tree())]
         return render_template("program.html", name=name, view=build(shown, history), weeks=n,
-                               total=len(history), ranges=(4, 8, 12, 26, 52), others=others)
+                               total=len(history), ranges=(4, 8, 12, 26, 52),
+                               unit_groups=[p for p in groups if p["choices"]])
 
     def _week_page(run: Optional[Dict[str, Any]], side: str, program: str, week: str,
                    history: Dict[str, list]):  # type: ignore[no-untyped-def]

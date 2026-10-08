@@ -430,6 +430,9 @@ class TheProgramTags(unittest.TestCase):
         refused = other.post(f"/runs/{run_id}/tag", data={"csrf_token": token(other), "program": "X",
                                                           "week_start": "2026-10-11"})
         self.assertEqual(refused.status_code, 403)
+        from webapp.programs import ProgramBook
+        ProgramBook(store).add_program("NMG")  # re-pinned (Phase R): a run's program is picked from the
+        # programs set up under LOBs and defaults, never typed (owner, 2026-10-08: typing made stray programs)
         client.post(f"/runs/{run_id}/tag", data={"csrf_token": token(client), "program": "NMG",
                                                  "week_start": "2026-10-11"})
         run = store.get_run(run_id)
@@ -1240,7 +1243,8 @@ class TheRunDetails(unittest.TestCase):
 
     def test_admin_edits_every_detail(self):
         page = html.unescape(self.admin.get(f"/runs/{self.run_id}").get_data(as_text=True))
-        for words in ("Edit details", 'name="user_id"', 'name="workbook"', '<option value="AE/AR B2B">'):
+        # re-pinned (Phase R): the program is a select of the programs and LOBs set up, the run's own selected
+        for words in ("Edit details", 'name="user_id"', 'name="workbook"', '<option value="AE/AR B2B" selected>'):
             self.assertIn(words, page)
         got = self.post(self.admin, program="AE/AR B2B", week_start="2026-10-11", user_id=str(self.lina),
                         workbook="AR week 42.xlsx", reason="Lina built it")
@@ -1259,6 +1263,8 @@ class TheRunDetails(unittest.TestCase):
         self.assertIn("Submitted by: Sara → Lina", " ".join(str(v) for v in changed[0].values()))
 
     def test_submitter_edits_program_and_week_only(self):
+        from webapp.programs import ProgramBook
+        ProgramBook(self.store).add_program("NMG")  # re-pinned (Phase R): programs are picked, never typed
         page = html.unescape(self.sara.get(f"/runs/{self.run_id}").get_data(as_text=True))
         self.assertNotIn('name="user_id"', page)
         self.assertEqual(self.post(self.sara, program="NMG", week_start="2026-10-18").status_code, 302)
@@ -1270,16 +1276,70 @@ class TheRunDetails(unittest.TestCase):
         self.assertEqual(self.store.get_run(self.run_id)["workbook"], "week42.xlsx")
 
     def test_program_rename_page(self):
-        self.assertEqual(self.post(self.sara, "/programs/rename", old="AE/AR B2B", new="AE-AR B2B").status_code, 403)
-        page = html.unescape(self.post(self.admin, "/programs/rename", old="AE/AR B2B", new="AE-AR B2B")
+        # re-pinned (Phase R): a program's data moves into a program or LOB that is set up, picked from a
+        # list; a typed new name is refused (owner, 2026-10-08: typing made stray programs). Display names
+        # change under LOBs and defaults.
+        from webapp.programs import ProgramBook
+        book = ProgramBook(self.store)
+        target = book.add_lob(book.add_program("AE"), "AR B2B")  # key "AE AR B2B"
+        self.assertEqual(self.post(self.sara, "/programs/rename", old="AE/AR B2B", new=target).status_code, 403)
+        page = html.unescape(self.post(self.admin, "/programs/rename", old="AE/AR B2B", new=target)
                              .get_data(as_text=True))
-        for words in ("Rename AE/AR B2B to AE-AR B2B", "1 run", "Give a reason"):
+        for words in ("Move AE/AR B2B into AE, AR B2B", "1 run", "Give a reason"):
             self.assertIn(words, page)
         self.assertEqual(self.store.get_run(self.run_id)["program"], "AE/AR B2B")  # not yet
-        got = self.post(self.admin, "/programs/rename", old="AE/AR B2B", new="AE-AR B2B", confirm="1",
-                        reason="new name")
+        got = self.post(self.admin, "/programs/rename", old="AE/AR B2B", new=target, confirm="1",
+                        reason="into its LOB")
         self.assertEqual(got.status_code, 302)
-        self.assertEqual(self.store.get_run(self.run_id)["program"], "AE-AR B2B")
+        self.assertEqual(self.store.get_run(self.run_id)["program"], target)
+
+
+class ThePickedProgram(unittest.TestCase):
+    """Phase R task 1: a run's program and a program's move target are picked from the programs and LOBs
+    set up under LOBs and defaults, never typed (owner, 2026-10-08: typing made stray programs)."""
+
+    def setUp(self):
+        from webapp.programs import ProgramBook
+        self.app, self.store, *_ = make_app(start_worker=False)
+        self.store.add_user("omar", "Omar", "Owner-pass-123", is_admin=True, must_change=False)
+        book = ProgramBook(self.store)
+        saks = book.add_program("SAKS")
+        book.add_lob(saks, "NMG Tier 1")
+        self.tier2 = book.add_lob(saks, "NMG Tier 2")  # key "SAKS NMG Tier 2"
+        self.admin = sign_in(self.app, "omar", "Owner-pass-123")
+        self.run_id = seed_week(self.store, self.tier2, "2026-10-11")
+
+    def post(self, url, **data):
+        return self.admin.post(url, data={"csrf_token": token(self.admin), **data}, follow_redirects=True)
+
+    def test_edit_details_offers_program_and_lob_select(self):
+        page = html.unescape(self.admin.get(f"/runs/{self.run_id}").get_data(as_text=True))
+        self.assertIn('<select name="program"', page)
+        self.assertIn('<optgroup label="SAKS">', page)
+        self.assertRegex(page, r'<option value="SAKS NMG Tier 2" selected>SAKS, NMG Tier 2</option>')
+        self.assertNotIn('<input name="program"', page)
+
+    def test_typed_program_is_refused(self):
+        page = html.unescape(self.post(f"/runs/{self.run_id}/tag", program="SAKS, NMG Tier 2",
+                                       week_start="2026-10-11", reason="typed").get_data(as_text=True))
+        self.assertIn("Pick a program and LOB set up under LOBs and defaults.", page)
+        self.assertEqual(self.store.get_run(self.run_id)["program"], "SAKS NMG Tier 2")
+        self.assertNotIn("SAKS, NMG Tier 2", [p["name"] for p in self.store.list_programs()])
+
+    def test_picked_program_is_saved(self):
+        self.post(f"/runs/{self.run_id}/tag", program="SAKS NMG Tier 1", week_start="2026-10-11", reason="moved")
+        self.assertEqual(self.store.get_run(self.run_id)["program"], "SAKS NMG Tier 1")
+
+    def test_program_page_moves_into_a_picked_unit(self):
+        page = html.unescape(self.admin.get("/programs/SAKS%20NMG%20Tier%202").get_data(as_text=True))
+        self.assertIn("Move everything into", page)
+        self.assertRegex(page, r'(?s)<select name="new"[^>]*>.*<option value="SAKS NMG Tier 1">SAKS, NMG Tier 1</option>')
+        self.assertNotIn('<input name="new"', page)
+        page = html.unescape(self.post("/programs/rename", old="SAKS NMG Tier 2", new="SAKS Tier 9").get_data(as_text=True))
+        self.assertIn("Pick a program and LOB set up under LOBs and defaults.", page)
+        self.assertEqual(self.store.get_run(self.run_id)["program"], "SAKS NMG Tier 2")
+        page = html.unescape(self.post("/programs/rename", old="SAKS NMG Tier 2", new="SAKS NMG Tier 1").get_data(as_text=True))
+        self.assertIn("Move SAKS, NMG Tier 2 into SAKS, NMG Tier 1", page)
 
 
 class ThePeoplePage(unittest.TestCase):

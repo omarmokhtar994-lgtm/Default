@@ -17,6 +17,18 @@ from .attendance import pick_version
 FIELDS = {"program": "Program", "week_start": "Schedule starts", "user_id": "Submitted by", "workbook": "Workbook"}
 
 
+PICK_UNIT = "Pick a program and LOB set up under LOBs and defaults."
+
+
+def unit_keys(store) -> set:
+    """Every program and LOB a run can be filed under: LOB keys, and the keys of programs without LOBs
+    (or with runs of their own). People pick these; typed names made stray programs (owner, 2026-10-08)."""
+    from .programs import ProgramBook
+    book = ProgramBook(store)
+    book.sync()
+    return {k for p in book.tree() for k in p["units"]}
+
+
 def _shown(store, key: str, value: Any) -> str:
     if key == "user_id":
         person = store.get_user(value) if value is not None else None

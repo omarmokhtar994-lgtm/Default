@@ -16,8 +16,10 @@
     <summary>{% if user.is_admin %}Edit details{% else %}{{ 'Change' if run.program else 'Set' }} the program and start date{% endif %}</summary>
     <form class="tagrow" method="post" action="{{ url_for('run_tag', run_id=run.id) }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <label>Program <input name="program" type="text" maxlength="80" value="{{ run.program }}" list="known-programs"></label>
-      <datalist id="known-programs">{% for p in known_programs %}<option value="{{ p }}">{% endfor %}</datalist>
+      <label>Program and LOB <select name="program">
+        <option value=""{% if not run.program %} selected{% endif %}>No program</option>
+        {% for p in unit_groups %}<optgroup label="{{ p.name }}">{% for key, text in p.choices %}<option value="{{ key }}"{% if key == run.program %} selected{% endif %}>{{ text }}</option>{% endfor %}</optgroup>{% endfor %}
+      </select></label>
       <label>Schedule starts <select name="week_start">
         <option value=""{% if not run.week_start %} selected{% endif %}>Not set</option>
         {% for value, label, day in start_options %}<option value="{{ value }}" data-day="{{ day }}"{% if value == run.week_start %} selected{% endif %}>{{ label }}</option>{% endfor %}
@@ -29,7 +31,7 @@
       <label class="why-field">Reason <input name="reason" type="text" maxlength="200" placeholder="Optional; asked for when a change needs it"></label>
       <button type="submit">Save</button>
     </form>
-    <p class="hint">The run's schedule versions move with it. {% if user.is_admin %}To rename a program everywhere, day records included, use the program's page.{% endif %}</p>
+    <p class="hint">Pick from the programs and LOBs set up under LOBs and defaults. The run's schedule versions move with it. {% if user.is_admin %}To move a program's day records too, use the program's page.{% endif %}</p>
   </details>
   {% endif %}
   {% if check %}{% set old_p, old_w = check.old %}{% set new_p, new_w = check.new %}

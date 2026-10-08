@@ -19,15 +19,16 @@
 </div>
 {% if user.is_admin %}
 <details class="advanced tag rename">
-  <summary>Rename or merge this program</summary>
+  <summary>Move this program into another program or LOB</summary>
   <form class="tagrow" method="post" action="{{ url_for('program_rename') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="old" value="{{ name }}">
-    <label>New name <input name="new" type="text" maxlength="80" required value="{{ name }}" list="other-programs"></label>
-    <datalist id="other-programs">{% for p in others %}<option value="{{ p }}">{% endfor %}</datalist>
+    <label>Move everything into <select name="new" required>
+      {% for p in unit_groups %}<optgroup label="{{ p.name }}">{% for key, text in p.choices %}<option value="{{ key }}">{{ text }}</option>{% endfor %}</optgroup>{% endfor %}
+    </select></label>
     <button type="submit">Check what moves</button>
   </form>
-  <p class="hint">Its runs, schedule versions and day records move to the new name. Give another program's name to merge into it. Nothing changes until you confirm.</p>
+  <p class="hint">Its runs, schedule versions and day records move into the program or LOB you pick. To change only the name people see, use LOBs and defaults. Nothing changes until you confirm.</p>
 </details>
 {% endif %}
 

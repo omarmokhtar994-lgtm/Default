@@ -71,15 +71,17 @@ class _Weeks:
     def __init__(self, days):
         self.days = days
         self.seen: Dict[int, Dict[str, Any]] = {}
+        self.dates: Dict[Tuple[str, date], Dict[str, Any]] = {}
 
     def week(self, program: str, day: date) -> Dict[str, Any]:
-        """The week holding ``day`` (its start may be any weekday), read once per version."""
-        row, _ = self.days.version(program, day)
-        if row is None:
-            return {}
-        if row["id"] not in self.seen:
-            self.seen[row["id"]] = json.loads(row["week"] or "{}")
-        return self.seen[row["id"]]
+        """The week holding ``day`` (its start may be any weekday): looked up once per program and date,
+        read once per version."""
+        if (program, day) not in self.dates:
+            row, _ = self.days.version(program, day)
+            if row is not None and row["id"] not in self.seen:
+                self.seen[row["id"]] = json.loads(row["week"] or "{}")
+            self.dates[(program, day)] = self.seen[row["id"]] if row is not None else {}
+        return self.dates[(program, day)]
 
     def person(self, program: str, day: date, name: str) -> Dict[str, Any]:
         return next((a for a in self.week(program, day).get("associates", []) if a["name"] == name), {})

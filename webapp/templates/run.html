@@ -26,7 +26,7 @@
       <label>Submitted by <select name="user_id">{% for u in people %}<option value="{{ u.id }}"{% if u.id == run.user_id %} selected{% endif %}>{{ u.display_name }}</option>{% endfor %}</select></label>
       <label>Workbook name <input name="workbook" type="text" maxlength="120" required value="{{ run.workbook }}"></label>
       {% endif %}
-      <label class="why-field">Reason <input name="reason" type="text" maxlength="200" placeholder="Needed when the change moves a schedule in use or leaves day records behind"></label>
+      <label class="why-field">Reason <input name="reason" type="text" maxlength="200" placeholder="Optional; asked for when a change needs it"></label>
       <button type="submit">Save</button>
     </form>
     <p class="hint">The run's schedule versions move with it. {% if user.is_admin %}To rename a program everywhere, day records included, use the program's page.{% endif %}</p>
@@ -37,9 +37,9 @@
     <h2 id="check-h">Check before saving</h2>
     <ul class="check-list">
       {% for label, was, now in check.changes %}<li><b>{{ label }}</b>: {{ was }} → {{ now }}</li>{% endfor %}
-      {% for s in check.stop_in_use %}<li class="warn">{{ s.label }} stops being in use: {{ new_p }}, week of {{ new_w }} already uses {{ check.kept_by_target }}.</li>{% endfor %}
-      {% if check.old_affected %}{% set r = check.old_records %}<li class="warn">{{ r.attendance }} attendance, {{ r.breaks }} break moves and {{ r.activities }} activities kept for {{ old_p }} in the week of {{ old_w }} stay on their dates. That week is then read from {{ check.old_week_after or 'no schedule, so they will not show until one is added' }}. If the program name itself was wrong, rename the program instead: that moves the day records too.</li>{% endif %}
-      {% if check.target_affected %}{% set r = check.target_records %}<li class="warn">{{ r.attendance }} attendance, {{ r.breaks }} break moves and {{ r.activities }} activities already kept for {{ new_p }} in the week of {{ new_w }} will be read from {{ check.target_after }} instead of {{ check.target_before or 'no schedule' }}.</li>{% endif %}
+      {% for s in check.stop_in_use %}<li class="warn">{{ s.label }} stops being in use: {{ new_p }}, week starting {{ new_w|start_day }}, already uses {{ check.kept_by_target }}.</li>{% endfor %}
+      {% if check.old_affected %}<li class="warn">Day records kept for {{ old_p }} in the week starting {{ old_w|start_day }} ({{ check.old_records|records_text }}) stay on their dates. That week is then read from {{ check.old_week_after or 'no schedule, so they will not show until one is added' }}. If the program name itself was wrong, rename the program instead: that moves the day records too.</li>{% endif %}
+      {% if check.target_affected %}<li class="warn">Day records already kept for {{ new_p }} in the week starting {{ new_w|start_day }} ({{ check.target_records|records_text }}) will be read from {{ check.target_after }} instead of {{ check.target_before or 'no schedule' }}.</li>{% endif %}
     </ul>
     <form method="post" action="{{ url_for('run_tag', run_id=run.id) }}" class="check-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

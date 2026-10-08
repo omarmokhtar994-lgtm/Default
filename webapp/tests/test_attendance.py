@@ -381,6 +381,17 @@ class TheStartDay(unittest.TestCase):
         rows = list(load_workbook(io.BytesIO(data))["Breaks planned vs taken"].iter_rows(values_only=True))
         self.assertEqual({r[0] for r in rows[1:]}, {"2026-10-12"})
 
+    def test_exports_look_each_day_up_once(self):
+        import io
+        from webapp.exports import build
+        for name in ("Associate 001", "Associate 006", "Associate 008"):  # all work on Wednesday
+            self.days.set_status("MON", date(2026, 10, 14), name, "Sick", self.sara)
+        asked = []
+        version = self.days.version
+        self.days.version = lambda program, on: (asked.append((program, on)), version(program, on))[1]
+        build(self.store, self.days, date(2026, 10, 14), date(2026, 10, 14), ["attendance"], program="MON", by="Omar")
+        self.assertEqual(asked, [("MON", date(2026, 10, 14))])  # three records, one lookup
+
 
 if __name__ == "__main__":
     unittest.main()

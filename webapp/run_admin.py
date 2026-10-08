@@ -59,6 +59,30 @@ def _name(store, version: Optional[Dict[str, Any]]) -> Optional[str]:
     return f"{version['label']} of {run['workbook']}" if run else version["label"]
 
 
+def _read_from(store, program: str, day: date, drop_run: str = "", add: List[Dict[str, Any]] = ()):
+    """The version ``day`` is read from, without the versions of ``drop_run`` and with ``add`` (moved ones)."""
+    versions = [v for v in store.list_schedules(program=program, covering=day.isoformat()) if v["run_id"] != drop_run]
+    versions += [v for v in add if v["program"] == program and v["week_start"]
+                 and 0 <= (day - date.fromisoformat(v["week_start"])).days <= 6]
+    return pick_version(versions)[0]
+
+
+def _days_changed(store, program: str, first: str, run_id: str, moved: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """For the seven days from ``first``: day records held, and whether any day holding records would be
+    read from another version once the run has moved."""
+    found = {"records": _week_records(store, program, first), "affected": False, "before": None, "after": None}
+    for n in range(7):
+        day = date.fromisoformat(first) + timedelta(days=n)
+        before = _read_from(store, program, day)
+        after = _read_from(store, program, day, drop_run=run_id, add=moved)
+        if n == 0:
+            found["before"], found["after"] = _name(store, before), _name(store, after)
+        if (before or {}).get("id") != (after or {}).get("id") and \
+                any(store.day_record_counts(program, day.isoformat(), day.isoformat()).values()):
+            found["affected"] = True
+    return found
+
+
 def preview_run_change(store, run: Dict[str, Any], new: Dict[str, Any]) -> Dict[str, Any]:
     """What changing ``run`` to ``new`` would do, without doing it."""
     _check(store, new)
@@ -78,23 +102,17 @@ def preview_run_change(store, run: Dict[str, Any], new: Dict[str, Any]) -> Dict[
         if target is not None:
             found["stop_in_use"] = [{"id": v["id"], "label": v["label"]} for v in mine if v["in_use"]]
             found["kept_by_target"] = target["label"] if found["stop_in_use"] else None
+        stopped = {s["id"] for s in found["stop_in_use"]}
+        moved = [{**v, "program": new_p, "week_start": new_w, "in_use": 0 if v["id"] in stopped else v["in_use"]}
+                 for v in mine]
         if old_p and old_w:
-            before, _ = pick_version(store.list_schedules(program=old_p, week_start=old_w))
-            left = [v for v in store.list_schedules(program=old_p, week_start=old_w) if v["run_id"] != run["id"]]
-            after, _ = pick_version(left)
-            found["old_records"] = _week_records(store, old_p, old_w)
-            found["old_week_after"] = _name(store, after)
-            found["old_affected"] = (before or {}).get("id") != (after or {}).get("id") and \
-                any(found["old_records"].values())
+            old = _days_changed(store, old_p, old_w, run["id"], moved)
+            found["old_records"], found["old_week_after"], found["old_affected"] = \
+                old["records"], old["after"], old["affected"]
         if new_p and new_w:
-            stopped = {s["id"] for s in found["stop_in_use"]}
-            moved = [{**v, "in_use": 0 if v["id"] in stopped else v["in_use"]} for v in mine]
-            before, _ = pick_version(others)
-            after, _ = pick_version(others + moved)
-            found["target_records"] = _week_records(store, new_p, new_w)
-            found["target_before"], found["target_after"] = _name(store, before), _name(store, after)
-            found["target_affected"] = (before or {}).get("id") != (after or {}).get("id") and \
-                any(found["target_records"].values())
+            target_days = _days_changed(store, new_p, new_w, run["id"], moved)
+            found["target_records"], found["target_affected"] = target_days["records"], target_days["affected"]
+            found["target_before"], found["target_after"] = target_days["before"], target_days["after"]
     found["needs_check"] = bool(found["stop_in_use"] or found["old_affected"] or found["target_affected"])
     return found
 

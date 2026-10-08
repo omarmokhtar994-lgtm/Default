@@ -81,6 +81,17 @@ class TheRunChange(unittest.TestCase):
         self.assertEqual([r["associate"] for r in self.store.list_attendance("AE/AR B2B", [WED.isoformat()])],
                          ["Associate 001"])
 
+    def test_moving_the_start_a_day_keeps_its_days(self):
+        # Sunday 11 to Monday 12: Wednesday stays in the same run (its Wed column), so its records need no check
+        self.days.set_status("AE/AR B2B", WED, "Associate 001", "Sick", self.sara)
+        found = preview_run_change(self.store, self.a, {"week_start": "2026-10-12"})
+        self.assertFalse(found["needs_check"])
+        # a record on Sunday 11 is left with no schedule, so that one is shown
+        self.days.set_status("AE/AR B2B", date(2026, 10, 11), "Associate 002", "Sick", self.sara)
+        found = preview_run_change(self.store, self.a, {"week_start": "2026-10-12"})
+        self.assertTrue(found["needs_check"])
+        self.assertTrue(found["old_affected"])
+
     def test_clearing_program_and_week(self):
         apply_run_change(self.store, self.a, {"program": "", "week_start": ""}, self.sara, "")
         self.assertEqual({(v["program"], v["week_start"]) for v in self.store.list_schedules(run_id="aaaaaaaaaaaa")},
@@ -109,6 +120,7 @@ class TheProgramRename(TheRunChange):
     """Renaming a program moves its runs, versions and day records; past events keep the name they had."""
     test_versions_move_with_the_run = test_in_use_at_the_target_wins = test_day_records_stay_and_are_listed = None
     test_clearing_program_and_week = test_change_is_recorded = test_nothing_to_change = None
+    test_moving_the_start_a_day_keeps_its_days = None
 
     def merge_ready(self):
         """Run B becomes AE-AR B2B for the week of 11 October, so both programs hold that week."""

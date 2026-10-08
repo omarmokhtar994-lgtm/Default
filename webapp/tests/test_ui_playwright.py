@@ -669,3 +669,64 @@ class TheFloorToolsInTheBrowser(unittest.TestCase):
         expect(page.locator(".tl-tag.called")).to_have_attribute("title", f"Day off cancelled: called in {shift}")
         expect(page.get_by_text(f"Day off cancelled: called in {shift}").first).to_be_visible()
         page.screenshot(path=str(O_SCREENS / "called_in_timeline.png"), full_page=True)
+
+
+P_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_p" / "screens"
+
+
+class TheRunDetailsInTheBrowser(unittest.TestCase):
+    """Phase P: the start-date dropdown, Edit details with its check before saving, and Rename or merge."""
+
+    setUpClass_base = classmethod(TheSchedulesInTheBrowser.setUpClass.__func__)
+    tearDownClass = classmethod(TheSchedulesInTheBrowser.tearDownClass.__func__)
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+
+    @classmethod
+    def setUpClass(cls):
+        cls.setUpClass_base()
+        P_SCREENS.mkdir(parents=True, exist_ok=True)
+        from datetime import date
+        sara = next(u for u in cls.store.list_users() if u["username"] == "sara")["id"]
+        cls.store.add_run("0123456789ab", sara, "NMG_week.xlsx", "QUICK", "DONE", program="NMG", week_start="2026-10-12")
+        cls.app.extensions["days"].set_status("AE/AR B2B", date(2026, 10, 14), "Associate 001", "Sick", sara)
+        seed_week(cls.store, "AE/AR B2B", "2026-10-04", associates=14, fully_covered=118, before_full=126)  # a page
+
+    def test_start_date_edit_and_rename(self):
+        page = self.page(width=1280, height=900)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        starts = page.locator("select[name=week_start]")
+        page.locator("input[name=program]").fill("NMG")  # NMG starts on Mondays: its Monday is preselected
+        self.assertEqual(starts.locator("option:checked").get_attribute("data-day"), "1")
+        starts.scroll_into_view_if_needed()
+        page.locator("form:has(select[name=week_start])").screenshot(path=str(P_SCREENS / "upload_start_date.png"))
+        page.goto(self.base + f"/runs/{self.run_id}")
+        page.wait_for_load_state("load")
+        page.get_by_text("Edit details").click()
+        expect(page.locator("select[name=user_id]")).to_be_visible()
+        page.locator("details.tag").screenshot(path=str(P_SCREENS / "run_edit_details.png"))
+        page.locator("details.tag select[name=week_start]").select_option("2026-10-18")
+        page.locator("details.tag").get_by_role("button", name="Save").click()
+        page.wait_for_load_state("load")
+        panel = page.locator("#check")
+        expect(panel.locator("h2")).to_have_text("Check before saving")
+        expect(panel).to_contain_text("Sun 11 Oct 2026 → Sun 18 Oct 2026")
+        expect(panel).to_contain_text("stay on their dates")
+        panel.scroll_into_view_if_needed()
+        page.wait_for_timeout(600)
+        panel.screenshot(path=str(P_SCREENS / "run_check_before_saving.png"))
+        panel.get_by_role("link", name="No, keep as it was").click()
+        page.wait_for_load_state("load")
+        self.assertEqual(self.store.get_run(self.run_id)["week_start"], "2026-10-11")  # nothing changed
+        page.get_by_role("link", name="AE/AR B2B").first.click()
+        page.wait_for_load_state("load")
+        page.get_by_text("Rename or merge this program").click()
+        page.locator("input[name=new]").fill("AE-AR B2B")
+        page.get_by_role("button", name="Check what moves").click()
+        page.wait_for_load_state("load")
+        expect(page.locator("h1")).to_have_text("Rename AE/AR B2B to AE-AR B2B")
+        page.wait_for_timeout(600)  # let the page-to-page crossfade finish before the screenshot
+        page.screenshot(path=str(P_SCREENS / "program_rename.png"), full_page=True)
+        self.assertEqual(errors, [])

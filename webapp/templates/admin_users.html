@@ -1,25 +1,47 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
-{% extends "base.html" %}{% block title %}People · Team Scheduler{% endblock %}
+{% extends "base.html" %}{% block title %}People on Team Scheduler{% endblock %}
 {% block content %}
-<h1>People</h1>
+<div class="phead"><div>
+  <h1>People</h1>
+  <p class="byline">{% if admin %}Admins manage everyone. Supervisors manage the planners of their own programs.{% else %}You manage the planners of your programs: their programs, passwords, switched on or off.{% endif %}</p>
+</div></div>
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
-<table class="people"><thead><tr><th>Username</th><th>Name</th><th>Role</th><th>State</th><th></th></tr></thead><tbody>
+{% macro program_boxes(chosen, everything) %}
+  <fieldset class="exp-kinds"><legend>Programs</legend>
+    {% if admin %}<label class="exp-kind"><input type="checkbox" name="all_programs" value="1"{% if everything %} checked{% endif %}> All programs</label>{% endif %}
+    {% for p in grantable %}<label class="exp-kind"><input type="checkbox" name="programs" value="{{ p.id }}"{% if p.id in chosen %} checked{% endif %}> {{ p.name }}{% if p.lobs %}: {{ p.lobs|map(attribute='name')|join(', ') }}{% endif %}</label>{% else %}<p class="empty">No programs yet: an admin adds them on Programs and LOBs.</p>{% endfor %}
+  </fieldset>
+{% endmacro %}
+<section class="panel" aria-labelledby="add-h">
+  <h2 id="add-h">Add a person</h2>
+  <form method="post" class="people-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Username <input name="username" required></label>
+    <label>Name <input name="display_name"></label>
+    <label>Temporary password <input name="password" type="text" minlength="10" required></label>
+    <label>Role <select name="role">{% for key, name in roles.items() %}<option value="{{ key }}">{{ name }}</option>{% endfor %}</select></label>
+    {{ program_boxes([], false) }}
+    <button class="primary">Add person</button>
+  </form>
+</section>
+<table class="people"><thead><tr><th>Person</th><th>Role</th><th>Programs</th><th>State</th><th></th></tr></thead><tbody>
 {% for u in users %}<tr>
-  <td>{{ u.username }}</td><td>{{ u.display_name }}</td><td>{{ 'Admin' if u.is_admin else 'Member' }}</td>
+  <td><b>{{ u.display_name }}</b><br><small>{{ u.username }}</small></td>
+  <td><span class="role role-{{ u.role|lower }}">{{ u.role }}</span></td>
+  <td>{% if u.is_admin or u.all_programs %}All programs{% else %}{{ u.programs or 'None yet' }}{% endif %}</td>
   <td>{{ 'Active' if u.active else 'Switched off' }}</td>
-  <td class="actions">
+  <td class="actions">{% if u.manageable %}
     {% for action, label in ([('disable','Switch off')] if u.active else [('enable','Switch on')]) + [('reset','Reset password')] %}
     <form method="post" action="{{ url_for('admin_user_action', user_id=u.id, action=action) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="quiet">{{ label }}</button></form>
     {% endfor %}
-  </td></tr>{% endfor %}
+    <details class="advanced"><summary>Programs{% if admin %} and role{% endif %}</summary>
+      <form method="post" action="{{ url_for('admin_user_action', user_id=u.id, action='programs') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% if admin %}<label>Role <select name="role">{% for key, name in roles.items() %}<option value="{{ key }}"{% if name == u.role %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>{% endif %}
+        {{ program_boxes(u.program_ids, u.all_programs) }}
+        <button>Save</button>
+      </form>
+    </details>
+  {% endif %}</td></tr>{% endfor %}
 </tbody></table>
-<h2>Add a person</h2>
-<form method="post" class="inline">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <label>Username <input name="username" required></label>
-  <label>Name <input name="display_name"></label>
-  <label>Temporary password <input name="password" type="text" minlength="10" required></label>
-  <label class="check"><input type="checkbox" name="is_admin"> Admin</label>
-  <button class="primary">Add person</button>
-</form>
 {% endblock %}

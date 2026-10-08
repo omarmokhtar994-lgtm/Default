@@ -49,6 +49,17 @@ def login_required(view: Callable[..., Any]) -> Callable[..., Any]:
     return wrapped
 
 
+def manager_required(view: Callable[..., Any]) -> Callable[..., Any]:
+    """Admins and supervisors (who manage the planners of their own programs)."""
+    @functools.wraps(view)
+    @login_required
+    def wrapped(*args: Any, **kwargs: Any) -> Any:
+        if not (g.user["is_admin"] or g.user["is_supervisor"]):
+            abort(403)
+        return view(*args, **kwargs)
+    return wrapped
+
+
 def admin_required(view: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(view)
     @login_required

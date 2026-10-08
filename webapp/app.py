@@ -24,7 +24,8 @@ from .eta import queue_plan
 from .handover import note as handover_note
 from .exports import KINDS as EXPORT_KINDS, build as build_export
 from .outcome import cannot_schedule, read as read_outcome, view as outcome_view
-from .auth import admin_required, check_csrf, csrf_token, load_user, login_required
+from .access import Access, role
+from .auth import admin_required, check_csrf, csrf_token, load_user, login_required, manager_required
 from .program_page import build, overview, weeks_to_show
 from .run_admin import apply_rename, apply_run_change, preview_rename, preview_run_change
 from .schedules import ScheduleBook
@@ -357,39 +358,86 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return render_template("password.html", error=error, forced=bool(g.user["must_change"]))
 
     # ------------------------------------------------------------- admin
+    ROLES = {"planner": "Planner", "supervisor": "Supervisor", "admin": "Admin"}
+
+    def _chosen_programs(access: Access, values: list, keep: Optional[list] = None) -> list:
+        """Program ids picked on a form, checked against what this person may give; ``keep`` are the target's
+        programs this person cannot see (a supervisor's change leaves them as they are)."""
+        try:
+            picked = {int(v) for v in values}
+        except ValueError:
+            raise ValueError("Pick programs from the list.") from None
+        allowed = {p["id"] for p in access.grantable()}
+        if picked - allowed:
+            raise PermissionError("You can only give your own programs.")
+        return sorted(picked | {pid for pid in (keep or []) if pid not in allowed})
+
+    def _program_names(ids: list, tree: list) -> str:
+        names = {p["id"]: p["name"] for p in tree}
+        return ", ".join(names.get(i, "?") for i in ids)
+
     @app.route("/admin/users", methods=["GET", "POST"])
-    @admin_required
+    @manager_required
     def admin_users():  # type: ignore[no-untyped-def]
+        """People: admins manage everyone; supervisors the planners of their own programs."""
         store = app.extensions["store"]
+        access = Access(store, g.user)
+        admin = bool(g.user["is_admin"])
         error = ""
         if request.method == "POST":
             username = request.form.get("username", "").strip().lower()
             password = request.form.get("password", "")
-            if username_problem(username):
+            kind = request.form.get("role") or ("admin" if request.form.get("is_admin") == "on" else "planner")
+            everything = admin and request.form.get("all_programs") == "1"
+            try:
+                programs = _chosen_programs(access, request.form.getlist("programs"))
+            except (ValueError, PermissionError) as exc:
+                programs, error = [], str(exc)
+            if error:
+                pass
+            elif kind not in ROLES:
+                error = "Pick a role."
+            elif kind != "planner" and not admin:
+                error = "Only an admin adds supervisors and admins."
+            elif not admin and not programs:
+                error = "Give them at least one of your programs."
+            elif username_problem(username):
                 error = USERNAME_RULE
             elif any(u["username"] == username for u in store.list_users()):
                 error = f"{username} already exists."
             elif len(password) < MIN_PASSWORD:
                 error = f"Give a temporary password of at least {MIN_PASSWORD} characters."
             else:
-                store.add_user(username, request.form.get("display_name", ""), password,
-                               is_admin=request.form.get("is_admin") == "on", must_change=True)
-                _record("user_added", subject=username,
-                        detail="admin" if request.form.get("is_admin") == "on" else "")  # never the password
+                uid = store.add_user(username, request.form.get("display_name", ""), password,
+                                     is_admin=kind == "admin", must_change=True)
+                store.update_user(uid, is_supervisor=int(kind == "supervisor"), all_programs=int(everything))
+                store.set_user_programs(uid, programs)
+                _record("user_added", subject=username,  # never the password
+                        detail=f"{ROLES[kind]}; " + ("all programs" if everything else
+                                                     _program_names(programs, access.book.tree()) or "no programs"))
                 flash(f"Added {username}. They choose their own password at first sign-in.")
                 return redirect(url_for("admin_users"))
-        return render_template("admin_users.html", users=store.list_users(), error=error)
+        tree = access.book.tree()
+        people = [dict(u, role=role(u), programs=_program_names(store.user_program_ids(u["id"]), tree),
+                       program_ids=store.user_program_ids(u["id"]), manageable=access.can_manage(u))
+                  for u in store.list_users() if admin or access.can_manage(u)]
+        return render_template("admin_users.html", users=people, error=error, grantable=access.grantable(),
+                               roles=ROLES if admin else {"planner": "Planner"}, admin=admin)
 
     @app.route("/admin/users/<int:user_id>/<action>", methods=["POST"])
-    @admin_required
+    @manager_required
     def admin_user_action(user_id: int, action: str):  # type: ignore[no-untyped-def]
         store = app.extensions["store"]
+        access = Access(store, g.user)
         target = store.get_user(user_id)
         if target is None:
             abort(404)
-        if target["id"] == g.user["id"] and action == "disable":
-            flash("You cannot switch off your own account.")
-        elif action == "disable":
+        if target["id"] == g.user["id"]:
+            flash("Change your own account from Settings; you cannot switch it off.")
+            return redirect(url_for("admin_users"))
+        if not access.can_manage(target):
+            abort(403)
+        if action == "disable":
             store.set_active(user_id, False)
             _record("user_disabled", subject=target["username"])
             flash(f"{target['username']} is switched off.")
@@ -403,6 +451,32 @@ def create_app(config: Dict[str, Any]) -> Flask:
             _record("password_reset", subject=target["username"])  # never the password itself
             flash(f"Temporary password for {target['username']}: {temporary} "
                   "(shown once; they choose their own at next sign-in).")
+        elif action == "programs":
+            admin = bool(g.user["is_admin"])
+            kind = request.form.get("role", "")
+            current = "admin" if target["is_admin"] else ("supervisor" if target["is_supervisor"] else "planner")
+            if kind and kind != current and not admin:
+                abort(403)
+            try:
+                programs = _chosen_programs(access, request.form.getlist("programs"),
+                                            keep=store.user_program_ids(user_id))
+            except PermissionError:
+                abort(403)
+            except ValueError as exc:
+                flash(str(exc))
+                return redirect(url_for("admin_users"))
+            changes: Dict[str, Any] = {}
+            if admin:
+                kind = kind if kind in ROLES else current
+                changes = {"is_admin": int(kind == "admin"), "is_supervisor": int(kind == "supervisor"),
+                           "all_programs": int(request.form.get("all_programs") == "1")}
+                store.update_user(user_id, **changes)
+            store.set_user_programs(user_id, programs)
+            tree = access.book.tree()
+            said = ("all programs" if changes.get("all_programs") else _program_names(programs, tree) or "no programs")
+            _record("user_programs_changed", subject=target["username"],
+                    detail=f"{ROLES[kind or current]}; {said}")
+            flash(f"{target['username']}: {said}.")
         else:
             abort(404)
         return redirect(url_for("admin_users"))

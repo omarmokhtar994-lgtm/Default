@@ -1266,6 +1266,84 @@ class TheRunDetails(unittest.TestCase):
         self.assertEqual(self.store.get_run(self.run_id)["program"], "AE-AR B2B")
 
 
+class ThePeoplePage(unittest.TestCase):
+    """Phase Q: roles and programs. Admins manage everyone; supervisors the planners of their own programs
+    (add, programs, reset password, switch on or off); planners nobody."""
+
+    def setUp(self):
+        from webapp.programs import ProgramBook
+        self.app, self.store, *_ = make_app(start_worker=False)
+        self.omar = self.store.add_user("omar", "Omar", "Owner-pass-123", is_admin=True, must_change=False)
+        book = ProgramBook(self.store)
+        self.ae, self.nmg = book.add_program("AE"), book.add_program("NMG")
+        self.admin = sign_in(self.app, "omar", "Owner-pass-123")
+
+    def post(self, client, url, **data):
+        return client.post(url, data={"csrf_token": token(client), **data})
+
+    def person(self, username):
+        return next(u for u in self.store.list_users() if u["username"] == username)
+
+    def supervisor(self):
+        sid = self.store.add_user("sami", "Sami", "Sami-pass-123", must_change=False)
+        self.store.update_user(sid, is_supervisor=1)
+        self.store.set_user_programs(sid, [self.ae])
+        return sid, sign_in(self.app, "sami", "Sami-pass-123")
+
+    def test_admin_adds_a_supervisor_with_programs(self):
+        got = self.admin.post("/admin/users", data={"csrf_token": token(self.admin), "username": "rana",
+                                                    "display_name": "Rana", "password": "Rana-temp-pass-1",
+                                                    "role": "supervisor", "programs": [str(self.ae)]})
+        self.assertEqual(got.status_code, 302)
+        rana = self.person("rana")
+        self.assertEqual((rana["is_supervisor"], rana["is_admin"], rana["all_programs"]), (1, 0, 0))
+        self.assertEqual(self.store.user_program_ids(rana["id"]), [self.ae])
+        page = html.unescape(self.admin.get("/admin/users").get_data(as_text=True))
+        self.assertIn("Supervisor", page)
+        self.assertRegex(page, r"(?s)Rana</b>.*?Supervisor.*?<td>AE</td>")  # name, role, programs on one row
+
+    def test_supervisor_manages_planners_of_their_programs(self):
+        sid, sami = self.supervisor()
+        self.assertEqual(sami.get("/admin/users").status_code, 200)
+        self.post(sami, "/admin/users", username="lina", display_name="Lina", password="Lina-temp-pass-1",
+                  role="planner", programs=[str(self.ae)])
+        lina = self.person("lina")
+        self.assertEqual(self.store.user_program_ids(lina["id"]), [self.ae])
+        page = html.unescape(self.post(sami, "/admin/users", username="hadi", display_name="Hadi",
+                                       password="Hadi-temp-pass-1", role="planner",
+                                       programs=[str(self.nmg)]).get_data(as_text=True))
+        self.assertIn("You can only give your own programs.", page)
+        self.assertFalse(any(u["username"] == "hadi" for u in self.store.list_users()))
+        page = html.unescape(self.post(sami, "/admin/users", username="hadi", display_name="Hadi",
+                                       password="Hadi-temp-pass-1", role="admin",
+                                       programs=[str(self.ae)]).get_data(as_text=True))
+        self.assertIn("Only an admin adds supervisors and admins.", page)
+        got = self.post(sami, f"/admin/users/{lina['id']}/reset")
+        self.assertEqual(got.status_code, 302)
+        self.assertIn("Temporary password for lina", html.unescape(sami.get("/admin/users").get_data(as_text=True)))
+        self.assertEqual(self.post(sami, f"/admin/users/{self.omar}/reset").status_code, 403)
+        self.assertEqual(self.post(sami, f"/admin/users/{lina['id']}/programs", programs=[str(self.nmg)]).status_code,
+                         403)
+        self.assertEqual(self.store.user_program_ids(lina["id"]), [self.ae])
+        self.assertEqual(self.post(sami, f"/admin/users/{lina['id']}/disable").status_code, 302)
+        self.assertFalse(self.person("lina")["active"])
+
+    def test_admin_changes_programs_and_role(self):
+        lina = self.store.add_user("lina", "Lina", "Lina-pass-123", must_change=False)
+        self.post(self.admin, f"/admin/users/{lina}/programs", programs=[str(self.ae), str(self.nmg)],
+                  role="supervisor")
+        self.assertEqual(self.store.user_program_ids(lina), [self.ae, self.nmg])
+        self.assertEqual(self.store.get_user(lina)["is_supervisor"], 1)
+        self.post(self.admin, f"/admin/users/{lina}/programs", all_programs="1", role="planner")
+        self.assertEqual((self.store.get_user(lina)["all_programs"], self.store.get_user(lina)["is_supervisor"]), (1, 0))
+        kinds = [(e["kind"], e["subject"]) for e in self.store.list_events(0, time.time() + 60)]
+        self.assertIn(("user_programs_changed", "lina"), kinds)
+
+    def test_planners_cannot_open_people(self):
+        self.store.add_user("lina", "Lina", "Lina-pass-123", must_change=False)
+        self.assertEqual(sign_in(self.app, "lina", "Lina-pass-123").get("/admin/users").status_code, 403)
+
+
 class TheStartDate(unittest.TestCase):
     """Phase P: the schedule's first date is picked from Sundays and Mondays when uploading (some programs
     start on Monday), kept as picked, and changed by an admin from the run page."""

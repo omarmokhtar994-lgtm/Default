@@ -720,3 +720,11 @@ body.wall { background: var(--night); color: var(--paper); padding: 2vh 2.5vw; m
 .check-list li.warn { color: var(--short-ink); }
 .check-form label { display: block; max-width: 520px; }
 .check-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 10px; }
+
+/* people: roles and programs */
+.people-form { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 14px; align-items: end; }
+.people-form fieldset, .people-form button { grid-column: 1 / -1; justify-self: start; }
+@media (max-width: 720px) { .people-form { grid-template-columns: minmax(0, 1fr); } }
+.role { display: inline-block; border: 1px solid var(--rail); border-radius: 4px; padding: 1px 8px; font-size: 13px; }
+.role-supervisor { border-color: var(--over); color: var(--over); }
+.role-admin { border-color: var(--short); color: var(--short-ink); }

@@ -43,6 +43,13 @@
     {% if queue %}
     <form method="post" action="{{ url_for('submit_run') }}" enctype="multipart/form-data">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <fieldset class="modes run-kind">
+        <legend>What do you want to do?</legend>
+        <label class="mode"><input type="radio" name="kind" value="build" checked data-run-kind> Build the schedule
+          <small>The engine makes the shifts and breaks from your demand and rules.</small></label>
+        <label class="mode"><input type="radio" name="kind" value="ready" data-run-kind> Upload a ready schedule
+          <small>You already have the shifts. Put each person's shift (or OFF) for each day in the Schedule tab of the input workbook; breaks can stay empty, you plan them here. Checked in seconds; the engine does not run.</small></label>
+      </fieldset>
       <p class="tmpl">Need a fresh workbook?
         <a href="{{ url_for('workbook', name='Scheduler_Input_Blank.xlsx') }}">Blank input workbook</a> (every tab and dropdown, no people or demand) or
         <a href="{{ url_for('workbook', name='Scheduler_Input_Example.xlsx') }}">filled example</a> (made-up people and demand that schedule cleanly).</p>
@@ -66,7 +73,7 @@
           </select></label>
       </div>
       <p class="hint">The first day of this schedule: the Sunday, or the Monday for programs that start on Monday. Each date reads its own weekday's column. The program and start date put this run on the program's history page.</p>
-      <fieldset class="modes">
+      <fieldset class="modes" data-build-only>
         <legend>How long to search</legend>
         <label class="mode"><input type="radio" name="mode" value="QUICK" checked> Quick
           <small>About 1 hour on this server. Recommended for every week.</small></label>
@@ -77,12 +84,12 @@
         <label class="mode"><input type="radio" name="mode" value="SMOKE"> Readiness check
           <small>Minutes. Checks the workbook and its rules; builds no schedule.</small></label>
       </fieldset>
-      <details class="advanced">
+      <details class="advanced" data-build-only>
         <summary>Advanced options</summary>
         <p class="hint">Leave these on "Follow the workbook" unless you want to override what its Instructions sheet says for this run only.</p>
         {{ advanced_options() }}
       </details>
-      <button class="primary" type="submit">Check and run</button>
+      <button class="primary" type="submit" data-submit-label>Check and run</button>
     </form>
     {% else %}
     <p>Runs are not set up on this server yet. Ask your admin.</p>

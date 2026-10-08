@@ -830,3 +830,6 @@ dialog.dlg.add-dlg { width: 620px; }
 .ot-offer b, .vto-offer b { min-width: 9em; }
 .ot-offer label, .vto-offer label { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
 .ot-offer select, .vto-offer select { width: auto; }
+/* Phase R: a ready schedule */
+.ready-run { border-left: 3px solid var(--covered); }
+.ready-run .acts { display: flex; flex-wrap: wrap; gap: 10px; }

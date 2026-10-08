@@ -672,3 +672,21 @@
   shape(true);
   preview();
 })();
+
+// The upload form (Phase R): build the schedule with the engine, or upload a ready one (shifts already made;
+// the engine does not run, so its run length and options are hidden).
+(function () {
+  "use strict";
+  var kinds = document.querySelectorAll("input[data-run-kind]");
+  if (!kinds.length) { return; }
+  var form = kinds[0].form;
+  function shape() {
+    var picked = form.querySelector("input[data-run-kind]:checked");
+    var ready = picked && picked.value === "ready";
+    Array.prototype.forEach.call(form.querySelectorAll("[data-build-only]"), function (el) { el.hidden = ready; });
+    var button = form.querySelector("[data-submit-label]");
+    if (button) { button.textContent = ready ? "Check and upload" : "Check and run"; }
+  }
+  Array.prototype.forEach.call(kinds, function (k) { k.addEventListener("change", shape); });
+  shape();
+})();

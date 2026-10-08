@@ -9,7 +9,8 @@
     <p class="status-word" data-status="{{ run.status }}" aria-live="polite">{{ label(run) }}</p>
   </div>
   {% set opts = run_options(run) %}
-  <p class="byline">{{ run.mode|capitalize if run.mode != 'SMOKE' else 'Readiness check' }} run, started by {{ run.by_name }} on {{ when(run.created) }} (Egypt time). Settings: {% if opts %}{% for k, v in opts.items() %}{{ k|replace('_', ' ')|capitalize }} {{ option_labels[v] }}{% if not loop.last %}; {% endif %}{% endfor %}{% else %}followed the workbook{% endif %}.</p>
+  {% if run.mode == 'READY' %}<p class="byline">Ready schedule uploaded by {{ run.by_name }} on {{ when(run.created) }} (Egypt time). The engine did not run.</p>
+  {% else %}<p class="byline">{{ run.mode|capitalize if run.mode != 'SMOKE' else 'Readiness check' }} run, started by {{ run.by_name }} on {{ when(run.created) }} (Egypt time). Settings: {% if opts %}{% for k, v in opts.items() %}{{ k|replace('_', ' ')|capitalize }} {{ option_labels[v] }}{% if not loop.last %}; {% endif %}{% endfor %}{% else %}followed the workbook{% endif %}.</p>{% endif %}
   <p class="byline tagline">{% if run.program %}Program <a href="{{ url_for('program', name=run.program) }}">{{ unit_label or run.program }}</a>{% else %}No program set{% endif %}{% if run.week_start %}, starts {{ run.week_start|start_day }}{% else %}, no start date set{% endif %}.</p>
   {% if user.id == run.user_id or user.is_admin %}
   <details class="advanced tag{% if user.is_admin %} details-admin{% endif %}"{% if check %} open{% endif %}>
@@ -105,6 +106,13 @@
   </section>
   {% endif %}
 
+  {% if run.mode == 'READY' and run.status == 'DONE' %}
+  <section class="panel ready-run" aria-labelledby="ready-h">
+    <h2 id="ready-h">Ready schedule uploaded</h2>
+    <p>Its shifts are kept as {{ ready_version.label if ready_version else 'version 1' }}; the engine did not run. Plan the week's breaks next: Suggest fills them inside the program's rules, and you can change any time before saving.</p>
+    {% if ready_version %}<p class="acts"><a class="button primary" href="{{ url_for('plan_breaks', schedule_id=ready_version.id) }}">Plan breaks</a> <a class="button" href="{{ url_for('run_schedules', run_id=run.id) }}">Open the schedule</a></p>{% endif %}
+  </section>
+  {% else %}
   <div class="run-top">
     <section class="panel progress" aria-label="Progress">
       {{ ring(run) }}
@@ -128,6 +136,7 @@
       {% endif %}
     </section>
   </div>
+  {% endif %}
 
   {% if run.message and not (why and run.status == 'FAILED') and not (run.mode == 'SMOKE' and run.status == 'DONE') %}<p class="message" data-status="{{ run.status }}">{{ run.message.splitlines()[0] }}</p>{% endif %}
   {% if run.status == 'REJECTED' %}<pre class="message-full">{{ run.message }}</pre><p class="byline">Fix the cells named above in your workbook, save it, and upload it again. Nothing was run.</p>{% endif %}

@@ -4,6 +4,7 @@
 Real run files already in the repository: a week with breaks (AE/AR B2B
 slice, names "Associate 001"...) and a before-breaks week, each with the input
 workbook it was built from. The checks are the independent validator's."""
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -71,6 +72,14 @@ class TheWorkbooks(unittest.TestCase):
     def test_the_unedited_week_passes(self):
         result = validate(AFTER_INPUT, AFTER, REPO)
         self.assertEqual((result["status"], [p for p in problems(result) if p["severity"] == "red"]), ("PASS", []))
+
+    def test_validate_writes_nothing_beside_the_schedule(self):
+        folder = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, folder, True)
+        schedule = folder / "kept.xlsx"
+        shutil.copyfile(AFTER, schedule)
+        validate(AFTER_INPUT, schedule, REPO)
+        self.assertEqual(sorted(f.name for f in folder.iterdir()), ["kept.xlsx"])
 
     def test_marks_cells_and_days(self):
         m = marks(problems(validate(AFTER_INPUT, self.edited(), REPO), edited={("Associate 001", "Wed")}))

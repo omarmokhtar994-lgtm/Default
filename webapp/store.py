@@ -78,6 +78,37 @@ create table if not exists schedule_changes (
     severity text not null default '',
     problems text not null default ''
 );
+create table if not exists attendance (
+    program text not null,
+    shift_date text not null,
+    associate text not null,
+    status text not null,
+    from_min integer,
+    to_min integer,
+    user_id integer not null,
+    at real not null,
+    primary key (program, shift_date, associate)
+);
+create table if not exists actual_breaks (
+    program text not null,
+    shift_date text not null,
+    associate text not null,
+    idx integer not null,
+    kind text not null,
+    start integer not null,
+    user_id integer not null,
+    at real not null,
+    primary key (program, shift_date, associate, idx)
+);
+create table if not exists day_log (
+    id integer primary key autoincrement,
+    program text not null,
+    shift_date text not null,
+    associate text not null,
+    what text not null,
+    user_id integer not null,
+    at real not null
+);
 """
 
 
@@ -222,6 +253,57 @@ class Store:
                 "select schedule_changes.*, users.display_name as by_name from schedule_changes join users"
                 " on users.id = schedule_changes.user_id where schedule_id = ? order by schedule_changes.id",
                 (schedule_id,))]
+
+    # ------------------------------------------------------------- the day (attendance, actual breaks)
+    def set_attendance(self, **fields: Any) -> None:
+        fields.setdefault("at", time.time())
+        names = ", ".join(fields)
+        marks = ", ".join("?" for _ in fields)
+        with self._db() as db:
+            db.execute(f"insert or replace into attendance ({names}) values ({marks})", tuple(fields.values()))
+
+    def list_attendance(self, program: str, dates: List[str]) -> List[Dict[str, Any]]:
+        marks = ", ".join("?" for _ in dates)
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                f"select * from attendance where program = ? and shift_date in ({marks})", (program, *dates))]
+
+    def set_actual_break(self, **fields: Any) -> None:
+        fields.setdefault("at", time.time())
+        names = ", ".join(fields)
+        marks = ", ".join("?" for _ in fields)
+        with self._db() as db:
+            db.execute(f"insert or replace into actual_breaks ({names}) values ({marks})", tuple(fields.values()))
+
+    def clear_actual_break(self, program: str, shift_date: str, associate: str, idx: int) -> None:
+        with self._db() as db:
+            db.execute("delete from actual_breaks where program = ? and shift_date = ? and associate = ? and idx = ?",
+                       (program, shift_date, associate, idx))
+
+    def list_actual_breaks(self, program: str, dates: List[str]) -> List[Dict[str, Any]]:
+        marks = ", ".join("?" for _ in dates)
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                f"select * from actual_breaks where program = ? and shift_date in ({marks})", (program, *dates))]
+
+    def add_day_log(self, **fields: Any) -> None:
+        fields.setdefault("at", time.time())
+        names = ", ".join(fields)
+        marks = ", ".join("?" for _ in fields)
+        with self._db() as db:
+            db.execute(f"insert into day_log ({names}) values ({marks})", tuple(fields.values()))
+
+    def list_day_log(self, program: str, shift_date: str) -> List[Dict[str, Any]]:
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                "select day_log.*, users.display_name as by_name from day_log join users on users.id = day_log.user_id"
+                " where program = ? and shift_date = ? order by day_log.id", (program, shift_date))]
+
+    def delete_day_before(self, shift_date: str) -> int:
+        """Delete attendance, actual breaks and their log for shift dates before the one given."""
+        with self._db() as db:
+            return sum(db.execute(f"delete from {table} where shift_date < ?", (shift_date,)).rowcount
+                       for table in ("attendance", "actual_breaks", "day_log"))
 
     def update_run(self, run_id: str, **fields: Any) -> None:
         if not fields:

@@ -190,7 +190,7 @@ def validate(input_path: Path, schedule_path: Path, package_root: Path,
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "check.json"
         cmd = [sys.executable, str(Path(package_root) / VALIDATOR), "--input", str(input_path),
-               "--output", str(schedule_path), "--json-out", str(out)]
+               "--output", str(schedule_path), "--json-out", str(out), "--csv-out", str(Path(tmp) / "check.csv")]
         if options and options.get("language_window"):
             cmd += ["--language-working-window", options["language_window"]]
         try:

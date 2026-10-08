@@ -28,7 +28,31 @@ create table if not exists users (
     must_change integer not null default 1,
     failed integer not null default 0,
     locked_until real not null default 0,
+    created real not null,
+    is_supervisor integer not null default 0,
+    all_programs integer not null default 0
+);
+create table if not exists programs (
+    id integer primary key autoincrement,
+    name text unique not null,
+    key text unique not null,
+    start_day integer not null default 0,
+    run_mode text not null default 'QUICK',
+    options text not null default '',
     created real not null
+);
+create table if not exists lobs (
+    id integer primary key autoincrement,
+    program_id integer not null,
+    name text not null,
+    key text unique not null,
+    created real not null,
+    unique (program_id, name)
+);
+create table if not exists user_programs (
+    user_id integer not null,
+    program_id integer not null,
+    primary key (user_id, program_id)
 );
 create table if not exists runs (
     id text primary key,
@@ -156,6 +180,14 @@ class Store:
             for name in ("options", "program", "week_start", "metrics", "engine_outcome"):
                 if name not in columns:
                     db.execute(f"alter table runs add column {name} text not null default ''")
+            # Phase Q: roles and program access. People from before keep every program (nobody is locked out
+            # by the update); people added from now on get the programs chosen for them.
+            people = {row["name"] for row in db.execute("pragma table_info(users)")}
+            if "is_supervisor" not in people:
+                db.execute("alter table users add column is_supervisor integer not null default 0")
+            if "all_programs" not in people:
+                db.execute("alter table users add column all_programs integer not null default 0")
+                db.execute("update users set all_programs = 1")
 
     def _db(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path, timeout=30)
@@ -175,6 +207,74 @@ class Store:
                 (username, display_name.strip() or username, hash_password(password), int(is_admin),
                  int(must_change), time.time()))
             return int(cur.lastrowid)
+
+    PERSON_FIELDS = ("display_name", "is_admin", "is_supervisor", "all_programs")
+
+    def update_user(self, user_id: int, **fields: Any) -> None:
+        unknown = set(fields) - set(self.PERSON_FIELDS)
+        if unknown:
+            raise ValueError(f"Not a person's detail: {', '.join(sorted(unknown))}.")
+        if fields:
+            names = ", ".join(f"{k} = ?" for k in fields)
+            with self._db() as db:
+                db.execute(f"update users set {names} where id = ?", (*fields.values(), user_id))
+
+    def set_user_programs(self, user_id: int, program_ids: List[int]) -> None:
+        with self._db() as db:
+            db.execute("delete from user_programs where user_id = ?", (user_id,))
+            db.executemany("insert into user_programs (user_id, program_id) values (?, ?)",
+                           [(user_id, pid) for pid in sorted(set(program_ids))])
+
+    def user_program_ids(self, user_id: int) -> List[int]:
+        with self._db() as db:
+            return [r[0] for r in db.execute("select program_id from user_programs where user_id = ?"
+                                             " order by program_id", (user_id,))]
+
+    # ------------------------------------------------------------- programs and LOBs (the registry)
+    def add_program_row(self, name: str, key: str) -> int:
+        with self._db() as db:
+            return int(db.execute("insert into programs (name, key, created) values (?, ?, ?)",
+                                  (name, key, time.time())).lastrowid)
+
+    def list_programs(self) -> List[Dict[str, Any]]:
+        with self._db() as db:
+            return [dict(r) for r in db.execute("select * from programs order by name collate nocase")]
+
+    def update_program(self, program_id: int, **fields: Any) -> None:
+        unknown = set(fields) - {"name", "start_day", "run_mode", "options"}
+        if unknown:
+            raise ValueError(f"Not a program detail: {', '.join(sorted(unknown))}.")
+        if fields:
+            names = ", ".join(f"{k} = ?" for k in fields)
+            with self._db() as db:
+                db.execute(f"update programs set {names} where id = ?", (*fields.values(), program_id))
+
+    def add_lob_row(self, program_id: int, name: str, key: str) -> int:
+        with self._db() as db:
+            return int(db.execute("insert into lobs (program_id, name, key, created) values (?, ?, ?, ?)",
+                                  (program_id, name, key, time.time())).lastrowid)
+
+    def list_lobs(self) -> List[Dict[str, Any]]:
+        with self._db() as db:
+            return [dict(r) for r in db.execute("select * from lobs order by name collate nocase")]
+
+    def rename_lob(self, lob_id: int, name: str) -> None:
+        with self._db() as db:
+            db.execute("update lobs set name = ? where id = ?", (name, lob_id))
+
+    def fold_program(self, program_id: int, into: int) -> None:
+        """A program row without LOBs folded into another program: its people get that program."""
+        with self._db() as db:
+            db.execute("insert or ignore into user_programs (user_id, program_id) select user_id, ?"
+                       " from user_programs where program_id = ?", (into, program_id))
+            db.execute("delete from user_programs where program_id = ?", (program_id,))
+            db.execute("delete from programs where id = ?", (program_id,))
+
+    def run_programs(self) -> List[str]:
+        """Every program key a run was made under."""
+        with self._db() as db:
+            return [r[0] for r in db.execute("select distinct program from runs where program != ''"
+                                             " order by program")]
 
     def get_user(self, user_id: int) -> Optional[Dict[str, Any]]:
         with self._db() as db:

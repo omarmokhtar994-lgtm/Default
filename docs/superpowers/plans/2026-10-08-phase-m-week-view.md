@@ -28,12 +28,12 @@
 ### Task 1: `webapp/week.py`
 
 **Produces:** `compact(rows) -> list[list]` (`[day_index, "HH:MM", required, after_eff, after_raw, before_eff, before_raw, severe]`); `view(intervals, side="after") -> dict` with `step`, `grid` (rows of cells or `{"fold": "02:00 to 16:30"}`), `days_at_full`, `short`, `extra` (each row `day, time, need, have, pct, people, hours`), `totals` (`active, full, overtime_hours, overtime_people, extra_hours, extra_people`).
-- [ ] Tests (`webapp/tests/test_week.py`, real run): `test_real_week_totals` (107 of 126; overtime 19 associates, 9.5 h; extra 49 associates, 24.5 h), `test_sunday_2130_needs_one_more` (need 4, have 3, 96%), `test_no_demand_hours_fold` ("02:00 to 16:30"), `test_before_breaks_view`, `test_sixty_minute_week`, `test_nobody_on_the_floor`.
+- [x] Tests (`webapp/tests/test_week.py`, real run): `test_real_week_totals` (107 of 126; overtime 19 associates, 9.5 h; extra 49 associates, 24.5 h), `test_sunday_2130_needs_one_more` (need 4, have 3, 96%), `test_no_demand_hours_fold` ("02:00 to 16:30"), `test_before_breaks_view`, `test_sixty_minute_week`, `test_nobody_on_the_floor`.
 
 ### Task 2: stored, backfilled, shown
 
 **Files:** `results.py` (`metrics()` adds `intervals`), `runs.py` (backfill runs whose figures lack intervals), `app.py` (`/runs/<id>/week`, `/week`), `templates/week.html`, links from the run page and the program page's week table, `app.css`; Test `test_runs.py`, `test_ui_playwright.py` (screens to `evidence/phase_m/screens`).
-- [ ] Tests: `test_week_view_for_a_run`, `test_week_view_by_program_and_week`, `test_week_view_survives_file_expiry`, `test_older_runs_gain_intervals`, `test_unknown_week_says_so`, `test_week_links_from_run_and_program_pages`, browser `test_week_view_page`.
+- [x] Tests: `test_week_view_for_a_run`, `test_week_view_by_program_and_week`, `test_week_view_survives_file_expiry`, `test_older_runs_gain_intervals`, `test_unknown_week_says_so`, `test_week_links_from_run_and_program_pages`, browser `test_week_view_page`.
 
 ### Finish
 

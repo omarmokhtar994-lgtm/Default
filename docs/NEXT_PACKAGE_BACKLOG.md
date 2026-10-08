@@ -47,6 +47,12 @@ the next package; nothing here is built yet.
 - Blank and example input workbooks download from the home page.
 - Light and dark looks (the device's setting until a person picks one).
 
+## Built in Phase M (2026-10-08: see docs/superpowers/plans/2026-10-08-phase-m-week-view.md)
+
+- Week view (menu: Weeks; also from each run and each program week): what was
+  achieved in every interval of the week, where overtime is needed (associates
+  and hours to reach 100%) and where extra hours are available.
+
 ## Offered, waiting for the owner
 
 - AI-written summaries on the program page (the owner chose rule-based

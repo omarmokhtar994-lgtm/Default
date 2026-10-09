@@ -1353,7 +1353,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             add_panel = {"t": t, "end": t + step, "kinds": ADD_KINDS, "person": request.args.get("person", ""),
                          "people": [(l["name"], x["label"], l["language"]) for l, x in own],
                          "cell": next((c for c in page["view"]["cells"] if c["t"] == t), None)}
-        who = request.args.get("who", "")
+        who = request.args.get("who", "") if tab != "meeting" else ""  # Find a time's "who" is its list of people
         if page and who and add_panel is None:  # one person's day (Phase R)
             lane = next((l for l in page["view"]["lanes"] if l["name"] == who), None)
             if lane is not None:

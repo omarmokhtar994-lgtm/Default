@@ -1194,6 +1194,15 @@ class TheDayPage(unittest.TestCase):
         self.assertRegex(body, r"Associate 021</b></td><td>08:00 - 17:00</td><td>Late</td>")
         self.assertIn("Adherence", body)  # the tab
 
+    def test_find_a_time_for_two_people_opens_no_person_dialog(self):
+        # owner, 2026-10-09: "if i choosed more than 1 associate the pop up is showing ... 1 associate only": the
+        # person dialog read the first of Find a time's people (both use "who") and covered the list of times
+        url = self.url + "&view=meeting&who=Associate+001&who=Associate+012&minutes=30&from=13:00&to=17:00"
+        body = html.unescape(self.client.get(url).get_data(as_text=True))
+        self.assertNotIn('id="person-dialog"', body)
+        self.assertEqual(len(re.findall(r'name="who" value="Associate 0(?:01|12)" checked', body)), 2)
+        self.assertTrue(re.findall(r'name="start" value="(\d+)"', body))
+
     def test_find_a_time_and_book_it(self):
         url = (self.url + "&view=meeting&who=Associate+001&who=Associate+012&minutes=30&from=13:00&to=17:00"
                "&kind=Training&billable=1")

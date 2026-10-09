@@ -596,12 +596,16 @@ def create_app(config: Dict[str, Any]) -> Flask:
         prefill = start_date(request.args.get("week", "")) or next_sunday()
         upload_programs, upload_keys = _upload_choices(everyone)
         picked = None if request.args.get("all") == "1" else (_left_menu().get("nav_unit") or None)
+        unfiled = [r for r in runs if not r.get("program") and r["mode"] != "SMOKE"
+                   and r["status"] not in ("REJECTED", "EXPIRED", "CANCELLED")]  # uploaded without a program
         cards = _program_cards(runs, picked)
         everything = _program_cards(runs)
         others = [{"name": c["name"], "key": c["units"][0]["key"]} for c in everything
                   if not any(c["name"] == x["name"] for x in cards)] if picked else []
         return render_template("dashboard.html", upload_programs=upload_programs, upload_keys=upload_keys,
-                               program_cards=cards, other_programs=others, picked=picked,
+                               program_cards=cards, other_programs=others, picked=picked, unfiled=unfiled,
+                               unfiled_starts={r["id"]: start_choices(r["week_start"] or prefill, r["week_start"])
+                                               for r in unfiled},
                                runs=runs, queue=queue, plan=plan, summaries=summaries,
                                active=active, waiting=waiting, latest=latest,
                                latest_summary=summaries.get(latest["id"]) if latest else None,
@@ -793,15 +797,16 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if run["user_id"] != g.user["id"] and not admin:
             abort(403)
         store = app.extensions["store"]
+        back = url_for("home") if request.form.get("back") == "home" else url_for("run_detail", run_id=run_id)
         week = request.form.get("week_start", "").strip()
         week_start = start_date(week) if week else ""
         if week_start is None:
             flash("Pick the date the schedule starts.")
-            return redirect(url_for("run_detail", run_id=run_id))
+            return redirect(back)
         new: Dict[str, Any] = {"program": clean_program(request.form.get("program", "")), "week_start": week_start}
         if new["program"] and new["program"] != run["program"] and new["program"] not in unit_keys(store):
             flash(PICK_UNIT)  # picked from the list; a typed name would start a stray program
-            return redirect(url_for("run_detail", run_id=run_id))
+            return redirect(back)
         if "user_id" in request.form:
             new["user_id"] = request.form.get("user_id", type=int)
         if "workbook" in request.form:
@@ -813,13 +818,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
             person = store.get_user(new["user_id"]) if new["user_id"] is not None else None
             if person is None or not person["active"]:
                 flash("Pick someone on the team who is switched on.")
-                return redirect(url_for("run_detail", run_id=run_id))
+                return redirect(back)
         reason = " ".join(request.form.get("reason", "").split())[:200]
         try:
             found = preview_run_change(store, run, new)
             if not found["changes"]:
                 flash("Nothing changed: the details are the same.")
-                return redirect(url_for("run_detail", run_id=run_id))
+                return redirect(back)
             confirmed = request.form.get("confirm") == "1"
             if found["needs_check"] and not (confirmed and reason):
                 return _run_page(run, check=found, posted=new, reason=reason, reason_missing=confirmed)
@@ -827,7 +832,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             flash("Details saved.")
         except ValueError as exc:
             flash(str(exc))
-        return redirect(url_for("run_detail", run_id=run_id))
+        return redirect(back)
 
     ADVANCED_DEFAULTS = {"language_window": "workbook", "coverage_measure": "workbook", "stage": "FULL_SCHEDULE"}
 

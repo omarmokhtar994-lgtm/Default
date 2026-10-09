@@ -854,3 +854,13 @@ dialog.dlg.add-dlg { width: 620px; }
 .bp-save label:first-child { flex: 1 1 18em; }
 .bp-save label:first-child input { width: 100%; }
 @media (max-width: 560px) { .bp-strip span { font-size: 0; } }
+
+/* ------------------------------------------------------------ Home: runs not filed under a program (Phase S) */
+.unfiled { border-color: var(--short); margin-bottom: 16px; }
+.unfiled-list { list-style: none; margin: 0; padding: 0; }
+.unfiled-list li { border-top: 1px solid var(--rail); padding: 12px 0 2px; }
+.unfiled-list li > p { margin: 0 0 8px; }
+.unfiled-list li > p small { display: block; color: var(--dim); }
+.unfiled-list .tagrow { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto; align-items: end; }
+.unfiled-list .tagrow button { margin-bottom: 14px; }
+@media (max-width: 700px) { .unfiled-list .tagrow { grid-template-columns: minmax(0, 1fr); } }

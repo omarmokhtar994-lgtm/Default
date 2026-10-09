@@ -15,6 +15,27 @@
     </article>{% else %}
     <p class="empty">No programs are assigned to you yet: ask your supervisor or admin. You can still start a new schedule below.</p>{% endfor %}</div>
 </section>
+{% if unfiled %}
+<section class="panel unfiled" aria-labelledby="unfiled-h">
+  <h2 id="unfiled-h">Not filed under a program</h2>
+  <p class="note">Uploaded without a program, so no program's pages show {{ 'it' if unfiled|length == 1 else 'them' }}. Pick the program and LOB and the start date to file each one; its schedule versions move with it.</p>
+  <ul class="unfiled-list">{% for r in unfiled %}
+    <li><p><a href="{{ url_for('run_detail', run_id=r.id) }}">{{ r.workbook }}</a><small>{{ 'Ready schedule' if r.mode == 'READY' else r.mode|capitalize ~ ' run' }} by {{ r.by_name }}, {{ when(r.created) }}</small></p>
+    {% if user.is_admin or r.user_id == user.id %}<form class="tagrow" method="post" action="{{ url_for('run_tag', run_id=r.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="back" value="home">
+      <label>Program and LOB <select name="program" required>
+        <option value="" selected>Pick the program</option>
+        {% for p in upload_programs %}<optgroup label="{{ p.name }}">{% for key, text in p.choices %}<option value="{{ key }}">{{ text }}</option>{% endfor %}</optgroup>{% endfor %}
+      </select></label>
+      <label>Schedule starts <select name="week_start">
+        <option value=""{% if not r.week_start %} selected{% endif %}>Not set</option>
+        {% for value, text, day in unfiled_starts[r.id] %}<option value="{{ value }}" data-day="{{ day }}"{% if value == r.week_start %} selected{% endif %}>{{ text }}</option>{% endfor %}
+      </select></label>
+      <button type="submit">File it</button>
+    </form>{% else %}<p class="dim">{{ r.by_name }} or an admin can file it.</p>{% endif %}
+    </li>{% endfor %}</ul>
+</section>
+{% endif %}
 <section class="now" aria-labelledby="now-h">
   <h2 id="now-h" class="sr-only">Now</h2>
   {% if active %}{% set r = active[0] %}{% set e = plan.get(r.id) %}

@@ -194,5 +194,68 @@ class TheReadyUpload(unittest.TestCase):
         self.assertIn("Upload a ready schedule", page)
 
 
+
+class TheUnfiledRuns(unittest.TestCase):
+    """Phase S: a schedule uploaded without a program is listed on Home, where it is filed under a program and LOB
+    (owner, 2026-10-09: "in case program was not choosen in the upload im not able to located it and assign it to
+    program")."""
+
+    @classmethod
+    def setUpClass(cls):
+        from webapp.programs import ProgramBook
+        cls.dir = Path(tempfile.mkdtemp())
+        cls.ready = make_ready(cls.dir / "ready.xlsx").read_bytes()
+        cls.app, cls.store, *_ = make_app(VALIDATOR_ROOT=str(REPO))
+        cls.store.add_user("omar", "Omar", "Owner-pass-123", is_admin=True, must_change=False)
+        book = ProgramBook(cls.store)
+        saks = book.add_program("SAKS")
+        cls.key = book.add_lob(saks, "NMG Tier 2")
+        for name in ("lina", "nour"):
+            user = cls.store.add_user(name, name.title(), f"{name.title()}-pass-123", must_change=False)
+            cls.store.set_user_programs(user, [saks])
+        cls.admin = sign_in(cls.app, "omar", "Owner-pass-123")
+        cls.lina = sign_in(cls.app, "lina", "Lina-pass-123")
+        cls.nour = sign_in(cls.app, "nour", "Nour-pass-123")
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.dir, True)
+
+    def upload(self, client, name):
+        got = client.post("/runs", data={"csrf_token": token(client), "kind": "ready", "program": "", "week_start": "",
+                                         "workbook": (io.BytesIO(self.ready), name)},
+                          content_type="multipart/form-data")
+        run_id = run_id_of(got)
+        self.assertEqual(wait(self.store, run_id, statuses=("DONE", "REJECTED", "FAILED"))["status"], "DONE")
+        return run_id
+
+    def unfiled(self, client):
+        body = html.unescape(client.get("/").get_data(as_text=True))
+        found = re.search(r'<section class="panel unfiled"[^>]*>(.*?)</section>', body, re.S)
+        return found.group(1) if found else ""
+
+    def test_a_run_without_a_program_is_listed_on_home_and_filed_there(self):
+        run_id = self.upload(self.admin, "unfiled_admin.xlsx")
+        panel = self.unfiled(self.admin)
+        self.assertIn("Not filed under a program", panel)
+        self.assertIn("unfiled_admin.xlsx", panel)
+        self.assertIn(f'action="/runs/{run_id}/tag"', panel)
+        self.assertIn(f'<option value="{self.key}">SAKS, NMG Tier 2</option>', panel)  # picked from the list
+        got = self.admin.post(f"/runs/{run_id}/tag", data={"csrf_token": token(self.admin), "program": self.key,
+                                                           "week_start": "2026-10-11", "back": "home"})
+        self.assertIn(got.status_code, (302, 303))
+        self.assertEqual(got.headers["Location"], "/")  # back to Home, where the next one waits
+        self.assertEqual((self.store.get_run(run_id)["program"], self.store.get_run(run_id)["week_start"]),
+                         (self.key, "2026-10-11"))
+        self.assertEqual([v["program"] for v in self.app.extensions["schedules"].versions(run_id)], [self.key])
+        self.assertNotIn("unfiled_admin.xlsx", self.unfiled(self.admin))
+
+    def test_a_planner_files_their_own_and_nobody_elses(self):
+        run_id = self.upload(self.lina, "unfiled_lina.xlsx")
+        self.assertIn(f'action="/runs/{run_id}/tag"', self.unfiled(self.lina))
+        self.assertNotIn("unfiled_lina.xlsx", self.unfiled(self.nour))  # not hers, and in no program she has
+        self.assertIn("unfiled_lina.xlsx", self.unfiled(self.admin))  # an admin sees every one
+
+
 if __name__ == "__main__":
     unittest.main()

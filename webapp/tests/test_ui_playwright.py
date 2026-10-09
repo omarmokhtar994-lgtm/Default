@@ -260,7 +260,8 @@ class InTheBrowser(unittest.TestCase):
     def test_admin_people_page(self):
         page = self.page()
         self.sign_in(page)
-        page.get_by_role("link", name="People").click()
+        # re-pinned (Phase U): the menu also has "Departments and people", so the People link is matched exactly
+        page.get_by_role("link", name="People", exact=True).click()
         expect(page.get_by_role("heading", name="People")).to_be_visible()
         page.screenshot(path=str(SCREENS / "08_people.png"), full_page=True)
 

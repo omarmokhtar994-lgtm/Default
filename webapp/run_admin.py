@@ -181,7 +181,7 @@ def apply_rename(store, old: str, new: str, user_id: int, reason: str) -> Dict[s
     moved = store.rename_program(old, found["new"], [s["id"] for s in found["stop_in_use"]])
     said = [f"{old} → {found['new']}" + (" (merged)" if found["merge"] else ""),
             f"{moved['runs']} runs, {moved['versions']} versions, "
-            f"{sum(moved[k] for k in ('attendance', 'breaks', 'activities', 'log'))} day records moved"]
+            f"{sum(moved[k] for k, _ in store.DAY_TABLES)} day records moved"]
     said += [f"{s['label']} for the week of {s['week']} no longer in use" for s in found["stop_in_use"]]
     if (reason or "").strip():
         said.append(f"Reason: {reason.strip()}")

@@ -339,7 +339,7 @@ class DayBook:
         if any(blended_at(setup, d, t) for t in range(lo, hi, STEP)):
             raise ValueError("That is an all-channels time: there everyone covers every channel they work.")
         blocks = [(b["start"], b["end"], b["channel"]) for b in channel_blocks(week, d, name)]
-        moved = [{"start": r["start"], "end": r["end_min"], "channel": r["channel"]}
+        moved = [{"id": r["id"], "start": r["start"], "end": r["end_min"], "channel": r["channel"]}
                  for r in self.store.list_channel_moves(program, [on.isoformat()]) if r["associate"] == name]
         was = letter_at(blocks, moved, lo, False)
         made = self.store.add_channel_move(program=program, shift_date=on.isoformat(), associate=name, start=lo,

@@ -156,6 +156,15 @@ class TheChannelsOnTheDay(_Day):
         self.days.cancel_channel_move(self.key, WED, move["id"], self.omar)
         self.assertEqual(len(self.heads()), 1)
 
+    def test_the_later_of_two_overlapping_channel_changes_wins(self):
+        self.days.channel_move(self.key, WED, ARABIC_SPARE, "15:00", "16:00", "C", self.omar)
+        self.days.channel_move(self.key, WED, ARABIC_SPARE, "15:30", "16:00", "P", self.omar)
+        line = self.view()["channels"]["timelines"][ARABIC_SPARE]
+        self.assertIn("15:00 Chat", line)
+        self.assertIn("15:30 Phone", line)
+        said = [r["what"] for r in self.store.list_day_log(self.key, WED.isoformat())]
+        self.assertEqual(said[-1], "Phone from 15:30 to 16:00 (was Chat)")
+
     def test_moving_the_coaching_clears_the_warning(self):
         made = self.days.add_activity(self.key, WED, "Associate 001", "Coaching", "15:00", "15:30", self.omar,
                                       why="Quality follow-up")
@@ -217,6 +226,21 @@ class TheBreakMovesAndChannels(_Day):
             name, idx, start = move["name"], move["idx"], f"{move['to'] // 60 % 24:02d}:{move['to'] % 60:02d}"
             self.days.move_break(self.key, WED, name, idx, start, self.omar)
         self.assertEqual({w["text"] for w in self.warnings()} - before, set())
+
+
+class TheChannelChangesKeptWithTheProgram(_Day):
+    """Final review: a program renamed (or merged) takes its channel changes with it, they count as day records
+    (so an LOB holding them is not deleted), and the rename's record says so."""
+
+    def test_a_rename_moves_the_channel_changes_and_they_count_as_day_records(self):
+        from webapp.run_admin import apply_rename
+        self.days.channel_move(self.key, WED, ARABIC_SPARE, "15:00", "16:00", "C", self.omar)
+        self.assertEqual(self.store.day_record_counts(self.key, WED.isoformat(), WED.isoformat())["channels"], 1)
+        apply_rename(self.store, self.key, "SAKS NMG Tier Two", self.omar, "")
+        self.assertEqual(self.store.list_channel_moves(self.key, [WED.isoformat()]), [])
+        self.assertEqual(len(self.store.list_channel_moves("SAKS NMG Tier Two", [WED.isoformat()])), 1)
+        said = [e["detail"] for e in self.store.list_events(0, 2e9) if e["kind"] == "program_renamed"]
+        self.assertIn("2 day records moved", said[0])  # the channel change and its day-log line
 
 
 class TheChannelExportAndTimeline(_Day):

@@ -845,7 +845,7 @@ class Store:
         return counts
 
     DAY_TABLES = (("attendance", "attendance"), ("breaks", "actual_breaks"), ("activities", "activities"),
-                  ("log", "day_log"))
+                  ("log", "day_log"), ("channels", "channel_moves"))  # channels: Phase V
 
     def rename_program(self, old: str, new: str, stop_in_use: List[int]) -> Dict[str, int]:
         """Move everything kept under program ``old`` to ``new`` in one transaction (runs, versions and day

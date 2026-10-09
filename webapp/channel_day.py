@@ -32,7 +32,7 @@ def letter_at(blocks: Sequence[Tuple[int, int, str]], moves: Sequence[Dict[str, 
     block, else the block before, else the block after; None without a plan."""
     if blended:
         return "A"
-    for m in moves:
+    for m in sorted(moves, key=lambda m: m.get("id") or 0, reverse=True):  # the latest change wins
         if m["start"] <= t < m["end"]:
             return m["channel"]
     for start, end, letter in blocks:

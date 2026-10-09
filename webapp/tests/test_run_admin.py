@@ -133,7 +133,9 @@ class TheProgramRename(TheRunChange):
         self.book.set_in_use(self.book.versions("aaaaaaaaaaaa")[0]["id"], self.sara)
         found = preview_rename(self.store, "AE/AR B2B", "AE-AR B2B")
         self.assertEqual((found["merge"], found["runs"], found["versions"]), (False, 2, 2))  # one version each
-        self.assertEqual(found["records"], {"attendance": 1, "breaks": 1, "activities": 1, "log": 3})
+        # Re-pinned in Phase V: channel changes made on the day are day records too and move with a rename (none
+        # here), so the counts carry a "channels" entry.
+        self.assertEqual(found["records"], {"attendance": 1, "breaks": 1, "activities": 1, "log": 3, "channels": 0})
         self.assertEqual((found["stop_in_use"], found["clashes"]), ([], []))
         apply_rename(self.store, "AE/AR B2B", "AE-AR B2B", self.sara, "new name")
         self.assertEqual({r["program"] for r in self.store.list_runs()}, {"AE-AR B2B"})

@@ -304,7 +304,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
     def _records_text(counts: Dict[str, int]) -> str:
         """Day record counts in words, leaving out what is none: 1 attendance, 2 break moves."""
         words = (("attendance", "attendance", "attendance"), ("breaks", "break move", "break moves"),
-                 ("activities", "activity", "activities"), ("log", "day-log line", "day-log lines"))
+                 ("activities", "activity", "activities"), ("log", "day-log line", "day-log lines"),
+                 ("channels", "channel change", "channel changes"))
         parts = [f"{counts[k]} {one if counts[k] == 1 else many}" for k, one, many in words if (counts or {}).get(k)]
         return ", ".join(parts) or "no day records"
 

@@ -976,8 +976,8 @@ details.autobreaks > summary::-webkit-details-marker { display: none; }
 .tc.below { background: var(--gap-soft); color: var(--gap-ink); font-weight: 700; }
 .tc.attarget { color: var(--accent-ink); }
 .tgt { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 8px 0; }
-.tgt label { display: flex; flex-direction: column; gap: 4px; font-weight: 700; }
-.tgt select { width: auto; min-width: 240px; }
+.tgt label { display: flex; flex-direction: column; gap: 4px; font-weight: 700; max-width: 100%; }
+.tgt select { width: auto; min-width: min(240px, 100%); max-width: 100%; }
 .tgt-days { display: grid; grid-template-columns: repeat(7, minmax(84px, 1fr)); gap: 8px; margin: 12px 0 0; }
 .tgt-days a { display: flex; flex-direction: column; gap: 1px; border: 1px solid var(--rail); border-radius: 8px; padding: 8px 10px;
   background: var(--console); color: var(--paper); text-decoration: none; }

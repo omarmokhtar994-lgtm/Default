@@ -1416,3 +1416,142 @@ class ThePhaseVInTheBrowser(unittest.TestCase):
             self.go(phone, url, errors)
             self.assertLessEqual(phone.evaluate("document.scrollingElement.scrollWidth"), 390, url)
         phone.screenshot(path=str(V_SCREENS / "phone_rta_channels.png"), full_page=True)
+
+
+W_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_w" / "screens"
+
+
+class ThePhaseWInTheBrowser(unittest.TestCase):
+    """Phase W (owner, 2026-10-09), in a real browser: the upload says the week already has a schedule, breaks
+    planned automatically, Back after a save leaves the page, the interval target set on the Week page and counted
+    on the RTA, the Timeline filtered by shift start through an attendance change, and an export that says Ready.
+    The week is this week, so the upload form offers its start date."""
+
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+    go = ThePhaseRInTheBrowser.go
+
+    @classmethod
+    def setUpClass(cls):
+        import io
+        import shutil
+        from datetime import date, timedelta
+        from webapp.programs import ProgramBook
+        from webapp.tests.test_ready import make_ready
+        from webapp.tests.test_runs import sign_in as client_sign_in, token, wait
+        cls.dir = Path(tempfile.mkdtemp())
+        cls.addClassCleanup(shutil.rmtree, cls.dir, True)
+        today = date.today()
+        cls.sunday = today - timedelta(days=(today.weekday() + 1) % 7)
+        cls.wed = cls.sunday + timedelta(days=3)
+        ready = make_ready(cls.dir / "ready.xlsx")
+        cls.app, cls.store, _, _ = make_app(VALIDATOR_ROOT=str(REPO))
+        cls.store.add_user("omar", "Omar Mokhtar", "Owner-pass-123", is_admin=True, must_change=False)
+        programs = ProgramBook(cls.store)
+        cls.key = programs.add_lob(programs.add_program("SAKS"), "NMG Tier 2")
+        client = client_sign_in(cls.app, "omar", "Owner-pass-123")
+        client.post("/runs", data={"csrf_token": token(client), "kind": "ready", "mode": "QUICK", "program": cls.key,
+                                   "week_start": cls.sunday.isoformat(),
+                                   "workbook": (io.BytesIO(ready.read_bytes()), "week.xlsx")},
+                    content_type="multipart/form-data")
+        cls.run_id = cls.store.list_runs()[0]["id"]
+        wait(cls.store, cls.run_id, statuses=("DONE", "REJECTED", "FAILED"))
+        cls.server = make_server("127.0.0.1", 0, cls.app, threaded=True)
+        cls.base = f"http://127.0.0.1:{cls.server.server_port}"
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.pw = sync_playwright().start()
+        launch = {"headless": True}
+        if os.path.exists(CHROMIUM):
+            launch["executable_path"] = CHROMIUM
+        cls.browser = cls.pw.chromium.launch(**launch)
+        W_SCREENS.mkdir(parents=True, exist_ok=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.pw.stop()
+        cls.server.shutdown()
+
+    def test_phase_w_screens(self):
+        page = self.page(width=1440, height=900, scheme="light")
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        q = self.key.replace(" ", "+")
+        # the upload form: this LOB already has a schedule for the week
+        self.go(page, "/", errors)
+        page.locator("select[name=program][data-program-pick]").select_option(self.key)
+        page.locator("select[name=week_start]").first.select_option(self.sunday.isoformat())
+        warning = page.locator("[data-week-check]")
+        expect(warning).to_be_visible()
+        expect(warning).to_contain_text("has 1 schedule for the week of")
+        warning.scroll_into_view_if_needed()
+        page.wait_for_timeout(700)
+        page.screenshot(path=str(W_SCREENS / "upload_same_week.png"))
+        # plan breaks automatically on the schedules page
+        self.go(page, f"/runs/{self.run_id}/schedules", errors)
+        page.locator("summary", has_text="Plan breaks automatically").click()
+        expect(page.get_by_text("This version has no breaks yet.")).to_be_visible()
+        page.wait_for_timeout(700)
+        page.screenshot(path=str(W_SCREENS / "plan_breaks_automatically.png"))
+        page.get_by_role("button", name="Plan breaks", exact=True).click()
+        page.wait_for_load_state("load")
+        expect(page.locator("p.flash").first).to_contain_text("Breaks planned automatically for 7 days")
+        expect(page.locator("summary", has_text="Re-plan breaks automatically")).to_be_visible()
+        page.wait_for_timeout(700)
+        page.screenshot(path=str(W_SCREENS / "breaks_planned.png"))
+        made = self.app.extensions["schedules"].versions(self.run_id)[-1]
+        # Back after a save on Plan breaks leaves the page (it used to reload the same one)
+        self.go(page, f"/schedules/{made['id']}/breaks?day=Wed", errors)
+        page.get_by_role("button", name="Suggest times for the empty ones").click()
+        page.wait_for_load_state("load")
+        page.get_by_role("link", name="‹ Back").click()
+        page.wait_for_load_state("load")
+        self.assertIn(f"/runs/{self.run_id}/schedules", page.url)
+        # the interval target, set on the Week page and counted on the RTA
+        self.go(page, f"/week?program={q}&week={self.sunday.isoformat()}", errors)
+        page.locator("#target select[name=target]").select_option("90")
+        page.wait_for_load_state("load")
+        expect(page.locator("p.flash").first).to_contain_text("is now 90%")
+        page.wait_for_timeout(700)
+        page.locator("#target").screenshot(path=str(W_SCREENS / "week_interval_target.png"))
+        self.go(page, f"/day?program={q}&date={self.wed.isoformat()}", errors)
+        expect(page.locator(".tgt-tile")).to_contain_text("Intervals at 90% or more")
+        expect(page.locator(".tl-lbl", has_text="Achieved (target 90%)")).to_be_visible()
+        page.wait_for_timeout(700)
+        page.locator(".rta-sum").screenshot(path=str(W_SCREENS / "rta_intervals_at_target.png"))
+        # the Timeline by shift start, kept through an attendance change
+        page.locator(".shiftbar a", has_text="08:00").click()
+        page.wait_for_load_state("load")
+        lanes = page.locator(".tl-lane select.att")
+        expect(lanes).to_have_count(3)
+        lanes.first.select_option("Sick")
+        page.wait_for_load_state("load")
+        expect(page.locator(".shiftbar a[aria-current]")).to_contain_text("1 off")
+        expect(page.locator(".tl-lane select.att")).to_have_count(3)
+        page.locator(".shiftpick").scroll_into_view_if_needed()
+        page.wait_for_timeout(700)
+        page.screenshot(path=str(W_SCREENS / "rta_filter_by_shift.png"))
+        # an export that says what it is doing, then Ready
+        self.go(page, f"/exports?from={self.sunday.isoformat()}&to={self.wed.isoformat()}", errors)
+        with page.expect_download() as got:
+            page.get_by_role("button", name="Download").click()
+        self.assertTrue(got.value.suggested_filename.endswith(".xlsx"))
+        expect(page.locator(".exp-ok")).to_contain_text("Ready: Team_Scheduler_")
+        page.locator(".exp-ok").scroll_into_view_if_needed()
+        page.wait_for_timeout(700)
+        page.screenshot(path=str(W_SCREENS / "export_ready.png"))
+        self.assertEqual(errors, [])
+
+    def test_a_phone_has_no_sideways_scroll(self):
+        phone = self.page(width=390, height=844)
+        errors = []
+        phone.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(phone)
+        q = self.key.replace(" ", "+")
+        for url in (f"/day?program={q}&date={self.wed.isoformat()}&shift=08:00",
+                    f"/week?program={q}&week={self.sunday.isoformat()}"):
+            self.go(phone, url, errors)
+            self.assertLessEqual(phone.evaluate("document.scrollingElement.scrollWidth"), 390, url)
+        phone.wait_for_timeout(700)
+        phone.screenshot(path=str(W_SCREENS / "phone_week_target.png"), full_page=True)

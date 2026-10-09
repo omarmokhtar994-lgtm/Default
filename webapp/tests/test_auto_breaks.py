@@ -85,6 +85,14 @@ class TheFill(_Book):
                       f"{len(week['associates'])} people, none left empty. Saved as {new['label']}, checked by the "
                       "validator, and in use for this week.", found["said"])
 
+    def test_a_filled_week_keeps_the_limit_on_breaks_at_once(self):
+        """Found in the browser check: the fill broke the validator's limit on people on break at once in 53
+        quarter-hours. The limit is the engine's: the smallest of the people on shift less one, their share
+        (max_concurrent_ratio) and the absolute cap; Suggest only knew the absolute cap."""
+        found = self.book.auto_breaks(self.version["id"], self.sara, use=False)
+        said = [p["text"] for p in self.book.view(found["id"])["problems"]]
+        self.assertEqual([t for t in said if "more people on break than allowed" in t], [])
+
     def test_an_edited_draft_is_left_as_it_is(self):
         week = json.loads(self.version["week"])
         person = next(a for a in week["associates"] if shift_span(a["days"][WED]))

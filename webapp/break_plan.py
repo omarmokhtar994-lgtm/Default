@@ -10,9 +10,10 @@ highest over the break, spread across the shift; what people typed is kept."""
 from __future__ import annotations
 
 import copy
+import math
 from typing import Any, Dict, List, Optional, Tuple
 
-from .day import STEP, _tightest, day_view
+from .day import STEP, _tightest, day_view, planned
 from .versions import DAYS, shift_span
 
 QUARTER = 15
@@ -112,14 +113,41 @@ def suggest(week: Dict[str, Any], inputs: Dict[str, Any], rules: Dict[str, Any],
     view = day_view(week_with(week, d, out, rules), inputs, d, {}, {})
     slots_now = [x for c in view["cells"] for x in c["slots"]]  # on the floor per 5 minutes, typed breaks taken
     on_break = [0] * (2 * 1440 // QUARTER)  # people on a break per quarter (this day and the night after)
+    staffed = [0] * (2 * 1440 // QUARTER)  # people on shift per quarter, as the validator counts them
     for name, (lo, hi) in people:
+        for q in range(lo // QUARTER, min(len(staffed), -(-hi // QUARTER))):
+            staffed[q] += 1
         for (kind, minutes), s in zip(slots_for(rules, hi - lo), out[name]):
             if s is not None:
                 for q in range(s // QUARTER, (s + minutes) // QUARTER):
                     on_break[q] += 1
+    if d > 0:  # last night's people, still on shift (and on their breaks) in this day's first hours
+        for a in week.get("associates", []):
+            span = shift_span(a["days"][d - 1])
+            if not span or span[1] <= 1440:
+                continue
+            for q in range(0, -(-(span[1] - 1440) // QUARTER)):
+                staffed[q] += 1
+            for b in planned(week, d - 1, a["name"]):
+                for q in range(max(0, b["start"] - 1440) // QUARTER, max(0, b["start"] + b["minutes"] - 1440) // QUARTER):
+                    on_break[q] += 1
     margin = rules.get("edge_margin") or 0
     min_gap, preferred, most = rules.get("min_gap") or 0, rules.get("preferred_gap") or 0, rules.get("max_gap")
-    cap = rules.get("max_concurrent") or 0
+    absolute, share = rules.get("max_concurrent") or 0, rules.get("max_concurrent_ratio") or 0
+
+    def allowed(q: int) -> int:
+        """The engine's limit on people on break at once (maximum_concurrent_breaks): the smallest of the people
+        on shift less one, their share and the absolute cap (each at least one when set)."""
+        n = staffed[q]
+        if n <= 1:
+            return 0
+        caps = [n - 1]
+        if share:
+            caps.append(max(1, math.floor(n * share + 1e-9)))
+        if absolute:
+            caps.append(max(1, absolute))
+        return min(caps)
+
     windows = rules.get("windows") or {}
     for name, (lo, hi) in people:
         slots = slots_for(rules, hi - lo)
@@ -145,7 +173,7 @@ def suggest(week: Dict[str, Any], inputs: Dict[str, Any], rules: Dict[str, Any],
             for c in range(first, last + 1, QUARTER):
                 gap = c - (prev[0] + prev[1]) if prev else None
                 quarters = range(c // QUARTER, (c + minutes) // QUARTER)
-                crowded = cap and any(on_break[q] >= cap for q in quarters if q < len(on_break))
+                crowded = any(on_break[q] >= allowed(q) for q in quarters if q < len(on_break))
                 trial = list(slots_now)
                 for t in range(c, c + minutes, STEP):
                     if 0 <= t < 1440:

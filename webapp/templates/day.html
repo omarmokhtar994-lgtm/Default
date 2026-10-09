@@ -339,6 +339,7 @@
   <div class="dlg-form">
     <h2 id="pp-h">{{ pp.lane.name }}</h2>
     <p class="dim">{{ s.label }}{% if s.offset != 0 %} (started the day before){% endif %}, {{ pp.lane.language }}{% if pp.lane.slot %}, slot {{ pp.lane.slot }}{% endif %}, {{ pp.date.strftime('%A %d %b') }}.</p>
+    {% if v.channels and v.channels.timelines.get(pp.lane.name) %}<p class="cp-line"><b>Channels</b> {{ v.channels.timelines[pp.lane.name]|join(' · ') }}</p>{% endif %}
     <label>Attendance <select class="att{% if s.status in absent_states %} gone{% elif s.status != 'Present' %} away{% endif %}" data-name="{{ pp.lane.name }}" data-date="{{ pp.date.isoformat() }}" data-shift="{{ s.label }}">
       {% for st in statuses if st not in aux %}<option value="{{ st }}"{% if st == s.status %} selected{% endif %}>{{ st }}</option>{% endfor %}
       {% for st in aux %}<option value="{{ st }}|1"{% if st == s.status and s.billable %} selected{% endif %}>{{ st }} (billable)</option><option value="{{ st }}|0"{% if st == s.status and not s.billable %} selected{% endif %}>{{ st }} (non-billable)</option>{% endfor %}

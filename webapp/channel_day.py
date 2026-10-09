@@ -136,7 +136,36 @@ def channel_view(day: int, step: int, now, plan, pieces, lanes: Dict[str, Any], 
                       for (offset, name), ms in ch["moves"].items() if offset == 0 for m in ms if m.get("id")),
                      key=lambda m: (m["start"], m["name"]))
     return {"rows": rows, "warnings": warnings, "now": moment, "unplanned": loose, "changes": changes,
-            "hold": ChannelHold(day, step, setup, rules, today, ch)}
+            "timelines": _timelines(pieces, today), "hold": ChannelHold(day, step, setup, rules, today, ch)}
+
+
+def _timelines(pieces, today: "_Counts") -> Dict[str, List[str]]:
+    """Each person's day as it stands, in time order: "12:00 Phone", "14:00 Break 1", ... (this day's shifts)."""
+    names = {**{c: n for c, n in CHANNELS.items()}, "A": "All channels"}
+    out: Dict[str, List[str]] = {}
+    for seg, status, away, breaks, acts in pieces:
+        if seg["offset"] != 0:
+            continue
+        key, line, last = (0, seg["name"]), [], None
+        for t in range(max(seg["start"], 0), min(seg["end"], 1440), STEP):
+            letter = today.who[t // STEP].get(key)
+            if letter is not None:
+                label = names.get(letter, "No channel planned")
+            elif status in ABSENT:
+                label = status
+            elif any(b["start"] <= t < b["start"] + b["minutes"] for b in breaks):
+                label = next(b["kind"] for b in breaks if b["start"] <= t < b["start"] + b["minutes"])
+            elif any(a["start"] <= t < a["end"] for a in acts):
+                label = next(a["kind"] for a in acts if a["start"] <= t < a["end"])
+            elif status != "Present" and away[0] <= t < away[1]:
+                label = status
+            else:
+                label = "Off the floor"
+            if label != last:
+                line.append(f"{hm(t)} {label}")
+                last = label
+        out[seg["name"]] = line
+    return out
 
 
 class ChannelHold:

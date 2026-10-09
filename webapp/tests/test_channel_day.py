@@ -219,6 +219,35 @@ class TheBreakMovesAndChannels(_Day):
         self.assertEqual({w["text"] for w in self.warnings()} - before, set())
 
 
+class TheChannelExportAndTimeline(_Day):
+    """Task 9: the export lists every planned block and every change made on the day (what it was, who, when); a
+    person's day reads as one line of channels and breaks."""
+
+    def test_the_export_lists_planned_blocks_and_changes_on_the_day(self):
+        import io
+        from webapp.exports import KINDS, build
+        self.days.channel_move(self.key, WED, ARABIC_SPARE, "15:00", "16:00", "C", self.omar)
+        data, _, _ = build(self.store, self.days, WED, WED, kinds=["channels"], by="Omar")
+        ws = load_workbook(io.BytesIO(data))[KINDS["channels"]]
+        got = list(ws.iter_rows(values_only=True))
+        rows = [dict(zip(got[0], r)) for r in got[1:]]
+        self.assertEqual(KINDS["channels"], "Channels planned and changed")
+        planned = [(r["Channel"], r["Start"], r["End"], r["Minutes"]) for r in rows
+                   if r["Associate"] == "Associate 031" and r["Source"] == "Plan"]
+        self.assertEqual(planned, [("Phone", "12:00", "14:00", 120), ("Phone", "14:15", "21:00", 405)])
+        changed = [(r["Associate"], r["Channel"], r["Start"], r["End"], r["Was"], r["By"]) for r in rows
+                   if r["Source"] == "Changed on the day"]
+        self.assertEqual(changed, [(ARABIC_SPARE, "Chat", "15:00", "16:00", "Email", "Omar")])
+
+    def test_a_persons_day_reads_as_channels_and_breaks(self):
+        self.assertEqual(self.view()["channels"]["timelines"]["Associate 031"],
+                         ["12:00 Phone", "14:00 Break 1", "14:15 Phone", "19:00 All channels"])
+        self.days.add_activity(self.key, WED, "Associate 031", "Coaching", "16:00", "16:30", self.omar)
+        self.assertEqual(self.view()["channels"]["timelines"]["Associate 031"],
+                         ["12:00 Phone", "14:00 Break 1", "14:15 Phone", "16:00 Coaching", "16:30 Phone",
+                          "19:00 All channels"])
+
+
 class TheChannelsTab(unittest.TestCase):
     """The RTA page's Channels tab: warnings with causes and fixes; a fix applied from the page."""
 
@@ -271,6 +300,12 @@ class TheChannelsTab(unittest.TestCase):
         self.assertIn(f"{ARABIC_SPARE}: Chat from 15:00 to 16:00.", page)
         self.assertNotIn("nobody on Chat", page)
         self.assertIn("Take back", page)
+
+    def test_the_person_dialog_shows_their_day_on_the_channels(self):
+        import html
+        url = f"/day?program={self.key.replace(' ', '+')}&date={WED.isoformat()}&who=Associate+031"
+        page = html.unescape(self.admin.get(url).get_data(as_text=True))
+        self.assertIn("12:00 Phone · 14:00 Break 1 · 14:15 Phone · 19:00 All channels", page)
 
 
 class TheDayWithoutChannels(_Day):

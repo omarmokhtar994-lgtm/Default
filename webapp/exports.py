@@ -28,7 +28,8 @@ MAX_DAYS = 400
 KINDS = {"attendance": "Attendance", "activities": "Activities", "activity": "Day activity",
          "breaks": "Breaks planned vs taken",
          "changes": "Schedule changes and swaps", "versions": "Versions and in use", "runs": "Runs",
-         "worked": "Worked hours and adherence", "summary": "Daily summary", "record": "Other actions"}
+         "worked": "Worked hours and adherence", "summary": "Daily summary",
+         "channels": "Channels planned and changed", "record": "Other actions"}
 VERSION_EVENTS = {"version_created": "New version", "set_in_use": "Set in use"}
 OTHER_EVENTS = {"run_uploaded": "Run uploaded", "run_started": "Run started", "run_stopped": "Run stopped",
                 "run_resumed": "Run resumed", "downloaded": "Downloaded", "exported": "Exported",
@@ -243,10 +244,37 @@ def _summary(store, days, weeks, start, end, program, user_id, measure):
                    n["conformance"], n["changes"]]
 
 
+def _channels(store, days, weeks, start, end, program, user_id, measure):
+    """Phase V: each planned channel block of the schedule in use, and each channel change made on the day."""
+    from .channel_day import letter_at
+    from .channels import CHANNELS
+    from .versions import channel_blocks
+    words = {**CHANNELS, "A": "All channels"}
+    yield ["Shift date", "Program", "Associate", "Slot", "Shift", "Channel", "Start", "End", "Minutes", "Source",
+           "Was", "By", "At"]
+    for p in _programs(days, program):
+        changes: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
+        for r in store.channel_moves_between(start.isoformat(), end.isoformat(), p, user_id):
+            changes.setdefault((r["shift_date"], r["associate"]), []).append(r)
+        for day in _dates(start, end):
+            week = weeks.week(p, day)
+            for a in week.get("associates", []):
+                blocks = channel_blocks(week, _day_index(day), a["name"])
+                shift = a["days"][_day_index(day)]
+                for b in blocks:
+                    yield [day.isoformat(), p, a["name"], a.get("slot", ""), shift, words[b["channel"]],
+                           _hm(b["start"]), _hm(b["end"]), b["end"] - b["start"], "Plan", "", "", ""]
+                for r in changes.get((day.isoformat(), a["name"]), []):
+                    was = letter_at([(b["start"], b["end"], b["channel"]) for b in blocks], [], r["start"], False)
+                    yield [day.isoformat(), p, a["name"], a.get("slot", ""), shift, words[r["channel"]],
+                           _hm(r["start"]), _hm(r["end_min"]), r["end_min"] - r["start"], "Changed on the day",
+                           words.get(was, ""), r["by_name"], _when(r["at"])]
+
+
 TABLES: Dict[str, Callable] = {"attendance": _attendance, "activities": _activities, "activity": _activity,
                                "breaks": _breaks,
                                "changes": _changes, "versions": _versions, "runs": _runs, "worked": _worked,
-                               "summary": _summary,
+                               "summary": _summary, "channels": _channels,
                                "record": _record}
 
 

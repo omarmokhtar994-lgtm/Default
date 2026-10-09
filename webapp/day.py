@@ -353,7 +353,8 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
                                  "start": seg["start"],
                                  "end": seg["end"], "status": status, "billable": billable,
                                  "from": mark.get("from"), "to": mark.get("to"), "away": away, "breaks": breaks,
-                                 "activities": acts})
+                                 "activities": acts, "with_whom": mark.get("with_whom", ""),
+                                 "why": mark.get("why", "")})
 
     def overlapping(lo: int, hi: int, t: int) -> bool:
         return lo < t + step and t < hi

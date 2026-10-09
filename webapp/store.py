@@ -197,6 +197,12 @@ class Store:
             if "all_programs" not in people:
                 db.execute("alter table users add column all_programs integer not null default 0")
                 db.execute("update users set all_programs = 1")
+            # Phase T: an aux says who it is with and why; rows from before keep both empty.
+            for table in ("attendance", "activities"):
+                have = {row["name"] for row in db.execute(f"pragma table_info({table})")}
+                for name in ("with_whom", "why"):
+                    if name not in have:
+                        db.execute(f"alter table {table} add column {name} text not null default ''")
 
     def _db(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path, timeout=30)

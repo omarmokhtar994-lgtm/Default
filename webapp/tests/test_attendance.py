@@ -11,7 +11,7 @@ import unittest
 from datetime import date
 from pathlib import Path
 
-from webapp.attendance import DayBook, hm
+from webapp.attendance import DayBook, aux_details, hm
 from webapp.day import board
 from webapp.day import BreakRefused
 from webapp.schedules import ScheduleBook
@@ -447,6 +447,88 @@ class TheAddDialog(unittest.TestCase):
         self.assertEqual(self.store.list_activities("AE/AR B2B", [WED.isoformat()]), [])
         with self.assertRaises(ValueError):  # refused the same way the real thing is
             self.days.preview_item("AE/AR B2B", WED, "Associate 001", "Late", "22:00", 0, False, "interval")
+
+
+
+class TheAuxDetails(unittest.TestCase):
+    """Phase T: every aux says who it is with and why, kept with the record and in the day log (owner, 2026-10-09:
+    "in case of any aux being placed like meeting coaching etc we need to specify with who and why in a comment
+    while reserving and to reflect in the export report")."""
+
+    setUpClass = classmethod(TheAddDialog.setUpClass.__func__)
+    tearDownClass = classmethod(TheAddDialog.tearDownClass.__func__)
+    setUp = TheAddDialog.setUp
+    seg = TheAddDialog.seg
+    free_start = TheAddDialog.free_start
+
+    def test_both_answers_are_required_for_every_aux(self):
+        for kind in ("Coaching", "Meeting", "Training", "System issue"):
+            with self.assertRaises(ValueError) as said:
+                aux_details(kind, "", "Monthly review")
+            self.assertEqual(str(said.exception), f"Say who the {kind.lower()} is with.")
+            with self.assertRaises(ValueError) as said:
+                aux_details(kind, "Sara", "  ")
+            self.assertEqual(str(said.exception), f"Say why: a short reason for the {kind.lower()}.")
+        self.assertEqual(aux_details("Coaching", "  Sara   Ali ", " Monthly\n review "), ("Sara Ali", "Monthly review"))
+        self.assertEqual(aux_details("Overtime", "", ""), ("", ""))  # not an aux: nothing is asked
+
+    def test_long_answers_are_refused_not_cut(self):
+        with self.assertRaises(ValueError) as said:
+            aux_details("Meeting", "x" * 81, "Why")
+        self.assertIn("80 characters", str(said.exception))
+        with self.assertRaises(ValueError) as said:
+            aux_details("Meeting", "Sara", "y" * 201)
+        self.assertIn("200 characters", str(said.exception))
+
+    def test_an_activity_keeps_who_and_why_and_logs_them(self):
+        t = self.free_start(30)
+        self.days.add_item("AE/AR B2B", WED, "Associate 001", "Coaching", hm(t), 30, self.sara, billable=True,
+                           with_whom="Sara (team leader)", why="Monthly quality review")
+        row = next(r for r in self.store.list_activities("AE/AR B2B", [WED.isoformat()]) if r["kind"] == "Coaching")
+        self.assertEqual((row["with_whom"], row["why"]), ("Sara (team leader)", "Monthly quality review"))
+        self.assertEqual(self.days.page("AE/AR B2B", WED)["log"][-1]["what"],
+                         f"Coaching {hm(t)} to {hm(t + 30)} (billable), with Sara (team leader): Monthly quality review")
+        act = next(a for a in self.seg()["activities"] if a["kind"] == "Coaching")
+        self.assertEqual((act["with_whom"], act["why"]), ("Sara (team leader)", "Monthly quality review"))
+
+    def test_an_aux_status_keeps_who_and_why_and_logs_them(self):
+        self.days.set_status("AE/AR B2B", WED, "Associate 001", "Training", self.sara, start="13:00", end="14:00",
+                             with_whom="IT trainer", why="New CRM release")
+        row = self.store.list_attendance("AE/AR B2B", [WED.isoformat()])[0]
+        self.assertEqual((row["with_whom"], row["why"]), ("IT trainer", "New CRM release"))
+        self.assertEqual(self.days.page("AE/AR B2B", WED)["log"][-1]["what"],
+                         "Training (non-billable) 13:00 to 14:00, with IT trainer: New CRM release")
+        seg = self.seg()
+        self.assertEqual((seg["with_whom"], seg["why"]), ("IT trainer", "New CRM release"))
+
+    def test_a_booked_session_keeps_who_and_why_for_everyone(self):
+        names = ["Associate 001", "Associate 012"]
+        slots = self.days.meeting_slots("AE/AR B2B", WED, names, 30, "13:00", "17:00")
+        self.days.book_session("AE/AR B2B", WED, names, slots[0]["start"], 30, "Meeting", self.sara,
+                               with_whom="Ops manager", why="Process update")
+        rows = [r for r in self.store.list_activities("AE/AR B2B", [WED.isoformat()]) if r["kind"] == "Meeting"]
+        self.assertEqual({(r["associate"], r["with_whom"], r["why"]) for r in rows},
+                         {(n, "Ops manager", "Process update") for n in names})
+
+    def test_a_database_from_before_gets_the_columns(self):
+        import sqlite3
+        old = self.data / "old.db"
+        with sqlite3.connect(old) as db:  # the two tables as they were before Phase T
+            db.execute("create table attendance (program text not null, shift_date text not null, associate text "
+                       "not null, status text not null, from_min integer, to_min integer, billable integer not null "
+                       "default 0, user_id integer not null, at real not null, primary key (program, shift_date, "
+                       "associate))")
+            db.execute("create table activities (id integer primary key autoincrement, program text not null, "
+                       "shift_date text not null, associate text not null, kind text not null, start integer not "
+                       "null, end_min integer not null, billable integer not null default 0, note text not null "
+                       "default '', user_id integer not null, at real not null)")
+            db.execute("insert into activities (program, shift_date, associate, kind, start, end_min, user_id, at) "
+                       "values ('P', '2026-10-14', 'A', 'Meeting', 600, 630, 1, 0)")
+        store = Store(old)
+        with sqlite3.connect(old) as db:
+            for table in ("attendance", "activities"):
+                self.assertTrue({"with_whom", "why"} <= {r[1] for r in db.execute(f"pragma table_info({table})")})
+        self.assertEqual([(r["with_whom"], r["why"]) for r in store.list_activities("P", ["2026-10-14"])], [("", "")])
 
 
 class TheStartDay(unittest.TestCase):

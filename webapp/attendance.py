@@ -27,6 +27,7 @@ HHMM = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
 FALLBACK = "No version is marked in use for this week, so this is the tool's own schedule."
 FALLBACK_READY = "No version is marked in use for this week, so this is the uploaded ready schedule."
 ACTIVITY_KINDS = sorted(AUX) + list(EXTRA_BREAKS) + ["Overtime", "VTO", CALLED_IN]
+WITH_MAX, WHY_MAX = 80, 200  # characters: who an aux is with, and why (Phase T)
 DAY_OFF = "Day off cancelled"  # "+ Add" calls in someone off that day (owner, 2026-10-09)
 QUARTER = 15  # typed call-in times go in 15-minute steps
 # What RTA's "+ Add" offers in an interval (owner, 2026-10-08), grouped as the dialog shows them.
@@ -34,6 +35,34 @@ ADD_KINDS = {"Off the floor": ["Break", "Lunch", "Coaching", "Meeting", "Trainin
              "Attendance": ["Unplanned leave", "Sick", "Late", "Left early"],
              "Hours": ["Overtime", "VTO"],
              "Day off": [DAY_OFF]}
+
+
+def aux_details(kind: str, with_whom: str, why: str) -> Tuple[str, str]:
+    """Who an aux (Coaching, Meeting, Training, System issue) is with and why, tidied: both are required, and a
+    long answer is refused, never cut (owner, 2026-10-09). Anything else asks for neither: ("", "")."""
+    if kind not in AUX:
+        return "", ""
+    with_whom, why = " ".join((with_whom or "").split()), " ".join((why or "").split())
+    if not with_whom:
+        raise ValueError(f"Say who the {kind.lower()} is with.")
+    if not why:
+        raise ValueError(f"Say why: a short reason for the {kind.lower()}.")
+    if len(with_whom) > WITH_MAX:
+        raise ValueError(f"Keep who it is with to {WITH_MAX} characters.")
+    if len(why) > WHY_MAX:
+        raise ValueError(f"Keep the reason to {WHY_MAX} characters.")
+    return with_whom, why
+
+
+def with_text(with_whom: str, why: str) -> str:
+    """", with Sara: monthly review" after an aux in the day log; "" when neither is known (records from before)."""
+    if with_whom and why:
+        return f", with {with_whom}: {why}"
+    return f", with {with_whom}" if with_whom else (f": {why}" if why else "")
+
+
+def _tidy(text: str) -> str:
+    return " ".join((text or "").split())
 
 
 def week_start(on: date) -> date:
@@ -188,10 +217,12 @@ class DayBook:
             for r in self.store.list_activities(program, [d.isoformat()]):
                 acts.setdefault((offset, r["associate"]), []).append(
                     {"id": r["id"], "kind": r["kind"], "start": r["start"], "end": r["end_min"],
-                     "billable": bool(r["billable"]), "note": r["note"], "label": r["note"]})
+                     "billable": bool(r["billable"]), "note": r["note"], "label": r["note"],
+                     "with_whom": r.get("with_whom", ""), "why": r.get("why", "")})
             for r in self.store.list_attendance(program, [d.isoformat()]):
                 attendance[(offset, r["associate"])] = {"status": r["status"], "from": r["from_min"], "to": r["to_min"],
-                                                        "billable": bool(r["billable"])}
+                                                        "billable": bool(r["billable"]),
+                                                        "with_whom": r.get("with_whom", ""), "why": r.get("why", "")}
             source = row if d == on else self.version(program, d)[0]
             week = self._week(source) if source else {}
             for r in self.store.list_actual_breaks(program, [d.isoformat()]):
@@ -223,7 +254,8 @@ class DayBook:
         elif extra and extra.get("kind"):
             acts.setdefault((0, extra["name"]), []).append(
                 {"id": 0, "kind": extra["kind"], "start": extra["start"], "end": extra["end"],
-                 "billable": extra["billable"], "note": "", "label": ""})
+                 "billable": extra["billable"], "note": "", "label": "",
+                 "with_whom": extra.get("with_whom", ""), "why": extra.get("why", "")})
         earlier, _ = self.version(program, on - timedelta(days=1))  # last night: the schedule holding yesterday
         before = (self._week(earlier), day_index(on - timedelta(days=1))) if earlier else None
         view = day_view(week, inputs, day_index(on), attendance, actual, measure, acts, before)
@@ -233,7 +265,8 @@ class DayBook:
 
     # ------------------------------------------------------------- what people record
     def set_status(self, program: str, on: date, name: str, status: str, user_id: int,
-                   start: str = "", end: str = "", billable: bool = False, dry_run: bool = False) -> Dict[str, Any]:
+                   start: str = "", end: str = "", billable: bool = False, dry_run: bool = False,
+                   with_whom: str = "", why: str = "") -> Dict[str, Any]:
         """Record a status for the shift that starts on ``on``. Late needs the arrival (``end``),
         Left early the leaving time (``start``); an aux (Training, Coaching, Meeting, System issue)
         takes an optional from/to and is billable or not."""
@@ -271,13 +304,15 @@ class DayBook:
         else:
             lo = hi = None
             what = status
+        with_whom, why = (_tidy(with_whom), _tidy(why)) if status in AUX else ("", "")
+        what += with_text(with_whom, why)
         record = {"name": name, "status": status, "from": lo, "to": hi, "billable": bool(billable) and status in AUX,
-                  "what": what, "span": span}
+                  "what": what, "span": span, "with_whom": with_whom, "why": why}
         if dry_run:
             return record
         self.store.set_attendance(program=program, shift_date=on.isoformat(), associate=name, status=status,
                                   from_min=lo, to_min=hi, billable=int(bool(billable) and status in AUX),
-                                  user_id=user_id)
+                                  user_id=user_id, with_whom=with_whom, why=why)
         self.store.add_day_log(program=program, shift_date=on.isoformat(), associate=name, what=what, user_id=user_id)
         return record
 
@@ -321,7 +356,7 @@ class DayBook:
 
     # ------------------------------------------------------------- activities: aux, meetings, overtime, VTO
     @staticmethod
-    def _describe(kind: str, lo: int, hi: int, billable: bool) -> str:
+    def _describe(kind: str, lo: int, hi: int, billable: bool, with_whom: str = "", why: str = "") -> str:
         if kind == CALLED_IN:
             return f"Day off cancelled: called in {hm(lo)} - {hm(hi)}"
         if kind == "Overtime":
@@ -330,10 +365,11 @@ class DayBook:
             return f"VTO {hm(lo)} to {hm(hi)}"  # any stretch of the shift (owner, 2026-10-08)
         if kind in EXTRA_BREAKS:
             return f"{kind} {hm(lo)} to {hm(hi)}"
-        return f"{kind} {hm(lo)} to {hm(hi)} ({'billable' if billable else 'non-billable'})"
+        return f"{kind} {hm(lo)} to {hm(hi)} ({'billable' if billable else 'non-billable'})" + with_text(with_whom, why)
 
     def add_activity(self, program: str, on: date, name: str, kind: str, start: str, end: str, user_id: int,
-                     billable: bool = False, note: str = "", dry_run: bool = False) -> Any:
+                     billable: bool = False, note: str = "", dry_run: bool = False, with_whom: str = "",
+                     why: str = "") -> Any:
         """Record an activity for the shift that starts on ``on``: an aux, a break or lunch added on the day,
         or VTO (each inside the shift), or overtime (touching the shift, at most 2 hours, keeping the rest
         gap). Returns its id; with ``dry_run`` every check runs, nothing is kept, and the record is returned."""
@@ -378,18 +414,20 @@ class DayBook:
             if r["associate"] == name and r["kind"] != CALLED_IN and r["start"] < hi and lo < r["end_min"]:
                 raise ValueError(f"{name} already has {r['kind'].lower()} from {hm(r['start'])} to {hm(r['end_min'])}.")
         billable = bool(billable) and kind in AUX or kind == "Overtime"
+        with_whom, why = (_tidy(with_whom), _tidy(why)) if kind in AUX else ("", "")
+        what = self._describe(kind, lo, hi, billable, with_whom, why)
         if dry_run:
-            return {"name": name, "kind": kind, "start": lo, "end": hi, "billable": billable,
-                    "what": self._describe(kind, lo, hi, billable)}
+            return {"name": name, "kind": kind, "start": lo, "end": hi, "billable": billable, "what": what,
+                    "with_whom": with_whom, "why": why}
         made = self.store.add_activity(program=program, shift_date=on.isoformat(), associate=name, kind=kind, start=lo,
                                        end_min=hi, billable=int(billable), note=" ".join(note.split())[:200],
-                                       user_id=user_id)
-        self.store.add_day_log(program=program, shift_date=on.isoformat(), associate=name,
-                               what=self._describe(kind, lo, hi, billable), user_id=user_id)
+                                       user_id=user_id, with_whom=with_whom, why=why)
+        self.store.add_day_log(program=program, shift_date=on.isoformat(), associate=name, what=what, user_id=user_id)
         return made
 
     def add_item(self, program: str, on: date, name: str, what: str, start: str, minutes: int, user_id: int,
-                 billable: bool = False, note: str = "", dry_run: bool = False, end: str = "") -> Dict[str, Any]:
+                 billable: bool = False, note: str = "", dry_run: bool = False, end: str = "", with_whom: str = "",
+                 why: str = "") -> Dict[str, Any]:
         """Anything RTA's "+ Add" offers: Unplanned leave or Sick (the whole shift); Late (``start`` is when
         they arrived); Left early (``start`` is when they left); a break, lunch, aux, overtime or VTO from
         ``start`` for ``minutes``; a day off cancelled from ``start`` to ``end``. Returns what was recorded
@@ -418,9 +456,10 @@ class DayBook:
             raise ValueError("Pick a length in 5-minute steps.")
         end = hm(lo + minutes)
         rec = self.add_activity(program, on, name, what, start, end, user_id, billable=billable, note=note,
-                                dry_run=True)
+                                dry_run=True, with_whom=with_whom, why=why)
         if not dry_run:
-            self.add_activity(program, on, name, what, start, end, user_id, billable=billable, note=note)
+            self.add_activity(program, on, name, what, start, end, user_id, billable=billable, note=note,
+                              with_whom=with_whom, why=why)
         return {"text": rec["what"], "lo": rec["start"], "hi": rec["end"], "record": rec}
 
     def preview_item(self, program: str, on: date, name: str, what: str, start: str, minutes: int,
@@ -582,7 +621,7 @@ class DayBook:
         return done
 
     def book_session(self, program: str, on: date, names: List[str], start: int, minutes: int, kind: str, user_id: int,
-             billable: bool = False) -> None:
+             billable: bool = False, with_whom: str = "", why: str = "") -> None:
         """Book a session for everyone, or for nobody when anyone is not free then."""
         if kind not in AUX:
             raise ValueError(f"Book a meeting, training or coaching, not {kind}.")
@@ -598,7 +637,8 @@ class DayBook:
         if busy:
             raise ValueError(f"Not free then: {', '.join(busy)}. Nobody was booked.")
         for name in names:
-            self.add_activity(program, on, name, kind, hm(start), hm(start + minutes), user_id, billable=billable)
+            self.add_activity(program, on, name, kind, hm(start), hm(start + minutes), user_id, billable=billable,
+                              with_whom=with_whom, why=why)
 
     # ------------------------------------------------------------- retention
     def cleanup(self, now: Optional[float] = None) -> int:

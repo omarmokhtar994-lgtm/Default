@@ -39,6 +39,12 @@ def _working_cells(week: Dict[str, Any]) -> Set[Tuple[str, str]]:
     return {(a["name"], DAYS[i]) for a in week.get("associates", []) for i, v in enumerate(a["days"]) if shift_span(v)}
 
 
+def not_worse(before: Dict[str, Any], after: Dict[str, Any]) -> bool:
+    """Phase W's rule for breaks planned again (fixed before measuring, accepted by the owner): the new version is
+    put in use only when it fully covers at least as many intervals after breaks and breaks no more rules."""
+    return after["covered"] >= before["covered"] and after["broken"] <= before["broken"]
+
+
 def worst(found: List[Dict[str, Any]]) -> str:
     return max((p["severity"] for p in found), key=RANK.get, default="ok")
 
@@ -191,14 +197,14 @@ class ScheduleBook:
         return self._trial(schedule_id, lambda src, dst: swap_slots(src, dst, first, second),
                            {(n, d) for n in (first, second) for d in DAYS})
 
-    def _draft_from(self, row: Dict[str, Any], user_id: int) -> Dict[str, Any]:
+    def _draft_from(self, row: Dict[str, Any], user_id: int, label: Optional[str] = None) -> Dict[str, Any]:
         number = max(v["number"] for v in self.store.list_schedules(run_id=row["run_id"])) + 1
         user = self.store.get_user(user_id) or {}
         name = f"v{number}.xlsx"
         shutil.copyfile(self.root / row["file"], self.root / row["run_id"] / name)
         new_id = self.store.add_schedule(run_id=row["run_id"], program=row["program"], week_start=row["week_start"],
                                          kind="edited", number=number,
-                                         label=f"Version {number}: {user.get('display_name', 'someone')}'s edit",
+                                         label=f"Version {number}: " + (label or f"{user.get('display_name', 'someone')}'s edit"),
                                          base_id=row["id"], user_id=user_id, file=f"{row['run_id']}/{name}",
                                          week=row["week"], checks=row["checks"])
         made = self.store.get_schedule(new_id)
@@ -207,13 +213,15 @@ class ScheduleBook:
                              subject=made["label"], detail=f"copied from {row['label']}")
         return made
 
-    def _save(self, row: Dict[str, Any], user_id: int, edit, cells: Set[Tuple[str, str]]) -> Tuple[Dict[str, Any], List]:
-        """Apply an edit to ``row`` (a new draft unless it is a draft not in use), re-check it and
-        return the version saved in and what the edit added. The caller holds the run's lock."""
+    def _save(self, row: Dict[str, Any], user_id: int, edit, cells: Set[Tuple[str, str]], fresh: bool = False,
+              label: Optional[str] = None) -> Tuple[Dict[str, Any], List]:
+        """Apply an edit to ``row`` (a new draft unless it is a draft not in use; always a new one when ``fresh``,
+        named ``label``), re-check it and return the version saved in and what the edit added. The caller holds the
+        run's lock."""
         with tempfile.TemporaryDirectory() as tmp:  # a refused edit (ValueError) must not leave an empty draft
             edit(self.root / row["file"], Path(tmp) / "trial.xlsx")
-        if row["kind"] != "edited" or row["in_use"]:
-            row = self._draft_from(row, user_id)
+        if fresh or row["kind"] != "edited" or row["in_use"]:
+            row = self._draft_from(row, user_id, label)
         target = self.root / row["file"]
         edited = self.edited_cells(row["id"]) | cells
         before = self._problems(row, edited)
@@ -288,7 +296,8 @@ class ScheduleBook:
         return found
 
     def save_breaks(self, schedule_id: int, user_id: int, plan: Dict[str, Dict[str, List[Optional[int]]]],
-                    reason: str, use: bool = False) -> Tuple[int, List[str]]:
+                    reason: str, use: bool = False, fresh: bool = False,
+                    version_label: Optional[str] = None) -> Tuple[int, List[str]]:
         """Write the planned breaks (day -> person -> starts) as a new version (or into a draft not in use),
         checked like any edit; one change row per person and day. Returns the version and what was left out
         (people not working that day), said in plain words. ``use`` also marks the version in use."""
@@ -324,7 +333,8 @@ class ScheduleBook:
                         changes.append((name, day, old, new_text))
             if not rows:
                 return int(row["id"]), left_out
-            row, added_now = self._save(row, user_id, lambda src, dst: write_breaks(src, dst, rows), set(rows))
+            row, added_now = self._save(row, user_id, lambda src, dst: write_breaks(src, dst, rows), set(rows),
+                                        fresh=fresh, label=version_label)
             for name, day, old, new_text in changes:
                 self.store.add_change(schedule_id=row["id"], user_id=user_id, associate=name, day=day, old=old,
                                       new=new_text, reason=reason, severity=worst(added_now),
@@ -332,6 +342,72 @@ class ScheduleBook:
         if use:
             self.set_in_use(int(row["id"]), user_id)
         return int(row["id"]), left_out
+
+    def _standing(self, schedule_id: int) -> Dict[str, Any]:
+        """A version's figures the re-plan rule compares: intervals fully covered after breaks (of those with
+        demand) and rules broken, as its own validator run says."""
+        checks = json.loads(self.store.get_schedule(schedule_id)["checks"] or "{}")
+        metrics = checks.get("metrics") or {}
+        return {"covered": metrics.get("after_100") or 0, "active": metrics.get("active_intervals") or 0,
+                "broken": sum(1 for p in checks.get("problems") or [] if p.get("severity") == "red")}
+
+    def auto_breaks(self, schedule_id: int, user_id: int, use: bool) -> Dict[str, Any]:
+        """Every break of the week planned at once (Phase W), inside the workbook's break rules: the Plan breaks
+        page's Suggest, day after day on the week so far (so last night's breaks are counted). A version without
+        breaks is filled; one with breaks has them all planned again. Always a new version (the one clicked on stays
+        as it is); ``use`` puts it in use, a re-plan only when ``not_worse``. Returns what happened and a sentence."""
+        from .break_plan import suggest, week_with
+        from .day import read_inputs
+        row = self.store.get_schedule(schedule_id)
+        if row is None:
+            raise KeyError(schedule_id)
+        week = json.loads(row["week"] or "{}")
+        rules = self.break_rules(schedule_id)
+        inputs = read_inputs(self.input_path(row["run_id"]))
+        mode = "replan" if week.get("breaks") else "fill"
+        work, plan, placed, empty = week, {}, 0, 0
+        for d, day in enumerate(DAYS):
+            got = suggest(work, inputs, rules, d, {})
+            work = week_with(work, d, got, rules)
+            plan[day] = got
+            placed += sum(1 for starts in got.values() for s in starts if s is not None)
+            empty += sum(1 for starts in got.values() for s in starts if s is None)
+        saved, _ = self.save_breaks(schedule_id, user_id, plan, "Breaks planned automatically", use=False,
+                                    fresh=True, version_label="breaks planned automatically")
+        people = len(week.get("associates", []))
+        holes = " none left empty" if not empty else f" {empty} left empty (no time fits the rules; Plan breaks lists them)"
+        if saved == schedule_id:  # the same breaks it already has
+            if use:
+                self.set_in_use(schedule_id, user_id)
+            return {"id": schedule_id, "mode": mode, "placed": placed, "empty": empty, "used": bool(use),
+                    "said": "The breaks planned automatically are the ones this version already has, so nothing "
+                            "changed." + (" It is now the schedule in use for this week." if use else "")}
+        made = self.store.get_schedule(saved)
+        before, after = self._standing(schedule_id), self._standing(saved)
+        used = bool(use) and (mode == "fill" or not_worse(before, after))
+        if used:
+            self.set_in_use(saved, user_id)
+        verb = "Breaks planned automatically" if mode == "fill" else "Breaks planned again"
+        said = f"{verb} for 7 days: {placed} breaks placed for {people} people,{holes}. Saved as {made['label']}, "
+        if mode == "fill":
+            said += "checked by the validator" + (", and in use for this week." if used else ".")
+        elif used:
+            said += (f"checked by the validator, and in use for this week: it fully covers {after['covered']} of "
+                     f"{after['active']} intervals after breaks (before: {before['covered']}).")
+        elif use:
+            worse = [f"it fully covers {after['covered']} of {after['active']} intervals after breaks against "
+                     f"{before['covered']} before"] if after["covered"] < before["covered"] else []
+            if after["broken"] > before["broken"]:
+                worse.append(f"it breaks {after['broken'] - before['broken']} more rule"
+                             f"{'s' if after['broken'] - before['broken'] != 1 else ''}")
+            said += ("checked by the validator, but not put in use: " + (" and ".join(worse) or "it is not better")
+                     + ". The schedule in use did not change.")
+        else:
+            said += "checked by the validator."
+        if week.get("channels"):
+            said += " Channels were planned for the old breaks: open Plan channels to plan them again."
+        return {"id": saved, "mode": mode, "placed": placed, "empty": empty, "used": used, "said": said,
+                "before": before, "after": after}
 
     def save_channels(self, schedule_id: int, user_id: int, draft: Dict[str, Dict[str, Any]], reason: str,
                       use: bool = False) -> Tuple[int, List[str]]:

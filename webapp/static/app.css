@@ -964,3 +964,10 @@ dialog.dlg.add-dlg { width: 620px; }
 .shiftbar a.soon { border-color: var(--short); }
 .shiftbar .soon-tag { font-size: 11px; font-weight: 700; color: var(--short-ink); }
 .shiftbar a:focus-visible { outline: 3px solid var(--covered); outline-offset: 2px; }
+
+/* Phase W: plan breaks automatically (a button that opens what it will do) */
+details.autobreaks > summary { list-style: none; cursor: pointer; }
+details.autobreaks > summary::-webkit-details-marker { display: none; }
+.actions details.autobreaks[open] { flex-basis: 100%; }
+.autobreaks-form { margin-top: 10px; max-width: 660px; }
+.autobreaks-form h2 { margin-top: 0; }

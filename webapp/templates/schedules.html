@@ -1,5 +1,6 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
 {% extends "base.html" %}
+{% from "_auto_breaks.html" import auto_breaks with context %}
 {% block title %}Schedules: {{ run.program|unit if run.program else run.workbook }} on Team Scheduler{% endblock %}
 {% block content %}
 <div class="phead"><div>
@@ -27,6 +28,7 @@
 </nav>
 
 <div class="actions">
+  {{ auto_breaks(current, view.week.breaks|length, may_set_in_use) }}
   {% if may_set_in_use and not current.in_use %}
   <form method="post" action="{{ url_for('schedule_in_use', schedule_id=current.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="primary" type="submit">Set as the schedule in use</button></form>
   {% elif current.in_use %}<p class="inuse">This is the schedule in use for the week.</p>{% endif %}

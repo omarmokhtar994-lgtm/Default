@@ -1,0 +1,17 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{# Phase W: plan every break of a version at once (fill, or plan again), as a new version. #}
+{% macro auto_breaks(version, breaks, may_use, back='') %}
+<details class="autobreaks">
+  <summary class="button{% if not breaks %} primary{% endif %}">{{ 'Re-plan breaks automatically' if breaks else 'Plan breaks automatically' }}</summary>
+  <form method="post" action="{{ url_for('auto_breaks', schedule_id=version.id) }}" class="panel autobreaks-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% if back %}<input type="hidden" name="back" value="{{ back }}">{% endif %}
+    <h2>{{ 'Plan breaks again' if breaks else 'Plan breaks' }} for {{ version.label }}</h2>
+    {% if breaks %}<p>This version already has {{ breaks }} break{{ 's' if breaks != 1 }}. All of them are planned again from scratch, all 7 days, inside this workbook's break rules: which breaks each shift takes, their windows and gaps, and how many people may be on a break at once. Each break goes where the floor stays strongest.</p>
+    <p>The new version is put in use only if it is at least as good: as many intervals fully covered after breaks, and no more broken rules.</p>
+    {% else %}<p>This version has no breaks yet. Every break is placed, all 7 days, inside this workbook's break rules: which breaks each shift takes, their windows and gaps, and how many people may be on a break at once. Each break goes where the floor stays strongest.</p>{% endif %}
+    <p>The result is a new version, <b>breaks planned automatically</b>, checked like any other. This version stays as it is.</p>
+    {% if may_use %}<label class="exp-kind"><input type="checkbox" name="use" value="1" checked><span>Use the new version for this week (RTA reads it)</span></label>{% endif %}
+    <p><button class="primary" type="submit">{{ 'Re-plan breaks' if breaks else 'Plan breaks' }}</button></p>
+  </form>
+</details>
+{% endmacro %}

@@ -1,5 +1,6 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
 {% extends "base.html" %}
+{% from "_auto_breaks.html" import auto_breaks with context %}
 {% block title %}{% if program %}{{ program|unit }}, week of {{ week|day_month }}{% elif run %}{{ run.workbook }}: the week{% else %}Week view{% endif %} on Team Scheduler{% endblock %}
 {% block content %}
 {% set unit = 'hour' if view and view.step == 60 else (view.step ~ ' minutes' if view else '30 minutes') %}
@@ -8,7 +9,8 @@
     <h1>{% if program and week %}{{ program|unit }}, week of {{ week|day_month }}{% elif run %}{{ run.workbook }}: the week{% else %}Week view{% endif %}</h1>
     {% if week_note %}<p class="byline">{% if week_note.said %}{{ week_note.said }} <a href="{{ url_for('run_schedules', run_id=version.run_id, v=version.id) }}">{{ version.label }}</a>{% else %}From the schedule in use: <a href="{{ url_for('run_schedules', run_id=version.run_id, v=version.id) }}">{{ version.label }}</a>{% endif %}{% if week_note.workbook %}, workbook {{ week_note.workbook }}{% endif %}{% if week_note.set_by %}, {{ week_note.set_by }}{% endif %}.</p>
     {% if week_note.others %}<p class="byline">This week also has {{ week_note.others|join(', ') }} (not in use). <a href="{{ url_for('run_schedules', run_id=version.run_id, v=version.id) }}">Compare or switch</a></p>{% endif %}
-    {% elif version %}<p class="byline">Version: <a href="{{ url_for('run_schedules', run_id=version.run_id, v=version.id) }}">{{ version.label }}</a>{% if version.in_use %} (in use){% endif %}.</p>{% endif %}
+    {% endif %}{% if version %}<div class="actions">{{ auto_breaks(version, (version.week|fromjson).breaks|length, may_set_in_use, 'week' if week_note else '') }}<a class="button" href="{{ url_for('run_schedules', run_id=version.run_id, v=version.id) }}">Open the schedules</a></div>{% endif %}
+    {% if version and not week_note %}<p class="byline">Version: <a href="{{ url_for('run_schedules', run_id=version.run_id, v=version.id) }}">{{ version.label }}</a>{% if version.in_use %} (in use){% endif %}.</p>{% endif %}
     {% if run %}<p class="byline">From <a href="{{ url_for('run_detail', run_id=run.id) }}">{{ run.workbook }}</a> ({{ run.mode|lower }} run by {{ run.by_name }}, {{ label(run) }}).
       {% if view %}Every {{ unit }}, {{ 'before' if side == 'before' else 'after' }} breaks. Needed = associates on the floor for 100% of demand after shrinkage.{% endif %}</p>{% endif %}
   </div>

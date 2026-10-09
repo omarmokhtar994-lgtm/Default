@@ -1206,3 +1206,86 @@ class ThePhaseTInTheBrowser(unittest.TestCase):
         expect(page.locator("section[aria-labelledby=acts-h]")).to_contain_text("with IT trainer: New CRM release")
         page.locator("section[aria-labelledby=acts-h]").screenshot(path=str(T_SCREENS / "activities_list.png"))
         self.assertEqual(errors, [])
+
+
+U_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_u" / "screens"
+
+
+class ThePhaseUInTheBrowser(unittest.TestCase):
+    """Phase U: With is picked from the program's departments and people, kept by admins and supervisors (owner,
+    2026-10-09: "categorized as well by 2 things department and names ... popup as a drop down list")."""
+
+    setUpClass_base = classmethod(TheSchedulesInTheBrowser.setUpClass.__func__)
+    tearDownClass = classmethod(TheSchedulesInTheBrowser.tearDownClass.__func__)
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+    go = ThePhaseRInTheBrowser.go
+
+    @classmethod
+    def setUpClass(cls):
+        from webapp.contacts import ContactBook
+        from webapp.programs import ProgramBook
+        cls.setUpClass_base()
+        U_SCREENS.mkdir(parents=True, exist_ok=True)
+        book = ProgramBook(cls.store)
+        book.sync()
+        cls.program = next(p["id"] for p in book.tree() if p["key"] == "AE/AR B2B")
+        ContactBook(cls.store).add_many(cls.program, "Quality, Lina\nTraining, IT trainer\nWorkforce", 1)
+
+    def test_a_phone_has_no_sideways_scroll(self):
+        phone = self.page(width=390, height=844)
+        errors = []
+        phone.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(phone)
+        for url in ("/setup/with?program=AE/AR+B2B", "/day?program=AE/AR+B2B&date=2026-10-13&view=board&add=900"):
+            self.go(phone, url, errors)
+            self.assertLessEqual(phone.evaluate("document.scrollingElement.scrollWidth"), 390, url)
+        phone.locator("#add-dialog").get_by_label("Meeting").check()
+        expect(phone.locator("#add-dialog select[name=with_dept]")).to_be_visible()
+        phone.locator("#add-dialog").screenshot(path=str(U_SCREENS / "phone_add_department.png"))
+
+    def test_phase_u_screens(self):
+        page = self.page(width=1440, height=900, scheme="light")
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        # the lists: an admin (or the program's supervisor) adds a person
+        self.go(page, "/setup/with?program=AE/AR+B2B", errors)
+        add = page.locator("form.wl-add").first
+        add.get_by_label("Department").fill("Quality")
+        add.get_by_label("Name").fill("Omar")
+        add.get_by_role("button", name="Add").click()
+        page.wait_for_load_state("load")
+        expect(page.locator("p.flash")).to_have_text("Added Omar to Quality.")
+        page.screenshot(path=str(U_SCREENS / "departments_and_people.png"), full_page=True)
+        # + Add: the department first, then only its people
+        page.set_viewport_size({"width": 1440, "height": 1200})  # the whole dialog in the screen
+        self.go(page, "/day?program=AE/AR+B2B&date=2026-10-15&view=board&add=900", errors)
+        dialog = page.locator("#add-dialog")
+        dialog.locator("select[name=associate]:not([data-off])").select_option("Associate 001")
+        dialog.get_by_label("Coaching").check()
+        dept, who = dialog.locator("select[name=with_dept]"), dialog.locator("select[name=with_whom]")
+        expect(dept).to_be_visible()
+        dept.select_option("Quality")
+        offered = who.evaluate("s => Array.from(s.options).filter(o => o.value && !o.hidden).map(o => o.value)")
+        self.assertEqual(offered, ["Lina", "Omar"])  # Training's people are not offered under Quality
+        who.select_option("Lina")
+        dialog.locator("input[name=why]").fill("Monthly quality review")
+        expect(dialog.locator("[data-effect]")).to_contain_text("Coaching 15:00 to 15:30", timeout=15000)
+        dialog.screenshot(path=str(U_SCREENS / "add_with_department.png"))
+        dialog.get_by_role("button", name="Add coaching").click()
+        page.wait_for_load_state("load")
+        expect(page.locator("p.flash")).to_contain_text("with Lina (Quality): Monthly quality review")
+        # the attendance popup picks the same way
+        self.go(page, "/day?program=AE/AR+B2B&date=2026-10-14", errors)
+        page.select_option('select.att[data-name="Associate 021"]', "Training|0")
+        att = page.locator("#att-dialog")
+        att.locator("input[name=from]").fill("10:00")
+        att.locator("input[name=to]").fill("10:30")
+        att.locator("select[name=with_dept]").select_option("Training")
+        att.locator("select[name=with_whom]").select_option("IT trainer")
+        att.locator("input[name=why]").fill("New CRM release")
+        att.screenshot(path=str(U_SCREENS / "attendance_with_department.png"))
+        att.locator("[data-keep]").click()
+        expect(page.locator(".log")).to_contain_text("with IT trainer (Training): New CRM release", timeout=15000)
+        self.assertEqual(errors, [])

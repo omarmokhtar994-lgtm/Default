@@ -16,7 +16,7 @@
   <form method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="action" value="save"><input type="hidden" name="rows" value="{{ rows|length }}">
     <div class="scroll"><table class="actable">
-      <thead><tr><th scope="col">Associate</th><th scope="col">Language</th><th scope="col" class="c">Chat</th><th scope="col" class="c">Phone</th><th scope="col" class="c">Email</th><th scope="col"><span class="sr-only">Channels</span></th></tr></thead>
+      <thead><tr><th scope="col">Associate</th><th scope="col">Language</th><th scope="col" class="c">Chat</th><th scope="col" class="c">Phone</th><th scope="col" class="c">Email</th><th scope="col">Channels</th></tr></thead>
       <tbody>
       {% for r in rows %}{% set i = loop.index0 %}
       <tr><th scope="row"><input type="hidden" name="who-{{ i }}" value="{{ r.name }}"><b>{{ r.name }}</b></th><td>{{ r.language or '–' }}</td>

@@ -1290,3 +1290,129 @@ class ThePhaseUInTheBrowser(unittest.TestCase):
         att.locator("[data-keep]").click()
         expect(page.locator(".log")).to_contain_text("with IT trainer (Training): New CRM release", timeout=15000)
         self.assertEqual(errors, [])
+
+
+V_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_v" / "screens"
+
+
+@unittest.skipIf(sync_playwright is None, "Playwright is not installed here; UI tests skipped")
+class ThePhaseVInTheBrowser(unittest.TestCase):
+    """Phase V: Chat, Phone and Email planned per associate (owner, 2026-10-09), in a real browser: the upload's
+    channel check, Associate channels, Plan channels (Suggest, Save), booking that warns about a channel, and the
+    RTA's Channels tab with a fix applied. The day is test_channel_day's: Associate 001 (Arabic) alone on Chat,
+    Associate 031 alone on Phone, Chat and Phone needed from 14:00 to 16:00 and in the 19:00 to 21:00 all-channels
+    time."""
+
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+    go = ThePhaseRInTheBrowser.go
+
+    @classmethod
+    def setUpClass(cls):
+        import io
+        import shutil
+        from webapp.channel_people import ChannelPeople
+        from webapp.programs import ProgramBook
+        from webapp.tests.test_channel_day import ARABIC_SPARE, channel_day
+        from webapp.tests.test_runs import sign_in as client_sign_in, token, wait
+        from webapp.versions import read_week
+        cls.dir = Path(tempfile.mkdtemp())
+        cls.addClassCleanup(shutil.rmtree, cls.dir, True)
+        upload = channel_day(cls.dir / "upload.xlsx")
+        cls.app, cls.store, _, _ = make_app(VALIDATOR_ROOT=str(REPO))
+        cls.omar = cls.store.add_user("omar", "Omar Mokhtar", "Owner-pass-123", is_admin=True, must_change=False)
+        programs = ProgramBook(cls.store)
+        program_id = programs.add_program("SAKS")
+        cls.key = programs.add_lob(program_id, "NMG Tier 2")
+        client = client_sign_in(cls.app, "omar", "Owner-pass-123")
+        client.post("/runs", data={"csrf_token": token(client), "kind": "ready", "mode": "QUICK", "program": cls.key,
+                                   "week_start": "2026-10-11", "workbook": (io.BytesIO(upload.read_bytes()), "week.xlsx")},
+                    content_type="multipart/form-data")
+        cls.run_id = cls.store.list_runs()[0]["id"]
+        wait(cls.store, cls.run_id, statuses=("DONE", "REJECTED", "FAILED"))
+        cls.version = cls.app.extensions["schedules"].versions(cls.run_id)[0]
+        everyone = [a["name"] for a in read_week(upload)["associates"]]
+        ChannelPeople(cls.store).save(program_id, {n: "E" for n in everyone if n not in
+                                                   ("Associate 001", "Associate 031", ARABIC_SPARE)}, cls.omar)
+        cls.server = make_server("127.0.0.1", 0, cls.app, threaded=True)
+        cls.base = f"http://127.0.0.1:{cls.server.server_port}"
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.pw = sync_playwright().start()
+        launch = {"headless": True}
+        if os.path.exists(CHROMIUM):
+            launch["executable_path"] = CHROMIUM
+        cls.browser = cls.pw.chromium.launch(**launch)
+        V_SCREENS.mkdir(parents=True, exist_ok=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.pw.stop()
+        cls.server.shutdown()
+
+    def test_phase_v_screens(self):
+        page = self.page(width=1440, height=900, scheme="light")
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        q = self.key.replace(" ", "+")
+        # the schedules page: the upload's channel check, and the way to plan channels
+        self.go(page, f"/runs/{self.run_id}/schedules", errors)
+        expect(page.get_by_role("heading", name="Channel tabs")).to_be_visible()
+        page.screenshot(path=str(V_SCREENS / "schedules_channel_check.png"), full_page=True)
+        # Associate channels: Associate 001 stops working Email
+        self.go(page, f"/setup/channels?program={q}", errors)
+        page.get_by_label("Associate 001 works Email").uncheck()
+        page.get_by_role("button", name="Save", exact=True).click()
+        page.wait_for_load_state("load")
+        expect(page.locator("p.flash").first).to_have_text("Saved 1 change.")
+        page.screenshot(path=str(V_SCREENS / "associate_channels.png"), full_page=True)
+        # Plan channels: Thursday suggested, then saved as a new version in use
+        self.go(page, f"/schedules/{self.version['id']}/channels?day=Thu", errors)
+        page.get_by_role("button", name="Suggest the day").click()
+        page.wait_for_load_state("load")
+        expect(page.locator("p.flash").first).to_contain_text("Suggested channels for Thursday")
+        expect(page.locator("table.cp-grid td.ch-P").first).to_be_visible()
+        page.screenshot(path=str(V_SCREENS / "plan_channels.png"), full_page=True)
+        page.get_by_role("button", name="Save as a new version").click()
+        page.wait_for_load_state("load")
+        expect(page.locator("p.flash").first).to_contain_text("Saved as Version 2")
+        # booking coaching for the only Arabic speaker on Chat: the dialog says so, and offers a time
+        page.set_viewport_size({"width": 1440, "height": 1200})
+        self.go(page, f"/day?program={q}&date=2026-10-14&view=board&add=900", errors)
+        dialog = page.locator("#add-dialog")
+        dialog.locator("select[name=associate]:not([data-off])").select_option("Associate 001")
+        dialog.get_by_label("Coaching").check()
+        effect = dialog.locator("[data-channel-effect]")
+        expect(effect).to_contain_text("nobody on Chat, and no Arabic speaker on Chat")
+        expect(dialog.get_by_role("button", name="Use 16:00")).to_be_visible()
+        dialog.screenshot(path=str(V_SCREENS / "booking_channel_effect.png"))
+        dialog.locator("input[name=with_whom]").fill("Associate 021")
+        dialog.locator("input[name=why]").fill("Quality follow-up")
+        dialog.get_by_role("button", name="Add coaching").click()
+        page.wait_for_load_state("load")
+        # the RTA's Channels tab: the warning, its cause, and a fix applied
+        self.go(page, f"/day?program={q}&date=2026-10-14&view=channels", errors)
+        expect(page.locator(".alert h3").first).to_have_text(
+            "15:00 to 16:00: nobody on Chat, and no Arabic speaker on Chat")
+        expect(page.locator(".alert").first).to_contain_text("Associate 001 is booked for Coaching, with Associate 021: "
+                                                             "Quality follow-up")
+        page.screenshot(path=str(V_SCREENS / "rta_channel_warning.png"), full_page=True)
+        page.locator("form.fix", has_text="Associate 013: Email → Chat").get_by_role("button", name="Apply").click()
+        page.wait_for_load_state("load")
+        expect(page.locator("p.flash").first).to_have_text("Associate 013: Chat from 15:00 to 16:00.")
+        expect(page.locator(".alert")).to_have_count(0)
+        page.screenshot(path=str(V_SCREENS / "rta_channel_fixed.png"), full_page=True)
+        self.assertEqual(errors, [])
+
+    def test_a_phone_has_no_sideways_scroll(self):
+        phone = self.page(width=390, height=844)
+        errors = []
+        phone.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(phone)
+        q = self.key.replace(" ", "+")
+        for url in (f"/setup/channels?program={q}", f"/schedules/{self.version['id']}/channels?day=Wed",
+                    f"/day?program={q}&date=2026-10-14&view=channels"):
+            self.go(phone, url, errors)
+            self.assertLessEqual(phone.evaluate("document.scrollingElement.scrollWidth"), 390, url)
+        phone.screenshot(path=str(V_SCREENS / "phone_rta_channels.png"), full_page=True)

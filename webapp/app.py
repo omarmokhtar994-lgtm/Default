@@ -17,7 +17,8 @@ from werkzeug.utils import secure_filename
 
 from .adherence import interval_shrinkage, person_day, team as team_figures
 from .analytics import program_weeks, team
-from .attendance import ACTIVITY_KINDS, ADD_KINDS, DAY_OFF, DayBook, hm, tomorrow_unchecked, week_start
+from .attendance import (ACTIVITY_KINDS, ADD_KINDS, DAY_OFF, DayBook, aux_details, hm, tomorrow_unchecked, week_start,
+                         with_text)
 from .break_plan import check_row, floor, slots_for, suggest
 from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, board, read_inputs
 from .coach import actual_shrinkage, corrected_tab
@@ -341,7 +342,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 "theme": theme if theme in THEMES else "", "back": back,
                 "status_words": STATUS_WORDS, "label": label, "modes": MODES, "stages": stages, "in_flight": IN_FLIGHT,
                 "when": _when, "run_options": run_options, "option_labels": OPTION_LABELS,
-                "eta_text": eta_text, "duration": duration, "clock": _clock}
+                "eta_text": eta_text, "duration": duration, "clock": _clock, "with_text": with_text}
 
     NAV_ACTIVE = {"home": "home", "overview_page": "overview", "day_page": "day", "week_page": "week",
                   "run_week": "week", "run_schedules": "schedules", "program": "analysis", "programs": "programs",
@@ -1351,7 +1352,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if page and tab == "meeting":
             finder = {"who": request.args.getlist("who"), "minutes": request.args.get("minutes", 30, type=int),
                       "from": request.args.get("from", "09:00"), "to": request.args.get("to", "18:00"),
-                      "kind": request.args.get("kind", "Meeting"), "billable": request.args.get("billable") == "1"}
+                      "kind": request.args.get("kind", "Meeting"), "billable": request.args.get("billable") == "1",
+                      "with_whom": request.args.get("with_whom", ""), "why": request.args.get("why", "")}
             if finder["who"]:
                 try:
                     finder["slots"] = days.meeting_slots(program, on, finder["who"], finder["minutes"], finder["from"],
@@ -1403,6 +1405,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                people=people, whole=whole, shrink=shrink, finder=finder, cover=cover,
                                proposal=proposal, from_now=from_now, cover_panel=cover_panel,
                                add_panel=add_panel, person_panel=person_panel, lengths=ADD_LENGTHS,
+                               team_names=sorted({u["display_name"] for u in app.extensions["store"].list_users()
+                                                  if u["active"]}, key=str.lower),  # "With": pick one or type
                                tomorrow_unchecked=tomorrow_unchecked(on) if on else "",
                                activity_kinds=ACTIVITY_KINDS,
                                measure=measure,
@@ -1429,9 +1433,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
     def day_attendance():  # type: ignore[no-untyped-def]
         try:
             program, on, name = _day_form()
-            _days().set_status(program, on, name, request.form.get("status", ""), g.user["id"],
+            status = request.form.get("status", "")
+            with_whom, why = _aux_answers(status)
+            _days().set_status(program, on, name, status, g.user["id"],
                                start=request.form.get("from", ""), end=request.form.get("to", ""),
-                               billable=request.form.get("billable") == "1")
+                               billable=request.form.get("billable") == "1", with_whom=with_whom, why=why)
         except ValueError as exc:
             return jsonify(error=str(exc)), 400
         return jsonify(ok=True)
@@ -1540,9 +1546,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
             start, _, end = request.form.get("span", "").partition("|")  # a picked length ("21:00|21:45")
             if not request.form.get("span"):
                 start, end = request.form.get("from", ""), request.form.get("to", "")
+            with_whom, why = _aux_answers(kind)
             _days().add_activity(program, on, name, kind, start, end,
                                  g.user["id"], billable=request.form.get("billable") == "1",
-                                 note=request.form.get("note", ""))
+                                 note=request.form.get("note", ""), with_whom=with_whom, why=why)
             flash(f"Recorded: {name}, {'day off cancelled (called in)' if kind == 'Called in' else kind.lower()}.")
             if kind in ("Overtime", "Called in") and _days().next_week_unknown(program, on):
                 flash(tomorrow_unchecked(on))
@@ -1562,6 +1569,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
         except ValueError as exc:
             flash(str(exc))
         return _back_to_day(program, on, request.form.get("view", ""))
+
+    def _aux_answers(kind: str) -> Tuple[str, str]:
+        """Who an aux is with and why, from the form: every way of booking one asks both (Phase T)."""
+        return aux_details(kind, request.form.get("with_whom", ""), request.form.get("why", ""))
 
     def _add_fields():  # type: ignore[no-untyped-def]
         program, on, name = _day_form()
@@ -1583,8 +1594,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
         program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
         try:
             program, on, name, what, start, minutes, billable = _add_fields()
+            with_whom, why = _aux_answers(what)
             found = _days().add_item(program, on, name, what, start, minutes, g.user["id"], billable=billable,
-                                     note=request.form.get("note", ""), end=request.form.get("to", "").strip())
+                                     note=request.form.get("note", ""), end=request.form.get("to", "").strip(),
+                                     with_whom=with_whom, why=why)
             flash(f"Recorded: {name}, {found['text']}.")
             if what in ("Overtime", DAY_OFF) and _days().next_week_unknown(program, on):
                 flash(tomorrow_unchecked(on))
@@ -1600,7 +1613,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             program, on, name, what, start, minutes, billable = _add_fields()
             found = _days().preview_item(program, on, name, what, start, minutes, billable,
                                          measure if measure in MEASURES else "interval",
-                                         end=request.form.get("to", "").strip())
+                                         end=request.form.get("to", "").strip())  # who and why are asked on Add
         except ValueError as exc:
             return jsonify(error=str(exc)), 400
         return jsonify(found)
@@ -1634,8 +1647,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 raise ValueError("Pick a day.")
             start, minutes = request.form.get("start", -1, type=int), request.form.get("minutes", 0, type=int)
             kind = request.form.get("kind", "Meeting")
+            with_whom, why = _aux_answers(kind)
             _days().book_session(program, on, who, start, minutes, kind, g.user["id"],
-                                 billable=request.form.get("billable") == "1")
+                                 billable=request.form.get("billable") == "1", with_whom=with_whom, why=why)
             flash(f"Booked: {kind.lower()} {hm(start)} to {hm(start + minutes)} for {', '.join(who)}.")
         except ValueError as exc:
             flash(str(exc))

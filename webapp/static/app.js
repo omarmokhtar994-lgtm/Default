@@ -311,6 +311,11 @@
       to.firstChild.textContent = state === "Late" ? "Arrived at " : "To ";
       hint.textContent = state === "Late" || state === "Left early" ? "" : "Leave both empty for the whole shift.";
       from.querySelector("input").value = ""; to.querySelector("input").value = ""; result.textContent = "";
+      var auxBox = att.querySelector("[data-aux]");  // an aux says who it is with and why (Phase T)
+      if (auxBox) {
+        auxBox.hidden = parts.length < 2;
+        Array.prototype.forEach.call(auxBox.querySelectorAll("input"), function (i) { i.value = ""; });
+      }
       att.dataset.pending = JSON.stringify(fields);
       att.showModal();
       (state === "Late" ? to : from).querySelector("input").focus();
@@ -323,6 +328,8 @@
       var fields = JSON.parse(att.dataset.pending || "{}");
       fields.from = att.querySelector("input[name=from]").value;
       fields.to = att.querySelector("input[name=to]").value;
+      var withWhom = att.querySelector("input[name=with_whom]"), why = att.querySelector("input[name=why]");
+      if (withWhom && !withWhom.closest("[hidden]")) { fields.with_whom = withWhom.value; fields.why = why.value; }
       post(root.dataset.attUrl, fields).then(function (r) {
         if (r._ok) { att.close("saved"); window.location.reload(); return; }
         att.querySelector(".dlg-result").textContent = r.error || "That was not saved.";
@@ -658,7 +665,12 @@
     return o && o.value ? o : null;
   }
   function shape(changedKind) {
-    var k = kind(), calling = k === "Day off cancelled";
+    var k = kind(), calling = k === "Day off cancelled", isAux = aux.indexOf(k) >= 0;
+    var auxFields = form.querySelector("[data-aux-fields]");
+    if (auxFields) {
+      auxFields.hidden = !isAux;
+      Array.prototype.forEach.call(auxFields.querySelectorAll("input"), function (i) { i.disabled = !isAux; i.required = isAux; });
+    }
     length.hidden = whole.indexOf(k) >= 0 || k === "Late" || k === "Left early" || calling;
     billable.hidden = aux.indexOf(k) < 0;
     from.hidden = whole.indexOf(k) >= 0;

@@ -967,8 +967,9 @@ class TheDayPage(unittest.TestCase):
 
     def test_add_route_records_and_redirects_to_the_board_row(self):
         """Phase R task 4: "+ Add" posts here; back to the board at that interval with what was kept."""
+        # re-pinned (Phase T): an aux is booked with who it is with and why (owner, 2026-10-09)
         got = self.post("/day/add", date="2026-10-15", associate="Associate 001", what="Coaching", **{"from": "15:00"},
-                        minutes="30", billable="1", view="board", at="900")
+                        minutes="30", billable="1", view="board", at="900", with_whom="Sara", why="Quality review")
         self.assertEqual(got.status_code, 303)
         self.assertIn("view=board", got.headers["Location"])
         self.assertTrue(got.headers["Location"].endswith("#row-900"))
@@ -976,7 +977,7 @@ class TheDayPage(unittest.TestCase):
         self.assertEqual([(a["associate"], a["kind"], a["start"], a["end_min"], a["billable"]) for a in acts],
                          [("Associate 001", "Coaching", 900, 930, 1)])
         page = html.unescape(self.client.get(got.headers["Location"]).get_data(as_text=True))
-        self.assertIn("Recorded: Associate 001, Coaching 15:00 to 15:30 (billable).", page)
+        self.assertIn("Recorded: Associate 001, Coaching 15:00 to 15:30 (billable), with Sara: Quality review.", page)
         from datetime import date
         days = self.app.extensions["days"]
         days.cancel_activity("AE/AR B2B", date(2026, 10, 15), acts[0]["id"], 1)
@@ -1185,8 +1186,10 @@ class TheDayPage(unittest.TestCase):
         self.assertEqual((got.status_code, got.get_json()["error"]), (400, "Pick a day."))
 
     def test_measure_and_billable_aux(self):
+        # re-pinned (Phase T): an aux is kept with who it is with and why (owner, 2026-10-09)
         self.assertEqual(self.post("/day/attendance", associate="Associate 012", status="Coaching", **{"from": "10:00"},
-                                   to="11:00", billable="1").get_json(), {"ok": True})
+                                   to="11:00", billable="1", with_whom="Sara", why="Call quality review").get_json(),
+                         {"ok": True})
         body = self.page()
         self.assertIn("Coaching (billable) 10:00 to 11:00", body)
         self.assertRegex(body, r'<option value="interval" selected>Interval compliance</option>')
@@ -1229,6 +1232,64 @@ class TheDayPage(unittest.TestCase):
         self.assertEqual(len(re.findall(r'name="who" value="Associate 0(?:01|12)" checked', body)), 2)
         self.assertTrue(re.findall(r'name="start" value="(\d+)"', body))
 
+    def test_every_aux_route_asks_who_and_why(self):
+        # owner, 2026-10-09: "in case of any aux being placed like meeting coaching etc we need to specify with who
+        # and why in a comment while reserving"; refused before anything is kept, on every way in
+        def kept():
+            return (len(self.store.list_activities("AE/AR B2B", ["2026-10-16"])),
+                    len(self.store.list_attendance("AE/AR B2B", ["2026-10-16"])))
+        def said(got):  # the message on the page the form returns to
+            return html.unescape(self.client.get(got.headers["Location"]).get_data(as_text=True))
+
+        before = kept()
+        got = self.post("/day/add", date="2026-10-16", associate="Associate 001", what="Meeting", **{"from": "15:00"},
+                        minutes="30", view="board", at="900")
+        self.assertIn("Say who the meeting is with.", said(got))
+        got = self.post("/day/activity", date="2026-10-16", associate="Associate 001", kind="Coaching",
+                        **{"from": "15:00", "to": "15:30"}, with_whom="Sara")
+        self.assertIn("Say why: a short reason for the coaching.", said(got))
+        got = self.post("/day/attendance", date="2026-10-16", associate="Associate 001", status="Training",
+                        billable="1", **{"from": "15:00", "to": "16:00"})
+        self.assertEqual((got.status_code, got.get_json()["error"]), (400, "Say who the training is with."))
+        got = self.post("/day/book", date="2026-10-16", who=["Associate 001"], start="900", minutes="30",
+                        kind="Meeting", why="Process update")
+        self.assertIn("Say who the meeting is with.", said(got))
+        self.assertEqual(kept(), before)
+        preview = self.post("/day/add-preview", date="2026-10-16", associate="Associate 001", what="Meeting",
+                            **{"from": "15:00"}, minutes="30")
+        self.assertEqual(preview.status_code, 200)  # the floor preview needs neither answer yet
+
+    def test_an_aux_status_from_the_timeline_keeps_who_and_why(self):
+        got = self.post("/day/attendance", date="2026-10-16", associate="Associate 012", status="System issue",
+                        **{"from": "18:00", "to": "18:30"}, with_whom="IT ticket 4411", why="Headset not working")
+        self.assertEqual(got.status_code, 200)
+        try:
+            row = next(r for r in self.store.list_attendance("AE/AR B2B", ["2026-10-16"]) if r["associate"] == "Associate 012")
+            self.assertEqual((row["status"], row["with_whom"], row["why"]),
+                             ("System issue", "IT ticket 4411", "Headset not working"))
+            body = html.unescape(self.client.get("/day?program=AE/AR+B2B&date=2026-10-16&view=board&who=Associate+012")
+                                 .get_data(as_text=True))
+            dialog = body[body.index('<dialog id="person-dialog"'):]
+            self.assertIn("with IT ticket 4411: Headset not working", dialog[:dialog.index("</dialog>")])
+        finally:
+            self.post("/day/undo", date="2026-10-16", associate="Associate 012", what="status")
+
+    def test_the_forms_ask_who_and_why(self):
+        body = html.unescape(self.client.get(self.url + "&view=board&add=600").get_data(as_text=True))
+        dialog = body[body.index('<dialog id="add-dialog"'):]
+        dialog = dialog[:dialog.index("</dialog>")]
+        self.assertRegex(dialog, r'<input name="with_whom" list="team-names" maxlength="80"')
+        self.assertRegex(dialog, r'<input name="why" maxlength="200"')
+        self.assertRegex(body, r'(?s)<datalist id="team-names">.*?<option value="Sara">')  # the team, or type a name
+        att = body[body.index('<dialog id="att-dialog"'):]
+        self.assertRegex(att[:att.index("</dialog>")], r'name="with_whom".*name="why"')
+        finder = html.unescape(self.client.get(self.url + "&view=meeting&who=Associate+001&minutes=30&from=13:00"
+                                               "&to=17:00&with_whom=Ops+manager&why=Process+update")
+                               .get_data(as_text=True))
+        self.assertRegex(finder, r'<input name="with_whom" list="team-names" maxlength="80" required value="Ops manager"')
+        self.assertRegex(finder, r'<input type="hidden" name="with_whom" value="Ops manager"><input type="hidden" '
+                                 r'name="why" value="Process update">')  # carried to Book
+
     def test_find_a_time_and_book_it(self):
         url = (self.url + "&view=meeting&who=Associate+001&who=Associate+012&minutes=30&from=13:00&to=17:00"
                "&kind=Training&billable=1")
@@ -1238,14 +1299,17 @@ class TheDayPage(unittest.TestCase):
         self.assertTrue(starts)
         got = self.client.post("/day/book", data={"csrf_token": token(self.client), "program": "AE/AR B2B",
                                                   "date": "2026-10-14", "who": ["Associate 001", "Associate 012"],
-                                                  "start": starts[0], "minutes": "30", "kind": "Training", "billable": "1"})
+                                                  "start": starts[0], "minutes": "30", "kind": "Training", "billable": "1",
+                                                  # re-pinned (Phase T): who it is with and why (owner, 2026-10-09)
+                                                  "with_whom": "IT trainer", "why": "New CRM release"})
         self.assertEqual(got.status_code, 303)
         page = self.page()
         self.assertRegex(page, r'class="tl-act aux billable"')
         self.assertIn("Associate 012, Training", page)
         again = self.client.post("/day/book", data={"csrf_token": token(self.client), "program": "AE/AR B2B",
                                                     "date": "2026-10-14", "who": ["Associate 001"], "start": starts[0],
-                                                    "minutes": "30", "kind": "Meeting"}, follow_redirects=True)
+                                                    "minutes": "30", "kind": "Meeting", "with_whom": "Ops manager",
+                                                    "why": "Process update"}, follow_redirects=True)
         self.assertIn("Not free then: Associate 001. Nobody was booked.", html.unescape(again.get_data(as_text=True)))
 
     def test_overtime_and_vto_tab(self):

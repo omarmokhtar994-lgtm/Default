@@ -56,6 +56,13 @@ class TheHandover(unittest.TestCase):
         self.assertEqual(n["numbers"]["short_hours"], page["view"]["tiles"]["short_hours"])
         self.assertEqual(n["short"], [(c["t"], c["pm"]) for c in page["view"]["cells"] if c["pm"] is not None and c["pm"] < 0])
 
+    def test_an_aux_says_who_it_was_with_and_why(self):
+        # Phase T (owner, 2026-10-09): the handover reads who an aux was with and why
+        self.days.add_activity("AE/AR B2B", WED, "Associate 021", "Meeting", "10:00", "10:30", self.sara,
+                               with_whom="Ops manager", why="Process update")
+        texts = [a["text"] for a in note(self.days, "AE/AR B2B", WED)["activities"] if a["name"] == "Associate 021"]
+        self.assertEqual(texts, ["Meeting 10:00 to 10:30 (non-billable), with Ops manager: Process update"])
+
     def test_a_called_in_day_off_is_in_the_note(self):
         self.days.add_activity("AE/AR B2B", WED, "Associate 002", "Called in", "12:00", "21:00", self.sara)
         n = note(self.days, "AE/AR B2B", WED)

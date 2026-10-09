@@ -50,6 +50,18 @@ create table if not exists lobs (
     created real not null,
     unique (program_id, name)
 );
+create table if not exists aux_departments (
+    id integer primary key autoincrement,
+    program_id integer not null,
+    name text not null,
+    created real not null
+);
+create table if not exists aux_people (
+    id integer primary key autoincrement,
+    department_id integer not null,
+    name text not null,
+    created real not null
+);
 create table if not exists break_drafts (
     schedule_id integer not null,
     day text not null,
@@ -200,7 +212,7 @@ class Store:
             # Phase T: an aux says who it is with and why; rows from before keep both empty.
             for table in ("attendance", "activities"):
                 have = {row["name"] for row in db.execute(f"pragma table_info({table})")}
-                for name in ("with_whom", "why"):
+                for name in ("with_whom", "why", "with_dept"):  # with_dept: Phase U
                     if name not in have:
                         db.execute(f"alter table {table} add column {name} text not null default ''")
 
@@ -283,7 +295,28 @@ class Store:
             db.execute("insert or ignore into user_programs (user_id, program_id) select user_id, ?"
                        " from user_programs where program_id = ?", (into, program_id))
             db.execute("delete from user_programs where program_id = ?", (program_id,))
+            self._fold_aux(db, program_id, into)
             db.execute("delete from programs where id = ?", (program_id,))
+
+    @staticmethod
+    def _fold_aux(db: sqlite3.Connection, program_id: int, into: int) -> None:
+        """Its departments and people move into the other program; a department both have is merged."""
+        theirs = {r["name"].casefold(): r["id"] for r in db.execute(
+            "select id, name from aux_departments where program_id = ?", (into,))}
+        for dept in db.execute("select id, name from aux_departments where program_id = ?", (program_id,)).fetchall():
+            target = theirs.get(dept["name"].casefold())
+            if target is None:
+                db.execute("update aux_departments set program_id = ? where id = ?", (into, dept["id"]))
+                continue
+            have = {r["name"].casefold() for r in db.execute("select name from aux_people where department_id = ?",
+                                                             (target,))}
+            for person in db.execute("select id, name from aux_people where department_id = ?",
+                                     (dept["id"],)).fetchall():
+                if person["name"].casefold() in have:
+                    db.execute("delete from aux_people where id = ?", (person["id"],))
+                else:
+                    db.execute("update aux_people set department_id = ? where id = ?", (target, person["id"]))
+            db.execute("delete from aux_departments where id = ?", (dept["id"],))
 
     # ------------------------------------------------------------- a week's breaks being planned (Phase R)
     def set_break_draft(self, schedule_id: int, day: str, rows: Dict[str, List[Optional[int]]], user_id: int) -> None:
@@ -302,10 +335,62 @@ class Store:
         with self._db() as db:
             db.execute("delete from break_drafts where schedule_id = ?", (schedule_id,))
 
+    # ------------------------------------------------------------- who an aux is with (Phase U)
+    def list_aux_departments(self, program_id: int) -> List[Dict[str, Any]]:
+        with self._db() as db:
+            return [dict(r) for r in db.execute("select * from aux_departments where program_id = ? order by name "
+                                                "collate nocase", (program_id,))]
+
+    def list_aux_people(self, program_id: int) -> List[Dict[str, Any]]:
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                "select aux_people.*, aux_departments.program_id from aux_people join aux_departments on "
+                "aux_departments.id = aux_people.department_id where aux_departments.program_id = ? "
+                "order by aux_people.name collate nocase", (program_id,))]
+
+    def add_aux_entries(self, program_id: int, entries: List[Tuple[str, str]]) -> None:
+        """(department, name or "") pairs, in one transaction: a department is made when it is new."""
+        now = time.time()
+        with self._db() as db:
+            for dept, name in entries:
+                row = db.execute("select id from aux_departments where program_id = ? and name = ?",
+                                 (program_id, dept)).fetchone()
+                dept_id = row["id"] if row else db.execute(
+                    "insert into aux_departments (program_id, name, created) values (?, ?, ?)",
+                    (program_id, dept, now)).lastrowid
+                if name:
+                    db.execute("insert into aux_people (department_id, name, created) values (?, ?, ?)",
+                               (dept_id, name, now))
+
+    def get_aux_department(self, department_id: int) -> Optional[Dict[str, Any]]:
+        with self._db() as db:
+            row = db.execute("select * from aux_departments where id = ?", (department_id,)).fetchone()
+        return dict(row) if row else None
+
+    def get_aux_person(self, person_id: int) -> Optional[Dict[str, Any]]:
+        with self._db() as db:
+            row = db.execute("select aux_people.*, aux_departments.program_id, aux_departments.name as department "
+                             "from aux_people join aux_departments on aux_departments.id = aux_people.department_id "
+                             "where aux_people.id = ?", (person_id,)).fetchone()
+        return dict(row) if row else None
+
+    def delete_aux_person(self, person_id: int) -> None:
+        with self._db() as db:
+            db.execute("delete from aux_people where id = ?", (person_id,))
+
+    def delete_aux_department(self, department_id: int) -> None:
+        with self._db() as db:
+            db.execute("delete from aux_people where department_id = ?", (department_id,))
+            db.execute("delete from aux_departments where id = ?", (department_id,))
+
     def delete_program_row(self, program_id: int) -> None:
-        """A program row and who was assigned to it (its LOBs are deleted first, by the caller)."""
+        """A program row, who was assigned to it and its departments and people (its LOBs are deleted first, by
+        the caller)."""
         with self._db() as db:
             db.execute("delete from user_programs where program_id = ?", (program_id,))
+            db.execute("delete from aux_people where department_id in (select id from aux_departments where "
+                       "program_id = ?)", (program_id,))
+            db.execute("delete from aux_departments where program_id = ?", (program_id,))
             db.execute("delete from programs where id = ?", (program_id,))
 
     def delete_lob_row(self, lob_id: int) -> None:

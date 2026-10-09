@@ -186,7 +186,7 @@ class TheAttendance(unittest.TestCase):
     def test_calling_in_keeps_the_rules(self):
         with self.assertRaises(ValueError):  # works that day: overtime instead
             self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Called in", "12:00", "21:00", self.sara)
-        with self.assertRaises(ValueError):  # not a Shift Library shift
+        with self.assertRaises(ValueError):  # not a Shift Library shift, and typed times go in 15-minute steps
             self.days.add_activity("AE/AR B2B", WED, "Associate 002", "Called in", "12:05", "21:05", self.sara)
         with self.assertRaises(ValueError):  # Tuesday 23:00 - 08:00 leaves 1 hour's rest before 09:00
             self.days.add_activity("AE/AR B2B", WED, "Associate 004", "Called in", "09:00", "18:00", self.sara)
@@ -375,6 +375,52 @@ class TheAddDialog(unittest.TestCase):
         self.days.add_item("AE/AR B2B", WED, "Associate 001", "Overtime", "21:00", 45, self.sara)
         acts = self.store.list_activities("AE/AR B2B", [WED.isoformat()])
         self.assertEqual([(a["kind"], a["start"], a["end_min"]) for a in acts], [("Overtime", 1260, 1305)])
+
+    def test_day_off_cancelled_on_typed_times(self):
+        # owner, 2026-10-09: "cancel day off I'm not able to choose the shift start end manually or it's not
+        # existing in RTA view": "+ Add" calls in someone off that day, on typed times (Associate 002 is off Wed)
+        got = self.days.add_item("AE/AR B2B", WED, "Associate 002", "Day off cancelled", "10:30", 0, self.sara,
+                                 end="16:30")
+        self.assertEqual(got["text"], "Day off cancelled: called in 10:30 - 16:30")
+        seg = self.seg("Associate 002")
+        self.assertEqual((seg["label"], seg["start"], seg["end"], seg["breaks"]),
+                         ("10:30 - 16:30 (called in)", 630, 990, []))  # nobody works it: breaks are added by hand
+
+    def test_day_off_cancelled_on_a_library_shift_takes_its_breaks(self):
+        self.days.add_item("AE/AR B2B", WED, "Associate 002", "Day off cancelled", "12:00", 0, self.sara, end="21:00")
+        self.assertEqual([b["kind"] for b in self.seg("Associate 002")["breaks"]], ["Break 1", "Lunch", "Break 2"])
+
+    def test_day_off_cancelled_overnight_on_typed_times(self):
+        self.days.add_item("AE/AR B2B", WED, "Associate 002", "Day off cancelled", "22:00", 0, self.sara, end="04:00")
+        seg = self.seg("Associate 002")
+        self.assertEqual((seg["start"], seg["end"]), (22 * 60, 28 * 60))
+
+    def test_typed_call_in_times_are_checked(self):
+        for start, end, said in (("10:10", "16:30", "15-minute steps"), ("10:00", "10:45", "at least 1 hour"),
+                                 ("06:00", "22:00", "9 hours, the longest shift in the Shift Library"),
+                                 ("10", "16:30", "like 08:00")):
+            with self.assertRaises(ValueError) as refused:
+                self.days.add_item("AE/AR B2B", WED, "Associate 002", "Day off cancelled", start, 0, self.sara,
+                                   end=end)
+            self.assertIn(said, str(refused.exception))
+        with self.assertRaises(ValueError) as refused:  # works that day: overtime instead
+            self.days.add_item("AE/AR B2B", WED, "Associate 001", "Day off cancelled", "10:00", 0, self.sara,
+                               end="16:00")
+        self.assertIn("not off", str(refused.exception))
+        self.assertIsNone(self.days.called_in_on("AE/AR B2B", WED, "Associate 002"))
+
+    def test_day_off_cancelled_preview_records_nothing(self):
+        found = self.days.preview_item("AE/AR B2B", WED, "Associate 002", "Day off cancelled", "12:00", 0,
+                                       end="21:00")
+        self.assertIn("Day off cancelled: called in 12:00 - 21:00", found["text"])
+        self.assertIsNone(self.days.called_in_on("AE/AR B2B", WED, "Associate 002"))
+
+    def test_people_off_today_are_listed_for_the_dialog(self):
+        off = self.days.off_today("AE/AR B2B", WED)
+        self.assertIn("Associate 002", [name for name, _ in off])
+        self.assertNotIn("Associate 001", [name for name, _ in off])
+        self.days.add_item("AE/AR B2B", WED, "Associate 002", "Day off cancelled", "12:00", 0, self.sara, end="21:00")
+        self.assertNotIn("Associate 002", [name for name, _ in self.days.off_today("AE/AR B2B", WED)])
 
     def test_vto_any_stretch_inside_the_shift(self):
         got = self.days.add_item("AE/AR B2B", WED, "Associate 001", "VTO", "14:00", 60, self.sara)

@@ -1039,6 +1039,32 @@ class TheDayPage(unittest.TestCase):
         self.assertIn('<input type="hidden" name="at" value="600">', dialog)
         self.assertRegex(dialog, r'<option value="Associate \d+"')
 
+    def test_add_dialog_calls_in_someone_off_on_typed_times(self):
+        # owner, 2026-10-09: "cancel day off I'm not able to choose the shift start end manually or it's not
+        # existing in RTA view"
+        body = html.unescape(self.client.get(self.url + "&view=board&add=600").get_data(as_text=True))
+        dialog = body[body.index('<dialog id="add-dialog"'):]
+        dialog = dialog[:dialog.index("</dialog>")]
+        self.assertRegex(dialog, r'<input type="radio" name="what" value="Day off cancelled">')
+        off = re.search(r'<select name="associate" data-off[^>]*>(.*?)</select>', dialog, re.S)
+        self.assertIsNotNone(off)
+        listed = re.findall(r'<option value="(Associate \d+)">', off.group(1))
+        self.assertTrue(listed)
+        self.assertNotIn("Associate 001", listed)  # works that day (12:00 - 21:00)
+        self.assertRegex(dialog, r'(?s)<select name="shift" data-shift-pick>.*?data-from="12:00" data-to="21:00"')
+        self.assertRegex(dialog, r'<input type="time" name="to"')
+        form = {"csrf_token": token(self.client), "program": "AE/AR B2B", "date": "2026-10-14",
+                "what": "Day off cancelled", "from": "10:30", "to": "16:30"}
+        who = next(n for n in listed  # the first one off whose rest gap allows 10:30 - 16:30
+                   if self.client.post("/day/add-preview", data={**form, "associate": n}).status_code == 200)
+        got = self.client.post("/day/add", data={**form, "associate": who, "view": "board", "at": "600",
+                                                 "minutes": "15"}, follow_redirects=True)
+        self.assertIn(f"Recorded: {who}, Day off cancelled: called in 10:30 - 16:30.",
+                      html.unescape(got.get_data(as_text=True)))
+        again = self.client.post("/day/add-preview", data={**form, "associate": who})
+        self.assertEqual(again.status_code, 400)  # already called in: said, never recorded twice
+        self.assertIn("already called in", again.get_json()["error"])
+
     def test_person_dialog_lists_records_with_delete(self):
         from datetime import date
         days, on = self.app.extensions["days"], date(2026, 10, 16)

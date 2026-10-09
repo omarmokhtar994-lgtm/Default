@@ -17,7 +17,7 @@ from werkzeug.utils import secure_filename
 
 from .adherence import interval_shrinkage, person_day, team as team_figures
 from .analytics import program_weeks, team
-from .attendance import ACTIVITY_KINDS, ADD_KINDS, DayBook, hm, tomorrow_unchecked, week_start
+from .attendance import ACTIVITY_KINDS, ADD_KINDS, DAY_OFF, DayBook, hm, tomorrow_unchecked, week_start
 from .break_plan import check_row, floor, slots_for, suggest
 from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, board, read_inputs
 from .coach import actual_shrinkage, corrected_tab
@@ -1356,9 +1356,15 @@ def create_app(config: Dict[str, Any]) -> Flask:
             t = add_at - add_at % step
             own = [(l, x) for l in page["view"]["lanes"] for x in l["segments"] if x["offset"] == 0]
             own.sort(key=lambda p: (not (p[1]["start"] < t + step and t < p[1]["end"]), p[1]["start"], p[0]["name"]))
-            add_panel = {"t": t, "end": t + step, "kinds": ADD_KINDS, "person": request.args.get("person", ""),
+            off = days.off_today(program, on)  # for "Day off cancelled" (Phase S)
+            shifts = days.shift_library(program, on)
+            add_panel = {"t": t, "end": t + step, "person": request.args.get("person", ""),
+                         "kinds": {k: v for k, v in ADD_KINDS.items() if off or DAY_OFF not in v},
                          "people": [(l["name"], x["label"], l["language"]) for l, x in own],
-                         "cell": next((c for c in page["view"]["cells"] if c["t"] == t), None)}
+                         "cell": next((c for c in page["view"]["cells"] if c["t"] == t), None),
+                         "off": off, "shifts": shifts,
+                         "shift_pick": max((x for x in shifts if x[1] <= t < x[2]), key=lambda x: x[1],
+                                           default=shifts[0] if shifts else None)}  # most of it after this time
         who = request.args.get("who", "") if tab != "meeting" else ""  # Find a time's "who" is its list of people
         if page and who and add_panel is None:  # one person's day (Phase R)
             lane = next((l for l in page["view"]["lanes"] if l["name"] == who), None)
@@ -1558,9 +1564,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
         try:
             program, on, name, what, start, minutes, billable = _add_fields()
             found = _days().add_item(program, on, name, what, start, minutes, g.user["id"], billable=billable,
-                                     note=request.form.get("note", ""))
+                                     note=request.form.get("note", ""), end=request.form.get("to", "").strip())
             flash(f"Recorded: {name}, {found['text']}.")
-            if what == "Overtime" and _days().next_week_unknown(program, on):
+            if what in ("Overtime", DAY_OFF) and _days().next_week_unknown(program, on):
                 flash(tomorrow_unchecked(on))
         except ValueError as exc:
             flash(str(exc))
@@ -1573,7 +1579,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         try:
             program, on, name, what, start, minutes, billable = _add_fields()
             found = _days().preview_item(program, on, name, what, start, minutes, billable,
-                                         measure if measure in MEASURES else "interval")
+                                         measure if measure in MEASURES else "interval",
+                                         end=request.form.get("to", "").strip())
         except ValueError as exc:
             return jsonify(error=str(exc)), 400
         return jsonify(found)

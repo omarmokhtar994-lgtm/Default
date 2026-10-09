@@ -647,15 +647,43 @@
   var usual = { "Break": "15", "Lunch": "30", "Overtime": "60", "VTO": "60", "Coaching": "30", "Meeting": "30",
                 "Training": "60", "System issue": "15" };
   var seq = 0;
+  // Day off cancelled (Phase S): the people off today, a Shift Library shift or typed start and end
+  var working = form.querySelector("[data-who-working]"), off = form.querySelector("[data-who-off]");
+  var dayoff = form.querySelector("[data-dayoff-fields]"), to = form.querySelector("[data-to-label]");
+  var shiftPick = form.querySelector("select[data-shift-pick]");
+  var fromInput = form.querySelector("input[name=from]"), toInput = form.querySelector("input[name=to]");
   function kind() { var c = form.querySelector("input[name=what]:checked"); return c ? c.value : ""; }
+  function pickedShift() {
+    var o = shiftPick && shiftPick.options[shiftPick.selectedIndex];
+    return o && o.value ? o : null;
+  }
   function shape(changedKind) {
-    var k = kind();
-    length.hidden = whole.indexOf(k) >= 0 || k === "Late" || k === "Left early";
+    var k = kind(), calling = k === "Day off cancelled";
+    length.hidden = whole.indexOf(k) >= 0 || k === "Late" || k === "Left early" || calling;
     billable.hidden = aux.indexOf(k) < 0;
     from.hidden = whole.indexOf(k) >= 0;
     from.querySelector("span").textContent = k === "Late" ? "Arrived at" : k === "Left early" ? "Left at" : "From";
     if (changedKind && usual[k]) { minutes.value = usual[k]; }
-    submit.textContent = "Add " + k.toLowerCase();
+    if (off) {
+      off.hidden = !calling; off.querySelector("select").disabled = !calling;
+      working.hidden = calling; working.querySelector("select").disabled = calling;
+      dayoff.hidden = !calling; to.hidden = !calling;
+      var o = pickedShift();
+      if (changedKind && calling && o) { fromInput.value = o.dataset.from; toInput.value = o.dataset.to; }
+    }
+    submit.textContent = calling ? "Call in" : "Add " + k.toLowerCase();
+  }
+  if (shiftPick) {
+    shiftPick.addEventListener("change", function () {
+      var o = pickedShift();
+      if (o) { fromInput.value = o.dataset.from; toInput.value = o.dataset.to; }
+    });
+    [fromInput, toInput].forEach(function (el) {
+      el.addEventListener("change", function () {
+        var o = pickedShift();  // typed times that no longer match the picked shift are typed times
+        if (o && (fromInput.value !== o.dataset.from || toInput.value !== o.dataset.to)) { shiftPick.value = ""; }
+      });
+    });
   }
   function preview() {
     var mine = ++seq;

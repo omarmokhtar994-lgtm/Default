@@ -32,7 +32,8 @@ from .program_page import build, overview, weeks_to_show
 from .run_admin import PICK_UNIT, apply_rename, apply_run_change, preview_rename, preview_run_change, unit_keys
 from .schedules import ScheduleBook
 from .versions import DAYS, shift_span, with_notes
-from .runs import MODES, OPTION_LABELS, RESUMABLE, RunQueue, parse_options, run_options
+from .results import version_summary
+from .runs import MODES, OPTION_LABELS, READY, RESUMABLE, RunQueue, parse_options, run_options
 from .store import Store
 from .week import view as week_view
 
@@ -588,7 +589,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         everyone = app.extensions["store"].list_runs()
         plan = _plan(everyone)  # the queue is shared: waiting times count every run
         runs = _visible(everyone)
-        summaries = {r["id"]: queue.summary(r["id"]) for r in runs} if queue else {}
+        summaries = {r["id"]: _ready_figures(r) if r["mode"] == READY else queue.summary(r["id"])
+                     for r in runs} if queue else {}
         active = [r for r in runs if r["status"] in ("GATE", "RUNNING", "SCORING")]
         waiting = sorted((r for r in runs if r["status"] == "QUEUED"), key=lambda r: r["created"])
         latest = next((r for r in runs if r["status"] in ("DONE", "REVIEW") and summaries.get(r["id"])), None)
@@ -718,6 +720,16 @@ def create_app(config: Dict[str, Any]) -> Flask:
     def run_detail(run_id: str):  # type: ignore[no-untyped-def]
         return _run_page(_run_or_404(run_id))
 
+    def _ready_figures(run: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """A ready schedule's coverage (Phase S): the validator's figures for its version in use, else its newest,
+        with which version that is and whether its breaks are planned yet; None when no version is kept."""
+        versions = _book().versions(run["id"])
+        row = next((v for v in versions if v["in_use"]), None) or (versions[-1] if versions else None)
+        found = version_summary(json.loads(row["checks"] or "{}")) if row else None
+        if found:
+            found.update(version_label=row["label"], breaks_planned=bool(json.loads(row["week"] or "{}").get("breaks")))
+        return found
+
     def _run_page(run: Dict[str, Any], **extra: Any):  # type: ignore[no-untyped-def]
         """The run page; ``extra`` carries a change to check before saving (run_tag)."""
         run_id = run["id"]
@@ -734,7 +746,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                has_shortfall=queue.shortfall_schedule(run_id) is not None,
                                has_week=bool(kept_figures(run).get("intervals")),
                                resumable=run["status"] in RESUMABLE and not fixed_input and run["mode"] != "SMOKE",
-                               summary=queue.summary(run_id), said=said,
+                               summary=_ready_figures(run) if run["mode"] == READY else queue.summary(run_id),
+                               said=said,
                                why=outcome_view(found) if found else None,
                                eta=_plan(store.list_runs()).get(run_id), now=time.time(), people=people,
                                start_options=start_choices(run["week_start"], run["week_start"]),

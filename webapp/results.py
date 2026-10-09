@@ -263,6 +263,65 @@ def metrics(summary: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def version_summary(checks: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """A kept version's coverage in the run summary's shape (numbers, the week wall), from the validator's figures
+    kept with it: its canonical metrics and each interval's counts. A ready schedule has no engine run, so its run
+    page and Home read this (Phase S); None without interval figures."""
+    rows = checks.get("intervals") or []
+    if not rows:
+        return None
+    starts = sorted({_minutes(r[1]) for r in rows})
+    gaps = [b - a for a, b in zip(starts, starts[1:]) if b > a]
+    step = min(gaps) if gaps else 30
+    if 1440 % step:
+        step = 30
+    slots = [_hhmm(m) for m in range(0, 1440, step)]
+    cells: List[List[Optional[dict]]] = [[None] * len(slots) for _ in DAYS]
+    for day, time, required, after_eff, after_raw, before_eff, before_raw, severe in rows:
+        if required <= 0:
+            continue  # no requirement: drawn as an empty cell, as on the run's own wall
+        after, before = after_eff / required, before_eff / required
+        pct = int(round(after * 100))
+        cells[int(day) % 7][_minutes(time) // step] = {
+            "cls": _cell_class({"after_pct": after, "severe_overage": severe}), "pct": pct, "people": after_raw,
+            "before_pct": int(round(before * 100)), "before_cls": _cell_class({"after_pct": before}),
+            "title": (f"{DAYS[int(day) % 7]} {time}: {pct}% of need, {_people(after_raw)} on the floor "
+                      f"(needs {required:g}, has {after_eff:.2g})"),
+        }
+    m = checks.get("metrics") or {}
+    numbers = {"active": int(m.get("active_intervals", len(rows))), "fully_covered": int(m.get("after_100", 0)),
+               "at_90": int(m.get("after_90", 0)), "floor_gaps": int(m.get("floor_gap_count", 0)),
+               "zero_staffed": int(m.get("zero_staffed_active_quarters", 0)),
+               "losses_from_breaks": int(m.get("target_losses_from_breaks", 0))}
+    findings = _folded(checks.get("failures") or [], "gap") + _folded(checks.get("warnings") or [], "review")
+    return {"interval_minutes": step, "days": DAYS, "slots": slots, "cells": cells, "numbers": numbers,
+            "findings": findings, "intervals": rows}
+
+
+def _folded(items: List[dict], level: str) -> List[dict]:
+    """One finding per kind: the validator lists some per shift (a week without breaks is a line per shift)."""
+    groups: Dict[str, List[dict]] = {}
+    for item in items:
+        groups.setdefault(str(item.get("type", "")), []).append(item)
+    out = []
+    for kind, group in groups.items():
+        if kind.upper() == "BREAK_SEGMENT_COUNT_OR_DURATION":
+            none = sum(1 for g in group if not g.get("actual"))
+            parts = [f"{none} shift{'s have' if none != 1 else ' has'} no breaks yet; Plan breaks adds them inside "
+                     "the program's rules."] if none else []
+            if len(group) > none:
+                other = len(group) - none
+                parts.append(f"{other} shift{'s have' if other != 1 else ' has'} breaks that differ from the ones "
+                             "their length takes.")
+            out.append({"level": "review" if len(group) == none else level, "text": " ".join(parts)})
+            continue
+        first = _finding(group[0], level)
+        if len(group) > 1:
+            first["text"] += f" {len(group) - 1} more like this."
+        out.append(first)
+    return out
+
+
 def summarize(results_dir: Path) -> Optional[Dict[str, Any]]:
     case = _case_dir(Path(results_dir))
     if case is None:

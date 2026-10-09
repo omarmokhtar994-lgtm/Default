@@ -2,6 +2,7 @@
 {% extends "base.html" %}{% from "_macros.html" import ring, wall, pct with context %}
 {% block title %}{{ run.workbook }} on Team Scheduler{% endblock %}
 {% block content %}
+{% set units = {15: 'quarter-hours', 30: 'half-hours', 60: 'hours'} %}
 <article class="run" data-run="{{ run.id }}" data-final="{{ 'no' if run.status in in_flight else 'yes' }}"
          data-status-url="{{ url_for('run_status', run_id=run.id) }}">
   <div class="runhead">
@@ -112,6 +113,19 @@
     <p>Its shifts are kept as {{ ready_version.label if ready_version else 'version 1' }}; the engine did not run. Plan the week's breaks next: Suggest fills them inside the program's rules, and you can change any time before saving.</p>
     {% if ready_version %}<p class="acts"><a class="button primary" href="{{ url_for('plan_breaks', schedule_id=ready_version.id) }}">Plan breaks</a> <a class="button" href="{{ url_for('run_schedules', run_id=run.id) }}">Open the schedule</a></p>{% endif %}
   </section>
+  <section class="panel coverage" aria-labelledby="cov-h">
+    <h2 id="cov-h">Coverage</h2>
+    {% if summary %}{% set n = summary.numbers %}
+    <p class="note">The independent validator's figures for {{ summary.version_label }}.{% if not summary.breaks_planned %} Breaks are not planned yet, so every shift counts on the floor from start to end: plan breaks to see the coverage after breaks.{% endif %}</p>
+    <div class="numbers">
+      <p><b>{{ pct(n.fully_covered, n.active) }}</b> {{ n.fully_covered }} of {{ n.active }} {{ units.get(summary.interval_minutes, 'intervals') }} fully covered{{ ' after breaks' if summary.breaks_planned }}</p>
+      <p><b>{{ n.at_90 }}</b> at 90% or more</p>
+      <p><b>{{ n.floor_gaps }}</b> below the floor</p>
+      {% if summary.breaks_planned %}<p><b>{{ n.losses_from_breaks }}</b> lost to breaks</p>{% endif %}
+    </div>
+    {{ wall(summary, run.id, pair=summary.breaks_planned) }}
+    {% else %}<p class="empty">No coverage figures were kept with this schedule.</p>{% endif %}
+  </section>
   {% else %}
   <div class="run-top">
     <section class="panel progress" aria-label="Progress">
@@ -123,7 +137,7 @@
       <h2 id="cov-h">Coverage</h2>
       {% if summary %}{% set n = summary.numbers %}
       <div class="numbers">
-        <p><b>{{ pct(n.fully_covered, n.active) }}</b> {{ n.fully_covered }} of {{ n.active }} half-hours fully covered after breaks</p>
+        <p><b>{{ pct(n.fully_covered, n.active) }}</b> {{ n.fully_covered }} of {{ n.active }} {{ units.get(summary.interval_minutes, 'intervals') }} fully covered after breaks</p>
         <p><b>{{ n.at_90 }}</b> at 90% or more</p>
         <p><b>{{ n.floor_gaps }}</b> below the floor</p>
         <p><b>{{ n.losses_from_breaks }}</b> lost to breaks</p>

@@ -7,6 +7,7 @@ yellow ("planned next"), not red (owner, 2026-10-08: "upload a full schedule alr
 without breaks and we can plot breaks manually")."""
 import html
 import io
+import json
 import re
 import shutil
 import tempfile
@@ -186,6 +187,46 @@ class TheReadyUpload(unittest.TestCase):
         page = html.unescape(planner.get(f"/runs/{self.run_id}/schedules").get_data(as_text=True))
         self.assertIn('<p class="byline rundetails">', page)
         self.assertNotIn("?edit=1", page)
+
+    def test_ready_run_page_has_a_coverage_summary(self):
+        # owner, 2026-10-09: "summary part for already uploaded schedules": the figures are the validator's own
+        # for the uploaded version, as an engine run's are for its schedule
+        version = self.app.extensions["schedules"].versions(self.run_id)[0]
+        m = json.loads(version["checks"])["metrics"]
+        page = html.unescape(self.admin.get(f"/runs/{self.run_id}").get_data(as_text=True))
+        cov = re.search(r'<section class="panel coverage"[^>]*>(.*?)</section>', page, re.S)
+        self.assertIsNotNone(cov)
+        self.assertIn(f"{m['after_100']} of {m['active_intervals']} hours fully covered", cov.group(1))  # 60-min cells
+        self.assertIn(f"<b>{m['floor_gap_count']}</b> below the floor", cov.group(1))
+        self.assertIn("Breaks are not planned yet", cov.group(1))  # every shift counts whole until they are
+        self.assertIn('class="grid', cov.group(1))  # the week wall
+        self.assertIn("Ready schedule (uploaded)", cov.group(1))  # which version the figures are for
+
+    def test_home_shows_the_ready_schedule_as_the_latest(self):
+        version = self.app.extensions["schedules"].versions(self.run_id)[0]
+        m = json.loads(version["checks"])["metrics"]
+        home = html.unescape(self.admin.get("/?all=1").get_data(as_text=True))
+        latest = re.search(r'<section class="panel latest"[^>]*>(.*?)</section>', home, re.S).group(1)
+        self.assertIn(f'href="/runs/{self.run_id}"', latest)
+        self.assertIn("breaks not planned yet", latest)
+        row = re.search(rf'(?s)<a href="/runs/{self.run_id}">.*?</tr>', home).group(0)
+        self.assertNotIn("no data", row)  # the Runs table's Covered column
+        self.assertIn(f"{round(m['after_100'] * 100 / m['active_intervals'])}%", row)
+
+    def test_version_summary_counts_as_the_validator(self):
+        from webapp.results import version_summary
+        checks = json.loads(self.app.extensions["schedules"].versions(self.run_id)[0]["checks"])
+        found = version_summary(checks)
+        self.assertEqual(found["numbers"]["active"], checks["metrics"]["active_intervals"])
+        full = sum(1 for day in found["cells"] for c in day if c and c["cls"] in ("covered", "over"))
+        self.assertEqual(full, checks["metrics"]["after_100"])
+        self.assertIsNone(version_summary({"metrics": {}, "intervals": []}))
+        # one line per kind, not one per shift (184 shifts without breaks were 184 lines on the run page)
+        missing = sum(1 for f in checks["failures"] if f["type"] == "BREAK_SEGMENT_COUNT_OR_DURATION" and not f["actual"])
+        self.assertGreater(missing, 1)
+        texts = [f["text"] for f in found["findings"]]
+        self.assertEqual(len(texts), len({f["type"] for f in checks["failures"] + checks["warnings"]}))
+        self.assertIn(f"{missing} shifts have no breaks yet", " ".join(texts))
 
     def test_upload_form_offers_build_or_ready(self):
         page = html.unescape(self.admin.get("/").get_data(as_text=True))

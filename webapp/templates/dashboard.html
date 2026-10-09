@@ -121,7 +121,7 @@
     {% if latest_summary %}{% set n = latest_summary.numbers %}
     <h2 id="latest-h">Latest schedule: <a href="{{ url_for('run_detail', run_id=latest.id) }}">{{ latest.workbook }}</a></h2>
     <div class="numbers">
-      <p><b>{{ pct(n.fully_covered, n.active) }}</b> of half-hours fully covered after breaks</p>
+      <p><b>{{ pct(n.fully_covered, n.active) }}</b> of {{ {15: 'quarter-hours', 30: 'half-hours', 60: 'hours'}.get(latest_summary.interval_minutes, 'intervals') }} fully covered {% if latest_summary.breaks_planned is defined and not latest_summary.breaks_planned %}(breaks not planned yet){% else %}after breaks{% endif %}</p>
       <p><b>{{ n.floor_gaps }}</b> below the floor</p>
       <p><b>{{ latest_summary.findings|length }}</b> to review</p>
     </div>

@@ -1681,7 +1681,9 @@ class TheProgramSetup(unittest.TestCase):
         self.assertIsNotNone(group)
         self.assertEqual(json.loads(html.unescape(group.group(1))), {"start_day": 1, "run_mode": "DEEP",
                                                                      "options": {"stage": "BEFORE_BREAKS_ONLY"}})
-        self.assertIn('<option value="AE/AR B2B">AE, AR B2B</option>', group.group(2))  # program and LOB, even closed
+        # program and LOB, even closed; re-pinned (Phase S): the unit picked on the left (here the one Sara last
+        # opened) is now preselected in the upload form (owner, 2026-10-09), so the option may carry "selected"
+        self.assertRegex(group.group(2), r'<option value="AE/AR B2B"( selected)?>AE, AR B2B</option>')
         self.assertIn('<option value="AE IT">AE, IT</option>', group.group(2))
         other = run_id_of(upload(self.sara, program="AE IT", week_start="2026-10-12"))
         self.assertEqual(self.store.get_run(other)["program"], "AE IT")

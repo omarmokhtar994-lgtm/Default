@@ -86,7 +86,7 @@ Owner, verbatim:
 
 ---
 
-### Task V1: Channel inputs, `webapp/channels.py`
+### Task 1 (V1): Channel inputs, `webapp/channels.py`
 
 **Files:** create `webapp/channels.py`; test `webapp/tests/test_channels.py` (with the builder
 `add_channel_tabs(path, ...)`).
@@ -121,7 +121,7 @@ Owner, verbatim:
 - [ ] Run (`$PY -m unittest webapp.tests.test_channels -v`): expect failures, then implement, then expect a pass.
   Commit.
 
-### Task V2: Upload refuses bad channel tabs; the schedule page shows the check
+### Task 2 (V2): Upload refuses bad channel tabs; the schedule page shows the check
 
 **Files:** modify `webapp/app.py` (the run upload route and the ready upload) and `webapp/templates/schedules.html`;
 test `test_channels.py` (app class).
@@ -134,7 +134,7 @@ test `test_channels.py` (app class).
   - A workbook without channel tabs shows no panel.
 - [ ] Implement, run, commit.
 
-### Task V3: Who can work which channel (`webapp/channel_people.py`, `/setup/channels`)
+### Task 3 (V3): Who can work which channel (`webapp/channel_people.py`, `/setup/channels`)
 
 **Files:**
 - create `webapp/channel_people.py`
@@ -162,7 +162,7 @@ test `test_channels.py` (app class).
   - A program's deletion removes its rows.
 - [ ] Implement, run, commit.
 
-### Task V4: A version carries its channel plan
+### Task 4 (V4): A version carries its channel plan
 
 **Files:** modify `webapp/versions.py`; test `test_channels.py` (versions class).
 
@@ -181,7 +181,7 @@ test `test_channels.py` (app class).
   - A swapped shift's leftover blocks are reported stale, not counted.
 - [ ] Implement, run, commit.
 
-### Task V5: The planner, `webapp/channel_plan.py` (CP-SAT; load cpsat-engine-modeling first)
+### Task 5 (V5): The planner, `webapp/channel_plan.py` (CP-SAT; load cpsat-engine-modeling first)
 
 **Interfaces:**
 - Produces `plan_day(people, setup, rules, day, carry=None, move_breaks=True, locked=frozenset())`:
@@ -227,7 +227,7 @@ test `test_channels.py` (app class).
   - `score_day` agrees with the model's own shortfall.
 - [ ] Implement, run, commit.
 
-### Task V6: The "Plan channels" page
+### Task 6 (V6): The "Plan channels" page
 
 **Files:**
 - create `webapp/templates/channels.html`
@@ -257,7 +257,7 @@ test `test_channels.py` (app class).
   - A program with no channel tabs gets a 404 with words.
 - [ ] Implement, run, commit.
 
-### Task V7: RTA channel coverage, warnings and fixes; booking preview
+### Task 7 (V7): RTA channel coverage, warnings and fixes; booking preview
 
 **Files:**
 - modify `webapp/day.py` (`day_view(..., channels=None)`)
@@ -290,7 +290,7 @@ test `test_channels.py` (app class).
   - A moved break gives its freed time to the block before it.
 - [ ] Implement, run, commit.
 
-### Task V8: Break moves and re-plan respect channels
+### Task 8 (V8): Break moves and re-plan respect channels
 
 **Files:** modify `webapp/day.py` (`advice`, `replan`); test `test_channel_day.py`.
 
@@ -299,7 +299,7 @@ test `test_channels.py` (app class).
   - Re-plan from now never makes a move that creates a channel or language warning.
 - [ ] Implement, run, commit.
 
-### Task V9: Exports and the person's timeline
+### Task 9 (V9): Exports and the person's timeline
 
 **Files:** modify `webapp/exports.py`: kind "channels", shown as "Channels planned and changed on the day". Modify
 the person-day popup (`day.html` or `app.js`). Tests in `test_exports.py` and `test_channel_day.py`.
@@ -309,7 +309,7 @@ the person-day popup (`day.html` or `app.js`). Tests in `test_exports.py` and `t
   - The person popup lists "08:00 Phone · 10:00 Break · 10:15 Chat …".
 - [ ] Implement, run, commit.
 
-### Task V10: Browser check, screens, suite, gate, package, report
+### Task 10 (V10): Browser check, screens, suite, gate, package, report
 
 - [ ] Add a class `ThePhaseVInTheBrowser` at the end of `test_ui_playwright.py`. It walks:
   - the upload with channel tabs

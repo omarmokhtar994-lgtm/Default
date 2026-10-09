@@ -945,3 +945,32 @@ def dayoff_offers(view: Dict[str, Any], week: Dict[str, Any], day: int, rest_hou
                         "start": span[0], "end": span[1], "covers": covers})
     out.sort(key=lambda o: (-o["covers"], o["name"]))
     return out[:top]
+
+
+def shift_groups(view: Dict[str, Any], from_now: Optional[int] = None) -> List[Dict[str, Any]]:
+    """The Timeline's filter by shift start (Phase W): the day's people grouped by the start of their own shift that
+    day (last night's people first, under "From yesterday"), each group with its names and how many are late or left
+    early, off for the shift and in aux. ``from_now`` (minutes, today only) marks the next start to come."""
+    groups: Dict[str, Dict[str, Any]] = {}
+    for lane in view["lanes"]:
+        own = [s for s in lane["segments"] if s["offset"] == 0]
+        seg = own[0] if own else lane["segments"][0]
+        key = f"{seg['start'] // 60:02d}:{seg['start'] % 60:02d}" if own else "earlier"
+        group = groups.setdefault(key, {"key": key, "label": key if own else "From yesterday",
+                                        "start": seg["start"] if own else -1, "people": 0, "late": 0, "off": 0,
+                                        "aux": 0, "names": [], "next": False})
+        group["people"] += 1
+        group["names"].append(lane["name"])
+        status = seg["status"]
+        if status in ABSENT:
+            group["off"] += 1
+        elif status in LATE_EARLY:
+            group["late"] += 1
+        elif status in AUX:
+            group["aux"] += 1
+    out = sorted(groups.values(), key=lambda g: g["start"])
+    if from_now is not None:
+        coming = next((g for g in out if g["start"] >= from_now), None)
+        if coming is not None:
+            coming["next"] = True
+    return out

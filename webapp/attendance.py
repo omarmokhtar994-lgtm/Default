@@ -271,9 +271,32 @@ class DayBook:
         channels, channel_problem = self._channel_inputs(program, on, week, inputs, source, earlier)
         view = day_view(week, inputs, day_index(on), attendance, actual, measure, acts, before, channels=channels)
         return {"version": row, "note": note, "view": view, "stale": stale, "date": on,
+                "unlisted": self._unlisted(program, on, view, attendance, acts),
                 "channel_problem": channel_problem,
                 "week_start": row["week_start"], "day": day_index(on), "inputs": inputs,
                 "log": self.store.list_day_log(program, on.isoformat())}
+
+    def _unlisted(self, program: str, on: date, view: Dict[str, Any], attendance: Dict[Any, Any],
+                  acts: Dict[Any, Any]) -> List[Dict[str, str]]:
+        """People with this day's records who are not on the floor list (Phase W: kept from another schedule of
+        the week), each with what was recorded, in words. Break moves are counted as stale instead."""
+        shown = {lane["name"] for lane in view["lanes"]}
+        said: Dict[str, List[str]] = {}
+        for (offset, name), mark in attendance.items():
+            if offset == 0 and name not in shown:
+                text = mark["status"]
+                if mark["status"] == "Late" and mark.get("to") is not None:
+                    text += f", arrived {hm(mark['to'])}"
+                elif mark["status"] == "Left early" and mark.get("from") is not None:
+                    text += f", left at {hm(mark['from'])}"
+                said.setdefault(name, []).append(text)
+        for (offset, name), items in acts.items():
+            if offset == 0 and name not in shown:
+                said.setdefault(name, []).extend(a["kind"] for a in items)
+        for r in self.store.list_channel_moves(program, [on.isoformat()]):
+            if r["associate"] not in shown:
+                said.setdefault(r["associate"], []).append("a channel change")
+        return [{"name": name, "what": ", ".join(dict.fromkeys(what))} for name, what in sorted(said.items())]
 
     # ------------------------------------------------------------- channels on the day (Phase V)
     def _channel_inputs(self, program: str, on: date, week: Dict[str, Any], inputs: Dict[str, Any], source,

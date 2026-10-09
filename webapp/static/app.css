@@ -948,3 +948,19 @@ dialog.dlg.add-dlg { width: 620px; }
 /* Phase W: the export's progress, done and failed states */
 .exp-wait { color: var(--dim); margin: 8px 0; }
 .exp-ok { border-left: 4px solid var(--covered); background: var(--accent-soft); border-radius: 6px; padding: 10px 14px; margin: 10px 0; }
+
+/* Phase W: the Timeline by shift start */
+.shiftpick { margin: 6px 0 12px; }
+.shiftnote { margin: 4px 0 8px; color: var(--dim); font-size: 14px; }
+.shiftbar { display: flex; flex-wrap: wrap; gap: 8px; }
+.shiftbar a { display: flex; flex-direction: column; gap: 1px; padding: 6px 12px; min-width: 84px; border: 1px solid var(--rail);
+  border-radius: 8px; background: var(--console); color: var(--paper); text-decoration: none; }
+.shiftbar a b { color: var(--paper); font-size: 15px; font-variant-numeric: tabular-nums; }
+.shiftbar a small { color: var(--dim); font-size: 12px; }
+.shiftbar a small em { font-style: normal; color: var(--short-ink); font-weight: 700; }
+.shiftbar a small i { font-style: normal; color: var(--gap-ink); font-weight: 700; }
+.shiftbar a.on { background: var(--accent-soft); border-color: var(--covered); }
+.shiftbar a.on small { color: var(--paper); }
+.shiftbar a.soon { border-color: var(--short); }
+.shiftbar .soon-tag { font-size: 11px; font-weight: 700; color: var(--short-ink); }
+.shiftbar a:focus-visible { outline: 3px solid var(--covered); outline-offset: 2px; }

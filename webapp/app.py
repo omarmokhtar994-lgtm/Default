@@ -27,7 +27,7 @@ from .channel_page import (FULL as FULL_DAYS, NAMES as CHANNEL_NAMES, apply_edit
 from .channel_people import ChannelPeople, can_work, channel_words
 from .channel_plan import NoPlan, plan_day, score_day
 from .channels import check_lines, has_channel_tabs, read_channels, requirement_tab
-from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, board, read_inputs
+from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, board, read_inputs, shift_groups
 from .coach import actual_shrinkage, corrected_tab
 from .contacts import ContactBook, pick_contact
 from .eta import queue_plan
@@ -1692,6 +1692,14 @@ def create_app(config: Dict[str, Any]) -> Flask:
                     finder["error"] = str(exc)
         clock_now = datetime.now(EGYPT)
         from_now = clock_now.hour * 60 + clock_now.minute if clock_now.date() == on else 0
+        shifts: Dict[str, Any] = {"shift_groups": [], "shift": "", "shift_names": None}
+        if page and tab == "timeline":  # the Timeline by shift start (Phase W)
+            wanted = request.args.get("shift", "").strip()
+            wanted = wanted if wanted == "earlier" or re.match(r"^([01]\d|2[0-3]):[0-5]\d$", wanted) else ""
+            groups = shift_groups(page["view"], from_now if clock_now.date() == on else None)
+            chosen = next((g for g in groups if g["key"] == wanted), None)
+            shifts = {"shift_groups": groups, "shift": wanted,
+                      "shift_names": set(chosen["names"]) if chosen else (set() if wanted else None)}
         if page and tab == "cover":
             cover = days.offers(page, from_now)
         proposal = days.replan(page, from_now) if page and tab == "replan" else None
@@ -1743,7 +1751,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                measure=measure,
                                measures=MEASURES, tab=tab, statuses=STATUSES, aux=sorted(AUX), hm=hm,
                                rows=board(page["view"]) if page and tab == "board" else None, week_of=week_start(on),
-                               earlier=on - timedelta(days=1), later=on + timedelta(days=1))
+                               earlier=on - timedelta(days=1), later=on + timedelta(days=1), **shifts)
 
     ADD_LENGTHS = (5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240)  # minutes offered by "+ Add"
 

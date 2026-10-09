@@ -64,6 +64,7 @@
   <p class="dim measure-note">{% if measure == 'interval' %}Billable aux (for example billable coaching) stays on the floor; breaks, absences and non-billable aux do not.{% else %}Anyone in aux, on a break or away is off the queue.{% endif %}</p>
 </div>
 {% if page.channel_problem %}<p class="notice">{{ page.channel_problem }}</p>{% endif %}
+{% if page.unlisted %}{% set n = page.unlisted|length %}<p class="notice">{{ n }} {{ 'person has' if n == 1 else 'people have' }} records today but {{ 'is' if n == 1 else 'are' }} not in the schedule in use ({{ page.version.label }}): {% for u in page.unlisted %}{% if not loop.first %}{{ ' and ' if loop.last else ', ' }}{% endif %}{{ u.name }} ({{ u.what }}){% endfor %}. Their records are kept and are in Exports; they show here again if a schedule with them is put in use. <a href="{{ url_for('run_schedules', run_id=page.version.run_id, v=page.version.id) }}">Open the schedules</a></p>{% endif %}
 {% if page.stale %}<p class="notice">{{ page.stale }} break move{{ 's' if page.stale != 1 }} recorded earlier no longer match{{ 'es' if page.stale == 1 }} the schedule in use (it changed since), so {{ 'it is' if page.stale == 1 else 'they are' }} not counted.</p>{% endif %}
 <p id="day-status" class="notice" role="status" hidden></p>
 
@@ -108,10 +109,21 @@
   <h2 id="floor-h">Who is on the floor</h2>
   <p class="autopilot"><a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='replan') }}">Fix the rest of the day's breaks</a></p>
   <p class="note">Shifts in blue, breaks in amber. Drag a break to move it in 5-minute steps, or select it and press Enter to type the time; the dashed outline is where the engine planned it. Set attendance on the left.</p>
+  {% if shift_groups %}{% set everyone = v.lanes|length %}
+  <div class="shiftpick">
+    <p class="shiftnote">Shift starts</p>
+    <div class="shiftbar" role="group" aria-label="Filter by shift start">
+      <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure) }}"{% if not shift %} class="on" aria-current="true"{% endif %}><b>All shifts</b><small>{{ everyone }} {{ 'person' if everyone == 1 else 'people' }}</small></a>
+      {% for g in shift_groups %}<a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, shift=g.key) }}"{% if g.key == shift or g.next %} class="{{ 'on' if g.key == shift }}{{ ' ' if g.key == shift and g.next }}{{ 'soon' if g.next }}"{% endif %}{% if g.key == shift %} aria-current="true"{% endif %}><b>{{ g.label }}</b><small>{{ g.people }} {{ 'person' if g.people == 1 else 'people' }}{% if g.late %}, <em>{{ g.late }} late</em>{% endif %}{% if g.off %}, <i>{{ g.off }} off</i>{% endif %}{% if g.aux %}, {{ g.aux }} in aux{% endif %}</small>{% if g.next %}<span class="soon-tag">starts next</span>{% endif %}</a>{% endfor %}
+    </div>
+    {% if shift %}{% set n = shift_names|length %}{% if n %}<p class="shiftnote">Showing the {{ n }} of {{ everyone }} people {% if shift == 'earlier' %}on from yesterday's shifts{% else %}whose shift starts at {{ shift }}{% endif %}. Marking attendance keeps this filter; the counts update as you mark.</p>
+    {% else %}<p class="notice">Nobody's shift starts at {{ shift }} on this day. <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure) }}">Show all shifts</a></p>{% endif %}{% endif %}
+  </div>
+  {% endif %}
   <div class="tl-scroll"><div class="tl cols-{{ v.cells|length }}">
     <div class="tl-row tl-axis" aria-hidden="true"><span></span><div class="tl-ticks">{% for h in range(0, 24, 2) %}<span>{{ '%02d'|format(h) }}</span>{% endfor %}</div></div>
     {% for lane in v.lanes %}{% set own = lane.segments|selectattr('offset', 'equalto', 0)|list %}{% set seg = own[0] if own else lane.segments[0] %}{% set d = on if seg.offset == 0 else earlier %}
-    <div class="tl-row tl-lane">
+    {% if shift_names is none or lane.name in shift_names %}<div class="tl-row tl-lane">
       <div class="tl-who"><b title="{{ lane.name }}"><a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, who=lane.name) }}#person">{{ lane.name }}</a></b>{% if lane.slot %}<span class="tl-tag">Slot {{ lane.slot }}</span>{% endif %}<span class="tl-tag">{{ lane.language[:3]|upper }}</span>{% if seg.called_in %}<span class="tl-tag called" title="Day off cancelled: called in {{ seg.label[:-12] }}">Called in</span>{% endif %}
         <select class="att{% if seg.status in absent_states %} gone{% elif seg.status != 'Present' %} away{% endif %}" data-name="{{ lane.name }}" data-date="{{ d.isoformat() }}" data-shift="{{ seg.label }}" aria-label="Attendance for {{ lane.name }}, shift {{ seg.label }}{% if seg.offset != 0 %} (started yesterday){% endif %}">
           {% for s in statuses if s not in aux %}<option value="{{ s }}"{% if s == seg.status %} selected{% endif %}>{{ s }}</option>{% endfor %}
@@ -127,7 +139,7 @@
         {% endfor %}{% endif %}
         {% for a in s.activities if a.kind != 'Called in' %}{% set a0 = [a.start, 0]|max %}{% set a1 = [a.end, 1440]|min %}{% if a1 > a0 %}<rect class="tl-act {{ 'ot' if a.kind == 'Overtime' else ('vto' if a.kind == 'VTO' else 'aux') }}{% if a.billable and a.kind not in ('Overtime', 'VTO') %} billable{% endif %}" x="{{ a0 }}" y="{{ 8 if a.kind == 'Overtime' else 2 }}" width="{{ a1 - a0 }}" height="{{ 14 if a.kind == 'Overtime' else 4 }}"{% if a.kind != 'Overtime' %} fill="url(#{{ 'hatch-ok' if a.billable and measure == 'interval' else 'hatch' }})"{% endif %}><title>{{ a.kind }} {{ hm(a.start) }} to {{ hm(a.end) }}{% if a.kind not in ('Overtime', 'VTO') %} ({{ 'billable' if a.billable else 'non-billable' }}){% endif %}</title></rect>{% endif %}{% endfor %}{% endfor %}
       </svg>
-    </div>{% endfor %}
+    </div>{% endif %}{% endfor %}
     <div class="tl-row tl-num"><span class="tl-lbl">Needed on the floor</span><div class="tl-cells">{% for c in v.cells %}<span class="tc n">{{ c.need if c.pm is not none else '' }}</span>{% endfor %}</div></div>
     <div class="tl-row tl-num"><span class="tl-lbl">Planned on the floor</span><div class="tl-cells">{% for c in v.cells %}<span class="tc n">{{ c.plan|num if c.plan else '' }}</span>{% endfor %}</div></div>
     <div class="tl-row tl-num"><span class="tl-lbl">On the floor now</span><div class="tl-cells">{% for c in v.cells %}<span class="tc {{ c.cls }}">{{ c.now|num if (c.now or c.pm is not none) else '' }}</span>{% endfor %}</div></div>

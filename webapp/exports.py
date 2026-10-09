@@ -90,24 +90,24 @@ class _Weeks:
 
 
 def _attendance(store, days, weeks, start, end, program, user_id, measure):
-    yield ["Shift date", "Program", "Associate", "Slot", "Shift", "Status", "From", "To", "Billable", "With", "Why",
-           "Recorded by", "Recorded at"]
+    yield ["Shift date", "Program", "Associate", "Slot", "Shift", "Status", "From", "To", "Billable", "With department",
+           "With", "Why", "Recorded by", "Recorded at"]
     for r in store.attendance_between(start.isoformat(), end.isoformat(), program, user_id):
         day = date.fromisoformat(r["shift_date"])
         person = weeks.person(r["program"], day, r["associate"])
         billable = "Yes" if r["billable"] else ("No" if r["status"] in AUX else "")
         yield [r["shift_date"], r["program"], r["associate"], person.get("slot", ""),
                (person.get("days") or [""] * 7)[_day_index(day)], r["status"], _hm(r["from_min"]), _hm(r["to_min"]),
-               billable, r.get("with_whom", ""), r.get("why", ""), r["by_name"], _when(r["at"])]
+               billable, r.get("with_dept", ""), r.get("with_whom", ""), r.get("why", ""), r["by_name"], _when(r["at"])]
 
 
 def _activities(store, days, weeks, start, end, program, user_id, measure):
-    yield ["Shift date", "Program", "Associate", "Activity", "From", "To", "Minutes", "Billable", "With", "Why", "Note",
-           "Recorded by", "Recorded at"]
+    yield ["Shift date", "Program", "Associate", "Activity", "From", "To", "Minutes", "Billable", "With department",
+           "With", "Why", "Note", "Recorded by", "Recorded at"]
     for r in store.activities_between(start.isoformat(), end.isoformat(), program, user_id):
         yield [r["shift_date"], r["program"], r["associate"], r["kind"], _hm(r["start"]), _hm(r["end_min"]),
-               r["end_min"] - r["start"], "Yes" if r["billable"] else "No", r.get("with_whom", ""), r.get("why", ""),
-               r["note"], r["by_name"], _when(r["at"])]
+               r["end_min"] - r["start"], "Yes" if r["billable"] else "No", r.get("with_dept", ""),
+               r.get("with_whom", ""), r.get("why", ""), r["note"], r["by_name"], _when(r["at"])]
 
 
 def _activity(store, days, weeks, start, end, program, user_id, measure):

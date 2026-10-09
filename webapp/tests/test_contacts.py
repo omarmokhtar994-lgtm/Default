@@ -183,5 +183,104 @@ class TheContactsPage(unittest.TestCase):
             self.assertEqual(link in body, shown)
 
 
+
+class TheWithLists(unittest.TestCase):
+    """Phase U: once a program has its lists, every aux booking picks the department, then the person in it; the
+    record, the day log and the exports keep both (owner, 2026-10-09: "popup as a drop down list while choosing")."""
+
+    @classmethod
+    def setUpClass(cls):
+        from webapp.tests.test_runs import REPO, client_for, make_app, sign_in, versioned_run
+        cls.app, cls.store, *_ = make_app(VALIDATOR_ROOT=str(REPO))
+        cls.store.add_user("omar", "Omar", "Owner-pass-123", is_admin=True, must_change=False)
+        cls.client = client_for(cls.app)  # Sara, a planner
+        versioned_run(cls.app, cls.store, cls.client, program="AE/AR B2B", week_start="2026-10-11")
+        cls.admin = sign_in(cls.app, "omar", "Owner-pass-123")
+        book = ProgramBook(cls.store)
+        book.sync()
+        cls.program = next(p["id"] for p in book.tree() if p["key"] == "AE/AR B2B")
+
+    def setUp(self):
+        ContactBook(self.store).add_many(self.program, "Quality, Lina\nQuality, Omar\nTraining, IT trainer\nWorkforce", 1)
+        self.addCleanup(self.clear)
+
+    def clear(self):
+        for d in ContactBook(self.store).lists(self.program):
+            self.store.delete_aux_department(d["id"])
+        for table in ("activities", "attendance", "day_log"):
+            with __import__("sqlite3").connect(self.store.path) as db:
+                db.execute(f"delete from {table}")
+
+    def post(self, url, **data):
+        from webapp.tests.test_runs import token
+        return self.client.post(url, data={"csrf_token": token(self.client), "program": "AE/AR B2B",
+                                           "date": "2026-10-14", **data})
+
+    def said(self, got):
+        import html
+        return html.unescape(self.client.get(got.headers["Location"]).get_data(as_text=True))
+
+    def dialog(self, client=None):
+        import html
+        body = html.unescape((client or self.client).get("/day?program=AE/AR+B2B&date=2026-10-14&view=board&add=600")
+                             .get_data(as_text=True))
+        found = body[body.index('<dialog id="add-dialog"'):]
+        return found[:found.index("</dialog>")]
+
+    def test_the_dialog_offers_departments_then_their_people(self):
+        dialog = self.dialog()
+        self.assertRegex(dialog, r'(?s)<select name="with_dept" data-with-dept disabled>.*?<option value="Quality">Quality'
+                                 r'</option><option value="Training">Training</option></select>')  # Workforce: nobody yet
+        self.assertIn('<option value="Lina" data-dept="Quality">Lina</option>', dialog)
+        self.assertIn('<option value="IT trainer" data-dept="Training">IT trainer</option>', dialog)
+        self.assertNotIn('<input name="with_whom"', dialog)  # no typing once there is a list
+
+    def test_booking_takes_only_who_is_listed(self):
+        got = self.post("/day/add", associate="Associate 001", what="Coaching", **{"from": "15:00"}, minutes="30",
+                        view="board", at="900", with_whom="Lina", why="Monthly quality review")
+        self.assertIn("Pick the department the coaching is with.", self.said(got))
+        got = self.post("/day/add", associate="Associate 001", what="Coaching", **{"from": "15:00"}, minutes="30",
+                        view="board", at="900", with_dept="Quality", with_whom="Sara", why="Monthly quality review")
+        self.assertIn("Sara is not on Quality's list for this program.", self.said(got))
+        self.assertEqual(self.store.list_activities("AE/AR B2B", ["2026-10-14"]), [])
+        got = self.post("/day/add", associate="Associate 001", what="Coaching", **{"from": "15:00"}, minutes="30",
+                        view="board", at="900", with_dept="quality", with_whom="lina", why="Monthly quality review")
+        self.assertIn("Recorded: Associate 001, Coaching 15:00 to 15:30 (non-billable), with Lina (Quality): "
+                      "Monthly quality review.", self.said(got))
+        row = self.store.list_activities("AE/AR B2B", ["2026-10-14"])[0]
+        self.assertEqual((row["with_dept"], row["with_whom"]), ("Quality", "Lina"))  # as the list spells them
+
+    def test_the_timeline_and_find_a_time_take_the_lists_too(self):
+        got = self.post("/day/attendance", associate="Associate 021", status="Meeting", **{"from": "10:00", "to": "10:30"},
+                        with_dept="Quality", with_whom="Omar", why="Process update")
+        self.assertEqual(got.get_json(), {"ok": True})
+        row = self.store.list_attendance("AE/AR B2B", ["2026-10-14"])[0]
+        self.assertEqual((row["with_dept"], row["with_whom"]), ("Quality", "Omar"))
+        got = self.post("/day/attendance", associate="Associate 008", status="Meeting", **{"from": "10:00", "to": "10:30"},
+                        with_whom="Omar", why="Process update")
+        self.assertEqual(got.get_json()["error"], "Pick the department the meeting is with.")
+        import html
+        finder = html.unescape(self.client.get("/day?program=AE/AR+B2B&date=2026-10-14&view=meeting&who=Associate+001"
+                                               "&minutes=30&from=13:00&to=17:00&with_dept=Training&with_whom=IT+trainer"
+                                               "&why=New+CRM+release").get_data(as_text=True))
+        self.assertIn('<option value="Training" selected>Training</option>', finder)
+        self.assertIn('<option value="IT trainer" data-dept="Training" selected>IT trainer</option>', finder)
+        self.assertIn('<input type="hidden" name="with_dept" value="Training"><input type="hidden" name="with_whom" '
+                      'value="IT trainer">', finder)
+        start = __import__("re").findall(r'name="start" value="(\d+)"', finder)[0]
+        got = self.post("/day/book", who=["Associate 001"], start=start, minutes="30", kind="Training",
+                        with_dept="Training", with_whom="IT trainer", why="New CRM release")
+        self.assertIn("Booked: training", self.said(got))
+        self.assertEqual({(r["with_dept"], r["with_whom"]) for r in self.store.list_activities("AE/AR B2B", ["2026-10-14"])},
+                         {("Training", "IT trainer")})
+
+    def test_without_a_list_a_name_is_typed_and_admins_are_shown_where_to_set_it(self):
+        self.clear()
+        dialog = self.dialog(self.admin)
+        self.assertIn('<input name="with_whom" list="team-names" maxlength="80"', dialog)
+        self.assertIn('href="/setup/with?program=AE/AR+B2B">Set the departments and people</a>', dialog)
+        self.assertNotIn("Set the departments and people", self.dialog())  # a planner cannot set them
+
+
 if __name__ == "__main__":
     unittest.main()

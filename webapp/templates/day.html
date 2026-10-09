@@ -2,6 +2,10 @@
 {% extends "base.html" %}
 {% block title %}The day: {{ program or 'no program' }} on Team Scheduler{% endblock %}
 {% block content %}
+{% macro with_fields(dept='', who='', disabled=False, required=False) -%}
+{% if with_lists %}<label><span>Department</span> <select name="with_dept" data-with-dept{{ ' disabled' if disabled }}{{ ' required' if required }}><option value="">Pick the department</option>{% for d in with_lists %}<option value="{{ d.name }}"{% if d.name == dept %} selected{% endif %}>{{ d.name }}</option>{% endfor %}</select></label><label><span>With</span> <select name="with_whom" data-with-person{{ ' disabled' if disabled }}{{ ' required' if required }}><option value="">Pick who</option>{% for d in with_lists %}{% for p in d.people %}<option value="{{ p.name }}" data-dept="{{ d.name }}"{% if d.name == dept and p.name == who %} selected{% endif %}>{{ p.name }}</option>{% endfor %}{% endfor %}</select></label>
+{%- else %}<label><span>With</span> <input name="with_whom" list="team-names" maxlength="80"{{ ' required' if required }} value="{{ who }}" placeholder="Who it is with"{{ ' disabled' if disabled }}></label>{% endif %}
+{%- endmacro %}
 {% set absent_states = ['Unplanned leave', 'Sick'] %}
 {% set unit = {15: 'quarter-hours', 30: 'half-hours', 60: 'hours'} %}
 {% macro hidden_day(view, cover=none) %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="view" value="{{ view }}">{% if cover is not none %}<input type="hidden" name="cover" value="{{ cover }}">{% endif %}{% endmacro %}
@@ -136,7 +140,7 @@
       <label>Counts as <select name="kind">{% for k in ('Meeting', 'Training', 'Coaching') %}<option value="{{ k }}"{% if k == finder.kind %} selected{% endif %}>{{ k }}</option>{% endfor %}</select></label>
     </div>
     <div class="exp-row">
-      <label>With <input name="with_whom" list="team-names" maxlength="80" required value="{{ finder.with_whom }}" placeholder="Who it is with"></label>
+      {{ with_fields(finder.with_dept, finder.with_whom, required=True) }}
       <label>Why <input name="why" maxlength="200" required value="{{ finder.why }}" placeholder="A short reason"></label>
     </div>
     <label class="exp-kind"><input type="checkbox" name="billable" value="1"{% if finder.billable %} checked{% endif %}><span>Billable (stays on the floor under interval compliance)</span></label>
@@ -147,7 +151,7 @@
   <h2 id="fits-h">Best times</h2>
   {% if finder.error %}<p class="notice" role="alert">{{ finder.error }}</p>
   {% elif finder.slots %}<ol class="fit-list">{% for x in finder.slots %}<li><span><b>{{ hm(x.start) }} to {{ hm(x.end) }}</b><small>buffer at its tightest after: <span class="{{ 'ok' if x.tightest is none or x.tightest >= 0 else 'bad' }}">{{ 'no demand then' if x.tightest is none else x.tightest|hmm }}</span></small></span>
-      <form method="post" action="{{ url_for('day_book') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}">{% for n in finder.who %}<input type="hidden" name="who" value="{{ n }}">{% endfor %}<input type="hidden" name="start" value="{{ x.start }}"><input type="hidden" name="minutes" value="{{ finder.minutes }}"><input type="hidden" name="kind" value="{{ finder.kind }}"><input type="hidden" name="with_whom" value="{{ finder.with_whom }}"><input type="hidden" name="why" value="{{ finder.why }}">{% if finder.billable %}<input type="hidden" name="billable" value="1">{% endif %}<button type="submit">Book</button></form></li>{% endfor %}</ol>
+      <form method="post" action="{{ url_for('day_book') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}">{% for n in finder.who %}<input type="hidden" name="who" value="{{ n }}">{% endfor %}<input type="hidden" name="start" value="{{ x.start }}"><input type="hidden" name="minutes" value="{{ finder.minutes }}"><input type="hidden" name="kind" value="{{ finder.kind }}"><input type="hidden" name="with_dept" value="{{ finder.with_dept }}"><input type="hidden" name="with_whom" value="{{ finder.with_whom }}"><input type="hidden" name="why" value="{{ finder.why }}">{% if finder.billable %}<input type="hidden" name="billable" value="1">{% endif %}<button type="submit">Book</button></form></li>{% endfor %}</ol>
   {% elif finder.who %}<p class="empty">No time fits: these people are never free together in that window.</p>
   {% else %}<p class="empty">Pick who is in it, then Find times.</p>{% endif %}
 </section>
@@ -171,7 +175,7 @@
 <section class="panel" aria-labelledby="acts-h">
   <h2 id="acts-h">Activities on this day</h2>
   {% set listed = [] %}
-  <ul class="log">{% for lane in v.lanes %}{% for seg in lane.segments if seg.offset == 0 %}{% for a in seg.activities %}{% set _ = listed.append(1) %}<li><b>{{ lane.name }}, {% if a.kind == 'Called in' %}Day off cancelled: called in {{ hm(a.start) }} - {{ hm(a.end) }}{% elif a.kind == 'Overtime' %}Overtime {{ hm(a.start) }} to {{ hm(a.end) }}{% elif a.kind == 'VTO' %}VTO {{ hm(a.start) }} to {{ hm(a.end) }}{% elif a.kind in ('Break', 'Lunch') %}{{ a.kind }} {{ hm(a.start) }} to {{ hm(a.end) }}, added today{% else %}{{ a.kind }} {{ hm(a.start) }} to {{ hm(a.end) }} ({{ 'billable' if a.billable else 'non-billable' }}){{ with_text(a.with_whom, a.why) }}{% endif %}</b>
+  <ul class="log">{% for lane in v.lanes %}{% for seg in lane.segments if seg.offset == 0 %}{% for a in seg.activities %}{% set _ = listed.append(1) %}<li><b>{{ lane.name }}, {% if a.kind == 'Called in' %}Day off cancelled: called in {{ hm(a.start) }} - {{ hm(a.end) }}{% elif a.kind == 'Overtime' %}Overtime {{ hm(a.start) }} to {{ hm(a.end) }}{% elif a.kind == 'VTO' %}VTO {{ hm(a.start) }} to {{ hm(a.end) }}{% elif a.kind in ('Break', 'Lunch') %}{{ a.kind }} {{ hm(a.start) }} to {{ hm(a.end) }}, added today{% else %}{{ a.kind }} {{ hm(a.start) }} to {{ hm(a.end) }} ({{ 'billable' if a.billable else 'non-billable' }}){{ with_text(a.with_whom, a.why, a.with_dept) }}{% endif %}</b>
     <form method="post" action="{{ url_for('day_activity_cancel') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="id" value="{{ a.id }}"><input type="hidden" name="view" value="cover"><button type="submit" class="link danger">Delete</button></form></li>{% endfor %}{% endfor %}{% endfor %}</ul>
   {% if not listed %}<p class="empty">No meetings, training, overtime or VTO recorded for this day.</p>{% endif %}
 </section>
@@ -287,8 +291,9 @@
     </div>
     <label class="exp-kind" data-billable hidden><input type="checkbox" name="billable" value="1"><span>Billable (stays on the floor under interval compliance)</span></label>
     <div class="dlg-grid" data-aux-fields hidden>
-      <label><span>With</span> <input name="with_whom" list="team-names" maxlength="80" placeholder="Who it is with" disabled></label>
+      {{ with_fields(disabled=True) }}
       <label><span>Why</span> <input name="why" maxlength="200" placeholder="A short reason" disabled></label>
+      {% if not with_lists and (user.is_admin or user.is_supervisor) %}<p class="note">With is typed until this program has its lists: <a href="{{ url_for('with_setup', program=program) }}">Set the departments and people</a>.</p>{% endif %}
     </div>
     <p class="effect" data-effect aria-live="polite">The effect on the floor shows here before anything is kept.</p>
     <div class="btns"><button class="primary" type="submit">Add</button><a class="button" href="{{ close_url }}#row-{{ ap.t }}">Close</a></div>
@@ -307,12 +312,12 @@
     </select></label>
     <h3>Recorded and planned</h3>
     <ul class="pp-list">
-      {% if s.status != 'Present' %}<li><span><b>{% if s.status == 'Late' %}Late, arrived {{ hm(s.to) }}{% elif s.status == 'Left early' %}Left early at {{ hm(s['from']) }}{% elif s['from'] is not none and s.to is not none %}{{ s.status }} {{ hm(s['from']) }} to {{ hm(s.to) }}{{ with_text(s.with_whom, s.why) }}{% else %}{{ s.status }}{{ with_text(s.with_whom, s.why) }}{% endif %}</b><small>Attendance</small></span>
+      {% if s.status != 'Present' %}<li><span><b>{% if s.status == 'Late' %}Late, arrived {{ hm(s.to) }}{% elif s.status == 'Left early' %}Left early at {{ hm(s['from']) }}{% elif s['from'] is not none and s.to is not none %}{{ s.status }} {{ hm(s['from']) }} to {{ hm(s.to) }}{{ with_text(s.with_whom, s.why, s.with_dept) }}{% else %}{{ s.status }}{{ with_text(s.with_whom, s.why, s.with_dept) }}{% endif %}</b><small>Attendance</small></span>
         <form method="post" action="{{ url_for('day_undo') }}" class="acts"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ pp.date.isoformat() }}"><input type="hidden" name="associate" value="{{ pp.lane.name }}"><input type="hidden" name="what" value="status"><input type="hidden" name="view" value="{{ tab }}"><button type="submit">Set back to present</button></form></li>{% endif %}
       {% for b in s.breaks %}<li><span><b>{{ b.kind }}</b> {{ hm(b.start) }} to {{ hm(b.start + b.minutes) }}<small>{% if b.moved %}Moved from {{ hm(b.planned_start) }}{% else %}From the schedule{% endif %}</small></span>
         <span class="acts"><button type="button" class="chip-move" data-name="{{ pp.lane.name }}" data-date="{{ pp.date.isoformat() }}" data-idx="{{ b.idx }}" data-kind="{{ b.kind }}" data-minutes="{{ b.minutes }}" data-start="{{ hm(b.start) }}" data-planned="{{ hm(b.planned_start) }}" data-shift="{{ s.label }}">Move</button>
         {% if b.moved %}<form method="post" action="{{ url_for('day_undo') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ pp.date.isoformat() }}"><input type="hidden" name="associate" value="{{ pp.lane.name }}"><input type="hidden" name="what" value="break"><input type="hidden" name="idx" value="{{ b.idx }}"><input type="hidden" name="view" value="{{ tab }}"><button type="submit">Back to plan</button></form>{% endif %}</span></li>{% endfor %}
-      {% for a in s.activities %}<li><span><b>{% if a.kind == 'Called in' %}Called in on a day off {{ hm(a.start) }} - {{ hm(a.end) }}{% elif a.kind in ('Overtime', 'VTO') %}{{ a.kind }} {{ hm(a.start) }} to {{ hm(a.end) }}{% elif a.kind in ('Break', 'Lunch') %}{{ a.kind }} {{ hm(a.start) }} to {{ hm(a.end) }}, added today{% else %}{{ a.kind }} {{ hm(a.start) }} to {{ hm(a.end) }}, {{ 'billable' if a.billable else 'non-billable' }}{{ with_text(a.with_whom, a.why) }}{% endif %}</b><small>Recorded on this day</small></span>
+      {% for a in s.activities %}<li><span><b>{% if a.kind == 'Called in' %}Called in on a day off {{ hm(a.start) }} - {{ hm(a.end) }}{% elif a.kind in ('Overtime', 'VTO') %}{{ a.kind }} {{ hm(a.start) }} to {{ hm(a.end) }}{% elif a.kind in ('Break', 'Lunch') %}{{ a.kind }} {{ hm(a.start) }} to {{ hm(a.end) }}, added today{% else %}{{ a.kind }} {{ hm(a.start) }} to {{ hm(a.end) }}, {{ 'billable' if a.billable else 'non-billable' }}{{ with_text(a.with_whom, a.why, a.with_dept) }}{% endif %}</b><small>Recorded on this day</small></span>
         <form method="post" action="{{ url_for('day_activity_cancel') }}" class="acts"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ pp.date.isoformat() }}"><input type="hidden" name="id" value="{{ a.id }}"><input type="hidden" name="view" value="{{ tab }}"><button type="submit" class="danger">Delete</button></form></li>{% endfor %}
       {% if s.status == 'Present' and not s.breaks and not s.activities %}<li><span>Nothing recorded and no breaks planned.</span></li>{% endif %}
     </ul>
@@ -326,7 +331,7 @@
     <p class="dim" data-who></p>
     <label data-from>From <input type="time" name="from"></label>
     <label data-to>To <input type="time" name="to"></label>
-    <div data-aux hidden><label>With <input name="with_whom" list="team-names" maxlength="80" placeholder="Who it is with"></label><label>Why <input name="why" maxlength="200" placeholder="A short reason"></label></div>
+    <div data-aux hidden>{{ with_fields() }}<label>Why <input name="why" maxlength="200" placeholder="A short reason"></label></div>
     <p class="note" data-hint></p>
     <div class="dlg-result" aria-live="polite"></div>
     <div class="btns"><button class="primary" type="button" data-keep>Save</button><button type="button" data-cancel>Cancel</button></div>

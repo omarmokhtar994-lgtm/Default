@@ -158,6 +158,18 @@ class TheExports(unittest.TestCase):
         self.assertIn("Coaching 15:00 to 15:30 (billable), with Lina (team leader): Monthly quality review", texts)
         self.assertIn("Meeting (non-billable) 13:00 to 13:30, with Ops manager: Process update", texts)
 
+    def test_the_department_of_an_aux_is_exported(self):
+        # Phase U (owner, 2026-10-09): "categorized ... by department and names ... for later on analysis"
+        self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Coaching", "15:00", "15:30", self.lina,
+                               with_dept="Quality", with_whom="Lina", why="Monthly quality review")
+        self.days.set_status("AE/AR B2B", WED, "Associate 012", "Meeting", self.sara, start="13:00", end="13:30",
+                             with_dept="Workforce", with_whom="Sara", why="Schedule review")
+        data, *_ = self.export(kinds=["activities", "attendance"])
+        act = next(r for r in self.sheet(data, "Activities") if r["Activity"] == "Coaching")
+        self.assertEqual((act["With department"], act["With"]), ("Quality", "Lina"))
+        att = next(r for r in self.sheet(data, "Attendance") if r["Associate"] == "Associate 012")
+        self.assertEqual((att["With department"], att["With"]), ("Workforce", "Sara"))
+
     def test_text_is_never_a_formula(self):
         self.book.change(self.tool["id"], self.lina, "Associate 002", "Sun", "OFF", '=HYPERLINK("http://x","click")')
         today = datetime.now(EGYPT).date()  # exports count days in Egypt time; the server clock is UTC

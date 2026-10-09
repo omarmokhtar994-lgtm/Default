@@ -1397,7 +1397,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             finder = {"who": request.args.getlist("who"), "minutes": request.args.get("minutes", 30, type=int),
                       "from": request.args.get("from", "09:00"), "to": request.args.get("to", "18:00"),
                       "kind": request.args.get("kind", "Meeting"), "billable": request.args.get("billable") == "1",
-                      "with_whom": request.args.get("with_whom", ""), "why": request.args.get("why", "")}
+                      "with_whom": request.args.get("with_whom", ""), "why": request.args.get("why", ""),
+                      "with_dept": request.args.get("with_dept", "")}
             if finder["who"]:
                 try:
                     finder["slots"] = days.meeting_slots(program, on, finder["who"], finder["minutes"], finder["from"],
@@ -1451,6 +1452,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                add_panel=add_panel, person_panel=person_panel, lengths=ADD_LENGTHS,
                                team_names=sorted({u["display_name"] for u in app.extensions["store"].list_users()
                                                   if u["active"]}, key=str.lower),  # "With": pick one or type
+                               with_lists=_with_lists(program) if program else [],  # or from the lists (Phase U)
                                tomorrow_unchecked=tomorrow_unchecked(on) if on else "",
                                activity_kinds=ACTIVITY_KINDS,
                                measure=measure,
@@ -1478,10 +1480,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
         try:
             program, on, name = _day_form()
             status = request.form.get("status", "")
-            with_whom, why = _aux_answers(status)
+            with_dept, with_whom, why = _aux_answers(status, program)
             _days().set_status(program, on, name, status, g.user["id"],
                                start=request.form.get("from", ""), end=request.form.get("to", ""),
-                               billable=request.form.get("billable") == "1", with_whom=with_whom, why=why)
+                               billable=request.form.get("billable") == "1", with_whom=with_whom, why=why,
+                               with_dept=with_dept)
         except ValueError as exc:
             return jsonify(error=str(exc)), 400
         return jsonify(ok=True)
@@ -1590,10 +1593,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
             start, _, end = request.form.get("span", "").partition("|")  # a picked length ("21:00|21:45")
             if not request.form.get("span"):
                 start, end = request.form.get("from", ""), request.form.get("to", "")
-            with_whom, why = _aux_answers(kind)
+            with_dept, with_whom, why = _aux_answers(kind, program)
             _days().add_activity(program, on, name, kind, start, end,
                                  g.user["id"], billable=request.form.get("billable") == "1",
-                                 note=request.form.get("note", ""), with_whom=with_whom, why=why)
+                                 note=request.form.get("note", ""), with_whom=with_whom, why=why, with_dept=with_dept)
             flash(f"Recorded: {name}, {'day off cancelled (called in)' if kind == 'Called in' else kind.lower()}.")
             if kind in ("Overtime", "Called in") and _days().next_week_unknown(program, on):
                 flash(tomorrow_unchecked(on))
@@ -1614,9 +1617,19 @@ def create_app(config: Dict[str, Any]) -> Flask:
             flash(str(exc))
         return _back_to_day(program, on, request.form.get("view", ""))
 
-    def _aux_answers(kind: str) -> Tuple[str, str]:
-        """Who an aux is with and why, from the form: every way of booking one asks both (Phase T)."""
-        return aux_details(kind, request.form.get("with_whom", ""), request.form.get("why", ""))
+    def _with_lists(program: str) -> list:
+        """The departments a booking picks from (Phase U): those of the program's lists with someone in them."""
+        return [d for d in ContactBook(app.extensions["store"]).for_unit(program) if d["people"]]
+
+    def _aux_answers(kind: str, program: str) -> Tuple[str, str, str]:
+        """(department, with, why) for an aux, from the form: every way of booking one asks who it is with and why
+        (Phase T); from the program's lists when it has them, typed when it has none (Phase U)."""
+        dept, with_whom = request.form.get("with_dept", ""), request.form.get("with_whom", "")
+        lists = _with_lists(program) if kind in AUX else []
+        if lists:
+            dept, with_whom = pick_contact(lists, kind, dept, with_whom)
+        with_whom, why = aux_details(kind, with_whom, request.form.get("why", ""))
+        return (dept if lists else ""), with_whom, why
 
     def _add_fields():  # type: ignore[no-untyped-def]
         program, on, name = _day_form()
@@ -1638,10 +1651,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
         program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
         try:
             program, on, name, what, start, minutes, billable = _add_fields()
-            with_whom, why = _aux_answers(what)
+            with_dept, with_whom, why = _aux_answers(what, program)
             found = _days().add_item(program, on, name, what, start, minutes, g.user["id"], billable=billable,
                                      note=request.form.get("note", ""), end=request.form.get("to", "").strip(),
-                                     with_whom=with_whom, why=why)
+                                     with_whom=with_whom, why=why, with_dept=with_dept)
             flash(f"Recorded: {name}, {found['text']}.")
             if what in ("Overtime", DAY_OFF) and _days().next_week_unknown(program, on):
                 flash(tomorrow_unchecked(on))
@@ -1691,9 +1704,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 raise ValueError("Pick a day.")
             start, minutes = request.form.get("start", -1, type=int), request.form.get("minutes", 0, type=int)
             kind = request.form.get("kind", "Meeting")
-            with_whom, why = _aux_answers(kind)
+            with_dept, with_whom, why = _aux_answers(kind, program)
             _days().book_session(program, on, who, start, minutes, kind, g.user["id"],
-                                 billable=request.form.get("billable") == "1", with_whom=with_whom, why=why)
+                                 billable=request.form.get("billable") == "1", with_whom=with_whom, why=why,
+                                 with_dept=with_dept)
             flash(f"Booked: {kind.lower()} {hm(start)} to {hm(start + minutes)} for {', '.join(who)}.")
         except ValueError as exc:
             flash(str(exc))

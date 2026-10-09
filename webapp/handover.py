@@ -20,7 +20,8 @@ def _own(view: Dict[str, Any]) -> List[tuple]:
     return [(lane, seg) for lane in view["lanes"] for seg in lane["segments"] if seg["offset"] == 0]
 
 
-def _activity_text(kind: str, lo: int, hi: int, billable: bool, with_whom: str = "", why: str = "") -> str:
+def _activity_text(kind: str, lo: int, hi: int, billable: bool, with_whom: str = "", why: str = "",
+                   with_dept: str = "") -> str:
     if kind == "Called in":
         return f"Day off cancelled: called in {_hm(lo)} - {_hm(hi)}"
     if kind == "Overtime":
@@ -29,7 +30,8 @@ def _activity_text(kind: str, lo: int, hi: int, billable: bool, with_whom: str =
         return f"VTO {_hm(lo)} to {_hm(hi)}"
     if kind in ("Break", "Lunch"):  # added on the day in RTA
         return f"{kind} {_hm(lo)} to {_hm(hi)}"
-    return f"{kind} {_hm(lo)} to {_hm(hi)} ({'billable' if billable else 'non-billable'})" + with_text(with_whom, why)
+    return (f"{kind} {_hm(lo)} to {_hm(hi)} ({'billable' if billable else 'non-billable'})"
+            + with_text(with_whom, why, with_dept))
 
 
 def note(days, program: str, on: date, measure: str = "interval") -> Optional[Dict[str, Any]]:
@@ -46,11 +48,11 @@ def note(days, program: str, on: date, measure: str = "interval") -> Optional[Di
         if s["status"] in AUX and s["away"][0] < s["away"][1]:
             activities.append({"name": l["name"], "text": _activity_text(s["status"], s["away"][0], s["away"][1],
                                                                          s["billable"], s.get("with_whom", ""),
-                                                                         s.get("why", ""))})
+                                                                         s.get("why", ""), s.get("with_dept", ""))})
         for a in s.get("activities", []):
             activities.append({"name": l["name"], "text": _activity_text(a["kind"], a["start"], a["end"],
                                                                          a.get("billable", False), a.get("with_whom", ""),
-                                                                         a.get("why", ""))})
+                                                                         a.get("why", ""), a.get("with_dept", ""))})
     by_whom = {}
     for e in page["log"]:
         by_whom[(e["associate"], e["what"])] = e["by_name"]

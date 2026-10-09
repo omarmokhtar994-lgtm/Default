@@ -510,6 +510,28 @@ class TheAuxDetails(unittest.TestCase):
         self.assertEqual({(r["associate"], r["with_whom"], r["why"]) for r in rows},
                          {(n, "Ops manager", "Process update") for n in names})
 
+    def test_the_department_is_kept_and_logged(self):
+        # Phase U (owner, 2026-10-09): who an aux is with is a department and a person from the program's lists
+        t = self.free_start(30)
+        self.days.add_item("AE/AR B2B", WED, "Associate 001", "Coaching", hm(t), 30, self.sara,
+                           with_dept="Quality", with_whom="Lina", why="Monthly quality review")
+        row = next(r for r in self.store.list_activities("AE/AR B2B", [WED.isoformat()]) if r["kind"] == "Coaching")
+        self.assertEqual((row["with_dept"], row["with_whom"]), ("Quality", "Lina"))
+        self.assertEqual(self.days.page("AE/AR B2B", WED)["log"][-1]["what"],
+                         f"Coaching {hm(t)} to {hm(t + 30)} (non-billable), with Lina (Quality): Monthly quality review")
+        self.assertEqual(next(a for a in self.seg()["activities"] if a["kind"] == "Coaching")["with_dept"], "Quality")
+        self.days.set_status("AE/AR B2B", WED, "Associate 012", "Meeting", self.sara, start="13:00", end="13:30",
+                             with_dept="Workforce", with_whom="Sara", why="Schedule review")
+        row = next(r for r in self.store.list_attendance("AE/AR B2B", [WED.isoformat()]) if r["associate"] == "Associate 012")
+        self.assertEqual((row["with_dept"], row["with_whom"]), ("Workforce", "Sara"))
+        self.assertEqual(self.seg("Associate 012")["with_dept"], "Workforce")
+        names = ["Associate 013", "Associate 027"]
+        slots = self.days.meeting_slots("AE/AR B2B", WED, names, 30, "13:00", "18:00")
+        self.days.book_session("AE/AR B2B", WED, names, slots[0]["start"], 30, "Training", self.sara,
+                               with_dept="Training", with_whom="IT trainer", why="New CRM release")
+        self.assertEqual({r["with_dept"] for r in self.store.list_activities("AE/AR B2B", [WED.isoformat()])
+                          if r["kind"] == "Training"}, {"Training"})
+
     def test_a_database_from_before_gets_the_columns(self):
         import sqlite3
         old = self.data / "old.db"

@@ -314,7 +314,9 @@
       var auxBox = att.querySelector("[data-aux]");  // an aux says who it is with and why (Phase T)
       if (auxBox) {
         auxBox.hidden = parts.length < 2;
-        Array.prototype.forEach.call(auxBox.querySelectorAll("input"), function (i) { i.value = ""; });
+        Array.prototype.forEach.call(auxBox.querySelectorAll("input, select"), function (i) {
+          i.value = ""; i.dispatchEvent(new Event("change"));
+        });
       }
       att.dataset.pending = JSON.stringify(fields);
       att.showModal();
@@ -329,8 +331,11 @@
       var fields = JSON.parse(att.dataset.pending || "{}");
       fields.from = att.querySelector("input[name=from]").value;
       fields.to = att.querySelector("input[name=to]").value;
-      var withWhom = att.querySelector("input[name=with_whom]"), why = att.querySelector("input[name=why]");
-      if (withWhom && !withWhom.closest("[hidden]")) { fields.with_whom = withWhom.value; fields.why = why.value; }
+      var withWhom = att.querySelector("[name=with_whom]"), why = att.querySelector("input[name=why]");
+      var dept = att.querySelector("select[name=with_dept]");
+      if (withWhom && !withWhom.closest("[hidden]")) {
+        fields.with_whom = withWhom.value; fields.why = why.value; fields.with_dept = dept ? dept.value : "";
+      }
       post(root.dataset.attUrl, fields).then(function (r) {
         if (r._ok) { att.close("saved"); window.location.reload(); return; }
         att.querySelector(".dlg-result").textContent = r.error || "That was not saved.";
@@ -670,7 +675,7 @@
     var auxFields = form.querySelector("[data-aux-fields]");
     if (auxFields) {
       auxFields.hidden = !isAux;
-      Array.prototype.forEach.call(auxFields.querySelectorAll("input"), function (i) { i.disabled = !isAux; i.required = isAux; });
+      Array.prototype.forEach.call(auxFields.querySelectorAll("input, select"), function (i) { i.disabled = !isAux; i.required = isAux; });
     }
     length.hidden = whole.indexOf(k) >= 0 || k === "Late" || k === "Left early" || calling;
     billable.hidden = aux.indexOf(k) < 0;
@@ -731,4 +736,24 @@
   }
   Array.prototype.forEach.call(kinds, function (k) { k.addEventListener("change", shape); });
   shape();
+})();
+
+// "With" from the program's lists (Phase U): the department first, then only the people in it.
+(function () {
+  "use strict";
+  Array.prototype.forEach.call(document.querySelectorAll("select[data-with-dept]"), function (dept) {
+    var scope = dept.closest("form") || dept.parentNode.parentNode;
+    var person = scope.querySelector("select[data-with-person]");
+    if (!person) { return; }
+    function show() {
+      Array.prototype.forEach.call(person.options, function (o) {
+        if (!o.value) { return; }
+        var mine = o.dataset.dept === dept.value;
+        o.hidden = !mine; o.disabled = !mine;
+        if (!mine && o.selected) { person.value = ""; }
+      });
+    }
+    dept.addEventListener("change", show);
+    show();
+  });
 })();

@@ -1,0 +1,15 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{% extends "base.html" %}
+{% block title %}{{ name|unit }}: analysis on Team Scheduler{% endblock %}
+{% block content %}
+<div class="phead"><div>
+  <h1>{{ name|unit }}</h1>
+  <p class="byline">No analysis yet. Analysis follows the weeks the engine scheduled{% if uploaded %}, and this one's schedules were uploaded ready, so the engine did not run{% else %}, and none is on record here yet{% endif %}.</p>
+</div></div>
+<section class="panel" aria-labelledby="none-h">
+  <h2 id="none-h">Where to look</h2>
+  {% if uploaded %}<p>Each uploaded schedule's page has its coverage: the independent validator's figures and the week wall.</p>
+  <ul class="log">{% for r in uploaded %}<li><a href="{{ url_for('run_detail', run_id=r.id) }}">{{ r.workbook }}</a>{% if r.week_start %}, starts {{ r.week_start|start_day }}{% endif %}, uploaded by {{ r.by_name }}</li>{% endfor %}</ul>{% endif %}
+  <p><a class="button" href="{{ url_for('schedules_for', program=name) }}">Schedules</a> <a class="button" href="{{ url_for('day_page', program=name) }}">RTA</a></p>
+</section>
+{% endblock %}

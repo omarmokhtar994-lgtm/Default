@@ -962,7 +962,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
     def program(name: str):  # type: ignore[no-untyped-def]
         history = program_weeks(_all_runs()).get(name)
         if not history:
-            abort(404)
+            if name not in unit_keys(app.extensions["store"]):
+                abort(404)
+            uploaded = [r for r in _visible(app.extensions["store"].list_runs())
+                        if r.get("program") == name and r["mode"] == READY and r["status"] == "DONE"]
+            return render_template("program_empty.html", name=name, uploaded=uploaded)  # no engine week yet
         n = weeks_to_show(request.args.get("weeks", "12"))
         shown = history if n is None else history[-n:]
         groups = [{**p, "choices": [(k, t) for k, t in p["choices"] if k != name]}

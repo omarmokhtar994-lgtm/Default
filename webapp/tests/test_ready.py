@@ -228,6 +228,15 @@ class TheReadyUpload(unittest.TestCase):
         self.assertEqual(len(texts), len({f["type"] for f in checks["failures"] + checks["warnings"]}))
         self.assertIn(f"{missing} shifts have no breaks yet", " ".join(texts))
 
+    def test_analysis_of_a_ready_only_program_explains_instead_of_not_found(self):
+        # Phase S sweep: the menu's Analysis for a LOB with only uploaded schedules was a "Not found" page
+        got = self.admin.get(f"/programs/{self.key}")
+        self.assertEqual(got.status_code, 200)
+        page = html.unescape(got.get_data(as_text=True))
+        self.assertIn("No analysis yet", page)
+        self.assertIn(f'href="/runs/{self.run_id}"', page)  # each uploaded schedule, with its coverage
+        self.assertEqual(self.admin.get("/programs/No such program").status_code, 404)
+
     def test_upload_form_offers_build_or_ready(self):
         page = html.unescape(self.admin.get("/").get_data(as_text=True))
         self.assertRegex(page, r'<input type="radio" name="kind" value="build" checked')

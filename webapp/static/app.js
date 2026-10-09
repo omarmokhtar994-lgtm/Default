@@ -46,6 +46,48 @@ function keyedPick(field, act, says) {
 }
 function showSays(next) { return "Press Enter to show " + next + ", or Esc to go back."; }
 
+// Home refreshes every 30 s while something runs or waits, until the New run form is in use (Phase XY, review
+// finding 2): a reload then would drop the chosen workbook. From then on the running schedule's ring is redrawn in
+// place, as the run page does, and when it ends the panel says so with a link.
+function homeRefresh(now) {
+  "use strict";
+  var form = document.querySelector("#newrun form"), touched = false, url = now.getAttribute("data-status-url");
+  function inUse() {
+    if (touched) { return; }
+    touched = true;
+    var note = document.createElement("p");
+    note.className = "notice paused";
+    note.textContent = "Updates paused while you fill in this form. They start again when you submit it.";
+    form.insertBefore(note, form.firstChild);
+  }
+  if (form) { form.addEventListener("input", inUse); form.addEventListener("change", inUse); }
+  function finished() {
+    var link = now.querySelector(".now-title"), line = document.createElement("p");
+    line.className = "now-done";
+    line.setAttribute("role", "status");
+    line.appendChild(document.createTextNode("This schedule finished. "));
+    var open = document.createElement("a");
+    open.href = link ? link.getAttribute("href") : "/";
+    open.textContent = "Open it";
+    line.appendChild(open);
+    (now.querySelector(".now-text") || now).appendChild(line);
+  }
+  function tick() {
+    if (!touched) { window.location.reload(); return; }
+    if (!url) { return; }  // only waiting runs: nothing on the page to redraw
+    fetch(url, { credentials: "same-origin", headers: { "Accept": "application/json" } })
+      .then(function (r) { if (!r.ok || r.redirected) { throw new Error("HTTP " + r.status); } return r.json(); })
+      .then(function (s) {
+        var word = now.querySelector(".ring-word"), arcs = now.querySelectorAll(".ring .arc");
+        if (word) { word.textContent = s.label; word.dataset.status = s.status; }
+        s.stages.forEach(function (stage, i) { if (arcs[i]) { arcs[i].setAttribute("class", "arc " + stage.state); } });
+        if (s.final) { finished(); } else { setTimeout(tick, 30000); }
+      })
+      .catch(function () { setTimeout(tick, 30000); });
+  }
+  setTimeout(tick, 30000);
+}
+
 // The look: with no choice saved the page follows the device, so the switch
 // offers the other one.
 (function () {
@@ -576,8 +618,9 @@ function showSays(next) { return "Press Enter to show " + next + ", or Esc to go
   "use strict";
   var run = document.querySelector("article.run");
   if (!run) {
-    if (document.querySelector(".now .ring") || /[1-9]\d* waiting/.test((document.querySelector(".now-queue .big") || {}).textContent || "")) {
-      setTimeout(function () { window.location.reload(); }, 30000);
+    var now = document.querySelector(".now");
+    if (now && (now.querySelector(".ring") || /[1-9]\d* waiting/.test((now.querySelector(".now-queue .big") || {}).textContent || ""))) {
+      homeRefresh(now);
     }
     return;
   }

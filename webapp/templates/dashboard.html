@@ -36,7 +36,7 @@
     </li>{% endfor %}</ul>
 </section>
 {% endif %}
-<section class="now" aria-labelledby="now-h">
+<section class="now" aria-labelledby="now-h"{% if active %} data-status-url="{{ url_for('run_status', run_id=active[0].id) }}"{% endif %}>
   <h2 id="now-h" class="sr-only">Now</h2>
   {% if active %}{% set r = active[0] %}{% set e = plan.get(r.id) %}
   {{ ring(r, "small") }}

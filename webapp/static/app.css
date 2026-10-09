@@ -1002,3 +1002,7 @@ select.pending, input.pending, [data-day] select.att.pending { border-style: das
   border-radius: 6px; font-size: 13px; }
 .sel .pick-note { flex-basis: 100%; margin: 0; }
 [data-day] .tl > .pick-note { position: sticky; left: 0; width: max-content; max-width: 100%; }
+
+/* Phase XY: Home stops reloading once the New run form is in use, and says so */
+.newrun .paused { margin: 0 0 14px; }
+.now-text p.now-done { color: var(--paper); font-weight: 600; }

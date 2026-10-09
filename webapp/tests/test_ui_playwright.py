@@ -1609,7 +1609,7 @@ class ThePhaseXYInTheBrowser(unittest.TestCase):
         version = cls.app.extensions["schedules"].versions(cls.run_id)[-1]["id"]
         client.post(f"/schedules/{version}/auto-breaks", data={"csrf_token": token(client), "use": "1"})
         seed_history(cls.store)
-        cls.running = "xy-running"
+        cls.running = "0123456789ab"  # a run id as the queue makes them (12 hex digits)
         cls.store.add_run(cls.running, owner, "week_next_NMG.xlsx", "QUICK", "RUNNING", program=cls.key,
                           week_start=(cls.sunday + timedelta(days=7)).isoformat())
         cls.q = cls.key.replace(" ", "+")
@@ -1720,3 +1720,50 @@ class ThePhaseXYInTheBrowser(unittest.TestCase):
         with page.expect_navigation():
             page.keyboard.press("Enter")
         self.assertIn("measure=sl", page.url)
+
+    # ---------------------------------------------------------------- Task 5: Home keeps a form in use
+    def home_with_a_clock(self):
+        """Home, with the page's timers on a clock the test moves; returns the page and its count of later loads."""
+        page = self.page(scheme="light")
+        self.sign_in(page)
+        page.clock.install()
+        page.goto(self.base + "/")
+        page.wait_for_load_state("load")
+        expect(page.locator(".now .ring")).to_have_count(1)
+        loads = []
+        page.on("load", lambda: loads.append(page.url))
+        return page, loads
+
+    def touch_the_form(self, page):
+        page.locator("input[name=kind][value=ready]").check()
+        page.locator("#newrun input[type=file]").set_input_files(str(self.dir / "ready.xlsx"))
+
+    def test_home_does_not_reload_over_a_form_in_use(self):
+        page, loads = self.home_with_a_clock()
+        self.touch_the_form(page)
+        page.clock.run_for(65000)
+        page.wait_for_timeout(1500)
+        self.assertEqual(loads, [])
+        expect(page.locator("input[name=kind][value=ready]")).to_be_checked()
+        self.assertEqual(page.evaluate("document.querySelector('#newrun input[type=file]').files[0].name"), "ready.xlsx")
+        expect(page.locator("#newrun form p.paused")).to_have_text(
+            "Updates paused while you fill in this form. They start again when you submit it.")
+
+    def test_home_still_refreshes_when_the_form_is_untouched(self):
+        page, loads = self.home_with_a_clock()
+        with page.expect_event("load"):
+            page.clock.run_for(31000)
+        page.wait_for_timeout(800)
+        self.assertEqual(len(loads), 1)
+        expect(page.locator("#newrun form p.paused")).to_have_count(0)
+
+    def test_a_finished_run_says_so_without_reloading(self):
+        page, loads = self.home_with_a_clock()
+        self.touch_the_form(page)
+        self.store.update_run(self.running, status="DONE")
+        self.addCleanup(self.store.update_run, self.running, status="RUNNING")
+        page.clock.run_for(31000)
+        expect(page.locator(".now")).to_contain_text("This schedule finished.")
+        expect(page.locator(".now a", has_text="Open it")).to_have_attribute("href", f"/runs/{self.running}")
+        self.assertEqual(loads, [])
+        self.assertEqual(page.evaluate("document.querySelector('#newrun input[type=file]').files.length"), 1)

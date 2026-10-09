@@ -143,6 +143,21 @@ class TheExports(unittest.TestCase):
         self.assertEqual([(r["Activity"], r["From"], r["To"], r["Minutes"], r["Billable"], r["Recorded by"]) for r in rows],
                          [("Training", "15:00", "16:00", 60, "Yes", "Lina"), ("Overtime", "21:00", "22:00", 60, "Yes", "Sara")])
 
+    def test_who_and_why_of_an_aux_are_exported(self):
+        # Phase T (owner, 2026-10-09): "specify with who and why ... and to reflect in the export report"
+        self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Coaching", "15:00", "15:30", self.lina,
+                               billable=True, with_whom="Lina (team leader)", why="Monthly quality review")
+        self.days.set_status("AE/AR B2B", WED, "Associate 012", "Meeting", self.sara, start="13:00", end="13:30",
+                             with_whom="Ops manager", why="Process update")
+        data, *_ = self.export(kinds=["activities", "attendance", "activity"])
+        act = next(r for r in self.sheet(data, "Activities") if r["Activity"] == "Coaching")
+        self.assertEqual((act["With"], act["Why"]), ("Lina (team leader)", "Monthly quality review"))
+        att = next(r for r in self.sheet(data, "Attendance") if r["Associate"] == "Associate 012")
+        self.assertEqual((att["Status"], att["With"], att["Why"]), ("Meeting", "Ops manager", "Process update"))
+        texts = " | ".join(str(v) for r in self.sheet(data, "Day activity") for v in r.values())
+        self.assertIn("Coaching 15:00 to 15:30 (billable), with Lina (team leader): Monthly quality review", texts)
+        self.assertIn("Meeting (non-billable) 13:00 to 13:30, with Ops manager: Process update", texts)
+
     def test_text_is_never_a_formula(self):
         self.book.change(self.tool["id"], self.lina, "Associate 002", "Sun", "OFF", '=HYPERLINK("http://x","click")')
         today = datetime.now(EGYPT).date()  # exports count days in Egypt time; the server clock is UTC

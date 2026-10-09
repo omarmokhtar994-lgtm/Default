@@ -867,3 +867,5 @@ dialog.dlg.add-dlg { width: 620px; }
 @media (max-width: 700px) { .unfiled-list .tagrow { grid-template-columns: minmax(0, 1fr); } }
 /* workbook names have no spaces (Week_42_ready.xlsx): they break where they must, never widen a phone page */
 .latest h2, .runhead h1, .unfiled-list li > p a, .runs td a, .rundetails b { overflow-wrap: anywhere; }
+/* targets opened by a link (#edit, #check, #newrun) stop below the sticky top bar, not under it */
+#edit, #check, #newrun { scroll-margin-top: 72px; }

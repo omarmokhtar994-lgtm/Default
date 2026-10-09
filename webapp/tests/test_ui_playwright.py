@@ -866,7 +866,9 @@ class TheRtaActionsInTheBrowser(unittest.TestCase):
         dialog = page.locator("#add-dialog")
         expect(dialog).to_be_visible()
         self.assertTrue(page.evaluate("document.getElementById('add-dialog').matches(':modal')"))
-        dialog.locator("select[name=associate]").select_option("Associate 001")  # Thursday 12:00 - 21:00
+        # re-pinned (Phase S): the dialog also holds the people off that day for "Day off cancelled" (owner,
+        # 2026-10-09), a second, disabled "associate" list; this is the working people's
+        dialog.locator("select[name=associate]:not([data-off])").select_option("Associate 001")  # Thursday 12:00 - 21:00
         expect(dialog.locator("[data-effect]")).to_contain_text("the floor at its tightest")
         page.wait_for_timeout(300)
         page.screenshot(path=str(R_SCREENS / "board_add.png"))

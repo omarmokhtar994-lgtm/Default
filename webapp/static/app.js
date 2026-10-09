@@ -16,16 +16,33 @@
   }
 })();
 
-// Back goes to the page you came from when you came from this site; the
-// link's own address (the page's parent) is the fallback.
+// Back goes to the last page here that was a different page (Phase W): a save reloads the same page, so the
+// browser's own previous page was often this one and Back looked dead. Pages are told apart by their path (the
+// RTA on another day is still the RTA). With no such page, the link's own address (one level up) is used.
 (function () {
   "use strict";
+  var KEY = "ts-trail";
+  var kind = window.location.pathname;
+  var here = { url: window.location.pathname + window.location.search, kind: kind };
+  var trail = [];
+  try {
+    trail = JSON.parse(window.sessionStorage.getItem(KEY) || "[]");
+    if (!Array.isArray(trail)) { trail = []; }
+  } catch (e) { trail = []; }
+  var last = trail[trail.length - 1];
+  if (!last || last.url !== here.url) { trail.push(here); }
+  trail = trail.slice(-20);
+  try { window.sessionStorage.setItem(KEY, JSON.stringify(trail)); } catch (e) { /* the link still works */ }
   var back = document.querySelector("[data-back]");
   if (!back) { return; }
   back.addEventListener("click", function (e) {
-    if (document.referrer.indexOf(window.location.origin + "/") === 0 && window.history.length > 1) {
-      e.preventDefault();
-      window.history.back();
+    for (var i = trail.length - 2; i >= 0; i--) {
+      if (trail[i] && trail[i].kind !== kind && typeof trail[i].url === "string" && /^\/(?![\/\\])/.test(trail[i].url)) {
+        e.preventDefault();
+        try { window.sessionStorage.setItem(KEY, JSON.stringify(trail.slice(0, i))); } catch (err) { /* fine */ }
+        window.location.href = trail[i].url;
+        return;
+      }
     }
   });
 })();

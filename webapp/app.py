@@ -346,11 +346,23 @@ def create_app(config: Dict[str, Any]) -> Flask:
     def _channel_name(letter: str) -> str:
         return CHANNEL_NAMES.get(letter, letter)
 
+    def _parent_url(endpoint: str, args: Optional[Dict[str, Any]]) -> str:
+        """Where Back goes when this browser has no earlier page here (Phase W): one level up. A version's pages
+        go to that version on its run's schedules page, a run's pages to the run, the rest as BACK says."""
+        args = args or {}
+        if "schedule_id" in args:
+            row = app.extensions["store"].get_schedule(args["schedule_id"])
+            if row is not None:
+                return url_for("run_schedules", run_id=row["run_id"], v=row["id"])
+        if "run_id" in args and endpoint != "run_detail":
+            return url_for("run_detail", run_id=args["run_id"])
+        return url_for(BACK.get(endpoint, "home"))
+
     @app.context_processor
     def _globals() -> Dict[str, Any]:
         theme = request.cookies.get("theme", "")
         endpoint = request.endpoint or ""
-        back = None if endpoint in ("home", "login", "static") else url_for(BACK.get(endpoint, "home"))
+        back = None if endpoint in ("home", "login", "static") else _parent_url(endpoint, request.view_args)
         return {"csrf_token": csrf_token, "copyright": COPYRIGHT, "user": g.get("user"),
                 "theme": theme if theme in THEMES else "", "back": back,
                 "status_words": STATUS_WORDS, "label": label, "modes": MODES, "stages": stages, "in_flight": IN_FLIGHT,

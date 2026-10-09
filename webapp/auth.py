@@ -55,7 +55,7 @@ def manager_required(view: Callable[..., Any]) -> Callable[..., Any]:
     @login_required
     def wrapped(*args: Any, **kwargs: Any) -> Any:
         if not (g.user["is_admin"] or g.user["is_supervisor"]):
-            abort(403)
+            abort(403, description="Only admins and supervisors can open this page.")
         return view(*args, **kwargs)
     return wrapped
 
@@ -65,6 +65,6 @@ def admin_required(view: Callable[..., Any]) -> Callable[..., Any]:
     @login_required
     def wrapped(*args: Any, **kwargs: Any) -> Any:
         if not g.user["is_admin"]:
-            abort(403)
+            abort(403, description="Only admins can open this page.")
         return view(*args, **kwargs)
     return wrapped

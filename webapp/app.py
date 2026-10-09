@@ -255,7 +255,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             key = (request.view_args or {}).get("name") if request.endpoint == "program" else \
                 clean_program(request.values.get("program", ""))
             if key and not _access().can_open(key):
-                abort(403)
+                g.error_hint = "Your account opens only the programs given to you. Ask an admin to add this one to your programs."
+                abort(403, description=f"{_unit_filter(key)} is not one of your programs")
 
     def _access() -> Access:
         if "access" not in g:
@@ -2283,9 +2284,16 @@ def create_app(config: Dict[str, Any]) -> Flask:
     @app.errorhandler(404)
     @app.errorhandler(413)
     def _error(err):  # type: ignore[no-untyped-def]
-        messages = {403: "This page is for admins.", 404: "There is nothing here.",
+        """What went wrong and what to do (Phase XY): a reason given where the error was raised wins over the
+        default words for its code."""
+        messages = {403: "Your account cannot do this.", 404: "This page does not exist.",
                     413: "That file is larger than 25 MB."}
-        text = messages.get(err.code) or getattr(err, "description", "") or "Something went wrong."
-        return render_template("error.html", code=err.code, message=text), err.code
+        hints = {403: "Ask an admin if you need it.", 404: "The link may be old, or the page moved.",
+                 413: "Pick a smaller workbook."}
+        said = getattr(err, "description", "") or ""
+        own = bool(said) and said != type(err).description  # words given where it was raised
+        text = said if own else messages.get(err.code, said or "Something went wrong.")
+        hint = g.get("error_hint") or ("" if own else hints.get(err.code, ""))
+        return render_template("error.html", code=err.code, message=text, hint=hint), err.code
 
     return app

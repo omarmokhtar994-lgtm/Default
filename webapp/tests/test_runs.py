@@ -1025,7 +1025,8 @@ class TheDayPage(unittest.TestCase):
     def test_board_rows_offer_add(self):
         """Phase R task 5: every interval of the board has "+ Add"."""
         body = html.unescape(self.client.get(self.url + "&view=board").get_data(as_text=True))
-        self.assertRegex(body, r'<a class="rb-add" href="[^"]*add=600[^"]*#add">\+ Add</a>')
+        # Phase XY (owner-approved review finding 12): each + Add also names its interval for screen readers.
+        self.assertRegex(body, r'<a class="rb-add" href="[^"]*add=600[^"]*#add">\+ Add<span class="sr-only"> to 10:00</span></a>')
 
     def test_add_dialog_lists_kinds_and_prefills_the_interval(self):
         body = html.unescape(self.client.get(self.url + "&view=board&add=600").get_data(as_text=True))

@@ -43,7 +43,7 @@
   <section class="panel" aria-labelledby="shifts-h">
     <h2 id="shifts-h">Shifts</h2>
     <p class="note">Click a shift to change it. Choices come from this program's Shift Library, plus OFF and Leave. Changed shifts are outlined, with the tool's shift under the new one{% if current.kind != 'edited' or current.in_use %}; a change here starts a new version{% endif %}.</p>
-    <div class="scroll">
+    <div class="scroll" role="region" tabindex="0" aria-label="Shifts (scrolls sideways)">
     <table class="edgrid" data-check-url="{{ url_for('schedule_check', schedule_id=current.id) }}" data-change-url="{{ url_for('schedule_change', schedule_id=current.id) }}">
       <thead><tr><th scope="col"><span class="sr-only">Associate</span></th>{% for d in days %}<th scope="col">{{ d }}{% if m.days.get(d) %} <i class="dot {{ m.days[d] }}" title="{{ 'A rule is broken' if m.days[d] == 'red' else 'A warning' }} on this day"></i>{% endif %}</th>{% endfor %}</tr></thead>
       <tbody>

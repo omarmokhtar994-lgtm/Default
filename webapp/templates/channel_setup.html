@@ -15,7 +15,7 @@
   {% if rows %}
   <form method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="action" value="save"><input type="hidden" name="rows" value="{{ rows|length }}">
-    <div class="scroll"><table class="actable">
+    <div class="scroll" role="region" tabindex="0" aria-label="Who can work which channel (scrolls sideways)"><table class="actable">
       <thead><tr><th scope="col">Associate</th><th scope="col">Language</th><th scope="col" class="c">Chat</th><th scope="col" class="c">Phone</th><th scope="col" class="c">Email</th><th scope="col">Channels</th></tr></thead>
       <tbody>
       {% for r in rows %}{% set i = loop.index0 %}

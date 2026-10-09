@@ -61,7 +61,7 @@
     <a href="{{ base }}{{ '&' if '?' in base else '?' }}side=after"{% if side == 'after' %} aria-current="true"{% endif %}>After breaks (published)</a>
     <a href="{{ base }}{{ '&' if '?' in base else '?' }}side=before"{% if side == 'before' %} aria-current="true"{% endif %}>Before breaks</a>
   </nav>
-  <div class="scroll">
+  <div class="scroll" role="region" tabindex="0" aria-label="Achieved every {{ unit }} (scrolls sideways)">
   <table class="wkgrid">
     <thead><tr><th scope="col"><span class="sr-only">Time</span></th>{% for d in view.days %}<th scope="col">{{ d }}</th>{% endfor %}</tr></thead>
     <tbody>
@@ -81,7 +81,7 @@
     <h2 id="ot-h">Where overtime is needed</h2>
     <p class="note">Intervals below 100% and how many more associates would reach it.</p>
     {% if view.short %}
-    <div class="scroll"><table class="runs small">
+    <div class="scroll" role="region" tabindex="0" aria-label="Where overtime is needed (scrolls sideways)"><table class="runs small">
       <thead><tr><th>Day</th><th>Time</th><th>Needed for 100%</th><th>On the floor</th><th>Achieved</th><th>Associates needed</th><th>Overtime hours</th></tr></thead>
       <tbody>{% for r in view.short %}<tr><td>{{ r.day }}</td><td>{{ r.time }}</td><td>{{ r.need }}</td><td>{{ r.have }}</td><td>{{ r.pct }}%</td><td><b>{{ r.people }}</b></td><td>{{ r.hours|num }}</td></tr>{% endfor %}
         <tr class="tot"><td colspan="5">Total</td><td><b>{{ t.overtime_people }}</b></td><td><b>{{ t.overtime_hours|num }} h</b></td></tr></tbody>
@@ -92,7 +92,7 @@
     <h2 id="ex-h">Extra hours available</h2>
     <p class="note">Intervals with more associates than 100% needs: hours that could move to the short ones.</p>
     {% if view.extra %}
-    <div class="scroll"><table class="runs small">
+    <div class="scroll" role="region" tabindex="0" aria-label="Extra hours available (scrolls sideways)"><table class="runs small">
       <thead><tr><th>Day</th><th>Time</th><th>Needed for 100%</th><th>On the floor</th><th>Achieved</th><th>Associates above need</th><th>Extra hours</th></tr></thead>
       <tbody>{% for r in view.extra %}<tr><td>{{ r.day }}</td><td>{{ r.time }}</td><td>{{ r.need }}</td><td>{{ r.have }}</td><td>{{ r.pct }}%</td><td><b>{{ r.people }}</b></td><td>{{ r.hours|num }}</td></tr>{% endfor %}
         <tr class="tot"><td colspan="5">Total</td><td><b>{{ t.extra_people }}</b></td><td><b>{{ t.extra_hours|num }} h</b></td></tr></tbody>

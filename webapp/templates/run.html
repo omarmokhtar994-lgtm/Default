@@ -88,7 +88,7 @@
     {% endif %}
     {% if why.people %}
     <h3>Who and when</h3>
-    <div class="scroll"><table class="who"><thead><tr><th>Associate</th><th>Days</th><th>Shift</th><th>Limit</th></tr></thead><tbody>
+    <div class="scroll" role="region" tabindex="0" aria-label="Who and when (scrolls sideways)"><table class="who"><thead><tr><th>Associate</th><th>Days</th><th>Shift</th><th>Limit</th></tr></thead><tbody>
       {% for p in why.people %}<tr><td>{{ p.associate }}</td><td>{{ p.days }}</td><td>{{ p.shift }}</td><td>{{ p.window }}</td></tr>{% endfor %}
     </tbody></table></div>
     {% if why.people_rows > why.people|length %}<p class="more">{{ why.people_rows - why.people|length }} more rows are in the download (BUSINESS_OUTCOME.txt).</p>{% endif %}

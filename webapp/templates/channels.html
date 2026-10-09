@@ -30,7 +30,7 @@
 {% if cover %}<section class="panel" aria-labelledby="cp-cov-h">
   <h2 id="cp-cov-h">Coverage</h2>
   <p class="note">People on each channel per interval against the channel tab's need; each language row is its lowest point in the interval against its minimum.</p>
-  <div class="scroll"><table class="cp-cov">
+  <div class="scroll" role="region" tabindex="0" aria-label="Coverage (scrolls sideways)"><table class="cp-cov">
     <thead><tr><th scope="col"><span class="sr-only">Channel</span></th>{% for c in cover[0].cells %}<th scope="col">{{ hm(c.t) }}</th>{% endfor %}</tr></thead>
     <tbody>{% for rowc in cover %}<tr><th scope="row">{{ rowc.name }}</th>{% for c in rowc.cells %}<td class="{{ c.cls }}">{{ c.text }}</td>{% endfor %}</tr>{% endfor %}</tbody>
   </table></div>
@@ -39,7 +39,7 @@
 <section class="panel" aria-labelledby="cp-grid-h">
   <h2 id="cp-grid-h">Who is on what</h2>
   <p class="note">Each cell is 15 minutes. The letters after a name are the channels the person works. Click a cell to fill in the change below.</p>
-  <div class="scroll"><table class="cp-grid" data-block="{{ r.min_block }}">
+  <div class="scroll" role="region" tabindex="0" aria-label="Who is on what (scrolls sideways)"><table class="cp-grid" data-block="{{ r.min_block }}">
     <thead><tr><th scope="col"><span class="sr-only">Associate</span></th>{% for t in grid.cols %}{% if t % 60 == 0 %}<th scope="col" colspan="4" class="h">{{ hm(t)[:2] }}</th>{% endif %}{% endfor %}</tr></thead>
     <tbody>{% for g_row in grid.rows %}
       <tr data-end="{{ hm(g_row.end) }}"><th scope="row"><b>{{ g_row.name }}</b><small>{% for c in 'PCE' %}<span class="sk{{ ' ch-' ~ c if c in g_row.skills else ' sk-off' }}" title="{{ names[c] }}{{ '' if c in g_row.skills else ': not this person' }}">{{ c }}</span>{% endfor %}{% if g_row.language %} {{ g_row.language }}{% endif %}</small></th>

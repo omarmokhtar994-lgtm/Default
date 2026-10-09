@@ -989,3 +989,9 @@ details.autobreaks > summary::-webkit-details-marker { display: none; }
 /* Phase XY: removing a department goes through a check; its link keeps the red of a destructive action */
 .wl-head a.danger { font-size: 12px; font-weight: 600; color: var(--gap-ink); }
 .wl-dept .check-save { margin: 10px 0 4px; }
+
+/* Phase XY: a way past the menu for keyboard users (hidden until it has focus) */
+.skip { position: absolute; left: 16px; top: -80px; z-index: 10; padding: 10px 16px; border: 1px solid var(--accent-ink);
+  border-radius: 4px; background: var(--console); color: var(--accent-ink); font-weight: 600; text-decoration: none; }
+.skip:focus { top: 12px; }
+main:focus { outline: none; }  /* the skip link's target, not a control */

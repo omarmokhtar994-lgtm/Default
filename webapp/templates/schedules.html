@@ -8,6 +8,14 @@
   <p class="byline rundetails">Workbook <b>{{ run.workbook }}</b> · {{ run.program|unit if run.program else 'no program set' }} · {% if run.week_start %}starts {{ run.week_start|start_day }}{% else %}no start date set{% endif %}{% if user.is_admin %} · <a href="{{ url_for('run_detail', run_id=run.id, edit=1) }}#edit">Edit the name, program or start date</a>{% elif user.id == run.user_id %} · <a href="{{ url_for('run_detail', run_id=run.id, edit=1) }}#edit">Change the program or start date</a>{% endif %}</p>
 </div></div>
 
+{% if channel_lines %}
+<section class="panel chkpanel" aria-labelledby="chan-h">
+  <h2 id="chan-h">Channel tabs</h2>
+  <p class="note">Chat, Phone and Email checked against the requirement tab. Warnings never block anything and never change the schedule; the channel plan follows the channel tabs.</p>
+  <ul class="chk">{% for level, text in channel_lines %}<li class="{{ level }}">{{ text }}</li>{% endfor %}</ul>
+</section>
+{% endif %}
+
 {% if not versions %}
 <p class="empty panel">No schedules kept for this run: a readiness check, a run that did not finish, or a run whose files were already deleted.</p>
 {% else %}

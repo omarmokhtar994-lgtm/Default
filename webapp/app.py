@@ -7,6 +7,7 @@ import json
 import os
 import re
 import secrets
+import shutil
 import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -20,6 +21,7 @@ from .analytics import program_weeks, team
 from .attendance import (ACTIVITY_KINDS, ADD_KINDS, DAY_OFF, DayBook, aux_details, hm, tomorrow_unchecked, week_start,
                          with_text)
 from .break_plan import check_row, floor, slots_for, suggest
+from .channels import check_lines, has_channel_tabs, read_channels, requirement_tab
 from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, board, read_inputs
 from .coach import actual_shrinkage, corrected_tab
 from .contacts import ContactBook, pick_contact
@@ -680,6 +682,40 @@ def create_app(config: Dict[str, Any]) -> Flask:
             abort(403)
         return run
 
+    def _channel_upload_check(path: Path) -> Tuple[Optional[str], Optional[int]]:
+        """Phase V: (refusal, warnings) for an uploaded workbook; (None, None) when it has no channel tabs. Refused
+        when the channel tabs cannot be used, or when the requirement tab is not named (the engine could then read
+        a channel tab as its requirement). Warnings never block the upload."""
+        trial = path.with_suffix(".xlsx")  # openpyxl opens .xlsx names only
+        shutil.copyfile(path, trial)
+        try:
+            if not has_channel_tabs(trial):
+                return None, None
+            try:
+                inputs = read_inputs(trial)
+                setup = read_channels(trial, inputs["interval"])
+            except (ValueError, KeyError, StopIteration) as exc:
+                return f"The channel tabs need fixing before this upload: {exc}", None
+            if requirement_tab(trial) is None:
+                step = inputs["interval"]
+                return ("This workbook has channel tabs but does not name its requirement tab, so the engine could "
+                        "read a channel tab as the requirement. Add Requirements Source on the Instructions tab "
+                        f"(for example FT Wise {step} Min), or name the tab FT Wise {step} Min."), None
+            return None, sum(1 for level, _ in check_lines(setup, inputs, trial) if level == "warn")
+        finally:
+            trial.unlink(missing_ok=True)
+
+    def _channel_lines(run_id: str) -> Optional[List[Tuple[str, str]]]:
+        """The channel check of a run's input workbook, or None when it has no channel tabs."""
+        src = _book().input_path(run_id)
+        if not src.is_file() or not has_channel_tabs(src):
+            return None
+        try:
+            inputs = read_inputs(src)
+            return check_lines(read_channels(src, inputs["interval"]), inputs, src)
+        except (ValueError, KeyError, StopIteration) as exc:
+            return [("warn", f"The channel tabs cannot be read: {exc}")]
+
     @app.route("/runs", methods=["POST"])
     @login_required
     def submit_run():  # type: ignore[no-untyped-def]
@@ -711,6 +747,14 @@ def create_app(config: Dict[str, Any]) -> Flask:
             path.unlink()
             flash("Upload an Excel workbook (.xlsx): that file is not one.")
             return redirect(url_for("home"))
+        refusal, warnings = _channel_upload_check(path)
+        if refusal:
+            path.unlink()
+            flash(refusal)
+            return redirect(url_for("home"))
+        if warnings is not None:
+            flash(f"Channel tabs: {warnings} warning{'s' if warnings != 1 else ''}. They are listed on the schedules "
+                  "page and never change the schedule." if warnings else "Channel tabs: checked, no warnings.")
         if ready:
             run_id = queue.submit_ready(g.user["id"], path, name, program=program, week_start=week_start)
             _record("run_uploaded", app.extensions["store"].get_run(run_id), detail="ready schedule")
@@ -1094,7 +1138,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         counts = {v["id"]: book.view(v["id"]) for v in versions} if versions else {}
         return render_template("schedules.html", run=run, versions=versions, current=current, view=view,
                                counts=counts, may_set_in_use=bool(current) and _may_set_in_use(current),
-                               days=DAYS)
+                               days=DAYS, channel_lines=_channel_lines(run_id))
 
     # ------------------------------------------------------------- a week's breaks (Phase R)
     def _clock_of(text: str, span: Tuple[int, int]) -> Optional[int]:

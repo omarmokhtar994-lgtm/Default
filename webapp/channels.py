@@ -15,10 +15,12 @@ covered by the requirements"), leaving out the all-channels times (owner: "to av
 from __future__ import annotations
 
 import re
+import zipfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from openpyxl import load_workbook
+from openpyxl.utils.exceptions import InvalidFileException
 
 from .versions import DAYS
 
@@ -334,6 +336,19 @@ def _days_or_none(value: Any) -> Optional[Set[int]]:
         return _days(value, "")
     except ValueError:
         return None
+
+
+def has_channel_tabs(path: Path) -> bool:
+    """Whether a workbook has any channel tab (a grid for any interval, Email Hours or Channel Setup). A file that
+    cannot be opened as a workbook has none here: the run's own check reports it, as before Phase V."""
+    try:
+        wb = load_workbook(path, read_only=True)
+    except (zipfile.BadZipFile, InvalidFileException, KeyError, OSError):
+        return False
+    try:
+        return any(GRID_TAB.match(_norm(n)) or _norm(n) in ("email hours", "channel setup") for n in wb.sheetnames)
+    finally:
+        wb.close()
 
 
 def read_channels(path: Path, step: int) -> Optional[Dict[str, Any]]:

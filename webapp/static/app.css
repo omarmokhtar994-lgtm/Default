@@ -881,3 +881,13 @@ dialog.dlg.add-dlg { width: 620px; }
 .wl-add textarea { width: 100%; font: inherit; margin-top: 6px; }
 .wl-add .hint { display: block; font-weight: 400; color: var(--dim); font-size: 14px; }
 .wl-add button { margin: 2px 0 12px; }
+
+/* Phase V: the channel tabs' check (schedules page) */
+.chkpanel { margin-bottom: 18px; }
+.chk { list-style: none; padding: 0; margin: 8px 0 0; }
+.chk li { padding: 7px 0 7px 28px; position: relative; border-bottom: 1px solid var(--rail); overflow-wrap: anywhere; }
+.chk li:last-child { border-bottom: 0; }
+.chk li::before { position: absolute; left: 6px; top: 6px; font-weight: 700; }
+.chk li.ok::before { content: "\2713"; color: var(--covered); }
+.chk li.warn::before { content: "!"; color: var(--short-ink); left: 10px; }
+.chk li.info::before { content: "i"; color: var(--dim); left: 10px; font-style: italic; }

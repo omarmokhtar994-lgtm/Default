@@ -13,7 +13,7 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
-from webapp.channels import blended_at, check_lines, read_channels, requirement_tab
+from webapp.channels import blended_at, check_lines, has_channel_tabs, read_channels, requirement_tab
 from webapp.day import read_inputs
 from webapp.tests.test_schedules import INPUT
 
@@ -227,6 +227,13 @@ class TheChannelTabs(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, r"Chat 30 Min.*60-minute.*Chat 60 Min"):
             read_channels(path, 60)
 
+    def test_a_file_that_is_not_a_workbook_is_left_to_the_run_check(self):
+        # The upload only looks for channel tabs; a file openpyxl cannot open is reported by the run's own check,
+        # as before Phase V (webapp.tests.test_runs uploads such files).
+        fake = self.dir / "fake.xlsx"
+        fake.write_bytes(b"PK\x03\x04 fake workbook")
+        self.assertFalse(has_channel_tabs(fake))
+
     def test_all_channels_times_by_day_and_across_midnight(self):
         found = read_channels(self.book(blended=[("Fri, Sat", "20:00", "22:00", "Yes", ""),
                                                  ("Sat", "23:00", "02:00", "Yes", ""),
@@ -301,3 +308,77 @@ class TheUploadCheck(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheChannelUpload(unittest.TestCase):
+    """Task 2: an upload with channel tabs is refused when the website cannot use them, or when the requirement tab
+    is not named (the engine could then read a channel tab as its requirement); otherwise it is kept and its check
+    is listed on the schedules page. A workbook without channel tabs is uploaded exactly as before."""
+
+    @classmethod
+    def setUpClass(cls):
+        import html as _html
+        from webapp.programs import ProgramBook
+        from webapp.tests.test_ready import make_ready
+        from webapp.tests.test_runs import REPO, make_app, sign_in, token
+        cls.unescape, cls.token = staticmethod(_html.unescape), staticmethod(token)
+        cls.dir = Path(tempfile.mkdtemp())
+        cls.ready = make_ready(cls.dir / "ready.xlsx")
+        cls.good = add_channel_tabs(cls.dir / "good.xlsx", src=cls.ready)
+        cls.app, cls.store, *_ = make_app(VALIDATOR_ROOT=str(REPO))
+        cls.store.add_user("omar", "Omar", "Owner-pass-123", is_admin=True, must_change=False)
+        book = ProgramBook(cls.store)
+        cls.key = book.add_lob(book.add_program("SAKS"), "NMG Tier 2")
+        cls.admin = sign_in(cls.app, "omar", "Owner-pass-123")
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.dir, True)
+
+    def upload(self, path, name="week.xlsx"):
+        import io
+        return self.admin.post("/runs", data={"csrf_token": self.token(self.admin), "kind": "ready", "mode": "QUICK",
+                                              "program": self.key, "week_start": "2026-10-11",
+                                              "workbook": (io.BytesIO(Path(path).read_bytes()), name)},
+                               content_type="multipart/form-data", follow_redirects=True)
+
+    def runs(self):
+        return len(self.store.list_runs())
+
+    def run_named(self, name):
+        from webapp.tests.test_runs import wait
+        run_id = next(r["id"] for r in self.store.list_runs() if r["workbook"] == name)
+        wait(self.store, run_id, statuses=("DONE", "REJECTED", "FAILED"))
+        return run_id
+
+    def test_an_unnamed_requirement_is_refused_and_nothing_is_kept(self):
+        before = self.runs()
+        page = self.unescape(self.upload(unnamed(self.good, self.dir / "unnamed.xlsx")).get_data(as_text=True))
+        self.assertIn("This workbook has channel tabs but does not name its requirement tab", page)
+        self.assertIn("Requirements Source", page)
+        self.assertEqual(self.runs(), before)
+        self.assertFalse([p for p in (self.app.extensions["runs"].runs_root / "_incoming").glob("*")])
+
+    def test_a_channel_setup_row_it_cannot_use_is_refused_naming_the_row(self):
+        bad = add_channel_tabs(self.dir / "bad.xlsx", src=self.ready,
+                               languages=[("Fax", "Arabic", 1, "10:00", "20:00", "All", "Yes")])
+        page = self.unescape(self.upload(bad).get_data(as_text=True))
+        self.assertIn(f"The channel tabs need fixing before this upload: Channel Setup, row {setup_row(bad, 'Fax')}: "
+                      "Fax is not a channel (Chat, Phone or Email).", page)
+
+    def test_a_good_upload_says_its_warnings_and_the_schedules_page_lists_them(self):
+        page = self.unescape(self.upload(self.good, "good_week.xlsx").get_data(as_text=True))
+        self.assertIn("Channel tabs: 3 warnings. They are listed on the schedules page and never change the "
+                      "schedule.", page)
+        run_id = self.run_named("good_week.xlsx")
+        page = self.unescape(self.admin.get(f"/runs/{run_id}/schedules").get_data(as_text=True))
+        self.assertIn("Channel tabs", page)
+        self.assertIn("Thu 13:00: Chat 2 + Phone 5 = 7, but FT Wise 60 Min needs 6.", page)
+        self.assertIn("Sat 21:00 (all channels): Phone alone needs 3, but FT Wise 60 Min needs 2.", page)
+
+    def test_a_workbook_without_channel_tabs_shows_no_channel_panel(self):
+        page = self.unescape(self.upload(self.ready, "plain_week.xlsx").get_data(as_text=True))
+        self.assertNotIn("Channel tabs:", page)
+        run_id = self.run_named("plain_week.xlsx")
+        page = self.unescape(self.admin.get(f"/runs/{run_id}/schedules").get_data(as_text=True))
+        self.assertNotIn("Channel tabs", page)

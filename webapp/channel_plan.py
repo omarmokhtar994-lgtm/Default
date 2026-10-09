@@ -345,6 +345,8 @@ def score_day(people: List[Dict[str, Any]], plan: Dict[str, Any], setup: Dict[st
             if level != "ok":
                 problems.append(f"{name}: {text}")
         for (kind, _, minutes), s in zip(p["breaks"], starts):
+            if s is None:
+                continue  # not placed yet: the row check says so
             for t in range(s - s % QUARTER, s + minutes, QUARTER):
                 at[name, t] = "B"
         for start, end, letter in plan["blocks"].get(name, []):

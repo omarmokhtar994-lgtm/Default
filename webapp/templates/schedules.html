@@ -32,6 +32,7 @@
   {% elif current.in_use %}<p class="inuse">This is the schedule in use for the week.</p>{% endif %}
   <a class="button" href="{{ url_for('schedule_download', schedule_id=current.id) }}">Download (.xlsx)</a>
   <a class="button" href="{{ url_for('schedule_week', schedule_id=current.id) }}">Week view of this version</a>
+  {% if channel_lines %}<a class="button" href="{{ url_for('plan_channels', schedule_id=current.id) }}">Plan channels</a>{% endif %}
   <button type="button" class="button" data-swap-open>Swap slots</button>
 </div>
 

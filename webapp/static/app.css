@@ -839,6 +839,9 @@ dialog.dlg.add-dlg { width: 620px; }
 .bp-days button { padding: 6px 12px; border: 1px solid var(--rail); border-radius: 6px; background: none; color: var(--paper);
   font-weight: 600; cursor: pointer; }
 .bp-days button.on { background: var(--accent-soft); border-color: var(--accent-ink); color: var(--accent-ink); }
+.bp-days a { padding: 6px 12px; border: 1px solid var(--rail); border-radius: 6px; color: var(--paper); text-decoration: none; }
+.bp-days a:hover { background: var(--hover); }
+.bp-days a.on { background: var(--accent-soft); border-color: var(--accent-ink); color: var(--accent-ink); }
 .bp-days small { color: var(--short-ink); font-weight: 400; }
 .bp-strip { display: flex; gap: 2px; margin: 8px 0 2px; }
 .bp-strip span { flex: 1 1 0; min-width: 0; height: 34px; border-radius: 3px; display: grid; place-items: center; overflow: hidden;
@@ -898,3 +901,36 @@ dialog.dlg.add-dlg { width: 620px; }
 .actable .c { text-align: center; }
 .actable input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--covered); }
 .btnrow { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+
+/* Phase V: the channels, one colour each wherever they appear */
+:root { --ch-phone: #3E6FD8; --ch-chat: #B4479A; --ch-email: #4F7F8F; --ch-ink: #FFFFFF; }
+.ch-P { background: var(--ch-phone); color: var(--ch-ink); }
+.ch-C { background: var(--ch-chat); color: var(--ch-ink); }
+.ch-E { background: var(--ch-email); color: var(--ch-ink); }
+.ch-A { background: linear-gradient(90deg, var(--ch-phone) 0 33%, var(--ch-chat) 33% 66%, var(--ch-email) 66%); color: var(--ch-ink); }
+.ch-B, .ch-L { background: repeating-linear-gradient(45deg, var(--rail), var(--rail) 3px, transparent 3px, transparent 6px); color: var(--dim); }
+.cp-sum { display: flex; gap: 22px; flex-wrap: wrap; margin: 6px 0; }
+.cp-sum b { font-size: 1.15em; margin-right: 4px; }
+.warn-ink { color: var(--short-ink); }
+.cp-grid { border-collapse: separate; border-spacing: 1px; font-size: 11px; width: auto; }
+.cp-grid th[scope="row"] { position: sticky; left: 0; background: var(--console); text-align: left; padding: 0 10px 0 0; white-space: nowrap; font-size: 13px; z-index: 1; }
+.cp-grid th[scope="row"] small { color: var(--dim); margin-left: 6px; }
+.cp-grid th.h { font-weight: 400; color: var(--dim); text-align: left; font-size: 11px; }
+.cp-grid td.c { width: 17px; min-width: 17px; height: 22px; padding: 0; border-radius: 2px; text-align: center; font-weight: 700; cursor: pointer; }
+.cp-grid td.c.off { background: transparent; cursor: default; }
+.cp-grid td.c.none { background: var(--empty-cell); }
+.cp-grid td.c:focus-visible, .cp-grid td.c:hover { outline: 2px solid var(--accent-ink); outline-offset: -1px; }
+.sk { display: inline-block; width: 14px; height: 14px; border-radius: 3px; font-size: 10px; line-height: 14px; text-align: center; margin-left: 2px; font-weight: 700; }
+.sk.sk-off { background: transparent; border: 1px dashed var(--rail); color: var(--dim); }
+.cp-cov { border-collapse: separate; border-spacing: 2px; font-size: 12px; width: auto; }
+.cp-cov th[scope="row"] { text-align: left; padding-right: 10px; white-space: nowrap; position: sticky; left: 0; background: var(--console); }
+.cp-cov thead th { font-weight: 400; color: var(--dim); font-size: 11px; }
+.cp-cov td { min-width: 40px; height: 24px; text-align: center; border-radius: 3px; font-weight: 700; }
+.cp-cov td.ok { background: var(--accent-soft); color: var(--covered); }
+.cp-cov td.warn { background: var(--short-soft); color: var(--short-ink); }
+.cp-cov td.bad { background: var(--gap-soft); color: var(--gap-ink); }
+.cp-cov td.em { background: var(--hover); color: var(--dim); }
+.legend3 { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--dim); margin-top: 10px; }
+.legend3 i { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; margin-right: 5px; }
+.cp-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; margin: 10px 0; }
+.cp-edit label { display: flex; flex-direction: column; gap: 4px; }

@@ -757,3 +757,24 @@
     show();
   });
 })();
+
+// Phase V: a click on a cell of the channel grid fills in "Set the block" (who, from, to one minimum block later)
+(function () {
+  const form = document.querySelector("[data-cp-edit]");
+  const table = document.querySelector(".cp-grid");
+  if (!form || !table) return;
+  const block = parseInt(table.dataset.block || "60", 10);
+  const minutes = (t) => parseInt(t.slice(0, 2), 10) * 60 + parseInt(t.slice(3, 5), 10);
+  const clock = (m) => String(Math.floor(m / 60) % 24).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+  table.addEventListener("click", (event) => {
+    const cell = event.target.closest("[data-cp-cell]");
+    if (!cell) return;
+    const start = minutes(cell.dataset.t);
+    let shiftEnd = minutes(cell.closest("tr").dataset.end || "23:59");
+    if (shiftEnd <= start) shiftEnd += 1440;
+    form.elements.who.value = cell.dataset.who;
+    form.elements.start.value = cell.dataset.t;
+    form.elements.end.value = clock(Math.min(start + block, shiftEnd));
+    form.elements.channel.focus();
+  });
+})();

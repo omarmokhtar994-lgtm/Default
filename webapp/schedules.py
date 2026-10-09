@@ -25,8 +25,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from .versions import (DAYS, added, apply_change, marks, problems, read_week, shift_span, swap_slots, validate,
-                       write_breaks)
+from .versions import (DAYS, added, apply_change, channel_blocks, marks, problems, read_week, shift_span, swap_slots,
+                       validate, write_breaks, write_channels)
 
 KEEP_DAYS = 395  # 13 months after the schedule's week (owner, 2026-10-08)
 EGYPT = timezone(timedelta(hours=3))
@@ -327,6 +327,74 @@ class ScheduleBook:
             row, added_now = self._save(row, user_id, lambda src, dst: write_breaks(src, dst, rows), set(rows))
             for name, day, old, new_text in changes:
                 self.store.add_change(schedule_id=row["id"], user_id=user_id, associate=name, day=day, old=old,
+                                      new=new_text, reason=reason, severity=worst(added_now),
+                                      problems=json.dumps([p["text"] for p in added_now]))
+        if use:
+            self.set_in_use(int(row["id"]), user_id)
+        return int(row["id"]), left_out
+
+    def save_channels(self, schedule_id: int, user_id: int, draft: Dict[str, Dict[str, Any]], reason: str,
+                      use: bool = False) -> Tuple[int, List[str]]:
+        """Phase V: write the planned channels (and the breaks the plan moved or placed) of each drafted day as a new
+        version (or into a draft not in use), checked like any edit; one change row per person, day and kind.
+        Returns the version and what was left out (people not working that day), in plain words."""
+        from .break_plan import hm, slots_for
+        from .channel_page import describe
+        first = self.store.get_schedule(schedule_id)
+        if first is None:
+            raise KeyError(schedule_id)
+        rules = self.break_rules(schedule_id)
+        left_out: List[str] = []
+        with self._lock(first["run_id"]):
+            row = self.store.get_schedule(schedule_id)
+            week = json.loads(row["week"] or "{}")
+            shifts = {a["name"]: a["days"] for a in week.get("associates", [])}
+            channel_rows, break_rows, changes = {}, {}, []
+            for day in DAYS:
+                plan = draft.get(day)
+                if not plan:
+                    continue
+                d = DAYS.index(day)
+                for name in sorted(set(plan.get("blocks", {})) | set(plan.get("breaks", {}))):
+                    if name not in shifts:
+                        left_out.append(f"{name}, {day}: not on this schedule, so this plan was left out.")
+                        continue
+                    label = shifts[name][d]
+                    span = shift_span(label)
+                    if not span:
+                        left_out.append(f"{name}, {day}: no shift that day ({label}), so this plan was left out.")
+                        continue
+                    blocks = [(int(a), int(b), x) for a, b, x in plan.get("blocks", {}).get(name, [])]
+                    old = [(b["start"], b["end"], b["channel"]) for b in channel_blocks(week, d, name)]
+                    rows_now = sum(1 for c in week.get("channels", []) if c["associate"] == name and c["day"] == day)
+                    if blocks != old or rows_now != len(old):
+                        channel_rows[(name, day)] = (label, blocks)
+                        changes.append((name, day, describe(old), describe(blocks)))
+                    starts = plan.get("breaks", {}).get(name)
+                    if starts is not None:
+                        entries = [(kind, s, minutes) for (kind, minutes), s in
+                                   zip(slots_for(rules, span[1] - span[0]), starts) if s is not None]
+                        was = ", ".join(f"{b['kind']} {b['start']}" for b in week.get("breaks", [])
+                                        if b["associate"] == name and b["day"] == day) or "no breaks"
+                        now = ", ".join(f"{kind} {hm(s)}" for kind, s, _ in entries) or "no breaks"
+                        if was != now:
+                            break_rows[(name, day)] = (label, entries)
+                            changes.append((name, day, was, now))
+            if not channel_rows and not break_rows:
+                return int(row["id"]), left_out
+
+            def edit(src: Path, dst: Path) -> None:
+                middle = Path(dst).with_name(Path(dst).stem + "_breaks.xlsx")
+                try:
+                    if break_rows:
+                        write_breaks(src, middle, break_rows)
+                    write_channels(middle if break_rows else src, dst, channel_rows)
+                finally:
+                    middle.unlink(missing_ok=True)
+
+            row, added_now = self._save(row, user_id, edit, set(channel_rows) | set(break_rows))
+            for name, day, old_text, new_text in changes:
+                self.store.add_change(schedule_id=row["id"], user_id=user_id, associate=name, day=day, old=old_text,
                                       new=new_text, reason=reason, severity=worst(added_now),
                                       problems=json.dumps([p["text"] for p in added_now]))
         if use:

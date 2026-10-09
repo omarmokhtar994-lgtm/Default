@@ -21,7 +21,11 @@ from .analytics import program_weeks, team
 from .attendance import (ACTIVITY_KINDS, ADD_KINDS, DAY_OFF, DayBook, aux_details, hm, tomorrow_unchecked, week_start,
                          with_text)
 from .break_plan import check_row, floor, slots_for, suggest
+from .channel_page import (FULL as FULL_DAYS, NAMES as CHANNEL_NAMES, apply_edit, before as channel_before,
+                           carry as channel_carry, coverage as channel_coverage, current as channel_current,
+                           grid as channel_grid, people_for, planned_anything)
 from .channel_people import ChannelPeople, can_work, channel_words
+from .channel_plan import NoPlan, plan_day, score_day
 from .channels import check_lines, has_channel_tabs, read_channels, requirement_tab
 from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, board, read_inputs
 from .coach import actual_shrinkage, corrected_tab
@@ -36,7 +40,7 @@ from .auth import admin_required, check_csrf, csrf_token, load_user, login_requi
 from .program_page import build, overview, weeks_to_show
 from .run_admin import PICK_UNIT, apply_rename, apply_run_change, preview_rename, preview_run_change, unit_keys
 from .schedules import ScheduleBook
-from .versions import DAYS, shift_span, with_notes
+from .versions import DAYS, shift_span, stale_blocks, with_notes
 from .results import version_summary
 from .runs import MODES, OPTION_LABELS, READY, RESUMABLE, RunQueue, parse_options, run_options
 from .store import Store
@@ -336,6 +340,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
     def _num(value: float) -> str:
         value = round(float(value), 1)
         return str(int(value)) if value.is_integer() else str(value)
+
+    @app.template_filter("channel_name")
+    def _channel_name(letter: str) -> str:
+        return CHANNEL_NAMES.get(letter, letter)
 
     @app.context_processor
     def _globals() -> Dict[str, Any]:
@@ -1311,6 +1319,126 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 starts.append(m)
             out[a["name"]] = starts
         return out
+
+    # ------------------------------------------------------------- a week's channels (Phase V)
+    @app.route("/schedules/<int:schedule_id>/channels", methods=["GET", "POST"])
+    @login_required
+    def plan_channels(schedule_id: int):  # type: ignore[no-untyped-def]
+        """Plan a week's channels: a grid per day, Suggest (channels, and breaks inside the break rules), a block set
+        by hand, Copy to days with the same shifts; nothing is kept until Save, which makes a new version."""
+        row = _version_or_404(schedule_id)
+        store, book = app.extensions["store"], _book()
+        src = book.input_path(row["run_id"])
+        setup = None
+        if src.is_file() and has_channel_tabs(src):
+            try:
+                inputs = read_inputs(src)
+                setup = read_channels(src, inputs["interval"])
+            except (ValueError, KeyError, StopIteration) as exc:
+                return render_template("error.html", code=400, message=f"The channel tabs cannot be read: {exc}"), 400
+        if setup is None:
+            return render_template("error.html", code=404, message="This schedule's input workbook has no channel "
+                                   "tabs (Chat, Phone or Email per interval, Email Hours, Channel Setup), so there are "
+                                   "no channels to plan."), 404
+        week = json.loads(row["week"] or "{}")
+        day = request.values.get("day", "")
+        if day not in DAYS:
+            day = next((DAYS[i] for i in range(7) if any(shift_span(a["days"][i]) for a in week.get("associates", []))),
+                       DAYS[0])
+        d = DAYS.index(day)
+        try:
+            rules = book.break_rules(schedule_id)
+        except ValueError as exc:
+            flash(str(exc))
+            return redirect(url_for("run_schedules", run_id=row["run_id"], v=schedule_id))
+        skills = ChannelPeople(store).skills_for_unit(row["program"])
+        draft = store.get_channel_draft(schedule_id)
+        plan = channel_current(week, d, rules, draft)
+        people = people_for(week, d, rules, plan, skills, inputs["languages"])
+        if request.method == "POST":
+            action = request.form.get("action", "")
+            try:
+                if action == "suggest":
+                    found = plan_day(people, setup, rules, d, carry=channel_carry(week, rules, draft, d),
+                                     move_breaks=request.form.get("move") == "1",
+                                     before=channel_before(week, rules, draft, d, skills))
+                    store.set_channel_draft(schedule_id, day, {"blocks": found["blocks"], "breaks": found["breaks"],
+                                                               "moved": found["moved"], "note": found["note"]},
+                                            g.user["id"])
+                    moved = len(found["moved"])
+                    flash(f"Suggested channels for {FULL_DAYS[day]} in {found['seconds']:g} seconds"
+                          + (f"; {moved} break{'s' if moved != 1 else ''} moved inside the break rules" if moved else "")
+                          + ". Nothing is kept until you save.")
+                    if found["note"]:
+                        flash(found["note"])
+                elif action == "edit":
+                    name = request.form.get("who", "")
+                    person = next((p for p in people if p["name"] == name), None)
+                    if person is None:
+                        raise ValueError(f"{name or 'Nobody'} works on {FULL_DAYS[day]} in this schedule.")
+                    span = (person["start"], person["end"])
+                    start = _clock_of(request.form.get("start", ""), span)
+                    end = _clock_of(request.form.get("end", ""), span)
+                    if start is None or end is None:
+                        raise ValueError("Give the start and the end, like 10:00 and 11:00.")
+                    if end <= start:
+                        end += 1440
+                    letter = request.form.get("channel", "")
+                    changed = apply_edit(plan, person, start, end, letter, setup, d)
+                    store.set_channel_draft(schedule_id, day, changed, g.user["id"])
+                    flash(f"{name}: {CHANNEL_NAMES[letter]} from {hm(start)} to {hm(end)}. Nothing is kept until "
+                          "you save.")
+                elif action == "copy":
+                    shifts = {a["name"]: a["days"] for a in week.get("associates", [])}
+                    copied = 0
+                    for other in DAYS:
+                        if other == day:
+                            continue
+                        o = DAYS.index(other)
+                        theirs = channel_current(week, o, rules, draft)
+                        changed = False
+                        for name, days_of in shifts.items():
+                            if days_of[o] == days_of[d] and shift_span(days_of[d]) and name in plan["blocks"]:
+                                if (theirs["blocks"].get(name), theirs["breaks"].get(name)) != \
+                                        (plan["blocks"][name], plan["breaks"].get(name)):
+                                    theirs["blocks"][name] = plan["blocks"][name]
+                                    theirs["breaks"][name] = plan["breaks"].get(name)
+                                    changed = True
+                        if changed:
+                            theirs["moved"], theirs["note"] = [], ""
+                            store.set_channel_draft(schedule_id, other, theirs, g.user["id"])
+                            copied += 1
+                    flash(f"Copied {FULL_DAYS[day]}'s channels to {copied} other day{'s' if copied != 1 else ''} with "
+                          "the same shifts. Nothing is kept until you save." if copied else
+                          f"Nothing to copy: no other day changes with {FULL_DAYS[day]}'s channels.")
+                elif action == "discard":
+                    store.clear_channel_draft(schedule_id)
+                    flash("Your unsaved channels were dropped.")
+                elif action == "save":
+                    reason = " ".join(request.form.get("reason", "").split())[:200] or "Channels planned"
+                    use = request.form.get("use") == "1" and _may_set_in_use(row)
+                    saved, left_out = book.save_channels(schedule_id, g.user["id"], draft, reason, use=use)
+                    store.clear_channel_draft(schedule_id)
+                    made = book.lineage(saved)[0]
+                    flash("Nothing changed." if saved == schedule_id else
+                          f"Saved as {made['label']}{' and in use for this week' if use else ''}.")
+                    for line in left_out:
+                        flash(line)
+                    return redirect(url_for("plan_channels", schedule_id=saved, day=day), code=303)
+                else:
+                    raise ValueError("Pick what to do.")
+            except ValueError as exc:  # NoPlan is a ValueError
+                flash(str(exc))
+            return redirect(url_for("plan_channels", schedule_id=schedule_id, day=day), code=303)
+        score = score_day(people, plan, setup, d, rules) if planned_anything(plan) else None
+        target = setup["email_hours"][d]["hours"] if setup["email_mode"] == "hours" else None
+        run = store.get_run(row["run_id"]) or {}
+        return render_template("channels.html", row=row, run=run, day=day, days=DAYS, full=FULL_DAYS, setup=setup,
+                               grid=channel_grid(people, plan), people=people, score=score, target=target,
+                               cover=channel_coverage(people, plan, setup, d, inputs["interval"]),
+                               plan=plan, drafted=sorted(draft, key=DAYS.index), names=CHANNEL_NAMES,
+                               stale=[] if day in draft else stale_blocks(week, d),
+                               may_set_in_use=_may_set_in_use(row), hm=hm)
 
     @app.route("/schedules/<int:schedule_id>/check", methods=["POST"])
     @login_required

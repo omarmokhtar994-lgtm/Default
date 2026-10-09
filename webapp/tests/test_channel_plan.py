@@ -190,6 +190,14 @@ class TheOrderAndTheTimes(unittest.TestCase):
         self.assertEqual(score_day(people, plan, night, WED, RULES)["problems"], [])
 
 
+class TheJudge(unittest.TestCase):
+    def test_a_break_not_placed_yet_is_said_not_a_crash(self):
+        people = day_people(with_breaks=False)[:1]
+        plan = {"blocks": {people[0]["name"]: [(480, 1020, "P")]}, "breaks": {people[0]["name"]: [None, None, None]}}
+        found = score_day(people, plan, setup(), WED, RULES)
+        self.assertIn("Associate 001: Not placed yet", found["problems"])
+
+
 class TheLanguages(unittest.TestCase):
     def test_who_counts_for_a_language_follows_language_setup(self):
         setup_rows = [{"name": "Arabic", "covers": {"arabic"}}, {"name": "Bilingual", "covers": {"bilingual", "arabic",

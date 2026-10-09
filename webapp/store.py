@@ -70,6 +70,14 @@ create table if not exists associate_channels (
     updated real not null,
     primary key (program_id, name)
 );
+create table if not exists channel_drafts (
+    schedule_id integer not null,
+    day text not null,
+    plan text not null,
+    user_id integer,
+    updated real not null,
+    primary key (schedule_id, day)
+);
 create table if not exists break_drafts (
     schedule_id integer not null,
     day text not null,
@@ -342,6 +350,23 @@ class Store:
     def clear_break_draft(self, schedule_id: int) -> None:
         with self._db() as db:
             db.execute("delete from break_drafts where schedule_id = ?", (schedule_id,))
+
+    # ------------------------------------------------------------- a week's channels being planned (Phase V)
+    def set_channel_draft(self, schedule_id: int, day: str, plan: Dict[str, Any], user_id: int) -> None:
+        with self._db() as db:
+            db.execute("insert into channel_drafts (schedule_id, day, plan, user_id, updated) values (?, ?, ?, ?, ?)"
+                       " on conflict (schedule_id, day) do update set plan = excluded.plan,"
+                       " user_id = excluded.user_id, updated = excluded.updated",
+                       (schedule_id, day, json.dumps(plan), user_id, time.time()))
+
+    def get_channel_draft(self, schedule_id: int) -> Dict[str, Dict[str, Any]]:
+        with self._db() as db:
+            return {r["day"]: json.loads(r["plan"]) for r in db.execute(
+                "select day, plan from channel_drafts where schedule_id = ? order by day", (schedule_id,))}
+
+    def clear_channel_draft(self, schedule_id: int) -> None:
+        with self._db() as db:
+            db.execute("delete from channel_drafts where schedule_id = ?", (schedule_id,))
 
     # ------------------------------------------------------------- who can work which channel (Phase V)
     def list_associate_channels(self, program_id: int) -> List[Dict[str, Any]]:

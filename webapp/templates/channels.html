@@ -1,0 +1,77 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{% extends "base.html" %}
+{% block title %}Plan channels: {{ row.program|unit if row.program else run.workbook }} on Team Scheduler{% endblock %}
+{% block content %}
+{% set r = setup.rules %}
+<div class="phead"><div>
+  <h1>{{ row.program|unit if row.program else run.workbook }}: plan channels</h1>
+  <p class="byline">{{ row.label }}{% if row.week_start %}, starts {{ row.week_start|start_day }}{% endif %}. A block lasts at least {{ r.min_block }} minutes unless a break, the end of the shift or an all-channels time cuts it{% for c, most in r.max_run.items() if most %}; {{ names[c] }} at most {{ most }} minutes in a row{% endfor %}. When people are short: {{ r.order|map('channel_name')|join(', then ') }} ({{ 'strict order' if r.strict else 'balanced' }}). Breaks stay inside the break rules. Nothing is kept until you save; saving makes a new version, checked like every other.</p>
+</div><a class="button" href="{{ url_for('run_schedules', run_id=row.run_id, v=row.id) }}">Back to the schedule</a></div>
+
+<nav class="bp-days" aria-label="Days of the week">{% for dd in days %}<a href="{{ url_for('plan_channels', schedule_id=row.id, day=dd) }}"{% if dd == day %} class="on" aria-current="page"{% endif %}>{{ dd }}{% if dd in drafted and dd != day %} <small>unsaved</small>{% endif %}</a>{% endfor %}</nav>
+
+<section class="panel cp-facts" aria-labelledby="cp-facts-h">
+  <h2 id="cp-facts-h">{{ full[day] }}{% if day in drafted %} <small class="dim">unsaved</small>{% endif %}</h2>
+  {% if not people %}<p class="empty">Nobody works on {{ full[day] }} in this schedule. Pick another day.</p>
+  {% elif not score %}<p class="empty">Not planned yet: Suggest the day, or set blocks by hand.</p>
+  {% else %}
+  <p class="cp-sum">{% for c, h in score.short.items() %}<span><b>{{ '%g'|format(h) }} h</b> short on {{ names[c] }}</span>{% endfor %}{% if target is not none %}<span><b>{{ '%g'|format(score.email) }} h</b> of Email placed, {{ '%g'|format(target) }} h needed</span>{% endif %}<span><b>{{ score.switches }}</b> channel change{{ 's' if score.switches != 1 }} mid-stretch</span></p>
+  <p class="note">{% if score.language_short %}{{ '%g'|format(score.language_short) }} h below a language minimum.{% elif setup.languages %}Every language minimum is met.{% endif %}{% for name, n in score.long.items() %} {{ name }} has {{ n }} stretch{{ 'es' if n != 1 }} longer than a channel's maximum (said, not hidden: they cannot always follow it).{% endfor %}</p>
+  {% endif %}
+  {% if plan.note %}<p class="note">{{ plan.note }}</p>{% endif %}
+  {% if plan.moved %}<details class="tableview"><summary>Breaks the suggestion moved ({{ plan.moved|length }})</summary>
+    <ul class="log">{% for name, kind, old, new in plan.moved %}<li>{{ name }}: {{ kind }} {{ hm(old) }} → {{ hm(new) }}</li>{% endfor %}</ul></details>{% endif %}
+  {% for line in stale %}<p class="note warn-ink">{{ line }}</p>{% endfor %}
+  {% if score and score.problems %}<details class="tableview"><summary>To finish ({{ score.problems|length }})</summary>
+    <ul class="log">{% for p in score.problems[:60] %}<li>{{ p }}</li>{% endfor %}</ul></details>{% endif %}
+</section>
+
+{% if people %}
+{% if cover %}<section class="panel" aria-labelledby="cp-cov-h">
+  <h2 id="cp-cov-h">Coverage</h2>
+  <p class="note">People on each channel per interval against the channel tab's need; each language row is its lowest point in the interval against its minimum.</p>
+  <div class="scroll"><table class="cp-cov">
+    <thead><tr><th scope="col"><span class="sr-only">Channel</span></th>{% for c in cover[0].cells %}<th scope="col">{{ hm(c.t) }}</th>{% endfor %}</tr></thead>
+    <tbody>{% for rowc in cover %}<tr><th scope="row">{{ rowc.name }}</th>{% for c in rowc.cells %}<td class="{{ c.cls }}">{{ c.text }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+  </table></div>
+</section>{% endif %}
+
+<section class="panel" aria-labelledby="cp-grid-h">
+  <h2 id="cp-grid-h">Who is on what</h2>
+  <p class="note">Each cell is 15 minutes. The letters after a name are the channels the person works. Click a cell to fill in the change below.</p>
+  <div class="scroll"><table class="cp-grid" data-block="{{ r.min_block }}">
+    <thead><tr><th scope="col"><span class="sr-only">Associate</span></th>{% for t in grid.cols %}{% if t % 60 == 0 %}<th scope="col" colspan="4" class="h">{{ hm(t)[:2] }}</th>{% endif %}{% endfor %}</tr></thead>
+    <tbody>{% for g_row in grid.rows %}
+      <tr data-end="{{ hm(g_row.end) }}"><th scope="row"><b>{{ g_row.name }}</b><small>{% for c in 'PCE' %}<span class="sk{{ ' ch-' ~ c if c in g_row.skills else ' sk-off' }}" title="{{ names[c] }}{{ '' if c in g_row.skills else ': not this person' }}">{{ c }}</span>{% endfor %}{% if g_row.language %} {{ g_row.language }}{% endif %}</small></th>
+        {% for c in g_row.cells %}<td class="c {{ c.cls }}"{% if c.cls != 'off' %} data-cp-cell data-who="{{ g_row.name }}" data-t="{{ hm(c.t) }}" title="{{ g_row.name }}, {{ hm(c.t) }}: {{ names.get(c.letter, 'break or lunch' if c.letter in ('B', 'L') else 'nothing yet') }}"{% endif %}>{{ c.letter }}</td>{% endfor %}</tr>{% endfor %}
+    </tbody>
+  </table></div>
+  <div class="legend3"><span><i class="ch-P"></i>Phone</span><span><i class="ch-C"></i>Chat</span><span><i class="ch-E"></i>Email</span><span><i class="ch-A"></i>All channels</span><span><i class="ch-B"></i>Break or lunch</span></div>
+</section>
+
+<section class="panel" aria-labelledby="cp-do-h">
+  <h2 id="cp-do-h">Plan {{ full[day] }}</h2>
+  <form method="post" class="cp-row">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="day" value="{{ day }}">
+    <label class="exp-kind"><input type="checkbox" name="move" value="1" checked><span>Move breaks if it helps (inside the break rules)</span></label>
+    <button type="submit" name="action" value="suggest" class="primary">Suggest the day</button>
+    <button type="submit" name="action" value="copy">Copy {{ full[day] }} to days with the same shifts</button>
+  </form>
+  <form method="post" class="cp-row cp-edit" data-cp-edit>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="day" value="{{ day }}"><input type="hidden" name="action" value="edit">
+    <label>Who <select name="who">{% for p in people %}<option value="{{ p.name }}">{{ p.name }} ({{ p.label }})</option>{% endfor %}</select></label>
+    <label>From <input type="time" name="start" step="900" required></label>
+    <label>To <input type="time" name="end" step="900" required></label>
+    <label>Channel <select name="channel"><option value="P">Phone</option><option value="C">Chat</option><option value="E">Email</option></select></label>
+    <button type="submit">Set the block</button>
+  </form>
+  <form method="post" class="bp-save">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="day" value="{{ day }}">
+    <label>What changed (kept with the version) <input name="reason" maxlength="200" placeholder="For example: channels planned for the week"></label>
+    {% if may_set_in_use %}<label class="exp-kind"><input type="checkbox" name="use" value="1" checked><span>Use it for this week (RTA reads it)</span></label>{% endif %}
+    <button type="submit" name="action" value="save" class="primary">Save as a new version</button>
+    {% if drafted %}<button type="submit" name="action" value="discard" class="link danger">Drop unsaved channels</button>{% endif %}
+  </form>
+</section>
+{% endif %}
+{% endblock %}

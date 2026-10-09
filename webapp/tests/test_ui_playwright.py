@@ -989,3 +989,123 @@ class ThePhaseRInTheBrowser(unittest.TestCase):
             self.assertLessEqual(phone.evaluate("document.scrollingElement.scrollWidth"), 390, url)
         self.go(phone, "/day?program=AE/AR+B2B&date=2026-10-14&view=board&add=600", errors)
         phone.screenshot(path=str(R_SCREENS / "phone_add.png"))
+
+
+
+S_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_s" / "screens"
+
+
+class ThePhaseSInTheBrowser(unittest.TestCase):
+    """Phase S: the owner's seven points of 2026-10-09 in a real browser, saved for the owner, and no sideways
+    scroll on a phone."""
+
+    setUpClass_base = classmethod(TheSchedulesInTheBrowser.setUpClass.__func__)
+    tearDownClass = classmethod(TheSchedulesInTheBrowser.tearDownClass.__func__)
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+    go = ThePhaseRInTheBrowser.go
+
+    @classmethod
+    def setUpClass(cls):
+        import io
+        from webapp.programs import ProgramBook
+        from webapp.tests.test_ready import make_ready
+        from webapp.tests.test_runs import client_for, run_id_of, token
+        cls.setUpClass_base()
+        S_SCREENS.mkdir(parents=True, exist_ok=True)
+        book = ProgramBook(cls.store)
+        book.sync()
+        saks = book.add_program("SAKS")
+        cls.tier2 = book.add_lob(saks, "NMG Tier 2")
+        book.set_defaults(saks, 1, "QUICK", {})  # SAKS starts on Monday
+        client = client_for(cls.app)
+        ready = make_ready(Path(tempfile.mkdtemp()) / "ready.xlsx").read_bytes()
+
+        def upload(program, week, name):
+            return run_id_of(client.post("/runs", data={
+                "csrf_token": token(client), "kind": "ready", "program": program, "week_start": week,
+                "workbook": (io.BytesIO(ready), name)}, content_type="multipart/form-data"))
+        cls.ready_run = upload(cls.tier2, "2026-10-11", "SAKS_week_ready.xlsx")
+        cls.unfiled = upload("", "", "Uploaded_without_a_program.xlsx")
+
+    def test_a_phone_has_no_sideways_scroll(self):
+        phone = self.page(width=390, height=844)
+        errors = []
+        phone.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(phone)
+        for url in ("/?all=1", "/day?program=AE/AR+B2B&date=2026-10-14&view=cover",
+                    "/day/wallboard?program=AE/AR+B2B&date=2026-10-14&at=12:00", f"/runs/{self.ready_run}",
+                    f"/runs/{self.ready_run}/schedules", "/day?program=AE/AR+B2B&date=2026-10-14&view=board&add=600"):
+            self.go(phone, url, errors)
+            self.assertLessEqual(phone.evaluate("document.scrollingElement.scrollWidth"), 390, url)
+        dialog = phone.locator("#add-dialog")
+        dialog.get_by_label("Day off cancelled").check()
+        expect(dialog.locator("select[data-off]")).to_be_visible()
+        phone.wait_for_timeout(1500)
+        dialog.screenshot(path=str(S_SCREENS / "phone_day_off.png"))
+
+    def test_phase_s_screens(self):
+        page = self.page(width=1440, height=900, scheme="light")
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        # 1: the upload form takes the program and LOB picked on the left, and that program's defaults
+        self.go(page, f"/?program={self.tier2.replace(' ', '+')}", errors)
+        self.go(page, "/", errors)
+        expect(page.locator("#newrun select[name=program]")).to_have_value(self.tier2)
+        self.assertEqual(page.locator("#newrun select[name=week_start] option:checked").get_attribute("data-day"), "1")
+        page.locator("#newrun").screenshot(path=str(S_SCREENS / "upload_picked.png"))
+        # 2: a schedule uploaded without a program is listed on Home and filed there
+        self.go(page, "/?all=1", errors)
+        panel = page.locator("section.unfiled")
+        expect(panel).to_contain_text("Uploaded_without_a_program.xlsx")
+        panel.screenshot(path=str(S_SCREENS / "home_unfiled.png"))
+        panel.locator("select[name=program]").select_option(self.tier2)
+        panel.locator("select[name=week_start]").select_option("2026-10-18")
+        panel.get_by_role("button", name="File it").click()
+        page.wait_for_load_state("load")
+        expect(page.locator("p.flash")).to_contain_text("Details saved.")
+        expect(page.locator("section.unfiled")).to_have_count(0)
+        # 3: the Schedules page says the name, program and start date, and opens the editor
+        self.go(page, f"/runs/{self.ready_run}/schedules", errors)
+        expect(page.locator("p.rundetails")).to_contain_text("starts Sunday 11 Oct")
+        page.locator("div.phead").screenshot(path=str(S_SCREENS / "schedules_details.png"))
+        page.get_by_role("link", name="Edit the name, program or start date").click()
+        page.wait_for_load_state("load")
+        expect(page.locator("details#edit")).to_have_attribute("open", "")
+        page.locator("details#edit").screenshot(path=str(S_SCREENS / "edit_open.png"))
+        # 4: Day off cancelled from RTA's + Add, on typed times
+        self.go(page, "/day?program=AE/AR+B2B&date=2026-10-14&view=board&add=600", errors)
+        dialog = page.locator("#add-dialog")
+        dialog.get_by_label("Day off cancelled").check()
+        expect(dialog.locator("select[data-off]")).to_be_visible()
+        expect(dialog.locator("button[type=submit]")).to_have_text("Call in")
+        dialog.locator("select[data-shift-pick]").select_option("")
+        dialog.locator("input[name=from]").fill("10:30")
+        dialog.locator("input[name=to]").fill("16:30")
+        expect(dialog.locator("[data-effect]")).to_contain_text("called in 10:30 - 16:30", timeout=15000)
+        dialog.screenshot(path=str(S_SCREENS / "day_off_add.png"))
+        who = dialog.locator("select[data-off]").input_value()
+        dialog.locator("button[type=submit]").click()
+        page.wait_for_load_state("load")
+        expect(page.locator("p.flash")).to_contain_text(f"Recorded: {who}, Day off cancelled: called in 10:30 - 16:30.")
+        # 5: an uploaded schedule's coverage summary
+        self.go(page, f"/runs/{self.ready_run}", errors)
+        coverage = page.locator("section.coverage")
+        expect(coverage).to_contain_text("Breaks are not planned yet")
+        coverage.screenshot(path=str(S_SCREENS / "ready_summary.png"))
+        # 6: Find a time for two people lists the times; no person popup
+        self.go(page, "/day?program=AE/AR+B2B&date=2026-10-14&view=meeting", errors)
+        for name in ("Associate 001", "Associate 012"):
+            page.locator(f"input[name=who][value='{name}']").check()
+        page.get_by_role("button", name="Find times").click()
+        page.wait_for_load_state("load")
+        expect(page.locator("#person-dialog")).to_have_count(0)
+        expect(page.locator("ol.fit-list li").first).to_be_visible()
+        page.locator("section[aria-labelledby=fits-h]").screenshot(path=str(S_SCREENS / "find_a_time.png"))
+        # 7: Analysis of a LOB with only uploaded schedules explains, not "Not found"
+        self.go(page, f"/programs/{self.tier2}", errors)
+        expect(page.locator("main")).to_contain_text("No analysis yet")
+        page.screenshot(path=str(S_SCREENS / "analysis_ready_only.png"))
+        self.assertEqual(errors, [])
+

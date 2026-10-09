@@ -167,6 +167,7 @@ class TheReadyUpload(unittest.TestCase):
         # owner, 2026-10-09: "not able to change schedule name or start dates after upload": the Schedules page
         # (where the menu goes) said neither and had no way to the run page's editor
         page = html.unescape(self.admin.get(f"/runs/{self.run_id}/schedules").get_data(as_text=True))
+        self.assertIn("<h1>SAKS, NMG Tier 2, week of 11 Oct: schedules</h1>", page)  # the LOB as on every page
         details = re.search(r'<p class="byline rundetails">(.*?)</p>', page, re.S)
         self.assertIsNotNone(details)
         for words in ("ready_week.xlsx", "SAKS, NMG Tier 2", "starts Sunday 11 Oct"):

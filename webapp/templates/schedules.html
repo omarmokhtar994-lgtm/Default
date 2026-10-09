@@ -1,9 +1,9 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
 {% extends "base.html" %}
-{% block title %}Schedules: {{ run.program or run.workbook }} on Team Scheduler{% endblock %}
+{% block title %}Schedules: {{ run.program|unit if run.program else run.workbook }} on Team Scheduler{% endblock %}
 {% block content %}
 <div class="phead"><div>
-  <h1>{% if run.program and run.week_start %}{{ run.program }}, week of {{ run.week_start|day_month }}: schedules{% else %}{{ run.workbook }}: schedules{% endif %}</h1>
+  <h1>{% if run.program and run.week_start %}{{ run.program|unit }}, week of {{ run.week_start|day_month }}: schedules{% else %}{{ run.workbook }}: schedules{% endif %}</h1>
   <p class="byline">Pick a version to view or edit. The tool's own schedules never change; every edit is saved in a new version with who changed what and why.</p>
   <p class="byline rundetails">Workbook <b>{{ run.workbook }}</b> · {{ run.program|unit if run.program else 'no program set' }} · {% if run.week_start %}starts {{ run.week_start|start_day }}{% else %}no start date set{% endif %}{% if user.is_admin %} · <a href="{{ url_for('run_detail', run_id=run.id, edit=1) }}#edit">Edit the name, program or start date</a>{% elif user.id == run.user_id %} · <a href="{{ url_for('run_detail', run_id=run.id, edit=1) }}#edit">Change the program or start date</a>{% endif %}</p>
 </div></div>

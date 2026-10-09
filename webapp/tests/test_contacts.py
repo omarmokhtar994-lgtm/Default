@@ -163,12 +163,38 @@ class TheContactsPage(unittest.TestCase):
             self.assertIn(words, page)
         quality = ContactBook(self.store).lists(self.saks)[0]
         self.post(self.sup, self.tier2, action="remove_person", id=str(quality["people"][0]["id"]))
-        self.post(self.sup, self.tier2, action="remove_department", id=str(quality["id"]))
+        # Phase XY (owner-approved sample 5): removing a department takes a check first; its button sends confirm=yes.
+        self.post(self.sup, self.tier2, action="remove_department", id=str(quality["id"]), confirm="yes")
         self.assertIn("Removed the department Quality and its people.", self.page(self.sup, self.tier2))
         self.assertEqual([d["name"] for d in ContactBook(self.store).lists(self.saks)], ["Training", "Workforce"])
         said = [e["detail"] for e in self.store.list_events(0, 2e9) if e["kind"] == "with_list_changed"]
         self.assertEqual(said, ["Added Lina to Quality.", "Added 2 departments and 2 people.", "Removed Lina from Quality.",
                                 "Removed the department Quality and its people."])
+
+    def test_removing_a_department_asks_first(self):
+        """Phase XY (review finding 5): one click used to remove a department and everyone in it, with no undo."""
+        import html
+        self.post(self.sup, self.tier2, action="paste", lines="Quality, Lina\nQuality, Omar")
+        quality = ContactBook(self.store).lists(self.saks)[0]
+        asked = self.post(self.sup, self.tier2, action="remove_department", id=str(quality["id"]))
+        self.assertEqual(asked.status_code, 303)
+        self.assertIn(f"remove={quality['id']}", asked.headers["Location"])
+        self.assertEqual([d["name"] for d in ContactBook(self.store).lists(self.saks)], ["Quality"])
+        check = html.unescape(self.sup.get(asked.headers["Location"]).get_data(as_text=True))
+        self.assertIn("Remove Quality and its 2 people?", check)
+        self.assertIn("This cannot be undone", check)
+        self.assertRegex(check, r'<button[^>]*class="danger"[^>]*>Remove Quality and 2 people</button>')
+        self.assertRegex(check, r'<a [^>]*>Keep Quality</a>')
+        self.assertIn('name="confirm" value="yes"', check)
+        self.post(self.sup, self.tier2, action="remove_department", id=str(quality["id"]), confirm="yes")
+        self.assertEqual(ContactBook(self.store).lists(self.saks), [])
+        self.assertIn("Removed the department Quality and its people.", self.page(self.sup, self.tier2))
+
+    def test_a_stale_check_shows_nothing(self):
+        self.post(self.sup, self.tier2, action="add", department="Quality")
+        page = self.sup.get(self.url(self.tier2) + "&remove=99999")
+        self.assertEqual(page.status_code, 200)
+        self.assertNotIn("cannot be undone", page.get_data(as_text=True))
 
     def test_a_bad_paste_says_which_lines(self):
         self.post(self.admin, self.tier2, action="paste", lines="Quality, Lina\nQuality, Lina")

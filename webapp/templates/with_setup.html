@@ -15,9 +15,17 @@
   {% for d in lists %}
   <div class="wl-dept">
     <div class="wl-head"><h3>{{ d.name }} <small>{{ d.people|length }} {{ 'person' if d.people|length == 1 else 'people' }}</small></h3>
-      <form method="post" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="action" value="remove_department"><input type="hidden" name="id" value="{{ d.id }}"><button type="submit" class="link danger">Remove the department and its people</button></form></div>
+      <a class="link danger" href="{{ url_for('with_setup', program=key, remove=d.id) }}#remove-{{ d.id }}">Remove the department and its people</a></div>
     {% if d.people %}<ul class="wl-people">{% for p in d.people %}<li><span>{{ p.name }}</span><form method="post" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="action" value="remove_person"><input type="hidden" name="id" value="{{ p.id }}"><button type="submit" class="link danger" aria-label="Remove {{ p.name }} from {{ d.name }}">Remove</button></form></li>{% endfor %}</ul>
     {% else %}<p class="dim">No people yet: it is not offered when booking until someone is added.</p>{% endif %}
+    {% if removing == d.id %}{% set n = d.people|length %}{% set who = 'person' if n == 1 else 'people' %}
+    <div class="panel check-save" id="remove-{{ d.id }}">
+      <h2>Remove {{ d.name }} and its {{ n }} {{ who }}?</h2>
+      <p>They come off the department lists for {{ program.name }}, so nobody can pick them as With any more. This cannot be undone: you would add them again by hand.</p>
+      <form method="post" class="check-actions"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="action" value="remove_department"><input type="hidden" name="id" value="{{ d.id }}"><input type="hidden" name="confirm" value="yes">
+        <button type="submit" class="danger">Remove {{ d.name }} and {{ n }} {{ who }}</button>
+        <a href="{{ url_for('with_setup', program=key) }}">Keep {{ d.name }}</a></form>
+    </div>{% endif %}
   </div>
   {% else %}<p class="empty">No departments yet. Until there are, booking an aux takes a typed name.</p>{% endfor %}
 </section>

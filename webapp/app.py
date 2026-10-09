@@ -968,7 +968,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
                     dept, name = book.remove_person(pid, request.form.get("id", -1, type=int), uid)
                     said = f"Removed {name} from {dept}."
                 elif action == "remove_department":
-                    dept = book.remove_department(pid, request.form.get("id", -1, type=int), uid)
+                    dept_id = request.form.get("id", -1, type=int)
+                    if request.form.get("confirm") != "yes":  # Phase XY: the department and its people go only after a check
+                        return redirect(url_for("with_setup", program=key, remove=dept_id) + f"#remove-{dept_id}", code=303)
+                    dept = book.remove_department(pid, dept_id, uid)
                     said = f"Removed the department {dept} and its people."
                 else:
                     raise ValueError("Pick what to do.")
@@ -978,7 +981,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 flash(str(exc))
             return redirect(url_for("with_setup", program=key), code=303)
         return render_template("with_setup.html", program=program, key=key, lists=book.lists(program["id"]),
-                               choices=[(p["name"], p["units"][0]) for p in mine])
+                               choices=[(p["name"], p["units"][0]) for p in mine],
+                               removing=request.args.get("remove", type=int))
 
     @app.route("/setup/channels", methods=["GET", "POST"])
     @manager_required

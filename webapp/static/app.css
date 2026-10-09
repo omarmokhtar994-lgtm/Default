@@ -985,3 +985,7 @@ details.autobreaks > summary::-webkit-details-marker { display: none; }
 .tgt-days small { color: var(--dim); }
 .tgt-days a.miss b { color: var(--gap-ink); }
 @media (max-width: 720px) { .tgt-days { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Phase XY: removing a department goes through a check; its link keeps the red of a destructive action */
+.wl-head a.danger { font-size: 12px; font-weight: 600; color: var(--gap-ink); }
+.wl-dept .check-save { margin: 10px 0 4px; }

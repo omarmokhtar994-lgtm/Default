@@ -366,6 +366,11 @@
         li.className = "yellow"; b.textContent = "Warning: ";
         li.appendChild(b); li.appendChild(document.createTextNode(w)); list.appendChild(li);
       });
+      (found.channels || []).forEach(function (w) {  // Phase V: the channel a move would leave short
+        var li = document.createElement("li"), b = document.createElement("b");
+        li.className = "yellow"; b.textContent = "Channels: ";
+        li.appendChild(b); li.appendChild(document.createTextNode(w)); list.appendChild(li);
+      });
       if (list.childNodes.length) { result.appendChild(list); }
       warned = list.childNodes.length > 0;
       dlg.classList.toggle("yellow", warned);

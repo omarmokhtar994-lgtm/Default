@@ -85,7 +85,8 @@ def channel_view(day: int, step: int, now, plan, pieces, lanes: Dict[str, Any], 
             languages[seg["name"]] = counts_for(seg.get("language", ""), ch["language_rows"])
         return languages[seg["name"]]
 
-    ch = {**ch, "speaks": speaks, "skills_of": lambda name: can_work(ch["skills"], name)}
+    ch = {**ch, "speaks": speaks, "skills_of": lambda name: can_work(ch["skills"], name),
+          "language_of": {seg["name"]: seg.get("language", "") for tick in now for seg in tick}}
     today = _Counts(day, now, ch, rules, moves=True)
     planned = _Counts(day, plan, ch, rules, moves=False)
     letters = [c for c in "PCE" if c in setup["need"]]
@@ -134,7 +135,59 @@ def channel_view(day: int, step: int, now, plan, pieces, lanes: Dict[str, Any], 
     changes = sorted(({"id": m["id"], "name": name, "start": m["start"], "end": m["end"], "channel": m["channel"]}
                       for (offset, name), ms in ch["moves"].items() if offset == 0 for m in ms if m.get("id")),
                      key=lambda m: (m["start"], m["name"]))
-    return {"rows": rows, "warnings": warnings, "now": moment, "unplanned": loose, "changes": changes}
+    return {"rows": rows, "warnings": warnings, "now": moment, "unplanned": loose, "changes": changes,
+            "hold": ChannelHold(day, step, setup, rules, today, ch)}
+
+
+class ChannelHold:
+    """For re-planning breaks (``day.replan``): whether moving a person's break (a per-tick change of +1 where they
+    come back, -1 where they leave) keeps every channel and language minimum they count for at its need, and the
+    counts once a move is kept."""
+
+    def __init__(self, day: int, step: int, setup: Dict[str, Any], rules: List[Dict[str, Any]], counts: "_Counts",
+                 ch: Dict[str, Any]):
+        self.day, self.step, self.setup, self.rules, self.ch = day, step, setup, rules, ch
+        self.channel = {c: list(v) for c, v in counts.channel.items()}
+        self.language = [list(v) for v in counts.language]
+        self.who = counts.who
+
+    def _covered(self, name: str, i: int) -> str:
+        t = i * STEP
+        key = (0, name)
+        letter = self.who[i].get(key) or letter_at(self.ch["blocks"].get(key, []), self.ch["moves"].get(key, []), t,
+                                                   blended_at(self.setup, self.day, t))
+        return self.ch["skills_of"](name) if letter == "A" else (letter or "")
+
+    def _langs(self, name: str, covered: str) -> List[int]:
+        seg = {"name": name, "language": self.ch["language_of"].get(name, "")}
+        return [j for j, r in enumerate(self.rules) if r["channel"] in covered
+                and r["language"].casefold() in self.ch["speaks"](seg)]
+
+    def holds(self, name: str, change: Dict[int, int]) -> bool:
+        for i, d in change.items():
+            if d >= 0 or not 0 <= i < len(self.who):
+                continue
+            t = i * STEP
+            covered = self._covered(name, i)
+            for c in covered:
+                if c in self.setup["need"] and self.channel[c][i] + d < need_at(self.setup, c, self.day, t):
+                    return False
+            for j in self._langs(name, covered):
+                rule = self.rules[j]
+                if inside(rule["days"], rule["start"], rule["end"], self.day, t) and \
+                        self.language[j][i] + d < rule["minimum"]:
+                    return False
+        return True
+
+    def apply(self, name: str, change: Dict[int, int]) -> None:
+        for i, d in change.items():
+            if not 0 <= i < len(self.who):
+                continue
+            covered = self._covered(name, i)
+            for c in covered:
+                self.channel[c][i] += d
+            for j in self._langs(name, covered):
+                self.language[j][i] += d
 
 
 def _windows(issues: Dict[int, list], step: int) -> List[Tuple[int, int, list]]:

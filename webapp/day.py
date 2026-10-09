@@ -853,6 +853,7 @@ def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: i
                         return False
         return True
 
+    hold = (view.get("channels") or {}).get("hold")
     before_score = score(sums)
     current = before_score
     for _ in range(rounds):
@@ -869,6 +870,8 @@ def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: i
                     change = delta(lane, seg, b, new)
                     if not change or not languages_hold(lane, change):
                         continue
+                    if hold is not None and not hold.holds(lane["name"], change):
+                        continue  # Phase V: never a move that leaves a channel or its language below its need
                     totals = list(sums)
                     for i, d in change.items():
                         totals[i // per] += d
@@ -879,6 +882,8 @@ def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: i
         if best is None:
             break
         _, lane, seg, b, new, change, totals = best
+        if hold is not None:
+            hold.apply(lane["name"], change)
         for i, d in change.items():
             for L in langs:
                 if lang_of[lane["name"]] in L["eligible"]:

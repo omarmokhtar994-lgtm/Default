@@ -194,6 +194,31 @@ class TheChannelsOnTheDay(_Day):
         self.assertEqual(said["better"][0], "16:00")
 
 
+class TheBreakMovesAndChannels(_Day):
+    """Task 8: moving a break says what it does to the channels; re-planning the day's breaks never makes a move that
+    leaves a channel or a language minimum below its need."""
+
+    def test_the_break_advice_says_the_channel_effect(self):
+        said = self.days.break_advice(self.key, WED, "Associate 031", 0, "15:00")
+        self.assertEqual(said["channels"], ["15:00 to 16:00: nobody on Phone"])
+        self.assertEqual(self.days.break_advice(self.key, WED, "Associate 031", 0, "16:00")["channels"], [])
+
+    def test_the_channel_guard_refuses_a_move_that_leaves_a_channel_short(self):
+        hold = self.view()["channels"]["hold"]
+        to_three = {t // 5: -1 for t in range(900, 915, 5)} | {t // 5: 1 for t in range(840, 855, 5)}
+        to_four = {t // 5: -1 for t in range(960, 975, 5)} | {t // 5: 1 for t in range(840, 855, 5)}
+        self.assertFalse(hold.holds("Associate 031", to_three))
+        self.assertTrue(hold.holds("Associate 031", to_four))
+
+    def test_every_move_the_replan_proposes_keeps_the_channels(self):
+        page = self.days.page(self.key, WED)
+        before = {w["text"] for w in page["view"]["channels"]["warnings"]}
+        for move in self.days.replan(page)["moves"]:
+            name, idx, start = move["name"], move["idx"], f"{move['to'] // 60 % 24:02d}:{move['to'] % 60:02d}"
+            self.days.move_break(self.key, WED, name, idx, start, self.omar)
+        self.assertEqual({w["text"] for w in self.warnings()} - before, set())
+
+
 class TheChannelsTab(unittest.TestCase):
     """The RTA page's Channels tab: warnings with causes and fixes; a fix applied from the page."""
 

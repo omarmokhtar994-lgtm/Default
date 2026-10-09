@@ -251,7 +251,10 @@ class DayBook:
                              "out. Run the week again, or ask the admin to restore the server's data folder.")
         inputs = read_inputs(source)
         attendance, actual, stale, acts = self._records(program, on, row)
-        if extra and extra.get("status"):
+        if extra and extra.get("break"):  # a break at another time (the break advice's channel effect)
+            name, idx, minute = extra["break"]
+            actual[(0, name, idx)] = minute
+        elif extra and extra.get("status"):
             attendance[(0, extra["name"])] = {"status": extra["status"], "from": extra["from"], "to": extra["to"],
                                               "billable": extra["billable"]}
         elif extra and extra.get("kind"):
@@ -471,7 +474,13 @@ class DayBook:
         if m is None:
             raise ValueError("The break time must be like 13:05.")
         page = self.page(program, on, measure)
-        return advice(page["view"], page["inputs"], name, idx, m + (1440 if m < span[0] else 0))
+        m += 1440 if m < span[0] else 0
+        found = advice(page["view"], page["inputs"], name, idx, m)
+        if page["view"].get("channels") is not None:  # Phase V: what the move does to the channels
+            old = {w["text"] for w in page["view"]["channels"]["warnings"]}
+            moved = self.page(program, on, measure, extra={"break": (name, idx, m)})["view"]["channels"]
+            found["channels"] = [w["text"] for w in moved["warnings"] if w["text"] not in old]
+        return found
 
     # ------------------------------------------------------------- activities: aux, meetings, overtime, VTO
     @staticmethod

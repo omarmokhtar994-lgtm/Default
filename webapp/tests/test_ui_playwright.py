@@ -1568,6 +1568,55 @@ class ThePhaseWInTheBrowser(unittest.TestCase):
         phone.screenshot(path=str(W_SCREENS / "phone_week_target.png"), full_page=True)
 
 
+# Phase XY task 6: colours as the browser draws them. Each pair is [foreground, background] in sRGB 0-255; a
+# see-through background is laid over what is behind it, up to the page.
+PAIRS_JS = """([selector, what]) => {
+  const parse = (c) => { const m = c.match(/rgba?\\(([^)]+)\\)/); if (!m) return null;
+    const p = m[1].split(/[\\s,\\/]+/).filter(Boolean).map(Number); return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1]; };
+  const over = (top, under) => [0, 1, 2].map(i => top[i] * top[3] + under[i] * (1 - top[3]));
+  const behind = (el) => { const layers = [];
+    for (let e = el; e; e = e.parentElement) { const c = parse(getComputedStyle(e).backgroundColor);
+      if (c && c[3] > 0) { layers.push(c); if (c[3] >= 1) break; } }
+    let base = [255, 255, 255]; for (let i = layers.length - 1; i >= 0; i--) base = over(layers[i], base); return base; };
+  return [...document.querySelectorAll(selector)].slice(0, 60).filter(el => el.getClientRects().length).map(el => {
+    const s = getComputedStyle(el);
+    if (what === "text") { const bg = behind(el), fg = parse(s.color); return [over(fg, bg), bg]; }
+    const bg = behind(el.parentElement);
+    if (what === "edge") { const fg = parse(s.borderTopColor); return [over(fg, bg), bg]; }
+    return [behind(el), bg];  // a filled cell against the panel it sits on
+  });
+}"""
+
+
+def parse_colour(text):
+    nums = [float(x) for x in re.findall(r"[\d.]+", text)] if "rgb" in text else None
+    if nums is None:
+        h = text.strip().lstrip("#")
+        nums = [int(h[i:i + 2], 16) for i in (0, 2, 4)]
+    return nums
+
+
+def contrast(fg, bg):
+    def lum(c):
+        c = [v / 255 for v in c[:3]]
+        c = [v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4 for v in c]
+        return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+    a, b = sorted((lum(fg), lum(bg)), reverse=True)
+    return (a + 0.05) / (b + 0.05)
+
+
+def oklch(rgb):
+    """(chroma, hue in degrees) of an sRGB colour, by OKLab."""
+    import math
+    r, g, b = [v / 255 for v in rgb]
+    r, g, b = [v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4 for v in (r, g, b)]
+    l = (0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b) ** (1 / 3)
+    m = (0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b) ** (1 / 3)
+    s = (0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b) ** (1 / 3)
+    a2 = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s
+    b2 = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s
+    return math.hypot(a2, b2), math.degrees(math.atan2(b2, a2)) % 360
+
 XY_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_xy" / "screens"
 
 
@@ -1606,7 +1655,7 @@ class ThePhaseXYInTheBrowser(unittest.TestCase):
                     content_type="multipart/form-data")
         cls.run_id = cls.store.list_runs()[0]["id"]
         wait(cls.store, cls.run_id, statuses=("DONE", "REJECTED", "FAILED"))
-        version = cls.app.extensions["schedules"].versions(cls.run_id)[-1]["id"]
+        cls.version = version = cls.app.extensions["schedules"].versions(cls.run_id)[-1]["id"]
         client.post(f"/schedules/{version}/auto-breaks", data={"csrf_token": token(client), "use": "1"})
         seed_history(cls.store)
         cls.running = "0123456789ab"  # a run id as the queue makes them (12 hex digits)
@@ -1767,3 +1816,129 @@ class ThePhaseXYInTheBrowser(unittest.TestCase):
         expect(page.locator(".now a", has_text="Open it")).to_have_attribute("href", f"/runs/{self.running}")
         self.assertEqual(loads, [])
         self.assertEqual(page.evaluate("document.querySelector('#newrun input[type=file]').files.length"), 1)
+
+    # ---------------------------------------------------------------- Task 6: colour means state; layout fixes
+    def look(self, name, width=1280):
+        """A signed-in page in one look: night, day (the device's) or day picked with the switch on a dark device."""
+        page = self.page(width=width, scheme="light" if name == "day" else "dark")
+        self.sign_in(page)
+        if name == "picked":
+            with page.expect_navigation():
+                page.locator("[data-theme-toggle]").click()
+            self.assertEqual(page.evaluate("document.documentElement.dataset.theme"), "light")
+        return page
+
+    def test_rendered_pairs_pass_in_both_looks(self):
+        """The Phase Y pairs as the browser draws them (computed colours, see-through panels laid over the page)."""
+        q, s = self.q, self.sunday.isoformat()
+        checks = [  # page, elements, what is measured, the least contrast
+            (f"/day?program={q}&date={s}", "[data-day] .tc.ok", "text", 4.5),
+            (f"/day?program={q}&date={s}&view=board", "[data-day] .chip small", "text", 4.5),
+            (f"/week?program={q}&week={s}", ".wk.over", "text", 4.5),
+            (f"/week?program={q}&week={s}", ".wk.over small", "text", 4.5),
+            (f"/schedules/{self.version}/breaks", ".bp-strip .ok", "text", 4.5),
+            (f"/runs/{self.run_id}", "main input[type=text], main select", "edge", 3.0),
+            (f"/week?program={q}&week={s}", ".wk.covered", "fill", 3.0),
+            (f"/week?program={q}&week={s}", ".wk.short", "fill", 3.0),
+        ]
+        for name in ("night", "day", "picked"):
+            page = self.look(name)
+            for url, selector, what, least in checks:
+                page.goto(self.base + url)
+                page.wait_for_load_state("load")
+                pairs = page.evaluate(PAIRS_JS, [selector, what])
+                self.assertTrue(pairs, f"{name}: nothing matched {selector} on {url}")
+                low = sorted({round(contrast(fg, bg), 2) for fg, bg in pairs if contrast(fg, bg) < least})
+                self.assertEqual(low, [], f"{name}: {selector} ({what}) on {url}")
+            page.goto(self.base + f"/week?program={q}&week={s}")
+            link, teal = page.evaluate("[getComputedStyle(document.querySelector('main p a, main td a, main li a')).color,"
+                                       " getComputedStyle(document.documentElement).getPropertyValue('--covered')]")
+            (l_c, l_h), (t_c, t_h) = oklch(parse_colour(link)[:3]), oklch(parse_colour(teal)[:3])
+            apart = min(abs(l_h - t_h), 360 - abs(l_h - t_h))
+            self.assertTrue(l_c < 0.03 or apart >= 15, f"{name}: links ({link}) wear the covered teal ({teal})")
+
+    def test_ticks_are_ink_and_every_field_has_an_edge(self):
+        """Proposal.css made every checkbox and radio ink and gave time fields and text areas the field edge too."""
+        for name in ("night", "day"):
+            page = self.look(name)
+            for url, selector, prop, token in ((f"/exports", "main input[type=checkbox]", "accentColor", "--action"),
+                                               ("/", "main input[type=radio]", "accentColor", "--action"),
+                                               (f"/schedules/{self.version}/breaks", "main input[type=time]", "borderTopColor", "--edge"),
+                                               (f"/setup/with?program={self.q}", "main textarea", "borderTopColor", "--edge")):
+                page.goto(self.base + url)
+                page.wait_for_load_state("load")
+                got = page.evaluate("""([sel, prop, token]) => {
+                  const probe = document.createElement('i'); probe.style.color = `var(${token})`; document.body.append(probe);
+                  const want = getComputedStyle(probe).color; probe.remove();
+                  return [...document.querySelectorAll(sel)].map(el => [getComputedStyle(el)[prop], want]);
+                }""", [selector, prop, token])
+                self.assertTrue(got, f"{name}: nothing matched {selector} on {url}")
+                self.assertEqual({g for g, _ in got}, {got[0][1]}, f"{name}: {selector} {prop} on {url}")
+
+    def test_focus_never_hides_under_the_top_bar(self):
+        for width in (1280, 390):
+            page = self.page(width=width, height=700, scheme="light")
+            self.sign_in(page)
+            page.goto(self.base + f"/runs/{self.run_id}/schedules")
+            page.wait_for_load_state("load")
+            page.keyboard.press("Tab")  # a keyboard user
+            page.evaluate("""() => {
+              const cells = [...document.querySelectorAll('button.ed')], target = cells[40], next = cells[41];
+              window.scrollTo(0, window.scrollY + target.getBoundingClientRect().top - 10);  // on screen, behind the bar
+              next.focus({ preventScroll: true });
+            }""")
+            page.keyboard.press("Shift+Tab")
+            page.wait_for_timeout(400)
+            top, bar = page.evaluate("[document.activeElement.getBoundingClientRect().top,"
+                                     " document.querySelector('header.top').getBoundingClientRect().bottom]")
+            self.assertGreaterEqual(top, bar, f"{width} px wide: the focused cell is under the top bar")
+
+    def test_focus_clears_a_top_bar_that_wraps(self):
+        """A long name wraps the top bar to two rows on a narrow desktop (83 px at 960 wide); focus still clears it."""
+        page = self.page(width=960, height=700, scheme="light")
+        self.sign_in(page)
+        page.goto(self.base + f"/runs/{self.run_id}/schedules")
+        page.wait_for_load_state("load")
+        page.evaluate("document.querySelector('header.top .who').textContent ="
+                      " 'Abdelrahman Mohamed Abdelaziz Elsayed Ibrahim, supervisor'")
+        page.wait_for_timeout(300)
+        self.assertGreater(page.evaluate("document.querySelector('header.top').getBoundingClientRect().height"), 72)
+        page.keyboard.press("Tab")
+        page.evaluate("""() => {  // the cell's top 8 px under the bar's lower edge: past a fixed padding, still covered
+          const cells = [...document.querySelectorAll('button.ed')], target = cells[40], next = cells[41];
+          const bar = document.querySelector('header.top').getBoundingClientRect().bottom;
+          window.scrollTo(0, window.scrollY + target.getBoundingClientRect().top - (bar - 8));
+          next.focus({ preventScroll: true });
+        }""")
+        page.keyboard.press("Shift+Tab")
+        page.wait_for_timeout(400)
+        top, bar = page.evaluate("[document.activeElement.getBoundingClientRect().top,"
+                                 " document.querySelector('header.top').getBoundingClientRect().bottom]")
+        self.assertGreaterEqual(top, bar)
+
+    def test_a_focused_break_shows_its_ring(self):
+        for name in ("night", "day"):
+            page = self.look(name)
+            self.day(page, [])
+            brk = page.locator("[data-day] rect.brk").first
+            brk.focus()
+            page.keyboard.press("Shift+Tab")
+            page.keyboard.press("Tab")  # reached with the keyboard, so :focus-visible holds
+            style = page.evaluate("""() => { const s = getComputedStyle(document.activeElement);
+              return [document.activeElement.tagName, s.outlineStyle, s.outlineWidth, s.outlineColor,
+                      getComputedStyle(document.documentElement).getPropertyValue('--action')]; }""")
+            tag, outline, width, colour, action = style
+            self.assertEqual(tag.lower(), "rect")
+            self.assertEqual((outline, width), ("solid", "2px"), name)
+            self.assertEqual(parse_colour(colour)[:3], parse_colour(action)[:3], name)
+
+    def test_names_fit_on_a_phone(self):
+        page = self.page(width=320, height=700, scheme="light")
+        self.sign_in(page)
+        self.day(page, [])
+        cut = page.evaluate("[...document.querySelectorAll('[data-day] .tl-who b')]"
+                            ".filter(b => b.scrollWidth > b.clientWidth).map(b => b.textContent)")
+        self.assertEqual(cut, [])
+        sizes = page.evaluate("[...document.querySelectorAll('[data-day] select.att')].map(s => parseFloat(getComputedStyle(s).fontSize))")
+        self.assertTrue(sizes)
+        self.assertGreaterEqual(min(sizes), 16)

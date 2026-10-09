@@ -1,10 +1,16 @@
-# Team Scheduler: design plan (v2, "control room")
+# Team Scheduler: design plan (v3, "control room")
 
 © 2026 Omar Mokhtar. All rights reserved.
 
 Owner, 2026-10-07: redesign in the "Control room (dark)" direction (chosen from
 four previews), keep the name "Team Scheduler". v1 (light limestone and Nile)
 is replaced.
+
+v3, 2026-10-10 (Phase XY, owner-approved Phase Y proposal and Phase X review):
+colour means state. Everything you can press or move is ink; teal, amber, red
+and violet only ever mean covered, short, gap and over-staffed. Every pair is
+measured in `evidence/phase_y/PALETTE.md`. Font sizes are in rem, so the page
+follows the reader's own text size.
 
 ## Subject, audience, job
 
@@ -28,9 +34,31 @@ is replaced.
 | Short | `#F2A93B` | below target, at or above the floor; in progress |
 | Gap | `#E5534B` | below the floor or uncovered; not approved |
 | Over | `#8A7BF0` | over-staffed beyond the cap |
+| Action | `#E6EDF5` | links, buttons, the focus ring, picked items, breaks you can move (ink) |
+| Edge | `#627389` | field and button edges (3.22:1 on panels) |
+| Selected | `#1B2D47` | the background of a picked tab, chip or option |
+| Done | `#54749A` | a finished stage (3.23:1 on panels) |
+| Covered text, Over text | `#2BC4B4`, `#9086EE` | "covered" and "over-staffed" written as words |
+
+The day look (the device's, or picked with the switch) has its own values for
+each token in `app.css`: actions are navy ink (`#12233A`), edges `#77869A`, and
+the status fills sit a step deeper (`#06A496`, `#C98304`, `#D53D38`,
+`#7560E3`) with dark text on teal and amber and white text on red and violet,
+so the four stay apart by lightness as well as hue (colour-blind check: worst
+pair ΔE 8.6).
 
 The four status colours are the heatmap's scale, so the page's colour always
-means something; there is no decorative accent.
+means something; there is no decorative accent. The rule that keeps it true:
+
+- A thing you can press, pick or move wears ink (`--action`), never a status
+  colour. Picked means ink edge on `--selected`, not teal.
+- A status written as a word uses its text token (`--covered-text`,
+  `--short-ink`, `--gap-ink`, `--over-text`); text on a status fill uses
+  `--on-covered`, `--on-short`, `--on-gap` or `--on-over`.
+- Chart series never borrow a status colour: the "hours needed" level is a
+  dashed ink line.
+- Breaks on the RTA timeline are ink (you can move them); a moved break keeps
+  a dashed outline where the engine planned it.
 
 Type: **Saira Semi Condensed** (600/700) for headings, status words and every
 big number, which reads like control-room signage and keeps figures narrow;
@@ -99,6 +127,9 @@ time.
 ## Quality floor
 
 360 px wide without horizontal scroll (the wall scrolls inside its panel on
-a phone), visible focus ring (2 px Covered outline, offset), AA contrast on
-text, every colour also spelled out in words (legend, cell titles, chips),
-`prefers-reduced-motion` respected.
+a phone), visible focus ring (2 px ink outline, offset) that never hides under
+the sticky top bar, AA contrast on text and 3:1 on field edges and status
+cells, every colour also spelled out in words (legend, cell titles, chips),
+`prefers-reduced-motion` respected. On a phone the RTA timeline gives each name
+its own line and the attendance box 16 px text (no zoom on tap). A list that
+acts when it changes waits for Enter when the keyboard moves it.

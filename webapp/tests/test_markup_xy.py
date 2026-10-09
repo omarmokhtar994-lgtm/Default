@@ -90,5 +90,59 @@ class TheMarkup(unittest.TestCase):
         self.assertNotIn("breaks in amber", page)
 
 
+CSS = Path(__file__).resolve().parents[1] / "static" / "app.css"
+# Phase Y proposal, approved by the owner (evidence/phase_y/proposal.css, measured in PALETTE.md)
+NIGHT = {"--action": "#E6EDF5", "--action-hover": "#FFFFFF", "--on-action": "#0E1A2B", "--edge": "#627389",
+         "--done": "#54749A", "--covered-text": "#2BC4B4", "--over-text": "#9086EE", "--on-covered": "#0E1A2B",
+         "--on-short": "#0E1A2B", "--on-gap": "#0E1A2B", "--on-over": "#0E1A2B", "--selected": "#1B2D47",
+         "--ch-email": "#4D7D8D"}
+DAY = {"--action": "#12233A", "--action-hover": "#22385A", "--on-action": "#FFFFFF", "--edge": "#77869A",
+       "--done": "#7692B4", "--covered-text": "#0B776C", "--over-text": "#715ED8", "--covered": "#06A496",
+       "--short": "#C98304", "--gap": "#D53D38", "--over": "#7560E3", "--on-covered": "#0E1A2B",
+       "--on-short": "#0E1A2B", "--on-gap": "#FFFFFF", "--on-over": "#FFFFFF", "--selected": "#E3EAF2"}
+
+
+def block(text, opener):
+    """The body of the first {...} that follows ``opener`` (braces balanced)."""
+    start = text.index(opener)
+    i = text.index("{", start + len(opener) - 1)
+    depth, j = 0, i
+    while True:
+        depth += {"{": 1, "}": -1}.get(text[j], 0)
+        if depth == 0:
+            return text[i + 1:j]
+        j += 1
+
+
+def tokens(body):
+    return {k: v.upper() for k, v in re.findall(r"(--[\w-]+)\s*:\s*(#[0-9A-Fa-f]{6})", body)}
+
+
+class TheStylesheet(unittest.TestCase):
+    """Phase XY task 6 (review finding 14 and the Phase Y colours): sizes follow the reader's text size, and the
+    approved colours are in every look."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.css = re.sub(r"/\*.*?\*/", "", CSS.read_text(), flags=re.S)
+
+    def test_every_font_size_is_in_rem(self):
+        screen = self.css.replace(block(self.css, "@media print"), "")
+        px = re.findall(r"font-size\s*:\s*[\d.]+px[^;}]*", screen) + re.findall(r"\bfont\s*:[^;}]*?\b[\d.]+px[^;}]*", screen)
+        self.assertEqual(px, [])
+
+    def test_the_night_tokens_are_the_approved_ones(self):
+        night = {}
+        for at in [i for i in range(len(self.css)) if self.css.startswith(":root {", i)]:  # every plain :root block
+            night.update(tokens(block(self.css[at:], ":root {")))
+        self.assertEqual({k: night.get(k) for k in NIGHT}, NIGHT)
+
+    def test_the_proposed_tokens_are_in_both_day_blocks(self):
+        device = tokens(block(block(self.css, "@media (prefers-color-scheme: light)"), ':root:not([data-theme="dark"])'))
+        picked = tokens(block(self.css, ':root[data-theme="light"]'))
+        self.assertEqual({k: device.get(k) for k in DAY}, DAY)
+        self.assertEqual({k: picked.get(k) for k in DAY}, DAY)
+
+
 if __name__ == "__main__":
     unittest.main()

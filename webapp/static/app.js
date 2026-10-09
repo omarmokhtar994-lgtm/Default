@@ -100,6 +100,18 @@ function homeRefresh(now) {
   }
 })();
 
+// A focused or linked item stops below the sticky top bar (Phase XY, review finding 3). app.css gives a padding per
+// screen width; a long name can wrap the bar to two rows, so the padding follows the bar's measured height.
+(function () {
+  "use strict";
+  var bar = document.querySelector("header.top");
+  if (!bar || typeof ResizeObserver !== "function") { return; }
+  new ResizeObserver(function () {
+    var h = bar.getBoundingClientRect().height;
+    document.documentElement.style.scrollPaddingTop = h ? Math.ceil(h + 12) + "px" : "";
+  }).observe(bar);
+})();
+
 // Back goes to the last page here that was a different page (Phase W): a save reloads the same page, so the
 // browser's own previous page was often this one and Back looked dead. Pages are told apart by their path (the
 // RTA on another day is still the RTA). With no such page, the link's own address (one level up) is used.

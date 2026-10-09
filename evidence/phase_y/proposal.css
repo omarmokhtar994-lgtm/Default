@@ -1,0 +1,113 @@
+/* Phase Y colour and design proposal: a layer over webapp/static/app.css, for the owner to see before anything
+   changes. Principle: colour means the floor's state (covered, short, gap, over) or a data identity (shifts,
+   channels), never "you can press this". Everything you can press or move is ink: near-white on the night look,
+   navy on the day look. Values measured in evidence/phase_y/PALETTE.md. */
+
+/* ------------------------------------------------------------ tokens: night look (default) */
+:root {
+  --action: #E6EDF5;          /* links, buttons, focus ring, selection, breaks you can move */
+  --action-hover: #FFFFFF;
+  --on-action: #0E1A2B;       /* text on a filled action: 14.81:1 */
+  --edge: #627389;            /* field and button edges: 3.22:1 on panels, 3.61:1 on the page */
+  --done: #54749A;            /* a finished stage: 3.23:1 on panels (was 2.37) */
+  --covered-text: #2BC4B4;    /* "covered" as text: 7.18:1 */
+  --over-text: #9086EE;       /* "over-staffed" as text: 5.08:1 (was 4.59) */
+  --on-covered: #0E1A2B; --on-short: #0E1A2B; --on-gap: #0E1A2B; --on-over: #0E1A2B;  /* 8.04, 8.75, 4.72, 5.14 */
+  --selected: #1B2D47;        /* the background of a picked tab, chip or option */
+  --ch-email: #4D7D8D;        /* white text 4.53:1 (was 4.41) */
+}
+/* ------------------------------------------------------------ tokens: day look */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --action: #12233A; --action-hover: #22385A; --on-action: #FFFFFF;   /* 15.82:1 */
+    --edge: #77869A;            /* 3.71:1 on white, 3.21:1 on the page */
+    --done: #7692B4;            /* 3.21:1 on white (was 2.15) */
+    --covered-text: #0B776C; --over-text: #715ED8;                      /* 5.43:1, 4.89:1 */
+    /* status fills: 3:1 or more on white; amber and teal light with dark text, red and violet darker with white
+       text, so the four stay apart for colour-blind readers (validator: worst pair ΔE 8.6) */
+    --covered: #06A496; --short: #C98304; --gap: #D53D38; --over: #7560E3;
+    --on-covered: #0E1A2B; --on-short: #0E1A2B; --on-gap: #FFFFFF; --on-over: #FFFFFF;  /* 5.63, 5.60, 4.61, 4.63 */
+    --selected: #E3EAF2;
+  }
+}
+:root[data-theme="light"] {
+  --action: #12233A; --action-hover: #22385A; --on-action: #FFFFFF;
+  --edge: #77869A; --done: #7692B4; --covered-text: #0B776C; --over-text: #715ED8;
+  --covered: #06A496; --short: #C98304; --gap: #D53D38; --over: #7560E3;
+  --on-covered: #0E1A2B; --on-short: #0E1A2B; --on-gap: #FFFFFF; --on-over: #FFFFFF;
+  --selected: #E3EAF2;
+}
+
+/* ------------------------------------------------------------ actions are ink */
+a { color: var(--action); }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible, input:focus-visible, select:focus-visible, button:focus-visible, summary:focus-visible,
+input:focus, select:focus { outline-color: var(--action); }
+button, .button { color: var(--action); border-color: var(--edge); }
+button:hover, .button:hover { background: var(--hover); border-color: var(--action); }
+button.primary, .button.primary { background: var(--action); border-color: var(--action); color: var(--on-action); }
+button.primary:hover, .button.primary:hover { background: var(--action-hover); border-color: var(--action-hover); }
+button.link { color: var(--paper); }
+button.danger, .button.danger { color: var(--gap-ink); border-color: var(--gap); }
+input[type=text], input[type=password], input[type=date], input[type=time], input:not([type]), select, textarea {
+  border-color: var(--edge); }
+input[type=date], input[type=time] { color-scheme: inherit; }  /* the picker follows the look (was always dark) */
+input[type=radio], input[type=checkbox], .mode input, .actable input[type="checkbox"] { accent-color: var(--action); }
+.drop.over { border-color: var(--action); background: var(--hover); }
+.drop .chosen { color: var(--action); }
+.drop input[type=file]::file-selector-button { border-color: var(--edge); color: var(--action); }
+.crumbs a { border-color: var(--edge); }
+.crumbs a:hover { border-color: var(--action); color: var(--action); }
+.flash { border-left-color: var(--action); }
+dialog.dlg { border-top-color: var(--action); }
+.rb-add { color: var(--action); border-color: var(--edge); }
+.rb-add:hover, .rb-add:focus-visible { background: var(--hover); border-color: var(--action); }
+.ed:hover, .cp-grid td.c:hover, .cp-grid td.c:focus-visible { outline-color: var(--action); }
+.ed.changed { outline: 2px solid var(--action); }
+[data-day] .chip.offer { border-color: var(--action); }
+[data-day] .chip.offer:hover { background: var(--hover); }
+.inuse, .vbar .use { color: var(--action); }
+
+/* ------------------------------------------------------------ picked = ink edge on a raised background */
+.leftnav nav a.on { color: var(--action); box-shadow: inset 3px 0 0 var(--action); }
+.tabs a.on, .exp-presets a.on, .shiftbar a.on, .bp-days button.on, .bp-days a.on {
+  background: var(--selected); color: var(--paper); border-color: var(--action); box-shadow: inset 0 -2px 0 var(--action); }
+.shiftbar a.on small { color: var(--paper); }
+.shiftbar a.soon { border-style: dashed; border-color: var(--edge); }
+.shiftbar .soon-tag { color: var(--dim); }
+.mode:has(input:checked) { border-color: var(--action); box-shadow: inset 3px 0 0 var(--action); background: var(--selected); }
+.view label:has(input:checked) { border-color: var(--action); color: var(--action); background: var(--selected); }
+.add-dlg .kinds label.k:has(input:checked) { background: var(--selected); border-color: var(--action); color: var(--action); }
+.vbar a.cur { border-color: var(--action); box-shadow: inset 3px 0 0 var(--action); }
+.sidepick a[aria-current] { border-color: var(--action); color: var(--action); }
+.shiftbar a:focus-visible { outline-color: var(--action); }
+
+/* ------------------------------------------------------------ status: the four colours mean only that */
+.wk.covered { color: var(--on-covered); } .wk.short { color: var(--on-short); }
+.wk.gap { color: var(--on-gap); } .wk.over { color: var(--on-over); }
+.wk small { opacity: 1; }
+[data-day] .tc.ok { color: var(--on-covered); } [data-day] .tc.warn { color: var(--on-short); } [data-day] .tc.bad { color: var(--on-gap); }
+.bp-strip .ok { color: var(--on-covered); } .bp-strip .warn { color: var(--on-short); } .bp-strip .bad { color: var(--on-gap); }
+.cp-cov td.ok { color: var(--covered-text); }
+[data-day] .tl-tag.called { border-color: var(--covered); color: var(--covered-text); }
+.role-supervisor { border-color: var(--over); color: var(--over-text); }
+.chg.good { color: var(--covered-text); }
+.ch-E { background: var(--ch-email); }
+
+/* ------------------------------------------------------------ the RTA timeline and board: amber and violet only mean short and over */
+[data-day] .brk, [data-day] .brk.moved { fill: var(--action); }      /* a break is something you can move: ink */
+[data-day] .tl-ghost { stroke: var(--dim); }                          /* where the engine planned it */
+.legend2 .k.moved { background: var(--action); }
+.legend2 .k.ghost { border-color: var(--dim); }
+[data-day] .tl-act.aux, [data-day] .tl-act.vto { stroke: var(--dim); }
+[data-day] .chip small { background: var(--action); color: var(--on-action); }  /* the break's kind (B1, L) */
+[data-day] .chip.moved { border-color: var(--action); border-style: dashed; background: var(--console-2); }
+[data-day] .chip.moved small { background: var(--action); }
+.advice .says li::before { background: var(--dim); }
+
+/* ------------------------------------------------------------ charts: series never borrow a status colour */
+.chart path[data-series=orange], .chart line[data-series=orange] { stroke: var(--paper); stroke-dasharray: 6 4; }
+.chart circle[data-series=orange] { fill: var(--paper); }
+.readout { border-left-color: var(--edge); }  /* a summary panel, not a "covered" state */
+/* a focused break keeps a ring: an ink outline 2 px out, with the background showing between (works on the bar and off it) */
+[data-day] .brk:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; stroke: none; }

@@ -875,6 +875,12 @@
             throw new Error(j.error || ("The server answered " + r.status + ". Try again, or pick a shorter period."));
           });
         }
+        if (r.redirected && /^\/login(?:$|\?)/.test(new URL(r.url).pathname + new URL(r.url).search)) {
+          throw new Error("You were signed out: sign in again, then download.");
+        }
+        if ((r.headers.get("Content-Type") || "").indexOf("text/html") === 0) {
+          throw new Error("The server sent a page instead of the file. Reload this page, then download again.");
+        }
         var said = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(r.headers.get("Content-Disposition") || "");
         var name = said ? decodeURIComponent(said[1]) : "Team_Scheduler_export";
         return r.blob().then(function (blob) { return { blob: blob, name: name }; });

@@ -1543,6 +1543,17 @@ class ThePhaseWInTheBrowser(unittest.TestCase):
         page.screenshot(path=str(W_SCREENS / "export_ready.png"))
         self.assertEqual(errors, [])
 
+    def test_an_export_after_signing_out_says_so(self):
+        """Final review: with the session gone, the script followed the redirect to the sign-in page and saved
+        that page as the export file."""
+        page = self.page(width=1280, height=900, scheme="light")
+        self.sign_in(page)
+        self.go(page, f"/exports?from={self.sunday.isoformat()}&to={self.wed.isoformat()}", [])
+        page.context.clear_cookies()
+        page.get_by_role("button", name="Download").click()
+        expect(page.locator(".alert.bad")).to_contain_text("You were signed out: sign in again, then download.")
+        expect(page.locator(".exp-ok")).to_have_count(0)
+
     def test_a_phone_has_no_sideways_scroll(self):
         phone = self.page(width=390, height=844)
         errors = []

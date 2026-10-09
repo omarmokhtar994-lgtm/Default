@@ -695,6 +695,7 @@ body.wall { background: var(--night); color: var(--paper); padding: 2vh 2.5vw; m
 .wall-lists li.bad, .wall-lists li.warn { color: var(--gap-ink); }
 .wall-none, .wall-empty { color: var(--dim); font-size: 2.4vh; }
 @media (max-width: 900px) { .wall-rows { grid-template-columns: repeat(2, minmax(0, 1fr)); } .wall-lists { grid-template-columns: 1fr; } }
+@media (max-width: 600px) { .wall-rows { grid-template-columns: minmax(0, 1fr); } }  /* a phone: the big figures stay inside */
 
 /* add cover from the board; called-in shifts */
 [data-day] .addcover { display: inline-block; margin-top: 6px; font-size: 12px; font-weight: 600; }

@@ -153,15 +153,15 @@
   <h2 id="ot-h">Short: offer overtime</h2>
   <p class="note">People whose shift ends just before a short interval, or starts just after it, could stay on or come in early: at most 2 hours, keeping the program's rest gap. Offer it, and when they accept, press their name: it counts on the floor and is logged.</p>
   {% if not cover.next_known %}<p class="note warn-note">{{ tomorrow_unchecked }}</p>{% endif %}
-  {% if cover.overtime %}<table class="adh-t"><thead><tr><th scope="col">Interval</th><th scope="col" class="n">Buffer</th><th scope="col" class="n">People short</th><th scope="col">Who could cover (accepted → press)</th></tr></thead>
-  <tbody>{% for row in cover.overtime %}<tr><td><b>{{ hm(row.t) }}</b></td><td class="n bad">{{ row.buffer|hmm }}</td><td class="n">{{ row.short }}</td><td>{% for o in row.offers %}{{ overtime(o) }}{% else %}<span class="dim">nobody next to it within the rules</span>{% endfor %}</td></tr>{% endfor %}</tbody></table>
+  {% if cover.overtime %}<div class="scroll"><table class="adh-t"><thead><tr><th scope="col">Interval</th><th scope="col" class="n">Buffer</th><th scope="col" class="n">People short</th><th scope="col">Who could cover (accepted → press)</th></tr></thead>
+  <tbody>{% for row in cover.overtime %}<tr><td><b>{{ hm(row.t) }}</b></td><td class="n bad">{{ row.buffer|hmm }}</td><td class="n">{{ row.short }}</td><td>{% for o in row.offers %}{{ overtime(o) }}{% else %}<span class="dim">nobody next to it within the rules</span>{% endfor %}</td></tr>{% endfor %}</tbody></table></div>
   {% else %}<p class="empty">No short intervals.</p>{% endif %}
 </section>
 <section class="panel" aria-labelledby="vto-h">
   <h2 id="vto-h">Above demand: offer voluntary time off</h2>
   <p class="note">Where the floor is comfortably above need, people whose shift ends within 2 hours could leave early, while every interval until then keeps its need at every 5 minutes and every language keeps its minimum.</p>
-  {% if cover.vto %}<table class="adh-t"><thead><tr><th scope="col">From</th><th scope="col" class="n">Buffer</th><th scope="col" class="n">Room</th><th scope="col">Who could leave early (accepted → press)</th></tr></thead>
-  <tbody>{% for row in cover.vto %}<tr><td><b>{{ hm(row.t) }}</b></td><td class="n ok">{{ row.buffer|hmm }}</td><td class="n">{{ row.room }}</td><td>{% for o in row.offers %}{{ vto(o) }}{% endfor %}</td></tr>{% endfor %}</tbody></table>
+  {% if cover.vto %}<div class="scroll"><table class="adh-t"><thead><tr><th scope="col">From</th><th scope="col" class="n">Buffer</th><th scope="col" class="n">Room</th><th scope="col">Who could leave early (accepted → press)</th></tr></thead>
+  <tbody>{% for row in cover.vto %}<tr><td><b>{{ hm(row.t) }}</b></td><td class="n ok">{{ row.buffer|hmm }}</td><td class="n">{{ row.room }}</td><td>{% for o in row.offers %}{{ vto(o) }}{% endfor %}</td></tr>{% endfor %}</tbody></table></div>
   {% else %}<p class="empty">No interval has room for VTO.</p>{% endif %}
 </section>
 <section class="panel" aria-labelledby="acts-h">

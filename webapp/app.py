@@ -1106,15 +1106,18 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 for other in DAYS:
                     if other == day:
                         continue
-                    rows = draft.get(other) or _version_breaks(week, DAYS.index(other), rules)
+                    before = draft.get(other) or _version_breaks(week, DAYS.index(other), rules)
+                    rows = dict(before)
                     for name, starts in current.items():
                         label = shifts.get(name, [""] * 7)[d]
                         if shifts.get(name) and shifts[name][DAYS.index(other)] == label and shift_span(label):
-                            rows[name] = [None if s is None else s for s in starts]
-                            copied += 1
-                    store.set_break_draft(schedule_id, other, rows, g.user["id"])
+                            rows[name] = list(starts)
+                    if rows != before:  # only a day it changes is marked unsaved
+                        store.set_break_draft(schedule_id, other, rows, g.user["id"])
+                        copied += 1
                 flash(f"Copied {day}'s times to {copied} other day{'s' if copied != 1 else ''} with the same shift. "
-                      "Nothing is kept until you save.")
+                      "Nothing is kept until you save." if copied else
+                      f"Nothing to copy: no other day changes with {day}'s times.")
             elif action == "discard":
                 store.clear_break_draft(schedule_id)
                 flash("Your unsaved times were dropped.")

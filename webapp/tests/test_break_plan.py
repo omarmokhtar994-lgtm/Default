@@ -207,6 +207,26 @@ class TheBreakPlanPage(unittest.TestCase):
         self.admin.post(self.url("Thu"), data={"csrf_token": self.token(self.admin), "day": "Thu", "go": "Fri", **fields})
         self.assertNotIn("Thu", self.store.get_break_draft(self.version["id"]))
 
+    def test_copy_marks_only_the_days_it_changes(self):
+        # Phase R's deferred minor, fixed in Phase S (owner, 2026-10-09: "see if anything else needs fixing"): Copy
+        # marked every other day "unsaved" even where no one works the same shift or nothing changed
+        vid = self.version["id"]
+        self.store.clear_break_draft(vid)
+        self.addCleanup(self.store.clear_break_draft, vid)
+
+        def post(**fields):
+            return self.admin.post(self.url(), data={"csrf_token": self.token(self.admin), "day": "Wed", **fields})
+
+        post(action="copy")  # Wednesday has no breaks yet: nothing changes anywhere
+        self.assertEqual(self.store.get_break_draft(vid), {})
+        post(action="suggest")
+        post(action="copy")
+        week = json.loads(self.version["week"])
+        same = {DAYS[i] for i in range(7) if i != 3 for a in week["associates"]
+                if shift_span(a["days"][3]) and a["days"][i] == a["days"][3]}
+        self.assertTrue(same)
+        self.assertEqual(set(self.store.get_break_draft(vid)) - {"Wed"}, same)
+
     def test_grid_suggest_keep_and_save(self):
         import html
         page = html.unescape(self.admin.get(self.url()).get_data(as_text=True))

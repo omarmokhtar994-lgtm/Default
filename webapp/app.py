@@ -22,6 +22,7 @@ from .attendance import (ACTIVITY_KINDS, ADD_KINDS, DAY_OFF, DayBook, aux_detail
 from .break_plan import check_row, floor, slots_for, suggest
 from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, board, read_inputs
 from .coach import actual_shrinkage, corrected_tab
+from .contacts import ContactBook, pick_contact
 from .eta import queue_plan
 from .handover import note as handover_note
 from .exports import KINDS as EXPORT_KINDS, MAX_DAYS as MAX_EXPORT_DAYS, build as build_export
@@ -346,10 +347,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
 
     NAV_ACTIVE = {"home": "home", "overview_page": "overview", "day_page": "day", "week_page": "week",
                   "run_week": "week", "run_schedules": "schedules", "program": "analysis", "programs": "programs",
-                  "exports_page": "exports", "team_page": "team", "admin_users": "people", "program_setup": "setup"}
+                  "exports_page": "exports", "team_page": "team", "admin_users": "people", "program_setup": "setup",
+                  "with_setup": "with"}
     PROGRAM_PAGES = {"overview": "/overview?program={key}", "day": "/day?program={key}", "week": "/week?program={key}",
                      "schedules": "/schedules?program={key}", "analysis": "/programs/{key}",
-                     "home": "/?program={key}"}  # Home shows the program picked (owner, 2026-10-08)
+                     "home": "/?program={key}",  # Home shows the program picked (owner, 2026-10-08)
+                     "with": "/setup/with?program={key}"}
 
     def _unit_choices(programs: list) -> list:
         """Each program with its LOBs as (key, name) pairs, for the left menu's picker."""
@@ -849,6 +852,47 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return redirect(back)
 
     ADVANCED_DEFAULTS = {"language_window": "workbook", "coverage_measure": "workbook", "stage": "FULL_SCHEDULE"}
+
+    @app.route("/setup/with", methods=["GET", "POST"])
+    @manager_required
+    def with_setup():  # type: ignore[no-untyped-def]
+        """Who an aux can be with, per program (Phase U): its departments and the people in each. Admins keep
+        every program's; a supervisor their own programs' (the program check runs before every request)."""
+        access = _access()
+        key = clean_program(request.values.get("program", "")) or _left_menu().get("nav_unit", "")
+        unit = access.book.unit(key) if key else None
+        mine = [p for p in access.programs() if p["units"]]
+        if unit is None or not access.can_open(key):
+            if not mine:
+                flash("There is no program to keep departments and people for yet.")
+                return redirect(url_for("home"))
+            return redirect(url_for("with_setup", program=mine[0]["units"][0]))
+        program, book = unit["program"], ContactBook(app.extensions["store"])
+        if request.method == "POST":
+            action, pid, uid = request.form.get("action", ""), program["id"], g.user["id"]
+            try:
+                if action == "add":
+                    dept, name = book.add(pid, request.form.get("department", ""), request.form.get("name", ""), uid)
+                    said = f"Added {name} to {dept}." if name else f"Added the department {dept}."
+                elif action == "paste":
+                    depts, people = book.add_many(pid, request.form.get("lines", ""), uid)
+                    said = (f"Added {depts} department{'s' if depts != 1 else ''} and {people} "
+                            f"{'person' if people == 1 else 'people'}.")
+                elif action == "remove_person":
+                    dept, name = book.remove_person(pid, request.form.get("id", -1, type=int), uid)
+                    said = f"Removed {name} from {dept}."
+                elif action == "remove_department":
+                    dept = book.remove_department(pid, request.form.get("id", -1, type=int), uid)
+                    said = f"Removed the department {dept} and its people."
+                else:
+                    raise ValueError("Pick what to do.")
+                _record("with_list_changed", subject=program["name"], detail=said)
+                flash(said)
+            except ValueError as exc:
+                flash(str(exc))
+            return redirect(url_for("with_setup", program=key), code=303)
+        return render_template("with_setup.html", program=program, key=key, lists=book.lists(program["id"]),
+                               choices=[(p["name"], p["units"][0]) for p in mine])
 
     @app.route("/setup/programs", methods=["GET", "POST"])
     @admin_required

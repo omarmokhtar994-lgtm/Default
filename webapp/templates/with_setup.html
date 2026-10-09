@@ -1,0 +1,43 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{% extends "base.html" %}
+{% block title %}Departments and people: {{ program.name }} on Team Scheduler{% endblock %}
+{% block content %}
+<div class="phead"><div>
+  <h1>Departments and people: {{ program.name }}</h1>
+  <p class="byline">Who a coaching, meeting, training or system issue can be with. Booking one picks the department, then the person, from these lists{% if program.lobs %}; every LOB of {{ program.name }} ({{ program.lobs|map(attribute='name')|join(', ') }}) uses them{% endif %}. Changing a list never changes what was booked before.</p>
+</div>
+{% if choices|length > 1 %}<form class="sel" method="get" action="{{ url_for('with_setup') }}"><label>Program <select name="program" data-autosubmit>{% for name, k in choices %}<option value="{{ k }}"{% if name == program.name %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label><noscript><button type="submit">Show</button></noscript></form>{% endif %}
+</div>
+
+<div class="side wl">
+<section class="panel" aria-labelledby="wl-h">
+  <h2 id="wl-h">Departments{% if lists %} ({{ lists|length }}){% endif %}</h2>
+  {% for d in lists %}
+  <div class="wl-dept">
+    <div class="wl-head"><h3>{{ d.name }} <small>{{ d.people|length }} {{ 'person' if d.people|length == 1 else 'people' }}</small></h3>
+      <form method="post" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="action" value="remove_department"><input type="hidden" name="id" value="{{ d.id }}"><button type="submit" class="link danger">Remove the department and its people</button></form></div>
+    {% if d.people %}<ul class="wl-people">{% for p in d.people %}<li><span>{{ p.name }}</span><form method="post" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="action" value="remove_person"><input type="hidden" name="id" value="{{ p.id }}"><button type="submit" class="link danger" aria-label="Remove {{ p.name }} from {{ d.name }}">Remove</button></form></li>{% endfor %}</ul>
+    {% else %}<p class="dim">No people yet: it is not offered when booking until someone is added.</p>{% endif %}
+  </div>
+  {% else %}<p class="empty">No departments yet. Until there are, booking an aux takes a typed name.</p>{% endfor %}
+</section>
+<section class="panel" aria-labelledby="wl-add-h">
+  <h2 id="wl-add-h">Add</h2>
+  <form method="post" class="wl-add">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="action" value="add">
+    <label>Department <input name="department" list="dept-names" maxlength="60" required placeholder="For example: Quality"></label>
+    <label>Name <input name="name" maxlength="80" placeholder="Leave empty to add only the department"></label>
+    <button type="submit" class="primary">Add</button>
+  </form>
+  <datalist id="dept-names">{% for d in lists %}<option value="{{ d.name }}">{% endfor %}</datalist>
+  <h3>Paste a list</h3>
+  <form method="post" class="wl-add">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="action" value="paste">
+    <label>Lines to add <span class="hint">One per line: Department, Name. A line with only a department adds the department. Two columns copied from Excel work too.</span>
+      <textarea name="lines" rows="8" required placeholder="Quality, Lina&#10;Quality, Omar&#10;Training, Sara"></textarea></label>
+    <button type="submit">Add all</button>
+  </form>
+  <p class="note">A list with a wrong line adds nothing and names the line, so nothing is added twice or half.</p>
+</section>
+</div>
+{% endblock %}

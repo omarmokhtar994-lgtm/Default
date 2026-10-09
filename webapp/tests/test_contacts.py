@@ -109,5 +109,79 @@ class TheContactBook(unittest.TestCase):
             self.assertEqual(str(refused.exception), said)
 
 
+
+class TheContactsPage(unittest.TestCase):
+    """Phase U: admins keep every program's lists; a supervisor keeps their own programs'; planners book from them."""
+
+    def setUp(self):
+        from webapp.tests.test_runs import make_app, sign_in
+        self.app, self.store, *_ = make_app(start_worker=False)
+        self.store.add_user("omar", "Omar", "Owner-pass-123", is_admin=True, must_change=False)
+        programs = ProgramBook(self.store)
+        self.saks = programs.add_program("SAKS")
+        self.tier2 = programs.add_lob(self.saks, "NMG Tier 2")
+        self.gdi = programs.add_program("GDI")
+        nour = self.store.add_user("nour", "Nour", "Nour-pass-123", must_change=False)
+        self.store.update_user(nour, is_supervisor=1)
+        self.store.set_user_programs(nour, [self.saks])
+        lina = self.store.add_user("lina", "Lina", "Lina-pass-123", must_change=False)
+        self.store.set_user_programs(lina, [self.saks])
+        self.admin = sign_in(self.app, "omar", "Owner-pass-123")
+        self.sup = sign_in(self.app, "nour", "Nour-pass-123")
+        self.planner = sign_in(self.app, "lina", "Lina-pass-123")
+
+    def url(self, key):
+        return "/setup/with?program=" + key.replace(" ", "+")
+
+    def post(self, client, key, **data):
+        from webapp.tests.test_runs import token
+        return client.post("/setup/with", data={"csrf_token": token(client), "program": key, **data})
+
+    def page(self, client, key):
+        import html
+        return html.unescape(client.get(self.url(key)).get_data(as_text=True))
+
+    def test_admins_and_the_programs_supervisors_keep_the_lists(self):
+        self.assertEqual(self.admin.get(self.url(self.tier2)).status_code, 200)
+        self.assertEqual(self.admin.get(self.url("GDI")).status_code, 200)
+        self.assertEqual(self.sup.get(self.url(self.tier2)).status_code, 200)
+        self.assertEqual(self.sup.get(self.url("GDI")).status_code, 403)  # not one of his programs
+        self.assertEqual(self.planner.get(self.url(self.tier2)).status_code, 403)
+        self.assertEqual(self.post(self.planner, self.tier2, action="add", department="Quality").status_code, 403)
+        self.assertEqual(self.store.list_aux_departments(self.saks), [])
+
+    def test_add_paste_and_remove_on_the_page(self):
+        got = self.post(self.sup, self.tier2, action="add", department="Quality", name="Lina")
+        self.assertEqual(got.status_code, 303)
+        self.post(self.sup, self.tier2, action="paste", lines="Quality, Omar\nTraining\tSara\nWorkforce")
+        page = self.page(self.sup, self.tier2)
+        self.assertIn("Added 2 departments and 2 people.", page)
+        self.assertIn("<h1>Departments and people: SAKS</h1>", page)
+        self.assertIn("every LOB of SAKS", page)
+        for words in ("Quality", "Lina", "Omar", "Training", "Sara", "Workforce",
+                      "No people yet: it is not offered when booking until someone is added."):
+            self.assertIn(words, page)
+        quality = ContactBook(self.store).lists(self.saks)[0]
+        self.post(self.sup, self.tier2, action="remove_person", id=str(quality["people"][0]["id"]))
+        self.post(self.sup, self.tier2, action="remove_department", id=str(quality["id"]))
+        self.assertIn("Removed the department Quality and its people.", self.page(self.sup, self.tier2))
+        self.assertEqual([d["name"] for d in ContactBook(self.store).lists(self.saks)], ["Training", "Workforce"])
+        said = [e["detail"] for e in self.store.list_events(0, 2e9) if e["kind"] == "with_list_changed"]
+        self.assertEqual(said, ["Added Lina to Quality.", "Added 2 departments and 2 people.", "Removed Lina from Quality.",
+                                "Removed the department Quality and its people."])
+
+    def test_a_bad_paste_says_which_lines(self):
+        self.post(self.admin, self.tier2, action="paste", lines="Quality, Lina\nQuality, Lina")
+        self.assertIn("Nothing was added. Line 2: Lina is already on Quality's list.", self.page(self.admin, self.tier2))
+        self.assertEqual(self.store.list_aux_departments(self.saks), [])
+
+    def test_the_menu_offers_it_to_admins_and_supervisors(self):
+        import html
+        link = f'href="{self.url(self.tier2)}">Departments and people</a>'
+        for client, shown in ((self.admin, True), (self.sup, True), (self.planner, False)):
+            body = html.unescape(client.get(f"/day?program={self.tier2.replace(' ', '+')}").get_data(as_text=True))
+            self.assertEqual(link in body, shown)
+
+
 if __name__ == "__main__":
     unittest.main()

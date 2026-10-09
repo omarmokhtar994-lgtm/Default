@@ -869,3 +869,15 @@ dialog.dlg.add-dlg { width: 620px; }
 .latest h2, .runhead h1, .unfiled-list li > p a, .runs td a, .rundetails b { overflow-wrap: anywhere; }
 /* targets opened by a link (#edit, #check, #newrun) stop below the sticky top bar, not under it */
 #edit, #check, #newrun { scroll-margin-top: 72px; }
+
+/* ------------------------------------------------------------ departments and people (Phase U) */
+.wl-dept { border-top: 1px solid var(--rail); padding: 10px 0; }
+.wl-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.wl-head h3 { margin: 0; } .wl-head h3 small { color: var(--dim); font-weight: 400; }
+.wl-people { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.wl-people li { display: inline-flex; align-items: center; gap: 4px; padding: 3px 4px 3px 12px; border: 1px solid var(--rail); border-radius: 99px; }
+.wl-people form, .wl-head form { display: inline; margin: 0; }
+.wl-people .link, .wl-head .link { font-size: 12px; padding: 2px 8px; margin: 0; width: auto; }
+.wl-add textarea { width: 100%; font: inherit; margin-top: 6px; }
+.wl-add .hint { display: block; font-weight: 400; color: var(--dim); font-size: 14px; }
+.wl-add button { margin: 2px 0 12px; }

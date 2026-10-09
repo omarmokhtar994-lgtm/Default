@@ -611,6 +611,7 @@
     });
   }
   pick.addEventListener("change", apply);
+  if (pick.value) { apply(); }  // a program already picked (on the left or by the link) brings its defaults
 })();
 
 // The left menu: picking a program (and LOB) opens the same page for it; on a

@@ -606,7 +606,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                active=active, waiting=waiting, latest=latest,
                                latest_summary=summaries.get(latest["id"]) if latest else None,
                                now=time.time(), known_programs=known,
-                               prefill_program=clean_program(request.args.get("program", "")),
+                               prefill_program=clean_program(request.args.get("program", ""))
+                               or (picked if picked in upload_keys else ""),  # the unit picked on the left
                                prefill_week=prefill, start_options=start_choices(prefill, prefill),
                                usual_start=usual_start_days(runs))
 

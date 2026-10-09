@@ -1820,6 +1820,22 @@ class TheHomeFollowsThePicker(unittest.TestCase):
             self.assertNotIn("AE/AR B2B", cards)
             self.assertNotIn("Show all my programs", cards)  # one program: nothing else to show
 
+    def upload_pick(self, client, url="/"):
+        body = client.get(url).get_data(as_text=True)
+        found = re.search(r'<select name="program" data-program-pick>(.*?)</select>', body, re.S)
+        self.assertIsNotNone(found)
+        return re.findall(r'<option value="([^"]*)" selected>', html.unescape(found.group(1)))
+
+    def test_upload_form_takes_the_program_picked_on_the_left(self):
+        # owner, 2026-10-09: "program while uploading should be selected automatically based on choosen program/lob"
+        self.admin.get("/?program=NMG")  # picked on the left; the menu remembers it
+        self.assertEqual(self.upload_pick(self.admin), ["NMG"])
+        self.assertEqual(self.upload_pick(self.admin, "/?program=AE/AR+B2B"), ["AE/AR B2B"])
+        self.admin.get("/day?program=AE/AR+B2B")  # picked on another page
+        self.assertEqual(self.upload_pick(self.admin), ["AE/AR B2B"])
+        self.assertEqual(self.upload_pick(self.admin, "/?all=1"), [""])  # all programs: the planner picks
+        self.assertEqual(self.upload_pick(self.lina), ["NMG"])  # one program: always it
+
     def test_menu_picker_on_home_stays_on_home(self):
         body, _ = self.home(self.admin)
         self.assertIn('data-target="/?program={key}"', body)

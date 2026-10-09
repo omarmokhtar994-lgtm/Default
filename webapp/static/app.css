@@ -944,3 +944,7 @@ dialog.dlg.add-dlg { width: 620px; }
 .effect-ch { border-left: 4px solid var(--gap); background: var(--gap-soft); border-radius: 6px; padding: 8px 12px; margin: 8px 0; }
 .effect-ch p { margin: 3px 0; }
 .effect-ch .chip { margin-right: 6px; }
+
+/* Phase W: the export's progress, done and failed states */
+.exp-wait { color: var(--dim); margin: 8px 0; }
+.exp-ok { border-left: 4px solid var(--covered); background: var(--accent-soft); border-radius: 6px; padding: 10px 14px; margin: 10px 0; }

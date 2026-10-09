@@ -68,6 +68,18 @@ def _instruction(wb, names) -> Any:
     return None
 
 
+def _target(wb) -> float:
+    """The interval target the engine reads ("Target", "Coverage Target" or "Interval Target"; 90% when not set),
+    as a ratio: 0.9 and 90 both mean 90%."""
+    value = _instruction(wb, ("target", "coverage target", "interval target"))
+    try:
+        ratio = float(str(value).strip().rstrip("%"))
+    except (TypeError, ValueError):
+        return 0.9
+    ratio = ratio / 100 if ratio > 1 else ratio
+    return round(ratio, 4) if 0 < ratio <= 1 else 0.9
+
+
 def _grid(wb, name: str) -> Dict[int, Dict[int, float]]:
     """{day index: {minute: value}} from a demand or shrinkage tab."""
     ws = next((wb[n] for n in wb.sheetnames if _norm(n) == _norm(name)), None)
@@ -132,16 +144,16 @@ def read_inputs(path: Path) -> Dict[str, Any]:
     planned = _grid(wb, str(_instruction(wb, ("shrinkage source",)) or f"Shrinkage {step} Min"))
     planned = {d: {t: (v / 100 if v > 1 else v) for t, v in col.items()} for d, col in planned.items()}
     gaps = {}
-    for key, names in (("gap_min", ("break absolute minimum gap minutes",)),
-                       ("gap_max", ("break normal maximum gap minutes",))):
+    for setting, names in (("gap_min", ("break absolute minimum gap minutes",)),  # not "key": that is the cache's
+                           ("gap_max", ("break normal maximum gap minutes",))):
         try:
-            gaps[key] = int(float(_instruction(wb, names)))
+            gaps[setting] = int(float(_instruction(wb, names)))
         except (TypeError, ValueError):
-            gaps[key] = None  # not set for this program: no gap warning is made up
+            gaps[setting] = None  # not set for this program: no gap warning is made up
     # planned_shrinkage is only compared with what happened (adherence, the shrinkage coach); the
     # day's own figures never use it (owner: actuals replace it)
     found = {"interval": step if 1440 % step == 0 else 30, "required": demand, "planned_shrinkage": planned, **gaps,
-             "languages": _languages(wb), "previous_saturday": previous}
+             "languages": _languages(wb), "previous_saturday": previous, "target": _target(wb)}
     while len(_CACHE) >= KEEP:
         _CACHE.pop(next(iter(_CACHE)))
     _CACHE[key] = found

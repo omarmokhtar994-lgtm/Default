@@ -32,7 +32,7 @@ from .coach import actual_shrinkage, corrected_tab
 from .contacts import ContactBook, pick_contact
 from .eta import queue_plan
 from .handover import note as handover_note
-from .exports import KINDS as EXPORT_KINDS, MAX_DAYS as MAX_EXPORT_DAYS, build as build_export
+from .exports import EXPORT_SECONDS, KINDS as EXPORT_KINDS, MAX_DAYS as MAX_EXPORT_DAYS, build as build_export
 from .outcome import cannot_schedule, read as read_outcome, view as outcome_view
 from .access import Access, role
 from .programs import ProgramBook
@@ -2071,8 +2071,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
         fmt = request.args.get("format", "xlsx")
         try:
             data, name, mime = build_export(app.extensions["store"], _days(), a["start"], a["end"], kinds, fmt,
-                                            a["program"], a["user_id"], g.user["display_name"], a["measure"])
-        except ValueError as exc:  # said on the page
+                                            a["program"], a["user_id"], g.user["display_name"], a["measure"],
+                                            deadline=time.monotonic() + EXPORT_SECONDS)
+        except ValueError as exc:  # said on the page (in JSON when the page's script asked: Phase W)
+            if request.headers.get("X-Requested-With") == "fetch":
+                return jsonify(error=str(exc)), 400
             return _exports_page(str(exc), 400)
         _record("exported", subject=name, program=a["program"] if isinstance(a["program"], str) else "",
                 detail=f"{a['start']} to {a['end']}: {', '.join(k for k in EXPORT_KINDS if k in kinds)}")

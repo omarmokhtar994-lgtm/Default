@@ -12,6 +12,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
@@ -41,6 +42,49 @@ OTHER_EVENTS = {"run_uploaded": "Run uploaded", "run_started": "Run started", "r
                 "channels_changed": "Associate channels"}
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 RISKY = ("=", "+", "-", "@", "\t", "\r")
+
+
+EXPORT_SECONDS = 300  # an export still working after this stops and says why (owner: it "keeps loading")
+
+
+class ExportTooSlow(ValueError):
+    """An export that ran past its time (said on the page with what to untick)."""
+
+
+SLOW_SAID = (f"The export did not finish within {EXPORT_SECONDS // 60} minutes, so it was stopped. Pick a shorter "
+             f"period, or untick {KINDS['worked']} and {KINDS['summary']} (the items that work out every day), then "
+             "download again.")
+
+
+class _Days:
+    """The day book as one export sees it: each day worked out once (worked hours and the daily summary ask for the
+    same days), and a check that the export is still within its time."""
+
+    def __init__(self, days, deadline: Optional[float]):
+        self._days = days
+        self._deadline = deadline
+        self._pages: Dict[Tuple[str, date, str], Any] = {}
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._days, name)
+
+    def page(self, program: str, on: date, measure: str = "interval", extra: Optional[Dict[str, Any]] = None):
+        if extra:
+            return self._days.page(program, on, measure, extra)
+        key = (program, on, measure)
+        if key not in self._pages:
+            try:
+                self._pages[key] = (self._days.page(program, on, measure), None)
+            except ValueError as exc:  # said again to every item that asks for this day
+                self._pages[key] = (None, exc)
+        found, problem = self._pages[key]
+        if problem is not None:
+            raise problem
+        return found
+
+    def check(self) -> None:
+        if self._deadline is not None and time.monotonic() > self._deadline:
+            raise ExportTooSlow(SLOW_SAID)
 
 
 def _ts(day: date) -> float:
@@ -149,6 +193,7 @@ def _breaks(store, days, weeks, start, end, program, user_id, measure):
             if r["kind"] in EXTRA_BREAKS:
                 added.setdefault((r["shift_date"], r["associate"]), []).append(r)
         for day in _dates(start, end):
+            days.check()
             week = weeks.week(p, day)
             for a in week.get("associates", []):
                 state = status.get((day.isoformat(), a["name"]), "Present")
@@ -208,6 +253,7 @@ def _worked(store, days, weeks, start, end, program, user_id, measure):
            "Conformance %"]
     for p in _programs(days, program):
         for day in _dates(start, end):
+            days.check()
             try:
                 page = days.page(p, day, measure)
             except ValueError:  # the input workbook is gone: said on the day page, skipped here
@@ -231,6 +277,7 @@ def _summary(store, days, weeks, start, end, program, user_id, measure):
            "Language gaps", "Adherence %", "Conformance %", "Changes recorded"]
     for p in _programs(days, program):
         for day in _dates(start, end):
+            days.check()
             try:
                 found = note(days, p, day, measure)
             except ValueError:
@@ -257,6 +304,7 @@ def _channels(store, days, weeks, start, end, program, user_id, measure):
         for r in store.channel_moves_between(start.isoformat(), end.isoformat(), p, user_id):
             changes.setdefault((r["shift_date"], r["associate"]), []).append(r)
         for day in _dates(start, end):
+            days.check()
             week = weeks.week(p, day)
             for a in week.get("associates", []):
                 blocks = channel_blocks(week, _day_index(day), a["name"])
@@ -290,8 +338,10 @@ def _csv_safe(value: Any) -> Any:
 
 
 def build(store, days, start: date, end: date, kinds: List[str], fmt: str = "xlsx", program: Optional[str] = None,
-          user_id: Optional[int] = None, by: str = "", measure: str = "interval") -> Tuple[bytes, str, str]:
-    """The export as (bytes, file name, media type). Raises ValueError for a request it cannot answer."""
+          user_id: Optional[int] = None, by: str = "", measure: str = "interval",
+          deadline: Optional[float] = None) -> Tuple[bytes, str, str]:
+    """The export as (bytes, file name, media type). Raises ValueError for a request it cannot answer, and
+    ExportTooSlow (a ValueError) once ``deadline`` (time.monotonic()) has passed."""
     if end < start:
         raise ValueError("The period ends before it starts.")
     if (end - start).days + 1 > MAX_DAYS:
@@ -305,6 +355,7 @@ def build(store, days, start: date, end: date, kinds: List[str], fmt: str = "xls
     if measure not in MEASURES:
         raise ValueError("Pick a measure.")
     ordered = [k for k in KINDS if k in kinds]
+    days = _Days(days, deadline)
     weeks = _Weeks(days)
     who = (store.get_user(user_id) or {}).get("display_name", "") if user_id is not None else ""
     if fmt == "csv":
@@ -330,18 +381,23 @@ def build(store, days, start: date, end: date, kinds: List[str], fmt: str = "xls
         head = WriteOnlyCell(about, value=key)
         head.font = bold
         about.append([head, _text_cell(about, value)])
-    for kind in ordered:
-        ws = wb.create_sheet(KINDS[kind][:31])
-        rows = TABLES[kind](store, days, weeks, start, end, program, user_id, measure)
-        header = next(rows)
-        cells = []
-        for value in header:
-            cell = WriteOnlyCell(ws, value=value)
-            cell.font = bold
-            cells.append(cell)
-        ws.append(cells)
-        for row in rows:
-            ws.append([_text_cell(ws, v) for v in row])
+    try:
+        for kind in ordered:
+            ws = wb.create_sheet(KINDS[kind][:31])
+            rows = TABLES[kind](store, days, weeks, start, end, program, user_id, measure)
+            header = next(rows)
+            cells = []
+            for value in header:
+                cell = WriteOnlyCell(ws, value=value)
+                cell.font = bold
+                cells.append(cell)
+            ws.append(cells)
+            for row in rows:
+                ws.append([_text_cell(ws, v) for v in row])
+    except BaseException:  # a stopped export: finish the half-written tabs so nothing is left open
+        for sheet in wb.worksheets:
+            sheet.close()
+        raise
     out = io.BytesIO()
     wb.save(out)
     return out.getvalue(), f"Team_Scheduler_{start}_to_{end}.xlsx", XLSX

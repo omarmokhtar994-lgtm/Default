@@ -814,3 +814,79 @@
     form.elements.channel.focus();
   });
 })();
+
+// Exports (Phase W): the file comes through a script so the page can say what is happening ("Preparing", then
+// "Ready" or what went wrong) instead of loading with no end; without a script the form is a plain download.
+(function () {
+  "use strict";
+  var form = document.querySelector("form[data-export]");
+  if (!form || !window.fetch || !window.URLSearchParams || !window.FormData || !window.URL) { return; }
+  var box = form.querySelector("[data-export-status]");
+  var button = form.querySelector("button[type=submit]");
+  if (!box || !button) { return; }
+  var label = button.textContent;
+  function failed(text) {
+    box.className = "alert bad";
+    box.textContent = "";
+    var h = document.createElement("h3");
+    h.textContent = "The export did not finish";
+    var p = document.createElement("p");
+    p.textContent = text;
+    box.appendChild(h);
+    box.appendChild(p);
+  }
+  form.addEventListener("submit", function (e) {
+    if (typeof form.checkValidity === "function" && !form.checkValidity()) { return; }
+    e.preventDefault();
+    var url = form.action + "?" + new URLSearchParams(new FormData(form)).toString();
+    var started = Date.now();
+    var seconds = function () { return Math.round((Date.now() - started) / 1000); };
+    button.disabled = true;
+    button.textContent = "Preparing your export…";
+    box.hidden = false;
+    box.className = "exp-wait";
+    var tick = function () {
+      box.textContent = seconds() + " s. Working out the period you picked; long periods take longer. You can keep " +
+        "working in another tab: the file downloads by itself when it is ready.";
+    };
+    tick();
+    var timer = window.setInterval(tick, 1000);
+    fetch(url, { headers: { "X-Requested-With": "fetch" }, credentials: "same-origin" })
+      .then(function (r) {
+        if (!r.ok) {
+          return r.json().catch(function () { return {}; }).then(function (j) {
+            throw new Error(j.error || ("The server answered " + r.status + ". Try again, or pick a shorter period."));
+          });
+        }
+        var said = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(r.headers.get("Content-Disposition") || "");
+        var name = said ? decodeURIComponent(said[1]) : "Team_Scheduler_export";
+        return r.blob().then(function (blob) { return { blob: blob, name: name }; });
+      })
+      .then(function (got) {
+        var href = window.URL.createObjectURL(got.blob);
+        var link = document.createElement("a");
+        link.href = href;
+        link.download = got.name;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        box.className = "exp-ok";
+        box.textContent = "Ready: " + got.name + " (" + Math.max(1, Math.round(got.blob.size / 1024)) + " KB) " +
+          "downloaded in " + seconds() + " s. ";
+        var again = document.createElement("a");
+        again.href = href;
+        again.download = got.name;
+        again.textContent = "Download again";
+        box.appendChild(again);
+      })
+      .catch(function (err) {
+        failed(err && err.message && err.message !== "Failed to fetch" ? err.message :
+          "The connection was lost before the file arrived. Pick a shorter period, then download again.");
+      })
+      .then(function () {
+        window.clearInterval(timer);
+        button.disabled = false;
+        button.textContent = label;
+      });
+  });
+})();

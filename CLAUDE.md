@@ -45,5 +45,23 @@ python-performance-optimization.
   (the team scheduler website): plan palette/type/layout first, avoid templated defaults.
 - webapp-testing (anthropics/skills, Apache-2.0): Playwright checks and screenshots of
   the website before reporting it done.
+- Website review skills. They suggest fixes; they never override the rules above. Every
+  fix keeps the strict CSP (no inline script, style or event handlers; their React and
+  Tailwind examples translate to plain Jinja, CSS and JS), copy stays in sentence case,
+  and the engine stays untouched.
+  - better-interface, better-accessibility, better-colors, better-layout,
+    better-typography, better-ui, better-writing (jakubkrehel/skills @d574cc8, MIT):
+    review a page or a change before a website phase ships; better-writing for labels,
+    errors and empty states. interface-review (same source) runs only when typed as
+    /interface-review and reviews a branch's interface changes.
+  - web-interface-guidelines (vercel-labs/web-interface-guidelines @434b7f9, MIT; a pinned
+    local copy, because the upstream skill downloads its rules at run time): the quick
+    checklist for changed templates, CSS and JS.
+  - web-quality-audit, accessibility, best-practices, performance, core-web-vitals
+    (addyosmani/web-quality-skills @afa8da9, MIT; analyze.sh not installed): whole-site
+    audits, security headers, page speed. Evidence comes from Playwright here (no
+    Lighthouse or DevTools MCP); SEO is out of scope for an internal tool behind a sign-in.
+    For accessibility, use addyosmani's skill for a site audit and better-accessibility for
+    a single change.
 - find-skills: discovering more skills (skills.sh search is blocked by the
   network policy here; browse the source repos on GitHub instead).

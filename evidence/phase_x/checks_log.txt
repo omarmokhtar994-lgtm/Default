@@ -1,0 +1,39 @@
+Phase X interface review: measured lines from the review copy (127.0.0.1:8765, Chromium 141.0.7390.37), 2026-10-09 Egypt time.
+Test data: the Phase W ready workbook (Associate NN names); a second schedule left RUNNING; a planner "agent" with no programs.
+
+axe-core 4.14.0 (wcag2a, wcag2aa, wcag21a, wcag21aa, wcag22aa), 49 pages x light and dark:
+  color-contrast [serious]: 20 page-look pairs (/day, /week, /schedules/N/week, /schedules/1/breaks)
+  scrollable-region-focusable [serious]: 14 page-look pairs (/day adherence, /week, /schedules/N/week)
+  nested-interactive [serious]: 8 page-look pairs, 224 nodes (/day timeline lanes)
+Failing contrast pairs (contrast.py):
+  light /day            span.tc.ok   #ffffff on #22ae9f  2.75  9px bold    x46
+  light /day            .chip small  #ffffff on #e9a23b  2.16  10px bold   x45
+  light /week           td.wk.over   #0e1a2b on #7b6be6  4.23  12px bold   x140
+  light /week           .wk small    #1e2647 on #7b6be6  3.57  10px        x140
+  light /schedules/1/breaks .bp-strip .ok #ffffff on #22ae9f 2.75 11px     x24
+  dark  /week           .wk small    #212949 on #8a7bf0  4.17  10px        x140
+After the proposed colour change (verify_ink.py): 0 failing nodes on /day, /day board, /week, /schedules/2/week,
+  /schedules/1/breaks, light and dark.
+Overflow: 0 of 96 page runs at 320 px and 640 px (200% zoom of 1280) scroll sideways or put an element outside the window.
+
+checks.py:
+  HOME_RELOAD reloads after [29.7] s; form before {'file': 1, 'program': 'SAKS NMG Tier 2', 'ready': True}
+              after {'file': 0, 'program': 'SAKS NMG Tier 2', 'ready': False}
+  SELECT_ATT Associate 022 was Present -> after one ArrowDown: Unplanned leave | POSTs: ['/day/attendance']
+  SELECT_ATT log: Omar Mokhtar, 21:59: Associate 022, Unplanned leave
+  SELECT_MEASURE navigations after one ArrowDown: ['/day?...&view=timeline&measure=sl']
+  FOCUS_OBSCURED (Shift+Tab, 100 steps, top-bar items excluded):
+    /day board: fully under the top bar 1 ('+ Add'), partly 18
+    /runs/<id>/schedules?v=2: fully under the top bar 9 (shift cells), partly 0
+    /admin/users 0; /week 0 fully, 29 partly; /schedules/1/breaks 0
+  FOCUS_VISIBLE: 7 pages, 88-90 stops each, Tabs to reach main: 20 on every page; every stop has a ring
+    (date and time fields checked by screenshot: 2 px ring)
+  AX_BREAKS rect.brk in DOM: 81 | in the accessibility tree: 81 | not ignored: 81 | role button
+  TOUCH_HOVER (Chromium touch emulation) a schedule cell after tap and Cancel: hover False
+  Scroll boxes: Tab reaches .scroll boxes in Chromium 141 (keyboard-focusable scrollers)
+Department removal (dept.py): Added 1 department and 4 people -> one click on "Remove the department and its
+  people": no question asked, flash "Removed the department Quality and its 4 people.", no undo offered.
+403 and 404 (more.py): planner without the program -> status 403 "This page is for admins." links Back, Home,
+  "Back to runs"; /nothing-here -> 404 "There is nothing here."
+Status colours, dataviz validate_palette.js --pairs all: CVD separation PASS (dark worst ΔE 14.1, light worst 11.6);
+  light teal 2.75:1 and amber 2.17:1 against #FFFFFF.

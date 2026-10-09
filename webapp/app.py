@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from flask import Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file, session, url_for
+from flask.sessions import SecureCookieSessionInterface
 from werkzeug.utils import secure_filename
 
 from .adherence import interval_shrinkage, person_day, team as team_figures
@@ -199,6 +200,19 @@ def next_sunday(today: Optional[date] = None) -> str:
     return (today + timedelta(days=(6 - today.weekday()) % 7 or 7)).isoformat()
 
 
+class QuietSessions(SecureCookieSessionInterface):
+    """The session cookie goes out on page loads and whenever the session changes, but not on a page's own
+    background requests (previews, status polls). Phase XY: a preview started before a save and answered after it
+    re-sent the session from before the save, and the save's message was lost. Page loads keep a signed-in person's
+    12 hours running as before; browsers say which requests are page loads (Sec-Fetch-Mode: navigate), and a
+    request that does not say is treated as one."""
+
+    def should_set_cookie(self, app: Flask, session: Any) -> bool:
+        if not session.modified and request.headers.get("Sec-Fetch-Mode", "navigate") != "navigate":
+            return False
+        return super().should_set_cookie(app, session)
+
+
 def clean_program(text: str) -> str:
     return " ".join((text or "").split())[:80]
 
@@ -215,6 +229,7 @@ def password_problem(new: str, confirm: str, username: str) -> str:
 
 def create_app(config: Dict[str, Any]) -> Flask:
     app = Flask(__name__)
+    app.session_interface = QuietSessions()
     data_dir = Path(config["DATA_DIR"])
     data_dir.mkdir(parents=True, exist_ok=True)
     app.config.update(
@@ -256,7 +271,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 clean_program(request.values.get("program", ""))
             if key and not _access().can_open(key):
                 g.error_hint = "Your account opens only the programs given to you. Ask an admin to add this one to your programs."
-                abort(403, description=f"{_unit_filter(key)} is not one of your programs")
+                label = _unit_filter(key)  # a real program or LOB is named; words from a link are never repeated back
+                abort(403, description=f"{label if key in g.unit_labels else 'This program'} is not one of your programs")
 
     def _access() -> Access:
         if "access" not in g:

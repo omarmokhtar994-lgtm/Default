@@ -1610,11 +1610,11 @@ def oklch(rgb):
     import math
     r, g, b = [v / 255 for v in rgb]
     r, g, b = [v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4 for v in (r, g, b)]
-    l = (0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b) ** (1 / 3)
-    m = (0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b) ** (1 / 3)
-    s = (0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b) ** (1 / 3)
-    a2 = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s
-    b2 = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s
+    lc = (0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b) ** (1 / 3)  # the three cone responses
+    mc = (0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b) ** (1 / 3)
+    sc = (0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b) ** (1 / 3)
+    a2 = 1.9779984951 * lc - 2.4285922050 * mc + 0.4505937099 * sc
+    b2 = 0.0259040371 * lc + 0.7827717662 * mc - 0.8086757660 * sc
     return math.hypot(a2, b2), math.degrees(math.atan2(b2, a2)) % 360
 
 XY_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_xy" / "screens"
@@ -1738,6 +1738,24 @@ class ThePhaseXYInTheBrowser(unittest.TestCase):
         self.assertEqual(posts, [])
         self.assertEqual(errors, [])
 
+    def test_an_open_list_saves_with_one_enter(self):
+        """Review focus 1: a list opened from the keyboard (Alt+Down, Space) and closed with Enter saves once, with no
+        second Enter; the wait for Enter is only for arrows on a closed list."""
+        for opener in ("Alt+ArrowDown", "Space"):
+            page = self.page(scheme="light")
+            self.sign_in(page)
+            self.day(page, [])
+            posts = self.watch_posts(page)
+            box, name = self.present_lane(page, skip=6)
+            box.focus()
+            page.keyboard.press(opener)
+            page.keyboard.press("ArrowDown")
+            with page.expect_navigation():
+                page.keyboard.press("Enter")
+            page.wait_for_load_state("load")
+            self.assertEqual(len(posts), 1, opener)
+            expect(page.locator(f'.tl-lane select.att[data-name="{name}"]')).to_have_value("Unplanned leave")
+
     def test_a_mouse_pick_still_saves_at_once(self):
         page = self.page(scheme="light")
         errors = []
@@ -1853,7 +1871,7 @@ class ThePhaseXYInTheBrowser(unittest.TestCase):
             page.goto(self.base + f"/week?program={q}&week={s}")
             link, teal = page.evaluate("[getComputedStyle(document.querySelector('main p a, main td a, main li a')).color,"
                                        " getComputedStyle(document.documentElement).getPropertyValue('--covered')]")
-            (l_c, l_h), (t_c, t_h) = oklch(parse_colour(link)[:3]), oklch(parse_colour(teal)[:3])
+            (l_c, l_h), (_, t_h) = oklch(parse_colour(link)[:3]), oklch(parse_colour(teal)[:3])
             apart = min(abs(l_h - t_h), 360 - abs(l_h - t_h))
             self.assertTrue(l_c < 0.03 or apart >= 15, f"{name}: links ({link}) wear the covered teal ({teal})")
 
@@ -1861,7 +1879,7 @@ class ThePhaseXYInTheBrowser(unittest.TestCase):
         """Proposal.css made every checkbox and radio ink and gave time fields and text areas the field edge too."""
         for name in ("night", "day"):
             page = self.look(name)
-            for url, selector, prop, token in ((f"/exports", "main input[type=checkbox]", "accentColor", "--action"),
+            for url, selector, prop, token in (("/exports", "main input[type=checkbox]", "accentColor", "--action"),
                                                ("/", "main input[type=radio]", "accentColor", "--action"),
                                                (f"/schedules/{self.version}/breaks", "main input[type=time]", "borderTopColor", "--edge"),
                                                (f"/setup/with?program={self.q}", "main textarea", "borderTopColor", "--edge")):
@@ -1942,3 +1960,58 @@ class ThePhaseXYInTheBrowser(unittest.TestCase):
         sizes = page.evaluate("[...document.querySelectorAll('[data-day] select.att')].map(s => parseFloat(getComputedStyle(s).fontSize))")
         self.assertTrue(sizes)
         self.assertGreaterEqual(min(sizes), 16)
+
+    # ---------------------------------------------------------------- Task 7: the screens for the report
+    def test_phase_xy_screens(self):
+        errors = []
+        q, s = self.q, self.sunday.isoformat()
+        shots = [  # look, width, url, file, what to show (None: the screen)
+            ("night", 1280, "/", "home_night.png", None),
+            ("day", 1280, f"/day?program={q}&date={s}", "rta_timeline_day.png", "section:has(#floor-h)"),
+            ("night", 1280, f"/day?program={q}&date={s}", "rta_timeline_night.png", "section:has(#floor-h)"),
+            ("day", 1280, f"/day?program={q}&date={s}&view=board", "board_day.png", "section:has(#board-h)"),
+            ("day", 1280, f"/week?program={q}&week={s}", "week_day.png", None),
+            ("night", 1280, f"/runs/{self.run_id}/schedules", "editor_night.png", None),
+            ("day", 1280, "/exports", "exports_day.png", None),
+        ]
+        for look, width, url, name, part in shots:
+            page = self.look(look, width=width)
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            self.go(page, url, errors)
+            page.wait_for_timeout(500)
+            if part:
+                page.locator(part).first.screenshot(path=str(XY_SCREENS / name))
+            else:
+                page.screenshot(path=str(XY_SCREENS / name))
+        # a program the planner does not have: the page says why and who can fix it
+        page = self.page(scheme="light")
+        self.sign_in(page, "agent", "Agent-pass-123")
+        page.goto(self.base + f"/day?program={q}")
+        expect(page.locator("main h1")).to_contain_text("is not one of your programs")
+        page.screenshot(path=str(XY_SCREENS / "not_your_program.png"))
+        # removing a department asks first
+        page = self.look("day")
+        self.go(page, f"/setup/with?program={q}", errors)
+        add = page.locator("form.wl-add").first
+        add.get_by_label("Department").fill("Quality")
+        add.get_by_label("Name").fill("Associate 090")
+        add.get_by_role("button", name="Add").click()
+        page.wait_for_load_state("load")
+        page.get_by_role("link", name="Remove the department and its people").first.click()
+        page.wait_for_load_state("load")
+        expect(page.locator(".check-save h2")).to_contain_text("Remove Quality and its 1 person?")
+        page.locator(".check-save").screenshot(path=str(XY_SCREENS / "remove_department_check.png"))
+        # the skip link, the first stop for a keyboard
+        page = self.look("night")
+        self.go(page, "/", errors)
+        page.keyboard.press("Tab")
+        expect(page.locator("a.skip")).to_be_focused()
+        page.screenshot(path=str(XY_SCREENS / "skip_link.png"), clip={"x": 0, "y": 0, "width": 640, "height": 160})
+        # a phone: whole names on the timeline
+        phone = self.page(width=390, height=844, scheme="dark")
+        self.sign_in(phone)
+        self.go(phone, f"/day?program={q}&date={s}", errors)
+        phone.locator(".tl-lane").first.scroll_into_view_if_needed()
+        phone.wait_for_timeout(400)
+        phone.screenshot(path=str(XY_SCREENS / "phone_timeline.png"))
+        self.assertEqual(errors, [])

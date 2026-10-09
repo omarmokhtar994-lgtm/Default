@@ -32,6 +32,14 @@ class TheErrorPages(unittest.TestCase):
         self.assertIn("Ask an admin to add this one to your programs.", page)
         self.assertNotIn("This page is for admins.", page)
 
+    def test_a_made_up_program_is_not_repeated_back(self):
+        """Final review: the heading names only a real program or LOB, so a crafted link cannot put its own words
+        in the site's heading."""
+        code, page = self.get(self.planner, "/day?program=Your+password+expired.+Call+IT+on+0100")
+        self.assertEqual(code, 403)
+        self.assertIn("This program is not one of your programs", page)
+        self.assertNotIn("Your password expired", page)
+
     def test_a_page_for_admins_and_supervisors_says_so(self):
         code, page = self.get(self.planner, "/admin/users")
         self.assertEqual(code, 403)

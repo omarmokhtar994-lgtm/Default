@@ -125,6 +125,33 @@ def _breaks(wb) -> List[dict]:
     return out
 
 
+CHANNEL_TAB = "Channel Plan"  # Phase V: the channel each person works, block by block
+CHANNEL_HEADERS = ("Associate", "Day", "Shift", "Start", "End", "Channel")
+CHANNEL_WORDS = {"P": "Phone", "C": "Chat", "E": "Email", "A": "All channels"}
+
+
+def _channels(wb) -> List[dict]:
+    """The Channel Plan tab's blocks: associate, day, start and end (HH:MM), channel letter (A: all channels)."""
+    if CHANNEL_TAB not in wb.sheetnames:
+        return []
+    ws = wb[CHANNEL_TAB]
+    row, cols = _header(ws, ("associate",))
+    letters = {word.casefold(): letter for letter, word in CHANNEL_WORDS.items()}
+    out: List[dict] = []
+    for r in range(row + 1, ws.max_row + 1):
+        name = ws.cell(r, cols["associate"]).value
+        if not name:
+            continue
+        word = _norm(ws.cell(r, cols["channel"]).value) if "channel" in cols else ""
+        if word not in letters:
+            raise ValueError(f"{CHANNEL_TAB}, row {r}: {ws.cell(r, cols['channel']).value if 'channel' in cols else ''}"
+                             " is not a channel (Phone, Chat, Email or All channels).")
+        out.append({"associate": str(name).strip(), "day": str(ws.cell(r, cols["day"]).value or "").strip(),
+                    "start": _hhmm(ws.cell(r, cols["start"]).value), "end": _hhmm(ws.cell(r, cols["end"]).value),
+                    "channel": letters[word]})
+    return out
+
+
 _REF = re.compile(r"^=\s*\$?([A-Z]{1,3})\$?(\d+)\s*([+-])\s*(\d+)\s*$")
 
 
@@ -169,7 +196,56 @@ def read_week(path: Path) -> Dict[str, Any]:
                            "tl": cell("tl"), "days": [str(ws.cell(r, c).value or "").strip() for c in day_cols]})
     breaks = _breaks(wb)
     return {"associates": associates, "breaks": breaks, "shifts": _library(wb), "settings": _settings(wb),
-            "stage": "after" if breaks else "before"}
+            "stage": "after" if breaks else "before", "channels": _channels(wb)}
+
+
+def channel_blocks(week: Dict[str, Any], d: int, name: str) -> List[Dict[str, Any]]:
+    """A person's channel blocks on day ``d`` in minutes (after midnight reads +24h, as breaks do), in time order;
+    blocks outside today's shift are left out (``stale_blocks`` names them)."""
+    span = next((shift_span(a["days"][d]) for a in week.get("associates", []) if a["name"] == name), None)
+    if not span:
+        return []
+    out = []
+    for b in week.get("channels", []):
+        if b["associate"] != name or b["day"] != DAYS[d]:
+            continue
+        start = _minutes(b["start"])
+        start += 1440 if start < span[0] else 0
+        end = _minutes(b["end"])
+        while end <= start:
+            end += 1440
+        if span[0] <= start and end <= span[1]:
+            out.append({"start": start, "end": end, "channel": b["channel"]})
+    return sorted(out, key=lambda b: b["start"])
+
+
+def stale_blocks(week: Dict[str, Any], d: int) -> List[str]:
+    """People whose channel plan on day ``d`` no longer fits their day (a shift changed or swapped since it was
+    planned), said once each, in plain words."""
+    days = {a["name"]: a["days"][d] for a in week.get("associates", [])}
+    said: List[str] = []
+    seen = set()
+    for b in week.get("channels", []):
+        name = b["associate"]
+        if b["day"] != DAYS[d] or name in seen:
+            continue
+        label = days.get(name)
+        if label is None:
+            seen.add(name)
+            said.append(f"{name}, {DAYS[d]}: not on this schedule any more, so their channel plan is not used.")
+            continue
+        span = shift_span(label)
+        if not span:
+            seen.add(name)
+            said.append(f"{name}, {DAYS[d]}: the channel plan has times, but the day is {label or 'empty'}; plan "
+                        f"channels again for {DAYS[d]}.")
+            continue
+        mine = [x for x in week["channels"] if x["associate"] == name and x["day"] == DAYS[d]]
+        if len(channel_blocks(week, d, name)) < len(mine):
+            seen.add(name)
+            said.append(f"{name}, {DAYS[d]}: part of the channel plan is outside the shift {label} (made for another "
+                        f"shift); plan channels again for {DAYS[d]}.")
+    return said
 
 
 PERSON = ("emp id", "email", "sf name", "associate name", "name", "tl", "language")  # who sits in a slot
@@ -281,6 +357,34 @@ def write_breaks(src: Path, dst: Path, rows: Dict[Tuple[str, str], Tuple[str, Li
                 for key, c in cols.items():
                     if key in values:
                         ws.cell(r, c).value = values[key]
+    wb.save(dst)
+
+
+def write_channels(src: Path, dst: Path, rows: Dict[Tuple[str, str], Tuple[str, List[Tuple[int, int, str]]]]) -> None:
+    """Replace the channel blocks of each (person, day) in ``rows`` with ``(shift label, [(start, end, letter)])`` on
+    the Channel Plan tab (made when missing); other people and days are kept as they are."""
+    wb = load_workbook(src)
+    if CHANNEL_TAB in wb.sheetnames:
+        ws = wb[CHANNEL_TAB]
+        head, cols = _header(ws, ("associate",))
+    else:
+        ws = wb.create_sheet(CHANNEL_TAB)
+        ws.append(list(CHANNEL_HEADERS))
+        head, cols = 1, {_norm(h): i for i, h in enumerate(CHANNEL_HEADERS, 1)}
+    keys = {(_norm(n), _norm(d)) for n, d in rows}
+    width = max(cols.values())
+    kept = [[ws.cell(r, c).value for c in range(1, width + 1)] for r in range(head + 1, ws.max_row + 1)
+            if ws.cell(r, cols["associate"]).value
+            and (_norm(ws.cell(r, cols["associate"]).value), _norm(ws.cell(r, cols["day"]).value)) not in keys]
+    if ws.max_row > head:
+        ws.delete_rows(head + 1, ws.max_row - head)
+    for values in kept:
+        ws.append(values)
+    for (name, day), (label, entries) in rows.items():
+        for start, end, letter in entries:
+            values = {"associate": name, "day": day, "shift": label, "start": f"{(start // 60) % 24:02d}:{start % 60:02d}",
+                      "end": f"{(end // 60) % 24:02d}:{end % 60:02d}", "channel": CHANNEL_WORDS[letter]}
+            ws.append([values.get(next((k for k, c in cols.items() if c == i), ""), None) for i in range(1, width + 1)])
     wb.save(dst)
 
 

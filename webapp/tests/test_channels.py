@@ -382,3 +382,62 @@ class TheChannelUpload(unittest.TestCase):
         run_id = self.run_named("plain_week.xlsx")
         page = self.unescape(self.admin.get(f"/runs/{run_id}/schedules").get_data(as_text=True))
         self.assertNotIn("Channel tabs", page)
+
+
+class TheChannelPlanTab(unittest.TestCase):
+    """Task 4: a version keeps its channel plan on a "Channel Plan" tab (one row per block); the week read from it
+    carries the blocks, and blocks that no longer fit the person's shift (after a shift edit or a swap) are named
+    for re-planning instead of being counted."""
+
+    @classmethod
+    def setUpClass(cls):
+        from webapp.tests.test_ready import make_ready
+        cls.dir = Path(tempfile.mkdtemp())
+        cls.ready = make_ready(cls.dir / "ready.xlsx")
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.dir, True)
+
+    def test_blocks_are_written_per_person_and_day_and_read_back(self):
+        from webapp.versions import read_week, write_channels
+        first, second = self.dir / "first.xlsx", self.dir / "second.xlsx"
+        write_channels(self.ready, first, {("Associate 001", "Mon"): ("10:00 - 19:00", [(600, 720, "P"), (720, 840, "C")]),
+                                           ("Associate 002", "Mon"): ("10:00 - 19:00", [(600, 1140, "A")])})
+        write_channels(first, second, {("Associate 002", "Mon"): ("10:00 - 19:00", [(600, 900, "E")])})
+        self.assertEqual(read_week(second)["channels"], [
+            {"associate": "Associate 001", "day": "Mon", "start": "10:00", "end": "12:00", "channel": "P"},
+            {"associate": "Associate 001", "day": "Mon", "start": "12:00", "end": "14:00", "channel": "C"},
+            {"associate": "Associate 002", "day": "Mon", "start": "10:00", "end": "15:00", "channel": "E"}])
+        ws = load_workbook(second)["Channel Plan"]
+        self.assertEqual([c.value for c in ws[1]], ["Associate", "Day", "Shift", "Start", "End", "Channel"])
+        self.assertEqual(ws.cell(2, 6).value, "Phone")
+        self.assertEqual(read_week(self.ready)["channels"], [])
+
+    def test_the_independent_validator_still_passes_a_version_with_the_tab(self):
+        from webapp.tests.test_schedules import REPO
+        from webapp.versions import validate, write_channels
+        planned = self.dir / "planned.xlsx"
+        write_channels(self.ready, planned, {("Associate 001", "Mon"): ("10:00 - 19:00", [(600, 1140, "P")])})
+        before, after = validate(self.ready, self.ready, REPO), validate(planned, planned, REPO)
+        self.assertEqual(after["status"], before["status"])
+        self.assertEqual(sorted(f["type"] for f in after["failures"]), sorted(f["type"] for f in before["failures"]))
+
+    def test_blocks_in_minutes_overnight_and_stale_ones_named(self):
+        from webapp.versions import channel_blocks, stale_blocks
+        week = {"associates": [{"name": "Associate 005", "days": ["OFF"] * 3 + ["22:00 - 07:00"] + ["OFF"] * 3},
+                               {"name": "Associate 006", "days": ["OFF"] * 3 + ["12:00 - 21:00"] + ["OFF"] * 3},
+                               {"name": "Associate 007", "days": ["OFF"] * 7}],
+                "channels": [{"associate": "Associate 005", "day": "Wed", "start": "22:00", "end": "02:00", "channel": "P"},
+                             {"associate": "Associate 005", "day": "Wed", "start": "02:00", "end": "07:00", "channel": "C"},
+                             {"associate": "Associate 006", "day": "Wed", "start": "10:00", "end": "12:00", "channel": "P"},
+                             {"associate": "Associate 006", "day": "Wed", "start": "12:00", "end": "16:00", "channel": "C"},
+                             {"associate": "Associate 007", "day": "Wed", "start": "10:00", "end": "12:00", "channel": "E"}]}
+        self.assertEqual(channel_blocks(week, 3, "Associate 005"),
+                         [{"start": 1320, "end": 1560, "channel": "P"}, {"start": 1560, "end": 1860, "channel": "C"}])
+        self.assertEqual(channel_blocks(week, 3, "Associate 006"), [{"start": 720, "end": 960, "channel": "C"}])
+        self.assertEqual(channel_blocks(week, 3, "Associate 007"), [])
+        self.assertEqual(stale_blocks(week, 3), [
+            "Associate 006, Wed: part of the channel plan is outside the shift 12:00 - 21:00 (made for another shift); "
+            "plan channels again for Wed.",
+            "Associate 007, Wed: the channel plan has times, but the day is OFF; plan channels again for Wed."])

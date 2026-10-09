@@ -21,6 +21,7 @@ from .analytics import program_weeks, team
 from .attendance import (ACTIVITY_KINDS, ADD_KINDS, DAY_OFF, DayBook, aux_details, hm, tomorrow_unchecked, week_start,
                          with_text)
 from .break_plan import check_row, floor, slots_for, suggest
+from .channel_people import ChannelPeople, can_work, channel_words
 from .channels import check_lines, has_channel_tabs, read_channels, requirement_tab
 from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, board, read_inputs
 from .coach import actual_shrinkage, corrected_tab
@@ -350,11 +351,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
     NAV_ACTIVE = {"home": "home", "overview_page": "overview", "day_page": "day", "week_page": "week",
                   "run_week": "week", "run_schedules": "schedules", "program": "analysis", "programs": "programs",
                   "exports_page": "exports", "team_page": "team", "admin_users": "people", "program_setup": "setup",
-                  "with_setup": "with"}
+                  "with_setup": "with", "channel_setup": "channels"}
     PROGRAM_PAGES = {"overview": "/overview?program={key}", "day": "/day?program={key}", "week": "/week?program={key}",
                      "schedules": "/schedules?program={key}", "analysis": "/programs/{key}",
                      "home": "/?program={key}",  # Home shows the program picked (owner, 2026-10-08)
-                     "with": "/setup/with?program={key}"}
+                     "with": "/setup/with?program={key}", "channels": "/setup/channels?program={key}"}
 
     def _unit_choices(programs: list) -> list:
         """Each program with its LOBs as (key, name) pairs, for the left menu's picker."""
@@ -936,6 +937,51 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 flash(str(exc))
             return redirect(url_for("with_setup", program=key), code=303)
         return render_template("with_setup.html", program=program, key=key, lists=book.lists(program["id"]),
+                               choices=[(p["name"], p["units"][0]) for p in mine])
+
+    @app.route("/setup/channels", methods=["GET", "POST"])
+    @manager_required
+    def channel_setup():  # type: ignore[no-untyped-def]
+        """Which channels each associate can work, per program (Phase V). Admins keep every program's; a supervisor
+        their own programs' (the program check runs before every request)."""
+        access = _access()
+        key = clean_program(request.values.get("program", "")) or _left_menu().get("nav_unit", "")
+        unit = access.book.unit(key) if key else None
+        mine = [p for p in access.programs() if p["units"]]
+        if unit is None or not access.can_open(key):
+            if not mine:
+                flash("There is no program to set channels for yet.")
+                return redirect(url_for("home"))
+            return redirect(url_for("channel_setup", program=mine[0]["units"][0]))
+        program, people = unit["program"], ChannelPeople(app.extensions["store"])
+        if request.method == "POST":
+            action, pid = request.form.get("action", ""), program["id"]
+            try:
+                if action == "save":
+                    rows = {}
+                    for i in range(min(request.form.get("rows", 0, type=int), 3000)):
+                        name = request.form.get(f"who-{i}", "")
+                        if name:
+                            rows[name] = "".join(c for c in "PCE" if request.form.get(f"{c}-{i}"))
+                    changes = people.plan_changes(pid, rows)
+                elif action == "paste":
+                    changes = people.plan_changes(pid, people.read_paste(pid, request.form.get("lines", "")))
+                else:
+                    raise ValueError("Pick what to do.")
+                count = people.apply(pid, changes, g.user["id"])
+                if count:
+                    said = f"Saved {count} change{'s' if count != 1 else ''}"
+                    _record("channels_changed", subject=program["name"], detail=f"{said}: {people.describe(changes)}.")
+                    flash(said + ".")
+                else:
+                    flash("Nothing changed.")
+            except ValueError as exc:
+                flash(str(exc))
+            return redirect(url_for("channel_setup", program=key), code=303)
+        skills = people.skills(program["id"])
+        rows = [{"name": n, "language": lang, "letters": can_work(skills, n)}
+                for n, lang in people.roster(program["id"])]
+        return render_template("channel_setup.html", program=program, key=key, rows=rows, words=channel_words,
                                choices=[(p["name"], p["units"][0]) for p in mine])
 
     @app.route("/setup/programs", methods=["GET", "POST"])

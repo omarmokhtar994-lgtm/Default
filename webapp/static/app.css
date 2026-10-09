@@ -891,3 +891,10 @@ dialog.dlg.add-dlg { width: 620px; }
 .chk li.ok::before { content: "\2713"; color: var(--covered); }
 .chk li.warn::before { content: "!"; color: var(--short-ink); left: 10px; }
 .chk li.info::before { content: "i"; color: var(--dim); left: 10px; font-style: italic; }
+
+/* Phase V: who can work which channel */
+.actable { border-collapse: collapse; width: 100%; }
+.actable th, .actable td { border-bottom: 1px solid var(--rail); padding: 7px 8px; text-align: left; }
+.actable .c { text-align: center; }
+.actable input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--covered); }
+.btnrow { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }

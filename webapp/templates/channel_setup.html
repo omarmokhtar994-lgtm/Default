@@ -1,0 +1,43 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{% extends "base.html" %}
+{% block title %}Associate channels: {{ program.name }} on Team Scheduler{% endblock %}
+{% block content %}
+<div class="phead"><div>
+  <h1>Associate channels: {{ program.name }}</h1>
+  <p class="byline">Which channels each person can work. Set once and kept for every week; people on the schedule who are not listed here can work all three{% if program.lobs %}. Every LOB of {{ program.name }} ({{ program.lobs|map(attribute='name')|join(', ') }}) uses this list{% endif %}. Admins and supervisors keep it; changes are recorded.</p>
+</div>
+{% if choices|length > 1 %}<form class="sel" method="get" action="{{ url_for('channel_setup') }}"><label>Program <select name="program" data-autosubmit>{% for name, k in choices %}<option value="{{ k }}"{% if name == program.name %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label><noscript><button type="submit">Show</button></noscript></form>{% endif %}
+</div>
+
+<div class="side wl">
+<section class="panel" aria-labelledby="ac-h">
+  <h2 id="ac-h">People{% if rows %} ({{ rows|length }}){% endif %}</h2>
+  {% if rows %}
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="action" value="save"><input type="hidden" name="rows" value="{{ rows|length }}">
+    <div class="scroll"><table class="actable">
+      <thead><tr><th scope="col">Associate</th><th scope="col">Language</th><th scope="col" class="c">Chat</th><th scope="col" class="c">Phone</th><th scope="col" class="c">Email</th><th scope="col"><span class="sr-only">Channels</span></th></tr></thead>
+      <tbody>
+      {% for r in rows %}{% set i = loop.index0 %}
+      <tr><th scope="row"><input type="hidden" name="who-{{ i }}" value="{{ r.name }}"><b>{{ r.name }}</b></th><td>{{ r.language or '–' }}</td>
+        {% for letter, label in (('C', 'Chat'), ('P', 'Phone'), ('E', 'Email')) %}<td class="c"><input type="checkbox" name="{{ letter }}-{{ i }}" value="1" aria-label="{{ r.name }} works {{ label }}"{% if letter in r.letters %} checked{% endif %}></td>{% endfor %}
+        <td class="dim">{{ words(r.letters) if r.letters|length == 3 else words(r.letters) ~ ' only' }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    <div class="btnrow"><button type="submit" class="primary">Save</button></div>
+  </form>
+  {% else %}<p class="empty">Nobody yet: the list follows {{ program.name }}'s newest schedule, so upload one first.</p>{% endif %}
+</section>
+<section class="panel" aria-labelledby="ac-paste-h">
+  <h2 id="ac-paste-h">Paste a list</h2>
+  <form method="post" class="wl-add">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="action" value="paste">
+    <label>Lines <span class="hint">One per line: Name, Chat, Phone, Email, each Yes or No. Columns copied from Excel work too, with or without the header line.</span>
+      <textarea name="lines" rows="8" required placeholder="Associate 002, Yes, Yes, No&#10;Associate 006, Yes, No, Yes&#10;Associate 010, No, Yes, No"></textarea></label>
+    <button type="submit">Apply all</button>
+  </form>
+  <p class="note">A list with a name that is not on the schedule, or a wrong line, applies nothing and names the line.</p>
+</section>
+</div>
+{% endblock %}

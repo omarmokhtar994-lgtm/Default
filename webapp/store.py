@@ -62,6 +62,14 @@ create table if not exists aux_people (
     name text not null,
     created real not null
 );
+create table if not exists associate_channels (
+    program_id integer not null,
+    name text not null collate nocase,
+    channels text not null,
+    user_id integer,
+    updated real not null,
+    primary key (program_id, name)
+);
 create table if not exists break_drafts (
     schedule_id integer not null,
     day text not null,
@@ -335,6 +343,25 @@ class Store:
         with self._db() as db:
             db.execute("delete from break_drafts where schedule_id = ?", (schedule_id,))
 
+    # ------------------------------------------------------------- who can work which channel (Phase V)
+    def list_associate_channels(self, program_id: int) -> List[Dict[str, Any]]:
+        with self._db() as db:
+            return [dict(r) for r in db.execute("select * from associate_channels where program_id = ? order by name",
+                                                (program_id,))]
+
+    def set_associate_channels(self, program_id: int, rows: Dict[str, Optional[str]], user_id: int) -> None:
+        """name -> letters, or None to take the person off the list; in one transaction."""
+        now = time.time()
+        with self._db() as db:
+            for name, letters in rows.items():
+                if letters is None:
+                    db.execute("delete from associate_channels where program_id = ? and name = ?", (program_id, name))
+                else:
+                    db.execute("insert into associate_channels (program_id, name, channels, user_id, updated) values"
+                               " (?, ?, ?, ?, ?) on conflict (program_id, name) do update set name = excluded.name,"
+                               " channels = excluded.channels, user_id = excluded.user_id, updated = excluded.updated",
+                               (program_id, name, letters, user_id, now))
+
     # ------------------------------------------------------------- who an aux is with (Phase U)
     def list_aux_departments(self, program_id: int) -> List[Dict[str, Any]]:
         with self._db() as db:
@@ -391,6 +418,7 @@ class Store:
             db.execute("delete from aux_people where department_id in (select id from aux_departments where "
                        "program_id = ?)", (program_id,))
             db.execute("delete from aux_departments where program_id = ?", (program_id,))
+            db.execute("delete from associate_channels where program_id = ?", (program_id,))
             db.execute("delete from programs where id = ?", (program_id,))
 
     def delete_lob_row(self, lob_id: int) -> None:

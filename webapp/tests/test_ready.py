@@ -162,6 +162,31 @@ class TheReadyUpload(unittest.TestCase):
         self.assertIn("9-18", run["message"])
         self.assertEqual(self.app.extensions["schedules"].versions(run_id), [])
 
+    def test_schedules_page_shows_the_details_and_links_to_edit_them(self):
+        # owner, 2026-10-09: "not able to change schedule name or start dates after upload": the Schedules page
+        # (where the menu goes) said neither and had no way to the run page's editor
+        page = html.unescape(self.admin.get(f"/runs/{self.run_id}/schedules").get_data(as_text=True))
+        details = re.search(r'<p class="byline rundetails">(.*?)</p>', page, re.S)
+        self.assertIsNotNone(details)
+        for words in ("ready_week.xlsx", "SAKS, NMG Tier 2", "starts Sunday 11 Oct"):
+            self.assertIn(words, details.group(1))
+        self.assertIn(f'<a href="/runs/{self.run_id}?edit=1#edit">Edit the name, program or start date</a>',
+                      details.group(1))
+        run_page = self.admin.get(f"/runs/{self.run_id}?edit=1").get_data(as_text=True)
+        self.assertRegex(run_page, r'<details class="advanced tag[^"]*" id="edit" open>')
+        self.assertNotRegex(self.admin.get(f"/runs/{self.run_id}").get_data(as_text=True), r'id="edit" open>')
+
+    def test_only_who_may_edit_gets_the_edit_link(self):
+        from webapp.programs import ProgramBook
+        saks = next(p["id"] for p in ProgramBook(self.store).tree() if p["name"] == "SAKS")
+        if not any(u["username"] == "nour" for u in self.store.list_users()):
+            nour = self.store.add_user("nour", "Nour", "Nour-pass-123", must_change=False)
+            self.store.set_user_programs(nour, [saks])
+        planner = sign_in(self.app, "nour", "Nour-pass-123")
+        page = html.unescape(planner.get(f"/runs/{self.run_id}/schedules").get_data(as_text=True))
+        self.assertIn('<p class="byline rundetails">', page)
+        self.assertNotIn("?edit=1", page)
+
     def test_upload_form_offers_build_or_ready(self):
         page = html.unescape(self.admin.get("/").get_data(as_text=True))
         self.assertRegex(page, r'<input type="radio" name="kind" value="build" checked')

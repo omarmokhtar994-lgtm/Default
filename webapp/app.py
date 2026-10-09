@@ -737,7 +737,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                unit_label=ProgramBook(store).label(run["program"]) if run["program"] else "",
                                unit_groups=_unit_choices(ProgramBook(store).tree()),
                                ready_version=(_book().versions(run_id) or [None])[0] if run["mode"] == "READY" else None,
-                               **extra)
+                               edit_open=request.args.get("edit") == "1", **extra)
 
     @app.route("/runs/<run_id>/status.json")
     @login_required

@@ -324,6 +324,7 @@
   });
   if (att) {
     att.querySelector("[data-cancel]").addEventListener("click", function () { att.close("cancel"); });
+    att.addEventListener("input", function () { att.querySelector(".dlg-result").textContent = ""; });  // said, now typing
     att.querySelector("[data-keep]").addEventListener("click", function () {
       var fields = JSON.parse(att.dataset.pending || "{}");
       fields.from = att.querySelector("input[name=from]").value;

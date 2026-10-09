@@ -1114,3 +1114,92 @@ class ThePhaseSInTheBrowser(unittest.TestCase):
         page.screenshot(path=str(S_SCREENS / "analysis_ready_only.png"))
         self.assertEqual(errors, [])
 
+
+
+T_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_t" / "screens"
+
+
+class ThePhaseTInTheBrowser(unittest.TestCase):
+    """Phase T: every aux asks who it is with and why, in a real browser (owner, 2026-10-09: "in case of any aux
+    being placed like meeting coaching etc we need to specify with who and why in a comment while reserving")."""
+
+    setUpClass_base = classmethod(TheSchedulesInTheBrowser.setUpClass.__func__)
+    tearDownClass = classmethod(TheSchedulesInTheBrowser.tearDownClass.__func__)
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+    go = ThePhaseRInTheBrowser.go
+
+    @classmethod
+    def setUpClass(cls):
+        cls.setUpClass_base()
+        T_SCREENS.mkdir(parents=True, exist_ok=True)
+
+    def test_a_phone_has_no_sideways_scroll(self):
+        phone = self.page(width=390, height=844)
+        errors = []
+        phone.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(phone)
+        self.go(phone, "/day?program=AE/AR+B2B&date=2026-10-13&view=board&add=900", errors)
+        phone.locator("#add-dialog").get_by_label("Meeting").check()
+        expect(phone.locator("#add-dialog input[name=why]")).to_be_visible()
+        self.assertLessEqual(phone.evaluate("document.scrollingElement.scrollWidth"), 390)
+        self.go(phone, "/day?program=AE/AR+B2B&date=2026-10-13&view=meeting", errors)
+        self.assertLessEqual(phone.evaluate("document.scrollingElement.scrollWidth"), 390)
+
+    def test_phase_t_screens(self):
+        page = self.page(width=1440, height=900, scheme="light")
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        # + Add: an aux shows With and Why, both required; the record and the log carry them
+        self.go(page, "/day?program=AE/AR+B2B&date=2026-10-15&view=board&add=900", errors)
+        dialog = page.locator("#add-dialog")
+        expect(dialog.locator("input[name=with_whom]")).to_be_hidden()  # a break asks neither
+        dialog.locator("select[name=associate]:not([data-off])").select_option("Associate 001")
+        dialog.get_by_label("Coaching").check()
+        for name in ("with_whom", "why"):
+            expect(dialog.locator(f"input[name={name}]")).to_be_visible()
+            self.assertTrue(dialog.locator(f"input[name={name}]").evaluate("e => e.required && !e.disabled"))
+        dialog.locator("input[name=with_whom]").fill("Sara")
+        dialog.locator("input[name=why]").fill("Monthly quality review")
+        expect(dialog.locator("[data-effect]")).to_contain_text("Coaching 15:00 to 15:30", timeout=15000)
+        dialog.screenshot(path=str(T_SCREENS / "add_coaching.png"))
+        dialog.get_by_role("button", name="Add coaching").click()
+        page.wait_for_load_state("load")
+        expect(page.locator("p.flash")).to_contain_text("with Sara: Monthly quality review")
+        # the timeline's attendance list: the popup asks both, and the server says what is missing
+        self.go(page, "/day?program=AE/AR+B2B&date=2026-10-14", errors)
+        page.select_option('select.att[data-name="Associate 021"]', "Meeting|0")
+        att = page.locator("#att-dialog")
+        expect(att.locator("input[name=with_whom]")).to_be_visible()
+        att.locator("input[name=from]").fill("10:00")
+        att.locator("input[name=to]").fill("10:30")
+        att.locator("[data-keep]").click()
+        expect(att.locator(".dlg-result")).to_have_text("Say who the meeting is with.")
+        att.screenshot(path=str(T_SCREENS / "attendance_meeting_refused.png"))
+        att.locator("input[name=with_whom]").fill("Ops manager")
+        att.locator("input[name=why]").fill("Process update")
+        expect(att.locator(".dlg-result")).to_have_text("")  # the message goes once they type
+        att.screenshot(path=str(T_SCREENS / "attendance_meeting.png"))
+        att.locator("[data-keep]").click()
+        expect(page.locator(".log")).to_contain_text("with Ops manager: Process update", timeout=15000)
+        # one person's day lists who and why
+        self.go(page, "/day?program=AE/AR+B2B&date=2026-10-14&view=board&who=Associate+021", errors)
+        expect(page.locator("#person-dialog")).to_contain_text("with Ops manager: Process update")
+        page.locator("#person-dialog").screenshot(path=str(T_SCREENS / "person_with_why.png"))
+        # Find a time asks both before the times, and Book carries them
+        self.go(page, "/day?program=AE/AR+B2B&date=2026-10-14&view=meeting", errors)
+        for name in ("Associate 001", "Associate 012"):
+            page.locator(f"input[name=who][value='{name}']").check()
+        page.locator("form.exp-form input[name=with_whom]").fill("IT trainer")
+        page.locator("form.exp-form input[name=why]").fill("New CRM release")
+        page.get_by_role("button", name="Find times").click()
+        page.wait_for_load_state("load")
+        page.locator("div.adh").first.screenshot(path=str(T_SCREENS / "find_a_time_with_why.png"))
+        page.locator("ol.fit-list li").first.get_by_role("button", name="Book").click()
+        page.wait_for_load_state("load")
+        expect(page.locator("p.flash")).to_contain_text("Booked: meeting")
+        self.go(page, "/day?program=AE/AR+B2B&date=2026-10-14&view=cover", errors)
+        expect(page.locator("section[aria-labelledby=acts-h]")).to_contain_text("with IT trainer: New CRM release")
+        page.locator("section[aria-labelledby=acts-h]").screenshot(path=str(T_SCREENS / "activities_list.png"))
+        self.assertEqual(errors, [])

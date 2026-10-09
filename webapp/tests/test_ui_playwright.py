@@ -1103,6 +1103,9 @@ class ThePhaseSInTheBrowser(unittest.TestCase):
         self.go(page, "/day?program=AE/AR+B2B&date=2026-10-14&view=meeting", errors)
         for name in ("Associate 001", "Associate 012"):
             page.locator(f"input[name=who][value='{name}']").check()
+        # re-pinned (Phase T): Find a time asks who the session is with and why (owner, 2026-10-09)
+        page.locator("form.exp-form input[name=with_whom]").fill("Sara")
+        page.locator("form.exp-form input[name=why]").fill("Team huddle")
         page.get_by_role("button", name="Find times").click()
         page.wait_for_load_state("load")
         expect(page.locator("#person-dialog")).to_have_count(0)

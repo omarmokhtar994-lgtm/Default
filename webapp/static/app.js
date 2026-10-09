@@ -4,6 +4,48 @@
 // last known state stays on screen). Reloads once the run ends, so the wall,
 // findings and downloads appear. The dashboard refreshes every 30 s while
 // something is running or waiting.
+// A list that acts when it changes (attendance, a picker that shows another page) waits for Enter when the
+// keyboard moves it (Phase XY, review finding 2): on a closed list one arrow press changes the value, so it used to
+// save or leave the page on the first key. Enter acts; Esc or leaving the field puts the saved value back. A pick
+// with the mouse, or from the open list, acts at once as before.
+function keyedPick(field, act, says) {
+  "use strict";
+  var saved = field.value, keyed = false, note = null;
+  var moves = /^(ArrowUp|ArrowDown|ArrowLeft|ArrowRight|Home|End|PageUp|PageDown)$/;
+  function shown(value) {
+    var o = field.options ? Array.prototype.filter.call(field.options, function (x) { return x.value === value; })[0] : null;
+    return o ? o.text : value;
+  }
+  function clear() {
+    field.classList.remove("pending");
+    if (note) { note.parentNode.removeChild(note); note = null; }
+  }
+  function putBack() { if (note) { field.value = saved; clear(); } }
+  field.addEventListener("keydown", function (e) {
+    if (note && e.key === "Enter") { e.preventDefault(); clear(); act(); return; }
+    if (note && e.key === "Escape") { e.preventDefault(); e.stopPropagation(); putBack(); return; }
+    keyed = !e.altKey && !e.ctrlKey && !e.metaKey && (moves.test(e.key) || (e.key.length === 1 && e.key !== " "));
+  });
+  field.addEventListener("pointerdown", function () { keyed = false; });
+  field.addEventListener("blur", putBack);
+  field.addEventListener("change", function () {
+    if (!keyed) { clear(); act(); return; }
+    keyed = false;
+    if (field.value === saved) { clear(); return; }
+    field.classList.add("pending");
+    var text = says(shown(field.value), shown(saved));
+    if (note) { note.textContent = text; return; }
+    note = document.createElement("p");
+    note.className = "pick-note";
+    note.setAttribute("role", "status");
+    var after = field.closest(".tl-row") || field.closest("label") || field;
+    after.parentNode.insertBefore(note, after.nextSibling);
+    var mine = note;
+    setTimeout(function () { if (note === mine) { mine.textContent = text; } }, 30);  // an empty live region first, then its words, so it is read out
+  });
+}
+function showSays(next) { return "Press Enter to show " + next + ", or Esc to go back."; }
+
 // The look: with no choice saved the page follows the device, so the switch
 // offers the other one.
 (function () {
@@ -93,11 +135,11 @@
 (function () {
   "use strict";
   Array.prototype.forEach.call(document.querySelectorAll("[data-autosubmit]"), function (pick) {
-    pick.addEventListener("change", function () {
+    keyedPick(pick, function () {
       var week = pick.form.querySelector("select[name=week]");
       if (week && pick.name === "program") { week.disabled = true; }
       pick.form.submit();
-    });
+    }, showSays);
   });
 })();
 
@@ -306,7 +348,7 @@
   var att = document.getElementById("att-dialog");
   Array.prototype.forEach.call(root.querySelectorAll("select.att"), function (sel) {
     var was = sel.value;
-    sel.addEventListener("change", function () {
+    keyedPick(sel, function () {
       var parts = sel.value.split("|"), state = parts[0];
       var fields = { date: sel.dataset.date, associate: sel.dataset.name, status: state, billable: parts[1] === "1" ? "1" : "" };
       if (state !== "Late" && state !== "Left early" && parts.length < 2) {
@@ -339,7 +381,7 @@
       att.showModal();
       (state === "Late" ? to : from).querySelector("input").focus();
       att.onclose = function () { if (att.returnValue !== "saved") { sel.value = was; } att.returnValue = ""; };
-    });
+    }, function (next, now) { return "Not saved yet. Press Enter to save " + next + ", or Esc to keep " + now + "."; });
   });
   if (att) {
     att.querySelector("[data-cancel]").addEventListener("click", function () { att.close("cancel"); });
@@ -655,10 +697,10 @@
   "use strict";
   var pick = document.querySelector("select[data-unit-pick]");
   if (pick) {
-    pick.addEventListener("change", function () {
+    keyedPick(pick, function () {
       var target = pick.getAttribute("data-target") || "/overview?program={key}";
       window.location = target.replace("{key}", encodeURIComponent(pick.value));
-    });
+    }, showSays);
   }
   var menu = document.querySelector("details[data-menu]");
   if (menu && window.matchMedia && window.matchMedia("(max-width: 900px)").matches) { menu.open = false; }

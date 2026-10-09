@@ -1566,3 +1566,157 @@ class ThePhaseWInTheBrowser(unittest.TestCase):
             self.assertLessEqual(phone.evaluate("document.scrollingElement.scrollWidth"), 390, url)
         phone.wait_for_timeout(700)
         phone.screenshot(path=str(W_SCREENS / "phone_week_target.png"), full_page=True)
+
+
+XY_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_xy" / "screens"
+
+
+@unittest.skipIf(sync_playwright is None, "Playwright is not installed here; UI tests skipped")
+class ThePhaseXYInTheBrowser(unittest.TestCase):
+    """Phase XY (the owner approved every review sample and the colour proposal): the review fixes and the new
+    colours in a real browser. The Phase W week, plus a schedule still running, a planner with no program and a
+    program with ten weeks of history."""
+
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+    go = ThePhaseRInTheBrowser.go
+
+    @classmethod
+    def setUpClass(cls):
+        import io
+        import shutil
+        from datetime import date, timedelta
+        from webapp.programs import ProgramBook
+        from webapp.tests.test_ready import make_ready
+        from webapp.tests.test_runs import sign_in as client_sign_in, token, wait
+        cls.dir = Path(tempfile.mkdtemp())
+        cls.addClassCleanup(shutil.rmtree, cls.dir, True)
+        today = date.today()
+        cls.sunday = today - timedelta(days=(today.weekday() + 1) % 7)
+        ready = make_ready(cls.dir / "ready.xlsx")
+        cls.app, cls.store, _, _ = make_app(VALIDATOR_ROOT=str(REPO))
+        owner = cls.store.add_user("omar", "Omar Mokhtar", "Owner-pass-123", is_admin=True, must_change=False)
+        cls.store.add_user("agent", "Agent Seven", "Agent-pass-123", must_change=False)  # a planner with no program
+        programs = ProgramBook(cls.store)
+        cls.key = programs.add_lob(programs.add_program("SAKS"), "NMG Tier 2")
+        client = client_sign_in(cls.app, "omar", "Owner-pass-123")
+        client.post("/runs", data={"csrf_token": token(client), "kind": "ready", "mode": "QUICK", "program": cls.key,
+                                   "week_start": cls.sunday.isoformat(),
+                                   "workbook": (io.BytesIO(ready.read_bytes()), "week.xlsx")},
+                    content_type="multipart/form-data")
+        cls.run_id = cls.store.list_runs()[0]["id"]
+        wait(cls.store, cls.run_id, statuses=("DONE", "REJECTED", "FAILED"))
+        version = cls.app.extensions["schedules"].versions(cls.run_id)[-1]["id"]
+        client.post(f"/schedules/{version}/auto-breaks", data={"csrf_token": token(client), "use": "1"})
+        seed_history(cls.store)
+        cls.running = "xy-running"
+        cls.store.add_run(cls.running, owner, "week_next_NMG.xlsx", "QUICK", "RUNNING", program=cls.key,
+                          week_start=(cls.sunday + timedelta(days=7)).isoformat())
+        cls.q = cls.key.replace(" ", "+")
+        cls.server = make_server("127.0.0.1", 0, cls.app, threaded=True)
+        cls.base = f"http://127.0.0.1:{cls.server.server_port}"
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.pw = sync_playwright().start()
+        launch = {"headless": True}
+        if os.path.exists(CHROMIUM):
+            launch["executable_path"] = CHROMIUM
+        cls.browser = cls.pw.chromium.launch(**launch)
+        XY_SCREENS.mkdir(parents=True, exist_ok=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.pw.stop()
+        cls.server.shutdown()
+
+    def day(self, page, errors, view=""):
+        self.go(page, f"/day?program={self.q}&date={self.sunday.isoformat()}" + (f"&view={view}" if view else ""), errors)
+
+    def present_lane(self, page, skip=0):
+        """The attendance box of a lane showing Present (the skip-th one) whose shift starts on the page's day, and
+        its person. A shift from the Saturday before belongs to a week with no schedule here, so it cannot be marked."""
+        i = page.evaluate("([skip, day]) => [...document.querySelectorAll('.tl-lane select.att')]"
+                          ".map((s, k) => s.value === 'Present' && s.dataset.date === day ? k : -1)"
+                          ".filter(k => k >= 0)[skip]", [skip, self.sunday.isoformat()])
+        box = page.locator(".tl-lane select.att").nth(i)
+        return box, box.get_attribute("data-name")
+
+    def watch_posts(self, page):
+        posts = []
+        page.on("request", lambda r: posts.append(r.url) if r.method == "POST" and "/day/attendance" in r.url else None)
+        return posts
+
+    # ---------------------------------------------------------------- Task 4: keyboard moves wait for Enter
+    def test_one_arrow_does_not_save_attendance(self):
+        page = self.page(scheme="light")
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        self.day(page, errors)
+        posts = self.watch_posts(page)
+        box, name = self.present_lane(page)
+        box.focus()
+        page.keyboard.press("ArrowDown")
+        page.wait_for_timeout(1500)
+        self.assertEqual(posts, [])
+        expect(box).to_have_class(re.compile(r"\bpending\b"))
+        expect(page.locator("p.pick-note")).to_have_text(
+            "Not saved yet. Press Enter to save Unplanned leave, or Esc to keep Present.")
+        with page.expect_navigation():
+            page.keyboard.press("Enter")
+        page.wait_for_load_state("load")
+        self.assertEqual(len(posts), 1)
+        expect(page.locator(f'.tl-lane select.att[data-name="{name}"]')).to_have_value("Unplanned leave")
+        self.assertEqual(errors, [])
+
+    def test_escape_and_tab_put_attendance_back(self):
+        page = self.page(scheme="light")
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        self.day(page, errors)
+        posts = self.watch_posts(page)
+        box, _ = self.present_lane(page, skip=2)
+        for leave in ("Escape", "Tab"):
+            box.focus()
+            page.keyboard.press("ArrowDown")
+            expect(page.locator("p.pick-note")).to_have_count(1)
+            page.keyboard.press(leave)
+            page.wait_for_timeout(800)
+            expect(box).to_have_value("Present")
+            expect(page.locator("p.pick-note")).to_have_count(0)
+            expect(box).not_to_have_class(re.compile(r"\bpending\b"))
+        self.assertEqual(posts, [])
+        self.assertEqual(errors, [])
+
+    def test_a_mouse_pick_still_saves_at_once(self):
+        page = self.page(scheme="light")
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        self.day(page, errors)
+        posts = self.watch_posts(page)
+        box, name = self.present_lane(page, skip=4)
+        with page.expect_navigation():
+            box.select_option("Sick")
+        page.wait_for_load_state("load")
+        self.assertEqual(len(posts), 1)
+        expect(page.locator(f'.tl-lane select.att[data-name="{name}"]')).to_have_value("Sick")
+
+    def test_one_arrow_does_not_change_the_measure(self):
+        page = self.page(scheme="light")
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        self.day(page, errors)
+        before = page.url
+        pick = page.locator("select[name=measure][data-autosubmit]")
+        second = pick.locator("option").nth(1).inner_text()
+        pick.focus()
+        page.keyboard.press("ArrowDown")
+        page.wait_for_timeout(1500)
+        self.assertEqual(page.url, before)
+        expect(page.locator("p.pick-note")).to_have_text(f"Press Enter to show {second}, or Esc to go back.")
+        with page.expect_navigation():
+            page.keyboard.press("Enter")
+        self.assertIn("measure=sl", page.url)

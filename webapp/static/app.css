@@ -995,3 +995,10 @@ details.autobreaks > summary::-webkit-details-marker { display: none; }
   border-radius: 4px; background: var(--console); color: var(--accent-ink); font-weight: 600; text-decoration: none; }
 .skip:focus { top: 12px; }
 main:focus { outline: none; }  /* the skip link's target, not a control */
+
+/* Phase XY: a list moved by the keyboard waits for Enter; until then its edge is dashed amber and a note says so */
+select.pending, input.pending, [data-day] select.att.pending { border-style: dashed; border-color: var(--short); }
+.pick-note { margin: 6px 0; padding: 6px 10px; border-left: 4px solid var(--short); background: var(--short-soft);
+  border-radius: 6px; font-size: 13px; }
+.sel .pick-note { flex-basis: 100%; margin: 0; }
+[data-day] .tl > .pick-note { position: sticky; left: 0; width: max-content; max-width: 100%; }

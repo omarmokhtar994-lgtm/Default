@@ -6,7 +6,9 @@
 <div class="phead">
   <div>
     <h1>{% if program and week %}{{ program|unit }}, week of {{ week|day_month }}{% elif run %}{{ run.workbook }}: the week{% else %}Week view{% endif %}</h1>
-    {% if version %}<p class="byline">Version: <a href="{{ url_for('run_schedules', run_id=version.run_id, v=version.id) }}">{{ version.label }}</a>{% if version.in_use %} (in use){% endif %}.</p>{% endif %}
+    {% if week_note %}<p class="byline">{% if week_note.said %}{{ week_note.said }} <a href="{{ url_for('run_schedules', run_id=version.run_id, v=version.id) }}">{{ version.label }}</a>{% else %}From the schedule in use: <a href="{{ url_for('run_schedules', run_id=version.run_id, v=version.id) }}">{{ version.label }}</a>{% endif %}{% if week_note.workbook %}, workbook {{ week_note.workbook }}{% endif %}{% if week_note.set_by %}, {{ week_note.set_by }}{% endif %}.</p>
+    {% if week_note.others %}<p class="byline">This week also has {{ week_note.others|join(', ') }} (not in use). <a href="{{ url_for('run_schedules', run_id=version.run_id, v=version.id) }}">Compare or switch</a></p>{% endif %}
+    {% elif version %}<p class="byline">Version: <a href="{{ url_for('run_schedules', run_id=version.run_id, v=version.id) }}">{{ version.label }}</a>{% if version.in_use %} (in use){% endif %}.</p>{% endif %}
     {% if run %}<p class="byline">From <a href="{{ url_for('run_detail', run_id=run.id) }}">{{ run.workbook }}</a> ({{ run.mode|lower }} run by {{ run.by_name }}, {{ label(run) }}).
       {% if view %}Every {{ unit }}, {{ 'before' if side == 'before' else 'after' }} breaks. Needed = associates on the floor for 100% of demand after shrinkage.{% endif %}</p>{% endif %}
   </div>

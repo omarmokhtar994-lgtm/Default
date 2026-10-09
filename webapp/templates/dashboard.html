@@ -93,6 +93,7 @@
             {% for value, label, day in start_options %}<option value="{{ value }}" data-day="{{ day }}"{% if value == prefill_week %} selected{% endif %}>{{ label }}</option>{% endfor %}
           </select></label>
       </div>
+      <div class="alert" data-week-check data-url="{{ url_for('week_check') }}" role="status" hidden><h3>This week already has schedules</h3><p></p></div>
       <p class="hint">The first day of this schedule: the Sunday, or the Monday for programs that start on Monday. Each date reads its own weekday's column. The program and start date put this run on the program's history page.</p>
       <fieldset class="modes" data-build-only>
         <legend>How long to search</legend>

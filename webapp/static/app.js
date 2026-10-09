@@ -907,3 +907,29 @@
       });
   });
 })();
+
+// The upload form (Phase W): once a program and a start date are picked, say what that week already has, so a
+// second schedule for the same week is a choice, not a surprise. Nothing is blocked.
+(function () {
+  "use strict";
+  var box = document.querySelector("[data-week-check]");
+  if (!box || !window.fetch) { return; }
+  var form = box.closest("form");
+  var program = form && form.querySelector("select[name=program]");
+  var week = form && form.querySelector("select[name=week_start]");
+  if (!program || !week) { return; }
+  var text = box.querySelector("p");
+  function check() {
+    if (!program.value || !week.value) { box.hidden = true; return; }
+    var url = box.getAttribute("data-url") + "?program=" + encodeURIComponent(program.value) +
+      "&week=" + encodeURIComponent(week.value);
+    fetch(url, { credentials: "same-origin" }).then(function (r) { return r.ok ? r.json() : { count: 0 }; })
+      .then(function (j) {
+        text.textContent = j.text || "";
+        box.hidden = !j.count;
+      }).catch(function () { box.hidden = true; });
+  }
+  program.addEventListener("change", check);
+  week.addEventListener("change", check);
+  check();
+})();

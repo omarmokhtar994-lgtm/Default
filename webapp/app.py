@@ -18,7 +18,7 @@ from werkzeug.utils import secure_filename
 
 from .adherence import interval_shrinkage, person_day, team as team_figures
 from .analytics import program_weeks, team
-from .attendance import (ACTIVITY_KINDS, ADD_KINDS, DAY_OFF, DayBook, aux_details, hm, tomorrow_unchecked, week_start,
+from .attendance import (ACTIVITY_KINDS, ADD_KINDS, DAY_OFF, DayBook, aux_details, hm, pick_version, tomorrow_unchecked, week_start,
                          with_text)
 from .break_plan import check_row, floor, slots_for, suggest
 from .channel_page import (FULL as FULL_DAYS, NAMES as CHANNEL_NAMES, apply_edit, before as channel_before,
@@ -777,6 +777,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if warnings is not None:
             flash(f"Channel tabs: {warnings} warning{'s' if warnings != 1 else ''}. They are listed on the schedules "
                   "page and never change the schedule." if warnings else "Channel tabs: checked, no warnings.")
+        already = _book().week_note(program, week_start, _unit_name(program))["text"] if program and week_start else ""
+        if already:
+            flash(already)
         if ready:
             run_id = queue.submit_ready(g.user["id"], path, name, program=program, week_start=week_start)
             _record("run_uploaded", app.extensions["store"].get_run(run_id), detail="ready schedule")
@@ -784,6 +787,22 @@ def create_app(config: Dict[str, Any]) -> Flask:
         run_id = queue.submit(g.user["id"], path, mode, name, options, program=program, week_start=week_start)
         _record("run_uploaded", app.extensions["store"].get_run(run_id), detail=mode)
         return redirect(url_for("run_detail", run_id=run_id))
+
+    def _unit_name(key: str) -> str:
+        return str(_unit_filter(key))
+
+    @app.route("/runs/week-check")
+    @login_required
+    def week_check():  # type: ignore[no-untyped-def]
+        """For the upload form (Phase W): what the picked program and week already have, in a sentence."""
+        program = clean_program(request.args.get("program", ""))
+        week = start_date(request.args.get("week", "")) or ""
+        if not program or not week:
+            return jsonify(count=0, text="")
+        if not _access().can_open(program):
+            abort(403)
+        found = _book().week_note(program, week, _unit_name(program))
+        return jsonify(count=found["count"], text=found["text"])
 
     @app.route("/runs/<run_id>")
     @login_required
@@ -1079,7 +1098,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         store = app.extensions["store"]
         old, new = request.form.get("old", ""), clean_program(request.form.get("new", ""))
         reason = " ".join(request.form.get("reason", "").split())[:200]
-        known = program_weeks(_all_runs())
+        known = program_weeks(_all_runs(), app.extensions['store'].in_use_runs())
         try:
             if new not in unit_keys(store):
                 raise ValueError(PICK_UNIT)  # moved into a program or LOB that is set up, never a typed name
@@ -1089,7 +1108,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 apply_rename(store, old, new, g.user["id"], reason)
                 book = ProgramBook(store)
                 flash(f"Moved {book.label(old)} into {book.label(found['new'])}.")
-                known = program_weeks(_all_runs())
+                known = program_weeks(_all_runs(), app.extensions['store'].in_use_runs())
                 return redirect(url_for("program", name=found["new"]) if found["new"] in known else url_for("programs"))
             return render_template("program_rename.html", found=found, reason=reason,
                                    reason_missing=confirmed and not reason,
@@ -1107,7 +1126,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
     @login_required
     def programs():  # type: ignore[no-untyped-def]
         group = {k: p["name"] for p in ProgramBook(app.extensions["store"]).tree() for k in p["units"]}
-        rows = overview(program_weeks(_all_runs()))
+        rows = overview(program_weeks(_all_runs(), app.extensions['store'].in_use_runs()))
         for r in rows:  # each LOB under its program
             r["group"] = group.get(r["name"], r["name"])
         rows.sort(key=lambda r: (r["group"].casefold(), r["name"].casefold()))
@@ -1116,7 +1135,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
     @app.route("/programs/<path:name>")
     @login_required
     def program(name: str):  # type: ignore[no-untyped-def]
-        history = program_weeks(_all_runs()).get(name)
+        history = program_weeks(_all_runs(), app.extensions['store'].in_use_runs()).get(name)
         if not history:
             if name not in unit_keys(app.extensions["store"]):
                 abort(404)
@@ -1146,19 +1165,62 @@ def create_app(config: Dict[str, Any]) -> Flask:
         run = _run_or_404(run_id)
         side = "before" if request.args.get("side") == "before" else "after"
         return _week_page(run, side, run.get("program") or "", run.get("week_start") or "",
-                          program_weeks(_all_runs()))
+                          program_weeks(_all_runs(), app.extensions['store'].in_use_runs()))
+
+    def _version_weeks(program: str) -> List[str]:
+        """The weeks with a kept schedule for ``program`` (uploaded ones included), as the person may see."""
+        return sorted({w for p, w in app.extensions["store"].schedule_weeks() if p == program}) \
+            if program and _access().can_open(program) else []
+
+    def _week_choices(program: str, history: Dict[str, list]) -> Tuple[List[str], List[str]]:
+        """The Week page's program and week lists: runs that count and kept schedules (Phase W)."""
+        kept = {p for p, _ in app.extensions["store"].schedule_weeks()}
+        programs = sorted(set(history) | {p for p in kept if _access().can_open(p)}, key=str.lower)
+        weeks = sorted({w["week"] for w in history.get(program, [])} | set(_version_weeks(program)), reverse=True)
+        return programs, weeks
+
+    def _version_week(row: Dict[str, Any], side: str, note: Optional[Dict[str, Any]] = None):  # type: ignore[no-untyped-def]
+        """A version's week view; ``note`` (the Week page): why this version, and what else the week has."""
+        intervals = json.loads(row["checks"] or "{}").get("intervals") or []
+        run = app.extensions["store"].get_run(row["run_id"])
+        programs, weeks = _week_choices(row["program"], program_weeks(_all_runs(), app.extensions['store'].in_use_runs()))
+        return render_template("week.html", run=run, view=week_view(intervals, side) if intervals else None,
+                               side=side, program=row["program"], week=row["week_start"], programs=programs,
+                               weeks=weeks, figures=kept_figures(run or {}), version=row, week_note=note)
 
     @app.route("/week")
     @login_required
     def week_page():  # type: ignore[no-untyped-def]
-        """A program's week: the run that counts for it (the latest finished, as on the program page)."""
-        history = program_weeks(_all_runs())
+        """A program's week: the schedule in use (Phase W; else the newest kept, said so), else the run that counts
+        for it (the latest finished, as on the program page)."""
+        store = app.extensions["store"]
+        history = program_weeks(_all_runs(), store.in_use_runs())
         side = "before" if request.args.get("side") == "before" else "after"
         program = clean_program(request.args.get("program", ""))
         week = start_date(request.args.get("week", "")) or ""
         if not program and history:
             latest = max((w for rows in history.values() for w in rows), key=lambda w: w["finished"] or 0)
             program, week = latest["program"], latest["week"]
+        kept = _version_weeks(program)
+        holding = next((w for w in reversed(kept) if week and 0 <= (date.fromisoformat(week)
+                                                                    - date.fromisoformat(w)).days <= 6), None)
+        if program and not week and kept:
+            holding = kept[-1]
+        if holding:
+            versions = store.list_schedules(program=program, week_start=holding)
+            chosen, said = pick_version(versions)
+            if chosen is not None:
+                runs = {v["run_id"]: (store.get_run(v["run_id"]) or {}).get("workbook", "") for v in versions}
+                others = [wb for rid, wb in runs.items() if rid != chosen["run_id"]]
+                set_by = ""
+                if chosen["in_use"]:
+                    marks = [e for e in store.list_events(0, time.time() + 60, program, None, ["set_in_use"])
+                             if e.get("schedule_id") == chosen["id"]]
+                    if marks:
+                        set_by = (f"set in use by {marks[-1].get('by_name') or 'someone'} on "
+                                  f"{datetime.fromtimestamp(marks[-1]['at'], EGYPT):%a %d %b}")
+                return _version_week(chosen, side, {"said": said, "workbook": runs.get(chosen["run_id"], ""),
+                                                    "others": others, "set_by": set_by})
         rows = history.get(program, [])
         if program and not week and rows:
             week = rows[-1]["week"]
@@ -1166,7 +1228,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             (w for w in reversed(rows) if week and start_date(w["week"]) and
              0 <= (date.fromisoformat(week) - date.fromisoformat(w["week"])).days <= 6), None)
         week = row["week"] if row else week
-        run = app.extensions["store"].get_run(row["run_id"]) if row else None
+        run = store.get_run(row["run_id"]) if row else None
         return _week_page(run, side, program, week, history)
 
     # ------------------------------------------------------------- schedule versions (Phase N)
@@ -1534,15 +1596,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
     @login_required
     def schedule_week(schedule_id: int):  # type: ignore[no-untyped-def]
         row = _version_or_404(schedule_id)
-        intervals = json.loads(row["checks"] or "{}").get("intervals") or []
-        side = "before" if request.args.get("side") == "before" else "after"
-        run = app.extensions["store"].get_run(row["run_id"])
-        history = program_weeks(_all_runs())
-        return render_template("week.html", run=run, view=week_view(intervals, side) if intervals else None,
-                               side=side, program=row["program"], week=row["week_start"],
-                               programs=sorted(history, key=str.lower),
-                               weeks=[w["week"] for w in reversed(history.get(row["program"], []))],
-                               figures=kept_figures(run or {}), version=row)
+        return _version_week(row, "before" if request.args.get("side") == "before" else "after")
 
     # ------------------------------------------------------------- the day (Phase N)
     def _days() -> DayBook:

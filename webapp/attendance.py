@@ -93,10 +93,14 @@ def _clock(text: str) -> Optional[int]:
 
 
 def pick_version(versions: List[Dict[str, Any]]) -> Tuple[Optional[Dict[str, Any]], str]:
-    """Which of the versions covering a day it is read from: one in use, else the newest tool schedule
-    (after breaks first), with a note saying so; (None, "") when there is none. Where two weeks overlap
-    (a program moving from Sunday to Monday starts), the later start counts."""
-    order = (lambda v: (v["week_start"], v["kind"] == "tool_after", v["created"]))
+    """Which of the versions covering a day it is read from: one in use, else the newest schedule made by the tool
+    or uploaded (Phase W: by when its run's schedules were kept; within one engine run, after breaks before before
+    breaks), with a note saying so; (None, "") when there is none. Where two weeks overlap (a program moving from
+    Sunday to Monday starts), the later start counts."""
+    kept: Dict[Any, float] = {}
+    for v in versions:
+        kept[v["run_id"]] = min(kept.get(v["run_id"], v["created"]), v["created"])
+    order = (lambda v: (v["week_start"], kept[v["run_id"]], v["kind"] == "tool_after", v["created"]))
     chosen = max((v for v in versions if v["in_use"]), key=order, default=None)
     if chosen:
         return chosen, ""

@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from collections import Counter
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 EGYPT = timezone(timedelta(hours=3))
 COUNTED = ("DONE", "REVIEW")
@@ -51,7 +51,10 @@ def _figures(m: dict) -> Dict[str, Any]:
     }
 
 
-def program_weeks(runs: List[dict]) -> Dict[str, List[dict]]:
+def program_weeks(runs: List[dict], in_use: Optional[Dict[Tuple[str, str], str]] = None) -> Dict[str, List[dict]]:
+    """Per program, one row per week: the run whose schedule is in use that week (``in_use``: (program, week) ->
+    run id, Phase W), else the latest finished, with how many runs that week had."""
+    in_use = in_use or {}
     chosen: Dict[tuple, dict] = {}
     counts: Counter = Counter()
     for run in runs:
@@ -64,11 +67,14 @@ def program_weeks(runs: List[dict]) -> Dict[str, List[dict]]:
         key = (program, week)
         counts[key] += 1
         when = run.get("finished") or run.get("created") or 0
-        if key not in chosen or when >= (chosen[key]["finished"] or 0):
+        mine = in_use.get(key) == run["id"]
+        if key in chosen and chosen[key]["in_use"] and not mine:
+            continue
+        if mine or key not in chosen or when >= (chosen[key]["finished"] or 0):
             chosen[key] = {"program": program, "week": week, "run_id": run["id"], "workbook": run.get("workbook"),
                            "by_name": run.get("by_name"), "mode": run.get("mode"), "finished": when,
                            "week_basis": "set" if run.get("week_start") else "run date", "m": m,
-                           "f": _figures(m)}
+                           "f": _figures(m), "in_use": mine}
     out: Dict[str, List[dict]] = {}
     for (program, week), row in sorted(chosen.items()):
         row["runs_that_week"] = counts[(program, week)]

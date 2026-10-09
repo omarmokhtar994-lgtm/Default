@@ -577,6 +577,19 @@ class Store:
                              " on users.id = schedules.user_id where schedules.id = ?", (schedule_id,)).fetchone()
         return dict(row) if row else None
 
+    def in_use_runs(self) -> Dict[Tuple[str, str], str]:
+        """(program, week start) -> the run whose version is in use that week (Phase W)."""
+        with self._db() as db:
+            return {(r[0], r[1]): r[2] for r in db.execute(
+                "select program, week_start, run_id from schedules where in_use = 1 and program != ''"
+                " and week_start != ''")}
+
+    def schedule_weeks(self) -> List[Tuple[str, str]]:
+        """Every (program, week start) that has a kept schedule (Phase W: the Week page lists uploaded ones too)."""
+        with self._db() as db:
+            return [(r[0], r[1]) for r in db.execute(
+                "select distinct program, week_start from schedules where program != '' and week_start != ''")]
+
     def list_schedules(self, run_id: Optional[str] = None, program: Optional[str] = None,
                        week_start: Optional[str] = None, covering: Optional[str] = None) -> List[Dict[str, Any]]:
         """Versions by run, program and start date; ``covering`` (a YYYY-MM-DD date) keeps those whose

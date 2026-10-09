@@ -21,7 +21,7 @@ import shutil
 import tempfile
 import threading
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -400,6 +400,26 @@ class ScheduleBook:
         if use:
             self.set_in_use(int(row["id"]), user_id)
         return int(row["id"]), left_out
+
+    def week_note(self, program: str, week_start: str, unit: str) -> Dict[str, Any]:
+        """What a week already has (Phase W): how many schedules (one per run: an upload or an engine run), the
+        version in use and its workbook, and a sentence saying so for an upload (empty when there is none)."""
+        rows = self.store.list_schedules(program=program, week_start=week_start) if program and week_start else []
+        runs = {v["run_id"] for v in rows}
+        if not runs:
+            return {"count": 0, "in_use": None, "text": ""}
+        used = next((v for v in rows if v["in_use"]), None)
+        n = len(runs)
+        when = f"{date.fromisoformat(week_start):%a %d %b}"
+        text = f"{unit} has {n} schedule{'s' if n != 1 else ''} for the week of {when}. "
+        if used:
+            workbook = (self.store.get_run(used["run_id"]) or {}).get("workbook", "")
+            text += f"In use: {used['label']}" + (f" from {workbook}. " if workbook else ". ")
+        else:
+            text += "None is in use; the RTA reads the newest. "
+        text += (f"Yours is kept next to {'them' if n != 1 else 'it'}. The RTA keeps reading the one in use until you "
+                 "choose another on the Schedules page.")
+        return {"count": n, "in_use": used, "text": text}
 
     def set_in_use(self, schedule_id: int, user_id: int) -> None:
         row = self.store.get_schedule(schedule_id)

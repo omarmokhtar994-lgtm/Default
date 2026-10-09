@@ -21,7 +21,7 @@ from .day import (ABSENT, AUX, CALLED_IN, EXTRA_BREAKS, LATE_EARLY, MEASURES, OV
                   check_break, day_view, dayoff_offers, meeting_slots, overtime_offers, pattern_breaks, planned,
                   read_inputs, replan, vto_offers)
 from .schedules import EGYPT, KEEP_DAYS, ScheduleBook
-from .versions import DAYS, shift_span
+from .versions import DAYS, channel_blocks, shift_span
 
 HHMM = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
 FALLBACK = "No version is marked in use for this week, so this is the tool's own schedule."
@@ -261,10 +261,126 @@ class DayBook:
                  "with_whom": extra.get("with_whom", ""), "why": extra.get("why", "")})
         earlier, _ = self.version(program, on - timedelta(days=1))  # last night: the schedule holding yesterday
         before = (self._week(earlier), day_index(on - timedelta(days=1))) if earlier else None
-        view = day_view(week, inputs, day_index(on), attendance, actual, measure, acts, before)
+        channels, channel_problem = self._channel_inputs(program, on, week, inputs, source, earlier)
+        view = day_view(week, inputs, day_index(on), attendance, actual, measure, acts, before, channels=channels)
         return {"version": row, "note": note, "view": view, "stale": stale, "date": on,
+                "channel_problem": channel_problem,
                 "week_start": row["week_start"], "day": day_index(on), "inputs": inputs,
                 "log": self.store.list_day_log(program, on.isoformat())}
+
+    # ------------------------------------------------------------- channels on the day (Phase V)
+    def _channel_inputs(self, program: str, on: date, week: Dict[str, Any], inputs: Dict[str, Any], source,
+                        earlier: Optional[Dict[str, Any]]) -> Tuple[Optional[Dict[str, Any]], str]:
+        """What the day view needs to count channels (None without channel tabs), and why it cannot when the tabs
+        no longer read (said on the page; the day itself still shows)."""
+        from .channel_people import ChannelPeople
+        from .channels import read_channels
+        try:
+            setup = read_channels(source, inputs["interval"])
+        except ValueError as exc:
+            return None, f"The channel tabs of this schedule's workbook cannot be read, so channels are not shown: {exc}"
+        if not setup:
+            return None, ""
+        d = day_index(on)
+        blocks: Dict[Tuple[int, str], List[Tuple[int, int, str]]] = {}
+        for a in week.get("associates", []):
+            found = channel_blocks(week, d, a["name"])
+            if found:
+                blocks[(0, a["name"])] = [(b["start"], b["end"], b["channel"]) for b in found]
+        if earlier:  # last night's overnight blocks, read past midnight
+            prev, pd = self._week(earlier), day_index(on - timedelta(days=1))
+            for a in prev.get("associates", []):
+                found = channel_blocks(prev, pd, a["name"])
+                if found:
+                    blocks[(-1, a["name"])] = [(b["start"] - 1440, b["end"] - 1440, b["channel"]) for b in found]
+        moves: Dict[Tuple[int, str], List[Dict[str, Any]]] = {}
+        for offset, when in ((0, on), (-1, on - timedelta(days=1))):
+            for r in self.store.list_channel_moves(program, [when.isoformat()]):
+                moves.setdefault((offset, r["associate"]), []).append(
+                    {"id": r["id"], "start": r["start"] + 1440 * offset, "end": r["end_min"] + 1440 * offset,
+                     "channel": r["channel"]})
+        clock = datetime.now(EGYPT)
+        after = clock.hour * 60 + clock.minute if on == clock.date() else (0 if on > clock.date() else 1440)
+        return {"setup": setup, "skills": ChannelPeople(self.store).skills_for_unit(program),
+                "language_rows": inputs["languages"], "blocks": blocks, "moves": moves, "after": after,
+                "gaps": (inputs.get("gap_min"), inputs.get("gap_max")), "today": on == clock.date()}, ""
+
+    def channel_move(self, program: str, on: date, name: str, start: Any, end: Any, channel: str,
+                     user_id: int) -> int:
+        """Put ``name`` on ``channel`` from ``start`` to ``end`` (minutes, or HH:MM) for the shift that starts on
+        ``on``; kept and said in the day log. Refused outside the shift, off the 5-minute steps, in all-channels
+        time, or for a channel the person cannot work."""
+        from .channel_day import letter_at
+        from .channel_people import ChannelPeople, can_work
+        from .channels import CHANNELS, blended_at, read_channels
+        row, week, span = self._shift(program, on, name)
+        lo = start if isinstance(start, int) else _clock(str(start))
+        hi = end if isinstance(end, int) else _clock(str(end))
+        if lo is None or hi is None:
+            raise ValueError("Give the start and end like 15:00.")
+        lo += 1440 if lo < span[0] else 0
+        hi += 1440 if hi <= lo else 0
+        if lo % STEP or hi % STEP:
+            raise ValueError("Channel changes go in 5-minute steps.")
+        if lo < span[0] or hi > span[1]:
+            raise ValueError(f"A channel change has to fall inside {name}'s shift ({hm(span[0])} to {hm(span[1])}).")
+        if channel not in CHANNELS:
+            raise ValueError("Pick Phone, Chat or Email.")
+        if channel not in can_work(ChannelPeople(self.store).skills_for_unit(program), name):
+            raise ValueError(f"{name} cannot work {CHANNELS[channel]} (see Associate channels).")
+        source = self.book.input_path(row["run_id"])
+        setup = read_channels(source, read_inputs(source)["interval"]) if source.is_file() else None
+        if not setup:
+            raise ValueError("This schedule's workbook has no channel tabs.")
+        d = day_index(on)
+        if any(blended_at(setup, d, t) for t in range(lo, hi, STEP)):
+            raise ValueError("That is an all-channels time: there everyone covers every channel they work.")
+        blocks = [(b["start"], b["end"], b["channel"]) for b in channel_blocks(week, d, name)]
+        moved = [{"start": r["start"], "end": r["end_min"], "channel": r["channel"]}
+                 for r in self.store.list_channel_moves(program, [on.isoformat()]) if r["associate"] == name]
+        was = letter_at(blocks, moved, lo, False)
+        made = self.store.add_channel_move(program=program, shift_date=on.isoformat(), associate=name, start=lo,
+                                           end_min=hi, channel=channel, user_id=user_id)
+        what = f"{CHANNELS[channel]} from {hm(lo)} to {hm(hi)}" + (f" (was {CHANNELS[was]})" if was in CHANNELS else "")
+        self.store.add_day_log(program=program, shift_date=on.isoformat(), associate=name, what=what, user_id=user_id)
+        return made
+
+    def cancel_channel_move(self, program: str, on: date, move_id: int, user_id: int) -> None:
+        from .channels import CHANNELS
+        r = self.store.get_channel_move(move_id)
+        if r is None or r["program"] != program or r["shift_date"] != on.isoformat():
+            raise ValueError("That channel change is not on this day.")
+        self.store.delete_channel_move(move_id)
+        self.store.add_day_log(program=program, shift_date=on.isoformat(), associate=r["associate"],
+                               what=f"{CHANNELS[r['channel']]} from {hm(r['start'])} to {hm(r['end_min'])} taken back",
+                               user_id=user_id)
+
+    def move_activity(self, program: str, on: date, activity_id: int, start: str, user_id: int) -> int:
+        """Move an aux, or a break or lunch added on the day, to ``start`` (HH:MM), the same length, with the same
+        who and why; checked like a new booking (the original stays when the new time is refused)."""
+        r = self.store.get_activity(activity_id)
+        if r is None or r["program"] != program or r["shift_date"] != on.isoformat():
+            raise ValueError("That activity is not on this day.")
+        if r["kind"] not in AUX and r["kind"] not in EXTRA_BREAKS:
+            raise ValueError(f"{r['kind']} cannot be moved here.")
+        lo = _clock(start)
+        if lo is None:
+            raise ValueError("Give the new start like 16:00.")
+        fields = {k: v for k, v in r.items() if k != "id"}
+        self.store.delete_activity(activity_id)
+        try:
+            rec = self.add_activity(program, on, r["associate"], r["kind"], start, hm(lo + r["end_min"] - r["start"]),
+                                    user_id, billable=bool(r["billable"]), note=r["note"], dry_run=True,
+                                    with_whom=r.get("with_whom", ""), why=r.get("why", ""),
+                                    with_dept=r.get("with_dept", ""))
+        except ValueError:
+            self.store.add_activity(**fields)
+            raise
+        made = self.store.add_activity(**{**fields, "start": rec["start"], "end_min": rec["end"], "user_id": user_id,
+                                          "at": time.time()})
+        self.store.add_day_log(program=program, shift_date=on.isoformat(), associate=r["associate"],
+                               what=f"{r['kind']} moved {hm(r['start'])} to {hm(rec['start'])}", user_id=user_id)
+        return made
 
     # ------------------------------------------------------------- what people record
     def set_status(self, program: str, on: date, name: str, status: str, user_id: int,
@@ -484,10 +600,44 @@ class DayBook:
         was, now = tightest(before), tightest(after)
         said = found["text"] if hm(lo) in found["text"] else f"{found['text']} ({hm(lo)} to {hm(hi)})"
         if was is None or now is None:
-            return {"text": f"{said}: no demand is set for those intervals.", "level": "ok"}
-        level = "ok" if now >= 0 else ("warn" if now > -step / 60 else "bad")
-        return {"text": f"{said}: the floor at its tightest goes from {_signed(was)} to {_signed(now)}.",
-                "level": level}
+            result = {"text": f"{said}: no demand is set for those intervals.", "level": "ok"}
+        else:
+            level = "ok" if now >= 0 else ("warn" if now > -step / 60 else "bad")
+            result = {"text": f"{said}: the floor at its tightest goes from {_signed(was)} to {_signed(now)}.",
+                      "level": level}
+        if before.get("channels") is not None and after.get("channels") is not None:  # Phase V
+            old = {w["text"] for w in before["channels"]["warnings"]}
+            result["channels"] = [w["text"] for w in after["channels"]["warnings"] if w["text"] not in old]
+            result["better"] = []
+            if result["channels"]:
+                result["level"] = "bad"
+                result["better"] = self._better_times(program, on, name, what, lo, minutes, billable, measure, end,
+                                                      before, old)
+        return result
+
+    def _better_times(self, program: str, on: date, name: str, what: str, lo: int, minutes: int, billable: bool,
+                      measure: str, end: str, before: Dict[str, Any], old: set) -> List[str]:
+        """Up to two quarter-hour starts, nearest first (within 4 hours, inside the shift), at which the same
+        booking makes no new channel warning."""
+        seg = next((x for lane in before["lanes"] if lane["name"] == name for x in lane["segments"]
+                    if x["offset"] == 0), None)
+        if seg is None or not isinstance(minutes, int):
+            return []
+        starts = sorted((s for s in range(seg["start"] - seg["start"] % 15, seg["end"] - minutes + 1, 15)
+                         if s != lo and abs(s - lo) <= 240 and s >= seg["start"]), key=lambda s: (abs(s - lo), s))
+        good: List[str] = []
+        for s in starts[:16]:
+            try:
+                rec = self.add_item(program, on, name, what, hm(s), minutes, 0, billable=billable, dry_run=True,
+                                    end=end)
+            except ValueError:
+                continue
+            view = self.page(program, on, measure, extra=rec["record"])["view"]
+            if not {w["text"] for w in view["channels"]["warnings"]} - old:
+                good.append(hm(s))
+                if len(good) == 2:
+                    break
+        return good
 
     def off_today(self, program: str, on: date) -> List[Tuple[str, str]]:
         """Who is off on ``on`` in the schedule read for it and not called in yet: (name, language)."""

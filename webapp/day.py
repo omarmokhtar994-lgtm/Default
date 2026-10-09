@@ -297,8 +297,9 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
              attendance: Dict[Tuple[int, str], Dict[str, Any]],
              actual: Dict[Tuple[int, str, int], int], measure: str = "interval",
              activities: Optional[Dict[Tuple[int, str], List[Dict[str, Any]]]] = None,
-             before: Any = SAME_WEEK) -> Dict[str, Any]:
-    """The day's lanes, interval cells, language rows and tiles. ``before`` is where the day before is
+             before: Any = SAME_WEEK, channels: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """The day's lanes, interval cells, language rows and tiles (and, with ``channels``, the channel view of
+    ``channel_day``: setup, skills, language_rows, blocks and moves per (offset, name), after, gaps). ``before`` is where the day before is
     read from: (week, column), None for the input's carry-in tab, or this week's previous column. ``attendance``,
     ``actual`` and ``activities`` are keyed by (day offset, name[, break index]):
     0 for this day's shifts, -1 for the previous day's; times are minutes from that
@@ -436,8 +437,12 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
         return (min(own) + 1440 if own else min(s["start"] for s in lane["segments"]), lane["name"])
 
     order = sorted(lanes.values(), key=first)
+    found = None
+    if channels:  # Phase V
+        from .channel_day import channel_view
+        found = channel_view(day, step, now, plan, pieces, lanes, channels)
     return {"interval": step, "measure": measure, "lanes": order, "cells": cells, "languages": languages,
-            "tiles": tiles}
+            "tiles": tiles, "channels": found}
 
 
 def _hm(minute: int) -> str:

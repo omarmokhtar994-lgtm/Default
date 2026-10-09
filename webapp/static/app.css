@@ -934,3 +934,13 @@ dialog.dlg.add-dlg { width: 620px; }
 .legend3 i { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; margin-right: 5px; }
 .cp-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; margin: 10px 0; }
 .cp-edit label { display: flex; flex-direction: column; gap: 4px; }
+
+/* Phase V: channel warnings on the RTA page and in the booking dialog */
+.alert { border-left: 4px solid var(--short); background: var(--short-soft); border-radius: 6px; padding: 12px 14px; margin: 10px 0; }
+.alert.bad { border-left-color: var(--gap); background: var(--gap-soft); }
+.alert h3 { margin: 0 0 4px; font-size: 1rem; }
+.alert p { margin: 4px 0; }
+.fix { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 6px 0; border-top: 1px dashed var(--rail); margin-top: 6px; }
+.effect-ch { border-left: 4px solid var(--gap); background: var(--gap-soft); border-radius: 6px; padding: 8px 12px; margin: 8px 0; }
+.effect-ch p { margin: 3px 0; }
+.effect-ch .chip { margin-right: 6px; }

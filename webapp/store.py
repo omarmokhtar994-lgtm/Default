@@ -70,6 +70,17 @@ create table if not exists associate_channels (
     updated real not null,
     primary key (program_id, name)
 );
+create table if not exists channel_moves (
+    id integer primary key autoincrement,
+    program text not null,
+    shift_date text not null,
+    associate text not null,
+    start integer not null,
+    end_min integer not null,
+    channel text not null,
+    user_id integer,
+    at real not null
+);
 create table if not exists channel_drafts (
     schedule_id integer not null,
     day text not null,
@@ -350,6 +361,37 @@ class Store:
     def clear_break_draft(self, schedule_id: int) -> None:
         with self._db() as db:
             db.execute("delete from break_drafts where schedule_id = ?", (schedule_id,))
+
+    # ------------------------------------------------------------- channels changed on the day (Phase V)
+    def add_channel_move(self, **fields: Any) -> int:
+        fields.setdefault("at", time.time())
+        names = ", ".join(fields)
+        marks = ", ".join("?" for _ in fields)
+        with self._db() as db:
+            return int(db.execute(f"insert into channel_moves ({names}) values ({marks})",
+                                  tuple(fields.values())).lastrowid)
+
+    def get_channel_move(self, move_id: int) -> Optional[Dict[str, Any]]:
+        with self._db() as db:
+            row = db.execute("select * from channel_moves where id = ?", (move_id,)).fetchone()
+        return dict(row) if row else None
+
+    def delete_channel_move(self, move_id: int) -> None:
+        with self._db() as db:
+            db.execute("delete from channel_moves where id = ?", (move_id,))
+
+    def list_channel_moves(self, program: str, dates: List[str]) -> List[Dict[str, Any]]:
+        marks = ", ".join("?" for _ in dates)
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                f"select * from channel_moves where program = ? and shift_date in ({marks}) order by start, id",
+                (program, *dates))]
+
+    def channel_moves_between(self, start: str, end: str, program: Optional[str] = None,
+                              user_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        return self._between("select channel_moves.*, coalesce(users.display_name, '') as by_name from channel_moves"
+                             " left join users on users.id = channel_moves.user_id where shift_date between ? and ?",
+                             [start, end], program, user_id, "channel_moves", "shift_date, program, associate, start")
 
     # ------------------------------------------------------------- a week's channels being planned (Phase V)
     def set_channel_draft(self, schedule_id: int, day: str, plan: Dict[str, Any], user_id: int) -> None:

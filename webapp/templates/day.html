@@ -44,7 +44,7 @@
 <p class="empty panel">No schedule for {{ program|unit }} in the week of {{ week_of.strftime('%d %b') }}. Pick another day, or run this week and mark a version in use from the run's Schedules page.</p>
 {% else %}
 {% set v = page.view %}{% set t = v.tiles %}
-<p class="rta-sum" aria-label="The day in numbers"><span><b>On shift today</b> {{ t.present }} of {{ t.planned }}{% if t.absent %} ({{ t.absent }} off){% endif %}</span><span><b>Short of demand</b> {{ '−' if t.short_hours else '' }}{{ t.short_hours|num }} h</span><span><b>Above demand</b> +{{ t.over_hours|num }} h</span><span><b>Languages</b> {{ t.language_gaps }} gap{{ 's' if t.language_gaps != 1 }}</span><a href="{{ url_for('overview_page', program=program, date=on.isoformat()) }}">Overview</a></p>
+<p class="rta-sum" aria-label="The day in numbers"><span><b>On shift today</b> {{ t.present }} of {{ t.planned }}{% if t.absent %} ({{ t.absent }} off){% endif %}</span><span><b>Short of demand</b> {{ '−' if t.short_hours else '' }}{{ t.short_hours|num }} h</span><span><b>Above demand</b> +{{ t.over_hours|num }} h</span><span><b>Languages</b> {{ t.language_gaps }} gap{{ 's' if t.language_gaps != 1 }}</span>{% if v.channels %}{% set nw = v.channels.warnings|length %}<span><b>Channels</b> <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='channels') }}"{% if nw %} class="warn-ink"{% endif %}>{{ nw }} channel warning{{ 's' if nw != 1 }}</a></span>{% endif %}<a href="{{ url_for('overview_page', program=program, date=on.isoformat()) }}">Overview</a></p>
 
 <div class="daybar">
   <nav class="tabs" aria-label="Views">
@@ -53,6 +53,7 @@
     <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='adherence') }}"{% if tab == 'adherence' %} class="on" aria-current="page"{% endif %}>Adherence</a>
     <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='meeting') }}"{% if tab == 'meeting' %} class="on" aria-current="page"{% endif %}>Find a time</a>
     <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='cover') }}"{% if tab == 'cover' %} class="on" aria-current="page"{% endif %}>Overtime and VTO</a>
+    {% if v.channels %}<a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='channels') }}"{% if tab == 'channels' %} class="on" aria-current="page"{% endif %}>Channels</a>{% endif %}
   </nav>
   <form class="sel" method="get" action="{{ url_for('day_page') }}">
     <input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="view" value="{{ tab }}">
@@ -62,6 +63,7 @@
   </form>
   <p class="dim measure-note">{% if measure == 'interval' %}Billable aux (for example billable coaching) stays on the floor; breaks, absences and non-billable aux do not.{% else %}Anyone in aux, on a break or away is off the queue.{% endif %}</p>
 </div>
+{% if page.channel_problem %}<p class="notice">{{ page.channel_problem }}</p>{% endif %}
 {% if page.stale %}<p class="notice">{{ page.stale }} break move{{ 's' if page.stale != 1 }} recorded earlier no longer match{{ 'es' if page.stale == 1 }} the schedule in use (it changed since), so {{ 'it is' if page.stale == 1 else 'they are' }} not counted.</p>{% endif %}
 <p id="day-status" class="notice" role="status" hidden></p>
 
@@ -70,6 +72,36 @@
      data-person-url="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view=tab if tab in ('board',) else none) }}">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <svg class="defs" aria-hidden="true" focusable="false" width="0" height="0"><defs><pattern id="hatch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="10" class="hatch-line"/></pattern><pattern id="hatch-ok" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="10" class="hatch-line ok"/></pattern></defs></svg>
+
+{% if tab == 'channels' and v.channels %}{% set chv = v.channels %}
+<section class="panel" aria-labelledby="chw-h">
+  <h2 id="chw-h">Channel warnings</h2>
+  <p class="note">Where today's breaks, absences, coaching, meetings and other aux leave a channel, or a channel's language minimum, below its need and below the plan{{ ' for the rest of the day' if from_now }}. Nothing changes until you apply a fix.</p>
+  {% if chv.now %}<p class="cp-sum">{% for c, n in chv.now.items() %}<span><b>{{ c|channel_name }}</b> {{ n.have }} on{% if n.need %}, {{ n.need|num }} needed{% endif %}</span>{% endfor %}</p>{% endif %}
+  {% for w in chv.warnings %}
+  <div class="alert bad"><h3>{{ w.text }}</h3>
+    {% for c in w.causes %}<p>{{ c }}</p>{% endfor %}
+    {% for f in w.fixes %}<form method="post" action="{{ url_for('day_channel') }}" class="fix">{{ hidden_day('channels') }}<input type="hidden" name="associate" value="{{ f.who }}"><input type="hidden" name="action" value="{{ 'swap' if f.kind == 'swap' else f.kind }}">{% if f.kind == 'swap' %}<input type="hidden" name="from" value="{{ hm(f.start) }}"><input type="hidden" name="to" value="{{ hm(f.end) }}"><input type="hidden" name="channel" value="{{ f.channel }}">{% elif f.kind == 'activity' %}<input type="hidden" name="id" value="{{ f.id }}"><input type="hidden" name="at" value="{{ f.start }}">{% else %}<input type="hidden" name="idx" value="{{ f.idx }}"><input type="hidden" name="at" value="{{ f.start }}">{% endif %}<span>{{ f.text }}</span><button type="submit"{% if loop.first %} class="primary"{% endif %}>Apply</button></form>{% endfor %}
+    {% if not w.fixes %}<p class="dim">No single change covers it without leaving another channel short: add overtime, or call someone in.</p>{% endif %}
+  </div>
+  {% else %}<p class="empty">No channel warnings: every channel and language minimum is as planned or better.</p>{% endfor %}
+  {% if chv.unplanned %}<p class="note">On the floor with no channel planned: {{ chv.unplanned|join(', ') }}. Plan channels for this day to count them.</p>{% endif %}
+</section>
+<section class="panel" aria-labelledby="chi-h">
+  <h2 id="chi-h">Channels by interval</h2>
+  <p class="note">People on each channel (average in the interval) against the channel tab's need; each language row is its lowest point against its minimum.</p>
+  <div class="scroll"><table class="cp-cov">
+    <thead><tr><th scope="col"><span class="sr-only">Channel</span></th>{% for c in chv.rows[0].cells if c.need or c.have or (c.plan or 0) > 0 %}<th scope="col">{{ hm(c.t) }}</th>{% endfor %}</tr></thead>
+    <tbody>{% set keep = [] %}{% for c in chv.rows[0].cells if c.need or c.have or (c.plan or 0) > 0 %}{% set _ = keep.append(c.t) %}{% endfor %}
+    {% for r in chv.rows %}<tr><th scope="row">{{ r.name }}</th>{% for c in r.cells if c.t in keep %}<td class="{{ c.cls }}">{% if c.have is not none and (c.need or c.have) %}{{ c.have|num }}/{{ c.need|num }}{% endif %}</td>{% endfor %}</tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+<section class="panel" aria-labelledby="chc-h">
+  <h2 id="chc-h">Channel changes on this day</h2>
+  {% if chv.changes %}<ul class="log">{% for m in chv.changes %}<li>{{ m.name }}: {{ m.channel|channel_name }} from {{ hm(m.start) }} to {{ hm(m.end) }} <form method="post" action="{{ url_for('day_channel') }}" class="inline">{{ hidden_day('channels') }}<input type="hidden" name="associate" value="{{ m.name }}"><input type="hidden" name="action" value="cancel"><input type="hidden" name="id" value="{{ m.id }}"><button type="submit" class="link">Take back</button></form></li>{% endfor %}</ul>
+  {% else %}<p class="empty">None yet. A fix applied above, or a change made here, is listed with a way to take it back.</p>{% endif %}
+</section>
+{% endif %}
 
 {% if tab == 'timeline' %}
 <section class="panel" aria-labelledby="floor-h">
@@ -205,7 +237,7 @@
   </table></div>
 </section>
 </div>
-{% else %}
+{% elif tab != 'channels' %}
 <section class="panel" aria-labelledby="board-h">
   <h2 id="board-h">Interval board</h2>
   <p class="autopilot"><a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='replan') }}">Fix the rest of the day's breaks</a></p>
@@ -296,6 +328,7 @@
       {% if not with_lists and (user.is_admin or user.is_supervisor) %}<p class="note">With is typed until this program has its lists: <a href="{{ url_for('with_setup', program=program) }}">Set the departments and people</a>.</p>{% endif %}
     </div>
     <p class="effect" data-effect aria-live="polite">The effect on the floor shows here before anything is kept.</p>
+    <div class="effect-ch" data-channel-effect hidden aria-live="polite"></div>
     <div class="btns"><button class="primary" type="submit">Add</button><a class="button" href="{{ close_url }}#row-{{ ap.t }}">Close</a></div>
     {% else %}<p class="empty">Nobody has a shift starting this day.</p><div class="btns"><a class="button" href="{{ close_url }}">Close</a></div>{% endif %}
   </form>

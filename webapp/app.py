@@ -1602,7 +1602,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         measure = request.args.get("measure", "")
         measure = measure if measure in MEASURES else "interval"
         tab = request.args.get("view", "")
-        tab = tab if tab in ("board", "adherence", "meeting", "cover", "replan") else "timeline"
+        tab = tab if tab in ("board", "adherence", "meeting", "cover", "replan", "channels") else "timeline"
         problem = ""
         try:
             page = days.page(program, on, measure) if program else None
@@ -1692,6 +1692,39 @@ def create_app(config: Dict[str, Any]) -> Flask:
         except ValueError:
             raise ValueError("Pick a break.") from None
 
+    @app.route("/day/channel", methods=["POST"])
+    @login_required
+    def day_channel():  # type: ignore[no-untyped-def]
+        """Phase V: a channel warning's fix, from the Channels tab: a channel change for someone (swap), moving the
+        aux that caused it (activity) or a break (break); or taking a channel change back (cancel)."""
+        try:
+            program, on, name = _day_form()
+        except ValueError as exc:
+            flash(str(exc))
+            return redirect(url_for("day_page"), code=303)
+        action, days, at = request.form.get("action", ""), _days(), request.form.get("at", "")
+        try:
+            if action == "swap":
+                letter = request.form.get("channel", "")
+                days.channel_move(program, on, name, request.form.get("from", ""), request.form.get("to", ""), letter,
+                                  g.user["id"])
+                flash(f"{name}: {CHANNEL_NAMES.get(letter, letter)} from {request.form.get('from')} to "
+                      f"{request.form.get('to')}.")
+            elif action == "activity":
+                days.move_activity(program, on, request.form.get("id", -1, type=int), at, g.user["id"])
+                flash(f"{name}: moved to {at}.")
+            elif action == "break":
+                days.move_break(program, on, name, _break_idx(), at, g.user["id"])
+                flash(f"{name}: break moved to {at}.")
+            elif action == "cancel":
+                days.cancel_channel_move(program, on, request.form.get("id", -1, type=int), g.user["id"])
+                flash("The channel change was taken back.")
+            else:
+                raise ValueError("Pick what to do.")
+        except ValueError as exc:  # BreakRefused is a ValueError
+            flash(str(exc))
+        return _back_to_day(program, on, "channels")
+
     @app.route("/day/attendance", methods=["POST"])
     @login_required
     def day_attendance():  # type: ignore[no-untyped-def]
@@ -1720,7 +1753,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
 
     def _back_to_day(program: str, on: Optional[date], view: str, cover: str = ""):  # type: ignore[no-untyped-def]
         args = {"program": program, "date": on.isoformat() if on else None,
-                "view": view if view in ("board", "adherence", "meeting", "cover", "replan") else None,
+                "view": view if view in ("board", "adherence", "meeting", "cover", "replan", "channels") else None,
                 "cover": cover if cover.isdigit() and view == "board" else None}
         if args["cover"]:
             args["_anchor"] = f"row-{args['cover']}"

@@ -712,8 +712,39 @@
         if (mine !== seq) { return; }
         effect.textContent = d._ok ? d.text : (d.error || "That cannot be added.");
         effect.className = "effect " + (d._ok ? d.level : "bad");
+        showChannels(d._ok ? d : {});
       })
       .catch(function () { if (mine === seq) { effect.textContent = "The effect could not be worked out; you can still add it."; } });
+  }
+  // Phase V: what the booking does to the channels, and times that keep every channel and language covered
+  var channelEffect = form.querySelector("[data-channel-effect]");
+  function showChannels(d) {
+    if (!channelEffect) { return; }
+    channelEffect.textContent = "";
+    var lines = d.channels || [];
+    channelEffect.hidden = lines.length === 0;
+    lines.forEach(function (line) {
+      var p = document.createElement("p");
+      p.textContent = "Channels: " + line;
+      channelEffect.appendChild(p);
+    });
+    if (lines.length && d.better && d.better.length) {
+      var p = document.createElement("p");
+      p.textContent = "Times that keep every channel and language covered: ";
+      d.better.forEach(function (t) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "chip";
+        b.textContent = "Use " + t;
+        b.addEventListener("click", function () { fromInput.value = t; preview(); });
+        p.appendChild(b);
+      });
+      channelEffect.appendChild(p);
+    } else if (lines.length) {
+      var q = document.createElement("p");
+      q.textContent = "No nearby time keeps every channel covered; booking anyway is allowed and stays on the Channels tab.";
+      channelEffect.appendChild(q);
+    }
   }
   form.addEventListener("change", function (e) { shape(e.target.name === "what"); preview(); });
   shape(true);

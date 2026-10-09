@@ -1,0 +1,3 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{# Phase W: the day's intervals at the week's interval target, as a tile on the RTA. #}
+{% macro target_tile(t, week_url) %}{% set pct = (100 * t.target)|round|int %}<span class="tgt-tile"><b>Intervals at {{ pct }}% or more</b> {% if t.intervals %}{{ t.now }} of {{ t.intervals }} ({{ (100 * t.now / t.intervals)|round|int }}%), plan {{ t.plan }} of {{ t.intervals }}{% else %}No intervals with demand{% endif %} <a href="{{ week_url }}">Target {{ pct }}% for this week</a></span>{% endmacro %}

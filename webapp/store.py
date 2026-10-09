@@ -81,6 +81,14 @@ create table if not exists channel_moves (
     user_id integer,
     at real not null
 );
+create table if not exists interval_targets (
+    program text not null,
+    week_start text not null,
+    target integer not null,
+    user_id integer,
+    at real not null,
+    primary key (program, week_start)
+);
 create table if not exists channel_drafts (
     schedule_id integer not null,
     day text not null,
@@ -577,6 +585,19 @@ class Store:
                              " on users.id = schedules.user_id where schedules.id = ?", (schedule_id,)).fetchone()
         return dict(row) if row else None
 
+    def set_interval_target(self, program: str, week_start: str, target: int, user_id: Optional[int]) -> None:
+        """The interval target (a whole percent) for a program and week (Phase W)."""
+        with self._db() as db:
+            db.execute("insert or replace into interval_targets (program, week_start, target, user_id, at)"
+                       " values (?, ?, ?, ?, ?)", (program, week_start, int(target), user_id, time.time()))
+
+    def get_interval_target(self, program: str, week_start: str) -> Optional[Dict[str, Any]]:
+        with self._db() as db:
+            row = db.execute("select interval_targets.*, users.display_name as by_name from interval_targets"
+                             " left join users on users.id = interval_targets.user_id"
+                             " where program = ? and week_start = ?", (program, week_start)).fetchone()
+        return dict(row) if row else None
+
     def in_use_runs(self) -> Dict[Tuple[str, str], str]:
         """(program, week start) -> the run whose version is in use that week (Phase W)."""
         with self._db() as db:
@@ -869,6 +890,9 @@ class Store:
                 db.execute("update schedules set in_use = 0 where id = ?", (schedule_id,))
             for key, table in (("runs", "runs"), ("versions", "schedules"), *self.DAY_TABLES):
                 moved[key] = db.execute(f"update {table} set program = ? where program = ?", (new, old)).rowcount
+            # interval targets (Phase W) go with the name; a week the new name has a target for keeps its own
+            db.execute("update or ignore interval_targets set program = ? where program = ?", (new, old))
+            db.execute("delete from interval_targets where program = ?", (old,))
         return moved
 
     def program_clashes(self, old: str, new: str, limit: int = 5) -> List[Dict[str, Any]]:

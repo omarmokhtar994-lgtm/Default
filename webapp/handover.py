@@ -92,4 +92,6 @@ def note(days, program: str, on: date, measure: str = "interval") -> Optional[Di
                         "short_hours": tiles["short_hours"], "plan_short_hours": tiles["plan_short_hours"],
                         "over_hours": tiles["over_hours"], "tightest": min(pms) if pms else None,
                         "language_gaps": tiles["language_gaps"], "adherence": whole["adherence"],
-                        "conformance": whole["conformance"], "changes": len(page["log"])}}
+                        "conformance": whole["conformance"], "changes": len(page["log"]),
+                        "target": round(100 * page["target"]["target"]), "at_target": page["target"]["now"],
+                        "intervals": page["target"]["intervals"]}}

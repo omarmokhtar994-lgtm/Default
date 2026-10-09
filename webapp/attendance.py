@@ -17,7 +17,7 @@ from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 from .day import (ABSENT, AUX, CALLED_IN, EXTRA_BREAKS, LATE_EARLY, MEASURES, OVERTIME_MAX, STATUSES, STEP, TIMED,
-                  BreakRefused, _busy, advice,
+                  BreakRefused, _busy, advice, at_target,
                   check_break, day_view, dayoff_offers, meeting_slots, overtime_offers, pattern_breaks, planned,
                   read_inputs, replan, vto_offers)
 from .schedules import EGYPT, KEEP_DAYS, ScheduleBook
@@ -270,11 +270,29 @@ class DayBook:
         before = (self._week(earlier), day_index(on - timedelta(days=1))) if earlier else None
         channels, channel_problem = self._channel_inputs(program, on, week, inputs, source, earlier)
         view = day_view(week, inputs, day_index(on), attendance, actual, measure, acts, before, channels=channels)
+        ratio, source_of_target = self.target_for(program, on, row, inputs)
         return {"version": row, "note": note, "view": view, "stale": stale, "date": on,
                 "unlisted": self._unlisted(program, on, view, attendance, acts),
+                "target": at_target(view["cells"], ratio), "target_source": source_of_target,
                 "channel_problem": channel_problem,
                 "week_start": row["week_start"], "day": day_index(on), "inputs": inputs,
                 "log": self.store.list_day_log(program, on.isoformat())}
+
+    def target_for(self, program: str, on: date, row: Optional[Dict[str, Any]] = None,
+                   inputs: Optional[Dict[str, Any]] = None) -> Tuple[float, Dict[str, Any]]:
+        """The interval target of the week holding ``on`` (Phase W): the one set for this program and week (with who
+        set it), else the workbook's own "Target"; (0.9, workbook) when there is no schedule."""
+        if row is None:
+            row, _ = self.version(program, on)
+        if row is None:
+            return 0.9, {"kind": "workbook"}
+        kept = self.store.get_interval_target(program, row["week_start"])
+        if kept:
+            return kept["target"] / 100, {"kind": "set", "by": kept.get("by_name") or "someone", "at": kept["at"]}
+        if inputs is None:
+            source = self.book.input_path(row["run_id"])
+            inputs = read_inputs(source) if source.is_file() else {}
+        return float(inputs.get("target", 0.9)), {"kind": "workbook"}
 
     def _unlisted(self, program: str, on: date, view: Dict[str, Any], attendance: Dict[Any, Any],
                   acts: Dict[Any, Any]) -> List[Dict[str, str]]:

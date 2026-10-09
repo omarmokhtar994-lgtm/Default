@@ -39,7 +39,7 @@ OTHER_EVENTS = {"run_uploaded": "Run uploaded", "run_started": "Run started", "r
                 "program_renamed": "Program renamed", "user_programs_changed": "Programs or role changed",
                 "program_set_up": "Programs and LOBs", "program_deleted": "Program deleted",
                 "lob_deleted": "LOB deleted", "with_list_changed": "Departments and people",
-                "channels_changed": "Associate channels"}
+                "channels_changed": "Associate channels", "interval_target_changed": "Interval target"}
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 RISKY = ("=", "+", "-", "@", "\t", "\r")
 
@@ -274,7 +274,8 @@ def _summary(store, days, weeks, start, end, program, user_id, measure):
     from .handover import note  # the handover note's numbers, one row per program and day
     yield ["Date", "Program", "Planned", "Present", "Absent", "Late or early", "In aux", "Breaks moved", "Overtime min",
            "VTO min", "Called in min", "Hours short", "Hours short in the plan", "Hours above", "Tightest (hours)",
-           "Language gaps", "Adherence %", "Conformance %", "Changes recorded"]
+           "Language gaps", "Adherence %", "Conformance %", "Changes recorded", "Interval target %",
+           "Intervals at target", "Intervals with demand"]
     for p in _programs(days, program):
         for day in _dates(start, end):
             days.check()
@@ -288,7 +289,7 @@ def _summary(store, days, weeks, start, end, program, user_id, measure):
             yield [day.isoformat(), p, n["planned"], n["present"], n["absent"], n["late_early"], n["aux"], n["moved"],
                    n["overtime_minutes"], n["vto_minutes"], n["called_in_minutes"], n["short_hours"],
                    n["plan_short_hours"], n["over_hours"], n["tightest"], n["language_gaps"], n["adherence"],
-                   n["conformance"], n["changes"]]
+                   n["conformance"], n["changes"], n["target"], n["at_target"], n["intervals"]]
 
 
 def _channels(store, days, weeks, start, end, program, user_id, measure):

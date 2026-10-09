@@ -1179,7 +1179,57 @@ def create_app(config: Dict[str, Any]) -> Flask:
         weeks = sorted({w["week"] for w in history.get(program, [])} | set(_version_weeks(program)), reverse=True)
         return programs, weeks
 
-    def _version_week(row: Dict[str, Any], side: str, note: Optional[Dict[str, Any]] = None):  # type: ignore[no-untyped-def]
+    def _own_target(row: Dict[str, Any]) -> int:
+        """The workbook's own interval target for a version, a whole percent (90 when it cannot be read)."""
+        source = _book().input_path(row["run_id"])
+        return round(100 * read_inputs(source)["target"]) if source.is_file() else 90
+
+    def _target_panel(program: str, week_start: str, row: Dict[str, Any]) -> Dict[str, Any]:
+        """The Week page's interval target (Phase W): the choice and each day's intervals at it, as the RTA counts."""
+        kept = app.extensions["store"].get_interval_target(program, week_start)
+        own = _own_target(row)
+        days = []
+        first = date.fromisoformat(week_start)
+        for i in range(7):
+            on = first + timedelta(days=i)
+            try:
+                page = _days().page(program, on)
+            except ValueError:  # the workbook is missing: said on the day page
+                page = None
+            days.append({"date": on, "label": f"{on:%a %d}", "t": page["target"] if page else None})
+        return {"current": kept["target"] if kept else own, "own": own, "kept": kept, "days": days,
+                "choices": sorted({100, 95, 90, 85, 80, own}, reverse=True),
+                "may_set": bool(g.user["is_admin"] or g.user["is_supervisor"])}
+
+    @app.route("/week/target", methods=["POST"])
+    @manager_required
+    def week_target():  # type: ignore[no-untyped-def]
+        """Set the interval target for a program's week (Phase W; admins and supervisors)."""
+        program = clean_program(request.form.get("program", ""))
+        week = start_date(request.form.get("week", "")) or ""
+        if not program or not week:
+            abort(400)
+        if not _access().can_open(program):
+            abort(403)
+        store = app.extensions["store"]
+        row, _ = pick_version(store.list_schedules(program=program, week_start=week))
+        if row is None:
+            abort(404)
+        try:
+            target = int(request.form.get("target", ""))
+        except ValueError:
+            target = -1
+        if target not in {100, 95, 90, 85, 80, _own_target(row)}:
+            abort(400)
+        store.set_interval_target(program, week, target, g.user["id"])
+        _record("interval_target_changed", program=program, week_start=week, subject=f"{target}%",
+                detail=f"interval target for the week of {week}")
+        flash(f"The interval target for the week of {date.fromisoformat(week):%a %d %b} is now {target}%: the RTA "
+              "counts each day's intervals against it.")
+        return redirect(url_for("week_page", program=program, week=week) + "#target", code=303)
+
+    def _version_week(row: Dict[str, Any], side: str, note: Optional[Dict[str, Any]] = None,
+                      target: Optional[Dict[str, Any]] = None):  # type: ignore[no-untyped-def]
         """A version's week view; ``note`` (the Week page): why this version, and what else the week has."""
         intervals = json.loads(row["checks"] or "{}").get("intervals") or []
         run = app.extensions["store"].get_run(row["run_id"])
@@ -1187,7 +1237,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return render_template("week.html", run=run, view=week_view(intervals, side) if intervals else None,
                                side=side, program=row["program"], week=row["week_start"], programs=programs,
                                weeks=weeks, figures=kept_figures(run or {}), version=row, week_note=note,
-                               may_set_in_use=_may_set_in_use(row))
+                               may_set_in_use=_may_set_in_use(row), target_panel=target)
 
     @app.route("/week")
     @login_required
@@ -1221,7 +1271,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                         set_by = (f"set in use by {marks[-1].get('by_name') or 'someone'} on "
                                   f"{datetime.fromtimestamp(marks[-1]['at'], EGYPT):%a %d %b}")
                 return _version_week(chosen, side, {"said": said, "workbook": runs.get(chosen["run_id"], ""),
-                                                    "others": others, "set_by": set_by})
+                                                    "others": others, "set_by": set_by},
+                                     _target_panel(program, holding, chosen))
         rows = history.get(program, [])
         if program and not week and rows:
             week = rows[-1]["week"]

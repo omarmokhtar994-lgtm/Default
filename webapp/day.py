@@ -974,3 +974,20 @@ def shift_groups(view: Dict[str, Any], from_now: Optional[int] = None) -> List[D
         if coming is not None:
             coming["next"] = True
     return out
+
+
+def at_target(cells: List[Dict[str, Any]], target: float) -> Dict[str, Any]:
+    """The day against an interval target (Phase W, owner: "count of intervals above 90% or the chosen target /
+    total intervals"): of the intervals with demand, how many have on the floor at least ``target`` x demand, now
+    and in the plan, and each interval's share of its demand (None where there is no demand)."""
+    shares = []
+    for c in cells:
+        if c["required"] > 0:
+            pct = int(100 * c["now"] / c["required"] + 1e-9)
+            shares.append({"t": c["t"], "pct": pct, "ok": c["now"] >= target * c["required"] - 1e-9})
+        else:
+            shares.append({"t": c["t"], "pct": None, "ok": None})
+    have = [c for c in cells if c["required"] > 0]
+    return {"target": target, "intervals": len(have),
+            "now": sum(1 for c in have if c["now"] >= target * c["required"] - 1e-9),
+            "plan": sum(1 for c in have if c["plan"] >= target * c["required"] - 1e-9), "cells": shares}

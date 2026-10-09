@@ -1,5 +1,6 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
 {% extends "base.html" %}
+{% from "_target_tile.html" import target_tile with context %}
 {% block title %}The day: {{ program or 'no program' }} on Team Scheduler{% endblock %}
 {% block content %}
 {% macro with_fields(dept='', who='', disabled=False, required=False) -%}
@@ -44,7 +45,7 @@
 <p class="empty panel">No schedule for {{ program|unit }} in the week of {{ week_of.strftime('%d %b') }}. Pick another day, or run this week and mark a version in use from the run's Schedules page.</p>
 {% else %}
 {% set v = page.view %}{% set t = v.tiles %}
-<p class="rta-sum" aria-label="The day in numbers"><span><b>On shift today</b> {{ t.present }} of {{ t.planned }}{% if t.absent %} ({{ t.absent }} off){% endif %}</span><span><b>Short of demand</b> {{ '−' if t.short_hours else '' }}{{ t.short_hours|num }} h</span><span><b>Above demand</b> +{{ t.over_hours|num }} h</span><span><b>Languages</b> {{ t.language_gaps }} gap{{ 's' if t.language_gaps != 1 }}</span>{% if v.channels %}{% set nw = v.channels.warnings|length %}<span><b>Channels</b> <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='channels') }}"{% if nw %} class="warn-ink"{% endif %}>{{ nw }} channel warning{{ 's' if nw != 1 }}</a></span>{% endif %}<a href="{{ url_for('overview_page', program=program, date=on.isoformat()) }}">Overview</a></p>
+<p class="rta-sum" aria-label="The day in numbers">{{ target_tile(page.target, url_for('week_page', program=program, week=page.week_start) ~ '#target') }}<span><b>On shift today</b> {{ t.present }} of {{ t.planned }}{% if t.absent %} ({{ t.absent }} off){% endif %}</span><span><b>Short of demand</b> {{ '−' if t.short_hours else '' }}{{ t.short_hours|num }} h</span><span><b>Above demand</b> +{{ t.over_hours|num }} h</span><span><b>Languages</b> {{ t.language_gaps }} gap{{ 's' if t.language_gaps != 1 }}</span>{% if v.channels %}{% set nw = v.channels.warnings|length %}<span><b>Channels</b> <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='channels') }}"{% if nw %} class="warn-ink"{% endif %}>{{ nw }} channel warning{{ 's' if nw != 1 }}</a></span>{% endif %}<a href="{{ url_for('overview_page', program=program, date=on.isoformat()) }}">Overview</a></p>
 
 <div class="daybar">
   <nav class="tabs" aria-label="Views">
@@ -144,6 +145,7 @@
     <div class="tl-row tl-num"><span class="tl-lbl">Planned on the floor</span><div class="tl-cells">{% for c in v.cells %}<span class="tc n">{{ c.plan|num if c.plan else '' }}</span>{% endfor %}</div></div>
     <div class="tl-row tl-num"><span class="tl-lbl">On the floor now</span><div class="tl-cells">{% for c in v.cells %}<span class="tc {{ c.cls }}">{{ c.now|num if (c.now or c.pm is not none) else '' }}</span>{% endfor %}</div></div>
     <div class="tl-row tl-num"><span class="tl-lbl">Plus / minus (hours)</span><div class="tl-cells">{% for c in v.cells %}<span class="tc {{ c.cls }}" title="{{ hm(c.t) }}: {{ c.pm|hmm }}">{% if c.pm is not none %}{{ '+' if c.pm >= 0 else '' }}{{ '%.1f'|format(c.pm) }}{% endif %}</span>{% endfor %}</div></div>
+    {% set tg = page.target %}<div class="tl-row tl-num"><span class="tl-lbl">Achieved (target {{ (100 * tg.target)|round|int }}%)</span><div class="tl-cells">{% for c in tg.cells %}{% if c.pct is none %}<span class="tc"></span>{% else %}<span class="tc {{ 'attarget' if c.ok else 'below' }}">{{ c.pct }}%</span>{% endif %}{% endfor %}</div></div>
     {% for l in v.languages %}<div class="tl-row tl-num"><span class="tl-lbl">{{ l.name }} on the floor</span><div class="tl-cells">{% for c in l.cells %}<span class="tc {{ c.cls }}">{{ c.count if c.count is not none else '' }}</span>{% endfor %}</div></div>{% endfor %}
   </div></div>
   <p class="legend2"><span><i class="k ok"></i>Enough people</span><span><i class="k warn"></i>Short by less than one person</span><span><i class="k bad"></i>Short by a person or more</span><span><i class="k moved"></i>Break moved here</span><span><i class="k ghost"></i>Where the engine planned it</span><span><i class="k away"></i>Away (late, aux, leave)</span>{% if v.tiles.called_in %}<span><i class="k called"></i>Called in on a day off</span>{% endif %}</p>

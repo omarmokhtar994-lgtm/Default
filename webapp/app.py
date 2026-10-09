@@ -1186,7 +1186,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         programs, weeks = _week_choices(row["program"], program_weeks(_all_runs(), app.extensions['store'].in_use_runs()))
         return render_template("week.html", run=run, view=week_view(intervals, side) if intervals else None,
                                side=side, program=row["program"], week=row["week_start"], programs=programs,
-                               weeks=weeks, figures=kept_figures(run or {}), version=row, week_note=note)
+                               weeks=weeks, figures=kept_figures(run or {}), version=row, week_note=note,
+                               may_set_in_use=_may_set_in_use(row))
 
     @app.route("/week")
     @login_required
@@ -1592,6 +1593,22 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return send_file(with_notes(book.path(schedule_id), book.view(schedule_id)), as_attachment=True,
                          download_name=f"{stem}.xlsx")
 
+    @app.route("/schedules/<int:schedule_id>/auto-breaks", methods=["POST"])
+    @login_required
+    def auto_breaks(schedule_id: int):  # type: ignore[no-untyped-def]
+        """Plan breaks automatically (Phase W): every break of the week, saved as a new version."""
+        row = _version_or_404(schedule_id)
+        use = request.form.get("use") == "1" and _may_set_in_use(row)
+        try:
+            found = _book().auto_breaks(schedule_id, g.user["id"], use)
+        except ValueError as exc:  # the break rules could not be read, or an edit was refused: said, nothing saved
+            flash(f"Breaks were not planned: {exc}")
+            return redirect(url_for("run_schedules", run_id=row["run_id"], v=schedule_id))
+        flash(found["said"])
+        if request.form.get("back") == "week":
+            return redirect(url_for("week_page", program=row["program"], week=row["week_start"]))
+        return redirect(url_for("run_schedules", run_id=row["run_id"], v=found["id"]))
+
     @app.route("/schedules/<int:schedule_id>/week")
     @login_required
     def schedule_week(schedule_id: int):  # type: ignore[no-untyped-def]
@@ -1692,14 +1709,14 @@ def create_app(config: Dict[str, Any]) -> Flask:
                     finder["error"] = str(exc)
         clock_now = datetime.now(EGYPT)
         from_now = clock_now.hour * 60 + clock_now.minute if clock_now.date() == on else 0
-        shifts: Dict[str, Any] = {"shift_groups": [], "shift": "", "shift_names": None}
+        shift_view: Dict[str, Any] = {"shift_groups": [], "shift": "", "shift_names": None}
         if page and tab == "timeline":  # the Timeline by shift start (Phase W)
             wanted = request.args.get("shift", "").strip()
             wanted = wanted if wanted == "earlier" or re.match(r"^([01]\d|2[0-3]):[0-5]\d$", wanted) else ""
             groups = shift_groups(page["view"], from_now if clock_now.date() == on else None)
             chosen = next((g for g in groups if g["key"] == wanted), None)
-            shifts = {"shift_groups": groups, "shift": wanted,
-                      "shift_names": set(chosen["names"]) if chosen else (set() if wanted else None)}
+            shift_view = {"shift_groups": groups, "shift": wanted,
+                          "shift_names": set(chosen["names"]) if chosen else (set() if wanted else None)}
         if page and tab == "cover":
             cover = days.offers(page, from_now)
         proposal = days.replan(page, from_now) if page and tab == "replan" else None
@@ -1751,7 +1768,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                measure=measure,
                                measures=MEASURES, tab=tab, statuses=STATUSES, aux=sorted(AUX), hm=hm,
                                rows=board(page["view"]) if page and tab == "board" else None, week_of=week_start(on),
-                               earlier=on - timedelta(days=1), later=on + timedelta(days=1), **shifts)
+                               earlier=on - timedelta(days=1), later=on + timedelta(days=1), **shift_view)
 
     ADD_LENGTHS = (5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240)  # minutes offered by "+ Add"
 

@@ -12,10 +12,9 @@ from collections import Counter
 from pathlib import Path
 from unittest import mock
 
-from openpyxl import load_workbook
+from openpyxl import Workbook
 
 from webapp import channels, day
-from webapp.tests.test_ready import make_ready
 from webapp.tests.test_runs import make_app, sign_in
 
 
@@ -58,11 +57,12 @@ class TheCaches(unittest.TestCase):
         self.assertEqual(errors, Counter())
 
     def test_input_cache_survives_threads(self):
-        ready = load_workbook(make_ready(self.dir / "ready.xlsx"), data_only=True)
-        with mock.patch.object(day, "load_workbook", lambda path, data_only=True: ready), \
+        # each call gets its own empty workbook, as each request loads its own file: one openpyxl workbook shared
+        # by threads raises by itself (it makes cells as they are read), which is not what this test measures
+        with mock.patch.object(day, "load_workbook", lambda path, data_only=True: Workbook()), \
                 mock.patch.object(day, "KEEP", 3):
             day._CACHE.clear()
-            errors = hammer(day.read_inputs, self.files, rounds=150)
+            errors = hammer(day.read_inputs, self.files, rounds=300)
         self.assertEqual(errors, Counter())
 
     def test_a_slow_read_does_not_block_other_files(self):

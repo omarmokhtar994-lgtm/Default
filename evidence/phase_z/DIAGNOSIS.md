@@ -54,3 +54,17 @@ after breaks" shows on a version that has no breaks yet.
   off screen unless you scroll to the bottom.
 
 Screens: `scratchpad` captures `01_home` to `07_channels_setup` (review server, night look, 1440 px).
+
+## 4. More strange things found while checking (owner: "check rest of my comments above")
+
+- Run pages never say whether that schedule is in use, and the in-use run still says "Plan the week's breaks next"
+  after its breaks were planned (Version 2).
+- Every automatically planned break is logged as its own change, each tagged "warning" (184 lines), because the
+  save's one warning is copied onto every line.
+- The week view of a version that is not in use has the same title as the week in use and does not say it is not
+  used.
+- Home's "Latest schedule" panel and its Runs table cover every program, although Home otherwise shows only the
+  program picked on the left (Phase R).
+- Analysis for a program whose schedules were all uploaded ready says "No analysis yet" and lists the uploads
+  without saying which one is in use. Analysis from uploaded schedules is a new feature, so it is offered for
+  later rather than built in this phase.

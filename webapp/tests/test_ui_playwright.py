@@ -2145,7 +2145,10 @@ class ThePhaseZInTheBrowser(unittest.TestCase):
         page.screenshot(path=str(Z_SCREENS / "associate_channels_pointer.png"))
         # the Week page links to the other schedule and to the list
         self.go(page, f"/week?program={self.q}&week={self.sunday.isoformat()}", errors)
-        expect(page.get_by_role("link", name="See both schedules")).to_be_visible()
+        # Re-pinned in Phase AA (2026-10-10): approved sample 04 replaced the "See both schedules" sentence with the
+        # Week page's Schedule switch, which opens the other schedule and the week's comparison.
+        expect(page.get_by_role("group", name="Schedule shown").get_by_role("link", name="week_v2.xlsx")).to_be_visible()
+        expect(page.get_by_role("link", name="Compare the week's schedules")).to_be_visible()
         page.screenshot(path=str(Z_SCREENS / "week_page_links.png"))
         # today's achievement on the RTA: the Timeline, then the Interval board, night and day looks
         self.go(page, f"/day?program={self.q}&date={day}", errors)
@@ -2179,4 +2182,138 @@ class ThePhaseZInTheBrowser(unittest.TestCase):
         phone.locator(".achv").scroll_into_view_if_needed()
         phone.wait_for_timeout(300)
         phone.screenshot(path=str(Z_SCREENS / "phone_rta_achievement.png"))
+        self.assertEqual(errors, [])
+
+
+AA_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_aa" / "screens"
+
+
+class ThePhaseAAInTheBrowser(unittest.TestCase):
+    """Phase AA (the owner approved samples 01 to 04): overtime before or after the shift, deleting a schedule that is
+    not needed, the Schedules page by week, and the Week page's schedule switch, in a real browser. This week for
+    SAKS, NMG Tier 2 has week.xlsx (breaks planned, in use), week_v2.xlsx and week_v3.xlsx; next week has one."""
+
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+    go = ThePhaseRInTheBrowser.go
+
+    @classmethod
+    def setUpClass(cls):
+        import io
+        import shutil
+        from datetime import datetime, timedelta, timezone
+        from webapp.programs import ProgramBook
+        from webapp.tests.test_ready import make_ready
+        from webapp.tests.test_runs import sign_in as client_sign_in, token, wait
+        cls.dir = Path(tempfile.mkdtemp())
+        cls.addClassCleanup(shutil.rmtree, cls.dir, True)
+        today = datetime.now(timezone(timedelta(hours=3))).date()
+        cls.sunday = today - timedelta(days=(today.weekday() + 1) % 7)
+        cls.wed = cls.sunday + timedelta(days=3)
+        ready = make_ready(cls.dir / "ready.xlsx")
+        cls.app, cls.store, _, _ = make_app(VALIDATOR_ROOT=str(REPO))
+        cls.store.add_user("omar", "Omar Mokhtar", "Owner-pass-123", is_admin=True, must_change=False)
+        programs = ProgramBook(cls.store)
+        cls.key = programs.add_lob(programs.add_program("SAKS"), "NMG Tier 2")
+        cls.q = cls.key.replace(" ", "+")
+        client = client_sign_in(cls.app, "omar", "Owner-pass-123")
+        runs = {}
+        for name, week in (("week.xlsx", cls.sunday), ("week_v2.xlsx", cls.sunday), ("week_v3.xlsx", cls.sunday),
+                           ("week_next.xlsx", cls.sunday + timedelta(days=7))):
+            client.post("/runs", data={"csrf_token": token(client), "kind": "ready", "mode": "QUICK",
+                                       "program": cls.key, "week_start": week.isoformat(),
+                                       "workbook": (io.BytesIO(ready.read_bytes()), name)},
+                        content_type="multipart/form-data")
+            runs[name] = cls.store.list_runs()[0]["id"]
+            wait(cls.store, runs[name], statuses=("DONE", "REJECTED", "FAILED"))
+        first = cls.app.extensions["schedules"].versions(runs["week.xlsx"])[-1]["id"]
+        client.post(f"/schedules/{first}/auto-breaks", data={"csrf_token": token(client), "use": "1"})
+        cls.runs = runs
+        cls.server = make_server("127.0.0.1", 0, cls.app, threaded=True)
+        cls.base = f"http://127.0.0.1:{cls.server.server_port}"
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.pw = sync_playwright().start()
+        launch = {"headless": True}
+        if os.path.exists(CHROMIUM):
+            launch["executable_path"] = CHROMIUM
+        cls.browser = cls.pw.chromium.launch(**launch)
+        AA_SCREENS.mkdir(parents=True, exist_ok=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.pw.stop()
+        cls.server.shutdown()
+
+    def test_overtime_before_or_after_the_shift(self):
+        page = self.page(width=1280, height=1000)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        self.go(page, f"/day?program={self.q}&date={self.wed.isoformat()}&view=board&add=480&person=Associate+021",
+                errors)
+        dialog = page.locator("#add-dialog")
+        dialog.get_by_label("Overtime").check()
+        expect(dialog.locator("[data-from-label]")).to_be_hidden()
+        expect(dialog.locator("[data-ot-shift]")).to_have_text("Associate 021's shift today: 08:00 to 17:00.")
+        expect(dialog.locator("[data-ot-time=before]")).to_have_text("07:00 to 08:00")
+        dialog.locator("select[name=minutes]").select_option("30")
+        expect(dialog.locator("[data-ot-time=before]")).to_have_text("07:30 to 08:00")
+        dialog.get_by_label("After the shift").check()
+        expect(dialog.locator("[data-ot-time=after]")).to_have_text("17:00 to 17:30")
+        expect(dialog.locator("[data-effect]")).to_contain_text("Overtime 17:00 to 17:30")
+        dialog.screenshot(path=str(AA_SCREENS / "overtime_before_or_after.png"))
+        dialog.get_by_role("button", name="Add overtime").click()
+        page.wait_for_load_state("load")
+        expect(page.locator("p.flash").first).to_contain_text("Recorded: Associate 021, Overtime 17:00 to 17:30.")
+        self.assertEqual(errors, [])
+
+    def test_phase_aa_screens(self):
+        page = self.page(width=1440, height=900)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        week = self.sunday.isoformat()
+        # the menu's Schedules: the week picker and the week's schedules side by side
+        self.go(page, f"/schedules?program={self.q}&week={week}", errors)
+        expect(page.locator("nav.weekpick a[aria-current]")).to_contain_text("3 schedules")
+        expect(page.locator("table.cmp thead th b")).to_have_count(3)
+        expect(page.locator("table.cmp thead th b").first).to_have_text("week.xlsx")
+        page.screenshot(path=str(AA_SCREENS / "schedules_by_week.png"), full_page=True)
+        # the Week page's switch, then the other schedule's week with Set in use
+        self.go(page, f"/week?program={self.q}&week={week}", errors)
+        switch = page.get_by_role("group", name="Schedule shown")
+        expect(switch.locator("a[aria-current]")).to_contain_text("week.xlsx")
+        page.locator("div.phead").screenshot(path=str(AA_SCREENS / "week_switch.png"))
+        switch.get_by_role("link", name="week_v2.xlsx").click()
+        page.wait_for_load_state("load")
+        expect(page.get_by_role("button", name="Set week_v2.xlsx in use")).to_be_visible()
+        page.locator("div.phead").screenshot(path=str(AA_SCREENS / "week_switch_not_in_use.png"))
+        # delete: the tick is required, then the week's page opens without it
+        self.go(page, f"/runs/{self.runs['week_v3.xlsx']}/schedules#delete", errors)
+        section = page.locator("#delete")
+        section.scroll_into_view_if_needed()
+        section.screenshot(path=str(AA_SCREENS / "delete_section.png"))
+        section.get_by_role("button", name="Delete schedule").click()
+        page.wait_for_timeout(400)
+        self.assertIn(f"/runs/{self.runs['week_v3.xlsx']}/schedules", page.url)  # the browser asks for the tick
+        self.assertIsNotNone(self.store.get_run(self.runs["week_v3.xlsx"]))
+        section.locator("input[name=confirm]").check()
+        section.get_by_role("button", name="Delete schedule").click()
+        page.wait_for_load_state("load")
+        expect(page.locator("p.flash").first).to_contain_text("Deleted week_v3.xlsx and its 1 version.")
+        expect(page.locator("table.cmp thead th b")).to_have_count(2)
+        page.screenshot(path=str(AA_SCREENS / "after_delete.png"))
+        # phones: no sideways scroll
+        for width in (390, 320):
+            phone = self.page(width=width, height=800)
+            phone.on("pageerror", lambda e: errors.append(str(e)))
+            self.sign_in(phone)
+            for url in (f"/schedules?program={self.q}&week={week}", f"/week?program={self.q}&week={week}",
+                        f"/runs/{self.runs['week_v2.xlsx']}/schedules"):
+                self.go(phone, url, errors)
+                self.assertLessEqual(phone.evaluate("document.documentElement.scrollWidth"), width, f"{width} {url}")
+            if width == 390:
+                self.go(phone, f"/schedules?program={self.q}&week={week}", errors)
+                phone.screenshot(path=str(AA_SCREENS / "phone_schedules_by_week.png"))
         self.assertEqual(errors, [])

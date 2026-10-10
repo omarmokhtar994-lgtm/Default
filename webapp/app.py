@@ -42,7 +42,8 @@ from .notify import (DEFAULT_HOLD, DEFAULT_KINDS as NOTIFY_DEFAULT_KINDS, HOLDS,
                      MODES as NOTIFY_MODES, SERVICES, Notifier, Post, check_link, last_line, leave_out, link_end,
                      post_json, post_result, post_what)
 from .programs import ProgramBook
-from .auth import admin_required, check_csrf, csrf_token, load_user, login_required, manager_required
+from .auth import (admin_required, check_csrf, csrf_token, load_user, login_required, manager_required, safe_next,
+                   session_stamp)
 from .program_page import build, overview, weeks_to_show
 from .run_admin import PICK_UNIT, apply_rename, apply_run_change, preview_rename, preview_run_change, unit_keys
 from .schedules import ScheduleBook, group_changes
@@ -455,10 +456,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
     def set_theme():  # type: ignore[no-untyped-def]
         """Light, dark, or the device's own setting ("system"); kept in a cookie
         so the page is drawn in that theme from the first byte."""
-        back = request.form.get("next") or "/"
-        if not back.startswith("/") or back.startswith("//"):
-            back = "/"  # only ever back to this site
-        response = redirect(back)
+        response = redirect(safe_next(request.form.get("next", "")) or "/")  # only ever back to this site
         choice = request.form.get("theme", "")
         if choice in THEMES:
             response.set_cookie("theme", choice, max_age=365 * 86400, httponly=True, samesite="Lax",
@@ -478,9 +476,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 session.clear()
                 session.permanent = True
                 session["user_id"] = user["id"]
+                session["pw"] = session_stamp(user)
                 csrf_token()
-                target = request.args.get("next", "")
-                return redirect(target if target.startswith("/") and not target.startswith("//") else url_for("home"))
+                return redirect(safe_next(request.args.get("next", "")) or url_for("home"))
             error = {"locked": "Too many wrong passwords: this account is locked for 15 minutes.",
                      "disabled": "This account is switched off. Ask your admin."}.get(
                          reason, "Wrong username or password.")
@@ -504,6 +502,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                          g.user["username"])
             if not error:
                 store.set_password(g.user["id"], request.form["new"], must_change=False)
+                session["pw"] = session_stamp(store.get_user(g.user["id"]))  # this device stays; others sign in again
                 flash("Password changed.")
                 return redirect(url_for("home"))
         return render_template("password.html", error=error, forced=bool(g.user["must_change"]))

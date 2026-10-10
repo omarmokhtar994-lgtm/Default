@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import functools
+import hashlib
 import hmac
+import re
 import secrets
-from typing import Any, Callable
+from typing import Any, Callable, Dict
 
 from flask import abort, current_app, g, redirect, request, session, url_for
+
+SAFE_NEXT = re.compile(r"/(?![/\\])[^\x00-\x20\x7f\\]*")  # a path here: no second slash, no backslash or control character
 
 
 def csrf_token() -> str:
@@ -26,6 +30,18 @@ def check_csrf() -> None:
         abort(400, description="This form expired or did not come from this site. Reload the page and try again.")
 
 
+def safe_next(target: str) -> str:
+    """``target`` when it is a path on this site, else "". A browser drops tabs and line breaks from an address and
+    reads a backslash as a slash, so "/<tab>/example.com" would leave the site: none of them is allowed (Phase AC)."""
+    target = target or ""
+    return target if SAFE_NEXT.fullmatch(target) else ""
+
+
+def session_stamp(user: Dict[str, Any]) -> str:
+    """Changes whenever the password does: a session carrying an older stamp is signed out (Phase AC)."""
+    return hashlib.sha256(str(user["password_hash"]).encode("utf-8")).hexdigest()[:16]
+
+
 def load_user() -> None:
     g.user = None
     user_id = session.get("user_id")
@@ -34,6 +50,12 @@ def load_user() -> None:
     user = current_app.extensions["store"].get_user(user_id)
     if user is None or not user["active"]:
         session.clear()  # disabled or deleted: out at once, not at the next login
+        return
+    stamp = session_stamp(user)
+    if "pw" not in session:
+        session["pw"] = stamp  # a session from before Phase AC: kept, and stamped now
+    elif session["pw"] != stamp:
+        session.clear()  # the password changed since this session signed in (a reset, or changed elsewhere)
         return
     g.user = user
 

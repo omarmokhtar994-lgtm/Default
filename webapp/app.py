@@ -1398,7 +1398,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             return send_file(added_needs, as_attachment=True, download_name=name)
         inputs = read_inputs(source)
         with tempfile.TemporaryDirectory() as folder:
-            made = channel_workbook(Path(folder) / name, inputs["interval"], [lang["name"] for lang in inputs["languages"]])
+            made = channel_workbook(Path(folder) / name, inputs["interval"],
+                                    [lang["name"] for lang in inputs["languages"]])
             data = io.BytesIO(made.read_bytes())
         return send_file(data, as_attachment=True, download_name=name,
                          mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")

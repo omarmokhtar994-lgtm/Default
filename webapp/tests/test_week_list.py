@@ -82,7 +82,8 @@ class TheWeekList(TwoSchedulesForOneWeek):
             self.assertEqual(listed.count("You are here"), 1)
             self.assertIn(f'href="/runs/{other}/schedules"', listed)
         listed = self.week_list(self.page(f"/runs/{self.first}/schedules"))
-        self.assertRegex(listed, rf'(?s)<form method="post" action="/schedules/{other_shown}/in-use">.*?Set in use</button>')
+        self.assertRegex(listed,
+                         rf'(?s)<form method="post" action="/schedules/{other_shown}/in-use">.*?Set in use</button>')
 
     def test_a_week_with_one_schedule_has_no_list(self):
         self.assertNotIn('id="week-list"', self.page(f"/runs/{self.single}/schedules"))
@@ -117,8 +118,8 @@ class TheHomePage(TwoSchedulesForOneWeek):
 
     def test_home_shows_the_schedule_in_use_for_the_picked_program(self):
         page = self.home(self.key)
-        self.assertIn(f'<h2 id="latest-h">In use for the week of 11 Oct: <a href="/runs/{self.first}">week_v1.xlsx</a></h2>',
-                      page)
+        self.assertIn('<h2 id="latest-h">In use for the week of 11 Oct: '
+                      f'<a href="/runs/{self.first}">week_v1.xlsx</a></h2>', page)
         self.assertNotIn("Latest schedule: <a", page)
 
     def test_a_week_with_nothing_in_use_shows_its_latest_schedule(self):

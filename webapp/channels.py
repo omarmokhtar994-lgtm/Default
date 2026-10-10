@@ -38,7 +38,7 @@ SETTINGS = {"minimum block minutes": "min_block", "phone maximum continuous minu
 YES, NO = ("yes", "y", "true"), ("no", "n", "false")
 EPS = 1e-6
 KEEP = 8
-_CACHE: Dict[Tuple[str, float, int], Optional[Dict[str, Any]]] = {}
+_CACHE: Dict[Tuple[Any, ...], Any] = {}  # read_channels by (path, mtime, step); has_channel_needs by ("needs", ...)
 
 
 def _norm(value: Any) -> str:
@@ -356,7 +356,19 @@ def has_channel_needs(path: Path) -> bool:
     Chat, Phone or Email tab (any interval) or of Email Hours, or a filled language or all-channels row on Channel
     Setup. Anything that is not a number counts, so it is read and refused by tab and row. The tabs as the Blank
     input workbook and the channel needs download hand them out ask for nobody: such a workbook is treated as one
-    without channel tabs, as before Phase V. A file that cannot be opened as a workbook has none (see above)."""
+    without channel tabs, as before Phase V. A file that cannot be opened as a workbook has none (see above). Read
+    once per file version (the day page asks for each candidate break time and each exported day)."""
+    try:
+        stat = Path(path).stat()
+    except OSError:
+        return False
+    key = ("needs", str(path), stat.st_mtime_ns, stat.st_size)
+    if key not in _CACHE:
+        _remember(key, _asks_for_someone(path))
+    return bool(_CACHE[key])
+
+
+def _asks_for_someone(path: Path) -> bool:
     try:
         wb = load_workbook(path, read_only=True, data_only=True)
     except (zipfile.BadZipFile, InvalidFileException, KeyError, OSError):

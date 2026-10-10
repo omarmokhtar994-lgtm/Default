@@ -227,6 +227,22 @@ class TheNeedsTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Chat 60 Min, row 14"):
             read_channels(path, 60)
 
+    def test_a_file_is_read_once_per_version(self):
+        # Break advice asks for the day once per candidate time and exports once per day: the input workbook is
+        # opened once per version of the file, as read_channels does, and again when the file changes.
+        import os
+        from unittest import mock
+        from webapp import channels
+        path = filled(self.dir / "needs.xlsx")
+        with mock.patch.object(channels, "load_workbook", wraps=channels.load_workbook) as opened:
+            self.assertTrue(has_channel_needs(path))
+            self.assertTrue(has_channel_needs(path))
+        self.assertEqual(opened.call_count, 1)
+        before = path.stat().st_mtime_ns
+        channel_workbook(path, 60, ["English"])  # the same file, now asking for nobody
+        os.utime(path, ns=(before + 10 ** 9, before + 10 ** 9))
+        self.assertFalse(has_channel_needs(path))
+
     def test_email_hours_or_a_language_minimum_alone_count(self):
         for sheet, cell, value in (("Email Hours", "B7", 4), ("Channel Setup", "A15", "Phone")):
             path = channel_workbook(self.dir / f"{sheet}.xlsx", 60, ["English"])

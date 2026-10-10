@@ -577,7 +577,7 @@ svg.defs { position: absolute; width: 0; height: 0; }
 [data-day] .board-gone { color: var(--dim); } [data-day] .board-gone b { color: var(--gap-ink); }
 [data-day] .rb-scroll { overflow-x: auto; }
 [data-day] .rb { display: grid; gap: 3px; font-size: 0.8125rem; min-width: 1240px; }
-[data-day] .rb-row { display: grid; grid-template-columns: 92px 58px 80px 92px 56px 150px 84px 70px minmax(150px, 1fr) minmax(180px, 1.3fr) minmax(170px, 1.1fr) 120px;
+[data-day] .rb-row { display: grid; grid-template-columns: 92px 58px 80px 92px 72px 150px 84px 70px minmax(150px, 1fr) minmax(180px, 1.3fr) minmax(170px, 1.1fr) 120px;
   background: var(--console); border-left: 4px solid var(--covered); border-radius: 6px; }
 [data-day] .rb-head { background: transparent; border-left-color: transparent; color: var(--dim); font-weight: 600; font-size: 0.75rem; position: sticky; top: 0; }
 [data-day] .rb-head > span { padding: 4px 8px; }
@@ -1031,6 +1031,7 @@ select.pending, input.pending, [data-day] select.att.pending { border-style: das
 .weeklist { margin-bottom: 18px; }
 .weeklist h2 { margin: 0 0 4px; }
 .weeklist .note { margin: 0 0 10px; color: var(--dim); max-width: 70ch; }
+.weeklist .scroll { position: relative; }  /* keeps the hidden "Actions" label inside the sideways scroll on a phone */
 .weeklist-t { width: 100%; border-collapse: collapse; }
 .weeklist-t th { text-align: left; font-size: 0.8125rem; color: var(--dim); font-weight: 600; padding: 0 12px 6px; }
 .weeklist-t td { padding: 10px 12px; border-top: 1px solid var(--rail); vertical-align: middle; }
@@ -1051,15 +1052,16 @@ select.pending, input.pending, [data-day] select.att.pending { border-style: das
 .chpanel { margin: 18px 0; }
 .chpanel h2 { margin: 0 0 4px; }
 .chpanel .note { margin: 0 0 10px; color: var(--dim); max-width: 70ch; }
-.ch-steps { list-style: none; counter-reset: step; padding: 0; margin: 12px 0; display: grid; gap: 14px; max-width: 76ch; }
+.ch-steps { list-style: none; counter-reset: step; padding: 0; margin: 12px 0; display: grid; gap: 14px; max-width: 76ch;
+  grid-template-columns: minmax(0, 1fr); }  /* each step may shrink to a 320 px phone */
 .ch-steps li { counter-increment: step; position: relative; padding-left: 36px; }
 .ch-steps li::before { content: counter(step); position: absolute; left: 0; top: 0; width: 24px; height: 24px; border-radius: 50%;
   border: 1px solid var(--paper); display: grid; place-items: center; font-weight: 700; font-size: 0.8125rem; }
 .ch-steps b { display: block; }
 .ch-steps span { display: block; color: var(--dim); font-size: 0.875rem; margin: 2px 0 8px; }
 .ch-up { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0; }
-.ch-up label { margin: 0; font-weight: 400; font-size: 0.8125rem; color: var(--dim); }
-.ch-up input[type=file] { display: block; margin-top: 4px; font: inherit; font-size: 0.8125rem; color: var(--dim); }
+.ch-up label { margin: 0; min-width: 0; max-width: 100%; font-weight: 400; font-size: 0.8125rem; color: var(--dim); }
+.ch-up input[type=file] { display: block; max-width: 100%; margin-top: 4px; font: inherit; font-size: 0.8125rem; color: var(--dim); }
 .ch-up input[type=file]::file-selector-button { margin-right: 10px; padding: 6px 10px; border: 1px solid var(--edge);
   border-radius: 4px; background: transparent; color: var(--action); font: 600 0.8125rem var(--text); cursor: pointer; }
 .ch-acts { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; }

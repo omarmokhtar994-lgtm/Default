@@ -2100,3 +2100,83 @@ class ThePhaseZInTheBrowser(unittest.TestCase):
         expect(page.get_by_role("heading", name=f"Achievement on {other:%a %d %b}")).to_be_visible()
         expect(page.locator(".achv-now")).to_have_count(0)
         self.assertEqual(errors, [])
+
+    # ---------------------------------------------------------------- Task 7: the screens
+    def test_phase_z_screens(self):
+        from webapp.tests.test_channel_needs import filled
+        page = self.page(width=1440, height=900)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        day = self.today.isoformat()
+        # Home follows the picked program and the schedule in use; the Runs table tags both uploads
+        self.go(page, f"/?program={self.q}", errors)
+        expect(page.locator("#latest-h")).to_contain_text("In use for the week of")
+        expect(page.locator("table.runs .wl-tag.use")).to_have_count(1)
+        expect(page.locator("table.runs .wl-tag.off")).to_have_count(1)
+        page.screenshot(path=str(Z_SCREENS / "home_in_use.png"))
+        # the week's schedules, from the one not in use
+        self.go(page, f"/runs/{self.other}/schedules", errors)
+        listed = page.locator("#week-list")
+        expect(listed).to_contain_text("Schedules for the week of")
+        expect(listed.get_by_role("button", name="Set in use")).to_be_visible()
+        page.screenshot(path=str(Z_SCREENS / "schedules_week_list.png"))
+        # its Channels panel: three steps, the workbook made for the week, then the needs added
+        panel = page.locator("#channels")
+        expect(panel).to_contain_text("This schedule has no channel needs yet")
+        panel.scroll_into_view_if_needed()
+        page.wait_for_timeout(300)
+        panel.screenshot(path=str(Z_SCREENS / "channels_three_steps.png"))
+        with page.expect_download() as got:
+            panel.get_by_role("link", name="Download channel needs (.xlsx)").click()
+        self.assertTrue(got.value.suggested_filename.startswith("Channel_needs_SAKS_NMG_Tier_2_"))
+        panel.get_by_label("Channel needs workbook (.xlsx)").set_input_files(str(filled(self.dir / "needs.xlsx")))
+        panel.get_by_role("button", name="Add channel needs").click()
+        page.wait_for_load_state("load")
+        expect(page.locator("p.flash").first).to_contain_text("Channel needs added to week_v2.xlsx")
+        expect(page.locator("#channels")).to_contain_text("From channel needs added on")
+        expect(page.locator(".actions").get_by_role("link", name="Plan channels")).to_be_visible()
+        page.locator("#channels").scroll_into_view_if_needed()
+        page.wait_for_timeout(300)
+        page.locator("#channels").screenshot(path=str(Z_SCREENS / "channels_added.png"))
+        # Associate channels says where the needs go
+        self.go(page, f"/setup/channels?program={self.q}", errors)
+        expect(page.locator(".ch-point")).to_contain_text("open Schedules, then Channels")
+        page.screenshot(path=str(Z_SCREENS / "associate_channels_pointer.png"))
+        # the Week page links to the other schedule and to the list
+        self.go(page, f"/week?program={self.q}&week={self.sunday.isoformat()}", errors)
+        expect(page.get_by_role("link", name="See both schedules")).to_be_visible()
+        page.screenshot(path=str(Z_SCREENS / "week_page_links.png"))
+        # today's achievement on the RTA: the Timeline, then the Interval board, night and day looks
+        self.go(page, f"/day?program={self.q}&date={day}", errors)
+        expect(page.locator(".achv-now")).to_be_visible()
+        expect(page.locator(".tl-row").nth(1)).to_contain_text("Achieved (target 90%)")
+        page.screenshot(path=str(Z_SCREENS / "rta_today_achievement.png"))
+        self.go(page, f"/day?program={self.q}&date={day}&view=board", errors)
+        expect(page.locator(".rb-head")).to_contain_text("Cover (target 90%)")
+        expect(page.locator(".rb-c small.ok, .rb-c small.below").first).to_be_visible()
+        page.locator(".rb-head").scroll_into_view_if_needed()
+        page.wait_for_timeout(300)
+        page.screenshot(path=str(Z_SCREENS / "rta_board_at_target.png"))
+        light = self.page(width=1440, height=900, scheme="light")
+        light.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(light)
+        self.go(light, f"/day?program={self.q}&date={day}", errors)
+        light.locator(".achv").screenshot(path=str(Z_SCREENS / "rta_today_achievement_day_look.png"))
+        # a phone: the block and the schedules list fit without sideways scroll
+        phone = self.page(width=390, height=844)
+        phone.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(phone)
+        for url in (f"/day?program={self.q}&date={day}", f"/runs/{self.other}/schedules",
+                    f"/runs/{self.run_id}/schedules"):  # the Channels panel with needs added, then its three steps
+            self.go(phone, url, errors)
+            self.assertLessEqual(phone.evaluate("document.documentElement.scrollWidth"), 390, url)
+        narrow = self.page(width=320, height=700)
+        self.sign_in(narrow)
+        self.go(narrow, f"/runs/{self.run_id}/schedules", errors)
+        self.assertLessEqual(narrow.evaluate("document.documentElement.scrollWidth"), 320)
+        self.go(phone, f"/day?program={self.q}&date={day}", errors)
+        phone.locator(".achv").scroll_into_view_if_needed()
+        phone.wait_for_timeout(300)
+        phone.screenshot(path=str(Z_SCREENS / "phone_rta_achievement.png"))
+        self.assertEqual(errors, [])

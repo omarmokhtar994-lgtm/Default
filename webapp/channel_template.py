@@ -55,7 +55,8 @@ def _read_me(wb, step: int) -> None:
         "",
         f"Chat {step} Min, Phone {step} Min: people needed per interval, like FT Wise {step} Min. Chat + Phone + Email "
         "make up the requirement.",
-        f"Email: either Email {step} Min (per interval, like Chat), or, when that tab is left out or empty, Email Hours",
+        f"Email: either Email {step} Min (per interval, like Chat), or, when that tab is left out or empty, "
+        "Email Hours",
         "   (hours per day, shared out automatically into the quieter times of the day).",
         "Channel Setup: the rotation rules, the language minimums per channel (with start and end times), and the",
         "   all-channels times, when 1 or 2 people cover every channel at once (no add-up warning there).",

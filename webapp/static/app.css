@@ -1181,7 +1181,7 @@ select.pending, input.pending, [data-day] select.att.pending { border-style: das
 .nf-row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 0 0 16px; }
 .nf-row .dim { margin: 0; flex: 1 1 240px; }
 .nf-morning .nf-row { margin: 8px 0 0; }
-.nf-side { display: grid; gap: 18px; min-width: 0; }
+.nf-side { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; min-width: 0; }
 .nf-last h2, .nf-posts h2 { font-size: 1.125rem; margin: 0 0 10px; }
 .nf-card { background: var(--well); border: 1px solid var(--rail); border-left: 4px solid var(--action); border-radius: 6px;
   padding: 12px 14px; overflow-wrap: anywhere; }
@@ -1208,3 +1208,8 @@ label.post-tick { display: flex; gap: 8px; align-items: flex-start; flex-wrap: w
 label.post-tick input { margin-top: 3px; accent-color: var(--action); }
 label.post-tick small { flex: 1 0 100%; padding-left: 26px; color: var(--dim); font-size: 0.8125rem; }
 ul.log .post-st { font-size: 0.8125rem; margin-left: 4px; }
+.nf-row label { margin: 0; }
+.nf-morning .nf-row { align-items: flex-end; }
+.nf-morning input[type=time] { display: block; width: 9em; margin-top: 6px; padding: 10px 12px; font: inherit;
+  color: var(--paper); background: var(--night); border: 1px solid var(--edge); border-radius: 4px; }
+.nf-morning select { min-width: 12em; }

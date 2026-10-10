@@ -2317,3 +2317,156 @@ class ThePhaseAAInTheBrowser(unittest.TestCase):
                 self.go(phone, f"/schedules?program={self.q}&week={week}", errors)
                 phone.screenshot(path=str(AA_SCREENS / "phone_schedules_by_week.png"))
         self.assertEqual(errors, [])
+
+
+AB_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_ab" / "screens"
+
+
+class ThePhaseABInTheBrowser(unittest.TestCase):
+    """Phase AB (the owner approved samples 01 to 04 and said "Start the Teams/Slack notifications now"): the
+    Notifications page, and RTA changes reaching a Slack group, in a real browser. The group is a fake that records
+    what it receives; the link is a made-up Slack link."""
+
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+    go = ThePhaseRInTheBrowser.go
+    SLACK = "https://hooks.slack.com/services/T0000/B0000/abcdEFGHijkl"
+
+    @classmethod
+    def setUpClass(cls):
+        import io
+        import shutil
+        from datetime import datetime, timedelta, timezone
+        from webapp.programs import ProgramBook
+        from webapp.tests.test_notify_sender import Group
+        from webapp.tests.test_ready import make_ready
+        from webapp.tests.test_runs import sign_in as client_sign_in, token, wait
+        cls.dir = Path(tempfile.mkdtemp())
+        cls.addClassCleanup(shutil.rmtree, cls.dir, True)
+        cls.today = datetime.now(timezone(timedelta(hours=3))).date()
+        sunday = cls.today - timedelta(days=(cls.today.weekday() + 1) % 7)
+        ready = make_ready(cls.dir / "ready.xlsx")
+        cls.group = Group()
+        cls.app, cls.store, _, _ = make_app(VALIDATOR_ROOT=str(REPO), NOTIFY_THREAD=False, NOTIFY_TRANSPORT=cls.group)
+        cls.store.add_user("omar", "Omar Mokhtar", "Owner-pass-123", is_admin=True, must_change=False)
+        programs = ProgramBook(cls.store)
+        cls.key = programs.add_lob(programs.add_program("SAKS"), "NMG Tier 2")
+        cls.q = cls.key.replace(" ", "+")
+        client = client_sign_in(cls.app, "omar", "Owner-pass-123")
+        client.post("/runs", data={"csrf_token": token(client), "kind": "ready", "mode": "QUICK", "program": cls.key,
+                                   "week_start": sunday.isoformat(),
+                                   "workbook": (io.BytesIO(ready.read_bytes()), "week.xlsx")},
+                    content_type="multipart/form-data")
+        run = cls.store.list_runs()[0]["id"]
+        wait(cls.store, run, statuses=("DONE", "REJECTED", "FAILED"))
+        first = cls.app.extensions["schedules"].versions(run)[-1]["id"]
+        client.post(f"/schedules/{first}/auto-breaks", data={"csrf_token": token(client), "use": "1"})
+        cls.server = make_server("127.0.0.1", 0, cls.app, threaded=True)
+        cls.base = f"http://127.0.0.1:{cls.server.server_port}"
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.pw = sync_playwright().start()
+        launch = {"headless": True}
+        if os.path.exists(CHROMIUM):
+            launch["executable_path"] = CHROMIUM
+        cls.browser = cls.pw.chromium.launch(**launch)
+        AB_SCREENS.mkdir(parents=True, exist_ok=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.pw.stop()
+        cls.server.shutdown()
+
+    def move_a_break(self, page, errors, tick):
+        """Open the first break of someone not moved yet, set the tick, move it 5 minutes later; the log line."""
+        day = f"/day?program={self.q}&date={self.today.isoformat()}"
+        done = {e["associate"] for e in self.store.list_day_log(self.key, self.today.isoformat())}
+        for rect in page.locator(f'rect.brk[data-date="{self.today.isoformat()}"]').all():
+            name = rect.get_attribute("data-name")
+            if name in done:
+                continue
+            rect.focus()
+            page.keyboard.press("Enter")
+            dialog = page.locator("#break-dialog")
+            expect(dialog).to_be_visible()
+            box = dialog.locator("input[name=post]")
+            expect(box).to_be_checked()
+            if not tick:
+                box.uncheck()
+            dialog.locator("[data-step='5']").click()
+            dialog.locator("[data-keep]").click()
+            try:
+                expect(page.locator("#daylog-h + ul.log")).to_contain_text(name, timeout=8000)
+                page.wait_for_load_state("load")  # the reloaded page's script is attached
+                return name
+            except AssertionError:
+                self.go(page, day, errors)
+        self.fail("no break could be moved")
+
+    def test_notifications_page_and_rta_posts(self):
+        import time as clock
+        page = self.page(width=1440, height=1000)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        # the page before any link
+        self.go(page, "/notifications", errors)
+        expect(page.locator("h1")).to_have_text("Notifications")
+        expect(page.locator("table.nf-lobs")).to_contain_text("No group link yet")
+        page.screenshot(path=str(AB_SCREENS / "notifications_empty.png"), full_page=True)
+        # save a Slack link: shown again only by its end
+        page.fill("input[name=link]", self.SLACK)
+        page.get_by_label("On", exact=False).first.check()
+        page.get_by_role("button", name="Save").click()
+        page.wait_for_load_state("load")
+        expect(page.locator("p.flash").first).to_have_text("Notifications saved for SAKS, NMG Tier 2.")
+        expect(page.locator("#nf-link-said")).to_contain_text("Ends in …ijkl.")
+        self.assertEqual(page.locator("input[name=link]").input_value(), "")
+        self.assertNotIn("abcdEFGH", page.content())
+        # the test message reaches the group, and says so
+        page.get_by_role("button", name="Send test message").click()
+        page.wait_for_load_state("load")
+        expect(page.locator("p.flash").first).to_have_text("Test message posted to Slack.")
+        expect(page.locator("table.nf-recent")).to_contain_text("Posted to Slack")
+        self.assertEqual(self.group.calls[-1][0], self.SLACK)
+        page.screenshot(path=str(AB_SCREENS / "notifications_saved.png"), full_page=True)
+        # on the RTA: one break move posted, one left out with the tick
+        day = f"/day?program={self.q}&date={self.today.isoformat()}"
+        self.go(page, day, errors)
+        posted = self.move_a_break(page, errors, tick=True)
+        left = self.move_a_break(page, errors, tick=False)
+        expect(page.locator("#daylog-h + ul.log .post-st.waiting").first).to_contain_text("Waiting: posts by")
+        calls = len(self.group.calls)
+        self.app.extensions["notifier"].run_once(clock.time() + 200)
+        self.assertEqual(len(self.group.calls), calls + 1)
+        sent = str(self.group.calls[-1][1])
+        self.assertIn(posted, sent)
+        self.assertNotIn(left, sent)
+        self.go(page, day, errors)
+        log = page.locator("#daylog-h + ul.log")
+        expect(log.locator("li", has_text=posted).locator(".post-st.sent")).to_contain_text("Posted to Slack, ")
+        expect(log.locator("li", has_text=left).locator(".post-st.skipped")).to_have_text(
+            "Not posted: left out on the RTA")
+        page.locator("section[aria-labelledby=daylog-h]").screenshot(path=str(AB_SCREENS / "changes_today.png"))
+        # the break dialog with its tick
+        page.locator(f'rect.brk[data-date="{self.today.isoformat()}"]').first.focus()
+        page.keyboard.press("Enter")
+        page.locator("#break-dialog").screenshot(path=str(AB_SCREENS / "break_dialog_tick.png"))
+        page.locator("#break-dialog [data-cancel]").click()
+        # the last post, as the group saw it
+        self.go(page, "/notifications", errors)
+        expect(page.locator("section.nf-last")).to_contain_text(posted)
+        expect(page.locator("table.nf-lobs")).to_contain_text("Posted 1 change at")
+        page.screenshot(path=str(AB_SCREENS / "notifications_last_post.png"), full_page=True)
+        # phones: no sideways scroll
+        for width in (390, 320):
+            phone = self.page(width=width, height=800)
+            phone.on("pageerror", lambda e: errors.append(str(e)))
+            self.sign_in(phone)
+            for url in ("/notifications", day):
+                self.go(phone, url, errors)
+                self.assertLessEqual(phone.evaluate("document.documentElement.scrollWidth"), width, f"{width} {url}")
+            if width == 390:
+                self.go(phone, "/notifications", errors)
+                phone.screenshot(path=str(AB_SCREENS / "phone_notifications.png"), full_page=True)
+        self.assertEqual(errors, [])

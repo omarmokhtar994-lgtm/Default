@@ -108,6 +108,22 @@ sudo bash /opt/scheduler/package/deploy/update.sh ~/RC9_2_2_PRODUCTION_PACKAGE.z
 Users, runs and results are kept. If a run is in progress it asks first.
 If the new package fails its runtime check, the old one is put back.
 
+## Teams or Slack posts (optional)
+
+RTA changes can post to a Teams or Slack group, one group per LOB. Nothing to
+install: an admin opens **Notifications** (left menu, under Manage), pastes the
+group's link, picks what posts and presses **Send test message**. The page
+says where each link comes from (about two minutes per group).
+
+- The server needs outbound HTTPS to `hooks.slack.com` (Slack) or
+  `*.logic.azure.com` / `*.api.powerplatform.com` (Teams). Oracle allows
+  outbound traffic by default; nothing to open.
+- A group link lets anyone holding it post to the group. It is kept only in
+  `/var/lib/scheduler/scheduler.db` and shown again only by its last four
+  characters, so keep backups of that file private too.
+- If posts stop, the Notifications page and the RTA say why (for example
+  "Slack says the link no longer works (404); replace the link").
+
 ## 8. If something is wrong
 
 | What you see | What to do |
@@ -118,8 +134,9 @@ If the new package fails its runtime check, the old one is put back.
 | A run says the safety gate failed | Nothing runs until it passes. Send the gate log named on the run page to whoever maintains the package. |
 | Website log | `sudo journalctl -u scheduler-web -n 200` |
 
-**Backup**: users and run history are in `/var/lib/scheduler/scheduler.db`;
-results are in `/var/lib/scheduler/runs/`.
+**Backup**: users, run history and any Teams or Slack group links are in
+`/var/lib/scheduler/scheduler.db` (keep copies private); results are in
+`/var/lib/scheduler/runs/`.
 
 **Idle servers**: Oracle's Always Free terms allow it to reclaim compute
 instances that stay nearly idle for a week. Regular weekly runs normally keep

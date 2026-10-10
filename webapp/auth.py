@@ -64,7 +64,8 @@ def login_required(view: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(view)
     def wrapped(*args: Any, **kwargs: Any) -> Any:
         if g.user is None:
-            return redirect(url_for("login", next=request.path))
+            asked = request.full_path if request.query_string else request.path  # with its program and date
+            return redirect(url_for("login", next=asked))
         if g.user["must_change"] and request.endpoint not in {"change_password", "logout"}:
             return redirect(url_for("change_password"))
         return view(*args, **kwargs)

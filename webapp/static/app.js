@@ -114,7 +114,8 @@ function homeRefresh(now) {
 
 // Back goes to the last page here that was a different page (Phase W): a save reloads the same page, so the
 // browser's own previous page was often this one and Back looked dead. Pages are told apart by their path (the
-// RTA on another day is still the RTA). With no such page, the link's own address (one level up) is used.
+// RTA on another day is still the RTA). With no such page, the link's own address (one level up) is used. The
+// sign-in page is never a place to go back to (Phase AC).
 (function () {
   "use strict";
   var KEY = "ts-trail";
@@ -126,14 +127,15 @@ function homeRefresh(now) {
     if (!Array.isArray(trail)) { trail = []; }
   } catch (e) { trail = []; }
   var last = trail[trail.length - 1];
-  if (!last || last.url !== here.url) { trail.push(here); }
+  if (kind !== "/login" && (!last || last.url !== here.url)) { trail.push(here); }
   trail = trail.slice(-20);
   try { window.sessionStorage.setItem(KEY, JSON.stringify(trail)); } catch (e) { /* the link still works */ }
   var back = document.querySelector("[data-back]");
   if (!back) { return; }
   back.addEventListener("click", function (e) {
     for (var i = trail.length - 2; i >= 0; i--) {
-      if (trail[i] && trail[i].kind !== kind && typeof trail[i].url === "string" && /^\/(?![\/\\])/.test(trail[i].url)) {
+      if (trail[i] && trail[i].kind !== kind && trail[i].kind !== "/login" && typeof trail[i].url === "string" &&
+          /^\/(?![\/\\])/.test(trail[i].url)) {
         e.preventDefault();
         try { window.sessionStorage.setItem(KEY, JSON.stringify(trail.slice(0, i))); } catch (err) { /* fine */ }
         window.location.href = trail[i].url;

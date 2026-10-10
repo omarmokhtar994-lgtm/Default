@@ -1520,7 +1520,9 @@ class ThePhaseWInTheBrowser(unittest.TestCase):
         expect(page.locator(".achv")).to_contain_text("intervals at 90% or more")
         expect(page.locator(".tl-lbl", has_text="Achieved (target 90%)")).to_be_visible()
         page.wait_for_timeout(700)
-        page.locator(".rta-sum").screenshot(path=str(W_SCREENS / "rta_intervals_at_target.png"))
+        # Phase AC: the screenshot shows the achievement block the count now lives in (the summary line's own
+        # screenshot cropped it); the assertions above are unchanged
+        page.locator(".achv").screenshot(path=str(W_SCREENS / "rta_intervals_at_target.png"))
         # the Timeline by shift start, kept through an attendance change
         page.locator(".shiftbar a", has_text="08:00").click()
         page.wait_for_load_state("load")
@@ -2469,4 +2471,174 @@ class ThePhaseABInTheBrowser(unittest.TestCase):
             if width == 390:
                 self.go(phone, "/notifications", errors)
                 phone.screenshot(path=str(AB_SCREENS / "phone_notifications.png"), full_page=True)
+        self.assertEqual(errors, [])
+
+
+AC_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_ac" / "screens"
+
+
+class ThePhaseACInTheBrowser(unittest.TestCase):
+    """Phase AC (owner: "Fix rest of the items, and make a deep review on the website current status and fix any
+    bugs or improve any vision"): the review's fixes in a real browser. + Add opens on someone present and says who
+    is away; the "Post to the group" tick follows what is picked; Back never returns to the sign-in page; the left
+    menu's program picker waits for Enter; the Week page's figures stay on one line; nothing scrolls sideways on a
+    phone."""
+
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+    go = ThePhaseRInTheBrowser.go
+    SLACK = "https://hooks.slack.com/services/T0000/B0000/abcdEFGHijkl"
+
+    @classmethod
+    def setUpClass(cls):
+        import io
+        import shutil
+        from datetime import datetime, timedelta, timezone
+        from webapp.notify import KINDS
+        from webapp.programs import ProgramBook
+        from webapp.tests.test_notify_sender import Group
+        from webapp.tests.test_ready import make_ready
+        from webapp.tests.test_runs import sign_in as client_sign_in, token, wait
+        cls.dir = Path(tempfile.mkdtemp())
+        cls.addClassCleanup(shutil.rmtree, cls.dir, True)
+        cls.today = datetime.now(timezone(timedelta(hours=3))).date()
+        cls.sunday = cls.today - timedelta(days=(cls.today.weekday() + 1) % 7)
+        ready = make_ready(cls.dir / "ready.xlsx")
+        cls.app, cls.store, _, _ = make_app(VALIDATOR_ROOT=str(REPO), NOTIFY_THREAD=False, NOTIFY_TRANSPORT=Group())
+        cls.omar = cls.store.add_user("omar", "Omar Mokhtar", "Owner-pass-123", is_admin=True, must_change=False)
+        programs = ProgramBook(cls.store)
+        cls.key = programs.add_lob(programs.add_program("SAKS"), "NMG Tier 2")
+        cls.other = programs.add_lob(programs.add_program("Demo"), "Voice")
+        cls.q = cls.key.replace(" ", "+")
+        client = client_sign_in(cls.app, "omar", "Owner-pass-123")
+        client.post("/runs", data={"csrf_token": token(client), "kind": "ready", "mode": "QUICK", "program": cls.key,
+                                   "week_start": cls.sunday.isoformat(),
+                                   "workbook": (io.BytesIO(ready.read_bytes()), "week.xlsx")},
+                    content_type="multipart/form-data")
+        run = cls.store.list_runs()[0]["id"]
+        wait(cls.store, run, statuses=("DONE", "REJECTED", "FAILED"))
+        cls.store.set_notify(cls.key, link=cls.SLACK, service="slack", mode="on", kinds=",".join(KINDS), hold=120)
+        cls.server = make_server("127.0.0.1", 0, cls.app, threaded=True)
+        cls.base = f"http://127.0.0.1:{cls.server.server_port}"
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.pw = sync_playwright().start()
+        launch = {"headless": True}
+        if os.path.exists(CHROMIUM):
+            launch["executable_path"] = CHROMIUM
+        cls.browser = cls.pw.chromium.launch(**launch)
+        AC_SCREENS.mkdir(parents=True, exist_ok=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.pw.stop()
+        cls.server.shutdown()
+
+    def add_dialog(self, page, errors):
+        self.go(page, f"/day?program={self.q}&date={self.today.isoformat()}&view=board&add=600", errors)
+        dialog = page.locator("#add-dialog")
+        expect(dialog).to_be_visible()
+        effect = dialog.locator("[data-effect]")
+        expect(effect).not_to_have_text("The effect on the floor shows here before anything is kept.")
+        return dialog, effect
+
+    def test_add_opens_on_someone_present_and_follows_the_pick(self):
+        page = self.page(width=1440, height=1000)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        dialog, effect = self.add_dialog(page, errors)
+        first = dialog.locator("select[name=associate]:not([data-off]) option").first.get_attribute("value")
+        days = self.app.extensions["days"]
+        days.set_status(self.key, self.today, first, "Sick", self.omar)
+        self.addCleanup(days.set_status, self.key, self.today, first, "Present", self.omar)
+        dialog, effect = self.add_dialog(page, errors)
+        who = dialog.locator("select[name=associate]:not([data-off])")
+        self.assertNotEqual(who.locator("option").first.get_attribute("value"), first)
+        self.assertTrue(who.locator(f'option[value="{first}"]').inner_text().endswith(", sick"))
+        self.assertNotIn("bad", effect.get_attribute("class"))  # opens on someone present: no error to start with
+        title, tick = page.locator("#add-h"), dialog.locator(".post-tick")
+        interval = title.get_attribute("data-add-title")
+        self.assertRegex(interval, r"^Add for \d\d:\d\d to \d\d:\d\d$")
+        dialog.locator('input[name=what][value="Sick"]').check()
+        expect(tick).to_be_hidden()  # a private change never posts
+        dialog.locator('input[name=what][value="Overtime"]').check()
+        expect(title).to_have_text("Add overtime for " + who.input_value())
+        expect(tick).to_be_visible()
+        dialog.screenshot(path=str(AC_SCREENS / "add_overtime.png"))
+        dialog.locator('input[name=what][value="Break"]').check()
+        expect(title).to_have_text(interval)
+        self.assertEqual(errors, [])
+
+    def test_back_never_returns_to_the_sign_in_page(self):
+        page = self.page()
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.goto(self.base + f"/week?program={self.q}")
+        page.wait_for_load_state("load")
+        self.assertIn("/login", page.url)
+        page.get_by_label("Username").fill("omar")
+        page.get_by_label("Password").fill("Owner-pass-123")
+        with page.expect_navigation():
+            page.get_by_role("button", name="Sign in").click()
+        page.wait_for_load_state("load")
+        self.assertIn("/week?program=", page.url)  # signing in leads on to the page asked for
+        page.get_by_role("link", name="‹ Back").click()
+        page.wait_for_load_state("load")
+        self.assertNotIn("/login", page.url)
+        expect(page.get_by_role("button", name="Sign in")).to_have_count(0)
+        self.assertEqual(errors, [])
+
+    def test_the_left_menu_picker_waits_for_enter(self):
+        page = self.page()
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        self.go(page, f"/day?program={self.q}&date={self.today.isoformat()}", errors)
+        pick = page.locator("select[data-unit-pick]")
+        self.assertEqual(pick.locator("option").count(), 2)
+        before = page.url
+        pick.focus()
+        page.keyboard.press("ArrowDown" if pick.evaluate("s => s.selectedIndex") == 0 else "ArrowUp")
+        page.wait_for_timeout(1500)
+        self.assertEqual(page.url, before)  # one arrow does not leave the page
+        expect(page.locator("p.pick-note")).to_contain_text("Press Enter to show ")
+        with page.expect_navigation():
+            page.keyboard.press("Enter")
+        self.assertIn("program=" + self.other.replace(" ", "+").replace(",", "%2C"), page.url.replace("%20", "+"))
+        self.assertEqual(errors, [])
+
+    def test_week_figures_stay_on_one_line(self):
+        page = self.page(width=1366, height=900)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        self.go(page, f"/week?program={self.q}&week={self.sunday.isoformat()}", errors)
+        figures = page.locator(".tiles .tile b")
+        self.assertGreaterEqual(figures.count(), 4)
+        lines = page.evaluate("""() => Array.from(document.querySelectorAll('.tiles .tile b')).map(b => {
+            const r = document.createRange(); r.selectNodeContents(b.firstChild);
+            return b.getBoundingClientRect().height / r.getBoundingClientRect().height; })""")
+        for ratio in lines:
+            self.assertLess(ratio, 1.6, lines)  # one line, not two
+        page.locator(".tiles").screenshot(path=str(AC_SCREENS / "week_tiles.png"))
+        self.assertEqual(errors, [])
+
+    def test_phones_never_scroll_sideways(self):
+        errors = []
+        day = f"/day?program={self.q}&date={self.today.isoformat()}"
+        urls = (day, day + "&view=board&add=600", f"/week?program={self.q}&week={self.sunday.isoformat()}",
+                f"/schedules?program={self.q}&week={self.sunday.isoformat()}",
+                f"/runs/{self.store.list_runs()[0]['id']}/schedules", "/notifications",
+                f"/day/wallboard?program={self.q}&date={self.today.isoformat()}", "/runs")
+        for width in (390, 320):
+            phone = self.page(width=width, height=800)
+            phone.on("pageerror", lambda e: errors.append(str(e)))
+            self.sign_in(phone)
+            for url in urls:
+                self.go(phone, url, errors)
+                self.assertLessEqual(phone.evaluate("document.documentElement.scrollWidth"), width, f"{width} {url}")
+            if width == 390:
+                self.go(phone, f"/week?program={self.q}&week={self.sunday.isoformat()}", errors)
+                phone.screenshot(path=str(AC_SCREENS / "phone_week.png"), full_page=True)
         self.assertEqual(errors, [])

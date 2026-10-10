@@ -4,7 +4,7 @@ people to its own pages; and a new password ends the sessions opened with the ol
 person out everywhere; changing your own keeps only the device you changed it on)."""
 import re
 import unittest
-from urllib.parse import quote
+from urllib.parse import parse_qs, quote, urlsplit
 
 from webapp.tests.test_runs import TOKEN, make_app, sign_in, token
 
@@ -35,6 +35,18 @@ class TheRedirects(_Site):
                 self.assertEqual(got.headers["Location"], "/")
         kept = self.sign_in_to("/day?program=SAKS+NMG+Tier+2&date=2026-10-14")
         self.assertEqual(kept.headers["Location"], "/day?program=SAKS+NMG+Tier+2&date=2026-10-14")
+
+    def test_sign_in_returns_to_the_whole_address(self):
+        # found by the Phase AC browser check: the page asked for came back without its program and date
+        client = self.app.test_client()
+        asked = "/day?program=SAKS+NMG+Tier+2&date=2026-10-14"
+        got = client.get(asked)
+        self.assertEqual(got.status_code, 302)
+        nxt = parse_qs(urlsplit(got.headers["Location"]).query)["next"][0]
+        self.assertEqual(nxt, asked)
+        self.assertEqual(self.sign_in_to(nxt).headers["Location"], asked)
+        bare = parse_qs(urlsplit(client.get("/week").headers["Location"]).query)["next"][0]
+        self.assertEqual(bare, "/week")  # no stray "?" on an address without a query
 
     def test_theme_never_redirects_off_site(self):
         client = sign_in(self.app, "omar", "Owner-pass-123")

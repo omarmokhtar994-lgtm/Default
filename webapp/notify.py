@@ -21,6 +21,8 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 from urllib.parse import quote_plus, urlsplit
 
+from .day import ABSENT
+
 log = logging.getLogger(__name__)
 
 EGYPT = timezone(timedelta(hours=3))  # owner's rule: times in Egypt time (UTC+3)
@@ -182,6 +184,32 @@ def slack_body(post: Post) -> Dict[str, Any]:
     return {"text": _plain(post.title), "blocks": blocks}
 
 
+def _clock_text(m: int) -> str:
+    return f"{m // 60 % 24:02d}:{m % 60:02d}"
+
+
+def breaks_post(label: str, unit: str, on: date, page: Dict[str, Any], site: str, at: float,
+                changes_follow: bool) -> Post:
+    """The day's breaks for a group (approved sample 04): one section per shift in start order, each person's breaks
+    as they stand (a moved break at its new time). People marked sick or on unplanned leave are left out."""
+    shifts: Dict[Tuple[int, str], List[Tuple[str, str]]] = {}
+    for lane in page["view"]["lanes"]:
+        for seg in lane["segments"]:
+            if seg["offset"] != 0 or seg["status"] in ABSENT:
+                continue
+            breaks = sorted(seg["breaks"], key=lambda b: b["start"])
+            text = ", ".join(f"{b['kind']} {_clock_text(b['start'])}" for b in breaks) or "No breaks planned"
+            shifts.setdefault((seg["start"], seg["label"]), []).append((lane["name"], text))
+    sections = []
+    for (_, shift), people in sorted(shifts.items()):
+        n = len(people)
+        sections.append((f"{shift.replace(' - ', ' to ')} ({n} {'person' if n == 1 else 'people'})", sorted(people)))
+    footer = f"As planned at {_hm(at)}." + (" Changes during the day are posted as they happen." if changes_follow
+                                           else "")
+    return Post(title=f"{label}: breaks for {on:%a %d %b}", sections=sections, footer=footer,
+                url=day_url(site, unit, on.isoformat()))
+
+
 def body_for(service: str, post: Post) -> Dict[str, Any]:
     return teams_body(post) if service == "teams" else slack_body(post)
 
@@ -311,6 +339,11 @@ class Notifier:
                     self._batch(settings, now)
                 except Exception:  # noqa: BLE001 (kept going for the other LOBs; the cause goes to the log)
                     log.exception("group posts: could not prepare the posts of %s", settings["unit"])
+        for settings in self.store.list_notify():
+            try:
+                self._morning(settings, now)
+            except Exception:  # noqa: BLE001
+                log.exception("group posts: could not prepare the day's breaks of %s", settings["unit"])
         tried = 0  # sending holds no lock: an RTA change never waits for a slow group
         for post in reversed(self.store.notify_posts(status="waiting")):
             if (post["next_at"] or 0) > now:
@@ -346,6 +379,37 @@ class Notifier:
                                               body=json.dumps(asdict(post)), made_at=now)
             self.store.set_notify_items([i["id"] for i in items], status="preview" if preview else "sending",
                                         post_id=made)
+
+    MORNING_WINDOW = 2 * 3600  # a day's breaks post goes within two hours of its time, or not that day
+
+    def _morning(self, settings: Dict[str, Any], now: float) -> None:
+        """The day's breaks post (sample 04): once per LOB and day, from its set time to two hours after it."""
+        if not settings["morning"] or settings["mode"] not in ("on", "preview") or self.days is None:
+            return
+        local = datetime.fromtimestamp(now, EGYPT)
+        hh, mm = (int(x) for x in settings["morning"].split(":"))
+        set_at = local.replace(hour=hh, minute=mm, second=0, microsecond=0)
+        if not set_at <= local < set_at + timedelta(seconds=self.MORNING_WINDOW):
+            return
+        on = local.date() + timedelta(days=1 if settings["morning_day"] == "before" else 0)
+        unit = settings["unit"]
+        if self.store.notify_posts(unit=unit, what="morning", shift_date=on.isoformat(), limit=1):
+            return
+        common = {"unit": unit, "shift_date": on.isoformat(), "what": "morning", "service": settings["service"],
+                  "made_at": now}
+        try:
+            page = self.days.page(unit, on)
+        except ValueError as exc:  # the day cannot be worked out: said once, on the Notifications page
+            self.store.add_notify_post(**common, status="skipped", reason=str(exc))
+            return
+        if page is None:
+            self.store.add_notify_post(**common, status="skipped", reason="there is no schedule in use for that day")
+            return
+        changes_follow = settings["mode"] == "on" and bool(settings["kinds"])
+        post = breaks_post(self.label(unit), unit, on, page, settings["site"], now, changes_follow)
+        people = sum(len(lines) for _, lines in post.sections)
+        self.store.add_notify_post(**common, count=people, status="preview" if settings["mode"] == "preview"
+                                   else "waiting", tries=0, next_at=now, body=json.dumps(asdict(post)))
 
     def _finish(self, post: Dict[str, Any], status: str, reason: str = "", **fields: Any) -> None:
         self.store.set_notify_post(post["id"], status=status, reason=reason, **fields)

@@ -149,6 +149,8 @@ class DayAction:
     kind: str
     id: Optional[int] = None
     logs: List[Tuple[int, str, str]] = field(default_factory=list)
+    hold: bool = False  # an undo's lines wait for Send (the change it takes back was a posted bulk change)
+    silent: bool = False  # an undo's lines are never posted (the change it takes back never was)
 
 
 def _diff(before: Dict[str, Dict[tuple, Dict[str, Any]]], after: Dict[str, Dict[tuple, Dict[str, Any]]]
@@ -200,7 +202,9 @@ class DayBook:
             user = self.store.get_user(user_id) or {}
             self.notifier.queue(log_id, program, on.isoformat(), name, kind, post or what,
                                 user.get("display_name", ""), ref=ref, before=before, after=after,
-                                left_out=left_out_now())
+                                left_out=left_out_now(), action_id=running.id if running else None,
+                                held=bool(running and (running.kind == "bulk" or running.hold)),
+                                skip_reason="undone before it was posted" if running and running.silent else "")
         except Exception:  # noqa: BLE001 (the RTA change stands; the group post is what is lost, and logged)
             logging.getLogger(__name__).exception("group posts: could not queue a change for %s", program)
 
@@ -267,6 +271,16 @@ class DayBook:
             stale = self.store.restore_day_rows(changes)
             if stale:
                 raise ValueError(self._changed_since(program, on, act, stale[0]))
+            # Phase AD: a change the group never saw goes quietly, with its undo; a posted one gets its correction
+            # (a bulk change's waits for Send, a single change's posts by itself, as it did)
+            items = self.store.notify_items(action_id=act["id"])
+            posted = [i for i in items if i["status"] not in ("waiting", "held", "skipped")]
+            if not posted:
+                self.store.set_notify_items([i["id"] for i in items if i["status"] in ("waiting", "held")],
+                                            status="skipped", reason="undone before it was posted")
+                undo.silent = True
+            else:
+                undo.hold = act["kind"] == "bulk"
             for c in changes:
                 self._log_undone(program, c, user_id)
             self.store.set_day_action(act["id"], undone_at=time.time(), undone_by=undo.id)

@@ -307,6 +307,10 @@ class Store:
             if "all_programs" not in people:
                 db.execute("alter table users add column all_programs integer not null default 0")
                 db.execute("update users set all_programs = 1")
+            # Phase AD: a group-post item knows the journal entry it came from (bulk changes wait for Send).
+            have = {row["name"] for row in db.execute("pragma table_info(notify_items)")}
+            if "action_id" not in have:
+                db.execute("alter table notify_items add column action_id integer")
             # Phase AD: a break the RTA cancelled keeps the reason; rows from before were never cancelled.
             have = {row["name"] for row in db.execute("pragma table_info(actual_breaks)")}
             if "cancelled" not in have:
@@ -921,8 +925,9 @@ class Store:
                                   tuple(fields.values())).lastrowid)
 
     def notify_items(self, unit: Optional[str] = None, shift_date: Optional[str] = None,
-                     status: Optional[str] = None, post_id: Optional[int] = None) -> List[Dict[str, Any]]:
-        where = {"unit": unit, "shift_date": shift_date, "status": status, "post_id": post_id}
+                     status: Optional[str] = None, post_id: Optional[int] = None,
+                     action_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        where = {"unit": unit, "shift_date": shift_date, "status": status, "post_id": post_id, "action_id": action_id}
         where = {k: v for k, v in where.items() if v is not None}
         sql = "select * from notify_items" + (" where " + " and ".join(f"{k} = ?" for k in where) if where else "")
         with self._db() as db:

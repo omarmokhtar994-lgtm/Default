@@ -1123,3 +1123,23 @@ function homeRefresh(now) {
   mark.style.left = (Math.min(Math.max(minutes, 0), 1440) / 1440 * 100) + "%";
   mark.classList.add("placed");
 })();
+
+// Phase AD: Send again for a bulk change already posted asks first (the page asks too when the script is off).
+(function () {
+  "use strict";
+  var form = document.querySelector("form[data-resend]"), dlg = document.getElementById("resend-dialog");
+  if (!form || !dlg || typeof dlg.showModal !== "function") { return; }
+  form.addEventListener("submit", function (e) {
+    if (form.querySelector("input[name=again]").value === "1") { return; }
+    e.preventDefault();
+    dlg.querySelector("[data-resend-said]").textContent = form.dataset.said || "";
+    dlg.showModal();
+    dlg.querySelector("[data-resend-no]").focus();
+  });
+  dlg.querySelector("[data-resend-yes]").addEventListener("click", function () {
+    form.querySelector("input[name=again]").value = "1";
+    dlg.close();
+    form.submit();
+  });
+  dlg.querySelector("[data-resend-no]").addEventListener("click", function () { dlg.close(); });
+})();

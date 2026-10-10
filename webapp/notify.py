@@ -308,26 +308,31 @@ class Notifier:
 
     # ------------------------------------------------------------------ queue
     def queue(self, log_id: Optional[int], unit: str, shift_date: str, associate: str, kind: str, text: str,
-              by_name: str, ref: str = "", before: str = "", after: str = "", left_out: bool = False) -> None:
+              by_name: str, ref: str = "", before: str = "", after: str = "", left_out: bool = False,
+              action_id: Optional[int] = None, held: bool = False, skip_reason: str = "") -> None:
         """Keep one RTA change for the LOB's group, or say why it will not be posted. A LOB that posts nowhere
-        keeps nothing."""
+        keeps nothing. Phase AD: a change of a bulk change (``held``) waits for Send instead of the hold;
+        ``skip_reason`` keeps it out with that reason."""
         settings = self.store.get_notify(unit)
         if not settings or settings["mode"] not in ("on", "preview"):
             return
         ticked = [k for k in settings["kinds"].split(",") if k]
         if kind == PRIVATE:
             status, reason = "skipped", "kept private"
+        elif skip_reason:
+            status, reason = "skipped", skip_reason
         elif left_out:
             status, reason = "skipped", "left out on the RTA"
         elif kind not in ticked:
             status, reason = "skipped", "not ticked for this LOB"
         else:
-            status, reason = "waiting", ""
+            status, reason = ("held" if held else "waiting"), ""
         with self._lock:
             made = self.store.add_notify_item(log_id=log_id, unit=unit, shift_date=shift_date, associate=associate,
                                               kind=kind, text=text, ref=ref, before=before, after=after,
-                                              by_name=by_name, at=self.clock(), status=status, reason=reason)
-            if ref:  # back where it was before anything was posted: nothing to tell the group
+                                              by_name=by_name, at=self.clock(), status=status, reason=reason,
+                                              action_id=action_id)
+            if ref and status == "waiting":  # back where it was before anything was posted: nothing to tell the group
                 same = [i for i in self.store.notify_items(unit=unit, shift_date=shift_date, status="waiting")
                         if i["ref"] == ref and i["id"] != made]
                 if same and same[0]["before"] == after:
@@ -470,6 +475,8 @@ class Notifier:
             name = SERVICES.get(post.get("service", ""), "the group")
             if i["status"] == "waiting":
                 out[i["log_id"]] = {"state": "waiting", "text": f"Waiting: posts by {_hm(due)}"}
+            elif i["status"] == "held":  # Phase AD: part of a bulk change
+                out[i["log_id"]] = {"state": "waiting", "text": "Waiting for Send at the top of the page"}
             elif i["status"] == "sending" and not post.get("tries"):
                 out[i["log_id"]] = {"state": "waiting", "text": "Posting now"}
             elif i["status"] == "sending":
@@ -482,6 +489,50 @@ class Notifier:
             else:
                 out[i["log_id"]] = {"state": i["status"], "text": f"Not posted: {i['reason']}"}
         return out
+
+    # ------------------------------------------------------------------ bulk changes (Phase AD)
+    POSTED = ("sending", "sent", "preview", "failed")
+
+    def action_state(self, action: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """What a journal entry has with its LOB's group: 'held' (waiting for Send), 'correction' (an undo of a
+        posted bulk change, waiting for Send) or 'posted'; None when nothing of it goes to the group."""
+        live = [i for i in self.store.notify_items(action_id=action["id"]) if i["status"] != "skipped"]
+        if not live:
+            return None
+        held = [i for i in live if i["status"] == "held"]
+        state = ("correction" if action["kind"] == "undo" else "held") if held else "posted"
+        settings = self.store.get_notify(action["program"]) or {}
+        return {"state": state, "count": len(live), "service": SERVICES.get(settings.get("service", ""), "group"),
+                "preview": settings.get("mode") == "preview", "sent_at": action.get("sent_at")}
+
+    def send_action(self, action: Dict[str, Any], again: bool = False) -> Tuple[bool, str]:
+        """Post a bulk change (or the correction an undo makes) as one post now: its held lines, or, with ``again``,
+        the same lines once more. Refused without ``again`` once it was posted. Returns (posted, what to say)."""
+        state = self.action_state(action)
+        settings = self.store.get_notify(action["program"])
+        if state is None or not settings or settings["mode"] not in ("on", "preview"):
+            return False, "Nothing in this change goes to a group."
+        name = "the preview on the Notifications page" if state["preview"] else f"the {state['service']} group"
+        if state["state"] == "posted" and not again:
+            return False, (f"Already posted to {name} at {_hm(action['sent_at'])}." if action.get("sent_at")
+                           else f"Already posted to {name}.")
+        items = [i for i in self.store.notify_items(action_id=action["id"]) if i["status"] != "skipped"]
+        held = [i for i in items if i["status"] == "held"]
+        now = self.clock()
+        preview = settings["mode"] == "preview"
+        with self._lock:
+            post = change_post(self.label(action["program"]), action["shift_date"], held or items, settings["site"],
+                               action["program"])
+            made = self.store.add_notify_post(unit=action["program"], shift_date=action["shift_date"], what="changes",
+                                              service=settings["service"], count=len(held or items),
+                                              status="preview" if preview else "waiting", tries=0, next_at=now,
+                                              body=json.dumps(asdict(post)), made_at=now)
+            if held:
+                self.store.set_notify_items([i["id"] for i in held], status="preview" if preview else "sending",
+                                            post_id=made)
+        self.store.set_day_action(action["id"], sent_at=now, sends=(action.get("sends") or 0) + 1)
+        return True, ("Shown in the preview on the Notifications page." if preview else
+                      f"Posting to the {state['service']} group now.")
 
     # ------------------------------------------------------------------ the Notifications page
     def send_test(self, unit: str, by_name: str) -> Tuple[bool, str]:

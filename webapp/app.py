@@ -2112,7 +2112,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
                             key=lambda r: (r["adherence"] is not None, r["adherence"] or 0, r["name"]))
             whole = team_figures(people)
             shrink = interval_shrinkage(v, page["inputs"], page["day"])
-        bar = {"undo": days.undoable(program, on, g.user["id"]) if program and page else None}  # Phase AD
+        bar = {"undo": days.undoable(program, on, g.user["id"]) if program and page else None,  # Phase AD
+               "send": _send_bar(program, on) if program and page else None,
+               "resend": request.args.get("resend", 0, type=int)}
         group = app.extensions["store"].get_notify(program) if program else None  # Phase AB: group posts
         posting = bool(group and group["link"] and group["mode"] in ("on", "preview"))
         post_kinds = [k for k in (group or {}).get("kinds", "").split(",") if k] if posting else []
@@ -2216,6 +2218,36 @@ def create_app(config: Dict[str, Any]) -> Flask:
         except ValueError as exc:  # BreakRefused is a ValueError
             return jsonify(error=str(exc)), 400
         return jsonify(ok=True)
+
+    def _send_bar(program: str, on: date) -> Optional[Dict[str, Any]]:
+        """Phase AD (samples 05a, 05b): the newest bulk change of this LOB's day (or the undo of one) and what it
+        has with the group: held for Send, posted, or a correction to send; None when nothing goes to a group."""
+        store, notifier = app.extensions["store"], app.extensions["notifier"]
+        for a in reversed(store.day_actions(program, on.isoformat())):
+            of = store.get_day_action(a["undo_of"]) if a["kind"] == "undo" and a["undo_of"] else None
+            if a["kind"] != "bulk" and not (of and of["kind"] == "bulk"):
+                continue
+            state = notifier.action_state(a)
+            return {**state, "action": a, "of": of} if state else None
+        return None
+
+    @app.route("/day/send", methods=["POST"])
+    @login_required
+    def day_send():  # type: ignore[no-untyped-def]
+        """Phase AD: post a bulk change (or its correction) to the LOB's group; once posted, only when asked again."""
+        program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
+        view = request.form.get("view", "")
+        action = app.extensions["store"].get_day_action(request.form.get("action_id", 0, type=int))
+        if on is None or not action or action["program"] != program or action["shift_date"] != on.isoformat():
+            flash("That change is not on this day: open the day again.")
+            return _back_to_day(program, on, view)
+        posted, said = app.extensions["notifier"].send_action(action, again=request.form.get("again") == "1")
+        flash(said)
+        if not posted and said.startswith("Already posted"):  # asked on the page (the script asks in a dialog)
+            args = {"program": program, "date": on.isoformat(), "resend": action["id"],
+                    "view": view if view in ("board", "adherence", "meeting", "cover", "replan", "channels") else None}
+            return redirect(url_for("day_page", **{k: v for k, v in args.items() if v}) + "#act-bar", code=303)
+        return _back_to_day(program, on, view)
 
     @app.route("/day/undo-last", methods=["POST"])
     @login_required

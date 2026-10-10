@@ -1043,3 +1043,7 @@ select.pending, input.pending, [data-day] select.att.pending { border-style: das
 .wl-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 0.75rem; white-space: nowrap; }
 .wl-tag.use { background: var(--selected); border: 1px solid var(--action); color: var(--paper); }
 .wl-tag.off { color: var(--dim); border: 1px solid var(--edge); }
+/* Phase Z: a save with many changes (a break plan) is one line; its changes fold away under it */
+.log-each { margin: 4px 0 0; }
+.log-each summary { cursor: pointer; color: var(--dim); font-size: 0.8125rem; }
+.log-each ul { margin: 6px 0 0; padding-left: 18px; font-size: 0.8125rem; color: var(--dim); }

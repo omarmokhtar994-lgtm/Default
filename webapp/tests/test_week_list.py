@@ -132,5 +132,55 @@ class TheHomePage(TwoSchedulesForOneWeek):
         self.assertNotIn("wl-tag", rows["tier1.xlsx"])  # the only schedule of its week: nothing to tell apart
 
 
+class TheWording(TwoSchedulesForOneWeek):
+    """The strange things found with the owner's complaint (DIAGNOSIS.md section 4)."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        from webapp.tests.test_runs import versioned_run
+        cls.engine = versioned_run(cls.app, cls.store, cls.client)
+
+    def log(self, page):
+        return re.search(r'(?s)<h2 id="log-h">Changes in this version</h2>.*?</section>', page).group(0)
+
+    def checks(self, page):
+        return re.search(r'(?s)<h2 id="checks-h">Checks</h2>.*?</section>', page).group(0)
+
+    def test_an_upload_is_not_called_the_tools_schedule(self):
+        page = self.page(f"/runs/{self.second}/schedules")
+        self.assertIn("No changes: this is the schedule as uploaded.", page)
+        self.assertIn("Already in the uploaded schedule (", page)
+        self.assertIn("The uploaded schedule never changes;", page)
+        self.assertNotIn("the tool's schedule", page)
+        self.assertIn("No changes: this is the tool's schedule.", self.page(f"/runs/{self.engine}/schedules"))
+
+    def test_a_version_without_breaks_does_not_claim_after_breaks(self):
+        checks = self.checks(self.page(f"/runs/{self.second}/schedules"))
+        self.assertRegex(checks, r"<b>\d+ of \d+</b> intervals fully covered \(no breaks planned yet\)")
+        self.assertNotIn("after breaks", checks)
+
+    def test_planned_breaks_are_one_change_with_one_warning(self):
+        log = self.log(self.page(f"/runs/{self.first}/schedules"))
+        lines = re.findall(r"(\d+) changes for (\d+) people\. \"Breaks planned automatically\"", log)
+        self.assertEqual(len(lines), 1, log[:600])
+        changes, people = map(int, lines[0])
+        self.assertGreater(changes, people)
+        self.assertLessEqual(log.count("tagsev"), 1)
+        self.assertRegex(log, r"(?s)<details[^>]*><summary>Each change</summary>.*?Associate 0\d\d, \w{3} no breaks")
+
+    def test_the_run_page_says_whether_it_is_in_use(self):
+        self.assertIn("In use for the week of 11 Oct.", self.page(f"/runs/{self.first}"))
+        other = self.page(f"/runs/{self.second}")
+        self.assertIn("Not in use: the RTA uses week_v1.xlsx for the week of 11 Oct.", other)
+        self.assertIn(f'<a href="/runs/{self.second}/schedules#week-list">See the week\'s schedules</a>', other)
+
+    def test_the_run_page_stops_asking_to_plan_breaks_once_planned(self):
+        planned = self.page(f"/runs/{self.first}")
+        self.assertIn("Breaks are planned in Version 2: breaks planned automatically.", planned)
+        self.assertNotIn("Plan the week's breaks next", planned)
+        self.assertIn("Plan the week's breaks next", self.page(f"/runs/{self.second}"))
+
+
 if __name__ == "__main__":
     unittest.main()

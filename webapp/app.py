@@ -40,7 +40,7 @@ from .programs import ProgramBook
 from .auth import admin_required, check_csrf, csrf_token, load_user, login_required, manager_required
 from .program_page import build, overview, weeks_to_show
 from .run_admin import PICK_UNIT, apply_rename, apply_run_change, preview_rename, preview_run_change, unit_keys
-from .schedules import ScheduleBook
+from .schedules import ScheduleBook, group_changes
 from .versions import DAYS, shift_span, stale_blocks, with_notes
 from .results import version_summary
 from .runs import MODES, OPTION_LABELS, READY, RESUMABLE, RunQueue, parse_options, run_options
@@ -384,7 +384,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 "theme": theme if theme in THEMES else "", "back": back,
                 "status_words": STATUS_WORDS, "label": label, "modes": MODES, "stages": stages, "in_flight": IN_FLIGHT,
                 "when": _when, "run_options": run_options, "option_labels": OPTION_LABELS,
-                "eta_text": eta_text, "duration": duration, "clock": _clock, "with_text": with_text}
+                "eta_text": eta_text, "duration": duration, "clock": _clock, "with_text": with_text,
+                "group_changes": group_changes}
 
     NAV_ACTIVE = {"home": "home", "overview_page": "overview", "day_page": "day", "week_page": "week",
                   "run_week": "week", "run_schedules": "schedules", "program": "analysis", "programs": "programs",
@@ -860,7 +861,17 @@ def create_app(config: Dict[str, Any]) -> Flask:
         said = engine_said(run)
         found = read_outcome(queue.results_dir(run_id))
         fixed_input = cannot_schedule(said.get("code", ""), said.get("category", ""))
-        return render_template("run.html", run=run, log=queue.log_tail(run_id),
+        versions = _book().versions(run_id)
+        week_state = None  # Phase Z: whether this run is the one its week uses
+        if run.get("program") and run.get("week_start"):
+            used = _book().in_use(run["program"], run["week_start"])
+            if used is not None:
+                week_state = {"mine": used["run_id"] == run_id, "week": run["week_start"],
+                              "workbook": (store.get_run(used["run_id"]) or {}).get("workbook", "")}
+        with_breaks = [v for v in versions if json.loads(v["week"] or "{}").get("breaks")]
+        breaks_version = next((v for v in with_breaks if v["in_use"]), with_breaks[-1] if with_breaks else None)
+        return render_template("run.html", run=run, log=queue.log_tail(run_id), week_state=week_state,
+                               breaks_version=breaks_version,
                                has_zip=queue.zip_path(run_id).is_file(),
                                has_schedule=queue.final_schedule(run_id) is not None,
                                has_shortfall=queue.shortfall_schedule(run_id) is not None,

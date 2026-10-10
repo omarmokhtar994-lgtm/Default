@@ -49,6 +49,30 @@ def worst(found: List[Dict[str, Any]]) -> str:
     return max((p["severity"] for p in found), key=RANK.get, default="ok")
 
 
+def group_changes(changes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """A version's change log as saves (Phase Z): consecutive changes by one person within 2 seconds, with the same
+    reason and the same problems, are one save. A save's warning belongs to the save, so it is said once (it used to
+    be copied onto each of a break plan's 184 lines)."""
+    groups: List[Dict[str, Any]] = []
+    for c in changes:
+        last = groups[-1] if groups else None
+        if last and last["user_id"] == c.get("user_id") and abs(c["at"] - last["at"]) <= 2 \
+                and last["reason"] == (c.get("reason") or "") and last["raw_problems"] == (c.get("problems") or "[]"):
+            last["items"].append(c)
+            continue
+        try:
+            said = json.loads(c.get("problems") or "[]")
+        except ValueError:
+            said = []
+        groups.append({"at": c["at"], "user_id": c.get("user_id"), "by_name": c.get("by_name"),
+                       "reason": c.get("reason") or "", "severity": c.get("severity") or "",
+                       "raw_problems": c.get("problems") or "[]", "problems": said if isinstance(said, list) else [],
+                       "items": [c]})
+    for gr in groups:
+        gr["people"] = len({c["associate"] for c in gr["items"]})
+    return groups
+
+
 class ScheduleBook:
     def __init__(self, store, data_dir: Path, package_root: Path):
         self.store = store
@@ -196,7 +220,8 @@ class ScheduleBook:
                 "inherited": [p for p in found if p["key"] not in keys], "tool_days": tool_days, "tool": tool,
                 "marks": marks(new, edited=edited), "edited": sorted(edited),
                 "metrics": json.loads(row["checks"] or "{}").get("metrics") or {},
-                "changes": [c for r in reversed(self.lineage(schedule_id)) for c in self.store.list_changes(r["id"])]}
+                "changes": [c for r in reversed(self.lineage(schedule_id)) for c in self.store.list_changes(r["id"])],
+                "uploaded": tool["kind"] == "ready"}
 
     def _trial(self, schedule_id: int, edit, cells: Set[Tuple[str, str]]) -> Dict[str, Any]:
         """What an edit would add, checked on a copy (nothing is saved)."""

@@ -5,7 +5,7 @@
 {% block content %}
 <div class="phead"><div>
   <h1>{% if run.program and run.week_start %}{{ run.program|unit }}, week of {{ run.week_start|day_month }}: schedules{% else %}{{ run.workbook }}: schedules{% endif %}</h1>
-  <p class="byline">Pick a version to view or edit. The tool's own schedules never change; every edit is saved in a new version with who changed what and why.</p>
+  <p class="byline">Pick a version to view or edit. {{ 'The uploaded schedule never changes' if run.mode == 'READY' else "The tool's own schedules never change" }}; every edit is saved in a new version with who changed what and why.</p>
   <p class="byline rundetails">Workbook <b>{{ run.workbook }}</b> · {{ run.program|unit if run.program else 'no program set' }} · {% if run.week_start %}starts {{ run.week_start|start_day }}{% else %}no start date set{% endif %}{% if user.is_admin %} · <a href="{{ url_for('run_detail', run_id=run.id, edit=1) }}#edit">Edit the name, program or start date</a>{% elif user.id == run.user_id %} · <a href="{{ url_for('run_detail', run_id=run.id, edit=1) }}#edit">Change the program or start date</a>{% endif %}</p>
 </div></div>
 
@@ -87,15 +87,17 @@
         <ul class="sevlist">{% for p in view.added %}<li class="{{ p.severity }}"><b>{{ 'Rule broken' if p.severity == 'red' else 'Warning' }}:</b> {{ p.text }}</li>{% endfor %}</ul>
         {% else %}<p>The edits added no problems.</p>{% endif %}
       {% endif %}
-      {% set met = view.metrics %}{% if met.active_intervals %}<p><b>{{ met.after_100 }} of {{ met.active_intervals }}</b> intervals fully covered after breaks{% if current.kind == 'edited' %} (the tool's version: {{ (view.tool.checks|fromjson).metrics.after_100 }}){% endif %}.</p>{% endif %}
-      {% if view.inherited %}<details class="tableview"><summary>Already in the tool's schedule ({{ view.inherited|length }})</summary>
+      {% set met = view.metrics %}{% if met.active_intervals %}<p><b>{{ met.after_100 }} of {{ met.active_intervals }}</b> intervals fully covered {{ 'after breaks' if view.week.breaks else '(no breaks planned yet)' }}{% if current.kind == 'edited' %} ({{ 'as uploaded' if view.uploaded else "the tool's version" }}: {{ (view.tool.checks|fromjson).metrics.after_100 }}){% endif %}.</p>{% endif %}
+      {% if view.inherited %}<details class="tableview"><summary>Already in the {{ 'uploaded' if view.uploaded else "tool's" }} schedule ({{ view.inherited|length }})</summary>
         <ul class="sevlist quiet">{% for p in view.inherited %}<li class="{{ p.severity }}">{{ p.text }}</li>{% endfor %}</ul></details>{% endif %}
     </section>
     <section class="panel" aria-labelledby="log-h">
       <h2 id="log-h">Changes in this version</h2>
       {% if view.changes %}
-      <ul class="log">{% for c in view.changes|reverse %}<li><b>{{ c.by_name }}</b>, {{ when(c.at) }}: {% if c.day == 'Week' %}{{ c.associate }} moved from {{ c.old }} to {{ c.new }} (slot swap){% else %}{{ c.associate }}, {{ c.day }} {{ c.old }} → {{ c.new }}{% endif %}{% if c.reason %}. "{{ c.reason }}"{% endif %}{% if c.severity in ('red', 'yellow') %} <span class="tagsev {{ c.severity }}">{{ 'rule broken' if c.severity == 'red' else 'warning' }}</span>{% endif %}</li>{% endfor %}</ul>
-      {% else %}<p class="empty">No changes: this is the tool's schedule.</p>{% endif %}
+      <ul class="log">{% for gr in group_changes(view.changes)|reverse %}{% if gr["items"]|length >= 3 %}<li><b>{{ gr.by_name }}</b>, {{ when(gr.at) }}: {{ gr["items"]|length }} changes for {{ gr.people }} {{ 'person' if gr.people == 1 else 'people' }}{% if gr.reason %}. "{{ gr.reason }}"{% endif %}{% if gr.severity in ('red', 'yellow') %} <span class="tagsev {{ gr.severity }}">{{ 'rule broken' if gr.severity == 'red' else 'warning' }}</span>{% if gr.problems %} {{ gr.problems|join('; ') }}{% endif %}{% endif %}
+        <details class="log-each"><summary>Each change</summary><ul>{% for c in gr["items"] %}<li>{% if c.day == 'Week' %}{{ c.associate }} moved from {{ c.old }} to {{ c.new }} (slot swap){% else %}{{ c.associate }}, {{ c.day }} {{ c.old }} → {{ c.new }}{% endif %}</li>{% endfor %}</ul></details></li>
+      {% else %}{% for c in gr["items"]|reverse %}<li><b>{{ c.by_name }}</b>, {{ when(c.at) }}: {% if c.day == 'Week' %}{{ c.associate }} moved from {{ c.old }} to {{ c.new }} (slot swap){% else %}{{ c.associate }}, {{ c.day }} {{ c.old }} → {{ c.new }}{% endif %}{% if c.reason %}. "{{ c.reason }}"{% endif %}{% if c.severity in ('red', 'yellow') %} <span class="tagsev {{ c.severity }}">{{ 'rule broken' if c.severity == 'red' else 'warning' }}</span>{% endif %}</li>{% endfor %}{% endif %}{% endfor %}</ul>
+      {% else %}<p class="empty">No changes: this is {{ 'the schedule as uploaded' if view.uploaded else "the tool's schedule" }}.</p>{% endif %}
     </section>
   </aside>
 </div>

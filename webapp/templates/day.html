@@ -323,10 +323,16 @@
     <h2 id="add-h">Add to {{ hm(ap.t) }} to {{ hm(ap.end) }}</h2>
     <p class="dim">{{ program|unit }}, {{ on.strftime('%A %d %b') }}.{% if ap.cell and ap.cell.pm is not none %} Right now this {{ unit.get(v.interval, 'interval')[:-1] }} is {{ ap.cell.pm|hmm }} against demand.{% endif %}</p>
     {% if ap.people %}
-    <label data-who-working>Who <select name="associate" required>{% for name, label, lang in ap.people %}<option value="{{ name }}"{% if name == ap.person %} selected{% endif %}>{{ name }}, {{ label }}, {{ lang[:3]|upper }}</option>{% endfor %}</select></label>
+    <label data-who-working>Who <select name="associate" required>{% for name, label, lang, s0, s1 in ap.people %}<option value="{{ name }}" data-start="{{ s0 }}" data-end="{{ s1 }}"{% if name == ap.person %} selected{% endif %}>{{ name }}, {{ label }}, {{ lang[:3]|upper }}</option>{% endfor %}</select></label>
     {% if ap.off %}<label data-who-off hidden>Who (off today) <select name="associate" data-off required disabled>{% for name, lang in ap.off %}<option value="{{ name }}">{{ name }}, off today{% if lang %}, {{ lang[:3]|upper }}{% endif %}</option>{% endfor %}</select></label>{% endif %}
     <fieldset class="kinds"><legend>What</legend>
       {% for group, kinds in ap.kinds.items() %}<span class="grp">{{ group }}</span>{% for k in kinds %}<label class="k"><input type="radio" name="what" value="{{ k }}"{% if k == 'Break' %} checked{% endif %}> {{ k }}</label>{% endfor %}{% endfor %}
+    </fieldset>
+    <fieldset class="ot-side" data-ot-side hidden>
+      <legend>When</legend>
+      <p class="ot-shift" data-ot-shift></p>
+      <label class="ot-choice"><input type="radio" name="side" value="before" checked disabled><b>Before the shift</b><span class="t" data-ot-time="before"></span><small>Comes in early</small></label>
+      <label class="ot-choice"><input type="radio" name="side" value="after" disabled><b>After the shift</b><span class="t" data-ot-time="after"></span><small>Stays on</small></label>
     </fieldset>
     {% if ap.off %}<div data-dayoff-fields hidden>
       <label>Shift <select name="shift" data-shift-pick><option value="">Type the start and end</option>{% for label, lo, hi in ap.shifts %}<option value="{{ label }}" data-from="{{ hm(lo) }}" data-to="{{ hm(hi) }}"{% if ap.shift_pick and label == ap.shift_pick[0] %} selected{% endif %}>{{ label }} (Shift Library)</option>{% endfor %}</select></label>

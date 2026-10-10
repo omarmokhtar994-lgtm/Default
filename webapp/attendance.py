@@ -606,11 +606,12 @@ class DayBook:
 
     def add_item(self, program: str, on: date, name: str, what: str, start: str, minutes: int, user_id: int,
                  billable: bool = False, note: str = "", dry_run: bool = False, end: str = "", with_whom: str = "",
-                 why: str = "", with_dept: str = "") -> Dict[str, Any]:
+                 why: str = "", with_dept: str = "", side: str = "") -> Dict[str, Any]:
         """Anything RTA's "+ Add" offers: Unplanned leave or Sick (the whole shift); Late (``start`` is when
         they arrived); Left early (``start`` is when they left); a break, lunch, aux, overtime or VTO from
-        ``start`` for ``minutes``; a day off cancelled from ``start`` to ``end``. Returns what was recorded
-        ("text") and the minutes it covers (lo, hi)."""
+        ``start`` for ``minutes``; a day off cancelled from ``start`` to ``end``. Overtime with ``side``
+        "before" or "after" (Phase AA) ignores ``start``: it ends when the person's shift starts, or starts when it
+        ends. Returns what was recorded ("text") and the minutes it covers (lo, hi)."""
         if what == DAY_OFF:
             rec = self._call_in(program, on, name, start, end, user_id, note, dry_run=True)
             if not dry_run:
@@ -628,6 +629,16 @@ class DayBook:
             return {"text": rec["what"], "lo": lo, "hi": hi, "record": rec}
         if what not in ACTIVITY_KINDS or what == CALLED_IN:
             raise ValueError(f"Unknown: {what}.")
+        if what == "Overtime" and side in ("before", "after"):
+            if not isinstance(minutes, int) or minutes <= 0 or minutes % STEP:
+                raise ValueError("Pick a length in 5-minute steps.")
+            span = self._shift(program, on, name)[2]
+            if side == "before" and span[0] - minutes < 0:
+                length = f"{minutes} min" if minutes < 60 else f"{minutes // 60} h" + (
+                    f" {minutes % 60}" if minutes % 60 else "")
+                raise ValueError(f"{name}'s shift starts at {hm(span[0])}, so {length} of overtime before it would "
+                                 "start the day before. Pick a shorter length, or After the shift.")
+            start = hm(span[1] if side == "after" else span[0] - minutes)
         lo = _clock(start)
         if lo is None:
             raise ValueError("Give the start like 13:05.")
@@ -642,10 +653,12 @@ class DayBook:
         return {"text": rec["what"], "lo": rec["start"], "hi": rec["end"], "record": rec}
 
     def preview_item(self, program: str, on: date, name: str, what: str, start: str, minutes: int,
-                     billable: bool = False, measure: str = "interval", end: str = "") -> Dict[str, str]:
+                     billable: bool = False, measure: str = "interval", end: str = "",
+                     side: str = "") -> Dict[str, str]:
         """What adding this would do to the floor, before anything is kept: the tightest buffer over the
         intervals it touches, now and after. Refused the same way the real thing is (ValueError)."""
-        found = self.add_item(program, on, name, what, start, minutes, 0, billable=billable, dry_run=True, end=end)
+        found = self.add_item(program, on, name, what, start, minutes, 0, billable=billable, dry_run=True, end=end,
+                              side=side)
         lo, hi = found["lo"], found["hi"]
         before = self.page(program, on, measure)["view"]
         after = self.page(program, on, measure, extra=found["record"])["view"]

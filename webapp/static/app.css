@@ -1099,3 +1099,16 @@ select.pending, input.pending, [data-day] select.att.pending { border-style: das
 .rb-c small.ok { display: block; color: var(--covered-text); font-weight: 700; }
 .rb-c small.below { display: block; color: var(--short-ink); font-weight: 700; }
 .rb-head small { display: block; font-weight: 400; }
+/* Phase AA: overtime before or after the shift, in the + Add dialog */
+.ot-side { border: 0; padding: 0; margin: 4px 0 12px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.ot-side[hidden] { display: none; }
+.ot-side legend { font-weight: 600; margin-bottom: 6px; padding: 0; }
+.ot-side .ot-shift { grid-column: 1 / -1; margin: 0; color: var(--dim); font-size: 0.875rem; }
+.ot-side .ot-choice { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: baseline; margin: 0;
+  padding: 10px 12px; border: 1px solid var(--rail); border-radius: 6px; cursor: pointer; font-weight: 400; }
+.ot-side .ot-choice:has(input:checked) { border-color: var(--action); box-shadow: inset 3px 0 0 var(--action); background: var(--selected); }
+.ot-side .ot-choice:has(input:disabled) { cursor: not-allowed; opacity: .7; }
+.ot-side .ot-choice b { font-weight: 700; }
+.ot-side .ot-choice .t { grid-column: 2; font: 700 1.125rem/1.2 var(--display); font-variant-numeric: tabular-nums; }
+.ot-side .ot-choice small { grid-column: 2; color: var(--dim); font-size: 0.8125rem; }
+@media (max-width: 480px) { .ot-side { grid-template-columns: minmax(0, 1fr); } }

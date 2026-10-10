@@ -1906,7 +1906,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             shifts = days.shift_library(program, on)
             add_panel = {"t": t, "end": t + step, "person": request.args.get("person", ""),
                          "kinds": {k: v for k, v in ADD_KINDS.items() if off or DAY_OFF not in v},
-                         "people": [(l["name"], x["label"], l["language"]) for l, x in own],
+                         "people": [(l["name"], x["label"], l["language"], x["start"], x["end"]) for l, x in own],
                          "cell": next((c for c in page["view"]["cells"] if c["t"] == t), None),
                          "off": off, "shifts": shifts,
                          "shift_pick": max((x for x in shifts if x[1] <= t < x[2]), key=lambda x: x[1],
@@ -2167,7 +2167,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             with_dept, with_whom, why = _aux_answers(what, program)
             found = _days().add_item(program, on, name, what, start, minutes, g.user["id"], billable=billable,
                                      note=request.form.get("note", ""), end=request.form.get("to", "").strip(),
-                                     with_whom=with_whom, why=why, with_dept=with_dept)
+                                     with_whom=with_whom, why=why, with_dept=with_dept,
+                                     side=request.form.get("side", ""))
             flash(f"Recorded: {name}, {found['text']}.")
             if what in ("Overtime", DAY_OFF) and _days().next_week_unknown(program, on):
                 flash(tomorrow_unchecked(on))
@@ -2183,7 +2184,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             program, on, name, what, start, minutes, billable = _add_fields()
             found = _days().preview_item(program, on, name, what, start, minutes, billable,
                                          measure if measure in MEASURES else "interval",
-                                         end=request.form.get("to", "").strip())  # who and why are asked on Add
+                                         end=request.form.get("to", "").strip(),  # who and why are asked on Add
+                                         side=request.form.get("side", ""))
         except ValueError as exc:
             return jsonify(error=str(exc)), 400
         return jsonify(found)

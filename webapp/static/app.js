@@ -784,6 +784,26 @@ function homeRefresh(now) {
   var dayoff = form.querySelector("[data-dayoff-fields]"), to = form.querySelector("[data-to-label]");
   var shiftPick = form.querySelector("select[data-shift-pick]");
   var fromInput = form.querySelector("input[name=from]"), toInput = form.querySelector("input[name=to]");
+  // Phase AA: overtime before or after the shift, the times worked out from the person's shift and the length
+  var otSide = form.querySelector("[data-ot-side]"), otShift = form.querySelector("[data-ot-shift]");
+  var who = form.querySelector("select[name=associate]:not([data-off])");
+  function clock(m) { m = ((m % 1440) + 1440) % 1440; return ("0" + Math.floor(m / 60)).slice(-2) + ":" + ("0" + m % 60).slice(-2); }
+  function overtimeSides(on) {
+    if (!otSide) { return; }
+    otSide.hidden = !on;
+    var radios = otSide.querySelectorAll("input[name=side]");
+    Array.prototype.forEach.call(radios, function (r) { r.disabled = !on; });
+    var o = who && who.options[who.selectedIndex];
+    if (!on || !o || !o.dataset.start) { return; }
+    var start = parseInt(o.dataset.start, 10), end = parseInt(o.dataset.end, 10), m = parseInt(minutes.value, 10) || 0;
+    otShift.textContent = o.value + "'s shift today: " + clock(start) + " to " + clock(end) + ".";
+    var before = otSide.querySelector("input[value=before]"), after = otSide.querySelector("input[value=after]");
+    var early = start - m < 0;  // it would start the day before: pick a shorter length or after the shift
+    otSide.querySelector("[data-ot-time=before]").textContent = early ? "Would start the day before" : clock(start - m) + " to " + clock(start);
+    otSide.querySelector("[data-ot-time=after]").textContent = clock(end) + " to " + clock(end + m);
+    before.disabled = early;
+    if (early && before.checked) { after.checked = true; }
+  }
   function kind() { var c = form.querySelector("input[name=what]:checked"); return c ? c.value : ""; }
   function pickedShift() {
     var o = shiftPick && shiftPick.options[shiftPick.selectedIndex];
@@ -798,9 +818,10 @@ function homeRefresh(now) {
     }
     length.hidden = whole.indexOf(k) >= 0 || k === "Late" || k === "Left early" || calling;
     billable.hidden = aux.indexOf(k) < 0;
-    from.hidden = whole.indexOf(k) >= 0;
+    from.hidden = whole.indexOf(k) >= 0 || k === "Overtime";
     from.querySelector("span").textContent = k === "Late" ? "Arrived at" : k === "Left early" ? "Left at" : "From";
     if (changedKind && usual[k]) { minutes.value = usual[k]; }
+    overtimeSides(k === "Overtime");
     if (off) {
       off.hidden = !calling; off.querySelector("select").disabled = !calling;
       working.hidden = calling; working.querySelector("select").disabled = calling;

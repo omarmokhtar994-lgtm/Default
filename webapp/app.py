@@ -29,7 +29,7 @@ from .channel_page import (FULL as FULL_DAYS, NAMES as CHANNEL_NAMES, apply_edit
 from .channel_people import ChannelPeople, can_work, channel_words
 from .channel_plan import NoPlan, plan_day, score_day
 from .channel_template import channel_workbook
-from .channels import check_lines, has_channel_tabs, read_channels, requirement_tab
+from .channels import check_lines, has_channel_needs, read_channels, requirement_tab
 from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, board, read_inputs, shift_groups
 from .coach import actual_shrinkage, corrected_tab
 from .contacts import ContactBook, pick_contact
@@ -745,7 +745,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         trial = path.with_suffix(".xlsx")  # openpyxl opens .xlsx names only
         shutil.copyfile(path, trial)
         try:
-            if not has_channel_tabs(trial):
+            if not has_channel_needs(trial):  # Phase Z: empty tabs (the Blank's) ask for nobody: as before Phase V
                 return None, None
             try:
                 inputs = read_inputs(trial)

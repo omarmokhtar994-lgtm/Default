@@ -351,6 +351,44 @@ def has_channel_tabs(path: Path) -> bool:
         wb.close()
 
 
+def has_channel_needs(path: Path) -> bool:
+    """Whether a workbook's channel tabs ask for anyone (Phase Z): a cell other than empty or 0 under the header of a
+    Chat, Phone or Email tab (any interval) or of Email Hours, or a filled language or all-channels row on Channel
+    Setup. Anything that is not a number counts, so it is read and refused by tab and row. The tabs as the Blank
+    input workbook and the channel needs download hand them out ask for nobody: such a workbook is treated as one
+    without channel tabs, as before Phase V. A file that cannot be opened as a workbook has none (see above)."""
+    try:
+        wb = load_workbook(path, read_only=True, data_only=True)
+    except (zipfile.BadZipFile, InvalidFileException, KeyError, OSError):
+        return False
+
+    def asks(value: Any) -> bool:
+        return value not in (None, "") and not (isinstance(value, (int, float)) and not isinstance(value, bool)
+                                                and value == 0)
+    try:
+        for name in wb.sheetnames:
+            key = _norm(name)
+            rows = list(wb[name].iter_rows(values_only=True)) if (GRID_TAB.match(key) or key in (
+                "email hours", "channel setup")) else []
+            if GRID_TAB.match(key) or key == "email hours":
+                head = next((i for i, r in enumerate(rows[:10]) if r and _norm(r[0]) in ("interval", "day")), None)
+                if head is not None and any(asks(v) for r in rows[head + 1:] for v in r[1:]):
+                    return True
+            elif key == "channel setup":
+                section = None
+                for r in rows:
+                    first, second = _norm(r[0] if r else None), _norm(r[1] if r and len(r) > 1 else None)
+                    if (first, second) in (("channel", "language"), ("days", "start")):
+                        section = first
+                    elif section == "channel" and first in LETTER:
+                        return True
+                    elif section == "days" and any(asks(v) for v in r):
+                        return True
+        return False
+    finally:
+        wb.close()
+
+
 def read_channels(path: Path, step: int) -> Optional[Dict[str, Any]]:
     """The channel tabs of an input workbook, or None when it has none. Refused (ValueError naming each tab and row,
     all of them at once) when a cell cannot be used. Read once per file version."""

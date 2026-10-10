@@ -97,13 +97,14 @@ class ScheduleBook:
 
     def channel_path(self, run_id: str) -> Optional[Path]:
         """Where a run's channel needs are read from (Phase Z): the channel needs added to it, else its input
-        workbook when that has channel tabs, else None. The requirement and the inputs stay the input workbook's."""
-        from .channels import has_channel_tabs
+        workbook when its channel tabs ask for someone, else None. The requirement and the inputs stay the input
+        workbook's."""
+        from .channels import has_channel_needs
         added_needs = self.root / run_id / "channels.xlsx"
         if added_needs.is_file():
             return added_needs
         source = self.input_path(run_id)
-        return source if source.is_file() and has_channel_tabs(source) else None
+        return source if source.is_file() and has_channel_needs(source) else None
 
     def attach_channels(self, run_id: str, upload: Path) -> List[Tuple[str, str]]:
         """Add channel needs to a run without a new run (Phase Z): read at the run's interval and kept as its
@@ -112,7 +113,7 @@ class ScheduleBook:
         from openpyxl.utils.exceptions import InvalidFileException
         from zipfile import BadZipFile
 
-        from .channels import check_lines, read_channels
+        from .channels import check_lines, has_channel_needs, read_channels
         from .day import read_inputs
         source = self.input_path(run_id)
         if not source.is_file():
@@ -132,6 +133,9 @@ class ScheduleBook:
                 if setup is None:
                     raise ValueError(f"This workbook has no channel tabs (Chat {step} Min, Phone {step} Min, Email "
                                      f"{step} Min, Email Hours or Channel Setup).")
+                if not has_channel_needs(trial):
+                    raise ValueError("This workbook asks for nobody on any channel: fill in how many people Chat, "
+                                     "Phone or Email need (or Email Hours), then add it again.")
                 os.replace(trial, self.root / run_id / "channels.xlsx")
             finally:
                 trial.unlink(missing_ok=True)

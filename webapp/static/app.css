@@ -1214,3 +1214,5 @@ ul.log .post-st { font-size: 0.8125rem; margin-left: 4px; }
 .nf-morning input[type=time] { display: block; width: 9em; margin-top: 6px; padding: 10px 12px; font: inherit;
   color: var(--paper); background: var(--night); border: 1px solid var(--edge); border-radius: 4px; }
 .nf-morning select { min-width: 12em; }
+/* Phase AC: a tile's "of N" stays on the figure's line, smaller */
+.tile b small.of { font-size: 0.5em; font-weight: 600; white-space: nowrap; }

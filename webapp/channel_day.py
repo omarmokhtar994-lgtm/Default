@@ -136,6 +136,7 @@ def channel_view(day: int, step: int, now, plan, pieces, lanes: Dict[str, Any], 
                       for (offset, name), ms in ch["moves"].items() if offset == 0 for m in ms if m.get("id")),
                      key=lambda m: (m["start"], m["name"]))
     return {"rows": rows, "warnings": warnings, "now": moment, "unplanned": loose, "changes": changes,
+            "planned": any(ch["blocks"].values()),  # Phase AC: whether the schedule has a channel plan at all
             "timelines": _timelines(pieces, today), "hold": ChannelHold(day, step, setup, rules, today, ch)}
 
 

@@ -49,10 +49,10 @@
 <p class="empty panel">No interval figures for this run: the independent validator's report was not produced (a rejected workbook, a readiness check, or a run that built no schedule).</p>
 {% else %}{% set t = view.totals %}
 <section class="tiles" aria-label="The week in numbers">
-  <p class="tile"><span class="tile-label">{{ 'Hours' if view.step == 60 else 'Intervals' }} at 100%</span><b>{{ t.full }} of {{ t.active }}</b><small class="dim">{{ (100 * t.full / t.active)|round|int if t.active else 0 }}% of the week</small></p>
-  <p class="tile"><span class="tile-label">Overtime needed for 100%</span><b>{{ t.overtime_hours|num }} h</b><small class="dim">{{ view.short|length }} intervals, {{ t.overtime_people }} associate-intervals</small></p>
-  <p class="tile"><span class="tile-label">Extra hours available</span><b>{{ t.extra_hours|num }} h</b><small class="dim">{{ view.extra|length }} intervals above need</small></p>
-  <p class="tile"><span class="tile-label">Associates</span><b>{{ figures.associates if figures.associates is not none else '–' }}</b><small class="dim">{% if figures.productive_hours %}{{ figures.productive_hours|round|int }} productive hours{% endif %}</small></p>
+  <p class="tile"><span class="tile-label">{{ 'Hours' if view.step == 60 else 'Intervals' }} at 100%</span><b>{{ t.full }}<small class="of"> of {{ t.active }}</small></b><small class="dim">{{ (100 * t.full / t.active)|round|int if t.active else 0 }}% of the week</small></p>
+  <p class="tile"><span class="tile-label">Overtime needed for 100%</span><b>{{ t.overtime_hours|num }} h</b>{% set ns, np = view.short|length, t.overtime_people %}<small class="dim">{{ ns }} interval{{ 's' if ns != 1 }}, {{ np }} associate-interval{{ 's' if np != 1 }}</small></p>
+  <p class="tile"><span class="tile-label">Extra hours available</span><b>{{ t.extra_hours|num }} h</b>{% set nx = view.extra|length %}<small class="dim">{{ nx }} interval{{ 's' if nx != 1 }} above need</small></p>
+  <p class="tile"><span class="tile-label">Associates</span><b>{{ figures.get('associates') if figures.get('associates') is not none else '–' }}</b><small class="dim">{% if figures.get('productive_hours') %}{{ figures.productive_hours|round|int }} productive hours{% elif figures.get('associates_from') %}{{ figures.associates_from }}{% endif %}</small></p>
 </section>
 
 <section class="panel" aria-labelledby="grid-h">

@@ -10,12 +10,14 @@ import secrets
 import shutil
 import tempfile
 import time
+import zipfile
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from flask import Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file, session, url_for
 from flask.sessions import SecureCookieSessionInterface
+from openpyxl.utils.exceptions import InvalidFileException
 from werkzeug.utils import secure_filename
 
 from .adherence import interval_shrinkage, person_day, team as team_figures
@@ -872,6 +874,14 @@ def create_app(config: Dict[str, Any]) -> Flask:
             found.update(version_label=row["label"], breaks_planned=bool(json.loads(row["week"] or "{}").get("breaks")))
         return found
 
+    def _can_resume(run: Dict[str, Any]) -> bool:
+        """A stopped, interrupted or failed engine run that can continue from its checkpoints: never a readiness
+        check, never a run the engine said cannot be scheduled from that workbook (Phase AC: one rule for the page
+        and the route)."""
+        said = engine_said(run)
+        return (run["status"] in RESUMABLE and run["mode"] != "SMOKE"
+                and not cannot_schedule(said.get("code", ""), said.get("category", "")))
+
     def _run_page(run: Dict[str, Any], **extra: Any):  # type: ignore[no-untyped-def]
         """The run page; ``extra`` carries a change to check before saving (run_tag)."""
         run_id = run["id"]
@@ -897,7 +907,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                has_schedule=queue.final_schedule(run_id) is not None,
                                has_shortfall=queue.shortfall_schedule(run_id) is not None,
                                has_week=bool(kept_figures(run).get("intervals")),
-                               resumable=run["status"] in RESUMABLE and not fixed_input and run["mode"] != "SMOKE",
+                               resumable=_can_resume(run),
                                summary=_ready_figures(run) if run["mode"] == READY else queue.summary(run_id),
                                said=said,
                                why=outcome_view(found) if found else None,
@@ -1405,9 +1415,14 @@ def create_app(config: Dict[str, Any]) -> Flask:
                    "url": url_for("week_page", program=row["program"], week=row["week_start"]) if e["in_use"]
                    else url_for("schedule_week", schedule_id=e["shown"]["id"])}
                   for e in listed] if len(listed) > 1 else []
+        figures = kept_figures(run or {})
+        if figures.get("associates") is None:  # Phase AC: an uploaded schedule keeps no count; its week has the people
+            people = (json.loads(row["week"] or "{}") or {}).get("associates") or []
+            figures["associates"] = sum(1 for a in people if any(shift_span(d) for d in a.get("days", []))) or None
+            figures["associates_from"] = "with a shift this week" if figures["associates"] else ""
         return render_template("week.html", run=run, view=week_view(intervals, side) if intervals else None,
                                side=side, program=row["program"], week=row["week_start"], programs=programs,
-                               weeks=weeks, figures=kept_figures(run or {}), version=row, week_note=note,
+                               weeks=weeks, figures=figures, version=row, week_note=note,
                                may_set_in_use=_may_set_in_use(row), target_panel=target, elsewhere=elsewhere,
                                switch=switch)
 
@@ -1497,12 +1512,18 @@ def create_app(config: Dict[str, Any]) -> Flask:
         week_list = book.week_list(run.get("program") or "", run.get("week_start") or "")
         needs = book.channel_path(run_id)
         added = needs.stat().st_mtime if needs is not None and needs.name == "channels.xlsx" else None
-        step = None
+        step, input_problem = None, ""
         if versions and book.input_path(run_id).is_file():
-            step = read_inputs(book.input_path(run_id))["interval"]
+            try:
+                step = read_inputs(book.input_path(run_id))["interval"]
+            except (ValueError, KeyError, StopIteration, OSError, zipfile.BadZipFile, InvalidFileException):
+                # Phase AC: a damaged kept input says so here instead of turning the whole page into an error
+                input_problem = ("The input workbook kept with this schedule cannot be read, so its channels cannot "
+                                 "be checked here. Upload the schedule again to replace it.")
         return render_template("schedules.html", run=run, versions=versions, current=current, view=view,
                                counts=counts, may_set_in_use=bool(current) and _may_set_in_use(current),
-                               days=DAYS, channel_lines=_channel_lines(run_id), channel_added=added, step=step,
+                               days=DAYS, channel_lines=None if input_problem else _channel_lines(run_id),
+                               channel_added=added, step=step, input_problem=input_problem,
                                week_list=week_list if len(week_list) > 1 else [],
                                may_use={e["shown"]["id"] for e in week_list if _may_set_in_use(e["shown"])},
                                may_delete=_may_delete(run), running=run["status"] in ACTIVE + ("QUEUED",))
@@ -1531,7 +1552,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             return redirect(url_for("run_schedules", run_id=run_id) + "#delete")
         shutil.rmtree(_queue().run_dir(run_id), ignore_errors=True)
         _record("run_deleted", run, detail=f"{count} version{'s' if count != 1 else ''}")
-        flash(f"Deleted {run['workbook']} and its {count} version{'s' if count != 1 else ''}.")
+        flash(f"Deleted {run['workbook']}." if not count else
+              f"Deleted {run['workbook']} and its {count} version{'s' if count != 1 else ''}.")
         return back
 
     # ------------------------------------------------------------- channel needs for a schedule (Phase Z)
@@ -2570,6 +2592,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
     @login_required
     def run_resume(run_id: str):  # type: ignore[no-untyped-def]
         run = _run_or_404(run_id)
+        if not _can_resume(run):  # Phase AC: the page offers it only then; a direct request gets the same answer
+            flash("This run cannot be resumed: " + ("a readiness check builds no schedule. Start the run instead."
+                                                    if run["mode"] == "SMOKE" else
+                                                    "it ended without one it could continue. Fix the workbook and "
+                                                    "run it again." if run["status"] in RESUMABLE else
+                                                    f"it is {label(run).lower()}."))
+            return redirect(url_for("run_detail", run_id=run_id))
         resumed = _queue().resume(run_id)
         if resumed:
             _record("run_resumed", run)

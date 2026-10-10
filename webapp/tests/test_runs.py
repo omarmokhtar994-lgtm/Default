@@ -779,7 +779,9 @@ class TheWeekPage(unittest.TestCase):
     def page(self, client, url):
         response = client.get(url)
         self.assertEqual(response.status_code, 200, url)
-        return html.unescape(response.get_data(as_text=True))
+        # re-pinned (Phase AC, review finding 9): a tile's "of N" is now a smaller part of the figure,
+        # <b>107<small class="of"> of 126</small></b>, so it stays on one line; the figures checked are unchanged
+        return re.sub(r'<small class="of">( of \d+)</small>', r"\1", html.unescape(response.get_data(as_text=True)))
 
     def test_week_view_for_a_run(self):
         app, store, client, run_id = self.finished()

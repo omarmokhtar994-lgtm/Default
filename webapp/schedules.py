@@ -50,13 +50,14 @@ def worst(found: List[Dict[str, Any]]) -> str:
 
 
 def group_changes(changes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """A version's change log as saves (Phase Z): consecutive changes by one person within 2 seconds, with the same
-    reason and the same problems, are one save. A save's warning belongs to the save, so it is said once (it used to
-    be copied onto each of a break plan's 184 lines)."""
+    """A version's change log as saves (Phase Z): consecutive changes by one person, each within 2 seconds of the one
+    before (Phase AC: a save written over several seconds stays one save), with the same reason and the same problems,
+    are one save. A save's warning belongs to the save, so it is said once (it used to be copied onto each of a break
+    plan's 184 lines)."""
     groups: List[Dict[str, Any]] = []
     for c in changes:
         last = groups[-1] if groups else None
-        if last and last["user_id"] == c.get("user_id") and abs(c["at"] - last["at"]) <= 2 \
+        if last and last["user_id"] == c.get("user_id") and abs(c["at"] - last["items"][-1]["at"]) <= 2 \
                 and last["reason"] == (c.get("reason") or "") and last["raw_problems"] == (c.get("problems") or "[]"):
             last["items"].append(c)
             continue

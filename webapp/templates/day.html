@@ -90,7 +90,8 @@
     {% if not w.fixes %}<p class="dim">No single change covers it without leaving another channel short: add overtime, or call someone in.</p>{% endif %}
   </div>
   {% else %}<p class="empty">No channel warnings: every channel and language minimum is as planned or better.</p>{% endfor %}
-  {% if chv.unplanned %}<p class="note">On the floor with no channel planned: {{ chv.unplanned|join(', ') }}. Plan channels for this day to count them.</p>{% endif %}
+  {% if not chv.planned %}<p class="note">No channel plan for this day yet: plan channels for it to count each channel.</p>
+  {% elif chv.unplanned %}<p class="note">On the floor with no channel planned: {{ chv.unplanned|join(', ') }}. Plan channels for this day to count them.</p>{% endif %}
 </section>
 <section class="panel" aria-labelledby="chi-h">
   <h2 id="chi-h">Channels by interval</h2>

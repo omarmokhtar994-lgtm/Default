@@ -1149,12 +1149,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
         key = key if key in dict(units) else units[0][0]
         saved = store.get_notify(key) or {}
         rows = []
+        every, newest = store.notify_overview()  # Phase AC: two queries for every LOB, not two per LOB
         for k, text in units:
-            s = store.get_notify(k) or {}
-            newest = store.notify_posts(unit=k, limit=1)
+            s = every.get(k, {})
             rows.append({"key": k, "label": text, "mode": MODE_WORDS[s.get("mode") or "off"],
                          "service": SERVICES.get(s.get("service", ""), "–") if s.get("link") else "–",
-                         "last": last_line(newest[0]) if newest else
+                         "last": last_line(newest[k]) if k in newest else
                          ("No posts yet" if s.get("link") else "No group link yet")})
         posts = store.notify_posts(unit=key, limit=10)
         shown = next((p for p in posts if p["what"] != "test" and p["status"] in ("sent", "preview")), None)

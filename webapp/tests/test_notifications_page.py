@@ -162,6 +162,35 @@ class TheRemove(_Page):
         self.assertNotIn("Ends in", page)
 
 
+class TheQueries(unittest.TestCase):
+    def test_page_reads_every_lob_at_once(self):
+        """Phase AC (Phase AB's open item): the list of LOBs costs the same few queries for 30 LOBs as for 2."""
+        app, store, *_ = make_app(NOTIFY_THREAD=False, NOTIFY_TRANSPORT=Group())
+        store.add_user("omar", "Omar", "Owner-pass-123", is_admin=True, must_change=False)
+        programs = ProgramBook(store)
+        counts = {}
+        for n in (2, 30):
+            pid = programs.add_program(f"P{n}")
+            for i in range(n):
+                key = programs.add_lob(pid, f"LOB {i}")
+                store.set_notify(key, link=SLACK, service="slack", mode="on", kinds="break")
+            client = sign_in(app, "omar", "Owner-pass-123")
+            calls = []
+            served = app.extensions["store"]  # the website's own Store (the test's is another handle on the file)
+            real = served._db
+
+            def counted():
+                calls.append(1)
+                return real()
+            served._db = counted
+            try:
+                self.assertEqual(client.get("/notifications").status_code, 200)
+            finally:
+                served._db = real
+            counts[n] = len(calls)
+        self.assertLessEqual(counts[30] - counts[2], 3, counts)
+
+
 class TheRecentPosts(_Page):
     def test_recent_posts_and_last_post_shown(self):
         self.save(link=SLACK)

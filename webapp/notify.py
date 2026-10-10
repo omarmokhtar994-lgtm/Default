@@ -133,18 +133,23 @@ def _plain(text: str) -> str:
     return " ".join(str(text).replace("*", "").split())
 
 
+def _teams(text: str) -> str:
+    """Card text that can never form a Markdown link: "[a](b)" becomes "[a] (b)" (Phase AC); brackets stay readable."""
+    return _plain(text).replace("](", "] (")
+
+
 def teams_body(post: Post) -> Dict[str, Any]:
     """The message Teams' "Send webhook alerts to a channel" workflow posts: one Adaptive Card."""
-    body: List[Dict[str, Any]] = [{"type": "TextBlock", "text": _plain(post.title), "weight": "Bolder",
+    body: List[Dict[str, Any]] = [{"type": "TextBlock", "text": _teams(post.title), "weight": "Bolder",
                                    "size": "Medium", "wrap": True}]
     for heading, lines in post.sections:
         if heading:
-            body.append({"type": "TextBlock", "text": f"**{_plain(heading)}**", "wrap": True, "spacing": "Medium"})
+            body.append({"type": "TextBlock", "text": f"**{_teams(heading)}**", "wrap": True, "spacing": "Medium"})
         if lines:
             body.append({"type": "TextBlock", "wrap": True,
-                         "text": "\n".join(f"- **{_plain(n)}**: {_plain(t)}" for n, t in lines)})
+                         "text": "\n".join(f"- **{_teams(n)}**: {_teams(t)}" for n, t in lines)})
     if post.footer:
-        body.append({"type": "TextBlock", "text": _plain(post.footer), "isSubtle": True, "size": "Small",
+        body.append({"type": "TextBlock", "text": _teams(post.footer), "isSubtle": True, "size": "Small",
                      "wrap": True})
     card: Dict[str, Any] = {"$schema": "http://adaptivecards.io/schemas/adaptive-card.json", "type": "AdaptiveCard",
                             "version": "1.4", "body": body, "msteams": {"width": "Full"}}

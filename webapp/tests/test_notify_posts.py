@@ -129,6 +129,17 @@ class ThePost(unittest.TestCase):
         self.assertNotIn("<!", text)
         self.assertNotIn("<@", text)
 
+    def test_teams_text_cannot_make_a_link(self):
+        # Phase AC (Phase AB's open item): text typed on the RTA never becomes a link in a Teams card
+        post = self.post([item("Associate 002", "Coaching 14:00 to 14:30 (billable), with [Lina](https://evil.example)")])
+        text = json.dumps(teams_body(post))
+        self.assertNotIn("](", text)
+        self.assertIn("with [Lina] (https://evil.example)", text)
+
+    def test_brackets_stay_readable(self):
+        post = self.post([item("Associate 001", "Break [1] moved 10:00 to 10:15")])
+        self.assertIn("Break [1] moved 10:00 to 10:15", json.dumps(teams_body(post)))
+
     def test_long_slack_post_splits(self):
         many = [item(f"Associate {i:03d}", "Break 1 moved 10:00 to 10:15 and a long reason " * 2) for i in range(120)]
         body = slack_body(self.post(many))

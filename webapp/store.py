@@ -813,6 +813,14 @@ class Store:
         with self._db() as db:
             return [dict(r) for r in db.execute("select * from notify_settings order by unit")]
 
+    def notify_overview(self) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, Dict[str, Any]]]:
+        """Every LOB's settings and its newest post, keyed by unit, in two queries (Phase AC)."""
+        with self._db() as db:
+            settings = {r["unit"]: dict(r) for r in db.execute("select * from notify_settings")}
+            newest = {r["unit"]: dict(r) for r in db.execute(
+                "select * from notify_posts where id in (select max(id) from notify_posts group by unit)")}
+        return settings, newest
+
     def add_notify_item(self, **fields: Any) -> int:
         names, marks = ", ".join(fields), ", ".join("?" for _ in fields)
         with self._db() as db:

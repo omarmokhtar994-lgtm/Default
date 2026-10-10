@@ -17,7 +17,7 @@ import time
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
-from .day import (ABSENT, AUX, CALLED_IN, EXTRA_BREAKS, LATE_EARLY, MEASURES, OVERTIME_MAX, STATUSES, STEP, TIMED,
+from .day import (ABSENT, AUX, CALLED_IN, CANCELLED, EXTRA_BREAKS, LATE_EARLY, MEASURES, OVERTIME_MAX, STATUSES, STEP, TIMED,
                   BreakRefused, _busy, advice, at_target,
                   check_break, day_view, dayoff_offers, meeting_slots, overtime_offers, pattern_breaks, planned,
                   read_inputs, replan, vto_offers)
@@ -266,7 +266,7 @@ class DayBook:
                 if plan.get(r["idx"], {}).get("kind") != r["kind"]:
                     stale += 1
                     continue
-                actual[(offset, r["associate"], r["idx"])] = r["start"]
+                actual[(offset, r["associate"], r["idx"])] = CANCELLED if r.get("cancelled") else r["start"]
         return attendance, actual, stale, acts
 
     def page(self, program: str, on: date, measure: str = "interval",
@@ -526,9 +526,11 @@ class DayBook:
         plan = {b["idx"]: b for b in self.plan_for(program, on, name, week)}
         if idx not in plan:
             raise BreakRefused("That break is not on the plan.")
-        kept = {(0, r["associate"], r["idx"]): r["start"] for r in self.store.list_actual_breaks(program, [on.isoformat()])
+        rows = {r["idx"]: r for r in self.store.list_actual_breaks(program, [on.isoformat()])
                 if r["associate"] == name and plan.get(r["idx"], {}).get("kind") == r["kind"]}
-        was = kept.get((0, name, idx), plan[idx]["start"])
+        kept = {(0, name, i): CANCELLED if r.get("cancelled") else r["start"] for i, r in rows.items()}
+        was = rows[idx]["start"] if idx in rows else plan[idx]["start"]
+        was_cancelled = bool(rows.get(idx, {}).get("cancelled"))
         if at is None:
             self.store.clear_actual_break(program, on.isoformat(), name, idx)
             what = f"{plan[idx]['kind']} back to plan ({hm(plan[idx]['start'])})"
@@ -541,10 +543,37 @@ class DayBook:
                 "start": span[0], "end": span[1], "label": f"{hm(span[0])} - {hm(span[1])}",
                 "planned": list(plan.values())})
             self.store.set_actual_break(program=program, shift_date=on.isoformat(), associate=name, idx=idx,
-                                        kind=plan[idx]["kind"], start=m, user_id=user_id)
-            what = f"{plan[idx]['kind']} moved {hm(was)} to {hm(m)}{suffix}"
-        self._log(program, on, name, what, user_id, "break", ref=f"break:{name}:{idx}", before=hm(was),
-                  after=hm(plan[idx]["start"] if at is None else m))
+                                        kind=plan[idx]["kind"], start=m, user_id=user_id, cancelled=0, why="")
+            what = (f"{plan[idx]['kind']} brought back at {hm(m)}{suffix}" if was_cancelled else
+                    f"{plan[idx]['kind']} moved {hm(was)} to {hm(m)}{suffix}")
+        self._log(program, on, name, what, user_id, "break", ref=f"break:{name}:{idx}",
+                  before="cancelled" if was_cancelled else hm(was), after=hm(plan[idx]["start"] if at is None else m))
+
+    def cancel_break(self, program: str, on: date, name: str, idx: int, why: str, user_id: int,
+                     now: Optional[int] = None) -> None:
+        """Cancel a break of the shift that starts on ``on`` (Phase AD): the person stays on the floor. ``why`` is
+        kept on the site and in exports, never in the group post. ``now`` (minutes, today only) refuses a break that
+        has started."""
+        why = _tidy(why)[:200]
+        if not why:
+            raise ValueError("Say why the break is cancelled.")
+        row, week, span = self._shift(program, on, name)
+        plan = {b["idx"]: b for b in self.plan_for(program, on, name, week)}
+        if idx not in plan:
+            raise BreakRefused("That break is not on the plan.")
+        kept = next((r for r in self.store.list_actual_breaks(program, [on.isoformat()])
+                     if r["associate"] == name and r["idx"] == idx and r["kind"] == plan[idx]["kind"]), None)
+        if kept and kept.get("cancelled"):
+            raise ValueError(f"{name}'s {plan[idx]['kind']} is already cancelled.")
+        start = kept["start"] if kept else plan[idx]["start"]
+        if now is not None and start <= now:
+            raise ValueError("That break has started: it cannot be cancelled.")
+        kind = plan[idx]["kind"]
+        self.store.set_actual_break(program=program, shift_date=on.isoformat(), associate=name, idx=idx, kind=kind,
+                                    start=start, user_id=user_id, cancelled=1, why=why)
+        self._log(program, on, name, f"{kind} cancelled ({hm(start)}): {why}", user_id, "break",
+                  post=f"{kind} at {hm(start)} cancelled", ref=f"break:{name}:{idx}", before=hm(start),
+                  after="cancelled")
 
     def break_advice(self, program: str, on: date, name: str, idx: int, at: str,
                      measure: str = "interval") -> Dict[str, Any]:
@@ -823,7 +852,8 @@ class DayBook:
                 left.append(f"{'a ' if r['kind'] in AUX else ''}{what} {hm(r['start'])} to {hm(r['end_min'])}")
         left += [f"the status {r['status']}" for r in self.store.list_attendance(program, day)
                  if r["associate"] == name and r["status"] != "Present"]
-        left += [f"a moved {r['kind']}" for r in self.store.list_actual_breaks(program, day) if r["associate"] == name]
+        left += [f"a {'cancelled' if r.get('cancelled') else 'moved'} {r['kind']}"
+                 for r in self.store.list_actual_breaks(program, day) if r["associate"] == name]
         if left:
             listed = left[0] if len(left) == 1 else ", ".join(left[:-1]) + " and " + left[-1]
             raise ValueError(f"{name} still has {listed} on this shift: cancel or set those back first.")

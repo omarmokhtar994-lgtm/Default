@@ -505,8 +505,25 @@ function homeRefresh(now) {
       fits.hidden = !(found.fits || []).length;
     }).catch(function () { if (mine === seq) { result.textContent = "The check did not answer: try again."; } });
   }
+  var cancelRow = dlg.querySelector("[data-cancel-row]"), cancelAsk = dlg.querySelector("[data-cancel-ask]");
+  var stepper = dlg.querySelector(".stepper");
   function openBreak(el, at) {
-    current = { name: el.dataset.name, date: el.dataset.date, idx: el.dataset.idx };
+    current = { name: el.dataset.name, date: el.dataset.date, idx: el.dataset.idx, kind: el.dataset.kind,
+                minutes: el.dataset.minutes };
+    // Phase AD: a cancelled break only comes back (Back to plan); any other can also be cancelled, with a reason
+    var gone = el.dataset.cancelled === "1";
+    if (cancelAsk) { cancelAsk.hidden = true; }
+    if (cancelRow) { cancelRow.hidden = gone; }
+    stepper.hidden = gone; keep.hidden = gone;
+    if (gone) {
+      dlg.querySelector("#brk-h").textContent = "Bring back " + el.dataset.name + "'s " + el.dataset.kind;
+      dlg.querySelector("[data-who]").textContent = el.dataset.minutes + " minutes, planned " + el.dataset.planned +
+        ", cancelled. Back to plan puts it back at " + el.dataset.planned + ".";
+      result.textContent = ""; fits.hidden = true; ask.hidden = true;
+      dlg.showModal();
+      dlg.querySelector("[data-plan]").focus();
+      return;
+    }
     var personLink = dlg.querySelector("[data-person-link]");
     if (personLink && root.dataset.personUrl) {
       personLink.href = root.dataset.personUrl + "&who=" + encodeURIComponent(el.dataset.name) + "#person";
@@ -539,6 +556,27 @@ function homeRefresh(now) {
   }
   keep.addEventListener("click", function () { save(input.value); });
   dlg.querySelector("[data-plan]").addEventListener("click", function () { save(""); });
+  if (cancelRow && cancelAsk) {
+    var why = cancelAsk.querySelector("input[name=why]");
+    cancelRow.querySelector("[data-cancel-break]").addEventListener("click", function () {
+      cancelAsk.querySelector("[data-cancel-what]").textContent = "Cancel " + current.kind + " for " + current.name + "?";
+      cancelAsk.querySelector("[data-cancel-mins]").textContent = current.minutes;
+      cancelAsk.hidden = false; why.value = ""; why.focus();
+    });
+    cancelAsk.querySelector("[data-cancel-no]").addEventListener("click", function () { cancelAsk.hidden = true; });
+    cancelAsk.querySelector("[data-cancel-yes]").addEventListener("click", function () {
+      var yes = this;
+      if (!why.value.trim()) { result.textContent = "Say why the break is cancelled."; why.focus(); return; }
+      yes.disabled = true;
+      var fields = { date: current.date, associate: current.name, idx: current.idx, why: why.value };
+      var tick = dlg.querySelector("input[name=post]");
+      if (tick) { fields.post_asked = "1"; if (tick.checked) { fields.post = "1"; } }
+      post(root.dataset.cancelUrl, fields).then(function (r) {
+        if (r._ok) { window.location.reload(); return; }
+        yes.disabled = false; result.textContent = r.error || "The break was not cancelled.";
+      });
+    });
+  }
 
   // timeline: drag a break sideways (5-minute steps), or Enter / click to type the time
   Array.prototype.forEach.call(root.querySelectorAll("rect.brk"), function (rect) {
@@ -546,6 +584,7 @@ function homeRefresh(now) {
       if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openBreak(rect); }
     });
     rect.addEventListener("pointerdown", function (e) {
+      if (rect.dataset.cancelled === "1") { openBreak(rect); return; }  // nothing to drag: it only comes back
       var svg = rect.ownerSVGElement, box = svg.getBoundingClientRect(), x0 = parseFloat(rect.getAttribute("x"));
       var startX = e.clientX, moved = 0;
       rect.setPointerCapture(e.pointerId);

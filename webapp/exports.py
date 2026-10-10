@@ -183,7 +183,7 @@ def _programs(days, program):
 
 def _breaks(store, days, weeks, start, end, program, user_id, measure):
     yield ["Shift date", "Program", "Associate", "Slot", "Shift", "Break", "Minutes", "Planned", "Taken", "Moved by",
-           "Moved at", "Status"]
+           "Moved at", "Status", "Cancelled because"]  # Phase AD: a break the RTA cancelled, and why
     for p in _programs(days, program):
         moved = {(r["shift_date"], r["associate"], r["idx"]): r for r in store.actual_breaks_between(
             start.isoformat(), end.isoformat(), p)}
@@ -207,13 +207,14 @@ def _breaks(store, days, weeks, start, end, program, user_id, measure):
                 for b in plan:
                     m = moved.get((day.isoformat(), a["name"], b["idx"]))
                     m = m if m and m["kind"] == b["kind"] else None  # a move kept against another plan is not this break
-                    taken = "" if state in ABSENT else _hm(m["start"] if m else b["start"])
+                    gone = bool(m and m.get("cancelled"))
+                    taken = "" if state in ABSENT else ("Cancelled" if gone else _hm(m["start"] if m else b["start"]))
                     yield [day.isoformat(), p, a["name"], a.get("slot", ""), shift, b["kind"],
                            b["minutes"], _hm(b["start"]), taken, m["by_name"] if m else "", _when(m["at"]) if m else "",
-                           state]
+                           state, m["why"] if gone else ""]
                 for r in added.get((day.isoformat(), a["name"]), []):
                     yield [day.isoformat(), p, a["name"], a.get("slot", ""), shift, r["kind"], r["end_min"] - r["start"],
-                           "", _hm(r["start"]), r["by_name"], _when(r["at"]), f"{state}, added on the day"]
+                           "", _hm(r["start"]), r["by_name"], _when(r["at"]), f"{state}, added on the day", ""]
 
 
 def _changes(store, days, weeks, start, end, program, user_id, measure):

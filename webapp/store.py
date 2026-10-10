@@ -290,6 +290,12 @@ class Store:
             if "all_programs" not in people:
                 db.execute("alter table users add column all_programs integer not null default 0")
                 db.execute("update users set all_programs = 1")
+            # Phase AD: a break the RTA cancelled keeps the reason; rows from before were never cancelled.
+            have = {row["name"] for row in db.execute("pragma table_info(actual_breaks)")}
+            if "cancelled" not in have:
+                db.execute("alter table actual_breaks add column cancelled integer not null default 0")
+            if "why" not in have:
+                db.execute("alter table actual_breaks add column why text not null default ''")
             # Phase T: an aux says who it is with and why; rows from before keep both empty.
             for table in ("attendance", "activities"):
                 have = {row["name"] for row in db.execute(f"pragma table_info({table})")}

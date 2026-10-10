@@ -73,7 +73,7 @@
 <p id="day-status" class="notice" role="status" hidden></p>
 
 <div data-day data-program="{{ program }}" data-step="{{ v.interval }}" data-measure="{{ measure }}"
-     data-att-url="{{ url_for('day_attendance') }}" data-break-url="{{ url_for('day_break') }}" data-advice-url="{{ url_for('day_break_advice') }}"
+     data-att-url="{{ url_for('day_attendance') }}" data-break-url="{{ url_for('day_break') }}" data-cancel-url="{{ url_for('day_break_cancel') }}" data-advice-url="{{ url_for('day_break_advice') }}"
      data-person-url="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view=tab if tab in ('board',) else none) }}">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <svg class="defs" aria-hidden="true" focusable="false" width="0" height="0"><defs><pattern id="hatch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="10" class="hatch-line"/></pattern><pattern id="hatch-ok" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="10" class="hatch-line ok"/></pattern></defs></svg>
@@ -142,7 +142,8 @@
         {% if s.status in absent_states %}<rect class="tl-away gone" x="{{ x0 }}" y="8" width="{{ x1 - x0 }}" height="14" fill="url(#hatch)"><title>{{ s.status }}</title></rect>{% else %}
         {% for b in s.breaks %}{% if b.moved %}<rect class="tl-ghost" x="{{ b.planned_start }}" y="5" width="{{ b.minutes }}" height="20" rx="2"/>{% endif %}
         <rect class="brk{% if b.moved %} moved{% endif %}" data-name="{{ lane.name }}" data-date="{{ d.isoformat() }}" data-idx="{{ b.idx }}" data-kind="{{ b.kind }}" data-minutes="{{ b.minutes }}" data-start="{{ hm(b.start) }}" data-planned="{{ hm(b.planned_start) }}" data-shift="{{ s.label }}" x="{{ b.start }}" y="5" width="{{ b.minutes }}" height="20" rx="2" tabindex="0" role="button" aria-label="{{ lane.name }}, {{ b.kind }} {{ hm(b.start) }}, {{ b.minutes }} minutes{% if b.moved %}, moved from {{ hm(b.planned_start) }}{% endif %}: press Enter to move"><title>{{ b.kind }} {{ hm(b.start) }} ({{ b.minutes }} min){% if b.moved %}, planned {{ hm(b.planned_start) }}{% endif %}</title></rect>
-        {% endfor %}{% endif %}
+        {% endfor %}
+        {% for b in s.cancelled %}<rect class="brk cancelled" data-name="{{ lane.name }}" data-date="{{ d.isoformat() }}" data-idx="{{ b.idx }}" data-kind="{{ b.kind }}" data-minutes="{{ b.minutes }}" data-start="{{ hm(b.planned_start) }}" data-planned="{{ hm(b.planned_start) }}" data-shift="{{ s.label }}" data-cancelled="1" x="{{ b.planned_start }}" y="5" width="{{ b.minutes }}" height="20" rx="2" tabindex="0" role="button" aria-label="{{ lane.name }}, {{ b.kind }} {{ hm(b.planned_start) }} cancelled: press Enter to bring it back"><title>{{ b.kind }} {{ hm(b.planned_start) }}, cancelled</title></rect>{% endfor %}{% endif %}
         {% for a in s.activities if a.kind != 'Called in' %}{% set a0 = [a.start, 0]|max %}{% set a1 = [a.end, 1440]|min %}{% if a1 > a0 %}<rect class="tl-act {{ 'ot' if a.kind == 'Overtime' else ('vto' if a.kind == 'VTO' else 'aux') }}{% if a.billable and a.kind not in ('Overtime', 'VTO') %} billable{% endif %}" x="{{ a0 }}" y="{{ 8 if a.kind == 'Overtime' else 2 }}" width="{{ a1 - a0 }}" height="{{ 14 if a.kind == 'Overtime' else 4 }}"{% if a.kind != 'Overtime' %} fill="url(#{{ 'hatch-ok' if a.billable and measure == 'interval' else 'hatch' }})"{% endif %}><title>{{ a.kind }} {{ hm(a.start) }} to {{ hm(a.end) }}{% if a.kind not in ('Overtime', 'VTO') %} ({{ 'billable' if a.billable else 'non-billable' }}){% endif %}</title></rect>{% endif %}{% endfor %}{% endfor %}
       </svg>
     </div>{% endif %}{% endfor %}
@@ -313,7 +314,14 @@
     <div class="fits" hidden><p class="dim">Where this break fits best today:</p><ul></ul></div>
     {% if post_to and 'break' in post_kinds %}{{ post_tick() }}{% endif %}
     <p class="dlg-ask" hidden><b>Keep this time anyway?</b></p>
-    <div class="btns"><button class="primary" type="button" data-keep>Save</button><button type="button" data-plan>Back to plan</button><button type="button" data-cancel>Cancel</button></div>
+    <div class="btns"><button class="primary" type="button" data-keep>Save</button><button type="button" data-plan>Back to plan</button><button type="button" data-cancel>Close</button></div>
+    {# Phase AD (sample 03): cancel a break, with a reason kept on the site and in exports, not in the group post #}
+    <div class="btns" data-cancel-row><button class="danger" type="button" data-cancel-break>Cancel break</button></div>
+    <div class="brk-cancel" data-cancel-ask hidden>
+      <p><b data-cancel-what></b> They stay on the floor for those <span data-cancel-mins></span> minutes. Back to plan or Undo brings it back.</p>
+      <label>Why <input type="text" name="why" maxlength="200" placeholder="A short reason" autocomplete="off"></label>
+      <div class="btns"><button class="danger" type="button" data-cancel-yes>Cancel the break</button><button type="button" data-cancel-no>Keep the break</button></div>
+    </div>
     <p><a href="#" data-person-link>Open this person's day</a></p>
   </form>
 </dialog>

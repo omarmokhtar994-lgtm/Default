@@ -37,6 +37,7 @@ LATE_EARLY = {"Late", "Left early"}
 AUX = {"Training", "Coaching", "Meeting", "System issue"}  # billable or not, chosen when it is recorded
 EXTRA_BREAKS = ("Break", "Lunch")  # added on the day in RTA (owner, 2026-10-08): always off the floor
 TIMED = LATE_EARLY | AUX  # may carry a from/to time
+CANCELLED = "cancelled"  # Phase AD: an ``actual`` break value meaning the RTA cancelled that break (a reason is kept)
 MEASURES = {"interval": "Interval compliance", "sl": "Service level"}
 KEEP = 8  # workbooks kept read
 _CACHE: Dict[Tuple[str, float], Dict[str, Any]] = {}
@@ -306,6 +307,8 @@ def check_break(week: Dict[str, Any], day: int, offset: int, name: str, idx: int
         if other == idx:
             continue
         s = actual.get((offset, name, other), b["start"])
+        if s == CANCELLED:  # Phase AD: a cancelled break takes no time
+            continue
         if start < s + b["minutes"] and s < start + length:
             raise BreakRefused(f"The break would overlap {name}'s {b['kind']}.")
 
@@ -346,9 +349,12 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
                if a["kind"] == "VTO" or a["kind"] in EXTRA_BREAKS
                or (a["kind"] in AUX and not (a.get("billable") and measure == "interval"))]
         extra = [(a["start"], a["end"]) for a in acts if a["kind"] == "Overtime"]
-        breaks = []
+        breaks, cancelled = [], []
         for b in seg["planned"]:
             moved = actual.get((seg["offset"], seg["name"], b["idx"]))
+            if moved == CANCELLED:  # Phase AD: on the floor instead; drawn apart so it can be brought back
+                cancelled.append({**b, "planned_start": b["start"]})
+                continue
             start = b["start"] if moved is None else moved + 1440 * seg["offset"]
             breaks.append({**b, "planned_start": b["start"], "start": start, "moved": moved is not None})
         for i in range(slots):
@@ -371,6 +377,7 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
                                  "start": seg["start"],
                                  "end": seg["end"], "status": status, "billable": billable,
                                  "from": mark.get("from"), "to": mark.get("to"), "away": away, "breaks": breaks,
+                                 "cancelled": cancelled,
                                  "activities": acts, "with_whom": mark.get("with_whom", ""),
                                  "why": mark.get("why", ""), "with_dept": mark.get("with_dept", "")})
 
@@ -467,6 +474,36 @@ def _hm(minute: int) -> str:
     return f"{minute // 60:02d}:{minute % 60:02d}"
 
 
+def _across_cancel(seg: Dict[str, Any], first: int, second: int) -> bool:
+    """Whether a cancelled break sits between breaks ``first`` and ``second`` (plan order) of ``seg``: the long gap
+    a cancel leaves is wanted, so the program's maximum gap is not held against it (Phase AD)."""
+    lo, hi = min(first, second), max(first, second)
+    return any(lo < c["idx"] < hi for c in seg.get("cancelled", []))
+
+
+def break_window(seg: Dict[str, Any], b: Dict[str, Any], starts: Dict[int, int], now: int,
+                 lo_gap: Optional[int], hi_gap: Optional[int]) -> Tuple[int, int]:
+    """The earliest and latest start for break ``b`` of ``seg`` (minutes), its neighbours at ``starts`` (by break
+    index): inside the shift, not before ``now``, and within the program's gaps to the breaks either side (the
+    maximum gap not held across a cancelled break)."""
+    others = sorted(((starts[o["idx"]], o) for o in seg["breaks"] if o["idx"] != b["idx"]), key=lambda x: x[0])
+    before = [(s, o) for s, o in others if o["idx"] < b["idx"]]
+    after = [(s, o) for s, o in others if o["idx"] > b["idx"]]
+    lo = max(seg["start"], now)
+    hi = seg["end"] - b["minutes"]
+    if before:
+        prev_end = before[-1][0] + before[-1][1]["minutes"]
+        lo = max(lo, prev_end + (lo_gap or 0))
+        if hi_gap is not None and not _across_cancel(seg, before[-1][1]["idx"], b["idx"]):
+            hi = min(hi, prev_end + hi_gap)
+    if after:
+        nxt = after[0][0]
+        hi = min(hi, nxt - (lo_gap or 0) - b["minutes"])
+        if hi_gap is not None and not _across_cancel(seg, b["idx"], after[0][1]["idx"]):
+            lo = max(lo, nxt - hi_gap - b["minutes"])
+    return lo, hi
+
+
 def advice(view: Dict[str, Any], inputs: Dict[str, Any], name: str, idx: int, start: int) -> Dict[str, Any]:
     """For moving break ``idx`` of ``name``'s shift that starts this day to ``start`` (minutes
     from this day's midnight): the gap warnings (the program's Break Absolute Minimum / Normal
@@ -479,8 +516,10 @@ def advice(view: Dict[str, Any], inputs: Dict[str, Any], name: str, idx: int, st
     lo_gap, hi_gap = inputs.get("gap_min"), inputs.get("gap_max")
 
     def gaps(m: int) -> List[Tuple[str, str, int]]:
-        seq = sorted([(b["start"], b["minutes"], b["kind"]) for b in others] + [(m, me["minutes"], me["kind"])])
-        return [(a[2], b[2], b[0] - (a[0] + a[1])) for a, b in zip(seq, seq[1:])]
+        seq = sorted([(b["start"], b["minutes"], b["kind"], b["idx"]) for b in others]
+                     + [(m, me["minutes"], me["kind"], idx)])
+        return [(a[2], b[2], b[0] - (a[0] + a[1])) for a, b in zip(seq, seq[1:])
+                if not (hi_gap is not None and b[0] - (a[0] + a[1]) > hi_gap and _across_cancel(seg, a[3], b[3]))]
 
     warnings = []
     for a, b, gap in gaps(start):
@@ -824,21 +863,7 @@ def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: i
 
     def positions(lane, seg, b) -> List[int]:
         name = lane["name"]
-        others = sorted(((starts[(name, o["idx"])], o) for o in seg["breaks"] if o["idx"] != b["idx"]), key=lambda x: x[0])
-        before = [(s, o) for s, o in others if o["idx"] < b["idx"]]
-        after = [(s, o) for s, o in others if o["idx"] > b["idx"]]
-        lo = max(seg["start"], now)
-        hi = seg["end"] - b["minutes"]
-        if before:
-            prev_end = before[-1][0] + before[-1][1]["minutes"]
-            lo = max(lo, prev_end + (lo_gap or 0))
-            if hi_gap is not None:
-                hi = min(hi, prev_end + hi_gap)
-        if after:
-            nxt = after[0][0]
-            hi = min(hi, nxt - (lo_gap or 0) - b["minutes"])
-            if hi_gap is not None:
-                lo = max(lo, nxt - hi_gap - b["minutes"])
+        lo, hi = break_window(seg, b, {o["idx"]: starts[(name, o["idx"])] for o in seg["breaks"]}, now, lo_gap, hi_gap)
         out = []
         for s in range(lo + (-lo) % STEP, hi + 1, STEP):
             if s == starts[(name, b["idx"])]:

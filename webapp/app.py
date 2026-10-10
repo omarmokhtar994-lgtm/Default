@@ -2216,6 +2216,24 @@ def create_app(config: Dict[str, Any]) -> Flask:
             return jsonify(error=str(exc)), 400
         return jsonify(ok=True)
 
+    @app.route("/day/break/cancel", methods=["POST"])
+    @login_required
+    def day_break_cancel():  # type: ignore[no-untyped-def]
+        """Phase AD: cancel a break with a reason (sample 03); answered like a break move."""
+        try:
+            program, on, name = _day_form()
+            with leave_out(_left_out_asked()):
+                _days().cancel_break(program, on, name, _break_idx(), request.form.get("why", ""), g.user["id"],
+                                     now=_minute_now(on))
+        except ValueError as exc:  # BreakRefused is a ValueError
+            return jsonify(error=str(exc)), 400
+        return jsonify(ok=True)
+
+    def _minute_now(on: Optional[date]) -> Optional[int]:
+        """Minutes past midnight now, Egypt time, when ``on`` is today; None for any other day."""
+        clock_now = datetime.now(EGYPT)
+        return clock_now.hour * 60 + clock_now.minute if clock_now.date() == on else None
+
     def _back_to_day(program: str, on: Optional[date], view: str, cover: str = ""):  # type: ignore[no-untyped-def]
         args = {"program": program, "date": on.isoformat() if on else None,
                 "view": view if view in ("board", "adherence", "meeting", "cover", "replan", "channels") else None,

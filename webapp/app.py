@@ -38,7 +38,9 @@ from .handover import note as handover_note
 from .exports import EXPORT_SECONDS, KINDS as EXPORT_KINDS, MAX_DAYS as MAX_EXPORT_DAYS, build as build_export
 from .outcome import cannot_schedule, read as read_outcome, view as outcome_view
 from .access import Access, role
-from .notify import Notifier, post_json
+from .notify import DEFAULT_HOLD, HOLDS, KINDS as NOTIFY_KINDS, DEFAULT_KINDS as NOTIFY_DEFAULT_KINDS, \
+    MODE_WORDS, MODES as NOTIFY_MODES, SERVICES, Notifier, Post, check_link, last_line, link_end, post_json, \
+    post_result, post_what
 from .programs import ProgramBook
 from .auth import admin_required, check_csrf, csrf_token, load_user, login_required, manager_required
 from .program_page import build, overview, weeks_to_show
@@ -399,7 +401,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
     NAV_ACTIVE = {"home": "home", "overview_page": "overview", "day_page": "day", "week_page": "week",
                   "run_week": "week", "run_schedules": "schedules", "program": "analysis", "programs": "programs",
                   "exports_page": "exports", "team_page": "team", "admin_users": "people", "program_setup": "setup",
-                  "with_setup": "with", "channel_setup": "channels"}
+                  "with_setup": "with", "channel_setup": "channels", "notifications_page": "notify"}
     PROGRAM_PAGES = {"overview": "/overview?program={key}", "day": "/day?program={key}", "week": "/week?program={key}",
                      "schedules": "/schedules?program={key}", "analysis": "/programs/{key}",
                      "home": "/?program={key}",  # Home shows the program picked (owner, 2026-10-08)
@@ -1080,6 +1082,103 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 for n, lang in people.roster(program["id"])]
         return render_template("channel_setup.html", program=program, key=key, rows=rows, words=channel_words,
                                choices=[(p["name"], p["units"][0]) for p in mine])
+
+    # ---------------------------------------------------------------- group posts (Phase AB)
+    def _notify_units() -> List[Tuple[str, str]]:
+        """Every LOB (and program without LOBs) as (key, "Program, LOB"), in the left menu's order."""
+        return [pair for p in _unit_choices(ProgramBook(app.extensions["store"]).tree()) for pair in p["choices"]]
+
+    def _notify_fields(saved: Dict[str, Any]) -> Dict[str, Any]:
+        """The Notifications form, checked: a pasted link replaces the saved one, an empty field keeps it."""
+        link, service = request.form.get("link", "").strip(), saved.get("service", "")
+        if link:
+            service = check_link(link)
+        else:
+            link = saved.get("link", "")
+        mode = request.form.get("mode", "off")
+        mode = mode if mode in NOTIFY_MODES else "off"
+        if mode != "off" and not link:
+            raise ValueError("Paste the group link first, or leave posting Off.")
+        hold = request.form.get("hold", type=int)
+        morning = request.form.get("morning", "").strip()
+        if morning and not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", morning):
+            raise ValueError("Pick a time like 07:30, or leave it empty.")
+        return {"link": link, "service": service, "mode": mode,
+                "kinds": ",".join(k for k in NOTIFY_KINDS if k in request.form.getlist("kinds")),
+                "hold": hold if hold in HOLDS else DEFAULT_HOLD, "morning": morning,
+                "morning_day": "before" if request.form.get("morning_day") == "before" else "same"}
+
+    def _notify_unit() -> Tuple[str, str]:
+        key, labels = request.values.get("unit", ""), dict(_notify_units())
+        if key not in labels:
+            abort(404, description="There is no such LOB. Pick one from the list on the Notifications page.")
+        return key, labels[key]
+
+    @app.route("/notifications", methods=["GET", "POST"])
+    @admin_required
+    def notifications_page():  # type: ignore[no-untyped-def]
+        """Teams and Slack group posts (Phase AB, approved sample 02): each LOB's group link, kept on this server and
+        never shown again in full; what posts; how long changes wait; the last posts and their result."""
+        store, units = app.extensions["store"], _notify_units()
+        if not units:
+            flash("There is no LOB to post for yet. Add one under LOBs and defaults.")
+            return redirect(url_for("home"))
+        if request.method == "POST":
+            key, label_ = _notify_unit()
+            try:
+                fields = _notify_fields(store.get_notify(key) or {})
+            except ValueError as exc:
+                flash(str(exc))
+                return redirect(url_for("notifications_page", unit=key), code=303)
+            store.set_notify(key, **fields, site=request.host_url, saved_by=g.user["id"], saved_at=time.time())
+            said = f"Posting {MODE_WORDS[fields['mode']].lower()}; " + (
+                f"{SERVICES[fields['service']]} link ending {link_end(fields['link'])}" if fields["link"] else
+                "no group link")
+            _record("notify_saved", program=key, subject=label_, detail=said)
+            flash(f"Notifications saved for {label_}.")
+            return redirect(url_for("notifications_page", unit=key), code=303)
+        key = request.args.get("unit", "")
+        key = key if key in dict(units) else units[0][0]
+        saved = store.get_notify(key) or {}
+        rows = []
+        for k, text in units:
+            s = store.get_notify(k) or {}
+            newest = store.notify_posts(unit=k, limit=1)
+            rows.append({"key": k, "label": text, "mode": MODE_WORDS[s.get("mode") or "off"],
+                         "service": SERVICES.get(s.get("service", ""), "–") if s.get("link") else "–",
+                         "last": last_line(newest[0]) if newest else
+                         ("No posts yet" if s.get("link") else "No group link yet")})
+        posts = store.notify_posts(unit=key, limit=10)
+        shown = next((p for p in posts if p["what"] != "test" and p["status"] in ("sent", "preview")), None)
+        by = store.get_user(saved["saved_by"]) if saved.get("saved_by") else None
+        return render_template("notifications.html", unit=key, unit_label=dict(units)[key], rows=rows, saved=saved,
+                               mode=saved.get("mode") or "off", kinds=NOTIFY_KINDS, holds=HOLDS,
+                               ticked=(saved["kinds"].split(",") if saved else NOTIFY_DEFAULT_KINDS),
+                               hold=int(saved.get("hold") or DEFAULT_HOLD), end=link_end(saved.get("link", "")),
+                               service_name=SERVICES.get(saved.get("service", ""), ""),
+                               saved_by=by["display_name"] if by else "",
+                               last_post=Post(**json.loads(shown["body"])) if shown else None,
+                               recent=[(p, post_what(p), *post_result(p)) for p in posts])
+
+    @app.route("/notifications/test", methods=["POST"])
+    @admin_required
+    def notifications_test():  # type: ignore[no-untyped-def]
+        key, label_ = _notify_unit()
+        ok, said = app.extensions["notifier"].send_test(key, g.user["display_name"])
+        if (app.extensions["store"].get_notify(key) or {}).get("link"):
+            _record("notify_tested", program=key, subject=label_, detail=said)
+        flash(said)
+        return redirect(url_for("notifications_page", unit=key), code=303)
+
+    @app.route("/notifications/remove", methods=["POST"])
+    @admin_required
+    def notifications_remove():  # type: ignore[no-untyped-def]
+        key, label_ = _notify_unit()
+        app.extensions["store"].set_notify(key, link="", service="", mode="off", saved_by=g.user["id"],
+                                           saved_at=time.time())
+        _record("notify_removed", program=key, subject=label_, detail="Posting off")
+        flash(f"Group link removed for {label_}; posting is off.")
+        return redirect(url_for("notifications_page", unit=key), code=303)
 
     @app.route("/setup/programs", methods=["GET", "POST"])
     @admin_required

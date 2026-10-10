@@ -40,7 +40,9 @@ OTHER_EVENTS = {"run_uploaded": "Run uploaded", "run_started": "Run started", "r
                 "program_set_up": "Programs and LOBs", "program_deleted": "Program deleted",
                 "lob_deleted": "LOB deleted", "with_list_changed": "Departments and people",
                 "channels_changed": "Associate channels", "interval_target_changed": "Interval target",
-                "channel_needs_added": "Channel needs added", "run_deleted": "Schedule deleted"}
+                "channel_needs_added": "Channel needs added", "run_deleted": "Schedule deleted",
+                "notify_saved": "Notifications changed", "notify_removed": "Group link removed",
+                "notify_tested": "Test message sent"}
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 RISKY = ("=", "+", "-", "@", "\t", "\r")
 

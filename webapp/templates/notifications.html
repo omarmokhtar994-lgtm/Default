@@ -1,0 +1,69 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{% extends "base.html" %}
+{% block title %}Notifications on Team Scheduler{% endblock %}
+{% block content %}
+<div class="phead"><div>
+  <h1>Notifications</h1>
+  <p class="byline">Post RTA changes to a Teams or Slack group. Each LOB posts to the group whose link it has; the same link can serve several LOBs.</p>
+</div></div>
+
+<div class="scroll" role="region" tabindex="0" aria-label="LOBs and where they post (scrolls sideways)"><table class="nf-lobs">
+  <thead><tr><th scope="col">LOB</th><th scope="col">Posts to</th><th scope="col">Posting</th><th scope="col">Last post</th></tr></thead>
+  <tbody>{% for r in rows %}<tr{% if r.key == unit %} class="on"{% endif %}><th scope="row"><a href="{{ url_for('notifications_page', unit=r.key) }}"{% if r.key == unit %} aria-current="true"{% endif %}>{{ r.label }}</a></th><td>{{ r.service }}</td><td>{{ r.mode }}</td><td>{{ r.last }}</td></tr>{% endfor %}</tbody>
+</table></div>
+
+<div class="nf-grid">
+<section class="panel nf-form" aria-labelledby="nf-h">
+  <h2 id="nf-h">{{ unit_label }}</h2>
+  <form method="post" action="{{ url_for('notifications_page') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="unit" value="{{ unit }}">
+    <div class="nf-link">
+      <label for="nf-link">{{ service_name ~ ' group link' if saved.link else 'Group link' }}</label>
+      {% if saved.link %}<p class="dim" id="nf-link-said">Ends in …{{ end }}. Saved {{ when(saved.saved_at) }}{% if saved_by %} by {{ saved_by }}{% endif %}. Kept on this server; never shown again in full.</p>{% endif %}
+      <input type="password" name="link" id="nf-link" autocomplete="off" spellcheck="false" placeholder="{{ 'Paste a new link to replace it' if saved.link else 'Paste the link from Teams or Slack' }}"{% if saved.link %} aria-describedby="nf-link-said"{% endif %}>
+    </div>
+    <fieldset class="nf-modes"><legend>Posting</legend>
+      {% for value, word, note in (('on', 'On', 'Posts to the group'), ('preview', 'Preview only', 'Shown here; nothing is sent'), ('off', 'Off', 'Nothing is posted')) %}<label><input type="radio" name="mode" value="{{ value }}"{% if mode == value %} checked{% endif %}>{{ word }}<small>{{ note }}</small></label>{% endfor %}
+    </fieldset>
+    <fieldset class="nf-kinds"><legend>Post these changes</legend>
+      <div class="nf-events">{% for k, text in kinds.items() %}<label><input type="checkbox" name="kinds" value="{{ k }}"{% if k in ticked %} checked{% endif %}> {{ text }}</label>{% endfor %}</div>
+      <p class="dim">Never posted: sick and unplanned leave, attendance set back to present, and the why of any aux.</p>
+    </fieldset>
+    <div class="nf-row"><label>Wait before posting <select name="hold">{% for s, word in holds.items() %}<option value="{{ s }}"{% if s == hold %} selected{% endif %}>{{ word }}</option>{% endfor %}</select></label>
+      <p class="dim">Changes made in that time go as one post; a change undone in that time is not posted.</p></div>
+    <fieldset class="nf-morning"><legend>Day's breaks post</legend>
+      <p class="dim">Everyone's planned breaks for the day, by shift, posted once at this time. Leave the time empty for none.</p>
+      <div class="nf-row"><label>At <input type="time" name="morning" value="{{ saved.morning or '' }}" step="300"></label>
+        <label>Posted <select name="morning_day"><option value="same"{% if saved.morning_day != 'before' %} selected{% endif %}>On the day</option><option value="before"{% if saved.morning_day == 'before' %} selected{% endif %}>The evening before</option></select></label></div>
+    </fieldset>
+    <div class="btnrow"><button type="submit" class="primary">Save</button>{% if saved.link %}<button type="submit" formaction="{{ url_for('notifications_test') }}" formnovalidate>Send test message</button><button type="submit" class="danger" formaction="{{ url_for('notifications_remove') }}" formnovalidate>Remove link</button>{% endif %}</div>
+    {% if saved.link %}<p class="dim">Send test message uses the saved link: save a new link first.</p>{% endif %}
+  </form>
+</section>
+
+<div class="nf-side">
+<section class="nf-last" aria-labelledby="nf-last-h">
+  <h2 id="nf-last-h">The last post, as the group saw it</h2>
+  {% if last_post %}<div class="nf-card"><b class="t">{{ last_post.title }}</b>{% for heading, lines in last_post.sections %}{% if heading %}<p class="h">{{ heading }}</p>{% endif %}<ul>{% for n, t in lines %}<li><b>{{ n }}</b>: {{ t }}</li>{% endfor %}</ul>{% endfor %}{% if last_post.footer %}<small>{{ last_post.footer }}</small>{% endif %}</div>
+  <p class="dim">Teams and Slack each draw it in their own style; the lines are the same.</p>
+  {% else %}<p class="empty">Nothing posted yet. Save a link, then Send test message to check it.</p>{% endif %}
+</section>
+<section class="nf-posts" aria-labelledby="nf-rec-h">
+  <h2 id="nf-rec-h">Recent posts</h2>
+  {% if recent %}<div class="scroll" role="region" tabindex="0" aria-label="Recent posts (scrolls sideways)"><table class="nf-recent">
+    <thead><tr><th scope="col">Time</th><th scope="col">What</th><th scope="col">Result</th></tr></thead>
+    <tbody>{% for p, what, state, said in recent %}<tr><td>{{ when(p.sent_at or p.made_at) }}</td><td>{{ what }}</td><td><span class="post-st {{ state }}">{{ said }}</span></td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="empty">No posts yet.</p>{% endif %}
+</section>
+</div>
+</div>
+
+<details class="nf-how"><summary>Where the group link comes from (about two minutes, once per group)</summary>
+  <ol>
+    <li><b>Teams:</b> in the channel, More options (…) &gt; Workflows &gt; "Send webhook alerts to a channel". Name it "Team Scheduler", pick the team and channel, then copy the link it gives you. The workflow belongs to whoever makes it, so a shared account is safer.</li>
+    <li><b>Slack:</b> api.slack.com/apps &gt; Create New App &gt; From scratch &gt; Incoming Webhooks &gt; On &gt; Add New Webhook &gt; pick the channel, then copy the link.</li>
+    <li>Paste the link here and Save, then Send test message. Anyone holding the link can post to the group, so paste it only here.</li>
+  </ol>
+</details>
+{% endblock %}

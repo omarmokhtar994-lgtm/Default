@@ -414,6 +414,32 @@ class Notifier:
                 out[i["log_id"]] = {"state": i["status"], "text": f"Not posted: {i['reason']}"}
         return out
 
+    # ------------------------------------------------------------------ the Notifications page
+    def send_test(self, unit: str, by_name: str) -> Tuple[bool, str]:
+        """Post a short test to the LOB's saved group now (an admin pressed Send test message, so the answer is shown
+        at once); the result is kept with the LOB's posts. Returns (posted, what to tell the admin)."""
+        settings = self.store.get_notify(unit)
+        if not settings or not settings["link"]:
+            return False, "Save a group link first."
+        try:
+            service = check_link(settings["link"])
+        except ValueError:
+            return False, "The saved link is not a Teams or Slack group link: paste the link again."
+        now = self.clock()
+        post = Post(title=f"{self.label(unit)}: test from Team Scheduler",
+                    footer=f"Sent by {by_name} at {_hm(now)}. RTA changes for this LOB post here.")
+        try:
+            ok, code = self.transport(settings["link"], body_for(service, post))
+        except Exception:  # noqa: BLE001
+            log.exception("group posts: the test message for %s failed", unit)
+            ok, code = False, 0
+        reason = "" if ok else reason_for(service, code)
+        self.store.add_notify_post(unit=unit, shift_date=datetime.fromtimestamp(now, EGYPT).date().isoformat(),
+                                   what="test", service=service, count=0, status="sent" if ok else "failed",
+                                   sent_at=now if ok else None, reason=reason, body=json.dumps(asdict(post)),
+                                   made_at=now)
+        return ok, (f"Test message posted to {SERVICES[service]}." if ok else f"Test message not posted: {reason}.")
+
     # ------------------------------------------------------------------ the thread
     def start(self, every: float = 15) -> None:
         """Send on a daemon thread every ``every`` seconds; an error is logged and the loop goes on."""
@@ -432,3 +458,42 @@ class Notifier:
 
     def stop(self) -> None:
         self._stop.set()
+
+
+# ----------------------------------------------------------------------------------------------- page words
+MODE_WORDS = {"on": "On", "preview": "Preview only", "off": "Off"}
+
+
+def _changes(count: int) -> str:
+    return f"{count} change{'' if count == 1 else 's'}"
+
+
+def post_what(p: Dict[str, Any]) -> str:
+    """What a kept post was, as the Notifications page lists it."""
+    return {"test": "Test message", "morning": "Day's breaks"}.get(p["what"], _changes(int(p["count"] or 0)))
+
+
+def post_result(p: Dict[str, Any]) -> Tuple[str, str]:
+    """(state, words) for a kept post: sent, waiting, preview, skipped or failed."""
+    name = SERVICES.get(p["service"], "the group")
+    tries = int(p["tries"] or 0)
+    if p["status"] == "sent":
+        return "sent", f"Posted to {name}" + (f" after {tries} retr{'y' if tries == 1 else 'ies'}" if tries else "")
+    if p["status"] == "preview":
+        return "preview", "Preview only: not sent"
+    if p["status"] == "waiting":
+        return "waiting", f"Waiting: trying again at {_hm(p['next_at'])}" if tries else "Waiting"
+    return p["status"], f"Not posted: {p['reason']}"
+
+
+def last_line(p: Dict[str, Any]) -> str:
+    """A LOB's newest post in a few words, for the list of LOBs."""
+    at = _hm(p["sent_at"] or p["made_at"])
+    what = {"test": "the test message", "morning": "the day's breaks"}.get(p["what"], _changes(int(p["count"] or 0)))
+    if p["status"] == "sent":
+        return f"Posted {what} at {at}"
+    if p["status"] == "preview":
+        return f"{what[0].upper() + what[1:]} would have been posted at {at}"
+    if p["status"] == "waiting":
+        return "Waiting to post"
+    return f"Not posted at {at}: {p['reason']}"

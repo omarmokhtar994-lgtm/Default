@@ -53,6 +53,7 @@
     {{ navlink('people', url_for('admin_users'), 'People') }}
     {{ navlink('with', url_for('with_setup', program=nav_unit or none), 'Departments and people') }}
     {{ navlink('channels', url_for('channel_setup', program=nav_unit or none), 'Associate channels') }}
+    {% if user.is_admin %}{{ navlink('notify', url_for('notifications_page'), 'Notifications') }}{% endif %}
     {% if user.is_admin %}{{ navlink('setup', url_for('program_setup'), 'LOBs and defaults') }}{% endif %}{% endif %}
   </nav>
   </details>

@@ -217,6 +217,52 @@ create table if not exists day_log (
     user_id integer not null,
     at real not null
 );
+create table if not exists notify_settings (
+    unit text primary key,
+    link text not null default '',
+    service text not null default '',
+    mode text not null default 'off',
+    kinds text not null default '',
+    hold integer not null default 120,
+    morning text not null default '',
+    morning_day text not null default 'same',
+    site text not null default '',
+    saved_by integer,
+    saved_at real
+);
+create table if not exists notify_items (
+    id integer primary key autoincrement,
+    log_id integer,
+    unit text not null,
+    shift_date text not null,
+    associate text not null,
+    kind text not null,
+    text text not null,
+    ref text not null default '',
+    before text not null default '',
+    after text not null default '',
+    by_name text not null default '',
+    at real not null,
+    status text not null,
+    reason text not null default '',
+    post_id integer
+);
+create index if not exists notify_items_unit on notify_items (unit, shift_date, status);
+create table if not exists notify_posts (
+    id integer primary key autoincrement,
+    unit text not null,
+    shift_date text not null,
+    what text not null,
+    service text not null default '',
+    count integer not null default 0,
+    status text not null,
+    tries integer not null default 0,
+    next_at real,
+    sent_at real,
+    reason text not null default '',
+    body text not null default '',
+    made_at real not null
+);
 """
 
 
@@ -730,12 +776,12 @@ class Store:
                              " left join users on users.id = activities.user_id where shift_date between ? and ?",
                              [start, end], program, user_id, "activities", "shift_date, program, associate, start")
 
-    def add_day_log(self, **fields: Any) -> None:
+    def add_day_log(self, **fields: Any) -> int:
         fields.setdefault("at", time.time())
         names = ", ".join(fields)
         marks = ", ".join("?" for _ in fields)
         with self._db() as db:
-            db.execute(f"insert into day_log ({names}) values ({marks})", tuple(fields.values()))
+            return int(db.execute(f"insert into day_log ({names}) values ({marks})", tuple(fields.values())).lastrowid)
 
     def list_day_log(self, program: str, shift_date: str) -> List[Dict[str, Any]]:
         with self._db() as db:
@@ -747,7 +793,69 @@ class Store:
         """Delete attendance, actual breaks and their log for shift dates before the one given."""
         with self._db() as db:
             return sum(db.execute(f"delete from {table} where shift_date < ?", (shift_date,)).rowcount
-                       for table in ("attendance", "actual_breaks", "activities", "day_log"))
+                       for table in ("attendance", "actual_breaks", "activities", "day_log", "notify_items",
+                                     "notify_posts"))
+
+    # ------------------------------------------------------------- group posts (Phase AB)
+    def get_notify(self, unit: str) -> Optional[Dict[str, Any]]:
+        with self._db() as db:
+            row = db.execute("select * from notify_settings where unit = ?", (unit,)).fetchone()
+        return dict(row) if row else None
+
+    def set_notify(self, unit: str, **fields: Any) -> None:
+        with self._db() as db:
+            db.execute("insert or ignore into notify_settings (unit) values (?)", (unit,))
+            if fields:
+                sets = ", ".join(f"{name} = ?" for name in fields)
+                db.execute(f"update notify_settings set {sets} where unit = ?", (*fields.values(), unit))
+
+    def list_notify(self) -> List[Dict[str, Any]]:
+        with self._db() as db:
+            return [dict(r) for r in db.execute("select * from notify_settings order by unit")]
+
+    def add_notify_item(self, **fields: Any) -> int:
+        names, marks = ", ".join(fields), ", ".join("?" for _ in fields)
+        with self._db() as db:
+            return int(db.execute(f"insert into notify_items ({names}) values ({marks})",
+                                  tuple(fields.values())).lastrowid)
+
+    def notify_items(self, unit: Optional[str] = None, shift_date: Optional[str] = None,
+                     status: Optional[str] = None, post_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        where = {"unit": unit, "shift_date": shift_date, "status": status, "post_id": post_id}
+        where = {k: v for k, v in where.items() if v is not None}
+        sql = "select * from notify_items" + (" where " + " and ".join(f"{k} = ?" for k in where) if where else "")
+        with self._db() as db:
+            return [dict(r) for r in db.execute(sql + " order by id", tuple(where.values()))]
+
+    def set_notify_items(self, ids: List[int], **fields: Any) -> None:
+        if not ids or not fields:
+            return
+        sets = ", ".join(f"{name} = ?" for name in fields)
+        with self._db() as db:
+            db.execute(f"update notify_items set {sets} where id in ({', '.join('?' for _ in ids)})",
+                       (*fields.values(), *ids))
+
+    def add_notify_post(self, **fields: Any) -> int:
+        fields.setdefault("made_at", time.time())
+        names, marks = ", ".join(fields), ", ".join("?" for _ in fields)
+        with self._db() as db:
+            return int(db.execute(f"insert into notify_posts ({names}) values ({marks})",
+                                  tuple(fields.values())).lastrowid)
+
+    def set_notify_post(self, post_id: int, **fields: Any) -> None:
+        sets = ", ".join(f"{name} = ?" for name in fields)
+        with self._db() as db:
+            db.execute(f"update notify_posts set {sets} where id = ?", (*fields.values(), post_id))
+
+    def notify_posts(self, unit: Optional[str] = None, status: Optional[str] = None, what: Optional[str] = None,
+                     shift_date: Optional[str] = None, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Newest first."""
+        where = {"unit": unit, "status": status, "what": what, "shift_date": shift_date}
+        where = {k: v for k, v in where.items() if v is not None}
+        sql = "select * from notify_posts" + (" where " + " and ".join(f"{k} = ?" for k in where) if where else "")
+        sql += " order by id desc" + (f" limit {int(limit)}" if limit else "")
+        with self._db() as db:
+            return [dict(r) for r in db.execute(sql, tuple(where.values()))]
 
     # ------------------------------------------------------------- ranges for exports
     @staticmethod

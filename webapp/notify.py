@@ -8,10 +8,18 @@ it is kept in the server's database, checked before it is saved and again before
 full again."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import json
+import logging
+import threading
+import time
+import urllib.error
+import urllib.request
+from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from urllib.parse import quote_plus, urlsplit
+
+log = logging.getLogger(__name__)
 
 EGYPT = timezone(timedelta(hours=3))  # owner's rule: times in Egypt time (UTC+3)
 
@@ -174,3 +182,233 @@ def slack_body(post: Post) -> Dict[str, Any]:
 
 def body_for(service: str, post: Post) -> Dict[str, Any]:
     return teams_body(post) if service == "teams" else slack_body(post)
+
+
+# ----------------------------------------------------------------------------------------------- sending
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """A group link that answers with a redirect is not followed: the answer is reported as it came."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
+        return None
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect)
+
+
+def send_json(url: str, body: Dict[str, Any], timeout: float = TIMEOUT) -> Tuple[bool, int]:
+    """POST ``body`` as JSON: (True, code) for a 2xx answer, (False, code) otherwise, (False, 0) when the group
+    could not be reached in ``timeout`` seconds."""
+    data = json.dumps(body).encode("utf-8")
+    req = urllib.request.Request(url, data=data, method="POST",
+                                 headers={"Content-Type": "application/json", "User-Agent": "TeamScheduler"})
+    try:
+        with _OPENER.open(req, timeout=timeout) as answer:
+            code = answer.status
+    except urllib.error.HTTPError as exc:
+        code = exc.code
+    except (urllib.error.URLError, OSError, ValueError):
+        return False, 0
+    return 200 <= code < 300, code
+
+
+def post_json(url: str, body: Dict[str, Any]) -> Tuple[bool, int]:
+    """The real transport: the link is checked again first, so only a Teams or Slack group is ever posted to."""
+    check_link(url)
+    return send_json(url, body)
+
+
+def reason_for(service: str, code: int) -> str:
+    """Why a post did not go, in words an admin can act on (never the link itself)."""
+    name = SERVICES.get(service, "The group")
+    if code == 0:
+        return f"{name} could not be reached"
+    if code == 400:
+        return f"{name} refused the message (400)"
+    if code in (401, 403):
+        return f"{name} says this link may not post ({code}); replace the link"
+    if code in (404, 410):
+        return f"{name} says the link no longer works ({code}); replace the link"
+    if code == 429:
+        return f"{name} asked to slow down (429)"
+    if 500 <= code < 600:
+        return f"{name} had a problem ({code})"
+    return f"{name} answered {code}"
+
+
+# ----------------------------------------------------------------------------------------------- the queue
+class Notifier:
+    """Keeps each RTA change a LOB may post, sends a LOB's changes for a day as one post once they have waited the
+    LOB's hold, and tries a failed post again. Everything it knows lives in the database, so a restart loses
+    nothing and sends nothing twice. RTA requests only queue; the sending happens on the notifier's own thread."""
+
+    def __init__(self, store, transport: Callable[[str, Dict[str, Any]], Tuple[bool, int]] = post_json,
+                 clock: Callable[[], float] = time.time, label: Optional[Callable[[str], Optional[str]]] = None,
+                 days=None) -> None:
+        self.store, self.transport, self.clock, self.days = store, transport, clock, days
+        self._label = label
+        self._lock = threading.Lock()
+        self._stop = threading.Event()
+        self._thread: Optional[threading.Thread] = None
+
+    def label(self, unit: str) -> str:
+        return (self._label(unit) if self._label else None) or unit
+
+    # ------------------------------------------------------------------ queue
+    def queue(self, log_id: Optional[int], unit: str, shift_date: str, associate: str, kind: str, text: str,
+              by_name: str, ref: str = "", before: str = "", after: str = "", left_out: bool = False) -> None:
+        """Keep one RTA change for the LOB's group, or say why it will not be posted. A LOB that posts nowhere
+        keeps nothing."""
+        settings = self.store.get_notify(unit)
+        if not settings or settings["mode"] not in ("on", "preview"):
+            return
+        ticked = [k for k in settings["kinds"].split(",") if k]
+        if kind == PRIVATE:
+            status, reason = "skipped", "kept private"
+        elif left_out:
+            status, reason = "skipped", "left out on the RTA"
+        elif kind not in ticked:
+            status, reason = "skipped", "not ticked for this LOB"
+        else:
+            status, reason = "waiting", ""
+        with self._lock:
+            made = self.store.add_notify_item(log_id=log_id, unit=unit, shift_date=shift_date, associate=associate,
+                                              kind=kind, text=text, ref=ref, before=before, after=after,
+                                              by_name=by_name, at=self.clock(), status=status, reason=reason)
+            if ref:  # back where it was before anything was posted: nothing to tell the group
+                same = [i for i in self.store.notify_items(unit=unit, shift_date=shift_date, status="waiting")
+                        if i["ref"] == ref and i["id"] != made]
+                if same and same[0]["before"] == after:
+                    self.store.set_notify_items([i["id"] for i in same] + ([made] if status == "waiting" else []),
+                                                status="skipped", reason="undone before it was posted")
+
+    # ------------------------------------------------------------------ send
+    def run_once(self, now: Optional[float] = None) -> int:
+        """Send what is due; returns how many posts were tried. One LOB's trouble never stops another."""
+        now = self.clock() if now is None else now
+        with self._lock:  # with queue(): an item is either still waiting (and can be undone) or in a post
+            for settings in self.store.list_notify():
+                try:
+                    self._batch(settings, now)
+                except Exception:  # noqa: BLE001 (kept going for the other LOBs; the cause goes to the log)
+                    log.exception("group posts: could not prepare the posts of %s", settings["unit"])
+        tried = 0  # sending holds no lock: an RTA change never waits for a slow group
+        for post in reversed(self.store.notify_posts(status="waiting")):
+            if (post["next_at"] or 0) > now:
+                continue
+            try:
+                tried += self._attempt(post, now)
+            except Exception:  # noqa: BLE001
+                log.exception("group posts: could not send post %s", post["id"])
+        return tried
+
+    def _due(self, items: List[Dict[str, Any]], hold: int) -> float:
+        return min(max(i["at"] for i in items) + hold, min(i["at"] for i in items) + MAX_HOLD)
+
+    def _batch(self, settings: Dict[str, Any], now: float) -> None:
+        unit = settings["unit"]
+        waiting = self.store.notify_items(unit=unit, status="waiting")
+        if not waiting:
+            return
+        if settings["mode"] not in ("on", "preview"):
+            self.store.set_notify_items([i["id"] for i in waiting], status="skipped", reason="posting was turned off")
+            return
+        days: Dict[str, List[Dict[str, Any]]] = {}
+        for i in waiting:
+            days.setdefault(i["shift_date"], []).append(i)
+        for shift_date, items in sorted(days.items()):
+            if now < self._due(items, int(settings["hold"])):
+                continue
+            post = change_post(self.label(unit), shift_date, items, settings["site"], unit)
+            preview = settings["mode"] == "preview"
+            made = self.store.add_notify_post(unit=unit, shift_date=shift_date, what="changes",
+                                              service=settings["service"], count=len(items),
+                                              status="preview" if preview else "waiting", tries=0, next_at=now,
+                                              body=json.dumps(asdict(post)), made_at=now)
+            self.store.set_notify_items([i["id"] for i in items], status="preview" if preview else "sending",
+                                        post_id=made)
+
+    def _finish(self, post: Dict[str, Any], status: str, reason: str = "", **fields: Any) -> None:
+        self.store.set_notify_post(post["id"], status=status, reason=reason, **fields)
+        self.store.set_notify_items([i["id"] for i in self.store.notify_items(post_id=post["id"])],
+                                    status=status, reason=reason)
+
+    def _attempt(self, post: Dict[str, Any], now: float) -> int:
+        settings = self.store.get_notify(post["unit"])
+        if not settings or settings["mode"] != "on":
+            self._finish(post, "failed", "posting was turned off")
+            return 0
+        if not settings["link"]:
+            self._finish(post, "failed", "the group link was removed")
+            return 0
+        try:
+            service = check_link(settings["link"])
+        except ValueError:
+            self._finish(post, "failed", "the saved group link is not a Teams or Slack link")
+            return 0
+        body = body_for(service, Post(**json.loads(post["body"])))
+        try:
+            ok, code = self.transport(settings["link"], body)
+        except Exception:  # noqa: BLE001 (an unexpected network failure is a failed try like any other)
+            log.exception("group posts: sending post %s failed", post["id"])
+            ok, code = False, 0
+        if ok:
+            self._finish(post, "sent", service=service, sent_at=now)
+            return 1
+        tries = int(post["tries"]) + 1
+        reason = reason_for(service, code)
+        if tries > len(RETRIES):
+            self._finish(post, "failed", reason, service=service, tries=tries)
+        else:
+            self.store.set_notify_post(post["id"], service=service, tries=tries, reason=reason,
+                                       next_at=now + RETRIES[tries - 1])
+        return 1
+
+    # ------------------------------------------------------------------ what the RTA shows
+    def statuses(self, unit: str, shift_date: str) -> Dict[int, Dict[str, str]]:
+        """For each day-log line of the LOB's day that the group rule saw: its state and the words the RTA shows."""
+        items = self.store.notify_items(unit=unit, shift_date=shift_date)
+        if not items:
+            return {}
+        settings = self.store.get_notify(unit) or {"hold": DEFAULT_HOLD}
+        waiting = [i for i in items if i["status"] == "waiting"]
+        due = self._due(waiting, int(settings["hold"])) if waiting else 0
+        posts = {p["id"]: p for p in self.store.notify_posts(unit=unit, shift_date=shift_date)}
+        out: Dict[int, Dict[str, str]] = {}
+        for i in items:
+            if i["log_id"] is None:
+                continue
+            post = posts.get(i["post_id"] or 0, {})
+            name = SERVICES.get(post.get("service", ""), "the group")
+            if i["status"] == "waiting":
+                out[i["log_id"]] = {"state": "waiting", "text": f"Waiting: posts by {_hm(due)}"}
+            elif i["status"] == "sending" and not post.get("tries"):
+                out[i["log_id"]] = {"state": "waiting", "text": "Posting now"}
+            elif i["status"] == "sending":
+                out[i["log_id"]] = {"state": "waiting",
+                                    "text": f"Waiting: {name} did not take it, trying again at {_hm(post['next_at'])}"}
+            elif i["status"] == "sent":
+                out[i["log_id"]] = {"state": "sent", "text": f"Posted to {name}, {_hm(post['sent_at'])}"}
+            elif i["status"] == "preview":
+                out[i["log_id"]] = {"state": "preview", "text": "Preview only: not sent"}
+            else:
+                out[i["log_id"]] = {"state": i["status"], "text": f"Not posted: {i['reason']}"}
+        return out
+
+    # ------------------------------------------------------------------ the thread
+    def start(self, every: float = 15) -> None:
+        """Send on a daemon thread every ``every`` seconds; an error is logged and the loop goes on."""
+        if self._thread is not None:
+            return
+
+        def loop() -> None:
+            while not self._stop.wait(every):
+                try:
+                    self.run_once()
+                except Exception:  # noqa: BLE001
+                    log.exception("group posts: a round failed")
+
+        self._thread = threading.Thread(target=loop, name="group-posts", daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()

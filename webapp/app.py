@@ -1285,10 +1285,17 @@ def create_app(config: Dict[str, Any]) -> Flask:
         intervals = json.loads(row["checks"] or "{}").get("intervals") or []
         run = app.extensions["store"].get_run(row["run_id"])
         programs, weeks = _week_choices(row["program"], program_weeks(_all_runs(), app.extensions['store'].in_use_runs()))
+        listed = _book().week_list(row["program"], row["week_start"])  # Phase AA: switch between the week's schedules
+        switch = [{"workbook": e["run"].get("workbook") or e["run"]["id"], "in_use": e["in_use"],
+                   "here": e["run"]["id"] == row["run_id"],
+                   "url": url_for("week_page", program=row["program"], week=row["week_start"]) if e["in_use"]
+                   else url_for("schedule_week", schedule_id=e["shown"]["id"])}
+                  for e in listed] if len(listed) > 1 else []
         return render_template("week.html", run=run, view=week_view(intervals, side) if intervals else None,
                                side=side, program=row["program"], week=row["week_start"], programs=programs,
                                weeks=weeks, figures=kept_figures(run or {}), version=row, week_note=note,
-                               may_set_in_use=_may_set_in_use(row), target_panel=target, elsewhere=elsewhere)
+                               may_set_in_use=_may_set_in_use(row), target_panel=target, elsewhere=elsewhere,
+                               switch=switch)
 
     @app.route("/week")
     @login_required

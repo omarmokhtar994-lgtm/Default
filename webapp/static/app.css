@@ -1143,3 +1143,14 @@ select.pending, input.pending, [data-day] select.att.pending { border-style: das
 .delpanel form { margin: 0; }
 .delpanel label.tick { display: flex; gap: 10px; align-items: flex-start; margin: 0 0 12px; font-weight: 400; max-width: 72ch; }
 .delpanel label.tick input { margin-top: 3px; }
+/* Phase AA: the Week page switches between the week's schedules */
+.wk-switch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 0; }
+.wk-switch > span { color: var(--dim); font-weight: 600; margin-right: 4px; }
+.wk-switch a { padding: 6px 12px; border: 1px solid var(--edge); border-radius: 4px; color: var(--paper); text-decoration: none; }
+.wk-switch a:hover { border-color: var(--action); }
+.wk-switch a small { color: var(--dim); margin-left: 6px; }
+.wk-switch a[aria-current] { border-color: var(--action); box-shadow: inset 0 -3px 0 var(--action); background: var(--selected); }
+.wk-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 10px 0 0; padding: 10px 14px;
+  border-left: 3px solid var(--edge); background: var(--well); max-width: 80ch; }
+.wk-notice p { margin: 0; }
+.wk-notice form { margin: 0; }

@@ -99,9 +99,13 @@ class TheWeekList(TwoSchedulesForOneWeek):
         self.assertNotIn('id="week-list"', self.page(f"/runs/{loose}/schedules"))
 
     def test_the_week_page_links_to_the_other_schedule(self):
+        # Re-pinned in Phase AA (2026-10-10): the owner approved sample 04, so the sentence "This week also has
+        # week_v2.xlsx (not in use). See both schedules" became a Schedule switch that opens the other schedule's
+        # week and the week's comparison. The other schedule is still one click away, marked not in use.
         page = self.page(f"/week?program={self.key.replace(' ', '+')}&week={WEEK}")
-        self.assertIn(f'This week also has <a href="/runs/{self.second}/schedules">week_v2.xlsx</a> (not in use)', page)
-        self.assertIn(f'<a href="/runs/{self.first}/schedules#week-list">See both schedules</a>', page)
+        other = self.book.versions(self.second)[-1]["id"]
+        self.assertIn(f'<a href="/schedules/{other}/week">week_v2.xlsx<small>not in use</small></a>', page)
+        self.assertIn("Compare the week's schedules</a>", page)
         self.assertNotIn("Compare or switch", page)
 
     def test_a_version_not_in_use_says_so_on_its_week_view(self):

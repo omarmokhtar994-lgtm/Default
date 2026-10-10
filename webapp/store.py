@@ -1013,6 +1013,11 @@ class Store:
             # interval targets (Phase W) go with the name; a week the new name has a target for keeps its own
             db.execute("update or ignore interval_targets set program = ? where program = ?", (new, old))
             db.execute("delete from interval_targets where program = ?", (old,))
+            # group posts (Phase AB) go with the name too; a name that has its own settings keeps them
+            db.execute("update or ignore notify_settings set unit = ? where unit = ?", (new, old))
+            db.execute("delete from notify_settings where unit = ?", (old,))
+            for table in ("notify_items", "notify_posts"):
+                db.execute(f"update {table} set unit = ? where unit = ?", (new, old))
         return moved
 
     def program_clashes(self, old: str, new: str, limit: int = 5) -> List[Dict[str, Any]]:

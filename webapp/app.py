@@ -38,6 +38,7 @@ from .handover import note as handover_note
 from .exports import EXPORT_SECONDS, KINDS as EXPORT_KINDS, MAX_DAYS as MAX_EXPORT_DAYS, build as build_export
 from .outcome import cannot_schedule, read as read_outcome, view as outcome_view
 from .access import Access, role
+from .notify import Notifier, post_json
 from .programs import ProgramBook
 from .auth import admin_required, check_csrf, csrf_token, load_user, login_required, manager_required
 from .program_page import build, overview, weeks_to_show
@@ -257,8 +258,14 @@ def create_app(config: Dict[str, Any]) -> Flask:
         app.extensions["schedules"] = book
         queue.schedules = book
         app.extensions["days"] = queue.days = DayBook(app.extensions["store"], book)
+        # Phase AB: RTA changes posted to each LOB's Teams or Slack group, on the notifier's own thread.
+        notifier = Notifier(app.extensions["store"], transport=config.get("NOTIFY_TRANSPORT") or post_json,
+                            label=ProgramBook(app.extensions["store"]).label, days=app.extensions["days"])
+        app.extensions["notifier"] = app.extensions["days"].notifier = notifier
         if config.get("START_WORKER", True):
             queue.start()
+        if config.get("NOTIFY_THREAD", config.get("START_WORKER", True)):
+            notifier.start()
 
     OPEN_TO_ALL = {"static", "login", "logout", "set_theme", "change_password", "home", "submit_run", "run_tag",
                    "program_rename", "program_setup", "workbook"}

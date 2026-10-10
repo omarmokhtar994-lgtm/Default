@@ -11,6 +11,7 @@ logged with who and when. Kept 13 months, like the schedules.
 from __future__ import annotations
 
 import json
+import logging
 import re
 import time
 from datetime import date, datetime, timedelta
@@ -20,6 +21,7 @@ from .day import (ABSENT, AUX, CALLED_IN, EXTRA_BREAKS, LATE_EARLY, MEASURES, OV
                   BreakRefused, _busy, advice, at_target,
                   check_break, day_view, dayoff_offers, meeting_slots, overtime_offers, pattern_breaks, planned,
                   read_inputs, replan, vto_offers)
+from .notify import PRIVATE, left_out_now
 from .schedules import EGYPT, KEEP_DAYS, ScheduleBook
 from .versions import DAYS, channel_blocks, shift_span
 
@@ -116,10 +118,37 @@ def tomorrow_unchecked(on: date) -> str:
     return f"Next week's schedule is not here yet, so the rest gap to {day} is not checked: check {day}'s start by hand."
 
 
+def _group_kind(kind: str) -> str:
+    """The Notifications page's kind (Phase AB) for an activity kind."""
+    if kind in EXTRA_BREAKS:
+        return "added_break"
+    if kind in ("Overtime", "VTO"):
+        return "overtime"
+    return "called_in" if kind == CALLED_IN else "aux"
+
+
 class DayBook:
     def __init__(self, store, book: ScheduleBook):
         self.store = store
         self.book = book
+        self.notifier = None  # Phase AB: hands each change to its LOB's group rule (webapp/notify.py)
+
+    def _log(self, program: str, on: date, name: str, what: str, user_id: int, kind: str, post: str = "",
+             ref: str = "", before: str = "", after: str = "") -> None:
+        """Keep a line in the day's log, and hand it to the LOB's group rule (Phase AB): ``post`` is the text a
+        group may see (the why of an aux stays on the website); ``ref``, ``before`` and ``after`` let a change
+        undone before it is posted drop out. The change is kept even if the hand-over fails; the failure is logged."""
+        log_id = self.store.add_day_log(program=program, shift_date=on.isoformat(), associate=name, what=what,
+                                        user_id=user_id)
+        if self.notifier is None:
+            return
+        try:
+            user = self.store.get_user(user_id) or {}
+            self.notifier.queue(log_id, program, on.isoformat(), name, kind, post or what,
+                                user.get("display_name", ""), ref=ref, before=before, after=after,
+                                left_out=left_out_now())
+        except Exception:  # noqa: BLE001 (the RTA change stands; the group post is what is lost, and logged)
+            logging.getLogger(__name__).exception("group posts: could not queue a change for %s", program)
 
     # ------------------------------------------------------------- what the day reads
     def programs(self) -> List[str]:
@@ -394,7 +423,7 @@ class DayBook:
         made = self.store.add_channel_move(program=program, shift_date=on.isoformat(), associate=name, start=lo,
                                            end_min=hi, channel=channel, user_id=user_id)
         what = f"{CHANNELS[channel]} from {hm(lo)} to {hm(hi)}" + (f" (was {CHANNELS[was]})" if was in CHANNELS else "")
-        self.store.add_day_log(program=program, shift_date=on.isoformat(), associate=name, what=what, user_id=user_id)
+        self._log(program, on, name, what, user_id, "channel", ref=f"channel:{made}", after="on")
         return made
 
     def cancel_channel_move(self, program: str, on: date, move_id: int, user_id: int) -> None:
@@ -403,9 +432,8 @@ class DayBook:
         if r is None or r["program"] != program or r["shift_date"] != on.isoformat():
             raise ValueError("That channel change is not on this day.")
         self.store.delete_channel_move(move_id)
-        self.store.add_day_log(program=program, shift_date=on.isoformat(), associate=r["associate"],
-                               what=f"{CHANNELS[r['channel']]} from {hm(r['start'])} to {hm(r['end_min'])} taken back",
-                               user_id=user_id)
+        self._log(program, on, r["associate"], f"{CHANNELS[r['channel']]} from {hm(r['start'])} to {hm(r['end_min'])} "
+                  "taken back", user_id, "channel", ref=f"channel:{move_id}", before="on")
 
     def move_activity(self, program: str, on: date, activity_id: int, start: str, user_id: int) -> int:
         """Move an aux, or a break or lunch added on the day, to ``start`` (HH:MM), the same length, with the same
@@ -430,8 +458,8 @@ class DayBook:
             raise
         made = self.store.add_activity(**{**fields, "start": rec["start"], "end_min": rec["end"], "user_id": user_id,
                                           "at": time.time()})
-        self.store.add_day_log(program=program, shift_date=on.isoformat(), associate=r["associate"],
-                               what=f"{r['kind']} moved {hm(r['start'])} to {hm(rec['start'])}", user_id=user_id)
+        self._log(program, on, r["associate"], f"{r['kind']} moved {hm(r['start'])} to {hm(rec['start'])}", user_id,
+                  _group_kind(r["kind"]), ref=f"activity:{made}", before=hm(r["start"]), after=hm(rec["start"]))
         return made
 
     # ------------------------------------------------------------- what people record
@@ -476,15 +504,19 @@ class DayBook:
             lo = hi = None
             what = status
         with_whom, why, with_dept = (_tidy(with_whom), _tidy(why), _tidy(with_dept)) if status in AUX else ("", "", "")
+        post = what + with_text(with_whom, "", with_dept)  # Phase AB: what a group may see, never the why
         what += with_text(with_whom, why, with_dept)
         record = {"name": name, "status": status, "from": lo, "to": hi, "billable": bool(billable) and status in AUX,
                   "what": what, "span": span, "with_whom": with_whom, "why": why, "with_dept": with_dept}
         if dry_run:
             return record
+        was = next((r["status"] for r in self.store.list_attendance(program, [on.isoformat()])
+                    if r["associate"] == name), "Present")
         self.store.set_attendance(program=program, shift_date=on.isoformat(), associate=name, status=status,
                                   from_min=lo, to_min=hi, billable=int(bool(billable) and status in AUX),
                                   user_id=user_id, with_whom=with_whom, why=why, with_dept=with_dept)
-        self.store.add_day_log(program=program, shift_date=on.isoformat(), associate=name, what=what, user_id=user_id)
+        kind = "late" if status in LATE_EARLY else "aux" if status in AUX else PRIVATE  # sick, leave, present
+        self._log(program, on, name, what, user_id, kind, post=post, ref=f"status:{name}", before=was, after=status)
         return record
 
     def move_break(self, program: str, on: date, name: str, idx: int, at: Optional[str], user_id: int,
@@ -511,7 +543,8 @@ class DayBook:
             self.store.set_actual_break(program=program, shift_date=on.isoformat(), associate=name, idx=idx,
                                         kind=plan[idx]["kind"], start=m, user_id=user_id)
             what = f"{plan[idx]['kind']} moved {hm(was)} to {hm(m)}{suffix}"
-        self.store.add_day_log(program=program, shift_date=on.isoformat(), associate=name, what=what, user_id=user_id)
+        self._log(program, on, name, what, user_id, "break", ref=f"break:{name}:{idx}", before=hm(was),
+                  after=hm(plan[idx]["start"] if at is None else m))
 
     def break_advice(self, program: str, on: date, name: str, idx: int, at: str,
                      measure: str = "interval") -> Dict[str, Any]:
@@ -601,7 +634,9 @@ class DayBook:
         made = self.store.add_activity(program=program, shift_date=on.isoformat(), associate=name, kind=kind, start=lo,
                                        end_min=hi, billable=int(billable), note=" ".join(note.split())[:200],
                                        user_id=user_id, with_whom=with_whom, why=why, with_dept=with_dept)
-        self.store.add_day_log(program=program, shift_date=on.isoformat(), associate=name, what=what, user_id=user_id)
+        self._log(program, on, name, what, user_id, _group_kind(kind),
+                  post=self._describe(kind, lo, hi, billable, with_whom, "", with_dept), ref=f"activity:{made}",
+                  after="on")
         return made
 
     def add_item(self, program: str, on: date, name: str, what: str, start: str, minutes: int, user_id: int,
@@ -763,8 +798,8 @@ class DayBook:
                     "what": f"Day off cancelled: called in {label}"}
         made = self.store.add_activity(program=program, shift_date=on.isoformat(), associate=name, kind=CALLED_IN,
                                        start=lo, end_min=hi, billable=1, note=label, user_id=user_id)
-        self.store.add_day_log(program=program, shift_date=on.isoformat(), associate=name,
-                               what=f"Day off cancelled: called in {label}", user_id=user_id)
+        self._log(program, on, name, f"Day off cancelled: called in {label}", user_id, "called_in",
+                  ref=f"callin:{made}", after="on")
         return made
 
     def cancel_activity(self, program: str, on: date, activity_id: int, user_id: int) -> None:
@@ -774,9 +809,9 @@ class DayBook:
         if row["kind"] == CALLED_IN:
             return self._cancel_call_in(program, on, row, user_id)
         self.store.delete_activity(activity_id)
-        self.store.add_day_log(program=program, shift_date=on.isoformat(), associate=row["associate"], user_id=user_id,
-                               what="Cancelled: " + self._describe(row["kind"], row["start"], row["end_min"],
-                                                                   bool(row["billable"])))
+        self._log(program, on, row["associate"], "Cancelled: " + self._describe(row["kind"], row["start"],
+                                                                                row["end_min"], bool(row["billable"])),
+                  user_id, _group_kind(row["kind"]), ref=f"activity:{activity_id}", before="on")
 
     def _cancel_call_in(self, program: str, on: date, row: Dict[str, Any], user_id: int) -> None:
         """Back to the day off, but only once nothing else is recorded on that shift (nothing is left behind)."""
@@ -793,9 +828,8 @@ class DayBook:
             listed = left[0] if len(left) == 1 else ", ".join(left[:-1]) + " and " + left[-1]
             raise ValueError(f"{name} still has {listed} on this shift: cancel or set those back first.")
         self.store.delete_activity(row["id"])
-        self.store.add_day_log(program=program, shift_date=on.isoformat(), associate=name, user_id=user_id,
-                               what=f"Call-in cancelled: back to the day off (was {hm(row['start'])} - "
-                                    f"{hm(row['end_min'])})")
+        self._log(program, on, name, f"Call-in cancelled: back to the day off (was {hm(row['start'])} - "
+                  f"{hm(row['end_min'])})", user_id, "called_in", ref=f"callin:{row['id']}", before="on")
 
     def meeting_slots(self, program: str, on: date, names: List[str], minutes: int, earliest: str, latest: str,
                       billable: bool = False, measure: str = "interval") -> List[Dict[str, Any]]:

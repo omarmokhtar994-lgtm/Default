@@ -11,12 +11,14 @@ from __future__ import annotations
 import json
 import logging
 import threading
+from contextlib import contextmanager
+from contextvars import ContextVar
 import time
 import urllib.error
 import urllib.request
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 from urllib.parse import quote_plus, urlsplit
 
 log = logging.getLogger(__name__)
@@ -182,6 +184,24 @@ def slack_body(post: Post) -> Dict[str, Any]:
 
 def body_for(service: str, post: Post) -> Dict[str, Any]:
     return teams_body(post) if service == "teams" else slack_body(post)
+
+
+# The RTA's "Post to the group" tick, unticked for one change (Phase AB, sample 03b). Set for the request that makes
+# the change; read where the change is logged. A ContextVar, so each request thread sees only its own.
+_LEFT_OUT: ContextVar[bool] = ContextVar("group_post_left_out", default=False)
+
+
+@contextmanager
+def leave_out(flag: bool) -> Iterator[None]:
+    token = _LEFT_OUT.set(bool(flag))
+    try:
+        yield
+    finally:
+        _LEFT_OUT.reset(token)
+
+
+def left_out_now() -> bool:
+    return _LEFT_OUT.get()
 
 
 # ----------------------------------------------------------------------------------------------- sending

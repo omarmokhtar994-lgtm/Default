@@ -1036,3 +1036,13 @@ function homeRefresh(now) {
   week.addEventListener("change", check);
   check();
 })();
+
+// Phase Z: the "now" line on today's achievement, at the time of day the page was made (Egypt time, from the server)
+(function () {
+  var strip = document.querySelector(".achv-strip[data-now]");
+  var mark = strip && strip.querySelector(".achv-now");
+  var minutes = strip ? parseInt(strip.getAttribute("data-now"), 10) : NaN;
+  if (!mark || isNaN(minutes)) return;
+  mark.style.left = (Math.min(Math.max(minutes, 0), 1440) / 1440 * 100) + "%";
+  mark.classList.add("placed");
+})();

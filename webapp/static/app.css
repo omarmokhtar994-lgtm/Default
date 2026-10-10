@@ -1069,3 +1069,31 @@ select.pending, input.pending, [data-day] select.att.pending { border-style: das
 .ch-then { margin: 0; }
 .ch-point { margin: 10px 0 0; padding: 8px 12px; max-width: 70ch; border-left: 3px solid var(--edge); background: var(--well);
   font-size: 0.875rem; }
+/* Phase Z: today's achievement, one block above the RTA's tabs (teal at the target, amber below; ink "now" line) */
+.achv { background: var(--console); border-radius: 8px; padding: 12px 16px 10px; margin: 0 0 12px; }
+.achv h2 { margin: 0; font-size: 1rem; }
+.achv-num { margin: 2px 0 0; color: var(--dim); font-weight: 600; }
+.achv-num b { font: 700 2rem/1.1 var(--display); color: var(--paper); margin-right: 6px; font-variant-numeric: tabular-nums; }
+.achv-share { margin: 4px 0 12px; font-size: 0.875rem; max-width: 76ch; }
+.achv-share > b { color: var(--paper); }
+.achv-strip { position: relative; display: grid; gap: 3px; height: 22px; margin-top: 14px; }
+.achv-strip.cols-24 { grid-template-columns: repeat(24, 1fr); } .achv-strip.cols-48 { grid-template-columns: repeat(48, 1fr); gap: 2px; }
+.achv-strip.cols-72 { grid-template-columns: repeat(72, 1fr); gap: 1px; } .achv-strip.cols-96 { grid-template-columns: repeat(96, 1fr); gap: 1px; }
+.achv-strip.cols-144 { grid-template-columns: repeat(144, 1fr); gap: 0; } .achv-strip.cols-288 { grid-template-columns: repeat(288, 1fr); gap: 0; }
+.achv-strip i, .achv-key i { display: block; border-radius: 2px; background: var(--rail); }
+.achv-strip i.ok, .achv-key i.ok { background: var(--covered); }
+.achv-strip i.below, .achv-key i.below { background: var(--short); }
+.achv-strip i.none, .achv-key i.none { background: transparent; box-shadow: inset 0 0 0 1px var(--rail); }
+.achv-now { position: absolute; top: -4px; bottom: -4px; left: 0; width: 2px; margin-left: -1px; background: var(--paper);
+  visibility: hidden; }
+.achv-now.placed { visibility: visible; }  /* app.js puts it at the current time; without it, no mark at all */
+.achv-now::before { content: "now"; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+  padding-bottom: 2px; font-size: 0.6875rem; font-weight: 700; line-height: 1; color: var(--paper); }
+.achv-hours { display: grid; grid-template-columns: repeat(8, 1fr); margin: 4px 0 0; font-size: 0.6875rem; color: var(--dim);
+  font-variant-numeric: tabular-nums; }
+.achv-key { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 8px 0 0; font-size: 0.75rem; color: var(--dim); }
+.achv-key span { display: inline-flex; align-items: center; gap: 6px; }
+.achv-key i { width: 10px; height: 10px; }
+.rb-c small.ok { display: block; color: var(--covered-text); font-weight: 700; }
+.rb-c small.below { display: block; color: var(--short-ink); font-weight: 700; }
+.rb-head small { display: block; font-weight: 400; }

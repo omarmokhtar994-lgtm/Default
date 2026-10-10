@@ -139,8 +139,13 @@ class TheTargetPages(unittest.TestCase):
                              .get_data(as_text=True))
         found = at_target(self.app.extensions["days"].page(PROGRAM, WED)["view"]["cells"], 0.9)
         share = round(100 * found["now"] / found["intervals"])
-        self.assertIn(f"<b>Intervals at 90% or more</b> {found['now']} of {found['intervals']} ({share}%), plan "
-                      f"{found['plan']} of {found['intervals']}", page)
+        # Re-pinned in Phase Z (2026-10-10): the owner approved sample 04, which moves this count from the summary
+        # line into the "Achievement on ..." block above the tabs. The numbers measured here are the same; only the
+        # markup that carries them changed (webapp.tests.test_achievement covers the block itself).
+        self.assertIn(f'<p class="achv-num"><b>{found["now"]} of {found["intervals"]}</b> intervals at 90% or more</p>',
+                      page)
+        self.assertIn(f"<b>{share}%</b> of the day's intervals reach the target, with attendance as marked. The plan "
+                      f"had {found['plan']} of {found['intervals']}.", page)
         self.assertIn('<span class="tl-lbl">Achieved (target 90%)</span>', page)
         self.assertEqual(len(re.findall(r'<span class="tc (?:attarget|below)">\d+%</span>', page)), found["intervals"])
 

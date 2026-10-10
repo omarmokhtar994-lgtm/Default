@@ -1516,7 +1516,8 @@ class ThePhaseWInTheBrowser(unittest.TestCase):
         page.wait_for_timeout(700)
         page.locator("#target").screenshot(path=str(W_SCREENS / "week_interval_target.png"))
         self.go(page, f"/day?program={q}&date={self.wed.isoformat()}", errors)
-        expect(page.locator(".tgt-tile")).to_contain_text("Intervals at 90% or more")
+        # Re-pinned in Phase Z: the count moved from the summary line's tile into the achievement block (sample 04).
+        expect(page.locator(".achv")).to_contain_text("intervals at 90% or more")
         expect(page.locator(".tl-lbl", has_text="Achieved (target 90%)")).to_be_visible()
         page.wait_for_timeout(700)
         page.locator(".rta-sum").screenshot(path=str(W_SCREENS / "rta_intervals_at_target.png"))
@@ -2014,4 +2015,88 @@ class ThePhaseXYInTheBrowser(unittest.TestCase):
         phone.locator(".tl-lane").first.scroll_into_view_if_needed()
         phone.wait_for_timeout(400)
         phone.screenshot(path=str(XY_SCREENS / "phone_timeline.png"))
+        self.assertEqual(errors, [])
+
+
+Z_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_z" / "screens"
+
+
+class ThePhaseZInTheBrowser(unittest.TestCase):
+    """Phase Z (the owner approved samples 01 to 05): a week's schedules in one list, channel needs added to a
+    schedule, and today's achievement on the RTA, in a real browser. This week has two uploads for SAKS, NMG Tier 2:
+    week.xlsx (breaks planned automatically, in use) and week_v2.xlsx (not in use)."""
+
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+    go = ThePhaseRInTheBrowser.go
+
+    @classmethod
+    def setUpClass(cls):
+        import io
+        import shutil
+        from datetime import datetime, timedelta, timezone
+        from webapp.programs import ProgramBook
+        from webapp.tests.test_ready import make_ready
+        from webapp.tests.test_runs import sign_in as client_sign_in, token, wait
+        cls.dir = Path(tempfile.mkdtemp())
+        cls.addClassCleanup(shutil.rmtree, cls.dir, True)
+        cls.today = datetime.now(timezone(timedelta(hours=3))).date()  # the server's day (Egypt time)
+        cls.sunday = cls.today - timedelta(days=(cls.today.weekday() + 1) % 7)
+        ready = make_ready(cls.dir / "ready.xlsx")
+        cls.app, cls.store, _, _ = make_app(VALIDATOR_ROOT=str(REPO))
+        cls.store.add_user("omar", "Omar Mokhtar", "Owner-pass-123", is_admin=True, must_change=False)
+        programs = ProgramBook(cls.store)
+        cls.key = programs.add_lob(programs.add_program("SAKS"), "NMG Tier 2")
+        cls.q = cls.key.replace(" ", "+")
+        cls.client = client = client_sign_in(cls.app, "omar", "Owner-pass-123")
+        runs = []
+        for name in ("week.xlsx", "week_v2.xlsx"):
+            client.post("/runs", data={"csrf_token": token(client), "kind": "ready", "mode": "QUICK",
+                                       "program": cls.key, "week_start": cls.sunday.isoformat(),
+                                       "workbook": (io.BytesIO(ready.read_bytes()), name)},
+                        content_type="multipart/form-data")
+            runs.append(cls.store.list_runs()[0]["id"])
+            wait(cls.store, runs[-1], statuses=("DONE", "REJECTED", "FAILED"))
+            if name == "week.xlsx":
+                first = cls.app.extensions["schedules"].versions(runs[-1])[-1]["id"]
+                client.post(f"/schedules/{first}/auto-breaks", data={"csrf_token": token(client), "use": "1"})
+        cls.run_id, cls.other = runs
+        client.post("/week/target", data={"csrf_token": token(client), "program": cls.key,
+                                          "week": cls.sunday.isoformat(), "target": "90"})
+        cls.server = make_server("127.0.0.1", 0, cls.app, threaded=True)
+        cls.base = f"http://127.0.0.1:{cls.server.server_port}"
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.pw = sync_playwright().start()
+        launch = {"headless": True}
+        if os.path.exists(CHROMIUM):
+            launch["executable_path"] = CHROMIUM
+        cls.browser = cls.pw.chromium.launch(**launch)
+        Z_SCREENS.mkdir(parents=True, exist_ok=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.pw.stop()
+        cls.server.shutdown()
+
+    # ---------------------------------------------------------------- Task 6: today's achievement
+    def test_the_now_mark_sits_at_the_current_time(self):
+        page = self.page(width=1280, height=900)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        self.go(page, f"/day?program={self.q}&date={self.today.isoformat()}", errors)
+        expect(page.get_by_role("heading", name="Today's achievement")).to_be_visible()
+        mark = page.locator(".achv-now")
+        expect(mark).to_be_visible()
+        strip = page.locator(".achv-strip").bounding_box()
+        line = mark.bounding_box()
+        minutes = int(page.locator(".achv-strip").get_attribute("data-now"))
+        at = (line["x"] + line["width"] / 2 - strip["x"]) / strip["width"]
+        self.assertAlmostEqual(at, minutes / 1440, delta=0.01)
+        from datetime import timedelta
+        other = self.sunday if self.today != self.sunday else self.sunday + timedelta(days=1)  # same week, not today
+        self.go(page, f"/day?program={self.q}&date={other.isoformat()}", errors)
+        expect(page.get_by_role("heading", name=f"Achievement on {other:%a %d %b}")).to_be_visible()
+        expect(page.locator(".achv-now")).to_have_count(0)
         self.assertEqual(errors, [])

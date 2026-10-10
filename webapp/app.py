@@ -1925,6 +1925,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             whole = team_figures(people)
             shrink = interval_shrinkage(v, page["inputs"], page["day"])
         return render_template("day.html", page=page, problem=problem, program=program, programs=programs, on=on,
+                               today=clock_now.date(),
                                people=people, whole=whole, shrink=shrink, finder=finder, cover=cover,
                                proposal=proposal, from_now=from_now, cover_panel=cover_panel,
                                add_panel=add_panel, person_panel=person_panel, lengths=ADD_LENGTHS,

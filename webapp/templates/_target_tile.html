@@ -1,3 +1,20 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
-{# Phase W: the day's intervals at the week's interval target, as a tile on the RTA. #}
-{% macro target_tile(t, week_url) %}{% set pct = (100 * t.target)|round|int %}<span class="tgt-tile"><b>Intervals at {{ pct }}% or more</b> {% if t.intervals %}{{ t.now }} of {{ t.intervals }} ({{ (100 * t.now / t.intervals)|round|int }}%), plan {{ t.plan }} of {{ t.intervals }}{% else %}No intervals with demand{% endif %} <a href="{{ week_url }}">Target {{ pct }}% for this week</a></span>{% endmacro %}
+{# Phase W: the day's intervals at the week's interval target. Phase Z (approved sample 04): one block above the
+   RTA's tabs, called today's achievement on today, with one mark per interval and a "now" line (placed by app.js). #}
+{% macro target_tile(t, week_url, on=None, today=None, now=None) %}{% set pct = (100 * t.target)|round|int %}{% set is_today = on is not none and on == today %}
+<section class="achv" aria-labelledby="achv-h">
+  <h2 id="achv-h">{% if is_today or on is none %}Today's achievement{% else %}Achievement on {{ on.strftime('%a %d %b') }}{% endif %}</h2>
+  {% if t.intervals %}
+  <p class="achv-num"><b>{{ t.now }} of {{ t.intervals }}</b> intervals at {{ pct }}% or more</p>
+  <p class="achv-share"><b>{{ (100 * t.now / t.intervals)|round|int }}%</b> of {{ "today's" if is_today or on is none else "the day's" }} intervals reach the target, with attendance as marked. The plan had {{ t.plan }} of {{ t.intervals }}. <a href="{{ week_url }}">Target {{ pct }}% for this week</a></p>
+  {% set n = t.cells|length %}
+  <div class="achv-strip cols-{{ n }}"{% if is_today and now is not none %} data-now="{{ now }}"{% endif %} role="img" aria-label="{{ t.now }} of {{ t.intervals }} intervals at {{ pct }}% or more, one mark per interval from midnight">
+    {% for c in t.cells %}<i class="{{ 'none' if c.ok is none else ('ok' if c.ok else 'below') }}" title="{{ '%02d:%02d'|format(c.t // 60, c.t % 60) }}{% if c.pct is not none %}: {{ c.pct }}%{% endif %}"></i>{% endfor %}
+    {% if is_today and now is not none %}<span class="achv-now" aria-hidden="true"></span>{% endif %}
+  </div>
+  <div class="achv-hours" aria-hidden="true">{% for h in range(0, 24, 3) %}<span>{{ '%02d'|format(h) }}</span>{% endfor %}</div>
+  <p class="achv-key"><span><i class="ok"></i>At {{ pct }}% or more</span><span><i class="below"></i>Below {{ pct }}%</span>{% if t.cells|selectattr('ok', 'none')|list %}<span><i class="none"></i>No demand</span>{% endif %}<span>One mark per interval</span></p>
+  {% else %}
+  <p class="achv-num">No intervals with demand on this day. <a href="{{ week_url }}">Target {{ pct }}% for this week</a></p>
+  {% endif %}
+</section>{% endmacro %}

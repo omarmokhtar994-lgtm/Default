@@ -38,9 +38,9 @@ from .handover import note as handover_note
 from .exports import EXPORT_SECONDS, KINDS as EXPORT_KINDS, MAX_DAYS as MAX_EXPORT_DAYS, build as build_export
 from .outcome import cannot_schedule, read as read_outcome, view as outcome_view
 from .access import Access, role
-from .notify import DEFAULT_HOLD, HOLDS, KINDS as NOTIFY_KINDS, DEFAULT_KINDS as NOTIFY_DEFAULT_KINDS, \
-    MODE_WORDS, MODES as NOTIFY_MODES, SERVICES, Notifier, Post, check_link, last_line, link_end, post_json, \
-    post_result, post_what
+from .notify import (DEFAULT_HOLD, DEFAULT_KINDS as NOTIFY_DEFAULT_KINDS, HOLDS, KINDS as NOTIFY_KINDS, MODE_WORDS,
+                     MODES as NOTIFY_MODES, SERVICES, Notifier, Post, check_link, last_line, leave_out, link_end,
+                     post_json, post_result, post_what)
 from .programs import ProgramBook
 from .auth import admin_required, check_csrf, csrf_token, load_user, login_required, manager_required
 from .program_page import build, overview, weeks_to_show
@@ -2078,8 +2078,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
                             key=lambda r: (r["adherence"] is not None, r["adherence"] or 0, r["name"]))
             whole = team_figures(people)
             shrink = interval_shrinkage(v, page["inputs"], page["day"])
+        group = app.extensions["store"].get_notify(program) if program else None  # Phase AB: group posts
+        posting = bool(group and group["link"] and group["mode"] in ("on", "preview"))
         return render_template("day.html", page=page, problem=problem, program=program, programs=programs, on=on,
                                today=clock_now.date(),
+                               posts=app.extensions["notifier"].statuses(program, on.isoformat())
+                               if program and on else {},
+                               post_to=SERVICES.get(group["service"], "") if posting else "",
                                people=people, whole=whole, shrink=shrink, finder=finder, cover=cover,
                                proposal=proposal, from_now=from_now, cover_panel=cover_panel,
                                add_panel=add_panel, person_panel=person_panel, lengths=ADD_LENGTHS,
@@ -2094,6 +2099,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                earlier=on - timedelta(days=1), later=on + timedelta(days=1), **shift_view)
 
     ADD_LENGTHS = (5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240)  # minutes offered by "+ Add"
+
+    def _left_out_asked() -> bool:
+        """The RTA unticked "Post to the group" for this one change (Phase AB): the form had the tick, and it is off."""
+        return request.form.get("post_asked") == "1" and request.form.get("post") != "1"
 
     def _day_form():  # type: ignore[no-untyped-def]
         on = _date(request.form.get("date", ""))
@@ -2161,7 +2170,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         try:
             program, on, name = _day_form()
             at = request.form.get("at", "").strip() or None
-            _days().move_break(program, on, name, _break_idx(), at, g.user["id"])
+            with leave_out(_left_out_asked()):
+                _days().move_break(program, on, name, _break_idx(), at, g.user["id"])
         except ValueError as exc:  # BreakRefused is a ValueError
             return jsonify(error=str(exc)), 400
         return jsonify(ok=True)
@@ -2318,10 +2328,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
         try:
             program, on, name, what, start, minutes, billable = _add_fields()
             with_dept, with_whom, why = _aux_answers(what, program)
-            found = _days().add_item(program, on, name, what, start, minutes, g.user["id"], billable=billable,
-                                     note=request.form.get("note", ""), end=request.form.get("to", "").strip(),
-                                     with_whom=with_whom, why=why, with_dept=with_dept,
-                                     side=request.form.get("side", ""))
+            with leave_out(_left_out_asked()):
+                found = _days().add_item(program, on, name, what, start, minutes, g.user["id"], billable=billable,
+                                         note=request.form.get("note", ""), end=request.form.get("to", "").strip(),
+                                         with_whom=with_whom, why=why, with_dept=with_dept,
+                                         side=request.form.get("side", ""))
             flash(f"Recorded: {name}, {found['text']}.")
             if what in ("Overtime", DAY_OFF) and _days().next_week_unknown(program, on):
                 flash(tomorrow_unchecked(on))

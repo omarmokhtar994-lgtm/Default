@@ -296,7 +296,7 @@
 
 <section class="panel" aria-labelledby="daylog-h">
   <h2 id="daylog-h">Changes today</h2>
-  {% if page.log %}<ul class="log">{% for e in page.log|reverse %}<li><b>{{ e.by_name }}</b>, {{ clock(e.at) }}: {{ e.associate }}, {{ e.what }}</li>{% endfor %}</ul>
+  {% if page.log %}<ul class="log">{% for e in page.log|reverse %}{% set st = posts.get(e.id) %}<li><b>{{ e.by_name }}</b>, {{ clock(e.at) }}: {{ e.associate }}, {{ e.what }}{% if st %} <span class="post-st {{ st.state }}">{{ st.text }}</span>{% endif %}</li>{% endfor %}</ul>
   {% else %}<p class="empty">Nothing recorded yet for this day.</p>{% endif %}
 </section>
 
@@ -308,6 +308,7 @@
     <div class="stepper"><button type="button" data-step="-5">− 5 min</button><input type="time" name="at" step="300" aria-label="Break starts at" required><button type="button" data-step="5">+ 5 min</button></div>
     <div class="dlg-result" aria-live="polite"></div>
     <div class="fits" hidden><p class="dim">Where this break fits best today:</p><ul></ul></div>
+    {% if post_to %}<label class="post-tick"><input type="checkbox" name="post" value="1" checked> Post to the {{ post_to }} group<small>Untick to keep this one change off the group.</small></label>{% endif %}
     <p class="dlg-ask" hidden><b>Keep this time anyway?</b></p>
     <div class="btns"><button class="primary" type="button" data-keep>Save</button><button type="button" data-plan>Back to plan</button><button type="button" data-cancel>Cancel</button></div>
     <p><a href="#" data-person-link>Open this person's day</a></p>
@@ -351,6 +352,7 @@
     </div>
     <p class="effect" data-effect aria-live="polite">The effect on the floor shows here before anything is kept.</p>
     <div class="effect-ch" data-channel-effect hidden aria-live="polite"></div>
+    {% if post_to %}<input type="hidden" name="post_asked" value="1">{% endif %}{% if post_to %}<label class="post-tick"><input type="checkbox" name="post" value="1" checked> Post to the {{ post_to }} group<small>Untick to keep this one change off the group.</small></label>{% endif %}
     <div class="btns"><button class="primary" type="submit">Add</button><a class="button" href="{{ close_url }}#row-{{ ap.t }}">Close</a></div>
     {% else %}<p class="empty">Nobody has a shift starting this day.</p><div class="btns"><a class="button" href="{{ close_url }}">Close</a></div>{% endif %}
   </form>

@@ -1203,3 +1203,8 @@ select.pending, input.pending, [data-day] select.att.pending { border-style: das
 .post-st.failed { color: var(--gap-ink); }
 .post-st.skipped, .post-st.preview { color: var(--dim); font-weight: 400; }
 @media (max-width: 900px) { .nf-grid { grid-template-columns: minmax(0, 1fr); } }
+label.post-tick { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; margin: 10px 0 0; padding: 10px 12px;
+  border: 1px solid var(--rail); border-radius: 6px; font-weight: 400; }
+label.post-tick input { margin-top: 3px; accent-color: var(--action); }
+label.post-tick small { flex: 1 0 100%; padding-left: 26px; color: var(--dim); font-size: 0.8125rem; }
+ul.log .post-st { font-size: 0.8125rem; margin-left: 4px; }

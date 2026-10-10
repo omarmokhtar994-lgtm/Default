@@ -526,7 +526,10 @@ function homeRefresh(now) {
   dlg.querySelector("[data-cancel]").addEventListener("click", function () { seq++; dlg.close(); });
   function save(at) {
     keep.disabled = true;
-    post(root.dataset.breakUrl, { date: current.date, associate: current.name, idx: current.idx, at: at })
+    var fields = { date: current.date, associate: current.name, idx: current.idx, at: at };
+    var tick = dlg.querySelector("input[name=post]");  // Phase AB: "Post to the group", unticked for one change
+    if (tick) { fields.post_asked = "1"; if (tick.checked) { fields.post = "1"; } }
+    post(root.dataset.breakUrl, fields)
       .then(function (r) {
         if (r._ok) { window.location.reload(); return; }
         keep.disabled = false; result.textContent = r.error || "That was not saved.";

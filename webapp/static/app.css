@@ -1221,3 +1221,11 @@ ul.log .post-st { font-size: 0.8125rem; margin-left: 4px; }
 .nf-morning select { min-width: 12em; }
 /* Phase AC: a tile's "of N" stays on the figure's line, smaller */
 .tile b small.of { font-size: 0.5em; font-weight: 600; white-space: nowrap; }
+
+/* Phase AD (samples 05a, 05b): the bar above Today's achievement: your last change (Undo) and bulk changes to send */
+.act-bar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; padding: 12px 16px; margin: 0 0 12px;
+  background: var(--console); border: 1px solid var(--rail); border-left: 3px solid var(--action); border-radius: 0 6px 6px 0; }
+.act-bar p { margin: 0; flex: 1 1 380px; min-width: 0; }
+.act-bar p small { display: block; color: var(--dim); font-size: .8125rem; margin-top: 2px; }
+.act-bar .acts { display: flex; gap: 8px; flex-wrap: wrap; margin: 0; }
+.act-bar.posted { border-left-color: var(--covered); }

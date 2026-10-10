@@ -217,6 +217,23 @@ create table if not exists day_log (
     user_id integer not null,
     at real not null
 );
+create table if not exists day_actions (
+    id integer primary key autoincrement,
+    program text not null,
+    shift_date text not null,
+    user_id integer not null,
+    at real not null,
+    label text not null default '',
+    kind text not null default 'single',
+    changes text not null default '[]',
+    log_ids text not null default '[]',
+    undo_of integer,
+    undone_at real,
+    undone_by integer,
+    sent_at real,
+    sends integer not null default 0
+);
+create index if not exists day_actions_day on day_actions (program, shift_date);
 create table if not exists notify_settings (
     unit text primary key,
     link text not null default '',
@@ -795,9 +812,79 @@ class Store:
                 "select day_log.*, users.display_name as by_name from day_log join users on users.id = day_log.user_id"
                 " where program = ? and shift_date = ? order by day_log.id", (program, shift_date))]
 
+    # ------------------------------------------------------------- the day's change journal (Phase AD)
+    DAY_ROW_KEYS = {"attendance": ("program", "shift_date", "associate"),
+                    "actual_breaks": ("program", "shift_date", "associate", "idx"),
+                    "activities": ("id",), "channel_moves": ("id",)}
+
+    def day_rows(self, program: str, dates: List[str]) -> Dict[str, Dict[Tuple[Any, ...], Dict[str, Any]]]:
+        """Every record of ``program`` on ``dates`` in the tables an RTA change writes, keyed by each table's key."""
+        marks = ", ".join("?" for _ in dates)
+        out: Dict[str, Dict[Tuple[Any, ...], Dict[str, Any]]] = {}
+        with self._db() as db:
+            for table, key in self.DAY_ROW_KEYS.items():
+                rows = db.execute(f"select * from {table} where program = ? and shift_date in ({marks})",
+                                  (program, *dates))
+                out[table] = {tuple(r[k] for k in key): dict(r) for r in rows}
+        return out
+
+    def restore_day_rows(self, changes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Put each change's ``before`` back, in one transaction, but only if every row is still as the change left
+        it (its ``after``); otherwise nothing changes and the changes that no longer hold are returned."""
+        with self._db() as db:
+            stale = []
+            for c in changes:
+                key = self.DAY_ROW_KEYS[c["table"]]
+                where = " and ".join(f"{k} = ?" for k in key)
+                row = db.execute(f"select * from {c['table']} where {where}", tuple(c["key"])).fetchone()
+                if (dict(row) if row else None) != c["after"]:
+                    stale.append(c)
+            if stale:
+                return stale
+            for c in changes:
+                key = self.DAY_ROW_KEYS[c["table"]]
+                where = " and ".join(f"{k} = ?" for k in key)
+                db.execute(f"delete from {c['table']} where {where}", tuple(c["key"]))
+                if c["before"] is not None:
+                    names = ", ".join(c["before"])
+                    db.execute(f"insert into {c['table']} ({names}) values ({', '.join('?' for _ in c['before'])})",
+                               tuple(c["before"].values()))
+        return []
+
+    def add_day_action(self, **fields: Any) -> int:
+        names, marks = ", ".join(fields), ", ".join("?" for _ in fields)
+        with self._db() as db:
+            return int(db.execute(f"insert into day_actions ({names}) values ({marks})",
+                                  tuple(fields.values())).lastrowid)
+
+    def set_day_action(self, action_id: int, **fields: Any) -> None:
+        sets = ", ".join(f"{name} = ?" for name in fields)
+        with self._db() as db:
+            db.execute(f"update day_actions set {sets} where id = ?", (*fields.values(), action_id))
+
+    def delete_day_action(self, action_id: int) -> None:
+        with self._db() as db:
+            db.execute("delete from day_actions where id = ?", (action_id,))
+
+    def get_day_action(self, action_id: int) -> Optional[Dict[str, Any]]:
+        with self._db() as db:
+            row = db.execute("select day_actions.*, coalesce(users.display_name, '') as by_name from day_actions"
+                             " left join users on users.id = day_actions.user_id where day_actions.id = ?",
+                             (action_id,)).fetchone()
+        return dict(row) if row else None
+
+    def day_actions(self, program: str, shift_date: str) -> List[Dict[str, Any]]:
+        """The day's journal, oldest first."""
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                "select day_actions.*, coalesce(users.display_name, '') as by_name from day_actions left join users"
+                " on users.id = day_actions.user_id where program = ? and shift_date = ? order by day_actions.id",
+                (program, shift_date))]
+
     def delete_day_before(self, shift_date: str) -> int:
         """Delete attendance, actual breaks and their log for shift dates before the one given."""
         with self._db() as db:
+            db.execute("delete from day_actions where shift_date < ?", (shift_date,))  # Phase AD: the journal goes too
             return sum(db.execute(f"delete from {table} where shift_date < ?", (shift_date,)).rowcount
                        for table in ("attendance", "actual_breaks", "activities", "day_log", "notify_items",
                                      "notify_posts"))
@@ -1032,6 +1119,7 @@ class Store:
             db.execute("delete from notify_settings where unit = ?", (old,))
             for table in ("notify_items", "notify_posts"):
                 db.execute(f"update {table} set unit = ? where unit = ?", (new, old))
+            db.execute("update day_actions set program = ? where program = ?", (new, old))  # Phase AD: the journal
         return moved
 
     def program_clashes(self, old: str, new: str, limit: int = 5) -> List[Dict[str, Any]]:

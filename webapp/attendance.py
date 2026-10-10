@@ -10,12 +10,18 @@ logged with who and when. Kept 13 months, like the schedules.
 """
 from __future__ import annotations
 
+import contextvars
+import functools
+import inspect
 import json
 import logging
 import re
+import threading
 import time
+from contextlib import contextmanager
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from .day import (ABSENT, AUX, CALLED_IN, CANCELLED, EXTRA_BREAKS, LATE_EARLY, MEASURES, OVERTIME_MAX, STATUSES, STEP, TIMED,
                   BreakRefused, _busy, advice, at_target,
@@ -127,11 +133,56 @@ def _group_kind(kind: str) -> str:
     return "called_in" if kind == CALLED_IN else "aux"
 
 
+UNDO_DEPTH = 2  # owner, 2026-10-11: "undo last move or 2 ... max 2 moves back"; your own only (answer 2)
+NOTHING_TO_UNDO = "Nothing of yours to undo on this day: Undo goes back 2 changes at most."
+_ACTION: contextvars.ContextVar = contextvars.ContextVar("day_action", default=None)
+
+
+@dataclass
+class DayAction:
+    """One RTA change in the day's journal (Phase AD): a single change, a bulk change (Fix breaks, Rescue the day,
+    Change several breaks) or an undo. ``id`` is its journal row while it runs; ``logs`` the day-log lines it made."""
+    program: str
+    on: date
+    user_id: int
+    label: str
+    kind: str
+    id: Optional[int] = None
+    logs: List[Tuple[int, str, str]] = field(default_factory=list)
+
+
+def _diff(before: Dict[str, Dict[tuple, Dict[str, Any]]], after: Dict[str, Dict[tuple, Dict[str, Any]]]
+          ) -> List[Dict[str, Any]]:
+    out = []
+    for table in before:
+        for key in sorted(set(before[table]) | set(after[table]), key=str):
+            old, new = before[table].get(key), after[table].get(key)
+            if old != new:
+                out.append({"table": table, "key": list(key), "before": old, "after": new})
+    return out
+
+
+def journaled(method):
+    """Run a DayBook change as one journal entry (joined to an outer one when nested; a dry run is not kept)."""
+    sig = inspect.signature(method)
+
+    @functools.wraps(method)
+    def wrapped(self, *args, **kwargs):
+        given = sig.bind(self, *args, **kwargs).arguments
+        if given.get("dry_run"):
+            return method(self, *args, **kwargs)
+        with self.action(given["program"], given["on"], given["user_id"]):
+            return method(self, *args, **kwargs)
+    return wrapped
+
+
 class DayBook:
     def __init__(self, store, book: ScheduleBook):
         self.store = store
         self.book = book
         self.notifier = None  # Phase AB: hands each change to its LOB's group rule (webapp/notify.py)
+        self._locks: Dict[Tuple[str, str], threading.RLock] = {}  # Phase AD: one change at a time per LOB and day
+        self._locks_lock = threading.Lock()
 
     def _log(self, program: str, on: date, name: str, what: str, user_id: int, kind: str, post: str = "",
              ref: str = "", before: str = "", after: str = "") -> None:
@@ -140,6 +191,9 @@ class DayBook:
         undone before it is posted drop out. The change is kept even if the hand-over fails; the failure is logged."""
         log_id = self.store.add_day_log(program=program, shift_date=on.isoformat(), associate=name, what=what,
                                         user_id=user_id)
+        running = _ACTION.get()
+        if running is not None:
+            running.logs.append((log_id, name, what))
         if self.notifier is None:
             return
         try:
@@ -149,6 +203,136 @@ class DayBook:
                                 left_out=left_out_now())
         except Exception:  # noqa: BLE001 (the RTA change stands; the group post is what is lost, and logged)
             logging.getLogger(__name__).exception("group posts: could not queue a change for %s", program)
+
+    # ------------------------------------------------------------- the change journal and Undo (Phase AD)
+    def _lock(self, program: str, on: date) -> threading.RLock:
+        with self._locks_lock:
+            return self._locks.setdefault((program, on.isoformat()), threading.RLock())
+
+    @contextmanager
+    def action(self, program: str, on: date, user_id: int, label: str = "", bulk: bool = False,
+               kind: str = "") -> Iterator[DayAction]:
+        """Keep everything changed inside as one journal entry: the records of ``program`` on ``on`` and the day
+        before, as they were and as they are after. A nested call joins the running entry (a bulk one makes it
+        bulk). Nothing is kept when nothing changed; what changed before a refusal is kept, so Undo can take it back."""
+        outer = _ACTION.get()
+        if outer is not None:
+            if bulk:
+                outer.kind, outer.label = "bulk", label or outer.label
+            yield outer
+            return
+        act = DayAction(program, on, user_id, label, kind or ("bulk" if bulk else "single"))
+        dates = [on.isoformat(), (on - timedelta(days=1)).isoformat()]
+        with self._lock(program, on):
+            before = self.store.day_rows(program, dates)
+            act.id = self.store.add_day_action(program=program, shift_date=on.isoformat(), user_id=user_id,
+                                               at=time.time(), label=label, kind=act.kind)
+            token = _ACTION.set(act)
+            try:
+                yield act
+            finally:
+                _ACTION.reset(token)
+                changes = _diff(before, self.store.day_rows(program, dates))
+                if changes:
+                    self.store.set_day_action(act.id, changes=json.dumps(changes), kind=act.kind,
+                                              log_ids=json.dumps([log_id for log_id, _, _ in act.logs]),
+                                              label=act.label or self._label(act, changes))
+                else:
+                    self.store.delete_day_action(act.id)
+                    act.id = None
+
+    @staticmethod
+    def _label(act: DayAction, changes: List[Dict[str, Any]]) -> str:
+        if len(act.logs) == 1:
+            return f"{act.logs[0][1]}, {act.logs[0][2]}"
+        if act.logs:
+            return f"{act.logs[0][1]}, {act.logs[0][2]} and {len(act.logs) - 1} more"
+        return f"{len(changes)} change{'s' if len(changes) != 1 else ''}"
+
+    def undoable(self, program: str, on: date, user_id: int) -> Optional[Dict[str, Any]]:
+        """The journal entry Undo would take back for ``user_id``: the newest of their own last 2 changes on this
+        LOB's day not taken back yet, or None."""
+        mine = [a for a in self.store.day_actions(program, on.isoformat())
+                if a["user_id"] == user_id and a["kind"] in ("single", "bulk")][-UNDO_DEPTH:]
+        return next((a for a in reversed(mine) if not a["undone_at"]), None)
+
+    def undo_last(self, program: str, on: date, user_id: int) -> str:
+        """Take back the user's newest change (see ``undoable``) exactly as it was before; refused, with nothing
+        changed, when anything it touched was changed again since. Returns what to tell the user."""
+        act = self.undoable(program, on, user_id)
+        if act is None:
+            raise ValueError(NOTHING_TO_UNDO)
+        changes = json.loads(act["changes"])
+        with self.action(program, on, user_id, label=f"Undo: {act['label']}", kind="undo") as undo:
+            stale = self.store.restore_day_rows(changes)
+            if stale:
+                raise ValueError(self._changed_since(program, on, act, stale[0]))
+            for c in changes:
+                self._log_undone(program, c, user_id)
+            self.store.set_day_action(act["id"], undone_at=time.time(), undone_by=undo.id)
+            self.store.set_day_action(undo.id, undo_of=act["id"])
+        return f"Undone: {act['label']}."
+
+    @staticmethod
+    def _thing(c: Dict[str, Any]) -> str:
+        row = c["after"] or c["before"]
+        if c["table"] == "actual_breaks":
+            return f"{row['associate']}'s {row['kind']}"
+        if c["table"] == "attendance":
+            return f"{row['associate']}'s attendance"
+        if c["table"] == "channel_moves":
+            return f"{row['associate']}'s channel change {hm(row['start'])} to {hm(row['end_min'])}"
+        return f"{row['associate']}'s {row['kind']} {hm(row['start'])} to {hm(row['end_min'])}"
+
+    def _changed_since(self, program: str, on: date, act: Dict[str, Any], c: Dict[str, Any]) -> str:
+        later = [a for a in self.store.day_actions(program, on.isoformat()) if a["id"] > act["id"]]
+        by = next((a["by_name"] for a in reversed(later)
+                   if any(x["table"] == c["table"] and x["key"] == c["key"] for x in json.loads(a["changes"]))), "")
+        return f"Not undone: {self._thing(c)} was changed again after it" + (f", by {by}." if by else ".")
+
+    def _planned_start(self, program: str, on: date, name: str, idx: int) -> Optional[int]:
+        try:
+            _, week, _ = self._shift(program, on, name)
+        except ValueError:
+            return None
+        return next((b["start"] for b in self.plan_for(program, on, name, week) if b["idx"] == idx), None)
+
+    def _log_undone(self, program: str, c: Dict[str, Any], user_id: int) -> None:
+        """One day-log line for a record put back by Undo, handed to the group rule like any change (a change never
+        posted and its undo then drop out together: same ref, before and after swapped)."""
+        old, new = c["before"], c["after"]
+        row = new or old
+        on, name = date.fromisoformat(row["shift_date"]), row["associate"]
+        if c["table"] == "actual_breaks":
+            kind = row["kind"]
+            was = "cancelled" if new and new.get("cancelled") else (hm(new["start"]) if new else "")
+            if old is None:
+                plan = self._planned_start(program, on, name, row["idx"])
+                what, now_is = f"{kind} back to plan (undone)", hm(plan) if plan is not None else ""
+            elif old.get("cancelled"):
+                what, now_is = f"{kind} cancelled again (undone)", "cancelled"
+            else:
+                what, now_is = f"{kind} back to {hm(old['start'])} (undone)", hm(old["start"])
+            self._log(program, on, name, what, user_id, "break", ref=f"break:{name}:{row['idx']}", before=was,
+                      after=now_is)
+        elif c["table"] == "attendance":
+            status = old["status"] if old else "Present"
+            self._log(program, on, name, f"Attendance back to {status} (undone)", user_id, PRIVATE,
+                      ref=f"status:{name}", before=new["status"] if new else "Present", after=status)
+        else:
+            channel = c["table"] == "channel_moves"
+            ref = f"channel:{row['id']}" if channel else (f"callin:{row['id']}" if row["kind"] == CALLED_IN
+                                                          else f"activity:{row['id']}")
+            kind = "channel" if channel else _group_kind(row["kind"])
+            label = "Channel change" if channel else row["kind"]
+            if old is None:
+                what, before, after = f"{label} {hm(new['start'])} to {hm(new['end_min'])} removed (undone)", "on", ""
+            elif new is None:
+                what, before, after = f"{label} {hm(old['start'])} to {hm(old['end_min'])} back (undone)", "", "on"
+            else:
+                what = f"{label} back to {hm(old['start'])} to {hm(old['end_min'])} (undone)"
+                before, after = hm(new["start"]), hm(old["start"])
+            self._log(program, on, name, what, user_id, kind, ref=ref, before=before, after=after)
 
     # ------------------------------------------------------------- what the day reads
     def programs(self) -> List[str]:
@@ -386,6 +570,7 @@ class DayBook:
                 "language_rows": inputs["languages"], "blocks": blocks, "moves": moves, "after": after,
                 "gaps": (inputs.get("gap_min"), inputs.get("gap_max")), "today": on == clock.date()}, ""
 
+    @journaled
     def channel_move(self, program: str, on: date, name: str, start: Any, end: Any, channel: str,
                      user_id: int) -> int:
         """Put ``name`` on ``channel`` from ``start`` to ``end`` (minutes, or HH:MM) for the shift that starts on
@@ -426,6 +611,7 @@ class DayBook:
         self._log(program, on, name, what, user_id, "channel", ref=f"channel:{made}", after="on")
         return made
 
+    @journaled
     def cancel_channel_move(self, program: str, on: date, move_id: int, user_id: int) -> None:
         from .channels import CHANNELS
         r = self.store.get_channel_move(move_id)
@@ -435,6 +621,7 @@ class DayBook:
         self._log(program, on, r["associate"], f"{CHANNELS[r['channel']]} from {hm(r['start'])} to {hm(r['end_min'])} "
                   "taken back", user_id, "channel", ref=f"channel:{move_id}", before="on")
 
+    @journaled
     def move_activity(self, program: str, on: date, activity_id: int, start: str, user_id: int) -> int:
         """Move an aux, or a break or lunch added on the day, to ``start`` (HH:MM), the same length, with the same
         who and why; checked like a new booking (the original stays when the new time is refused)."""
@@ -463,6 +650,7 @@ class DayBook:
         return made
 
     # ------------------------------------------------------------- what people record
+    @journaled
     def set_status(self, program: str, on: date, name: str, status: str, user_id: int,
                    start: str = "", end: str = "", billable: bool = False, dry_run: bool = False,
                    with_whom: str = "", why: str = "", with_dept: str = "") -> Dict[str, Any]:
@@ -519,6 +707,7 @@ class DayBook:
         self._log(program, on, name, what, user_id, kind, post=post, ref=f"status:{name}", before=was, after=status)
         return record
 
+    @journaled
     def move_break(self, program: str, on: date, name: str, idx: int, at: Optional[str], user_id: int,
                    suffix: str = "") -> None:
         """Move a break of the shift that starts on ``on`` to ``at`` (HH:MM), or back to the plan (None)."""
@@ -549,6 +738,7 @@ class DayBook:
         self._log(program, on, name, what, user_id, "break", ref=f"break:{name}:{idx}",
                   before="cancelled" if was_cancelled else hm(was), after=hm(plan[idx]["start"] if at is None else m))
 
+    @journaled
     def cancel_break(self, program: str, on: date, name: str, idx: int, why: str, user_id: int,
                      now: Optional[int] = None) -> None:
         """Cancel a break of the shift that starts on ``on`` (Phase AD): the person stays on the floor. ``why`` is
@@ -608,6 +798,7 @@ class DayBook:
         return (f"{kind} {hm(lo)} to {hm(hi)} ({'billable' if billable else 'non-billable'})"
                 + with_text(with_whom, why, with_dept))
 
+    @journaled
     def add_activity(self, program: str, on: date, name: str, kind: str, start: str, end: str, user_id: int,
                      billable: bool = False, note: str = "", dry_run: bool = False, with_whom: str = "",
                      why: str = "", with_dept: str = "") -> Any:
@@ -668,6 +859,7 @@ class DayBook:
                   after="on")
         return made
 
+    @journaled
     def add_item(self, program: str, on: date, name: str, what: str, start: str, minutes: int, user_id: int,
                  billable: bool = False, note: str = "", dry_run: bool = False, end: str = "", with_whom: str = "",
                  why: str = "", with_dept: str = "", side: str = "") -> Dict[str, Any]:
@@ -831,6 +1023,7 @@ class DayBook:
                   ref=f"callin:{made}", after="on")
         return made
 
+    @journaled
     def cancel_activity(self, program: str, on: date, activity_id: int, user_id: int) -> None:
         row = self.store.get_activity(activity_id)
         if row is None or row["program"] != program or row["shift_date"] != on.isoformat():
@@ -902,6 +1095,7 @@ class DayBook:
         """The autopilot's proposal for the breaks not yet started (nothing is kept)."""
         return replan(page["view"], page["inputs"], now)
 
+    @journaled
     def apply_replan(self, program: str, on: date, moves: List[Tuple[str, int, int]], user_id: int) -> int:
         """Keep the approved moves (each checked again: the day may have changed since the preview)."""
         done = 0
@@ -910,6 +1104,7 @@ class DayBook:
             done += 1
         return done
 
+    @journaled
     def book_session(self, program: str, on: date, names: List[str], start: int, minutes: int, kind: str, user_id: int,
              billable: bool = False, with_whom: str = "", why: str = "", with_dept: str = "") -> None:
         """Book a session for everyone, or for nobody when anyone is not free then."""

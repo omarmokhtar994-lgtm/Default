@@ -2112,6 +2112,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                             key=lambda r: (r["adherence"] is not None, r["adherence"] or 0, r["name"]))
             whole = team_figures(people)
             shrink = interval_shrinkage(v, page["inputs"], page["day"])
+        bar = {"undo": days.undoable(program, on, g.user["id"]) if program and page else None}  # Phase AD
         group = app.extensions["store"].get_notify(program) if program else None  # Phase AB: group posts
         posting = bool(group and group["link"] and group["mode"] in ("on", "preview"))
         post_kinds = [k for k in (group or {}).get("kinds", "").split(",") if k] if posting else []
@@ -2123,7 +2124,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                post_mode=group["mode"] if posting else "", post_kinds=post_kinds,
                                people=people, whole=whole, shrink=shrink, finder=finder, cover=cover,
                                proposal=proposal, from_now=from_now, cover_panel=cover_panel,
-                               add_panel=add_panel, person_panel=person_panel, lengths=ADD_LENGTHS,
+                               add_panel=add_panel, person_panel=person_panel, lengths=ADD_LENGTHS, bar=bar,
                                team_names=sorted({u["display_name"] for u in app.extensions["store"].list_users()
                                                   if u["active"]}, key=str.lower),  # "With": pick one or type
                                with_lists=_with_lists(program) if program else [],  # or from the lists (Phase U)
@@ -2215,6 +2216,19 @@ def create_app(config: Dict[str, Any]) -> Flask:
         except ValueError as exc:  # BreakRefused is a ValueError
             return jsonify(error=str(exc)), 400
         return jsonify(ok=True)
+
+    @app.route("/day/undo-last", methods=["POST"])
+    @login_required
+    def day_undo_last():  # type: ignore[no-untyped-def]
+        """Phase AD: take back your own newest change on this LOB's day (2 at most)."""
+        program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
+        try:
+            if on is None:
+                raise ValueError("Pick a day.")
+            flash(_days().undo_last(program, on, g.user["id"]))
+        except ValueError as exc:
+            flash(str(exc))
+        return _back_to_day(program, on, request.form.get("view", ""))
 
     @app.route("/day/break/cancel", methods=["POST"])
     @login_required

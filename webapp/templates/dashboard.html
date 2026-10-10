@@ -120,7 +120,7 @@
 
   <section class="panel latest" aria-labelledby="latest-h">
     {% if latest_summary %}{% set n = latest_summary.numbers %}
-    <h2 id="latest-h">Latest schedule: <a href="{{ url_for('run_detail', run_id=latest.id) }}">{{ latest.workbook }}</a></h2>
+    <h2 id="latest-h">{% if latest_week %}In use for the week of {{ latest_week|day_month }}{% else %}Latest schedule{% endif %}: <a href="{{ url_for('run_detail', run_id=latest.id) }}">{{ latest.workbook }}</a></h2>
     <div class="numbers">
       <p><b>{{ pct(n.fully_covered, n.active) }}</b> of {{ {15: 'quarter-hours', 30: 'half-hours', 60: 'hours'}.get(latest_summary.interval_minutes, 'intervals') }} fully covered {% if latest_summary.breaks_planned is defined and not latest_summary.breaks_planned %}(breaks not planned yet){% else %}after breaks{% endif %}</p>
       <p><b>{{ n.floor_gaps }}</b> below the floor</p>
@@ -142,7 +142,7 @@
     <tbody>
     {% for run in runs %}{% set s = summaries.get(run.id) %}
     <tr>
-      <td><a href="{{ url_for('run_detail', run_id=run.id) }}">{{ run.workbook }}</a><br><small>{{ label(run) }}, {{ run.mode|lower }}</small></td>
+      <td><a href="{{ url_for('run_detail', run_id=run.id) }}">{{ run.workbook }}</a>{% if run.id in in_use_ids %} <span class="wl-tag use">In use</span>{% elif run.id in not_in_use_ids %} <span class="wl-tag off">Not in use</span>{% endif %}<br><small>{{ label(run) }}, {{ run.mode|lower }}</small></td>
       <td class="by">{{ run.by_name }}</td>
       <td class="when">{{ when(run.created) }}</td>
       <td class="bar">{{ stagebar(run, small=True) }}</td>

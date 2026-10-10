@@ -103,5 +103,34 @@ class TheWeekList(TwoSchedulesForOneWeek):
         self.assertIn("Not in use: the RTA, exports and analysis use week_v1.xlsx for this week.", page)
 
 
+class TheHomePage(TwoSchedulesForOneWeek):
+    """Sample 02: Home shows the schedule in use for the program picked on the left, and the Runs table says which
+    run counts for its week."""
+
+    def home(self, key):
+        return self.page("/?program=" + key.replace(" ", "+"))
+
+    def rows(self, page):
+        table = re.search(r'(?s)<table class="runs">.*?</table>', page).group(0)
+        return {re.search(r'>([^<]+\.xlsx)</a>', r).group(1): r for r in re.findall(r"(?s)<tr>.*?</tr>", table)
+                if ".xlsx</a>" in r}
+
+    def test_home_shows_the_schedule_in_use_for_the_picked_program(self):
+        page = self.home(self.key)
+        self.assertIn(f'<h2 id="latest-h">In use for the week of 11 Oct: <a href="/runs/{self.first}">week_v1.xlsx</a></h2>',
+                      page)
+        self.assertNotIn("Latest schedule: <a", page)
+
+    def test_a_week_with_nothing_in_use_shows_its_latest_schedule(self):
+        page = self.home(self.alone)
+        self.assertIn(f'<h2 id="latest-h">Latest schedule: <a href="/runs/{self.single}">tier1.xlsx</a></h2>', page)
+
+    def test_the_runs_table_tags_in_use_and_not_in_use(self):
+        rows = self.rows(self.home(self.key))
+        self.assertIn('<span class="wl-tag use">In use</span>', rows["week_v1.xlsx"])
+        self.assertIn('<span class="wl-tag off">Not in use</span>', rows["week_v2.xlsx"])
+        self.assertNotIn("wl-tag", rows["tier1.xlsx"])  # the only schedule of its week: nothing to tell apart
+
+
 if __name__ == "__main__":
     unittest.main()

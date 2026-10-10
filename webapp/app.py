@@ -645,6 +645,19 @@ def create_app(config: Dict[str, Any]) -> Flask:
         picked = None if request.args.get("all") == "1" else (_left_menu().get("nav_unit") or None)
         unfiled = [r for r in runs if not r.get("program") and r["mode"] != "SMOKE"
                    and r["status"] not in ("REJECTED", "EXPIRED", "CANCELLED")]  # uploaded without a program
+        # Phase Z: which run counts for its week, and Home's panel follows the program picked on the left
+        in_use_map = app.extensions["store"].in_use_runs()
+        in_use_ids = set(in_use_map.values())
+        not_in_use_ids = {r["id"] for r in runs if (r.get("program"), r.get("week_start")) in in_use_map
+                          and in_use_map[(r["program"], r["week_start"])] != r["id"]}
+        latest_week = ""
+        if picked:
+            mine = [r for r in runs if r.get("program") == picked and r["status"] in ("DONE", "REVIEW")
+                    and summaries.get(r["id"])]
+            weeks = sorted({r["week_start"] for r in mine if r.get("week_start")})
+            used = in_use_map.get((picked, weeks[-1])) if weeks else None
+            latest = next((r for r in mine if r["id"] == used), None) or (mine[0] if mine else latest)
+            latest_week = weeks[-1] if latest is not None and latest["id"] == used else ""
         cards = _program_cards(runs, picked)
         everything = _program_cards(runs)
         others = [{"name": c["name"], "key": c["units"][0]["key"]} for c in everything
@@ -654,7 +667,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                unfiled_starts={r["id"]: start_choices(r["week_start"] or prefill, r["week_start"])
                                                for r in unfiled},
                                runs=runs, queue=queue, plan=plan, summaries=summaries,
-                               active=active, waiting=waiting, latest=latest,
+                               active=active, waiting=waiting, latest=latest, latest_week=latest_week,
+                               in_use_ids=in_use_ids, not_in_use_ids=not_in_use_ids,
                                latest_summary=summaries.get(latest["id"]) if latest else None,
                                now=time.time(), known_programs=known,
                                prefill_program=clean_program(request.args.get("program", ""))

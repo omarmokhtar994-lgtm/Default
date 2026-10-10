@@ -485,6 +485,12 @@ class DayBook:
         if extra and extra.get("break"):  # a break at another time (the break advice's channel effect)
             name, idx, minute = extra["break"]
             actual[(0, name, idx)] = minute
+        elif extra and "breaks" in extra:  # Phase AD: several breaks changed (a minute, CANCELLED, or None: the plan)
+            for (name, idx), minute in extra["breaks"].items():
+                if minute is None:
+                    actual.pop((0, name, idx), None)
+                else:
+                    actual[(0, name, idx)] = minute
         elif extra and extra.get("status"):
             attendance[(0, extra["name"])] = {"status": extra["status"], "from": extra["from"], "to": extra["to"],
                                               "billable": extra["billable"]}
@@ -1116,6 +1122,52 @@ class DayBook:
         for name, idx, start in moves:
             self.move_break(program, on, name, idx, hm(start), user_id, suffix=" (autopilot)")
             done += 1
+        return done
+
+    # ------------------------------------------------------------- Change several breaks (Phase AD, sample 04)
+    @staticmethod
+    def _figures(page: Dict[str, Any]) -> Dict[str, Any]:
+        return {"now": page["target"]["now"], "intervals": page["target"]["intervals"],
+                "target": page["target"]["target"], "short_hours": page["view"]["tiles"]["short_hours"]}
+
+    def bulk_preview(self, program: str, on: date, names: List[str], which: str, action: str, amount: int = 0,
+                     at: str = "", why: str = "", now: Optional[int] = None) -> Dict[str, Any]:
+        """What Change several breaks would do (``bulk_breaks.plan``) and the day before and after it (intervals at
+        the target, hours short), counted by the page itself. Nothing is kept."""
+        from .bulk_breaks import plan as bulk_plan
+        page = self.page(program, on)
+        if page is None:
+            raise ValueError(f"No schedule for {program} on {on:%d %b}.")
+        found = bulk_plan(page["view"], names, which, action, amount, at, now)
+        after = self.page(program, on, extra={"breaks": {(c["name"], c["idx"]): c["new"] for c in found["changes"]}})
+        return {**found, "before": self._figures(page), "after": self._figures(after)}
+
+    def apply_bulk(self, program: str, on: date, names: List[str], which: str, action: str, user_id: int,
+                   amount: int = 0, at: str = "", why: str = "", now: Optional[int] = None) -> int:
+        """Keep a Change several breaks as one bulk change (one step for Undo, held from the group until Send): each
+        change checked again as it is kept. Returns how many breaks changed."""
+        from .bulk_breaks import plan as bulk_plan, verb
+        if action == "cancel" and not _tidy(why):
+            raise ValueError("Say why the breaks are cancelled.")
+        page = self.page(program, on)
+        if page is None:
+            raise ValueError(f"No schedule for {program} on {on:%d %b}.")
+        found = bulk_plan(page["view"], names, which, action, amount, at, now)
+        if not found["changes"]:
+            left = "; ".join(f"{x['name']}: {x['why']}" for x in found["skipped"][:3])
+            raise ValueError("Nothing to change" + (f" ({left})." if left else ": pick people and a break."))
+        done = 0
+        with self.action(program, on, user_id, bulk=True) as act:
+            try:
+                for c in found["changes"]:
+                    if c["new"] == CANCELLED:
+                        self.cancel_break(program, on, c["name"], c["idx"], why, user_id, now=now)
+                    else:
+                        self.move_break(program, on, c["name"], c["idx"], None if c["new"] is None else hm(c["new"]),
+                                        user_id)
+                    done += 1
+            finally:
+                act.label = f"Change several breaks: {verb(action, done)}"
         return done
 
     @journaled

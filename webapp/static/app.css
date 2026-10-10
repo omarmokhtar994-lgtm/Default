@@ -1229,3 +1229,29 @@ ul.log .post-st { font-size: 0.8125rem; margin-left: 4px; }
 .act-bar p small { display: block; color: var(--dim); font-size: .8125rem; margin-top: 2px; }
 .act-bar .acts { display: flex; gap: 8px; flex-wrap: wrap; margin: 0; }
 .act-bar.posted { border-left-color: var(--covered); }
+
+/* Phase AD (sample 04): Change several breaks */
+[data-day] .autopilot .button + .button { margin-left: 8px; }
+.bk-fs { border: 0; padding: 0; margin: 16px 0 0; min-width: 0; }
+.bk-fs legend { font-weight: 600; padding: 0; margin: 0 0 6px; }
+.bk-head { margin: 10px 0 6px; font-weight: 600; color: var(--dim); font-size: .875rem; }
+.bk-head .link { margin-left: 10px; font-weight: 400; }
+.bk-who { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr)); gap: 6px 14px; }
+.bk-who label { display: grid; grid-template-columns: auto 1fr; gap: 0 8px; font-weight: 600; margin: 0; padding: 8px 10px;
+  border: 1px solid var(--rail); border-radius: 6px; }
+.bk-who label small { grid-column: 2; color: var(--dim); font-weight: 400; font-size: .8125rem; }
+.bk-who label:has(input:checked), .bk-chips label:has(input:checked), .bk-acts label:has(input:checked) {
+  border-color: var(--action); background: var(--selected); }
+.bk-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.bk-chips label { display: inline-flex; gap: 8px; align-items: center; margin: 0; padding: 7px 12px; border: 1px solid var(--edge);
+  border-radius: 999px; font-weight: 600; }
+.bk-acts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr)); gap: 8px; }
+.bk-acts label { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; margin: 0; padding: 10px 12px;
+  border: 1px solid var(--edge); border-radius: 6px; font-weight: 600; }
+.bk-acts label small { grid-column: 2; color: var(--dim); font-weight: 400; font-size: .8125rem; }
+.bk-acts select, .bk-acts input[type=time] { grid-column: 2; margin-top: 4px; }
+.bk-why { max-width: 32rem; margin-top: 16px; }
+.bk-skip td { color: var(--dim); }
+.bk-skip td b.why { color: var(--short-ink); }
+.bk-foot { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin-top: 14px; }
+.bk-foot small { color: var(--dim); flex: 1 1 320px; }

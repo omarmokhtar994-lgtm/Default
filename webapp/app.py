@@ -48,6 +48,7 @@ from .auth import (admin_required, check_csrf, csrf_token, load_user, login_requ
                    session_stamp)
 from .program_page import build, overview, weeks_to_show
 from .run_admin import PICK_UNIT, apply_rename, apply_run_change, preview_rename, preview_run_change, unit_keys
+from .bulk_breaks import SHIFTS as BULK_SHIFTS, verb as bulk_verb
 from .schedules import ScheduleBook, group_changes
 from .versions import DAYS, shift_span, stale_blocks, with_notes
 from .results import version_summary
@@ -2038,7 +2039,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         measure = request.args.get("measure", "")
         measure = measure if measure in MEASURES else "interval"
         tab = request.args.get("view", "")
-        tab = tab if tab in ("board", "adherence", "meeting", "cover", "replan", "channels") else "timeline"
+        tab = tab if tab in ("board", "adherence", "meeting", "cover", "replan", "channels", "bulk", "rescue") else "timeline"
         problem = ""
         try:
             page = days.page(program, on, measure) if program else None
@@ -2072,6 +2073,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if page and tab == "cover":
             cover = days.offers(page, from_now)
         proposal = days.replan(page, from_now) if page and tab == "replan" else None
+        bulk = _bulk_panel(days, page, program, on) if page and tab == "bulk" else None  # Phase AD (sample 04)
         cover_panel = None
         if page and tab == "board" and request.args.get("cover", type=int) is not None:
             try:
@@ -2140,6 +2142,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                people=people, whole=whole, shrink=shrink, finder=finder, cover=cover,
                                proposal=proposal, from_now=from_now, cover_panel=cover_panel,
                                add_panel=add_panel, person_panel=person_panel, lengths=ADD_LENGTHS, bar=bar,
+                               bulk=bulk, shifts=BULK_SHIFTS, bulk_verb=bulk_verb,
                                team_names=sorted({u["display_name"] for u in app.extensions["store"].list_users()
                                                   if u["active"]}, key=str.lower),  # "With": pick one or type
                                with_lists=_with_lists(program) if program else [],  # or from the lists (Phase U)
@@ -2232,6 +2235,55 @@ def create_app(config: Dict[str, Any]) -> Flask:
             return jsonify(error=str(exc)), 400
         return jsonify(ok=True)
 
+    def _bulk_form() -> Dict[str, Any]:
+        f = request.values
+        return {"names": f.getlist("who"), "which": f.get("which", ""), "action": f.get("act", ""),
+                "amount": f.get("amount", 0, type=int), "at": f.get("at", ""), "why": f.get("why", "")}
+
+    def _bulk_panel(days, page: Dict[str, Any], program: str, on: date) -> Dict[str, Any]:
+        """Change several breaks (Phase AD, sample 04): today's people by shift start with their breaks, the form as
+        filled, and the effect once asked for (nothing kept)."""
+        now = _minute_now(on)
+        groups: Dict[int, List[Dict[str, str]]] = {}
+        kinds: List[str] = []
+        for lane in page["view"]["lanes"]:
+            for seg in lane["segments"]:
+                if seg["offset"] != 0 or seg["status"] in ABSENT_STATES:
+                    continue
+                said = [f"{b['kind']} {hm(b['start'])}" + (" (started)" if now is not None and b["start"] <= now else "")
+                        for b in seg["breaks"]] + [f"{b['kind']} cancelled" for b in seg.get("cancelled", [])]
+                groups.setdefault(seg["start"], []).append({"name": lane["name"], "breaks": ", ".join(said)})
+                kinds += [b["kind"] for b in seg["breaks"] + seg.get("cancelled", []) if b["kind"] not in kinds]
+        form = _bulk_form()
+        panel = {"groups": [{"label": f"{hm(t)} shift", "people": people} for t, people in sorted(groups.items())],
+                 "kinds": kinds, "who": set(form["names"]), "which": form["which"] or (kinds[0] if kinds else "all"),
+                 "act": form["action"] or "cancel", "amount": form["amount"] or 15, "at": form["at"],
+                 "why": form["why"], "preview": None, "error": ""}
+        if request.args.get("show") and form["names"]:
+            try:
+                panel["preview"] = days.bulk_preview(program, on, form["names"], panel["which"], panel["act"],
+                                                     panel["amount"], form["at"], form["why"], now)
+            except ValueError as exc:
+                panel["error"] = str(exc)
+        return panel
+
+    @app.route("/day/bulk/apply", methods=["POST"])
+    @login_required
+    def day_bulk_apply():  # type: ignore[no-untyped-def]
+        """Phase AD: keep a Change several breaks as one change, held from the group until Send."""
+        program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
+        form = _bulk_form()
+        try:
+            if on is None:
+                raise ValueError("Pick a day.")
+            done = _days().apply_bulk(program, on, form["names"], form["which"], form["action"], g.user["id"],
+                                      amount=form["amount"], at=form["at"], why=form["why"], now=_minute_now(on))
+            said = bulk_verb(form["action"], done)
+            flash(said[0].upper() + said[1:] + ".")
+        except ValueError as exc:
+            flash(f"Stopped: {exc} Anything changed before it was kept, and Undo takes it all back.")
+        return _back_to_day(program, on, "")
+
     def _send_bar(program: str, on: date) -> Optional[Dict[str, Any]]:
         """Phase AD (samples 05a, 05b): the newest bulk change of this LOB's day (or the undo of one) and what it
         has with the group: held for Send, posted, or a correction to send; None when nothing goes to a group."""
@@ -2258,7 +2310,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         flash(said)
         if not posted and said.startswith("Already posted"):  # asked on the page (the script asks in a dialog)
             args = {"program": program, "date": on.isoformat(), "resend": action["id"],
-                    "view": view if view in ("board", "adherence", "meeting", "cover", "replan", "channels") else None}
+                    "view": view if view in ("board", "adherence", "meeting", "cover", "replan", "channels", "bulk", "rescue") else None}
             return redirect(url_for("day_page", **{k: v for k, v in args.items() if v}) + "#act-bar", code=303)
         return _back_to_day(program, on, view)
 
@@ -2295,7 +2347,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
 
     def _back_to_day(program: str, on: Optional[date], view: str, cover: str = ""):  # type: ignore[no-untyped-def]
         args = {"program": program, "date": on.isoformat() if on else None,
-                "view": view if view in ("board", "adherence", "meeting", "cover", "replan", "channels") else None,
+                "view": view if view in ("board", "adherence", "meeting", "cover", "replan", "channels", "bulk", "rescue") else None,
                 "cover": cover if cover.isdigit() and view == "board" else None}
         if args["cover"]:
             args["_anchor"] = f"row-{args['cover']}"

@@ -1143,3 +1143,15 @@ function homeRefresh(now) {
   });
   dlg.querySelector("[data-resend-no]").addEventListener("click", function () { dlg.close(); });
 })();
+
+// Phase AD: Change several breaks: Pick all ticks (or clears) everyone in that shift.
+(function () {
+  "use strict";
+  Array.prototype.forEach.call(document.querySelectorAll("[data-pick-all]"), function (b) {
+    b.addEventListener("click", function () {
+      var boxes = b.closest("[data-pick-group]").querySelectorAll("input[name=who]");
+      var all = Array.prototype.every.call(boxes, function (x) { return x.checked; });
+      Array.prototype.forEach.call(boxes, function (x) { x.checked = !all; });
+    });
+  });
+})();

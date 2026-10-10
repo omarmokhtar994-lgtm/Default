@@ -124,7 +124,7 @@
 {% if tab == 'timeline' %}
 <section class="panel" aria-labelledby="floor-h">
   <h2 id="floor-h">Who is on the floor</h2>
-  <p class="autopilot"><a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='replan') }}">Fix the rest of the day's breaks</a></p>
+  <p class="autopilot"><a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='replan') }}">Fix the rest of the day's breaks</a> <a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='bulk') }}">Change several breaks</a></p>
   <p class="note">Shifts are the blue bars; breaks are the marks on them. Drag a break to move it in 5-minute steps, or select it and press Enter to type the time; the dashed outline is where the engine planned it. Set attendance on the left.</p>
   {% if shift_groups %}{% set everyone = v.lanes|length %}
   <div class="shiftpick">
@@ -185,6 +185,42 @@
     <p><button class="primary" type="submit">Apply all {{ pr.moves|length }}</button> <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure) }}">Cancel</a></p>
   </form>
   {% else %}<p class="empty">No single move makes the day better within the rules: the gaps left are staffing gaps (overtime can help: see Overtime and VTO).</p>{% endif %}
+</section>
+{% elif tab == 'bulk' %}{% set bk = bulk %}{% set pct = (100 * page.target.target)|round|int %}
+<section class="panel" aria-labelledby="bk-h">
+  <h2 id="bk-h">Change several breaks</h2>
+  <p class="note">Pick the people, which break and what to do. You see the effect on the day before anything is kept. A break that has started is left as it is, and so is any change a person's shift or other breaks do not allow (each is listed with why).</p>
+  <form method="get" action="{{ url_for('day_page') }}" class="bk-form">
+    <input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="measure" value="{{ measure }}"><input type="hidden" name="view" value="bulk"><input type="hidden" name="show" value="1">
+    <fieldset class="bk-fs"><legend>Who <small class="dim">({{ bk.who|length }} picked)</small></legend>
+      {% for grp in bk.groups %}<div class="bk-grp" data-pick-group><p class="bk-head">{{ grp.label }} <button type="button" class="link" data-pick-all>Pick all {{ grp.people|length }}</button></p>
+      <div class="bk-who">{% for p in grp.people %}<label><input type="checkbox" name="who" value="{{ p.name }}"{% if p.name in bk.who %} checked{% endif %}> {{ p.name }}<small>{{ p.breaks or 'No breaks' }}</small></label>{% endfor %}</div></div>{% endfor %}
+    </fieldset>
+    <fieldset class="bk-fs"><legend>Which break</legend><div class="bk-chips">{% for k in bk.kinds + ['all'] %}<label><input type="radio" name="which" value="{{ k }}"{% if k == bk.which %} checked{% endif %}> {{ 'Every break not started' if k == 'all' else k }}</label>{% endfor %}</div></fieldset>
+    <fieldset class="bk-fs"><legend>What to do</legend><div class="bk-acts">
+      <label><input type="radio" name="act" value="cancel"{% if bk.act == 'cancel' %} checked{% endif %}> Cancel<small>They stay on the floor. Needs a reason.</small></label>
+      <label><input type="radio" name="act" value="shift"{% if bk.act == 'shift' %} checked{% endif %}> Move<small>Earlier or later by the same amount</small><select name="amount" aria-label="How much earlier or later">{% for m in shifts %}<option value="{{ m }}"{% if m == bk.amount %} selected{% endif %}>{{ m|abs }} min {{ 'later' if m > 0 else 'earlier' }}</option>{% endfor %}</select></label>
+      <label><input type="radio" name="act" value="set"{% if bk.act == 'set' %} checked{% endif %}> Set the time<small>The same start for everyone picked</small><input type="time" name="at" step="300" value="{{ bk.at }}" aria-label="The new start"></label>
+      <label><input type="radio" name="act" value="plan"{% if bk.act == 'plan' %} checked{% endif %}> Back to plan<small>Undo earlier moves and cancels of these breaks</small></label>
+    </div></fieldset>
+    <label class="bk-why">Why <input type="text" name="why" maxlength="200" placeholder="A short reason" value="{{ bk.why }}" autocomplete="off"></label>
+    <p><button type="submit">Show the effect</button></p>
+  </form>
+  {% if bk.error %}<p class="error" role="alert">{{ bk.error }}</p>{% endif %}
+  {% if bk.preview %}{% set pv = bk.preview %}{% set n = pv.changes|length %}
+  <section class="tiles" aria-label="Before and after">
+    <p class="tile"><span class="tile-label">Day at {{ pct }}% or more</span><b>{{ pv.after.now }}<small class="of"> of {{ pv.after.intervals }}</small></b><small class="dim">now {{ pv.before.now }} of {{ pv.before.intervals }}</small></p>
+    <p class="tile"><span class="tile-label">Breaks to change</span><b>{{ n }}</b><small class="dim">{{ bulk_verb(bk.act, n) }}</small></p>
+    <p class="tile"><span class="tile-label">Left as they are</span><b>{{ pv.skipped|length }}</b><small class="dim">{{ 'listed below with why' if pv.skipped else 'none' }}</small></p>
+    <p class="tile"><span class="tile-label">Short of demand</span><b>{{ pv.after.short_hours|num }} h</b><small class="dim">now {{ pv.before.short_hours|num }} h</small></p>
+  </section>
+  <div class="scroll" role="region" tabindex="0" aria-label="The changes (scrolls sideways)"><table class="adh-t"><thead><tr><th scope="col">Associate</th><th scope="col">Break</th><th scope="col">Now</th><th scope="col">After</th></tr></thead>
+    <tbody>{% for c in pv.changes %}<tr><td><b>{{ c.name }}</b></td><td>{{ c.kind }}, {{ c.minutes }} min</td><td>{{ 'Cancelled' if c.cancelled else hm(c.start) }}</td><td>{{ 'Cancelled' if c.new == 'cancelled' else ('Plan' if c.new is none else hm(c.new)) }}</td></tr>{% endfor %}
+    {% for x in pv.skipped %}<tr class="bk-skip"><td><b>{{ x.name }}</b></td><td>{{ x.kind }}</td><td></td><td><b class="why">Left as it is:</b> {{ x.why }}</td></tr>{% endfor %}</tbody></table></div>
+  {% if n %}<form method="post" action="{{ url_for('day_bulk_apply') }}" class="bk-foot"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}">{% for w in bk.who %}<input type="hidden" name="who" value="{{ w }}">{% endfor %}<input type="hidden" name="which" value="{{ bk.which }}"><input type="hidden" name="act" value="{{ bk.act }}"><input type="hidden" name="amount" value="{{ bk.amount }}"><input type="hidden" name="at" value="{{ bk.at }}"><input type="hidden" name="why" value="{{ bk.why }}">
+    <button class="{{ 'danger' if bk.act == 'cancel' else 'primary' }}" type="submit">{{ {'cancel': 'Cancel', 'shift': 'Move', 'set': 'Set', 'plan': 'Put'}[bk.act] }} {{ n }} break{{ 's' if n != 1 }}{{ ' back to plan' if bk.act == 'plan' }}</button> <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure) }}">Close</a>
+    <small>Not posted to the group until you press Send at the top of the page. You can undo it.</small></form>{% endif %}
+  {% endif %}
 </section>
 {% elif tab == 'meeting' %}
 <div class="adh">
@@ -271,7 +307,7 @@
 {% elif tab != 'channels' %}
 <section class="panel" aria-labelledby="board-h">
   <h2 id="board-h">Interval board</h2>
-  <p class="autopilot"><a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='replan') }}">Fix the rest of the day's breaks</a></p>
+  <p class="autopilot"><a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='replan') }}">Fix the rest of the day's breaks</a> <a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='bulk') }}">Change several breaks</a></p>
   <p class="note">Each row is one {{ unit.get(v.interval, 'interval')[:-1] }}: who goes on a break in it, who is late, leaves early or is in aux, and whether the floor still holds. Drag a break to another row, or click it to set the time in 5-minute steps; you see the warnings and the best times before anything is kept.</p>
   {% set gone = [] %}{% for lane in v.lanes %}{% for s in lane.segments if s.offset == 0 and s.status in absent_states %}{% set _ = gone.append(lane.name ~ ' (' ~ s.status|lower ~ ')') %}{% endfor %}{% endfor %}
   {% if gone %}<p class="board-gone">Not on the floor today: <b>{{ gone|join(', ') }}</b>.</p>{% endif %}

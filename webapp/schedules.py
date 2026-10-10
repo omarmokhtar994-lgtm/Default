@@ -225,6 +225,18 @@ class ScheduleBook:
         out.sort(key=lambda e: (not e["in_use"], -(e["run"].get("created") or 0)))
         return out
 
+    def delete_run(self, run_id: str) -> int:
+        """Delete a schedule (run) that is not in use, with its versions and its kept files (Phase AA). Refused
+        (ValueError) while one of its versions is the one in use for its week. Returns how many versions went."""
+        with self._lock(run_id):
+            if any(v["in_use"] for v in self.store.list_schedules(run_id=run_id)):
+                workbook = (self.store.get_run(run_id) or {}).get("workbook") or "This schedule"
+                raise ValueError(f"{workbook} is the schedule in use for the week, so it cannot be deleted. Set "
+                                 "another schedule in use first.")
+            count = self.store.delete_run(run_id)
+            shutil.rmtree(self.root / run_id, ignore_errors=True)
+        return count
+
     def kept_weeks(self, program: str) -> List[Dict[str, Any]]:
         """The weeks with a kept schedule for ``program``, oldest first, each with how many schedules (runs) it has
         (Phase AA: the Schedules page's week picker)."""

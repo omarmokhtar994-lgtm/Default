@@ -148,4 +148,16 @@
   </form>
 </dialog>
 {% endif %}
+{% if may_delete %}{% set n = versions|length %}
+<section class="panel delpanel" id="delete" aria-labelledby="del-h">
+  <h2 id="del-h">Delete this schedule</h2>
+  {% if versions|selectattr('in_use')|list %}<p>{{ run.workbook }} is the schedule in use for the week, so it cannot be deleted. Set another schedule in use first, then delete this one from here.</p>
+  {% elif running %}<p>{{ run.workbook }} is still running: stop it first, then delete it.</p>
+  {% else %}<p>{{ run.workbook }} is not in use. Deleting it removes it and its {{ n }} version{{ 's' if n != 1 }} for everyone: this page, the week's list, Home and exports.</p>
+  <ul><li>Kept: attendance, moved breaks and everything else recorded on the days. Those belong to the day, not to this schedule.</li><li>The activity log keeps who deleted it and when.</li></ul>
+  <form method="post" action="{{ url_for('run_delete', run_id=run.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label class="tick"><input type="checkbox" name="confirm" value="1" required> I understand that {{ run.workbook }} and its version{{ 's' if n != 1 }} are deleted for everyone and cannot be brought back.</label>
+    <button class="danger" type="submit">Delete schedule</button></form>
+  {% endif %}
+</section>{% endif %}
 {% endblock %}

@@ -1135,3 +1135,11 @@ select.pending, input.pending, [data-day] select.att.pending { border-style: das
 .cmp-acts { display: flex; flex-wrap: wrap; gap: 8px; }
 .cmp-acts form { margin: 0; }
 .cmp-acts .button, .cmp-acts button { padding: 6px 12px; font-size: 0.875rem; white-space: nowrap; }
+/* Phase AA: delete a schedule that is not needed */
+.delpanel { margin: 18px 0; }
+.delpanel h2 { margin: 0 0 4px; }
+.delpanel p { margin: 0 0 10px; max-width: 72ch; }
+.delpanel ul { margin: 0 0 12px; padding-left: 20px; color: var(--dim); max-width: 72ch; }
+.delpanel form { margin: 0; }
+.delpanel label.tick { display: flex; gap: 10px; align-items: flex-start; margin: 0 0 12px; font-weight: 400; max-width: 72ch; }
+.delpanel label.tick input { margin-top: 3px; }

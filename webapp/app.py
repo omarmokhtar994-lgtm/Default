@@ -45,7 +45,7 @@ from .run_admin import PICK_UNIT, apply_rename, apply_run_change, preview_rename
 from .schedules import ScheduleBook, group_changes
 from .versions import DAYS, shift_span, stale_blocks, with_notes
 from .results import version_summary
-from .runs import MODES, OPTION_LABELS, READY, RESUMABLE, RunQueue, parse_options, run_options
+from .runs import ACTIVE, MODES, OPTION_LABELS, READY, RESUMABLE, RunQueue, parse_options, run_options
 from .store import Store
 from .week import view as week_view
 
@@ -1383,7 +1383,35 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                counts=counts, may_set_in_use=bool(current) and _may_set_in_use(current),
                                days=DAYS, channel_lines=_channel_lines(run_id), channel_added=added, step=step,
                                week_list=week_list if len(week_list) > 1 else [],
-                               may_use={e["shown"]["id"] for e in week_list if _may_set_in_use(e["shown"])})
+                               may_use={e["shown"]["id"] for e in week_list if _may_set_in_use(e["shown"])},
+                               may_delete=_may_delete(run), running=run["status"] in ACTIVE + ("QUEUED",))
+
+    # ------------------------------------------------------------- delete a schedule (Phase AA)
+    @app.route("/runs/<run_id>/delete", methods=["POST"])
+    @login_required
+    def run_delete(run_id: str):  # type: ignore[no-untyped-def]
+        """Delete a schedule that is not needed (owner, 2026-10-10: "Uploader or admin"): admins and the person who
+        uploaded or ran it, any schedule not in use and not running. The days' records stay; the log keeps it."""
+        run = _run_or_404(run_id)
+        if not _may_delete(run):
+            abort(403)
+        program, week = run.get("program") or "", run.get("week_start") or ""
+        back = redirect(url_for("schedules_for", program=program, week=week) if program else url_for("home"))
+        if request.form.get("confirm") != "1":
+            flash("Tick the box to confirm, then press Delete schedule.")
+            return redirect(url_for("run_schedules", run_id=run_id) + "#delete")
+        if run["status"] in ACTIVE + ("QUEUED",):
+            flash(f"{run['workbook']} is still running: stop it first, then delete it.")
+            return redirect(url_for("run_schedules", run_id=run_id) + "#delete")
+        try:
+            count = _book().delete_run(run_id)
+        except ValueError as exc:
+            flash(str(exc))
+            return redirect(url_for("run_schedules", run_id=run_id) + "#delete")
+        shutil.rmtree(_queue().run_dir(run_id), ignore_errors=True)
+        _record("run_deleted", run, detail=f"{count} version{'s' if count != 1 else ''}")
+        flash(f"Deleted {run['workbook']} and its {count} version{'s' if count != 1 else ''}.")
+        return back
 
     # ------------------------------------------------------------- channel needs for a schedule (Phase Z)
     @app.route("/runs/<run_id>/channel-needs.xlsx")

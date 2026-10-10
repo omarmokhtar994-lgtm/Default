@@ -637,6 +637,18 @@ class Store:
         with self._db() as db:
             db.execute(f"update schedules set {names} where id = ?", (*fields.values(), schedule_id))
 
+    def delete_run(self, run_id: str) -> int:
+        """A run and what belongs only to it (Phase AA): its schedule versions, their changes and their drafts.
+        Events and every record of the days (attendance, moved breaks, activities, channel moves, day log, interval
+        targets) stay. Returns how many versions were deleted."""
+        with self._db() as db:
+            ids = [(r[0],) for r in db.execute("select id from schedules where run_id = ?", (run_id,))]
+            for table in ("schedule_changes", "break_drafts", "channel_drafts"):
+                db.executemany(f"delete from {table} where schedule_id = ?", ids)
+            db.execute("delete from schedules where run_id = ?", (run_id,))
+            db.execute("delete from runs where id = ?", (run_id,))
+        return len(ids)
+
     def delete_schedule(self, schedule_id: int) -> None:
         with self._db() as db:
             db.execute("delete from schedule_changes where schedule_id = ?", (schedule_id,))

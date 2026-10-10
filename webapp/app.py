@@ -172,12 +172,21 @@ def username_problem(username: str) -> str:
     return "" if username and plain.isalnum() and plain.isascii() else USERNAME_RULE
 
 
+FIRST_DAY, LAST_DAY = date(2000, 1, 1), date(2099, 12, 31)  # days the site works with (Phase AC: 9999-12-31 crashed)
+
+
+def in_range(day: Optional[date]) -> Optional[date]:
+    """``day`` when the website can work with it (week and day arithmetic stays inside the calendar), else None."""
+    return day if day is not None and FIRST_DAY <= day <= LAST_DAY else None
+
+
 def start_date(text: str) -> Optional[str]:
     """A schedule's first date as given (YYYY-MM-DD, any weekday), or None if it is not a date."""
     try:
-        return datetime.strptime((text or "").strip(), "%Y-%m-%d").date().isoformat()
+        found = in_range(datetime.strptime((text or "").strip(), "%Y-%m-%d").date())
     except ValueError:
         return None
+    return found.isoformat() if found else None
 
 
 def start_choices(around: str = "", keep: str = "") -> List[Tuple[str, str, int]]:
@@ -1937,7 +1946,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
 
     def _date(text: str) -> Optional[date]:
         try:
-            return datetime.strptime((text or "").strip(), "%Y-%m-%d").date()
+            return in_range(datetime.strptime((text or "").strip(), "%Y-%m-%d").date())
         except ValueError:
             return None
 
@@ -2565,14 +2574,15 @@ def create_app(config: Dict[str, Any]) -> Flask:
     @app.errorhandler(400)
     @app.errorhandler(403)
     @app.errorhandler(404)
+    @app.errorhandler(405)
     @app.errorhandler(413)
     def _error(err):  # type: ignore[no-untyped-def]
         """What went wrong and what to do (Phase XY): a reason given where the error was raised wins over the
-        default words for its code."""
+        default words for its code. Phase AC: a wrong-method request (a reload of a form's address) too."""
         messages = {403: "Your account cannot do this.", 404: "This page does not exist.",
-                    413: "That file is larger than 25 MB."}
+                    405: "This address opens only from its form.", 413: "That file is larger than 25 MB."}
         hints = {403: "Ask an admin if you need it.", 404: "The link may be old, or the page moved.",
-                 413: "Pick a smaller workbook."}
+                 405: "Go back, then send the form again.", 413: "Pick a smaller workbook."}
         said = getattr(err, "description", "") or ""
         own = bool(said) and said != type(err).description  # words given where it was raised
         text = said if own else messages.get(err.code, said or "Something went wrong.")

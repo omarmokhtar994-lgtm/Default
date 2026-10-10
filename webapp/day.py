@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import math
 import re
+import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -39,6 +40,7 @@ TIMED = LATE_EARLY | AUX  # may carry a from/to time
 MEASURES = {"interval": "Interval compliance", "sl": "Service level"}
 KEEP = 8  # workbooks kept read
 _CACHE: Dict[Tuple[str, float], Dict[str, Any]] = {}
+_LOCK = threading.Lock()  # the server's threads share _CACHE (Phase AC): every read and write holds it
 
 
 class BreakRefused(ValueError):
@@ -130,9 +132,11 @@ def _languages(wb) -> List[Dict[str, Any]]:
 def read_inputs(path: Path) -> Dict[str, Any]:
     """Demand, interval and language setup of a version's workbook (cached per file)."""
     key = (str(path), Path(path).stat().st_mtime)
-    if key in _CACHE:
-        return _CACHE[key]
-    wb = load_workbook(path, data_only=True)
+    with _LOCK:
+        found = _CACHE.get(key)
+    if found is not None:
+        return found
+    wb = load_workbook(path, data_only=True)  # read outside the lock: a slow workbook never holds up another
     step = int(float(_instruction(wb, ("interval minutes",)) or 30))
     demand = _grid(wb, str(_instruction(wb, ("requirements source",)) or f"FT Wise {step} Min"))
     previous = []
@@ -154,9 +158,10 @@ def read_inputs(path: Path) -> Dict[str, Any]:
     # day's own figures never use it (owner: actuals replace it)
     found = {"interval": step if 1440 % step == 0 else 30, "required": demand, "planned_shrinkage": planned, **gaps,
              "languages": _languages(wb), "previous_saturday": previous, "target": _target(wb)}
-    while len(_CACHE) >= KEEP:
-        _CACHE.pop(next(iter(_CACHE)))
-    _CACHE[key] = found
+    with _LOCK:
+        while len(_CACHE) >= KEEP:
+            _CACHE.pop(next(iter(_CACHE)))
+        _CACHE[key] = found
     return found
 
 

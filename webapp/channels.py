@@ -15,6 +15,7 @@ covered by the requirements"), leaving out the all-channels times (owner: "to av
 from __future__ import annotations
 
 import re
+import threading
 import zipfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -39,6 +40,8 @@ YES, NO = ("yes", "y", "true"), ("no", "n", "false")
 EPS = 1e-6
 KEEP = 8
 _CACHE: Dict[Tuple[Any, ...], Any] = {}  # read_channels by (path, mtime, step); has_channel_needs by ("needs", ...)
+_LOCK = threading.Lock()  # the server's threads share _CACHE (Phase AC): every read and write holds it
+_MISS = object()  # a cached value may itself be None or False
 
 
 def _norm(value: Any) -> str:
@@ -363,9 +366,11 @@ def has_channel_needs(path: Path) -> bool:
     except OSError:
         return False
     key = ("needs", str(path), stat.st_mtime_ns, stat.st_size)
-    if key not in _CACHE:
-        _remember(key, _asks_for_someone(path))
-    return bool(_CACHE[key])
+    found = _cached(key)
+    if found is _MISS:
+        found = _asks_for_someone(path)  # read outside the lock: a slow workbook never holds up another
+        _remember(key, found)
+    return bool(found)
 
 
 def _asks_for_someone(path: Path) -> bool:
@@ -405,8 +410,9 @@ def read_channels(path: Path, step: int) -> Optional[Dict[str, Any]]:
     """The channel tabs of an input workbook, or None when it has none. Refused (ValueError naming each tab and row,
     all of them at once) when a cell cannot be used. Read once per file version."""
     key = (str(path), Path(path).stat().st_mtime, step)
-    if key in _CACHE:
-        return _CACHE[key]
+    found = _cached(key)
+    if found is not _MISS:
+        return found
     wb = load_workbook(path, data_only=True)
     by_name = {_norm(n): n for n in wb.sheetnames}
     problems: List[str] = []
@@ -460,10 +466,16 @@ def read_channels(path: Path, step: int) -> Optional[Dict[str, Any]]:
     return found
 
 
+def _cached(key) -> Any:
+    with _LOCK:
+        return _CACHE.get(key, _MISS)
+
+
 def _remember(key, value) -> None:
-    while len(_CACHE) >= KEEP:
-        _CACHE.pop(next(iter(_CACHE)))
-    _CACHE[key] = value
+    with _LOCK:
+        while len(_CACHE) >= KEEP:
+            _CACHE.pop(next(iter(_CACHE)))
+        _CACHE[key] = value
 
 
 # ----------------------------------------------------------------------------------------------- the requirement tab

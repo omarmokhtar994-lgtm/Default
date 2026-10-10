@@ -48,7 +48,13 @@ class TheWebWorkbooks(unittest.TestCase):
 
     def test_blank_has_every_tab_and_no_people_or_demand(self):
         example, blank = load_workbook(EXAMPLE), load_workbook(BLANK)
-        self.assertEqual(blank.sheetnames, example.sheetnames)
+        # Re-pinned in Phase Z (2026-10-10): the owner approved the channel tabs on the Home workbooks (sample 03,
+        # "Panel + tabs"). A channel grid tab carries its workbook's own interval in its name (Phase V's approved
+        # layout; a grid at another interval is refused once filled in): the Blank is set to 30 minutes and the
+        # Example is 60, so those three names differ. Every other tab is the same, in the same order.
+        grids = {f"{c} 60 Min": f"{c} 30 Min" for c in ("Chat", "Phone", "Email")}
+        self.assertEqual(blank.sheetnames, [grids.get(n, n) for n in example.sheetnames])
+        self.assertTrue(set(grids) <= set(example.sheetnames))
         for sheet, (first_row, first_col) in W.CLEARED.items():
             ws = blank[sheet]
             filled = [(c.coordinate, c.value) for row in ws.iter_rows(min_row=first_row, min_col=first_col)

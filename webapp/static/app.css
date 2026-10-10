@@ -1047,3 +1047,25 @@ select.pending, input.pending, [data-day] select.att.pending { border-style: das
 .log-each { margin: 4px 0 0; }
 .log-each summary { cursor: pointer; color: var(--dim); font-size: 0.8125rem; }
 .log-each ul { margin: 6px 0 0; padding-left: 18px; font-size: 0.8125rem; color: var(--dim); }
+/* Phase Z: channel needs added to a schedule; without them, three steps say how */
+.chpanel { margin: 18px 0; }
+.chpanel h2 { margin: 0 0 4px; }
+.chpanel .note { margin: 0 0 10px; color: var(--dim); max-width: 70ch; }
+.ch-steps { list-style: none; counter-reset: step; padding: 0; margin: 12px 0; display: grid; gap: 14px; max-width: 76ch; }
+.ch-steps li { counter-increment: step; position: relative; padding-left: 36px; }
+.ch-steps li::before { content: counter(step); position: absolute; left: 0; top: 0; width: 24px; height: 24px; border-radius: 50%;
+  border: 1px solid var(--paper); display: grid; place-items: center; font-weight: 700; font-size: 0.8125rem; }
+.ch-steps b { display: block; }
+.ch-steps span { display: block; color: var(--dim); font-size: 0.875rem; margin: 2px 0 8px; }
+.ch-up { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0; }
+.ch-up label { margin: 0; font-weight: 400; font-size: 0.8125rem; color: var(--dim); }
+.ch-up input[type=file] { display: block; margin-top: 4px; font: inherit; font-size: 0.8125rem; color: var(--dim); }
+.ch-up input[type=file]::file-selector-button { margin-right: 10px; padding: 6px 10px; border: 1px solid var(--edge);
+  border-radius: 4px; background: transparent; color: var(--action); font: 600 0.8125rem var(--text); cursor: pointer; }
+.ch-acts { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; }
+.ch-more { margin: 12px 0 0; }
+.ch-more summary { cursor: pointer; font-weight: 600; }
+.ch-more > .note, .ch-more > .ch-up { margin-top: 8px; }
+.ch-then { margin: 0; }
+.ch-point { margin: 10px 0 0; padding: 8px 12px; max-width: 70ch; border-left: 3px solid var(--edge); background: var(--well);
+  font-size: 0.875rem; }

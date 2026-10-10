@@ -8,6 +8,7 @@ import os
 import re
 import secrets
 import shutil
+import tempfile
 import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -27,6 +28,7 @@ from .channel_page import (FULL as FULL_DAYS, NAMES as CHANNEL_NAMES, apply_edit
                            grid as channel_grid, people_for, planned_anything)
 from .channel_people import ChannelPeople, can_work, channel_words
 from .channel_plan import NoPlan, plan_day, score_day
+from .channel_template import channel_workbook
 from .channels import check_lines, has_channel_tabs, read_channels, requirement_tab
 from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, board, read_inputs, shift_groups
 from .coach import actual_shrinkage, corrected_tab
@@ -760,13 +762,15 @@ def create_app(config: Dict[str, Any]) -> Flask:
             trial.unlink(missing_ok=True)
 
     def _channel_lines(run_id: str) -> Optional[List[Tuple[str, str]]]:
-        """The channel check of a run's input workbook, or None when it has no channel tabs."""
-        src = _book().input_path(run_id)
-        if not src.is_file() or not has_channel_tabs(src):
+        """The channel check of a run's channel needs (Phase Z: the ones added to it, else its input workbook's
+        channel tabs) against its requirement tab, or None when it has none."""
+        book = _book()
+        needs, src = book.channel_path(run_id), book.input_path(run_id)
+        if needs is None:
             return None
         try:
             inputs = read_inputs(src)
-            return check_lines(read_channels(src, inputs["interval"]), inputs, src)
+            return check_lines(read_channels(needs, inputs["interval"]), inputs, src)
         except (ValueError, KeyError, StopIteration) as exc:
             return [("warn", f"The channel tabs cannot be read: {exc}")]
 
@@ -1365,11 +1369,67 @@ def create_app(config: Dict[str, Any]) -> Flask:
         view = book.view(current["id"]) if current else None
         counts = {v["id"]: book.view(v["id"]) for v in versions} if versions else {}
         week_list = book.week_list(run.get("program") or "", run.get("week_start") or "")
+        needs = book.channel_path(run_id)
+        added = needs.stat().st_mtime if needs is not None and needs.name == "channels.xlsx" else None
+        step = None
+        if versions and book.input_path(run_id).is_file():
+            step = read_inputs(book.input_path(run_id))["interval"]
         return render_template("schedules.html", run=run, versions=versions, current=current, view=view,
                                counts=counts, may_set_in_use=bool(current) and _may_set_in_use(current),
-                               days=DAYS, channel_lines=_channel_lines(run_id),
+                               days=DAYS, channel_lines=_channel_lines(run_id), channel_added=added, step=step,
                                week_list=week_list if len(week_list) > 1 else [],
                                may_use={e["shown"]["id"] for e in week_list if _may_set_in_use(e["shown"])})
+
+    # ------------------------------------------------------------- channel needs for a schedule (Phase Z)
+    @app.route("/runs/<run_id>/channel-needs.xlsx")
+    @login_required
+    def channel_needs_download(run_id: str):  # type: ignore[no-untyped-def]
+        """The channel needs workbook made for this run's week: the needs added to it when there are some (to
+        change them), else the empty tabs at the run's interval."""
+        run = _run_or_404(run_id)
+        book = _book()
+        source = book.input_path(run_id)
+        if not source.is_file():
+            abort(404)
+        name = secure_filename(f"Channel_needs_{run.get('program') or run_id}_{run.get('week_start') or ''}"
+                               ).rstrip("_") + ".xlsx"
+        added_needs = book.root / run_id / "channels.xlsx"
+        if added_needs.is_file():
+            return send_file(added_needs, as_attachment=True, download_name=name)
+        inputs = read_inputs(source)
+        with tempfile.TemporaryDirectory() as folder:
+            made = channel_workbook(Path(folder) / name, inputs["interval"], [lang["name"] for lang in inputs["languages"]])
+            data = io.BytesIO(made.read_bytes())
+        return send_file(data, as_attachment=True, download_name=name,
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    @app.route("/runs/<run_id>/channel-needs", methods=["POST"])
+    @login_required
+    def channel_needs_add(run_id: str):  # type: ignore[no-untyped-def]
+        """Add channel needs to this schedule (anyone who can edit its versions): kept with the run, no new run."""
+        run = _run_or_404(run_id)
+        back = redirect(url_for("run_schedules", run_id=run_id) + "#channels")
+        upload = request.files.get("workbook")
+        if upload is None or not os.path.basename(upload.filename or "").lower().endswith(".xlsx"):
+            flash("Pick the channel needs workbook (.xlsx) to add.")
+            return back
+        incoming = _queue().runs_root / "_incoming"
+        incoming.mkdir(exist_ok=True)
+        path = incoming / f"{secrets.token_hex(8)}.upload"
+        upload.save(path)
+        try:
+            lines = _book().attach_channels(run_id, path)
+        except ValueError as exc:
+            flash(f"These channel needs were not added: {exc}")
+            return back
+        finally:
+            path.unlink(missing_ok=True)
+        warnings = sum(1 for level, _ in lines if level == "warn")
+        _record("channel_needs_added", run, detail=f"{warnings} warning{'s' if warnings != 1 else ''}")
+        flash(f"Channel needs added to {run['workbook']}: " + (
+            f"{warnings} warning{'s' if warnings != 1 else ''}, listed under Channels. They never change the schedule."
+            if warnings else "checked, no warnings.") + " Plan channels is ready.")
+        return back
 
     # ------------------------------------------------------------- a week's breaks (Phase R)
     def _clock_of(text: str, span: Tuple[int, int]) -> Optional[int]:
@@ -1505,18 +1565,18 @@ def create_app(config: Dict[str, Any]) -> Flask:
         by hand, Copy to days with the same shifts; nothing is kept until Save, which makes a new version."""
         row = _version_or_404(schedule_id)
         store, book = app.extensions["store"], _book()
-        src = book.input_path(row["run_id"])
+        needs = book.channel_path(row["run_id"])
         setup = None
-        if src.is_file() and has_channel_tabs(src):
+        if needs is not None:
             try:
-                inputs = read_inputs(src)
-                setup = read_channels(src, inputs["interval"])
+                inputs = read_inputs(book.input_path(row["run_id"]))
+                setup = read_channels(needs, inputs["interval"])
             except (ValueError, KeyError, StopIteration) as exc:
                 return render_template("error.html", code=400, message=f"The channel tabs cannot be read: {exc}"), 400
         if setup is None:
             return render_template("error.html", code=404, message="This schedule's input workbook has no channel "
                                    "tabs (Chat, Phone or Email per interval, Email Hours, Channel Setup), so there are "
-                                   "no channels to plan."), 404
+                                   "no channels to plan. Add channel needs on its Schedules page, under Channels."), 404
         week = json.loads(row["week"] or "{}")
         day = request.values.get("day", "")
         if day not in DAYS:

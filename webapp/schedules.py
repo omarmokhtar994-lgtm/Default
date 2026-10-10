@@ -95,6 +95,48 @@ class ScheduleBook:
     def input_path(self, run_id: str) -> Path:
         return self.root / run_id / "input.xlsx"
 
+    def channel_path(self, run_id: str) -> Optional[Path]:
+        """Where a run's channel needs are read from (Phase Z): the channel needs added to it, else its input
+        workbook when that has channel tabs, else None. The requirement and the inputs stay the input workbook's."""
+        from .channels import has_channel_tabs
+        added_needs = self.root / run_id / "channels.xlsx"
+        if added_needs.is_file():
+            return added_needs
+        source = self.input_path(run_id)
+        return source if source.is_file() and has_channel_tabs(source) else None
+
+    def attach_channels(self, run_id: str, upload: Path) -> List[Tuple[str, str]]:
+        """Add channel needs to a run without a new run (Phase Z): read at the run's interval and kept as its
+        channels.xlsx, replacing any added before. Refused (ValueError naming the tab and row) when they cannot be
+        used; then nothing is kept. Returns what the check says against the requirement tab."""
+        from openpyxl.utils.exceptions import InvalidFileException
+        from zipfile import BadZipFile
+
+        from .channels import check_lines, read_channels
+        from .day import read_inputs
+        source = self.input_path(run_id)
+        if not source.is_file():
+            raise ValueError("This schedule's input workbook is missing, so channel needs cannot be added to it.")
+        inputs = read_inputs(source)
+        step = inputs["interval"]
+        with self._lock(run_id):
+            fd, name = tempfile.mkstemp(suffix=".xlsx", prefix=".channels-", dir=self.root / run_id)
+            os.close(fd)
+            trial = Path(name)
+            try:
+                shutil.copyfile(upload, trial)
+                try:
+                    setup = read_channels(trial, step)
+                except (BadZipFile, InvalidFileException, KeyError, OSError):
+                    raise ValueError("This file is not an Excel workbook (.xlsx).") from None
+                if setup is None:
+                    raise ValueError(f"This workbook has no channel tabs (Chat {step} Min, Phone {step} Min, Email "
+                                     f"{step} Min, Email Hours or Channel Setup).")
+                os.replace(trial, self.root / run_id / "channels.xlsx")
+            finally:
+                trial.unlink(missing_ok=True)
+        return check_lines(setup, inputs, source)
+
     def _options(self, run_id: str) -> Dict[str, str]:
         run = self.store.get_run(run_id) or {}
         try:

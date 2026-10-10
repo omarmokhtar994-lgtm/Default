@@ -268,7 +268,8 @@ class DayBook:
                  "with_whom": extra.get("with_whom", ""), "why": extra.get("why", "")})
         earlier, _ = self.version(program, on - timedelta(days=1))  # last night: the schedule holding yesterday
         before = (self._week(earlier), day_index(on - timedelta(days=1))) if earlier else None
-        channels, channel_problem = self._channel_inputs(program, on, week, inputs, source, earlier)
+        channels, channel_problem = self._channel_inputs(program, on, week, inputs,
+                                                         self.book.channel_path(row["run_id"]), earlier)
         view = day_view(week, inputs, day_index(on), attendance, actual, measure, acts, before, channels=channels)
         ratio, source_of_target = self.target_for(program, on, row, inputs)
         return {"version": row, "note": note, "view": view, "stale": stale, "date": on,
@@ -319,10 +320,13 @@ class DayBook:
     # ------------------------------------------------------------- channels on the day (Phase V)
     def _channel_inputs(self, program: str, on: date, week: Dict[str, Any], inputs: Dict[str, Any], source,
                         earlier: Optional[Dict[str, Any]]) -> Tuple[Optional[Dict[str, Any]], str]:
-        """What the day view needs to count channels (None without channel tabs), and why it cannot when the tabs
-        no longer read (said on the page; the day itself still shows)."""
+        """What the day view needs to count channels (None without channel needs), and why it cannot when the tabs
+        no longer read (said on the page; the day itself still shows). ``source`` is the run's channel needs
+        (Phase Z: ``ScheduleBook.channel_path``), None when it has none."""
         from .channel_people import ChannelPeople
         from .channels import read_channels
+        if source is None:
+            return None, ""
         try:
             setup = read_channels(source, inputs["interval"])
         except ValueError as exc:
@@ -376,8 +380,8 @@ class DayBook:
             raise ValueError("Pick Phone, Chat or Email.")
         if channel not in can_work(ChannelPeople(self.store).skills_for_unit(program), name):
             raise ValueError(f"{name} cannot work {CHANNELS[channel]} (see Associate channels).")
-        source = self.book.input_path(row["run_id"])
-        setup = read_channels(source, read_inputs(source)["interval"]) if source.is_file() else None
+        needs, source = self.book.channel_path(row["run_id"]), self.book.input_path(row["run_id"])
+        setup = read_channels(needs, read_inputs(source)["interval"]) if needs is not None else None
         if not setup:
             raise ValueError("This schedule's workbook has no channel tabs.")
         d = day_index(on)

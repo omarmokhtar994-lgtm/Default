@@ -5,6 +5,7 @@
 <div class="phead"><div>
   <h1>Associate channels: {{ program.name }}</h1>
   <p class="byline">Which channels each person can work. Set once and kept for every week; people on the schedule who are not listed here can work all three{% if program.lobs %}. Every LOB of {{ program.name }} ({{ program.lobs|map(attribute='name')|join(', ') }}) uses this list{% endif %}. Admins and supervisors keep it; changes are recorded.</p>
+  <p class="ch-point">This page says who can work each channel. How many people each channel needs comes with each week's schedule: open <a href="{{ url_for('schedules_for', program=key) }}">Schedules</a>, then Channels, to add the needs and plan the day.</p>
 </div>
 {% if choices|length > 1 %}<form class="sel" method="get" action="{{ url_for('channel_setup') }}"><label>Program <select name="program" data-autosubmit>{% for name, k in choices %}<option value="{{ k }}"{% if name == program.name %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label><noscript><button type="submit">Show</button></noscript></form>{% endif %}
 </div>

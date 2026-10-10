@@ -29,14 +29,6 @@
 </section>
 {% endif %}
 
-{% if channel_lines %}
-<section class="panel chkpanel" aria-labelledby="chan-h">
-  <h2 id="chan-h">Channel tabs</h2>
-  <p class="note">Chat, Phone and Email checked against the requirement tab. Warnings never block anything and never change the schedule; the channel plan follows the channel tabs.</p>
-  <ul class="chk">{% for level, text in channel_lines %}<li class="{{ level }}">{{ text }}</li>{% endfor %}</ul>
-</section>
-{% endif %}
-
 {% if not versions %}
 <p class="empty panel">No schedules kept for this run: a readiness check, a run that did not finish, or a run whose files were already deleted.</p>
 {% else %}
@@ -57,6 +49,35 @@
   {% if channel_lines %}<a class="button" href="{{ url_for('plan_channels', schedule_id=current.id) }}">Plan channels</a>{% endif %}
   <button type="button" class="button" data-swap-open>Swap slots</button>
 </div>
+
+{% if step %}{% macro needs_form(label) %}<form class="ch-up" method="post" action="{{ url_for('channel_needs_add', run_id=run.id) }}" enctype="multipart/form-data"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Channel needs workbook (.xlsx) <input type="file" name="workbook" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required></label><button class="primary" type="submit">{{ label }}</button></form>{% endmacro %}
+<section class="panel chpanel" id="channels" aria-labelledby="chan-h">
+{% if channel_lines and not channel_added %}
+  <h2 id="chan-h">Channel tabs</h2>
+  <p class="note">From this schedule's workbook: Chat, Phone and Email checked against the requirement tab. Warnings never block anything and never change the schedule; the channel plan follows the channel tabs.</p>
+  <ul class="chk">{% for level, text in channel_lines %}<li class="{{ level }}">{{ text }}</li>{% endfor %}</ul>
+  <details class="ch-more"><summary>Add channel needs instead</summary>
+    <p class="note">Channel needs added here are used instead of the workbook's own channel tabs. <a href="{{ url_for('channel_needs_download', run_id=run.id) }}">Download the channel needs workbook</a> for this week, fill it in and add it.</p>
+    {{ needs_form('Add channel needs') }}
+  </details>
+{% elif channel_lines %}
+  <h2 id="chan-h">Channels: Chat, Phone and Email</h2>
+  <p class="note">From channel needs added on {{ when(channel_added) }}, checked against the requirement tab. Warnings never block anything and never change the schedule; the channel plan follows these needs.</p>
+  <ul class="chk">{% for level, text in channel_lines %}<li class="{{ level }}">{{ text }}</li>{% endfor %}</ul>
+  <div class="ch-acts"><a class="button primary" href="{{ url_for('plan_channels', schedule_id=current.id) }}">Plan channels</a><a class="button" href="{{ url_for('channel_needs_download', run_id=run.id) }}">Download the channel needs (.xlsx)</a></div>
+  <details class="ch-more"><summary>Replace the channel needs</summary>{{ needs_form('Replace channel needs') }}</details>
+{% else %}
+  <h2 id="chan-h">Channels: Chat, Phone and Email</h2>
+  <p class="note">This schedule has no channel needs yet, so its channels cannot be planned. Add them in three steps; the schedule itself does not change and no new schedule is made.</p>
+  <ol class="ch-steps">
+    <li><b>Download the channel needs workbook</b><span>Made for {{ run.program|unit if run.program else run.workbook }}{% if run.week_start %}, week of {{ run.week_start|day_month }}{% endif %}: Chat {{ step }} Min, Phone {{ step }} Min and Email {{ step }} Min laid out like FT Wise, with this week's rows, plus Email Hours and Channel Setup.</span><a class="button" href="{{ url_for('channel_needs_download', run_id=run.id) }}">Download channel needs (.xlsx)</a></li>
+    <li><b>Fill in how many people each channel needs</b><span>Per interval, the same way as FT Wise. Email can be hours per day instead. Channel Setup holds the priority order, language minimums and the times when 1 or 2 people cover every channel.</span></li>
+    <li><b>Upload it here</b><span>It is checked against FT Wise first; problems are named by tab and row.</span>{{ needs_form('Add channel needs') }}</li>
+  </ol>
+  <p class="ch-then">Then a button to plan the week's channels appears next to Download, and the RTA's Channels tab shows coverage per channel.</p>
+{% endif %}
+</section>
+{% endif %}
 
 {% set m = view.marks %}
 <div class="side">

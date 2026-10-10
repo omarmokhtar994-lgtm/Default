@@ -132,6 +132,29 @@ class ScheduleBook:
     def versions(self, run_id: str) -> List[Dict[str, Any]]:
         return self.store.list_schedules(run_id=run_id)
 
+    def week_list(self, program: str, week_start: str) -> List[Dict[str, Any]]:
+        """Every schedule (run) kept for one program and week (Phase Z: "i cant find the one was not used"), the one
+        in use first, then the newest: its run, the version shown (the one in use, else its newest), how many versions
+        it has, whether it is in use, intervals fully covered after breaks of the version shown, and whether that
+        version has breaks. Empty without a program or a week."""
+        if not program or not week_start:
+            return []
+        by_run: Dict[str, List[Dict[str, Any]]] = {}
+        for v in self.store.list_schedules(program=program, week_start=week_start):
+            by_run.setdefault(v["run_id"], []).append(v)
+        out = []
+        for run_id, versions in by_run.items():
+            in_use = next((v for v in versions if v["in_use"]), None)
+            shown = in_use or max(versions, key=lambda v: (v["kind"] != "tool_before", v["created"], v["id"]))
+            metrics = json.loads(shown["checks"] or "{}").get("metrics") or {}
+            out.append({"run": self.store.get_run(run_id) or {"id": run_id, "workbook": run_id, "created": 0},
+                        "shown": shown, "count": len(versions), "in_use": in_use is not None,
+                        "covered": (metrics.get("after_100") or 0, metrics["active_intervals"])
+                        if metrics.get("active_intervals") else None,
+                        "has_breaks": bool(json.loads(shown["week"] or "{}").get("breaks"))})
+        out.sort(key=lambda e: (not e["in_use"], -(e["run"].get("created") or 0)))
+        return out
+
     def in_use(self, program: str, week_start: str) -> Optional[Dict[str, Any]]:
         return next((v for v in self.store.list_schedules(program=program, week_start=week_start) if v["in_use"]), None)
 

@@ -1250,7 +1250,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return redirect(url_for("week_page", program=program, week=week) + "#target", code=303)
 
     def _version_week(row: Dict[str, Any], side: str, note: Optional[Dict[str, Any]] = None,
-                      target: Optional[Dict[str, Any]] = None):  # type: ignore[no-untyped-def]
+                      target: Optional[Dict[str, Any]] = None,
+                      elsewhere: Optional[Dict[str, Any]] = None):  # type: ignore[no-untyped-def]
         """A version's week view; ``note`` (the Week page): why this version, and what else the week has."""
         intervals = json.loads(row["checks"] or "{}").get("intervals") or []
         run = app.extensions["store"].get_run(row["run_id"])
@@ -1258,7 +1259,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return render_template("week.html", run=run, view=week_view(intervals, side) if intervals else None,
                                side=side, program=row["program"], week=row["week_start"], programs=programs,
                                weeks=weeks, figures=kept_figures(run or {}), version=row, week_note=note,
-                               may_set_in_use=_may_set_in_use(row), target_panel=target)
+                               may_set_in_use=_may_set_in_use(row), target_panel=target, elsewhere=elsewhere)
 
     @app.route("/week")
     @login_required
@@ -1283,7 +1284,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             chosen, said = pick_version(versions)
             if chosen is not None:
                 runs = {v["run_id"]: (store.get_run(v["run_id"]) or {}).get("workbook", "") for v in versions}
-                others = [wb for rid, wb in runs.items() if rid != chosen["run_id"]]
+                others = [{"run_id": rid, "workbook": wb} for rid, wb in runs.items() if rid != chosen["run_id"]]
                 set_by = ""
                 if chosen["in_use"]:
                     marks = [e for e in store.list_events(0, time.time() + 60, program, None, ["set_in_use"])
@@ -1338,9 +1339,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
             (v for v in versions if v["in_use"]), None) or (versions[0] if versions else None)
         view = book.view(current["id"]) if current else None
         counts = {v["id"]: book.view(v["id"]) for v in versions} if versions else {}
+        week_list = book.week_list(run.get("program") or "", run.get("week_start") or "")
         return render_template("schedules.html", run=run, versions=versions, current=current, view=view,
                                counts=counts, may_set_in_use=bool(current) and _may_set_in_use(current),
-                               days=DAYS, channel_lines=_channel_lines(run_id))
+                               days=DAYS, channel_lines=_channel_lines(run_id),
+                               week_list=week_list if len(week_list) > 1 else [],
+                               may_use={e["shown"]["id"] for e in week_list if _may_set_in_use(e["shown"])})
 
     # ------------------------------------------------------------- a week's breaks (Phase R)
     def _clock_of(text: str, span: Tuple[int, int]) -> Optional[int]:
@@ -1685,7 +1689,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
     @login_required
     def schedule_week(schedule_id: int):  # type: ignore[no-untyped-def]
         row = _version_or_404(schedule_id)
-        return _version_week(row, "before" if request.args.get("side") == "before" else "after")
+        elsewhere = None  # Phase Z: a version that is not in use says which schedule the week uses
+        if not row["in_use"] and row["program"] and row["week_start"]:
+            used = _book().in_use(row["program"], row["week_start"])
+            if used is not None and used["run_id"] != row["run_id"]:
+                elsewhere = {"run_id": used["run_id"],
+                             "workbook": (app.extensions["store"].get_run(used["run_id"]) or {}).get("workbook", "")}
+        return _version_week(row, "before" if request.args.get("side") == "before" else "after", elsewhere=elsewhere)
 
     # ------------------------------------------------------------- the day (Phase N)
     def _days() -> DayBook:
@@ -1737,13 +1747,14 @@ def create_app(config: Dict[str, Any]) -> Flask:
     def schedules_for():  # type: ignore[no-untyped-def]
         """A program's newest schedule versions (the menu's Schedules)."""
         program = clean_program(request.args.get("program", ""))
-        rows = sorted((v for v in app.extensions["store"].list_schedules(program=program)),
-                      key=lambda v: (v["week_start"], v["created"]), reverse=True) if program else []
+        rows = app.extensions["store"].list_schedules(program=program) if program else []
         if not rows:
             flash(f"There are no schedule versions for {program or 'this program'} yet: they appear when a run "
                   "finishes.")
             return redirect(url_for("home"))
-        return redirect(url_for("run_schedules", run_id=rows[0]["run_id"]))
+        latest = max(v["week_start"] for v in rows)  # the latest week, and in it the schedule that counts (Phase Z)
+        chosen, _ = pick_version([v for v in rows if v["week_start"] == latest])
+        return redirect(url_for("run_schedules", run_id=(chosen or rows[-1])["run_id"]))
 
     @app.route("/day")
     @login_required

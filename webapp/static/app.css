@@ -1026,3 +1026,20 @@ select.pending, input.pending, [data-day] select.att.pending { border-style: das
 /* Phase XY: Home stops reloading once the New run form is in use, and says so */
 .newrun .paused { margin: 0 0 14px; }
 .now-text p.now-done { color: var(--paper); font-weight: 600; }
+
+/* Phase Z: every schedule of a week in one list; the one in use is tagged, the page you are on is marked */
+.weeklist { margin-bottom: 18px; }
+.weeklist h2 { margin: 0 0 4px; }
+.weeklist .note { margin: 0 0 10px; color: var(--dim); max-width: 70ch; }
+.weeklist-t { width: 100%; border-collapse: collapse; }
+.weeklist-t th { text-align: left; font-size: 0.8125rem; color: var(--dim); font-weight: 600; padding: 0 12px 6px; }
+.weeklist-t td { padding: 10px 12px; border-top: 1px solid var(--rail); vertical-align: middle; }
+.weeklist-t td small { display: block; color: var(--dim); font-size: 0.8125rem; margin-top: 2px; }
+.weeklist-t tr.here td { background: var(--hover); }
+.weeklist-t tr.here td:first-child { box-shadow: inset 3px 0 0 var(--action); }
+.wl-acts { display: flex; gap: 8px; justify-content: flex-end; align-items: center; flex-wrap: wrap; }
+.wl-acts form { margin: 0; }
+.wl-acts .button, .wl-acts button { padding: 6px 12px; font-size: 0.875rem; white-space: nowrap; }
+.wl-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 0.75rem; white-space: nowrap; }
+.wl-tag.use { background: var(--selected); border: 1px solid var(--action); color: var(--paper); }
+.wl-tag.off { color: var(--dim); border: 1px solid var(--edge); }

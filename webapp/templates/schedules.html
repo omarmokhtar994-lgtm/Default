@@ -9,6 +9,26 @@
   <p class="byline rundetails">Workbook <b>{{ run.workbook }}</b> · {{ run.program|unit if run.program else 'no program set' }} · {% if run.week_start %}starts {{ run.week_start|start_day }}{% else %}no start date set{% endif %}{% if user.is_admin %} · <a href="{{ url_for('run_detail', run_id=run.id, edit=1) }}#edit">Edit the name, program or start date</a>{% elif user.id == run.user_id %} · <a href="{{ url_for('run_detail', run_id=run.id, edit=1) }}#edit">Change the program or start date</a>{% endif %}</p>
 </div></div>
 
+{% if week_list %}
+<section class="panel weeklist" id="week-list" aria-labelledby="weeklist-h">
+  <h2 id="weeklist-h">Schedules for the week of {{ run.week_start|day_month }} ({{ week_list|length }})</h2>
+  <p class="note">The RTA, the Week page, exports and analysis use the one in use. Open another to look at it or compare, and set it in use if it should count.</p>
+  <div class="scroll" role="region" tabindex="0" aria-label="Schedules for the week (scrolls sideways)">
+  <table class="weeklist-t">
+    <thead><tr><th scope="col">Schedule</th><th scope="col">Newest version</th><th scope="col">Covered after breaks</th><th scope="col">Status</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+    <tbody>{% for e in week_list %}{% set here = e.run.id == run.id %}
+    <tr{% if here %} class="here"{% endif %}>
+      <td><b>{{ e.run.workbook }}</b><small>{{ 'Uploaded' if e.run.mode == 'READY' else 'Run' }} by {{ e.run.by_name or 'someone' }} on {{ when(e.run.created) }}</small></td>
+      <td>{{ e.shown.label }}<small>{{ e.count }} version{{ 's' if e.count != 1 }}</small></td>
+      <td>{% if not e.has_breaks %}No breaks yet{% elif e.covered %}{{ e.covered[0] }} of {{ e.covered[1] }}{% else %}–{% endif %}</td>
+      <td>{% if e.in_use %}<span class="wl-tag use">In use</span>{% else %}<span class="wl-tag off">Not in use</span>{% endif %}</td>
+      <td><div class="wl-acts">{% if here %}<span class="dim">You are here</span>{% else %}<a class="button" href="{{ url_for('run_schedules', run_id=e.run.id) }}">Open</a>{% endif %}{% if not e.in_use and e.shown.id in may_use %}<form method="post" action="{{ url_for('schedule_in_use', schedule_id=e.shown.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="primary" type="submit">Set in use</button></form>{% endif %}</div></td>
+    </tr>{% endfor %}</tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
 {% if channel_lines %}
 <section class="panel chkpanel" aria-labelledby="chan-h">
   <h2 id="chan-h">Channel tabs</h2>

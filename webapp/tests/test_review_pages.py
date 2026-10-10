@@ -89,6 +89,16 @@ class TheRunPages(unittest.TestCase):
                                follow_redirects=True)
         self.assertIn("This run cannot be resumed", html.unescape(got.get_data(as_text=True)))
         self.assertEqual(self.store.get_run(smoke)["status"], "FAILED")
+        stuck = self.run_with_input("aaaaaaaaaaa4", "stuck.xlsx", "QUICK", "FAILED")
+        self.store.update_run(stuck, engine_outcome=json.dumps({"code": "HARD_RULE_SHORTFALL_SCHEDULE_FOR_REVIEW",
+                                                                 "category": ""}))
+        page = html.unescape(self.client.get(f"/runs/{stuck}").get_data(as_text=True))
+        self.assertNotIn(f'action="/runs/{stuck}/resume"', page)  # the page does not offer it
+        got = self.client.post(f"/runs/{stuck}/resume", data={"csrf_token": token(self.client)},
+                               follow_redirects=True)
+        self.assertIn("This run cannot be resumed: the engine found the workbook needs a change before it can be "
+                      "scheduled. Fix the workbook and run it again.", html.unescape(got.get_data(as_text=True)))
+        self.assertEqual(self.store.get_run(stuck)["status"], "FAILED")
 
 
 class TheSaves(unittest.TestCase):

@@ -2595,8 +2595,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if not _can_resume(run):  # Phase AC: the page offers it only then; a direct request gets the same answer
             flash("This run cannot be resumed: " + ("a readiness check builds no schedule. Start the run instead."
                                                     if run["mode"] == "SMOKE" else
-                                                    "it ended without one it could continue. Fix the workbook and "
-                                                    "run it again." if run["status"] in RESUMABLE else
+                                                    "the engine found the workbook needs a change before it can be "
+                                                    "scheduled. Fix the workbook and run it again."
+                                                    if run["status"] in RESUMABLE else
                                                     f"it is {label(run).lower()}."))
             return redirect(url_for("run_detail", run_id=run_id))
         resumed = _queue().resume(run_id)

@@ -20,7 +20,7 @@
     <div class="nf-link">
       <label for="nf-link">{{ service_name ~ ' group link' if saved.link else 'Group link' }}</label>
       {% if saved.link %}<p class="dim" id="nf-link-said">Ends in …{{ end }}. Saved {{ when(saved.saved_at) }}{% if saved_by %} by {{ saved_by }}{% endif %}. Kept on this server; never shown again in full.</p>{% endif %}
-      <input type="password" name="link" id="nf-link" autocomplete="off" spellcheck="false" placeholder="{{ 'Paste a new link to replace it' if saved.link else 'Paste the link from Teams or Slack' }}"{% if saved.link %} aria-describedby="nf-link-said"{% endif %}>
+      <input type="text" name="link" id="nf-link" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="{{ 'Paste a new link to replace it' if saved.link else 'Paste the link from Teams or Slack' }}"{% if saved.link %} aria-describedby="nf-link-said"{% endif %}>
     </div>
     <fieldset class="nf-modes"><legend>Posting</legend>
       {% for value, word, note in (('on', 'On', 'Posts to the group'), ('preview', 'Preview only', 'Shown here; nothing is sent'), ('off', 'Off', 'Nothing is posted')) %}<label><input type="radio" name="mode" value="{{ value }}"{% if mode == value %} checked{% endif %}>{{ word }}<small>{{ note }}</small></label>{% endfor %}

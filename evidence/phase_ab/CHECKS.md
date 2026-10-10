@@ -15,6 +15,12 @@ records how the built site was checked. Screens are in `screens/` (written by `T
 | The RTA: each line under Changes today says what happened to it; the break dialog and + Add carry one tick to keep a change off the group; an LOB that posts nowhere looks as before | `webapp/tests/test_notify_rta.py` |
 | The day's breaks post: by shift, once a day, within two hours of its time, the evening before when asked, nothing for a day without a schedule, a day that cannot be read said once | `webapp/tests/test_notify_morning.py` |
 
+## Final review (self-review)
+
+One finding fixed: the group-link field was a password field, so a browser could offer to keep the link in its
+password manager, which syncs it off the server. It is now a plain text field with autocomplete off
+(`test_save_a_slack_link_then_it_is_masked`, failed first, then passed). Four minor points are listed in the report.
+
 ## Browser (Playwright, Chromium 141)
 
 `webapp/tests/test_ui_playwright.py`, class `ThePhaseABInTheBrowser`, `test_notifications_page_and_rta_posts`: save a

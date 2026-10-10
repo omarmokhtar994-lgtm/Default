@@ -70,7 +70,12 @@ class TheLink(_Page):
         saved = self.store.get_notify(self.key)
         self.assertEqual((saved["link"], saved["service"], saved["mode"]), (SLACK, "slack", "on"))
         self.assertEqual(saved["site"], "http://localhost/")
-        self.assertRegex(page, r'<input type="password" name="link"[^>]*autocomplete="off"')
+        # Final review (Phase AB): the link field is not a password field, so no browser offers to keep the link in
+        # its password manager (which syncs it off the server); autocomplete="off" keeps it out of form history.
+        field = re.search(r'<input[^>]*name="link"[^>]*>', page).group(0)
+        self.assertNotIn('type="password"', field)
+        self.assertIn('type="text"', field)
+        self.assertIn('autocomplete="off"', field)
         for event in self.store.list_events(0, 4e9):
             self.assertNotIn(SECRET, json.dumps(event))
         said = [e for e in self.store.list_events(0, 4e9) if e["kind"] == "notify_saved"]

@@ -341,7 +341,7 @@
 {% set close_url = url_for('day_page', program=program, date=on.isoformat(), measure=measure, view=tab if tab != 'timeline' else none) %}
 {% if add_panel %}{% set ap = add_panel %}
 <dialog id="add-dialog" class="dlg add-dlg" open aria-labelledby="add-h">
-  <form method="post" action="{{ url_for('day_add') }}" class="dlg-form" data-preview="{{ url_for('day_add_preview') }}"{% if post_to %} data-post-kinds="{{ post_kinds|join(' ') }}"{% endif %}>
+  <form method="post" action="{{ url_for('day_add') }}" class="dlg-form" data-preview="{{ url_for('day_add_preview') }}"{% if ap.default_minutes %} data-keep-minutes{% endif %}{% if post_to %} data-post-kinds="{{ post_kinds|join(' ') }}"{% endif %}>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="view" value="{{ tab if tab != 'timeline' else 'board' }}"><input type="hidden" name="measure" value="{{ measure }}">
     <input type="hidden" name="at" value="{{ ap.t }}">
     {% set add_title = 'Add for ' ~ hm(ap.t) ~ ' to ' ~ hm(ap.end) %}<h2 id="add-h" data-add-title="{{ add_title }}">{{ add_title }}</h2>
@@ -350,13 +350,13 @@
     <label data-who-working>Who <select name="associate" required>{% for name, label, lang, s0, s1, away in ap.people %}<option value="{{ name }}" data-start="{{ s0 }}" data-end="{{ s1 }}"{% if name == ap.person %} selected{% endif %}>{{ name }}, {{ label }}, {{ lang[:3]|upper }}{% if away %}, {{ away }}{% endif %}</option>{% endfor %}</select></label>
     {% if ap.off %}<label data-who-off hidden>Who (off today) <select name="associate" data-off required disabled>{% for name, lang in ap.off %}<option value="{{ name }}">{{ name }}, off today{% if lang %}, {{ lang[:3]|upper }}{% endif %}</option>{% endfor %}</select></label>{% endif %}
     <fieldset class="kinds"><legend>What</legend>
-      {% for group, kinds in ap.kinds.items() %}<span class="grp">{{ group }}</span>{% for k in kinds %}<label class="k" data-kind="{{ ap.kind_of.get(k, '') }}"><input type="radio" name="what" value="{{ k }}"{% if k == 'Break' %} checked{% endif %}> {{ k }}</label>{% endfor %}{% endfor %}
+      {% for group, kinds in ap.kinds.items() %}<span class="grp">{{ group }}</span>{% for k in kinds %}<label class="k" data-kind="{{ ap.kind_of.get(k, '') }}"><input type="radio" name="what" value="{{ k }}"{% if k == ap.default_what %} checked{% endif %}> {{ k }}</label>{% endfor %}{% endfor %}
     </fieldset>
     <fieldset class="ot-side" data-ot-side hidden>
       <legend>When</legend>
       <p class="ot-shift" data-ot-shift></p>
-      <label class="ot-choice"><input type="radio" name="side" value="before" checked disabled><b>Before the shift</b><span class="t" data-ot-time="before"></span><small>Comes in early</small></label>
-      <label class="ot-choice"><input type="radio" name="side" value="after" disabled><b>After the shift</b><span class="t" data-ot-time="after"></span><small>Stays on</small></label>
+      <label class="ot-choice"><input type="radio" name="side" value="before"{% if ap.default_side != 'after' %} checked{% endif %} disabled><b>Before the shift</b><span class="t" data-ot-time="before"></span><small>Comes in early</small></label>
+      <label class="ot-choice"><input type="radio" name="side" value="after"{% if ap.default_side == 'after' %} checked{% endif %} disabled><b>After the shift</b><span class="t" data-ot-time="after"></span><small>Stays on</small></label>
     </fieldset>
     {% if ap.off %}<div data-dayoff-fields hidden>
       <label>Shift <select name="shift" data-shift-pick><option value="">Type the start and end</option>{% for label, lo, hi in ap.shifts %}<option value="{{ label }}" data-from="{{ hm(lo) }}" data-to="{{ hm(hi) }}"{% if ap.shift_pick and label == ap.shift_pick[0] %} selected{% endif %}>{{ label }} (Shift Library)</option>{% endfor %}</select></label>
@@ -364,7 +364,7 @@
     </div>{% endif %}
     <div class="dlg-grid">
       <label data-from-label><span>From</span> <input type="time" name="from" value="{{ hm(ap.t) }}" step="300" required></label>
-      <label data-length><span>Length</span> <select name="minutes">{% for m in lengths %}<option value="{{ m }}"{% if m == 15 %} selected{% endif %}>{% if m < 60 %}{{ m }} min{% else %}{{ m // 60 }} h{% if m % 60 %} {{ m % 60 }}{% endif %}{% endif %}</option>{% endfor %}</select></label>
+      <label data-length><span>Length</span> <select name="minutes">{% for m in lengths %}<option value="{{ m }}"{% if m == (ap.default_minutes or 15) %} selected{% endif %}>{% if m < 60 %}{{ m }} min{% else %}{{ m // 60 }} h{% if m % 60 %} {{ m % 60 }}{% endif %}{% endif %}</option>{% endfor %}</select></label>
       {% if ap.off %}<label data-to-label hidden><span>To</span> <input type="time" name="to" value="{{ hm(ap.shift_pick[2]) if ap.shift_pick else '' }}" step="900"></label>{% endif %}
     </div>
     <label class="exp-kind" data-billable hidden><input type="checkbox" name="billable" value="1"><span>Billable (stays on the floor under interval compliance)</span></label>

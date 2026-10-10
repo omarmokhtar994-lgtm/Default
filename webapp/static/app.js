@@ -943,7 +943,7 @@ function homeRefresh(now) {
     }
   }
   form.addEventListener("change", function (e) { shape(e.target.name === "what"); preview(); });
-  shape(true);
+  shape(!form.hasAttribute("data-keep-minutes"));  // Phase AD: a length the server picked to cover the hour stays
   preview();
 })();
 

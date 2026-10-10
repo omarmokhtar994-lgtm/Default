@@ -2087,13 +2087,26 @@ def create_app(config: Dict[str, Any]) -> Flask:
             # Phase AC: someone marked sick or on leave goes last, so + Add never opens on a person it would refuse
             own.sort(key=lambda p: (p[1]["status"] in ABSENT_STATES,
                                     not (p[1]["start"] < t + step and t < p[1]["end"]), p[1]["start"], p[0]["name"]))
+            # Phase AD (owner's yes, sample 06): nobody present on shift in this interval: open on Overtime for the
+            # person whose shift starts right after it or ends right before it, placed and long enough to cover it
+            nobody = bool(own) and not any(x["status"] not in ABSENT_STATES and x["start"] < t + step and t < x["end"]
+                                           for _, x in own)
+            if nobody:
+                own.sort(key=lambda p: (p[1]["status"] in ABSENT_STATES,
+                                        min(abs(p[1]["start"] - (t + step)), abs(t - p[1]["end"])), p[1]["start"],
+                                        p[0]["name"]))
+            first = own[0][1] if nobody else None
+            side = "after" if first and first["start"] < t + step else "before"  # before, as always, unless it ended
+            reach = (first["start"] - t if side == "before" else t + step - first["end"]) if first else 0
+            minutes = min([m for m in ADD_LENGTHS if reach <= m <= 120] or [120]) if first else None
             off = days.off_today(program, on)  # for "Day off cancelled" (Phase S)
             shifts = days.shift_library(program, on)
             add_panel = {"t": t, "end": t + step, "person": request.args.get("person", ""),
                          "kinds": {k: v for k, v in ADD_KINDS.items() if off or DAY_OFF not in v},
                          "people": [(l["name"], x["label"], l["language"], x["start"], x["end"],
                                      x["status"].lower() if x["status"] in ABSENT_STATES else "") for l, x in own],
-                         "kind_of": GROUP_KIND,
+                         "kind_of": GROUP_KIND, "default_what": "Overtime" if nobody else "Break",
+                         "default_side": side, "default_minutes": minutes,
                          "cell": next((c for c in page["view"]["cells"] if c["t"] == t), None),
                          "off": off, "shifts": shifts,
                          "shift_pick": max((x for x in shifts if x[1] <= t < x[2]), key=lambda x: x[1],
@@ -2300,7 +2313,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
             for item in request.form.getlist("move"):
                 name, idx, start = item.rsplit("|", 2)
                 moves.append((name, int(idx), int(start)))
-            done = _days().apply_replan(program, on, moves, g.user["id"])
+            days = _days()
+            with days.action(program, on, g.user["id"], bulk=True) as act:  # Phase AD: one change, held for Send
+                try:
+                    done = days.apply_replan(program, on, moves, g.user["id"])
+                finally:
+                    n = len(act.logs)
+                    act.label = f"Fix breaks moved {n} break{'s' if n != 1 else ''}"
             flash(f"Moved {done} break{'s' if done != 1 else ''}.")
         except ValueError as exc:
             flash(f"Stopped: {exc} The moves before it were kept; open the autopilot again for a fresh proposal.")

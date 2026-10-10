@@ -68,8 +68,9 @@ an easy setup ?"
   website from being pointed at its own network.
 - Links never appear in pages after saving, in exports, in the activity log or in error text. A failed post records
   the group's answer code and a plain reason, not the link.
-- A send waits at most 10 seconds and never inside a page request. Up to three tries (after 1, 5 and 15 minutes),
-  then "Not posted" with the reason on the RTA and on the Notifications page.
+- A send waits at most 10 seconds. RTA changes are never sent inside a page request; only Send test message is, so
+  the admin sees the group's answer at once. A post that fails is tried again after 1, 5 and 15 minutes, then shows
+  "Not posted" with the reason on the RTA and on the Notifications page.
 - Preview only runs everything except the send, so an admin can watch a day's posts before turning them on.
 
 ## Not knowable from here

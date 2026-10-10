@@ -89,3 +89,14 @@ protected workbook or `engine/regression_assets` file changed (`git diff 32d291f
   shift. Opening on Overtime there would save a click; it is a behaviour change, so it waits for your yes.
 - The items that stand from the review (coverage text on a failed run, the gate retried per queued run, Analytics
   read per request, the rare lost flash and the three engine-side lines) are unchanged; reasons in `REVIEW.md`.
+
+## Suite, gate and package
+
+- Website suite: `python -m unittest discover -s webapp/tests -t .`, 798 tests, OK (1 skipped), 23:24 to 23:55 Egypt
+  time (31 min). After the self-review's wording change, `test_review_pages` and `test_runs` again: 162 tests, OK.
+- Release gate inside the staged package (`tools/build_production_package.py`): GATE PASS, 77 suites, 1537 tests
+  (2 skipped), 2 self-checks, call signatures and the undefined-name sweep; run alone, 23:56 to 00:13 Egypt time,
+  memory in use at most 1.16 GB of 16 GB.
+- `RC9_2_2_PRODUCTION_PACKAGE.zip`: 2371 files, 55,919,823 bytes, sha256
+  `388b7dae1b52e9ebd6d2109a0223720415d42a1249c164ff47bc9a3a74ec670a`. Sent in two halves, `AC_half_A.zip`
+  (28,500,000 bytes) and `AC_half_B.zip` (27,419,823 bytes); joined, they give the same sha256.

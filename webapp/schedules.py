@@ -225,6 +225,41 @@ class ScheduleBook:
         out.sort(key=lambda e: (not e["in_use"], -(e["run"].get("created") or 0)))
         return out
 
+    def kept_weeks(self, program: str) -> List[Dict[str, Any]]:
+        """The weeks with a kept schedule for ``program``, oldest first, each with how many schedules (runs) it has
+        (Phase AA: the Schedules page's week picker)."""
+        runs: Dict[str, Set[str]] = {}
+        for v in self.store.list_schedules(program=program):
+            if v["week_start"]:
+                runs.setdefault(v["week_start"], set()).add(v["run_id"])
+        return [{"week": week, "count": len(ids)} for week, ids in sorted(runs.items())]
+
+    def week_compare(self, program: str, week_start: str) -> List[Dict[str, Any]]:
+        """The week's schedules side by side (Phase AA, approved sample 03): each ``week_list`` entry with the figures
+        its week view already works out (after breaks), where its channel needs come from, and which figures are the
+        better ones. "Better" is marked only when every schedule has its breaks planned and its figures: a schedule
+        without breaks always looks better than it will be."""
+        from .week import view as week_view
+        entries = self.week_list(program, week_start)
+        for e in entries:
+            intervals = json.loads(e["shown"]["checks"] or "{}").get("intervals") or []
+            seen = week_view(intervals, "after") if intervals else None
+            t = seen["totals"] if seen else None
+            e["figures"] = {"full": t["full"], "active": t["active"], "overtime": t["overtime_hours"],
+                            "extra": t["extra_hours"], "step": seen["step"]} if t else None
+            path = self.channel_path(e["run"]["id"])
+            e["channels"] = None if path is None else ("added" if path.name == "channels.xlsx" else "workbook")
+            e["channels_at"] = path.stat().st_mtime if e["channels"] == "added" else None
+            e["better"] = set()
+        if len(entries) > 1 and all(e["has_breaks"] and e["figures"] for e in entries):
+            for key, best in (("full", max), ("overtime", min), ("extra", max)):
+                values = [e["figures"][key] for e in entries]
+                if len(set(values)) > 1:
+                    for e in entries:
+                        if e["figures"][key] == best(values):
+                            e["better"].add(key)
+        return entries
+
     def in_use(self, program: str, week_start: str) -> Optional[Dict[str, Any]]:
         return next((v for v in self.store.list_schedules(program=program, week_start=week_start) if v["in_use"]), None)
 

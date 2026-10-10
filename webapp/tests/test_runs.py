@@ -1140,9 +1140,11 @@ class TheDayPage(unittest.TestCase):
                       "Handover note"):
             self.assertIn(words, body)
         self.assertIn("/day?program=AE/AR+B2B&date=2026-10-14", body)
+        # Re-pinned in Phase AA (2026-10-10): the owner approved sample 03, so the menu's Schedules is a page of its
+        # own (a week picker and the week's schedules side by side) that opens each schedule, instead of a redirect.
         got = self.client.get("/schedules?program=AE/AR+B2B")
-        self.assertEqual(got.status_code, 302)
-        self.assertRegex(got.headers["Location"], r"/runs/[0-9a-f]{12}/schedules$")
+        self.assertEqual(got.status_code, 200)
+        self.assertRegex(got.get_data(as_text=True), r'href="/runs/[0-9a-f]{12}/schedules">Open</a>')
 
     def test_day_page_shows_lanes_rows_and_tiles(self):
         body = self.page()

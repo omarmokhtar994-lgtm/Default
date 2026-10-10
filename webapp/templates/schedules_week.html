@@ -1,0 +1,36 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{# Phase AA (approved sample 03): the menu's Schedules. Pick a week; its schedules sit side by side. #}
+{% extends "base.html" %}
+{% block title %}Schedules: {{ program|unit if program else 'pick a program' }} on Team Scheduler{% endblock %}
+{% block content %}
+<div class="phead"><div>
+  <h1>Schedules: {{ program|unit if program else 'pick a program' }}</h1>
+  <p class="byline">Pick a week to see every schedule uploaded or run for it, side by side, and which one counts.</p>
+</div></div>
+{% if not weeks %}
+<p class="empty panel">No schedules for {{ program|unit if program else 'this program' }} yet. Upload one from <a href="{{ url_for('home') }}">Home</a>; it appears here when it is checked.</p>
+{% else %}
+<nav class="weekpick" aria-label="Weeks">{% for w in weeks %}<a href="{{ url_for('schedules_for', program=program, week=w.week) }}"{% if w.week == week %} aria-current="true"{% endif %}><b>Week of {{ w.week|day_month }}</b><small>{{ w.count }} schedule{{ 's' if w.count != 1 }}{% if w.week == this_week %}, this week{% endif %}</small></a>{% endfor %}</nav>
+{% set n = entries|length %}
+<section class="panel cmpweek" aria-labelledby="cmp-h">
+  <h2 id="cmp-h">Week of {{ week|day_month }}: {{ n }} schedule{{ 's' if n != 1 }}</h2>
+  <p class="note">The RTA, the Week page, exports and analysis use the one in use. Figures are each schedule's own version shown (the one in use, else its newest). They are compared only when every schedule has its breaks planned: a schedule without breaks always looks better than it will be.</p>
+  {% set unit = 'Hours' if (entries|selectattr('figures')|map(attribute='figures')|map(attribute='step')|first|default(60)) == 60 else 'Intervals' %}
+  <div class="scroll" role="region" tabindex="0" aria-label="The week's schedules side by side (scrolls sideways)">
+  <table class="cmp">
+    <colgroup><col>{% for e in entries %}<col{% if e.in_use %} class="use"{% endif %}>{% endfor %}</colgroup>
+    <thead><tr><th scope="col"><span class="sr-only">Figure</span></th>{% for e in entries %}<th scope="col"><b>{{ e.run.workbook }}</b><small>{{ e.shown.label }}</small><small>{{ 'Uploaded' if e.run.mode == 'READY' else 'Run' }} by {{ e.run.by_name or 'someone' }} on {{ when(e.run.created) }}</small><span class="wl-tag {{ 'use' if e.in_use else 'off' }}">{{ 'In use' if e.in_use else 'Not in use' }}</span></th>{% endfor %}</tr></thead>
+    <tbody>
+    <tr><th scope="row">Versions</th>{% for e in entries %}<td>{{ e.count }}</td>{% endfor %}</tr>
+    {% for key, label in (('full', unit ~ ' at 100%'), ('overtime', 'Overtime needed for 100%'), ('extra', 'Extra hours available')) %}
+    <tr><th scope="row">{{ label }}</th>{% for e in entries %}<td{% if key in e.better %} class="better"{% endif %}>{% if e.figures %}{% if key == 'full' %}{{ e.figures.full }} of {{ e.figures.active }}{% else %}{{ e.figures[key]|num }} h{% endif %}{% if key in e.better %}<small>better</small>{% elif n > 1 and not e.has_breaks %}<small>before breaks: not compared</small>{% endif %}{% else %}–{% endif %}</td>{% endfor %}</tr>
+    {% endfor %}
+    <tr><th scope="row">Breaks planned</th>{% for e in entries %}<td>{{ 'Yes' if e.has_breaks else 'Not yet' }}</td>{% endfor %}</tr>
+    <tr><th scope="row">Channel needs</th>{% for e in entries %}<td>{% if e.channels == 'added' %}Added on {{ when(e.channels_at) }}{% elif e.channels == 'workbook' %}In the workbook{% else %}None yet{% endif %}</td>{% endfor %}</tr>
+    <tr><th scope="row"><span class="sr-only">Actions</span></th>{% for e in entries %}<td><div class="cmp-acts"><a class="button" href="{{ url_for('run_schedules', run_id=e.run.id) }}">Open</a><a class="button" href="{{ url_for('schedule_week', schedule_id=e.shown.id) }}">Week view</a>{% if not e.in_use and e.shown.id in may_use %}<form method="post" action="{{ url_for('schedule_in_use', schedule_id=e.shown.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="primary" type="submit">Set in use</button></form>{% endif %}{% if not e.in_use and e.run.id in may_delete %}<a class="button danger" href="{{ url_for('run_schedules', run_id=e.run.id) }}#delete">Delete</a>{% endif %}</div></td>{% endfor %}</tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

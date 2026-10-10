@@ -66,9 +66,15 @@ class TwoSchedulesForOneWeek(unittest.TestCase):
 
 class TheWeekList(TwoSchedulesForOneWeek):
     def test_the_menu_opens_the_schedule_in_use(self):
-        got = self.client.get("/schedules?program=" + self.key.replace(" ", "+"))
-        self.assertEqual(got.status_code, 302)
-        self.assertTrue(got.headers["Location"].endswith(f"/runs/{self.first}/schedules"), got.headers["Location"])
+        # Re-pinned in Phase AA (2026-10-10): the owner approved sample 03, so the menu's Schedules is a page of its
+        # own (a week picker and the week's schedules side by side) instead of a redirect. The schedule in use still
+        # comes first, and its Schedules page is one click away.
+        got = self.client.get(f"/schedules?program={self.key.replace(' ', '+')}&week={WEEK}")
+        self.assertEqual(got.status_code, 200)
+        page = html.unescape(got.get_data(as_text=True))
+        heads = re.findall(r'<th scope="col"><b>([^<]+)</b>', page)
+        self.assertEqual(heads[0], "week_v1.xlsx")
+        self.assertIn(f'href="/runs/{self.first}/schedules">Open</a>', page)
 
     def test_every_schedules_page_lists_the_weeks_schedules(self):
         other_shown = self.book.versions(self.second)[-1]["id"]

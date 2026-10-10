@@ -1350,6 +1350,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
             abort(403)
         return row
 
+    def _may_delete(run: Dict[str, Any]) -> bool:
+        """Who may delete a schedule (owner, 2026-10-10: "Uploader or admin"): admins, and the person who uploaded
+        or ran it."""
+        return bool(g.user["is_admin"]) or run.get("user_id") == g.user["id"]
+
     def _may_set_in_use(row: Dict[str, Any]) -> bool:
         run = app.extensions["store"].get_run(row["run_id"]) or {}
         return bool(g.user["is_admin"]) or run.get("user_id") == g.user["id"]
@@ -1831,16 +1836,23 @@ def create_app(config: Dict[str, Any]) -> Flask:
     @app.route("/schedules")
     @login_required
     def schedules_for():  # type: ignore[no-untyped-def]
-        """A program's newest schedule versions (the menu's Schedules)."""
+        """The menu's Schedules (Phase AA, approved sample 03): the program's weeks with a kept schedule, and the
+        chosen week's schedules side by side. The week shown is the one asked for, else this week when it has a
+        schedule, else the newest."""
         program = clean_program(request.args.get("program", ""))
-        rows = app.extensions["store"].list_schedules(program=program) if program else []
-        if not rows:
-            flash(f"There are no schedule versions for {program or 'this program'} yet: they appear when a run "
-                  "finishes.")
-            return redirect(url_for("home"))
-        latest = max(v["week_start"] for v in rows)  # the latest week, and in it the schedule that counts (Phase Z)
-        chosen, _ = pick_version([v for v in rows if v["week_start"] == latest])
-        return redirect(url_for("run_schedules", run_id=(chosen or rows[-1])["run_id"]))
+        book = _book()
+        weeks = book.kept_weeks(program) if program else []
+        keys = [w["week"] for w in weeks]
+        today = datetime.now(EGYPT).date()
+        this_week = (today - timedelta(days=(today.weekday() + 1) % 7)).isoformat()
+        week = request.args.get("week", "")
+        if week not in keys:
+            week = this_week if this_week in keys else (keys[-1] if keys else "")
+        entries = book.week_compare(program, week) if week else []
+        return render_template("schedules_week.html", program=program, weeks=weeks, week=week, this_week=this_week,
+                               entries=entries,
+                               may_use={e["shown"]["id"] for e in entries if _may_set_in_use(e["shown"])},
+                               may_delete={e["run"]["id"] for e in entries if _may_delete(e["run"])})
 
     @app.route("/day")
     @login_required

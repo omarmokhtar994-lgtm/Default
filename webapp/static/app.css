@@ -136,7 +136,9 @@ label { display: block; font-weight: 600; margin: 0 0 14px; }
 input[type=text], input[type=password], input[type=date], input:not([type]), select {
   display: block; width: 100%; margin-top: 6px; padding: 10px 12px; font: inherit; color: var(--paper);
   background: var(--night); border: 1px solid var(--edge); border-radius: 4px; }
-input[type=time], textarea { border-color: var(--edge); }
+input[type=time] { display: block; margin-top: 6px; padding: 10px 12px; font: inherit; color: var(--paper);
+  background: var(--night); border: 1px solid var(--edge); border-radius: 4px; }  /* under its label, as text fields */
+textarea { border-color: var(--edge); }
 input[type=radio], input[type=checkbox] { accent-color: var(--action); }  /* a tick is something you set: ink */
 button, .button { display: inline-block; padding: 11px 20px; border: 1px solid var(--edge); border-radius: 4px;
   font: 600 1rem/1.2 var(--text); cursor: pointer; text-decoration: none; background: transparent; color: var(--action); }
@@ -873,7 +875,7 @@ dialog.dlg.add-dlg { width: 620px; }
 .bp-hours { display: flex; gap: 2px; margin: 0 0 14px; font-size: 0.6875rem; color: var(--dim); }
 .bp-hours span { flex: 1 1 0; min-width: 0; overflow: visible; white-space: nowrap; }
 .bp-scroll { overflow-x: auto; max-width: 100%; }
-.bp-grid input[type=time] { width: 8.5em; }
+.bp-grid input[type=time] { width: 8.5em; margin: 0; padding: 4px 8px; }  /* a dense grid: the same field, compact */
 .bp-grid td.bp-check { min-width: 14em; }
 .bp-check.ok { color: var(--covered-text); } .bp-check.warn { color: var(--short-ink); } .bp-check.none { color: var(--dim); }
 .bp-actions, .bp-save { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; }
@@ -1211,8 +1213,7 @@ label.post-tick small { flex: 1 0 100%; padding-left: 26px; color: var(--dim); f
 ul.log .post-st { font-size: 0.8125rem; margin-left: 4px; }
 .nf-row label { margin: 0; }
 .nf-morning .nf-row { align-items: flex-end; }
-.nf-morning input[type=time] { display: block; width: 9em; margin-top: 6px; padding: 10px 12px; font: inherit;
-  color: var(--paper); background: var(--night); border: 1px solid var(--edge); border-radius: 4px; }
+.nf-morning input[type=time] { width: 9em; }
 .nf-morning select { min-width: 12em; }
 /* Phase AC: a tile's "of N" stays on the figure's line, smaller */
 .tile b small.of { font-size: 0.5em; font-weight: 600; white-space: nowrap; }

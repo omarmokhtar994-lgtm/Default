@@ -17,6 +17,8 @@ def _clean(name: str) -> str:
         raise ValueError("Give it a name.")
     if len(name) > 80:
         raise ValueError("Keep names to 80 characters.")
+    if not any(ch.isalnum() for ch in name):  # "." or ".." make a page address the browser rewrites
+        raise ValueError("Use letters or numbers in the name.")
     return name
 
 

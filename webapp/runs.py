@@ -462,8 +462,17 @@ class RunQueue:
 
     # ------------------------------------------------------------ retention
     def cleanup(self, now: Optional[float] = None) -> int:
-        """Delete the files of runs older than ``keep_days`` (30 to 60); the row stays as EXPIRED."""
-        cutoff = (time.time() if now is None else now) - self.keep_days * 86400
+        """Delete the files of runs older than ``keep_days`` (30 to 60); the row stays as EXPIRED. An upload still
+        in the staging folder a day after it came in was left there by a crash (a run takes its upload at once),
+        so it goes too."""
+        now = time.time() if now is None else now
+        for leftover in (self.runs_root / "_incoming").glob("*.upload"):
+            try:
+                if leftover.stat().st_mtime < now - 86400:
+                    leftover.unlink()
+            except FileNotFoundError:  # taken by a run, or swept by another cleanup, in the meantime
+                pass
+        cutoff = now - self.keep_days * 86400
         expired = 0
         for run in self.store.list_runs(limit=1_000_000):
             if run["status"] in ("EXPIRED", "QUEUED", "CHECKING") + ACTIVE or run["created"] >= cutoff:

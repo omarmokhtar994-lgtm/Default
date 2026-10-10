@@ -5,7 +5,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="{{ theme or 'dark light' }}">
-<title>{% block title %}Team Scheduler{% endblock %}</title>
+{% if theme %}<meta name="theme-color" content="{{ '#EAEFF5' if theme == 'light' else '#0E1A2B' }}">
+{% else %}<meta name="theme-color" content="#0E1A2B" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#EAEFF5" media="(prefers-color-scheme: light)">
+{% endif %}<title>{% block title %}Team Scheduler{% endblock %}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600&family=Saira+Semi+Condensed:wght@600;700&display=swap">

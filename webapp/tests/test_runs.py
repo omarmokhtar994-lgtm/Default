@@ -1032,7 +1032,8 @@ class TheDayPage(unittest.TestCase):
         body = html.unescape(self.client.get(self.url + "&view=board&add=600").get_data(as_text=True))
         dialog = body[body.index('<dialog id="add-dialog"'):]
         dialog = dialog[:dialog.index("</dialog>")]
-        self.assertIn("Add to 10:00 to", dialog)
+        # re-pinned (Phase AC, review finding 10): the title read "Add to 10:00 to 11:00"; it now reads "Add for ..."
+        self.assertIn("Add for 10:00 to", dialog)
         self.assertIn('action="/day/add"', dialog)
         for kind in ("Break", "Lunch", "Coaching", "Meeting", "Training", "System issue", "Unplanned leave", "Sick",
                      "Late", "Left early", "Overtime", "VTO"):

@@ -790,6 +790,8 @@ function homeRefresh(now) {
   // Phase AA: overtime before or after the shift, the times worked out from the person's shift and the length
   var otSide = form.querySelector("[data-ot-side]"), otShift = form.querySelector("[data-ot-shift]");
   var who = form.querySelector("select[name=associate]:not([data-off])");
+  var title = document.getElementById("add-h"), tick = form.querySelector(".post-tick");
+  var posts = (form.dataset.postKinds || "").split(" ");
   function clock(m) { m = ((m % 1440) + 1440) % 1440; return ("0" + Math.floor(m / 60)).slice(-2) + ":" + ("0" + m % 60).slice(-2); }
   function overtimeSides(on) {
     if (!otSide) { return; }
@@ -833,6 +835,16 @@ function homeRefresh(now) {
       if (changedKind && calling && o) { fromInput.value = o.dataset.from; toInput.value = o.dataset.to; }
     }
     submit.textContent = calling ? "Call in" : "Add " + k.toLowerCase();
+    // Phase AC: the title follows Overtime (it falls before or after the shift, not in this interval), and the
+    // "Post to the group" tick shows only for a change this LOB posts
+    if (title) {
+      var person = who && who.options[who.selectedIndex];
+      title.textContent = k === "Overtime" && person ? "Add overtime for " + person.value : title.dataset.addTitle;
+    }
+    if (tick) {
+      var picked = form.querySelector("input[name=what]:checked");
+      tick.hidden = !picked || posts.indexOf(picked.closest("label").dataset.kind) < 0;
+    }
   }
   if (shiftPick) {
     shiftPick.addEventListener("change", function () {

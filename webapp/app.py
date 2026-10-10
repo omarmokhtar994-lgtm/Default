@@ -2062,12 +2062,16 @@ def create_app(config: Dict[str, Any]) -> Flask:
             step = page["view"]["interval"]
             t = add_at - add_at % step
             own = [(l, x) for l in page["view"]["lanes"] for x in l["segments"] if x["offset"] == 0]
-            own.sort(key=lambda p: (not (p[1]["start"] < t + step and t < p[1]["end"]), p[1]["start"], p[0]["name"]))
+            # Phase AC: someone marked sick or on leave goes last, so + Add never opens on a person it would refuse
+            own.sort(key=lambda p: (p[1]["status"] in ABSENT_STATES,
+                                    not (p[1]["start"] < t + step and t < p[1]["end"]), p[1]["start"], p[0]["name"]))
             off = days.off_today(program, on)  # for "Day off cancelled" (Phase S)
             shifts = days.shift_library(program, on)
             add_panel = {"t": t, "end": t + step, "person": request.args.get("person", ""),
                          "kinds": {k: v for k, v in ADD_KINDS.items() if off or DAY_OFF not in v},
-                         "people": [(l["name"], x["label"], l["language"], x["start"], x["end"]) for l, x in own],
+                         "people": [(l["name"], x["label"], l["language"], x["start"], x["end"],
+                                     x["status"].lower() if x["status"] in ABSENT_STATES else "") for l, x in own],
+                         "kind_of": GROUP_KIND,
                          "cell": next((c for c in page["view"]["cells"] if c["t"] == t), None),
                          "off": off, "shifts": shifts,
                          "shift_pick": max((x for x in shifts if x[1] <= t < x[2]), key=lambda x: x[1],
@@ -2088,11 +2092,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
             shrink = interval_shrinkage(v, page["inputs"], page["day"])
         group = app.extensions["store"].get_notify(program) if program else None  # Phase AB: group posts
         posting = bool(group and group["link"] and group["mode"] in ("on", "preview"))
+        post_kinds = [k for k in (group or {}).get("kinds", "").split(",") if k] if posting else []
         return render_template("day.html", page=page, problem=problem, program=program, programs=programs, on=on,
                                today=clock_now.date(),
                                posts=app.extensions["notifier"].statuses(program, on.isoformat())
                                if program and on else {},
                                post_to=SERVICES.get(group["service"], "") if posting else "",
+                               post_mode=group["mode"] if posting else "", post_kinds=post_kinds,
                                people=people, whole=whole, shrink=shrink, finder=finder, cover=cover,
                                proposal=proposal, from_now=from_now, cover_panel=cover_panel,
                                add_panel=add_panel, person_panel=person_panel, lengths=ADD_LENGTHS,
@@ -2107,6 +2113,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                earlier=on - timedelta(days=1), later=on + timedelta(days=1), **shift_view)
 
     ADD_LENGTHS = (5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240)  # minutes offered by "+ Add"
+    # What each "+ Add" choice is to a LOB's group rule (Phase AC: the tick shows only for a change that would post)
+    GROUP_KIND = {**{k: "added_break" for k in ("Break", "Lunch")}, **{k: "aux" for k in AUX},
+                  **{k: "private" for k in ABSENT_STATES}, **{k: "late" for k in ("Late", "Left early")},
+                  "Overtime": "overtime", "VTO": "overtime", DAY_OFF: "called_in"}
 
     def _left_out_asked() -> bool:
         """The RTA unticked "Post to the group" for this one change (Phase AB): the form had the tick, and it is off."""

@@ -496,7 +496,8 @@ details.tableview[open] summary { margin-bottom: 8px; }
 .log li { font-size: 0.8125rem; color: var(--dim); margin: 6px 0; }
 .log b { color: var(--paper); }
 dialog.dlg { width: 560px; max-width: 92vw; padding: 22px 24px; color: var(--paper); background: var(--console);
-  border: 1px solid var(--rail); border-top: 4px solid var(--action); border-radius: 10px; }
+  border: 1px solid var(--rail); border-top: 4px solid var(--action); border-radius: 10px;
+  overscroll-behavior: contain; }  /* Phase AC: scrolling past a dialog's end never scrolls the page behind */
 dialog.dlg.red { border-top-color: var(--gap); } dialog.dlg.yellow { border-top-color: var(--short); }
 dialog.dlg::backdrop { background: rgba(5, 10, 18, .6); }
 dialog.dlg h2 { margin-bottom: 6px; }

@@ -1,7 +1,7 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
 {% extends "base.html" %}
 {% from "_target_tile.html" import target_tile with context %}
-{% block title %}The day: {{ program or 'no program' }} on Team Scheduler{% endblock %}
+{% block title %}The day: {{ program|unit if program else 'no program' }} on Team Scheduler{% endblock %}
 {% block content %}
 {% macro with_fields(dept='', who='', disabled=False, required=False) -%}
 {% if with_lists %}<label><span>Department</span> <select name="with_dept" data-with-dept{{ ' disabled' if disabled }}{{ ' required' if required }}><option value="">Pick the department</option>{% for d in with_lists %}<option value="{{ d.name }}"{% if d.name == dept %} selected{% endif %}>{{ d.name }}</option>{% endfor %}</select></label><label><span>With</span> <select name="with_whom" data-with-person{{ ' disabled' if disabled }}{{ ' required' if required }}><option value="">Pick who</option>{% for d in with_lists %}{% for p in d.people %}<option value="{{ p.name }}" data-dept="{{ d.name }}"{% if d.name == dept and p.name == who %} selected{% endif %}>{{ p.name }}</option>{% endfor %}{% endfor %}</select></label>
@@ -10,6 +10,8 @@
 {% set absent_states = ['Unplanned leave', 'Sick'] %}
 {% set unit = {15: 'quarter-hours', 30: 'half-hours', 60: 'hours'} %}
 {% macro hidden_day(view, cover=none) %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="view" value="{{ view }}">{% if cover is not none %}<input type="hidden" name="cover" value="{{ cover }}">{% endif %}{% endmacro %}
+{# Phase AB/AC: one change kept off the group. Preview only says so; with script, hidden for a change that would not post. #}
+{% macro post_tick() %}<label class="post-tick"><input type="checkbox" name="post" value="1" checked> {% if post_mode == 'preview' %}Show in the preview on the Notifications page<small>Untick to keep this one change out of the preview.</small>{% else %}Post to the {{ post_to }} group<small>Untick to keep this one change off the group.</small>{% endif %}</label>{% endmacro %}
 {% macro dur(m) %}{% if m < 60 %}{{ m }} min{% else %}{{ m // 60 }} h{% if m % 60 %} {{ m % 60 }}{% endif %}{% endif %}{% endmacro %}
 {% macro overtime(o, view='cover', cover=none) %}{% set own = o.end - o.start %}<form method="post" action="{{ url_for('day_activity') }}" class="ot-offer">{{ hidden_day(view, cover) }}<input type="hidden" name="associate" value="{{ o.name }}"><input type="hidden" name="kind" value="Overtime">
   <b>{{ o.name }}</b> <span class="dim">{{ 'shift ends ' ~ hm(o.start) if o.side == 'after' else 'shift starts ' ~ hm(o.end) }}</span>
@@ -308,7 +310,7 @@
     <div class="stepper"><button type="button" data-step="-5">− 5 min</button><input type="time" name="at" step="300" aria-label="Break starts at" required><button type="button" data-step="5">+ 5 min</button></div>
     <div class="dlg-result" aria-live="polite"></div>
     <div class="fits" hidden><p class="dim">Where this break fits best today:</p><ul></ul></div>
-    {% if post_to %}<label class="post-tick"><input type="checkbox" name="post" value="1" checked> Post to the {{ post_to }} group<small>Untick to keep this one change off the group.</small></label>{% endif %}
+    {% if post_to and 'break' in post_kinds %}{{ post_tick() }}{% endif %}
     <p class="dlg-ask" hidden><b>Keep this time anyway?</b></p>
     <div class="btns"><button class="primary" type="button" data-keep>Save</button><button type="button" data-plan>Back to plan</button><button type="button" data-cancel>Cancel</button></div>
     <p><a href="#" data-person-link>Open this person's day</a></p>
@@ -318,16 +320,16 @@
 {% set close_url = url_for('day_page', program=program, date=on.isoformat(), measure=measure, view=tab if tab != 'timeline' else none) %}
 {% if add_panel %}{% set ap = add_panel %}
 <dialog id="add-dialog" class="dlg add-dlg" open aria-labelledby="add-h">
-  <form method="post" action="{{ url_for('day_add') }}" class="dlg-form" data-preview="{{ url_for('day_add_preview') }}">
+  <form method="post" action="{{ url_for('day_add') }}" class="dlg-form" data-preview="{{ url_for('day_add_preview') }}"{% if post_to %} data-post-kinds="{{ post_kinds|join(' ') }}"{% endif %}>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="view" value="{{ tab if tab != 'timeline' else 'board' }}"><input type="hidden" name="measure" value="{{ measure }}">
     <input type="hidden" name="at" value="{{ ap.t }}">
-    <h2 id="add-h">Add to {{ hm(ap.t) }} to {{ hm(ap.end) }}</h2>
+    {% set add_title = 'Add for ' ~ hm(ap.t) ~ ' to ' ~ hm(ap.end) %}<h2 id="add-h" data-add-title="{{ add_title }}">{{ add_title }}</h2>
     <p class="dim">{{ program|unit }}, {{ on.strftime('%A %d %b') }}.{% if ap.cell and ap.cell.pm is not none %} Right now this {{ unit.get(v.interval, 'interval')[:-1] }} is {{ ap.cell.pm|hmm }} against demand.{% endif %}</p>
     {% if ap.people %}
-    <label data-who-working>Who <select name="associate" required>{% for name, label, lang, s0, s1 in ap.people %}<option value="{{ name }}" data-start="{{ s0 }}" data-end="{{ s1 }}"{% if name == ap.person %} selected{% endif %}>{{ name }}, {{ label }}, {{ lang[:3]|upper }}</option>{% endfor %}</select></label>
+    <label data-who-working>Who <select name="associate" required>{% for name, label, lang, s0, s1, away in ap.people %}<option value="{{ name }}" data-start="{{ s0 }}" data-end="{{ s1 }}"{% if name == ap.person %} selected{% endif %}>{{ name }}, {{ label }}, {{ lang[:3]|upper }}{% if away %}, {{ away }}{% endif %}</option>{% endfor %}</select></label>
     {% if ap.off %}<label data-who-off hidden>Who (off today) <select name="associate" data-off required disabled>{% for name, lang in ap.off %}<option value="{{ name }}">{{ name }}, off today{% if lang %}, {{ lang[:3]|upper }}{% endif %}</option>{% endfor %}</select></label>{% endif %}
     <fieldset class="kinds"><legend>What</legend>
-      {% for group, kinds in ap.kinds.items() %}<span class="grp">{{ group }}</span>{% for k in kinds %}<label class="k"><input type="radio" name="what" value="{{ k }}"{% if k == 'Break' %} checked{% endif %}> {{ k }}</label>{% endfor %}{% endfor %}
+      {% for group, kinds in ap.kinds.items() %}<span class="grp">{{ group }}</span>{% for k in kinds %}<label class="k" data-kind="{{ ap.kind_of.get(k, '') }}"><input type="radio" name="what" value="{{ k }}"{% if k == 'Break' %} checked{% endif %}> {{ k }}</label>{% endfor %}{% endfor %}
     </fieldset>
     <fieldset class="ot-side" data-ot-side hidden>
       <legend>When</legend>
@@ -352,7 +354,7 @@
     </div>
     <p class="effect" data-effect aria-live="polite">The effect on the floor shows here before anything is kept.</p>
     <div class="effect-ch" data-channel-effect hidden aria-live="polite"></div>
-    {% if post_to %}<input type="hidden" name="post_asked" value="1">{% endif %}{% if post_to %}<label class="post-tick"><input type="checkbox" name="post" value="1" checked> Post to the {{ post_to }} group<small>Untick to keep this one change off the group.</small></label>{% endif %}
+    {% if post_to %}<input type="hidden" name="post_asked" value="1">{{ post_tick() }}{% endif %}
     <div class="btns"><button class="primary" type="submit">Add</button><a class="button" href="{{ close_url }}#row-{{ ap.t }}">Close</a></div>
     {% else %}<p class="empty">Nobody has a shift starting this day.</p><div class="btns"><a class="button" href="{{ close_url }}">Close</a></div>{% endif %}
   </form>

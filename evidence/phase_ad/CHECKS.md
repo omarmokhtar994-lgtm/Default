@@ -103,3 +103,22 @@ changes never meet another's Undo):
   `83f6c248db38fe03095f5f5dc84bb4b125b411cbac28f84d572e6af1841dde62`. Sent in two halves, `AD_half_A.zip`
   (29,700,000 bytes) and `AD_half_B.zip` (28,920,706 bytes); joined, they give the same sha256.
 - No engine file, protected workbook or `engine/regression_assets` file changed in this phase.
+
+## After the phase: Slack Workflow posts (2026-10-11)
+
+- **Why:** the owner's workspace lets people make Slack Workflows but not apps. A Workflow link got only the post's
+  title, because a Workflow reads plain text variables only.
+- **Workflow posts:** a Workflow link (`hooks.slack.com/triggers/...` or `/workflows/...`) now gets the whole message
+  in one variable, `text`, laid out as the owner chose ("A"):
+  - 📋 and the title;
+  - the lines between two dividers;
+  - ✏️ and who changed it.
+  It has no bold marks, which a Workflow would show as stars, and it is cut with a note past 3,900 characters.
+- **No website address in any group post** (owner: associates have no access yet): not Teams' button, the Slack app's
+  link or the Workflow's. The switch `notify.LINK_TO_RTA` turns it back on.
+- **Tests:** failed first, then passed. 85 notification tests passed on the final code. The website suite passed
+  (860 tests, 1 skipped, 07:18 to 07:50) on the first commit of this change; the later two only change post wording.
+- **Gate:** GATE PASS (77 suites, 1537 tests), 07:50 to 08:07 Egypt time, memory at most 1.10 GB.
+- **Package:** `RC9_2_2_PRODUCTION_PACKAGE.zip`, 58,624,138 bytes, sha256
+  `acf62fc41c10dbd0222f7a77e8df258cdc4fd711d313c7b983a11ef959d3723c`, sent as `AE_half_A.zip` (29,500,000 bytes)
+  and `AE_half_B.zip` (29,124,138 bytes); joined, they give the same sha256.

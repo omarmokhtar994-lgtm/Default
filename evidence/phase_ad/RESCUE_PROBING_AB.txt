@@ -1,0 +1,25 @@
+Phase AD, Rescue the day: probing A/B result (rule: RESCUE_PROBING_RULE.txt, written before the B runs).
+Run 2026-10-11, Egypt time (UTC+3). 4 workers, seed 9000, limits (8 s, 4 s), two solves (stage 1, then the
+weighted rest). "at" = intervals at the target recounted by day_view; "given" = intervals given up.
+
+case                         | A (defaults)                                    | B (probing level 0)
+n=30  step=30 now=None       | at=46 given=0 OPTIMAL,OPTIMAL   4.6s moves=14   | at=46 given=0 OPTIMAL,OPTIMAL   2.3s moves=14
+n=30  step=30 now=10:00      | at=43 given=0 OPTIMAL,OPTIMAL   3.1s moves=11   | at=43 given=0 OPTIMAL,OPTIMAL   1.8s moves=11
+n=50  step=30 now=None       | at=48 given=0 OPTIMAL,OPTIMAL   7.8s moves=14   | at=48 given=0 OPTIMAL,OPTIMAL   4.0s moves=14
+n=50  step=30 now=10:00      | at=43 given=0 OPTIMAL,OPTIMAL   4.5s moves=7    | at=43 given=0 OPTIMAL,OPTIMAL   2.3s moves=7
+n=60  step=30 now=None       | at=46 given=0 OPTIMAL,FEASIBLE  9.1s moves=10   | at=46 given=0 OPTIMAL,OPTIMAL   5.7s moves=8
+n=60  step=30 now=10:00      | at=42 given=0 OPTIMAL,OPTIMAL   5.8s moves=3    | at=42 given=0 OPTIMAL,OPTIMAL   3.4s moves=3
+n=100 step=30 now=None       | at=38 NOT SOLVED (UNKNOWN)      7.9s            | at=48 given=0 OPTIMAL,FEASIBLE  8.5s moves=81
+n=100 step=30 now=10:00      | at=46 given=0 OPTIMAL,FEASIBLE 11.1s moves=89   | at=46 given=0 OPTIMAL,FEASIBLE  6.9s moves=65
+n=150 step=30 now=None       | at=37 NOT SOLVED (UNKNOWN)      8.6s            | at=46 given=1 OPTIMAL,UNKNOWN  12.2s moves=445
+n=150 step=30 now=10:00      | at=42 given=1 OPTIMAL,UNKNOWN  12.8s moves=63   | at=42 given=0 OPTIMAL,FEASIBLE  8.3s moves=250
+n=150 step=15 now=None       | at=75 NOT SOLVED (UNKNOWN)      8.8s            | at=92 given=1 OPTIMAL,FEASIBLE 11.9s moves=379
+n=150 step=15 now=10:00      | at=84 given=0 FEASIBLE,UNKNOWN 12.0s moves=97   | at=86 given=0 OPTIMAL,FEASIBLE  8.0s moves=48
+fixture, 5 sick, now=None    | at=24 given=0 OPTIMAL,OPTIMAL   3.0s moves=13   | at=24 given=0 OPTIMAL,OPTIMAL   1.7s moves=13
+total wall time              | 99.2 s                                          | 76.8 s
+
+Rule: 1 (B at >= A everywhere) holds; 2 (same at: B gives up no more) holds; 3 (nothing A solves becomes not
+solved) holds; 4 (B total time lower) holds. Decision: adopt B (rescue.PROBING = 0).
+Losses, stated: B moved more breaks than A on n=150/30/10:00 (250 vs 63, A's second solve also unfinished);
+on the cases A could not solve at all, B's answers move very many breaks (445, 379) because its second solve did
+not finish. Moves are not in this rule; they are the subject of the next A/B (RESCUE_ONESOLVE_RULE.txt).

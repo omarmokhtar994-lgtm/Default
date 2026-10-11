@@ -124,7 +124,7 @@
 {% if tab == 'timeline' %}
 <section class="panel" aria-labelledby="floor-h">
   <h2 id="floor-h">Who is on the floor</h2>
-  <p class="autopilot"><a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='replan') }}">Fix the rest of the day's breaks</a> <a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='bulk') }}">Change several breaks</a></p>
+  <p class="autopilot"><a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='replan') }}">Fix the rest of the day's breaks</a>{% if measure == 'interval' %} <a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='rescue') }}">Rescue the day</a>{% endif %} <a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='bulk') }}">Change several breaks</a></p>
   <p class="note">Shifts are the blue bars; breaks are the marks on them. Drag a break to move it in 5-minute steps, or select it and press Enter to type the time; the dashed outline is where the engine planned it. Set attendance on the left.</p>
   {% if shift_groups %}{% set everyone = v.lanes|length %}
   <div class="shiftpick">
@@ -222,6 +222,47 @@
     <small>Not posted to the group until you press Send at the top of the page. You can undo it.</small></form>{% endif %}
   {% endif %}
 </section>
+{% elif tab == 'rescue' %}{% set pct = (100 * page.target.target)|round|int %}
+<section class="panel" aria-labelledby="rs-h">
+  <h2 id="rs-h">Rescue the day</h2>
+  {% if measure != 'interval' %}
+  <p class="empty">Rescue the day counts intervals by interval compliance, each the same, so it is offered with that measure only. <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure='interval', view='rescue') }}">Open it with interval compliance</a></p>
+  {% elif rescue.error %}
+  <p class="error" role="alert">{{ rescue.error }}</p>
+  {% else %}{% set rs = rescue %}
+  <p class="note">For a day that cannot reach the target everywhere: breaks that have not started are gathered into at most {{ rs.limit }} intervals of the day, which may fall below {{ pct }}% but never below 50% of demand (or lower than now, if one is under that already), so that more of the other intervals reach {{ pct }}%. The rest of the breaks are spread to help, and every other interval stays at {{ pct }}% or no lower than now. It gives up an interval only when that puts more of the day at {{ pct }}%. Each interval counts the same (interval compliance, not weighted by volume). Every break stays inside its shift, in its order, on a 5-minute step, with this program's gaps{% if page.inputs.gap_min %} ({{ page.inputs.gap_min }} to {{ page.inputs.gap_max }} minutes){% endif %} or no further outside them than now, and no language or channel drops below its minimum. Nothing is kept until you apply it.</p>
+  <p class="rs-sofar">{% if rs.now is none %}<b>{{ on.strftime('%a %d %b') }}:</b> counted from the start of the day. The day may give up {{ rs.limit }} at most, so this can give up {{ rs.may }}.{% elif rs.lost %}<b>Today so far: {{ rs.lost|length }} interval{{ 's' if rs.lost|length != 1 }} lost</b> ({% for t, p in rs.lost %}{{ hm(t) }} at {{ p }}%{{ ', ' if not loop.last }}{% endfor %}). The day may give up {{ rs.limit }} at most, so {% if rs.may %}this can give up {{ rs.may }} more{% else %}this gives up none: it only spreads breaks to lift what it can{% endif %}.{% else %}<b>Today so far: no interval lost.</b> The day may give up {{ rs.limit }} at most, so this can give up {{ rs.may }}.{% endif %}</p>
+  {% set b, a = rs.before, rs.after %}
+  <section class="tiles" aria-label="Before and after">
+    <p class="tile"><span class="tile-label">Day at {{ pct }}% or more</span><b>{{ a.now }}<small class="of"> of {{ a.intervals }}</small></b><small class="dim">now {{ b.now }} of {{ b.intervals }}{% if b.intervals %} ({{ (100 * b.now / b.intervals)|round|int }}%), after {{ (100 * a.now / a.intervals)|round|int }}%{% endif %}</small></p>
+    <p class="tile"><span class="tile-label">Given up</span><b>{{ rs.given_up|length }}</b><small class="dim">{% for t, p in rs.given_up %}{{ hm(t) }} at {{ p }}%{{ ', ' if not loop.last }}{% else %}none{% endfor %}</small></p>
+    <p class="tile"><span class="tile-label">Rescued</span><b>{{ rs.rescued|length }}</b><small class="dim">{% for lo, hi in rs.rescued_runs %}{{ hm(lo) }} to {{ hm(hi) }}{{ ', ' if not loop.last }}{% else %}none{% endfor %}{% if rs.rescued_runs %} back to {{ pct }}% or more{% endif %}</small></p>
+    <p class="tile"><span class="tile-label">Breaks to move</span><b>{{ rs.moves|length }}</b><small class="dim">{{ 'none of them started yet' if rs.moves else 'nothing to move' }}</small></p>
+  </section>
+  {% set n = rs.strip|length %}{% set said_as = {'ok': 'at ' ~ pct ~ '% or more', 'below': 'below ' ~ pct ~ '%', 'gone': 'given up', 'saved': 'rescued', 'none': 'no demand'} %}
+  <div class="rs-strips">
+    {% for row in ('before', 'after') %}{% set fig = b if row == 'before' else a %}
+    <p class="rs-lbl">{{ 'Now' if row == 'before' else 'After the rescue' }}</p>
+    <div class="achv-strip rs-strip rs-{{ row }} cols-{{ n }}"{% if rs.now is not none %} data-now="{{ rs.now }}"{% endif %} role="img" aria-label="{{ 'Now' if row == 'before' else 'After the rescue' }}: {{ fig.now }} of {{ fig.intervals }} intervals at {{ pct }}% or more, one mark per interval from midnight">
+      {% for c in rs.strip %}{% set x = c[row] %}<i class="{{ x.cls }}{{ ' over' if x.over }}" title="{{ hm(c.t) }}{% if x.pct is not none %}: {{ x.pct }}%{% endif %}, {{ said_as[x.cls] }}{{ ', before now' if x.over }}">{% if n <= 24 and not x.over and x.cls in ('below', 'gone') %}{{ x.pct }}%{% endif %}</i>{% endfor %}
+      {% if rs.now is not none %}<span class="achv-now" aria-hidden="true"></span>{% endif %}
+    </div>
+    {% endfor %}
+    <span class="rs-lbl" aria-hidden="true"></span><div class="achv-hours" aria-hidden="true">{% for h in range(0, 24, 3) %}<span>{{ '%02d'|format(h) }}</span>{% endfor %}</div>
+  </div>
+  <p class="achv-key rs-key"><span><i class="ok"></i>At {{ pct }}% or more</span><span><i class="below"></i>Below {{ pct }}%</span><span><i class="gone"></i>Given up (never below 50%)</span><span><i class="saved"></i>Rescued</span>{% if rs.now is not none %}<span><i class="below over"></i>Faded: before now</span>{% endif %}{% if rs.strip|selectattr('before.cls', 'equalto', 'none')|list %}<span><i class="none"></i>No demand</span>{% endif %}</p>
+  {% for line in rs.said %}<p class="{{ 'error' if rs.status == 'refused' else 'empty' }}"{% if rs.status == 'refused' %} role="alert"{% endif %}>{{ line }}</p>{% endfor %}
+  {% if rs.moves %}
+  <form method="post" action="{{ url_for('day_rescue_apply') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}">
+    <div class="scroll" role="region" tabindex="0" aria-label="The moves (scrolls sideways)"><table class="adh-t rs-t"><thead><tr><th scope="col">Associate</th><th scope="col">Break</th><th scope="col">From</th><th scope="col">To</th><th scope="col">Why</th></tr></thead>
+      <tbody>{% for m in rs.moves|sort(attribute='to') %}<tr><td><b>{{ m.name }}</b><input type="hidden" name="move" value="{{ m.name }}|{{ m.idx }}|{{ m.to }}"></td><td>{{ m.kind }}, {{ m.minutes }} min</td><td>{{ hm(m['from']) }}</td><td><b>{{ hm(m.to) }}</b></td><td class="dim">{{ m.why }}</td></tr>{% endfor %}</tbody></table></div>
+    <p class="bk-foot"><button class="primary" type="submit">Apply all {{ rs.moves|length }}</button> <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure) }}">Close</a>
+      <small>Not posted to the group until you press Send at the top of the page. You can undo it.</small></p>
+  </form>
+  {% endif %}
+  {% endif %}
+</section>
 {% elif tab == 'meeting' %}
 <div class="adh">
 <section class="panel" aria-labelledby="mt-h">
@@ -307,7 +348,7 @@
 {% elif tab != 'channels' %}
 <section class="panel" aria-labelledby="board-h">
   <h2 id="board-h">Interval board</h2>
-  <p class="autopilot"><a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='replan') }}">Fix the rest of the day's breaks</a> <a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='bulk') }}">Change several breaks</a></p>
+  <p class="autopilot"><a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='replan') }}">Fix the rest of the day's breaks</a>{% if measure == 'interval' %} <a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='rescue') }}">Rescue the day</a>{% endif %} <a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='bulk') }}">Change several breaks</a></p>
   <p class="note">Each row is one {{ unit.get(v.interval, 'interval')[:-1] }}: who goes on a break in it, who is late, leaves early or is in aux, and whether the floor still holds. Drag a break to another row, or click it to set the time in 5-minute steps; you see the warnings and the best times before anything is kept.</p>
   {% set gone = [] %}{% for lane in v.lanes %}{% for s in lane.segments if s.offset == 0 and s.status in absent_states %}{% set _ = gone.append(lane.name ~ ' (' ~ s.status|lower ~ ')') %}{% endfor %}{% endfor %}
   {% if gone %}<p class="board-gone">Not on the floor today: <b>{{ gone|join(', ') }}</b>.</p>{% endif %}

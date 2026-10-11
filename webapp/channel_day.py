@@ -193,6 +193,25 @@ class ChannelHold:
         return [j for j, r in enumerate(self.rules) if r["channel"] in covered
                 and r["language"].casefold() in self.ch["speaks"](seg)]
 
+    def limits(self, name: str, i: int) -> List[Tuple[Tuple[str, Any], float]]:
+        """Phase AD (Rescue the day): the counters ``name`` counts toward at 5-minute tick ``i`` (("ch", channel) or
+        ("lang", rule index)) and the least each must keep: the same needs ``holds`` checks a move against."""
+        if not 0 <= i < len(self.who):
+            return []
+        t = i * STEP
+        covered = self._covered(name, i)
+        out: List[Tuple[Tuple[str, Any], float]] = [(("ch", c), need_at(self.setup, c, self.day, t)) for c in covered
+                                                    if c in self.setup["need"]]
+        for j in self._langs(name, covered):
+            rule = self.rules[j]
+            if inside(rule["days"], rule["start"], rule["end"], self.day, t):
+                out.append((("lang", j), rule["minimum"]))
+        return out
+
+    def current(self, key: Tuple[str, Any], i: int) -> float:
+        """How many count toward counter ``key`` at tick ``i`` now."""
+        return self.channel[key[1]][i] if key[0] == "ch" else self.language[key[1]][i]
+
     def holds(self, name: str, change: Dict[int, int]) -> bool:
         for i, d in change.items():
             if d >= 0 or not 0 <= i < len(self.who):

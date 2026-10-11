@@ -1,0 +1,29 @@
+Phase AD, Rescue the day: solve plan A/B result (rule: RESCUE_ONESOLVE_RULE.txt, written before the B runs).
+Run 2026-10-11, Egypt time (UTC+3). Probing level 0 in both arms, 4 workers, seed 9000.
+A = two solves (8 s + 4 s); B = one weighted solve (12 s). "at" recounted by day_view.
+
+case                         | A (two solves)                                   | B (one solve)
+n=30  step=30 now=None       | at=46 given=0 OPTIMAL,OPTIMAL    2.4s moves=14   | at=46 given=0 OPTIMAL   2.7s moves=14
+n=30  step=30 now=10:00      | at=43 given=0 OPTIMAL,OPTIMAL    1.7s moves=11   | at=43 given=0 OPTIMAL   1.9s moves=11
+n=50  step=30 now=None       | at=48 given=0 OPTIMAL,OPTIMAL    4.1s moves=14   | at=48 given=0 OPTIMAL   2.8s moves=14
+n=50  step=30 now=10:00      | at=43 given=0 OPTIMAL,OPTIMAL    2.2s moves=7    | at=43 given=0 OPTIMAL   1.5s moves=7
+n=60  step=30 now=None       | at=46 given=0 OPTIMAL,OPTIMAL    5.6s moves=8    | at=46 given=0 OPTIMAL   3.8s moves=8
+n=60  step=30 now=10:00      | at=42 given=0 OPTIMAL,OPTIMAL    3.5s moves=3    | at=42 given=0 OPTIMAL   2.5s moves=3
+n=100 step=30 now=None       | at=48 given=0 OPTIMAL,FEASIBLE   8.3s moves=224  | at=48 given=0 OPTIMAL   9.1s moves=18
+n=100 step=30 now=10:00      | at=46 given=0 OPTIMAL,FEASIBLE   6.9s moves=55   | at=46 given=0 OPTIMAL   6.7s moves=15
+n=150 step=30 now=None       | at=46 given=1 OPTIMAL,UNKNOWN   12.4s moves=447  | at=46 given=0 FEASIBLE 14.0s moves=24
+n=150 step=30 now=10:00      | at=42 given=0 OPTIMAL,FEASIBLE   8.0s moves=54   | at=42 given=0 OPTIMAL   8.5s moves=17
+n=150 step=15 now=None       | at=92 given=1 OPTIMAL,FEASIBLE  11.7s moves=444  | at=92 given=0 FEASIBLE 14.0s moves=58
+n=150 step=15 now=10:00      | at=86 given=0 OPTIMAL,FEASIBLE   8.3s moves=64   | at=86 given=0 OPTIMAL   6.5s moves=20
+fixture, 5 sick, now=None    | at=24 given=0 OPTIMAL,OPTIMAL    1.8s moves=13   | at=24 given=0 OPTIMAL   1.4s moves=13
+totals                       | 76.9 s, 1,358 breaks moved                       | 75.5 s, 222 breaks moved
+
+Rule: 1 holds (same at everywhere); 2 holds (B gives up no more; fewer on two cases); 3 holds; 4 holds
+(222 < 1,358 moved); 5 holds (75.5 s <= 76.9 s + 10%). Decision: adopt B (one solve, rescue.SECONDS = 12).
+Losses, stated: B is slower on n=100/None (9.1 vs 8.3 s), n=150/30/None (14.0 vs 12.4 s), n=150/15/None (14.0 vs
+11.7 s) and n=30/None (2.7 vs 2.4 s); on the two 150-person whole-day cases B's answer is FEASIBLE (the best found
+in 12 s, not proven), which the page then says. Run-to-run note: A's figures differ from the same arm in
+RESCUE_PROBING_AB.txt (e.g. n=100/None moved 81 there, 224 here): a time-limited parallel search is not
+repeatable to the move, which is why each rule compares arms run one after the other on the same case.
+Real LOBs in this project have up to about 49 people (evidence/production_readiness_audit); the days of that size
+here finish proven best in under 4 s.

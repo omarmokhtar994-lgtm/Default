@@ -1,0 +1,19 @@
+Phase AD, Rescue the day: pre-registered A/B for the solve plan (written before any B run).
+Time of writing: 2026-10-11 (Egypt time, UTC+3).
+
+Why: with probing at 0, the second solve still runs out of time on the stress days, and then the first solve's
+answer stands with very many breaks moved (445 of 450 on n=150/30/None). Every solve pays presolve again.
+
+Arms (both: probing level 0, 4 workers, seed 9000, same model, same machine, run one after the other per case):
+  A = two solves: max at-target (8 s), then given up / moves / least moving weighted (4 s)  [current]
+  B = one solve (12 s): at-target, given up, moves, least moving weighted in that order (each weight larger than
+      all that follows can add up to), from the same complete hint
+Cases: the same 13 as RESCUE_PROBING_RULE.txt.
+
+Decision rule: adopt B only if ALL hold:
+  1. on every case B reaches at least as many intervals at the target as A;
+  2. on every case where both reach the same count, B gives up no more intervals than A;
+  3. no case that A solves becomes "not solved" under B;
+  4. B's total of breaks moved over all cases is lower than A's;
+  5. B's total wall time is not more than A's plus 10%.
+Otherwise keep A. Results go to RESCUE_ONESOLVE_AB.txt with every case listed, losses included.

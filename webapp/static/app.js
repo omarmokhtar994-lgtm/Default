@@ -1116,12 +1116,14 @@ function homeRefresh(now) {
 
 // Phase Z: the "now" line on today's achievement, at the time of day the page was made (Egypt time, from the server)
 (function () {
-  var strip = document.querySelector(".achv-strip[data-now]");
-  var mark = strip && strip.querySelector(".achv-now");
-  var minutes = strip ? parseInt(strip.getAttribute("data-now"), 10) : NaN;
-  if (!mark || isNaN(minutes)) return;
-  mark.style.left = (Math.min(Math.max(minutes, 0), 1440) / 1440 * 100) + "%";
-  mark.classList.add("placed");
+  // Phase AD: every strip with a now line (Today's achievement, and both of Rescue the day's)
+  Array.prototype.forEach.call(document.querySelectorAll(".achv-strip[data-now]"), function (strip) {
+    var mark = strip.querySelector(".achv-now");
+    var minutes = parseInt(strip.getAttribute("data-now"), 10);
+    if (!mark || isNaN(minutes)) return;
+    mark.style.left = (Math.min(Math.max(minutes, 0), 1440) / 1440 * 100) + "%";
+    mark.classList.add("placed");
+  });
 })();
 
 // Phase AD: Send again for a bulk change already posted asks first (the page asks too when the script is off).

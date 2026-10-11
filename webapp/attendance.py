@@ -1170,6 +1170,131 @@ class DayBook:
                 act.label = f"Change several breaks: {verb(action, done)}"
         return done
 
+    # ------------------------------------------------------------- Rescue the day (Phase AD, sample 02)
+    def rescue_plan(self, program: str, on: date, now: Optional[int] = None,
+                    page: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """What Rescue the day proposes (``rescue.solve``), counted again by the page itself: the figures, the
+        intervals given up and rescued and the strips come from ``page(extra=...)``, never from the model. ``now``
+        is minutes past midnight today (None for another day): intervals over by then that missed the target count
+        toward the day's 3. A proposal the page's own count does not confirm (no gain, more given up than allowed,
+        an interval below 50%) is not offered, and that is said. Nothing is kept."""
+        from .rescue import FLOOR, LIMIT, allowance, lost_so_far, solve
+        page = page or self.page(program, on)
+        if page is None:
+            raise ValueError(f"No schedule for {program} on {on:%d %b}.")
+        view, target = page["view"], page["target"]
+        if view["measure"] != "interval":
+            raise ValueError("Rescue the day counts intervals by interval compliance.")
+        step = view["interval"]
+        lost = [(c["t"], c["pct"]) for c in lost_so_far(target["cells"], now, step)] if now is not None else []
+        may = allowance(lost)
+        found = solve(view, page["inputs"], target["target"], now, may)
+        out: Dict[str, Any] = {"before": self._figures(page), "after": self._figures(page), "lost": lost, "may": may,
+                               "limit": LIMIT, "moves": [], "given_up": [], "rescued": [], "said": [], "now": now,
+                               "status": found["status"], "solver": found["solver"], "seconds": found["seconds"]}
+        after = page
+        if found["moves"]:
+            after = self.page(program, on, extra={"breaks": {(m["name"], m["idx"]): m["to"] for m in found["moves"]}})
+            given, rescued, low = [], [], []
+            for vb, va, tb, ta in zip(view["cells"], after["view"]["cells"], target["cells"], after["target"]["cells"]):
+                if tb["ok"] is None:
+                    continue
+                if not tb["ok"] and ta["ok"]:
+                    rescued.append(vb["t"])
+                if not ta["ok"] and va["now"] < vb["now"] - 1e-9:
+                    given.append((vb["t"], ta["pct"]))
+                    if va["now"] < min(vb["now"], FLOOR * vb["required"]) - 1e-9:
+                        low.append(vb["t"])
+            problem = ("it puts no more of the day at the target" if after["target"]["now"] <= target["now"] else
+                       f"it gives up {len(given)}, more than the {may} allowed" if len(given) > may else
+                       f"{hm(low[0])} would fall below 50% of demand" if low else "")
+            if problem:
+                logging.getLogger(__name__).error("rescue the day: the page does not confirm the plan for %s %s: %s",
+                                                  program, on, problem)
+                out["said"].append(f"Rescue the day found moves, but the page's own count does not confirm them "
+                                   f"({problem}), so none are offered. Nothing was changed.")
+                out["status"] = "refused"
+                after = page
+            else:
+                given_at = {t for t, _ in given}
+                for m in found["moves"]:
+                    m["why"] = self._rescue_why(m, step, given_at, set(rescued))
+                out.update(moves=found["moves"], given_up=given, rescued=rescued, after=self._figures(after))
+        if not out["moves"] and out["status"] != "refused":
+            ahead = [c for c in target["cells"] if c["ok"] is not None and (now is None or c["t"] + step > now)]
+            out["said"].append(
+                f"Nothing to rescue: every interval {'still ahead' if now is not None else 'of the day'} is at the "
+                "target." if found["status"] == "no gain" and all(c["ok"] for c in ahead) else
+                "Nothing to rescue: no move of the breaks left puts more of the day at the target within the rules."
+                if found["status"] == "no gain" else
+                f"No answer was found in the time ({found['seconds']} s), so nothing is proposed. Try again, or use "
+                "Fix the rest of the day's breaks.")
+        elif out["moves"] and found["solver"] == "FEASIBLE":
+            out["said"].append("The best found in the time, not proven the best possible.")
+        gone, saved = {t for t, _ in out["given_up"]}, set(out["rescued"])
+
+        def mark(c: Dict[str, Any], kind: str) -> Dict[str, Any]:
+            return {"cls": kind, "pct": c["pct"], "over": now is not None and c["t"] + step <= now}
+
+        out["strip"] = [{"t": tb["t"],
+                         "before": mark(tb, "none" if tb["ok"] is None else "ok" if tb["ok"] else "below"),
+                         "after": mark(ta, "none" if ta["ok"] is None else "gone" if ta["t"] in gone else
+                                       "saved" if ta["t"] in saved else "ok" if ta["ok"] else "below")}
+                        for tb, ta in zip(target["cells"], after["target"]["cells"])]
+        runs: List[List[int]] = []
+        for t in out["rescued"]:
+            if runs and runs[-1][1] == t:
+                runs[-1][1] = t + step
+            else:
+                runs.append([t, t + step])
+        out["rescued_runs"] = runs
+        return out
+
+    @staticmethod
+    def _rescue_why(move: Dict[str, Any], step: int, given: set, rescued: set) -> str:
+        came, goes = move["from"] - move["from"] % step, move["to"] - move["to"] % step
+        if goes in given:
+            return f"into {hm(goes)} (given up)"
+        if came in rescued:
+            return f"out of {hm(came)}"
+        if came == goes:
+            return f"spread inside {hm(came)} to {hm(came + step)}"
+        return f"from {hm(came)} to {hm(goes)}"
+
+    def apply_rescue(self, program: str, on: date, moves: List[Tuple[str, int, int]], user_id: int,
+                     now: Optional[int] = None) -> int:
+        """Keep the approved Rescue the day moves as one bulk change (one step for Undo, held from the group until
+        Send), each checked again as it is kept. A person's breaks are moved in an order that never has one land on
+        another on the way (earlier moves first from the earliest, then later moves from the latest). ``now``
+        (today) refuses a break that has started since the preview. Returns how many breaks moved."""
+        page = self.page(program, on)
+        if page is None:
+            raise ValueError(f"No schedule for {program} on {on:%d %b}.")
+        where = {(l["name"], b["idx"]): b["start"] for l in page["view"]["lanes"] for s in l["segments"]
+                 if s["offset"] == 0 for b in s["breaks"]}
+        first = {name: i for i, (name, _, _) in reversed(list(enumerate(moves)))}
+
+        def order(move):
+            name, idx, start = move
+            later = start > where.get((name, idx), start)
+            return first[name], later, -idx if later else idx
+
+        done = 0
+        with self.action(program, on, user_id, bulk=True) as act:
+            try:
+                for name, idx, start in sorted(moves, key=order):
+                    was = where.get((name, idx))
+                    if now is not None and was is not None and was <= now:
+                        raise ValueError(f"{name}'s break at {hm(was)} has started since the preview: open Rescue "
+                                         "the day again.")
+                    if now is not None and start <= now:
+                        raise ValueError(f"{hm(start)} has passed: open Rescue the day again.")
+                    self.move_break(program, on, name, idx, hm(start), user_id, suffix=" (rescue)")
+                    done += 1
+            finally:
+                act.label = f"Rescue the day moved {done} break{'s' if done != 1 else ''}"
+        return done
+
     @journaled
     def book_session(self, program: str, on: date, names: List[str], start: int, minutes: int, kind: str, user_id: int,
              billable: bool = False, with_whom: str = "", why: str = "", with_dept: str = "") -> None:

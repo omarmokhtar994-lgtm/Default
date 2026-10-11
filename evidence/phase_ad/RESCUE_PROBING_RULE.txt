@@ -1,0 +1,20 @@
+Phase AD, Rescue the day: pre-registered A/B for one CP-SAT parameter (written before any B run).
+Time of writing: 2026-10-11 (Egypt time, UTC+3).
+
+Why: the search log of a 100-person made-up day shows presolve probing taking about 6 of 10 seconds
+(three passes, each stopped at its work limit), before any search; the search itself then finishes
+fast from the complete hint.
+
+Arms (both: 4 workers, seed 9000, time limits (8 s, 4 s), the same model and machine, run one after the other):
+  A = OR-Tools defaults (cp_model_probing_level 2)
+  B = cp_model_probing_level 0
+Cases (fixed, made up, "Associate NNN"): rs_bench.py days n = 30, 50, 60, 100, 150 people at 30-minute
+intervals, and 150 at 15-minute intervals, each with now = None and now = 10:00; plus the test fixture day
+with 5 people marked sick (now = None).
+
+Decision rule: adopt B only if ALL hold:
+  1. on every case B reaches at least as many intervals at the target as A (recounted by day_view);
+  2. on every case where both reach the same count, B gives up no more intervals than A;
+  3. no case that A solves ("rescued" or "no gain") becomes "not solved" under B;
+  4. B's total wall time over all cases is lower than A's.
+Otherwise keep A (the defaults). Results go to RESCUE_PROBING_AB.txt with every case listed, losses included.

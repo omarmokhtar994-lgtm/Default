@@ -2074,6 +2074,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
             cover = days.offers(page, from_now)
         proposal = days.replan(page, from_now) if page and tab == "replan" else None
         bulk = _bulk_panel(days, page, program, on) if page and tab == "bulk" else None  # Phase AD (sample 04)
+        rescue = None  # Phase AD (sample 02): interval compliance only; the page says so for the other measure
+        if page and tab == "rescue" and measure == "interval":
+            try:
+                rescue = days.rescue_plan(program, on, _minute_now(on), page=page)
+            except ValueError as exc:
+                rescue = {"error": str(exc)}
         cover_panel = None
         if page and tab == "board" and request.args.get("cover", type=int) is not None:
             try:
@@ -2142,7 +2148,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                people=people, whole=whole, shrink=shrink, finder=finder, cover=cover,
                                proposal=proposal, from_now=from_now, cover_panel=cover_panel,
                                add_panel=add_panel, person_panel=person_panel, lengths=ADD_LENGTHS, bar=bar,
-                               bulk=bulk, shifts=BULK_SHIFTS, bulk_verb=bulk_verb,
+                               bulk=bulk, shifts=BULK_SHIFTS, bulk_verb=bulk_verb, rescue=rescue,
                                team_names=sorted({u["display_name"] for u in app.extensions["store"].list_users()
                                                   if u["active"]}, key=str.lower),  # "With": pick one or type
                                with_lists=_with_lists(program) if program else [],  # or from the lists (Phase U)
@@ -2375,6 +2381,29 @@ def create_app(config: Dict[str, Any]) -> Flask:
             flash(f"Moved {done} break{'s' if done != 1 else ''}.")
         except ValueError as exc:
             flash(f"Stopped: {exc} The moves before it were kept; open the autopilot again for a fresh proposal.")
+        return _back_to_day(program, on, "")
+
+    @app.route("/day/rescue/apply", methods=["POST"])
+    @login_required
+    def day_rescue_apply():  # type: ignore[no-untyped-def]
+        """Phase AD: keep the Rescue the day moves as one change, held from the group until Send."""
+        program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
+        try:
+            if on is None:
+                raise ValueError("Pick a day.")
+            moves = []
+            for item in request.form.getlist("move"):
+                try:
+                    name, idx, start = item.rsplit("|", 2)
+                    moves.append((name, int(idx), int(start)))
+                except ValueError:
+                    raise ValueError("A move in the form cannot be read: open Rescue the day again.") from None
+            if not moves:
+                raise ValueError("No moves to keep.")
+            done = _days().apply_rescue(program, on, moves, g.user["id"], now=_minute_now(on))
+            flash(f"Rescue the day moved {done} break{'s' if done != 1 else ''}.")
+        except ValueError as exc:
+            flash(f"Stopped: {exc} Anything changed before it was kept, and Undo takes it all back.")
         return _back_to_day(program, on, "")
 
     @app.route("/day/handover")

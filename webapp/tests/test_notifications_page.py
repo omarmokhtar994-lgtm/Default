@@ -150,6 +150,15 @@ class TheTestMessage(_Page):
         self.assertIn("Save a group link first.", self.text(got))
 
 
+class TheHelp(_Page):
+    def test_says_how_to_make_a_slack_workflow_link(self):
+        # owner, 2026-10-11: the workspace allows Slack Workflows but not apps
+        page = self.page()
+        self.assertIn("Slack, with a Workflow", page)
+        self.assertIn('one variable named "text"', page)
+        self.assertIn("https://hooks.slack.com/triggers/", page)
+
+
 class TheRemove(_Page):
     def test_remove_link_turns_posting_off(self):
         self.save(link=SLACK)

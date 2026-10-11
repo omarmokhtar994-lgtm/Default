@@ -10,6 +10,9 @@ from webapp.notify import (DEFAULT_KINDS, KINDS, Post, body_for, change_post, ch
 
 EGYPT = timezone(timedelta(hours=3))
 SLACK = "https://hooks.slack.com/services/T0000/B0000/abcdEFGHijkl"
+# Slack Workflow Builder links ("Starts with a webhook"): the newer and the older form
+SLACK_FLOWS = ("https://hooks.slack.com/triggers/T0000/1234567890/abcdEFGHijkl",
+               "https://hooks.slack.com/workflows/T0000/A0000/123456789/abcdEFGHijkl")
 TEAMS_OLD = ("https://prod-12.westeurope.logic.azure.com:443/workflows/a1b2/triggers/manual/paths/invoke"
              "?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=Zx9Yk3Vw")
 TEAMS_NEW = ("https://default1ab.cd.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/a1b2"
@@ -155,6 +158,57 @@ class ThePost(unittest.TestCase):
                     footer="As planned at 07:30.", url="")
         self.assertIn("**05:00 to 14:00 (1 person)**", json.dumps(teams_body(post)))
         self.assertIn("*05:00 to 14:00 (1 person)*", json.dumps(slack_body(post)))
+
+
+
+class TheSlackWorkflow(unittest.TestCase):
+    """Owner, 2026-10-11: the workspace lets people make Slack Workflows but not apps, and a Workflow link received
+    only the title ("It's sending only SAKS, SAKS Tier 1: changes for Sat 10 Oct but not the change itself"). A
+    Workflow reads plain text variables only, so for its link the whole message goes in one, named "text"."""
+    post = ThePost.post
+
+    def test_a_workflow_link_gets_the_whole_message_as_text(self):
+        whole = ("SAKS, NMG Tier 2: changes for Sat 10 Oct\n"
+                 "\u2022 Associate 019: Lunch moved 12:15 to 12:45\n"
+                 "\u2022 Associate 008: Overtime 17:00 to 18:00\n"
+                 "Changed on the RTA by Omar Mokhtar, 19:19.\n"
+                 "Open the RTA: https://rta.example/day?program=SAKS+NMG+Tier+2&date=2026-10-10")
+        for link in SLACK_FLOWS:
+            with self.subTest(link=link):
+                self.assertEqual(check_link(link), "slack")
+                self.assertEqual(body_for("slack", self.post(), link), {"text": whole})
+
+    def test_an_app_link_keeps_its_layout(self):
+        self.assertEqual(body_for("slack", self.post(), SLACK), slack_body(self.post()))
+        self.assertEqual(body_for("slack", self.post()), slack_body(self.post()))
+
+    def test_no_link_line_without_a_site_address(self):
+        self.assertNotIn("Open the RTA", body_for("slack", self.post(site=""), SLACK_FLOWS[0])["text"])
+
+    def test_shift_headings_stay(self):
+        post = Post(title="SAKS, NMG Tier 2: breaks for Sat 10 Oct",
+                    sections=[("05:00 to 14:00 (1 person)", [("Associate 019", "Break 1 11:00, Lunch 12:45")])],
+                    footer="As planned at 07:30.", url="")
+        self.assertEqual(body_for("slack", post, SLACK_FLOWS[0])["text"],
+                         "SAKS, NMG Tier 2: breaks for Sat 10 Oct\n05:00 to 14:00 (1 person)\n"
+                         "\u2022 Associate 019: Break 1 11:00, Lunch 12:45\nAs planned at 07:30.")
+
+    def test_typed_text_cannot_mention_the_channel(self):
+        post = self.post([item("Associate <1> & *2*", "VTO <!channel> 15:00 to 16:00")])
+        text = body_for("slack", post, SLACK_FLOWS[0])["text"]
+        self.assertNotIn("<", text)
+        self.assertNotIn(">", text)
+        self.assertIn("Associate \u20391\u203a & 2", text)
+
+    def test_a_long_message_is_cut_with_a_note(self):
+        many = [item(f"Associate {i:03d}", "Break 1 moved 10:00 to 10:15 and a long reason " * 2) for i in range(120)]
+        text = body_for("slack", self.post(many), SLACK_FLOWS[0])["text"]
+        self.assertLessEqual(len(text), 3900)
+        lines = text.split("\n")
+        self.assertEqual(lines[0], "SAKS, NMG Tier 2: changes for Sat 10 Oct")
+        shown = sum(1 for line in lines if line.startswith("\u2022 "))
+        self.assertEqual(lines[-1], f"\u2026 and {120 - shown} more lines: open the RTA to see them.")
+        self.assertIn("Open the RTA: https://rta.example/", text)
 
 
 if __name__ == "__main__":

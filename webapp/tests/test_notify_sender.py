@@ -124,6 +124,23 @@ class TheSender(_Sender):
         self.assertEqual([p["status"] for p in self.store.notify_posts(unit=UNIT)], ["sent"])
         self.assertEqual(self.notifier.run_once(T0 + 400), 0)  # sent once
 
+    def test_a_slack_workflow_link_gets_the_whole_message(self):
+        # owner, 2026-10-11: a Workflow link received only the title; it now gets every line in "text"
+        flow = "https://hooks.slack.com/triggers/T0000/1234567890/abcdEFGHijkl"
+        self.settle(link=flow)
+        self.queue()
+        self.queue("Overtime 17:00 to 18:00", kind="overtime", who="Associate 008")
+        self.assertEqual(self.notifier.run_once(T0 + 180), 1)
+        url, body = self.group.calls[0]
+        self.assertEqual((url, list(body)), (flow, ["text"]))
+        self.assertIn("SAKS, NMG Tier 2: changes for Sat 10 Oct\n", body["text"])
+        self.assertIn("\u2022 Associate 019: Lunch moved 12:15 to 12:45", body["text"])
+        self.assertIn("\u2022 Associate 008: Overtime 17:00 to 18:00", body["text"])
+        ok, said = self.notifier.send_test(UNIT, "Omar Mokhtar")
+        self.assertTrue(ok, said)
+        self.assertEqual(list(self.group.calls[-1][1]), ["text"])
+        self.assertIn("test from Team Scheduler\nSent by Omar Mokhtar", self.group.calls[-1][1]["text"])
+
     def test_a_busy_day_posts_after_ten_minutes(self):
         self.settle()
         for step in range(7):  # a change every 100 seconds: the hold never runs out

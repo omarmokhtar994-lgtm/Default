@@ -56,6 +56,10 @@ NOT_GROUP = ("That is not a Teams or Slack group link. Teams links are on logic.
              "Slack links are on hooks.slack.com.")
 SLACK_CHUNK = 2900  # characters per Slack section (Slack allows 3000)
 SLACK_BLOCKS = 50
+# A Slack Workflow ("Starts with a webhook") link: the Workflow reads plain text variables only, so the whole message
+# goes in one named "text" (owner, 2026-10-11: the workspace allows Workflows, not apps)
+SLACK_FLOW_PATHS = ("/triggers/", "/workflows/")
+SLACK_FLOW_MAX = 3900  # characters, kept under Slack's 4,000 for one message
 
 
 def check_link(url: str) -> str:
@@ -215,8 +219,48 @@ def breaks_post(label: str, unit: str, on: date, page: Dict[str, Any], site: str
                 url=day_url(site, unit, on.isoformat()))
 
 
-def body_for(service: str, post: Post) -> Dict[str, Any]:
-    return teams_body(post) if service == "teams" else slack_body(post)
+def is_slack_flow(url: str) -> bool:
+    """Whether a Slack link is a Workflow's webhook (hooks.slack.com/triggers/... or /workflows/...)."""
+    parts = urlsplit((url or "").strip())
+    return (parts.hostname or "").lower() == SLACK_HOST and parts.path.startswith(SLACK_FLOW_PATHS)
+
+
+def _flow(text: str) -> str:
+    """Plain text that can never mention the channel or make a link: Slack's angle brackets become look-alikes."""
+    return _plain(text).replace("<", "\u2039").replace(">", "\u203a")
+
+
+def slack_flow_body(post: Post) -> Dict[str, str]:
+    """The whole message as plain lines in "text", for a Slack Workflow: the title, each heading and line, the
+    footer and the RTA's address; cut with a note past 3,900 characters."""
+    head = [_flow(post.title)]
+    tail = ([_flow(post.footer)] if post.footer.strip() else []) + ([f"Open the RTA: {post.url}"] if post.url else [])
+    body: List[str] = []
+    for heading, rows in post.sections:
+        if heading:
+            body.append(_flow(heading))
+        body += [f"\u2022 {_flow(n)}: {_flow(t)}" for n, t in rows]
+
+    def joined(lines: List[str]) -> str:
+        return "\n".join(head + lines + tail)
+
+    if len(joined(body)) <= SLACK_FLOW_MAX:
+        return {"text": joined(body)}
+    total = sum(1 for line in body if line.startswith("\u2022 "))
+    while True:  # drop lines from the end until the rest and a closing note fit
+        if body:
+            body.pop()
+        left = total - sum(1 for line in body if line.startswith("\u2022 "))
+        text = joined(body) + f"\n\u2026 and {left} more lines: open the RTA to see them."
+        if len(text) <= SLACK_FLOW_MAX or not body:
+            return {"text": text[:SLACK_FLOW_MAX]}
+
+
+def body_for(service: str, post: Post, link: str = "") -> Dict[str, Any]:
+    """What the group's link receives: a Teams card, a Slack app's message, or a Slack Workflow's plain text."""
+    if service == "teams":
+        return teams_body(post)
+    return slack_flow_body(post) if is_slack_flow(link) else slack_body(post)
 
 
 # The RTA's "Post to the group" tick, unticked for one change (Phase AB, sample 03b). Set for the request that makes
@@ -439,7 +483,7 @@ class Notifier:
         except ValueError:
             self._finish(post, "failed", "the saved group link is not a Teams or Slack link")
             return 0
-        body = body_for(service, Post(**json.loads(post["body"])))
+        body = body_for(service, Post(**json.loads(post["body"])), settings["link"])
         try:
             ok, code = self.transport(settings["link"], body)
         except Exception:  # noqa: BLE001 (an unexpected network failure is a failed try like any other)
@@ -549,7 +593,7 @@ class Notifier:
         post = Post(title=f"{self.label(unit)}: test from Team Scheduler",
                     footer=f"Sent by {by_name} at {_hm(now)}. RTA changes for this LOB post here.")
         try:
-            ok, code = self.transport(settings["link"], body_for(service, post))
+            ok, code = self.transport(settings["link"], body_for(service, post, settings["link"]))
         except Exception:  # noqa: BLE001
             log.exception("group posts: the test message for %s failed", unit)
             ok, code = False, 0

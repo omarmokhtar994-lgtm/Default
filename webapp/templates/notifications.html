@@ -62,7 +62,8 @@
 <details class="nf-how"><summary>Where the group link comes from (about two minutes, once per group)</summary>
   <ol>
     <li><b>Teams:</b> in the channel, More options (…) &gt; Workflows &gt; "Send webhook alerts to a channel". Name it "Team Scheduler", pick the team and channel, then copy the link it gives you. The workflow belongs to whoever makes it, so a shared account is safer.</li>
-    <li><b>Slack:</b> api.slack.com/apps &gt; Create New App &gt; From scratch &gt; Incoming Webhooks &gt; On &gt; Add New Webhook &gt; pick the channel, then copy the link.</li>
+    <li><b>Slack, with a Workflow</b> (no app needed): New workflow &gt; start it from a webhook &gt; Set up variables &gt; add one variable named "text" (Text) &gt; add the step "Send a message to a channel", pick the channel and put only the "text" variable in the message &gt; Publish, then copy the link (it starts with https://hooks.slack.com/triggers/). Each post arrives as plain lines.</li>
+    <li><b>Slack, with an app</b> (if your workspace allows apps): api.slack.com/apps &gt; Create New App &gt; From scratch &gt; Incoming Webhooks &gt; On &gt; Add New Webhook &gt; pick the channel, then copy the link.</li>
     <li>Paste the link here and Save, then Send test message. Anyone holding the link can post to the group, so paste it only here.</li>
   </ol>
 </details>

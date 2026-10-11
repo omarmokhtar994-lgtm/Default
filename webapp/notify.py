@@ -116,8 +116,14 @@ class Post:
     url: str = ""
 
 
+# Owner, 2026-10-11: "Don't add the link for the website we are not giving access to associates now". Group posts
+# carry no website address while this is False; set it to True once associates may open the website.
+LINK_TO_RTA = False
+
+
 def day_url(site: str, unit: str, shift_date: str) -> str:
-    return f"{site}day?program={quote_plus(unit)}&date={shift_date}" if site else ""
+    """The RTA day a group post may link to; "" while posts name no website address (``LINK_TO_RTA``)."""
+    return f"{site}day?program={quote_plus(unit)}&date={shift_date}" if site and LINK_TO_RTA else ""
 
 
 def change_post(label: str, shift_date: str, items: List[Dict[str, Any]], site: str, unit: str) -> Post:

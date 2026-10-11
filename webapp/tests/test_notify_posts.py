@@ -3,10 +3,11 @@
 are accepted, and the text of a post as Teams and Slack receive it. Made-up "Associate NN" names."""
 import json
 import unittest
-from datetime import datetime, timedelta, timezone
+from dataclasses import replace
+from datetime import date, datetime, timedelta, timezone
 
-from webapp.notify import (DEFAULT_KINDS, KINDS, Post, body_for, change_post, check_link, link_end, slack_body,
-                           teams_body)
+from webapp.notify import (DEFAULT_KINDS, KINDS, Post, body_for, breaks_post, change_post, check_link, link_end,
+                           slack_body, teams_body)
 
 EGYPT = timezone(timedelta(hours=3))
 SLACK = "https://hooks.slack.com/services/T0000/B0000/abcdEFGHijkl"
@@ -83,8 +84,21 @@ class ThePost(unittest.TestCase):
         self.assertEqual(post.sections, [("", [("Associate 019", "Lunch moved 12:15 to 12:45"),
                                                ("Associate 008", "Overtime 17:00 to 18:00")])])
         self.assertEqual(post.footer, "Changed on the RTA by Omar Mokhtar, 19:19.")
-        self.assertEqual(post.url, "https://rta.example/day?program=SAKS+NMG+Tier+2&date=2026-10-10")
+        # owner, 2026-10-11: "Don't add the link for the website we are not giving access to associates now", so a
+        # group post carries no website address (it did before, from the site the Notifications page was saved on)
+        self.assertEqual(post.url, "")
         self.assertEqual(self.post(site="").url, "")
+
+    def test_no_group_post_names_the_website(self):
+        breaks = breaks_post("SAKS, NMG Tier 2", "SAKS NMG Tier 2", date(2026, 10, 10),
+                             {"view": {"lanes": []}}, "https://rta.example/", at("07:30"), True)
+        for post in (self.post(), breaks):
+            for service, link in (("teams", ""), ("slack", SLACK), ("slack", SLACK_FLOWS[0])):
+                with self.subTest(title=post.title, service=service, link=link[-12:]):
+                    text = json.dumps(body_for(service, post, link), ensure_ascii=False)
+                    self.assertNotIn("rta.example", text)
+                    self.assertNotIn("Open the RTA", text)
+                    self.assertNotIn("\U0001f517", text)
 
     def test_lines_go_in_time_order(self):
         post = self.post([item("Associate 008", "Overtime 17:00 to 18:00", when="19:19"),
@@ -99,8 +113,12 @@ class ThePost(unittest.TestCase):
         two = self.post([item("Associate 001", "x", by="Sara", when="09:40"), item("Associate 002", "y", when="09:41")])
         self.assertEqual(two.footer, "Changed on the RTA by Sara and Omar Mokhtar; last at 09:41.")
 
+    def linked(self):
+        # a post given an address still renders it (for when associates are given access to the website)
+        return replace(self.post(), url="https://rta.example/day?program=SAKS+NMG+Tier+2&date=2026-10-10")
+
     def test_teams_body_shape(self):
-        body = teams_body(self.post())
+        body = teams_body(self.linked())
         self.assertEqual(body["type"], "message")
         att = body["attachments"][0]
         self.assertEqual(att["contentType"], "application/vnd.microsoft.card.adaptive")
@@ -113,17 +131,17 @@ class ThePost(unittest.TestCase):
         self.assertEqual(card["actions"], [{"type": "Action.OpenUrl", "title": "Open the RTA",
                                             "url": "https://rta.example/day?program=SAKS+NMG+Tier+2&date=2026-10-10"}])
         self.assertNotIn("actions", teams_body(self.post(site=""))["attachments"][0]["content"])
-        self.assertEqual(body_for("teams", self.post()), body)
+        self.assertEqual(body_for("teams", self.linked()), body)
 
     def test_slack_body_shape(self):
-        body = slack_body(self.post())
+        body = slack_body(self.linked())
         self.assertEqual(body["text"], "SAKS, NMG Tier 2: changes for Sat 10 Oct")
         text = json.dumps(body["blocks"])
         self.assertIn("*SAKS, NMG Tier 2: changes for Sat 10 Oct*", text)
         self.assertIn("\\u2022 *Associate 019*: Lunch moved 12:15 to 12:45", text)
         self.assertIn("<https://rta.example/day?program=SAKS+NMG+Tier+2&date=2026-10-10|Open the RTA>", text)
         self.assertNotIn("Open the RTA", json.dumps(slack_body(self.post(site=""))))
-        self.assertEqual(body_for("slack", self.post()), body)
+        self.assertEqual(body_for("slack", self.linked()), body)
 
     def test_slack_escapes_control_characters(self):
         post = self.post([item("Associate <1> & *2*", "VTO <!channel> 15:00 to 16:00 @here")])
@@ -176,8 +194,7 @@ class TheSlackWorkflow(unittest.TestCase):
                  "\u2022 Associate 019: Lunch moved 12:15 to 12:45\n"
                  "\u2022 Associate 008: Overtime 17:00 to 18:00\n"
                  + DIVIDER + "\n"
-                 "\u270f\ufe0f Changed on the RTA by Omar Mokhtar, 19:19.\n"
-                 "\U0001f517 https://rta.example/day?program=SAKS+NMG+Tier+2&date=2026-10-10")
+                 "\u270f\ufe0f Changed on the RTA by Omar Mokhtar, 19:19.")  # no website address (owner, 2026-10-11)
         for link in SLACK_FLOWS:
             with self.subTest(link=link):
                 self.assertEqual(check_link(link), "slack")
@@ -187,10 +204,10 @@ class TheSlackWorkflow(unittest.TestCase):
         self.assertEqual(body_for("slack", self.post(), SLACK), slack_body(self.post()))
         self.assertEqual(body_for("slack", self.post()), slack_body(self.post()))
 
-    def test_no_link_line_without_a_site_address(self):
-        text = body_for("slack", self.post(site=""), SLACK_FLOWS[0])["text"]
-        self.assertNotIn("\U0001f517", text)
-        self.assertTrue(text.endswith("\u270f\ufe0f Changed on the RTA by Omar Mokhtar, 19:19."))
+    def test_a_post_given_an_address_shows_it_last(self):
+        linked = replace(self.post(), url="https://rta.example/day?program=SAKS+NMG+Tier+2&date=2026-10-10")
+        text = body_for("slack", linked, SLACK_FLOWS[0])["text"]
+        self.assertTrue(text.endswith("\n\U0001f517 https://rta.example/day?program=SAKS+NMG+Tier+2&date=2026-10-10"))
 
     def test_shift_headings_stay(self):
         post = Post(title="SAKS, NMG Tier 2: breaks for Sat 10 Oct",
@@ -222,9 +239,8 @@ class TheSlackWorkflow(unittest.TestCase):
         self.assertEqual(lines[0], "\U0001f4cb SAKS, NMG Tier 2: changes for Sat 10 Oct")
         shown = sum(1 for line in lines if line.startswith("\u2022 "))
         self.assertGreater(shown, 10)
-        self.assertEqual(lines[-4:], [f"\u2026 and {120 - shown} more lines: open the RTA to see them.", DIVIDER,
-                                      "\u270f\ufe0f Changed on the RTA by Omar Mokhtar, 19:19.",
-                                      "\U0001f517 https://rta.example/day?program=SAKS+NMG+Tier+2&date=2026-10-10"])
+        self.assertEqual(lines[-3:], [f"\u2026 and {120 - shown} more lines: open the RTA to see them.", DIVIDER,
+                                      "\u270f\ufe0f Changed on the RTA by Omar Mokhtar, 19:19."])
 
 
 if __name__ == "__main__":

@@ -408,7 +408,8 @@
     <div class="btns" data-cancel-row><button class="danger" type="button" data-cancel-break>Cancel break</button></div>
     <div class="brk-cancel" data-cancel-ask hidden>
       <p><b data-cancel-what></b> They stay on the floor for those <span data-cancel-mins></span> minutes. Back to plan or Undo brings it back.</p>
-      <label>Why <input type="text" name="why" maxlength="200" placeholder="A short reason" autocomplete="off"></label>
+      <label>Why <input type="text" name="why" maxlength="200" placeholder="A short reason" autocomplete="off" aria-describedby="cancel-said"></label>
+      <p class="brk-cancel-said" id="cancel-said" data-cancel-said aria-live="polite"></p>
       <div class="btns"><button class="danger" type="button" data-cancel-yes>Cancel the break</button><button type="button" data-cancel-no>Keep the break</button></div>
     </div>
     <p><a href="#" data-person-link>Open this person's day</a></p>

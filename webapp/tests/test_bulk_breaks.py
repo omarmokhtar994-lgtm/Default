@@ -128,6 +128,16 @@ class ThePage(_Bulk):
         self.assertRegex(floor, r'<a class="button" href="[^"]*view=bulk[^"]*">Change several breaks</a>')
         self.assertIn("Change several breaks: cancelled 2 breaks", re.sub(r"<[^>]+>", "", floor))
 
+    def test_the_people_picked_open_no_person_dialog(self):
+        """The panel's "who" is the people picked, not the RTA's one-person view (found by the Phase AD browser
+        check: the person dialog opened over the preview and covered its button)."""
+        kind, chosen = self.with_kind(2)
+        q = "&".join(f"who={n.replace(' ', '+')}" for n, _ in chosen)
+        page = self.client.get(f"/day?program={self.key.replace(' ', '+')}&date={WED.isoformat()}&view=bulk&{q}"
+                               f"&which={kind.replace(' ', '+')}&act=shift&amount=15&show=1").get_data(as_text=True)
+        self.assertIn('<h2 id="bk-h">Change several breaks</h2>', page)
+        self.assertNotIn('id="person-dialog"', page)
+
 
 if __name__ == "__main__":
     import unittest

@@ -557,23 +557,28 @@ function homeRefresh(now) {
   keep.addEventListener("click", function () { save(input.value); });
   dlg.querySelector("[data-plan]").addEventListener("click", function () { save(""); });
   if (cancelRow && cancelAsk) {
-    var why = cancelAsk.querySelector("input[name=why]");
+    var why = cancelAsk.querySelector("input[name=why]"), cancelSaid = cancelAsk.querySelector("[data-cancel-said]");
+    function cancelProblem(text) {  // said next to the Why field, which it is about
+      cancelSaid.textContent = text;
+      if (text) { why.setAttribute("aria-invalid", "true"); } else { why.removeAttribute("aria-invalid"); }
+    }
     cancelRow.querySelector("[data-cancel-break]").addEventListener("click", function () {
       cancelAsk.querySelector("[data-cancel-what]").textContent = "Cancel " + current.kind + " for " + current.name + "?";
       cancelAsk.querySelector("[data-cancel-mins]").textContent = current.minutes;
-      cancelAsk.hidden = false; why.value = ""; why.focus();
+      cancelAsk.hidden = false; why.value = ""; cancelProblem(""); why.focus();
     });
     cancelAsk.querySelector("[data-cancel-no]").addEventListener("click", function () { cancelAsk.hidden = true; });
     cancelAsk.querySelector("[data-cancel-yes]").addEventListener("click", function () {
       var yes = this;
-      if (!why.value.trim()) { result.textContent = "Say why the break is cancelled."; why.focus(); return; }
+      if (!why.value.trim()) { cancelProblem("Say why the break is cancelled."); why.focus(); return; }
+      cancelProblem("");
       yes.disabled = true;
       var fields = { date: current.date, associate: current.name, idx: current.idx, why: why.value };
       var tick = dlg.querySelector("input[name=post]");
       if (tick) { fields.post_asked = "1"; if (tick.checked) { fields.post = "1"; } }
       post(root.dataset.cancelUrl, fields).then(function (r) {
         if (r._ok) { window.location.reload(); return; }
-        yes.disabled = false; result.textContent = r.error || "The break was not cancelled.";
+        yes.disabled = false; cancelProblem(r.error || "The break was not cancelled: try again.");
       });
     });
   }

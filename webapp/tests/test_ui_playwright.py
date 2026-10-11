@@ -2642,3 +2642,285 @@ class ThePhaseACInTheBrowser(unittest.TestCase):
                 self.go(phone, f"/week?program={self.q}&week={self.sunday.isoformat()}", errors)
                 phone.screenshot(path=str(AC_SCREENS / "phone_week.png"), full_page=True)
         self.assertEqual(errors, [])
+
+
+AD_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_ad" / "screens"
+
+
+@unittest.skipIf(sync_playwright is None, "Playwright is not installed here; UI tests skipped")
+class ThePhaseADInTheBrowser(unittest.TestCase):
+    """Phase AD (owner, 2026-10-11; samples 01 to 06): cancel a break with a reason and bring it back; Change several
+    breaks waits for Send, and Send again asks first; Undo goes back your own last 2 changes and then says why not;
+    Rescue the day previews and applies as one change; + Add opens on Overtime at an hour nobody is on; nothing
+    scrolls sideways on a phone. Each test works on its own day of the week, so one's changes never meet another's
+    Undo; days other than today keep the tests independent of the clock."""
+
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+    go = ThePhaseRInTheBrowser.go
+    SLACK = "https://hooks.slack.com/services/T0000/B0000/abcdEFGHijkl"
+
+    @classmethod
+    def setUpClass(cls):
+        import io
+        import shutil
+        from datetime import datetime, timedelta, timezone
+        from webapp.notify import KINDS
+        from webapp.programs import ProgramBook
+        from webapp.tests.test_notify_sender import Group
+        from webapp.tests.test_ready import make_ready
+        from webapp.tests.test_runs import sign_in as client_sign_in, token, wait
+        cls.dir = Path(tempfile.mkdtemp())
+        cls.addClassCleanup(shutil.rmtree, cls.dir, True)
+        cls.today = datetime.now(timezone(timedelta(hours=3))).date()
+        cls.sunday = cls.today - timedelta(days=(cls.today.weekday() + 1) % 7)
+        cls.day_of = {name: cls.sunday + timedelta(days=i) for i, name in
+                      enumerate(("sun", "mon", "tue", "wed", "thu", "fri", "sat"))}
+        ready = make_ready(cls.dir / "ready.xlsx")
+        cls.app, cls.store, _, _ = make_app(VALIDATOR_ROOT=str(REPO), NOTIFY_THREAD=False, NOTIFY_TRANSPORT=Group())
+        cls.omar = cls.store.add_user("omar", "Omar Mokhtar", "Owner-pass-123", is_admin=True, must_change=False)
+        programs = ProgramBook(cls.store)
+        cls.key = programs.add_lob(programs.add_program("SAKS"), "NMG Tier 2")
+        cls.q = cls.key.replace(" ", "+")
+        client = client_sign_in(cls.app, "omar", "Owner-pass-123")
+        client.post("/runs", data={"csrf_token": token(client), "kind": "ready", "mode": "QUICK", "program": cls.key,
+                                   "week_start": cls.sunday.isoformat(),
+                                   "workbook": (io.BytesIO(ready.read_bytes()), "week.xlsx")},
+                    content_type="multipart/form-data")
+        run = cls.store.list_runs()[0]["id"]
+        wait(cls.store, run, statuses=("DONE", "REJECTED", "FAILED"))
+        first = cls.app.extensions["schedules"].versions(run)[-1]["id"]  # the ready upload's breaks, planned
+        client.post(f"/schedules/{first}/auto-breaks", data={"csrf_token": token(client), "use": "1"})
+        cls.store.set_notify(cls.key, link=cls.SLACK, service="slack", mode="on", kinds=",".join(KINDS), hold=120)
+        cls.days = cls.app.extensions["days"]
+        cls.server = make_server("127.0.0.1", 0, cls.app, threaded=True)
+        cls.base = f"http://127.0.0.1:{cls.server.server_port}"
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.pw = sync_playwright().start()
+        launch = {"headless": True}
+        if os.path.exists(CHROMIUM):
+            launch["executable_path"] = CHROMIUM
+        cls.browser = cls.pw.chromium.launch(**launch)
+        AD_SCREENS.mkdir(parents=True, exist_ok=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.pw.stop()
+        cls.server.shutdown()
+
+    def url(self, on, extra=""):
+        return f"/day?program={self.q}&date={on.isoformat()}{extra}"
+
+    def present(self, on):
+        view = self.days.page(self.key, on)["view"]
+        return [(l["name"], s) for l in view["lanes"] for s in l["segments"]
+                if s["offset"] == 0 and s["status"] == "Present"]
+
+    def test_cancel_a_break_with_a_reason_and_bring_it_back(self):
+        on = self.day_of["wed"]
+        page = self.page(width=1440, height=1000)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        self.go(page, self.url(on), errors)
+        rect = page.locator(f'rect.brk[data-date="{on.isoformat()}"]:not(.cancelled)').first
+        name, idx = rect.get_attribute("data-name"), rect.get_attribute("data-idx")
+        self.addCleanup(self.store.clear_actual_break, self.key, on.isoformat(), name, int(idx))
+        rect.focus()
+        page.keyboard.press("Enter")
+        dialog = page.locator("#break-dialog")
+        expect(dialog).to_be_visible()
+        dialog.locator("[data-cancel-break]").click()
+        ask = dialog.locator("[data-cancel-ask]")
+        expect(ask).to_be_visible()
+        ask.locator("[data-cancel-yes]").click()
+        expect(ask.locator("[data-cancel-said]")).to_have_text("Say why the break is cancelled.")  # next to Why
+        expect(ask.locator("input[name=why]")).to_have_attribute("aria-invalid", "true")
+        dialog.screenshot(path=str(AD_SCREENS / "cancel_needs_a_reason.png"))
+        ask.locator("input[name=why]").fill("Queue is long after the outage")
+        dialog.screenshot(path=str(AD_SCREENS / "cancel_a_break.png"))
+        with page.expect_navigation():
+            ask.locator("[data-cancel-yes]").click()
+        page.wait_for_load_state("load")
+        gone = page.locator(f'rect.brk.cancelled[data-name="{name}"][data-idx="{idx}"]')
+        expect(gone).to_have_count(1)
+        expect(page.locator("ul.log")).to_contain_text("cancelled")
+        expect(page.locator("ul.log")).to_contain_text("Queue is long after the outage")  # the reason stays on the site
+        gone.focus()
+        page.keyboard.press("Enter")
+        expect(dialog.locator("#brk-h")).to_contain_text("Bring back " + name)
+        expect(dialog.locator("[data-keep]")).to_be_hidden()
+        with page.expect_navigation():
+            dialog.locator("[data-plan]").click()
+        page.wait_for_load_state("load")
+        expect(page.locator(f'rect.brk.cancelled[data-name="{name}"]')).to_have_count(0)
+        self.assertEqual(errors, [])
+
+    def test_bulk_change_waits_for_send_and_send_again_asks(self):
+        on = self.day_of["thu"]
+        page = self.page(width=1440, height=1000)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        self.go(page, self.url(on), errors)
+        page.get_by_role("link", name="Change several breaks").first.click()
+        page.wait_for_load_state("load")
+        expect(page.locator("#bk-h")).to_have_text("Change several breaks")
+        boxes = page.locator(".bk-who input[name=who]")
+        picked = [boxes.nth(i).get_attribute("value") for i in range(3)]
+        for i in range(3):
+            boxes.nth(i).check()
+        page.locator(".bk-form input[name=why]").fill("Queue is long after the outage")
+        page.get_by_role("button", name="Show the effect").click()
+        page.wait_for_load_state("load")
+        apply = page.locator("form.bk-foot button[type=submit]")
+        expect(apply).to_have_text("Cancel 3 breaks")
+        page.locator("section[aria-labelledby=bk-h]").screenshot(path=str(AD_SCREENS / "change_several_breaks.png"))
+        with page.expect_navigation():
+            apply.click()
+        page.wait_for_load_state("load")
+        rows = self.store.list_actual_breaks(self.key, [on.isoformat()])
+        for row in rows:
+            self.addCleanup(self.store.clear_actual_break, self.key, on.isoformat(), row["associate"], row["idx"])
+        self.assertEqual(sorted(r["associate"] for r in rows if r["cancelled"]), sorted(picked))
+        bar = page.locator("#act-bar")
+        expect(bar).to_contain_text("Change several breaks: cancelled 3 breaks")
+        expect(bar).to_contain_text("Not posted to the Slack group yet.")
+        bar.screenshot(path=str(AD_SCREENS / "bar_send.png"))
+        with page.expect_navigation():
+            bar.get_by_role("button", name="Send to group").click()
+        page.wait_for_load_state("load")
+        expect(page.locator("body")).to_contain_text("Posting to the Slack group now.")
+        again = bar.get_by_role("button", name="Send again")
+        expect(again).to_be_visible()
+        again.click()
+        dlg = page.locator("#resend-dialog")
+        expect(dlg).to_be_visible()
+        expect(dlg.locator("[data-resend-said]")).to_contain_text("was posted to the Slack group at")
+        dlg.screenshot(path=str(AD_SCREENS / "send_again_asks.png"))
+        dlg.get_by_role("button", name="Keep it as it is").click()
+        expect(dlg).to_be_hidden()
+        entry = self.store.day_actions(self.key, on.isoformat())[-1]
+        self.assertEqual(entry["sends"], 1)  # kept as it is: nothing sent again
+        again.click()
+        with page.expect_navigation():
+            dlg.get_by_role("button", name="Send again").click()
+        page.wait_for_load_state("load")
+        self.assertEqual(self.store.day_actions(self.key, on.isoformat())[-1]["sends"], 2)
+        self.assertEqual(errors, [])
+
+    def test_undo_goes_back_two_and_then_says_why_not(self):
+        from webapp.attendance import hm
+        on = self.day_of["fri"]
+        moved = []
+        for name, seg in self.present(on)[:3]:
+            b = seg["breaks"][0]
+            self.days.move_break(self.key, on, name, b["idx"], hm(b["start"] + 5), self.omar)
+            self.addCleanup(self.store.clear_actual_break, self.key, on.isoformat(), name, b["idx"])
+            moved.append(name)
+        page = self.page(width=1440, height=1000)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        self.go(page, self.url(on), errors)
+        bar = page.locator("#act-bar")
+        expect(bar).to_contain_text(moved[2])
+        bar.screenshot(path=str(AD_SCREENS / "bar_undo.png"))
+        for name in (moved[2], moved[1]):
+            with page.expect_navigation():
+                bar.get_by_role("button", name="Undo").click()
+            page.wait_for_load_state("load")
+            expect(page.locator("body")).to_contain_text("Undone: " + name)
+        expect(page.get_by_role("button", name="Undo")).to_have_count(0)  # 2 back at most: the first move stays
+        token = page.locator("input[name=csrf_token]").first.get_attribute("value")
+        said = page.request.post(self.base + "/day/undo-last", form={"csrf_token": token, "program": self.key,
+                                                                    "date": on.isoformat()})
+        self.assertIn("Nothing of yours to undo on this day: Undo goes back 2 changes at most.", said.text())
+        kept = {r["associate"] for r in self.store.list_actual_breaks(self.key, [on.isoformat()])}
+        self.assertEqual(kept, {moved[0]})
+        self.assertEqual(errors, [])
+
+    def test_rescue_the_day_previews_and_applies(self):
+        on = self.day_of["tue"]
+        plan = None
+        for name, seg in sorted(self.present(on), key=lambda p: (p[1]["start"], p[0])):
+            if not 420 <= seg["start"] <= 720:
+                continue
+            self.days.set_status(self.key, on, name, "Sick", self.omar)
+            self.addCleanup(self.days.set_status, self.key, on, name, "Present", self.omar)
+            plan = self.days.rescue_plan(self.key, on)
+            if len(plan["moves"]) >= 3:
+                break
+        self.assertTrue(plan and plan["moves"], "a made-short Tuesday needs something to rescue")
+        page = self.page(width=1440, height=1000)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        self.go(page, self.url(on), errors)
+        page.get_by_role("link", name="Rescue the day").first.click()
+        page.wait_for_load_state("load")
+        panel = page.locator("section[aria-labelledby=rs-h]")
+        expect(panel.locator("#rs-h")).to_have_text("Rescue the day")
+        expect(panel).to_contain_text("The day may give up 3 at most")
+        rows = panel.locator(".rs-t tbody tr")
+        self.assertEqual(rows.count(), len(plan["moves"]))
+        expect(panel.locator(".rs-strip.rs-after i.saved").first).to_be_visible()
+        panel.screenshot(path=str(AD_SCREENS / "rescue_the_day.png"))
+        light = self.page(width=1440, height=1000, scheme="light")
+        self.sign_in(light)
+        self.go(light, self.url(on, "&view=rescue"), errors)
+        light.locator("section[aria-labelledby=rs-h]").screenshot(path=str(AD_SCREENS / "rescue_the_day_light.png"))
+        n = rows.count()
+        with page.expect_navigation():
+            panel.get_by_role("button", name=f"Apply all {n}").click()
+        page.wait_for_load_state("load")
+        self.addCleanup(self.days.undo_last, self.key, on, self.omar)
+        expect(page.locator("body")).to_contain_text(f"Rescue the day moved {n} break{'s' if n != 1 else ''}.")
+        expect(page.locator("#act-bar")).to_contain_text(f"Rescue the day moved {n} break")
+        expect(page.locator("#act-bar").get_by_role("button", name="Send to group")).to_be_visible()
+        self.assertEqual(self.days.page(self.key, on)["target"]["now"], plan["after"]["now"])
+        self.assertEqual(errors, [])
+
+    def test_add_opens_on_overtime_where_nobody_is_on(self):
+        on = self.day_of["mon"]
+        present = self.present(on)
+        on_at = {t: [n for n, s in present if s["start"] < t + 60 and t < s["end"]] for t in range(0, 1440, 60)}
+        t = min((t for t in on_at if on_at[t]), key=lambda t: (len(on_at[t]), t))
+        for name in on_at[t]:
+            self.days.set_status(self.key, on, name, "Sick", self.omar)
+            self.addCleanup(self.days.set_status, self.key, on, name, "Present", self.omar)
+        page = self.page(width=1440, height=1000)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        self.go(page, self.url(on, f"&view=board&add={t}"), errors)
+        dialog = page.locator("#add-dialog")
+        expect(dialog).to_be_visible()
+        expect(dialog.locator('input[name=what][value="Overtime"]')).to_be_checked()
+        expect(page.locator("#add-h")).to_contain_text("Add overtime for ")
+        dialog.screenshot(path=str(AD_SCREENS / "add_opens_on_overtime.png"))
+        self.assertEqual(errors, [])
+
+    def test_phones_never_scroll_sideways(self):
+        errors = []
+        on = self.day_of["sat"]
+        name, seg = self.present(on)[0]
+        self.days.cancel_break(self.key, on, name, seg["breaks"][0]["idx"], "Queue is long", self.omar)
+        self.addCleanup(self.store.clear_actual_break, self.key, on.isoformat(), name, seg["breaks"][0]["idx"])
+        urls = (self.url(on), self.url(on, "&view=bulk"), self.url(on, "&view=rescue"), self.url(on, "&view=replan"),
+                self.url(on, "&view=bulk&who=" + name.replace(" ", "+") + "&act=shift&amount=15&show=1"),
+                self.url(self.today))
+        for width in (390, 320):
+            phone = self.page(width=width, height=800)
+            phone.on("pageerror", lambda e: errors.append(str(e)))
+            self.sign_in(phone)
+            for url in urls:
+                self.go(phone, url, errors)
+                self.assertLessEqual(phone.evaluate("document.documentElement.scrollWidth"), width, f"{width} {url}")
+            if width == 390:
+                self.go(phone, self.url(on, "&view=rescue"), errors)
+                phone.screenshot(path=str(AD_SCREENS / "phone_rescue.png"), full_page=True)
+                self.go(phone, self.url(on), errors)
+                phone.locator("#act-bar").screenshot(path=str(AD_SCREENS / "phone_bar.png"))
+        self.assertEqual(errors, [])

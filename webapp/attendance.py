@@ -1222,13 +1222,16 @@ class DayBook:
                 out.update(moves=found["moves"], given_up=given, rescued=rescued, after=self._figures(after))
         if not out["moves"] and out["status"] != "refused":
             ahead = [c for c in target["cells"] if c["ok"] is not None and (now is None or c["t"] + step > now)]
-            out["said"].append(
-                f"Nothing to rescue: every interval {'still ahead' if now is not None else 'of the day'} is at the "
-                "target." if found["status"] == "no gain" and all(c["ok"] for c in ahead) else
-                "Nothing to rescue: no move of the breaks left puts more of the day at the target within the rules."
-                if found["status"] == "no gain" else
-                f"No answer was found in the time ({found['seconds']} s), so nothing is proposed. Try again, or use "
-                "Fix the rest of the day's breaks.")
+            if found["status"] == "not solved":
+                said = (f"No answer was found in the time ({found['seconds']} s), so nothing is proposed. Try again, "
+                        "or use Fix the rest of the day's breaks.")
+            elif all(c["ok"] for c in ahead):
+                said = (f"Nothing to rescue: every interval {'still ahead' if now is not None else 'of the day'} "
+                        "is at the target.")
+            else:
+                said = ("Nothing to rescue: no move of the breaks left puts more of the day at the target within "
+                        "the rules.")
+            out["said"].append(said)
         elif out["moves"] and found["solver"] == "FEASIBLE":
             out["said"].append("The best found in the time, not proven the best possible.")
         gone, saved = {t for t, _ in out["given_up"]}, set(out["rescued"])

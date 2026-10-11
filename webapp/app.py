@@ -2119,7 +2119,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                          "off": off, "shifts": shifts,
                          "shift_pick": max((x for x in shifts if x[1] <= t < x[2]), key=lambda x: x[1],
                                            default=shifts[0] if shifts else None)}  # most of it after this time
-        who = request.args.get("who", "") if tab != "meeting" else ""  # Find a time's "who" is its list of people
+        # Find a time's and Change several breaks' "who" is their list of people, not one person's day
+        who = request.args.get("who", "") if tab not in ("meeting", "bulk") else ""
         if page and who and add_panel is None:  # one person's day (Phase R)
             lane = next((l for l in page["view"]["lanes"] if l["name"] == who), None)
             if lane is not None:

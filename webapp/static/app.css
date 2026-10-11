@@ -1256,6 +1256,10 @@ ul.log .post-st { font-size: 0.8125rem; margin-left: 4px; }
 .bk-foot { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin-top: 14px; }
 .bk-foot small { color: var(--dim); flex: 1 1 320px; }
 
+/* Phase AD: the cancel box says what is missing next to the Why field */
+.brk-cancel-said { margin: 4px 0 0; color: var(--gap-ink); font-size: .875rem; }
+.brk-cancel-said:empty { display: none; }
+
 /* Phase AD (sample 02): Rescue the day */
 .rs-sofar { margin: 12px 0 16px; padding: 12px 16px; border: 1px solid var(--rail); border-radius: 6px; max-width: 60rem; }
 .rs-strips { display: grid; grid-template-columns: minmax(0, 9rem) minmax(0, 1fr); gap: 8px 12px; align-items: center; }

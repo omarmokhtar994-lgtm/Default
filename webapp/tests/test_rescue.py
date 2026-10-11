@@ -12,6 +12,7 @@ import unittest
 
 from webapp import rescue
 from webapp.day import at_target, day_view
+from webapp.tests.test_channel_day import WED as CWED, _Day as _ChannelDay
 from webapp.tests.test_notify_daybook import WED, _Tagged, hm
 from webapp.tests.test_runs import token
 from webapp.versions import DAYS
@@ -192,6 +193,60 @@ class TheDay(_Tagged):
         self.assertIn("Rescue the day moved 1 break.", got.get_data(as_text=True))
         entry = self.store.day_actions(self.key, WED.isoformat())[-1]
         self.assertEqual({i["status"] for i in self.store.notify_items(action_id=entry["id"])}, {"held"})
+
+
+
+class TheDayGoingOn(_Tagged):
+    """Owner, 2026-10-11 ("U sure emergency button working correctly?"): Rescue the day in the middle of today. The
+    intervals already over that missed the target count toward the 3; a break that has started, or a time that has
+    passed, is never part of the plan."""
+    SICK = ("Associate 008", "Associate 021", "Associate 037", "Associate 012", "Associate 010", "Associate 028")
+
+    def short_day(self):
+        for name in self.SICK:
+            self.days.set_status(self.key, WED, name, "Sick", self.omar)
+            self.addCleanup(self.days.set_status, self.key, WED, name, "Present", self.omar)
+        return self.days.page(self.key, WED)
+
+    def test_what_is_lost_counts_and_nothing_started_moves(self):
+        page = self.short_day()
+        starts = {(l["name"], b["idx"]): b["start"] for l in page["view"]["lanes"] for s in l["segments"]
+                  if s["offset"] == 0 for b in s["breaks"]}
+        for now in (9 * 60 + 7, 11 * 60 + 2, 13 * 60 + 33):
+            with self.subTest(now=hm(now)):
+                plan = self.days.rescue_plan(self.key, WED, now=now, page=page)
+                lost = [(c["t"], c["pct"]) for c in page["target"]["cells"] if c["ok"] is False and c["t"] + 60 <= now]
+                self.assertEqual(plan["lost"], lost)
+                self.assertEqual(plan["may"], max(0, 3 - len(lost)))
+                self.assertLessEqual(len(plan["given_up"]), plan["may"])
+                self.assertTrue(all(pct >= 50 for _, pct in plan["given_up"]), plan["given_up"])
+                for m in plan["moves"]:
+                    self.assertGreater(starts[(m["name"], m["idx"])], now, m)  # not started
+                    self.assertGreater(m["to"], now, m)  # not to a time that has passed
+        self.assertEqual(self.days.rescue_plan(self.key, WED, now=11 * 60 + 2, page=page)["may"], 1)  # 2 lost
+        self.assertEqual(self.days.rescue_plan(self.key, WED, now=13 * 60 + 33, page=page)["may"], 0)  # 4 lost
+
+
+class TheChannels(_ChannelDay):
+    """A rescue never leaves a channel short that was covered: on a channel day made short, the moves it proposes
+    add no channel warning (the same day without the channel rule would)."""
+
+    def test_no_channel_left_short(self):
+        view = self.days.page(self.key, CWED)["view"]
+        people = sorted(((l["name"], s["start"]) for l in view["lanes"] for s in l["segments"]
+                         if s["offset"] == 0 and s["status"] == "Present"), key=lambda p: (p[1], p[0]))
+        for name, _ in people[:10]:
+            self.days.set_status(self.key, CWED, name, "Sick", self.omar)
+        page = self.days.page(self.key, CWED)
+        before = {w["text"] for w in page["view"]["channels"]["warnings"]}
+        plan = self.days.rescue_plan(self.key, CWED, page=page)
+        self.assertTrue(plan["moves"], plan["said"])
+        blind = rescue.solve(dict(page["view"], channels=None), page["inputs"], page["target"]["target"], None, 3)
+        self.days.apply_rescue(self.key, CWED, [(m["name"], m["idx"], m["to"]) for m in plan["moves"]], self.omar)
+        self.assertEqual({w["text"] for w in self.days.page(self.key, CWED)["view"]["channels"]["warnings"]} - before,
+                         set())
+        self.assertNotEqual([(m["name"], m["to"]) for m in blind["moves"]],
+                            [(m["name"], m["to"]) for m in plan["moves"]])  # the channel rule chose differently
 
 
 if __name__ == "__main__":

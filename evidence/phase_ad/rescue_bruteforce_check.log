@@ -1,0 +1,98 @@
+ok seed=0 may=0 before=3 grid-best=(4, 0) solver=(4, 0) valid=True rescued OPTIMAL
+ok seed=0 may=1 before=3 grid-best=(5, 1) solver=(5, 1) valid=True rescued OPTIMAL
+ok seed=0 may=2 before=3 grid-best=(5, 1) solver=(5, 1) valid=True rescued OPTIMAL
+ok seed=0 may=3 before=3 grid-best=(5, 1) solver=(5, 1) valid=True rescued OPTIMAL
+ok seed=1 may=0 before=3 grid-best=(4, 0) solver=(4, 0) valid=True rescued OPTIMAL
+ok seed=1 may=1 before=3 grid-best=(4, 0) solver=(4, 0) valid=True rescued OPTIMAL
+ok seed=1 may=2 before=3 grid-best=(4, 0) solver=(4, 0) valid=True rescued OPTIMAL
+ok seed=1 may=3 before=3 grid-best=(4, 0) solver=(4, 0) valid=True rescued OPTIMAL
+ok seed=2 may=0 before=1 grid-best=(1, 0) solver=(1, 0) valid=True no gain OPTIMAL
+ok seed=2 may=1 before=1 grid-best=(2, 1) solver=(2, 1) valid=True rescued OPTIMAL
+ok seed=2 may=2 before=1 grid-best=(3, 2) solver=(3, 2) valid=True rescued OPTIMAL
+ok seed=2 may=3 before=1 grid-best=(3, 2) solver=(3, 2) valid=True rescued OPTIMAL
+ok seed=3 may=0 before=2 grid-best=(2, 0) solver=(2, 0) valid=True no gain OPTIMAL
+ok seed=3 may=1 before=2 grid-best=(3, 1) solver=(3, 1) valid=True rescued OPTIMAL
+ok seed=3 may=2 before=2 grid-best=(3, 1) solver=(3, 1) valid=True rescued OPTIMAL
+ok seed=3 may=3 before=2 grid-best=(3, 1) solver=(3, 1) valid=True rescued OPTIMAL
+ok seed=4 may=0 before=1 grid-best=(1, 0) solver=(1, 0) valid=True no gain OPTIMAL
+ok seed=4 may=1 before=1 grid-best=(2, 1) solver=(2, 1) valid=True rescued OPTIMAL
+ok seed=4 may=2 before=1 grid-best=(3, 2) solver=(3, 2) valid=True rescued OPTIMAL
+ok seed=4 may=3 before=1 grid-best=(3, 2) solver=(3, 2) valid=True rescued OPTIMAL
+ok seed=5 may=0 before=3 grid-best=(3, 0) solver=(6, 0) valid=True rescued OPTIMAL
+ok seed=5 may=1 before=3 grid-best=(5, 1) solver=(6, 0) valid=True rescued OPTIMAL
+ok seed=5 may=2 before=3 grid-best=(5, 1) solver=(6, 0) valid=True rescued OPTIMAL
+ok seed=5 may=3 before=3 grid-best=(5, 1) solver=(6, 0) valid=True rescued OPTIMAL
+ok seed=6 may=0 before=1 grid-best=(1, 0) solver=(1, 0) valid=True no gain OPTIMAL
+ok seed=6 may=1 before=1 grid-best=(3, 1) solver=(3, 1) valid=True rescued OPTIMAL
+ok seed=6 may=2 before=1 grid-best=(3, 1) solver=(3, 1) valid=True rescued OPTIMAL
+ok seed=6 may=3 before=1 grid-best=(3, 1) solver=(3, 1) valid=True rescued OPTIMAL
+ok seed=7 may=0 before=4 grid-best=(5, 0) solver=(5, 0) valid=True rescued OPTIMAL
+ok seed=7 may=1 before=4 grid-best=(5, 0) solver=(5, 0) valid=True rescued OPTIMAL
+ok seed=7 may=2 before=4 grid-best=(5, 0) solver=(5, 0) valid=True rescued OPTIMAL
+ok seed=7 may=3 before=4 grid-best=(5, 0) solver=(5, 0) valid=True rescued OPTIMAL
+ok seed=8 may=0 before=1 grid-best=(1, 0) solver=(1, 0) valid=True no gain OPTIMAL
+ok seed=8 may=1 before=1 grid-best=(3, 1) solver=(4, 1) valid=True rescued OPTIMAL
+ok seed=8 may=2 before=1 grid-best=(3, 1) solver=(4, 1) valid=True rescued OPTIMAL
+ok seed=8 may=3 before=1 grid-best=(3, 1) solver=(4, 1) valid=True rescued OPTIMAL
+ok seed=9 may=0 before=2 grid-best=(3, 0) solver=(4, 0) valid=True rescued OPTIMAL
+ok seed=9 may=1 before=2 grid-best=(4, 1) solver=(4, 0) valid=True rescued OPTIMAL
+ok seed=9 may=2 before=2 grid-best=(4, 1) solver=(4, 0) valid=True rescued OPTIMAL
+ok seed=9 may=3 before=2 grid-best=(4, 1) solver=(4, 0) valid=True rescued OPTIMAL
+ok seed=10 may=0 before=2 grid-best=(3, 0) solver=(3, 0) valid=True rescued OPTIMAL
+ok seed=10 may=1 before=2 grid-best=(4, 1) solver=(4, 1) valid=True rescued OPTIMAL
+ok seed=10 may=2 before=2 grid-best=(4, 1) solver=(4, 1) valid=True rescued OPTIMAL
+ok seed=10 may=3 before=2 grid-best=(4, 1) solver=(4, 1) valid=True rescued OPTIMAL
+ok seed=11 may=0 before=2 grid-best=(2, 0) solver=(3, 0) valid=True rescued OPTIMAL
+ok seed=11 may=1 before=2 grid-best=(3, 1) solver=(4, 1) valid=True rescued OPTIMAL
+ok seed=11 may=2 before=2 grid-best=(4, 2) solver=(4, 1) valid=True rescued OPTIMAL
+ok seed=11 may=3 before=2 grid-best=(4, 2) solver=(4, 1) valid=True rescued OPTIMAL
+ok seed=12 may=0 before=3 grid-best=(4, 0) solver=(5, 0) valid=True rescued OPTIMAL
+ok seed=12 may=1 before=3 grid-best=(5, 1) solver=(5, 0) valid=True rescued OPTIMAL
+ok seed=12 may=2 before=3 grid-best=(5, 1) solver=(5, 0) valid=True rescued OPTIMAL
+ok seed=12 may=3 before=3 grid-best=(5, 1) solver=(5, 0) valid=True rescued OPTIMAL
+ok seed=13 may=0 before=3 grid-best=(4, 0) solver=(4, 0) valid=True rescued OPTIMAL
+ok seed=13 may=1 before=3 grid-best=(5, 1) solver=(5, 1) valid=True rescued OPTIMAL
+ok seed=13 may=2 before=3 grid-best=(5, 1) solver=(5, 1) valid=True rescued OPTIMAL
+ok seed=13 may=3 before=3 grid-best=(5, 1) solver=(5, 1) valid=True rescued OPTIMAL
+ok seed=14 may=0 before=2 grid-best=(2, 0) solver=(2, 0) valid=True no gain OPTIMAL
+ok seed=14 may=1 before=2 grid-best=(4, 1) solver=(4, 1) valid=True rescued OPTIMAL
+ok seed=14 may=2 before=2 grid-best=(4, 1) solver=(4, 1) valid=True rescued OPTIMAL
+ok seed=14 may=3 before=2 grid-best=(4, 1) solver=(4, 1) valid=True rescued OPTIMAL
+ok seed=15 may=0 before=2 grid-best=(2, 0) solver=(2, 0) valid=True no gain OPTIMAL
+ok seed=15 may=1 before=2 grid-best=(2, 0) solver=(2, 0) valid=True no gain OPTIMAL
+ok seed=15 may=2 before=2 grid-best=(2, 0) solver=(2, 0) valid=True no gain OPTIMAL
+ok seed=15 may=3 before=2 grid-best=(2, 0) solver=(2, 0) valid=True no gain OPTIMAL
+ok seed=16 may=0 before=4 grid-best=(4, 0) solver=(4, 0) valid=True no gain OPTIMAL
+ok seed=16 may=1 before=4 grid-best=(4, 0) solver=(4, 0) valid=True no gain OPTIMAL
+ok seed=16 may=2 before=4 grid-best=(4, 0) solver=(4, 0) valid=True no gain OPTIMAL
+ok seed=16 may=3 before=4 grid-best=(4, 0) solver=(4, 0) valid=True no gain OPTIMAL
+ok seed=17 may=0 before=1 grid-best=(1, 0) solver=(2, 0) valid=True rescued OPTIMAL
+ok seed=17 may=1 before=1 grid-best=(3, 1) solver=(4, 1) valid=True rescued OPTIMAL
+ok seed=17 may=2 before=1 grid-best=(4, 2) solver=(4, 1) valid=True rescued OPTIMAL
+ok seed=17 may=3 before=1 grid-best=(4, 2) solver=(4, 1) valid=True rescued OPTIMAL
+ok seed=18 may=0 before=2 grid-best=(2, 0) solver=(2, 0) valid=True no gain OPTIMAL
+ok seed=18 may=1 before=2 grid-best=(3, 1) solver=(3, 1) valid=True rescued OPTIMAL
+ok seed=18 may=2 before=2 grid-best=(3, 1) solver=(3, 1) valid=True rescued OPTIMAL
+ok seed=18 may=3 before=2 grid-best=(3, 1) solver=(3, 1) valid=True rescued OPTIMAL
+ok seed=19 may=0 before=4 grid-best=(4, 0) solver=(5, 0) valid=True rescued OPTIMAL
+ok seed=19 may=1 before=4 grid-best=(4, 0) solver=(5, 0) valid=True rescued OPTIMAL
+ok seed=19 may=2 before=4 grid-best=(4, 0) solver=(5, 0) valid=True rescued OPTIMAL
+ok seed=19 may=3 before=4 grid-best=(4, 0) solver=(5, 0) valid=True rescued OPTIMAL
+ok seed=20 may=0 before=5 grid-best=(5, 0) solver=(5, 0) valid=True no gain OPTIMAL
+ok seed=20 may=1 before=5 grid-best=(5, 0) solver=(5, 0) valid=True no gain OPTIMAL
+ok seed=20 may=2 before=5 grid-best=(5, 0) solver=(5, 0) valid=True no gain OPTIMAL
+ok seed=20 may=3 before=5 grid-best=(5, 0) solver=(5, 0) valid=True no gain OPTIMAL
+ok seed=21 may=0 before=3 grid-best=(4, 0) solver=(4, 0) valid=True rescued OPTIMAL
+ok seed=21 may=1 before=3 grid-best=(5, 1) solver=(5, 1) valid=True rescued OPTIMAL
+ok seed=21 may=2 before=3 grid-best=(5, 1) solver=(5, 1) valid=True rescued OPTIMAL
+ok seed=21 may=3 before=3 grid-best=(5, 1) solver=(5, 1) valid=True rescued OPTIMAL
+ok seed=22 may=0 before=2 grid-best=(2, 0) solver=(2, 0) valid=True no gain OPTIMAL
+ok seed=22 may=1 before=2 grid-best=(3, 1) solver=(3, 1) valid=True rescued OPTIMAL
+ok seed=22 may=2 before=2 grid-best=(3, 1) solver=(4, 2) valid=True rescued OPTIMAL
+ok seed=22 may=3 before=2 grid-best=(3, 1) solver=(4, 2) valid=True rescued OPTIMAL
+ok seed=23 may=0 before=4 grid-best=(4, 0) solver=(5, 0) valid=True rescued OPTIMAL
+ok seed=23 may=1 before=4 grid-best=(5, 1) solver=(5, 0) valid=True rescued OPTIMAL
+ok seed=23 may=2 before=4 grid-best=(5, 1) solver=(5, 0) valid=True rescued OPTIMAL
+ok seed=23 may=3 before=4 grid-best=(5, 1) solver=(5, 0) valid=True rescued OPTIMAL
+cases 96 problems 0
+solver beat the 30-minute grid in 20 cases; rescued something in 76 cases; gave up at least one in 42 cases

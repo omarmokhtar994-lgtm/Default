@@ -122,3 +122,19 @@ changes never meet another's Undo):
 - **Package:** `RC9_2_2_PRODUCTION_PACKAGE.zip`, 58,624,138 bytes, sha256
   `acf62fc41c10dbd0222f7a77e8df258cdc4fd711d313c7b983a11ef959d3723c`, sent as `AE_half_A.zip` (29,500,000 bytes)
   and `AE_half_B.zip` (29,124,138 bytes); joined, they give the same sha256.
+
+## Rescue the day, checked again (2026-10-11, owner: "U sure emergency button working correctly?")
+
+- **Existing tests:** the 13 Rescue the day tests pass on the current code.
+- **Brute-force check** (`rescue_bruteforce_check.py`, log `rescue_bruteforce_check.log`): 24 made-up days of 3 or 4
+  people and allowances 0 to 3, 96 cases. Every break placement on a 30-minute grid was counted by the page's own
+  `day_view` and judged by the rules, then compared with Rescue the day's answer.
+  - Problems: none. Every answer obeyed the rules, and none was worse than the best placement the grid has.
+  - Rescue the day did better than the 30-minute grid in 20 cases: it moves breaks in 5-minute steps.
+  - It rescued something in 76 cases and gave up at least one interval in 42.
+- **New test, the middle of today** (`TheDayGoingOn`): on a short day at 09:07, 11:02 and 13:33, the intervals
+  already lost are counted and lower the allowance (2 lost: 1 left; 4 lost: none). No started break and no past
+  time is in a plan, and nothing given up is below 50%.
+- **New test, channels** (`TheChannels`): on a short channel day, the moves add no channel warning; without the
+  channel rule, the same day's answer differs.
+- **Mutation checks:** each new test fails when its rule is removed from the model.

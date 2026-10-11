@@ -133,13 +133,14 @@ class TheSender(_Sender):
         self.assertEqual(self.notifier.run_once(T0 + 180), 1)
         url, body = self.group.calls[0]
         self.assertEqual((url, list(body)), (flow, ["text"]))
-        self.assertIn("SAKS, NMG Tier 2: changes for Sat 10 Oct\n", body["text"])
+        self.assertTrue(body["text"].startswith("\U0001f4cb SAKS, NMG Tier 2: changes for Sat 10 Oct\n"))
         self.assertIn("\u2022 Associate 019: Lunch moved 12:15 to 12:45", body["text"])
         self.assertIn("\u2022 Associate 008: Overtime 17:00 to 18:00", body["text"])
         ok, said = self.notifier.send_test(UNIT, "Omar Mokhtar")
         self.assertTrue(ok, said)
         self.assertEqual(list(self.group.calls[-1][1]), ["text"])
-        self.assertIn("test from Team Scheduler\nSent by Omar Mokhtar", self.group.calls[-1][1]["text"])
+        self.assertIn("test from Team Scheduler\n" + "\u2500" * 12 + "\n\u270f\ufe0f Sent by Omar Mokhtar",
+                      self.group.calls[-1][1]["text"])
 
     def test_a_busy_day_posts_after_ten_minutes(self):
         self.settle()

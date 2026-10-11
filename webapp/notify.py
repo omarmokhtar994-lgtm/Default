@@ -60,6 +60,8 @@ SLACK_BLOCKS = 50
 # goes in one named "text" (owner, 2026-10-11: the workspace allows Workflows, not apps)
 SLACK_FLOW_PATHS = ("/triggers/", "/workflows/")
 SLACK_FLOW_MAX = 3900  # characters, kept under Slack's 4,000 for one message
+FLOW_TITLE, FLOW_FOOTER, FLOW_LINK = "\U0001f4cb", "\u270f\ufe0f", "\U0001f517"  # clipboard, pencil, link
+FLOW_DIVIDER = "\u2500" * 12
 
 
 def check_link(url: str) -> str:
@@ -231,10 +233,12 @@ def _flow(text: str) -> str:
 
 
 def slack_flow_body(post: Post) -> Dict[str, str]:
-    """The whole message as plain lines in "text", for a Slack Workflow: the title, each heading and line, the
-    footer and the RTA's address; cut with a note past 3,900 characters."""
-    head = [_flow(post.title)]
-    tail = ([_flow(post.footer)] if post.footer.strip() else []) + ([f"Open the RTA: {post.url}"] if post.url else [])
+    """The whole message as plain lines in "text", for a Slack Workflow, laid out as the owner chose (option "A",
+    2026-10-11): an emoji before the title, the lines between two dividers, then who changed it and the RTA's address.
+    No bold marks (a Workflow shows them as stars). Past 3,900 characters the last lines give way to a note."""
+    head = [f"{FLOW_TITLE} {_flow(post.title)}"]
+    tail = ([f"{FLOW_FOOTER} {_flow(post.footer)}"] if post.footer.strip() else []) + \
+           ([f"{FLOW_LINK} {post.url}"] if post.url else [])
     body: List[str] = []
     for heading, rows in post.sections:
         if heading:
@@ -242,16 +246,17 @@ def slack_flow_body(post: Post) -> Dict[str, str]:
         body += [f"\u2022 {_flow(n)}: {_flow(t)}" for n, t in rows]
 
     def joined(lines: List[str]) -> str:
-        return "\n".join(head + lines + tail)
+        middle = [FLOW_DIVIDER] + lines + [FLOW_DIVIDER] if lines else [FLOW_DIVIDER]
+        return "\n".join(head + middle + tail)
 
     if len(joined(body)) <= SLACK_FLOW_MAX:
         return {"text": joined(body)}
     total = sum(1 for line in body if line.startswith("\u2022 "))
-    while True:  # drop lines from the end until the rest and a closing note fit
+    while True:  # drop lines from the end until the rest and a note fit
         if body:
             body.pop()
         left = total - sum(1 for line in body if line.startswith("\u2022 "))
-        text = joined(body) + f"\n\u2026 and {left} more lines: open the RTA to see them."
+        text = joined(body + [f"\u2026 and {left} more lines: open the RTA to see them."])
         if len(text) <= SLACK_FLOW_MAX or not body:
             return {"text": text[:SLACK_FLOW_MAX]}
 

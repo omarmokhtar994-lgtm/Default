@@ -10,6 +10,7 @@ from webapp.notify import (DEFAULT_KINDS, KINDS, Post, body_for, change_post, ch
 
 EGYPT = timezone(timedelta(hours=3))
 SLACK = "https://hooks.slack.com/services/T0000/B0000/abcdEFGHijkl"
+DIVIDER = "\u2500" * 12  # the Workflow message's divider line
 # Slack Workflow Builder links ("Starts with a webhook"): the newer and the older form
 SLACK_FLOWS = ("https://hooks.slack.com/triggers/T0000/1234567890/abcdEFGHijkl",
                "https://hooks.slack.com/workflows/T0000/A0000/123456789/abcdEFGHijkl")
@@ -164,15 +165,19 @@ class ThePost(unittest.TestCase):
 class TheSlackWorkflow(unittest.TestCase):
     """Owner, 2026-10-11: the workspace lets people make Slack Workflows but not apps, and a Workflow link received
     only the title ("It's sending only SAKS, SAKS Tier 1: changes for Sat 10 Oct but not the change itself"). A
-    Workflow reads plain text variables only, so for its link the whole message goes in one, named "text"."""
+    Workflow reads plain text variables only, so for its link the whole message goes in one, named "text". Laid out
+    as the owner chose (option "A", 2026-10-11): an emoji before the title, the lines between two dividers, then who
+    changed it and the RTA's address; bold marks would show as stars in a Workflow, so there are none."""
     post = ThePost.post
 
     def test_a_workflow_link_gets_the_whole_message_as_text(self):
-        whole = ("SAKS, NMG Tier 2: changes for Sat 10 Oct\n"
+        whole = ("\U0001f4cb SAKS, NMG Tier 2: changes for Sat 10 Oct\n"
+                 + DIVIDER + "\n"
                  "\u2022 Associate 019: Lunch moved 12:15 to 12:45\n"
                  "\u2022 Associate 008: Overtime 17:00 to 18:00\n"
-                 "Changed on the RTA by Omar Mokhtar, 19:19.\n"
-                 "Open the RTA: https://rta.example/day?program=SAKS+NMG+Tier+2&date=2026-10-10")
+                 + DIVIDER + "\n"
+                 "\u270f\ufe0f Changed on the RTA by Omar Mokhtar, 19:19.\n"
+                 "\U0001f517 https://rta.example/day?program=SAKS+NMG+Tier+2&date=2026-10-10")
         for link in SLACK_FLOWS:
             with self.subTest(link=link):
                 self.assertEqual(check_link(link), "slack")
@@ -183,15 +188,24 @@ class TheSlackWorkflow(unittest.TestCase):
         self.assertEqual(body_for("slack", self.post()), slack_body(self.post()))
 
     def test_no_link_line_without_a_site_address(self):
-        self.assertNotIn("Open the RTA", body_for("slack", self.post(site=""), SLACK_FLOWS[0])["text"])
+        text = body_for("slack", self.post(site=""), SLACK_FLOWS[0])["text"]
+        self.assertNotIn("\U0001f517", text)
+        self.assertTrue(text.endswith("\u270f\ufe0f Changed on the RTA by Omar Mokhtar, 19:19."))
 
     def test_shift_headings_stay(self):
         post = Post(title="SAKS, NMG Tier 2: breaks for Sat 10 Oct",
                     sections=[("05:00 to 14:00 (1 person)", [("Associate 019", "Break 1 11:00, Lunch 12:45")])],
                     footer="As planned at 07:30.", url="")
         self.assertEqual(body_for("slack", post, SLACK_FLOWS[0])["text"],
-                         "SAKS, NMG Tier 2: breaks for Sat 10 Oct\n05:00 to 14:00 (1 person)\n"
-                         "\u2022 Associate 019: Break 1 11:00, Lunch 12:45\nAs planned at 07:30.")
+                         "\U0001f4cb SAKS, NMG Tier 2: breaks for Sat 10 Oct\n" + DIVIDER + "\n"
+                         "05:00 to 14:00 (1 person)\n\u2022 Associate 019: Break 1 11:00, Lunch 12:45\n"
+                         + DIVIDER + "\n\u270f\ufe0f As planned at 07:30.")
+
+    def test_a_message_without_lines_has_one_divider(self):
+        post = Post(title="SAKS, NMG Tier 2: test from Team Scheduler", footer="Sent by Omar Mokhtar at 07:30.")
+        self.assertEqual(body_for("slack", post, SLACK_FLOWS[0])["text"],
+                         "\U0001f4cb SAKS, NMG Tier 2: test from Team Scheduler\n" + DIVIDER
+                         + "\n\u270f\ufe0f Sent by Omar Mokhtar at 07:30.")
 
     def test_typed_text_cannot_mention_the_channel(self):
         post = self.post([item("Associate <1> & *2*", "VTO <!channel> 15:00 to 16:00")])
@@ -205,10 +219,12 @@ class TheSlackWorkflow(unittest.TestCase):
         text = body_for("slack", self.post(many), SLACK_FLOWS[0])["text"]
         self.assertLessEqual(len(text), 3900)
         lines = text.split("\n")
-        self.assertEqual(lines[0], "SAKS, NMG Tier 2: changes for Sat 10 Oct")
+        self.assertEqual(lines[0], "\U0001f4cb SAKS, NMG Tier 2: changes for Sat 10 Oct")
         shown = sum(1 for line in lines if line.startswith("\u2022 "))
-        self.assertEqual(lines[-1], f"\u2026 and {120 - shown} more lines: open the RTA to see them.")
-        self.assertIn("Open the RTA: https://rta.example/", text)
+        self.assertGreater(shown, 10)
+        self.assertEqual(lines[-4:], [f"\u2026 and {120 - shown} more lines: open the RTA to see them.", DIVIDER,
+                                      "\u270f\ufe0f Changed on the RTA by Omar Mokhtar, 19:19.",
+                                      "\U0001f517 https://rta.example/day?program=SAKS+NMG+Tier+2&date=2026-10-10"])
 
 
 if __name__ == "__main__":

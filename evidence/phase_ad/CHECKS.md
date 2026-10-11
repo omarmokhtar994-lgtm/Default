@@ -93,4 +93,13 @@ changes never meet another's Undo):
 
 ## Suite, gate and package
 
-(filled in below once measured)
+- Website suite: `python -m unittest discover -s webapp/tests -t .`, 852 tests, OK (1 skipped), 04:21 to 04:54
+  Egypt time (33 min). Rescue the day's "no answer in the time" message changed after the suite had loaded the
+  code, so `test_rescue`, `test_bulk_breaks` and `ThePhaseADInTheBrowser` ran again on the final code: 27 tests, OK.
+- Release gate inside the staged package (`tools/build_production_package.py`): GATE PASS, 77 suites, 1537 tests
+  (2 skipped), 2 self-checks, call signatures and the undefined-name sweep; run alone, 04:56 to 05:13 Egypt time,
+  memory in use at most 1.11 GB of 16 GB (sampled every 5 s).
+- `RC9_2_2_PRODUCTION_PACKAGE.zip`: 2405 files, 58,620,706 bytes, sha256
+  `83f6c248db38fe03095f5f5dc84bb4b125b411cbac28f84d572e6af1841dde62`. Sent in two halves, `AD_half_A.zip`
+  (29,700,000 bytes) and `AD_half_B.zip` (28,920,706 bytes); joined, they give the same sha256.
+- No engine file, protected workbook or `engine/regression_assets` file changed in this phase.

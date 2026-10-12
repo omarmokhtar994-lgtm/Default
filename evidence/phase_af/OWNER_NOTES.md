@@ -62,15 +62,46 @@ The photos show real names, so they are not copied into the repository; rows are
     - each change follows the RTA's existing journal, Undo and group-post rules.
 12. **Open list.** The owner may add more points. Add them here before the phase starts.
 
-## To settle with samples (not yet asked)
+## Added 2026-10-12 (second message)
 
-- **Point 1:** two possible readings:
-  - a 60-minute program reads 60 Min grids;
-  - a 30-minute program also accepts a 60 Min grid and splits each hour into two halves.
-  - Which one, or both?
-- **Point 4:** what "add up" should check. For example, warn when the channel language minimums at a time exceed
-  the language's minimum on the floor, or fall short of it.
-- **Point 7:** the rule for "alone":
-  - only someone who speaks the same language, or anyone who can take the queue;
-  - what happens when nobody else comes in before the break window ends.
+13. **RTA day frame for overnight operations.** When shifts run past midnight (for example a day that starts at
+    16:00 and ends at 07:00), the RTA offers a switch between two views:
+    - the operating day, from its start time (16:00 to 07:00 the next morning);
+    - the calendar day, 00:00 to 23:59, as today.
+14. **Hover on a person's shift bar** on the RTA timeline shows:
+    - shift start, end and length;
+    - time left until logout, and time worked so far.
+15. **Hover on a break** shows:
+    - hours since the last break;
+    - hours from shift start to that break.
+
+    The same hover details appear in the interval view.
+16. **Drag a break to move it.** Dragging a break with the mouse to another time reschedules it. First a
+    confirmation asks "Change <break> from Y to Z?" with Yes and No.
+    - A keyboard path must stay: the existing break dialog.
+    - The strict CSP stays.
+
+## Owner's answers (2026-10-12)
+
+- **Point 1, 60-minute tabs:** "everything should be working both ways". A 60-minute program reads 60 Min
+  grids, and a 30-minute program also accepts 60 Min grids, splitting each hour.
+- **Point 4, "add up":** a channel's language window must sit inside that language's coverage in Language
+  Setup. The owner's example: if English is covered 16:00 to 07:00, a channel language row of 15:00 to 08:00
+  cannot be entered.
+- **Point 7, breaks while alone:**
+  - Hold the break until a second person comes in who can take the queue: same language preferred, otherwise
+    anyone who can take it.
+  - If nobody comes before the person's shift ends, plan breaks normally.
+  - Nobody waits more than 4 hours: the first break comes within that time even when alone.
+  - The owner's words: "if no one comes until the person end his/her shift schedule breaks normally and he will
+    wait more than 4 hours we can give me at least first break during that duration, preferably same language
+    if not so any one can take the queue". Confirm this reading with the sample.
+
+## Still to settle with samples
+
 - **Point 9:** whether the RTA view (point 5) uses the same runs.
+- **Point 13:** where the operating day's start comes from: the program's settings, or the earliest shift
+  start.
+- **Point 16:**
+  - the step a dragged break snaps to (5 minutes, as Rescue the day uses, or the interval);
+  - what the confirmation says when the new time breaks a rule (gap, window, language or channel minimum).

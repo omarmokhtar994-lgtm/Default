@@ -97,11 +97,15 @@ The photos show real names, so they are not copied into the repository; rows are
     wait more than 4 hours we can give me at least first break during that duration, preferably same language
     if not so any one can take the queue". Confirm this reading with the sample.
 
-## Still to settle with samples
+## Owner's answers, second round (2026-10-12)
 
-- **Point 9:** whether the RTA view (point 5) uses the same runs.
-- **Point 13:** where the operating day's start comes from: the program's settings, or the earliest shift
-  start.
+The owner said "those are notes only for now"; still nothing is built.
+
+- **Point 9:** yes. The RTA's per-person channel view (point 5) shows the same runs: one box per stretch on a
+  channel.
+- **Point 13:** the operating day's start comes from the program's settings, or from a setting in the input
+  workbook.
 - **Point 16:**
-  - the step a dragged break snaps to (5 minutes, as Rescue the day uses, or the interval);
-  - what the confirmation says when the new time breaks a rule (gap, window, language or channel minimum).
+  - A dragged break snaps to 5-minute steps.
+  - The confirmation lists any rule the new time breaks (gap, window, language or channel minimum) before Yes
+    or No.

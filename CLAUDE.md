@@ -63,5 +63,15 @@ python-performance-optimization.
     Lighthouse or DevTools MCP); SEO is out of scope for an internal tool behind a sign-in.
     For accessibility, use addyosmani's skill for a site audit and better-accessibility for
     a single change.
+- security-and-hardening, observability-and-instrumentation, documentation-and-adrs
+  (addyosmani/agent-skills @1be8e34, MIT; each has local notes at the top):
+  - security-and-hardening: any website change that touches sign-in, sessions, uploads,
+    group links or other secrets, or outbound posts.
+  - observability-and-instrumentation: adding or reviewing logging on the server. A metrics
+    or tracing stack is a new dependency: the owner decides.
+  - documentation-and-adrs: recording why a decision was made, in this repository's own
+    layout (docs/superpowers/plans, evidence/phase_xx), not a new docs/decisions folder.
+  - The rest of that pack is not installed: it repeats skills already in use (TDD,
+    debugging, review, planning, performance).
 - find-skills: discovering more skills (skills.sh search is blocked by the
   network policy here; browse the source repos on GitHub instead).

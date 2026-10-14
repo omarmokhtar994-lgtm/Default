@@ -1310,3 +1310,15 @@ ul.log .post-st { font-size: 0.8125rem; margin-left: 4px; }
 .glance-t b { display: block; font-family: var(--display); font-size: 1.125rem; font-variant-numeric: tabular-nums; }
 .glance-t small { display: block; color: var(--dim); font-size: 0.8125rem; overflow-wrap: anywhere; }
 .glance-t.warn { border-color: var(--short); } .glance-t.bad { border-color: var(--gap); }
+/* Phase AF (E1): shrinkage in and out of office, side by side, and what counts */
+.shr-today { margin: 0 0 12px; }
+.shr-today h2 { font-size: 1rem; margin: 0 0 6px; }
+.shr-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.shr-tile { padding: 8px 10px; border: 1px solid var(--rail); border-radius: 6px; }
+.shr-tile h3 { font-size: 0.875rem; margin: 0; }
+.shr-tile b { display: block; font-family: var(--display); font-size: 1.375rem; font-variant-numeric: tabular-nums; }
+.shr-tile small { display: block; color: var(--dim); font-size: 0.8125rem; overflow-wrap: anywhere; }
+.shr-map { margin-top: 6px; }
+.shr-map summary { cursor: pointer; }
+.shr-t th, .shr-t td { padding: 3px 8px; text-align: start; }
+.shr-t td { text-align: center; }

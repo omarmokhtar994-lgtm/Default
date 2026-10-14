@@ -512,7 +512,7 @@ class DayBook:
                 "unlisted": self._unlisted(program, on, view, attendance, acts),
                 "target": at_target(view["cells"], ratio), "target_source": source_of_target,
                 "channel_problem": channel_problem,
-                "week_start": row["week_start"], "day": day_index(on), "inputs": inputs,
+                "week_start": row["week_start"], "day": day_index(on), "inputs": inputs, "week": week,
                 "log": self.store.list_day_log(program, on.isoformat())}
 
     def target_for(self, program: str, on: date, row: Optional[Dict[str, Any]] = None,

@@ -89,6 +89,12 @@ create table if not exists interval_targets (
     at real not null,
     primary key (program, week_start)
 );
+create table if not exists shrinkage_maps (
+    program text primary key,
+    mapping text not null,
+    user_id integer,
+    at real not null
+);
 create table if not exists channel_drafts (
     schedule_id integer not null,
     day text not null,
@@ -664,6 +670,17 @@ class Store:
             db.execute("insert or replace into interval_targets (program, week_start, target, user_id, at)"
                        " values (?, ?, ?, ?, ?)", (program, week_start, int(target), user_id, time.time()))
 
+    def set_shrinkage_map(self, program: str, mapping: Dict[str, List[str]], user_id: Optional[int]) -> None:
+        """What counts as shrinkage in and out of office for a program (Phase AF, E1)."""
+        with self._db() as db:
+            db.execute("insert or replace into shrinkage_maps (program, mapping, user_id, at) values (?, ?, ?, ?)",
+                       (program, json.dumps(mapping, sort_keys=True), user_id, time.time()))
+
+    def get_shrinkage_map(self, program: str) -> Optional[Dict[str, Any]]:
+        with self._db() as db:
+            row = db.execute("select * from shrinkage_maps where program = ?", (program,)).fetchone()
+        return dict(row) if row else None
+
     def get_interval_target(self, program: str, week_start: str) -> Optional[Dict[str, Any]]:
         with self._db() as db:
             row = db.execute("select interval_targets.*, users.display_name as by_name from interval_targets"
@@ -1119,6 +1136,9 @@ class Store:
             # interval targets (Phase W) go with the name; a week the new name has a target for keeps its own
             db.execute("update or ignore interval_targets set program = ? where program = ?", (new, old))
             db.execute("delete from interval_targets where program = ?", (old,))
+            # what counts as shrinkage (Phase AF) goes with the name; a name with its own mapping keeps it
+            db.execute("update or ignore shrinkage_maps set program = ? where program = ?", (new, old))
+            db.execute("delete from shrinkage_maps where program = ?", (old,))
             # group posts (Phase AB) go with the name too; a name that has its own settings keeps them
             db.execute("update or ignore notify_settings set unit = ? where unit = ?", (new, old))
             db.execute("delete from notify_settings where unit = ?", (old,))

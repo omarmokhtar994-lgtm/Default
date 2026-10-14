@@ -35,6 +35,7 @@ from .channels import check_lines, has_channel_needs, read_channels, requirement
 from .clock import EGYPT
 from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, board, glance, hover_tips, read_inputs, shift_groups
 from .coach import actual_shrinkage, corrected_tab
+from .shrinkage import ITEMS as SHRINKAGE_ITEMS, day_shrinkage, mapping_from_form, read_mapping
 from .contacts import ContactBook, pick_contact
 from .eta import queue_plan
 from .handover import note as handover_note
@@ -1376,6 +1377,21 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 "choices": sorted({100, 95, 90, 85, 80, own}, reverse=True),
                 "may_set": bool(g.user["is_admin"] or g.user["is_supervisor"])}
 
+    @app.route("/day/shrinkage", methods=["POST"])
+    @manager_required
+    def day_shrinkage_map():  # type: ignore[no-untyped-def]
+        """Save what counts as shrinkage in and out of office for a program (Phase AF, E1; admins and supervisors)."""
+        program = clean_program(request.form.get("program", ""))
+        on = _date(request.form.get("date", ""))
+        if not program or on is None:
+            abort(400)
+        if not _access().can_open(program):
+            abort(403)
+        app.extensions["store"].set_shrinkage_map(program, mapping_from_form(request.form), g.user["id"])
+        _record("shrinkage_mapped", program=program, subject=program, detail="Saved what counts as shrinkage.")
+        flash("Saved what counts as shrinkage.")
+        return redirect(url_for("day_page", program=program, date=on.isoformat()), code=303)
+
     @app.route("/week/target", methods=["POST"])
     @manager_required
     def week_target():  # type: ignore[no-untyped-def]
@@ -2196,8 +2212,15 @@ def create_app(config: Dict[str, Any]) -> Flask:
                       else (10 ** 6 if on < clock_now.date() else -10 ** 6))
         tips = hover_tips(page["view"], now_of_day) if page else {}  # Phase AF (D2, D3)
         at_a_glance = glance(page["view"], now_of_day) if page else []  # Phase AF (D6)
+        shrinkage = None  # Phase AF (E1): in and out of office, side by side
+        if page:
+            kept = app.extensions["store"].get_shrinkage_map(program)
+            mapping = read_mapping(kept["mapping"] if kept else None)
+            shrinkage = {**day_shrinkage(page["view"], page["week"], page["day"], mapping, page["inputs"]),
+                         "mapping": mapping, "items": SHRINKAGE_ITEMS,
+                         "may_set": bool(g.user["is_admin"] or g.user["is_supervisor"])}
         return render_template("day.html", page=page, problem=problem, program=program, programs=programs, on=on,
-                               today=clock_now.date(), tips=tips, at_a_glance=at_a_glance,
+                               today=clock_now.date(), tips=tips, at_a_glance=at_a_glance, shrinkage=shrinkage,
                                posts=app.extensions["notifier"].statuses(program, on.isoformat())
                                if program and on else {},
                                post_to=SERVICES.get(group["service"], "") if posting else "",

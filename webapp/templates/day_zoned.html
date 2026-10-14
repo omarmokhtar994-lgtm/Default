@@ -17,7 +17,7 @@
   <h2 id="zd-h">{{ heading }}</h2>
   <p class="note"><b>Read only.</b> The schedule's times are in {{ own_label }}; changes are made on its own day, in its own time: <a href="{{ url_for('day_page', program=program, date=on.isoformat(), tz=own_zone) }}">open {{ on.strftime('%a %d %b') }} in {{ own_name }}</a>.{% if missing %} No schedule here for {{ missing }}, so those intervals are empty.{% endif %}</p>
   {% if said %}<p class="empty">{{ said }}</p>{% endif %}
-  {% if may_set %}<form class="tagrow" method="post" action="{{ url_for('day_operating_start') }}">
+  {% if may_set %}<form class="cp-row" method="post" action="{{ url_for('day_operating_start') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}">
     <label>Operating day starts at <input type="time" name="start" step="900" value="{{ hm(day_start) if day_start is not none else '16:00' }}" required></label>
     <button type="submit">Save</button>

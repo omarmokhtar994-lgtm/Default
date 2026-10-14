@@ -46,5 +46,13 @@ class TodayAtAGlance(unittest.TestCase):
             self.assertEqual(tile["value"], "None")
 
 
+class WholeDay(unittest.TestCase):
+    def test_every_interval_reads_all_day(self):
+        # seen in the browser check: a day above demand everywhere read "00:00 to 00:00"
+        from webapp.day import _stretches
+        self.assertEqual(_stretches(list(range(0, 1440, 60)), 60), "all day")
+        self.assertEqual(_stretches([0, 60], 60), "00:00 to 02:00")
+
+
 if __name__ == "__main__":
     unittest.main()

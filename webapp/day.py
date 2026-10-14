@@ -523,6 +523,8 @@ def _stretches(starts: List[int], step: int, most: int = 3) -> str:
             runs[-1][1] = t + step
         else:
             runs.append([t, t + step])
+    if runs == [[0, 1440]]:
+        return "all day"
     said = ", ".join(f"{_hm(a)} to {_hm(b)}" for a, b in runs[:most])
     return said + (f" and {len(runs) - most} more" if len(runs) > most else "")
 

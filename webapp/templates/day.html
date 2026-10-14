@@ -81,7 +81,7 @@
 </section>{% endif %}
 {% if page and page.week %}<details class="later-abs">
   <summary>Absences known for later days</summary>
-  <form method="post" action="{{ url_for('day_absences') }}" class="exp-form">
+  <form method="post" action="{{ url_for('day_absences') }}" class="cp-row">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}">
     <label>Who <select name="associate" required>{% for a in page.week.associates|sort(attribute='name') %}<option>{{ a.name }}</option>{% endfor %}</select></label>
     <label>What <select name="status">{% for st in statuses if st in ('Unplanned leave', 'Sick', 'Public holiday') %}<option>{{ st }}</option>{% endfor %}</select></label>

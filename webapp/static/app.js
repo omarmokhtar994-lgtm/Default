@@ -528,7 +528,11 @@ function homeRefresh(now) {
     if (personLink && root.dataset.personUrl) {
       personLink.href = root.dataset.personUrl + "&who=" + encodeURIComponent(el.dataset.name) + "#person";
     }
-    dlg.querySelector("#brk-h").textContent = "Move " + el.dataset.name + "'s " + el.dataset.kind;
+    // Phase AF (D4): after a drag the dialog is the confirmation: "Change Break 1 from 12:00 to 12:30?"
+    dlg.querySelector("#brk-h").textContent = at ? "Change " + el.dataset.name + "'s " + el.dataset.kind + " from " +
+      el.dataset.start + " to " + at + "?" : "Move " + el.dataset.name + "'s " + el.dataset.kind;
+    if (!keep.dataset.word) { keep.dataset.word = keep.textContent; }
+    keep.textContent = at ? "Yes, change it" : keep.dataset.word;
     dlg.querySelector("[data-who]").textContent = el.dataset.minutes + " minutes" +
       (el.dataset.shift ? " · shift " + el.dataset.shift : "") + " · planned " + el.dataset.planned +
       (el.dataset.start !== el.dataset.planned ? " · now " + el.dataset.start : "");
@@ -1065,6 +1069,42 @@ function homeRefresh(now) {
       })
       .catch(() => { said.textContent = "The preview could not be loaded. Apply still checks the change."; });
   });
+})();
+
+// Phase AF (D2, D3): hovering (or focusing) a shift bar or a break on the timeline shows its lines in a card
+// (from the element's title, which stays the plain tooltip without a script)
+(function () {
+  const marks = document.querySelectorAll(".tl-track rect.tl-bar, .tl-track rect.brk");
+  if (!marks.length) return;
+  const card = document.createElement("div");
+  card.className = "tl-tip";
+  card.hidden = true;
+  card.setAttribute("role", "tooltip");
+  document.body.appendChild(card);
+  const show = (el, x, y) => {
+    const lines = (el.dataset.tip || "").split("\n").filter(Boolean);
+    if (!lines.length) return;
+    card.textContent = "";
+    lines.forEach((text, i) => { const p = document.createElement(i ? "span" : "b"); p.textContent = text; card.appendChild(p); });
+    card.hidden = false;
+    const w = card.offsetWidth, h = card.offsetHeight;
+    card.style.left = Math.min(x + 14, window.innerWidth - w - 8) + "px";
+    card.style.top = Math.min(y + 14, window.innerHeight - h - 8) + "px";
+  };
+  const hide = () => { card.hidden = true; };
+  marks.forEach((el) => {
+    const title = el.querySelector("title");
+    if (!title) return;
+    el.dataset.tip = title.textContent;
+    title.remove();
+    el.addEventListener("pointerenter", (e) => show(el, e.clientX, e.clientY));
+    el.addEventListener("pointermove", (e) => { if (!card.hidden) show(el, e.clientX, e.clientY); });
+    el.addEventListener("pointerleave", hide);
+    el.addEventListener("focus", () => { const r = el.getBoundingClientRect(); show(el, r.left, r.bottom); });
+    el.addEventListener("blur", hide);
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
 })();
 
 // Exports (Phase W): the file comes through a script so the page can say what is happening ("Preparing", then

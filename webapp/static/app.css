@@ -1296,3 +1296,10 @@ ul.log .post-st { font-size: 0.8125rem; margin-left: 4px; }
   .rs-strips > span.rs-lbl { display: none; }
   .rs-strips .rs-lbl:not(:first-child) { margin-top: 10px; }
 }
+
+/* Phase AF (D2, D3): what hovering a shift bar or a break shows */
+.tl-tip { position: fixed; z-index: 50; display: grid; gap: 2px; max-width: 320px; padding: 10px 12px; background: var(--console);
+  color: var(--paper); border: 1px solid var(--edge); border-radius: 6px; box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
+  font-size: 0.8125rem; font-variant-numeric: tabular-nums; pointer-events: none; }
+.tl-tip b { font-size: 0.875rem; }
+.tl-tip span { color: var(--dim); }

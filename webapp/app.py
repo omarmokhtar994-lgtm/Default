@@ -33,7 +33,7 @@ from .channel_plan import NoPlan, plan_day, score_day
 from .channel_template import channel_workbook
 from .channels import check_lines, has_channel_needs, read_channels, requirement_tab
 from .clock import EGYPT
-from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, board, read_inputs, shift_groups
+from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, board, hover_tips, read_inputs, shift_groups
 from .coach import actual_shrinkage, corrected_tab
 from .contacts import ContactBook, pick_contact
 from .eta import queue_plan
@@ -2192,8 +2192,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
         group = app.extensions["store"].get_notify(program) if program else None  # Phase AB: group posts
         posting = bool(group and group["link"] and group["mode"] in ("on", "preview"))
         post_kinds = [k for k in (group or {}).get("kinds", "").split(",") if k] if posting else []
+        now_of_day = (clock_now.hour * 60 + clock_now.minute if clock_now.date() == on
+                      else (10 ** 6 if on < clock_now.date() else -10 ** 6))
+        tips = hover_tips(page["view"], now_of_day) if page else {}  # Phase AF (D2, D3)
         return render_template("day.html", page=page, problem=problem, program=program, programs=programs, on=on,
-                               today=clock_now.date(),
+                               today=clock_now.date(), tips=tips,
                                posts=app.extensions["notifier"].statuses(program, on.isoformat())
                                if program and on else {},
                                post_to=SERVICES.get(group["service"], "") if posting else "",

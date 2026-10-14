@@ -476,6 +476,36 @@ def _hm(minute: int) -> str:
     return f"{minute // 60:02d}:{minute % 60:02d}"
 
 
+def _dur(minutes: int) -> str:
+    minutes = max(0, int(minutes))
+    return f"{minutes} min" if minutes < 60 else f"{minutes // 60} h" + (f" {minutes % 60} min" if minutes % 60 else "")
+
+
+def hover_tips(view: Dict[str, Any], now: int) -> Dict[Tuple[str, int], Dict[str, Any]]:
+    """Phase AF (D2, D3): what hovering shows, per (name, offset): the shift's lines (start to end, length, worked
+    so far, left until logout, breaks taken) and per break index its lines (since the last break or the shift
+    start, from the shift start). ``now`` is the minute of the day shown (below 0 before it, past 1440 after)."""
+    out: Dict[Tuple[str, int], Dict[str, Any]] = {}
+    for lane in view["lanes"]:
+        for seg in lane["segments"]:
+            length = seg["end"] - seg["start"]
+            worked = min(max(now - seg["start"], 0), length)
+            breaks = sorted(seg["breaks"], key=lambda b: b["start"])
+            taken = sum(1 for b in breaks if b["start"] + b["minutes"] <= now)
+            shift = [f"{lane['name']}, {seg['label']}", f"Length {_dur(length)}", f"Worked so far {_dur(worked)}",
+                     f"Left until logout {_dur(length - worked)}", f"Breaks {taken} of {len(breaks)} taken"]
+            per: Dict[int, List[str]] = {}
+            prev = None
+            for b in breaks:
+                since = (f"Since the last break {_dur(b['start'] - prev)}" if prev is not None
+                         else f"Since the shift started {_dur(b['start'] - seg['start'])}")
+                per[b["idx"]] = [f"{b['kind']}, {_hm(b['start'])} to {_hm(b['start'] + b['minutes'])}", since,
+                                 f"From shift start {_dur(b['start'] - seg['start'])}"]
+                prev = b["start"] + b["minutes"]
+            out[(lane["name"], seg["offset"])] = {"shift": shift, "breaks": per}
+    return out
+
+
 def _across_cancel(seg: Dict[str, Any], first: int, second: int) -> bool:
     """Whether a cancelled break sits between breaks ``first`` and ``second`` (plan order) of ``seg``: the long gap
     a cancel leaves is wanted, so the program's maximum gap is not held against it (Phase AD)."""

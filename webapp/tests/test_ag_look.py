@@ -53,6 +53,12 @@ class TheLook(unittest.TestCase):
         self.assertRegex(icons, r'--i-pulse: url\("data:image/svg\+xml,')
         self.assertIn('icons.css', self.admin.get("/").get_data(as_text=True))
 
+    def test_hidden_boxes_stay_hidden(self):
+        # Phase AG (T9): the timeline's hover box sets its own display, which beat the hidden attribute and left an
+        # empty box in the page's top corner
+        css = (STATIC / "app.css").read_text()
+        self.assertRegex(css, r"\.tl-tip\[hidden\] { display: none; }")
+
     def test_the_menu_is_grouped_by_job(self):
         page = self.admin.get("/").get_data(as_text=True)
         side = page[page.index('class="leftnav"'):page.index("</aside>")]

@@ -1309,6 +1309,7 @@ ul.log .post-st { font-size: 0.8125rem; margin-left: 4px; }
   font-size: 0.8125rem; font-variant-numeric: tabular-nums; pointer-events: none; }
 .tl-tip b { font-size: 0.875rem; }
 .tl-tip span { color: var(--dim); }
+.tl-tip[hidden] { display: none; }
 
 /* Phase AF (D6): today at a glance */
 .glance { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; margin: 0 0 10px; }
@@ -1416,7 +1417,7 @@ form.inline { display: inline; }
 .me-week td:last-child { color: var(--dim); }
 .me-week tr.me-now th, .me-week tr.me-now td { background: var(--covered-soft); }
 details.sheet { background: var(--console); border: 1px solid var(--rail); border-radius: 12px; margin: 0 0 12px; padding: 0 16px; }
-details.sheet > summary { font: 700 semi-condensed 1.05rem/1.2 var(--display); padding: 14px 0; cursor: pointer; list-style: none; }
+details.sheet > summary { font: 700 semi-condensed 1.25rem/1.2 var(--display); padding: 14px 0; cursor: pointer; list-style: none; }
 details.sheet > summary::-webkit-details-marker { display: none; }
 details.sheet[open] > summary { border-bottom: 1px solid var(--rail); margin-bottom: 12px; }
 details.sheet > :not(summary) { margin-bottom: 14px; }
@@ -1438,3 +1439,32 @@ details.sheet > :not(summary) { margin-bottom: 14px; }
 .zd-rows td.zd-c.ok, .zd-rows td.zd-c.lok { background: var(--covered); }
 .zd-rows td.zd-c.warn { background: var(--short); }
 .zd-rows td.zd-c.bad { background: var(--gap); }
+
+/* Phase AG, T9: the v4 pass over every page. Smaller page titles set wide (the menu and the context say where you
+   are), icons spaced inside buttons, approve and refuse on one line, the phone week as a grid, and motion that
+   answers an action or marks what is live, all off under reduced motion. Colours unchanged (owner picks first). */
+h1 { font-size: 1.75rem; font-stretch: 112%; letter-spacing: 0; }
+h2 { font-stretch: 106%; }
+.phead h1, .page-head h1 { margin-bottom: 4px; }
+@media (max-width: 600px) { h1 { font-size: 1.45rem; } }
+button .ico, .button .ico { margin-right: 6px; vertical-align: -0.18em; }
+.panel { border-radius: 12px; }
+.req-act form { display: grid; grid-template-columns: auto auto 1fr; gap: 8px; align-items: center; }
+.req-act form label { grid-column: 1 / -1; order: 3; font-size: 0.8125rem; color: var(--dim); }
+.req-act form label input { margin-top: 4px; width: 100%; }
+.req-act form button[value="refuse"] { order: 2; }
+.req-act .hint { margin: 8px 0 0; font-size: 0.8125rem; }
+@media (max-width: 600px) {
+  .me-week tbody, .me-week tr { display: block; }
+  .me-week tr { display: grid; grid-template-columns: 7.5rem 1fr; border-top: 1px solid var(--rail); }
+  .me-week th, .me-week td { border-top: 0; }
+  .me-week td:first-of-type { white-space: nowrap; }
+  .me-week td:last-child { grid-column: 1 / -1; display: block; padding: 0 6px 8px; }
+  .me-week td:last-child:empty { display: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .achv-now.placed { animation: now-breathe 2.4s ease-in-out infinite; }
+  @keyframes now-breathe { 50% { opacity: .45; } }
+  .flash { animation: flash-in .25s ease-out; }
+  @keyframes flash-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+}

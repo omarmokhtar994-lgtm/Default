@@ -1,0 +1,6 @@
+current  night min ink 13.23  dim 6.05/5.38  edge 3.22  fills 4.21  FAIL: none
+current  day   min ink 13.69  dim 6.25/5.77  edge 3.71  fills 3.11  FAIL: none
+A        night min ink 14.28  dim 6.61/5.96  edge 3.50  fills 4.62  FAIL: none
+A        day   min ink 15.74  dim 6.80/6.34  edge 3.84  fills 3.11  FAIL: none
+B        night min ink 14.90  dim 6.88/6.11  edge 3.58  fills 4.61  FAIL: none
+B        day   min ink 13.87  dim 6.63/6.05  edge 3.82  fills 3.11  FAIL: none

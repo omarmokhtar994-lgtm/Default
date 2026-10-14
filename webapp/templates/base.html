@@ -9,10 +9,9 @@
 {% else %}<meta name="theme-color" content="#0E1A2B" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#EAEFF5" media="(prefers-color-scheme: light)">
 {% endif %}<title>{% block title %}Team Scheduler{% endblock %}</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600&family=Saira+Semi+Condensed:wght@600;700&display=swap">
+<link rel="preload" href="{{ url_for('static', filename='fonts/atkinson-hyperlegible-next.woff2') }}" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='icons.css') }}">
 <link rel="icon" href="{{ url_for('static', filename='mark.svg') }}" type="image/svg+xml">
 </head>
 <body>
@@ -42,17 +41,19 @@
     <select data-unit-pick data-target="{{ nav_target }}">{% for p in nav_units %}<optgroup label="{{ p.name }}">{% for key, text in p.choices %}<option value="{{ key }}"{% if key == nav_unit %} selected{% endif %}>{{ text }}</option>{% endfor %}</optgroup>{% endfor %}</select></label>{% endif %}
   <nav aria-label="Main">
     {{ navlink('home', url_for('home'), 'Home') }}
-    {% if nav_unit %}<p class="navhead">{{ nav_label }}</p>
-    {{ navlink('overview', url_for('overview_page', program=nav_unit, date=nav_date), 'Overview') }}
+    {% if nav_unit %}<p class="navhead">Today</p>
     {{ navlink('day', url_for('day_page', program=nav_unit, date=nav_date), 'RTA') }}
+    {{ navlink('overview', url_for('overview_page', program=nav_unit, date=nav_date), 'Overview') }}
+    {{ navlink('wallboard', url_for('day_wallboard', program=nav_unit), 'Wallboard') }}
+    <p class="navhead">This week</p>
     {{ navlink('week', url_for('week_page', program=nav_unit), 'Weeks') }}
-    {{ navlink('schedules', url_for('schedules_for', program=nav_unit), 'Schedules') }}
-    {{ navlink('analysis', url_for('program', name=nav_unit), 'Analysis') }}{% endif %}
-    <p class="navhead">Across programs</p>
+    {{ navlink('schedules', url_for('schedules_for', program=nav_unit), 'Schedules') }}{% endif %}
+    <p class="navhead">Insights</p>
+    {% if nav_unit %}{{ navlink('analysis', url_for('program', name=nav_unit), 'Analysis') }}{% endif %}
     {{ navlink('programs', url_for('programs'), 'Programs') }}
     {{ navlink('exports', url_for('exports_page'), 'Exports') }}
     {{ navlink('team', url_for('team_page'), 'Team') }}
-    {% if user.is_admin or user.is_supervisor %}<p class="navhead">Manage</p>
+    {% if user.is_admin or user.is_supervisor %}<p class="navhead">Setup</p>
     {{ navlink('people', url_for('admin_users'), 'People') }}
     {{ navlink('with', url_for('with_setup', program=nav_unit or none), 'Departments and people') }}
     {{ navlink('channels', url_for('channel_setup', program=nav_unit or none), 'Associate channels') }}

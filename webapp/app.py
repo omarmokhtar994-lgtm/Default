@@ -329,8 +329,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         response.headers.setdefault("Referrer-Policy", "same-origin")
         response.headers.setdefault(
             "Content-Security-Policy",
-            "default-src 'self'; style-src 'self' https://fonts.googleapis.com; "
-            "font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; frame-ancestors 'none'")
+            "default-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; "
+            "frame-ancestors 'none'")  # Phase AG: fonts and icons are served by the site itself
         return response
 
     @app.template_filter("unit")
@@ -419,7 +419,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
     NAV_ACTIVE = {"home": "home", "overview_page": "overview", "day_page": "day", "week_page": "week",
                   "run_week": "week", "run_schedules": "schedules", "program": "analysis", "programs": "programs",
                   "exports_page": "exports", "team_page": "team", "admin_users": "people", "program_setup": "setup",
-                  "with_setup": "with", "channel_setup": "channels", "notifications_page": "notify"}
+                  "with_setup": "with", "channel_setup": "channels", "notifications_page": "notify",
+                  "day_wallboard": "wallboard"}
     PROGRAM_PAGES = {"overview": "/overview?program={key}", "day": "/day?program={key}", "week": "/week?program={key}",
                      "schedules": "/schedules?program={key}", "analysis": "/programs/{key}",
                      "home": "/?program={key}",  # Home shows the program picked (owner, 2026-10-08)

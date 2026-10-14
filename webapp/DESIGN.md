@@ -1,10 +1,22 @@
-# Team Scheduler: design plan (v3, "control room")
+# Team Scheduler: design plan (v4, "shift desk"; v3 "control room" below still holds)
 
 © 2026 Omar Mokhtar. All rights reserved.
 
 Owner, 2026-10-07: redesign in the "Control room (dark)" direction (chosen from
 four previews), keep the name "Team Scheduler". v1 (light limestone and Nile)
 is replaced.
+
+v4, 2026-10-14 (Phase AG, owner: "u have all my approval for anything"; samples in `evidence/phase_ag/`): the
+measured v3 colours stay; the look changes through type, layout and the menu.
+
+- **Type:** Archivo (one variable family, self-hosted) replaces Saira Semi Condensed: headings and figures,
+  semi-condensed where a shorthand sets them, condensed for big figures. Atkinson Hyperlegible Next stays for text,
+  now self-hosted too. No page asks Google for fonts, so the CSP allows this site only.
+- **Icons:** Phosphor shapes (MIT, `static/LICENSE-phosphor`) inside `static/icons.css` as data URIs, written by
+  `tools/build_icons_css.py`. The menu draws them from the links' addresses; elsewhere `<span class="ico i-name">`.
+- **Menu by job:** Today (RTA, Overview, Wallboard), This week (Weeks, Schedules), Requests, Insights, Setup. The
+  menu sits a step darker than the page (`--rail-bg`).
+- **Now first:** the RTA's first screen carries the day strip and the Now column (see `evidence/phase_ag`).
 
 v3, 2026-10-10 (Phase XY, owner-approved Phase Y proposal and Phase X review):
 colour means state. Everything you can press or move is ink; teal, amber, red

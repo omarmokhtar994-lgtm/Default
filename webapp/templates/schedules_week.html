@@ -6,7 +6,13 @@
 <div class="phead"><div>
   <h1>Schedules: {{ program|unit if program else 'pick a program' }}</h1>
   <p class="byline">Pick a week to see every schedule uploaded or run for it, side by side, and which one counts.</p>
-</div></div>
+</div>
+  <form class="sel" method="get" action="{{ url_for('schedules_for') }}">
+    <input type="hidden" name="program" value="{{ program }}">{% if week %}<input type="hidden" name="week" value="{{ week }}">{% endif %}
+    <label>Times in <select name="tz" data-autosubmit>{% for key, name in zones %}<option value="{{ key }}"{% if key == g.zone %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+    <noscript><button type="submit">Show</button></noscript>
+  </form>
+</div>
 {% if not weeks %}
 <p class="empty panel">No schedules for {{ program|unit if program else 'this program' }} yet. Upload one from <a href="{{ url_for('home') }}">Home</a>; it appears here when it is checked.</p>
 {% else %}

@@ -1330,3 +1330,20 @@ ul.log .post-st { font-size: 0.8125rem; margin-left: 4px; }
 .later-abs { margin: 0 0 12px; }
 .later-abs summary { cursor: pointer; }
 .out-t td, .out-t th { vertical-align: top; text-align: start; }
+/* Phase AF (D1, D5): times in another zone and the operating day, one stitched window, read only */
+.zone-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 0 0 10px; }
+.zone-pick { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+.seg-switch { display: inline-flex; border: 1px solid var(--rail); border-radius: 6px; overflow: hidden; }
+.seg-switch a { padding: 6px 12px; color: inherit; text-decoration: none; }
+.seg-switch a[aria-current] { box-shadow: inset 0 -3px 0 var(--action); background: var(--selected); font-weight: 600; }
+.zd-tl { margin: 6px 0 14px; }
+.zd-hours { display: flex; justify-content: space-between; margin-inline-start: 208px; color: var(--dim);
+  font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.zd-row { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 8px; align-items: center;
+  border-top: 1px solid var(--rail); padding: 2px 0; }
+.zd-who b { display: block; } .zd-who small { display: block; color: var(--dim); font-size: 0.75rem; }
+.zd-track { display: block; width: 100%; height: 20px; }
+.zd-track .tl-bar { fill: var(--c-blue); opacity: .85; } .zd-track .tl-bar.gone { opacity: .25; }
+.zd-brk { fill: var(--rail); }
+.zd-t tr.bad td, .zd-t tr.warn td { font-weight: 600; }
+@media (max-width: 640px) { .zd-row { grid-template-columns: 120px minmax(0, 1fr); } .zd-hours { margin-inline-start: 128px; } }

@@ -130,6 +130,14 @@ def _languages(wb) -> List[Dict[str, Any]]:
     return rows
 
 
+def _day_start(value: Any) -> Optional[int]:
+    """Instructions' "Operating day start" (Phase AF, A4) in minutes, None when it is not set or not a time."""
+    if hasattr(value, "hour"):
+        return value.hour * 60 + value.minute
+    m = re.match(r"^\s*([01]?\d|2[0-3]):([0-5]\d)", str(value or ""))
+    return int(m.group(1)) * 60 + int(m.group(2)) if m else None
+
+
 def read_inputs(path: Path) -> Dict[str, Any]:
     """Demand, interval and language setup of a version's workbook (cached per file)."""
     key = (str(path), Path(path).stat().st_mtime)
@@ -158,7 +166,8 @@ def read_inputs(path: Path) -> Dict[str, Any]:
     # planned_shrinkage is only compared with what happened (adherence, the shrinkage coach); the
     # day's own figures never use it (owner: actuals replace it)
     found = {"interval": step if 1440 % step == 0 else 30, "required": demand, "planned_shrinkage": planned, **gaps,
-             "languages": _languages(wb), "previous_saturday": previous, "target": _target(wb)}
+             "languages": _languages(wb), "previous_saturday": previous, "target": _target(wb),
+             "day_start": _day_start(_instruction(wb, ("operating day start",)))}
     with _LOCK:
         while len(_CACHE) >= KEEP:
             _CACHE.pop(next(iter(_CACHE)))
@@ -1199,6 +1208,36 @@ def dayoff_proposals(view: Dict[str, Any], week: Dict[str, Any], day: int, rest_
         o["offers"] = named[:top]
         o["text"] = f"{_hm(o['start'])} to {_hm(o['end'])}: {o['people']} {'person' if o['people'] == 1 else 'people'}"
     return {"proposals": proposals, "overtime": overtime, "minimum": minimum}
+
+
+def stitch(views: Dict[int, Optional[Dict[str, Any]]], start: int, shift: int) -> Dict[str, Any]:
+    """One day-long window of the RTA (Phase AF, D1 and D5), read only: from minute ``start`` of the schedule's day,
+    taken from the day's view (0) and the day before (-1) or after (1) where the window reaches them. ``shift`` turns
+    the schedule's times into the zone shown. Each cell keeps its interval's figures (None where that day has no
+    schedule); each shift that overlaps the window is placed from the window's start, its breaks with it."""
+    step = next(v["interval"] for v in views.values() if v)
+    cells = []
+    for k in range(0, 1440, step):
+        d, t = divmod(start + k, 1440)
+        v = views.get(d)
+        c = next((c for c in v["cells"] if c["t"] == t), None) if v else None
+        cells.append({"k": k, "label": _hm(start + k + shift), "day": d,
+                      **{f: (c[f] if c else None) for f in ("required", "now", "need", "pm")},
+                      "cls": c["cls"] if c else "none"})
+    lanes = []
+    for d, v in sorted(views.items()):
+        for lane in (v or {}).get("lanes", []):
+            for s in lane["segments"]:
+                a, b = s["start"] + 1440 * d - start, s["end"] + 1440 * d - start
+                if s["offset"] != 0 or b <= 0 or a >= 1440:
+                    continue
+                lanes.append({"name": lane["name"], "language": lane.get("language", ""), "start": a, "end": b,
+                              "status": s["status"], "label": f"{_hm(s['start'] + shift)} to {_hm(s['end'] + shift)}",
+                              "breaks": [{"start": x["start"] + 1440 * d - start, "minutes": x["minutes"],
+                                          "kind": x.get("kind", "Break")} for x in s.get("breaks", [])]})
+    lanes.sort(key=lambda x: (x["start"], x["name"]))
+    return {"cells": cells, "lanes": lanes, "start": start, "shift": shift, "step": step,
+            "hours": [(x, _hm(start + x + shift)) for x in range(0, 1440, 120)]}
 
 
 def shift_groups(view: Dict[str, Any], from_now: Optional[int] = None) -> List[Dict[str, Any]]:

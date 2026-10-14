@@ -89,6 +89,12 @@ create table if not exists interval_targets (
     at real not null,
     primary key (program, week_start)
 );
+create table if not exists operating_days (
+    program text primary key,
+    start integer not null,
+    user_id integer,
+    at real not null
+);
 create table if not exists shrinkage_maps (
     program text primary key,
     mapping text not null,
@@ -302,7 +308,8 @@ class Store:
             # Databases created before Phase J have no options column: add it.
             columns = {row["name"] for row in db.execute("pragma table_info(runs)")}
             # Databases from earlier versions lack the later columns: add them.
-            for name in ("options", "program", "week_start", "metrics", "engine_outcome"):
+            # Phase AF: "tz", the zone the schedule's times are in ('' for runs from before: Egypt time)
+            for name in ("options", "program", "week_start", "metrics", "engine_outcome", "tz"):
                 if name not in columns:
                     db.execute(f"alter table runs add column {name} text not null default ''")
             # Phase Q: roles and program access. People from before keep every program (nobody is locked out
@@ -675,6 +682,17 @@ class Store:
         with self._db() as db:
             db.execute("insert or replace into shrinkage_maps (program, mapping, user_id, at) values (?, ?, ?, ?)",
                        (program, json.dumps(mapping, sort_keys=True), user_id, time.time()))
+
+    def set_day_start(self, program: str, start: int, user_id: Optional[int]) -> None:
+        """When a program's operating day starts, in minutes of its schedule's time (Phase AF, A4)."""
+        with self._db() as db:
+            db.execute("insert or replace into operating_days (program, start, user_id, at) values (?, ?, ?, ?)",
+                       (program, int(start), user_id, time.time()))
+
+    def get_day_start(self, program: str) -> Optional[int]:
+        with self._db() as db:
+            row = db.execute("select start from operating_days where program = ?", (program,)).fetchone()
+        return int(row["start"]) if row else None
 
     def get_shrinkage_map(self, program: str) -> Optional[Dict[str, Any]]:
         with self._db() as db:
@@ -1139,6 +1157,8 @@ class Store:
             # what counts as shrinkage (Phase AF) goes with the name; a name with its own mapping keeps it
             db.execute("update or ignore shrinkage_maps set program = ? where program = ?", (new, old))
             db.execute("delete from shrinkage_maps where program = ?", (old,))
+            db.execute("update or ignore operating_days set program = ? where program = ?", (new, old))
+            db.execute("delete from operating_days where program = ?", (old,))
             # group posts (Phase AB) go with the name too; a name that has its own settings keeps them
             db.execute("update or ignore notify_settings set unit = ? where unit = ?", (new, old))
             db.execute("delete from notify_settings where unit = ?", (old,))

@@ -14,8 +14,10 @@ import zipfile
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from zoneinfo import ZoneInfo
 
-from flask import Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file, session, url_for
+from flask import (Flask, abort, flash, g, has_request_context, jsonify, redirect, render_template, request, send_file,
+                   session, url_for)
 from flask.sessions import SecureCookieSessionInterface
 from openpyxl.utils.exceptions import InvalidFileException
 from werkzeug.utils import secure_filename
@@ -32,8 +34,8 @@ from .channel_people import ChannelPeople, can_work, channel_words
 from .channel_plan import NoPlan, plan_day, score_day
 from .channel_template import channel_workbook
 from .channels import check_lines, has_channel_needs, read_channels, requirement_tab
-from .clock import EGYPT
-from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, board, glance, hover_tips, read_inputs, shift_groups
+from .clock import EGYPT, HOME, ZONES, pick_zone, shift as zone_shift, zone_label
+from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, board, glance, hover_tips, read_inputs, shift_groups, stitch
 from .coach import actual_shrinkage, corrected_tab
 from .shrinkage import ITEMS as SHRINKAGE_ITEMS, day_shrinkage, mapping_from_form, read_mapping
 from .contacts import ContactBook, pick_contact
@@ -56,7 +58,7 @@ from .versions import DAYS, shift_span, stale_blocks, with_notes
 from .results import version_summary
 from .runs import ACTIVE, MODES, OPTION_LABELS, READY, RESUMABLE, RunQueue, parse_options, run_options
 from .store import Store
-from .week import view as week_view
+from .week import in_zone, view as week_view
 
 COPYRIGHT = "© 2026 Omar Mokhtar. All rights reserved."
 MIN_PASSWORD = 10
@@ -141,7 +143,8 @@ THEMES = ("light", "dark")  # no cookie: follow the device's setting
 def _when(epoch: Optional[float]) -> str:
     if not epoch:
         return ""
-    return datetime.fromtimestamp(epoch, EGYPT).strftime("%a %d %b, %H:%M")
+    zone = ZoneInfo(g.get("zone", HOME)) if has_request_context() else EGYPT  # Phase AF: the page's zone
+    return datetime.fromtimestamp(epoch, zone).strftime("%a %d %b, %H:%M")
 
 
 def duration(minutes: float) -> str:
@@ -290,6 +293,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
     def _before() -> None:
         check_csrf()
         load_user()
+        g.zone = pick_zone(request.args.get("tz", ""))  # Phase AF (D5): Egypt unless the page asks for another
         # Phase Q: a program page opens only for people with that program (New schedule is open to everyone).
         if g.get("user") and request.endpoint not in OPEN_TO_ALL:
             key = (request.view_args or {}).get("name") if request.endpoint == "program" else \
@@ -410,7 +414,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 "status_words": STATUS_WORDS, "label": label, "modes": MODES, "stages": stages, "in_flight": IN_FLIGHT,
                 "when": _when, "run_options": run_options, "option_labels": OPTION_LABELS,
                 "eta_text": eta_text, "duration": duration, "clock": _clock, "with_text": with_text,
-                "group_changes": group_changes}
+                "group_changes": group_changes, "zones": ZONES, "home_zone": HOME}
 
     NAV_ACTIVE = {"home": "home", "overview_page": "overview", "day_page": "day", "week_page": "week",
                   "run_week": "week", "run_schedules": "schedules", "program": "analysis", "programs": "programs",
@@ -816,6 +820,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if week_start is None:
             flash("Pick the date the schedule starts.")
             return redirect(url_for("home"))
+        zone = request.form.get("tz", HOME)  # Phase AF (A5): the zone the schedule's times are in
+        if zone not in dict(ZONES):
+            flash("Pick the schedule's time zone from the list.")
+            return redirect(url_for("home"))
         incoming = queue.runs_root / "_incoming"
         incoming.mkdir(exist_ok=True)
         path = incoming / f"{secrets.token_hex(8)}.upload"
@@ -839,11 +847,30 @@ def create_app(config: Dict[str, Any]) -> Flask:
             flash(already)
         if ready:
             run_id = queue.submit_ready(g.user["id"], path, name, program=program, week_start=week_start)
+            app.extensions["store"].update_run(run_id, tz=zone)
             _record("run_uploaded", app.extensions["store"].get_run(run_id), detail="ready schedule")
             return redirect(url_for("run_detail", run_id=run_id))
         run_id = queue.submit(g.user["id"], path, mode, name, options, program=program, week_start=week_start)
+        app.extensions["store"].update_run(run_id, tz=zone)
         _record("run_uploaded", app.extensions["store"].get_run(run_id), detail=mode)
         return redirect(url_for("run_detail", run_id=run_id))
+
+    @app.route("/runs/<run_id>/zone", methods=["POST"])
+    @login_required
+    def run_zone(run_id: str):  # type: ignore[no-untyped-def]
+        """Change the zone a schedule's times are in (Phase AF, A5): the uploader or an admin."""
+        run = _run_or_404(run_id)
+        if not (g.user["is_admin"] or run.get("user_id") == g.user["id"]):
+            abort(403)
+        zone = request.form.get("tz", "")
+        if zone not in dict(ZONES):
+            flash("Pick the schedule's time zone from the list.")
+        else:
+            app.extensions["store"].update_run(run_id, tz=zone)
+            _record("run_details_changed", app.extensions["store"].get_run(run_id),
+                    detail=f"times are in {dict(ZONES)[zone]}")
+            flash(f"The schedule's times are in {dict(ZONES)[zone]}.")
+        return redirect(url_for("run_detail", run_id=run_id), code=303)
 
     def _unit_name(key: str) -> str:
         return str(_unit_filter(key))
@@ -1326,14 +1353,25 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                total=len(history), ranges=(4, 8, 12, 26, 52),
                                unit_groups=[p for p in groups if p["choices"]])
 
+    def _week_zone(intervals: Optional[list], run: Optional[Dict[str, Any]], week: str) -> Tuple[Optional[list], str]:
+        """The week's rows in the page's zone (Phase AF, D5) and a sentence saying so (empty in the schedule's own)."""
+        own = pick_zone((run or {}).get("tz") or HOME)
+        first = start_date(week) if week else None
+        if not intervals or not first or own == g.zone:
+            return intervals, ""
+        on = date.fromisoformat(first)
+        return (in_zone(intervals, on, own, g.zone),
+                f"Times in {zone_label(g.zone, on)}: the schedule's times are in {dict(ZONES)[own]}. Each day is "
+                f"{dict(ZONES)[g.zone].split(' (')[0]}'s day; hours that fall in the week before or after are left out.")
+
     def _week_page(run: Optional[Dict[str, Any]], side: str, program: str, week: str,
                    history: Dict[str, list]):  # type: ignore[no-untyped-def]
         figures = kept_figures(run or {})
-        intervals = figures.get("intervals")
+        intervals, zone_note = _week_zone(figures.get("intervals"), run, week)
         weeks = [w["week"] for w in reversed(history.get(program, []))]
         return render_template("week.html", run=run, view=week_view(intervals, side) if intervals else None,
                                side=side, program=program, week=week, programs=sorted(history, key=str.lower),
-                               weeks=weeks, figures=figures)
+                               weeks=weeks, figures=figures, zone_note=zone_note)
 
     @app.route("/runs/<run_id>/week")
     @login_required
@@ -1435,8 +1473,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
                       elsewhere: Optional[Dict[str, Any]] = None,
                       outlook: Optional[List[Dict[str, Any]]] = None):  # type: ignore[no-untyped-def]
         """A version's week view; ``note`` (the Week page): why this version, and what else the week has."""
-        intervals = json.loads(row["checks"] or "{}").get("intervals") or []
         run = app.extensions["store"].get_run(row["run_id"])
+        intervals, zone_note = _week_zone(json.loads(row["checks"] or "{}").get("intervals") or [], run,
+                                          row["week_start"])
         programs, weeks = _week_choices(row["program"], program_weeks(_all_runs(), app.extensions['store'].in_use_runs()))
         listed = _book().week_list(row["program"], row["week_start"])  # Phase AA: switch between the week's schedules
         switch = [{"workbook": e["run"].get("workbook") or e["run"]["id"], "in_use": e["in_use"],
@@ -1453,7 +1492,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                side=side, program=row["program"], week=row["week_start"], programs=programs,
                                weeks=weeks, figures=figures, version=row, week_note=note,
                                may_set_in_use=_may_set_in_use(row), target_panel=target, elsewhere=elsewhere,
-                               switch=switch, outlook=outlook)
+                               switch=switch, outlook=outlook, zone_note=zone_note)
 
     @app.route("/week")
     @login_required
@@ -2126,6 +2165,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
             page = days.page(program, on, measure) if program else None
         except ValueError as exc:  # said on the page, not a server error
             page, problem = None, str(exc)
+        window = "operating" if request.args.get("window") == "operating" else ""
+        if page:  # Phase AF (D1, D5): another zone, or the operating day: one window stitched from the days
+            own_zone = pick_zone((app.extensions["store"].get_run(page["version"]["run_id"]) or {}).get("tz") or HOME)
+            moved = zone_shift(on, own_zone, g.zone)
+            if moved or window:
+                return _zoned_day(program, on, page, measure, own_zone, moved, window)
         people = shrink = whole = None
         finder: Dict[str, Any] = {}
         cover = None
@@ -2252,6 +2297,62 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                measures=MEASURES, tab=tab, statuses=STATUSES, aux=sorted(AUX), hm=hm,
                                rows=board(page["view"]) if page and tab == "board" else None, week_of=week_start(on),
                                earlier=on - timedelta(days=1), later=on + timedelta(days=1), **shift_view)
+
+    def _zoned_day(program: str, on: date, page: Dict[str, Any], measure: str, own_zone: str, moved: int,
+                   window: str):  # type: ignore[no-untyped-def]
+        """The RTA's day in another zone or as the operating day (Phase AF, D1 and D5), read only: one day-long
+        window stitched from the schedule's days around ``on``. Changes are made on the schedule's own day."""
+        kept = app.extensions["store"].get_day_start(program)
+        workbook_start = page["inputs"].get("day_start")
+        day_start = kept if kept is not None else workbook_start
+        said = ""
+        if window and day_start is None:
+            said = "Set when the operating day starts to see it as one day; until then this is the calendar day."
+            window = ""
+        step = page["view"]["interval"]
+        start = day_start if window else -moved
+        start -= start % step
+        views: Dict[int, Optional[Dict[str, Any]]] = {}
+        missing = []
+        for d in range(start // 1440, (start + 1439) // 1440 + 1):
+            if d == 0:
+                views[0] = page["view"]
+                continue
+            try:
+                other = _days().page(program, on + timedelta(days=d), measure)
+            except ValueError:  # a workbook that cannot be read: its intervals stay empty, as for a missing day
+                other = None
+            views[d] = other["view"] if other else None
+            if other is None:
+                missing.append(f"{on + timedelta(days=d):%a %d %b}")
+        first, at = on + timedelta(days=(start + moved) // 1440), hm(start + moved)
+        heading = (f"Operating day, {first:%A} {at} to {first + timedelta(days=1):%A} {at}" if window
+                   else f"{on:%A %d %b}") + (f" in {zone_label(g.zone, on)}" if moved else "")
+        return render_template("day_zoned.html", program=program, on=on, zone=g.zone, window=window, hm=hm,
+                               day_start=day_start, workbook_start=workbook_start, shift=moved, heading=heading,
+                               own_zone=own_zone, own_name=dict(ZONES)[own_zone], own_label=zone_label(own_zone, on),
+                               missing=", ".join(missing), said=said, view=stitch(views, start, moved),
+                               may_set=bool(g.user["is_admin"] or g.user["is_supervisor"]))
+
+    @app.route("/day/operating-day", methods=["POST"])
+    @manager_required
+    def day_operating_start():  # type: ignore[no-untyped-def]
+        """When a program's operating day starts (Phase AF, A4; admins and supervisors), in the schedule's time."""
+        program = clean_program(request.form.get("program", ""))
+        on = _date(request.form.get("date", ""))
+        if not program or on is None:
+            abort(400)
+        if not _access().can_open(program):
+            abort(403)
+        m = re.match(r"^([01]\d|2[0-3]):([0-5]\d)$", request.form.get("start", "").strip())
+        if not m or int(m.group(2)) % 15:
+            flash("Give the start as a time on the quarter hour, like 16:00.")
+        else:
+            start = int(m.group(1)) * 60 + int(m.group(2))
+            app.extensions["store"].set_day_start(program, start, g.user["id"])
+            _record("operating_day_set", program=program, subject=hm(start), detail="operating day start")
+            flash(f"The operating day starts at {hm(start)}.")
+        return redirect(url_for("day_page", program=program, date=on.isoformat(), window="operating"), code=303)
 
     ADD_LENGTHS = (5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240)  # minutes offered by "+ Add"
     # What each "+ Add" choice is to a LOB's group rule (Phase AC: the tick shows only for a change that would post)

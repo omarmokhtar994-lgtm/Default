@@ -1,0 +1,8 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{# Phase AF (D5): the zone a page's times are shown in; Egypt unless someone picks another. ``keep``: the page's
+   other query values, kept when the zone changes. #}
+{% macro zone_pick(current, keep) %}<form method="get" class="zone-pick">
+  {% for k, v in keep if v %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+  <label>Times in <select name="tz" data-autosubmit>{% for key, name in zones %}<option value="{{ key }}"{% if key == current %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+  <button class="quiet" type="submit">Show</button>
+</form>{% endmacro %}

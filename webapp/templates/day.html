@@ -32,8 +32,9 @@
     <label>Program
       <select name="program" data-autosubmit>{% for p in programs %}<option value="{{ p }}"{% if p == program %} selected{% endif %}>{{ p|unit }}</option>{% endfor %}</select></label>
     <label>Day <input type="date" name="date" value="{{ on.isoformat() }}" data-autosubmit></label>
+    <label>Times in <select name="tz" data-autosubmit>{% for key, name in zones %}<option value="{{ key }}"{% if key == g.zone %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
     <input type="hidden" name="measure" value="{{ measure }}"><input type="hidden" name="view" value="{{ tab }}">
-    <p class="daynav">{% if program %}<a href="{{ url_for('day_handover', program=program, date=on.isoformat()) }}">Handover note</a><a href="{{ url_for('day_wallboard', program=program) }}">Wallboard</a>{% endif %}<a href="{{ url_for('day_page', program=program, date=earlier.isoformat(), measure=measure, view=tab) }}">‹ {{ earlier.strftime('%a %d %b') }}</a>
+    <p class="daynav">{% if program %}<a href="{{ url_for('day_page', program=program, date=on.isoformat(), window='operating') }}">Operating day</a><a href="{{ url_for('day_handover', program=program, date=on.isoformat()) }}">Handover note</a><a href="{{ url_for('day_wallboard', program=program) }}">Wallboard</a>{% endif %}<a href="{{ url_for('day_page', program=program, date=earlier.isoformat(), measure=measure, view=tab) }}">‹ {{ earlier.strftime('%a %d %b') }}</a>
       <a href="{{ url_for('day_page', program=program, date=later.isoformat(), measure=measure, view=tab) }}">{{ later.strftime('%a %d %b') }} ›</a></p>
     <noscript><button type="submit">Show</button></noscript>
   </form>

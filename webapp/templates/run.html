@@ -34,6 +34,11 @@
       <label class="why-field">Reason <input name="reason" type="text" maxlength="200" placeholder="Optional; asked for when a change needs it"></label>
       <button type="submit">Save</button>
     </form>
+    <form class="tagrow" method="post" action="{{ url_for('run_zone', run_id=run.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>The schedule's times are in <select name="tz">{% for key, name in zones %}<option value="{{ key }}"{% if key == (run.tz or home_zone) %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+      <button type="submit">Save the zone</button>
+    </form>
     <p class="hint">Pick from the programs and LOBs set up under LOBs and defaults. The run's schedule versions move with it. {% if user.is_admin %}To move a program's day records too, use the program's page.{% endif %}</p>
   </details>
   {% endif %}

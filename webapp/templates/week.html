@@ -22,12 +22,15 @@
       <select name="program" data-autosubmit>{% for p in programs %}<option value="{{ p }}"{% if p == program %} selected{% endif %}>{{ p|unit }}</option>{% endfor %}</select></label>
     <label>Week
       <select name="week">{% for w in weeks %}<option value="{{ w }}"{% if w == week %} selected{% endif %}>{{ w|day_month }} {{ w[:4] }}</option>{% endfor %}</select></label>
+    <label>Times in
+      <select name="tz">{% for key, name in zones %}<option value="{{ key }}"{% if key == g.zone %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
     <input type="hidden" name="side" value="{{ side }}">
     <button class="quiet" type="submit">Show</button>
   </form>
   {% endif %}
 </div>
 
+{% if zone_note %}<p class="note panel">{{ zone_note }}</p>{% endif %}
 {% if target_panel %}{% set tp = target_panel %}
 <section class="panel" id="target" aria-labelledby="tgt-h">
   <h2 id="tgt-h">Interval target</h2>

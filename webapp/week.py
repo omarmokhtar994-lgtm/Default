@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import math
 import statistics
+from datetime import date, timedelta
 from typing import Any, Dict, List, Optional
 
 DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
@@ -27,6 +28,22 @@ def compact(rows: List[dict]) -> List[list]:
                     round(float(r.get("after_effective") or 0), 3), int(r.get("after_raw_min") or 0),
                     round(float(r.get("before_effective") or 0), 3), int(r.get("before_raw_min") or 0),
                     1 if r.get("severe_overage") else 0])
+    return out
+
+
+def in_zone(intervals: List[list], week_start: date, from_zone: str, to_zone: str) -> List[list]:
+    """The week's rows read in another zone (Phase AF, D5): each moves by its own date's shift, so summer time is
+    taken for that date; a row that moves out of the week is left out (it belongs to the week before or after)."""
+    from .clock import shift
+    if from_zone == to_zone:
+        return intervals
+    first = (week_start.weekday() + 1) % 7  # day_index counts from Sunday
+    out = []
+    for r in intervals:
+        into = (r[0] - first) % 7
+        moved = into * 1440 + _minutes(r[1]) + shift(week_start + timedelta(days=into), from_zone, to_zone)
+        if 0 <= moved < 7 * 1440:
+            out.append([(first + moved // 1440) % 7, _hhmm(moved % 1440), *r[2:]])
     return out
 
 

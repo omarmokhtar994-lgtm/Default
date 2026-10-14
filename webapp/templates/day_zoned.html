@@ -1,0 +1,40 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{% extends "base.html" %}
+{% from "_zone.html" import zone_pick with context %}
+{% block title %}The day: {{ program|unit }} on Team Scheduler{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ program|unit }}: the day</h1>
+</div>
+<div class="zone-bar">
+  {{ zone_pick(zone, [('program', program), ('date', on.isoformat()), ('window', window if window == 'operating' else '')]) }}
+  <nav class="seg-switch" aria-label="Which day">
+    <a href="{{ url_for('day_page', program=program, date=on.isoformat(), tz=zone) }}"{% if window != 'operating' %} aria-current="page"{% endif %}>Calendar day</a>
+    <a href="{{ url_for('day_page', program=program, date=on.isoformat(), tz=zone, window='operating') }}"{% if window == 'operating' %} aria-current="page"{% endif %}>Operating day{% if day_start is not none %} (from {{ hm(day_start + shift) }}){% endif %}</a>
+  </nav>
+</div>
+<section class="panel" aria-labelledby="zd-h">
+  <h2 id="zd-h">{{ heading }}</h2>
+  <p class="note"><b>Read only.</b> The schedule's times are in {{ own_label }}; changes are made on its own day, in its own time: <a href="{{ url_for('day_page', program=program, date=on.isoformat(), tz=own_zone) }}">open {{ on.strftime('%a %d %b') }} in {{ own_name }}</a>.{% if missing %} No schedule here for {{ missing }}, so those intervals are empty.{% endif %}</p>
+  {% if said %}<p class="empty">{{ said }}</p>{% endif %}
+  {% if may_set %}<form class="tagrow" method="post" action="{{ url_for('day_operating_start') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}">
+    <label>Operating day starts at <input type="time" name="start" step="900" value="{{ hm(day_start) if day_start is not none else '16:00' }}" required></label>
+    <button type="submit">Save</button>
+    <small class="dim">In the schedule's own time, for every day of {{ program|unit }}{% if workbook_start is not none %}; the workbook says {{ hm(workbook_start) }}{% endif %}.</small>
+  </form>{% endif %}
+  {% if view %}
+  <h3>Who is on</h3>
+  <div class="zd-tl" role="img" aria-label="Shifts from {{ view.cells[0].label }}, one row per shift">
+    <div class="zd-hours" aria-hidden="true">{% for x, label in view.hours %}<span>{{ label }}</span>{% endfor %}</div>
+    {% for lane in view.lanes %}<div class="zd-row"><span class="zd-who"><b>{{ lane.name }}</b><small>{{ lane.language }} · {{ lane.label }}{% if lane.status != 'Present' %} · {{ lane.status|lower }}{% endif %}</small></span>
+      <svg viewBox="0 0 1440 20" preserveAspectRatio="none" class="zd-track"><rect class="tl-bar{% if lane.status in ('Unplanned leave', 'Sick', 'Public holiday') %} gone{% endif %}" x="{{ [lane.start, 0]|max }}" y="3" width="{{ [lane.end, 1440]|min - [lane.start, 0]|max }}" height="14" rx="3"><title>{{ lane.name }}: {{ lane.label }}</title></rect>{% for b in lane.breaks if b.start + b.minutes > 0 and b.start < 1440 %}<rect class="zd-brk" x="{{ [b.start, 0]|max }}" y="3" width="{{ b.minutes }}" height="14"><title>{{ b.kind }}</title></rect>{% endfor %}</svg></div>{% else %}<p class="empty">Nobody is on shift in this window.</p>{% endfor %}
+  </div>
+  <h3>Every {{ {15: 'quarter hour', 30: 'half hour', 60: 'hour'}.get(view.step, 'interval') }}</h3>
+  <div class="scroll" role="region" tabindex="0" aria-label="The window's intervals (scrolls sideways)"><table class="adh-t zd-t">
+    <thead><tr><th scope="col">Interval</th><th scope="col">Needed</th><th scope="col">On the floor</th><th scope="col">Buffer (h)</th></tr></thead>
+    <tbody>{% for c in view.cells %}<tr class="{{ c.cls }}"><th scope="row">{{ c.label }}</th><td class="n">{{ c.need if c.need is not none else '' }}</td><td class="n">{{ c.now|num if c.now is not none else '' }}</td><td class="n">{{ c.pm|num if c.pm is not none else '' }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% endif %}
+</section>
+{% endblock %}

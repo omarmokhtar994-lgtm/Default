@@ -140,9 +140,15 @@ class TheChannelNeeds(_Needs):
         self.assertNotIn("view=channels", bare)
 
     def test_a_wrong_interval_file_is_refused_and_nothing_is_attached(self):
-        said = html.unescape(self.attach(self.bare, filled(self.dir / "thirty.xlsx", step=30)).get_data(as_text=True))
+        # Re-pinned 2026-10-14 (Phase AF, A1, owner: "everything should be working both ways"): a 30-minute grid is
+        # now read for a 60-minute program, so the refusal is measured with a 45-minute grid.
+        odd = filled(self.dir / "odd.xlsx", step=30)
+        wb = load_workbook(odd)
+        wb["Chat 30 Min"].title = "Chat 45 Min"
+        wb.save(odd)
+        said = html.unescape(self.attach(self.bare, odd).get_data(as_text=True))
         self.assertIn("These channel needs were not added:", said)
-        self.assertIn("Chat 30 Min does not match the program's 60-minute interval", said)
+        self.assertIn("Chat 45 Min does not match the program's 60-minute interval", said)
         self.assertFalse((self.book.root / self.bare / "channels.xlsx").exists())
         self.assertEqual(list((self.book.root / self.bare).glob("channels*")), [])
         self.assertIsNone(self.book.channel_path(self.bare))

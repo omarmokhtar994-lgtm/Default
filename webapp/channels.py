@@ -29,6 +29,7 @@ CHANNELS = {"P": "Phone", "C": "Chat", "E": "Email"}
 LETTER = {name.casefold(): letter for letter, name in CHANNELS.items()}
 QUARTER = 15  # minutes: the planning step (breaks start on quarter hours, as the validator checks)
 GRID_TAB = re.compile(r"^(chat|phone|email) (\d+) min$")
+GRID_MINUTES = (15, 30, 60)  # grids read for any of these intervals (Phase AF, A1)
 # The engine's _discover_requirement_sheet: the instruction first, then these names, then the first Sun-Sat grid.
 REQUIREMENT_INSTRUCTIONS = ("requirements source", "requirement source", "active requirements used")
 REQUIREMENT_ALIASES = ("FT Wise 30 Min", "FT Wise 60 Min", "FT Wise", "Required HC", "Requirements", "Forecast")
@@ -187,6 +188,25 @@ def _grid(ws, step: int, problems: List[str]) -> Dict[int, Dict[int, float]]:
                 out[d][t] = _number(v, where)
             except ValueError:
                 problems.append(f"{where}: {DAYS[d]} {hm(t)} reads {v!r}; a need is a number, 0 or more.")
+    return out
+
+
+def _to_step(grid: Dict[int, Dict[int, float]], minutes: int, step: int) -> Dict[int, Dict[int, float]]:
+    """A grid read at ``minutes`` per row, keyed by the program's ``step``: a coarser row split into its intervals
+    (the same people each), finer rows averaged (Phase AF, A1)."""
+    if minutes == step:
+        return grid
+    out: Dict[int, Dict[int, float]] = {d: {} for d in grid}
+    for d, rows in grid.items():
+        if minutes > step:
+            for t, v in rows.items():
+                for k in range(t, t + minutes, step):
+                    out[d][k] = v
+        else:
+            for t in range(0, 1440, step):
+                parts = [rows[k] for k in range(t, t + step, minutes) if k in rows]
+                if parts:
+                    out[d][t] = round(sum(parts) / (step // minutes), 4)
     return out
 
 
@@ -431,21 +451,41 @@ def read_channels(path: Path, step: int) -> Optional[Dict[str, Any]]:
     by_name = {_norm(n): n for n in wb.sheetnames}
     problems: List[str] = []
     notes: List[str] = []
+    tabs: Dict[str, Dict[int, Any]] = {}  # Phase AF (A1): a 15, 30 or 60-minute grid is read for any interval
     for norm_name, name in by_name.items():
         found = GRID_TAB.match(norm_name)
-        if found and int(found.group(2)) != step:
-            channel = found.group(1).capitalize()
-            problems.append(f"{name} does not match the program's {step}-minute interval: name it {channel} {step} "
-                            f"Min, with {step}-minute rows.")
-    grids = {letter: wb[by_name[f"{CHANNELS[letter].casefold()} {step} min"]]
-             for letter in "PCE" if f"{CHANNELS[letter].casefold()} {step} min" in by_name}
+        if not found:
+            continue
+        minutes, channel = int(found.group(2)), found.group(1).capitalize()
+        if minutes not in GRID_MINUTES or step not in GRID_MINUTES:
+            if minutes != step:
+                problems.append(f"{name} does not match the program's {step}-minute interval: name it {channel} "
+                                f"{step} Min, with {step}-minute rows.")
+                continue
+        tabs.setdefault(next(k for k, v in CHANNELS.items() if v == channel), {})[minutes] = wb[name]
+    grids: Dict[str, Any] = {}
+    grid_minutes: Dict[str, int] = {}
+    for letter in "PCE":
+        if letter not in tabs:
+            continue
+        minutes = step if step in tabs[letter] else min(tabs[letter])  # the program's own, else the finest
+        grids[letter], grid_minutes[letter] = tabs[letter][minutes], minutes
+        for other in sorted(set(tabs[letter]) - {minutes}):
+            notes.append(f"{tabs[letter][other].title} is not used: {grids[letter].title} is.")
+        if minutes > step:
+            notes.append(f"{grids[letter].title} is read for the {step}-minute interval: each row is split into its "
+                         f"{step}-minute intervals, each needing the same people.")
+        elif minutes < step:
+            notes.append(f"{grids[letter].title} is read for the {step}-minute interval: each {step}-minute interval "
+                         f"needs the average of its {minutes}-minute rows.")
     hours_ws = wb[by_name["email hours"]] if "email hours" in by_name else None
     setup_ws = wb[by_name["channel setup"]] if "channel setup" in by_name else None
     if not grids and hours_ws is None and setup_ws is None and not problems:
         found_none = None
         _remember(key, found_none)
         return found_none
-    need = {letter: _grid(ws, step, problems) for letter, ws in grids.items()}
+    need = {letter: _to_step(_grid(ws, grid_minutes[letter], problems), grid_minutes[letter], step)
+            for letter, ws in grids.items()}
     hours = _email_hours(hours_ws, problems) if hours_ws is not None else None
     if setup_ws is not None:
         rules, languages, blended = _setup(setup_ws, step, problems, notes)

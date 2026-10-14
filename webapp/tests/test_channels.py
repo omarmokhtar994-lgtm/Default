@@ -220,11 +220,14 @@ class TheChannelTabs(unittest.TestCase):
                     read_channels(path, 60)
 
     def test_a_tab_for_another_interval_is_refused_by_name(self):
+        # Re-pinned 2026-10-14 (Phase AF, A1, owner: "everything should be working both ways"): 15, 30 and
+        # 60-minute grids are now read for any of those intervals (test_af_channel_grids), so the refusal is
+        # measured with minutes that are none of them.
         path = self.book()
         wb = load_workbook(path)
-        wb["Chat 60 Min"].title = "Chat 30 Min"
+        wb["Chat 60 Min"].title = "Chat 45 Min"
         wb.save(path)
-        with self.assertRaisesRegex(ValueError, r"Chat 30 Min.*60-minute.*Chat 60 Min"):
+        with self.assertRaisesRegex(ValueError, r"Chat 45 Min.*60-minute.*Chat 60 Min"):
             read_channels(path, 60)
 
     def test_a_file_that_is_not_a_workbook_is_left_to_the_run_check(self):

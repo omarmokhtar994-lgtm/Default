@@ -155,15 +155,19 @@ def grid(people: List[Dict[str, Any]], plan: Dict[str, Any]) -> Dict[str, Any]:
     at = _at(people, plan)
     rows = []
     for p in people:
-        cells = []
+        cells, runs = [], []
         for t in cols:
             if not p["start"] <= t < p["end"]:
                 cells.append({"t": t, "letter": "", "cls": "off"})
             else:
                 letter = at.get((p["name"], t), "")
                 cells.append({"t": t, "letter": letter, "cls": f"ch-{letter}" if letter else "none"})
+                if runs and runs[-1][1] == t and runs[-1][2] == letter:  # Phase AF (C1): one box per stretch
+                    runs[-1] = (runs[-1][0], t + QUARTER, letter)
+                else:
+                    runs.append((t, t + QUARTER, letter))
         rows.append({"name": p["name"], "language": p["language"], "label": p["label"], "skills": p["skills"],
-                     "start": p["start"], "end": p["end"], "cells": cells})
+                     "start": p["start"], "end": p["end"], "cells": cells, "runs": runs})
     return {"cols": cols, "hours": [t for t in cols if t % 60 == 0], "rows": rows}
 
 

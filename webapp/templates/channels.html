@@ -38,7 +38,14 @@
 
 <section class="panel" aria-labelledby="cp-grid-h">
   <h2 id="cp-grid-h">Who is on what</h2>
-  <p class="note">Each cell is 15 minutes. The letters after a name are the channels the person works. Click a cell to fill in the change below.</p>
+  <p class="note">One box per stretch. The letters after a name are the channels the person works. Click a box to fill in the change below.</p>
+  {% set lo = grid.cols[0] if grid.cols else 0 %}{% set span = (grid.cols[-1] + 15 - lo) if grid.cols else 60 %}
+  <svg class="sr-defs" aria-hidden="true" focusable="false"><defs><linearGradient id="ch-all"><stop offset="0" class="g-p"/><stop offset=".33" class="g-p"/><stop offset=".33" class="g-c"/><stop offset=".66" class="g-c"/><stop offset=".66" class="g-e"/><stop offset="1" class="g-e"/></linearGradient></defs></svg>
+  <div class="scroll" role="region" tabindex="0" aria-label="Who is on what, by stretch (scrolls sideways)"><div class="chr" role="group" aria-label="Who is on what, by stretch">
+    <div class="chr-row" aria-hidden="true"><span></span><svg class="chr-svg" viewBox="0 0 {{ span }} 26">{% for t in grid.hours %}<text class="chr-h" x="{{ t - lo + 2 }}" y="20">{{ hm(t)[:2] }}</text>{% endfor %}</svg></div>
+    {% for g_row in grid.rows %}<div class="chr-row"><span class="chr-lbl">{{ g_row.name }}</span><svg class="chr-svg" viewBox="0 0 {{ span }} 40">{% for a, b, c in g_row.runs %}{% set word = names.get(c, 'Lunch' if c == 'L' else ('Break' if c == 'B' else 'Nothing yet')) %}<a href="#cp-set" data-cp-run data-who="{{ g_row.name }}" data-from="{{ hm(a) }}" data-to="{{ hm(b) }}" data-letter="{{ c }}"><rect class="{{ 'ch-' ~ c if c else 'ch-X' }}" x="{{ a - lo }}" y="4" width="{{ b - a }}" height="32" rx="3"><title>{{ g_row.name }}: {{ word }} {{ hm(a) }} to {{ hm(b) }}</title></rect>{% if b - a >= 75 and c in ('P', 'C', 'E') %}<text class="chr-t" x="{{ (a + b) / 2 - lo }}" y="26">{{ word }}</text>{% elif b - a >= 15 and c %}<text class="chr-t" x="{{ (a + b) / 2 - lo }}" y="26">{{ c }}</text>{% endif %}</a>{% endfor %}</svg></div>{% endfor %}
+  </div></div>
+  <details class="cp-quarters"><summary>Show quarter hours</summary>
   <div class="scroll" role="region" tabindex="0" aria-label="Who is on what (scrolls sideways)"><table class="cp-grid" data-block="{{ r.min_block }}">
     <thead><tr><th scope="col"><span class="sr-only">Associate</span></th>{% for t in grid.cols %}{% if t % 60 == 0 %}<th scope="col" colspan="4" class="h">{{ hm(t)[:2] }}</th>{% endif %}{% endfor %}</tr></thead>
     <tbody>{% for g_row in grid.rows %}
@@ -46,6 +53,7 @@
         {% for c in g_row.cells %}<td class="c {{ c.cls }}"{% if c.cls != 'off' %} data-cp-cell data-who="{{ g_row.name }}" data-t="{{ hm(c.t) }}" title="{{ g_row.name }}, {{ hm(c.t) }}: {{ names.get(c.letter, 'break or lunch' if c.letter in ('B', 'L') else 'nothing yet') }}"{% endif %}>{{ c.letter }}</td>{% endfor %}</tr>{% endfor %}
     </tbody>
   </table></div>
+  </details>
   <div class="legend3"><span><i class="ch-P"></i>Phone</span><span><i class="ch-C"></i>Chat</span><span><i class="ch-E"></i>Email</span><span><i class="ch-A"></i>All channels</span><span><i class="ch-B"></i>Break or lunch</span></div>
 </section>
 
@@ -58,7 +66,7 @@
     <button type="submit" name="action" value="suggest_week" title="Each working day in turn; up to about 20 seconds a day">Suggest every day</button>
     <button type="submit" name="action" value="copy">Copy {{ full[day] }} to days with the same shifts</button>
   </form>
-  <form method="post" class="cp-row cp-edit" data-cp-edit>
+  <form method="post" class="cp-row cp-edit" data-cp-edit id="cp-set">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="day" value="{{ day }}"><input type="hidden" name="action" value="edit">
     <label>Who <select name="who">{% for p in people %}<option value="{{ p.name }}">{{ p.name }} ({{ p.label }})</option>{% endfor %}</select></label>
     <label>From <input type="time" name="start" step="900" required></label>

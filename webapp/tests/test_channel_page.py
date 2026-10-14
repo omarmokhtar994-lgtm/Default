@@ -193,3 +193,32 @@ class TheWholeWeek(_Page):
         said = self.page()[1]
         self.assertRegex(said, r"Suggested channels for \d+ days in [\d.]+ seconds\. Nothing is kept until you save\.")
         self.assertIn('value="suggest_week"', said)
+
+
+class TheStretches(unittest.TestCase):
+    """Phase AF (C1): Plan channels shows each person's day as stretches (one box per run), each opening the block
+    form with its own times; the quarter-hour table stays, folded under "Show quarter hours"."""
+
+    def test_the_grid_joins_quarters_into_stretches(self):
+        from webapp.channel_page import grid
+        person = {"name": "Associate 01", "start": 600, "end": 1140, "breaks": [("Break 1", None, 15)],
+                  "language": "English", "label": "10:00 - 19:00", "skills": "PC"}
+        plan = {"blocks": {"Associate 01": [(600, 720, "P"), (735, 900, "C")]}, "breaks": {"Associate 01": [720]}}
+        row = grid([person], plan)["rows"][0]
+        self.assertEqual(row["runs"], [(600, 720, "P"), (720, 735, "B"), (735, 900, "C"), (900, 1140, "")])
+
+
+class TheStretchesOnThePage(_Page):
+    @classmethod
+    def setUpClass(cls):
+        cls.start()
+        cls.admin.post(cls.url, data={"csrf_token": token(cls.admin), "day": "Wed", "action": "suggest"})
+
+    def test_each_stretch_opens_the_block_form_and_the_table_stays(self):
+        status, page = self.page()
+        self.assertEqual(status, 200)
+        self.assertRegex(page, r'<a [^>]*data-cp-run data-who="[^"]+" data-from="\d\d:\d\d" data-to="\d\d:\d\d" '
+                               r'data-letter="[PCE]"')
+        self.assertRegex(page, r"<title>Associate \d+: (Phone|Chat|Email) \d\d:\d\d to \d\d:\d\d</title>")
+        self.assertIn("<summary>Show quarter hours</summary>", page)
+        self.assertIn('<table class="cp-grid"', page)

@@ -1011,6 +1011,23 @@ function homeRefresh(now) {
   });
 })();
 
+// Phase AF (C1): a click on a stretch fills in "Set the block" with that stretch's person, times and channel
+(function () {
+  const form = document.querySelector("[data-cp-edit]");
+  if (!form) return;
+  document.addEventListener("click", (event) => {
+    const run = event.target.closest("[data-cp-run]");
+    if (!run) return;
+    event.preventDefault();
+    form.elements.who.value = run.dataset.who;
+    form.elements.start.value = run.dataset.from;
+    form.elements.end.value = run.dataset.to;
+    if ("PCE".includes(run.dataset.letter) && run.dataset.letter) form.elements.channel.value = run.dataset.letter;
+    form.scrollIntoView({ block: "nearest" });
+    form.elements.channel.focus();
+  });
+})();
+
 // Exports (Phase W): the file comes through a script so the page can say what is happening ("Preparing", then
 // "Ready" or what went wrong) instead of loading with no end; without a script the form is a plain download.
 (function () {

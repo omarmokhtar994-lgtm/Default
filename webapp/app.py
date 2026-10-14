@@ -37,6 +37,7 @@ from .channels import check_lines, has_channel_needs, read_channels, requirement
 from .clock import EGYPT, HOME, ZONES, pick_zone, shift as zone_shift, zone_label
 from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, board, glance, hover_tips, now_panel, read_inputs, shift_groups, stitch
 from .coach import actual_shrinkage, corrected_tab
+from .leave import KINDS as LEAVE_KINDS, LeaveBook
 from .shrinkage import ITEMS as SHRINKAGE_ITEMS, day_shrinkage, mapping_from_form, read_mapping
 from .contacts import ContactBook, pick_contact
 from .eta import queue_plan
@@ -277,6 +278,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         app.extensions["schedules"] = book
         queue.schedules = book
         app.extensions["days"] = queue.days = DayBook(app.extensions["store"], book)
+        app.extensions["leave"] = LeaveBook(app.extensions["store"], app.extensions["days"])  # Phase AG
         # Phase AB: RTA changes posted to each LOB's Teams or Slack group, on the notifier's own thread.
         notifier = Notifier(app.extensions["store"], transport=config.get("NOTIFY_TRANSPORT") or post_json,
                             label=ProgramBook(app.extensions["store"]).label, days=app.extensions["days"])
@@ -426,7 +428,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                   "run_week": "week", "run_schedules": "schedules", "program": "analysis", "programs": "programs",
                   "exports_page": "exports", "team_page": "team", "admin_users": "people", "program_setup": "setup",
                   "with_setup": "with", "channel_setup": "channels", "notifications_page": "notify",
-                  "day_wallboard": "wallboard", "me": "me"}
+                  "day_wallboard": "wallboard", "me": "me", "requests_page": "requests"}
     PROGRAM_PAGES = {"overview": "/overview?program={key}", "day": "/day?program={key}", "week": "/week?program={key}",
                      "schedules": "/schedules?program={key}", "analysis": "/programs/{key}",
                      "home": "/?program={key}",  # Home shows the program picked (owner, 2026-10-08)
@@ -473,7 +475,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return {"nav_units": _unit_choices(access.programs()), "nav_unit": key,
                 "nav_date": day.isoformat() if day else None,
                 "nav_label": access.book.label(key) if key else "", "nav_active": active, "nav_target": target,
-                "user_role": role(user)}
+                "user_role": role(user), "nav_requests": _requests_waiting(key, user)}
+
+    def _requests_waiting(key: str, user: Dict[str, Any]) -> int:
+        """Phase AG: leave and swap requests on the program open that this person may decide now."""
+        book = app.extensions.get("leave")
+        return book.count_for(key, user) if book and key and not user["is_associate"] else 0
 
     # ------------------------------------------------------------- theme
     @app.route("/theme", methods=["POST"])
@@ -707,7 +714,124 @@ def create_app(config: Dict[str, Any]) -> Flask:
         """An associate's own week; staff have the whole site instead."""
         if not g.user["is_associate"]:
             return redirect(url_for("home"))
-        return render_template("me.html")
+        key = _my_unit()
+        leave = app.extensions.get("leave")
+        return render_template("me.html", unit=key, kinds=LEAVE_KINDS,
+                               mine=leave.mine(key, g.user["roster_name"]) if leave and key else [])
+
+    def _my_unit() -> str:
+        """The LOB whose schedule has this associate's name ("" when none does yet)."""
+        leave = app.extensions.get("leave")
+        if leave is None:
+            return ""
+        for p in _access().programs():
+            for key in p["units"]:
+                if g.user["roster_name"] in leave.names(key):
+                    return key
+        return ""
+
+    @app.route("/me/leave", methods=["POST"])
+    @login_required
+    def me_leave():  # type: ignore[no-untyped-def]
+        """An associate asks for leave for themselves (the name comes from their account, never the form)."""
+        key = _my_unit()
+        if not g.user["is_associate"] or not key:
+            abort(403, description="Only an associate on a schedule asks for leave here.")
+        first, last = _date(request.form.get("first", "")), _date(request.form.get("last", "")
+                                                                  or request.form.get("first", ""))
+        try:
+            if first is None or last is None:
+                raise ValueError("Pick the first and the last day.")
+            app.extensions["leave"].ask(key, g.user["roster_name"], g.user["id"], request.form.get("kind", ""),
+                                        first, last, request.form.get("note", ""), datetime.now(EGYPT).date())
+        except ValueError as exc:
+            flash(str(exc))
+        else:
+            flash("Sent. Your TM decides first, then the RTA.")
+        return redirect(url_for("me"))
+
+    @app.route("/me/leave/<int:request_id>/cancel", methods=["POST"])
+    @login_required
+    def me_leave_cancel(request_id: int):  # type: ignore[no-untyped-def]
+        try:
+            app.extensions["leave"].cancel(request_id, g.user["id"])
+        except KeyError:
+            abort(404)
+        except ValueError as exc:
+            flash(str(exc))
+        else:
+            flash("Cancelled.")
+        return redirect(url_for("me"))
+
+    # ------------------------------------------------------------- requests (Phase AG)
+    def _requests_unit() -> str:
+        key = clean_program(request.values.get("program", ""))
+        if key and _access().can_open(key):
+            return key
+        units = [k for p in _access().programs() for k in p["units"]]
+        remembered = session.get("unit", "")
+        return remembered if remembered in units else (units[0] if units else "")
+
+    @app.route("/requests")
+    @login_required
+    def requests_page():  # type: ignore[no-untyped-def]
+        """Leave waiting for a decision, each day with what it costs; what was decided lately; balances."""
+        key = _requests_unit()
+        leave = app.extensions.get("leave")
+        waiting = leave.waiting(key) if leave and key else []
+        for r in waiting:
+            r["mine"] = leave.may_decide(r, g.user)
+        return render_template("requests.html", unit=key, label=_unit_filter(key) if key else "", waiting=waiting,
+                               decided=leave.decided(key) if leave and key else [],
+                               manager=bool(g.user["is_admin"] or g.user["is_supervisor"]),
+                               year=datetime.now(EGYPT).year)
+
+    @app.route("/requests/leave/<int:request_id>", methods=["POST"])
+    @login_required
+    def request_leave_decide(request_id: int):  # type: ignore[no-untyped-def]
+        leave = app.extensions["leave"]
+        row = app.extensions["store"].get_leave(request_id)
+        if row is None:
+            abort(404)
+        if not _access().can_open(row["program"]):
+            abort(403, description="This request is on a program that is not one of yours.")
+        try:
+            said = leave.decide(request_id, g.user, request.form.get("decision") == "approve",
+                                request.form.get("reason", ""))
+        except ValueError as exc:
+            said = str(exc)
+        _record("leave_decided", subject=f"{row['associate']}: {row['kind']} {row['first_day']} to {row['last_day']}",
+                detail=said[:300])
+        flash(said)
+        return redirect(url_for("requests_page", program=row["program"]))
+
+    @app.route("/requests/balances", methods=["POST"])
+    @manager_required
+    def request_balances():  # type: ignore[no-untyped-def]
+        """Planned leave balances for a year, one person a line: a name, then the days (pasted from a sheet)."""
+        key = _requests_unit()
+        rows: Dict[str, float] = {}
+        try:
+            year = int(request.form.get("year", "0"))
+            for line in request.form.get("rows", "").splitlines():
+                if not line.strip():
+                    continue
+                parts = re.split(r"[\t,;]", line) if re.search(r"[\t,;]", line) else line.rsplit(" ", 1)
+                if len(parts) < 2:
+                    raise ValueError(f"Give a name and a number of days on each line: {line.strip()[:60]}")
+                try:
+                    rows[" ".join(parts[0].split())] = float(parts[-1].strip())
+                except ValueError:
+                    raise ValueError(f"Give a number of days on each line: {line.strip()[:60]}") from None
+            if not rows:
+                raise ValueError("Paste at least one line: a name, then the days.")
+            count = app.extensions["leave"].set_balances(key, year, rows, g.user["id"])
+        except ValueError as exc:
+            flash(str(exc))
+        else:
+            _record("leave_balances", subject=key, detail=f"{count} for {year}")
+            flash(f"Saved {count} balance{'s' if count != 1 else ''} for {year}.")
+        return redirect(url_for("requests_page", program=key))
 
     # ------------------------------------------------------------- home
     def _plan(runs: list) -> Dict[str, dict]:
@@ -2342,7 +2466,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                          "may_set": bool(g.user["is_admin"] or g.user["is_supervisor"])}
         return render_template("day.html", page=page, problem=problem, program=program, programs=programs, on=on,
                                today=clock_now.date(), tips=tips, at_a_glance=at_a_glance, shrinkage=shrinkage,
-                               now_box=now_box,
+                               now_box=now_box, requests_waiting=_requests_waiting(program, g.user) if now_box else 0,
                                posts=app.extensions["notifier"].statuses(program, on.isoformat())
                                if program and on else {},
                                post_to=SERVICES.get(group["service"], "") if posting else "",

@@ -1381,3 +1381,23 @@ dialog.goto::backdrop { background: rgb(4 8 14 / .55); }
 .goto-list li[aria-selected="true"] a, .goto-list a:hover { background: var(--selected); }
 .goto-none { padding: 10px; color: var(--dim); }
 .goto-hint { margin: 0; padding: 8px 14px 10px; border-top: 1px solid var(--rail); font-size: 0.75rem; color: var(--dim); }
+
+/* Phase AG, T5: requests (leave and swaps) and the menu's count */
+.leftnav nav a .count { margin-left: auto; min-width: 1.4rem; padding: 0 6px; border-radius: 999px; background: var(--short); color: #10141B; font-size: 0.75rem; font-weight: 700; text-align: center; line-height: 1.4rem; }
+.req-list .req { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(0, 3fr) minmax(220px, 1.2fr); gap: 12px 24px; padding: 14px 0; border-top: 1px solid var(--rail); }
+.req-list .req:first-of-type { border-top: 0; }
+.req-who { display: flex; flex-direction: column; gap: 2px; }
+.req-who small, .req-facts { color: var(--dim); }
+.req-what h3 { margin: 0 0 4px; font-size: 1rem; }
+.req-facts { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 6px; }
+.req-days, .req-done { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.req-warn { color: var(--short-ink); }
+.req-ok { color: var(--dim); }
+.req-act form { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+.req-act label { flex: 1 1 100%; }
+.req-bal { display: grid; gap: 10px; max-width: 40rem; }
+.me-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px 16px; align-items: end; }
+.me-form input, .me-form select { font-size: 1rem; }
+form.inline { display: inline; }
+@media (max-width: 760px) { .req-list .req { grid-template-columns: 1fr; } }
+.nb-req { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-weight: 600; }

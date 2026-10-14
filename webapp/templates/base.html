@@ -51,7 +51,9 @@
     {{ navlink('wallboard', url_for('day_wallboard', program=nav_unit), 'Wallboard') }}
     <p class="navhead">This week</p>
     {{ navlink('week', url_for('week_page', program=nav_unit), 'Weeks') }}
-    {{ navlink('schedules', url_for('schedules_for', program=nav_unit), 'Schedules') }}{% endif %}
+    {{ navlink('schedules', url_for('schedules_for', program=nav_unit), 'Schedules') }}
+    <p class="navhead">Requests</p>
+    <a href="{{ url_for('requests_page', program=nav_unit) }}"{% if nav_active == 'requests' %} class="on" aria-current="page"{% endif %}>Leave and swaps{% if nav_requests %} <span class="count" title="Waiting for you">{{ nav_requests }}</span>{% endif %}</a>{% endif %}
     <p class="navhead">Insights</p>
     {% if nav_unit %}{{ navlink('analysis', url_for('program', name=nav_unit), 'Analysis') }}{% endif %}
     {{ navlink('programs', url_for('programs'), 'Programs') }}

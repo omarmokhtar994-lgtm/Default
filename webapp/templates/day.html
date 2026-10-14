@@ -64,6 +64,7 @@
 <section class="glance" aria-label="Today at a glance">{% for g in at_a_glance %}<p class="glance-t {{ g.level }}"><small>{{ g.label }}</small><b>{% if g.label == 'Channel warnings' %}<a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='channels') }}">{{ g.value }}</a>{% else %}{{ g.value }}{% endif %}</b><small>{{ g.note }}</small></p>{% endfor %}</section>
 {% if now_box %}<section class="nowbox" aria-labelledby="now-h">
   <h2 id="now-h">Now, {{ hm(from_now) }}</h2>
+  {% if requests_waiting %}<p class="nb-req"><span class="ico i-tray" aria-hidden="true"></span><a href="{{ url_for('requests_page', program=program) }}">{{ requests_waiting }} request{{ 's' if requests_waiting != 1 }} waiting for you</a></p>{% endif %}
   <div class="nb-cols">
     <div><h3>Next hour</h3>{% if now_box.next %}<ul class="nb-list">{% for n in now_box.next %}<li><time>{{ hm(n.t) }}</time><a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, who=n.name) }}">{{ n.name }}</a><span class="dim">{{ n.what }}</span></li>{% endfor %}</ul>{% else %}<p class="empty">No break, start or end in the next hour.</p>{% endif %}</div>
     <div><h3>Needs attention</h3>{% if now_box.attention %}<ul class="nb-alerts">{% for a in now_box.attention %}<li class="{{ a.level }}"><span class="ico i-warning" aria-hidden="true"></span><span>{{ a.text }}</span></li>{% endfor %}</ul>{% else %}<p class="empty">Nothing needs attention in the next three hours.</p>{% endif %}</div>

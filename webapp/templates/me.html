@@ -5,4 +5,23 @@
   <h1>My week</h1>
   <p class="byline">{{ user.roster_name }}</p>
 </div></div>
+{% if unit %}
+<section class="panel" aria-labelledby="ask-h">
+  <h2 id="ask-h">Request leave</h2>
+  <form method="post" action="{{ url_for('me_leave') }}" class="me-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Type <select name="kind">{% for k in kinds %}<option>{{ k }}</option>{% endfor %}</select></label>
+    <label>From <input type="date" name="first" required></label>
+    <label>To <input type="date" name="last" required></label>
+    <label>Note for your TM <span class="hint">Optional</span><input name="note" maxlength="200" autocomplete="off"></label>
+    <button class="primary">Send the request</button>
+  </form>
+</section>
+<section class="panel" aria-labelledby="mine-h">
+  <h2 id="mine-h">My requests</h2>
+  <ul class="req-done">{% for r in mine %}<li><b>{{ r.label }}</b>: {{ {'waiting_tm': 'waiting for your TM', 'waiting_rta': 'approved by your TM, waiting for the RTA', 'applying': 'being approved'}.get(r.status, r.status) }}{% if r.reason %} ({{ r.reason }}){% endif %}
+    {% if r.status in ('waiting_tm', 'waiting_rta') %}<form method="post" action="{{ url_for('me_leave_cancel', request_id=r.id) }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="quiet">Cancel</button></form>{% endif %}</li>
+  {% else %}<li class="empty">No requests yet.</li>{% endfor %}</ul>
+</section>
+{% else %}<p class="empty">Your name is not on a schedule yet. Your planner adds it when your week is planned.</p>{% endif %}
 {% endblock %}

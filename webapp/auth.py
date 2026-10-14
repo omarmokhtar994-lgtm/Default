@@ -12,7 +12,8 @@ from typing import Any, Callable, Dict, Optional
 from flask import abort, current_app, g, redirect, request, session, url_for
 
 # Phase AG: the only pages an associate's account opens; anything else sends them to My week (or is refused).
-ASSOCIATE_PAGES = frozenset({"static", "login", "logout", "set_theme", "change_password", "me"})
+ASSOCIATE_PAGES = frozenset({"static", "login", "logout", "set_theme", "change_password", "me", "me_leave",
+                             "me_leave_cancel"})
 SAFE_NEXT = re.compile(r"/(?![/\\])[^\x00-\x20\x7f\\]*")  # a path here: no second slash, no backslash or control character
 
 

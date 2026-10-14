@@ -97,6 +97,33 @@ create table if not exists operating_days (
     user_id integer,
     at real not null
 );
+create table if not exists leave_requests (
+    id integer primary key autoincrement,
+    program text not null,
+    associate text not null,
+    user_id integer not null,
+    kind text not null,
+    first_day text not null,
+    last_day text not null,
+    note text not null default '',
+    status text not null default 'waiting_tm',
+    asked real not null,
+    tm_id integer,
+    tm_at real,
+    rta_id integer,
+    rta_at real,
+    reason text not null default '',
+    outcome text not null default ''
+);
+create table if not exists leave_balances (
+    program text not null,
+    associate text not null,
+    year integer not null,
+    days real not null,
+    user_id integer,
+    at real not null,
+    primary key (program, associate, year)
+);
 create table if not exists shrinkage_maps (
     program text primary key,
     mapping text not null,
@@ -701,6 +728,57 @@ class Store:
             row = db.execute("select start from operating_days where program = ?", (program,)).fetchone()
         return int(row["start"]) if row else None
 
+    # ------------------------------------------------------------------ leave (Phase AG)
+    def add_leave(self, **fields: Any) -> int:
+        fields.setdefault("asked", time.time())
+        names = ", ".join(fields)
+        with self._db() as db:
+            cur = db.execute(f"insert into leave_requests ({names}) values ({', '.join('?' for _ in fields)})",
+                             tuple(fields.values()))
+            return int(cur.lastrowid)
+
+    def get_leave(self, request_id: int) -> Optional[Dict[str, Any]]:
+        with self._db() as db:
+            row = db.execute("select * from leave_requests where id = ?", (request_id,)).fetchone()
+        return dict(row) if row else None
+
+    def list_leave(self, program: Optional[str] = None, associate: Optional[str] = None,
+                   statuses: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        where, args = [], []
+        for column, value in (("program", program), ("associate", associate)):
+            if value is not None:
+                where.append(f"{column} = ?")
+                args.append(value)
+        if statuses:
+            where.append(f"status in ({', '.join('?' for _ in statuses)})")
+            args += statuses
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                "select * from leave_requests" + (" where " + " and ".join(where) if where else "")
+                + " order by first_day, id", args)]
+
+    LEAVE_FIELDS = ("status", "tm_id", "tm_at", "rta_id", "rta_at", "reason", "outcome")
+
+    def move_leave(self, request_id: int, was: str, **fields: Any) -> bool:
+        """Change a request only while its status is still ``was`` (two people deciding at once: one wins)."""
+        if set(fields) - set(self.LEAVE_FIELDS):
+            raise ValueError("Not a leave request's detail.")
+        names = ", ".join(f"{k} = ?" for k in fields)
+        with self._db() as db:
+            return db.execute(f"update leave_requests set {names} where id = ? and status = ?",
+                              (*fields.values(), request_id, was)).rowcount == 1
+
+    def set_leave_balance(self, program: str, associate: str, year: int, days: float, user_id: Optional[int]) -> None:
+        with self._db() as db:
+            db.execute("insert or replace into leave_balances (program, associate, year, days, user_id, at)"
+                       " values (?, ?, ?, ?, ?, ?)", (program, associate, year, days, user_id, time.time()))
+
+    def get_leave_balance(self, program: str, associate: str, year: int) -> Optional[float]:
+        with self._db() as db:
+            row = db.execute("select days from leave_balances where program = ? and associate = ? and year = ?",
+                             (program, associate, year)).fetchone()
+        return row[0] if row else None
+
     def get_shrinkage_map(self, program: str) -> Optional[Dict[str, Any]]:
         with self._db() as db:
             row = db.execute("select * from shrinkage_maps where program = ?", (program,)).fetchone()
@@ -1166,6 +1244,10 @@ class Store:
             db.execute("delete from shrinkage_maps where program = ?", (old,))
             db.execute("update or ignore operating_days set program = ? where program = ?", (new, old))
             db.execute("delete from operating_days where program = ?", (old,))
+            # Phase AG: leave requests and balances go with the name
+            db.execute("update leave_requests set program = ? where program = ?", (new, old))
+            db.execute("update or ignore leave_balances set program = ? where program = ?", (new, old))
+            db.execute("delete from leave_balances where program = ?", (old,))
             # group posts (Phase AB) go with the name too; a name that has its own settings keeps them
             db.execute("update or ignore notify_settings set unit = ? where unit = ?", (new, old))
             db.execute("delete from notify_settings where unit = ?", (old,))

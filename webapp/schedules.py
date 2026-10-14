@@ -400,6 +400,33 @@ class ScheduleBook:
                                   problems=json.dumps([p["text"] for p in new]))
             return int(row["id"])
 
+    def change_many(self, schedule_id: int, user_id: int, cells: List[Tuple[str, str, str]], reason: str,
+                    label: str) -> int:
+        """Several (name, day, value) changes saved as one new version named ``label``, checked once (Phase AG: an
+        approved leave or swap). Returns the version saved in; cells already holding their value are left out."""
+        first = self.store.get_schedule(schedule_id)
+        if first is None:
+            raise KeyError(schedule_id)
+        with self._lock(first["run_id"]):
+            row = self.store.get_schedule(schedule_id)
+            olds = {(a["name"], d): a["days"][i] for a in json.loads(row["week"] or "{}").get("associates", [])
+                    for i, d in enumerate(DAYS)}
+            todo = [(n, d, v) for n, d, v in cells if olds.get((n, d), "").strip().casefold() != v.strip().casefold()]
+            if not todo:
+                return int(row["id"])
+
+            def edit(src: Path, dst: Path) -> None:
+                apply_change(src, dst, *todo[0])
+                for cell in todo[1:]:
+                    apply_change(dst, dst, *cell)
+
+            row, new = self._save(row, user_id, edit, {(n, d) for n, d, _ in todo}, fresh=True, label=label)
+            for name, day, value in todo:
+                self.store.add_change(schedule_id=row["id"], user_id=user_id, associate=name, day=day,
+                                      old=olds.get((name, day), ""), new=value, reason=reason, severity=worst(new),
+                                      problems=json.dumps([p["text"] for p in new]))
+            return int(row["id"])
+
     def swap(self, schedule_id: int, user_id: int, first: str, second: str, reason: str) -> int:
         """Two people swap slots (each keeps the other's shifts and breaks); logged once per person."""
         start = self.store.get_schedule(schedule_id)

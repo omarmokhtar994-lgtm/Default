@@ -1,0 +1,46 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{% extends "base.html" %}{% block title %}Requests on Team Scheduler{% endblock %}
+{% block content %}
+<div class="phead"><div>
+  <h1>Leave and swaps</h1>
+  <p class="byline">{{ label or 'Pick a program' }}. The TM approves first, then the RTA; the RTA's approval changes the schedule in use.</p>
+</div></div>
+<section class="panel req-list" aria-labelledby="wait-h">
+  <h2 id="wait-h">Waiting</h2>
+  {% for r in waiting %}
+  <article class="req">
+    <div class="req-who"><b>{{ r.associate }}</b><small>Asked {{ when(r.asked) }}</small>{% if r.note %}<small>“{{ r.note }}”</small>{% endif %}</div>
+    <div class="req-what">
+      <h3>{{ r.label }}</h3>
+      <p class="req-facts">{% if r.balance_text %}<span{% if r.short %} class="req-warn"{% endif %}>{{ r.balance_text }}</span>{% endif %}
+        <span>{{ 'Waiting for the TM' if r.step == 'tm' else 'Approved by the TM, waiting for the RTA' }}</span></p>
+      <ul class="req-days">{% for d in r.days %}
+        <li><b>{{ d.date.strftime('%a %d %b') }}</b> {{ d.cell or ('no schedule yet' if not d.kept else 'not on the schedule') }}{% if d.impact %}: <span class="{{ 'req-ok' if not d.impact.short else 'req-warn' }}">{{ d.impact.text }}</span>{% for t in d.impact.languages + d.impact.channels %} <span class="req-warn">{{ t }}.</span>{% endfor %}{% endif %}</li>
+      {% endfor %}</ul>
+    </div>
+    <div class="req-act">{% if r.mine %}
+      <form method="post" action="{{ url_for('request_leave_decide', request_id=r.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="primary" name="decision" value="approve"><span class="ico i-check-circle" aria-hidden="true"></span>Approve</button>
+        <label>Reason, if you refuse <input name="reason" maxlength="200" autocomplete="off"></label>
+        <button name="decision" value="refuse">Refuse</button>
+      </form>{% else %}<p class="hint">{{ 'Waiting for a supervisor or an admin.' if r.step == 'tm' else 'Another staff member gives the RTA approval.' }}</p>{% endif %}
+    </div>
+  </article>
+  {% else %}<p class="empty">Nothing is waiting. Requests appear here when associates send them from My week.</p>{% endfor %}
+</section>
+{% if decided %}<section class="panel" aria-labelledby="done-h">
+  <h2 id="done-h">Decided lately</h2>
+  <ul class="req-done">{% for r in decided %}<li><b>{{ r.associate }}</b> {{ r.label }}: {{ r.status }}{% if r.outcome %}. {{ r.outcome }}{% endif %}{% if r.reason %} ({{ r.reason }}){% endif %}</li>{% endfor %}</ul>
+</section>{% endif %}
+{% if manager and unit %}<section class="panel" aria-labelledby="bal-h">
+  <h2 id="bal-h">Planned leave balances</h2>
+  <form method="post" action="{{ url_for('request_balances') }}" class="req-bal">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="program" value="{{ unit }}">
+    <label>Year <input name="year" type="number" min="2000" max="2100" value="{{ year }}" required></label>
+    <label>One person a line: the name on the schedule, then the days <textarea name="rows" rows="4" placeholder="Associate 14	11" required></textarea></label>
+    <button>Save balances</button>
+  </form>
+</section>{% endif %}
+{% endblock %}

@@ -1303,3 +1303,10 @@ ul.log .post-st { font-size: 0.8125rem; margin-left: 4px; }
   font-size: 0.8125rem; font-variant-numeric: tabular-nums; pointer-events: none; }
 .tl-tip b { font-size: 0.875rem; }
 .tl-tip span { color: var(--dim); }
+
+/* Phase AF (D6): today at a glance */
+.glance { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; margin: 0 0 10px; }
+.glance-t { margin: 0; padding: 8px 10px; border: 1px solid var(--rail); border-radius: 6px; }
+.glance-t b { display: block; font-family: var(--display); font-size: 1.125rem; font-variant-numeric: tabular-nums; }
+.glance-t small { display: block; color: var(--dim); font-size: 0.8125rem; overflow-wrap: anywhere; }
+.glance-t.warn { border-color: var(--short); } .glance-t.bad { border-color: var(--gap); }

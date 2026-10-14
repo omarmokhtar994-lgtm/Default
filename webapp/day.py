@@ -506,6 +506,52 @@ def hover_tips(view: Dict[str, Any], now: int) -> Dict[Tuple[str, int], Dict[str
     return out
 
 
+def _stretches(starts: List[int], step: int, most: int = 3) -> str:
+    """Interval starts as joined stretches: "21:00 to 23:00, 01:00 to 01:30" (the first ``most``, then how many more)."""
+    runs: List[List[int]] = []
+    for t in sorted(starts):
+        if runs and runs[-1][1] == t:
+            runs[-1][1] = t + step
+        else:
+            runs.append([t, t + step])
+    said = ", ".join(f"{_hm(a)} to {_hm(b)}" for a, b in runs[:most])
+    return said + (f" and {len(runs) - most} more" if len(runs) > most else "")
+
+
+def glance(view: Dict[str, Any], now: int) -> List[Dict[str, str]]:
+    """Phase AF (D6): today at a glance, as tiles (label, value, note, level): on shift now (or that day), the
+    intervals short of demand and above it, the language gaps (which language, when) and the channel warnings."""
+    step = view["interval"]
+    def count(n: int) -> str:
+        return f"{n} interval{'s' if n != 1 else ''}"
+    if 0 <= now < 1440:
+        here = [s for lane in view["lanes"] for s in lane["segments"] if s["start"] <= now < s["end"]]
+        label, note = "On shift now", f"at {_hm(now)}"
+    else:
+        here = [s for lane in view["lanes"] for s in lane["segments"] if s["offset"] == 0]
+        label, note = "On shift that day", "planned shifts"
+    present = sum(1 for s in here if s["status"] not in ABSENT)
+    tiles = [{"label": label, "value": f"{present} of {len(here)}", "note": note,
+              "level": "warn" if present < len(here) else "ok"}]
+    short = [c["t"] for c in view["cells"] if c["pm"] is not None and c["pm"] < 0]
+    over = [c["t"] for c in view["cells"] if c["pm"] is not None and c["pm"] > 0]
+    tiles.append({"label": "Short of demand", "value": count(len(short)), "note": _stretches(short, step) or "none",
+                  "level": "warn" if short else "ok"})
+    tiles.append({"label": "Above demand", "value": count(len(over)), "note": _stretches(over, step) or "none",
+                  "level": "ok"})
+    gaps = [(l["name"], [c["t"] for c in l["cells"] if c["cls"] in ("bad", "warn")]) for l in view["languages"]]
+    gaps = [(name, ts) for name, ts in gaps if ts]
+    tiles.append({"label": "Language gaps", "value": ", ".join(name for name, _ in gaps) or "None",
+                  "note": "; ".join(f"{name} {_stretches(ts, step, 2)}" for name, ts in gaps) or "every language covered",
+                  "level": "bad" if gaps else "ok"})
+    if view.get("channels"):
+        warnings = view["channels"]["warnings"]
+        tiles.append({"label": "Channel warnings", "value": str(len(warnings)),
+                      "note": warnings[0]["text"].split(":")[0] if warnings else "none",
+                      "level": "warn" if warnings else "ok"})
+    return tiles
+
+
 def _across_cancel(seg: Dict[str, Any], first: int, second: int) -> bool:
     """Whether a cancelled break sits between breaks ``first`` and ``second`` (plan order) of ``seg``: the long gap
     a cancel leaves is wanted, so the program's maximum gap is not held against it (Phase AD)."""

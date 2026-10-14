@@ -350,6 +350,14 @@ class TheChannelsTab(unittest.TestCase):
         self.assertRegex(page, r'<rect class="ch-P"[^>]*><title>Associate 031: Phone 12:00 to 14:00</title>')
         self.assertRegex(page, r'<rect class="ch-B"[^>]*><title>Associate 031: Break 1 14:00 to 14:15</title>')
 
+    def test_today_at_a_glance_tiles(self):
+        # Phase AF (D6): tiles above the day's figures, the channel warnings linking to this tab
+        page = self.page()
+        self.assertIn('<section class="glance" aria-label="Today at a glance">', page)
+        for label in ("Short of demand", "Above demand", "Language gaps", "Channel warnings"):
+            self.assertIn(f"<small>{label}</small>", page)
+        self.assertIn('aria-label="The day in numbers"', page)  # the line of figures stays
+
     def test_the_tab_offers_a_channel_change_with_a_preview(self):
         # Phase AF (C3): a stretch fills in "Change a channel"; Preview asks the server, Apply keeps it
         page = self.page()

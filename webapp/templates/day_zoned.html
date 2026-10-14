@@ -25,7 +25,7 @@
   </form>{% endif %}
   {% if view %}
   <h3>Who is on</h3>
-  <div class="zd-tl" role="img" aria-label="Shifts from {{ view.cells[0].label }}, one row per shift">
+  <div class="zd-tl" role="group" aria-label="Shifts from {{ view.cells[0].label }}, one row per shift">
     <div class="zd-hours" aria-hidden="true">{% for x, label in view.hours %}<span>{{ label }}</span>{% endfor %}</div>
     {% for lane in view.lanes %}<div class="zd-row"><span class="zd-who"><b>{{ lane.name }}</b><small>{{ lane.language }} · {{ lane.label }}{% if lane.status != 'Present' %} · {{ lane.status|lower }}{% endif %}</small></span>
       <svg viewBox="0 0 1440 20" preserveAspectRatio="none" class="zd-track"><rect class="tl-bar{% if lane.status in ('Unplanned leave', 'Sick', 'Public holiday') %} gone{% endif %}" x="{{ [lane.start, 0]|max }}" y="3" width="{{ [lane.end, 1440]|min - [lane.start, 0]|max }}" height="14" rx="3"><title>{{ lane.name }}: {{ lane.label }}</title></rect>{% for b in lane.breaks if b.start + b.minutes > 0 and b.start < 1440 %}<rect class="zd-brk" x="{{ [b.start, 0]|max }}" y="3" width="{{ b.minutes }}" height="14"><title>{{ b.kind }}</title></rect>{% endfor %}</svg></div>{% else %}<p class="empty">Nobody is on shift in this window.</p>{% endfor %}

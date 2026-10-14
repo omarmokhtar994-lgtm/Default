@@ -23,5 +23,19 @@
     {% if r.status in ('waiting_tm', 'waiting_rta') %}<form method="post" action="{{ url_for('me_leave_cancel', request_id=r.id) }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="quiet">Cancel</button></form>{% endif %}</li>
   {% else %}<li class="empty">No requests yet.</li>{% endfor %}</ul>
 </section>
+<section class="panel" aria-labelledby="swap-h">
+  <h2 id="swap-h">Offer a swap</h2>
+  <form method="get" action="{{ url_for('me') }}" class="me-form">
+    <label>Day <input type="date" name="swap" value="{{ swap_day.isoformat() if swap_day else '' }}" required></label>
+    <button>Find colleagues</button>
+  </form>
+  {% if swap_day %}<p class="hint">Only colleagues whose shift keeps the rules are listed: rest between shifts, language and channels.</p>
+  <ul class="req-done">{% for c in offers %}<li><b>{{ c.name }}</b> {{ c.cell }}
+    <form method="post" action="{{ url_for('me_swap') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="day" value="{{ swap_day.isoformat() }}"><input type="hidden" name="other" value="{{ c.name }}"><button class="quiet">Offer</button></form></li>
+  {% else %}<li class="empty">Nobody can take your shift that day within the rules.</li>{% endfor %}</ul>{% endif %}
+  {% if swaps %}<h3>My swaps</h3><ul class="req-done">{% for w in swaps %}<li><b>{{ w.asker if w.other == user.roster_name else w.other }}</b> {{ w.label }}: {{ w.status_words }}
+    {% if w.status == 'waiting_other' and w.other == user.roster_name %}<form method="post" action="{{ url_for('me_swap_answer', swap_id=w.id, action='answer') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="quiet" name="decision" value="accept">Accept</button><button class="quiet" name="decision" value="decline">Decline</button></form>{% endif %}
+    {% if w.status in ('waiting_other', 'waiting_tm') and w.asker == user.roster_name %}<form method="post" action="{{ url_for('me_swap_answer', swap_id=w.id, action='cancel') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="quiet">Cancel</button></form>{% endif %}</li>{% endfor %}</ul>{% endif %}
+</section>
 {% else %}<p class="empty">Your name is not on a schedule yet. Your planner adds it when your week is planned.</p>{% endif %}
 {% endblock %}

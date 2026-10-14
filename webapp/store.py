@@ -115,6 +115,24 @@ create table if not exists leave_requests (
     reason text not null default '',
     outcome text not null default ''
 );
+create table if not exists swap_requests (
+    id integer primary key autoincrement,
+    program text not null,
+    day text not null,
+    asker text not null,
+    asker_user integer not null,
+    other text not null,
+    asker_cell text not null,
+    other_cell text not null,
+    note text not null default '',
+    status text not null default 'waiting_other',
+    asked real not null,
+    answered_at real,
+    decided_by integer,
+    decided_at real,
+    reason text not null default '',
+    outcome text not null default ''
+);
 create table if not exists leave_balances (
     program text not null,
     associate text not null,
@@ -768,6 +786,44 @@ class Store:
             return db.execute(f"update leave_requests set {names} where id = ? and status = ?",
                               (*fields.values(), request_id, was)).rowcount == 1
 
+    def add_swap(self, **fields: Any) -> int:
+        fields.setdefault("asked", time.time())
+        with self._db() as db:
+            cur = db.execute(f"insert into swap_requests ({', '.join(fields)}) values ({', '.join('?' for _ in fields)})",
+                             tuple(fields.values()))
+            return int(cur.lastrowid)
+
+    def get_swap(self, swap_id: int) -> Optional[Dict[str, Any]]:
+        with self._db() as db:
+            row = db.execute("select * from swap_requests where id = ?", (swap_id,)).fetchone()
+        return dict(row) if row else None
+
+    def list_swaps(self, program: Optional[str] = None, statuses: Optional[List[str]] = None,
+                   day: Optional[str] = None) -> List[Dict[str, Any]]:
+        where, args = [], []
+        for column, value in (("program", program), ("day", day)):
+            if value is not None:
+                where.append(f"{column} = ?")
+                args.append(value)
+        if statuses:
+            where.append(f"status in ({', '.join('?' for _ in statuses)})")
+            args += statuses
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                "select * from swap_requests" + (" where " + " and ".join(where) if where else "") + " order by day, id",
+                args)]
+
+    SWAP_FIELDS = ("status", "answered_at", "decided_by", "decided_at", "reason", "outcome")
+
+    def move_swap(self, swap_id: int, was: str, **fields: Any) -> bool:
+        """Change a swap only while its status is still ``was``."""
+        if set(fields) - set(self.SWAP_FIELDS):
+            raise ValueError("Not a swap's detail.")
+        names = ", ".join(f"{k} = ?" for k in fields)
+        with self._db() as db:
+            return db.execute(f"update swap_requests set {names} where id = ? and status = ?",
+                              (*fields.values(), swap_id, was)).rowcount == 1
+
     def set_leave_balance(self, program: str, associate: str, year: int, days: float, user_id: Optional[int]) -> None:
         with self._db() as db:
             db.execute("insert or replace into leave_balances (program, associate, year, days, user_id, at)"
@@ -1246,6 +1302,7 @@ class Store:
             db.execute("delete from operating_days where program = ?", (old,))
             # Phase AG: leave requests and balances go with the name
             db.execute("update leave_requests set program = ? where program = ?", (new, old))
+            db.execute("update swap_requests set program = ? where program = ?", (new, old))
             db.execute("update or ignore leave_balances set program = ? where program = ?", (new, old))
             db.execute("delete from leave_balances where program = ?", (old,))
             # group posts (Phase AB) go with the name too; a name that has its own settings keeps them

@@ -11,6 +11,7 @@ logged with who and when. Kept 13 months, like the schedules.
 from __future__ import annotations
 
 import contextvars
+import copy
 import functools
 import inspect
 import json
@@ -82,6 +83,21 @@ def week_start(on: date) -> date:
 
 def day_index(on: date) -> int:
     return (on.weekday() + 1) % 7  # Sunday = 0
+
+
+def swapped_week(week: Dict[str, Any], day: int, first: str, second: str) -> Dict[str, Any]:
+    """A copy of ``week`` where two people swap their shift, breaks and channel stretches on ``day`` (Phase AG)."""
+    out = copy.deepcopy(week)
+    other = {first: second, second: first}
+    cells = {a["name"]: a["days"][day] for a in out.get("associates", []) if a["name"] in other}
+    for a in out.get("associates", []):
+        if a["name"] in other and other[a["name"]] in cells:
+            a["days"][day] = cells[other[a["name"]]]
+    for key in ("breaks", "channels"):
+        for item in out.get(key) or []:
+            if item.get("day") == DAYS[day] and item.get("associate") in other:
+                item["associate"] = other[item["associate"]]
+    return out
 
 
 def hm(minute: int) -> str:
@@ -488,6 +504,8 @@ class DayBook:
         if row is None:
             return None
         week = self._week(row)
+        if extra and extra.get("swap"):  # Phase AG: two people swapping this day, counted as if done
+            week = swapped_week(week, day_index(on), *extra["swap"])
         source = self.book.input_path(row["run_id"])
         if not source.is_file():
             raise ValueError(f"The input workbook kept with {row['label']} is missing, so the day cannot be worked "

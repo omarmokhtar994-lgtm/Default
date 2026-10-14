@@ -29,9 +29,28 @@
   </article>
   {% else %}<p class="empty">Nothing is waiting. Requests appear here when associates send them from My week.</p>{% endfor %}
 </section>
-{% if decided %}<section class="panel" aria-labelledby="done-h">
+<section class="panel req-list" aria-labelledby="swap-h">
+  <h2 id="swap-h">Swaps</h2>
+  {% for w in swaps %}
+  <article class="req">
+    <div class="req-who"><b>{{ w.asker }} and {{ w.other }}</b><small>Asked {{ when(w.asked) }}</small>{% if w.note %}<small>“{{ w.note }}”</small>{% endif %}</div>
+    <div class="req-what"><h3>{{ w.label }}</h3><p class="req-facts"><span>{{ w.status_words|capitalize }}</span></p></div>
+    <div class="req-act">{% if w.status == 'waiting_tm' and manager %}
+      <form method="post" action="{{ url_for('request_swap_decide', swap_id=w.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="primary" name="decision" value="approve"><span class="ico i-check-circle" aria-hidden="true"></span>Approve</button>
+        <label>Reason, if you refuse <input name="reason" maxlength="200" autocomplete="off"></label>
+        <button name="decision" value="refuse">Refuse</button>
+      </form>
+      <p class="hint">Approving swaps the two shifts in the schedule in use, with their breaks and channels, after checking the rules again.</p>
+    {% elif w.status == 'waiting_tm' %}<p class="hint">A supervisor or an admin approves swaps.</p>{% else %}<p class="hint">Waiting for {{ w.other }} to accept.</p>{% endif %}</div>
+  </article>
+  {% else %}<p class="empty">No swaps waiting. Associates offer them from My week, to colleagues whose shift keeps the rules.</p>{% endfor %}
+</section>
+{% if decided or swaps_decided %}<section class="panel" aria-labelledby="done-h">
   <h2 id="done-h">Decided lately</h2>
   <ul class="req-done">{% for r in decided %}<li><b>{{ r.associate }}</b> {{ r.label }}: {{ r.status }}{% if r.outcome %}. {{ r.outcome }}{% endif %}{% if r.reason %} ({{ r.reason }}){% endif %}</li>{% endfor %}</ul>
+  <ul class="req-done">{% for w in swaps_decided %}<li><b>{{ w.asker }} and {{ w.other }}</b> swap, {{ w.label }}: {{ w.status_words }}{% if w.outcome %}. {{ w.outcome }}{% endif %}{% if w.reason %} ({{ w.reason }}){% endif %}</li>{% endfor %}</ul>
 </section>{% endif %}
 {% if manager and unit %}<section class="panel" aria-labelledby="bal-h">
   <h2 id="bal-h">Planned leave balances</h2>

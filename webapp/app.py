@@ -38,6 +38,7 @@ from .clock import EGYPT, HOME, ZONES, pick_zone, shift as zone_shift, zone_labe
 from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, board, glance, hover_tips, now_panel, read_inputs, shift_groups, stitch
 from .coach import actual_shrinkage, corrected_tab
 from .leave import KINDS as LEAVE_KINDS, LeaveBook
+from .swaps import SwapBook
 from .shrinkage import ITEMS as SHRINKAGE_ITEMS, day_shrinkage, mapping_from_form, read_mapping
 from .contacts import ContactBook, pick_contact
 from .eta import queue_plan
@@ -279,6 +280,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         queue.schedules = book
         app.extensions["days"] = queue.days = DayBook(app.extensions["store"], book)
         app.extensions["leave"] = LeaveBook(app.extensions["store"], app.extensions["days"])  # Phase AG
+        app.extensions["swaps"] = SwapBook(app.extensions["store"], app.extensions["days"])
         # Phase AB: RTA changes posted to each LOB's Teams or Slack group, on the notifier's own thread.
         notifier = Notifier(app.extensions["store"], transport=config.get("NOTIFY_TRANSPORT") or post_json,
                             label=ProgramBook(app.extensions["store"]).label, days=app.extensions["days"])
@@ -479,8 +481,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
 
     def _requests_waiting(key: str, user: Dict[str, Any]) -> int:
         """Phase AG: leave and swap requests on the program open that this person may decide now."""
-        book = app.extensions.get("leave")
-        return book.count_for(key, user) if book and key and not user["is_associate"] else 0
+        book, swaps = app.extensions.get("leave"), app.extensions.get("swaps")
+        if not (book and key) or user["is_associate"]:
+            return 0
+        return book.count_for(key, user) + swaps.count_for(key, user)
 
     # ------------------------------------------------------------- theme
     @app.route("/theme", methods=["POST"])
@@ -715,9 +719,16 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if not g.user["is_associate"]:
             return redirect(url_for("home"))
         key = _my_unit()
-        leave = app.extensions.get("leave")
+        leave, swaps = app.extensions.get("leave"), app.extensions.get("swaps")
+        name = g.user["roster_name"]
+        swap_day = _date(request.args.get("swap", ""))
+        offers = []
+        if key and swap_day:
+            offers = [c for c in swaps.candidates(key, swap_day, name)
+                      if c["ok"] and swaps.account(key, c["name"]) is not None]
         return render_template("me.html", unit=key, kinds=LEAVE_KINDS,
-                               mine=leave.mine(key, g.user["roster_name"]) if leave and key else [])
+                               mine=leave.mine(key, name) if leave and key else [],
+                               swaps=swaps.mine(key, name) if swaps and key else [], swap_day=swap_day, offers=offers)
 
     def _my_unit() -> str:
         """The LOB whose schedule has this associate's name ("" when none does yet)."""
@@ -763,6 +774,60 @@ def create_app(config: Dict[str, Any]) -> Flask:
             flash("Cancelled.")
         return redirect(url_for("me"))
 
+    @app.route("/me/swap", methods=["POST"])
+    @login_required
+    def me_swap():  # type: ignore[no-untyped-def]
+        """An associate offers a colleague a swap of one day's shifts (their own name comes from their account)."""
+        key = _my_unit()
+        if not g.user["is_associate"] or not key:
+            abort(403, description="Only an associate on a schedule offers swaps here.")
+        on, other = _date(request.form.get("day", "")), " ".join(request.form.get("other", "").split())
+        try:
+            if on is None or not other:
+                raise ValueError("Pick a day and a colleague.")
+            app.extensions["swaps"].offer(key, on, g.user["roster_name"], g.user["id"], other,
+                                          request.form.get("note", ""), datetime.now(EGYPT).date())
+        except ValueError as exc:
+            flash(str(exc))
+        else:
+            flash(f"Sent to {other}. Once they accept, your TM decides.")
+        return redirect(url_for("me"))
+
+    @app.route("/me/swap/<int:swap_id>/<action>", methods=["POST"])
+    @login_required
+    def me_swap_answer(swap_id: int, action: str):  # type: ignore[no-untyped-def]
+        swaps = app.extensions["swaps"]
+        try:
+            if action == "answer":
+                flash(swaps.answer(swap_id, g.user, request.form.get("decision") == "accept"))
+            elif action == "cancel":
+                swaps.cancel(swap_id, g.user["id"])
+                flash("Cancelled.")
+            else:
+                abort(404)
+        except KeyError:
+            abort(404)
+        except ValueError as exc:
+            flash(str(exc))
+        return redirect(url_for("me"))
+
+    @app.route("/requests/swap/<int:swap_id>", methods=["POST"])
+    @login_required
+    def request_swap_decide(swap_id: int):  # type: ignore[no-untyped-def]
+        row = app.extensions["store"].get_swap(swap_id)
+        if row is None:
+            abort(404)
+        if not _access().can_open(row["program"]):
+            abort(403, description="This request is on a program that is not one of yours.")
+        try:
+            said = app.extensions["swaps"].decide(swap_id, g.user, request.form.get("decision") == "approve",
+                                                  request.form.get("reason", ""))
+        except ValueError as exc:
+            said = str(exc)
+        _record("swap_decided", subject=f"{row['asker']} and {row['other']}, {row['day']}", detail=said[:300])
+        flash(said)
+        return redirect(url_for("requests_page", program=row["program"]))
+
     # ------------------------------------------------------------- requests (Phase AG)
     def _requests_unit() -> str:
         key = clean_program(request.values.get("program", ""))
@@ -781,8 +846,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
         waiting = leave.waiting(key) if leave and key else []
         for r in waiting:
             r["mine"] = leave.may_decide(r, g.user)
+        swaps = app.extensions.get("swaps")
         return render_template("requests.html", unit=key, label=_unit_filter(key) if key else "", waiting=waiting,
                                decided=leave.decided(key) if leave and key else [],
+                               swaps=swaps.waiting(key) if swaps and key else [],
+                               swaps_decided=swaps.decided(key) if swaps and key else [],
                                manager=bool(g.user["is_admin"] or g.user["is_supervisor"]),
                                year=datetime.now(EGYPT).year)
 

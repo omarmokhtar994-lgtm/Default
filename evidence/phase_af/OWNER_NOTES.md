@@ -178,3 +178,17 @@ Still open:
 - "Bilingual" counts only for people whose language is Bilingual, or whose Language Setup row covers it.
 - The English rows with a minimum of 0 do nothing.
 - Chat is blank from 16:00 to 18:30 while Phone needs people from 16:00; check that this is intended.
+
+## Samples answered (owner, 2026-10-14)
+
+Samples `evidence/phase_af/samples/af01` to `af07`. The owner commented on three; the rest are taken as approved
+as shown, Sutherland and client out-of-office shrinkage side by side included (the E1 open question).
+
+- **Time zone (A5, D5, replaces the program setting in af07):** optional on each page, not fixed for a program.
+  Every page shows times in Egypt time with a drop-down to see them in another zone (for example SAKS NMG Tier 1
+  in EST). At upload, the schedule's time zone is picked next to the program, the run mode (Quick, Deep,
+  Overnight) and the week start.
+- **Channel plan download (C4):** the table view as sampled, and in addition a view like the timeline, so the
+  export has both views.
+- **Day-off cancellations (F1):** a proposal must cover at least 6 to 8 short intervals, otherwise it is a waste.
+  Built with a minimum of 6 short intervals (the low end of the owner's range); the owner can raise it to 8.

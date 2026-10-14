@@ -43,6 +43,18 @@
 </section>
 {% endif %}
 
+{% if outlook is not none %}
+<section class="panel" id="outlook" aria-labelledby="out-h">
+  <h2 id="out-h">The rest of the week</h2>
+  <p class="note">Each day still to come, with the absences already known (recorded on the RTA under Absences known for later days), the hours short, the overtime needed and the days off to cancel, as Rescue the day proposes them for that day.</p>
+  {% if outlook %}<div class="scroll" role="region" tabindex="0" aria-label="The rest of the week (scrolls sideways)"><table class="adh-t out-t">
+    <thead><tr><th scope="col">Day</th><th scope="col">Known absences</th><th scope="col">Short hours</th><th scope="col">Overtime needed</th><th scope="col">Days off to cancel</th></tr></thead>
+    <tbody>{% for r in outlook %}<tr><th scope="row"><a href="{{ url_for('day_page', program=program, date=r.date.isoformat(), view='rescue') }}">{{ r.date.strftime('%a %d %b') }}</a></th><td>{{ r.absent|length }}{% if r.absent %} <small class="dim">{{ r.absent|join(', ') }}</small>{% endif %}</td><td class="n">{{ r.short_hours|num }}</td><td>{% for o in r.overtime %}{{ o }}{% if not loop.last %}<br>{% endif %}{% else %}None{% endfor %}</td><td>{% for d in r.dayoff %}{{ d }}{% if not loop.last %}<br>{% endif %}{% else %}None{% endfor %}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="empty">No day of this week is still to come with a schedule here.</p>{% endif %}
+</section>
+{% endif %}
+
 {% if not run %}
 <p class="empty panel">No finished run for this program and week. Pick another week, or start a run with this program and week on the home page.</p>
 {% elif not view %}

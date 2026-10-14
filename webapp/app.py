@@ -1419,9 +1419,21 @@ def create_app(config: Dict[str, Any]) -> Flask:
               "counts each day's intervals against it.")
         return redirect(url_for("week_page", program=program, week=week) + "#target", code=303)
 
+    def _outlook(program: str, week_start: str) -> Optional[List[Dict[str, Any]]]:
+        """The rest of the week on the Week page (Phase AF, F4); None for a week that is over."""
+        today = datetime.now(EGYPT).date()
+        first = date.fromisoformat(week_start)
+        if first + timedelta(days=6) <= today:
+            return None
+        try:
+            return _days().outlook(program, first, today)
+        except ValueError:  # a workbook that cannot be read: said on the day page
+            return None
+
     def _version_week(row: Dict[str, Any], side: str, note: Optional[Dict[str, Any]] = None,
                       target: Optional[Dict[str, Any]] = None,
-                      elsewhere: Optional[Dict[str, Any]] = None):  # type: ignore[no-untyped-def]
+                      elsewhere: Optional[Dict[str, Any]] = None,
+                      outlook: Optional[List[Dict[str, Any]]] = None):  # type: ignore[no-untyped-def]
         """A version's week view; ``note`` (the Week page): why this version, and what else the week has."""
         intervals = json.loads(row["checks"] or "{}").get("intervals") or []
         run = app.extensions["store"].get_run(row["run_id"])
@@ -1441,7 +1453,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                side=side, program=row["program"], week=row["week_start"], programs=programs,
                                weeks=weeks, figures=figures, version=row, week_note=note,
                                may_set_in_use=_may_set_in_use(row), target_panel=target, elsewhere=elsewhere,
-                               switch=switch)
+                               switch=switch, outlook=outlook)
 
     @app.route("/week")
     @login_required
@@ -1476,7 +1488,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                   f"{datetime.fromtimestamp(marks[-1]['at'], EGYPT):%a %d %b}")
                 return _version_week(chosen, side, {"said": said, "workbook": runs.get(chosen["run_id"], ""),
                                                     "others": others, "set_by": set_by},
-                                     _target_panel(program, holding, chosen))
+                                     _target_panel(program, holding, chosen),
+                                     outlook=_outlook(program, holding))
         rows = history.get(program, [])
         if program and not week and rows:
             week = rows[-1]["week"]
@@ -2309,6 +2322,36 @@ def create_app(config: Dict[str, Any]) -> Flask:
         except ValueError as exc:
             return jsonify(error=str(exc)), 400
         return jsonify(ok=True)
+
+    @app.route("/day/absences", methods=["POST"])
+    @login_required
+    def day_absences():  # type: ignore[no-untyped-def]
+        """Absences already known for later days (Phase AF, F3), from the RTA: one person, a whole-shift status, from
+        one day to another; the days they do not work are said, not recorded."""
+        program = clean_program(request.form.get("program", ""))
+        on = _date(request.form.get("date", ""))
+        if not program or on is None:
+            abort(400)
+        if not _access().can_open(program):
+            abort(403)
+        name, status = request.form.get("associate", "").strip(), request.form.get("status", "")
+        first = _date(request.form.get("first", ""))
+        last = _date(request.form.get("last", "")) or first
+        try:
+            if not name or first is None:
+                raise ValueError("Pick who and the first day.")
+            found = _days().record_absences(program, name, status, first, last, g.user["id"])
+            said = []
+            if found["done"]:
+                said.append(f"Recorded {status.lower()} for {name} on {', '.join(f'{d:%a %d %b}' for d in found['done'])}.")
+            if found["off"]:
+                said.append(f"{name} is off on {', '.join(f'{d:%a %d %b}' for d in found['off'])}: nothing recorded.")
+            if found["missing"]:
+                said.append(f"No schedule here for {', '.join(f'{d:%a %d %b}' for d in found['missing'])}.")
+            flash(" ".join(said))
+        except ValueError as exc:
+            flash(str(exc))
+        return redirect(url_for("day_page", program=program, date=on.isoformat()), code=303)
 
     @app.route("/day/break", methods=["POST"])
     @login_required

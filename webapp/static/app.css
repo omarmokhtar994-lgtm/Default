@@ -1326,3 +1326,7 @@ ul.log .post-st { font-size: 0.8125rem; margin-left: 4px; }
 .do-t th[scope=row] { text-align: start; white-space: nowrap; }
 .do-t td { vertical-align: top; }
 .do-bend { display: block; margin: 2px 0 6px; }
+/* Phase AF (F3, F4): absences known for later days, the rest of the week */
+.later-abs { margin: 0 0 12px; }
+.later-abs summary { cursor: pointer; }
+.out-t td, .out-t th { vertical-align: top; text-align: start; }

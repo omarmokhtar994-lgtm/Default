@@ -178,6 +178,11 @@ def journaled(method):
     return wrapped
 
 
+def _either(names: List[str]) -> str:
+    """X, Y or Z."""
+    return " or ".join([", ".join(names[:-1]), names[-1]]) if len(names) > 1 else "".join(names)
+
+
 class DayBook:
     def __init__(self, store, book: ScheduleBook):
         self.store = store
@@ -1126,6 +1131,56 @@ class DayBook:
         near = self.neighbours(page["version"]["program"], page["date"], page["version"])
         return {**dayoff_proposals(page["view"], week, page["day"], rest, after=after, near=near),
                 "next_known": near["next_known"]}
+
+    LATER_MAX = 14  # days: how far one entry of absences known for later days may reach
+
+    def record_absences(self, program: str, name: str, status: str, first: date, last: date,
+                        user_id: int) -> Dict[str, List[date]]:
+        """Absences already known for later days (Phase AF, F3): ``status`` (a whole-shift absence) for ``name`` on
+        every day from ``first`` to ``last`` that they work. Returns the days ``done``, the days they are ``off`` and
+        the days with no schedule here (``missing``); nothing is recorded on those."""
+        if status not in ABSENT:
+            raise ValueError("Pick unplanned leave, sick or public holiday.")
+        if last < first:
+            raise ValueError("The last day must be on or after the first.")
+        if (last - first).days >= self.LATER_MAX:
+            raise ValueError(f"Pick {self.LATER_MAX} days at most.")
+        found: Dict[str, List[date]] = {"done": [], "off": [], "missing": []}
+        on = first
+        while on <= last:
+            page = self.page(program, on)
+            if page is None:
+                found["missing"].append(on)
+            elif any(s["offset"] == 0 for lane in page["view"]["lanes"] if lane["name"] == name
+                     for s in lane["segments"]):
+                self.set_status(program, on, name, status, user_id)
+                found["done"].append(on)
+            else:
+                found["off"].append(on)
+            on += timedelta(days=1)
+        return found
+
+    def outlook(self, program: str, week_start: date, today: date) -> List[Dict[str, Any]]:
+        """The rest of the week (Phase AF, F4): for each day of the week after ``today``, the absences already known,
+        the hours and intervals short, the overtime needed and the days off to cancel (Rescue the day's proposals for
+        that day). A week that is over gives nothing; a week to come gives every day."""
+        rows = []
+        for i in range(7):
+            on = week_start + timedelta(days=i)
+            if on <= today:
+                continue
+            page = self.page(program, on)
+            if page is None:
+                continue
+            view = page["view"]
+            plan = self.dayoff_plan(page)
+            rows.append({"date": on, "absent": [f"{lane['name']} ({s['status'].lower()})" for lane in view["lanes"]
+                                                for s in lane["segments"] if s["offset"] == 0 and s["status"] in ABSENT],
+                         "short_hours": view["tiles"]["short_hours"], "short_intervals": view["tiles"]["short_intervals"],
+                         "overtime": [o["text"] for o in plan["overtime"]],
+                         "dayoff": [p["text"] + "; possible: " + _either([c["name"] for c in p["candidates"]])
+                                    for p in plan["proposals"]]})
+        return rows
 
     def next_week_unknown(self, program: str, on: date) -> bool:
         """The last day of a schedule whose next one is not here: the rest gap to tomorrow cannot be checked."""

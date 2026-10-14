@@ -1786,6 +1786,30 @@ def create_app(config: Dict[str, Any]) -> Flask:
                           + ". Nothing is kept until you save.")
                     if found["note"]:
                         flash(found["note"])
+                elif action == "suggest_week":  # Phase AF (B1): every working day, one after another
+                    began, planned, refused = time.time(), 0, []
+                    for o, other in enumerate(DAYS):
+                        if not any(shift_span(a["days"][o]) for a in week.get("associates", [])):
+                            continue
+                        draft = store.get_channel_draft(schedule_id)  # each day's fair spread counts the days before
+                        theirs = people_for(week, o, rules, channel_current(week, o, rules, draft), skills,
+                                            inputs["languages"])
+                        try:
+                            found = plan_day(theirs, setup, rules, o, carry=channel_carry(week, rules, draft, o),
+                                             move_breaks=request.form.get("move") == "1",
+                                             before=channel_before(week, rules, draft, o, skills))
+                        except NoPlan as exc:
+                            refused.append(f"{FULL_DAYS[other]}: {exc}")
+                            continue
+                        store.set_channel_draft(schedule_id, other, {"blocks": found["blocks"],
+                                                                     "breaks": found["breaks"],
+                                                                     "moved": found["moved"], "note": found["note"]},
+                                                g.user["id"])
+                        planned += 1
+                    flash(f"Suggested channels for {planned} day{'s' if planned != 1 else ''} in "
+                          f"{round(time.time() - began, 1):g} seconds. Nothing is kept until you save.")
+                    for line in refused:
+                        flash(f"Not planned: {line}")
                 elif action == "edit":
                     name = request.form.get("who", "")
                     person = next((p for p in people if p["name"] == name), None)

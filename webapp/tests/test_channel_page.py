@@ -169,3 +169,27 @@ class TheProgramWithoutChannels(_Page):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheWholeWeek(_Page):
+    """Phase AF, B1: one action plans every day of the week (Plan channels planned one day at a time)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.start()
+        cls.done = cls.admin.post(cls.url, data={"csrf_token": token(cls.admin), "day": "Wed",
+                                                 "action": "suggest_week"})
+
+    def test_every_working_day_gets_a_suggestion(self):
+        draft = self.store.get_channel_draft(self.version["id"])
+        working = [DAYS[i] for i in range(7) if any(shift_span(a["days"][i]) for a in self.week["associates"])]
+        self.assertTrue(working)
+        self.assertEqual(sorted(draft), sorted(working))
+        for day in working:
+            self.assertTrue(draft[day]["blocks"], day)
+
+    def test_the_page_says_so_and_offers_it(self):
+        self.assertEqual(self.done.status_code, 303)
+        said = self.page()[1]
+        self.assertRegex(said, r"Suggested channels for \d+ days in [\d.]+ seconds\. Nothing is kept until you save\.")
+        self.assertIn('value="suggest_week"', said)

@@ -99,8 +99,12 @@ number in the earlier version of this file.
   - **Out-of-office shrinkage, Sutherland:** (unplanned leave + planned leave + sick) / scheduled employees,
     leaving out anyone on a day off (owner, 2026-10-14).
   - **Out-of-office shrinkage, client:** the same, with public holiday added to the top line.
-  - The RTA has no "Planned leave" status today. It has Unplanned leave and Sick, and planned leave is in the
-    schedule. See the open questions.
+  - Planned leave is read from the schedule (owner, 2026-10-14). The RTA has no Planned leave status, and none
+    is added.
+  - It is counted per day.
+  - The mapping differs between programs, so the admin sets it per program.
+  - The starting assumption: every non-billable aux counts as in-office shrinkage, and billable aux does not
+    count.
 - **E2. Task status (was 21).** Records "with who" and "why", like the other aux.
 - **E3. Public holiday status (was 21).** Works like Sick or Unplanned.
   - It is not shrinkage for Sutherland (the company), but it is for the client.
@@ -142,16 +146,17 @@ number in the earlier version of this file.
 Settled on 2026-10-14: F2 is about consistent shifts, days follow the selected zone, day-off cancellations are
 the tool's own proposals, and the out-of-office shrinkage formulas are given.
 
-- **F1:** the proposals keep the weekly-hours, rest-day and days-in-a-row rules. This is the assumption; confirm
-  it.
-- **F2:** confirm that a proposed shift matches the person's shifts on the days before and after.
-- **E1, planned leave:** the RTA has no Planned leave status. Planned leave can be read from the schedule, or
-  become a new RTA status.
-- **E1, the rest of the mapping:**
-  - which statuses count as in-office shrinkage by default;
-  - whether the formula also runs per interval, or per day only, as stated;
-  - whether the RTA shows Sutherland and client shrinkage side by side.
-- **B2:** confirm the reading of the 4-hour rule.
+Settled the same day:
+- **F1, rules:** suggestions keep the weekly-hours, rest-day and days-in-a-row rules. Where that cannot cover
+  the day, the tool may suggest a deviation, the smallest first and clearly shown. In the worst case it may break
+  more, still shown.
+- **E1:** see above for planned leave, per day, the admin's mapping and the non-billable default.
+
+Still open:
+- **F2:** confirm that a proposed shift matches the person's shifts on the days before and after. Asked again
+  with an example.
+- **B2:** confirm the reading of the 4-hour rule. Asked again with an example.
+- **E1:** whether the RTA shows Sutherland and client shrinkage side by side. Offered in the sample.
 
 ## Suggested grouping when the phase starts (for the owner to decide)
 

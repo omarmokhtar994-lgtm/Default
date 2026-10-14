@@ -37,7 +37,7 @@
     <form class="tagrow" method="post" action="{{ url_for('run_zone', run_id=run.id) }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label>The schedule's times are in <select name="tz">{% for key, name in zones %}<option value="{{ key }}"{% if key == (run.tz or home_zone) %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
-      <button type="submit">Save the zone</button>
+      <button type="submit">Set the zone</button>
     </form>
     <p class="hint">Pick from the programs and LOBs set up under LOBs and defaults. The run's schedule versions move with it. {% if user.is_admin %}To move a program's day records too, use the program's page.{% endif %}</p>
   </details>

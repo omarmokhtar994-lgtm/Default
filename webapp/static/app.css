@@ -945,9 +945,9 @@ dialog.dlg.add-dlg { width: 620px; }
 .sr-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
 .g-p { stop-color: var(--ch-phone); } .g-c { stop-color: var(--ch-chat); } .g-e { stop-color: var(--ch-email); }
 .chr-svg rect.ch-B { fill: var(--rail); } .chr-svg rect.ch-X { fill: var(--empty-cell); }
-.chr-t { font: 700 17px var(--text); fill: var(--ch-ink); text-anchor: middle; pointer-events: none; }
+.chr-t { font: 700 1.0625rem var(--text); fill: var(--ch-ink); text-anchor: middle; pointer-events: none; }
 .chr-svg rect.ch-B + .chr-t, .chr-svg rect.ch-X + .chr-t { fill: var(--paper); }
-.chr-h { font: 400 16px var(--text); fill: var(--dim); }
+.chr-h { font: 400 1rem var(--text); fill: var(--dim); }
 .chr-svg a { cursor: pointer; outline: none; }
 .chr-svg a:focus-visible rect, .chr-svg a:hover rect { stroke: var(--action); stroke-width: 3; }
 .cp-quarters { margin: 10px 0 0; } .cp-quarters summary { cursor: pointer; font-weight: 600; }

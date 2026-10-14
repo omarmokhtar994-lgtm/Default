@@ -1372,6 +1372,10 @@ class ThePhaseVInTheBrowser(unittest.TestCase):
         page.get_by_role("button", name="Suggest the day").click()
         page.wait_for_load_state("load")
         expect(page.locator("p.flash").first).to_contain_text("Suggested channels for Thursday")
+        # Re-pinned (Phase AF, C1, owner's approved sample af02): Plan channels shows each person's stretches; the
+        # quarter-hour table is kept under "Show quarter hours", closed until it is opened.
+        expect(page.locator("svg a[data-cp-run] rect.ch-P").first).to_be_visible()
+        page.locator("details.cp-quarters summary").click()
         expect(page.locator("table.cp-grid td.ch-P").first).to_be_visible()
         page.screenshot(path=str(V_SCREENS / "plan_channels.png"), full_page=True)
         page.get_by_role("button", name="Save as a new version").click()

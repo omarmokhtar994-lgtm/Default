@@ -1,3 +1,4 @@
+# © 2026 Omar Mokhtar. All rights reserved.
 """Egypt time follows Cairo's clock (owner, 2026-10-14: "yes fix it and update the line").
 
 Egypt changes its clocks: UTC+3 in summer, UTC+2 from midnight on Thursday 29 October 2026 until the last Friday

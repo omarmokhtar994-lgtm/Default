@@ -71,9 +71,18 @@ not touched.
   sha256 c6d504bb4c5e6179dde794b22a33a902b55ba366151ff50be6f6ec42a364edc9. Sent in three parts (AG_part_0 to
   AG_part_2); joined in order they give the same sha256.
 
-## Waiting for the owner
+## Colours: the owner's pick (2026-10-15)
 
-- Colours: pick current, A Graphite or B Deep ocean (`colours/`). Applying the pick is a token change.
+"I recommend A as well but keep deep ocean as well as a third option so to have 3 views" (accee28):
+- Graphite night is the default, its light version is the day look, and Deep ocean is a third look ("Ocean look" in
+  the top bar, kept in the same cookie). Status and channel colours unchanged in every look.
+- Re-pinned, each saying why: test_review_polish.test_theme_color_meta, test_markup_xy approved tokens,
+  test_ui_playwright.test_light_theme_run_page (the day page background).
+- Browser: the switch goes Graphite, Ocean, Day, Ocean, Dark with the page background right each time, no console
+  errors (`screens/looks_*.png`); the rendered contrast test passes in both looks.
+- Package rebuilt, 01:08 to 01:24: GATE PASS (77 suites, 1537 tests); 2647 files, 71.56 MB,
+  sha256 b9917744b6fdc90aa8f853e55b6b81c0914bb724829430527e39230ac9e21fc6, sent as AG2_part_0 to AG2_part_2
+  (joined in order they give the same sha256). It replaces the earlier AG package.
 
 ## Deferred minors
 

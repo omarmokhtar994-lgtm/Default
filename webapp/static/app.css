@@ -1353,3 +1353,14 @@ ul.log .post-st { font-size: 0.8125rem; margin-left: 4px; }
 .zd-brk { fill: var(--rail); }
 .zd-t tr.bad td, .zd-t tr.warn td { font-weight: 600; }
 @media (max-width: 640px) { .zd-row { grid-template-columns: 120px minmax(0, 1fr); } .zd-hours { margin-inline-start: 128px; } }
+/* Phase AG (T2): the Now panel, today only: the next hour and what needs attention */
+.nowbox { background: var(--console); border: 1px solid var(--rail); border-radius: 10px; padding: 12px 16px 14px; margin: 0 0 12px; }
+.nowbox h2 { font-size: 1rem; margin: 0 0 8px; }
+.nowbox h3 { font-size: 0.875rem; color: var(--dim); margin: 0 0 6px; }
+.nb-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 8px 28px; }
+.nb-list, .nb-alerts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.nb-list li { display: grid; grid-template-columns: 3.25rem minmax(0, 1fr) auto; gap: 10px; align-items: baseline; }
+.nb-list time { font: 700 semi-condensed 0.9375rem/1 var(--display); font-variant-numeric: tabular-nums; color: var(--dim); }
+.nb-alerts li { display: flex; gap: 8px; align-items: flex-start; }
+.nb-alerts li .ico { margin-top: 0.15em; }
+.nb-alerts li.gap .ico { color: var(--gap-ink); } .nb-alerts li.short .ico { color: var(--short-ink); }

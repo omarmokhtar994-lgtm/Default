@@ -563,6 +563,46 @@ def glance(view: Dict[str, Any], now: int) -> List[Dict[str, str]]:
     return tiles
 
 
+NOW_HORIZON = 60  # minutes: the Now panel's next hour (Phase AG)
+WATCH_AHEAD = 180  # minutes: what needs attention, the next three hours
+
+
+def now_panel(view: Dict[str, Any], now: int, horizon: int = NOW_HORIZON,
+              ahead: int = WATCH_AHEAD) -> Optional[Dict[str, Any]]:
+    """Phase AG (T2): the RTA's Now panel, today only (None for another day). ``next``: breaks starting and shifts
+    starting or ending in the next ``horizon`` minutes, in time order (people off for the whole shift left out).
+    ``attention``: in the ``ahead`` minutes from now, intervals short by a person or more, language gaps, channel
+    warnings and intervals short by less than one person, in that order."""
+    if not 0 <= now < 1440:
+        return None
+    step = view["interval"]
+    found = []
+    for lane in view["lanes"]:
+        for s in lane["segments"]:
+            if s["status"] in ABSENT:
+                continue
+            events = [(s["start"], "Starts"), (s["end"], "Ends")] + [(b["start"], b.get("kind") or "Break")
+                                                                      for b in s["breaks"]]
+            found += [{"t": t, "name": lane["name"], "what": what} for t, what in events if now < t <= now + horizon]
+    found.sort(key=lambda n: (n["t"], n["name"]))
+
+    def soon(t: int) -> bool:  # an interval not over yet that starts within ``ahead``
+        return t + step > now and t < now + ahead
+
+    attention = [{"level": "gap", "text": f"{_hm(a)} to {_hm(b)}: short by a person or more"}
+                 for a, b in _runs_of([c["t"] for c in view["cells"] if c["cls"] == "bad" and soon(c["t"])], step)]
+    for lang in view["languages"]:
+        attention += [{"level": "gap", "text": f"{lang['name']}: {_hm(a)} to {_hm(b)}"}
+                      for a, b in _runs_of([c["t"] for c in lang["cells"] if c["cls"] in ("bad", "warn")
+                                            and soon(c["t"])], step)]
+    if view.get("channels"):
+        attention += [{"level": "short", "text": w["text"]} for w in view["channels"]["warnings"]
+                      if w["t1"] > now and w["t0"] < now + ahead]
+    attention += [{"level": "short", "text": f"{_hm(a)} to {_hm(b)}: short by less than one person"}
+                  for a, b in _runs_of([c["t"] for c in view["cells"] if c["cls"] == "warn" and soon(c["t"])], step)]
+    return {"next": found, "attention": attention}
+
+
 def _across_cancel(seg: Dict[str, Any], first: int, second: int) -> bool:
     """Whether a cancelled break sits between breaks ``first`` and ``second`` (plan order) of ``seg``: the long gap
     a cancel leaves is wanted, so the program's maximum gap is not held against it (Phase AD)."""

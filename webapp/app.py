@@ -35,7 +35,7 @@ from .channel_plan import NoPlan, plan_day, score_day
 from .channel_template import channel_workbook
 from .channels import check_lines, has_channel_needs, read_channels, requirement_tab
 from .clock import EGYPT, HOME, ZONES, pick_zone, shift as zone_shift, zone_label
-from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, board, glance, hover_tips, read_inputs, shift_groups, stitch
+from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, board, glance, hover_tips, now_panel, read_inputs, shift_groups, stitch
 from .coach import actual_shrinkage, corrected_tab
 from .shrinkage import ITEMS as SHRINKAGE_ITEMS, day_shrinkage, mapping_from_form, read_mapping
 from .contacts import ContactBook, pick_contact
@@ -2272,6 +2272,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                       else (10 ** 6 if on < clock_now.date() else -10 ** 6))
         tips = hover_tips(page["view"], now_of_day) if page else {}  # Phase AF (D2, D3)
         at_a_glance = glance(page["view"], now_of_day) if page else []  # Phase AF (D6)
+        now_box = now_panel(page["view"], now_of_day) if page else None  # Phase AG (T2): today only
         shrinkage = None  # Phase AF (E1): in and out of office, side by side
         if page:
             kept = app.extensions["store"].get_shrinkage_map(program)
@@ -2281,6 +2282,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                          "may_set": bool(g.user["is_admin"] or g.user["is_supervisor"])}
         return render_template("day.html", page=page, problem=problem, program=program, programs=programs, on=on,
                                today=clock_now.date(), tips=tips, at_a_glance=at_a_glance, shrinkage=shrinkage,
+                               now_box=now_box,
                                posts=app.extensions["notifier"].statuses(program, on.isoformat())
                                if program and on else {},
                                post_to=SERVICES.get(group["service"], "") if posting else "",

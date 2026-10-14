@@ -34,6 +34,8 @@ number in the earlier version of this file.
   operating day's start is set in the program's settings or in the input workbook. D1 uses it.
 - **A5. Time zone at upload (was 17).** Choose the schedule's time zone when uploading, and change it after
   upload. D5 shows other zones.
+  - Use named zones (Africa/Cairo, America/New_York), so summer time follows the date: Egypt is +2 or +3, US
+    Eastern is EST or EDT.
 
 ## B. Channel planning rules
 
@@ -84,6 +86,8 @@ number in the earlier version of this file.
   - The break dialog stays as the keyboard path, and the strict CSP stays.
 - **D5. View in any time zone (was 17).** Every tab can show another zone. For example, a schedule uploaded in
   Egypt time is shown in EST on the RTA.
+  - Days follow the selected zone too (owner, 2026-10-14): with EST selected, a day is an EST day; with Cairo
+    selected, it is a Cairo day.
 - **D6. A quick day summary on the RTA (was 22).** Today there is one summary line: on shift, short and above
   demand, language gaps, channel warnings. The owner wants a quicker view of the day.
 
@@ -92,6 +96,11 @@ number in the earlier version of this file.
 - **E1. Out-of-office shrinkage on the RTA (was 20),** next to in-office shrinkage.
   - Which statuses count as shrinkage, in office and out of office, is a program setting.
   - The admin or a supervisor maps it.
+  - **Out-of-office shrinkage, Sutherland:** (unplanned leave + planned leave + sick) / scheduled employees,
+    leaving out anyone on a day off (owner, 2026-10-14).
+  - **Out-of-office shrinkage, client:** the same, with public holiday added to the top line.
+  - The RTA has no "Planned leave" status today. It has Unplanned leave and Sick, and planned leave is in the
+    schedule. See the open questions.
 - **E2. Task status (was 21).** Records "with who" and "why", like the other aux.
 - **E3. Public holiday status (was 21).** Works like Sick or Unplanned.
   - It is not shrinkage for Sutherland (the company), but it is for the client.
@@ -100,11 +109,17 @@ number in the earlier version of this file.
 ## F. Saving the day and the week
 
 - **F1. Proposed day-off cancellations (was 18).**
-  - The RTA proposes which days off to cancel, day by day. For example: "2 people from 16:00 and 1 from 22:00
-    save the day".
+  - The tool itself proposes them, as it proposes overtime.
+  - When several intervals are short, it proposes which days off to cancel and with which shift, so the short
+    intervals are covered. For example: "2 people from 16:00 and 1 from 22:00 save the day".
   - If that is not enough, it proposes the overtime needed per interval.
-- **F2. "More consistent" (was 19).** The owner's words: "also more consistent should show up same as after
-  break and before break". The meaning is not yet confirmed (see G).
+- **F2. Consistent shifts (was 19).** The owner (2026-10-14): this is the engine output "where the shifts are
+  more consistent".
+  - That is the engine's shift consistency polish (`evidence/shift_consistency/`, 2026-10-03): same-day shifts
+    re-dealt so each person's start times move less over the week.
+  - A proposed shift, for a cancelled day off or overtime, follows the same idea. It matches the person's shifts
+    on the days before and after ("same as after ... and before ...").
+  - Confirm this reading with the sample.
 - **F3. Known absences for the rest of the week (was 23).**
   - Enter on the RTA the absences already known for later days, such as unplanned leave or sick.
   - From them, show a summary, perhaps on Week, of the overtime needed per day and the days off to cancel.
@@ -124,17 +139,18 @@ number in the earlier version of this file.
 
 ## Still to settle with samples
 
-- **F2:** two possible readings:
-  - overtime proposals come as whole blocks before or after a shift (as + Add's overtime already does), not
-    scattered intervals;
-  - the proposals show the before-and-after effect, the way break changes do.
-- **A5 and D5, zones:** named zones (Africa/Cairo, America/New_York), so summer time follows the date: Egypt is +2
-  or +3, US Eastern is EST or EDT.
-- **A5 and D5, day edges:** in another zone a day's edges move. A Cairo Monday starts on Sunday afternoon in New
-  York. Which day does a page show?
-- **F1:** which days off may be cancelled, keeping the weekly-hours, rest-day and days-in-a-row rules.
-- **E1 and E3:** the starting mapping of statuses to shrinkage, and whether the RTA shows Sutherland and client
-  shrinkage side by side.
+Settled on 2026-10-14: F2 is about consistent shifts, days follow the selected zone, day-off cancellations are
+the tool's own proposals, and the out-of-office shrinkage formulas are given.
+
+- **F1:** the proposals keep the weekly-hours, rest-day and days-in-a-row rules. This is the assumption; confirm
+  it.
+- **F2:** confirm that a proposed shift matches the person's shifts on the days before and after.
+- **E1, planned leave:** the RTA has no Planned leave status. Planned leave can be read from the schedule, or
+  become a new RTA status.
+- **E1, the rest of the mapping:**
+  - which statuses count as in-office shrinkage by default;
+  - whether the formula also runs per interval, or per day only, as stated;
+  - whether the RTA shows Sutherland and client shrinkage side by side.
 - **B2:** confirm the reading of the 4-hour rule.
 
 ## Suggested grouping when the phase starts (for the owner to decide)

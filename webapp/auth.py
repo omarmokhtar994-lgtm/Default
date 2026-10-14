@@ -7,11 +7,17 @@ import hashlib
 import hmac
 import re
 import secrets
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional
 
 from flask import abort, current_app, g, redirect, request, session, url_for
 
+# Phase AG: the only pages an associate's account opens; anything else sends them to My week (or is refused).
+ASSOCIATE_PAGES = frozenset({"static", "login", "logout", "set_theme", "change_password", "me"})
 SAFE_NEXT = re.compile(r"/(?![/\\])[^\x00-\x20\x7f\\]*")  # a path here: no second slash, no backslash or control character
+
+
+def associate_allowed(endpoint: Optional[str]) -> bool:
+    return endpoint in ASSOCIATE_PAGES
 
 
 def csrf_token() -> str:

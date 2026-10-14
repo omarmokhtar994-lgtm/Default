@@ -20,14 +20,17 @@
     <label>Name <input name="display_name"></label>
     <label>Temporary password <input name="password" type="text" minlength="10" required></label>
     <label>Role <select name="role">{% for key, name in roles.items() %}<option value="{{ key }}">{{ name }}</option>{% endfor %}</select></label>
+    <label>Name on the schedule <input name="roster_name" list="roster-names" autocomplete="off" aria-describedby="roster-hint"></label>
+    <p class="hint" id="roster-hint">For associates only: their name as it is on the program's schedule. They see that person's week.</p>
     {{ program_boxes([], false) }}
     <button class="primary">Add person</button>
   </form>
 </section>
+<datalist id="roster-names">{% for n in roster_names %}<option value="{{ n }}">{% endfor %}</datalist>
 <table class="people"><thead><tr><th>Person</th><th>Role</th><th>Programs</th><th>State</th><th></th></tr></thead><tbody>
 {% for u in users %}<tr>
   <td><b>{{ u.display_name }}</b><br><small>{{ u.username }}</small></td>
-  <td><span class="role role-{{ u.role|lower }}">{{ u.role }}</span></td>
+  <td><span class="role role-{{ u.role|lower }}">{{ u.role }}</span>{% if u.is_associate %}<br><small>{{ u.roster_name }}</small>{% endif %}</td>
   <td>{% if u.is_admin or u.all_programs %}All programs{% else %}{{ u.programs or 'None yet' }}{% endif %}</td>
   <td>{{ 'Active' if u.active else 'Switched off' }}</td>
   <td class="actions">{% if u.manageable %}
@@ -38,6 +41,7 @@
       <form method="post" action="{{ url_for('admin_user_action', user_id=u.id, action='programs') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         {% if admin %}<label>Role <select name="role">{% for key, name in roles.items() %}<option value="{{ key }}"{% if name == u.role %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>{% endif %}
+        {% if admin or u.is_associate %}<label>Name on the schedule <input name="roster_name" list="roster-names" autocomplete="off" value="{{ u.roster_name }}"></label>{% endif %}
         {{ program_boxes(u.program_ids, u.all_programs) }}
         <button>Save</button>
       </form>

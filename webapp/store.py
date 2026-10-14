@@ -31,7 +31,9 @@ create table if not exists users (
     locked_until real not null default 0,
     created real not null,
     is_supervisor integer not null default 0,
-    all_programs integer not null default 0
+    all_programs integer not null default 0,
+    is_associate integer not null default 0,
+    roster_name text not null default ''
 );
 create table if not exists programs (
     id integer primary key autoincrement,
@@ -320,6 +322,11 @@ class Store:
             if "all_programs" not in people:
                 db.execute("alter table users add column all_programs integer not null default 0")
                 db.execute("update users set all_programs = 1")
+            # Phase AG: associates sign in to see their own week; linked to their name on the schedule.
+            if "is_associate" not in people:
+                db.execute("alter table users add column is_associate integer not null default 0")
+            if "roster_name" not in people:
+                db.execute("alter table users add column roster_name text not null default ''")
             # Phase AD: a group-post item knows the journal entry it came from (bulk changes wait for Send).
             have = {row["name"] for row in db.execute("pragma table_info(notify_items)")}
             if "action_id" not in have:
@@ -356,7 +363,7 @@ class Store:
                  int(must_change), time.time()))
             return int(cur.lastrowid)
 
-    PERSON_FIELDS = ("display_name", "is_admin", "is_supervisor", "all_programs")
+    PERSON_FIELDS = ("display_name", "is_admin", "is_supervisor", "all_programs", "is_associate", "roster_name")
 
     def update_user(self, user_id: int, **fields: Any) -> None:
         unknown = set(fields) - set(self.PERSON_FIELDS)

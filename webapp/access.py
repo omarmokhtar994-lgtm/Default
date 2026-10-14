@@ -14,6 +14,8 @@ from .programs import ProgramBook
 def role(user: Dict[str, Any]) -> str:
     if user.get("is_admin"):
         return "Admin"
+    if user.get("is_associate"):
+        return "Associate"
     return "Supervisor" if user.get("is_supervisor") else "Planner"
 
 

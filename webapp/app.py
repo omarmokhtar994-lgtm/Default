@@ -48,8 +48,8 @@ from .notify import (DEFAULT_HOLD, DEFAULT_KINDS as NOTIFY_DEFAULT_KINDS, HOLDS,
                      MODES as NOTIFY_MODES, SERVICES, Notifier, Post, check_link, last_line, leave_out, link_end,
                      post_json, post_result, post_what)
 from .programs import ProgramBook
-from .auth import (admin_required, check_csrf, csrf_token, load_user, login_required, manager_required, safe_next,
-                   session_stamp)
+from .auth import (admin_required, associate_allowed, check_csrf, csrf_token, load_user, login_required,
+                   manager_required, safe_next, session_stamp)
 from .program_page import build, overview, weeks_to_show
 from .run_admin import PICK_UNIT, apply_rename, apply_run_change, preview_rename, preview_run_change, unit_keys
 from .bulk_breaks import SHIFTS as BULK_SHIFTS, verb as bulk_verb
@@ -290,9 +290,15 @@ def create_app(config: Dict[str, Any]) -> Flask:
                    "program_rename", "program_setup", "workbook"}
 
     @app.before_request
-    def _before() -> None:
+    def _before() -> Any:
         check_csrf()
         load_user()
+        # Phase AG: an associate's account opens their own pages only (My week); a page sends them there and a
+        # form is refused, whatever address they type.
+        if g.get("user") and g.user["is_associate"] and not associate_allowed(request.endpoint):
+            if request.method in ("GET", "HEAD"):
+                return redirect(url_for("me"))
+            abort(403, description="Your account opens My week only.")
         g.zone = pick_zone(request.args.get("tz", ""))  # Phase AF (D5): Egypt unless the page asks for another
         # Phase Q: a program page opens only for people with that program (New schedule is open to everyone).
         if g.get("user") and request.endpoint not in OPEN_TO_ALL:
@@ -420,7 +426,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                   "run_week": "week", "run_schedules": "schedules", "program": "analysis", "programs": "programs",
                   "exports_page": "exports", "team_page": "team", "admin_users": "people", "program_setup": "setup",
                   "with_setup": "with", "channel_setup": "channels", "notifications_page": "notify",
-                  "day_wallboard": "wallboard"}
+                  "day_wallboard": "wallboard", "me": "me"}
     PROGRAM_PAGES = {"overview": "/overview?program={key}", "day": "/day?program={key}", "week": "/week?program={key}",
                      "schedules": "/schedules?program={key}", "analysis": "/programs/{key}",
                      "home": "/?program={key}",  # Home shows the program picked (owner, 2026-10-08)
@@ -526,7 +532,37 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return render_template("password.html", error=error, forced=bool(g.user["must_change"]))
 
     # ------------------------------------------------------------- admin
-    ROLES = {"planner": "Planner", "supervisor": "Supervisor", "admin": "Admin"}
+    ROLES = {"planner": "Planner", "associate": "Associate", "supervisor": "Supervisor", "admin": "Admin"}
+    STAFF_ADDS = ("planner", "associate")  # what a supervisor may add for their programs
+
+    def _roster_names(program_ids: list, tree: list) -> List[str]:
+        """Names on the newest kept week's schedules of these programs' LOBs (Phase AG: an associate's account is
+        linked to one of them)."""
+        book, store = app.extensions.get("schedules"), app.extensions["store"]
+        names: set = set()
+        if book is None:  # no package installed: no schedules kept, so no names
+            return []
+        for p in tree:
+            if p["id"] not in program_ids:
+                continue
+            for key in p["units"]:
+                weeks = book.kept_weeks(key)
+                if weeks:
+                    for v in store.list_schedules(program=key, week_start=weeks[-1]["week"]):
+                        names |= {a["name"] for a in json.loads(v["week"] or "{}").get("associates", [])}
+        return sorted(names)
+
+    def _roster_problem(name: str, programs: list, tree: list, user_id: Optional[int] = None) -> str:
+        """Why ``name`` cannot be an associate's name on the schedule of ``programs``, or ""."""
+        if not name:
+            return "Pick their name on the schedule."
+        if name not in _roster_names(programs, tree):
+            return f"{name} is not on a schedule of {_program_names(programs, tree) or 'the programs picked'}."
+        for u in app.extensions["store"].list_users():
+            if (u["is_associate"] and u["roster_name"] == name and u["id"] != user_id
+                    and set(app.extensions["store"].user_program_ids(u["id"])) & set(programs)):
+                return f"{name} already has an account ({u['username']})."
+        return ""
 
     def _chosen_programs(access: Access, values: list, keep: Optional[list] = None) -> list:
         """Program ids picked on a form, checked against what this person may give; ``keep`` are the target's
@@ -556,7 +592,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             username = request.form.get("username", "").strip().lower()
             password = request.form.get("password", "")
             kind = request.form.get("role") or ("admin" if request.form.get("is_admin") == "on" else "planner")
-            everything = admin and request.form.get("all_programs") == "1"
+            everything = admin and request.form.get("all_programs") == "1" and kind != "associate"
+            roster = request.form.get("roster_name", "").strip()
             try:
                 programs = _chosen_programs(access, request.form.getlist("programs"))
             except (ValueError, PermissionError) as exc:
@@ -565,10 +602,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 pass
             elif kind not in ROLES:
                 error = "Pick a role."
-            elif kind != "planner" and not admin:
+            elif kind not in STAFF_ADDS and not admin:
                 error = "Only an admin adds supervisors and admins."
-            elif not admin and not programs:
+            elif (not admin or kind == "associate") and not programs:
                 error = "Give them at least one of your programs."
+            elif kind == "associate" and _roster_problem(roster, programs, access.book.tree()):
+                error = _roster_problem(roster, programs, access.book.tree())
             elif username_problem(username):
                 error = USERNAME_RULE
             elif any(u["username"] == username for u in store.list_users()):
@@ -578,7 +617,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             else:
                 uid = store.add_user(username, request.form.get("display_name", ""), password,
                                      is_admin=kind == "admin", must_change=True)
-                store.update_user(uid, is_supervisor=int(kind == "supervisor"), all_programs=int(everything))
+                store.update_user(uid, is_supervisor=int(kind == "supervisor"), all_programs=int(everything),
+                                  is_associate=int(kind == "associate"), roster_name=roster if kind == "associate" else "")
                 store.set_user_programs(uid, programs)
                 _record("user_added", subject=username,  # never the password
                         detail=f"{ROLES[kind]}; " + ("all programs" if everything else
@@ -590,7 +630,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                        program_ids=store.user_program_ids(u["id"]), manageable=access.can_manage(u))
                   for u in store.list_users() if admin or access.can_manage(u)]
         return render_template("admin_users.html", users=people, error=error, grantable=access.grantable(),
-                               roles=ROLES if admin else {"planner": "Planner"}, admin=admin)
+                               roles=ROLES if admin else {k: ROLES[k] for k in STAFF_ADDS}, admin=admin,
+                               roster_names=_roster_names([p["id"] for p in access.grantable()], tree))
 
     @app.route("/admin/users/<int:user_id>/<action>", methods=["POST"])
     @manager_required
@@ -622,7 +663,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         elif action == "programs":
             admin = bool(g.user["is_admin"])
             kind = request.form.get("role", "")
-            current = "admin" if target["is_admin"] else ("supervisor" if target["is_supervisor"] else "planner")
+            current = role(target).lower()
             if kind and kind != current and not admin:
                 abort(403)
             try:
@@ -634,20 +675,39 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 flash(str(exc))
                 return redirect(url_for("admin_users"))
             changes: Dict[str, Any] = {}
+            kind = kind if admin and kind in ROLES else current
+            if kind == "associate":  # Phase AG: still linked to a name on the schedule of the programs kept
+                roster = request.form.get("roster_name", "").strip() or target["roster_name"]
+                problem = _roster_problem(roster, programs, access.book.tree(), user_id)
+                if problem:
+                    flash(f"{target['username']}: {problem}")
+                    return redirect(url_for("admin_users"))
+                changes = {"is_associate": 1, "roster_name": roster}
             if admin:
-                kind = kind if kind in ROLES else current
-                changes = {"is_admin": int(kind == "admin"), "is_supervisor": int(kind == "supervisor"),
-                           "all_programs": int(request.form.get("all_programs") == "1")}
+                changes.update({"is_admin": int(kind == "admin"), "is_supervisor": int(kind == "supervisor"),
+                                "all_programs": int(request.form.get("all_programs") == "1" and kind != "associate"),
+                                "is_associate": int(kind == "associate"),
+                                "roster_name": changes.get("roster_name", "")})
+            if changes:
                 store.update_user(user_id, **changes)
             store.set_user_programs(user_id, programs)
             tree = access.book.tree()
             said = ("all programs" if changes.get("all_programs") else _program_names(programs, tree) or "no programs")
             _record("user_programs_changed", subject=target["username"],
-                    detail=f"{ROLES[kind or current]}; {said}")
+                    detail=f"{ROLES[kind]}; {said}")
             flash(f"{target['username']}: {said}.")
         else:
             abort(404)
         return redirect(url_for("admin_users"))
+
+    # ------------------------------------------------------------- my week (Phase AG)
+    @app.route("/me")
+    @login_required
+    def me():  # type: ignore[no-untyped-def]
+        """An associate's own week; staff have the whole site instead."""
+        if not g.user["is_associate"]:
+            return redirect(url_for("home"))
+        return render_template("me.html")
 
     # ------------------------------------------------------------- home
     def _plan(runs: list) -> Dict[str, dict]:

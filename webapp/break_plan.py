@@ -41,6 +41,14 @@ def _span(label: str) -> Tuple[int, int]:
     return span
 
 
+def edge_margin(rules: Dict[str, Any], duration_min: int) -> int:
+    """Minutes kept clear of breaks at a shift's start and end: the workbook's Break Edge Margin Minutes, or, left
+    blank, the engine's own per-shift margin of max(2, min(4, quarters // 10)) quarter-hours (Phase AF, X3)."""
+    if rules.get("edge_margin") is not None:
+        return int(rules["edge_margin"])
+    return QUARTER * max(2, min(4, (duration_min // QUARTER) // 10))
+
+
 def check_row(rules: Dict[str, Any], label: str, starts: Starts) -> Tuple[str, str]:
     """("ok", "OK"), ("none", "Not placed yet") or ("warn", what breaks a rule, in plain words)."""
     lo, hi = _span(label)
@@ -49,7 +57,7 @@ def check_row(rules: Dict[str, Any], label: str, starts: Starts) -> Tuple[str, s
     if all(s is None for s in starts):
         return "none", "Not placed yet"
     said: List[str] = []
-    margin = rules.get("edge_margin")
+    margin = edge_margin(rules, hi - lo)
     windows = rules.get("windows") or {}
     for (kind, minutes), s in zip(slots, starts):
         if s is None:
@@ -61,7 +69,7 @@ def check_row(rules: Dict[str, Any], label: str, starts: Starts) -> Tuple[str, s
             said.append(f"{kind} {hm(s)} is outside the shift ({hm(lo)} to {hm(hi)})")
             continue
         rel = s - lo
-        if margin is not None and (rel < margin or rel + minutes > hi - lo - margin):
+        if rel < margin or rel + minutes > hi - lo - margin:
             said.append(f"{kind} is within {margin} minutes of the shift's start or end")
         w = windows.get(kind.casefold()) or {}
         if (w.get("earliest") is not None and rel < w["earliest"]) or (w.get("latest") is not None and rel > w["latest"]):
@@ -131,7 +139,6 @@ def suggest(week: Dict[str, Any], inputs: Dict[str, Any], rules: Dict[str, Any],
             for b in planned(week, d - 1, a["name"]):
                 for q in range(max(0, b["start"] - 1440) // QUARTER, max(0, b["start"] + b["minutes"] - 1440) // QUARTER):
                     on_break[q] += 1
-    margin = rules.get("edge_margin") or 0
     min_gap, preferred, most = rules.get("min_gap") or 0, rules.get("preferred_gap") or 0, rules.get("max_gap")
     absolute, share = rules.get("max_concurrent") or 0, rules.get("max_concurrent_ratio") or 0
 
@@ -151,6 +158,7 @@ def suggest(week: Dict[str, Any], inputs: Dict[str, Any], rules: Dict[str, Any],
     windows = rules.get("windows") or {}
     for name, (lo, hi) in people:
         slots = slots_for(rules, hi - lo)
+        margin = edge_margin(rules, hi - lo)
         starts = out[name]
         for k, (kind, minutes) in enumerate(slots):
             if starts[k] is not None:

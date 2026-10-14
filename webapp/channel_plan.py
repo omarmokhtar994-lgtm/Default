@@ -25,8 +25,8 @@ from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Set, Tuple
 
 from ortools.sat.python import cp_model
 
-from .break_plan import check_row, hm
-from .channels import QUARTER, blended_at, inside
+from .break_plan import check_row, edge_margin, hm
+from .channels import QUARTER, blended_at, in_email_hours, inside
 
 LANGUAGE, BALANCED, LONG, MOVE, SWITCH, FAIR = 200, (100, 60, 30), 40, 5, 2, 1
 # Two stages, measured on a 16- and a 40-person day (Phase V task 5's ledger): the breaks kept (the best plan is
@@ -63,17 +63,15 @@ def allowed(setup: Dict[str, Any], day: int, person: Dict[str, Any], t: int) -> 
     day's window (unless Email is all they work)."""
     playing = in_play(setup)
     mine = [c for c in "PCE" if c in person["skills"] and c in playing] or [c for c in "PCE" if c in person["skills"]]
-    if setup["email_mode"] == "hours" and "E" in mine and len(mine) > 1:
-        window = setup["email_hours"][day]
-        if not (t < 1440 and window["start"] <= t < window["end"]):
-            mine.remove("E")
+    if setup["email_mode"] == "hours" and "E" in mine and len(mine) > 1 and not in_email_hours(setup, day, t):
+        mine.remove("E")
     return mine
 
 
 def _candidates(rules: Dict[str, Any], person: Dict[str, Any], kind: str, minutes: int) -> List[int]:
     """Break starts inside the rules for this kind (window, edge margin), on quarter hours."""
     lo, hi = person["start"], person["end"]
-    margin = rules.get("edge_margin") or 0
+    margin = edge_margin(rules, hi - lo)
     first, last = lo + margin, hi - margin - minutes
     window = (rules.get("windows") or {}).get(kind.casefold()) or {}
     if window.get("earliest") is not None:
@@ -242,7 +240,7 @@ def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=N
     email: List[Any] = []
     if setup["email_mode"] == "hours":
         target = setup["email_hours"][day]
-        lo, hi = target["start"], min(target["end"], 1440)
+        lo, hi = target["start"], target["end"]  # past 1440 when the window runs past midnight (Phase AF, A2)
         placed = [x[n, t, "E"] for n in slots for t in slots[n] if lo <= t < hi and (n, t, "E") in x]
         for lang, hours in [(None, target["hours"])] + list(target["languages"].items()):
             want = int(round(hours * 60 / QUARTER))
@@ -411,7 +409,7 @@ def score_day(people: List[Dict[str, Any]], plan: Dict[str, Any], setup: Dict[st
     if setup["email_mode"] == "hours":
         target = setup["email_hours"][day]
         email = sum(1 for p in people for t in every if at.get((p["name"], t)) == "E"
-                    and target["start"] <= t < min(target["end"], 1440)) * QUARTER / 60
+                    and target["start"] <= t < target["end"]) * QUARTER / 60
     else:
         email = sum(1 for p in people for t in every if at.get((p["name"], t)) == "E") * QUARTER / 60
     return {"short": short, "language_short": language_short, "email": email, "switches": switches,

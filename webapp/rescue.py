@@ -154,7 +154,7 @@ def solve(view: Dict[str, Any], inputs: Dict[str, Any], target: float, now: Opti
     # languages (as Fix breaks keeps them): per tick, eligible people on the floor never below min(now, minimum)
     lang_of = {lane["name"]: _norm(lane["language"]) for lane in view["lanes"]}
     for rule in view["languages"]:
-        inside = {c["t"] for c in rule["cells"] if c["count"] is not None}
+        inside = {c["t"]: c["minimum"] for c in rule["cells"] if c["count"] is not None}  # interval: its minimum
         eligible = set(rule["eligible"])
         mine = [(j, item) for j, item in enumerate(moving) if lang_of[item[0]["name"]] in eligible]
         if not mine or not inside:
@@ -180,10 +180,10 @@ def solve(view: Dict[str, Any], inputs: Dict[str, Any], target: float, now: Opti
                 for k in cover(seg, s, b["minutes"]):
                     takers.setdefault(k, []).append(v)
                     breaks_at.setdefault(k, set()).add(j)
-        least_on = max(rule["minimum"], 1)
         for k, vs in takers.items():
-            keep = min(now_on[k], least_on)
-            if k * STEP - (k * STEP) % step in inside and now_on[k] + back.get(k, 0) - len(breaks_at[k]) < keep:
+            at = k * STEP - (k * STEP) % step
+            keep = min(now_on[k], max(inside.get(at, 0), 1))
+            if at in inside and now_on[k] + back.get(k, 0) - len(breaks_at[k]) < keep:
                 m.Add(now_on[k] + back.get(k, 0) - sum(vs) >= keep)  # only where the breaks could breach it
 
     # channels (Phase V): never a channel or its language below its need, or below where it is now

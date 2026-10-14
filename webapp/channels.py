@@ -79,10 +79,15 @@ def _day(token: str) -> Optional[int]:
 
 
 def _days(value: Any, where: str) -> Set[int]:
-    """"All" (or blank) for every day, or days like "Sun, Mon" or "Sun-Thu"; refused when a day is not one."""
+    """"All" (or blank) for every day, "Weekdays" (Mon to Fri), "Weekends" (Sat and Sun), or days like "Sun, Mon"
+    or "Sun-Thu"; refused when a day is not one. The same words as the engine reads in Language Setup."""
     text = " ".join(str(value if value is not None else "").split())
     if text.casefold() in ("", "all", "every day", "daily"):
         return set(range(7))
+    if text.casefold() in ("weekdays", "weekday"):
+        return {1, 2, 3, 4, 5}
+    if text.casefold() in ("weekends", "weekend"):
+        return {0, 6}
     found: Set[int] = set()
     for part in re.split(r"[,;/]", text):
         if not part.strip():
@@ -130,6 +135,13 @@ def inside(days: Set[int], start: int, end: int, day: int, t: int) -> bool:
     if start < end:
         return day in days and start <= t < end
     return (day in days and t >= start) or ((day - 1) % 7 in days and t < end)
+
+
+def in_email_hours(setup: Dict[str, Any], day: int, t: int) -> bool:
+    """Whether minute ``t`` of ``day`` (past 1440 after midnight) is inside Email Hours: the day's own window, or the
+    day before's window running past midnight (Phase AF, A2)."""
+    own, before = setup["email_hours"][day], setup["email_hours"][(day - 1) % 7]
+    return own["start"] <= t < own["end"] or before["start"] <= t + 1440 < before["end"]
 
 
 def blended_at(setup: Optional[Dict[str, Any]], day: int, t: int) -> bool:
@@ -221,8 +233,10 @@ def _email_hours(ws, problems: List[str]) -> Dict[int, Dict[str, Any]]:
             start = _time(ws.cell(r, cols["window start"]).value, where) if "window start" in cols else None
             end = _time(ws.cell(r, cols["window end"]).value, where) if "window end" in cols else None
             start, end = (0 if start is None else start), (1440 if end is None else end)
-            if start >= end:
-                raise ValueError(f"{where}: the window must start before it ends.")
+            if start == end:
+                raise ValueError(f"{where}: the window must start and end at different times.")
+            if end < start:
+                end += 1440  # Phase AF (A2): an end before the start runs past midnight into the next morning
         except ValueError as exc:
             problems.append(str(exc))
             continue
@@ -577,8 +591,12 @@ def check_lines(setup: Dict[str, Any], inputs: Dict[str, Any], path: Path) -> Li
                 wrong.append((d, t, tuple(values[c] for c in letters) + (f,)))
             else:
                 ok += 1
-            if mode == "hours" and window["start"] <= t < window["end"]:
-                left[d] += max(0.0, f - total) * step / 60
+            if mode == "hours":
+                before = setup["email_hours"][(d - 1) % 7]
+                if window["start"] <= t < window["end"]:
+                    left[d] += max(0.0, f - total) * step / 60
+                elif before["start"] <= t + 1440 < before["end"]:  # the night of a window that started the day before
+                    left[(d - 1) % 7] += max(0.0, f - total) * step / 60
     joined = " + ".join(said[c] for c in letters)
     verb = "match" if mode == "interval" else "fit inside"
     if counted:

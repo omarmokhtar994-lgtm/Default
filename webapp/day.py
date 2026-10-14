@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from openpyxl import load_workbook
 
+from .channels import _days_or_none, inside as window_inside
 from .versions import DAYS, shift_span
 
 STEP = 5  # minutes: breaks move in 5-minute steps (owner, 2026-10-08)
@@ -119,8 +120,7 @@ def _languages(wb) -> List[Dict[str, Any]]:
         if not name or _norm(get(r, "active?")) in ("no", "n", "false"):
             continue
         covers = {_norm(x) for x in str(get(r, "can cover languages") or "").split(",") if x.strip()} | {_norm(name)}
-        days_text = _norm(get(r, "coverage days"))
-        days = list(range(7)) if days_text in ("", "all") else [DAYS.index(d) for d in DAYS if _norm(d) in days_text]
+        days = sorted(_days_or_none(get(r, "coverage days")) or ())  # as the engine reads it; not a day: no day
         try:
             minimum = int(float(get(r, "minimum per interval") or 0))
         except (TypeError, ValueError):
@@ -417,24 +417,26 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
         cells.append({**cell, "need": math.ceil(r - 1e-9), "pm": round(pm, 2),
                       "plan_pm": round((planned_here - r) * step / 60, 2), "cls": cls})
     languages = []
+    groups: Dict[str, List[Dict[str, Any]]] = {}  # Phase AF (X2): a language's rows show as one row
     for rule in inputs["languages"]:
-        eligible = {_norm(r["name"]) for r in inputs["languages"] if _norm(rule["name"]) in r["covers"]}
+        groups.setdefault(_norm(rule["name"]), []).append(rule)
+    for key, rules in groups.items():
+        rule = rules[0]
+        eligible = {_norm(r["name"]) for r in inputs["languages"] if key in r["covers"]}
         row = []
         for t in range(0, 1440, step):
-            if rule["start"] == rule["end"]:
-                inside = True
-            elif rule["start"] < rule["end"]:
-                inside = rule["start"] <= t < rule["end"]
-            else:
-                inside = t >= rule["start"] or t < rule["end"]
-            if not inside or day not in rule["days"]:
+            # Phase AF (X1): an overnight window belongs to the day it starts, as the engine reads it
+            minimums = [r["minimum"] for r in rules if window_inside(r["days"], r["start"], r["end"], day, t)]
+            if not minimums:
                 row.append({"t": t, "count": None, "cls": "none"})
                 continue
             count = min(sum(1 for seg in now[i] if _norm(seg["language"]) in eligible)
                         for i in range(t // STEP, (t + step) // STEP))
-            cls = "bad" if count < rule["minimum"] else ("warn" if count == 0 else "lok")
-            row.append({"t": t, "count": count, "cls": cls})
-        languages.append({"name": rule["name"], "start": rule["start"], "end": rule["end"], "minimum": rule["minimum"],
+            minimum = max(minimums)
+            cls = "bad" if count < minimum else ("warn" if count == 0 else "lok")
+            row.append({"t": t, "count": count, "cls": cls, "minimum": minimum})
+        languages.append({"name": rule["name"], "start": rule["start"], "end": rule["end"],
+                          "minimum": max(r["minimum"] for r in rules),
                           "eligible": sorted(eligible), "cells": row,
                           "gaps": sum(1 for c in row if c["cls"] in ("bad", "warn"))})
     mine = [(seg, st) for seg, st, away, br, ac in pieces if seg["offset"] == 0]
@@ -785,7 +787,7 @@ def vto_offers(view: Dict[str, Any], after: int = 0, top: int = 6) -> List[Dict[
                 for cell in lang["cells"]:
                     if cell["count"] is not None and t <= cell["t"] < end:
                         left = cell["count"] - gone.get(lang["name"], 0) - 1
-                        if left < max(lang["minimum"], 1 if cell["count"] else 0):
+                        if left < max(cell["minimum"], 1 if cell["count"] else 0):
                             ok = False
             if not ok:
                 continue
@@ -843,9 +845,9 @@ def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: i
     # languages: per 5 minutes, people on the floor who count for each language (inside its hours)
     langs = []
     for lang in view["languages"]:
-        inside = {c["t"] for c in lang["cells"] if c["count"] is not None}
+        inside = {c["t"]: c["minimum"] for c in lang["cells"] if c["count"] is not None}  # interval: its minimum
         counts = [0] * len(slots)
-        langs.append({"eligible": set(lang["eligible"]), "minimum": lang["minimum"], "inside": inside, "counts": counts})
+        langs.append({"eligible": set(lang["eligible"]), "inside": inside, "counts": counts})
     lang_of = {lane["name"]: _norm(lane["language"]) for lane in view["lanes"]}
     for lane in view["lanes"]:
         for seg in lane["segments"]:
@@ -890,8 +892,9 @@ def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: i
             if mine not in L["eligible"]:
                 continue
             for i, d in change.items():
-                if d < 0 and (i * STEP - (i * STEP) % step) in L["inside"]:
-                    if L["counts"][i] + d < max(L["minimum"], 1):
+                at = i * STEP - (i * STEP) % step
+                if d < 0 and at in L["inside"]:
+                    if L["counts"][i] + d < max(L["inside"][at], 1):
                         return False
         return True
 

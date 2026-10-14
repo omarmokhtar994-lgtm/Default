@@ -2501,7 +2501,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             on_break, soon = [], []
             for lane in v["lanes"]:
                 for seg in lane["segments"]:
-                    if seg["status"] in ("Unplanned leave", "Sick"):
+                    if seg["status"] in ABSENT_STATES:
                         continue
                     added = [{"kind": a["kind"], "start": a["start"], "minutes": a["end"] - a["start"]}
                              for a in seg.get("activities", []) if a["kind"] in EXTRA_BREAKS]  # added on the day

@@ -828,9 +828,9 @@ function homeRefresh(now) {
   var effect = form.querySelector("[data-effect]"), length = form.querySelector("[data-length]");
   var billable = form.querySelector("[data-billable]"), from = form.querySelector("[data-from-label]");
   var submit = form.querySelector("button[type=submit]"), minutes = form.querySelector("select[name=minutes]");
-  var whole = ["Unplanned leave", "Sick"], aux = ["Coaching", "Meeting", "Training", "System issue"];
+  var whole = ["Unplanned leave", "Sick", "Public holiday"], aux = ["Coaching", "Meeting", "Training", "System issue", "Task"];
   var usual = { "Break": "15", "Lunch": "30", "Overtime": "60", "VTO": "60", "Coaching": "30", "Meeting": "30",
-                "Training": "60", "System issue": "15" };
+                "Training": "60", "System issue": "15", "Task": "30" };
   var seq = 0;
   // Day off cancelled (Phase S): the people off today, a Shift Library shift or typed start and end
   var working = form.querySelector("[data-who-working]"), off = form.querySelector("[data-who-off]");

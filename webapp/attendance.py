@@ -39,8 +39,8 @@ WITH_MAX, WHY_MAX = 80, 200  # characters: who an aux is with, and why (Phase T)
 DAY_OFF = "Day off cancelled"  # "+ Add" calls in someone off that day (owner, 2026-10-09)
 QUARTER = 15  # typed call-in times go in 15-minute steps
 # What RTA's "+ Add" offers in an interval (owner, 2026-10-08), grouped as the dialog shows them.
-ADD_KINDS = {"Off the floor": ["Break", "Lunch", "Coaching", "Meeting", "Training", "System issue"],
-             "Attendance": ["Unplanned leave", "Sick", "Late", "Left early"],
+ADD_KINDS = {"Off the floor": ["Break", "Lunch", "Coaching", "Meeting", "Training", "System issue", "Task"],
+             "Attendance": ["Unplanned leave", "Sick", "Public holiday", "Late", "Left early"],
              "Hours": ["Overtime", "VTO"],
              "Day off": [DAY_OFF]}
 

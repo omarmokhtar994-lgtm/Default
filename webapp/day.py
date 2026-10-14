@@ -31,11 +31,11 @@ from .versions import DAYS, shift_span
 
 STEP = 5  # minutes: breaks move in 5-minute steps (owner, 2026-10-08)
 PRESENT = "Present"
-STATUSES = ["Present", "Unplanned leave", "Late", "Sick", "Left early", "Training", "Coaching", "Meeting",
-            "System issue"]
-ABSENT = {"Unplanned leave", "Sick"}  # the whole shift
+STATUSES = ["Present", "Unplanned leave", "Late", "Sick", "Public holiday", "Left early", "Training", "Coaching",
+            "Meeting", "System issue", "Task"]  # Phase AF: Public holiday (E3) and Task (E2)
+ABSENT = {"Unplanned leave", "Sick", "Public holiday"}  # the whole shift
 LATE_EARLY = {"Late", "Left early"}
-AUX = {"Training", "Coaching", "Meeting", "System issue"}  # billable or not, chosen when it is recorded
+AUX = {"Training", "Coaching", "Meeting", "System issue", "Task"}  # billable or not, chosen when it is recorded
 EXTRA_BREAKS = ("Break", "Lunch")  # added on the day in RTA (owner, 2026-10-08): always off the floor
 TIMED = LATE_EARLY | AUX  # may carry a from/to time
 CANCELLED = "cancelled"  # Phase AD: an ``actual`` break value meaning the RTA cancelled that break (a reason is kept)

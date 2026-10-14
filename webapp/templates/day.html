@@ -7,7 +7,7 @@
 {% if with_lists %}<label><span>Department</span> <select name="with_dept" data-with-dept{{ ' disabled' if disabled }}{{ ' required' if required }}><option value="">Pick the department</option>{% for d in with_lists %}<option value="{{ d.name }}"{% if d.name == dept %} selected{% endif %}>{{ d.name }}</option>{% endfor %}</select></label><label><span>With</span> <select name="with_whom" data-with-person{{ ' disabled' if disabled }}{{ ' required' if required }}><option value="">Pick who</option>{% for d in with_lists %}{% for p in d.people %}<option value="{{ p.name }}" data-dept="{{ d.name }}"{% if d.name == dept and p.name == who %} selected{% endif %}>{{ p.name }}</option>{% endfor %}{% endfor %}</select></label>
 {%- else %}<label><span>With</span> <input name="with_whom" list="team-names" maxlength="80"{{ ' required' if required }} value="{{ who }}" placeholder="Who it is with"{{ ' disabled' if disabled }}></label>{% endif %}
 {%- endmacro %}
-{% set absent_states = ['Unplanned leave', 'Sick'] %}
+{% set absent_states = ['Unplanned leave', 'Sick', 'Public holiday'] %}
 {% set unit = {15: 'quarter-hours', 30: 'half-hours', 60: 'hours'} %}
 {% macro hidden_day(view, cover=none) %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="view" value="{{ view }}">{% if cover is not none %}<input type="hidden" name="cover" value="{{ cover }}">{% endif %}{% endmacro %}
 {# Phase AB/AC: one change kept off the group. Preview only says so; with script, hidden for a change that would not post. #}

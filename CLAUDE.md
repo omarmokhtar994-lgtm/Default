@@ -17,6 +17,36 @@ of these, the rule wins.
   Egypt time (UTC+3).
 - The release gate is `run_tests.sh` with `tests_staged/GATE_MINIMUMS.json`.
 
+## Coding guidelines (Karpathy)
+
+Added at the owner's request (2026-10-14) from forrestchang/andrej-karpathy-skills @2c60614 (MIT), which
+draws on Andrej Karpathy's notes on common LLM coding mistakes. The project rules above win where they differ.
+These lean toward caution over speed; for trivial tasks, use judgment.
+
+1. **Think before coding.**
+   - State assumptions.
+   - When there are several readings, name them rather than picking one silently.
+   - Say so when a simpler way exists.
+   - If something is unclear, stop and name it.
+   - Here, ask the owner only about decisions that are theirs (samples, behaviour changes, new dependencies).
+     Otherwise take the sensible default and say which one.
+2. **Simplicity first.**
+   - Write the minimum code that solves the problem.
+   - No features, abstractions or configurability nobody asked for.
+   - If 200 lines could be 50, rewrite.
+   - This never relaxes fail-closed validation of inputs that can really occur.
+3. **Surgical changes.**
+   - Touch only what the request needs.
+   - Match the existing style.
+   - Do not improve neighbouring code, comments or formatting.
+   - Mention unrelated dead code instead of deleting it.
+   - Remove only what your own change left unused.
+   - Every changed line traces to the request.
+4. **Goal-driven execution.**
+   - Turn the task into checks: a failing test that reproduces the bug, then make it pass; tests green before
+     and after a refactor.
+   - For multi-step work, state a short plan with a check per step, and loop until each check passes.
+
 ## Installed skills and how they apply here
 
 Load the matching skill (Skill tool) at the start of each step it covers;

@@ -18,17 +18,22 @@ icons (MIT) as one SVG sprite; Playwright for browser checks.
 
 ## Rulings (owner gave blanket approval; each says what it costs if wrong)
 
-- Colours: the measured Phase Y tokens stay (contrast and colour-blind checks hold); the new look comes from type,
-  layout, the darker menu, surfaces and icons. Cost if wrong: a token change.
+- Colours: the measured Phase Y tokens stay for now; the owner allows new colours (answer 7: "feel free to change colors
+  ... show me first"), so T9 sends colour samples first and applies them only after the owner picks.
 - Tab names stay (Timeline, Interval board, ...): people know them and tests drive them. Rescue the day, Change
   several breaks and Re-plan are grouped under "Fix the day" beside the tabs.
-- Leave: 3 places a day per LOB by default (managers change it), types Annual leave, Casual leave and Unpaid leave;
-  balances typed or pasted per person per year by managers; Unpaid uses no balance.
+- Leave (owner's answer 3, 2026-10-14: "as per coverage and for balance ... covered by TM and RTA approval ... for
+  public holiday and for planned leave"): types Planned leave and Public holiday; no fixed places a day, the
+  coverage a request would leave decides (shown per day); a Planned leave balance per person per year, typed by
+  managers, shown to the approvers (it warns, the approvers decide); two approvals: the TM (a supervisor or an admin)
+  first, then the RTA (any other staff member of the program), whose approval changes the schedule.
 - Associates: an admin or supervisor creates each account, linked to the person's name on the schedule; first sign-in
   changes the password (as for everyone). Associates see only My week, their requests and swaps.
 - An approved leave or swap changes the schedule in use as a new version that is set in use (history and the earlier
   version kept, so it can be put back).
-- A swap needs the colleague to accept, then a manager to approve.
+- A swap needs the colleague to accept, then a manager to approve (owner's answer 6). Both speak the same languages,
+  unless swapping changes no language coverage; when their channels differ (Chat and Phone against all three), the
+  swap is offered only if no channel's coverage changes; otherwise it cannot be sent.
 - Every RTA tab in another zone: the stitched read-only view gains the language and channel rows; changes stay on the
   schedule's own day (zone-aware forms deferred again, said in the report).
 

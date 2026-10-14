@@ -35,7 +35,7 @@ from .channel_plan import NoPlan, plan_day, score_day
 from .channel_template import channel_workbook
 from .channels import check_lines, has_channel_needs, read_channels, requirement_tab
 from .clock import EGYPT, HOME, ZONES, pick_zone, shift as zone_shift, zone_label
-from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, board, glance, hover_tips, now_panel, read_inputs, shift_groups, stitch
+from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, board, glance, hover_tips, my_day, now_panel, read_inputs, shift_groups, stitch
 from .coach import actual_shrinkage, corrected_tab
 from .leave import KINDS as LEAVE_KINDS, LeaveBook
 from .swaps import SwapBook
@@ -726,9 +726,29 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if key and swap_day:
             offers = [c for c in swaps.candidates(key, swap_day, name)
                       if c["ok"] and swaps.account(key, c["name"]) is not None]
-        return render_template("me.html", unit=key, kinds=LEAVE_KINDS,
-                               mine=leave.mine(key, name) if leave and key else [],
-                               swaps=swaps.mine(key, name) if swaps and key else [], swap_day=swap_day, offers=offers)
+        clock_now = datetime.now(EGYPT)
+        today, card, week = clock_now.date(), None, []
+        mine = leave.mine(key, name) if leave and key else []
+        my_swaps = swaps.mine(key, name) if swaps and key else []
+        if key:
+            days = app.extensions["days"]
+            page = days.page(key, today)
+            card = my_day(page["view"], name, clock_now.hour * 60 + clock_now.minute) if page else None
+            version = days.version(key, today)[0]
+            first = date.fromisoformat(version["week_start"]) if version and version["week_start"] else week_start(today)
+            for i in range(7):
+                on = first + timedelta(days=i)
+                notes = [f"{r['kind']}: {MY_STATUS.get(r['status'], r['status'])}" for r in mine
+                         if r["status"] != "cancelled" and r["first_day"] <= on.isoformat() <= r["last_day"]]
+                notes += [f"Swap with {w['other'] if w['asker'] == name else w['asker']}: {w['status_words']}"
+                          for w in my_swaps if w["day"] == on.isoformat() and w["status"] != "cancelled"]
+                week.append({"date": on, "cell": dict(days.roster(key, on)).get(name, ""), "notes": notes,
+                             "today": on == today})
+        return render_template("me.html", unit=key, kinds=LEAVE_KINDS, mine=mine, swaps=my_swaps, swap_day=swap_day,
+                               offers=offers, today=today, card=card, week=week, hm=hm)
+
+    MY_STATUS = {"waiting_tm": "waiting for your TM", "waiting_rta": "approved by your TM, waiting for the RTA",
+                 "applying": "being approved", "approved": "approved", "refused": "refused"}
 
     def _my_unit() -> str:
         """The LOB whose schedule has this associate's name ("" when none does yet)."""

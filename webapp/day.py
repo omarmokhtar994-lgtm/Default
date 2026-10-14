@@ -1326,3 +1326,52 @@ def at_target(cells: List[Dict[str, Any]], target: float) -> Dict[str, Any]:
     return {"target": target, "intervals": len(have),
             "now": sum(1 for c in have if c["now"] >= target * c["required"] - 1e-9),
             "plan": sum(1 for c in have if c["plan"] >= target * c["required"] - 1e-9), "cells": shares}
+
+
+CHANNEL_WORD = {"P": "Phone", "C": "Chat", "E": "Email", "A": "all channels"}
+
+
+def my_day(view: Dict[str, Any], name: str, now: Optional[int] = None) -> Optional[Dict[str, Any]]:
+    """One person's day for My week (Phase AG, T7): their shift starting that day as a band of what they are on
+    (channel stretches, breaks; "work" where no channel is planned), and in words what they are on at ``now``
+    (minutes from that day's midnight) and what comes next. None when they do not work that day."""
+    lane = next((l for l in view["lanes"] if l["name"] == name), None)
+    seg = next((s for s in lane["segments"] if s["offset"] == 0), None) if lane else None
+    if seg is None:
+        return None
+    lo, hi = seg["start"], seg["end"]
+    runs = ((view.get("channels") or {}).get("runs") or {}).get(name) or []
+    breaks = sorted((b["start"], b["start"] + b["minutes"], b["kind"]) for b in seg["breaks"])
+    points = sorted({lo, hi} | {x for b in breaks for x in b[:2] if lo < x < hi}
+                    | {x for r in runs for x in r[:2] if lo < x < hi})
+    band: List[Dict[str, Any]] = []
+    for a, b in zip(points, points[1:]):
+        rest = next((k for s, e, k in breaks if s <= a < e), None)
+        letter = None if rest else next((c for s, e, c in runs if s <= a < e), None)
+        kind, what = ("break", rest) if rest else ((letter, CHANNEL_WORD.get(letter, letter)) if letter else ("work", ""))
+        if band and band[-1]["kind"] == kind and band[-1]["what"] == what:
+            band[-1]["hi"] = b
+        else:
+            band.append({"lo": a, "hi": b, "kind": kind, "what": what})
+    said = ""
+    if now is not None and now < lo:
+        said = f"Your shift starts at {_hm(lo)}."
+    elif now is not None and now >= hi:
+        said = f"Your shift ended at {_hm(hi)}."
+    elif now is not None:
+        i = next(i for i, p in enumerate(band) if p["lo"] <= now < p["hi"])
+        cur, after = band[i], band[i + 1:]
+        said = (f"Now working until {_hm(cur['hi'])}." if cur["kind"] == "work"
+                else f"Now on {cur['what']} until {_hm(cur['hi'])}.")
+        if not after:
+            said += " Then your shift ends."
+        elif after[0]["kind"] == "break":
+            said += f" Then {after[0]['what']}, {after[0]['hi'] - after[0]['lo']} minutes"
+            if len(after) > 1 and after[1]["kind"] not in ("break", "work"):
+                said += f", and {after[1]['what']} from {_hm(after[1]['lo'])}"
+            said += "."
+        elif after[0]["kind"] == "work":
+            said += f" Then back to work at {_hm(after[0]['lo'])}."
+        else:
+            said += f" Then {after[0]['what']} from {_hm(after[0]['lo'])}."
+    return {"label": seg["label"], "start": lo, "end": hi, "status": seg["status"], "band": band, "said": said}

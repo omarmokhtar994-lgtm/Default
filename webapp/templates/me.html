@@ -3,28 +3,38 @@
 {% block content %}
 <div class="phead"><div>
   <h1>My week</h1>
-  <p class="byline">{{ user.roster_name }}</p>
+  <p class="byline">{{ user.roster_name }}{% if week %}, {{ week[0].date.strftime('%d %b') }} to {{ week[-1].date.strftime('%d %b') }}{% endif %}</p>
 </div></div>
 {% if unit %}
-<section class="panel" aria-labelledby="ask-h">
-  <h2 id="ask-h">Request leave</h2>
+<section class="panel me-today" aria-labelledby="today-h">
+  <h2 id="today-h">Today, {{ today.strftime('%A') }}</h2>
+  {% if card %}
+  <b class="me-shift">{{ card.label }}</b>
+  {% set span = card.end - card.start %}
+  <svg class="me-band" viewBox="0 0 {{ span }} 12" preserveAspectRatio="none" role="img" aria-label="Your shift, part by part">{% for p in card.band %}<rect class="b-{{ p.kind }}" x="{{ p.lo - card.start }}" y="0" width="{{ p.hi - p.lo }}" height="12" rx="2"><title>{{ (p.what or 'Working')|capitalize }}, {{ hm(p.lo) }} to {{ hm(p.hi) }}</title></rect>{% endfor %}</svg>
+  <p class="me-ends"><span>{{ hm(card.start) }}</span><span>{{ hm(card.end) }}</span></p>
+  {% if card.status != 'Present' %}<p class="me-said">Recorded today: {{ card.status|lower }}.</p>{% endif %}
+  <p class="me-said">{{ card.said }}</p>
+  {% else %}<p class="me-said">You do not work today.</p>{% endif %}
+</section>
+<section class="panel" aria-labelledby="week-h">
+  <h2 id="week-h">The week</h2>
+  <table class="me-week"><tbody>{% for d in week %}<tr{% if d.today %} class="me-now" aria-current="date"{% endif %}><th scope="row">{{ d.date.strftime('%a %d %b') }}</th><td>{{ d.cell or 'Not planned yet' }}</td><td>{{ d.notes|join('; ') }}</td></tr>{% endfor %}</tbody></table>
+</section>
+<details class="sheet"{% if not swap_day %} open{% endif %}>
+  <summary>Request leave</summary>
   <form method="post" action="{{ url_for('me_leave') }}" class="me-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Type <select name="kind">{% for k in kinds %}<option>{{ k }}</option>{% endfor %}</select></label>
     <label>From <input type="date" name="first" required></label>
     <label>To <input type="date" name="last" required></label>
     <label>Note for your TM <span class="hint">Optional</span><input name="note" maxlength="200" autocomplete="off"></label>
+    <p class="hint">Your TM decides first, then the RTA. They see how the day's cover changes before deciding.</p>
     <button class="primary">Send the request</button>
   </form>
-</section>
-<section class="panel" aria-labelledby="mine-h">
-  <h2 id="mine-h">My requests</h2>
-  <ul class="req-done">{% for r in mine %}<li><b>{{ r.label }}</b>: {{ {'waiting_tm': 'waiting for your TM', 'waiting_rta': 'approved by your TM, waiting for the RTA', 'applying': 'being approved'}.get(r.status, r.status) }}{% if r.reason %} ({{ r.reason }}){% endif %}
-    {% if r.status in ('waiting_tm', 'waiting_rta') %}<form method="post" action="{{ url_for('me_leave_cancel', request_id=r.id) }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="quiet">Cancel</button></form>{% endif %}</li>
-  {% else %}<li class="empty">No requests yet.</li>{% endfor %}</ul>
-</section>
-<section class="panel" aria-labelledby="swap-h">
-  <h2 id="swap-h">Offer a swap</h2>
+</details>
+<details class="sheet"{% if swap_day %} open{% endif %}>
+  <summary>Offer a swap</summary>
   <form method="get" action="{{ url_for('me') }}" class="me-form">
     <label>Day <input type="date" name="swap" value="{{ swap_day.isoformat() if swap_day else '' }}" required></label>
     <button>Find colleagues</button>
@@ -33,9 +43,17 @@
   <ul class="req-done">{% for c in offers %}<li><b>{{ c.name }}</b> {{ c.cell }}
     <form method="post" action="{{ url_for('me_swap') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="day" value="{{ swap_day.isoformat() }}"><input type="hidden" name="other" value="{{ c.name }}"><button class="quiet">Offer</button></form></li>
   {% else %}<li class="empty">Nobody can take your shift that day within the rules.</li>{% endfor %}</ul>{% endif %}
-  {% if swaps %}<h3>My swaps</h3><ul class="req-done">{% for w in swaps %}<li><b>{{ w.asker if w.other == user.roster_name else w.other }}</b> {{ w.label }}: {{ w.status_words }}
+</details>
+<section class="panel" aria-labelledby="mine-h">
+  <h2 id="mine-h">My requests</h2>
+  <ul class="req-done">{% for r in mine %}<li><b>{{ r.label }}</b>: {{ {'waiting_tm': 'waiting for your TM', 'waiting_rta': 'approved by your TM, waiting for the RTA', 'applying': 'being approved'}.get(r.status, r.status) }}{% if r.reason %} ({{ r.reason }}){% endif %}
+    {% if r.status in ('waiting_tm', 'waiting_rta') %}<form method="post" action="{{ url_for('me_leave_cancel', request_id=r.id) }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="quiet">Cancel</button></form>{% endif %}</li>
+  {% endfor %}
+  {% for w in swaps %}<li><b>Swap with {{ w.asker if w.other == user.roster_name else w.other }}</b>, {{ w.label }}: {{ w.status_words }}
     {% if w.status == 'waiting_other' and w.other == user.roster_name %}<form method="post" action="{{ url_for('me_swap_answer', swap_id=w.id, action='answer') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="quiet" name="decision" value="accept">Accept</button><button class="quiet" name="decision" value="decline">Decline</button></form>{% endif %}
-    {% if w.status in ('waiting_other', 'waiting_tm') and w.asker == user.roster_name %}<form method="post" action="{{ url_for('me_swap_answer', swap_id=w.id, action='cancel') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="quiet">Cancel</button></form>{% endif %}</li>{% endfor %}</ul>{% endif %}
+    {% if w.status in ('waiting_other', 'waiting_tm') and w.asker == user.roster_name %}<form method="post" action="{{ url_for('me_swap_answer', swap_id=w.id, action='cancel') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="quiet">Cancel</button></form>{% endif %}</li>
+  {% endfor %}
+  {% if not mine and not swaps %}<li class="empty">No requests yet.</li>{% endif %}</ul>
 </section>
 {% else %}<p class="empty">Your name is not on a schedule yet. Your planner adds it when your week is planned.</p>{% endif %}
 {% endblock %}

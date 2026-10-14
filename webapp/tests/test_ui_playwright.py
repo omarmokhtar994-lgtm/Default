@@ -2036,13 +2036,16 @@ class ThePhaseZInTheBrowser(unittest.TestCase):
     def setUpClass(cls):
         import io
         import shutil
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
+
+        from webapp.clock import EGYPT
         from webapp.programs import ProgramBook
         from webapp.tests.test_ready import make_ready
         from webapp.tests.test_runs import sign_in as client_sign_in, token, wait
         cls.dir = Path(tempfile.mkdtemp())
         cls.addClassCleanup(shutil.rmtree, cls.dir, True)
-        cls.today = datetime.now(timezone(timedelta(hours=3))).date()  # the server's day (Egypt time)
+        # the server's day: Egypt time on Cairo's clock, UTC+2 in winter (re-pinned 2026-10-14 from a fixed UTC+3)
+        cls.today = datetime.now(EGYPT).date()
         cls.sunday = cls.today - timedelta(days=(cls.today.weekday() + 1) % 7)
         ready = make_ready(cls.dir / "ready.xlsx")
         cls.app, cls.store, _, _ = make_app(VALIDATOR_ROOT=str(REPO))
@@ -2203,13 +2206,15 @@ class ThePhaseAAInTheBrowser(unittest.TestCase):
     def setUpClass(cls):
         import io
         import shutil
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
+
+        from webapp.clock import EGYPT
         from webapp.programs import ProgramBook
         from webapp.tests.test_ready import make_ready
         from webapp.tests.test_runs import sign_in as client_sign_in, token, wait
         cls.dir = Path(tempfile.mkdtemp())
         cls.addClassCleanup(shutil.rmtree, cls.dir, True)
-        today = datetime.now(timezone(timedelta(hours=3))).date()
+        today = datetime.now(EGYPT).date()
         cls.sunday = today - timedelta(days=(today.weekday() + 1) % 7)
         cls.wed = cls.sunday + timedelta(days=3)
         ready = make_ready(cls.dir / "ready.xlsx")
@@ -2338,14 +2343,16 @@ class ThePhaseABInTheBrowser(unittest.TestCase):
     def setUpClass(cls):
         import io
         import shutil
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
+
+        from webapp.clock import EGYPT
         from webapp.programs import ProgramBook
         from webapp.tests.test_notify_sender import Group
         from webapp.tests.test_ready import make_ready
         from webapp.tests.test_runs import sign_in as client_sign_in, token, wait
         cls.dir = Path(tempfile.mkdtemp())
         cls.addClassCleanup(shutil.rmtree, cls.dir, True)
-        cls.today = datetime.now(timezone(timedelta(hours=3))).date()
+        cls.today = datetime.now(EGYPT).date()
         sunday = cls.today - timedelta(days=(cls.today.weekday() + 1) % 7)
         ready = make_ready(cls.dir / "ready.xlsx")
         cls.group = Group()
@@ -2493,7 +2500,9 @@ class ThePhaseACInTheBrowser(unittest.TestCase):
     def setUpClass(cls):
         import io
         import shutil
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
+
+        from webapp.clock import EGYPT
         from webapp.notify import KINDS
         from webapp.programs import ProgramBook
         from webapp.tests.test_notify_sender import Group
@@ -2501,7 +2510,7 @@ class ThePhaseACInTheBrowser(unittest.TestCase):
         from webapp.tests.test_runs import sign_in as client_sign_in, token, wait
         cls.dir = Path(tempfile.mkdtemp())
         cls.addClassCleanup(shutil.rmtree, cls.dir, True)
-        cls.today = datetime.now(timezone(timedelta(hours=3))).date()
+        cls.today = datetime.now(EGYPT).date()
         cls.sunday = cls.today - timedelta(days=(cls.today.weekday() + 1) % 7)
         ready = make_ready(cls.dir / "ready.xlsx")
         cls.app, cls.store, _, _ = make_app(VALIDATOR_ROOT=str(REPO), NOTIFY_THREAD=False, NOTIFY_TRANSPORT=Group())
@@ -2664,7 +2673,9 @@ class ThePhaseADInTheBrowser(unittest.TestCase):
     def setUpClass(cls):
         import io
         import shutil
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
+
+        from webapp.clock import EGYPT
         from webapp.notify import KINDS
         from webapp.programs import ProgramBook
         from webapp.tests.test_notify_sender import Group
@@ -2672,7 +2683,7 @@ class ThePhaseADInTheBrowser(unittest.TestCase):
         from webapp.tests.test_runs import sign_in as client_sign_in, token, wait
         cls.dir = Path(tempfile.mkdtemp())
         cls.addClassCleanup(shutil.rmtree, cls.dir, True)
-        cls.today = datetime.now(timezone(timedelta(hours=3))).date()
+        cls.today = datetime.now(EGYPT).date()
         cls.sunday = cls.today - timedelta(days=(cls.today.weekday() + 1) % 7)
         cls.day_of = {name: cls.sunday + timedelta(days=i) for i, name in
                       enumerate(("sun", "mon", "tue", "wed", "thu", "fri", "sat"))}

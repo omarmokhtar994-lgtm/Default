@@ -14,7 +14,7 @@ of these, the rule wins.
 - No speculative behaviour changes: back each one with a pre-registered A/B rule
   or a measured configuration.
 - Commit and push only to the session's designated branch. Report times in
-  Egypt time (UTC+3).
+  Egypt time (Africa/Cairo clock: UTC+3 in summer, UTC+2 in winter).
 - The release gate is `run_tests.sh` with `tests_staged/GATE_MINIMUMS.json`.
 
 ## Coding guidelines (Karpathy)

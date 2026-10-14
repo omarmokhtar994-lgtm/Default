@@ -21,6 +21,7 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 from openpyxl import load_workbook
 
+from .clock import EGYPT
 from .week import compact
 
 DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
@@ -563,11 +564,10 @@ def marks(found: List[Dict[str, Any]], week: Optional[Dict[str, Any]] = None,
 def with_notes(path: Path, view: Dict[str, Any]) -> "io.BytesIO":
     """The version's workbook with a first tab saying what changed, who, why, and what the checks found."""
     import io
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime
 
     from openpyxl.styles import Font
 
-    egypt = timezone(timedelta(hours=3))
     wb = load_workbook(path)
     ws = wb.create_sheet("Version Notes", 0)
     row = view["row"]
@@ -595,7 +595,7 @@ def with_notes(path: Path, view: Dict[str, Any]) -> "io.BytesIO":
         ws.cell(r, c, head).font = bold
     for change in view["changes"]:
         r += 1
-        when = datetime.fromtimestamp(change["at"], egypt).strftime("%a %d %b %Y, %H:%M")
+        when = datetime.fromtimestamp(change["at"], EGYPT).strftime("%a %d %b %Y, %H:%M")
         for c, v in enumerate((when, change["by_name"], change["associate"], change["day"], change["old"],
                                change["new"], change["reason"], change["severity"]), 1):
             ws.cell(r, c, v)

@@ -11,7 +11,7 @@ import shutil
 import tempfile
 import time
 import zipfile
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -32,6 +32,7 @@ from .channel_people import ChannelPeople, can_work, channel_words
 from .channel_plan import NoPlan, plan_day, score_day
 from .channel_template import channel_workbook
 from .channels import check_lines, has_channel_needs, read_channels, requirement_tab
+from .clock import EGYPT
 from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, board, read_inputs, shift_groups
 from .coach import actual_shrinkage, corrected_tab
 from .contacts import ContactBook, pick_contact
@@ -134,7 +135,6 @@ def _secret_key(data_dir: Path) -> str:
 WORKBOOKS = ("Scheduler_Input_Blank.xlsx", "Scheduler_Input_Example.xlsx")
 BACK = {"program": "programs"}  # where Back goes without browser history; every other page: home
 THEMES = ("light", "dark")  # no cookie: follow the device's setting
-EGYPT = timezone(timedelta(hours=3))  # owner's rule: times in Egypt time (UTC+3)
 
 
 def _when(epoch: Optional[float]) -> str:

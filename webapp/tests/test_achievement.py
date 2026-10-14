@@ -9,14 +9,16 @@ import re
 import shutil
 import tempfile
 import unittest
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
+from webapp.clock import EGYPT
 from webapp.programs import ProgramBook
 from webapp.tests.test_ready import make_ready
 from webapp.tests.test_runs import REPO, make_app, sign_in, token, wait
 
-EGYPT = timezone(timedelta(hours=3))
+# Re-pinned 2026-10-14: the server's day is Egypt time on Cairo's clock (UTC+2 in winter, webapp/clock.py).
+# A fixed UTC+3 here named the wrong day from 22:00 to 23:00 Egypt time all winter.
 WED = date(2026, 10, 14)
 
 

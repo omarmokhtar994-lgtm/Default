@@ -40,10 +40,10 @@ fi
 grep -qx 'ortools==9.15.6755' "$SRC/deploy/requirements.txt" || fail "deploy/requirements.txt must pin ortools==9.15.6755."
 
 # ---------------------------------------------------------------- packages
-say "Installing system packages (Python, firewall tools, Caddy)"
+say "Installing system packages (Python, time zone data, firewall tools, Caddy)"
 export DEBIAN_FRONTEND=noninteractive
 run apt-get update -y
-run apt-get install -y python3 python3-venv python3-pip unzip curl gpg iptables-persistent netfilter-persistent \
+run apt-get install -y python3 python3-venv python3-pip tzdata unzip curl gpg iptables-persistent netfilter-persistent \
     debian-keyring debian-archive-keyring apt-transport-https
 if ! command -v caddy >/dev/null 2>&1 || [ "$DRY_RUN" = 1 ]; then
   # Caddy's own package repository (https://caddyserver.com/docs/install#debian-ubuntu-raspbian)

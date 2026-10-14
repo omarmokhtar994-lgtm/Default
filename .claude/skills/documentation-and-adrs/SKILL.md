@@ -29,7 +29,7 @@ start a `docs/decisions/` folder unless the owner asks for one.
 - **Release notes:** use `changelog-generator`.
 - **Writing:**
   - Sentence case.
-  - Times in Egypt time (UTC+3).
+  - Times in Egypt time (Africa/Cairo clock: UTC+3 in summer, UTC+2 in winter).
   - No model identifiers.
   - Keep every number, unit and caveat when rewording.
   - Never regenerate or rewrite historical baselines or results.

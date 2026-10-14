@@ -21,15 +21,15 @@ import shutil
 import tempfile
 import threading
 import time
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from .clock import EGYPT
 from .versions import (DAYS, added, apply_change, channel_blocks, marks, problems, read_week, shift_span, swap_slots,
                        validate, write_breaks, write_channels)
 
 KEEP_DAYS = 395  # 13 months after the schedule's week (owner, 2026-10-08)
-EGYPT = timezone(timedelta(hours=3))
 RANK = {"ok": 0, "yellow": 1, "red": 2}
 WEEK = "Week"  # the change log's day for a slot swap
 

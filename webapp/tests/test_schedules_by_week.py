@@ -6,14 +6,16 @@ side, with the figures their pages already work out."""
 import html
 import json
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
+from webapp.clock import EGYPT
 from webapp.programs import ProgramBook
 from webapp.tests.test_runs import sign_in, token
 from webapp.tests.test_week_list import WEEK, TwoSchedulesForOneWeek
 from webapp.week import view as week_view
 
-EGYPT = timezone(timedelta(hours=3))
+# Re-pinned 2026-10-14: the server's day is Egypt time on Cairo's clock (UTC+2 in winter, webapp/clock.py).
+# A fixed UTC+3 here named the wrong day from 22:00 to 23:00 Egypt time all winter.
 PREV, NEXT = "2026-10-04", "2026-10-18"
 
 

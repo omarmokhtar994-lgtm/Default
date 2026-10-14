@@ -10,13 +10,14 @@ import sys
 import shutil
 import tempfile
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
 
 from webapp.channel_template import add_channel_tabs as needs_tabs, channel_workbook
 from webapp.channels import check_lines, has_channel_needs, read_channels
+from webapp.clock import EGYPT
 from webapp.day import read_inputs
 from webapp.programs import ProgramBook
 from webapp.tests.test_channels import add_channel_tabs
@@ -148,7 +149,7 @@ class TheChannelNeeds(_Needs):
 
     def test_attached_needs_win_over_the_workbooks_own_tabs(self):
         self.assertEqual(self.book.channel_path(self.tabbed), self.book.root / self.tabbed / "channels.xlsx")
-        today = datetime.now(timezone(timedelta(hours=3))).strftime("%a %d %b")
+        today = datetime.now(EGYPT).strftime("%a %d %b")  # Egypt time on Cairo's clock (re-pinned 2026-10-14)
         panel = self.panel(self.page(f"/runs/{self.tabbed}/schedules"))
         self.assertIn(f"From channel needs added on {today}", panel)
         self.assertNotIn("Phone 5 = 7", panel)  # the workbook's own Phone tab is no longer read

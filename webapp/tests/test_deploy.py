@@ -107,6 +107,13 @@ class TheDryRun(unittest.TestCase):
             self.assertIn(command, proc.stdout)
         self.assertIn("https://129-151-1-2.sslip.io", proc.stdout)
 
+    def test_installs_time_zone_data(self):
+        # owner, 2026-10-14: Egypt time follows Cairo's clock (webapp/clock.py), which needs the server's tzdata.
+        proc, _ = dry_run()
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        apt = [line for line in proc.stdout.splitlines() if "apt-get install" in line]
+        self.assertTrue(any(re.search(r"\btzdata\b", line) for line in apt), apt)
+
     def test_refuses_without_root_when_not_a_dry_run(self):
         if os.geteuid() == 0:
             self.skipTest("running as root here")

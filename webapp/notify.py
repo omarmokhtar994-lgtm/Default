@@ -17,15 +17,15 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import asdict, dataclass, field
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 from urllib.parse import quote_plus, urlsplit
 
+from .clock import EGYPT
 from .day import ABSENT
 
 log = logging.getLogger(__name__)
 
-EGYPT = timezone(timedelta(hours=3))  # owner's rule: times in Egypt time (UTC+3)
 
 # What can post, in the order the Notifications page lists it. Sick, unplanned leave and attendance set back to
 # present are PRIVATE: never posted to a group, whatever is ticked.

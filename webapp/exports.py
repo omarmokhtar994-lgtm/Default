@@ -13,7 +13,7 @@ import csv
 import io
 import json
 import time
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 from openpyxl import Workbook
@@ -21,10 +21,10 @@ from openpyxl.cell import WriteOnlyCell
 from openpyxl.styles import Font
 
 from .adherence import person_day
+from .clock import EGYPT
 from .day import ABSENT, AUX, CALLED_IN, EXTRA_BREAKS, MEASURES, pattern_breaks, planned
 from .versions import DAYS
 
-EGYPT = timezone(timedelta(hours=3))
 MAX_DAYS = 400
 KINDS = {"attendance": "Attendance", "activities": "Activities", "activity": "Day activity",
          "breaks": "Breaks planned vs taken",
@@ -376,7 +376,7 @@ def build(store, days, start: date, end: date, kinds: List[str], fmt: str = "xls
                        ("Changes by", who or "Anyone"), ("Measure", MEASURES[measure]),
                        ("Items", ", ".join(KINDS[k] for k in ordered)), ("Downloaded by", by),
                        ("Downloaded at", datetime.now(EGYPT).strftime("%Y-%m-%d %H:%M")),
-                       ("Times", "All times are Egypt time (UTC+3)."),
+                       ("Times", "All times are Egypt time (Cairo clock: UTC+3 in summer, UTC+2 in winter)."),
                        ("Dates", "Attendance, day activity, breaks and worked hours follow the shift's own date (an "
                                  "overnight shift belongs to the day it started); changes, versions, runs and other "
                                  "actions follow when they happened."),

@@ -10,10 +10,11 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
-EGYPT = timezone(timedelta(hours=3))
+from .clock import EGYPT
+
 COUNTED = ("DONE", "REVIEW")
 UNTAGGED = "Untagged"
 

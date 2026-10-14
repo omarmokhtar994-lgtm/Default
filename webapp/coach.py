@@ -11,7 +11,7 @@ the input's layout (title row, then Interval and Sun..Sat), ready to paste.
 from __future__ import annotations
 
 import io
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from typing import Any, Dict
 
 from openpyxl import Workbook
@@ -19,10 +19,10 @@ from openpyxl.comments import Comment
 from openpyxl.styles import Font
 
 from .adherence import interval_shrinkage
+from .clock import EGYPT
 from .versions import DAYS
 
 MIN_DAYS = 3
-EGYPT = timezone(timedelta(hours=3))
 
 
 def actual_shrinkage(days, program: str, start: date, end: date, min_days: int = MIN_DAYS,

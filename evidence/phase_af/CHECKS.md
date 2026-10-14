@@ -24,6 +24,8 @@ Built from `evidence/phase_af/OWNER_NOTES.md` (sections A to F and "Samples answ
 | F3, F4: absences known for later days; the rest of the week on Week | 591680c | attendance, week.html |
 | Z1, Z2: the schedule's zone at upload; times in any zone; the operating day | d016926 | clock, week, day_zoned.html |
 | Browser check fixes ("all day", one-row forms) and screens | b03b5cd | screens/ |
+| Stitched timeline keeps its names for screen readers | b520bd5 | day_zoned.html |
+| Full-suite fixes: rem fonts, one Save per panel, Phase V test re-pinned (C1) | d272948 | app.css, run.html |
 
 ## Rulings made while building (each says what it costs if wrong)
 
@@ -59,4 +61,26 @@ also works out the day-off proposals.
 
 ## Results
 
-(filled in below after the full suite and the release gate)
+- Full website suite (18:26 to 19:07): 981 tests, 15 failures, 4 errors, 1 skipped.
+  - 3 were this phase's and are fixed (d272948), each re-run green:
+    - test_markup_xy: the channel stretches' SVG labels used px font sizes;
+    - test_ui_playwright TheRunDetailsInTheBrowser: the zone button made a second "Save" in the edit panel;
+    - test_ui_playwright test_phase_v_screens: Plan channels folds the quarter-hour table under "Show quarter
+      hours" (C1, the owner's approved sample af02); the test now opens it. Re-pinned, with the reason in the test.
+  - The other 16 are calendar and time-of-day collisions, not this phase: their fixture day is Wednesday
+    14 October 2026, the day of the run, and channel warnings are only kept for intervals not yet over.
+    - The 8 known since the clock fix: test_achievement (2), test_bulk_breaks, test_cancel_break,
+      test_channel_day.test_as_planned_every_channel_and_language_is_covered, test_interval_target, test_rescue,
+      test_ui_playwright.test_cancel_a_break_with_a_reason_and_bring_it_back.
+    - 7 more test_channel_day tests check a 14:00 to 16:00 warning on that day, and the run started at 18:26. The
+      same 7 fail identically on the commit before Phase AF (0120e96) at 19:08; they passed in the 05:16 run.
+    - test_channel_day.TheChannelChangePreview (new in C3, same fixture, a 15:00 to 16:00 warning) and the later
+      part of test_phase_v_screens (a booking at 15:00 on that day) are the same collision.
+    - All pass on any other day, and on this one before the warning's hour. Not changed: the measured contract did
+      not change.
+- The browser tests rewrite the old phases' screenshots; the 141 rewritten files were restored before packaging.
+- Release gate (run_tests.sh, tests_staged/GATE_MINIMUMS.json), 19:11 to 19:32: GATE PASS, 77 suites, 1537 tests
+  (2 skipped), 2 selfchecks, call signatures, undefined-name sweep; also inside the staged package.
+- Package: dist/RC9_2_2_PRODUCTION_PACKAGE.zip, 2568 files, 63.33 MB,
+  sha256 ad6696b46a4248426e808c2af55d7a94a76a8264fa65bdd1de6ee20bc734d439. Sent in three parts
+  (AF_part_0 to AF_part_2); joined in order they give the same sha256.

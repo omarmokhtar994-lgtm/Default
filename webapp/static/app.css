@@ -1429,3 +1429,12 @@ details.sheet > :not(summary) { margin-bottom: 14px; }
   .me-form input, .me-form select, .me-form button { min-height: 44px; font-size: 1rem; }
   .me-week td:last-child { display: block; padding-top: 0; border-top: 0; }
 }
+
+/* Phase AG, T8: the day in another zone, languages and channels */
+.zd-rows { border-collapse: separate; border-spacing: 2px; }
+.zd-rows th { text-align: left; font-weight: 600; padding: 2px 8px 2px 0; white-space: nowrap; }
+.zd-rows thead th { color: var(--dim); font-weight: 400; font-size: 0.75rem; }
+.zd-rows td.zd-c { width: 14px; min-width: 14px; height: 18px; border-radius: 3px; background: var(--empty-cell); }
+.zd-rows td.zd-c.ok, .zd-rows td.zd-c.lok { background: var(--covered); }
+.zd-rows td.zd-c.warn { background: var(--short); }
+.zd-rows td.zd-c.bad { background: var(--gap); }

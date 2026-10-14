@@ -30,6 +30,12 @@
     {% for lane in view.lanes %}<div class="zd-row"><span class="zd-who"><b>{{ lane.name }}</b><small>{{ lane.language }} · {{ lane.label }}{% if lane.status != 'Present' %} · {{ lane.status|lower }}{% endif %}</small></span>
       <svg viewBox="0 0 1440 20" preserveAspectRatio="none" class="zd-track"><rect class="tl-bar{% if lane.status in ('Unplanned leave', 'Sick', 'Public holiday') %} gone{% endif %}" x="{{ [lane.start, 0]|max }}" y="3" width="{{ [lane.end, 1440]|min - [lane.start, 0]|max }}" height="14" rx="3"><title>{{ lane.name }}: {{ lane.label }}</title></rect>{% for b in lane.breaks if b.start + b.minutes > 0 and b.start < 1440 %}<rect class="zd-brk" x="{{ [b.start, 0]|max }}" y="3" width="{{ b.minutes }}" height="14"><title>{{ b.kind }}</title></rect>{% endfor %}</svg></div>{% else %}<p class="empty">Nobody is on shift in this window.</p>{% endfor %}
   </div>
+  {% if view.languages or view.channels %}<h3>Languages and channels</h3>
+  <div class="scroll" role="region" tabindex="0" aria-label="Languages and channels across the window (scrolls sideways)"><table class="zd-rows">
+    <thead><tr><th scope="col">Row</th>{% for x, label in view.hours %}<th scope="col" colspan="{{ (120 // view.step) or 1 }}">{{ label }}</th>{% endfor %}</tr></thead>
+    <tbody>{% for row in view.languages + view.channels %}<tr><th scope="row">{{ row.name }}</th>{% for c in row.cells %}<td class="zd-c {{ c.cls }}" title="{{ c.label }}: {{ {'bad': 'a gap', 'warn': 'short', 'ok': 'covered', 'lok': 'covered', 'none': 'not needed'}.get(c.cls, c.cls) }}"></td>{% endfor %}</tr>{% endfor %}</tbody>
+  </table></div>
+  {% endif %}
   <h3>Every {{ {15: 'quarter hour', 30: 'half hour', 60: 'hour'}.get(view.step, 'interval') }}</h3>
   <div class="scroll" role="region" tabindex="0" aria-label="The window's intervals (scrolls sideways)"><table class="adh-t zd-t">
     <thead><tr><th scope="col">Interval</th><th scope="col">Needed</th><th scope="col">On the floor</th><th scope="col">Buffer (h)</th></tr></thead>

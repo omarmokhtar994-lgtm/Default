@@ -2396,6 +2396,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                          if s["offset"] == 0 and s["status"] in ("Late", "Left early")]}
         return render_template("overview.html", page=page, problem=problem, program=program, programs=programs,
                                on=on, ahead=ahead, attention=attention, week_of=week_start(on),
+                               outlook=_outlook(program, week_start(on).isoformat()) if program else None,
                                label=ProgramBook(app.extensions["store"]).label(program) if program else "")
 
     @app.route("/schedules")

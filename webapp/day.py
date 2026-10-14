@@ -1278,8 +1278,29 @@ def stitch(views: Dict[int, Optional[Dict[str, Any]]], start: int, shift: int) -
                               "breaks": [{"start": x["start"] + 1440 * d - start, "minutes": x["minutes"],
                                           "kind": x.get("kind", "Break")} for x in s.get("breaks", [])]})
     lanes.sort(key=lambda x: (x["start"], x["name"]))
+
+    def rows(pick) -> List[Dict[str, Any]]:
+        """Phase AG (T8): the language or channel rows across the window, by name, from whichever day holds each
+        interval ("none" where that day has no such row)."""
+        names: Dict[str, Dict[str, Any]] = {}
+        for v in views.values():
+            for row in (pick(v) if v else []):
+                names.setdefault(row["name"], {k: row[k] for k in row if k != "cells"})
+        out = []
+        for name, head in names.items():
+            row_cells = []
+            for k in range(0, 1440, step):
+                d, t = divmod(start + k, 1440)
+                found = next((r for r in pick(views[d]) if r["name"] == name), None) if views.get(d) else None
+                c = next((c for c in found["cells"] if c["t"] == t), None) if found else None
+                row_cells.append({"k": k, "label": _hm(start + k + shift), "cls": c["cls"] if c else "none"})
+            out.append(dict(head, cells=row_cells))
+        return out
+
     return {"cells": cells, "lanes": lanes, "start": start, "shift": shift, "step": step,
-            "hours": [(x, _hm(start + x + shift)) for x in range(0, 1440, 120)]}
+            "hours": [(x, _hm(start + x + shift)) for x in range(0, 1440, 120)],
+            "languages": rows(lambda v: v.get("languages") or []),
+            "channels": rows(lambda v: (v.get("channels") or {}).get("rows") or [])}
 
 
 def shift_groups(view: Dict[str, Any], from_now: Optional[int] = None) -> List[Dict[str, Any]]:

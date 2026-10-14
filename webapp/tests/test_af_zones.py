@@ -167,6 +167,40 @@ class TheStitchedDay(unittest.TestCase):
         self.assertIsNone(found["cells"][10]["required"])
 
 
+class TheStitchedRows(unittest.TestCase):
+    """Phase AG (T8, left from Phase AF): the day in another zone has the language and channel rows too."""
+
+    @staticmethod
+    def day(gap_at, channel_cls):
+        view = TheStitchedDay.day(1.0)
+        view["languages"] = [{"name": "French", "cells": [{"t": t, "cls": "bad" if t == gap_at else "lok"}
+                                                         for t in range(0, 1440, 60)]}]
+        view["channels"] = {"rows": [{"name": "Chat", "letter": "C", "cells": [
+            {"t": t, "need": 1.0, "have": 1.0, "cls": channel_cls} for t in range(0, 1440, 60)]}]}
+        return view
+
+    def test_languages_from_both_days(self):
+        from webapp.day import stitch
+        found = stitch({0: self.day(17 * 60, "ok"), 1: self.day(1 * 60, "bad")}, 16 * 60, 0)
+        french = found["languages"][0]
+        self.assertEqual(french["name"], "French")
+        self.assertEqual([c["cls"] for c in french["cells"][:3]], ["lok", "bad", "lok"])  # 16:00, 17:00, 18:00
+        self.assertEqual(french["cells"][9]["cls"], "bad")  # the next day's 01:00
+        self.assertEqual(french["cells"][9]["label"], "01:00")
+
+    def test_channels_from_both_days(self):
+        from webapp.day import stitch
+        found = stitch({0: self.day(0, "ok"), 1: self.day(0, "bad")}, 16 * 60, 0)
+        chat = found["channels"][0]
+        self.assertEqual((chat["name"], chat["letter"]), ("Chat", "C"))
+        self.assertEqual([c["cls"] for c in chat["cells"][7:9]], ["ok", "bad"])  # 23:00 today, 00:00 the next day
+
+    def test_a_day_without_them(self):
+        from webapp.day import stitch
+        found = stitch({0: TheStitchedDay.day(1.0), 1: None}, 16 * 60, 0)
+        self.assertEqual((found["languages"], found["channels"]), ([], []))
+
+
 class OnThePages(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -202,6 +236,14 @@ class OnThePages(unittest.TestCase):
         self.assertIn('<option value="America/New_York" selected>', page)
         self.assertIn("Read only", page)
         self.assertRegex(page, r'<th scope="row">00:00</th>')
+
+    def test_new_york_has_the_language_and_channel_rows(self):
+        # Phase AG (T8): every RTA view in another zone, read only: the languages and channels too
+        page = self.get(self.day_url(tz="America/New_York"))
+        rows = page[page.index("<h3>Languages and channels</h3>"):]
+        self.assertRegex(rows, r'<th scope="row">English</th>')
+        self.assertRegex(rows, r'<th scope="row">Phone</th>')
+        self.assertRegex(rows, r'<td class="zd-c (lok|bad|ok|none|warn)" title="00:00')
 
     def test_the_operating_day(self):
         got = self.planner.post("/day/operating-day", data={"csrf_token": self.token(self.planner),

@@ -264,13 +264,14 @@ def _email_hours(ws, problems: List[str]) -> Dict[int, Dict[str, Any]]:
     return out
 
 
-def _setup(ws, step: int, problems: List[str], notes: List[str]) -> Tuple[Dict[str, Any], List, List]:
+def _setup(ws, step: int, problems: List[str], notes: List[str],
+           coverage: Optional[List[Dict[str, Any]]] = None) -> Tuple[Dict[str, Any], List, List]:
     found: Dict[str, Any] = {}
     languages: List[Dict[str, Any]] = []
     blended: List[Dict[str, Any]] = []
     section, cols = None, {}
     for r in range(1, ws.max_row + 1):
-        cells = [ws.cell(r, c).value for c in range(1, max(ws.max_column, 7) + 1)]
+        cells = [ws.cell(r, c).value for c in range(1, 8)]  # A to G; the drop-downs' lists sit in hidden X to Z
         first = _norm(cells[0])
         filled = [i for i, v in enumerate(cells) if v not in (None, "")]
         if not filled:
@@ -316,6 +317,8 @@ def _setup(ws, step: int, problems: List[str], notes: List[str]) -> Tuple[Dict[s
                 languages.append({"channel": channel, "language": language, "minimum": int(minimum),
                                   "start": start % 1440, "end": end % 1440, "days": days,
                                   "active": _norm(get("active?")) not in NO})
+                if coverage is not None:
+                    _inside_coverage(languages[-1], coverage, where, problems, notes)
             elif section == "blended":
                 get = lambda k: cells[cols[k]] if k in cols else None  # noqa: E731
                 if filled == [0] and _days_or_none(cells[0]) is None:
@@ -366,6 +369,28 @@ def _setup(ws, step: int, problems: List[str], notes: List[str]) -> Tuple[Dict[s
         except ValueError as exc:
             problems.append(str(exc))
     return rules, languages, blended
+
+
+def _inside_coverage(rule: Dict[str, Any], coverage: List[Dict[str, Any]], where: str, problems: List[str],
+                     notes: List[str]) -> None:
+    """Phase AF (A3): an active channel language window sits inside that language's coverage in Language Setup (the
+    engine's list), checked a quarter-hour at a time from each day the window starts; refused otherwise. A language
+    with no Language Setup row is said in the notes."""
+    if not rule["active"]:
+        return
+    mine = [c for c in coverage if _norm(c["name"]) == _norm(rule["language"])]
+    if not mine:
+        notes.append(f"{where}: {rule['language']} has no row in Language Setup, so the engine does not schedule for "
+                     "it; add it there to plan people for it.")
+        return
+    span = (rule["end"] - rule["start"]) % 1440 or 1440
+    if all(any(inside(set(c["days"]), c["start"], c["end"], (d + t // 1440) % 7, t % 1440) for c in mine)
+           for d in rule["days"] for t in range(rule["start"], rule["start"] + span, QUARTER)):
+        return
+    said = "; ".join(f"{_days_text(set(c['days']))} {hm(c['start'])} to {hm(c['end'])}" for c in mine)
+    problems.append(f"{where}: {CHANNELS[rule['channel']]} {rule['language']} {hm(rule['start'])} to {hm(rule['end'])} "
+                    f"on {_days_text(rule['days'])} is outside {rule['language']}'s coverage in Language Setup ({said}). "
+                    "Keep it inside the language's own hours.")
 
 
 def _days_or_none(value: Any) -> Optional[Set[int]]:
@@ -433,7 +458,7 @@ def _asks_for_someone(path: Path) -> bool:
                         section = first
                     elif section == "channel" and first in LETTER:
                         return True
-                    elif section == "days" and any(asks(v) for v in r):
+                    elif section == "days" and any(asks(v) for v in r[:7]):  # not the hidden lists in X to Z
                         return True
         return False
     finally:
@@ -488,7 +513,11 @@ def read_channels(path: Path, step: int) -> Optional[Dict[str, Any]]:
             for letter, ws in grids.items()}
     hours = _email_hours(hours_ws, problems) if hours_ws is not None else None
     if setup_ws is not None:
-        rules, languages, blended = _setup(setup_ws, step, problems, notes)
+        coverage = None
+        if any(_norm(n) in ("language setup", "skill setup", "skills setup") for n in wb.sheetnames):
+            from .day import _languages  # here, not at the top: day imports this module
+            coverage = _languages(wb)
+        rules, languages, blended = _setup(setup_ws, step, problems, notes, coverage)
     else:
         rules = {"min_block": max(QUARTER, step - step % QUARTER), "max_run": {"P": 0, "C": 0, "E": 0},
                  "order": ["P", "C", "E"], "strict": True, "fair": True}

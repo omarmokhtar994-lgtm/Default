@@ -29,7 +29,9 @@ SETTINGS = [
 ]
 ORDERS = ["Phone > Chat > Email", "Phone > Email > Chat", "Chat > Phone > Email", "Chat > Email > Phone",
           "Email > Phone > Chat", "Email > Chat > Phone"]
-LANGUAGE_ROWS = 6  # empty rows offered under the language minimums
+LANGUAGE_ROWS = 20  # empty rows offered under the language minimums (Phase AF, A3: was 6)
+DAY_CHOICES = ["All", "Weekdays", "Weekends", "Mon-Fri", "Sun-Thu", "Sat-Sun", "Fri-Sat",
+               "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]  # the Days drop-downs (others typed after a warning)
 BLENDED_ROWS = 11  # and under the all-channels times
 
 
@@ -90,7 +92,8 @@ def _email_hours(wb, languages: List[str]) -> None:
     ws = wb.create_sheet("Email Hours")
     _title(ws, "Email Hours", "Used when the Email tab per interval is empty: the hours of email work needed each "
            "day. The website shares them out inside the window, into the times with the most spare people, in "
-           "blocks like any channel.")
+           "blocks like any channel. A window that ends before it starts (16:00 to 04:00) runs past midnight into "
+           "the next morning.")
     split = [f"Of which {lang}" for lang in languages] if len(languages) > 1 else []
     _head(ws, 4, ["Day", "Hours needed"] + split + ["Window start", "Window end"])
     for i, day in enumerate(DAYS):
@@ -100,10 +103,27 @@ def _email_hours(wb, languages: List[str]) -> None:
         ws.column_dimensions[col].width = width
 
 
-def _setup(wb, step: int) -> None:
+def _lists(ws, step: int, languages: List[str]) -> dict:
+    """Hidden columns X to Z with the drop-downs' choices: times on the program's interval, days and (for a
+    workbook without Language Setup) the languages. Returns each list's range."""
+    times = [f"{t // 60:02d}:{t % 60:02d}" for t in range(0, 1440, step)]
+    out = {}
+    for col, label, values in (("X", "Times", times), ("Y", "Days", DAY_CHOICES), ("Z", "Languages", languages)):
+        ws[f"{col}4"] = label
+        for i, value in enumerate(values, start=5):
+            ws[f"{col}{i}"] = value
+        ws.column_dimensions[col].hidden = True
+        out[label] = f"${col}$5:${col}${4 + max(len(values), 1)}"
+    return out
+
+
+def _setup(wb, step: int, languages: List[str]) -> None:
     ws = wb.create_sheet("Channel Setup")
     _title(ws, "Channel Setup", "The rotation rules, then the language minimums per channel. Leave a row inactive to "
-           "switch it off without deleting it.")
+           "switch it off without deleting it. Coverage days is the day a window starts: Mon - Fri 16:00 to 07:00 "
+           "runs from Monday 16:00 to Saturday 07:00 and does not cover Sunday night. A language window has to sit "
+           "inside that language's coverage in Language Setup.")
+    lists = _lists(ws, step, languages)
     _head(ws, 4, ["Setting", "Value", "What it means"])
     for i, (name, value, means) in enumerate(SETTINGS):
         ws.cell(5 + i, 1, name)
@@ -118,6 +138,21 @@ def _setup(wb, step: int) -> None:
                      "Active?"])
     channel = DataValidation(type="list", formula1='"Chat,Phone,Email"', allow_blank=True)
     channel.add(f"A{head + 1}:A{head + LANGUAGE_ROWS}")
+    rows = lambda col: f"{col}{head + 1}:{col}{head + LANGUAGE_ROWS}"  # noqa: E731
+    source = ("'Language Setup'!$A$3:$A$60" if "Language Setup" in wb.sheetnames  # the list the engine reads
+              else lists["Languages"])
+    language = DataValidation(type="list", formula1=source, allow_blank=True)
+    language.add(rows("B"))
+    minimum = DataValidation(type="whole", operator="greaterThanOrEqual", formula1="0", allow_blank=True,
+                             error="A minimum is a whole number of people, 0 or more.", errorTitle="Minimum")
+    minimum.add(rows("C"))
+    times = DataValidation(type="list", formula1=lists["Times"], allow_blank=True)
+    times.add(rows("D"))
+    times.add(rows("E"))
+    days = DataValidation(type="list", formula1=lists["Days"], allow_blank=True, errorStyle="warning",
+                          error="Use All, Weekdays, Weekends, a range such as Sun-Thu, or days such as Sun, Tue.",
+                          errorTitle="Days")
+    days.add(rows("F"))
     blended = head + LANGUAGE_ROWS + 2
     ws.cell(blended, 1, "All channels together").font = Font(bold=True)
     ws.cell(blended + 1, 1, f"Times when the 1 or 2 people on the floor cover every channel they can work at once. "
@@ -128,7 +163,9 @@ def _setup(wb, step: int) -> None:
     yes_no = DataValidation(type="list", formula1='"Yes,No"', allow_blank=True)
     yes_no.add(f"G{head + 1}:G{head + LANGUAGE_ROWS}")
     yes_no.add(f"D{blended + 3}:D{blended + 2 + BLENDED_ROWS}")
-    for dv in (order, strict, channel, yes_no):
+    days.add(f"A{blended + 3}:A{blended + 2 + BLENDED_ROWS}")
+    times.add(f"B{blended + 3}:C{blended + 2 + BLENDED_ROWS}")
+    for dv in (order, strict, channel, language, minimum, times, days, yes_no):
         ws.add_data_validation(dv)
     for col, width in zip("ABCDEFG", (34, 20, 64, 16, 14, 26, 10)):
         ws.column_dimensions[col].width = width
@@ -147,7 +184,7 @@ def add_channel_tabs(wb, step: int, languages: List[str],
     _grid(wb, f"Email {step} Min", "Fill this tab to plan email per interval like Chat and Phone. Leave it empty (or "
           "delete it) to use Email Hours instead.", step, None, freeze=False)
     _email_hours(wb, languages)
-    _setup(wb, step)
+    _setup(wb, step, languages)
 
 
 def channel_workbook(path: Path, step: int, languages: List[str]) -> Path:

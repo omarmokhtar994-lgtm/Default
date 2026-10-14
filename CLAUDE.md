@@ -73,5 +73,19 @@ python-performance-optimization.
     layout (docs/superpowers/plans, evidence/phase_xx), not a new docs/decisions folder.
   - The rest of that pack is not installed: it repeats skills already in use (TDD,
     debugging, review, planning, performance).
+- Design and motion skills the owner asked for (2026-10-14). Same limits as the website review
+  skills: they suggest, the rules above and `webapp/DESIGN.md` decide, and a new library or a
+  visual change goes to the owner as a sample first.
+  - From the owner's claude.ai account (synced each session; not in this repository):
+    design-taste-frontend ("taste"), impeccable, design-md ("awesome design", DESIGN.md files of
+    well-known sites), playwright-cli, img2threejs (image to a three.js model; no three.js on the site).
+  - In this repository, each with local notes:
+    - ui-ux-pro-max (nextlevelbuilder @7246805, MIT): local searchable UX rules; never `--persist`.
+    - gsap-* (greensock/gsap-skills @aed9cfd, official, MIT, 8 skills).
+    - lenis (official README, darkroomengineering @bc152f9, MIT).
+    - react-bits (React Bits' own AI index @496968c; MIT + Commons Clause; ideas to port, no React).
+    - graphify (safishamsi/graphify @041771b): only on /graphify; code-only by default;
+      `graphify-out/` is git-ignored.
+  - "Web design guidelines" is web-interface-guidelines above.
 - find-skills: discovering more skills (skills.sh search is blocked by the
   network policy here; browse the source repos on GitHub instead).

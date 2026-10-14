@@ -6,3 +6,6 @@ results/
 dist/
 candidates/*/engine/**/debug/
 candidates/*/**/__pycache__/
+
+# Graphify maps (local only; see .claude/skills/graphify)
+graphify-out/

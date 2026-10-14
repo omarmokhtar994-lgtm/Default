@@ -51,9 +51,12 @@ class TheNextHour(unittest.TestCase):
 class NeedsAttention(unittest.TestCase):
     def test_short_and_gaps_in_the_next_three_hours(self):
         found = now_panel(view(short={19 * H}, bad={21 * H, 23 * H}), NOW)
+        # Re-pinned in Phase AH: the owner (2026-10-15) had the colours follow the week's target ("below tsget set to
+        # be in red if below 100% but above target set maybe in yellow or orange"), so red reads "below the target"
+        # and amber "at the target, under 100%" (was: short by a person or more / by less than one person).
         self.assertEqual([(a["level"], a["text"]) for a in found["attention"]],
-                         [("gap", "21:00 to 22:00: short by a person or more"),
-                          ("short", "19:00 to 20:00: short by less than one person")])
+                         [("gap", "21:00 to 22:00: below the target"),
+                          ("short", "19:00 to 20:00: at the target, under 100%")])
 
     def test_language_gaps_and_channel_warnings(self):
         v = view()

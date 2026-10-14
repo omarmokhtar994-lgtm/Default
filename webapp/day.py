@@ -571,8 +571,8 @@ def now_panel(view: Dict[str, Any], now: int, horizon: int = NOW_HORIZON,
               ahead: int = WATCH_AHEAD) -> Optional[Dict[str, Any]]:
     """Phase AG (T2): the RTA's Now panel, today only (None for another day). ``next``: breaks starting and shifts
     starting or ending in the next ``horizon`` minutes, in time order (people off for the whole shift left out).
-    ``attention``: in the ``ahead`` minutes from now, intervals short by a person or more, language gaps, channel
-    warnings and intervals short by less than one person, in that order."""
+    ``attention``: in the ``ahead`` minutes from now, intervals below the target, language gaps, channel warnings,
+    tight intervals and intervals at the target but under 100%, in that order (Phase AH: by the week's target)."""
     if not 0 <= now < 1440:
         return None
     step = view["interval"]
@@ -589,7 +589,7 @@ def now_panel(view: Dict[str, Any], now: int, horizon: int = NOW_HORIZON,
     def soon(t: int) -> bool:  # an interval not over yet that starts within ``ahead``
         return t + step > now and t < now + ahead
 
-    attention = [{"level": "gap", "text": f"{_hm(a)} to {_hm(b)}: short by a person or more"}
+    attention = [{"level": "gap", "text": f"{_hm(a)} to {_hm(b)}: below the target"}
                  for a, b in _runs_of([c["t"] for c in view["cells"] if c["cls"] == "bad" and soon(c["t"])], step)]
     for lang in view["languages"]:
         attention += [{"level": "gap", "text": f"{lang['name']}: {_hm(a)} to {_hm(b)}"}
@@ -598,8 +598,10 @@ def now_panel(view: Dict[str, Any], now: int, horizon: int = NOW_HORIZON,
     if view.get("channels"):
         attention += [{"level": "short", "text": w["text"]} for w in view["channels"]["warnings"]
                       if w["t1"] > now and w["t0"] < now + ahead]
-    attention += [{"level": "short", "text": f"{_hm(a)} to {_hm(b)}: short by less than one person"}
-                  for a, b in _runs_of([c["t"] for c in view["cells"] if c["cls"] == "warn" and soon(c["t"])], step)]
+    for tight, said in ((True, "tight, under 10 minutes over the target"), (False, "at the target, under 100%")):
+        attention += [{"level": "short", "text": f"{_hm(a)} to {_hm(b)}: {said}"}
+                      for a, b in _runs_of([c["t"] for c in view["cells"] if c["cls"] == "warn" and soon(c["t"])
+                                            and bool(c.get("tight")) == tight], step)]
     return {"next": found, "attention": attention}
 
 
@@ -1332,21 +1334,52 @@ def shift_groups(view: Dict[str, Any], from_now: Optional[int] = None) -> List[D
     return out
 
 
+CUSHION = 10  # person-minutes over the target an interval needs not to be tight (owner, 2026-10-15)
+
+
+def band(now: float, required: float, target: float) -> str:
+    """An interval's colour (Phase AH, owner: "based on the target set"): "ok" at 100% or more, "warn" from the target
+    to 99%, "bad" below the target, "none" without demand. ``now`` is the page's figure (one decimal)."""
+    if required <= 0:
+        return "none"
+    if now >= required - 1e-9:
+        return "ok"
+    return "warn" if now >= target * required - 1e-9 else "bad"
+
+
+def minutes_over(cell: Dict[str, Any], target: float) -> float:
+    """Person-minutes on the floor over ``target`` x demand in the interval, counted from its 5-minute ticks."""
+    return STEP * sum(cell["slots"]) - target * cell["required"] * STEP * len(cell["slots"])
+
+
+def safe_level(required: float, target: float, step: int) -> float:
+    """On the floor (people, averaged over the interval) to be at the target with ``CUSHION`` minutes to spare,
+    never more than the demand itself."""
+    return min(required, target * required + CUSHION / step)
+
+
 def at_target(cells: List[Dict[str, Any]], target: float) -> Dict[str, Any]:
     """The day against an interval target (Phase W, owner: "count of intervals above 90% or the chosen target /
     total intervals"): of the intervals with demand, how many have on the floor at least ``target`` x demand, now
-    and in the plan, and each interval's share of its demand (None where there is no demand)."""
+    and in the plan, and each interval's share of its demand (None where there is no demand). Phase AH: each
+    interval's colour (``band``), whether it is tight (at the target, under 100% and under ``CUSHION`` minutes over
+    it) and its minutes over the target; ``tight`` and ``safe`` count them (safe: at the target and not tight)."""
     shares = []
     for c in cells:
+        cls = band(c["now"], c["required"], target)
         if c["required"] > 0:
             pct = int(100 * c["now"] / c["required"] + 1e-9)
-            shares.append({"t": c["t"], "pct": pct, "ok": c["now"] >= target * c["required"] - 1e-9})
+            over = minutes_over(c, target) if c.get("slots") else None  # no ticks: no minutes to count
+            shares.append({"t": c["t"], "pct": pct, "ok": c["now"] >= target * c["required"] - 1e-9, "cls": cls,
+                           "tight": cls == "warn" and over is not None and over < CUSHION - 1e-9,
+                           "over": None if over is None else int(round(over))})
         else:
-            shares.append({"t": c["t"], "pct": None, "ok": None})
+            shares.append({"t": c["t"], "pct": None, "ok": None, "cls": cls, "tight": False, "over": None})
     have = [c for c in cells if c["required"] > 0]
     return {"target": target, "intervals": len(have),
             "now": sum(1 for c in have if c["now"] >= target * c["required"] - 1e-9),
-            "plan": sum(1 for c in have if c["plan"] >= target * c["required"] - 1e-9), "cells": shares}
+            "plan": sum(1 for c in have if c["plan"] >= target * c["required"] - 1e-9), "cells": shares,
+            "tight": sum(1 for s in shares if s["tight"]), "safe": sum(1 for s in shares if s["ok"] and not s["tight"])}
 
 
 CHANNEL_WORD = {"P": "Phone", "C": "Chat", "E": "Email", "A": "all channels"}

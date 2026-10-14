@@ -55,3 +55,17 @@ Each proposal was applied through the RTA's own figures and checked against what
    schedule file itself (a sick day is not a new version). Is that the meaning of "reflect back on the schedule in
    use"?
 4. The colour rule on every page (Weeks, RTA, Overview), or the Weeks page only?
+
+## Owner's answers (2026-10-15)
+
+1. The table: approved.
+2. Hours needed: "let it a choice by the RTA as a drop down to choose 100% or target".
+3. Fix breaks: "as it is" (the weakest interval first).
+4. "yes same as the example u have shared": the RTA's records change the figures on the Week and Schedules pages,
+   never the schedule file.
+5. The colour rule: "all pages".
+6. Note: "if target is 90% and I'm now 91% but have only 2-3 mins that's very tight at least 10 mins is sufficient to
+   cover that ... when rescue works and fix the breaks as well". Asked how to count it, the owner picked "At target,
+   marked tight": the count stays as it is (91% is at the target, amber), with a tight mark when the interval is
+   under 10 minutes over the target; Rescue, Fix breaks and Hours needed (the target choice) aim for 10 minutes or
+   more over the target.

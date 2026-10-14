@@ -538,9 +538,12 @@ class DayBook:
             channels["moves"].setdefault((0, who), []).append({"id": 0, "start": lo, "end": hi, "channel": letter})
         view = day_view(week, inputs, day_index(on), attendance, actual, measure, acts, before, channels=channels)
         ratio, source_of_target = self.target_for(program, on, row, inputs)
+        standing = at_target(view["cells"], ratio)
+        for c, s in zip(view["cells"], standing["cells"]):  # Phase AH: every page colours by the week's target
+            c.update(cls=s["cls"], tight=s["tight"], over=s["over"])
         return {"version": row, "note": note, "view": view, "stale": stale, "date": on,
                 "unlisted": self._unlisted(program, on, view, attendance, acts),
-                "target": at_target(view["cells"], ratio), "target_source": source_of_target,
+                "target": standing, "target_source": source_of_target,
                 "channel_problem": channel_problem,
                 "week_start": row["week_start"], "day": day_index(on), "inputs": inputs, "week": week,
                 "log": self.store.list_day_log(program, on.isoformat())}

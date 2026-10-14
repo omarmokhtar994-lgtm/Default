@@ -222,3 +222,36 @@ class TheStretchesOnThePage(_Page):
         self.assertRegex(page, r"<title>Associate \d+: (Phone|Chat|Email) \d\d:\d\d to \d\d:\d\d</title>")
         self.assertIn("<summary>Show quarter hours</summary>", page)
         self.assertIn('<table class="cp-grid"', page)
+
+
+class TheChannelDownload(_Page):
+    """Phase AF (C4): the channel plan as an Excel file in two views (owner, 2026-10-14: "the view shared is good;
+    in addition a similar view same as the timeline"): per working day a table of stretches and a timeline, and a
+    Week tab of hours per person and channel."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.start()
+        cls.admin.post(cls.url, data={"csrf_token": token(cls.admin), "day": "Wed", "action": "suggest"})
+        cls.got = cls.admin.get(cls.url.replace("/channels", "/channels.xlsx"))
+
+    def test_both_views_per_day_and_a_week_tab(self):
+        from openpyxl import load_workbook
+        self.assertEqual(self.got.status_code, 200)
+        self.assertIn("spreadsheetml", self.got.headers["Content-Type"])
+        wb = load_workbook(io.BytesIO(self.got.data))
+        self.assertEqual(wb.sheetnames[0], "Read me")
+        self.assertIn("Wed", wb.sheetnames)
+        self.assertIn("Wed timeline", wb.sheetnames)
+        self.assertEqual(wb.sheetnames[-1], "Week")
+        table = list(wb["Wed"].iter_rows(values_only=True))
+        self.assertEqual(table[0], ("Associate", "Language", "From", "To", "Channel", "Minutes"))
+        self.assertTrue(any(r[4] in ("Phone", "Chat", "Email") for r in table[1:]))
+        line = wb["Wed timeline"]
+        letters = {c.value for row in line.iter_rows(min_row=2, min_col=2) for c in row if c.value}
+        self.assertTrue(letters & {"P", "C", "E"}, letters)
+        filled = next(c for row in line.iter_rows(min_row=2, min_col=2) for c in row if c.value == "P")
+        self.assertEqual(filled.fill.fgColor.rgb[-6:], "3E6FD8")
+
+    def test_plan_channels_offers_it(self):
+        self.assertIn("Download the channel plan (Excel)", self.page()[1])

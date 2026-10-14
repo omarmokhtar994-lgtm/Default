@@ -64,6 +64,7 @@
     <label class="exp-kind"><input type="checkbox" name="move" value="1" checked><span>Move breaks if it helps (inside the break rules)</span></label>
     <button type="submit" name="action" value="suggest" class="primary">Suggest the day</button>
     <button type="submit" name="action" value="suggest_week" title="Each working day in turn; up to about 20 seconds a day">Suggest every day</button>
+    <a class="button" href="{{ url_for('channel_plan_download', schedule_id=row.id) }}">Download the channel plan (Excel)</a>
     <button type="submit" name="action" value="copy">Copy {{ full[day] }} to days with the same shifts</button>
   </form>
   <form method="post" class="cp-row cp-edit" data-cp-edit id="cp-set">

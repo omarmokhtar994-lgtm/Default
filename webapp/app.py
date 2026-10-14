@@ -1956,6 +1956,34 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return send_file(with_notes(book.path(schedule_id), book.view(schedule_id)), as_attachment=True,
                          download_name=f"{stem}.xlsx")
 
+    @app.route("/schedules/<int:schedule_id>/channels.xlsx")
+    @login_required
+    def channel_plan_download(schedule_id: int):  # type: ignore[no-untyped-def]
+        """Phase AF (C4): the week's channel plan as on Plan channels (unsaved suggestions included), in two views."""
+        from .channel_export import channel_plan_workbook
+        row = _version_or_404(schedule_id)
+        store, book = app.extensions["store"], _book()
+        if book.channel_path(row["run_id"]) is None:
+            abort(404)
+        inputs = read_inputs(book.input_path(row["run_id"]))
+        try:
+            rules = book.break_rules(schedule_id)
+        except ValueError as exc:
+            flash(str(exc))
+            return redirect(url_for("plan_channels", schedule_id=schedule_id))
+        week = json.loads(row["week"] or "{}")
+        skills = ChannelPeople(store).skills_for_unit(row["program"])
+        draft = store.get_channel_draft(schedule_id)
+        days = []
+        for d, day in enumerate(DAYS):
+            if any(shift_span(a["days"][d]) for a in week.get("associates", [])):
+                plan = channel_current(week, d, rules, draft)
+                days.append((day, channel_grid(people_for(week, d, rules, plan, skills, inputs["languages"]), plan)))
+        data = channel_plan_workbook(f"{row['program']}, {row['label']}", days)
+        name = f"channel_plan_{secure_filename(row['program'] or 'schedule')}_{schedule_id}.xlsx"
+        return send_file(io.BytesIO(data), as_attachment=True, download_name=name,
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
     @app.route("/schedules/<int:schedule_id>/auto-breaks", methods=["POST"])
     @login_required
     def auto_breaks(schedule_id: int):  # type: ignore[no-untyped-def]

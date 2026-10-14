@@ -29,6 +29,9 @@ from .break_plan import check_row, edge_margin, hm
 from .channels import QUARTER, blended_at, in_email_hours, inside
 
 LANGUAGE, BALANCED, LONG, MOVE, SWITCH, FAIR = 200, (100, 60, 30), 40, 5, 2, 1
+# Phase AF (B2): a quarter hour of break that leaves nobody else able to take the person's queue, and one that leaves
+# only colleagues of another language; someone who starts alone has the first break within FIRST_BY minutes
+ALONE, ALONE_LANGUAGE, FIRST_BY = 50, 10, 240
 # Two stages, measured on a 16- and a 40-person day (Phase V task 5's ledger): the breaks kept (the best plan is
 # proven in 4 to 11 s), then the breaks free to move, starting from that plan, for 10 s. A deterministic search
 # (interleaved, or one worker) gave the same plan twice but worse plans, or none in time once breaks may move.
@@ -192,7 +195,16 @@ def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=N
                     lits = [x[name, ts[i - 1], c]] if i > 0 and (name, ts[i - 1], c) in x else []
                     lits += [x[name, t, c].Not() for t in run] + [x[name, nxt, c]]
                     if (name, nxt) in off:
-                        lits.append(off[name, nxt])
+                        # Phase AF (B3): a break excuses a short stint only when the stint is the whole stretch, from
+                        # the shift's start (or a time the channel is not open) or from a break, to this break
+                        prev = ts[i - 1] if i > 0 else None
+                        if prev is None or (name, prev, c) not in x:
+                            lits.append(off[name, nxt])
+                        elif (name, prev) in off:
+                            both = m.NewBoolVar("")
+                            m.AddImplication(both, off[name, prev])
+                            m.AddImplication(both, off[name, nxt])
+                            lits.append(both)
                     m.AddBoolOr(lits)
             most = (setup["rules"]["max_run"].get(c) or 0) // QUARTER
             if most:
@@ -214,6 +226,7 @@ def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=N
         if setup["rules"].get("fair") and carry.get(name):
             ranks = {c: r for r, c in enumerate(sorted("PCE", key=lambda c: (carry[name].get(c, 0), c)))}
             cost += [FAIR * ranks[c] * x[name, t, c] for t in ts for c in "PCE" if (name, t, c) in x and ranks[c]]
+    _alone(m, people, slots, off, picks, cost)
     # coverage
     def cover(c: str, t: int, who: Optional[Set[str]] = None) -> List[Any]:
         found = []
@@ -312,6 +325,35 @@ def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=N
                       "long": {n: sum(solver.Value(v) for v in vs) for n, vs in longs.items()
                                if any(solver.Value(v) for v in vs)}}
     return out
+
+
+def _alone(m, people, slots, off, picks, cost) -> None:
+    """Phase AF (B2): no break while the person is the only one on shift who can take their queue (anyone sharing a
+    channel they work; a colleague of the same language preferred). Someone alone all shift has breaks as normal;
+    someone who starts alone has the first break within FIRST_BY minutes, at whatever time costs least."""
+    for p in people:
+        name = p["name"]
+        others = [q for q in people if q is not p and set(q["skills"]) & set(p["skills"])]
+        present = {t: [q for q in others if q["start"] <= t < q["end"]] for t in slots[name]}
+        if not any(present.values()):
+            continue  # alone all shift: breaks as normal
+        for t in slots[name]:
+            if (name, t) not in off:
+                continue
+            on = {q["name"]: (1 - off[q["name"], t]) if (q["name"], t) in off else 1 for q in present[t]}
+            alone = m.NewBoolVar("")
+            m.Add(alone >= off[name, t] - sum(on.values()))
+            cost.append(ALONE * alone)
+            same = [on[q["name"]] for q in present[t] if q["counts_for"] & p["counts_for"]]
+            if len(same) < len(on):
+                other_only = m.NewBoolVar("")
+                m.Add(other_only >= off[name, t] - sum(same))
+                cost.append(ALONE_LANGUAGE * other_only)
+        first = picks.get((name, 0), {})
+        if not present[p["start"]] and len(first) > 1 and any(c <= p["start"] + FIRST_BY for c in first):
+            for c, v in first.items():
+                if c > p["start"] + FIRST_BY:
+                    m.Add(v == 0)
 
 
 def _weights(order: List[str], strict: bool, worst: Dict[str, int]) -> Dict[str, int]:

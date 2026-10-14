@@ -272,6 +272,22 @@ class TheChannelExportAndTimeline(_Day):
                           "19:00 All channels"])
 
 
+class TheDayAsStretches(_Day):
+    """Phase AF (C2): each associate's channels on the RTA, one stretch per run (an hour on Phone is one box)."""
+
+    def test_a_persons_day_as_stretches(self):
+        runs = self.view()["channels"]["runs"]["Associate 031"]
+        self.assertEqual(runs[:3], [(720, 840, "P"), (840, 855, "Break 1"), (855, 1140, "P")])
+        self.assertEqual(runs[-1][:1] + runs[-1][2:], (1140, "A"))
+
+    def test_an_activity_splits_the_stretch(self):
+        self.days.add_activity(self.key, WED, "Associate 031", "Coaching", "16:00", "16:30", self.omar)
+        runs = self.view()["channels"]["runs"]["Associate 031"]
+        self.assertIn((855, 960, "P"), runs)
+        self.assertIn((960, 990, "Coaching"), runs)
+        self.assertIn((990, 1140, "P"), runs)
+
+
 class TheChannelsTab(unittest.TestCase):
     """The RTA page's Channels tab: warnings with causes and fixes; a fix applied from the page."""
 
@@ -306,6 +322,13 @@ class TheChannelsTab(unittest.TestCase):
         import html
         url = f"/day?program={self.key.replace(' ', '+')}&date={WED.isoformat()}&view=channels"
         return html.unescape(self.admin.get(url).get_data(as_text=True))
+
+    def test_the_tab_draws_each_persons_stretches(self):
+        # Phase AF (C2): one box per stretch, named in its title, under the warnings
+        page = self.page()
+        self.assertIn('aria-label="Who is on which channel"', page)
+        self.assertRegex(page, r'<rect class="ch-P"[^>]*><title>Associate 031: Phone 12:00 to 14:00</title>')
+        self.assertRegex(page, r'<rect class="ch-B"[^>]*><title>Associate 031: Break 1 14:00 to 14:15</title>')
 
     def test_the_tab_lists_the_warning_its_cause_and_fixes_and_a_fix_applies(self):
         self.days.add_activity(self.key, WED, "Associate 001", "Coaching", "15:00", "15:30", self.omar,

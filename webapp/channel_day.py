@@ -131,27 +131,33 @@ def channel_view(day: int, step: int, now, plan, pieces, lanes: Dict[str, Any], 
     i = after // STEP if ch.get("today") and 0 <= after < 1440 else None
     moment = {c: {"have": today.channel[c][i], "need": need_at(setup, c, day, after)} for c in letters} \
         if i is not None else {}
+    lines, runs = _timelines(pieces, today)
     loose = sorted({key[1] for i in range(today.ticks) for key, letter in today.who[i].items() if not letter})
     changes = sorted(({"id": m["id"], "name": name, "start": m["start"], "end": m["end"], "channel": m["channel"]}
                       for (offset, name), ms in ch["moves"].items() if offset == 0 for m in ms if m.get("id")),
                      key=lambda m: (m["start"], m["name"]))
     return {"rows": rows, "warnings": warnings, "now": moment, "unplanned": loose, "changes": changes,
             "planned": any(ch["blocks"].values()),  # Phase AC: whether the schedule has a channel plan at all
-            "timelines": _timelines(pieces, today), "hold": ChannelHold(day, step, setup, rules, today, ch)}
+            "timelines": lines, "runs": runs, "hold": ChannelHold(day, step, setup, rules, today, ch)}
 
 
-def _timelines(pieces, today: "_Counts") -> Dict[str, List[str]]:
-    """Each person's day as it stands, in time order: "12:00 Phone", "14:00 Break 1", ... (this day's shifts)."""
+def _timelines(pieces, today: "_Counts") -> Tuple[Dict[str, List[str]], Dict[str, List[Tuple[int, int, str]]]]:
+    """Each person's day as it stands, in time order: "12:00 Phone", "14:00 Break 1", ... (this day's shifts), and
+    the same as stretches (Phase AF, C2): (start, end, letter) on a channel, else (start, end, what it is)."""
     names = {**{c: n for c, n in CHANNELS.items()}, "A": "All channels"}
     out: Dict[str, List[str]] = {}
+    runs: Dict[str, List[Tuple[int, int, str]]] = {}
     for seg, status, away, breaks, acts in pieces:
         if seg["offset"] != 0:
             continue
         key, line, last = (0, seg["name"]), [], None
+        mine: List[Tuple[int, int, str]] = []
         for t in range(max(seg["start"], 0), min(seg["end"], 1440), STEP):
             letter = today.who[t // STEP].get(key)
+            code = None
             if letter is not None:
                 label = names.get(letter, "No channel planned")
+                code = letter if letter in names else None
             elif status in ABSENT:
                 label = status
             elif any(b["start"] <= t < b["start"] + b["minutes"] for b in breaks):
@@ -165,8 +171,12 @@ def _timelines(pieces, today: "_Counts") -> Dict[str, List[str]]:
             if label != last:
                 line.append(f"{hm(t)} {label}")
                 last = label
+                mine.append((t, t + STEP, code or label))
+            else:
+                mine[-1] = (mine[-1][0], t + STEP, mine[-1][2])
         out[seg["name"]] = line
-    return out
+        runs[seg["name"]] = mine
+    return out, runs
 
 
 class ChannelHold:

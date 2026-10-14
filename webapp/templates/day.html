@@ -105,6 +105,16 @@
   {% if not chv.planned %}<p class="note">No channel plan for this day yet: plan channels for it to count each channel.</p>
   {% elif chv.unplanned %}<p class="note">On the floor with no channel planned: {{ chv.unplanned|join(', ') }}. Plan channels for this day to count them.</p>{% endif %}
 </section>
+{% if chv.runs %}<section class="panel" aria-labelledby="chr-h">
+  <h2 id="chr-h">Who is on which channel</h2>
+  <p class="note">Each person's day as it stands, one box per stretch: channels, breaks and anything else that takes them off the queue.</p>
+  <svg class="sr-defs" aria-hidden="true" focusable="false"><defs><linearGradient id="ch-all"><stop offset="0" class="g-p"/><stop offset=".33" class="g-p"/><stop offset=".33" class="g-c"/><stop offset=".66" class="g-c"/><stop offset=".66" class="g-e"/><stop offset="1" class="g-e"/></linearGradient></defs></svg>
+  <div class="scroll" role="region" tabindex="0" aria-label="Who is on which channel (scrolls sideways)"><div class="chr" role="group" aria-label="Who is on which channel">
+    <div class="chr-row" aria-hidden="true"><span></span><svg class="chr-svg" viewBox="0 0 1440 26">{% for h in range(0, 24, 2) %}<text class="chr-h" x="{{ h * 60 + 2 }}" y="20">{{ '%02d'|format(h) }}</text>{% endfor %}</svg></div>
+    {% for name, runs in chv.runs.items() %}<div class="chr-row"><span class="chr-lbl">{{ name }}</span><svg class="chr-svg" viewBox="0 0 1440 40" role="img" aria-label="{{ name }}: {{ chv.timelines.get(name, [])|join(', ') }}">{% for a, b, c in runs %}{% set word = c|channel_name if c in ('P', 'C', 'E', 'A') else c %}<rect class="{{ 'ch-' ~ c if c in ('P', 'C', 'E', 'A') else ('ch-B' if c.startswith('Break') or c == 'Lunch' else 'ch-X') }}" x="{{ a }}" y="4" width="{{ b - a }}" height="32" rx="3"><title>{{ name }}: {{ word }} {{ hm(a) }} to {{ hm(b) }}</title></rect>{% if b - a >= 75 %}<text class="chr-t" x="{{ (a + b) / 2 }}" y="26">{{ word if word|length * 11 < b - a else c[:1] }}</text>{% elif b - a >= 15 %}<text class="chr-t" x="{{ (a + b) / 2 }}" y="26">{{ c[:1] }}</text>{% endif %}{% endfor %}</svg></div>{% endfor %}
+  </div></div>
+  <p class="legend3"><span><i class="ch-P"></i>Phone</span><span><i class="ch-C"></i>Chat</span><span><i class="ch-E"></i>Email</span><span><i class="ch-A"></i>All channels</span><span><i class="ch-B"></i>Break or lunch</span><span><i class="ch-X"></i>Aux, absence or no channel</span></p>
+</section>{% endif %}
 <section class="panel" aria-labelledby="chi-h">
   <h2 id="chi-h">Channels by interval</h2>
   <p class="note">People on each channel (average in the interval) against the channel tab's need; each language row is its lowest point against its minimum.</p>

@@ -934,6 +934,20 @@ dialog.dlg.add-dlg { width: 620px; }
 .ch-P { background: var(--ch-phone); color: var(--ch-ink); }
 .ch-C { background: var(--ch-chat); color: var(--ch-ink); }
 .ch-E { background: var(--ch-email); color: var(--ch-ink); }
+/* Phase AF (C2): each person's channels as stretches on the RTA */
+.ch-X { background: var(--empty-cell); color: var(--dim); }
+.chr { min-width: 760px; }
+.chr-row { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 10px; align-items: center; }
+.chr-lbl { font-size: 0.8125rem; font-weight: 600; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chr-svg { display: block; width: 100%; height: auto; }
+.chr-svg rect.ch-P { fill: var(--ch-phone); } .chr-svg rect.ch-C { fill: var(--ch-chat); }
+.chr-svg rect.ch-E { fill: var(--ch-email); } .chr-svg rect.ch-A { fill: url(#ch-all); }
+.sr-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+.g-p { stop-color: var(--ch-phone); } .g-c { stop-color: var(--ch-chat); } .g-e { stop-color: var(--ch-email); }
+.chr-svg rect.ch-B { fill: var(--rail); } .chr-svg rect.ch-X { fill: var(--empty-cell); }
+.chr-t { font: 700 17px var(--text); fill: var(--ch-ink); text-anchor: middle; pointer-events: none; }
+.chr-svg rect.ch-B + .chr-t, .chr-svg rect.ch-X + .chr-t { fill: var(--paper); }
+.chr-h { font: 400 16px var(--text); fill: var(--dim); }
 .ch-A { background: linear-gradient(90deg, var(--ch-phone) 0 33%, var(--ch-chat) 33% 66%, var(--ch-email) 66%); color: var(--ch-ink); }
 .ch-B, .ch-L { background: repeating-linear-gradient(45deg, var(--rail), var(--rail) 3px, transparent 3px, transparent 6px); color: var(--dim); }
 .cp-sum { display: flex; gap: 22px; flex-wrap: wrap; margin: 6px 0; }

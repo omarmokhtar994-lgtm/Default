@@ -48,7 +48,11 @@ number in the earlier version of this file.
   - Nobody waits more than 4 hours for the first break, even when alone.
   - The owner's example: the first UK associate starts at 10:00 and breaks at 10:15, alone until the second UK
     associate starts at about 13:00.
-  - Confirm this reading with the sample.
+  - Confirmed 2026-10-14, for someone who starts at 10:00 alone:
+    - someone arrives at 13:00: the first break comes after 13:00;
+    - nobody comes until later: the first break still comes within the first 4 hours, at whatever time hurts
+      least (11:00, 12:00 or 13:00), not fixed at the 4-hour mark;
+    - nobody comes all shift: breaks are planned normally.
 - **B3. No 15-minute stint before a break (was 8).** Never put someone on a channel for 15 minutes and then a
   break. The minimum block holds next to breaks and shift starts too. The owner's example: a single "A" at 10:00
   before the 10:15 break.
@@ -117,13 +121,16 @@ number in the earlier version of this file.
   - When several intervals are short, it proposes which days off to cancel and with which shift, so the short
     intervals are covered. For example: "2 people from 16:00 and 1 from 22:00 save the day".
   - If that is not enough, it proposes the overtime needed per interval.
+  - **Shape of a suggestion (owner, 2026-10-14):** how many people, the shift, and candidate names to choose
+    from. For example: "Cancel 2 days off, 16:00 to 01:00; possible: X, Y or Z".
 - **F2. Consistent shifts (was 19).** The owner (2026-10-14): this is the engine output "where the shifts are
   more consistent".
   - That is the engine's shift consistency polish (`evidence/shift_consistency/`, 2026-10-03): same-day shifts
     re-dealt so each person's start times move less over the week.
   - A proposed shift, for a cancelled day off or overtime, follows the same idea. It matches the person's shifts
     on the days before and after ("same as after ... and before ...").
-  - Confirm this reading with the sample.
+  - The owner's answer was "maybe". Consistency is preferred, but the worse the day, the more rules may bend.
+    This is the same ladder as F1.
 - **F3. Known absences for the rest of the week (was 23).**
   - Enter on the RTA the absences already known for later days, such as unplanned leave or sick.
   - From them, show a summary, perhaps on Week, of the overtime needed per day and the days off to cancel.
@@ -146,16 +153,13 @@ number in the earlier version of this file.
 Settled on 2026-10-14: F2 is about consistent shifts, days follow the selected zone, day-off cancellations are
 the tool's own proposals, and the out-of-office shrinkage formulas are given.
 
-Settled the same day:
+Settled the same day (B2 and F2 included):
 - **F1, rules:** suggestions keep the weekly-hours, rest-day and days-in-a-row rules. Where that cannot cover
   the day, the tool may suggest a deviation, the smallest first and clearly shown. In the worst case it may break
   more, still shown.
 - **E1:** see above for planned leave, per day, the admin's mapping and the non-billable default.
 
 Still open:
-- **F2:** confirm that a proposed shift matches the person's shifts on the days before and after. Asked again
-  with an example.
-- **B2:** confirm the reading of the 4-hour rule. Asked again with an example.
 - **E1:** whether the RTA shows Sutherland and client shrinkage side by side. Offered in the sample.
 
 ## Suggested grouping when the phase starts (for the owner to decide)

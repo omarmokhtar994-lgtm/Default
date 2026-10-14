@@ -1056,6 +1056,151 @@ def dayoff_offers(view: Dict[str, Any], week: Dict[str, Any], day: int, rest_hou
     return out[:top]
 
 
+DAYOFF_MINIMUM = 6  # short intervals a cancelled day off must cover, or it is a waste (owner, 2026-10-14: 6 to 8)
+LONG_SHIFT = 11 * 60  # the engine's 11H/3OFF long mode owes 3 days off a week instead of 2
+
+
+def _hours(minutes: int) -> str:
+    return f"{minutes // 60}" if minutes % 60 == 0 else f"{minutes / 60:.1f}"
+
+
+def _runs_of(times: List[int], step: int) -> List[Tuple[int, int]]:
+    runs: List[List[int]] = []
+    for t in sorted(times):
+        if runs and runs[-1][1] == t:
+            runs[-1][1] = t + step
+        else:
+            runs.append([t, t + step])
+    return [(a, b) for a, b in runs]
+
+
+def _bends(a: Dict[str, Any], day: int, span: Tuple[int, int], prv: Any, nxt: Any, rest: int) -> Tuple[List[str], int]:
+    """The rules calling ``a`` in on ``span`` would bend, in words, and the rest it falls short by (minutes)."""
+    bends, short = [], 0
+    if rest and prv and span[0] + 1440 - prv[1] < rest:
+        gap = span[0] + 1440 - prv[1]
+        short += rest - gap
+        bends.append(f"rest after {DAYS[(day - 1) % 7]} {_hours(max(gap, 0))} h (rule {_hours(rest)} h)")
+    if rest and nxt and nxt[0] + 1440 - span[1] < rest:
+        gap = nxt[0] + 1440 - span[1]
+        short += rest - gap
+        bends.append(f"rest before {DAYS[(day + 1) % 7]} {_hours(max(gap, 0))} h (rule {_hours(rest)} h)")
+    works = [bool(shift_span(c)) or i == day for i, c in enumerate(a["days"])]
+    run = 1
+    for i in range(day - 1, -1, -1):
+        if not works[i]:
+            break
+        run += 1
+    for i in range(day + 1, len(works)):
+        if not works[i]:
+            break
+        run += 1
+    if run >= 6:  # two days off a week leave 5 in a row at most
+        bends.append(f"{run} days in a row")
+    spans = [shift_span(c) for c in a["days"] if shift_span(c)]
+    owed = 3 if spans and all(e - b >= LONG_SHIFT for b, e in spans) else 2
+    left = sum(1 for c in a["days"] if _norm(c) == "off") - 1
+    if left < owed:
+        bends.append(f"{left} day{'s' if left != 1 else ''} off left this week (the week has {owed})")
+    return bends, short
+
+
+def dayoff_proposals(view: Dict[str, Any], week: Dict[str, Any], day: int, rest_hours: float,
+                     minimum: int = DAYOFF_MINIMUM, after: int = 0, near: Optional[Dict[str, Any]] = None,
+                     top: int = 5) -> Dict[str, Any]:
+    """Rescue the day's proposals (Phase AF, F1 and F2): days off to cancel, then overtime for what is left.
+
+    A proposal is a Shift Library shift and how many people to call in on it. Each person must cover at least
+    ``minimum`` short intervals of the program's own interval that are still short with the people before them, or
+    the cancelled day off is a waste. Shifts that start before ``after`` (now, today) are not offered. Up to ``top``
+    people off that day are named for it: those who keep every rule first (rest between shifts, the week's days off,
+    days in a row), then the smallest bend, each bend said; among equals, whoever works the same shift the day before
+    or after (consistent shifts). Whatever is still short becomes overtime per run of intervals, with
+    ``overtime_offers``' people next to their shifts."""
+    step = view["interval"]
+    rest = int(rest_hours * 60)
+    need = {c["t"]: math.ceil(c["required"] - c["now"] - 1e-9) for c in view["cells"]
+            if c["pm"] is not None and c["pm"] < 0 and c["t"] + step > after}
+    need = {t: n for t, n in need.items() if n > 0}
+    working = {l["name"] for l in view["lanes"] for s in l["segments"] if s["offset"] == 0}
+    off = [a for a in week.get("associates", []) if _norm(a["days"][day]) == "off" and a["name"] not in working]
+    shifts = []
+    for label in week.get("shifts", []):
+        span = shift_span(label)
+        if span and span[0] >= after and (label, span) not in shifts:
+            shifts.append((label, span))
+    taken: set = set()
+    proposals = []
+
+    def candidates(label: str, span: Tuple[int, int]) -> List[Dict[str, Any]]:
+        out = []
+        for a in off:
+            if a["name"] in taken:
+                continue
+            prv, nxt = _either_side(week, day, a["name"], near)
+            bends, short = _bends(a, day, span, prv, nxt, rest)
+            same = [DAYS[(day + d) % 7] for d, x in ((-1, prv), (1, nxt)) if x and tuple(x) == tuple(span)]
+            out.append({"name": a["name"], "language": a.get("language", ""), "bends": bends,
+                        "note": f"same as {' and '.join(same)}" if same else "",
+                        "rank": (len(bends), short, -len(same), a["name"])})
+        out.sort(key=lambda c: c["rank"])
+        return out
+
+    while True:
+        best = None
+        for label, span in shifts:
+            inside = [t for t in need if need[t] > 0 and span[0] <= t and t + step <= span[1]]
+            people = 0
+            while sum(1 for t in inside if need[t] >= people + 1) >= minimum:
+                people += 1
+            if not people:
+                continue
+            names = candidates(label, span)
+            if not names:
+                continue
+            people = min(people, len(names))
+            gain = sum(min(need[t], people) for t in inside)
+            kept = sum(1 for c in names[:people] if not c["bends"])
+            same = sum(1 for c in names[:people] if c["note"])
+            waste = sum(1 for t in range(max(span[0], 0), min(span[1], 1440), step)
+                        if t + step <= span[1] and need.get(t, 0) <= 0)
+            rank = (gain, kept, same, -waste)
+            if best is None or rank > best[0]:
+                best = (rank, label, span, people, inside, names)
+        if best is None:
+            break
+        _, label, span, people, inside, names = best
+        covered = [t for t in inside if need[t] > 0]
+        for t in inside:
+            need[t] -= min(need[t], people)
+        taken.update(c["name"] for c in names[:people])
+        rules: List[str] = []
+        for c in names[:people]:
+            rules += [b for b in c["bends"] if b not in rules]
+        proposals.append({"text": f"Cancel {people} day{'s' if people != 1 else ''} off, {_hm(span[0])} to "
+                                  f"{_hm(span[1])}",
+                          "shift": label, "start": span[0], "end": span[1], "people": people,
+                          "intervals": len(covered),
+                          "covers": ", ".join(f"{_hm(a)} to {_hm(b)}" for a, b in _runs_of(covered, step)),
+                          "candidates": [{k: v for k, v in c.items() if k != "rank"} for c in names[:top]],
+                          "rules": "; ".join(rules) if rules else "All kept"})
+    offers = {o["t"]: o["offers"] for o in overtime_offers(view, week, day, rest_hours, after, near=near)}
+    overtime: List[Dict[str, Any]] = []  # a run of intervals short by the same number of people
+    for t in sorted(t for t, n in need.items() if n > 0):
+        if overtime and overtime[-1]["end"] == t and overtime[-1]["people"] == need[t]:
+            overtime[-1]["end"] = t + step
+            overtime[-1]["times"].append(t)
+        else:
+            overtime.append({"start": t, "end": t + step, "people": need[t], "times": [t]})
+    for o in overtime:
+        named: List[Dict[str, Any]] = []
+        for t in o.pop("times"):
+            named += [x for x in offers.get(t, []) if x["name"] not in {y["name"] for y in named}]
+        o["offers"] = named[:top]
+        o["text"] = f"{_hm(o['start'])} to {_hm(o['end'])}: {o['people']} {'person' if o['people'] == 1 else 'people'}"
+    return {"proposals": proposals, "overtime": overtime, "minimum": minimum}
+
+
 def shift_groups(view: Dict[str, Any], from_now: Optional[int] = None) -> List[Dict[str, Any]]:
     """The Timeline's filter by shift start (Phase W): the day's people grouped by the start of their own shift that
     day (last night's people first, under "From yesterday"), each group with its names and how many are late or left

@@ -303,6 +303,18 @@
   {% endif %}
   {% endif %}
 </section>
+{% if dayoff %}<section class="panel" aria-labelledby="do-h">
+  <h2 id="do-h">Days off to cancel, then overtime</h2>
+  <p class="note">What the tool proposes for the {{ unit.get(v.interval, 'intervals') }} still short{% if from_now %} from {{ hm(from_now) }}{% endif %}: people off today called in on a Shift Library shift, each covering at least {{ dayoff.minimum }} short {{ unit.get(v.interval, 'intervals') }} (fewer is a waste of a day off), then overtime for what is left. Rules are kept first (rest between shifts, the week's days off, days in a row); anything that bends a rule says so, the smallest bend first. Nothing changes until you pick someone.</p>
+  {% if not dayoff.next_known %}<p class="note">The next week has no schedule here, so the rest before tomorrow is not checked.</p>{% endif %}
+  {% if dayoff.proposals or dayoff.overtime %}
+  <div class="scroll" role="region" tabindex="0" aria-label="Proposals (scrolls sideways)"><table class="adh-t do-t">
+    <thead><tr><th scope="col">Proposal</th><th scope="col">Covers</th><th scope="col">Possible people</th><th scope="col">Rules</th></tr></thead>
+    <tbody>{% for p in dayoff.proposals %}<tr><th scope="row">{{ p.text }}</th><td>{{ p.covers }}: {{ p.intervals }} short</td><td>{% for c in p.candidates %}{{ accept(c.name, 'Called in', p.start, p.end, 'call in' ~ (' · ' ~ c.language if c.language) ~ (' · ' ~ c.note if c.note), 'rescue') }}{% if c.bends %}<small class="dim do-bend">{{ c.name }}: {{ c.bends|join('; ') }}</small>{% endif %}{% endfor %}</td><td>{{ p.rules }}</td></tr>{% endfor %}
+    {% for o in dayoff.overtime %}<tr><th scope="row">Overtime still needed</th><td>{{ o.text }}</td><td>{% for x in o.offers %}{{ accept(x.name, 'Overtime', x.start, x.end, x.text, 'rescue') }}{% else %}Nobody can stay on or come in early here within the rules.{% endfor %}</td><td>{{ 'All kept' if o.offers else '' }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="empty">Nothing short{% if from_now %} from {{ hm(from_now) }}{% endif %}: no day off to cancel and no overtime needed.</p>{% endif %}
+</section>{% endif %}
 {% elif tab == 'meeting' %}
 <div class="adh">
 <section class="panel" aria-labelledby="mt-h">

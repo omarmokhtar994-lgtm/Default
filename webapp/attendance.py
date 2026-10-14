@@ -25,7 +25,7 @@ from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from .day import (ABSENT, AUX, CALLED_IN, CANCELLED, EXTRA_BREAKS, LATE_EARLY, MEASURES, OVERTIME_MAX, STATUSES, STEP, TIMED,
                   BreakRefused, _busy, advice, at_target,
-                  check_break, day_view, dayoff_offers, meeting_slots, overtime_offers, pattern_breaks, planned,
+                  check_break, day_view, dayoff_offers, dayoff_proposals, meeting_slots, overtime_offers, pattern_breaks, planned,
                   read_inputs, replan, vto_offers)
 from .notify import PRIVATE, left_out_now
 from .schedules import EGYPT, KEEP_DAYS, ScheduleBook
@@ -1118,6 +1118,14 @@ class DayBook:
         near = self.neighbours(page["version"]["program"], page["date"], page["version"])
         return {"overtime": overtime_offers(page["view"], week, page["day"], rest, after, near=near),
                 "vto": vto_offers(page["view"], after), "next_known": near["next_known"]}
+
+    def dayoff_plan(self, page: Dict[str, Any], after: int = 0) -> Dict[str, Any]:
+        """Rescue the day's days off to cancel, then overtime for what is left (Phase AF, F1 and F2), from ``after``."""
+        week = self._week(page["version"])
+        rest = float(week.get("settings", {}).get("rest_gap_hours") or 0)
+        near = self.neighbours(page["version"]["program"], page["date"], page["version"])
+        return {**dayoff_proposals(page["view"], week, page["day"], rest, after=after, near=near),
+                "next_known": near["next_known"]}
 
     def next_week_unknown(self, program: str, on: date) -> bool:
         """The last day of a schedule whose next one is not here: the rest gap to tomorrow cannot be checked."""

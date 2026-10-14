@@ -2148,6 +2148,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 rescue = days.rescue_plan(program, on, _minute_now(on), page=page)
             except ValueError as exc:
                 rescue = {"error": str(exc)}
+        dayoff = days.dayoff_plan(page, from_now) if page and tab == "rescue" else None  # Phase AF (F1, F2)
         cover_panel = None
         if page and tab == "board" and request.args.get("cover", type=int) is not None:
             try:
@@ -2228,7 +2229,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                people=people, whole=whole, shrink=shrink, finder=finder, cover=cover,
                                proposal=proposal, from_now=from_now, cover_panel=cover_panel,
                                add_panel=add_panel, person_panel=person_panel, lengths=ADD_LENGTHS, bar=bar,
-                               bulk=bulk, shifts=BULK_SHIFTS, bulk_verb=bulk_verb, rescue=rescue,
+                               bulk=bulk, shifts=BULK_SHIFTS, bulk_verb=bulk_verb, rescue=rescue, dayoff=dayoff,
                                team_names=sorted({u["display_name"] for u in app.extensions["store"].list_users()
                                                   if u["active"]}, key=str.lower),  # "With": pick one or type
                                with_lists=_with_lists(program) if program else [],  # or from the lists (Phase U)

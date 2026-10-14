@@ -1322,3 +1322,7 @@ ul.log .post-st { font-size: 0.8125rem; margin-left: 4px; }
 .shr-map summary { cursor: pointer; }
 .shr-t th, .shr-t td { padding: 3px 8px; text-align: start; }
 .shr-t td { text-align: center; }
+/* Phase AF (F1, F2): days off to cancel, then overtime */
+.do-t th[scope=row] { text-align: start; white-space: nowrap; }
+.do-t td { vertical-align: top; }
+.do-bend { display: block; margin: 2px 0 6px; }

@@ -2,7 +2,9 @@
 
 © 2026 Omar Mokhtar. All rights reserved.
 
-Nothing here is applied yet. The site keeps the measured Phase Y colours until the owner picks.
+Owner's pick, 2026-10-15: "I recommend A as well but keep deep ocean as well as a third option so to have 3 views".
+Applied: Graphite night is the default, Graphite day is the day look, and Deep ocean is a third look ("Ocean look" in
+the top bar). The current navy is retired.
 
 What changes is the family of surfaces (page, menu, panels, lines, text). The status colours (teal covered, amber
 short, red gap, violet over-staffed) and the channel colours (Phone, Chat, Email) stay as they are in every option:

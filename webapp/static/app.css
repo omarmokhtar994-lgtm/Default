@@ -2,89 +2,99 @@
 @font-face { font-family: "Archivo"; src: url("fonts/archivo.woff2") format("woff2"); font-weight: 400 800; font-stretch: 62% 125%; font-display: swap; }
 @font-face { font-family: "Atkinson Hyperlegible Next"; src: url("fonts/atkinson-hyperlegible-next.woff2") format("woff2"); font-weight: 200 800; font-display: swap; }
 :root {
-  /* dark (the control room) */
-  --night: #0E1A2B;        /* page */
-  --rail-bg: #0A1422;      /* Phase AG: the menu, a step below the page */
-  --console: #15243A;      /* panels, chart surface */
-  --console-2: #1B2D47;
-  --rail: #263954;         /* borders, grid lines */
-  --paper: #E6EDF5;        /* ink */
-  --dim: #8FA3BC;          /* secondary ink */
+  /* night: Graphite, the default (owner's pick 2026-10-15, evidence/phase_ag/colours) */
+  --night: #111418;        /* page */
+  --rail-bg: #0B0D10;      /* Phase AG: the menu, a step below the page */
+  --console: #181C22;      /* panels, chart surface */
+  --console-2: #20252D;
+  --rail: #2C333D;         /* borders, grid lines */
+  --paper: #E7EBF0;        /* ink */
+  --dim: #98A2AF;          /* secondary ink */
   --covered: #2BC4B4;      /* status fills: fully covered */
   --short: #F2A93B;        /*  short of the target */
   --gap: #E5534B;          /*  below the floor */
   --over: #8A7BF0;         /*  over-staffed */
-  --covered-text: #2BC4B4; /* "covered" written as text: 7.18:1 on panels */
+  --covered-text: #2BC4B4; /* "covered" written as text: 7.86:1 on panels */
   --over-text: #9086EE;    /* "over-staffed" written as text: 5.08:1 */
   --short-ink: #F2A93B;
   --gap-ink: #FF8A82;
-  --on-covered: #0E1A2B; --on-short: #0E1A2B; --on-gap: #0E1A2B; --on-over: #0E1A2B;  /* text on the status fills */
+  --on-covered: #111418; --on-short: #111418; --on-gap: #111418; --on-over: #111418;  /* text on the status fills */
   /* everything you can press or move is ink, never a status colour (Phase Y, evidence/phase_y/PALETTE.md) */
-  --action: #E6EDF5;       /* links, buttons, the focus ring, picked items, breaks you can move */
+  --action: #E7EBF0;       /* links, buttons, the focus ring, picked items, breaks you can move */
   --action-hover: #FFFFFF;
-  --on-action: #0E1A2B;    /* the label on a filled button: 14.81:1 */
-  --edge: #627389;         /* field and button edges: 3.22:1 on panels, 3.61:1 on the page */
-  --selected: #1B2D47;     /* the background of a picked tab, chip or option */
-  --done: #54749A;         /* a finished stage: 3.23:1 on panels */
-  --panel: rgba(21, 36, 58, .82);
-  --header: rgba(14, 26, 43, .85);
-  --well: rgba(14, 26, 43, .6);
-  --bg-line: rgba(143, 163, 188, .045);
-  --empty-cell: rgba(38, 57, 84, .45);
-  --empty-key: rgba(38, 57, 84, .9);
+  --on-action: #111418;    /* the label on a filled button: 14.28:1 */
+  --edge: #68727F;         /* field and button edges: 3.50:1 on panels */
+  --selected: #20252D;     /* the background of a picked tab, chip or option */
+  --done: #54749A;         /* a finished stage: 3.54:1 on panels */
+  --panel: rgba(24, 28, 34, .9);
+  --header: rgba(17, 20, 24, .88);
+  --well: rgba(17, 20, 24, .6);
+  --bg-line: rgba(152, 162, 175, .045);
+  --empty-cell: rgba(44, 51, 61, .5);
+  --empty-key: rgba(44, 51, 61, .9);
   --covered-soft: rgba(43, 196, 180, .12);  /* a wash behind "covered" or "ready" */
   --gap-soft: rgba(229, 83, 75, .18);
   --short-soft: rgba(242, 169, 59, .16);
-  --hover: rgba(230, 237, 245, .05);
+  --hover: rgba(231, 235, 240, .05);
   --glow: rgba(43, 196, 180, .45);
   --glow-strong: rgba(43, 196, 180, .7);
   --pulse: rgba(242, 169, 59, .9);
   --shadow: rgba(0, 0, 0, .35);
-  --code-bg: #0A1422;
-  --code-ink: #C9D6E3;
+  --code-bg: #0B0D10;
+  --code-ink: #CDD3DB;
   /* chart series and heat levels, validated on #15243A (evidence/phase_l/PALETTE_CHECKS.txt) */
   --c-blue: #3987e5; --c-aqua: #199e70; --c-orange: #d95926; --c-yellow: #c98500;
-  --h0: #1f3350; --h1: #4a3a2c; --h2: #7a4224; --h3: #a94b22; --h4: #d95926;
+  --h0: #20252D; --h1: #4a3a2c; --h2: #7a4224; --h3: #a94b22; --h4: #d95926;
   --display: "Archivo", "Arial Narrow", system-ui, sans-serif;  /* Phase AG: one variable family, width set where used */
   --text: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
   color-scheme: dark;
 }
 /* light (daylight): the person's choice, or the device's when they have not chosen */
 @media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) {
-    --rail-bg: #FFFFFF; --night: #EAEFF5; --console: #FFFFFF; --console-2: #F3F6FA; --rail: #D3DCE7; --paper: #12233A; --dim: #4F627A;
+  :root:not([data-theme="dark"]):not([data-theme="ocean"]) {
+    --rail-bg: #FFFFFF; --night: #F1F2F4; --console: #FFFFFF; --console-2: #F6F7F9; --rail: #D8DCE2; --paper: #15191F; --dim: #525C68;
     /* status fills 3:1 or more on white; teal and amber light with dark text, red and violet darker with white
        text, so the four stay apart for colour-blind readers too (palette validator: worst pair ΔE 8.6) */
     --covered: #06A496; --short: #C98304; --gap: #D53D38; --over: #7560E3;
     --on-covered: #0E1A2B; --on-short: #0E1A2B; --on-gap: #FFFFFF; --on-over: #FFFFFF;
     --covered-text: #0B776C; --over-text: #715ED8; --short-ink: #8C5300; --gap-ink: #B3261E;
-    --action: #12233A; --action-hover: #22385A; --on-action: #FFFFFF; --edge: #77869A; --selected: #E3EAF2;
-    --done: #7692B4; --panel: rgba(255, 255, 255, .92); --header: rgba(234, 239, 245, .9); --well: #F3F6FA;
-    --bg-line: rgba(18, 35, 58, .045); --empty-cell: #E3E9F1; --empty-key: #D3DCE7;
+    --action: #15191F; --action-hover: #2A313B; --on-action: #FFFFFF; --edge: #7A838F; --selected: #E8EBEF;
+    --done: #7692B4; --panel: rgba(255, 255, 255, .92); --header: rgba(241, 242, 244, .9); --well: #F6F7F9;
+    --bg-line: rgba(21, 25, 31, .045); --empty-cell: #E8EBEF; --empty-key: #D8DCE2;
     --covered-soft: rgba(11, 119, 108, .1);
-    --gap-soft: rgba(179, 38, 30, .1); --short-soft: rgba(140, 83, 0, .1); --hover: rgba(18, 35, 58, .05);
-    --glow: transparent; --glow-strong: transparent; --pulse: rgba(233, 162, 59, .6); --shadow: rgba(18, 35, 58, .18);
-    --code-bg: #F3F6FA; --code-ink: #12233A;
+    --gap-soft: rgba(179, 38, 30, .1); --short-soft: rgba(140, 83, 0, .1); --hover: rgba(21, 25, 31, .05);
+    --glow: transparent; --glow-strong: transparent; --pulse: rgba(233, 162, 59, .6); --shadow: rgba(21, 25, 31, .18);
+    --code-bg: #F6F7F9; --code-ink: #15191F;
     --c-blue: #2a78d6; --c-aqua: #1baf7a; --c-orange: #eb6834; --c-yellow: #eda100;
-    --h0: #E9EEF4; --h1: #F8D6C5; --h2: #F2B08F; --h3: #EB8A5E; --h4: #D95926;
+    --h0: #EDEFF2; --h1: #F8D6C5; --h2: #F2B08F; --h3: #EB8A5E; --h4: #D95926;
     color-scheme: light;
   }
 }
 :root[data-theme="light"] {
-  --rail-bg: #FFFFFF; --night: #EAEFF5; --console: #FFFFFF; --console-2: #F3F6FA; --rail: #D3DCE7; --paper: #12233A; --dim: #4F627A;
+  --rail-bg: #FFFFFF; --night: #F1F2F4; --console: #FFFFFF; --console-2: #F6F7F9; --rail: #D8DCE2; --paper: #15191F; --dim: #525C68;
   --covered: #06A496; --short: #C98304; --gap: #D53D38; --over: #7560E3;
   --on-covered: #0E1A2B; --on-short: #0E1A2B; --on-gap: #FFFFFF; --on-over: #FFFFFF;
   --covered-text: #0B776C; --over-text: #715ED8; --short-ink: #8C5300; --gap-ink: #B3261E;
-  --action: #12233A; --action-hover: #22385A; --on-action: #FFFFFF; --edge: #77869A; --selected: #E3EAF2;
-  --done: #7692B4; --panel: rgba(255, 255, 255, .92); --header: rgba(234, 239, 245, .9); --well: #F3F6FA;
-  --bg-line: rgba(18, 35, 58, .045); --empty-cell: #E3E9F1; --empty-key: #D3DCE7;
+  --action: #15191F; --action-hover: #2A313B; --on-action: #FFFFFF; --edge: #7A838F; --selected: #E8EBEF;
+  --done: #7692B4; --panel: rgba(255, 255, 255, .92); --header: rgba(241, 242, 244, .9); --well: #F6F7F9;
+  --bg-line: rgba(21, 25, 31, .045); --empty-cell: #E8EBEF; --empty-key: #D8DCE2;
   --covered-soft: rgba(11, 119, 108, .1);
-  --gap-soft: rgba(179, 38, 30, .1); --short-soft: rgba(140, 83, 0, .1); --hover: rgba(18, 35, 58, .05);
-  --glow: transparent; --glow-strong: transparent; --pulse: rgba(233, 162, 59, .6); --shadow: rgba(18, 35, 58, .18);
-  --code-bg: #F3F6FA; --code-ink: #12233A;
+  --gap-soft: rgba(179, 38, 30, .1); --short-soft: rgba(140, 83, 0, .1); --hover: rgba(21, 25, 31, .05);
+  --glow: transparent; --glow-strong: transparent; --pulse: rgba(233, 162, 59, .6); --shadow: rgba(21, 25, 31, .18);
+  --code-bg: #F6F7F9; --code-ink: #15191F;
   --c-blue: #2a78d6; --c-aqua: #1baf7a; --c-orange: #eb6834; --c-yellow: #eda100;
-  --h0: #E9EEF4; --h1: #F8D6C5; --h2: #F2B08F; --h3: #EB8A5E; --h4: #D95926;
+  --h0: #EDEFF2; --h1: #F8D6C5; --h2: #F2B08F; --h3: #EB8A5E; --h4: #D95926;
   color-scheme: light;
+}
+/* Deep ocean: a third look to switch to, night only (owner's pick 2026-10-15); the status and channel colours stay */
+:root[data-theme="ocean"] {
+  --night: #0A1220; --rail-bg: #060B14; --console: #111C2E; --console-2: #18263D; --rail: #23344F;
+  --paper: #EAF0F8; --dim: #93A6C0; --on-covered: #0A1220; --on-short: #0A1220; --on-gap: #0A1220; --on-over: #0A1220;
+  --action: #EAF0F8; --action-hover: #FFFFFF; --on-action: #0A1220; --edge: #61748E; --selected: #18263D;
+  --panel: rgba(17, 28, 46, .9); --header: rgba(10, 18, 32, .88); --well: rgba(10, 18, 32, .6);
+  --bg-line: rgba(147, 166, 192, .045); --empty-cell: rgba(35, 52, 79, .5); --empty-key: rgba(35, 52, 79, .9);
+  --hover: rgba(234, 240, 248, .05); --code-bg: #060B14; --code-ink: #C9D6E3; --h0: #18263D;
+  color-scheme: dark;
 }
 @view-transition { navigation: auto; }
 

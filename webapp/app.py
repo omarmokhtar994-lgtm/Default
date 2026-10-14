@@ -139,7 +139,7 @@ def _secret_key(data_dir: Path) -> str:
 
 WORKBOOKS = ("Scheduler_Input_Blank.xlsx", "Scheduler_Input_Example.xlsx")
 BACK = {"program": "programs"}  # where Back goes without browser history; every other page: home
-THEMES = ("light", "dark")  # no cookie: follow the device's setting
+THEMES = ("light", "dark", "ocean")  # no cookie: follow the device's setting; ocean: Phase AG, the third look
 
 
 def _when(epoch: Optional[float]) -> str:

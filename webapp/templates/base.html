@@ -4,10 +4,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="{{ theme or 'dark light' }}">
-{% if theme %}<meta name="theme-color" content="{{ '#EAEFF5' if theme == 'light' else '#0E1A2B' }}">
-{% else %}<meta name="theme-color" content="#0E1A2B" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#EAEFF5" media="(prefers-color-scheme: light)">
+<meta name="color-scheme" content="{{ {'light': 'light', 'dark': 'dark', 'ocean': 'dark'}.get(theme, 'dark light') }}">
+{% if theme %}<meta name="theme-color" content="{{ {'light': '#F1F2F4', 'ocean': '#0A1220'}.get(theme, '#111418') }}">
+{% else %}<meta name="theme-color" content="#111418" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F1F2F4" media="(prefers-color-scheme: light)">
 {% endif %}<title>{% block title %}Team Scheduler{% endblock %}</title>
 <link rel="preload" href="{{ url_for('static', filename='fonts/atkinson-hyperlegible-next.woff2') }}" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
@@ -27,6 +27,8 @@
       <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}">
       <button class="link" name="theme" value="{{ 'dark' if theme == 'light' else 'light' }}" data-theme-toggle
               title="Switch between the light and the dark look">{{ 'Dark look' if theme == 'light' else 'Light look' }}</button>
+      {% if theme == 'ocean' %}<button class="link" name="theme" value="dark" title="Back to the graphite night look">Dark look</button>
+      {% else %}<button class="link" name="theme" value="ocean" title="The deep ocean night look">Ocean look</button>{% endif %}
     </form>
     <a href="{{ url_for('change_password') }}" title="Your account: change your password">Settings</a>
     <form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="link">Sign out</button></form>

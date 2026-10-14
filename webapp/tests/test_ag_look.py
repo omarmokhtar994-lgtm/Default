@@ -67,5 +67,47 @@ class TheLook(unittest.TestCase):
         self.assertIn('<a href="/" class="on" aria-current="page">Home</a>', side)  # the links keep their markup
 
 
+class TheThreeLooks(unittest.TestCase):
+    """Owner's pick, 2026-10-15 (samples in evidence/phase_ag/colours): "I recommend A as well but keep deep ocean as
+    well as a third option so to have 3 views". Graphite is the night look and the default, its light version is the
+    day look, and Deep ocean is a third look to switch to. The status and channel colours do not change."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app, cls.store, *_ = make_app(start_worker=False)
+        cls.store.add_user("omar", "Omar", "Owner-pass-123", is_admin=True, must_change=False)
+
+    def block(self, selector):
+        css = (STATIC / "app.css").read_text()
+        start = css.index(selector + " {")
+        return css[start:css.index("}", start)]
+
+    def test_the_tokens(self):
+        self.assertIn("--night: #111418;", self.block(":root"))
+        self.assertIn("--console: #181C22;", self.block(":root"))
+        self.assertIn("--night: #F1F2F4;", self.block(':root[data-theme="light"]'))
+        ocean = self.block(':root[data-theme="ocean"]')
+        self.assertIn("--night: #0A1220;", ocean)
+        self.assertIn("--console: #111C2E;", ocean)
+        self.assertIn("color-scheme: dark;", ocean)
+        self.assertNotIn("--covered:", ocean)  # colour still means state: the status colours stay
+
+    def test_switching_to_deep_ocean(self):
+        from webapp.tests.test_runs import token
+        client = sign_in(self.app, "omar", "Owner-pass-123")
+        page = client.get("/").get_data(as_text=True)
+        self.assertIn('<button class="link" name="theme" value="ocean"', page)
+        self.assertIn(">Ocean look</button>", page)
+        got = client.post("/theme", data={"csrf_token": token(client), "theme": "ocean", "next": "/"})
+        self.assertIn("theme=ocean", got.headers["Set-Cookie"])
+        page = client.get("/").get_data(as_text=True)
+        self.assertIn('<html lang="en" data-theme="ocean">', page)
+        self.assertIn('<meta name="theme-color" content="#0A1220">', page)
+        self.assertIn('<meta name="color-scheme" content="dark">', page)
+        self.assertIn(">Light look</button>", page)  # the other two looks are offered
+        self.assertIn('value="dark"', page)
+        self.assertIn(">Dark look</button>", page)
+
+
 if __name__ == "__main__":
     unittest.main()

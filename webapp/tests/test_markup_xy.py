@@ -91,15 +91,17 @@ class TheMarkup(unittest.TestCase):
 
 
 CSS = Path(__file__).resolve().parents[1] / "static" / "app.css"
-# Phase Y proposal, approved by the owner (evidence/phase_y/proposal.css, measured in PALETTE.md)
-NIGHT = {"--action": "#E6EDF5", "--action-hover": "#FFFFFF", "--on-action": "#0E1A2B", "--edge": "#627389",
-         "--done": "#54749A", "--covered-text": "#2BC4B4", "--over-text": "#9086EE", "--on-covered": "#0E1A2B",
-         "--on-short": "#0E1A2B", "--on-gap": "#0E1A2B", "--on-over": "#0E1A2B", "--selected": "#1B2D47",
+# Phase Y proposal, approved by the owner (evidence/phase_y/proposal.css, measured in PALETTE.md). Re-pinned in
+# Phase AG: on 2026-10-15 the owner picked the Graphite surfaces (evidence/phase_ag/colours), so the ink, the edges,
+# the picked background and the text on status fills follow them; the status and channel colours are unchanged.
+NIGHT = {"--action": "#E7EBF0", "--action-hover": "#FFFFFF", "--on-action": "#111418", "--edge": "#68727F",
+         "--done": "#54749A", "--covered-text": "#2BC4B4", "--over-text": "#9086EE", "--on-covered": "#111418",
+         "--on-short": "#111418", "--on-gap": "#111418", "--on-over": "#111418", "--selected": "#20252D",
          "--ch-email": "#4D7D8D"}
-DAY = {"--action": "#12233A", "--action-hover": "#22385A", "--on-action": "#FFFFFF", "--edge": "#77869A",
+DAY = {"--action": "#15191F", "--action-hover": "#2A313B", "--on-action": "#FFFFFF", "--edge": "#7A838F",
        "--done": "#7692B4", "--covered-text": "#0B776C", "--over-text": "#715ED8", "--covered": "#06A496",
        "--short": "#C98304", "--gap": "#D53D38", "--over": "#7560E3", "--on-covered": "#0E1A2B",
-       "--on-short": "#0E1A2B", "--on-gap": "#FFFFFF", "--on-over": "#FFFFFF", "--selected": "#E3EAF2"}
+       "--on-short": "#0E1A2B", "--on-gap": "#FFFFFF", "--on-over": "#FFFFFF", "--selected": "#E8EBEF"}
 
 
 def block(text, opener):

@@ -7,7 +7,13 @@ four previews), keep the name "Team Scheduler". v1 (light limestone and Nile)
 is replaced.
 
 v4, 2026-10-14 (Phase AG, owner: "u have all my approval for anything"; samples in `evidence/phase_ag/`): the
-measured v3 colours stay; the look changes through type, layout and the menu.
+look changes through type, layout, the menu and, from 2026-10-15, the surfaces.
+
+- **Three looks** (owner's pick 2026-10-15, `evidence/phase_ag/colours`): Graphite night is the default (neutral
+  greys, page `#111418`, panels `#181C22`), its light version is the day look (page `#F1F2F4`, white panels), and
+  Deep ocean (page `#0A1220`, panels `#111C2E`) is a third look switched to from the top bar ("Ocean look"). Only
+  the surfaces, ink and edges change between them; the status colours (teal, amber, red, violet) and the channel
+  colours are the measured v3 set in every look. Every pair is measured in `evidence/phase_ag/colours/CONTRAST.txt`.
 
 - **Type:** Archivo (one variable family, self-hosted) replaces Saira Semi Condensed: headings and figures,
   semi-condensed where a shorthand sets them, condensed for big figures. Atkinson Hyperlegible Next stays for text,

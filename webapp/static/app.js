@@ -1028,6 +1028,45 @@ function homeRefresh(now) {
   });
 })();
 
+// Phase AF (C3): a stretch on the RTA's Channels tab fills in "Change a channel"; Preview asks the server what the
+// change would cause (new warnings and their fixes) before Apply keeps it
+(function () {
+  const form = document.querySelector("[data-ch-form]");
+  const said = document.querySelector("[data-ch-said]");
+  const button = form && form.querySelector("[data-ch-preview]");
+  if (!form || !said || !button || !window.fetch) return;
+  button.hidden = false;
+  document.addEventListener("click", (event) => {
+    const run = event.target.closest("[data-ch-run]");
+    if (!run) return;
+    event.preventDefault();
+    form.elements.associate.value = run.dataset.who;
+    form.elements.from.value = run.dataset.from;
+    form.elements.to.value = run.dataset.to;
+    said.textContent = "";
+    form.scrollIntoView({ block: "nearest" });
+    form.elements.channel.focus();
+  });
+  const line = (tag, text, cls) => { const el = document.createElement(tag); el.textContent = text; if (cls) el.className = cls; return el; };
+  button.addEventListener("click", () => {
+    if (!form.reportValidity()) return;
+    said.textContent = "Checking…";
+    fetch("/day/channel-preview", { method: "POST", body: new FormData(form), credentials: "same-origin" })
+      .then((r) => r.json())
+      .then((j) => {
+        said.textContent = "";
+        if (j.error) { said.appendChild(line("p", j.error, "alert bad")); return; }
+        const box = line("div", "", "alert " + (j.level === "ok" ? "ok" : "bad"));
+        box.appendChild(line("h3", j.text));
+        if (!j.warnings.length) box.appendChild(line("p", "No new channel warning."));
+        j.warnings.forEach((w) => box.appendChild(line("p", w)));
+        j.fixes.forEach((f) => box.appendChild(line("p", "Proposed fix: " + f)));
+        said.appendChild(box);
+      })
+      .catch(() => { said.textContent = "The preview could not be loaded. Apply still checks the change."; });
+  });
+})();
+
 // Exports (Phase W): the file comes through a script so the page can say what is happening ("Preparing", then
 // "Ready" or what went wrong) instead of loading with no end; without a script the form is a plain download.
 (function () {

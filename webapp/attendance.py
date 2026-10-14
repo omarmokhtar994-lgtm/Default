@@ -503,6 +503,9 @@ class DayBook:
         before = (self._week(earlier), day_index(on - timedelta(days=1))) if earlier else None
         channels, channel_problem = self._channel_inputs(program, on, week, inputs,
                                                          self.book.channel_path(row["run_id"]), earlier)
+        if channels and extra and extra.get("channel"):  # Phase AF (C3): a channel change counted as if kept
+            who, lo, hi, letter = extra["channel"]
+            channels["moves"].setdefault((0, who), []).append({"id": 0, "start": lo, "end": hi, "channel": letter})
         view = day_view(week, inputs, day_index(on), attendance, actual, measure, acts, before, channels=channels)
         ratio, source_of_target = self.target_for(program, on, row, inputs)
         return {"version": row, "note": note, "view": view, "stale": stale, "date": on,
@@ -596,6 +599,33 @@ class DayBook:
         """Put ``name`` on ``channel`` from ``start`` to ``end`` (minutes, or HH:MM) for the shift that starts on
         ``on``; kept and said in the day log. Refused outside the shift, off the 5-minute steps, in all-channels
         time, or for a channel the person cannot work."""
+        from .channels import CHANNELS
+        lo, hi, was = self._channel_change(program, on, name, start, end, channel)
+        made = self.store.add_channel_move(program=program, shift_date=on.isoformat(), associate=name, start=lo,
+                                           end_min=hi, channel=channel, user_id=user_id)
+        what = f"{CHANNELS[channel]} from {hm(lo)} to {hm(hi)}" + (f" (was {CHANNELS[was]})" if was in CHANNELS else "")
+        self._log(program, on, name, what, user_id, "channel", ref=f"channel:{made}", after="on")
+        return made
+
+    def channel_preview(self, program: str, on: date, name: str, start: Any, end: Any, channel: str,
+                        measure: str = "interval") -> Dict[str, Any]:
+        """Phase AF (C3): what putting ``name`` on ``channel`` from ``start`` to ``end`` would do, before anything is
+        kept: the channel warnings it would add and the fixes proposed for them. Refused as the change itself
+        would be (ValueError)."""
+        from .channels import CHANNELS
+        lo, hi, was = self._channel_change(program, on, name, start, end, channel)
+        before = self.page(program, on, measure)["view"]["channels"]
+        after = self.page(program, on, measure, extra={"channel": (name, lo, hi, channel)})["view"]["channels"]
+        old = {w["text"] for w in before["warnings"]}
+        new = [w for w in after["warnings"] if w["text"] not in old]
+        text = f"{name}: {CHANNELS[channel]} from {hm(lo)} to {hm(hi)}" + (
+            f" (was {CHANNELS[was]})" if was in CHANNELS else "")
+        return {"text": text, "level": "bad" if new else "ok", "warnings": [w["text"] for w in new],
+                "fixes": [f["text"] for w in new for f in w["fixes"]][:3]}
+
+    def _channel_change(self, program: str, on: date, name: str, start: Any, end: Any,
+                        channel: str) -> Tuple[int, int, Optional[str]]:
+        """The checks a channel change passes (see channel_move): its minutes and the channel it replaces."""
         from .channel_day import letter_at
         from .channel_people import ChannelPeople, can_work
         from .channels import CHANNELS, blended_at, read_channels
@@ -624,12 +654,7 @@ class DayBook:
         blocks = [(b["start"], b["end"], b["channel"]) for b in channel_blocks(week, d, name)]
         moved = [{"id": r["id"], "start": r["start"], "end": r["end_min"], "channel": r["channel"]}
                  for r in self.store.list_channel_moves(program, [on.isoformat()]) if r["associate"] == name]
-        was = letter_at(blocks, moved, lo, False)
-        made = self.store.add_channel_move(program=program, shift_date=on.isoformat(), associate=name, start=lo,
-                                           end_min=hi, channel=channel, user_id=user_id)
-        what = f"{CHANNELS[channel]} from {hm(lo)} to {hm(hi)}" + (f" (was {CHANNELS[was]})" if was in CHANNELS else "")
-        self._log(program, on, name, what, user_id, "channel", ref=f"channel:{made}", after="on")
-        return made
+        return lo, hi, letter_at(blocks, moved, lo, False)
 
     @journaled
     def cancel_channel_move(self, program: str, on: date, move_id: int, user_id: int) -> None:

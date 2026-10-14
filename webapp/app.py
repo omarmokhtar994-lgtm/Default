@@ -2621,6 +2621,18 @@ def create_app(config: Dict[str, Any]) -> Flask:
             flash(str(exc))
         return _back_to_day(program, on, "meeting")
 
+    @app.route("/day/channel-preview", methods=["POST"])
+    @login_required
+    def day_channel_preview():  # type: ignore[no-untyped-def]
+        """Phase AF (C3): what a channel change would cause, before it is kept (JSON)."""
+        try:
+            program, on, name = _day_form()
+            found = _days().channel_preview(program, on, name, request.form.get("from", ""),
+                                            request.form.get("to", ""), request.form.get("channel", ""))
+        except ValueError as exc:
+            return jsonify(error=str(exc)), 400
+        return jsonify(found)
+
     @app.route("/day/break-advice", methods=["POST"])
     @login_required
     def day_break_advice():  # type: ignore[no-untyped-def]

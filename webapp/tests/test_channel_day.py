@@ -288,6 +288,26 @@ class TheDayAsStretches(_Day):
         self.assertIn((990, 1140, "P"), runs)
 
 
+class TheChannelChangePreview(_Day):
+    """Phase AF (C3): a channel change from the RTA says what it would cause before it is kept."""
+
+    def test_the_preview_names_the_new_warning_and_fixes_and_keeps_nothing(self):
+        found = self.days.channel_preview(self.key, WED, "Associate 001", "15:00", "16:00", "P")
+        self.assertEqual(found["level"], "bad")
+        self.assertTrue(any(w.startswith("15:00 to 16:00: nobody on Chat") for w in found["warnings"]), found)
+        self.assertTrue(found["fixes"], found)
+        self.assertIn("Associate 001: Phone from 15:00 to 16:00", found["text"])
+        self.assertEqual(self.store.list_channel_moves(self.key, [WED.isoformat()]), [])
+
+    def test_a_change_that_harms_nothing_says_so(self):
+        found = self.days.channel_preview(self.key, WED, ARABIC_SPARE, "15:00", "16:00", "C")
+        self.assertEqual((found["level"], found["warnings"]), ("ok", []))
+
+    def test_it_is_refused_as_the_change_itself_would_be(self):
+        with self.assertRaisesRegex(ValueError, "inside"):
+            self.days.channel_preview(self.key, WED, "Associate 001", "03:00", "04:00", "P")
+
+
 class TheChannelsTab(unittest.TestCase):
     """The RTA page's Channels tab: warnings with causes and fixes; a fix applied from the page."""
 
@@ -329,6 +349,20 @@ class TheChannelsTab(unittest.TestCase):
         self.assertIn('aria-label="Who is on which channel"', page)
         self.assertRegex(page, r'<rect class="ch-P"[^>]*><title>Associate 031: Phone 12:00 to 14:00</title>')
         self.assertRegex(page, r'<rect class="ch-B"[^>]*><title>Associate 031: Break 1 14:00 to 14:15</title>')
+
+    def test_the_tab_offers_a_channel_change_with_a_preview(self):
+        # Phase AF (C3): a stretch fills in "Change a channel"; Preview asks the server, Apply keeps it
+        page = self.page()
+        self.assertIn('<h2 id="chg-h">Change a channel</h2>', page)
+        self.assertRegex(page, r'<a href="#chg-form" data-ch-run data-who="Associate 031" data-from="12:00" '
+                               r'data-to="14:00" data-letter="P">')
+        got = self.admin.post("/day/channel-preview", data={
+            "csrf_token": self.token(self.admin), "program": self.key, "date": WED.isoformat(),
+            "associate": "Associate 001", "from": "15:00", "to": "16:00", "channel": "P"})
+        self.assertEqual(got.status_code, 200)  # the warnings themselves: TheChannelChangePreview
+        found = got.get_json()
+        self.assertTrue(found["text"].startswith("Associate 001: Phone from 15:00 to 16:00"), found)
+        self.assertEqual(set(found), {"text", "level", "warnings", "fixes"})
 
     def test_the_tab_lists_the_warning_its_cause_and_fixes_and_a_fix_applies(self):
         self.days.add_activity(self.key, WED, "Associate 001", "Coaching", "15:00", "15:30", self.omar,

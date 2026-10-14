@@ -1364,3 +1364,20 @@ ul.log .post-st { font-size: 0.8125rem; margin-left: 4px; }
 .nb-alerts li { display: flex; gap: 8px; align-items: flex-start; }
 .nb-alerts li .ico { margin-top: 0.15em; }
 .nb-alerts li.gap .ico { color: var(--gap-ink); } .nb-alerts li.short .ico { color: var(--short-ink); }
+/* Phase AG (T3): Go to, Ctrl K */
+.goto-open { display: inline-flex; align-items: center; gap: 6px; }
+kbd { font: 600 0.75rem/1 var(--text); border: 1px solid var(--rail); border-bottom-width: 2px; border-radius: 4px; padding: 2px 5px; color: var(--dim); }
+dialog.goto { width: min(620px, calc(100vw - 32px)); margin-top: 12vh; padding: 0; background: var(--console); color: var(--paper);
+  border: 1px solid var(--rail); border-radius: 12px; box-shadow: 0 18px 48px rgb(3 8 16 / .5); }
+dialog.goto::backdrop { background: rgb(4 8 14 / .55); }
+.goto-q { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--rail); }
+.goto-q input { flex: 1; min-width: 0; font-size: 1rem; background: transparent; border: 0; color: var(--paper); }
+.goto-q input:focus-visible { outline: none; }
+.goto-q:focus-within { box-shadow: inset 0 -2px 0 var(--action); }
+.goto-list { list-style: none; margin: 0; padding: 6px 8px; max-height: 50vh; overflow-y: auto; overscroll-behavior: contain; }
+.goto-group { padding: 8px 10px 4px; font-size: 0.75rem; color: var(--dim); }
+.goto-list a { display: flex; gap: 10px; align-items: baseline; padding: 8px 10px; border-radius: 8px; color: var(--paper); text-decoration: none; }
+.goto-list a small { margin-left: auto; color: var(--dim); }
+.goto-list li[aria-selected="true"] a, .goto-list a:hover { background: var(--selected); }
+.goto-none { padding: 10px; color: var(--dim); }
+.goto-hint { margin: 0; padding: 8px 14px 10px; border-top: 1px solid var(--rail); font-size: 0.75rem; color: var(--dim); }

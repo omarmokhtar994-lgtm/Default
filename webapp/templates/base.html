@@ -20,6 +20,7 @@
   <a class="brand" href="{{ url_for('home') }}"><svg class="brand-mark" viewBox="0 0 28 20" aria-hidden="true"><rect x="0" y="1" width="16" height="5" rx="1.5" class="m1"/><rect x="6" y="8" width="16" height="5" rx="1.5" class="m2"/><rect x="12" y="15" width="16" height="5" rx="1.5" class="m3"/></svg>Team Scheduler</a>
   {% if user %}
   <div class="account">
+    <button type="button" class="link goto-open" data-goto-open aria-keyshortcuts="Control+K"><span class="ico i-magnifying-glass" aria-hidden="true"></span>Go to <kbd>Ctrl K</kbd></button>
     <span class="who">{{ user.display_name }}, {{ user_role|lower }}</span>
     <form class="theme" method="post" action="{{ url_for('set_theme') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -69,6 +70,11 @@
 {% block content %}{% endblock %}
 </main>
 {% if user %}</div>{% endif %}
+{% if user %}<dialog id="goto" class="goto" aria-label="Go to" data-url="{{ url_for('goto') }}" data-program="{{ nav_unit or '' }}" data-date="{{ nav_date or '' }}">
+  <form method="dialog" class="goto-q"><span class="ico i-magnifying-glass" aria-hidden="true"></span><input type="search" name="q" role="combobox" aria-expanded="true" aria-autocomplete="list" aria-controls="goto-list" aria-label="Go to a page, a program or a person" placeholder="For example Associate 14, or Weeks" autocomplete="off"><button class="link" value="close">Close</button></form>
+  <ul id="goto-list" class="goto-list" role="listbox" aria-label="Results"></ul>
+  <p class="goto-hint">Up and down to pick, Enter to open, Esc to close.</p>
+</dialog>{% endif %}
 <footer class="foot">{{ copyright }}</footer>
 <script src="{{ url_for('static', filename='app.js') }}" defer></script>
 </body>

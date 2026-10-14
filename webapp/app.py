@@ -2337,6 +2337,55 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                missing=", ".join(missing), said=said, view=stitch(views, start, moved),
                                may_set=bool(g.user["is_admin"] or g.user["is_supervisor"]))
 
+    GOTO_PAGES = (  # (label, endpoint, what it needs: "" anyone, "unit" a program picked, "manager", "admin")
+        ("Home", "home", ""), ("RTA", "day_page", "unit"), ("Overview", "overview_page", "unit"),
+        ("Wallboard", "day_wallboard", "unit"), ("Weeks", "week_page", "unit"), ("Schedules", "schedules_for", "unit"),
+        ("Analysis", "program", "unit"), ("Programs", "programs", ""), ("Exports", "exports_page", ""),
+        ("Team", "team_page", ""), ("People", "admin_users", "manager"),
+        ("Departments and people", "with_setup", "manager"), ("Associate channels", "channel_setup", "manager"),
+        ("Notifications", "notifications_page", "admin"), ("LOBs and defaults", "program_setup", "admin"))
+    GOTO_MAX = 8  # results per group
+
+    @app.route("/goto")
+    @login_required
+    def goto():  # type: ignore[no-untyped-def]
+        """Go to (Phase AG, T3): pages, programs and people matching ``q``, as JSON for the Ctrl K dialog."""
+        words = request.args.get("q", "").casefold().split()
+        program = clean_program(request.args.get("program", ""))
+        on = _date(request.args.get("date", "")) or datetime.now(EGYPT).date()
+        if program and not _access().can_open(program):
+            abort(403)
+
+        def hit(text: str) -> bool:
+            return all(w in text.casefold() for w in words)
+
+        items: List[Dict[str, str]] = []
+        manager = bool(g.user["is_admin"] or g.user["is_supervisor"])
+        for label, endpoint, needs in GOTO_PAGES:
+            if (needs == "unit" and not program) or (needs == "manager" and not manager) or \
+                    (needs == "admin" and not g.user["is_admin"]) or not hit(label):
+                continue
+            args = {"name": program} if endpoint == "program" else (
+                {"program": program, **({"date": on.isoformat()} if endpoint in ("day_page", "overview_page") else {})}
+                if needs == "unit" else {})
+            items.append({"group": "Pages", "label": label, "note": _unit_name(program) if needs == "unit" else "",
+                          "url": url_for(endpoint, **args)})
+        units = sorted(k for k in unit_keys(app.extensions["store"]) if _access().can_open(k))
+        items += [{"group": "Programs", "label": _unit_name(k), "note": "RTA", "url": url_for("day_page", program=k)}
+                  for k in units if words and (hit(k) or hit(_unit_name(k)))][:GOTO_MAX]
+        if program and words:
+            found = []
+            for name, cell in _days().roster(program, on):
+                if not hit(name):
+                    continue
+                span, word = shift_span(cell), " ".join(str(cell or "").split()).casefold()
+                note = (f"{on:%a} {hm(span[0])} to {hm(span[1])}" if span else
+                        f"On leave on {on:%a}" if word == "leave" else f"Off on {on:%a}")
+                found.append({"group": "People", "label": name, "note": note,
+                              "url": url_for("day_page", program=program, date=on.isoformat(), who=name)})
+            items += sorted(found, key=lambda i: i["label"])[:GOTO_MAX]
+        return jsonify(items=items)
+
     @app.route("/day/operating-day", methods=["POST"])
     @manager_required
     def day_operating_start():  # type: ignore[no-untyped-def]

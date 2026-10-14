@@ -1258,3 +1258,63 @@ function homeRefresh(now) {
     });
   });
 })();
+
+// Go to (Phase AG): Ctrl K, or the button in the top bar, searches pages, programs and the day's people
+(function () {
+  "use strict";
+  var dialog = document.getElementById("goto");
+  if (!dialog || typeof dialog.showModal !== "function") { return; }
+  var input = dialog.querySelector("input[name=q]"), list = dialog.querySelector("#goto-list");
+  var timer = null, seq = 0, picked = -1;
+  function options() { return list.querySelectorAll("li[role=option]"); }
+  function mark() {
+    var o = options();
+    Array.prototype.forEach.call(o, function (li, i) { li.setAttribute("aria-selected", i === picked ? "true" : "false"); });
+    if (picked >= 0 && o[picked]) { input.setAttribute("aria-activedescendant", o[picked].id); o[picked].scrollIntoView({ block: "nearest" }); }
+    else { input.removeAttribute("aria-activedescendant"); }
+  }
+  function render(items) {
+    list.textContent = "";
+    picked = items.length ? 0 : -1;
+    var group = "";
+    items.forEach(function (it, i) {
+      if (it.group !== group) {
+        group = it.group;
+        var head = document.createElement("li");
+        head.className = "goto-group"; head.setAttribute("role", "presentation"); head.textContent = group;
+        list.appendChild(head);
+      }
+      var li = document.createElement("li"), a = document.createElement("a");
+      li.setAttribute("role", "option"); li.id = "goto-" + i;
+      a.href = it.url; a.textContent = it.label; a.tabIndex = -1;
+      if (it.note) { var note = document.createElement("small"); note.textContent = it.note; a.appendChild(note); }
+      li.appendChild(a); list.appendChild(li);
+    });
+    if (!items.length && input.value.trim()) {
+      var none = document.createElement("li");
+      none.className = "goto-none"; none.setAttribute("role", "presentation");
+      none.textContent = "Nothing matches. Try a shorter word.";
+      list.appendChild(none);
+    }
+    mark();
+  }
+  function load(q) {
+    var mine = ++seq;
+    var url = dialog.dataset.url + "?q=" + encodeURIComponent(q) + "&program=" + encodeURIComponent(dialog.dataset.program || "") +
+      "&date=" + encodeURIComponent(dialog.dataset.date || "");
+    fetch(url, { credentials: "same-origin" }).then(function (r) { return r.ok ? r.json() : { items: [] }; })
+      .then(function (d) { if (mine === seq) { render(d.items || []); } }).catch(function () {});
+  }
+  function open() { input.value = ""; dialog.showModal(); input.focus(); load(""); }
+  input.addEventListener("input", function () { clearTimeout(timer); timer = setTimeout(function () { load(input.value); }, 180); });
+  input.addEventListener("keydown", function (e) {
+    var o = options();
+    if (e.key === "ArrowDown" && o.length) { picked = (picked + 1) % o.length; mark(); e.preventDefault(); }
+    else if (e.key === "ArrowUp" && o.length) { picked = (picked - 1 + o.length) % o.length; mark(); e.preventDefault(); }
+    else if (e.key === "Enter") { e.preventDefault(); if (picked >= 0 && o[picked]) { window.location.href = o[picked].querySelector("a").href; } }
+  });
+  document.addEventListener("keydown", function (e) {
+    if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K") && !dialog.open) { e.preventDefault(); open(); }
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-goto-open]"), function (b) { b.addEventListener("click", open); });
+})();

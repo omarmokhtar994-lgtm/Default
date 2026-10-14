@@ -364,6 +364,13 @@ class DayBook:
     def _week(self, row: Dict[str, Any]) -> Dict[str, Any]:
         return json.loads(row["week"] or "{}")
 
+    def roster(self, program: str, on: date) -> List[Tuple[str, str]]:
+        """(name, that day's cell: a shift, OFF or Leave) for everyone on the schedule holding ``on`` (Phase AG)."""
+        row, _ = self.version(program, on)
+        if row is None:
+            return []
+        return [(a["name"], a["days"][day_index(on)]) for a in self._week(row).get("associates", [])]
+
     def called_in_on(self, program: str, on: date, name: str) -> Optional[Dict[str, Any]]:
         return next((r for r in self.store.list_activities(program, [on.isoformat()])
                      if r["associate"] == name and r["kind"] == CALLED_IN), None)

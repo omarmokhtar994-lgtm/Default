@@ -97,6 +97,49 @@ The photos show real names, so they are not copied into the repository; rows are
     wait more than 4 hours we can give me at least first break during that duration, preferably same language
     if not so any one can take the queue". Confirm this reading with the sample.
 
+## Added 2026-10-14 (third message, notes only)
+
+17. **Time zones.**
+    - Choose the schedule's time zone when uploading, and change it after upload.
+    - Every tab can show times in another zone as needed. For example, a schedule uploaded in Egypt time (+2 or
+      +3) is viewed in EST on the RTA.
+18. **Proposed day-off cancellations to save the day.**
+    - The RTA proposes which days off to cancel, day by day. For example: "2 people from 16:00 and 1 from 22:00
+      save the day".
+    - Otherwise it proposes the overtime needed per interval.
+19. **"More consistent", in the owner's words:** "also more consistent should show up same as after break and
+    before break". Not yet clear. Two readings to confirm:
+    - Overtime proposals come as whole blocks before or after a shift, as + Add's overtime already does, not as
+      scattered intervals.
+    - The proposals show the before-and-after effect, the way break changes do.
+20. **Out-of-office shrinkage on the RTA,** next to in-office shrinkage.
+    - Which statuses count as shrinkage, in office and out of office, is a program setting.
+    - The admin or a supervisor maps it.
+21. **New statuses.**
+    - **Task:** records "with who" and "why", like the other aux.
+    - **Public holiday:** works like Sick or Unplanned. It is not shrinkage from the company's view, but it is
+      from the client's view.
+    - So there are two kinds of out-of-office shrinkage: one for Sutherland (the company) and one for the client.
+22. **A quick day summary on the RTA tab.** Today the RTA has a summary line: on shift, short of demand, above
+    demand, language gaps, channel warnings. The owner wants a quicker summary of the day.
+23. **Known shrinkage for the rest of the week.**
+    - On the RTA, enter absences already known for later days, such as unplanned leave or sick.
+    - From those updates, show a summary, perhaps on Week, of the overtime needed per day and the days off to
+      cancel to cover.
+24. **Placement.** Some of points 17 to 23 can sit on Overview instead of the RTA if that suits them better.
+
+### To settle with samples (points 17 to 23)
+
+- **Point 17, zones and clocks:** zones by name (Africa/Cairo, America/New_York), so summer time moves by
+  itself. Both Egypt and the US Eastern zone change clocks during the year, so "+2 or +3" and "EST or EDT"
+  follow the date.
+- **Point 17, the day's edges:** in another zone a day's edges move. A Cairo Monday starts on Sunday afternoon in
+  New York. Which day does a page show?
+- **Point 18, whose day off:** which day off may be cancelled. The weekly hours, rest-day and
+  consecutive-day rules still hold.
+- **Point 19:** which reading is meant.
+- **Points 20 and 21:** the default mapping, and whether the RTA shows company and client shrinkage side by side.
+
 ## Owner's answers, second round (2026-10-12)
 
 The owner said "those are notes only for now"; still nothing is built.

@@ -65,4 +65,21 @@ Times are Egypt time, 2026-10-15.
     36 in the rest of the week's Short, Overtime needed and Days off to cancel columns), not a missing value.
 - pyflakes over `webapp/*.py`: four unused imports, all older than Phase AI (`BreakRefused` in app.py, `Any` and
   `Optional` in channel_people.py, `DAYS` in exports.py). Left as they are (no change without a request).
-- Final review of the whole Phase AI diff: a self-review (subagents run only when the owner asks).
+- Final review of the whole Phase AI diff: a self-review (subagents run only when the owner asks). It found the hover
+  cards above (fixed in 1a8e849).
+
+On the final code (1a8e849):
+
+- Whole website suite, 12:27 to 12:41: 552 tests OK, 502 tests OK (1 skipped), and the browser module's 77 tests OK.
+  The browser tests rewrite the old phases' screenshots; those files were restored.
+- Release gate (run_tests.sh, tests_staged/GATE_MINIMUMS.json), 12:12 to 12:27: GATE PASS, 77 suites, 1537 tests
+  (2 skipped), 2 selfchecks, call signatures, undefined-name sweep; again inside the staged package (12:42 to 12:56).
+- Package: dist/RC9_2_2_PRODUCTION_PACKAGE.zip, 2689 files, 75.24 MB,
+  sha256 cda2507cd5d4c5aebbda648563c803cc6870be31d25fce9efd2dd182c2354ea0. Sent in three parts (AI_part_0 to
+  AI_part_2); joined in order they give the same sha256. It replaces the AH package.
+
+## Known and left as they are
+
+- A person whose two shifts both start in the RTA's 24 hours has one row with one attendance box: it marks the first
+  shift (as a plain day marks the shift that starts on it). The other shift is marked on its own day's view.
+- The four unused imports above, older than Phase AI.

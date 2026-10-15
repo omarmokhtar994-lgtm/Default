@@ -1857,6 +1857,10 @@ class ThePhaseXYInTheBrowser(unittest.TestCase):
     def test_rendered_pairs_pass_in_both_looks(self):
         """The Phase Y pairs as the browser draws them (computed colours, see-through panels laid over the page)."""
         q, s = self.q, self.sunday.isoformat()
+        # Phase AH: the owner (2026-10-15) had the Weeks grid coloured by the week's target instead of a fixed 90%; this
+        # workbook's own target is 100%, which has no amber band, so the week is set to 90% to keep amber cells to measure
+        owner = next(u["id"] for u in self.store.list_users() if u["username"] == "omar")
+        self.store.set_interval_target(self.key, s, 90, owner)
         checks = [  # page, elements, what is measured, the least contrast
             (f"/day?program={q}&date={s}", "[data-day] .tc.ok", "text", 4.5),
             (f"/day?program={q}&date={s}&view=board", "[data-day] .chip small", "text", 4.5),

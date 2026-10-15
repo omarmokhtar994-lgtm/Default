@@ -39,4 +39,26 @@ Built from the approved sample (`SAMPLES.md`, `samples/`), the owner's answers o
 
 ## Results
 
-(filled in below)
+- New tests: test_ah_rule 7, test_ah_colours 8, test_ah_cushion 4, test_ah_needed 11: all pass. Each was watched
+  failing first (missing function, old rule, or `no gain` from the old Rescue).
+- Re-pinned, each saying why in the test: test_ag_rta (the Now panel says below the target / at the target),
+  test_ui_playwright.test_rendered_pairs_pass_in_both_looks (its week set to 90%: the workbook's own 100% has no
+  amber band). test_attendance passes the week's target to `board`.
+- Found by the suite and fixed: the Week page lost its target panel's figures (a reused name, 869a196).
+- Rescue the day and Fix breaks, re-checked on two fixture weeks (as they are, 8 and 14 more people sick, and at
+  13:07): no rule broken (fewer at the target, more given up, below 50%, new language or channel gaps, a break
+  outside its shift or moved into the past). Review week, Saturday with 6 sick, target 90%, as (at the target, with
+  10 minutes over it, tightest hours, hours short):
+  - before (19, 19, -1.75, 6.25);
+  - Fix breaks (22, 21, -1.25, 5.33): before Phase AH it reached 20 at the target;
+  - Rescue (23, 23, -1.75, 5.25).
+  Friday: Fix breaks (24, 23), Rescue (24, 24), from (23, 23).
+- Browser (Playwright, review server with people sick on Thu, Fri and Sat): Weeks (night, day, 360 px phone with no
+  sideways scroll after the drop-down was allowed to shrink), RTA strip and legend, board, Rescue, Fix breaks,
+  Schedules, handover, the export downloaded and read back. No console errors. Screens in `screens/`.
+- The Weeks page with the table takes 0.8 to 1.0 s on the test week (seven day pages and three days' plans).
+- Full website suite, Thu 15 Oct 03:20 to 03:55: 1079 tests, 10 failures, 2 errors, 1 skipped:
+  - the contrast test above (fixed in 26ec013; its class re-run green, 15 tests);
+  - 9 in test_channel_day and 2 browser tests (bulk change, Phase V screens) fail the same way on 5c46cd3, before
+    this phase: not this phase's.
+- The browser tests rewrite the old phases' screenshots; those files were restored before packaging.

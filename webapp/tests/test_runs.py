@@ -1113,7 +1113,7 @@ class TheDayPage(unittest.TestCase):
         self.assertEqual(len(forms), 1, "Associate 001 (12:00 - 21:00, off on Saturday) can stay on")
         options = re.findall(r'<option value="([0-9:|]+)"( selected)?>', forms[0])
         self.assertEqual(options[0][0], "21:00|21:15")
-        self.assertEqual(options[-1][0], "21:00|23:00")
+        self.assertEqual(options[-1][0], "21:00|01:00")  # re-pinned in Phase AJ: the owner raised the cap to 4 hours
         self.assertIn(("21:00|22:00", " selected"), options)
 
     def test_record_overtime_with_span(self):

@@ -10,12 +10,14 @@ someone who can take it, moving the aux, moving a break. Booking an aux says the
 The made-up Wednesday: Associate 001 (Arabic, 12:00 to 21:00) is the only one on Chat, Associate 031 (12:00 to
 21:00, a break at 14:00) the only one on Phone, everyone else on Email. Chat and Phone each need one person from
 14:00 to 16:00 (Chat with an Arabic speaker) and from 19:00 to 21:00, which is an all-channels time."""
+import datetime as dt
 import json
 import shutil
 import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
+from unittest import mock
 
 from openpyxl import load_workbook
 
@@ -30,6 +32,28 @@ from webapp.tests.test_schedules import REPO
 from webapp.versions import read_week, shift_span, write_breaks, write_channels
 
 WED = date(2026, 10, 14)
+
+
+class _BeforeWednesday(dt.datetime):
+    """Phase AI (T11): the website's clock stopped on Tuesday 13 October 2026 at 09:00. These tests were written while
+    their Wednesday was still to come, and channel warnings count only what is left of a day: read on the real clock
+    after that Wednesday, the whole day was over and nothing was warned. The day is still to come here, as when they
+    were written; what they check is unchanged."""
+
+    @classmethod
+    def now(cls, tz=None):
+        return dt.datetime(2026, 10, 13, 9, 0, tzinfo=tz)
+
+
+_CLOCK = mock.patch("webapp.attendance.datetime", _BeforeWednesday)
+
+
+def setUpModule():
+    _CLOCK.start()
+
+
+def tearDownModule():
+    _CLOCK.stop()
 ARABIC_SPARE = "Associate 013"  # on shift 11:00 to 20:00 on Wednesday, on Email
 
 

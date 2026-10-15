@@ -38,3 +38,27 @@ see more of runned schedules same for OT and other staff"
 - 3: exam leave asked for like planned leave (TM then RTA approval), recorded on the RTA like sick, or both?
 - 6: with one calendar day, does a change made in another time zone (moving a break) apply as if made on the
   schedule's own day? Today that is read only.
+
+## The owner's answers (2026-10-15)
+
+1. Runs are seen by program, not by who ran them: "yes for admin but supervisor see everything based on accounts
+   assigned, not my run if 2 have access for saks for example both can download anything for saks". Admins see every
+   run; anyone else sees and downloads every run of the programs their account has; for other programs only that
+   something is running, how many are queued and the wait.
+2. Exam leave: "both": asked for under Leave and swaps (TM then RTA approval) and marked on the RTA for the whole
+   shift; client shrinkage, not Sutherland's.
+3. One calendar day: "break should show in the new time zone and can be changed but thing is being sent to the
+   associates on the notification channel ... the tkme should be based the schedule default while uploading". Every
+   tab follows the chosen zone and start time and can be changed there; group posts keep the schedule's own zone.
+
+## Added (2026-10-15): the timeline's hover
+
+Owner: "everything is showing up in the time line when i stand any wheree howlong is he logged in shift assigned first
+break etc is that applied?" In place since Phase AF (D2, D3): a shift bar shows the shift, its length, worked so far,
+left until logout and breaks taken; a break shows its time, the time since the last break (or the shift start) and
+from the shift start. Gaps found:
+
+| # | Gap | Reading |
+| --- | --- | --- |
+| 11 | "Worked so far" counts from the scheduled start, so a late login shows time not worked | Count from when the RTA marked them in (late, left early, aux away), and say "logged in at" |
+| 12 | Only the bar and the break answer the hover, not the rest of the row | Anywhere on the person's row shows the same card |

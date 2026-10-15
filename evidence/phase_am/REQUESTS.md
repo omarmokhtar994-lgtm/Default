@@ -18,26 +18,28 @@ list with "no data" under Covered.
 > A it should show the percentage
 > B in cas i pressed on plan breaks it should show the new percentage after breaks or as per my in use selection
 
-## 1. One click to fix the day on the RTA (question)
+## 1. One click to fix the channels on the RTA (question)
+
+The owner, the same night: "First point was related to channel for the button".
 
 What exists:
-- "Rescue the day" and "Fix the day's breaks" each apply with one click, but they only move breaks.
-- The day-off and overtime suggestions (Hours needed on Weeks, the RTA's Overtime and VTO tab) only list what to do
-  and who could do it: "Cancel a day off, 16:00 to 01:00; possible: X, Y or Z", then overtime per interval. Applying
-  one means typing it on the Overtime and VTO tab.
+- On the RTA's Channels tab, each channel warning ("Phone short 14:00 to 15:00") lists its own fixes, each with
+  "Apply". The fixes are: a channel change for someone, moving the aux that caused it, or moving a break. One click
+  fixes one warning.
+- Fix the day's breaks and Rescue the day fix the whole day in one click, but only for breaks.
+- Plan channels (on a schedule) plans a whole day with the channel planner, but only for the schedule, not the RTA's
+  day.
 
 Questions:
-1. **What does one click apply?**
-   - (a) An "Apply" on each suggestion. One click records that day-off cancellation or overtime for the first
-     person offered, with a preview first and Undo after.
-   - (b) A "Fix the day" button that applies every suggestion for the day at once: days off cancelled first, then
-     overtime. It shows the whole list first, then one Apply, then one Undo.
-   - (c) Both (recommended).
-2. **Who is picked** when several people could do it?
-   - The first one offered: the most rest before the shift, then the fewest hours this week (recommended).
-   - Or always ask the RTA to pick.
-3. **Where:** on the RTA, as a tab next to Fix the day's breaks and Rescue the day (recommended), and/or from the
-   Hours needed cells on Weeks?
+1. **What does the one button do?**
+   - (a) Applies each warning's first fix in turn, in one click, and lists what it could not fix.
+   - (b) Re-plans everyone's channels from now to the end of the 24 hours with the channel planner, for people on
+     shift and present, to cover every channel and language. It shows the changes first, then one Apply, then one
+     Undo (recommended: it can solve warnings that no single change solves).
+2. **Breaks:** channels only (recommended), or may it also move breaks that have not started, as "Move breaks if it
+   helps" does on Plan channels?
+3. **Fairness:** coverage first, then use the fairness you set (each person's share closer to even, no one stuck on
+   one channel) to choose between plans that cover the same (recommended), or ignore fairness here for now?
 
 ## 2. Download in the zone picked (bug)
 

@@ -41,7 +41,7 @@ DAY_OFF = "Day off cancelled"  # "+ Add" calls in someone off that day (owner, 2
 QUARTER = 15  # typed call-in times go in 15-minute steps
 # What RTA's "+ Add" offers in an interval (owner, 2026-10-08), grouped as the dialog shows them.
 ADD_KINDS = {"Off the floor": ["Break", "Lunch", "Coaching", "Meeting", "Training", "System issue", "Task"],
-             "Attendance": ["Unplanned leave", "Sick", "Public holiday", "Late", "Left early"],
+             "Attendance": ["Unplanned leave", "Sick", "Public holiday", "Exam leave", "Late", "Left early"],
              "Hours": ["Overtime", "VTO"],
              "Day off": [DAY_OFF]}
 
@@ -1171,7 +1171,7 @@ class DayBook:
         every day from ``first`` to ``last`` that they work. Returns the days ``done``, the days they are ``off`` and
         the days with no schedule here (``missing``); nothing is recorded on those."""
         if status not in ABSENT:
-            raise ValueError("Pick unplanned leave, sick or public holiday.")
+            raise ValueError("Pick unplanned leave, sick, public holiday or exam leave.")
         if last < first:
             raise ValueError("The last day must be on or after the first.")
         if (last - first).days >= self.LATER_MAX:

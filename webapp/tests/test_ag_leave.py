@@ -86,7 +86,8 @@ class Leave(unittest.TestCase):
 
     # ------------------------------------------------------------------ asking
     def test_the_kinds(self):
-        self.assertEqual(KINDS, ("Planned leave", "Public holiday"))
+        # re-pinned in Phase AI: the owner added exam leave (2026-10-15)
+        self.assertEqual(KINDS, ("Planned leave", "Public holiday", "Exam leave"))
 
     def test_each_day_with_their_shift(self):
         days = self.book.days_of(self.key, "Associate 007", WED, SUN2)
@@ -102,7 +103,8 @@ class Leave(unittest.TestCase):
             with self.subTest(said):
                 with self.assertRaisesRegex(ValueError, re.escape(said)):
                     self.ask("Associate 007", first, last)
-        with self.assertRaisesRegex(ValueError, "Pick Planned leave or Public holiday."):
+        # re-pinned in Phase AI: the owner added exam leave (2026-10-15)
+        with self.assertRaisesRegex(ValueError, "Pick Planned leave, Public holiday or Exam leave."):
             self.ask("Associate 007", WED, WED, kind="Sick")
         with self.assertRaisesRegex(ValueError, "Associate 999 is not on this program's schedule."):
             self.ask("Associate 999", WED, WED)

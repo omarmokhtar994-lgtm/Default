@@ -1,7 +1,7 @@
 # © 2026 Omar Mokhtar. All rights reserved.
 """Leave requests and their approval (Phase AG, T5; the owner's answers of 2026-10-14).
 
-An associate asks for Planned leave or a Public holiday for a run of days. There is no fixed number of places a day:
+An associate asks for Planned leave, a Public holiday or Exam leave (Phase AI) for a run of days. There is no fixed number of places a day:
 each day shows what the floor loses if it is approved, and the approvers decide. Two approvals: the TM (a supervisor
 or an admin) first, then the RTA (another staff member of the program). The RTA's approval writes Leave on the days
 the person works into a new version of the schedule and sets it in use (the earlier version is kept); days off and
@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional
 from .attendance import day_index, hm
 from .versions import DAYS, shift_span
 
-KINDS = ("Planned leave", "Public holiday")
+KINDS = ("Planned leave", "Public holiday", "Exam leave")
 WAITING = ("waiting_tm", "waiting_rta")
 MAX_DAYS = 31
 NOTE_MAX = 200
@@ -80,7 +80,7 @@ class LeaveBook:
     def ask(self, program: str, name: str, user_id: int, kind: str, first: date, last: date, note: str,
             today: date) -> int:
         if kind not in KINDS:
-            raise ValueError("Pick Planned leave or Public holiday.")
+            raise ValueError("Pick Planned leave, Public holiday or Exam leave.")
         if first < today:
             raise ValueError("Pick today or a later day.")
         if last < first:
@@ -242,6 +242,12 @@ class LeaveBook:
         for name, days in rows.items():
             self.store.set_leave_balance(program, name, year, days, user_id)
         return len(rows)
+
+    def approved_on(self, program: str, on: date) -> Dict[str, str]:
+        """Who has an approved request covering ``on``, and its kind (Phase AI: shrinkage counts each by its kind)."""
+        day = on.isoformat()
+        return {r["associate"]: r["kind"] for r in self.store.list_leave(program=program, statuses=["approved"])
+                if r["first_day"] <= day <= r["last_day"]}
 
     # ------------------------------------------------------------------ the inbox
     def may_decide(self, row: Dict[str, Any], user: Dict[str, Any]) -> bool:

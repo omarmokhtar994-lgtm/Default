@@ -49,7 +49,9 @@ class OutOfOffice(unittest.TestCase):
         self.assertAlmostEqual(found["sutherland"]["pct"], 3 / 9)  # unplanned 1 + planned 1 + sick 1
         self.assertAlmostEqual(found["client"]["pct"], 4 / 9)  # and public holiday 1
         self.assertEqual(found["sutherland"]["text"], "(unplanned 1 + planned 1 + sick 1) / 9 scheduled")
-        self.assertEqual(found["client"]["text"], "(unplanned 1 + planned 1 + sick 1 + public holiday 1) / 9 scheduled")
+        # re-pinned in Phase AI: the owner added exam leave to the client's shrinkage (2026-10-15)
+        self.assertEqual(found["client"]["text"],
+                         "(unplanned 1 + planned 1 + sick 1 + public holiday 1 + exam leave 0) / 9 scheduled")
         self.assertIn("Public holiday counts for the client only", found["client"]["notes"])
         self.assertIn("Days off are not counted", found["sutherland"]["notes"])
 

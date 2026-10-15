@@ -2,7 +2,7 @@
 """Shrinkage in and out of office for one day on the RTA (Phase AF, E1; owner, 2026-10-14).
 
 Out of office counts people: Sutherland's is (unplanned leave + planned leave + sick) / scheduled employees, anyone
-on a day off left out; the client's adds public holiday to the top line. Planned leave is read from the schedule (the
+on a day off left out; the client's adds public holiday (and exam leave, Phase AI) to the top line. Planned leave is read from the schedule (the
 RTA has no Planned leave status). In office counts minutes: the time present people spend off the floor on what the
 program maps as in-office shrinkage (breaks and lunch, and aux that is not billable, to start with) over their
 scheduled minutes. What counts is a program setting that the admin or a supervisor maps.
@@ -21,15 +21,18 @@ ITEMS = (("breaks", "Breaks and lunch", ("in",)),
          ("unplanned", "Unplanned leave", ("sutherland", "client")),
          ("planned", "Planned leave (from the schedule)", ("sutherland", "client")),
          ("sick", "Sick", ("sutherland", "client")),
-         ("holiday", "Public holiday", ("sutherland", "client")))
+         ("holiday", "Public holiday", ("sutherland", "client")),
+         ("exam", "Exam leave", ("sutherland", "client")))  # Phase AI: the client's, not Sutherland's
 DEFAULT: Dict[str, Set[str]] = {"breaks": {"in"}, "aux": {"in"}, "aux_billable": set(),
                                 "unplanned": {"sutherland", "client"}, "sick": {"sutherland", "client"},
-                                "planned": {"sutherland", "client"}, "holiday": {"client"}}
-STATUS_OF = {"unplanned": "Unplanned leave", "sick": "Sick", "holiday": "Public holiday"}
+                                "planned": {"sutherland", "client"}, "holiday": {"client"}, "exam": {"client"}}
+STATUS_OF = {"unplanned": "Unplanned leave", "sick": "Sick", "holiday": "Public holiday", "exam": "Exam leave"}
 WORDS = {"breaks": "breaks and lunch", "aux": "aux not billable", "aux_billable": "aux billable",
-         "unplanned": "unplanned", "sick": "sick", "planned": "planned", "holiday": "public holiday"}
+         "unplanned": "unplanned", "sick": "sick", "planned": "planned", "holiday": "public holiday",
+         "exam": "exam leave"}
 NAMES = {"sutherland": "Sutherland", "client": "the client"}
 LEAVE = {"leave", "planned", "planned leave"}  # a schedule cell for planned leave
+ITEM_OF_KIND = {"Public holiday": "holiday", "Exam leave": "exam"}  # an approved request's Leave cell (Phase AI)
 
 
 def read_mapping(saved: Optional[str]) -> Dict[str, Set[str]]:
@@ -54,15 +57,21 @@ def _norm(text: Any) -> str:
 
 
 def day_shrinkage(view: Dict[str, Any], week: Dict[str, Any], day: int, mapping: Dict[str, Set[str]],
-                  inputs: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                  inputs: Optional[Dict[str, Any]] = None,
+                  leave_kinds: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     """The day's three figures: ``in_office``, ``sutherland`` and ``client`` (``pct`` is None with nobody to count).
-    Only shifts that start on the day count (last night's belong to yesterday)."""
+    Only shifts that start on the day count (last night's belong to yesterday). ``leave_kinds`` names the kind of an
+    approved leave request on the day (Phase AI): its Leave cell counts as a public holiday or exam leave, not as
+    planned leave."""
     own = [s for lane in view["lanes"] for s in lane["segments"] if s["offset"] == 0]
     working = {lane["name"] for lane in view["lanes"] if any(s["offset"] == 0 for s in lane["segments"])}
     counts = {k: sum(1 for s in own if s["status"] == status) for k, status in STATUS_OF.items()}
-    counts["planned"] = sum(1 for a in week.get("associates", [])
-                            if a["name"] not in working and _norm(a["days"][day]) in LEAVE)
-    scheduled = len(working) + counts["planned"]
+    on_leave = [a["name"] for a in week.get("associates", [])
+                if a["name"] not in working and _norm(a["days"][day]) in LEAVE]
+    counts["planned"] = 0
+    for name in on_leave:
+        counts[ITEM_OF_KIND.get((leave_kinds or {}).get(name, ""), "planned")] += 1
+    scheduled = len(working) + len(on_leave)
     found: Dict[str, Any] = {}
     for measure in ("sutherland", "client"):
         parts = [k for k, _, _ in ITEMS if k in counts and measure in mapping.get(k, ())]

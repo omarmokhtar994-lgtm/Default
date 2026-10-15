@@ -25,7 +25,8 @@ class LaterDays(_Day):
         self.assertEqual(seg["status"], "Sick")
 
     def test_refused(self):
-        for status, first, last, said in (("Late", THU, THU, "unplanned leave, sick or public holiday"),
+        # re-pinned in Phase AI: the owner added exam leave (2026-10-15)
+        for status, first, last, said in (("Late", THU, THU, "unplanned leave, sick, public holiday or exam leave"),
                                           ("Sick", SAT, THU, "The last day must be on or after the first"),
                                           ("Sick", THU, THU + dt.timedelta(days=15), "14 days at most")):
             with self.subTest(status=status, last=last), self.assertRaisesRegex(ValueError, said):

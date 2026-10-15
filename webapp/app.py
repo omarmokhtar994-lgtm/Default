@@ -2642,7 +2642,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if page:
             kept = app.extensions["store"].get_shrinkage_map(program)
             mapping = read_mapping(kept["mapping"] if kept else None)
-            shrinkage = {**day_shrinkage(page["view"], page["week"], page["day"], mapping, page["inputs"]),
+            shrinkage = {**day_shrinkage(page["view"], page["week"], page["day"], mapping, page["inputs"],
+                                         app.extensions["leave"].approved_on(program, on)),
                          "mapping": mapping, "items": SHRINKAGE_ITEMS,
                          "may_set": bool(g.user["is_admin"] or g.user["is_supervisor"])}
         return render_template("day.html", page=page, problem=problem, program=program, programs=programs, on=on,

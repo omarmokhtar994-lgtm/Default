@@ -19,7 +19,15 @@
       </tbody>
     </table></div>
     <p class="note">A team manager approves their own team's leave and swaps; a supervisor with the first approval can approve for any team. Pages only admins use (Notifications, LOBs and defaults, Roles) stay with admins.</p>
-    <div class="btnrow"><button type="submit" class="primary">Save roles</button><button type="submit" name="reset" value="1">Back to the defaults</button></div>
+    <div class="btnrow"><button type="submit" class="primary">Save roles</button></div>
+  </form>
+</section>
+<section class="panel" aria-labelledby="reset-h">
+  <h2 id="reset-h">Back to the defaults</h2>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="reset" value="1">
+    <label class="tick"><input type="checkbox" name="confirm" value="1" required> I understand that every role goes back to what it could do at first, for everyone, and the ticks above are lost.</label>
+    <div class="btnrow"><button type="submit">Put every role back to the defaults</button></div>
   </form>
 </section>
 {% endblock %}

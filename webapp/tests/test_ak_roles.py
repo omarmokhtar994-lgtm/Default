@@ -97,3 +97,16 @@ class TheAdminPage(_Roles):
         self.assertEqual(client.get("/admin/users").status_code, 403)
         self.save(self.everything_but("x", "x"))
         self.assertEqual(client.get("/admin/users").status_code, 200)
+
+    def test_back_to_the_defaults_needs_the_tick(self):
+        """Review (better-interface, 2026-10-15): putting every role back to the defaults undoes an admin's settings for
+        everyone, so it asks for a tick first, as deleting a schedule does."""
+        self.save(self.everything_but("Planner", "exports"))
+        refused = self.client.post("/admin/roles", data={"csrf_token": token(self.client), "reset": "1"},
+                                   follow_redirects=True)
+        self.assertIn("Tick the box to put every role back to the defaults.", html.unescape(refused.get_data(as_text=True)))
+        self.assertFalse(allowed(self.store, self.store.get_user(self.planner), "exports"))
+        self.client.post("/admin/roles", data={"csrf_token": token(self.client), "reset": "1", "confirm": "1"})
+        self.assertTrue(allowed(self.store, self.store.get_user(self.planner), "exports"))
+        body = self.client.get("/admin/roles").get_data(as_text=True)
+        self.assertRegex(body, r'<input type="checkbox" name="confirm" value="1" required>')

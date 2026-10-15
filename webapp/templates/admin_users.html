@@ -50,7 +50,7 @@
     {% endfor %}
     {% if u.is_associate %}<form method="post" action="{{ url_for('admin_user_action', user_id=u.id, action='team') }}" class="team-pick"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label>Team manager <select name="team_manager"><option value="">None</option>{% for t in u.team_choices %}<option value="{{ t.id }}"{% if t.id == u.team_manager_id %} selected{% endif %}>{{ t.display_name }}</option>{% endfor %}</select></label>
-      <button class="quiet">Save</button></form>{% endif %}
+      <button class="quiet">Save team manager</button></form>{% endif %}
     <details class="advanced"><summary>Programs{% if admin %} and role{% endif %}</summary>
       <form method="post" action="{{ url_for('admin_user_action', user_id=u.id, action='programs') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

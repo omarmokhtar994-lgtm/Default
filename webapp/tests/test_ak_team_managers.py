@@ -79,6 +79,8 @@ class TheAssigning(_People):
         form = form[:form.index("</form>")]
         self.assertIn("Team Manager 01", form)
         self.assertNotIn("Team Manager 02", form)
+        # review (better-interface): the row has another Save (programs and role), so this one says what it saves
+        self.assertIn(">Save team manager</button>", form)
 
     def test_not_for_staff(self):
         got = self.set_one(self.tm_away, self.tm)

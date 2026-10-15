@@ -1567,7 +1567,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
         read from the form; everything not ticked is off)."""
         store = app.extensions["store"]
         if request.method == "POST":
-            if request.form.get("reset") == "1":
+            if request.form.get("reset") == "1" and request.form.get("confirm") != "1":
+                flash("Tick the box to put every role back to the defaults.")
+            elif request.form.get("reset") == "1":
                 store.set_role_permissions({})
                 _record("roles_changed", subject="Roles", detail="back to the defaults")
                 flash("Roles are back to the defaults.")

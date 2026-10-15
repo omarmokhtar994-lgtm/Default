@@ -2,7 +2,7 @@
 
 © 2026 Omar Mokhtar. All rights reserved.
 
-Written Thu 15 Oct 2026, 13:11 Egypt time, at the end of Phase AI. A new chat reads `CLAUDE.md` (it loads by itself)
+Written Thu 15 Oct 2026, 13:11 Egypt time, at the end of Phase AI; brought up to date at 18:30, end of Phase AJ. A new chat reads `CLAUDE.md` (it loads by itself)
 and then this file. Together they hold the rules, the owner's ways of working, where the work stands and how to
 check it. What they cannot hold is the chat itself: when something here is not enough, the record is in git
 (`git log`), the plans (`docs/superpowers/plans/`) and each phase's evidence (`evidence/phase_*/`).
@@ -41,7 +41,7 @@ check it. What they cannot hold is the chat itself: when something here is not e
 - Pages: Home, RTA (`/day`: Timeline, Interval board, Adherence, Find a time, Overtime and VTO, Channels, Rescue the
   day, Fix breaks, Change several breaks), Overview, Wallboard, Handover, Weeks, Schedules, Runs, Leave and swaps,
   Analysis, Programs, Exports, Team, People, Departments and people, Notifications, Coaching, My week (associates).
-- Branch: `claude/handoff-document-m6egz2` (commit and push only there; no pull request unless asked).
+- Branch: the session's designated branch (Phase AJ: `ccr-90ec94cc-a37tqk`, started from `claude/handoff-document-m6egz2`); no pull request unless asked.
 
 ## How a phase runs
 
@@ -56,7 +56,31 @@ check it. What they cannot hold is the chat itself: when something here is not e
 6. Package, split into parts, send them, and report in caveman style: what changed, rulings with their cost, what
    is known and left, Egypt times, screens.
 
-## Where things stand (end of Phase AI)
+## Where things stand (end of Phase AJ)
+
+- Phase AI is installed on the server (owner, 2026-10-15).
+- Phase AJ is complete and pushed (branch `ccr-90ec94cc-a37tqk`, from the handoff branch): overtime up to 4 hours,
+  cover from outside the roster (a TM or support member counted in the intervals), channel colours after midnight.
+  Requests, root causes and answers: `evidence/phase_aj/REQUESTS.md`; checks: `evidence/phase_aj/CHECKS.md`; rulings
+  at the end of `docs/superpowers/plans/2026-10-15-phase-aj-build.md`.
+- Package: `RC9_2_2_PRODUCTION_PACKAGE.zip`, 2602 files, 79.63 MB, sha256
+  `d2c474ae8c48a1028102a34d779a0157a5c908ea12fd9921f802b5e50a74f6d3`, sent as AJ_part_0 to AJ_part_3. Installing it is
+  the owner's step, the same way as before (four parts now: `cat AJ_part_0 AJ_part_1 AJ_part_2 AJ_part_3 > ...`).
+- Check tools for a fresh container: `evidence/phase_aj/tools/` (replace phase_ai with phase_aj in the commands
+  below). Expected on Phase AJ: 502 and 581 tests OK (1 skipped), 77 browser tests OK, GATE PASS with 1537 tests
+  (2 skipped), page review 0 problems, sweep 0 exceptions and 0 server errors.
+
+### Phase AJ decisions to remember
+
+- `OVERTIME_MAX` is 240 minutes, the longest "+ Add" length (owner, 2026-10-15).
+- Cover from outside the roster: table `outside_cover`, `DayBook.add_cover` / `cancel_cover` / `covers`,
+  `day_view(cover=...)` adds them to every 5 minutes (cell key `outside`), `page(cover=False)` leaves them out (the
+  export's tick). Group posts go under the "overtime" kind.
+- `channel_day._timelines` keeps last night's stretches after midnight in `runs` (the words in `timelines` stay with
+  the day the shift starts).
+
+## Earlier: end of Phase AI
+
 
 - Phase AI is complete and pushed (last code commit 1a8e849, results 71e9b5c). The owner's 12 items are in
   `evidence/phase_ai/REQUESTS.md`; what was built, the checks and the rulings are in `evidence/phase_ai/CHECKS.md`
@@ -147,3 +171,4 @@ read the real clock break when their date passes, so stop the clock with `mock.p
 - AG: v4 redesign, associates' accounts, leave requests and approval, shift swaps, My week.
 - AH: one rule for an interval's standing by the week's target, hours needed table, 10-minute cushion.
 - AI: the 12 items above.
+- AJ: overtime up to 4 hours, cover from outside the roster, channel colours after midnight.

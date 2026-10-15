@@ -40,3 +40,12 @@ session's branch only.
   in the plan, adherence, worked hours or shrinkage (they are not on the roster). Cost: a language field.
 - T6: the owner's "check box to include them or not" is read as the export's tick; the RTA always counts them (answer
   b). Cost: a tick on the RTA too if the owner meant the live page.
+- T6: "Changes recorded" in the Daily summary counts every change made on the RTA that day, a cover included, ticked
+  or not (it is the day's audit count, not a staffing figure). Cost: one filter on the day log.
+- T4: the board names a cover in the interval it starts ("support from outside the roster, covering 10:00 to 12:00");
+  the Timeline has no bar for them (they are not on the roster). Cost: a lane of their own if the owner wants one.
+- Item 3 (added by the owner while building): the next day's view carries last night's channel stretches after
+  midnight; the Channels tab's "Who" list for a channel change still names only that day's own shifts, so a change
+  is never offered for someone whose shift belongs to the day before. Cost: one list.
+- Samples: none were made first. The cover panel uses the existing form styles of the RTA (the Find a time form), so
+  nothing new was designed; screens are in `evidence/phase_aj/screens`. Cost: a restyle if the owner wants it otherwise.

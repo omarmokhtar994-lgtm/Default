@@ -48,3 +48,15 @@ so they can approve their requests"
 - impeccable (context loaded, mode Operate): scanning first; B's orange sits next to the red and amber status hues.
 - design-md: the catalog is brand sites, no ops-dashboard match; Linear's pattern (category colours kept apart from
   action and status colours) supports D.
+
+## The owner's answers (2026-10-15, evening)
+
+1. Colours: D (dark blue Phone, pink Chat, light green Email, letters).
+2. Schedule tab: "schedules". The menu's Schedules list already has "Times in"; the schedule it opens does not, so
+   that page gets it (ruling, see the plan).
+3. Team managers: a new Team manager role; yes, a pick per associate on the People page and many at once; yes,
+   admins and supervisors may approve for an absent team manager; swaps need both team managers; and "to see where
+   it's pending". d was not answered: an associate with no team manager is approved by any team manager of the
+   program, as now (ruling).
+4. New: "i need to adjust as i wish the options they can have and supervisor can have and what they can have access
+   for etc make it adjustable": the admin sets what each role (Planner, Team manager, Supervisor) may see and do.

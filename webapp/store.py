@@ -267,6 +267,12 @@ create table if not exists activities (
     user_id integer not null,
     at real not null
 );
+create table if not exists role_permissions (
+    role text not null,
+    key text not null,
+    allowed integer not null,
+    primary key (role, key)
+);
 create table if not exists outside_cover (
     id integer primary key autoincrement,
     program text not null,
@@ -1006,6 +1012,18 @@ class Store:
         return self._between("select activities.*, coalesce(users.display_name, '') as by_name from activities"
                              " left join users on users.id = activities.user_id where shift_date between ? and ?",
                              [start, end], program, user_id, "activities", "shift_date, program, associate, start")
+
+    # ------------------------------------------------------------- what each role may do (Phase AK)
+    def role_permissions(self) -> Dict[Tuple[str, str], bool]:
+        with self._db() as db:
+            return {(r["role"], r["key"]): bool(r["allowed"]) for r in db.execute("select * from role_permissions")}
+
+    def set_role_permissions(self, rows: Dict[Tuple[str, str], bool]) -> None:
+        """Replace every kept setting with ``rows`` in one transaction."""
+        with self._db() as db:
+            db.execute("delete from role_permissions")
+            db.executemany("insert into role_permissions (role, key, allowed) values (?, ?, ?)",
+                           [(role, key, int(value)) for (role, key), value in rows.items()])
 
     # ------------------------------------------------------------- cover from outside the roster (Phase AJ)
     def add_cover(self, **fields: Any) -> int:

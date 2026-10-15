@@ -1513,7 +1513,7 @@ table.hours tfoot th, table.hours tfoot td { border-top: 1px solid var(--rail); 
 .tl-track rect.tl-ch.ch-P { fill: var(--ch-phone); } .tl-track rect.tl-ch.ch-C { fill: var(--ch-chat); }
 .tl-track rect.tl-ch.ch-E { fill: var(--ch-email); } .tl-track rect.tl-ch.ch-A { fill: url(#ch-all); }
 [data-day] .tl-bar.has-ch { fill: var(--ch-bar); opacity: 1; }
-.tl-ch-t { font: 700 11px var(--text); fill: var(--ch-ink); text-anchor: middle; pointer-events: none; }
+.tl-ch-t { font: 700 0.6875rem var(--text); fill: var(--ch-ink); text-anchor: middle; pointer-events: none; }
 .tl-ch-t.e { fill: var(--ch-email-ink); }
 .tl-chnote, .tl-chkey { margin: 0 0 8px; }
 /* Phase AI: the wallboard's way back to the RTA */

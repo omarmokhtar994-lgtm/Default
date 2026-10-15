@@ -7,15 +7,17 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-
-def is_backup(user: Dict[str, Any]) -> bool:
-    """Admins and supervisors: they may approve for any team manager."""
-    return bool(user.get("is_admin") or user.get("is_supervisor"))
+from .permissions import allowed
 
 
-def may_first_approve(user: Dict[str, Any]) -> bool:
-    """Whether this person gives first approvals at all."""
-    return is_backup(user) or bool(user.get("is_team_manager"))
+def may_first_approve(store, user: Dict[str, Any]) -> bool:
+    """Whether this person gives first approvals at all (Roles: "first approval")."""
+    return allowed(store, user, "approve_tm")
+
+
+def is_backup(store, user: Dict[str, Any]) -> bool:
+    """Admins, and supervisors who give first approvals: they may approve for any team manager."""
+    return bool(user.get("is_admin") or (user.get("is_supervisor") and may_first_approve(store, user)))
 
 
 def team_manager_of(store, associate_user_id: Optional[int]) -> Optional[Dict[str, Any]]:
@@ -27,9 +29,9 @@ def team_manager_of(store, associate_user_id: Optional[int]) -> Optional[Dict[st
 
 def may_approve_for(store, user: Dict[str, Any], associate_user_id: Optional[int]) -> bool:
     """Whether ``user`` may give the first approval of a request by this associate."""
-    if not user or not user.get("active", 1) or not may_first_approve(user):
+    if not user or not user.get("active", 1) or not may_first_approve(store, user):
         return False
-    if is_backup(user):
+    if is_backup(store, user):
         return True
     manager = team_manager_of(store, associate_user_id)
     return manager is None or manager["id"] == user["id"]

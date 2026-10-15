@@ -34,7 +34,7 @@ KINDS = {"attendance": "Attendance", "activities": "Activities", "activity": "Da
          "record": "Other actions"}
 VERSION_EVENTS = {"version_created": "New version", "set_in_use": "Set in use"}
 OTHER_EVENTS = {"run_uploaded": "Run uploaded", "run_started": "Run started", "run_stopped": "Run stopped",
-                "run_resumed": "Run resumed", "downloaded": "Downloaded", "exported": "Exported",
+                "run_resumed": "Run resumed", "roles_changed": "Roles changed", "team_manager_set": "Team manager set", "downloaded": "Downloaded", "exported": "Exported",
                 "user_added": "Person added", "user_disabled": "Person switched off", "user_enabled": "Person switched on",
                 "password_reset": "Password reset", "run_details_changed": "Run details changed",
                 "program_renamed": "Program renamed", "user_programs_changed": "Programs or role changed",

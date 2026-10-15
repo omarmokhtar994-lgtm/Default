@@ -43,7 +43,9 @@ class TheErrorPages(unittest.TestCase):
     def test_a_page_for_admins_and_supervisors_says_so(self):
         code, page = self.get(self.planner, "/admin/users")
         self.assertEqual(code, 403)
-        self.assertIn("Only admins and supervisors can open this page.", page)
+        # re-pinned in Phase AK: the owner made what each role may open adjustable (Roles), so the page says so
+        self.assertIn("Your role cannot open this page", page)
+        self.assertIn("An admin sets what each role may open on Roles.", page)
 
     def test_a_page_for_admins_says_so(self):
         code, page = self.get(self.sup, "/setup/programs")

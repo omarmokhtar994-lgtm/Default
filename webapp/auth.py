@@ -80,12 +80,15 @@ def login_required(view: Callable[..., Any]) -> Callable[..., Any]:
 
 
 def manager_required(view: Callable[..., Any]) -> Callable[..., Any]:
-    """Admins and supervisors (who manage the planners of their own programs)."""
+    """Admins, and (Phase AK) the roles an admin allows this page on Roles (supervisors by default)."""
+    from .permissions import ENDPOINTS, allowed
+
     @functools.wraps(view)
     @login_required
     def wrapped(*args: Any, **kwargs: Any) -> Any:
-        if not (g.user["is_admin"] or g.user["is_supervisor"]):
-            abort(403, description="Only admins and supervisors can open this page.")
+        key = ENDPOINTS.get(request.endpoint or "")
+        if not (g.user["is_admin"] or (key and allowed(current_app.extensions["store"], g.user, key))):
+            abort(403, description="Your role cannot open this page.")
         return view(*args, **kwargs)
     return wrapped
 

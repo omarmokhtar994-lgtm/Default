@@ -36,6 +36,7 @@ from .channel_plan import NoPlan, plan_day, score_day
 from .channel_template import channel_workbook
 from .channels import check_lines, has_channel_needs, read_channels, requirement_tab
 from .clock import EGYPT, HOME, SHOWN, ZONES, moved_text, pick_zone, shift as zone_shift, shown, to_schedule, zone_label
+from .permissions import CATALOGUE as PERMISSIONS, ENDPOINTS as PERMISSION_ENDPOINTS, ROLE_NAMES, allowed, matrix
 from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, OVERTIME_MAX, STATUSES, channel_letters, BreakRefused, at_target, board, glance, hover_tips, my_day, now_panel, read_inputs, shift_groups, window_view
 from .coach import actual_shrinkage, corrected_tab
 from .leave import KINDS as LEAVE_KINDS, LeaveBook
@@ -307,6 +308,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
             if request.method in ("GET", "HEAD"):
                 return redirect(url_for("me"))
             abort(403, description="Your account opens My week only.")
+        # Phase AK: what this person's role may open or do, as the admin set it on Roles (checked here, not only hidden)
+        if g.get("user") and not g.user["is_associate"] and request.endpoint in PERMISSION_ENDPOINTS and \
+                not _can(PERMISSION_ENDPOINTS[request.endpoint]):
+            g.error_hint = "An admin sets what each role may open on Roles."
+            abort(403, description="Your role cannot open this page or do this")
         g.zone = pick_zone(request.args.get("tz", ""))  # Phase AF (D5): Egypt unless the page asks for another
         # Phase Q: a program page opens only for people with that program (New schedule is open to everyone).
         if g.get("user") and request.endpoint not in OPEN_TO_ALL:
@@ -316,6 +322,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 g.error_hint = "Your account opens only the programs given to you. Ask an admin to add this one to your programs."
                 label = _unit_filter(key)  # a real program or LOB is named; words from a link are never repeated back
                 abort(403, description=f"{label if key in g.unit_labels else 'This program'} is not one of your programs")
+
+    def _can(key: str) -> bool:
+        """Phase AK: whether the person signed in may do ``key`` (Roles), read once per request."""
+        if "role_grid" not in g:
+            g.role_grid = matrix(app.extensions["store"])
+        return allowed(app.extensions["store"], g.get("user"), key, g.role_grid)
 
     def _access() -> Access:
         if "access" not in g:
@@ -456,12 +468,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 "status_words": STATUS_WORDS, "label": label, "modes": MODES, "stages": stages, "in_flight": IN_FLIGHT,
                 "when": _when, "run_options": run_options, "option_labels": OPTION_LABELS,
                 "eta_text": eta_text, "duration": duration, "clock": _clock, "with_text": with_text,
-                "group_changes": group_changes, "zones": ZONES, "home_zone": HOME, "channel_letters": channel_letters}
+                "group_changes": group_changes, "zones": ZONES, "home_zone": HOME, "channel_letters": channel_letters,
+                "can": _can}
 
     NAV_ACTIVE = {"home": "home", "overview_page": "overview", "day_page": "day", "week_page": "week",
                   "run_week": "week", "run_schedules": "schedules", "program": "analysis", "programs": "programs",
                   "exports_page": "exports", "team_page": "team", "admin_users": "people", "program_setup": "setup",
-                  "with_setup": "with", "channel_setup": "channels", "notifications_page": "notify",
+                  "with_setup": "with", "channel_setup": "channels", "notifications_page": "notify", "roles_page": "roles",
                   "day_wallboard": "wallboard", "me": "me", "requests_page": "requests"}
     PROGRAM_PAGES = {"overview": "/overview?program={key}", "day": "/day?program={key}", "week": "/week?program={key}",
                      "schedules": "/schedules?program={key}", "analysis": "/programs/{key}",
@@ -978,7 +991,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                swaps=swap_rows,
                                swaps_decided=_paged(swaps.decided(key, limit=None) if swaps and key else [],
                                                     "swaps_done_page", "done-h"),
-                               manager=bool(g.user["is_admin"] or g.user["is_supervisor"]),
+                               manager=allowed(app.extensions["store"], g.user, "setup"),
                                year=datetime.now(EGYPT).year)
 
     @app.route("/requests/leave/<int:request_id>", methods=["POST"])
@@ -1547,6 +1560,27 @@ def create_app(config: Dict[str, Any]) -> Flask:
             abort(404, description="There is no such LOB. Pick one from the list on the Notifications page.")
         return key, labels[key]
 
+    @app.route("/admin/roles", methods=["GET", "POST"])
+    @admin_required
+    def roles_page():  # type: ignore[no-untyped-def]
+        """Phase AK: what Planner, Team manager and Supervisor may see and do (only the listed roles and keys are
+        read from the form; everything not ticked is off)."""
+        store = app.extensions["store"]
+        if request.method == "POST":
+            if request.form.get("reset") == "1":
+                store.set_role_permissions({})
+                _record("roles_changed", subject="Roles", detail="back to the defaults")
+                flash("Roles are back to the defaults.")
+            else:
+                ticked = set(request.form.getlist("allow"))
+                rows = {(r, k): f"{r}|{k}" in ticked for r in ROLE_NAMES for k in PERMISSIONS}
+                store.set_role_permissions(rows)
+                _record("roles_changed", subject="Roles", detail="; ".join(
+                    f"{r}: {sum(1 for k in PERMISSIONS if rows[(r, k)])} of {len(PERMISSIONS)}" for r in ROLE_NAMES))
+                flash("Roles saved.")
+            return redirect(url_for("roles_page"))
+        return render_template("roles.html", catalogue=PERMISSIONS, role_names=ROLE_NAMES, grid=matrix(store))
+
     @app.route("/notifications", methods=["GET", "POST"])
     @admin_required
     def notifications_page():  # type: ignore[no-untyped-def]
@@ -1821,7 +1855,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             days.append({"date": on, "label": f"{on:%a %d}", "t": page["target"] if page else None})
         return {"current": kept["target"] if kept else own, "own": own, "kept": kept, "days": days,
                 "choices": sorted({100, 95, 90, 85, 80, own}, reverse=True),
-                "may_set": bool(g.user["is_admin"] or g.user["is_supervisor"])}
+                "may_set": allowed(app.extensions["store"], g.user, "setup")}
 
     @app.route("/day/shrinkage", methods=["POST"])
     @manager_required
@@ -2846,7 +2880,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             shrinkage = {**day_shrinkage(anchor["view"], anchor["week"], anchor["day"], mapping, anchor["inputs"],
                                          app.extensions["leave"].approved_on(program, on)),
                          "mapping": mapping, "items": SHRINKAGE_ITEMS,
-                         "may_set": bool(g.user["is_admin"] or g.user["is_supervisor"])}
+                         "may_set": allowed(app.extensions["store"], g.user, "setup")}
         return render_template("day.html", page=page, problem=problem, program=program, programs=programs, on=on,
                                today=clock_now.date(), tips=tips, at_a_glance=at_a_glance, shrinkage=shrinkage,
                                now_box=now_box, requests_waiting=_requests_waiting(program, g.user) if now_box else 0,
@@ -2890,7 +2924,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return {"starts": starts, "start_at": plain_hm(start_at), "vx": vx, "moved": moved, "own_zone": own_zone,
                 "own_name": dict(ZONES)[own_zone].split(" (")[0], "zone_name": dict(ZONES)[g.zone].split(" (")[0], "anchor_view": anchor["view"] if anchor else None,
                 "on_anchor_day": bool(start) and tab not in WINDOW_TABS,
-                "may_set_start": bool(g.user["is_admin"] or g.user["is_supervisor"])}
+                "may_set_start": allowed(app.extensions["store"], g.user, "setup")}
 
     GOTO_PAGES = (  # (label, endpoint, what it needs: "" anyone, "unit" a program picked, "manager", "admin")
         ("Home", "home", ""), ("RTA", "day_page", "unit"), ("Overview", "overview_page", "unit"),
@@ -2915,7 +2949,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             return all(w in text.casefold() for w in words)
 
         items: List[Dict[str, str]] = []
-        manager = bool(g.user["is_admin"] or g.user["is_supervisor"])
+        manager = allowed(app.extensions["store"], g.user, "setup")
         for label, endpoint, needs in GOTO_PAGES:
             if (needs == "unit" and not program) or (needs == "manager" and not manager) or \
                     (needs == "admin" and not g.user["is_admin"]) or not hit(label):

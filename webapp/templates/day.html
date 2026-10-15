@@ -563,7 +563,7 @@
     <div class="dlg-grid" data-aux-fields hidden>
       {{ with_fields(disabled=True) }}
       <label><span>Why</span> <input name="why" maxlength="200" placeholder="A short reason" disabled></label>
-      {% if not with_lists and (user.is_admin or user.is_supervisor) %}<p class="note">With is typed until this program has its lists: <a href="{{ url_for('with_setup', program=program) }}">Set the departments and people</a>.</p>{% endif %}
+      {% if not with_lists and can('setup') %}<p class="note">With is typed until this program has its lists: <a href="{{ url_for('with_setup', program=program) }}">Set the departments and people</a>.</p>{% endif %}
     </div>
     <p class="effect" data-effect aria-live="polite">The effect on the floor shows here before anything is kept.</p>
     <div class="effect-ch" data-channel-effect hidden aria-live="polite"></div>

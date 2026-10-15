@@ -210,7 +210,7 @@ class SwapBook:
                                         reason=" ".join((reason or "").split())[:200]):
                 raise ValueError(self._decided(swap_id))
             return "Refused."
-        if not is_backup(user):
+        if not is_backup(self.store, user):
             for _, _, field in mine:
                 if not self.store.move_swap(swap_id, "waiting_tm", **{field: user["id"]}):
                     raise ValueError(self._decided(swap_id))

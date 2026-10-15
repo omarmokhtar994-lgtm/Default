@@ -16,6 +16,7 @@ from datetime import date, timedelta
 from typing import Any, Dict, List, Optional
 
 from .approvals import may_approve_for, who_approves
+from .permissions import allowed
 from .attendance import day_index, hm
 from .versions import DAYS, shift_span
 
@@ -41,10 +42,6 @@ def number(value: float) -> str:
 
 def span_text(first: date, last: date) -> str:
     return nice(first) if first == last else f"{nice(first)} to {nice(last)}"
-
-
-def is_staff_manager(user: Dict[str, Any]) -> bool:
-    return bool(user.get("is_admin") or user.get("is_supervisor"))
 
 
 class LeaveBook:
@@ -142,6 +139,8 @@ class LeaveBook:
             return "Approved by the TM: the RTA decides next." if approve else "Refused."
         if user["id"] == row["tm_id"]:
             raise ValueError("Someone other than the TM gives the RTA's approval.")
+        if not allowed(self.store, user, "approve_rta"):  # Phase AK: the roles an admin allows on Roles
+            raise ValueError("Your role does not give the RTA's approval.")
         if not approve:
             if not self.store.move_leave(request_id, "waiting_rta", status="refused", rta_id=user["id"], rta_at=now,
                                          reason=reason):
@@ -260,7 +259,7 @@ class LeaveBook:
     def may_decide(self, row: Dict[str, Any], user: Dict[str, Any]) -> bool:
         if row["status"] == "waiting_tm":
             return may_approve_for(self.store, user, row["user_id"])
-        return row["status"] == "waiting_rta" and row["tm_id"] != user["id"]
+        return row["status"] == "waiting_rta" and row["tm_id"] != user["id"] and allowed(self.store, user, "approve_rta")
 
     def waiting_on(self, row: Dict[str, Any]) -> str:
         """Phase AK: where a request waits, in words."""

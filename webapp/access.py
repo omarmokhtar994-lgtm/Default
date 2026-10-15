@@ -51,13 +51,18 @@ class Access:
         keys = self.keys()
         return keys is None or key in keys
 
+    def manages_people(self) -> bool:
+        """Phase AK: the roles an admin allows People on Roles (supervisors by default)."""
+        from .permissions import allowed
+        return allowed(self.store, self.user, "people")
+
     def can_manage(self, target: Dict[str, Any]) -> bool:
         """Admins manage anyone else; supervisors the planners who share a program with them."""
         if target["id"] == self.user["id"]:
             return False
         if self.user.get("is_admin"):
             return True
-        if not self.user.get("is_supervisor") or target.get("is_admin") or target.get("is_supervisor"):
+        if not self.manages_people() or target.get("is_admin") or target.get("is_supervisor"):
             return False
         if self.everything():
             return True
@@ -75,4 +80,4 @@ class Access:
         """The programs this person may give to others."""
         if self.user.get("is_admin"):
             return self.book.tree()
-        return self.programs() if self.user.get("is_supervisor") else []
+        return self.programs() if self.manages_people() else []

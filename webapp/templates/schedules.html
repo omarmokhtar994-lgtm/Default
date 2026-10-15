@@ -35,7 +35,7 @@
 <nav class="vbar" aria-label="Versions">
   {% for v in versions %}{% set c = counts[v.id] %}{% set reds = c.added|selectattr('severity', 'equalto', 'red')|list|length %}{% set yellows = c.added|selectattr('severity', 'equalto', 'yellow')|list|length %}
   <a href="{{ url_for('run_schedules', run_id=run.id, v=v.id) }}"{% if v.id == current.id %} class="cur" aria-current="true"{% endif %}>{{ v.label }}
-    <small>{% if v.in_use %}<span class="use">In use</span> · {% endif %}{% if v.kind == 'edited' %}{{ c.changes|length }} change{{ 's' if c.changes|length != 1 }} · {% if reds %}<span class="r">{{ reds }} rule{{ 's' if reds != 1 }} broken</span>{% elif yellows %}<span class="y">{{ yellows }} warning{{ 's' if yellows != 1 }}</span>{% else %}all checks pass{% endif %}{% else %}{{ 'from the run' if v.kind == 'tool_after' else 'no breaks yet' }}{% endif %}</small></a>
+    <small>{% if v.in_use %}<span class="use">In use</span> · {% endif %}{% if v.kind == 'edited' %}{{ c.changes|length }} change{{ 's' if c.changes|length != 1 }} · {% if reds %}<span class="r">{{ reds }} rule{{ 's' if reds != 1 }} broken</span>{% elif yellows %}<span class="y">{{ yellows }} warning{{ 's' if yellows != 1 }}</span>{% else %}all checks pass{% endif %}{% elif v.kind == 'tool_consistent' %}{% set st = (v.checks|fromjson).consistency or {} %}{% set b, a = st.before or {}, st.after or {} %}from the run, steadier start times: {{ b.start_movement_hours|round|int }} h to {{ a.start_movement_hours|round|int }} h of start-time changes, {{ b.distinct_start_times }} to {{ a.distinct_start_times }} different starts{% else %}{{ 'from the run' if v.kind == 'tool_after' else 'no breaks yet' }}{% endif %}</small></a>
   {% endfor %}
 </nav>
 

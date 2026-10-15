@@ -7,7 +7,11 @@ changes, so every module takes EGYPT from here instead of fixing an offset. The 
 comes from the server's time zone data (the tzdata package); without it the website
 stops at start-up with ZoneInfoNotFoundError rather than show times an hour out.
 """
+import re
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import date, datetime, time
+from typing import Iterator
 from zoneinfo import ZoneInfo
 
 EGYPT = ZoneInfo("Africa/Cairo")
@@ -43,3 +47,39 @@ def zone_label(zone: str, on: date) -> str:
     minutes = offset(zone, on)
     hours, rest = divmod(abs(minutes), 60)
     return f"{dict(ZONES).get(zone, zone)}, UTC{'+' if minutes >= 0 else '-'}{hours}" + (f":{rest:02d}" if rest else "")
+
+
+# Phase AI (owner, 2026-10-15: "break should show in the new time zone and can be changed but ... the time should be
+# based the schedule default"): while the RTA is drawn, every time of day is shown this many minutes ahead of the
+# schedule's own; what is kept, logged and posted stays in the schedule's time (the default, 0).
+SHOWN: ContextVar[int] = ContextVar("shown", default=0)
+TIME = re.compile(r"\b([01]\d|2[0-3]):([0-5]\d)\b")
+
+
+@contextmanager
+def shown(minutes: int) -> Iterator[None]:
+    """Times of day shown ``minutes`` ahead of the schedule's own while inside."""
+    token = SHOWN.set(minutes)
+    try:
+        yield
+    finally:
+        SHOWN.reset(token)
+
+
+def _clock(minute: int) -> str:
+    minute %= 1440
+    return f"{minute // 60:02d}:{minute % 60:02d}"
+
+
+def moved_text(text: str, minutes: int) -> str:
+    """``text`` with each time of day (HH:MM) read ``minutes`` later; durations ("2 h 20 min") are left as they are."""
+    if not minutes:
+        return text
+    return TIME.sub(lambda m: _clock(int(m.group(1)) * 60 + int(m.group(2)) + minutes), text)
+
+
+def to_schedule(value: str, minutes: int) -> str:
+    """A time typed in the zone shown, as the schedule's own time; anything that is not a time is left for the
+    caller to refuse, as before."""
+    m = TIME.fullmatch((value or "").strip())
+    return _clock(int(m.group(1)) * 60 + int(m.group(2)) - minutes) if m and minutes else value

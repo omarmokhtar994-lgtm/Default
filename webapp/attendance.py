@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
+from .clock import SHOWN
 from .day import (ABSENT, AUX, CALLED_IN, CANCELLED, EXTRA_BREAKS, LATE_EARLY, MEASURES, OVERTIME_MAX, STATUSES, STEP, TIMED,
                   BreakRefused, _busy, advice, at_target,
                   check_break, day_view, dayoff_offers, dayoff_proposals, meeting_slots, overtime_offers, pattern_breaks, planned,
@@ -101,6 +102,11 @@ def swapped_week(week: Dict[str, Any], day: int, first: str, second: str) -> Dic
 
 
 def hm(minute: int) -> str:
+    return plain_hm(minute + SHOWN.get())  # Phase AI: in the zone the RTA shows
+
+
+def plain_hm(minute: int) -> str:
+    """A time in the schedule's own time, whatever the page shows: for times handed on to be read again."""
     minute %= 1440
     return f"{minute // 60:02d}:{minute % 60:02d}"
 
@@ -716,7 +722,7 @@ class DayBook:
         fields = {k: v for k, v in r.items() if k != "id"}
         self.store.delete_activity(activity_id)
         try:
-            rec = self.add_activity(program, on, r["associate"], r["kind"], start, hm(lo + r["end_min"] - r["start"]),
+            rec = self.add_activity(program, on, r["associate"], r["kind"], start, plain_hm(lo + r["end_min"] - r["start"]),
                                     user_id, billable=bool(r["billable"]), note=r["note"], dry_run=True,
                                     with_whom=r.get("with_whom", ""), why=r.get("why", ""),
                                     with_dept=r.get("with_dept", ""))
@@ -974,13 +980,13 @@ class DayBook:
                     f" {minutes % 60}" if minutes % 60 else "")
                 raise ValueError(f"{name}'s shift starts at {hm(span[0])}, so {length} of overtime before it would "
                                  "start the day before. Pick a shorter length, or After the shift.")
-            start = hm(span[1] if side == "after" else span[0] - minutes)
+            start = plain_hm(span[1] if side == "after" else span[0] - minutes)
         lo = _clock(start)
         if lo is None:
             raise ValueError("Give the start like 13:05.")
         if not isinstance(minutes, int) or minutes <= 0 or minutes % STEP:
             raise ValueError("Pick a length in 5-minute steps.")
-        end = hm(lo + minutes)
+        end = plain_hm(lo + minutes)
         rec = self.add_activity(program, on, name, what, start, end, user_id, billable=billable, note=note,
                                 dry_run=True, with_whom=with_whom, why=why, with_dept=with_dept)
         if not dry_run:
@@ -1035,7 +1041,7 @@ class DayBook:
         good: List[str] = []
         for s in starts[:16]:
             try:
-                rec = self.add_item(program, on, name, what, hm(s), minutes, 0, billable=billable, dry_run=True,
+                rec = self.add_item(program, on, name, what, plain_hm(s), minutes, 0, billable=billable, dry_run=True,
                                     end=end)
             except ValueError:
                 continue
@@ -1247,7 +1253,7 @@ class DayBook:
         """Keep the approved moves (each checked again: the day may have changed since the preview)."""
         done = 0
         for name, idx, start in moves:
-            self.move_break(program, on, name, idx, hm(start), user_id, suffix=" (autopilot)")
+            self.move_break(program, on, name, idx, plain_hm(start), user_id, suffix=" (autopilot)")
             done += 1
         return done
 
@@ -1291,7 +1297,7 @@ class DayBook:
                     if c["new"] == CANCELLED:
                         self.cancel_break(program, on, c["name"], c["idx"], why, user_id, now=now)
                     else:
-                        self.move_break(program, on, c["name"], c["idx"], None if c["new"] is None else hm(c["new"]),
+                        self.move_break(program, on, c["name"], c["idx"], None if c["new"] is None else plain_hm(c["new"]),
                                         user_id)
                     done += 1
             finally:
@@ -1426,7 +1432,7 @@ class DayBook:
                                          "the day again.")
                     if now is not None and start <= now:
                         raise ValueError(f"{hm(start)} has passed: open Rescue the day again.")
-                    self.move_break(program, on, name, idx, hm(start), user_id, suffix=" (rescue)")
+                    self.move_break(program, on, name, idx, plain_hm(start), user_id, suffix=" (rescue)")
                     done += 1
             finally:
                 act.label = f"Rescue the day moved {done} break{'s' if done != 1 else ''}"
@@ -1450,7 +1456,7 @@ class DayBook:
         if busy:
             raise ValueError(f"Not free then: {', '.join(busy)}. Nobody was booked.")
         for name in names:
-            self.add_activity(program, on, name, kind, hm(start), hm(start + minutes), user_id, billable=billable,
+            self.add_activity(program, on, name, kind, plain_hm(start), plain_hm(start + minutes), user_id, billable=billable,
                               with_whom=with_whom, why=why, with_dept=with_dept)
 
     # ------------------------------------------------------------- retention

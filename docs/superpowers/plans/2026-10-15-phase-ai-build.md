@@ -66,3 +66,26 @@ schedule's own zone before any change is kept, so posts to the group stay in the
   before calling the DayBook, so the journal, undo and group posts stay in the schedule's zone.
 - The separate read-only zoned page goes; the program's operating-day start stays as one of the start choices.
 - The start choice is kept per program for the session (switching tabs and days keeps it).
+
+## Rulings while building (each with what it costs if wrong)
+
+- T6: approved leave keeps writing Leave on the schedule (the validator reads only Leave); shrinkage counts an
+  approved request's Leave cell by its kind (Exam leave as exam leave, Public holiday as a public holiday). Cost: a
+  second cell word if the owner wants the schedule to show Exam.
+- T7: someone who ran a run of a program they no longer have still sees it (their own work); everyone else sees runs
+  by program only. Cost: one condition in `_visible`.
+- T8: pages of 20; the Home runs list still reads the newest 200 runs (as before), so 10 pages at most. Cost: the
+  store's limit.
+- T9: the rest of the week shows figures, the names fold under the count, and the times are on that day's Rescue tab.
+  Cost: one template.
+- T10: the zone and the day's start are kept per program in the session (not per account): a new sign-in starts from
+  Egypt at midnight. Cost: a stored preference.
+- T10: the 24 hours from the start are on the Timeline, the Interval board and Adherence; Find a time, Overtime and
+  VTO, Channels, Rescue the day, Fix breaks and Change several breaks work on the schedule's day, with every time in
+  the zone picked (the page says so). Cost: those tools on a window.
+- T10: the change log, the undo labels and the group posts are kept in the schedule's time and shown in the zone
+  picked; times of day when something was done (the clock of a change) stay Egypt time. Cost: none for the posts.
+- T10: a form's times are read in the zone it was shown in (`tz` in the form), never the session's, so a page left
+  open in another zone cannot move a break by the wrong hours. Cost: none.
+- T11: the channel day tests read the real clock and broke once their Wednesday had passed; the module now stops the
+  clock on the Tuesday before, as when they were written. Cost: none to the website.

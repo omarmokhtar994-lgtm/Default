@@ -21,12 +21,14 @@ from __future__ import annotations
 import math
 import re
 import threading
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from openpyxl import load_workbook
 
 from .channels import _days_or_none, inside as window_inside
+from .clock import SHOWN, moved_text
 from .versions import DAYS, shift_span
 
 STEP = 5  # minutes: breaks move in 5-minute steps (owner, 2026-10-08)
@@ -481,7 +483,7 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
 
 
 def _hm(minute: int) -> str:
-    minute %= 1440
+    minute = (minute + SHOWN.get()) % 1440  # Phase AI: in the zone the RTA shows
     return f"{minute // 60:02d}:{minute % 60:02d}"
 
 
@@ -507,7 +509,7 @@ def hover_tips(view: Dict[str, Any], now: int) -> Dict[Tuple[str, int], Dict[str
                 logout = seg["away"][0]
             breaks = sorted(seg["breaks"], key=lambda b: b["start"])
             taken = sum(1 for b in breaks if b["start"] + b["minutes"] <= now)
-            shift = [f"{lane['name']}, {seg['label']}", f"Length {_dur(length)}"]
+            shift = [f"{lane['name']}, {moved_text(seg['label'], SHOWN.get())}", f"Length {_dur(length)}"]
             if seg["status"] in ABSENT:
                 shift.append(f"{seg['status']}: not on shift today")
             elif now < login:
@@ -537,7 +539,7 @@ def _stretches(starts: List[int], step: int, most: int = 3) -> str:
             runs[-1][1] = t + step
         else:
             runs.append([t, t + step])
-    if runs == [[0, 1440]]:
+    if len(runs) == 1 and runs[0][1] - runs[0][0] == 1440:
         return "all day"
     said = ", ".join(f"{_hm(a)} to {_hm(b)}" for a, b in runs[:most])
     return said + (f" and {len(runs) - most} more" if len(runs) > most else "")
@@ -549,7 +551,8 @@ def glance(view: Dict[str, Any], now: int) -> List[Dict[str, str]]:
     step = view["interval"]
     def count(n: int) -> str:
         return f"{n} interval{'s' if n != 1 else ''}"
-    if 0 <= now < 1440:
+    first = view.get("start", 0)  # Phase AI: where the page's 24 hours begin
+    if first <= now < first + 1440:
         here = [s for lane in view["lanes"] for s in lane["segments"] if s["start"] <= now < s["end"]]
         label, note = "On shift now", f"at {_hm(now)}"
     else:
@@ -587,7 +590,7 @@ def now_panel(view: Dict[str, Any], now: int, horizon: int = NOW_HORIZON,
     starting or ending in the next ``horizon`` minutes, in time order (people off for the whole shift left out).
     ``attention``: in the ``ahead`` minutes from now, intervals below the target, language gaps, channel warnings,
     tight intervals and intervals at the target but under 100%, in that order (Phase AH: by the week's target)."""
-    if not 0 <= now < 1440:
+    if not view.get("start", 0) <= now < view.get("start", 0) + 1440:  # Phase AI: the page's 24 hours
         return None
     step = view["interval"]
     found = []
@@ -744,6 +747,7 @@ def board(view: Dict[str, Any], target: float) -> List[Dict[str, Any]]:
                 for b in seg["breaks"]:
                     if t <= b["start"] < t + step:
                         chip = {"name": lane["name"], "slot": lane["slot"], "offset": seg["offset"], "idx": b["idx"],
+                                "date": seg.get("date"),  # Phase AI: the shift's own day in a 24-hour window
                                 "kind": b["kind"], "short": _short(b["kind"]), "start": _hm(b["start"]),
                                 "planned": _hm(b["planned_start"]), "moved": b["moved"], "minutes": b["minutes"]}
                         (lunch if b["kind"].lower() == "lunch" else short).append(chip)
@@ -1292,36 +1296,58 @@ def dayoff_proposals(view: Dict[str, Any], week: Dict[str, Any], day: int, rest_
     return {"proposals": proposals, "overtime": overtime, "minimum": minimum}
 
 
-def stitch(views: Dict[int, Optional[Dict[str, Any]]], start: int, shift: int) -> Dict[str, Any]:
-    """One day-long window of the RTA (Phase AF, D1 and D5), read only: from minute ``start`` of the schedule's day,
-    taken from the day's view (0) and the day before (-1) or after (1) where the window reaches them. ``shift`` turns
-    the schedule's times into the zone shown. Each cell keeps its interval's figures (None where that day has no
-    schedule); each shift that overlaps the window is placed from the window's start, its breaks with it."""
-    step = next(v["interval"] for v in views.values() if v)
+def _moved(seg: Dict[str, Any], by: int) -> Dict[str, Any]:
+    """A copy of ``seg`` with its times ``by`` minutes later (the marks ``from`` and ``to`` stay as kept: from the
+    shift's own midnight)."""
+    def later(items: List[Dict[str, Any]], *keys: str) -> List[Dict[str, Any]]:
+        return [{**x, **{k: x[k] + by for k in keys if k in x}} for x in items]
+    return {**seg, "start": seg["start"] + by, "end": seg["end"] + by,
+            "away": (seg["away"][0] + by, seg["away"][1] + by),
+            "breaks": later(seg["breaks"], "start", "planned_start"),
+            "cancelled": later(seg.get("cancelled", []), "start", "planned_start"),
+            "activities": later(seg.get("activities", []), "start", "end")}
+
+
+def window_view(views: Dict[int, Optional[Dict[str, Any]]], start: int, on: date) -> Dict[str, Any]:
+    """Phase AI (owner, 2026-10-15: one calendar day "with everything"): the RTA's 24 hours from minute ``start`` of
+    the schedule's day ``on``, with the day view's shape, so the Timeline, the Interval board and Adherence work on it
+    as on a day. Times are minutes from ``on``'s midnight (below 0 or past 1440 where the window reaches the day
+    before or after); ``views`` holds those days' views by their distance from ``on`` (None: no schedule kept).
+    Each cell and row comes from the day that holds it; each shift once, as its own day has it, with its ``date``,
+    and ``offset`` 0 when it starts in the window (-1 when it began before). A day with no schedule shows no figures."""
+    first = next(v for v in views.values() if v)
+    step, end = first["interval"], start + 1440
+
+    def held(k: int) -> Tuple[Optional[Dict[str, Any]], int]:
+        d, t = divmod(k, 1440)
+        return views.get(d), t
+
     cells = []
-    for k in range(0, 1440, step):
-        d, t = divmod(start + k, 1440)
-        v = views.get(d)
+    for k in range(start, end, step):
+        v, t = held(k)
         c = next((c for c in v["cells"] if c["t"] == t), None) if v else None
-        cells.append({"k": k, "label": _hm(start + k + shift), "day": d,
-                      **{f: (c[f] if c else None) for f in ("required", "now", "need", "pm")},
-                      "cls": c["cls"] if c else "none"})
-    lanes = []
-    for d, v in sorted(views.items()):
-        for lane in (v or {}).get("lanes", []):
-            for s in lane["segments"]:
-                a, b = s["start"] + 1440 * d - start, s["end"] + 1440 * d - start
-                if s["offset"] != 0 or b <= 0 or a >= 1440:
-                    continue
-                lanes.append({"name": lane["name"], "language": lane.get("language", ""), "start": a, "end": b,
-                              "status": s["status"], "label": f"{_hm(s['start'] + shift)} to {_hm(s['end'] + shift)}",
-                              "breaks": [{"start": x["start"] + 1440 * d - start, "minutes": x["minutes"],
-                                          "kind": x.get("kind", "Break")} for x in s.get("breaks", [])]})
-    lanes.sort(key=lambda x: (x["start"], x["name"]))
+        if c is None:
+            c = {"required": 0, "plan": 0, "now": 0, "slots": [0] * (step // STEP), "low": 0, "need": 0, "pm": None,
+                 "plan_pm": None, "cls": "none", **{x: 0 for x in ("absent", "aux", "late_early", "breaks", "overtime",
+                                                                  "vto")}}
+        cells.append({**c, "t": k, "date": on + timedelta(days=k // 1440)})
+    found: Dict[Tuple[str, int], Tuple[Dict[str, Any], Dict[str, Any], int]] = {}
+    for d in sorted(views):
+        for ln in (views[d] or {}).get("lanes", []):
+            for s in ln["segments"]:
+                own = d + s["offset"]  # the day the shift starts, from ``on``
+                if (ln["name"], own) in found and found[(ln["name"], own)][2] == 0:
+                    continue  # its own day's copy is kept
+                found[(ln["name"], own)] = (ln, {**_moved(s, 1440 * d), "date": on + timedelta(days=own)}, s["offset"])
+    lanes: Dict[str, Dict[str, Any]] = {}
+    for (name, own), (ln, s, _) in sorted(found.items(), key=lambda x: x[1][1]["start"]):
+        if s["end"] <= start or s["start"] >= end:
+            continue
+        s["offset"] = 0 if s["start"] >= start else -1
+        lanes.setdefault(name, {**{k: v for k, v in ln.items() if k != "segments"}, "segments": []})
+        lanes[name]["segments"].append(s)
 
     def rows(pick) -> List[Dict[str, Any]]:
-        """Phase AG (T8): the language or channel rows across the window, by name, from whichever day holds each
-        interval ("none" where that day has no such row)."""
         names: Dict[str, Dict[str, Any]] = {}
         for v in views.values():
             for row in (pick(v) if v else []):
@@ -1329,18 +1355,59 @@ def stitch(views: Dict[int, Optional[Dict[str, Any]]], start: int, shift: int) -
         out = []
         for name, head in names.items():
             row_cells = []
-            for k in range(0, 1440, step):
-                d, t = divmod(start + k, 1440)
-                found = next((r for r in pick(views[d]) if r["name"] == name), None) if views.get(d) else None
-                c = next((c for c in found["cells"] if c["t"] == t), None) if found else None
-                row_cells.append({"k": k, "label": _hm(start + k + shift), "cls": c["cls"] if c else "none"})
+            for k in range(start, end, step):
+                v, t = held(k)
+                row = next((r for r in pick(v) if r["name"] == name), None) if v else None
+                c = next((c for c in row["cells"] if c["t"] == t), None) if row else None
+                row_cells.append({**(c or {"count": None, "have": None, "need": 0, "cls": "none"}), "t": k})
             out.append(dict(head, cells=row_cells))
         return out
 
-    return {"cells": cells, "lanes": lanes, "start": start, "shift": shift, "step": step,
-            "hours": [(x, _hm(start + x + shift)) for x in range(0, 1440, 120)],
-            "languages": rows(lambda v: v.get("languages") or []),
-            "channels": rows(lambda v: (v.get("channels") or {}).get("rows") or [])}
+    languages = rows(lambda v: v.get("languages") or [])
+    for row in languages:
+        row["gaps"] = sum(1 for c in row["cells"] if c["cls"] in ("bad", "warn"))
+    channels = None
+    if any(v and v.get("channels") for v in views.values()):
+        runs: Dict[str, List[Tuple[int, int, str]]] = {}
+        warnings = []
+        for d in sorted(views):
+            ch = (views[d] or {}).get("channels") or {}
+            lo, hi = max(start, 1440 * d), min(end, 1440 * (d + 1))  # the part of the window this day holds
+            for name, stretches in (ch.get("runs") or {}).items():
+                for a, b, c in stretches:
+                    a, b = max(a + 1440 * d, lo), min(b + 1440 * d, hi)
+                    if a >= b:
+                        continue
+                    mine = runs.setdefault(name, [])
+                    if mine and mine[-1][1] == a and mine[-1][2] == c:
+                        mine[-1] = (mine[-1][0], b, c)
+                    else:
+                        mine.append((a, b, c))
+            warnings += [{**w, "t0": w["t0"] + 1440 * d, "t1": w["t1"] + 1440 * d} for w in ch.get("warnings", [])
+                         if w["t1"] + 1440 * d > lo and w["t0"] + 1440 * d < hi]
+        base = next(v["channels"] for v in views.values() if v and v.get("channels"))
+        channels = {**base, "rows": rows(lambda v: (v.get("channels") or {}).get("rows") or []), "runs": runs,
+                    "warnings": warnings,
+                    "planned": any(((v or {}).get("channels") or {}).get("planned") for v in views.values())}
+    order = sorted(lanes.values(), key=lambda ln: (min(s["start"] for s in ln["segments"]), ln["name"]))
+    own = [s for ln in order for s in ln["segments"] if s["offset"] == 0]
+    with_demand = [c for c in cells if c["pm"] is not None]
+    absent = sum(1 for s in own if s["status"] in ABSENT)
+    tiles = {"planned": len(own), "present": len(own) - absent, "absent": absent,
+             "late_early": sum(1 for s in own if s["status"] in LATE_EARLY),
+             "aux": sum(1 for s in own if s["status"] in AUX or any(a["kind"] in AUX for a in s["activities"])),
+             "moved": sum(1 for s in own for b in s["breaks"] if b["moved"]),
+             "overtime": sum(a["end"] - a["start"] for s in own for a in s["activities"] if a["kind"] == "Overtime"),
+             "vto": sum(a["end"] - a["start"] for s in own for a in s["activities"] if a["kind"] == "VTO"),
+             "called_in": sum(s["end"] - s["start"] for s in own if s["called_in"] and s["status"] not in ABSENT),
+             "short_hours": round(sum(-c["pm"] for c in with_demand if c["pm"] < 0), 1),
+             "plan_short_hours": round(sum(-c["plan_pm"] for c in with_demand
+                                           if c.get("plan_pm") is not None and c["plan_pm"] < 0), 1),
+             "short_intervals": sum(1 for c in with_demand if c["pm"] < 0),
+             "over_hours": round(sum(c["pm"] for c in with_demand if c["pm"] > 0), 1),
+             "language_gaps": sum(r["gaps"] for r in languages)}
+    return {"interval": step, "measure": first["measure"], "lanes": order, "cells": cells, "languages": languages,
+            "tiles": tiles, "channels": channels, "start": start}
 
 
 def shift_groups(view: Dict[str, Any], from_now: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -1351,9 +1418,10 @@ def shift_groups(view: Dict[str, Any], from_now: Optional[int] = None) -> List[D
     for lane in view["lanes"]:
         own = [s for s in lane["segments"] if s["offset"] == 0]
         seg = own[0] if own else lane["segments"][0]
-        key = f"{seg['start'] // 60:02d}:{seg['start'] % 60:02d}" if own else "earlier"
-        group = groups.setdefault(key, {"key": key, "label": key if own else "From yesterday",
-                                        "start": seg["start"] if own else -1, "people": 0, "late": 0, "off": 0,
+        key = _hm(seg["start"]) if own else "earlier"  # Phase AI: as the page shows it
+        group = groups.setdefault(key, {"key": key, "label": key if own else (
+                                            f"Began before {_hm(view['start'])}" if view.get("start") else "From yesterday"),
+                                        "start": seg["start"] if own else -10 ** 6, "people": 0, "late": 0, "off": 0,
                                         "aux": 0, "names": [], "next": False})
         group["people"] += 1
         group["names"].append(lane["name"])

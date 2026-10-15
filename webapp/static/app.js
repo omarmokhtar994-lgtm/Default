@@ -387,12 +387,14 @@ function homeRefresh(now) {
   if (!root) { return; }
   var token = root.querySelector("input[name=csrf_token]");
   var step = parseInt(root.dataset.step, 10) || 30;
+  var shift = parseInt(root.dataset.shift, 10) || 0;  // Phase AI: times show this many minutes past the schedule's
   var status = document.getElementById("day-status");
 
   function post(url, fields) {
     var body = new URLSearchParams(fields);
     body.append("csrf_token", token ? token.value : "");
     body.append("program", root.dataset.program);
+    body.append("tz", root.dataset.tz || "");  // the server reads the times as shown in this zone
     return fetch(url, { method: "POST", credentials: "same-origin", body: body, headers: { "Accept": "application/json" } })
       .then(function (r) { return r.json().then(function (d) { d._ok = r.ok; return d; }); });
   }
@@ -629,8 +631,9 @@ function homeRefresh(now) {
     var el = document.elementFromPoint(x, y);
     return el && board && board.contains(el) ? el.closest(".rb-row[data-t]") : null;
   }
-  function timeFor(chip, row) {
-    return toHm(parseInt(row.dataset.t, 10) + toMin(chip.dataset.start) % step);
+  function timeFor(chip, row) {  // the row's start (the schedule's minutes) and the chip's minutes into its interval
+    var into = (((toMin(chip.dataset.start) - shift) % step) + step) % step;
+    return toHm(parseInt(row.dataset.t, 10) + into + shift);
   }
   function mark(row) {
     if (carry.row === row) { return; }
@@ -901,7 +904,9 @@ function homeRefresh(now) {
   var who = form.querySelector("select[name=associate]:not([data-off])");
   var title = document.getElementById("add-h"), tick = form.querySelector(".post-tick");
   var posts = (form.dataset.postKinds || "").split(" ");
-  function clock(m) { m = ((m % 1440) + 1440) % 1440; return ("0" + Math.floor(m / 60)).slice(-2) + ":" + ("0" + m % 60).slice(-2); }
+  var dayRoot = document.querySelector("[data-day]");
+  var shown = dayRoot ? parseInt(dayRoot.dataset.shift, 10) || 0 : 0;  // Phase AI: the zone the page shows
+  function clock(m) { m = (((m + shown) % 1440) + 1440) % 1440; return ("0" + Math.floor(m / 60)).slice(-2) + ":" + ("0" + m % 60).slice(-2); }
   function overtimeSides(on) {
     if (!otSide) { return; }
     otSide.hidden = !on;

@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
 
+from .clock import SHOWN
 from .versions import DAYS
 
 CHANNELS = {"P": "Phone", "C": "Chat", "E": "Email"}
@@ -50,7 +51,8 @@ def _norm(value: Any) -> str:
 
 
 def hm(minute: int) -> str:
-    return f"{(minute // 60) % 24:02d}:{minute % 60:02d}"
+    minute = (minute + SHOWN.get()) % 1440  # Phase AI: in the zone the RTA shows
+    return f"{minute // 60:02d}:{minute % 60:02d}"
 
 
 def _n(value: float) -> str:

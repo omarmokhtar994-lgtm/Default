@@ -932,6 +932,45 @@ class TheRtaActionsInTheBrowser(unittest.TestCase):
         self.assertGreaterEqual(row_box["x"] + row_box["width"] + 1, last["x"] + last["width"])  # the row holds its cells
         self.assertEqual(errors, [])
 
+    def test_a_break_moved_in_new_york_from_16(self):
+        """Phase AI (owner, 2026-10-15: "break should show in the new time zone and can be changed"): on the board in
+        New York time from 16:00, a break dragged to the next row says the New York time and is kept in the
+        schedule's own time (Cairo, 7 hours later)."""
+        from datetime import date
+        page = self.page(width=1440, height=900)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        self.go(page, "/day?program=AE/AR+B2B&date=2026-10-15&view=board&tz=America/New_York&start=16:00", errors)
+        rows = page.locator(".rb-row[data-t]")
+        self.assertEqual(int(rows.nth(0).get_attribute("data-t")) % 1440, (16 * 60 + 420) % 1440)  # 16:00 in New York
+        step = int(rows.nth(1).get_attribute("data-t")) - int(rows.nth(0).get_attribute("data-t"))
+        source = next(rows.nth(i) for i in range(rows.count() - 1)
+                      if rows.nth(i).locator("button.chip[data-idx]").count())
+        index = next(i for i in range(rows.count()) if rows.nth(i).get_attribute("data-t") == source.get_attribute("data-t"))
+        chip, target = source.locator("button.chip[data-idx]").first, rows.nth(index + 1)
+        name, day, idx = chip.get_attribute("data-name"), chip.get_attribute("data-date"), int(chip.get_attribute("data-idx"))
+        start = chip.get_attribute("data-start")  # in New York time
+        into = (int(start[:2]) * 60 + int(start[3:]) + 420) % step
+        kept = int(target.get_attribute("data-t")) + into  # the schedule's minutes from the page's day
+        want = f"{(kept - 420) // 60 % 24:02d}:{(kept - 420) % 60:02d}"
+        source.scroll_into_view_if_needed()
+        from_box, box = chip.bounding_box(), target.locator(".rb-c").nth(3).bounding_box()
+        page.mouse.move(from_box["x"] + from_box["width"] / 2, from_box["y"] + from_box["height"] / 2)
+        page.mouse.down()
+        page.mouse.move(box["x"] + 10, box["y"] + box["height"] / 2, steps=8)
+        page.mouse.up()
+        expect(page.locator("dialog[open] #brk-h")).to_have_text(re.compile(rf" to {want}\?$"))
+        with page.expect_navigation():
+            page.locator("dialog[open] [data-keep]").click()
+            if page.locator("dialog[open] .dlg-ask:not([hidden])").count():
+                page.locator("dialog[open] [data-keep]").click()
+        moved = next(b for lane in self.app.extensions["days"].page("AE/AR B2B", date.fromisoformat(day))["view"]["lanes"]
+                     if lane["name"] == name for s in lane["segments"] if s["offset"] == 0 for b in s["breaks"]
+                     if b["idx"] == idx)
+        self.assertEqual(moved["start"] % 1440, (kept - 1440 * ((date.fromisoformat(day) - date(2026, 10, 15)).days)) % 1440)
+        self.assertEqual(errors, [])
+
     def test_delete_overtime_from_the_person_dialog(self):
         from datetime import date
         days = self.app.extensions["days"]

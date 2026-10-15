@@ -35,8 +35,8 @@ from .channel_people import ChannelPeople, can_work, channel_words
 from .channel_plan import NoPlan, plan_day, score_day
 from .channel_template import channel_workbook
 from .channels import check_lines, has_channel_needs, read_channels, requirement_tab
-from .clock import EGYPT, HOME, ZONES, pick_zone, shift as zone_shift, zone_label
-from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, board, glance, hover_tips, my_day, now_panel, read_inputs, shift_groups, stitch
+from .clock import EGYPT, HOME, SHOWN, ZONES, moved_text, pick_zone, shift as zone_shift, shown, to_schedule, zone_label
+from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, at_target, board, glance, hover_tips, my_day, now_panel, read_inputs, shift_groups, window_view
 from .coach import actual_shrinkage, corrected_tab
 from .leave import KINDS as LEAVE_KINDS, LeaveBook
 from .swaps import SwapBook
@@ -408,6 +408,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
             return ""
         minutes = round(abs(float(hours)) * 60)
         return f"{'+' if hours >= 0 else '−'}{minutes // 60}:{minutes % 60:02d}"
+
+    @app.template_filter("in_zone")
+    def _in_zone(text: str) -> str:
+        """Phase AI: a text kept in the schedule's time (a shift, a change) with its times as the RTA shows them."""
+        return moved_text(text or "", SHOWN.get())
 
     @app.template_filter("num")
     def _num(value: float) -> str:
@@ -2535,16 +2540,59 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                may_use={e["shown"]["id"] for e in entries if _may_set_in_use(e["shown"])},
                                may_delete={e["run"]["id"] for e in entries if _may_delete(e["run"])})
 
+    WINDOW_TABS = ("timeline", "board", "adherence")  # Phase AI: the 24 hours from the start picked
+    START = re.compile(r"^([01]\d|2[0-3]):(00|15|30|45)$")
+
+    def _own_zone(program: str, on: date) -> str:
+        """The zone the schedule in use for ``program`` on ``on`` was made in (Egypt when none is kept)."""
+        row = _days().version(program, on)[0] if program else None
+        return pick_zone(((app.extensions["store"].get_run(row["run_id"]) or {}).get("tz") if row else "") or HOME)
+
+    def _rta_choice(program: str, moved_for) -> Tuple[str, int]:
+        """Phase AI: the zone and the day's start (minutes, in that zone) the RTA shows ``program`` in: as asked for,
+        else as last picked for it this session; Egypt from midnight to begin with. ``window=operating`` (the program's
+        operating day, kept in the schedule's time) starts it there; ``moved_for(zone)`` is the zone's shift."""
+        every = dict(session.get("rta") or {})
+        kept = dict(every.get(program) or {})
+        if request.args.get("tz") in dict(ZONES):
+            kept["tz"] = request.args["tz"]
+        zone = pick_zone(kept.get("tz", ""))
+        if START.match(request.args.get("start", "")):
+            kept["start"] = request.args["start"]
+        elif request.args.get("window") == "operating" and program:
+            begins = app.extensions["store"].get_day_start(program)
+            if begins is not None:
+                kept["start"] = _clock_of(begins + moved_for(zone))
+        if program and kept != every.get(program):
+            every[program] = kept
+            session["rta"] = every
+        found = START.match(kept.get("start", "")) or START.match("00:00")
+        return zone, int(found.group(1)) * 60 + int(found.group(2))
+
+    def _clock_of(minute: int) -> str:
+        minute %= 1440
+        return f"{minute // 60:02d}:{minute % 60:02d}"
+
     @app.route("/day")
     @login_required
     def day_page():  # type: ignore[no-untyped-def]
-        """A program's day from the schedule in use: who is on the floor, attendance, actual breaks."""
+        """A program's day from the schedule in use: who is on the floor, attendance, actual breaks. Phase AI: in the
+        zone and from the start picked on the page; every time shown in that zone, and every change kept in the
+        schedule's own time."""
         days = _days()
         programs = _my_programs(days.programs())
         on = _date(request.args.get("date", "")) or datetime.now(EGYPT).date()
         program = clean_program(request.args.get("program", ""))
         if not program and programs:
             program = next((p for p in programs if days.version(p, on)[0]), programs[0])
+        own_zone = _own_zone(program, on)
+        g.zone, start_at = _rta_choice(program, lambda zone: zone_shift(on, own_zone, zone))
+        moved = zone_shift(on, own_zone, g.zone)
+        with shown(moved):
+            return _day_body(days, programs, on, program, own_zone, moved, start_at)
+
+    def _day_body(days, programs: List[str], on: date, program: str, own_zone: str, moved: int,
+                  start_at: int):  # type: ignore[no-untyped-def]
         measure = request.args.get("measure", "")
         measure = measure if measure in MEASURES else "interval"
         tab = request.args.get("view", "")
@@ -2554,12 +2602,35 @@ def create_app(config: Dict[str, Any]) -> Flask:
             page = days.page(program, on, measure) if program else None
         except ValueError as exc:  # said on the page, not a server error
             page, problem = None, str(exc)
-        window = "operating" if request.args.get("window") == "operating" else ""
-        if page:  # Phase AF (D1, D5): another zone, or the operating day: one window stitched from the days
-            own_zone = pick_zone((app.extensions["store"].get_run(page["version"]["run_id"]) or {}).get("tz") or HOME)
-            moved = zone_shift(on, own_zone, g.zone)
-            if moved or window:
-                return _zoned_day(program, on, page, measure, own_zone, moved, window)
+        anchor, sources, start = page, {0: page}, 0
+        if page:  # Phase AI: the 24 hours from the start picked, stitched from the schedule's days
+            step = page["view"]["interval"]
+            start = start_at - moved
+            start -= start % step
+            if start and tab in WINDOW_TABS:
+                for d in range(start // 1440, (start + 1439) // 1440 + 1):
+                    if d:
+                        try:
+                            sources[d] = days.page(program, on + timedelta(days=d), measure)
+                        except ValueError:  # a workbook that cannot be read: its hours stay empty
+                            sources[d] = None
+                found = window_view({d: (x or {}).get("view") for d, x in sources.items()}, start, on)
+                page = dict(page, view=found, target=at_target(found["cells"], page["target"]["target"]))
+        window = bool(page and "start" in page["view"])
+        clock_now = datetime.now(EGYPT)
+        now_at = (clock_now.date() - on).days * 1440 + clock_now.hour * 60 + clock_now.minute  # from on's midnight
+
+        def source(t: int):  # type: ignore[no-untyped-def]
+            """The schedule's day that holds minute ``t`` of the page (from ``on``'s midnight), its page and the
+            minute in it."""
+            d = t // 1440
+            if d not in sources:
+                try:
+                    sources[d] = days.page(program, on + timedelta(days=d), measure)
+                except ValueError:
+                    sources[d] = None
+            return on + timedelta(days=d), sources[d], t - 1440 * d
+
         people = shrink = whole = None
         finder: Dict[str, Any] = {}
         cover = None
@@ -2571,8 +2642,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
                       "with_dept": request.args.get("with_dept", "")}
             if finder["who"]:
                 try:
-                    finder["slots"] = days.meeting_slots(program, on, finder["who"], finder["minutes"], finder["from"],
-                                                         finder["to"], finder["billable"], measure)
+                    finder["slots"] = days.meeting_slots(program, on, finder["who"], finder["minutes"],
+                                                         to_schedule(finder["from"], moved),
+                                                         to_schedule(finder["to"], moved), finder["billable"], measure)
                 except ValueError as exc:
                     finder["error"] = str(exc)
         clock_now = datetime.now(EGYPT)
@@ -2588,7 +2660,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if page and tab == "cover":
             cover = days.offers(page, from_now)
         proposal = days.replan(page, from_now) if page and tab == "replan" else None
-        bulk = _bulk_panel(days, page, program, on) if page and tab == "bulk" else None  # Phase AD (sample 04)
+        bulk = _bulk_panel(days, page, program, on, moved) if page and tab == "bulk" else None  # Phase AD (sample 04)
         rescue = None  # Phase AD (sample 02): interval compliance only; the page says so for the other measure
         if page and tab == "rescue" and measure == "interval":
             try:
@@ -2597,17 +2669,27 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 rescue = {"error": str(exc)}
         dayoff = days.dayoff_plan(page, from_now) if page and tab == "rescue" else None  # Phase AF (F1, F2)
         cover_panel = None
-        if page and tab == "board" and request.args.get("cover", type=int) is not None:
+        cover_at = request.args.get("cover", type=int)
+        if page and tab == "board" and cover_at is not None:
+            held_on, held, at = source(cover_at)
             try:
-                cover_panel = days.cover_offers(page, request.args.get("cover", type=int))
+                if held is None:
+                    raise ValueError("No schedule for that hour.")
+                cover_panel = {**days.cover_offers(held, at), "t": cover_at, "end": cover_at + page["view"]["interval"],
+                               "date": held_on}  # Phase AI: the page's minutes, the day that holds them
             except ValueError as exc:
                 flash(str(exc))
         add_panel = person_panel = None
         add_at = request.args.get("add", type=int)
-        if page and add_at is not None and 0 <= add_at < 1440:  # "+ Add" on an interval (Phase R)
-            step = page["view"]["interval"]
-            t = add_at - add_at % step
-            own = [(l, x) for l in page["view"]["lanes"] for x in l["segments"] if x["offset"] == 0]
+        first_t = page["view"].get("start", 0) if page else 0
+        held = None
+        if page and add_at is not None and first_t <= add_at < first_t + 1440:  # "+ Add" on an interval (Phase R)
+            held_on, held, t = source(add_at)  # Phase AI: the schedule's day that holds the interval
+        if held is not None:
+            step = held["view"]["interval"]
+            row_at = add_at - add_at % step
+            t -= t % step
+            own = [(l, x) for l in held["view"]["lanes"] for x in l["segments"] if x["offset"] == 0]
             # Phase AC: someone marked sick or on leave goes last, so + Add never opens on a person it would refuse
             own.sort(key=lambda p: (p[1]["status"] in ABSENT_STATES,
                                     not (p[1]["start"] < t + step and t < p[1]["end"]), p[1]["start"], p[0]["name"]))
@@ -2623,15 +2705,16 @@ def create_app(config: Dict[str, Any]) -> Flask:
             side = "after" if first and first["start"] < t + step else "before"  # before, as always, unless it ended
             reach = (first["start"] - t if side == "before" else t + step - first["end"]) if first else 0
             minutes = min([m for m in ADD_LENGTHS if reach <= m <= 120] or [120]) if first else None
-            off = days.off_today(program, on)  # for "Day off cancelled" (Phase S)
-            shifts = days.shift_library(program, on)
-            add_panel = {"t": t, "end": t + step, "person": request.args.get("person", ""),
+            off = days.off_today(program, held_on)  # for "Day off cancelled" (Phase S)
+            shifts = days.shift_library(program, held_on)
+            add_panel = {"t": t, "end": t + step, "person": request.args.get("person", ""), "date": held_on,
+                         "row": row_at,
                          "kinds": {k: v for k, v in ADD_KINDS.items() if off or DAY_OFF not in v},
                          "people": [(l["name"], x["label"], l["language"], x["start"], x["end"],
                                      x["status"].lower() if x["status"] in ABSENT_STATES else "") for l, x in own],
                          "kind_of": GROUP_KIND, "default_what": "Overtime" if nobody else "Break",
                          "default_side": side, "default_minutes": minutes,
-                         "cell": next((c for c in page["view"]["cells"] if c["t"] == t), None),
+                         "cell": next((c for c in held["view"]["cells"] if c["t"] == t), None),
                          "off": off, "shifts": shifts,
                          "shift_pick": max((x for x in shifts if x[1] <= t < x[2]), key=lambda x: x[1],
                                            default=shifts[0] if shifts else None)}  # most of it after this time
@@ -2641,23 +2724,28 @@ def create_app(config: Dict[str, Any]) -> Flask:
             lane = next((l for l in page["view"]["lanes"] if l["name"] == who), None)
             if lane is not None:
                 seg = next((x for x in lane["segments"] if x["offset"] == 0), lane["segments"][0])
-                first = seg["start"] if seg["start"] >= from_now else from_now
-                person_panel = {"lane": lane, "seg": seg, "date": on if seg["offset"] == 0 else on - timedelta(days=1),
-                                "add_at": max(0, min(1439, first - first % page["view"]["interval"]))}
+                nowish = now_at if window else from_now
+                first = seg["start"] if seg["start"] >= nowish else nowish
+                person_panel = {"lane": lane, "seg": seg,
+                                "date": seg.get("date") or (on if seg["offset"] == 0 else on - timedelta(days=1)),
+                                "add_at": max(first_t, min(first_t + 1439, first - first % page["view"]["interval"]))}
         if page and tab == "adherence":
             v = page["view"]
             people = sorted((person_day(v, l["name"]) for l in v["lanes"] if any(x["offset"] == 0 for x in l["segments"])),
                             key=lambda r: (r["adherence"] is not None, r["adherence"] or 0, r["name"]))
             whole = team_figures(people)
-            shrink = interval_shrinkage(v, page["inputs"], page["day"])
+            # Phase AI: each interval's planned shrinkage from the day that holds it
+            planned = {t + 1440 * d: x for d, src in sources.items() if src
+                       for t, x in src["inputs"].get("planned_shrinkage", {}).get(src["day"], {}).items()}
+            shrink = interval_shrinkage(v, {"planned_shrinkage": {0: planned}}, 0)
         bar = {"undo": days.undoable(program, on, g.user["id"]) if program and page else None,  # Phase AD
                "send": _send_bar(program, on) if program and page else None,
                "resend": request.args.get("resend", 0, type=int)}
         group = app.extensions["store"].get_notify(program) if program else None  # Phase AB: group posts
         posting = bool(group and group["link"] and group["mode"] in ("on", "preview"))
         post_kinds = [k for k in (group or {}).get("kinds", "").split(",") if k] if posting else []
-        now_of_day = (clock_now.hour * 60 + clock_now.minute if clock_now.date() == on
-                      else (10 ** 6 if on < clock_now.date() else -10 ** 6))
+        now_of_day = now_at if window else (clock_now.hour * 60 + clock_now.minute if clock_now.date() == on
+                                            else (10 ** 6 if on < clock_now.date() else -10 ** 6))
         tips = hover_tips(page["view"], now_of_day) if page else {}  # Phase AF (D2, D3)
         at_a_glance = glance(page["view"], now_of_day) if page else []  # Phase AF (D6)
         now_box = now_panel(page["view"], now_of_day) if page else None  # Phase AG (T2): today only
@@ -2665,7 +2753,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if page:
             kept = app.extensions["store"].get_shrinkage_map(program)
             mapping = read_mapping(kept["mapping"] if kept else None)
-            shrinkage = {**day_shrinkage(page["view"], page["week"], page["day"], mapping, page["inputs"],
+            shrinkage = {**day_shrinkage(anchor["view"], anchor["week"], anchor["day"], mapping, anchor["inputs"],
                                          app.extensions["leave"].approved_on(program, on)),
                          "mapping": mapping, "items": SHRINKAGE_ITEMS,
                          "may_set": bool(g.user["is_admin"] or g.user["is_supervisor"])}
@@ -2681,6 +2769,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                vto_page=_paged(cover["vto"] if cover else [], "vto_page", "vto-h"),
                                log_page=_paged(list(reversed(page["log"])) if page else [], "log_page", "daylog-h"),
                                proposal=proposal, from_now=from_now, cover_panel=cover_panel,
+                               tile_now=now_at if window else (from_now if clock_now.date() == on else None),
                                add_panel=add_panel, person_panel=person_panel, lengths=ADD_LENGTHS, bar=bar,
                                bulk=bulk, shifts=BULK_SHIFTS, bulk_verb=bulk_verb, rescue=rescue, dayoff=dayoff,
                                team_names=sorted({u["display_name"] for u in app.extensions["store"].list_users()
@@ -2693,43 +2782,24 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                measure=measure,
                                measures=MEASURES, tab=tab, statuses=STATUSES, aux=sorted(AUX), hm=hm,
                                rows=board(page["view"], page["target"]["target"]) if page and tab == "board" else None, week_of=week_start(on),
-                               earlier=on - timedelta(days=1), later=on + timedelta(days=1), **shift_view)
+                               earlier=on - timedelta(days=1), later=on + timedelta(days=1), **shift_view,
+                               **_window_context(program, on, own_zone, moved, start_at, page, anchor, start, tab))
 
-    def _zoned_day(program: str, on: date, page: Dict[str, Any], measure: str, own_zone: str, moved: int,
-                   window: str):  # type: ignore[no-untyped-def]
-        """The RTA's day in another zone or as the operating day (Phase AF, D1 and D5), read only: one day-long
-        window stitched from the schedule's days around ``on``. Changes are made on the schedule's own day."""
-        kept = app.extensions["store"].get_day_start(program)
-        workbook_start = page["inputs"].get("day_start")
-        day_start = kept if kept is not None else workbook_start
-        said = ""
-        if window and day_start is None:
-            said = "Set when the operating day starts to see it as one day; until then this is the calendar day."
-            window = ""
-        step = page["view"]["interval"]
-        start = day_start if window else -moved
-        start -= start % step
-        views: Dict[int, Optional[Dict[str, Any]]] = {}
-        missing = []
-        for d in range(start // 1440, (start + 1439) // 1440 + 1):
-            if d == 0:
-                views[0] = page["view"]
-                continue
-            try:
-                other = _days().page(program, on + timedelta(days=d), measure)
-            except ValueError:  # a workbook that cannot be read: its intervals stay empty, as for a missing day
-                other = None
-            views[d] = other["view"] if other else None
-            if other is None:
-                missing.append(f"{on + timedelta(days=d):%a %d %b}")
-        first, at = on + timedelta(days=(start + moved) // 1440), hm(start + moved)
-        heading = (f"Operating day, {first:%A} {at} to {first + timedelta(days=1):%A} {at}" if window
-                   else f"{on:%A %d %b}") + (f" in {zone_label(g.zone, on)}" if moved else "")
-        return render_template("day_zoned.html", program=program, on=on, zone=g.zone, window=window, hm=hm,
-                               day_start=day_start, workbook_start=workbook_start, shift=moved, heading=heading,
-                               own_zone=own_zone, own_name=dict(ZONES)[own_zone], own_label=zone_label(own_zone, on),
-                               missing=", ".join(missing), said=said, view=stitch(views, start, moved),
-                               may_set=bool(g.user["is_admin"] or g.user["is_supervisor"]))
+    def _window_context(program: str, on: date, own_zone: str, moved: int, start_at: int, page, anchor, start: int,
+                        tab: str) -> Dict[str, Any]:
+        """Phase AI: what the page says and offers about its zone and start: the starts to pick from (each hour, and
+        the program's operating day in the zone shown), where the page's 24 hours begin (``vx``, minutes from the
+        day's midnight), the schedule's own zone, and the shift that turns the times shown into the schedule's."""
+        begins = app.extensions["store"].get_day_start(program) if program else None
+        op = _clock_of(begins + moved) if begins is not None else ""
+        hours = sorted({_clock_of(m) for m in range(0, 1440, 60)} | ({op} if op else set()))
+        starts = [(h, h + (", the operating day" if h == op else ", the calendar day" if h == "00:00" else ""))
+                  for h in hours]
+        vx = page["view"].get("start", 0) if page else 0
+        return {"starts": starts, "start_at": _clock_of(start_at), "vx": vx, "moved": moved, "own_zone": own_zone,
+                "own_name": dict(ZONES)[own_zone].split(" (")[0], "zone_name": dict(ZONES)[g.zone].split(" (")[0], "anchor_view": anchor["view"] if anchor else None,
+                "on_anchor_day": bool(start) and tab not in WINDOW_TABS,
+                "may_set_start": bool(g.user["is_admin"] or g.user["is_supervisor"])}
 
     GOTO_PAGES = (  # (label, endpoint, what it needs: "" anyone, "unit" a program picked, "manager", "admin")
         ("Home", "home", ""), ("RTA", "day_page", "unit"), ("Overview", "overview_page", "unit"),
@@ -2790,14 +2860,15 @@ def create_app(config: Dict[str, Any]) -> Flask:
             abort(400)
         if not _access().can_open(program):
             abort(403)
-        m = re.match(r"^([01]\d|2[0-3]):([0-5]\d)$", request.form.get("start", "").strip())
+        typed = to_schedule(request.form.get("start", "").strip(), _shift_of(program, on))  # Phase AI: as shown
+        m = re.match(r"^([01]\d|2[0-3]):([0-5]\d)$", typed)
         if not m or int(m.group(2)) % 15:
             flash("Give the start as a time on the quarter hour, like 16:00.")
         else:
             start = int(m.group(1)) * 60 + int(m.group(2))
             app.extensions["store"].set_day_start(program, start, g.user["id"])
             _record("operating_day_set", program=program, subject=hm(start), detail="operating day start")
-            flash(f"The operating day starts at {hm(start)}.")
+            _say(f"The operating day starts at {hm(start)}.", program, on)
         return redirect(url_for("day_page", program=program, date=on.isoformat(), window="operating"), code=303)
 
     ADD_LENGTHS = (5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240)  # minutes offered by "+ Add"
@@ -2805,6 +2876,35 @@ def create_app(config: Dict[str, Any]) -> Flask:
     GROUP_KIND = {**{k: "added_break" for k in ("Break", "Lunch")}, **{k: "aux" for k in AUX},
                   **{k: "private" for k in ABSENT_STATES}, **{k: "late" for k in ("Late", "Left early")},
                   "Overtime": "overtime", "VTO": "overtime", DAY_OFF: "called_in"}
+
+    def _shift_of(program: str, on: Optional[date]) -> int:
+        """Phase AI: minutes the RTA form showed its times ahead of the schedule's own (the form's ``tz``); 0 without
+        one, as before."""
+        zone = request.values.get("tz", "")
+        if not program or on is None or zone not in dict(ZONES):
+            return 0
+        return zone_shift(on, _own_zone(program, on), zone)
+
+    def _typed(key: str, program: str, on: Optional[date]) -> str:
+        """A time typed or picked on the RTA, in the schedule's own time."""
+        return to_schedule(request.form.get(key, "").strip(), _shift_of(program, on))
+
+    def _say(text: str, program: str, on: Optional[date]) -> None:
+        """Flash ``text`` (made in the schedule's time) with its times as the RTA form showed them."""
+        flash(moved_text(text, _shift_of(program, on)))
+
+    def _shown_data(value: Any, minutes: int) -> Any:
+        """A JSON answer with every time of day in it as the RTA shows them."""
+        if isinstance(value, str):
+            return moved_text(value, minutes)
+        if isinstance(value, dict):
+            return {k: _shown_data(v, minutes) for k, v in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [_shown_data(v, minutes) for v in value]
+        return value
+
+    def _refused(exc: Exception, program: str, on: Optional[date]):  # type: ignore[no-untyped-def]
+        return jsonify(error=moved_text(str(exc), _shift_of(program, on))), 400
 
     def _left_out_asked() -> bool:
         """The RTA unticked "Post to the group" for this one change (Phase AB): the form had the tick, and it is off."""
@@ -2815,6 +2915,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if on is None:
             raise ValueError("Pick a day.")
         return clean_program(request.form.get("program", "")), on, request.form.get("associate", "").strip()
+
+    def _posted_day() -> Tuple[str, Optional[date]]:
+        """The program and the day a form named (for its answer), whatever else it got wrong."""
+        return clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
 
     def _break_idx() -> int:
         try:
@@ -2836,15 +2940,16 @@ def create_app(config: Dict[str, Any]) -> Flask:
         try:
             if action == "swap":
                 letter = request.form.get("channel", "")
-                days.channel_move(program, on, name, request.form.get("from", ""), request.form.get("to", ""), letter,
+                days.channel_move(program, on, name, _typed("from", program, on), _typed("to", program, on), letter,
                                   g.user["id"])
                 flash(f"{name}: {CHANNEL_NAMES.get(letter, letter)} from {request.form.get('from')} to "
                       f"{request.form.get('to')}.")
             elif action == "activity":
-                days.move_activity(program, on, request.form.get("id", -1, type=int), at, g.user["id"])
+                days.move_activity(program, on, request.form.get("id", -1, type=int), _typed("at", program, on),
+                                   g.user["id"])
                 flash(f"{name}: moved to {at}.")
             elif action == "break":
-                days.move_break(program, on, name, _break_idx(), at, g.user["id"])
+                days.move_break(program, on, name, _break_idx(), _typed("at", program, on), g.user["id"])
                 flash(f"{name}: break moved to {at}.")
             elif action == "cancel":
                 days.cancel_channel_move(program, on, request.form.get("id", -1, type=int), g.user["id"])
@@ -2852,7 +2957,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             else:
                 raise ValueError("Pick what to do.")
         except ValueError as exc:  # BreakRefused is a ValueError
-            flash(str(exc))
+            _say(str(exc), program, on)
         return _back_to_day(program, on, "channels")
 
     @app.route("/day/attendance", methods=["POST"])
@@ -2863,11 +2968,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
             status = request.form.get("status", "")
             with_dept, with_whom, why = _aux_answers(status, program)
             _days().set_status(program, on, name, status, g.user["id"],
-                               start=request.form.get("from", ""), end=request.form.get("to", ""),
+                               start=_typed("from", program, on), end=_typed("to", program, on),
                                billable=request.form.get("billable") == "1", with_whom=with_whom, why=why,
                                with_dept=with_dept)
         except ValueError as exc:
-            return jsonify(error=str(exc)), 400
+            return _refused(exc, *_posted_day())
         return jsonify(ok=True)
 
     @app.route("/day/absences", methods=["POST"])
@@ -2905,11 +3010,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
     def day_break():  # type: ignore[no-untyped-def]
         try:
             program, on, name = _day_form()
-            at = request.form.get("at", "").strip() or None
+            at = _typed("at", program, on) or None
             with leave_out(_left_out_asked()):
                 _days().move_break(program, on, name, _break_idx(), at, g.user["id"])
         except ValueError as exc:  # BreakRefused is a ValueError
-            return jsonify(error=str(exc)), 400
+            return _refused(exc, *_posted_day())
         return jsonify(ok=True)
 
     def _bulk_form() -> Dict[str, Any]:
@@ -2917,7 +3022,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return {"names": f.getlist("who"), "which": f.get("which", ""), "action": f.get("act", ""),
                 "amount": f.get("amount", 0, type=int), "at": f.get("at", ""), "why": f.get("why", "")}
 
-    def _bulk_panel(days, page: Dict[str, Any], program: str, on: date) -> Dict[str, Any]:
+    def _bulk_panel(days, page: Dict[str, Any], program: str, on: date, moved: int = 0) -> Dict[str, Any]:
         """Change several breaks (Phase AD, sample 04): today's people by shift start with their breaks, the form as
         filled, and the effect once asked for (nothing kept)."""
         now = _minute_now(on)
@@ -2939,7 +3044,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if request.args.get("show") and form["names"]:
             try:
                 panel["preview"] = days.bulk_preview(program, on, form["names"], panel["which"], panel["act"],
-                                                     panel["amount"], form["at"], form["why"], now)
+                                                     panel["amount"], to_schedule(form["at"], moved), form["why"], now)
             except ValueError as exc:
                 panel["error"] = str(exc)
         return panel
@@ -2954,11 +3059,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
             if on is None:
                 raise ValueError("Pick a day.")
             done = _days().apply_bulk(program, on, form["names"], form["which"], form["action"], g.user["id"],
-                                      amount=form["amount"], at=form["at"], why=form["why"], now=_minute_now(on))
+                                      amount=form["amount"], at=_typed("at", program, on), why=form["why"],
+                                      now=_minute_now(on))
             said = bulk_verb(form["action"], done)
-            flash(said[0].upper() + said[1:] + ".")
+            _say(said[0].upper() + said[1:] + ".", program, on)
         except ValueError as exc:
-            flash(f"Stopped: {exc} Anything changed before it was kept, and Undo takes it all back.")
+            _say(f"Stopped: {exc} Anything changed before it was kept, and Undo takes it all back.", program, on)
         return _back_to_day(program, on, "")
 
     def _send_bar(program: str, on: date) -> Optional[Dict[str, Any]]:
@@ -2999,9 +3105,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
         try:
             if on is None:
                 raise ValueError("Pick a day.")
-            flash(_days().undo_last(program, on, g.user["id"]))
+            _say(_days().undo_last(program, on, g.user["id"]), program, on)
         except ValueError as exc:
-            flash(str(exc))
+            _say(str(exc), program, on)
         return _back_to_day(program, on, request.form.get("view", ""))
 
     @app.route("/day/break/cancel", methods=["POST"])
@@ -3014,7 +3120,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 _days().cancel_break(program, on, name, _break_idx(), request.form.get("why", ""), g.user["id"],
                                      now=_minute_now(on))
         except ValueError as exc:  # BreakRefused is a ValueError
-            return jsonify(error=str(exc)), 400
+            return _refused(exc, *_posted_day())
         return jsonify(ok=True)
 
     def _minute_now(on: Optional[date]) -> Optional[int]:
@@ -3022,10 +3128,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
         clock_now = datetime.now(EGYPT)
         return clock_now.hour * 60 + clock_now.minute if clock_now.date() == on else None
 
+    MINUTE = re.compile(r"^-?\d{1,4}$")  # a minute of the page's 24 hours (Phase AI: before 0 too)
+
     def _back_to_day(program: str, on: Optional[date], view: str, cover: str = ""):  # type: ignore[no-untyped-def]
+        on = _date(request.form.get("anchor", "")) or on  # Phase AI: the day the page showed, not the shift's own
         args = {"program": program, "date": on.isoformat() if on else None,
                 "view": view if view in ("board", "adherence", "meeting", "cover", "replan", "channels", "bulk", "rescue") else None,
-                "cover": cover if cover.isdigit() and view == "board" else None}
+                "cover": cover if MINUTE.match(cover) and view == "board" else None}
         if args["cover"]:
             args["_anchor"] = f"row-{args['cover']}"
         return redirect(url_for("day_page", **{k: v for k, v in args.items() if v}), code=303)
@@ -3051,7 +3160,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                     act.label = f"Fix breaks moved {n} break{'s' if n != 1 else ''}"
             flash(f"Moved {done} break{'s' if done != 1 else ''}.")
         except ValueError as exc:
-            flash(f"Stopped: {exc} The moves before it were kept; open the autopilot again for a fresh proposal.")
+            _say(f"Stopped: {exc} The moves before it were kept; open the autopilot again for a fresh proposal.", program,
+                 on)
         return _back_to_day(program, on, "")
 
     @app.route("/day/rescue/apply", methods=["POST"])
@@ -3074,7 +3184,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             done = _days().apply_rescue(program, on, moves, g.user["id"], now=_minute_now(on))
             flash(f"Rescue the day moved {done} break{'s' if done != 1 else ''}.")
         except ValueError as exc:
-            flash(f"Stopped: {exc} Anything changed before it was kept, and Undo takes it all back.")
+            _say(f"Stopped: {exc} Anything changed before it was kept, and Undo takes it all back.", program, on)
         return _back_to_day(program, on, "")
 
     @app.route("/day/handover")
@@ -3144,6 +3254,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             start, _, end = request.form.get("span", "").partition("|")  # a picked length ("21:00|21:45")
             if not request.form.get("span"):
                 start, end = request.form.get("from", ""), request.form.get("to", "")
+            start, end = (to_schedule(x.strip(), _shift_of(program, on)) for x in (start, end))
             with_dept, with_whom, why = _aux_answers(kind, program)
             _days().add_activity(program, on, name, kind, start, end,
                                  g.user["id"], billable=request.form.get("billable") == "1",
@@ -3152,7 +3263,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             if kind in ("Overtime", "Called in") and _days().next_week_unknown(program, on):
                 flash(tomorrow_unchecked(on))
         except ValueError as exc:
-            flash(str(exc))
+            _say(str(exc), program, on)
         return _back_to_day(program, on, request.form.get("view", ""), request.form.get("cover", ""))
 
     @app.route("/day/activity/cancel", methods=["POST"])
@@ -3165,7 +3276,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             _days().cancel_activity(program, on, request.form.get("id", 0, type=int), g.user["id"])
             flash("Cancelled.")
         except ValueError as exc:
-            flash(str(exc))
+            _say(str(exc), program, on)
         return _back_to_day(program, on, request.form.get("view", ""))
 
     def _with_lists(program: str) -> list:
@@ -3185,13 +3296,14 @@ def create_app(config: Dict[str, Any]) -> Flask:
     def _add_fields():  # type: ignore[no-untyped-def]
         program, on, name = _day_form()
         minutes = request.form.get("minutes", "0")
-        return program, on, name, request.form.get("what", ""), request.form.get("from", "").strip(), \
+        return program, on, name, request.form.get("what", ""), _typed("from", program, on), \
             int(minutes) if minutes.isdigit() else -1, request.form.get("billable") == "1"
 
     def _to_row(program: str, on: Optional[date], view: str, at: str):  # type: ignore[no-untyped-def]
+        on = _date(request.form.get("anchor", "")) or on  # Phase AI: the day the page showed
         args = {"program": program, "date": on.isoformat() if on else None,
                 "view": view if view in ("board", "cover") else None}
-        if at.isdigit():
+        if MINUTE.match(at):
             args["_anchor"] = f"row-{at}"
         return redirect(url_for("day_page", **{k: v for k, v in args.items() if v}), code=303)
 
@@ -3205,14 +3317,14 @@ def create_app(config: Dict[str, Any]) -> Flask:
             with_dept, with_whom, why = _aux_answers(what, program)
             with leave_out(_left_out_asked()):
                 found = _days().add_item(program, on, name, what, start, minutes, g.user["id"], billable=billable,
-                                         note=request.form.get("note", ""), end=request.form.get("to", "").strip(),
+                                         note=request.form.get("note", ""), end=_typed("to", program, on),
                                          with_whom=with_whom, why=why, with_dept=with_dept,
                                          side=request.form.get("side", ""))
-            flash(f"Recorded: {name}, {found['text']}.")
+            _say(f"Recorded: {name}, {found['text']}.", program, on)
             if what in ("Overtime", DAY_OFF) and _days().next_week_unknown(program, on):
                 flash(tomorrow_unchecked(on))
         except ValueError as exc:
-            flash(str(exc))
+            _say(str(exc), program, on)
         return _to_row(program, on, request.form.get("view", "board"), request.form.get("at", ""))
 
     @app.route("/day/add-preview", methods=["POST"])
@@ -3223,11 +3335,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
             program, on, name, what, start, minutes, billable = _add_fields()
             found = _days().preview_item(program, on, name, what, start, minutes, billable,
                                          measure if measure in MEASURES else "interval",
-                                         end=request.form.get("to", "").strip(),  # who and why are asked on Add
+                                         end=_typed("to", program, on),  # who and why are asked on Add
                                          side=request.form.get("side", ""))
         except ValueError as exc:
-            return jsonify(error=str(exc)), 400
-        return jsonify(found)
+            return _refused(exc, *_posted_day())
+        return jsonify(_shown_data(found, _shift_of(program, on)))
 
     @app.route("/day/undo", methods=["POST"])
     @login_required
@@ -3245,7 +3357,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             else:
                 abort(400)
         except ValueError as exc:
-            flash(str(exc))
+            _say(str(exc), program, on)
         return _to_row(program, on, request.form.get("view", ""), request.form.get("at", ""))
 
     @app.route("/day/book", methods=["POST"])
@@ -3262,9 +3374,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
             _days().book_session(program, on, who, start, minutes, kind, g.user["id"],
                                  billable=request.form.get("billable") == "1", with_whom=with_whom, why=why,
                                  with_dept=with_dept)
-            flash(f"Booked: {kind.lower()} {hm(start)} to {hm(start + minutes)} for {', '.join(who)}.")
+            _say(f"Booked: {kind.lower()} {hm(start)} to {hm(start + minutes)} for {', '.join(who)}.", program, on)
         except ValueError as exc:
-            flash(str(exc))
+            _say(str(exc), program, on)
         return _back_to_day(program, on, "meeting")
 
     @app.route("/day/channel-preview", methods=["POST"])
@@ -3273,11 +3385,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
         """Phase AF (C3): what a channel change would cause, before it is kept (JSON)."""
         try:
             program, on, name = _day_form()
-            found = _days().channel_preview(program, on, name, request.form.get("from", ""),
-                                            request.form.get("to", ""), request.form.get("channel", ""))
+            found = _days().channel_preview(program, on, name, _typed("from", program, on),
+                                            _typed("to", program, on), request.form.get("channel", ""))
         except ValueError as exc:
-            return jsonify(error=str(exc)), 400
-        return jsonify(found)
+            return _refused(exc, *_posted_day())
+        return jsonify(_shown_data(found, _shift_of(program, on)))
 
     @app.route("/day/break-advice", methods=["POST"])
     @login_required
@@ -3285,11 +3397,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
         measure = request.form.get("measure", "")
         try:
             program, on, name = _day_form()
-            found = _days().break_advice(program, on, name, _break_idx(), request.form.get("at", ""),
+            found = _days().break_advice(program, on, name, _break_idx(), _typed("at", program, on),
                                          measure if measure in MEASURES else "interval")
         except ValueError as exc:
-            return jsonify(error=str(exc)), 400
-        return jsonify(found)
+            return _refused(exc, *_posted_day())
+        return jsonify(_shown_data(found, _shift_of(program, on)))
 
     # ------------------------------------------------------------- exports (Phase O)
     def _export_args() -> Dict[str, Any]:

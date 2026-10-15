@@ -127,48 +127,56 @@ class TheWeekGrid(unittest.TestCase):
 
 
 class TheStitchedDay(unittest.TestCase):
-    """One day-long window stitched from the schedule's days: the day in another zone, or the operating day."""
+    """One day-long window stitched from the schedule's days: the day in another zone, or the operating day.
+    Re-pinned in Phase AI: the owner asked for no separate read-only page (2026-10-15: "i dont need operating day to be
+    something different than calendar day"); the window is now the RTA's own (``window_view``), in the day's minutes,
+    with every time shown in the zone picked (``shown``)."""
 
     @staticmethod
     def day(need, lanes=()):
-        return {"interval": 60, "lanes": list(lanes),
-                "cells": [{"t": t, "required": need, "now": need, "need": need, "pm": 0.0, "cls": "ok"}
-                          for t in range(0, 1440, 60)]}
+        return {"interval": 60, "measure": "interval", "lanes": list(lanes), "languages": [], "channels": None,
+                "cells": [{"t": t, "required": need, "plan": need, "now": need, "need": need, "pm": 0.0, "plan_pm": 0.0,
+                           "cls": "ok", "slots": [need] * 12, "low": need} for t in range(0, 1440, 60)]}
 
     def test_cells_come_from_both_days(self):
-        from webapp.day import stitch
-        found = stitch({0: self.day(1.0), 1: self.day(2.0)}, 16 * 60, 0)
-        self.assertEqual(found["cells"][0]["label"], "16:00")
+        from webapp.day import _hm, window_view
+        found = window_view({0: self.day(1.0), 1: self.day(2.0)}, 16 * 60, WED)
+        self.assertEqual(_hm(found["cells"][0]["t"]), "16:00")
         self.assertEqual(found["cells"][0]["required"], 1.0)
-        self.assertEqual(found["cells"][8]["label"], "00:00")
+        self.assertEqual(_hm(found["cells"][8]["t"]), "00:00")
         self.assertEqual(found["cells"][8]["required"], 2.0)  # the next day's midnight
 
     def test_new_york_labels(self):
-        from webapp.day import stitch
-        found = stitch({0: self.day(1.0), 1: self.day(2.0)}, 7 * 60, -420)  # New York's day from Cairo's 07:00
-        self.assertEqual([c["label"] for c in found["cells"][:2]], ["00:00", "01:00"])
+        from webapp.clock import shown
+        from webapp.day import _hm, window_view
+        found = window_view({0: self.day(1.0), 1: self.day(2.0)}, 7 * 60, WED)  # New York's day from Cairo's 07:00
+        with shown(-420):
+            self.assertEqual([_hm(c["t"]) for c in found["cells"][:2]], ["00:00", "01:00"])
         self.assertEqual(found["cells"][16]["required"], 1.0)  # Cairo's 23:00
         self.assertEqual(found["cells"][17]["required"], 2.0)  # Cairo's next 00:00
 
     def test_shifts_that_cross_the_window(self):
-        from webapp.day import stitch
-        evening = {"name": "Associate 07", "language": "English", "segments": [
+        from webapp.day import window_view
+        evening = {"name": "Associate 07", "language": "English", "slot": "", "segments": [
             {"offset": 0, "start": 22 * 60, "end": 31 * 60, "status": "Present", "label": "22:00 - 07:00",
-             "breaks": [{"start": 26 * 60, "minutes": 30, "kind": "Lunch"}]}]}
-        found = stitch({0: self.day(1.0, [evening]), 1: self.day(1.0)}, 16 * 60, 0)
-        lane = found["lanes"][0]
-        self.assertEqual((lane["start"], lane["end"]), (6 * 60, 15 * 60))
-        self.assertEqual(lane["label"], "22:00 to 07:00")
-        self.assertEqual(lane["breaks"][0]["start"], 10 * 60)
+             "away": (0, 0), "cancelled": [], "activities": [], "called_in": False, "billable": False,
+             "breaks": [{"idx": 0, "start": 26 * 60, "planned_start": 26 * 60, "minutes": 30, "kind": "Lunch",
+                         "moved": False}]}]}
+        found = window_view({0: self.day(1.0, [evening]), 1: self.day(1.0)}, 16 * 60, WED)
+        seg = found["lanes"][0]["segments"][0]
+        self.assertEqual((seg["start"], seg["end"]), (22 * 60, 31 * 60))  # the day's minutes, drawn from 16:00
+        self.assertEqual(seg["label"], "22:00 - 07:00")
+        self.assertEqual(seg["breaks"][0]["start"], 26 * 60)
 
     def test_a_missing_day_shows_no_figures(self):
-        from webapp.day import stitch
-        found = stitch({0: self.day(1.0), 1: None}, 16 * 60, 0)
-        self.assertIsNone(found["cells"][10]["required"])
+        from webapp.day import window_view
+        found = window_view({0: self.day(1.0), 1: None}, 16 * 60, WED)
+        self.assertEqual((found["cells"][10]["required"], found["cells"][10]["pm"]), (0, None))
 
 
 class TheStitchedRows(unittest.TestCase):
-    """Phase AG (T8, left from Phase AF): the day in another zone has the language and channel rows too."""
+    """Phase AG (T8, left from Phase AF): the day in another zone has the language and channel rows too. Re-pinned in
+    Phase AI with the window on the RTA itself (see TheStitchedDay)."""
 
     @staticmethod
     def day(gap_at, channel_cls):
@@ -180,25 +188,25 @@ class TheStitchedRows(unittest.TestCase):
         return view
 
     def test_languages_from_both_days(self):
-        from webapp.day import stitch
-        found = stitch({0: self.day(17 * 60, "ok"), 1: self.day(1 * 60, "bad")}, 16 * 60, 0)
+        from webapp.day import _hm, window_view
+        found = window_view({0: self.day(17 * 60, "ok"), 1: self.day(1 * 60, "bad")}, 16 * 60, WED)
         french = found["languages"][0]
         self.assertEqual(french["name"], "French")
         self.assertEqual([c["cls"] for c in french["cells"][:3]], ["lok", "bad", "lok"])  # 16:00, 17:00, 18:00
         self.assertEqual(french["cells"][9]["cls"], "bad")  # the next day's 01:00
-        self.assertEqual(french["cells"][9]["label"], "01:00")
+        self.assertEqual(_hm(french["cells"][9]["t"]), "01:00")
 
     def test_channels_from_both_days(self):
-        from webapp.day import stitch
-        found = stitch({0: self.day(0, "ok"), 1: self.day(0, "bad")}, 16 * 60, 0)
-        chat = found["channels"][0]
+        from webapp.day import window_view
+        found = window_view({0: self.day(0, "ok"), 1: self.day(0, "bad")}, 16 * 60, WED)
+        chat = found["channels"]["rows"][0]
         self.assertEqual((chat["name"], chat["letter"]), ("Chat", "C"))
         self.assertEqual([c["cls"] for c in chat["cells"][7:9]], ["ok", "bad"])  # 23:00 today, 00:00 the next day
 
     def test_a_day_without_them(self):
-        from webapp.day import stitch
-        found = stitch({0: TheStitchedDay.day(1.0), 1: None}, 16 * 60, 0)
-        self.assertEqual((found["languages"], found["channels"]), ([], []))
+        from webapp.day import window_view
+        found = window_view({0: TheStitchedDay.day(1.0), 1: None}, 16 * 60, WED)
+        self.assertEqual((found["languages"], found["channels"]), ([], None))
 
 
 class OnThePages(unittest.TestCase):
@@ -223,27 +231,33 @@ class OnThePages(unittest.TestCase):
         args = "".join(f"&{k}={v}" for k, v in extra.items())
         return f"/day?program={self.key.replace(' ', '+')}&date={WED.isoformat()}{args}"
 
+    # Re-pinned in Phase AI: the owner asked for one calendar day with every tab and change (2026-10-15: "i dont need
+    # operating day to be something different than calendar day"), so the zone and the start are options on the RTA
+    # itself, kept for the program, and there is no read-only page any more.
     def test_the_rta_offers_the_zones_and_egypt_is_the_usual(self):
-        page = self.get(self.day_url())
+        from webapp.tests.test_runs import sign_in
+        fresh = sign_in(self.app, "omar", "Owner-pass-123")  # a new session: nothing picked yet
+        import html
+        page = html.unescape(fresh.get(self.day_url()).get_data(as_text=True))
         self.assertIn('<select name="tz"', page)
         self.assertIn('<option value="Africa/Cairo" selected>', page)
-        self.assertNotIn('aria-labelledby="zd-h"', page)  # the usual page, every tab and change as before
+        self.assertIn('<option value="00:00" selected>00:00, the calendar day</option>', page)
+        self.assertIn('viewBox="0 0 1440 30"', page)  # the usual page, every tab and change as before
 
     def test_the_rta_in_new_york(self):
-        page = self.get(self.day_url(tz="America/New_York"))
-        self.assertIn('aria-labelledby="zd-h"', page)
-        self.assertIn("Wednesday 14 Oct in New York (US Eastern), UTC-4", page)
+        page = self.get(self.day_url(tz="America/New_York", start="00:00"))
+        self.assertIn("The 24 hours from 00:00 Wed 14 Oct, in New York time.", page)
         self.assertIn('<option value="America/New_York" selected>', page)
-        self.assertIn("Read only", page)
-        self.assertRegex(page, r'<th scope="row">00:00</th>')
+        self.assertNotIn("Read only", page)
+        self.assertIn('viewBox="420 0 1440 30"', page)  # New York's midnight is Cairo's 07:00
+        self.assertRegex(page, r'<div class="tl-ticks"><span>00:00</span>')
 
     def test_new_york_has_the_language_and_channel_rows(self):
-        # Phase AG (T8): every RTA view in another zone, read only: the languages and channels too
-        page = self.get(self.day_url(tz="America/New_York"))
-        rows = page[page.index("<h3>Languages and channels</h3>"):]
-        self.assertRegex(rows, r'<th scope="row">English</th>')
-        self.assertRegex(rows, r'<th scope="row">Phone</th>')
-        self.assertRegex(rows, r'<td class="zd-c (lok|bad|ok|none|warn)" title="00:00')
+        # Phase AG (T8): every RTA view in another zone: the languages and channels too
+        page = self.get(self.day_url(tz="America/New_York", start="00:00"))
+        self.assertRegex(page, r'<span class="tl-lbl">English on the floor</span>')
+        self.assertRegex(page, r'<span class="tl-lbl">Phone</span>')
+        self.assertRegex(page, r'title="Phone, 00:00: ')
 
     def test_the_operating_day(self):
         got = self.planner.post("/day/operating-day", data={"csrf_token": self.token(self.planner),
@@ -253,9 +267,10 @@ class OnThePages(unittest.TestCase):
         got = self.admin.post("/day/operating-day", data={"csrf_token": self.token(self.admin), "program": self.key,
                                                           "date": WED.isoformat(), "start": "16:00"})
         self.assertEqual(got.status_code, 303)
-        page = self.get(self.day_url(window="operating"))
-        self.assertIn("Operating day, Wednesday 16:00 to Thursday 16:00", page)
-        self.assertRegex(page, r'<tr[^>]*><th scope="row">16:00</th>')
+        page = self.get(self.day_url(window="operating", tz="Africa/Cairo"))
+        self.assertIn("The 24 hours from 16:00 Wed 14 Oct.", page)
+        self.assertIn('<option value="16:00" selected>16:00, the operating day</option>', page)
+        self.assertRegex(page, r'<div class="tl-ticks"><span>16:00</span>')
 
     def test_the_week_page_in_new_york(self):
         page = self.get(f"/week?program={self.key.replace(' ', '+')}&week=2026-10-11&tz=America/New_York")

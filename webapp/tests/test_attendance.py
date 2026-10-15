@@ -149,10 +149,11 @@ class TheAttendance(unittest.TestCase):
         # re-pinned in Phase AJ: the owner raised the overtime cap from 2 to 4 hours (2026-10-15)
         with self.assertRaises(ValueError):  # at most 4 hours
             self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Overtime", "21:00", "01:05", self.sara)
-        with self.assertRaises(ValueError):  # Tuesday 14:00 - 23:00: in at 09:00 leaves 10 hours' rest
-            self.days.add_activity("AE/AR B2B", WED, "Associate 013", "Overtime", "09:00", "11:00", self.sara)
-        with self.assertRaises(ValueError):  # Thursday 05:00 - 14:00: staying to 19:00 leaves 10 hours' rest
-            self.days.add_activity("AE/AR B2B", WED, "Associate 008", "Overtime", "17:00", "19:00", self.sara)
+        # re-pinned in Phase AJ: overtime breaking the rest gap is kept with a warning (owner, 2026-10-15)
+        for name, start, end in (("Associate 013", "09:00", "11:00"),  # Tuesday 14:00 - 23:00: 10 hours' rest
+                                 ("Associate 008", "17:00", "19:00")):  # Thursday 05:00 - 14:00: 10 hours' rest
+            self.assertIn("would rest 10 hours", self.days.add_activity("AE/AR B2B", WED, name, "Overtime", start, end,
+                                                                        self.sara, dry_run=True)["warning"])
         with self.assertRaises(ValueError):
             self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Lunch party", "15:00", "16:00", self.sara)
         self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Overtime", "21:00", "22:00", self.sara)
@@ -201,9 +202,11 @@ class TheAttendance(unittest.TestCase):
             self.days.add_activity("AE/AR B2B", SUN, "Associate 001", "Called in", "09:00", "18:00", self.sara)
         self.assertIn("would rest 8 hours after the previous shift", str(refused.exception))
         self.days.add_activity("AE/AR B2B", SUN, "Associate 001", "Called in", "13:00", "22:00", self.sara)
-        with self.assertRaises(ValueError) as refused:  # Associate 010: Saturday 18:00 - 03:00, Sunday from 16:00
-            self.days.add_activity("AE/AR B2B", SUN, "Associate 010", "Overtime", "14:00", "16:00", self.sara)
-        self.assertIn("would rest 11 hours after the previous shift", str(refused.exception))
+        # Re-pinned in Phase AJ: the owner asked that overtime breaking the rest gap is kept with a warning
+        # Associate 010: Saturday 18:00 - 03:00, Sunday from 16:00
+        warned = self.days.add_activity("AE/AR B2B", SUN, "Associate 010", "Overtime", "14:00", "16:00", self.sara,
+                                        dry_run=True)["warning"]
+        self.assertIn("would rest 11 hours after the previous shift", warned)
         # a call-in is a shift for the days either side: Associate 002 is off Wednesday and Thursday
         self.days.add_activity("AE/AR B2B", WED, "Associate 002", "Called in", "15:00", "00:00", self.sara)
         with self.assertRaises(ValueError) as refused:
@@ -217,9 +220,9 @@ class TheAttendance(unittest.TestCase):
         self.days.add_activity("AE/AR B2B", TUE, "Associate 003", "Called in", "08:00", "17:00", self.sara)
         # the other way: Associate 018 (Monday 09:00 - 18:00, off Tuesday) called in at 06:00 has exactly 12 hours
         self.days.add_activity("AE/AR B2B", TUE, "Associate 018", "Called in", "06:00", "15:00", self.sara)
-        with self.assertRaises(ValueError) as refused:
-            self.days.add_activity("AE/AR B2B", MON, "Associate 018", "Overtime", "18:00", "19:00", self.sara)
-        self.assertIn("would rest 11 hours before the next shift", str(refused.exception))
+        warned = self.days.add_activity("AE/AR B2B", MON, "Associate 018", "Overtime", "18:00", "19:00", self.sara,
+                                        dry_run=True)["warning"]  # re-pinned in Phase AJ: kept with a warning
+        self.assertIn("would rest 11 hours before the next shift", warned)
 
     def test_board_offers_keep_the_rest_gap_across_the_week(self):
         page = self.days.page("AE/AR B2B", SUN)

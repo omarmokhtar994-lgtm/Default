@@ -447,18 +447,24 @@ class DayBook:
         prev, nxt = self._spans(program, before, saturday), self._spans(program, on + timedelta(days=1))
         return {"prev": prev or {}, "next": nxt or {}, "next_known": nxt is not None}
 
-    def _rest(self, program: str, on: date, row: Dict[str, Any], name: str, lo: int, hi: int, rest: int) -> None:
-        """Refuse work from ``lo`` to ``hi`` on ``on`` that leaves less than ``rest`` minutes off either side."""
+    def _rest(self, program: str, on: date, row: Dict[str, Any], name: str, lo: int, hi: int, rest: int,
+              refuse: bool = True) -> str:
+        """Refuse work from ``lo`` to ``hi`` on ``on`` that leaves less than ``rest`` minutes off either side; with
+        ``refuse`` False, say why instead (Phase AJ: overtime is kept with a warning). "" when the rest is kept."""
         if not rest:
-            return
+            return ""
         near = self.neighbours(program, on, row)
         prv, nxt = near["prev"].get(name), near["next"].get(name)
+        said = ""
         if prv and lo + 1440 - prv[1] < rest:
-            raise ValueError(f"{name} would rest {(lo + 1440 - prv[1]) / 60:g} hours after the previous shift; "
-                             f"the rule is {rest / 60:g}.")
-        if nxt and nxt[0] + 1440 - hi < rest:
-            raise ValueError(f"{name} would rest {(nxt[0] + 1440 - hi) / 60:g} hours before the next shift; "
-                             f"the rule is {rest / 60:g}.")
+            said = (f"{name} would rest {(lo + 1440 - prv[1]) / 60:g} hours after the previous shift; "
+                    f"the rule is {rest / 60:g}.")
+        elif nxt and nxt[0] + 1440 - hi < rest:
+            said = (f"{name} would rest {(nxt[0] + 1440 - hi) / 60:g} hours before the next shift; "
+                    f"the rule is {rest / 60:g}.")
+        if said and refuse:
+            raise ValueError(said)
+        return said
 
     def _shift(self, program: str, on: date, name: str) -> Tuple[Dict[str, Any], Dict[str, Any], Tuple[int, int]]:
         """The version, its week and the person's shift that day: the planned one, or the shift they were
@@ -917,6 +923,7 @@ class DayBook:
         if kind == CALLED_IN:
             return self._call_in(program, on, name, start, end, user_id, note)
         row, week, span = self._shift(program, on, name)
+        warning = ""
         lo, hi = _clock(start), _clock(end)
         if lo is None or hi is None:
             raise ValueError("Give the start and end like 13:05.")
@@ -935,7 +942,8 @@ class DayBook:
             if hi - lo > OVERTIME_MAX:
                 raise ValueError(f"Overtime is offered up to {OVERTIME_MAX // 60} hours.")
             rest = int(float(week.get("settings", {}).get("rest_gap_hours") or 0) * 60)
-            self._rest(program, on, row, name, lo, hi, rest)
+            # owner, 2026-10-15: overtime that breaks the rest gap is kept, with a warning
+            warning = self._rest(program, on, row, name, lo, hi, rest, refuse=False)
         else:
             if lo < span[0] or hi > span[1]:
                 raise ValueError(f"{kind} has to fall inside {name}'s shift ({hm(span[0])} to {hm(span[1])}).")
@@ -957,11 +965,11 @@ class DayBook:
         what = self._describe(kind, lo, hi, billable, with_whom, why, with_dept)
         if dry_run:
             return {"name": name, "kind": kind, "start": lo, "end": hi, "billable": billable, "what": what,
-                    "with_whom": with_whom, "why": why, "with_dept": with_dept}
+                    "with_whom": with_whom, "why": why, "with_dept": with_dept, "warning": warning}
         made = self.store.add_activity(program=program, shift_date=on.isoformat(), associate=name, kind=kind, start=lo,
                                        end_min=hi, billable=int(billable), note=" ".join(note.split())[:200],
                                        user_id=user_id, with_whom=with_whom, why=why, with_dept=with_dept)
-        self._log(program, on, name, what, user_id, _group_kind(kind),
+        self._log(program, on, name, what + (f". Warning: {warning}" if warning else ""), user_id, _group_kind(kind),
                   post=self._describe(kind, lo, hi, billable, with_whom, "", with_dept), ref=f"activity:{made}",
                   after="on")
         return made
@@ -1013,7 +1021,8 @@ class DayBook:
         if not dry_run:
             self.add_activity(program, on, name, what, start, end, user_id, billable=billable, note=note,
                               with_whom=with_whom, why=why, with_dept=with_dept)
-        return {"text": rec["what"], "lo": rec["start"], "hi": rec["end"], "record": rec}
+        return {"text": rec["what"], "lo": rec["start"], "hi": rec["end"], "record": rec,
+                "warning": rec.get("warning", "")}
 
     def preview_item(self, program: str, on: date, name: str, what: str, start: str, minutes: int,
                      billable: bool = False, measure: str = "interval", end: str = "",
@@ -1047,6 +1056,9 @@ class DayBook:
                 result["level"] = "bad"
                 result["better"] = self._better_times(program, on, name, what, lo, minutes, billable, measure, end,
                                                       before, old)
+        if found.get("warning"):  # Phase AJ: kept, but the rest gap is broken
+            result["text"] += f" Warning: {found['warning']}"
+            result["level"] = "bad" if result["level"] == "bad" else "warn"
         return result
 
     def _better_times(self, program: str, on: date, name: str, what: str, lo: int, minutes: int, billable: bool,

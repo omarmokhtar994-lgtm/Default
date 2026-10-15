@@ -3264,10 +3264,15 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 start, end = request.form.get("from", ""), request.form.get("to", "")
             start, end = (to_schedule(x.strip(), _shift_of(program, on)) for x in (start, end))
             with_dept, with_whom, why = _aux_answers(kind, program)
+            warning = _days().add_activity(program, on, name, kind, start, end, g.user["id"], dry_run=True,
+                                           with_whom=with_whom, why=why, with_dept=with_dept).get("warning", "") \
+                if kind == "Overtime" else ""
             _days().add_activity(program, on, name, kind, start, end,
                                  g.user["id"], billable=request.form.get("billable") == "1",
                                  note=request.form.get("note", ""), with_whom=with_whom, why=why, with_dept=with_dept)
             flash(f"Recorded: {name}, {'day off cancelled (called in)' if kind == 'Called in' else kind.lower()}.")
+            if warning:
+                _say(f"Warning: {warning}", program, on)
             if kind in ("Overtime", "Called in") and _days().next_week_unknown(program, on):
                 flash(tomorrow_unchecked(on))
         except ValueError as exc:
@@ -3359,6 +3364,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                          with_whom=with_whom, why=why, with_dept=with_dept,
                                          side=request.form.get("side", ""))
             _say(f"Recorded: {name}, {found['text']}.", program, on)
+            if found.get("warning"):
+                _say(f"Warning: {found['warning']}", program, on)
             if what in ("Overtime", DAY_OFF) and _days().next_week_unknown(program, on):
                 flash(tomorrow_unchecked(on))
         except ValueError as exc:

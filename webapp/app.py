@@ -1052,8 +1052,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         everyone = app.extensions["store"].list_runs()
         plan = _plan(everyone)  # the queue is shared: waiting times count every run
         runs = _visible(everyone)
-        summaries = {r["id"]: _ready_figures(r) if r["mode"] == READY else queue.summary(r["id"])
-                     for r in runs} if queue else {}
+        summaries = {r["id"]: _run_figures(r) for r in runs} if queue else {}
         # Phase AI: the queue is everyone's; another program's runs show only as running or waiting, with the wait
         seen = {r["id"] for r in runs}
         active = sorted((r for r in everyone if r["status"] in ("GATE", "RUNNING", "SCORING")),
@@ -1299,6 +1298,26 @@ def create_app(config: Dict[str, Any]) -> Flask:
             found.update(version_label=row["label"], breaks_planned=bool(json.loads(row["week"] or "{}").get("breaks")))
         return found
 
+    def _run_figures(run: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Phase AM (owner: "it should show the percentage ... after breaks or as per my in use selection"): a run's
+        coverage on Home and its page. A ready schedule as before (Phase S). An engine run: the version in use; else
+        the engine's own figures, as before; else, when the engine has none (a "Before breaks only" run), the version
+        its week shows. A version's figures say which version and whether its breaks are planned."""
+        if run["mode"] == READY:
+            return _ready_figures(run)
+        queue = app.extensions.get("runs")
+        versions = _book().versions(run["id"]) if app.extensions.get("schedules") else []
+        row = next((v for v in versions if v["in_use"]), None)
+        if row is None:
+            found = queue.summary(run["id"]) if queue else None
+            if found or not versions:
+                return found
+            row = max(versions, key=lambda v: (v["kind"] not in ("tool_before", "tool_consistent"), v["created"], v["id"]))
+        found = version_summary(json.loads(row["checks"] or "{}"))
+        if found:
+            found.update(version_label=row["label"], breaks_planned=bool(json.loads(row["week"] or "{}").get("breaks")))
+        return found
+
     def _can_resume(run: Dict[str, Any]) -> bool:
         """A stopped, interrupted or failed engine run that can continue from its checkpoints: never a readiness
         check, never a run the engine said cannot be scheduled from that workbook (Phase AC: one rule for the page
@@ -1332,8 +1351,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                has_shortfall=queue.shortfall_schedule(run_id) is not None,
                                has_week=bool(kept_figures(run).get("intervals")),
                                resumable=_can_resume(run),
-                               summary=_walled(run, _ready_figures(run) if run["mode"] == READY
-                                               else queue.summary(run_id)),
+                               summary=_walled(run, _run_figures(run)),
                                said=said,
                                why=outcome_view(found) if found else None,
                                eta=_plan(store.list_runs()).get(run_id), now=time.time(), people=people,

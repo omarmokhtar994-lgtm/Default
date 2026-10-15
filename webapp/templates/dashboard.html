@@ -154,7 +154,7 @@
       <td class="by">{{ run.by_name }}</td>
       <td class="when">{{ when(run.created) }}</td>
       <td class="bar">{{ stagebar(run, small=True) }}</td>
-      <td class="cov">{% if s %}{{ pct(s.numbers.fully_covered, s.numbers.active) }}{% else %}<span class="dim">no data</span>{% endif %}</td>
+      <td class="cov">{% if s %}{{ pct(s.numbers.fully_covered, s.numbers.active) }}{% if s.breaks_planned is false %} <small>before breaks</small>{% endif %}{% else %}<span class="dim">no data</span>{% endif %}</td>
     </tr>
     {% endfor %}
     </tbody>

@@ -20,6 +20,13 @@ def runner(argv):
     print("[run] fake runner started", flush=True)
     delay = 3.0 if "SLOW" in stem else 0.2
     time.sleep(delay)
+    if "BEFOREONLY" in stem:  # Phase AM: a "Before breaks only" run: the real B1 week before breaks, nothing after
+        import shutil
+        real = Path(__file__).resolve().parents[2] / "fixtures" / "real_runs" / "before_break" / "B1_BEFORE"
+        shutil.copy(real / "B1_BEFORE_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx",
+                    case / f"{stem}_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx")
+        print("[run] fake runner done", flush=True)
+        return 0
     if "VERSIONED" in stem:  # a real schedule workbook (Phase N): the B3 AE/AR week, names "Associate 001"...
         import shutil
         real = Path(__file__).resolve().parents[2] / "fixtures" / "real_runs" / "week_boundary" / "B3_ARB2B_S30"

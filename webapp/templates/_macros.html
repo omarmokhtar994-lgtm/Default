@@ -86,3 +86,11 @@
     <select name="{{ name }}">{% for value, text in choices %}<option value="{{ value }}"{% if values.get(name, choices[0][0]) == value %} selected{% endif %}>{{ text }}</option>{% endfor %}</select></label>
   {% endfor %}
 {%- endmacro %}
+
+{# Phase AI: a long list 20 at a time (webapp/paging.py); nothing when it fits on one page #}
+{% macro pager(p, what) -%}
+{% if p %}<nav class="pager" aria-label="{{ what }}, pages"><span class="pager-at">{{ p.first }} to {{ p.last }} of {{ p.total }}</span>
+  {%- if p.prev %}<a href="{{ p.prev }}" rel="prev">Previous</a>{% endif %}
+  {%- for n, url in p.links %}{% if not n %}<span class="pager-gap" aria-hidden="true">…</span>{% elif n == p.page %}<a href="{{ url }}" aria-current="page">{{ n }}</a>{% else %}<a href="{{ url }}">{{ n }}</a>{% endif %}{% endfor %}
+  {%- if p.next %}<a href="{{ p.next }}" rel="next">Next</a>{% endif %}</nav>{% endif %}
+{%- endmacro %}

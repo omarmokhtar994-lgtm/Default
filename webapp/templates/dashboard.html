@@ -1,5 +1,5 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
-{% extends "base.html" %}{% from "_macros.html" import stagebar, ring, wall, pct, advanced_options with context %}
+{% extends "base.html" %}{% from "_macros.html" import stagebar, ring, wall, pct, advanced_options, pager with context %}
 {% block content %}
 <section class="programs-home" aria-labelledby="ph-h">
   <div class="phead"><div><h1 id="ph-h">{% if picked and program_cards %}{{ program_cards[0].name }}{% else %}Your programs{% endif %}</h1>
@@ -148,7 +148,7 @@
   <table class="runs">
     <thead><tr><th>Workbook</th><th class="by-h">By</th><th class="when-h">Started</th><th>Progress</th><th class="cov-h">Covered</th></tr></thead>
     <tbody>
-    {% for run in runs %}{% set s = summaries.get(run.id) %}
+    {% for run in runs_page[0] %}{% set s = summaries.get(run.id) %}
     <tr>
       <td><a href="{{ url_for('run_detail', run_id=run.id) }}">{{ run.workbook }}</a>{% if run.id in in_use_ids %} <span class="wl-tag use">In use</span>{% elif run.id in not_in_use_ids %} <span class="wl-tag off">Not in use</span>{% endif %}<br><small>{{ label(run) }}, {{ run.mode|lower }}</small></td>
       <td class="by">{{ run.by_name }}</td>
@@ -159,6 +159,7 @@
     {% endfor %}
     </tbody>
   </table>
+  {{ pager(runs_page[1], "Runs") }}
   <p class="byline">Results are kept for 30 days, then their files are deleted. Times are Egypt time.</p>
   {% else %}
   <p class="empty">No runs yet. Choose this week's workbook above and press Check and run.</p>

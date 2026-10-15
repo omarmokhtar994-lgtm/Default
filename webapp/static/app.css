@@ -1538,3 +1538,13 @@ table.hours tfoot th, table.hours tfoot td { border-top: 1px solid var(--rail); 
   background: var(--console-2); color: var(--paper); border: 1px solid var(--action); font-size: 0.8125rem;
   box-shadow: 0 6px 18px rgba(0, 0, 0, .35); white-space: nowrap; }
 .chip-ghost span { color: var(--action); font-weight: 700; }
+
+/* Phase AI: pages for long lists (runs, changes, offers, requests, posts) */
+.pager { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 12px 0 4px; }
+.pager-at { color: var(--dim); margin-right: 8px; font-variant-numeric: tabular-nums; }
+.pager a { min-width: 36px; min-height: 36px; padding: 6px 10px; border: 1px solid var(--edge); border-radius: 6px;
+  display: inline-flex; align-items: center; justify-content: center; color: var(--action); text-decoration: none;
+  font-variant-numeric: tabular-nums; }
+.pager a:hover { background: var(--hover); color: var(--action-hover); }
+.pager a[aria-current="page"] { background: var(--selected); border-color: var(--action); font-weight: 600; }
+.pager-gap { color: var(--dim); padding: 0 2px; }

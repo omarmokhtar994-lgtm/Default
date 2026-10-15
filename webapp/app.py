@@ -59,6 +59,7 @@ from .bulk_breaks import SHIFTS as BULK_SHIFTS, verb as bulk_verb
 from .schedules import ScheduleBook, group_changes
 from .versions import DAYS, shift_span, stale_blocks, with_notes
 from . import needed
+from .paging import page_of
 from .results import recolour, version_summary
 from .runs import ACTIVE, MODES, OPTION_LABELS, READY, RESUMABLE, RunQueue, parse_options, run_options
 from .store import Store
@@ -329,6 +330,19 @@ def create_app(config: Dict[str, Any]) -> Flask:
         """Rows (runs, versions, ...) of the programs this person may open."""
         keys = _access().keys()
         return rows if keys is None else [r for r in rows if r.get(key) in keys or r.get("user_id") == g.user["id"]]
+
+    def _paged(rows: list, arg: str, anchor: str) -> Tuple[list, Optional[Dict[str, Any]]]:
+        """Phase AI: a long list 20 at a time; ``?<arg>=N`` opens page N, and each link comes back to ``#anchor``."""
+        shown, info = page_of(rows, request.args.get(arg, 1, type=int) or 1)
+        if info:
+            args = {**(request.view_args or {}), **request.args.to_dict()}
+
+            def link(n: int) -> str:
+                return url_for(request.endpoint, **{**args, arg: n}) + f"#{anchor}"
+            info.update(links=[(n, link(n) if n else "") for n in info["numbers"]],
+                        prev=link(info["page"] - 1) if info["page"] > 1 else "",
+                        next=link(info["page"] + 1) if info["page"] < info["pages"] else "")
+        return shown, info
 
     def _my_programs(names: list) -> list:
         keys = _access().keys()
@@ -870,9 +884,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
             r["mine"] = leave.may_decide(r, g.user)
         swaps = app.extensions.get("swaps")
         return render_template("requests.html", unit=key, label=_unit_filter(key) if key else "", waiting=waiting,
-                               decided=leave.decided(key) if leave and key else [],
+                               decided=_paged(leave.decided(key, limit=None) if leave and key else [], "done_page",
+                                              "done-h"),
                                swaps=swaps.waiting(key) if swaps and key else [],
-                               swaps_decided=swaps.decided(key) if swaps and key else [],
+                               swaps_decided=_paged(swaps.decided(key, limit=None) if swaps and key else [],
+                                                    "swaps_done_page", "done-h"),
                                manager=bool(g.user["is_admin"] or g.user["is_supervisor"]),
                                year=datetime.now(EGYPT).year)
 
@@ -973,7 +989,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                program_cards=cards, other_programs=others, picked=picked, unfiled=unfiled,
                                unfiled_starts={r["id"]: start_choices(r["week_start"] or prefill, r["week_start"])
                                                for r in unfiled},
-                               runs=runs, queue=queue, plan=plan, summaries=summaries,
+                               runs=runs, runs_page=_paged(runs, "runs_page", "runs-h"), queue=queue, plan=plan,
+                               summaries=summaries,
                                active=active, waiting=waiting, seen=seen, wait_min=wait_min,
                                latest=latest, latest_week=latest_week,
                                in_use_ids=in_use_ids, not_in_use_ids=not_in_use_ids,
@@ -1476,7 +1493,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                          "service": SERVICES.get(s.get("service", ""), "–") if s.get("link") else "–",
                          "last": last_line(newest[k]) if k in newest else
                          ("No posts yet" if s.get("link") else "No group link yet")})
-        posts = store.notify_posts(unit=key, limit=10)
+        posts = store.notify_posts(unit=key)
         shown = next((p for p in posts if p["what"] != "test" and p["status"] in ("sent", "preview")), None)
         by = store.get_user(saved["saved_by"]) if saved.get("saved_by") else None
         return render_template("notifications.html", unit=key, unit_label=dict(units)[key], rows=rows, saved=saved,
@@ -1486,7 +1503,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                service_name=SERVICES.get(saved.get("service", ""), ""),
                                saved_by=by["display_name"] if by else "",
                                last_post=Post(**json.loads(shown["body"])) if shown else None,
-                               recent=[(p, post_what(p), *post_result(p)) for p in posts])
+                               recent=_paged([(p, post_what(p), *post_result(p)) for p in posts], "posts_page",
+                                             "nf-rec-h"))
 
     @app.route("/notifications/test", methods=["POST"])
     @admin_required
@@ -2659,6 +2677,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                post_to=SERVICES.get(group["service"], "") if posting else "",
                                post_mode=group["mode"] if posting else "", post_kinds=post_kinds,
                                people=people, whole=whole, shrink=shrink, finder=finder, cover=cover,
+                               ot_page=_paged(cover["overtime"] if cover else [], "ot_page", "ot-h"),
+                               vto_page=_paged(cover["vto"] if cover else [], "vto_page", "vto-h"),
+                               log_page=_paged(list(reversed(page["log"])) if page else [], "log_page", "daylog-h"),
                                proposal=proposal, from_now=from_now, cover_panel=cover_panel,
                                add_panel=add_panel, person_panel=person_panel, lengths=ADD_LENGTHS, bar=bar,
                                bulk=bulk, shifts=BULK_SHIFTS, bulk_verb=bulk_verb, rescue=rescue, dayoff=dayoff,

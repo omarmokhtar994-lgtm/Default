@@ -217,7 +217,7 @@ class SwapBook:
     def waiting(self, program: str) -> List[Dict[str, Any]]:
         return [self._label(r) for r in self.store.list_swaps(program=program, statuses=["waiting_other", "waiting_tm"])]
 
-    def decided(self, program: str, limit: int = 20) -> List[Dict[str, Any]]:
+    def decided(self, program: str, limit: Optional[int] = 20) -> List[Dict[str, Any]]:
         rows = self.store.list_swaps(program=program, statuses=["approved", "declined", "refused", "cancelled"])
         rows.sort(key=lambda r: -(r["decided_at"] or r["answered_at"] or r["asked"]))
         return [self._label(r) for r in rows[:limit]]

@@ -1,5 +1,5 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
-{% extends "base.html" %}{% block title %}Requests on Team Scheduler{% endblock %}
+{% extends "base.html" %}{% from "_macros.html" import pager with context %}{% block title %}Requests on Team Scheduler{% endblock %}
 {% block content %}
 <div class="phead"><div>
   <h1>Leave and swaps</h1>
@@ -47,10 +47,10 @@
   </article>
   {% else %}<p class="empty">No swaps waiting. Associates offer them from My week, to colleagues whose shift keeps the rules.</p>{% endfor %}
 </section>
-{% if decided or swaps_decided %}<section class="panel" aria-labelledby="done-h">
-  <h2 id="done-h">Decided lately</h2>
-  <ul class="req-done">{% for r in decided %}<li><b>{{ r.associate }}</b> {{ r.label }}: {{ r.status }}{% if r.outcome %}. {{ r.outcome }}{% endif %}{% if r.reason %} ({{ r.reason }}){% endif %}</li>{% endfor %}</ul>
-  <ul class="req-done">{% for w in swaps_decided %}<li><b>{{ w.asker }} and {{ w.other }}</b> swap, {{ w.label }}: {{ w.status_words }}{% if w.outcome %}. {{ w.outcome }}{% endif %}{% if w.reason %} ({{ w.reason }}){% endif %}</li>{% endfor %}</ul>
+{% if decided[0] or swaps_decided[0] %}<section class="panel" aria-labelledby="done-h">
+  <h2 id="done-h">Decided</h2>
+  {% if decided[0] %}<ul class="req-done">{% for r in decided[0] %}<li><b>{{ r.associate }}</b> {{ r.label }}: {{ r.status }}{% if r.outcome %}. {{ r.outcome }}{% endif %}{% if r.reason %} ({{ r.reason }}){% endif %}</li>{% endfor %}</ul>{{ pager(decided[1], "Decided leave") }}{% endif %}
+  {% if swaps_decided[0] %}<ul class="req-done">{% for w in swaps_decided[0] %}<li><b>{{ w.asker }} and {{ w.other }}</b> swap, {{ w.label }}: {{ w.status_words }}{% if w.outcome %}. {{ w.outcome }}{% endif %}{% if w.reason %} ({{ w.reason }}){% endif %}</li>{% endfor %}</ul>{{ pager(swaps_decided[1], "Decided swaps") }}{% endif %}
 </section>{% endif %}
 {% if manager and unit %}<section class="panel" aria-labelledby="bal-h">
   <h2 id="bal-h">Planned leave balances</h2>

@@ -1,5 +1,5 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
-{% extends "base.html" %}
+{% extends "base.html" %}{% from "_macros.html" import pager with context %}
 {% block title %}Notifications on Team Scheduler{% endblock %}
 {% block content %}
 <div class="phead"><div>
@@ -50,10 +50,10 @@
 </section>
 <section class="nf-posts" aria-labelledby="nf-rec-h">
   <h2 id="nf-rec-h">Recent posts</h2>
-  {% if recent %}<div class="scroll" role="region" tabindex="0" aria-label="Recent posts (scrolls sideways)"><table class="nf-recent">
+  {% if recent[0] %}<div class="scroll" role="region" tabindex="0" aria-label="Recent posts (scrolls sideways)"><table class="nf-recent">
     <thead><tr><th scope="col">Time</th><th scope="col">What</th><th scope="col">Result</th></tr></thead>
-    <tbody>{% for p, what, state, said in recent %}<tr><td>{{ when(p.sent_at or p.made_at) }}</td><td>{{ what }}</td><td><span class="post-st {{ state }}">{{ said }}</span></td></tr>{% endfor %}</tbody>
-  </table></div>
+    <tbody>{% for p, what, state, said in recent[0] %}<tr><td>{{ when(p.sent_at or p.made_at) }}</td><td>{{ what }}</td><td><span class="post-st {{ state }}">{{ said }}</span></td></tr>{% endfor %}</tbody>
+  </table></div>{{ pager(recent[1], "Posts") }}
   {% else %}<p class="empty">No posts yet.</p>{% endif %}
 </section>
 </div>

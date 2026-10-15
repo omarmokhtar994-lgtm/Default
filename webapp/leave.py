@@ -280,7 +280,7 @@ class LeaveBook:
                             and balance["left"] < 0, step="tm" if row["status"] == "waiting_tm" else "rta"))
         return out
 
-    def decided(self, program: str, limit: int = 20) -> List[Dict[str, Any]]:
+    def decided(self, program: str, limit: Optional[int] = 20) -> List[Dict[str, Any]]:
         rows = self.store.list_leave(program=program, statuses=["approved", "refused", "cancelled"])
         rows.sort(key=lambda r: -(r["rta_at"] or r["tm_at"] or r["asked"]))
         return [dict(r, label=f"{r['kind']}, {span_text(date.fromisoformat(r['first_day']), date.fromisoformat(r['last_day']))}")

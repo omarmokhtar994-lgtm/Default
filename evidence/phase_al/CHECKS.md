@@ -2,8 +2,8 @@
 
 © 2026 Omar Mokhtar. All rights reserved.
 
-Checks run on code commit c573b9a (later commits change only the release notes and the check tools), Thu 15 Oct
-2026 to Fri 16 Oct, finished about 01:45 Egypt time. Tools: `evidence/phase_al/tools/` (Phase AK's, plus `al_screens.py`
+Checks run on code commit c573b9a (later commits change only the release notes and the check tools), Fri 16 Oct
+2026, finished about 00:10 Egypt time. Tools: `evidence/phase_al/tools/` (Phase AK's, plus `al_screens.py`
 and `al_audit.py`).
 
 ## What was built

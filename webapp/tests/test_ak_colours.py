@@ -45,7 +45,7 @@ class ThePage(ai.TheChannelsOnTheTimeline):
         html = self.client.get(f"/day?program={self.key}&date=2026-10-14").get_data(as_text=True)
         self.assertIn('class="tl-bar has-ch', html)
         self.assertRegex(html, r'<rect class="tl-ch ch-[PCEA]" x="-?\d+" y="8" width="\d+" height="14"')
-        self.assertRegex(html, r'<text class="tl-ch-t( e)?" x="-?\d+" y="19" data-cx="-?\d+">[PCEA]</text>')
+        self.assertRegex(html, r'<text class="tl-ch-t( e)?" x="-?\d+" y="19" data-cx="-?\d+" aria-hidden="true">[PCEA]</text>')
 
 
 if __name__ == "__main__":

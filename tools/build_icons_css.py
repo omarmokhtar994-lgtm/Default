@@ -25,7 +25,7 @@ MENU = [('a[href="/"]', "house"), ('a[href^="/overview"]', "gauge"), ('a[href^="
         ('a[href^="/exports"]', "download-simple"), ('a[href^="/team"]', "users"), ('a[href^="/admin/users"]', "user-gear"),
         ('a[href^="/setup/with"]', "address-book"), ('a[href^="/setup/channels"]', "headset"),
         ('a[href^="/notifications"]', "bell"), ('a[href^="/setup/programs"]', "tree-structure"),
-        ('a[href^="/requests"]', "tray"), ('a[href^="/me"]', "calendar-check")]
+        ('a[href^="/requests"]', "tray"), ('a[href^="/me"]', "calendar-check"), ('a[href^="/admin/roles"]', "gear")]
 
 
 def main(folder: Path) -> None:

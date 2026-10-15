@@ -113,6 +113,8 @@ class TheSwaps(_Requests):
         self.team(self.pair_ids[0], self.tm)
         self.team(self.pair_ids[1], self.tm)
         made = self.offer_swap()
+        self.assertEqual(self.swaps.waiting_on(self.store.get_swap(made)),
+                         f"Waiting for Team Manager 01 ({self.pair[0]} and {self.pair[1]})")
         self.assertTrue(self.swaps.decide(made, self.user(self.tm), True).startswith("Approved: "))
 
     def test_a_backup_approves_both_sides(self):

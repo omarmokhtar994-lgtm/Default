@@ -188,12 +188,12 @@ class SwapBook:
             return f"Waiting for {row['other']} to accept"
         if row["status"] != "waiting_tm":
             return ""
-        left = []
+        left: Dict[str, List[str]] = {}  # each team manager still to approve, with their people
         for uid, name, field in self._sides(row):
             if row.get(field) is None:
                 manager = team_manager_of(self.store, uid)
-                left.append(f"{manager['display_name'] if manager else 'a team manager'} ({name})")
-        return "Waiting for " + " and ".join(left)
+                left.setdefault(manager["display_name"] if manager else "a team manager", []).append(name)
+        return "Waiting for " + " and ".join(f"{who} ({' and '.join(names)})" for who, names in left.items())
 
     def decide(self, swap_id: int, user: Dict[str, Any], approve: bool, reason: str = "") -> str:
         """Phase AK: each person's team manager approves their side (one approval when they share one); an admin or

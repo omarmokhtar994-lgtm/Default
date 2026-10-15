@@ -84,3 +84,16 @@ Question:
 4. With no version in use, should Home and Weeks show the **newest version with breaks** (so a "Plan breaks" result
    shows at once), or **only the version in use** (recommended: the one in use; with none in use, the engine's own,
    as now)?
+
+## The owner's answers (Fri 16 Oct 2026, about 01:40 Egypt time)
+
+> 1- B / 2- follow recommendation / 3- recommended as well / 4 recommended as well
+
+- One click on the RTA's Channels tab: re-plan everyone's channels from now to the end of the 24 hours with the
+  channel planner, for people on shift and present. The changes show first; then one Apply and one Undo.
+- Channels only: breaks are not moved.
+- Coverage first. Between plans that cover the same, fairness decides: shares closer to even, no one stuck on one
+  channel.
+- With no version in use, Home and Weeks read the engine's own figures, as now. Ruling: when the engine has none (a
+  "Before breaks only" run), they read the run's shown version, so a percentage always shows (the owner's A). Cost if
+  wrong: one fallback.

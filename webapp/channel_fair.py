@@ -8,7 +8,7 @@ slots. A break is not channel time; it does not end a turn either. "All channels
 Nothing here changes the plan or the coverage."""
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List
 
 from .channel_page import _at, current, people_for
 from .channel_people import can_work, channel_words

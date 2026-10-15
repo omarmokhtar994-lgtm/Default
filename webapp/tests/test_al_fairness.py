@@ -83,3 +83,33 @@ class TheSource(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+from webapp.tests import test_channel_page as cp  # noqa: E402
+
+
+class ThePage(cp._Page):
+    """The Plan channels page shows the fairness of the plan it shows: the week first, then the day picked."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.start()
+        working = cls.working(cls)
+        lang = next(l for l in {a["language"] for a in working}
+                    if sum(a["language"] == l for a in working) >= 2)
+        cls.pair = [a for a in working if a["language"] == lang][:2]
+        for a, letter in zip(cls.pair, "PC"):
+            start, end = cp.shift_span(a["days"][cp.WED])
+            cls.admin.post(cls.url, data={"csrf_token": cp.token(cls.admin), "day": "Wed", "action": "edit",
+                                          "who": a["name"], "start": f"{start // 60 % 24:02d}:{start % 60:02d}",
+                                          "end": f"{end // 60 % 24:02d}:{end % 60:02d}", "channel": letter})
+
+    def test_the_fairness_section(self):
+        code, page = self.page("Wed")
+        self.assertEqual(code, 200)
+        section = page[page.index('id="cp-fair-h"'):]
+        section = section[:section.index("</section>")]
+        for words in ("Fairness", "This week", "Wednesday", f"All three channels, {self.pair[0]['language']}",
+                      "Longest on one channel", "Coverage and the planner are unchanged", self.pair[0]["name"]):
+            self.assertIn(words, section)
+        self.assertEqual(section.count("furthest from even"), 4)  # both of the pair, in the week and in the day

@@ -28,6 +28,7 @@ from .analytics import program_weeks, team
 from .attendance import (ACTIVITY_KINDS, ADD_KINDS, COVER_ROLES, DAY_OFF, DayBook, aux_details, hm, pick_version, plain_hm, tomorrow_unchecked, week_start,
                          with_text)
 from .break_plan import check_row, floor, slots_for, suggest
+from .channel_fair import fairness
 from .channel_page import (FULL as FULL_DAYS, NAMES as CHANNEL_NAMES, apply_edit, before as channel_before,
                            carry as channel_carry, coverage as channel_coverage, current as channel_current,
                            grid as channel_grid, people_for, planned_anything)
@@ -2462,7 +2463,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                cover=channel_coverage(people, plan, setup, d, inputs["interval"]),
                                plan=plan, drafted=sorted(draft, key=DAYS.index), names=CHANNEL_NAMES,
                                stale=[] if day in draft else stale_blocks(week, d),
-                               may_set_in_use=_may_set_in_use(row), hm=hm)
+                               may_set_in_use=_may_set_in_use(row), hm=hm,
+                               fair=fairness(week, rules, draft, skills, inputs["languages"], d))
 
     @app.route("/schedules/<int:schedule_id>/check", methods=["POST"])
     @login_required

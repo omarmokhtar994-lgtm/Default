@@ -113,3 +113,19 @@ class ThePage(cp._Page):
                       "Longest on one channel", "Coverage and the planner are unchanged", self.pair[0]["name"]):
             self.assertIn(words, section)
         self.assertEqual(section.count("furthest from even"), 4)  # both of the pair, in the week and in the day
+
+
+class TheWords(unittest.TestCase):
+    """Review (better-writing, better-typography): "1 point", and a time that never breaks across lines."""
+
+    def test_one_point_and_unbroken_times(self):
+        app = cp.make_app(VALIDATOR_ROOT=str(cp.REPO))[0]
+        module = app.jinja_env.get_template("_fair.html").make_module(
+            {"names": {"P": "Phone", "C": "Chat", "E": "Email", "A": "All channels"}, "full": {"Sun": "Sunday"}})
+        people = [{"name": "Associate 001", "minutes": {"P": 1290, "C": 0, "E": 0, "A": 0},
+                   "share": {"P": 1.0, "C": 0, "E": 0, "A": 0}, "gap": 1.2, "longest": 480, "longest_day": "Sun",
+                   "furthest": False}]
+        got = str(module.fair_tables([{"label": "Phone, English", "people": people,
+                                       "even": {"P": 1.0, "C": 0, "E": 0, "A": 0}}], "This week"))
+        self.assertIn("1 point<", got)
+        self.assertIn("21 h 30 (100%)", got)

@@ -944,6 +944,7 @@ dialog.dlg.add-dlg { width: 620px; }
 .actable { border-collapse: collapse; width: 100%; }
 .actable th, .actable td { border-bottom: 1px solid var(--rail); padding: 7px 8px; text-align: left; }
 .actable .c { text-align: center; }
+.fair td { white-space: nowrap; font-variant-numeric: tabular-nums; }  /* Phase AL: a time and its share stay on one line */
 .actable input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--action); }
 .btnrow { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
 

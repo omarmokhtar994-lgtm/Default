@@ -36,9 +36,14 @@
     </li>{% endfor %}</ul>
 </section>
 {% endif %}
-<section class="now" aria-labelledby="now-h"{% if active %} data-status-url="{{ url_for('run_status', run_id=active[0].id) }}"{% endif %}>
+<section class="now" aria-labelledby="now-h"{% if active and active[0].id in seen %} data-status-url="{{ url_for('run_status', run_id=active[0].id) }}"{% endif %}>
   <h2 id="now-h" class="sr-only">Now</h2>
-  {% if active %}{% set r = active[0] %}{% set e = plan.get(r.id) %}
+  {% if active and active[0].id not in seen %}{% set e = plan.get(active[0].id) %}
+  <div class="now-text">
+    <p class="now-title">A run for another program is running</p>
+    <p>{% if e %}About {{ duration(e.finishes_in_min) }} left. {% endif %}Its workbook and results are for that program's people.</p>
+  </div>
+  {% elif active %}{% set r = active[0] %}{% set e = plan.get(r.id) %}
   {{ ring(r, "small") }}
   <div class="now-text">
     <a class="now-title" href="{{ url_for('run_detail', run_id=r.id) }}">{{ r.workbook }}</a>
@@ -53,8 +58,9 @@
   <div class="now-queue">
     <p class="big">{{ waiting|length }} waiting</p>
     {% for w in waiting[:3] %}{% set e = plan.get(w.id) %}
-    <p><a href="{{ url_for('run_detail', run_id=w.id) }}">{{ w.workbook }}</a>{% if e %}: starts in about {{ duration(e.starts_in_min) }} ({{ clock(e.starts_at) }}){% endif %}</p>
+    <p>{% if w.id in seen %}<a href="{{ url_for('run_detail', run_id=w.id) }}">{{ w.workbook }}</a>{% else %}A workbook for another program{% endif %}{% if e %}: starts in about {{ duration(e.starts_in_min) }} ({{ clock(e.starts_at) }}){% endif %}</p>
     {% endfor %}
+    {% if active or waiting %}<p>A new run would start in about {{ duration(wait_min) }}.</p>{% endif %}
   </div>
 </section>
 

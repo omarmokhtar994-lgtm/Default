@@ -939,8 +939,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
         runs = _visible(everyone)
         summaries = {r["id"]: _ready_figures(r) if r["mode"] == READY else queue.summary(r["id"])
                      for r in runs} if queue else {}
-        active = [r for r in runs if r["status"] in ("GATE", "RUNNING", "SCORING")]
-        waiting = sorted((r for r in runs if r["status"] == "QUEUED"), key=lambda r: r["created"])
+        # Phase AI: the queue is everyone's; another program's runs show only as running or waiting, with the wait
+        seen = {r["id"] for r in runs}
+        active = sorted((r for r in everyone if r["status"] in ("GATE", "RUNNING", "SCORING")),
+                        key=lambda r: r["id"] not in seen)
+        waiting = sorted((r for r in everyone if r["status"] == "QUEUED"), key=lambda r: r["created"])
+        wait_min = max((e["finishes_in_min"] for e in plan.values()), default=0)
         latest = next((r for r in runs if r["status"] in ("DONE", "REVIEW") and summaries.get(r["id"])), None)
         known = sorted({r["program"] for r in runs if r.get("program")}, key=str.lower)
         prefill = start_date(request.args.get("week", "")) or next_sunday()
@@ -970,7 +974,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                unfiled_starts={r["id"]: start_choices(r["week_start"] or prefill, r["week_start"])
                                                for r in unfiled},
                                runs=runs, queue=queue, plan=plan, summaries=summaries,
-                               active=active, waiting=waiting, latest=latest, latest_week=latest_week,
+                               active=active, waiting=waiting, seen=seen, wait_min=wait_min,
+                               latest=latest, latest_week=latest_week,
                                in_use_ids=in_use_ids, not_in_use_ids=not_in_use_ids,
                                latest_summary=_walled(latest, summaries.get(latest["id"])) if latest else None,
                                now=time.time(), known_programs=known,

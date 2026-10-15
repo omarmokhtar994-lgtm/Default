@@ -423,9 +423,9 @@ class RunQueue:
             # before the status says finished: a finished run's work is over (clean-up may follow at once)
             self.store.update_run(run_id, message="Keeping the schedules as versions.")
             self.keep_schedules(run_id)
+        self._stamp_outcome(run_id, status)  # Phase AM: first, so a finished run is never seen without it
         self.store.update_run(run_id, status=status, exit_code=code, verdict=verdict,
                               finished=time.time(), message=message)
-        self._stamp_outcome(run_id, status)
 
     def _stopped(self, run_id: str, code: Optional[int] = None) -> bool:
         with self._lock:

@@ -59,7 +59,7 @@ from .program_page import build, overview, weeks_to_show
 from .run_admin import PICK_UNIT, apply_rename, apply_run_change, preview_rename, preview_run_change, unit_keys
 from .bulk_breaks import SHIFTS as BULK_SHIFTS, verb as bulk_verb
 from .schedules import ScheduleBook, group_changes
-from .versions import DAYS, shift_span, stale_blocks, with_notes
+from .versions import DAYS, shift_span, stale_blocks, with_notes, zoned_copy, zoned_label
 from . import needed
 from .paging import page_of
 from .results import recolour, version_summary
@@ -432,11 +432,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
     def _zone_cell(value: str, moved: int) -> str:
         """Phase AK: a schedule cell ("08:00 - 17:00") read ``moved`` minutes later, said when it then starts the day
         before or the next day; OFF, Leave and the like as they are."""
-        span = shift_span(value or "") if moved else None
-        if not span:
-            return value
-        start = span[0] + moved
-        return moved_text(value, moved) + (" (day before)" if start < 0 else " (next day)" if start >= 1440 else "")
+        return zoned_label(value, moved)
 
     @app.template_filter("num")
     def _num(value: float) -> str:
@@ -2536,8 +2532,22 @@ def create_app(config: Dict[str, Any]) -> Flask:
         row = _version_or_404(schedule_id)
         book = _book()
         stem = secure_filename(f"{row['program'] or row['run_id']}_{row['week_start']}_{row['label']}") or "schedule"
+        # Phase AM: "Times in" another zone downloads a copy in that zone's clock; the kept workbook stays as it is
+        own = pick_zone((_book().store.get_run(row["run_id"]) or {}).get("tz") or HOME)
+        tz = request.args.get("tz", "")
+        first = start_date(row["week_start"] or "")
+        moved = zone_shift(date.fromisoformat(first), own, tz) if tz in dict(ZONES) and tz != own and first else 0
+        if moved:
+            stem = secure_filename(f"{stem}_{dict(ZONES)[tz].split(' (')[0]} time") or stem
         _record("downloaded", program=row["program"], week_start=row["week_start"], run_id=row["run_id"],
                 schedule_id=schedule_id, subject=f"{stem}.xlsx")
+        if moved:
+            source = book.path(schedule_id) if row["kind"] != "edited" else with_notes(book.path(schedule_id),
+                                                                                       book.view(schedule_id))
+            out = Path(tempfile.mkdtemp()) / "zoned.xlsx"
+            zoned_copy(source, out, moved)
+            return send_file(io.BytesIO(out.read_bytes()), as_attachment=True, download_name=f"{stem}.xlsx",
+                             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         if row["kind"] != "edited":
             return send_file(book.path(schedule_id), as_attachment=True, download_name=f"{stem}.xlsx")
         return send_file(with_notes(book.path(schedule_id), book.view(schedule_id)), as_attachment=True,

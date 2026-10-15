@@ -373,6 +373,49 @@ def apply_change(src: Path, dst: Path, name: str, day: str, value: str) -> None:
     wb.save(dst)
 
 
+def zoned_label(value: str, moved: int) -> str:
+    """Phase AK: a schedule cell ("08:00 - 17:00") read ``moved`` minutes later, said when it then starts the day
+    before or the next day; OFF, Leave and the like as they are."""
+    from .clock import moved_text
+    span = shift_span(value or "") if moved else None
+    if not span:
+        return value
+    start = span[0] + moved
+    return moved_text(value, moved) + (" (day before)" if start < 0 else " (next day)" if start >= 1440 else "")
+
+
+def zoned_copy(src: Path, dst: Path, moved: int) -> None:
+    """Phase AM: the workbook in another zone's clock, as the Schedules page shows it: every shift cell of the
+    schedule tabs as ``zoned_label`` reads it, and each break's shift and start ``moved`` minutes later."""
+    from datetime import time as clock_time
+    from .clock import moved_text
+    wb = load_workbook(src)
+    for tab in SCHEDULE_TABS:
+        if tab not in wb.sheetnames:
+            continue
+        ws = wb[tab]
+        row, cols = _header(ws, ("sf name", "associate name"))
+        for r in range(row + 1, ws.max_row + 1):
+            for day in DAYS:
+                c = cols.get(_norm(day))
+                if c and isinstance(ws.cell(r, c).value, str):
+                    ws.cell(r, c).value = zoned_label(ws.cell(r, c).value, moved)
+    for tab in BREAK_TABS:
+        if tab not in wb.sheetnames:
+            continue
+        ws = wb[tab]
+        row, cols = _header(ws, ("associate",))
+        for key in ("shift", "start"):
+            c = cols.get(key)
+            for r in range(row + 1, ws.max_row + 1) if c else ():
+                value = ws.cell(r, c).value
+                if isinstance(value, clock_time):
+                    value = f"{value.hour:02d}:{value.minute:02d}"
+                if isinstance(value, str):
+                    ws.cell(r, c).value = moved_text(value, moved)
+    wb.save(dst)
+
+
 BREAK_HEADERS = ("Associate", "Day", "Shift", "Break Type", "Start", "Duration Minutes", "Status")
 
 

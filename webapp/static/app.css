@@ -448,7 +448,7 @@ details.tableview[open] summary { margin-bottom: 8px; }
 .spark path { fill: none; stroke-width: 2; stroke-linejoin: round; }
 .runs .trend { display: block; }
 .runs.programs .cov, .runs.weeks td { white-space: nowrap; }
-.scroll { overflow-x: auto; }
+.scroll { overflow-x: auto; position: relative; }  /* Phase AI: its hidden labels (sr-only) stay inside the sideways scroll on a phone */
 .tip { position: fixed; z-index: 20; pointer-events: none; padding: 6px 10px; border-radius: 4px; max-width: 280px;
   background: var(--paper); color: var(--night); font-size: 0.8125rem; font-weight: 600; box-shadow: 0 4px 14px var(--shadow); }
 
@@ -1072,7 +1072,6 @@ select.pending, input.pending, [data-day] select.att.pending { border-style: das
 .weeklist { margin-bottom: 18px; }
 .weeklist h2 { margin: 0 0 4px; }
 .weeklist .note { margin: 0 0 10px; color: var(--dim); max-width: 70ch; }
-.weeklist .scroll { position: relative; }  /* keeps the hidden "Actions" label inside the sideways scroll on a phone */
 .weeklist-t { width: 100%; border-collapse: collapse; }
 .weeklist-t th { text-align: left; font-size: 0.8125rem; color: var(--dim); font-weight: 600; padding: 0 12px 6px; }
 .weeklist-t td { padding: 10px 12px; border-top: 1px solid var(--rail); vertical-align: middle; }
@@ -1163,7 +1162,6 @@ select.pending, input.pending, [data-day] select.att.pending { border-style: das
 .weekpick a[aria-current] { border-color: var(--action); box-shadow: inset 0 -3px 0 var(--action); background: var(--selected); }
 .cmpweek h2 { margin: 0 0 4px; }
 .cmpweek .note { margin: 0 0 12px; color: var(--dim); max-width: 76ch; }
-.cmpweek .scroll { position: relative; }
 .cmp { width: 100%; border-collapse: collapse; }
 .cmp th, .cmp td { padding: 9px 14px; border-top: 1px solid var(--rail); text-align: left; vertical-align: top; }
 .cmp thead th { border-top: 0; vertical-align: bottom; min-width: 200px; }

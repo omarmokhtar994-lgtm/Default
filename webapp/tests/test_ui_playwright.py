@@ -9,6 +9,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from werkzeug.serving import make_server
@@ -1407,6 +1408,12 @@ class ThePhaseVInTheBrowser(unittest.TestCase):
         from webapp.versions import read_week
         cls.dir = Path(tempfile.mkdtemp())
         cls.addClassCleanup(shutil.rmtree, cls.dir, True)
+        # Phase AI (T11): the clock stopped on the Tuesday before the fixture's Wednesday, as when this was written:
+        # channel warnings count only what is left of a day, and on the real clock that Wednesday is over
+        from webapp.tests.test_channel_day import _BeforeWednesday
+        clock = mock.patch("webapp.attendance.datetime", _BeforeWednesday)
+        clock.start()
+        cls.addClassCleanup(clock.stop)
         upload = channel_day(cls.dir / "upload.xlsx")
         cls.app, cls.store, _, _ = make_app(VALIDATOR_ROOT=str(REPO))
         cls.omar = cls.store.add_user("omar", "Omar Mokhtar", "Owner-pass-123", is_admin=True, must_change=False)
@@ -2867,6 +2874,20 @@ class ThePhaseADInTheBrowser(unittest.TestCase):
 
     def test_bulk_change_waits_for_send_and_send_again_asks(self):
         on = self.day_of["thu"]
+        # Phase AI (T11): the website's clock stopped on the fixture week's Sunday morning. Change several breaks
+        # leaves breaks already started alone, so on a Thursday (as on 15 October 2026) the first three people's
+        # breaks had started and there was nothing to cancel; the class means its days to be other than today.
+        from datetime import datetime, time
+        sunday = self.sunday
+
+        class SundayMorning(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return datetime.combine(sunday, time(9), tz)
+        for target in ("webapp.app.datetime", "webapp.attendance.datetime"):
+            clock = mock.patch(target, SundayMorning)
+            clock.start()
+            self.addCleanup(clock.stop)
         page = self.page(width=1440, height=1000)
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))

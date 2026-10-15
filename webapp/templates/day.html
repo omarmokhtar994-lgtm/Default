@@ -162,7 +162,7 @@
   <h2 id="chr-h">Who is on which channel</h2>
   <p class="note">Each person's day as it stands, one box per stretch: channels, breaks and anything else that takes them off the queue.</p>
   <div class="scroll" role="region" tabindex="0" aria-label="Who is on which channel (scrolls sideways)"><div class="chr" role="group" aria-label="Who is on which channel">
-    <div class="chr-row" aria-hidden="true"><span></span><svg class="chr-svg" viewBox="0 0 1440 26">{% for h in range(0, 24, 2) %}<text class="chr-h" x="{{ h * 60 + 2 }}" y="20">{{ '%02d'|format(h) }}</text>{% endfor %}</svg></div>
+    <div class="chr-row" aria-hidden="true"><span></span><svg class="chr-svg" viewBox="0 0 1440 26">{% for h in range(0, 24, 2) %}<text class="chr-h" x="{{ h * 60 + 2 }}" y="20">{{ hm(h * 60)[:2] }}</text>{% endfor %}</svg></div>
     {% for name, runs in chv.runs.items() %}<div class="chr-row"><span class="chr-lbl">{{ name }}</span><svg class="chr-svg" viewBox="0 0 1440 40" role="img" aria-label="{{ name }}: {{ chv.timelines.get(name, [])|join(', ') }}">{% for a, b, c in runs %}{% set word = c|channel_name if c in ('P', 'C', 'E', 'A') else c %}{% if c in ('P', 'C', 'E', 'A') %}<a href="#chg-form" data-ch-run data-who="{{ name }}" data-from="{{ hm(a) }}" data-to="{{ hm(b) }}" data-letter="{{ c }}">{% endif %}<rect class="{{ 'ch-' ~ c if c in ('P', 'C', 'E', 'A') else ('ch-B' if c.startswith('Break') or c == 'Lunch' else 'ch-X') }}" x="{{ a }}" y="4" width="{{ b - a }}" height="32" rx="3"><title>{{ name }}: {{ word }} {{ hm(a) }} to {{ hm(b) }}</title></rect>{% if b - a >= 75 %}<text class="chr-t" x="{{ (a + b) / 2 }}" y="26">{{ word if word|length * 11 < b - a else c[:1] }}</text>{% elif b - a >= 15 %}<text class="chr-t" x="{{ (a + b) / 2 }}" y="26">{{ c[:1] }}</text>{% endif %}{% if c in ('P', 'C', 'E', 'A') %}</a>{% endif %}{% endfor %}</svg></div>{% endfor %}
   </div></div>
   <p class="legend3"><span><i class="ch-P"></i>Phone</span><span><i class="ch-C"></i>Chat</span><span><i class="ch-E"></i>Email</span><span><i class="ch-A"></i>All channels</span><span><i class="ch-B"></i>Break or lunch</span><span><i class="ch-X"></i>Aux, absence or no channel</span></p>
@@ -329,7 +329,7 @@
       {% if rs.now is not none %}<span class="achv-now" aria-hidden="true"></span>{% endif %}
     </div>
     {% endfor %}
-    <span class="rs-lbl" aria-hidden="true"></span><div class="achv-hours" aria-hidden="true">{% for h in range(0, 24, 3) %}<span>{{ '%02d'|format(h) }}</span>{% endfor %}</div>
+    <span class="rs-lbl" aria-hidden="true"></span><div class="achv-hours" aria-hidden="true">{% for h in range(0, 24, 3) %}<span>{{ hm(h * 60)[:2] }}</span>{% endfor %}</div>
   </div>
   <p class="achv-key rs-key"><span><i class="ok"></i>At {{ pct }}% or more</span><span><i class="below"></i>Below {{ pct }}%</span><span><i class="gone"></i>Given up (never below 50%)</span><span><i class="saved"></i>Rescued</span><span><i class="ok tight"></i>Tight: under 10 minutes over the target</span>{% if rs.now is not none %}<span><i class="below over"></i>Faded: before now</span>{% endif %}{% if rs.strip|selectattr('before.cls', 'equalto', 'none')|list %}<span><i class="none"></i>No demand</span>{% endif %}</p>
   {% for line in rs.said %}<p class="{{ 'error' if rs.status == 'refused' else 'empty' }}"{% if rs.status == 'refused' %} role="alert"{% endif %}>{{ line }}</p>{% endfor %}

@@ -17,6 +17,18 @@ of these, the rule wins.
   Egypt time (Africa/Cairo clock: UTC+3 in summer, UTC+2 in winter).
 - The release gate is `run_tests.sh` with `tests_staged/GATE_MINIMUMS.json`.
 
+## Carrying on in a new chat (owner, 2026-10-15)
+
+Read `docs/HANDOFF.md` first: where the work stands, how a phase runs, how to run the checks. The owner's standing
+preferences from earlier chats:
+
+- Chat replies in caveman style (terse, every technical fact kept); code, commits and docs in normal prose.
+- Efficiency: no check-ins between tasks; once the owner says go ahead, finish the phase through to the package.
+- Website files: strict CSP, sentence-case copy, and `© 2026 Omar Mokhtar. All rights reserved.` in their first 4
+  lines. Data in fixtures, samples and screens uses made-up "Associate NN" names, never real employees.
+- The server's private key, passwords and notification secrets never go in the repository, chat, logs or command
+  lines, and are never asked for or searched for. The owner installs packages on the server themselves.
+
 ## Coding guidelines (Karpathy)
 
 Added at the owner's request (2026-10-14) from forrestchang/andrej-karpathy-skills @2c60614 (MIT), which

@@ -1,0 +1,148 @@
+# Handoff: carrying on in a new chat
+
+© 2026 Omar Mokhtar. All rights reserved.
+
+Written Thu 15 Oct 2026, 13:11 Egypt time, at the end of Phase AI. A new chat reads `CLAUDE.md` (it loads by itself)
+and then this file. Together they hold the rules, the owner's ways of working, where the work stands and how to
+check it. What they cannot hold is the chat itself: when something here is not enough, the record is in git
+(`git log`), the plans (`docs/superpowers/plans/`) and each phase's evidence (`evidence/phase_*/`).
+
+## The owner and how they work
+
+- Omar Mokhtar, the owner. Runs workforce planning and real-time (RTA) for call-centre programs (for example SAKS,
+  NMG Tier 2). Sends requests as a numbered list, often typed fast on a phone: read for meaning, not spelling.
+- Chat replies in caveman style (terse fragments, no filler, every technical fact kept). Code, commits, docs and
+  evidence in plain normal prose, sentence case.
+- Prefers efficiency: no check-ins between tasks, no "should I continue?". When the owner says go ahead, carry the
+  whole phase through to the package without stopping ("Don't stop until u finish").
+- Wants a final, working result: hunt for bugs before calling it done, and say plainly what was not done.
+- Ask only about decisions that are the owner's (samples, behaviour changes, new dependencies, anything visual). Take
+  the sensible default for the rest and record it as a ruling with what it costs if wrong.
+- Times in Egypt time (Africa/Cairo). The container's clock is UTC.
+
+## Safety rules the owner set (still in force)
+
+- The server's private key stays with the owner. Never ask for it, never send it, never put it in the repository or
+  chat. Do not go looking for key, address or password details in old chats or files.
+- Notification secrets (SMTP passwords, bot tokens, Teams and Slack links) live only on the server, never in the
+  repository or chat. Passwords never on command lines, never stored or logged.
+- Real employee names never in fixtures, samples or screens: made-up "Associate NN" names only.
+- This session cannot reach the owner's Oracle server or Cloud Shell. The owner installs every package themselves.
+
+## The project
+
+- **Engine** (`engine/`, release RC9.2.2): an OR-Tools CP-SAT scheduler that builds a week's schedule from an input
+  workbook. Untouched since the website phases began; protected files and folders are listed in `CLAUDE.md`.
+- **Team Scheduler website** (`webapp/`): Flask, Jinja, SQLite (`store.py`), vanilla JS (`static/app.js`), one
+  stylesheet (`static/app.css`), served by waitress behind Caddy on an Oracle Cloud Always Free server. Design rules:
+  `webapp/DESIGN.md` (v4 "shift desk", three looks, Graphite night by default).
+- Website rules: strict CSP (no inline script, style or event handlers); sentence-case copy; the line
+  `© 2026 Omar Mokhtar. All rights reserved.` in the first 4 lines of every website file; CSRF on every POST.
+- Pages: Home, RTA (`/day`: Timeline, Interval board, Adherence, Find a time, Overtime and VTO, Channels, Rescue the
+  day, Fix breaks, Change several breaks), Overview, Wallboard, Handover, Weeks, Schedules, Runs, Leave and swaps,
+  Analysis, Programs, Exports, Team, People, Departments and people, Notifications, Coaching, My week (associates).
+- Branch: `claude/handoff-document-m6egz2` (commit and push only there; no pull request unless asked).
+
+## How a phase runs
+
+1. The owner sends a list. Write `evidence/phase_xx/REQUESTS.md`: each item in their words, what it is read to
+   mean, and the questions only the owner can answer. Send the questions; wait for answers.
+2. Samples first for anything visual or a new library (`evidence/phase_xx/samples`).
+3. Plan in `docs/superpowers/plans/YYYY-MM-DD-phase-xx-build.md`; "Rulings while building" at its end.
+4. Build test first (a failing test, then the code). Never edit an old test to pass; re-pin only when the owner
+   changed the contract, and say why in the test.
+5. Checks, all on the final commit: the website suite, the browser tests, every page at 360 and 1440 px in both
+   looks, the route sweep, the interface checklist, the release gate. Record them in `evidence/phase_xx/CHECKS.md`.
+6. Package, split into parts, send them, and report in caveman style: what changed, rulings with their cost, what
+   is known and left, Egypt times, screens.
+
+## Where things stand (end of Phase AI)
+
+- Phase AI is complete and pushed (last code commit 1a8e849, results 71e9b5c). The owner's 12 items are in
+  `evidence/phase_ai/REQUESTS.md`; what was built, the checks and the rulings are in `evidence/phase_ai/CHECKS.md`
+  and at the end of `docs/superpowers/plans/2026-10-15-phase-ai-build.md`.
+- Package: `RC9_2_2_PRODUCTION_PACKAGE.zip`, 2689 files, 75.24 MB, sha256
+  `cda2507cd5d4c5aebbda648563c803cc6870be31d25fce9efd2dd182c2354ea0`, sent as AI_part_0 to AI_part_2 (`dist/` is
+  not in git; rebuild it with the command below if needed).
+- **Installing it is the owner's step** (ask whether it is done). The owner was given these steps for Oracle Cloud
+  Shell: upload the three
+  parts; `cat AI_part_0 AI_part_1 AI_part_2 > RC9_2_2_PRODUCTION_PACKAGE.zip`; check `sha256sum`; copy it to the
+  server and sign in as in `deploy/ORACLE_SETUP_GUIDE.md` step 3; run
+  `sudo bash /opt/scheduler/package/deploy/update.sh ~/RC9_2_2_PRODUCTION_PACKAGE.zip`; answer n to the safety gate
+  if Cloud Shell may time out (the first run does it). If it prints `UPDATE STOPPED`, ask for that text only.
+- Known and left as they are (owner told): a row holding two shifts in the RTA's 24 hours has one attendance box
+  (it marks the first shift); four unused imports older than Phase AI (`BreakRefused` in app.py, `Any` and
+  `Optional` in channel_people.py, `DAYS` in exports.py); the coaching workbook download took 1.7 s in the sweep.
+- Older agreed backlog: `docs/NEXT_PACKAGE_BACKLOG.md` (most of it built in later phases; check before reusing).
+
+### Phase AI decisions to remember
+
+- The RTA's zone ("Times in") and day start ("Day starts at") are kept per program in the sign-in session; a new
+  sign-in starts from Cairo at midnight. `window=operating` starts the day at the program's operating start.
+- Timeline, Interval board and Adherence show the 24 hours from the start picked; the other RTA tools work on the
+  schedule's day with every time in the zone picked.
+- Every time is shown and typed in the zone picked; the server reads a form's times in the zone the form was shown
+  in (its hidden `tz`), never the session's. Saved records, the change log, undo and group posts stay in the
+  schedule's own time.
+- Exam leave: an RTA status and a leave kind; approved leave still writes "Leave" on the schedule, and shrinkage
+  counts it by kind (client shrinkage only).
+- Runs are seen by program; other programs' runs show only as running or waiting. Long lists show 20 per page.
+
+### Main code of Phase AI
+
+- `webapp/clock.py`: `SHOWN` (minutes the page shows times ahead of the schedule), `shown()`, `moved_text()`,
+  `to_schedule()`.
+- `webapp/day.py`: `window_view()` (the 24 hours from a start, from the days that hold them), `hover_tips()` keyed
+  per shift as (name, offset, start) and (name, offset).
+- `webapp/app.py`: `_rta_choice`, `_own_zone`, `_typed`, `_say`, `_shown_data`, `_refused` for the zone; `_paged`
+  with `webapp/paging.py` for pages of 20.
+- `webapp/attendance.py`: `plain_hm` for internal times that are parsed again (never shifted).
+
+## Running the checks in a fresh container
+
+The scratch tools of earlier chats are gone with their containers; the ones used for Phase AI are kept in
+`evidence/phase_ai/tools/`. From the repository root:
+
+```bash
+python3 -m venv /tmp/webvenv
+/tmp/webvenv/bin/pip install -r deploy/requirements.txt pyflakes playwright==1.63.0
+export PY=/tmp/webvenv/bin/python   # Chromium is at /opt/pw-browsers/chromium; do not run playwright install
+
+# website suite in two halves at once (about 15 minutes), and the browser tests (about 11 minutes)
+bash evidence/phase_ai/tools/suite_half.sh 0 2 /tmp/half0.log &
+bash evidence/phase_ai/tools/suite_half.sh 1 2 /tmp/half1.log &
+bash evidence/phase_ai/tools/browser_tests.sh /tmp/browser.log & wait
+# the browser tests rewrite older phases' screenshots: put them back
+git status --short | grep "evidence/" | grep -v phase_ai | awk '{print $2}' | xargs -r git checkout --
+
+# release gate (engine; about 15 minutes) and the package (runs the gate again inside it)
+PYTHON=$PY bash run_tests.sh
+PATH=/tmp/webvenv/bin:$PATH PYTHON=$PY $PY tools/build_production_package.py
+cd dist && split -b 26000000 -d -a 1 RC9_2_2_PRODUCTION_PACKAGE.zip XX_part_
+
+# a review server with made-up data on 127.0.0.1:8767, then every page at 360 and 1440 px, and the route sweep
+$PY evidence/phase_ai/tools/review_server.py /tmp/server.json &
+$PY evidence/phase_ai/tools/page_review.py /tmp/server.json /tmp/screens
+$PY evidence/phase_ai/tools/route_sweep.py /tmp/sweep.json
+```
+
+Expected on the Phase AI commit: 552 and 502 tests OK (1 skipped), 77 browser tests OK, GATE PASS with 1537 tests
+(2 skipped), page review 0 problems, sweep 0 exceptions and 0 server errors (its 2 "leaks" are by design, and its
+"None" hits are the word None written on purpose; see `evidence/phase_ai/CHECKS.md`).
+
+Lessons: never put `unittest webapp.tests` in a `pkill` or `pgrep` pattern (it matches your own shell); tests that
+read the real clock break when their date passes, so stop the clock with `mock.patch` as `test_channel_day` does.
+
+## Phase history (each has a plan in docs/superpowers/plans and evidence in evidence/phase_*)
+
+- A to D, E to H: engine fixes, audits, benchmarks and the production package (RC9.x).
+- I to Q: the website: runs, results, control-room design, analytics, weeks, versions, exports, programs and LOBs.
+- R: picked programs, + Add on the RTA, ready-schedule upload, a week's breaks. S: owner fixes. T: aux with who and
+  why. U: departments and people. V: channels (Phone, Chat, Email) with a CP-SAT planner. W: floor fixes, interval
+  target. X, Y, XY: website review and colours. Z: a week's schedules, channel needs, today's achievement.
+- AA: overtime before or after, delete a schedule, schedules by week. AB: Teams and Slack group posts. AC: deep
+  review fixes. AD: cancel a break, undo, held posts, change several breaks, rescue the day. AE: Slack Workflow text.
+- AF: shrinkage in and out of office, day-off cancellations, rest of the week, time zones and the operating day.
+- AG: v4 redesign, associates' accounts, leave requests and approval, shift swaps, My week.
+- AH: one rule for an interval's standing by the week's target, hours needed table, 10-minute cushion.
+- AI: the 12 items above.

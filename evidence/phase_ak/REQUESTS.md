@@ -21,7 +21,7 @@ so they can approve their requests"
 
 1. Colours (sample ak01, light and dark): A (grey bar, Phone blue, Chat magenta, Email amber), B (blue bar, Phone
    orange, Chat purple, Email green), C (as A with P, C, E written on longer stretches) or D (recommended: dark Phone
-   #1A47A8, mid Chat #C2549F, light Email #F4BE55, with letters)? Measured (better-colors): today Phone on the bar is
+   #1A47A8, mid Chat #C2549F, light green Email #A6D96A, with letters)? Measured (better-colors): today Phone on the bar is
    1.00:1 and the three channels 1.04 to 1.08:1 apart in lightness; B puts orange next to green (1.13:1, unreadable
    with red-green colour blindness); white letters on C's amber are 2.76:1. D: channels 2.0 to 4.9:1 apart, letters
    4.2:1 or more.
@@ -35,3 +35,16 @@ so they can approve their requests"
       supervisors too?
    d. An associate with no team manager assigned: any team manager of the program approves, as now?
    e. Shift swaps: approved by the team manager of the person who offered, or of both people?
+
+## Design skills run on sample ak01 (2026-10-15)
+
+- better-colors: contrast measured (see question 1).
+- frontend-design with `webapp/DESIGN.md`: amber means "Short", so an amber Email (options A, C and the first D)
+  breaks "colour means state"; D's Email moved to light green #A6D96A (hue 88, 52 degrees from Short's amber, 86 from
+  Covered's teal; Phone 221 and Chat 319 at least 27 and 44 degrees from any status hue).
+- ui-ux-pro-max: no palette match for this case; its rule "never colour alone" keeps the P, C, E letters and the
+  hover titles.
+- design-taste-frontend: dashboards are outside its scope; its colour-consistency and both-looks rules apply.
+- impeccable (context loaded, mode Operate): scanning first; B's orange sits next to the red and amber status hues.
+- design-md: the catalog is brand sites, no ops-dashboard match; Linear's pattern (category colours kept apart from
+  action and status colours) supports D.

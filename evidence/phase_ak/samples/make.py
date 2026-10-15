@@ -13,8 +13,8 @@ OPTS = {
     "C": ("Grey bar, channel fills the bar, with its letter", "As A, plus P, C or E written on each stretch of 30 minutes or more",
           {"bar": "#8A929C", "P": "#2F6FE0", "C": "#B4479A", "E": "#D98A1C"}, "letters"),
     "D": ("Recommended: dark Phone, mid Chat, light Email, with letters",
-          "Told apart by lightness as well as colour, so colour-blind staff can read it too; dark letter on Email",
-          {"bar": "#9AA1AA", "P": "#1A47A8", "C": "#C2549F", "E": "#F4BE55"}, "letters"),
+          "Dark blue Phone, pink Chat, light green Email: apart by lightness too, and clear of the status colours (amber means short)",
+          {"bar": "#9AA1AA", "P": "#1A47A8", "C": "#C2549F", "E": "#A6D96A"}, "letters"),
 }
 def svg(rows, c, mode):
     out = []

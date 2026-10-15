@@ -69,7 +69,8 @@ class OnThePage(unittest.TestCase):
     def test_the_add_dialog_knows_the_new_kinds(self):
         from pathlib import Path
         script = (Path(__file__).resolve().parents[1] / "static" / "app.js").read_text()
-        self.assertIn('whole = ["Unplanned leave", "Sick", "Public holiday"]', script)
+        # re-pinned in Phase AI: the owner added exam leave, a whole-shift absence (2026-10-15)
+        self.assertIn('whole = ["Unplanned leave", "Sick", "Public holiday", "Exam leave"]', script)
         self.assertIn('"System issue", "Task"]', script)
 
 

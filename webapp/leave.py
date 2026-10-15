@@ -101,6 +101,12 @@ class LeaveBook:
                                     first_day=first.isoformat(), last_day=last.isoformat(),
                                     note=" ".join((note or "").split())[:NOTE_MAX])
 
+    def recover(self) -> int:
+        """Phase AI: requests left "applying" by a server stopped during the RTA's approval go back to the RTA, who
+        approves again to finish them (days already Leave are not changed twice). Run when the website starts."""
+        return sum(1 for row in self.store.list_leave(statuses=["applying"])
+                   if self.store.move_leave(row["id"], "applying", status="waiting_rta", rta_id=None, rta_at=None))
+
     def cancel(self, request_id: int, user_id: int) -> None:
         row = self._get(request_id)
         if row["user_id"] != user_id:

@@ -25,7 +25,7 @@ from werkzeug.utils import secure_filename
 
 from .adherence import interval_shrinkage, person_day, team as team_figures
 from .analytics import program_weeks, team
-from .attendance import (ACTIVITY_KINDS, ADD_KINDS, DAY_OFF, DayBook, aux_details, hm, pick_version, tomorrow_unchecked, week_start,
+from .attendance import (ACTIVITY_KINDS, ADD_KINDS, DAY_OFF, DayBook, aux_details, hm, pick_version, plain_hm, tomorrow_unchecked, week_start,
                          with_text)
 from .break_plan import check_row, floor, slots_for, suggest
 from .channel_page import (FULL as FULL_DAYS, NAMES as CHANNEL_NAMES, apply_edit, before as channel_before,
@@ -283,6 +283,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         queue.schedules = book
         app.extensions["days"] = queue.days = DayBook(app.extensions["store"], book)
         app.extensions["leave"] = LeaveBook(app.extensions["store"], app.extensions["days"])  # Phase AG
+        app.extensions["leave"].recover()  # Phase AI: an approval a stopped server left half done goes back to the RTA
         app.extensions["swaps"] = SwapBook(app.extensions["store"], app.extensions["days"])
         # Phase AB: RTA changes posted to each LOB's Teams or Slack group, on the notifier's own thread.
         notifier = Notifier(app.extensions["store"], transport=config.get("NOTIFY_TRANSPORT") or post_json,
@@ -743,10 +744,16 @@ def create_app(config: Dict[str, Any]) -> Flask:
         leave, swaps = app.extensions.get("leave"), app.extensions.get("swaps")
         name = g.user["roster_name"]
         swap_day = _date(request.args.get("swap", ""))
-        offers = []
+        offers, swap_note = [], ""
         if key and swap_day:
             offers = [c for c in swaps.candidates(key, swap_day, name)
                       if c["ok"] and swaps.account(key, c["name"]) is not None]
+            # Phase AI: when nobody is listed because there is nothing to swap, say why
+            if any(r["first_day"] <= swap_day.isoformat() <= r["last_day"] for r in app.extensions["store"].list_leave(
+                    program=key, associate=name, statuses=["waiting_tm", "waiting_rta", "applying", "approved"])):
+                swap_note = f"You asked for leave on {swap_day:%a %d %b}, so there is no shift to swap."
+            elif not shift_span(dict(app.extensions["days"].roster(key, swap_day)).get(name, "")):
+                swap_note = f"You do not work on {swap_day:%a %d %b}."
         clock_now = datetime.now(EGYPT)
         today, card, week = clock_now.date(), None, []
         mine = leave.mine(key, name) if leave and key else []
@@ -766,6 +773,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 week.append({"date": on, "cell": dict(days.roster(key, on)).get(name, ""), "notes": notes,
                              "today": on == today})
         return render_template("me.html", unit=key, kinds=LEAVE_KINDS, mine=mine, swaps=my_swaps, swap_day=swap_day,
+                               swap_note=swap_note,
                                offers=offers, today=today, card=card, week=week, hm=hm)
 
     MY_STATUS = {"waiting_tm": "waiting for your TM", "waiting_rta": "approved by your TM, waiting for the RTA",
@@ -1222,7 +1230,6 @@ def create_app(config: Dict[str, Any]) -> Flask:
             if g.user["is_admin"] else []
         said = engine_said(run)
         found = read_outcome(queue.results_dir(run_id))
-        fixed_input = cannot_schedule(said.get("code", ""), said.get("category", ""))
         versions = _book().versions(run_id)
         week_state = None  # Phase Z: whether this run is the one its week uses
         if run.get("program") and run.get("week_start"):
@@ -2562,16 +2569,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
         elif request.args.get("window") == "operating" and program:
             begins = app.extensions["store"].get_day_start(program)
             if begins is not None:
-                kept["start"] = _clock_of(begins + moved_for(zone))
+                kept["start"] = plain_hm(begins + moved_for(zone))
         if program and kept != every.get(program):
             every[program] = kept
             session["rta"] = every
         found = START.match(kept.get("start", "")) or START.match("00:00")
         return zone, int(found.group(1)) * 60 + int(found.group(2))
-
-    def _clock_of(minute: int) -> str:
-        minute %= 1440
-        return f"{minute // 60:02d}:{minute % 60:02d}"
 
     @app.route("/day")
     @login_required
@@ -2791,12 +2794,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
         the program's operating day in the zone shown), where the page's 24 hours begin (``vx``, minutes from the
         day's midnight), the schedule's own zone, and the shift that turns the times shown into the schedule's."""
         begins = app.extensions["store"].get_day_start(program) if program else None
-        op = _clock_of(begins + moved) if begins is not None else ""
-        hours = sorted({_clock_of(m) for m in range(0, 1440, 60)} | ({op} if op else set()))
+        op = plain_hm(begins + moved) if begins is not None else ""
+        hours = sorted({plain_hm(m) for m in range(0, 1440, 60)} | ({op} if op else set()))
         starts = [(h, h + (", the operating day" if h == op else ", the calendar day" if h == "00:00" else ""))
                   for h in hours]
         vx = page["view"].get("start", 0) if page else 0
-        return {"starts": starts, "start_at": _clock_of(start_at), "vx": vx, "moved": moved, "own_zone": own_zone,
+        return {"starts": starts, "start_at": plain_hm(start_at), "vx": vx, "moved": moved, "own_zone": own_zone,
                 "own_name": dict(ZONES)[own_zone].split(" (")[0], "zone_name": dict(ZONES)[g.zone].split(" (")[0], "anchor_view": anchor["view"] if anchor else None,
                 "on_anchor_day": bool(start) and tab not in WINDOW_TABS,
                 "may_set_start": bool(g.user["is_admin"] or g.user["is_supervisor"])}

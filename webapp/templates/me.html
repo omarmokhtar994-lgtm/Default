@@ -42,7 +42,7 @@
   {% if swap_day %}<p class="hint">Only colleagues whose shift keeps the rules are listed: rest between shifts, language and channels.</p>
   <ul class="req-done">{% for c in offers %}<li><b>{{ c.name }}</b> {{ c.cell }}
     <form method="post" action="{{ url_for('me_swap') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="day" value="{{ swap_day.isoformat() }}"><input type="hidden" name="other" value="{{ c.name }}"><button class="quiet">Offer</button></form></li>
-  {% else %}<li class="empty">Nobody can take your shift that day within the rules.</li>{% endfor %}</ul>{% endif %}
+  {% else %}<li class="empty">{{ swap_note or 'Nobody can take your shift that day within the rules.' }}</li>{% endfor %}</ul>{% endif %}
 </details>
 <section class="panel" aria-labelledby="mine-h">
   <h2 id="mine-h">My requests</h2>

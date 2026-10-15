@@ -11,6 +11,7 @@ severity and the cells or days they concern.
 """
 from __future__ import annotations
 
+import io
 import json
 import re
 import subprocess
@@ -606,7 +607,6 @@ def marks(found: List[Dict[str, Any]], week: Optional[Dict[str, Any]] = None,
 
 def with_notes(path: Path, view: Dict[str, Any]) -> "io.BytesIO":
     """The version's workbook with a first tab saying what changed, who, why, and what the checks found."""
-    import io
     from datetime import datetime
 
     from openpyxl.styles import Font

@@ -30,7 +30,10 @@ class TheRestOfTheWeek(unittest.TestCase):
     def test_overview_has_the_days_to_come(self):
         page = self.overview("2026-10-13")
         rest = page[page.index('aria-labelledby="out-h"'):]
-        days = __import__("re").findall(r'<th scope="row"><a href="/day\?[^"]*">([A-Z][a-z]{2} \d\d [A-Z][a-z]{2})</a></th>', rest)
+        # re-pinned in Phase AI: one short row a day, the way in is its "Plan this day" button (owner, 2026-10-15:
+        # "rest of week view in overall view is not organized")
+        days = __import__("re").findall(r'<th scope="row">([A-Z][a-z]{2} \d\d [A-Z][a-z]{2})</th>.*?'
+                                        r'<a class="button" href="/day\?[^"]*">Plan this day</a>', rest)
         self.assertEqual(days, ["Wed 14 Oct", "Thu 15 Oct", "Fri 16 Oct", "Sat 17 Oct"])
 
     def test_a_week_that_is_over_has_none(self):

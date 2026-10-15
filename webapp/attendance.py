@@ -1205,8 +1205,15 @@ class DayBook:
                 continue
             view = page["view"]
             plan = self.dayoff_plan(page)
+            away = [s["status"] for lane in view["lanes"] for s in lane["segments"]
+                    if s["offset"] == 0 and s["status"] in ABSENT]
+            kinds = sorted(set(away), key=lambda k: (-away.count(k), STATUSES.index(k)))
             rows.append({"date": on, "absent": [f"{lane['name']} ({s['status'].lower()})" for lane in view["lanes"]
                                                 for s in lane["segments"] if s["offset"] == 0 and s["status"] in ABSENT],
+                         # Phase AI: one short row a day
+                         "absent_text": ", ".join(f"{away.count(k)} {k.lower()}" for k in kinds) or "Nobody",
+                         "overtime_hours": sum(o["people"] * (o["end"] - o["start"]) for o in plan["overtime"]) / 60,
+                         "dayoff_people": sum(p["people"] for p in plan["proposals"]),
                          "short_hours": view["tiles"]["short_hours"], "short_intervals": view["tiles"]["short_intervals"],
                          "overtime": [o["text"] for o in plan["overtime"]],
                          "dayoff": [p["text"] + "; possible: " + _either([c["name"] for c in p["candidates"]])

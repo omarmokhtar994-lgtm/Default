@@ -1349,7 +1349,15 @@ ul.log .post-st { font-size: 0.8125rem; margin-left: 4px; }
 /* Phase AF (F3, F4): absences known for later days, the rest of the week */
 .later-abs { margin: 0 0 12px; }
 .later-abs summary { cursor: pointer; }
-.out-t td, .out-t th { vertical-align: top; text-align: start; }
+.out-t td, .out-t th { vertical-align: middle; text-align: start; }
+/* Phase AI: one short row a day, on Overview and the Week page as on the RTA */
+.out-t { width: 100%; border-collapse: collapse; }
+.out-t th, .out-t td { padding: 8px 12px; border-bottom: 1px solid var(--rail); }
+.out-t thead th { color: var(--dim); font-weight: 600; }
+.out-t .n { text-align: right; font-variant-numeric: tabular-nums; }
+.out-t th[scope="row"], .out-t td.n, .out-t .button, .out-t .out-who summary { white-space: nowrap; }
+.out-t .out-who summary { cursor: pointer; }
+.out-t .out-who small { display: block; max-width: 48ch; margin-top: 4px; color: var(--dim); }
 /* Phase AF (D1, D5): times in another zone and the operating day, one stitched window, read only */
 .zone-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 0 0 10px; }
 .zone-pick { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }

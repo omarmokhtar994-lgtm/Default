@@ -2660,12 +2660,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
             chosen = next((g for g in groups if g["key"] == wanted), None)
             shift_view = {"shift_groups": groups, "shift": wanted,
                           "shift_names": set(chosen["names"]) if chosen else (set() if wanted else None)}
-        outside: Dict[str, Any] = {"rows": [], "roles": COVER_ROLES, "channels": []}
+        outside: Dict[str, Any] = {"rows": [], "roles": COVER_ROLES, "channels": [], "languages": []}
         if page and tab == "cover":
             cover = days.offers(page, from_now)
             ch = page["view"].get("channels")  # Phase AJ: cover from outside the roster, on a channel when there are
             outside = {"rows": days.covers(program, on), "roles": COVER_ROLES,
-                       "channels": [(r["letter"], r["name"]) for r in ch["rows"] if "language" not in r] if ch else []}
+                       "channels": [(r["letter"], r["name"]) for r in ch["rows"] if "language" not in r] if ch else [],
+                       "languages": days.cover_languages(page)}
         proposal = days.replan(page, from_now) if page and tab == "replan" else None
         bulk = _bulk_panel(days, page, program, on, moved) if page and tab == "bulk" else None  # Phase AD (sample 04)
         rescue = None  # Phase AD (sample 02): interval compliance only; the page says so for the other measure
@@ -3290,7 +3291,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             with leave_out(_left_out_asked()):
                 _days().add_cover(program, on, request.form.get("name", ""), request.form.get("role", ""),
                                   _typed("from", program, on), _typed("to", program, on), g.user["id"],
-                                  channel=request.form.get("channel", ""))
+                                  channel=request.form.get("channel", ""), language=request.form.get("language", ""))
             flash(f"Recorded: {' '.join(request.form.get('name', '').split())} covering.")
         except ValueError as exc:
             _say(str(exc), program, on)

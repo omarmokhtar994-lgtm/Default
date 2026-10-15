@@ -407,7 +407,7 @@
 </section>
 <section class="panel" aria-labelledby="outside-h">
   <h2 id="outside-h">Cover from outside the roster</h2>
-  <p class="note">A team manager or support member who is not on the schedule logs in to cover intervals. They count as one more person on the floor for the time they cover{% if outside.channels %}, on the channel they take{% endif %}, and stay out of the roster's hours, adherence and shrinkage.</p>
+  <p class="note">A team manager or support member who is not on the schedule logs in to cover intervals. They count as one more person on the floor for the time they cover{% if outside.channels %}, on the channel they take{% endif %}{% if outside.languages %}, and for the language they take{% endif %}, and stay out of the roster's hours, adherence and shrinkage.</p>
   <form method="post" action="{{ url_for('day_cover') }}" class="exp-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ zone_fields() }}<input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="view" value="cover">
     <div class="exp-row">
       <label>Name <input name="name" maxlength="60" required autocomplete="off" placeholder="Who is covering"></label>
@@ -415,11 +415,12 @@
       <label>From <input type="time" name="from" step="300" required></label>
       <label>To <input type="time" name="to" step="300" required></label>
       {% if outside.channels %}<label>Channel <select name="channel" required>{% for letter, name in outside.channels %}<option value="{{ letter }}">{{ name }}</option>{% endfor %}</select></label>{% endif %}
+      {% if outside.languages %}<label>Language <select name="language"><option value="">None of these</option>{% for name in outside.languages %}<option value="{{ name }}">{{ name }}</option>{% endfor %}</select></label>{% endif %}
     </div>
     {% if post_to and 'overtime' in post_kinds %}<input type="hidden" name="post_asked" value="1">{{ post_tick() }}{% endif %}
     <p><button class="primary" type="submit">Add cover</button></p>
   </form>
-  {% if outside.rows %}<ul class="log">{% for c in outside.rows %}<li><b>{{ c.associate }} ({{ c.role }}) {{ hm(c.start) }} to {{ hm(c.end_min) }}{% if c.channel %}, {{ dict(outside.channels).get(c.channel, c.channel) }}{% endif %}</b>
+  {% if outside.rows %}<ul class="log">{% for c in outside.rows %}<li><b>{{ c.associate }} ({{ c.role }}) {{ hm(c.start) }} to {{ hm(c.end_min) }}{% if c.channel %}, {{ dict(outside.channels).get(c.channel, c.channel) }}{% endif %}{% if c.language %}, {{ c.language }}{% endif %}</b>
     <form method="post" action="{{ url_for('day_cover_cancel') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ zone_fields() }}<input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="id" value="{{ c.id }}"><input type="hidden" name="view" value="cover"><button type="submit" class="link danger">Delete</button></form></li>{% endfor %}</ul>
   {% else %}<p class="empty">Nobody from outside the roster is covering on this day.</p>{% endif %}
 </section>

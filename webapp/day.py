@@ -448,6 +448,8 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
                 row.append({"t": t, "count": None, "cls": "none"})
                 continue
             count = min(sum(1 for seg in now[i] if _norm(seg["language"]) in eligible)
+                        + sum(1 for c in cover if c["start"] <= i * STEP < c["end"]  # Phase AJ: cover in a language
+                              and c.get("language") and _norm(c["language"]) in eligible)
                         for i in range(t // STEP, (t + step) // STEP))
             minimum = max(minimums)
             cls = "bad" if count < minimum else ("warn" if count == 0 else "lok")

@@ -568,7 +568,7 @@ class DayBook:
         if recorded and cover:  # Phase AJ: today's, and last night's that ran past midnight
             for shift, when in ((0, on), (-1440, on - timedelta(days=1))):
                 covering += [{"start": r["start"] + shift, "end": r["end_min"] + shift, "channel": r["channel"],
-                              "name": r["associate"], "role": r["role"]}
+                              "name": r["associate"], "role": r["role"], "language": r.get("language", "")}
                              for r in self.store.list_cover(program, [when.isoformat()])]
         view = day_view(week, inputs, day_index(on), attendance, actual, measure, acts, before, channels=channels,
                         cover=covering)
@@ -1148,14 +1148,27 @@ class DayBook:
         return self.store.list_cover(program, [on.isoformat()])
 
     @staticmethod
-    def _cover_text(name: str, role: str, lo: int, hi: int, channel: str = "") -> str:
+    def _cover_text(name: str, role: str, lo: int, hi: int, channel: str = "", language: str = "") -> str:
         from .channels import CHANNELS
         return (f"Cover from outside the roster ({role}) {hm(lo)} to {hm(hi)}"  # the log line and post name them
-                + (f", {CHANNELS.get(channel, channel)}" if channel else ""))
+                + (f", {CHANNELS.get(channel, channel)}" if channel else "") + (f", {language}" if language else ""))
+
+    @staticmethod
+    def cover_languages(page: Optional[Dict[str, Any]]) -> List[str]:
+        """The languages a cover can take (Phase AJ): the day's language rules and the channels' language rules."""
+        if not page:
+            return []
+        view = page["view"]
+        names = [l["name"] for l in view["languages"]]
+        names += [r["language"] for r in (view.get("channels") or {}).get("rows", []) if r.get("language")]
+        found: Dict[str, str] = {}
+        for n in names:
+            found.setdefault(n.strip().casefold(), n.strip())
+        return sorted(found.values(), key=str.casefold)
 
     @journaled
     def add_cover(self, program: str, on: date, name: str, role: str, start: str, end: str, user_id: int,
-                  channel: str = "", dry_run: bool = False) -> Any:
+                  channel: str = "", dry_run: bool = False, language: str = "") -> Any:
         """Keep a team manager or support member, not on the roster, logging in from ``start`` to ``end`` on ``on``
         (an end at or before the start runs past midnight). They count as one person on the floor for those minutes,
         on ``channel`` when the program has channels (then it must be one of them). Returns the id; with ``dry_run``
@@ -1188,14 +1201,22 @@ class DayBook:
             raise ValueError("This program has no channels set up, so there is no channel to pick.")
         if letters and channel not in letters:
             raise ValueError(f"Pick the channel {name} takes: {_either([CHANNELS[c] for c in letters])}.")
+        offered = self.cover_languages(page)  # Phase AJ: counts for that language too (owner, 2026-10-15)
+        language = _tidy(language)
+        if language:
+            language = next((n for n in offered if n.casefold() == language.casefold()), "")
+            if not language:
+                raise ValueError(f"Pick the language {name} takes: {', '.join(offered) or 'none'}, or none."
+                                 if offered else "This program has no languages set up, so there is none to pick.")
         for r in self.covers(program, on):
             if r["associate"].casefold() == name.casefold() and r["start"] < hi and lo < r["end_min"]:
                 raise ValueError(f"{r['associate']} already covers {hm(r['start'])} to {hm(r['end_min'])}.")
-        what = self._cover_text(name, role, lo, hi, channel)  # logged under the name
+        what = self._cover_text(name, role, lo, hi, channel, language)  # logged under the name
         if dry_run:
-            return {"name": name, "role": role, "start": lo, "end": hi, "channel": channel, "what": what}
+            return {"name": name, "role": role, "start": lo, "end": hi, "channel": channel, "language": language,
+                    "what": what}
         made = self.store.add_cover(program=program, shift_date=on.isoformat(), associate=name, role=role, start=lo,
-                                    end_min=hi, channel=channel, user_id=user_id)
+                                    end_min=hi, channel=channel, language=language, user_id=user_id)
         self._log(program, on, name, what, user_id, "overtime", ref=f"cover:{made}", after="on")
         return made
 
@@ -1205,7 +1226,8 @@ class DayBook:
         if row is None or row["program"] != program or row["shift_date"] != on.isoformat():
             raise ValueError("That cover is not on this day.")
         self.store.delete_cover(cover_id)
-        text = self._cover_text(row["associate"], row["role"], row["start"], row["end_min"], row["channel"])
+        text = self._cover_text(row["associate"], row["role"], row["start"], row["end_min"], row["channel"],
+                                row.get("language", ""))
         self._log(program, on, row["associate"], "Cancelled: c" + text[1:], user_id, "overtime",
                   ref=f"cover:{cover_id}", before="on")
 

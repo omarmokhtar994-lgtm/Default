@@ -258,3 +258,67 @@ class TheBoard(_Book):
         views = {d: (self.days.page(AR, WED + timedelta(days=d)) or {}).get("view") for d in (0, 1)}
         found = window_view(views, 12 * 60, WED)
         self.assertEqual([(o["name"], o["start"], o["end"]) for o in found["outside"]], [(TM, 1380, 1500)])
+
+
+class TheLanguage(_Book):
+    """Phase AJ item 4 (owner, 2026-10-15: "For the support tm cover should count in language as well so add language
+    part"): a cover says the language the person takes, from the program's languages, and counts for it."""
+
+    def lang(self, t, **kw):
+        row = next(l for l in self.days.page(AR, WED, **kw)["view"]["languages"] if l["name"] == "English")
+        return next(c for c in row["cells"] if c["t"] == t)
+
+    def test_a_cover_in_a_language_counts_for_it(self):
+        before = self.lang(600)["count"]
+        self.add("10:00", "12:00", language="English")
+        self.assertEqual(self.lang(600)["count"], before + 1)
+        self.assertEqual(self.days.covers(AR, WED)[0]["language"], "English")
+        self.assertEqual(self.days.page(AR, WED)["log"][-1]["what"],
+                         "Cover from outside the roster (Team manager) 10:00 to 12:00, English")
+
+    def test_without_a_language_it_counts_for_none(self):
+        before = self.lang(600)["count"]
+        self.add("10:00", "12:00")
+        self.assertEqual(self.lang(600)["count"], before)
+
+    def test_only_the_programs_languages(self):
+        with self.assertRaises(ValueError) as said:
+            self.add(language="Klingon")
+        self.assertEqual(str(said.exception), f"Pick the language {TM} takes: English, or none.")
+
+    def test_the_tab_offers_the_languages(self):
+        self.assertEqual(self.days.cover_languages(self.days.page(AR, WED)), ["English"])
+
+
+class TheChannelLanguage(_Day):
+    def test_a_cover_counts_for_its_channel_and_language(self):
+        rows = self.view()["channels"]["rows"]
+        rule = next(r for r in rows if r.get("language"))
+        cell = next(c for c in rule["cells"] if c["need"])
+        names = {"P": "Phone", "C": "Chat", "E": "Email"}
+        lo = cell["t"]
+        self.days.add_cover(self.key, date(2026, 10, 14), TM, "Support", plain(lo), plain(lo + 60), self.omar,
+                            channel=rule["letter"], language=rule["language"])
+        after = next(c for r in self.view()["channels"]["rows"] if r["name"] == rule["name"] for c in r["cells"]
+                     if c["t"] == lo)
+        self.assertEqual(after["low"], cell["low"] + 1, names[rule["letter"]])
+
+
+class TheUpgrade(unittest.TestCase):
+    def test_a_database_from_the_first_phase_aj_package_gets_the_language_column(self):
+        import sqlite3
+        folder = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, folder, True)
+        Store(folder / "scheduler.db")
+        db = sqlite3.connect(folder / "scheduler.db")
+        db.execute("drop table outside_cover")
+        db.execute("create table outside_cover (id integer primary key autoincrement, program text not null, "
+                   "shift_date text not null, associate text not null, role text not null, start integer not null, "
+                   "end_min integer not null, channel text not null default '', user_id integer not null, "
+                   "at real not null)")
+        db.execute("insert into outside_cover (program, shift_date, associate, role, start, end_min, user_id, at) "
+                   "values ('X', '2026-10-15', 'Team lead 01', 'Support', 600, 660, 1, 0)")
+        db.commit()
+        db.close()
+        store = Store(folder / "scheduler.db")
+        self.assertEqual(store.list_cover("X", ["2026-10-15"])[0]["language"], "")

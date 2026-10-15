@@ -276,6 +276,7 @@ create table if not exists outside_cover (
     start integer not null,
     end_min integer not null,
     channel text not null default '',
+    language text not null default '',
     user_id integer not null,
     at real not null
 );
@@ -394,6 +395,10 @@ class Store:
                 db.execute("alter table actual_breaks add column cancelled integer not null default 0")
             if "why" not in have:
                 db.execute("alter table actual_breaks add column why text not null default ''")
+            # Phase AJ: a cover from outside the roster says its language; covers kept before have none.
+            have = {row["name"] for row in db.execute("pragma table_info(outside_cover)")}
+            if "language" not in have:
+                db.execute("alter table outside_cover add column language text not null default ''")
             # Phase T: an aux says who it is with and why; rows from before keep both empty.
             for table in ("attendance", "activities"):
                 have = {row["name"] for row in db.execute(f"pragma table_info({table})")}

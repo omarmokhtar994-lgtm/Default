@@ -331,10 +331,12 @@ def _channels(store, days, weeks, start, end, program, user_id, measure):
 def _cover(store, days, weeks, start, end, program, user_id, measure):
     """Phase AJ: team managers and support members, not on the roster, who logged in to cover intervals."""
     from .channels import CHANNELS
-    yield ["Shift date", "Program", "Name", "Role", "From", "To", "Minutes", "Channel", "Recorded by", "Recorded at"]
+    yield ["Shift date", "Program", "Name", "Role", "From", "To", "Minutes", "Channel", "Language", "Recorded by",
+           "Recorded at"]
     for r in store.cover_between(start.isoformat(), end.isoformat(), program, user_id):
         yield [r["shift_date"], r["program"], r["associate"], r["role"], _hm(r["start"]), _hm(r["end_min"]),
-               r["end_min"] - r["start"], CHANNELS.get(r["channel"], ""), r["by_name"], _when(r["at"])]
+               r["end_min"] - r["start"], CHANNELS.get(r["channel"], ""), r.get("language", ""), r["by_name"],
+               _when(r["at"])]
 
 
 TABLES: Dict[str, Callable] = {"attendance": _attendance, "activities": _activities, "activity": _activity,

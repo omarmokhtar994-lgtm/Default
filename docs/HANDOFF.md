@@ -64,8 +64,9 @@ check it. What they cannot hold is the chat itself: when something here is not e
 - Package: `RC9_2_2_PRODUCTION_PACKAGE.zip`, 2689 files, 75.24 MB, sha256
   `cda2507cd5d4c5aebbda648563c803cc6870be31d25fce9efd2dd182c2354ea0`, sent as AI_part_0 to AI_part_2 (`dist/` is
   not in git; rebuild it with the command below if needed).
-- **Installing it is the owner's step** (ask whether it is done). The owner was given these steps for Oracle Cloud
-  Shell: upload the three
+- **Installing it is the owner's step** (ask whether it is done). The key and the server are already set up in the
+  owner's Oracle Cloud Shell (agreed 2026-10-14): never ask for them again. Their earlier `scp` and `ssh` commands
+  are in Cloud Shell's history (`history | grep -E "scp |ssh "`); point there. The owner was given these steps: upload the three
   parts; `cat AI_part_0 AI_part_1 AI_part_2 > RC9_2_2_PRODUCTION_PACKAGE.zip`; check `sha256sum`; copy it to the
   server and sign in as in `deploy/ORACLE_SETUP_GUIDE.md` step 3; run
   `sudo bash /opt/scheduler/package/deploy/update.sh ~/RC9_2_2_PRODUCTION_PACKAGE.zip`; answer n to the safety gate

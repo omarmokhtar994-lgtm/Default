@@ -1185,12 +1185,12 @@ class DayBook:
         if lo is None or hi is None:
             raise ValueError("Give the start and end like 13:05.")
         if lo % STEP or hi % STEP:
-            raise ValueError("Cover goes in 5-minute steps.")
+            raise ValueError("Pick times in 5-minute steps, like 10:05.")
         if hi == lo:
             raise ValueError("The end time must be after the start time.")
         hi += 1440 if hi < lo else 0
         if hi - lo > COVER_MAX:
-            raise ValueError(f"Cover is up to {COVER_MAX // 60} hours.")
+            raise ValueError(f"Keep a cover to {COVER_MAX // 60} hours or less, and add a second one for the rest.")
         page = self.page(program, on)
         if page is None:
             raise ValueError(f"There is no schedule for {program} in the week of {week_start(on):%d %b}.")
@@ -1210,7 +1210,8 @@ class DayBook:
                                  if offered else "This program has no languages set up, so there is none to pick.")
         for r in self.covers(program, on):
             if r["associate"].casefold() == name.casefold() and r["start"] < hi and lo < r["end_min"]:
-                raise ValueError(f"{r['associate']} already covers {hm(r['start'])} to {hm(r['end_min'])}.")
+                raise ValueError(f"{r['associate']} already covers {hm(r['start'])} to {hm(r['end_min'])}. Pick another "
+                                 "time, or delete that cover first.")
         what = self._cover_text(name, role, lo, hi, channel, language)  # logged under the name
         if dry_run:
             return {"name": name, "role": role, "start": lo, "end": hi, "channel": channel, "language": language,

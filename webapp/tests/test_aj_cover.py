@@ -119,16 +119,17 @@ class TheChecks(_Book):
         self.refused("Keep the name to 60 characters.", name="x" * 61)
         self.refused("Pick Team manager or Support.", role="Manager")
         self.refused("Give the start and end like 13:05.", start="10")
-        self.refused("Cover goes in 5-minute steps.", start="10:03")
+        self.refused("Pick times in 5-minute steps, like 10:05.", start="10:03")
         self.refused("The end time must be after the start time.", start="10:00", end="10:00")
-        self.refused("Cover is up to 12 hours.", start="08:00", end="20:05")
+        self.refused("Keep a cover to 12 hours or less, and add a second one for the rest.", start="08:00", end="20:05")
         self.refused("This program has no channels set up, so there is no channel to pick.", channel="P")
         self.assertIsNone(self.days.page(AR, date(2026, 11, 4)))
         self.refused(f"There is no schedule for {AR} in the week of 01 Nov.", on=date(2026, 11, 4))
 
     def test_one_name_cannot_cover_twice_at_once(self):
         self.add("10:00", "12:00")
-        self.refused(f"{TM} already covers 10:00 to 12:00.", start="11:00", end="13:00")
+        self.refused(f"{TM} already covers 10:00 to 12:00. Pick another time, or delete that cover first.",
+                     start="11:00", end="13:00")
         self.add("12:00", "13:00")  # back to back is fine
         self.add("11:00", "12:00", name="Support 02", role="Support")  # someone else is fine
 

@@ -410,7 +410,7 @@
   <p class="note">A team manager or support member who is not on the schedule logs in to cover intervals. They count as one more person on the floor for the time they cover{% if outside.channels %}, on the channel they take{% endif %}{% if outside.languages %}, and for the language they take{% endif %}, and stay out of the roster's hours, adherence and shrinkage.</p>
   <form method="post" action="{{ url_for('day_cover') }}" class="exp-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ zone_fields() }}<input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="view" value="cover">
     <div class="exp-row">
-      <label>Name <input name="name" maxlength="60" required autocomplete="off" placeholder="Who is covering"></label>
+      <label>Name <input name="name" maxlength="60" required autocomplete="off" spellcheck="false" placeholder="Who is covering"></label>
       <label>Role <select name="role">{% for r in outside.roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}</select></label>
       <label>From <input type="time" name="from" step="300" required></label>
       <label>To <input type="time" name="to" step="300" required></label>
@@ -421,7 +421,7 @@
     <p><button class="primary" type="submit">Add cover</button></p>
   </form>
   {% if outside.rows %}<ul class="log">{% for c in outside.rows %}<li><b>{{ c.associate }} ({{ c.role }}) {{ hm(c.start) }} to {{ hm(c.end_min) }}{% if c.channel %}, {{ dict(outside.channels).get(c.channel, c.channel) }}{% endif %}{% if c.language %}, {{ c.language }}{% endif %}</b>
-    <form method="post" action="{{ url_for('day_cover_cancel') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ zone_fields() }}<input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="id" value="{{ c.id }}"><input type="hidden" name="view" value="cover"><button type="submit" class="link danger">Delete</button></form></li>{% endfor %}</ul>
+    <form method="post" action="{{ url_for('day_cover_cancel') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ zone_fields() }}<input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="id" value="{{ c.id }}"><input type="hidden" name="view" value="cover"><button type="submit" class="link danger" aria-label="Delete the cover of {{ c.associate }}, {{ hm(c.start) }} to {{ hm(c.end_min) }}">Delete</button></form></li>{% endfor %}</ul>
   {% else %}<p class="empty">Nobody from outside the roster is covering on this day.</p>{% endif %}
 </section>
 <section class="panel" aria-labelledby="acts-h">

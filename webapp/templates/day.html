@@ -147,6 +147,16 @@
 <section class="panel" aria-labelledby="chw-h">
   <h2 id="chw-h">Channel warnings</h2>
   <p class="note">Where today's breaks, absences, coaching, meetings and other aux leave a channel, or a channel's language minimum, below its need and below the plan{{ ' for the rest of the day' if from_now }}. Nothing changes until you apply a fix.</p>
+  {% if can('rta_change') %}<div class="chfix" id="chfix">
+  {% if chfix is none %}<form method="get" action="{{ url_for('day_page') }}#chfix">{{ zone_fields() }}<input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="view" value="channels"><input type="hidden" name="fix" value="1"><button type="submit" class="primary">Fix channels</button> <span class="note">Re-plans everyone's channels from now on to cover every channel and language. Breaks stay where they are; the changes show first.</span></form>
+  {% elif chfix.error %}<p class="alert bad">{{ chfix.error }}</p>
+  {% else %}<h3>Fix channels from {{ hm(chfix['from']) }}</h3>
+    <p class="cp-sum">{% for c, h in chfix.short_before.items() %}<span><b>{{ 'Language minimums' if c == 'languages' else (c|channel_name) }} short</b> {{ h|num }} h now, {{ chfix.short_after.get(c, 0)|num }} h after</span>{% endfor %}</p>
+    {% if chfix.changes %}<form method="post" action="{{ url_for('day_channel_fix') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}">
+      <ul class="log">{% for name, lo, hi, c, was in chfix.changes %}<li><input type="hidden" name="change" value="{{ name }}|{{ lo }}|{{ hi }}|{{ c }}">{{ name }}: {{ c|channel_name }} {{ hm(lo) }} to {{ hm(hi) }}{% if was in ('P', 'C', 'E') %}, was {{ was|channel_name }}{% elif not was %}, no channel planned{% endif %}</li>{% endfor %}</ul>
+      <p><button class="primary" type="submit">Apply all {{ chfix.changes|length }}</button> <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='channels') }}">Cancel</a></p>
+    </form>{% else %}<p class="note">Nothing to change: every channel and language is covered as well as it can be from {{ hm(chfix['from']) }}. <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='channels') }}">Close</a></p>{% endif %}
+  {% endif %}</div>{% endif %}
   {% if chv.now %}<p class="cp-sum">{% for c, n in chv.now.items() %}<span><b>{{ c|channel_name }}</b> {{ n.have }} on{% if n.need %}, {{ n.need|num }} needed{% endif %}</span>{% endfor %}</p>{% endif %}
   {% for w in chv.warnings %}
   <div class="alert bad"><h3>{{ w.text }}</h3>

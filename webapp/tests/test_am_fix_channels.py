@@ -3,6 +3,7 @@
 click fix things" ... "First point was related to channel for the button"; answers: the channel planner re-plans
 everyone's channels from now on, channels only, coverage first then fairness, changes shown first, one Apply, one
 Undo)."""
+import re
 import unittest
 
 from webapp.channel_plan import plan_day
@@ -112,3 +113,37 @@ class TheFix(ai.TheChannelsOnTheTimeline):
         for key, hours in plan["short_after"].items():
             self.assertLessEqual(hours, plan["short_before"][key], key)
         self.assertEqual(plan["short_after"]["P"], 0)
+
+
+import html  # noqa: E402
+from unittest import mock  # noqa: E402
+
+from webapp.permissions import ENDPOINTS  # noqa: E402
+from webapp.tests.test_af_outlook import _Clock  # noqa: E402  (Wednesday 14 October 2026, 10:00 Egypt time)
+from webapp.tests.test_runs import token  # noqa: E402
+
+
+class ThePage(TheFix):
+    def url(self, **more):
+        return "/day?" + "&".join(f"{k}={v}" for k, v in {"program": self.key.replace(" ", "+"), "date": "2026-10-14",
+                                                         "view": "channels", **more}.items())
+
+    def test_the_button_then_the_changes_then_apply(self):
+        with mock.patch("webapp.app.datetime", _Clock):
+            body = html.unescape(self.client.get(self.url()).get_data(as_text=True))
+            self.assertIn(">Fix channels</button>", body)
+            preview = html.unescape(self.client.get(self.url(fix=1)).get_data(as_text=True))
+            plan = self.days.channel_fix_plan(self.key, WED, now=600)
+            name, lo, hi, letter, was = plan["changes"][0]
+            self.assertRegex(preview, rf"{name}: \w+ {lo // 60:02d}:{lo % 60:02d} to")
+            self.assertIn(f"Apply all {len(plan['changes'])}", preview)
+            self.assertIn("Phone short", preview)
+            items = re.findall(r'name="change" value="([^"]+)"', preview)
+            self.assertEqual(len(items), len(plan["changes"]))
+            got = self.client.post("/day/channels/fix", data={"csrf_token": token(self.client), "program": self.key,
+                                                               "date": "2026-10-14", "change": items})
+            self.assertEqual(got.status_code, 303)
+        self.assertEqual(len(self.store.list_channel_moves(self.key, [WED.isoformat()])), len(items))
+
+    def test_it_is_an_rta_change(self):
+        self.assertEqual(ENDPOINTS.get("day_channel_fix"), "rta_change")

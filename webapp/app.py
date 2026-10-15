@@ -2855,6 +2855,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
             except ValueError as exc:
                 rescue = {"error": str(exc)}
         dayoff = days.dayoff_plan(anchor, from_now) if anchor and tab == "rescue" else None  # Phase AF (F1, F2)
+        chfix = None  # Phase AM: Fix channels, shown before anything is kept
+        if page and tab == "channels" and request.args.get("fix") == "1" and allowed(app.extensions["store"], g.user,
+                                                                                    "rta_change"):
+            try:
+                chfix = days.channel_fix_plan(program, on, now=_window_now(on, 0))
+            except ValueError as exc:
+                chfix = {"error": str(exc)}
         cover_panel = None
         cover_at = request.args.get("cover", type=int)
         if page and tab == "board" and cover_at is not None:
@@ -2959,7 +2966,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                tile_now=now_at if window else (from_now if clock_now.date() == on else None),
                                add_panel=add_panel, person_panel=person_panel, lengths=ADD_LENGTHS, bar=bar,
                                overtime_hours=OVERTIME_MAX // 60,
-                               bulk=bulk, shifts=BULK_SHIFTS, bulk_verb=bulk_verb, rescue=rescue, dayoff=dayoff,
+                               bulk=bulk, shifts=BULK_SHIFTS, bulk_verb=bulk_verb, rescue=rescue, dayoff=dayoff, chfix=chfix,
                                team_names=sorted({u["display_name"] for u in app.extensions["store"].list_users()
                                                   if u["active"] and not u["is_associate"] and program
                                                   and Access(app.extensions["store"], u).can_open(program)},
@@ -3394,6 +3401,28 @@ def create_app(config: Dict[str, Any]) -> Flask:
         except ValueError as exc:
             _say(f"Stopped: {exc} Anything changed before it was kept, and Undo takes it all back.", program, on)
         return _back_to_day(program, on, "")
+
+    @app.route("/day/channels/fix", methods=["POST"])
+    @login_required
+    def day_channel_fix():  # type: ignore[no-untyped-def]
+        """Phase AM: keep the Fix channels changes shown in the preview as one change (one step for Undo)."""
+        program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
+        try:
+            if on is None:
+                raise ValueError("Pick a day.")
+            changes = []
+            for item in request.form.getlist("change"):
+                name, lo, hi, letter = (item.split("|") + ["", "", "", ""])[:4]
+                if not (lo.isdigit() and hi.isdigit()) or letter not in ("P", "C", "E"):
+                    raise ValueError("A change in the list cannot be read: open Fix channels again.")
+                changes.append((name, int(lo), int(hi), letter))
+            if not changes:
+                raise ValueError("No changes to keep.")
+            done = _days().apply_channel_fix(program, on, changes, g.user["id"], now=_window_now(on, 0))
+            flash(f"Fix channels changed {done} stretch{'es' if done != 1 else ''}. Undo takes them all back.")
+        except ValueError as exc:
+            _say(f"Stopped: {exc} Anything changed before it was kept, and Undo takes it all back.", program, on)
+        return _back_to_day(program, on, "channels")
 
     @app.route("/day/handover")
     @login_required

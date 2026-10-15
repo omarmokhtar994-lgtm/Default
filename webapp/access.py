@@ -3,7 +3,8 @@
 
 Admins see and manage everything. Everyone else sees the programs assigned to them (or every program, for
 people marked so, which is how people from before program assignments keep their access). Supervisors manage
-the planners of their own programs: their programs, passwords, switched on or off."""
+the planners, team managers and associates of their own programs: their programs, passwords, switched on or off,
+and (Phase AK) which team manager an associate belongs to."""
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Set
@@ -16,7 +17,9 @@ def role(user: Dict[str, Any]) -> str:
         return "Admin"
     if user.get("is_associate"):
         return "Associate"
-    return "Supervisor" if user.get("is_supervisor") else "Planner"
+    if user.get("is_supervisor"):
+        return "Supervisor"
+    return "Team manager" if user.get("is_team_manager") else "Planner"
 
 
 class Access:
@@ -61,6 +64,12 @@ class Access:
         if target.get("all_programs"):
             return False
         return bool(self.program_ids() & set(self.store.user_program_ids(target["id"])))
+
+    def team_managers_for(self, associate: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Phase AK: the active team managers who share one of ``associate``'s programs (or have every program)."""
+        mine = set(self.store.user_program_ids(associate["id"]))
+        return [u for u in self.store.list_users() if u["is_team_manager"] and u["active"]
+                and (u["all_programs"] or mine & set(self.store.user_program_ids(u["id"])))]
 
     def grantable(self) -> List[Dict[str, Any]]:
         """The programs this person may give to others."""

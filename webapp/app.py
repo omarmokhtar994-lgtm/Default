@@ -575,8 +575,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return render_template("password.html", error=error, forced=bool(g.user["must_change"]))
 
     # ------------------------------------------------------------- admin
-    ROLES = {"planner": "Planner", "associate": "Associate", "supervisor": "Supervisor", "admin": "Admin"}
-    STAFF_ADDS = ("planner", "associate")  # what a supervisor may add for their programs
+    ROLES = {"planner": "Planner", "associate": "Associate", "team_manager": "Team manager", "supervisor": "Supervisor",
+             "admin": "Admin"}
+    STAFF_ADDS = ("planner", "associate", "team_manager")  # what a supervisor may add for their programs
 
     def _roster_names(program_ids: list, tree: list) -> List[str]:
         """Names on the newest kept week's schedules of these programs' LOBs (Phase AG: an associate's account is
@@ -661,7 +662,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 uid = store.add_user(username, request.form.get("display_name", ""), password,
                                      is_admin=kind == "admin", must_change=True)
                 store.update_user(uid, is_supervisor=int(kind == "supervisor"), all_programs=int(everything),
-                                  is_associate=int(kind == "associate"), roster_name=roster if kind == "associate" else "")
+                                  is_associate=int(kind == "associate"), roster_name=roster if kind == "associate" else "",
+                                  is_team_manager=int(kind == "team_manager"))
                 store.set_user_programs(uid, programs)
                 _record("user_added", subject=username,  # never the password
                         detail=f"{ROLES[kind]}; " + ("all programs" if everything else
@@ -669,12 +671,65 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 flash(f"Added {username}. They choose their own password at first sign-in.")
                 return redirect(url_for("admin_users"))
         tree = access.book.tree()
+        names = {u["id"]: u["display_name"] for u in store.list_users()}
         people = [dict(u, role=role(u), programs=_program_names(store.user_program_ids(u["id"]), tree),
-                       program_ids=store.user_program_ids(u["id"]), manageable=access.can_manage(u))
+                       program_ids=store.user_program_ids(u["id"]), manageable=access.can_manage(u),
+                       team_manager=names.get(u["team_manager_id"], ""),
+                       team_choices=access.team_managers_for(u) if u["is_associate"] else [])
                   for u in store.list_users() if admin or access.can_manage(u)]
         return render_template("admin_users.html", users=people, error=error, grantable=access.grantable(),
                                roles=ROLES if admin else {k: ROLES[k] for k in STAFF_ADDS}, admin=admin,
                                roster_names=_roster_names([p["id"] for p in access.grantable()], tree))
+
+    def _set_team_manager(access: Access, target: Dict[str, Any], value: str) -> str:
+        """Phase AK: ``target``'s team manager from a form value (a user id, or "" for none). Returns what to say."""
+        store = app.extensions["store"]
+        if not target["is_associate"]:
+            raise ValueError("Only an associate has a team manager.")
+        if not access.can_manage(target):
+            raise PermissionError
+        if not value.strip():
+            store.update_user(target["id"], team_manager_id=None)
+            _record("team_manager_set", subject=target["username"], detail="none")
+            return f"{target['roster_name'] or target['display_name']} has no team manager."
+        chosen = store.get_user(int(value)) if value.strip().isdigit() else None
+        if chosen is None or not chosen["is_team_manager"] or not chosen["active"]:
+            raise ValueError("Pick a team manager.")
+        if chosen["id"] not in {u["id"] for u in access.team_managers_for(target)}:
+            raise ValueError(f"{chosen['display_name']} has none of {target['roster_name'] or target['display_name']}'s "
+                             "programs.")
+        store.update_user(target["id"], team_manager_id=chosen["id"])
+        _record("team_manager_set", subject=target["username"], detail=chosen["display_name"])
+        return f"{target['roster_name'] or target['display_name']}'s team manager is {chosen['display_name']}."
+
+    @app.route("/admin/users/team", methods=["POST"])
+    @manager_required
+    def admin_users_team():  # type: ignore[no-untyped-def]
+        """Phase AK: one team manager for several associates at once (each checked as if set alone)."""
+        store = app.extensions["store"]
+        access = Access(store, g.user)
+        value = request.form.get("team_manager", "")
+        done, refused = 0, []
+        for who in request.form.getlist("who"):
+            target = store.get_user(int(who)) if who.isdigit() else None
+            if target is None:
+                continue
+            try:
+                _set_team_manager(access, target, value)
+                done += 1
+            except PermissionError:
+                abort(403)
+            except ValueError as exc:
+                refused.append(str(exc))
+        chosen = store.get_user(int(value)) if value.isdigit() else None
+        if done:
+            flash(f"{done} associate{'s' if done != 1 else ''} now ha{'ve' if done != 1 else 's'} "
+                  + (f"{chosen['display_name']} as their team manager." if chosen else "no team manager."))
+        for said in refused[:3]:
+            flash(said)
+        if not done and not refused:
+            flash("Pick the associates.")
+        return redirect(url_for("admin_users"))
 
     @app.route("/admin/users/<int:user_id>/<action>", methods=["POST"])
     @manager_required
@@ -703,10 +758,17 @@ def create_app(config: Dict[str, Any]) -> Flask:
             _record("password_reset", subject=target["username"])  # never the password itself
             flash(f"Temporary password for {target['username']}: {temporary} "
                   "(shown once; they choose their own at next sign-in).")
+        elif action == "team":  # Phase AK
+            try:
+                flash(_set_team_manager(access, target, request.form.get("team_manager", "")))
+            except PermissionError:
+                abort(403)
+            except ValueError as exc:
+                flash(str(exc))
         elif action == "programs":
             admin = bool(g.user["is_admin"])
             kind = request.form.get("role", "")
-            current = role(target).lower()
+            current = role(target).lower().replace(" ", "_")
             if kind and kind != current and not admin:
                 abort(403)
             try:
@@ -728,6 +790,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 changes = {"is_associate": 1, "roster_name": roster}
             if admin:
                 changes.update({"is_admin": int(kind == "admin"), "is_supervisor": int(kind == "supervisor"),
+                                "is_team_manager": int(kind == "team_manager"),
                                 "all_programs": int(request.form.get("all_programs") == "1" and kind != "associate"),
                                 "is_associate": int(kind == "associate"),
                                 "roster_name": changes.get("roster_name", "")})

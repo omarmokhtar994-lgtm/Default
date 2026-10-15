@@ -385,6 +385,11 @@ class Store:
                 db.execute("alter table users add column is_associate integer not null default 0")
             if "roster_name" not in people:
                 db.execute("alter table users add column roster_name text not null default ''")
+            # Phase AK: team managers, and the team manager an associate belongs to (none for everyone from before)
+            if "is_team_manager" not in people:
+                db.execute("alter table users add column is_team_manager integer not null default 0")
+            if "team_manager_id" not in people:
+                db.execute("alter table users add column team_manager_id integer")
             # Phase AD: a group-post item knows the journal entry it came from (bulk changes wait for Send).
             have = {row["name"] for row in db.execute("pragma table_info(notify_items)")}
             if "action_id" not in have:
@@ -425,7 +430,8 @@ class Store:
                  int(must_change), time.time()))
             return int(cur.lastrowid)
 
-    PERSON_FIELDS = ("display_name", "is_admin", "is_supervisor", "all_programs", "is_associate", "roster_name")
+    PERSON_FIELDS = ("display_name", "is_admin", "is_supervisor", "all_programs", "is_associate", "roster_name",
+                     "is_team_manager", "team_manager_id")
 
     def update_user(self, user_id: int, **fields: Any) -> None:
         unknown = set(fields) - set(self.PERSON_FIELDS)

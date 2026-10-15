@@ -3,7 +3,7 @@
 {% block content %}
 <div class="phead"><div>
   <h1>People</h1>
-  <p class="byline">{% if admin %}Admins manage everyone. Supervisors manage the planners of their own programs.{% else %}You manage the planners of your programs: their programs, passwords, switched on or off.{% endif %}</p>
+  <p class="byline">{% if admin %}Admins manage everyone. Supervisors manage the planners, team managers and associates of their own programs.{% else %}You manage the planners, team managers and associates of your programs: their programs, passwords, switched on or off, and each associate's team manager.{% endif %}</p>
 </div></div>
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
 {% macro program_boxes(chosen, everything) %}
@@ -26,17 +26,31 @@
     <button class="primary">Add person</button>
   </form>
 </section>
+{% set managed = users|selectattr('is_associate')|selectattr('manageable')|list %}
+{% set leaders = users|selectattr('is_team_manager')|selectattr('active')|list %}
+{% if managed and leaders %}<section class="panel" aria-labelledby="team-h">
+  <h2 id="team-h">Set the team manager of several associates</h2>
+  <p class="note">Their team manager gives the first approval of their leave and swaps. Admins and supervisors can approve in their place.</p>
+  <form method="post" action="{{ url_for('admin_users_team') }}" class="people-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <fieldset class="exp-kinds"><legend>Associates</legend>{% for u in managed %}<label class="exp-kind"><input type="checkbox" name="who" value="{{ u.id }}"> {{ u.roster_name or u.display_name }}{% if u.team_manager %} <small>({{ u.team_manager }})</small>{% endif %}</label>{% endfor %}</fieldset>
+    <label>Team manager <select name="team_manager"><option value="">None</option>{% for t in leaders %}<option value="{{ t.id }}">{{ t.display_name }}</option>{% endfor %}</select></label>
+    <button class="primary">Set team manager</button>
+  </form>
+</section>{% endif %}
 <datalist id="roster-names">{% for n in roster_names %}<option value="{{ n }}">{% endfor %}</datalist>
 <table class="people"><thead><tr><th>Person</th><th>Role</th><th>Programs</th><th>State</th><th></th></tr></thead><tbody>
 {% for u in users %}<tr>
   <td><b>{{ u.display_name }}</b><br><small>{{ u.username }}</small></td>
-  <td><span class="role role-{{ u.role|lower }}">{{ u.role }}</span>{% if u.is_associate %}<br><small>{{ u.roster_name }}</small>{% endif %}</td>
+  <td><span class="role role-{{ u.role|lower|replace(' ', '-') }}">{{ u.role }}</span>{% if u.is_associate %}<br><small>{{ u.roster_name }}</small><br><small>Team manager: {{ u.team_manager or 'none' }}</small>{% endif %}</td>
   <td>{% if u.is_admin or u.all_programs %}All programs{% else %}{{ u.programs or 'None yet' }}{% endif %}</td>
   <td>{{ 'Active' if u.active else 'Switched off' }}</td>
   <td class="actions">{% if u.manageable %}
     {% for action, label in ([('disable','Switch off')] if u.active else [('enable','Switch on')]) + [('reset','Reset password')] %}
     <form method="post" action="{{ url_for('admin_user_action', user_id=u.id, action=action) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="quiet">{{ label }}</button></form>
     {% endfor %}
+    {% if u.is_associate %}<form method="post" action="{{ url_for('admin_user_action', user_id=u.id, action='team') }}" class="team-pick"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Team manager <select name="team_manager"><option value="">None</option>{% for t in u.team_choices %}<option value="{{ t.id }}"{% if t.id == u.team_manager_id %} selected{% endif %}>{{ t.display_name }}</option>{% endfor %}</select></label>
+      <button class="quiet">Save</button></form>{% endif %}
     <details class="advanced"><summary>Programs{% if admin %} and role{% endif %}</summary>
       <form method="post" action="{{ url_for('admin_user_action', user_id=u.id, action='programs') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

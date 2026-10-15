@@ -770,6 +770,7 @@ body.wall { background: var(--night); color: var(--paper); padding: 2vh 2.5vw; m
 .role { display: inline-block; border: 1px solid var(--rail); border-radius: 4px; padding: 1px 8px; font-size: 0.8125rem; }
 .role-supervisor { border-color: var(--over); color: var(--over-text); }
 .role-admin { border-color: var(--short); color: var(--short-ink); }
+.team-pick { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; margin: 6px 0; }
 
 /* programs and LOBs */
 .setup-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }

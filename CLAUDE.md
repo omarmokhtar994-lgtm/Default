@@ -28,6 +28,10 @@ preferences from earlier chats:
   lines. Data in fixtures, samples and screens uses made-up "Associate NN" names, never real employees.
 - The server's private key, passwords and notification secrets never go in the repository, chat, logs or command
   lines, and are never asked for or searched for. The owner installs packages on the server themselves.
+- Plugins the owner asked for (2026-10-14; none showed as enabled on 2026-10-15, so check with ListPlugins and use
+  each once enabled): Headroom (large files and logs, such as gate and suite logs), burn (CodeBurn: token use and
+  cost), Superpowers (its core skills are already in .claude/skills), claude-security and Security Guidance (security
+  reviews), claude-code-setup (Claude Code setup).
 
 ## Coding guidelines (Karpathy)
 

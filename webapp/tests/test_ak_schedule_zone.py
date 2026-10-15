@@ -4,7 +4,6 @@ schedule a run keeps (/runs/<id>/schedules, opened from the Schedules list) has 
 shift is shown in that zone's clock, marked when it starts the day before or the next day; shifts are changed in the
 schedule's own zone, so the page links back to it and the shift buttons rest until then."""
 import html
-import re
 
 from webapp.tests import test_overtime_side as ots
 

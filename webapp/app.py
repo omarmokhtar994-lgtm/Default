@@ -2562,7 +2562,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                may_use={e["shown"]["id"] for e in entries if _may_set_in_use(e["shown"])},
                                may_delete={e["run"]["id"] for e in entries if _may_delete(e["run"])})
 
-    WINDOW_TABS = ("timeline", "board", "adherence")  # Phase AI: the 24 hours from the start picked
+    # Phase AI: the 24 hours from the start picked; Phase AK: Fix breaks, Rescue the day and Change several breaks too
+    WINDOW_TABS = ("timeline", "board", "adherence", "replan", "rescue", "bulk")
     START = re.compile(r"^([01]\d|2[0-3]):(00|15|30|45)$")
 
     def _own_zone(program: str, on: date) -> str:
@@ -2682,15 +2683,15 @@ def create_app(config: Dict[str, Any]) -> Flask:
             outside = {"rows": days.covers(program, on), "roles": COVER_ROLES,
                        "channels": [(r["letter"], r["name"]) for r in ch["rows"] if "language" not in r] if ch else [],
                        "languages": days.cover_languages(page)}
-        proposal = days.replan(page, from_now) if page and tab == "replan" else None
-        bulk = _bulk_panel(days, page, program, on, moved) if page and tab == "bulk" else None  # Phase AD (sample 04)
+        proposal = days.replan_window(program, on, start, _window_now(on, start) or 0) if page and tab == "replan" else None
+        bulk = _bulk_panel(days, page, program, on, moved, start) if page and tab == "bulk" else None  # Phase AD (sample 04)
         rescue = None  # Phase AD (sample 02): interval compliance only; the page says so for the other measure
         if page and tab == "rescue" and measure == "interval":
             try:
-                rescue = days.rescue_plan(program, on, _minute_now(on), page=page)
+                rescue = days.rescue_plan(program, on, _window_now(on, start), page=None if start else page, start=start)
             except ValueError as exc:
                 rescue = {"error": str(exc)}
-        dayoff = days.dayoff_plan(page, from_now) if page and tab == "rescue" else None  # Phase AF (F1, F2)
+        dayoff = days.dayoff_plan(anchor, from_now) if anchor and tab == "rescue" else None  # Phase AF (F1, F2)
         cover_panel = None
         cover_at = request.args.get("cover", type=int)
         if page and tab == "board" and cover_at is not None:
@@ -3046,10 +3047,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return {"names": f.getlist("who"), "which": f.get("which", ""), "action": f.get("act", ""),
                 "amount": f.get("amount", 0, type=int), "at": f.get("at", ""), "why": f.get("why", "")}
 
-    def _bulk_panel(days, page: Dict[str, Any], program: str, on: date, moved: int = 0) -> Dict[str, Any]:
+    def _bulk_panel(days, page: Dict[str, Any], program: str, on: date, moved: int = 0,
+                    start: int = 0) -> Dict[str, Any]:
         """Change several breaks (Phase AD, sample 04): today's people by shift start with their breaks, the form as
         filled, and the effect once asked for (nothing kept)."""
-        now = _minute_now(on)
+        now = _window_now(on, start)
         groups: Dict[int, List[Dict[str, str]]] = {}
         kinds: List[str] = []
         for lane in page["view"]["lanes"]:
@@ -3068,7 +3070,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if request.args.get("show") and form["names"]:
             try:
                 panel["preview"] = days.bulk_preview(program, on, form["names"], panel["which"], panel["act"],
-                                                     panel["amount"], to_schedule(form["at"], moved), form["why"], now)
+                                                     panel["amount"], to_schedule(form["at"], moved), form["why"], now,
+                                                     start=start)
             except ValueError as exc:
                 panel["error"] = str(exc)
         return panel
@@ -3082,9 +3085,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
         try:
             if on is None:
                 raise ValueError("Pick a day.")
+            start = _form_start()
             done = _days().apply_bulk(program, on, form["names"], form["which"], form["action"], g.user["id"],
                                       amount=form["amount"], at=_typed("at", program, on), why=form["why"],
-                                      now=_minute_now(on))
+                                      now=_window_now(on, start), start=start)
             said = bulk_verb(form["action"], done)
             _say(said[0].upper() + said[1:] + ".", program, on)
         except ValueError as exc:
@@ -3154,6 +3158,31 @@ def create_app(config: Dict[str, Any]) -> Flask:
 
     MINUTE = re.compile(r"^-?\d{1,4}$")  # a minute of the page's 24 hours (Phase AI: before 0 too)
 
+    def _window_now(on: Optional[date], start: int) -> Optional[int]:
+        """Phase AK: now as a minute from ``on``'s midnight when it falls in the 24 hours from ``start``, else None
+        (from 0, as ``_minute_now``)."""
+        if on is None:
+            return None
+        clock_now = datetime.now(EGYPT)
+        at = (clock_now.date() - on).days * 1440 + clock_now.hour * 60 + clock_now.minute
+        return at if start <= at < start + 1440 else None
+
+    def _form_start() -> int:
+        """The minute the page's 24 hours began at, as the form sent it (0 when it did not)."""
+        value = request.form.get("start", "0")
+        return int(value) if MINUTE.match(value) else 0
+
+    def _move_item(item: str) -> Tuple[Any, ...]:
+        """A move from a form: "name|idx|minute" on the page's day, or "name|idx|minute|YYYY-MM-DD" on its shift's own
+        date (Phase AK)."""
+        try:
+            head, last = item.rsplit("|", 1)
+            when = _date(last) if re.match(r"^\d{4}-\d{2}-\d{2}$", last) else None
+            name, idx, minute = (head if when else item).rsplit("|", 2)
+            return (name, int(idx), int(minute)) + ((when,) if when else ())
+        except ValueError:
+            raise ValueError("A move in the form cannot be read: open the tool again.") from None
+
     def _back_to_day(program: str, on: Optional[date], view: str, cover: str = ""):  # type: ignore[no-untyped-def]
         on = _date(request.form.get("anchor", "")) or on  # Phase AI: the day the page showed, not the shift's own
         args = {"program": program, "date": on.isoformat() if on else None,
@@ -3171,10 +3200,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         try:
             if on is None:
                 raise ValueError("Pick a day.")
-            moves = []
-            for item in request.form.getlist("move"):
-                name, idx, start = item.rsplit("|", 2)
-                moves.append((name, int(idx), int(start)))
+            moves = [_move_item(item) for item in request.form.getlist("move")]
             days = _days()
             with days.action(program, on, g.user["id"], bulk=True) as act:  # Phase AD: one change, held for Send
                 try:
@@ -3196,16 +3222,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
         try:
             if on is None:
                 raise ValueError("Pick a day.")
-            moves = []
-            for item in request.form.getlist("move"):
-                try:
-                    name, idx, start = item.rsplit("|", 2)
-                    moves.append((name, int(idx), int(start)))
-                except ValueError:
-                    raise ValueError("A move in the form cannot be read: open Rescue the day again.") from None
+            moves = [_move_item(item) for item in request.form.getlist("move")]
             if not moves:
                 raise ValueError("No moves to keep.")
-            done = _days().apply_rescue(program, on, moves, g.user["id"], now=_minute_now(on))
+            start = _form_start()
+            done = _days().apply_rescue(program, on, moves, g.user["id"], now=_window_now(on, start), start=start)
             flash(f"Rescue the day moved {done} break{'s' if done != 1 else ''}.")
         except ValueError as exc:
             _say(f"Stopped: {exc} Anything changed before it was kept, and Undo takes it all back.", program, on)

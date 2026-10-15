@@ -204,6 +204,8 @@ class ChannelHold:
     def _covered(self, name: str, i: int) -> str:
         t = i * STEP
         key = (0, name)
+        if key not in self.who[i] and (-1, name) in self.who[i]:  # Phase AK: last night's shift, after midnight
+            key = (-1, name)
         letter = self.who[i].get(key) or letter_at(self.ch["blocks"].get(key, []), self.ch["moves"].get(key, []), t,
                                                    blended_at(self.setup, self.day, t))
         return self.ch["skills_of"](name) if letter == "A" else (letter or "")

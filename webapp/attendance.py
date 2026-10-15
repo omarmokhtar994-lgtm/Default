@@ -28,9 +28,10 @@ from .clock import SHOWN
 from .day import (ABSENT, AUX, CALLED_IN, CANCELLED, EXTRA_BREAKS, LATE_EARLY, MEASURES, OVERTIME_MAX, STATUSES, STEP, TIMED,
                   BreakRefused, _busy, advice, at_target,
                   check_break, day_view, dayoff_offers, dayoff_proposals, meeting_slots, overtime_offers, pattern_breaks, planned,
-                  read_inputs, replan, vto_offers)
+                  read_inputs, replan, vto_offers, window_view)
 from .notify import PRIVATE, left_out_now
 from .schedules import EGYPT, KEEP_DAYS, ScheduleBook
+from .window_tools import by_date, dates_of, in_own_day, rebase
 from .versions import DAYS, channel_blocks, shift_span
 
 HHMM = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
@@ -256,7 +257,8 @@ class DayBook:
             yield outer
             return
         act = DayAction(program, on, user_id, label, kind or ("bulk" if bulk else "single"))
-        dates = [on.isoformat(), (on - timedelta(days=1)).isoformat()]
+        # Phase AK: the day after too, so a change on the 24 hours from a later start is one entry for Undo
+        dates = [on.isoformat(), (on - timedelta(days=1)).isoformat(), (on + timedelta(days=1)).isoformat()]
         with self._lock(program, on):
             before = self.store.day_rows(program, dates)
             act.id = self.store.add_day_action(program=program, shift_date=on.isoformat(), user_id=user_id,
@@ -582,6 +584,29 @@ class DayBook:
                 "channel_problem": channel_problem,
                 "week_start": row["week_start"], "day": day_index(on), "inputs": inputs, "week": week,
                 "log": self.store.list_day_log(program, on.isoformat())}
+
+    def window_page(self, program: str, on: date, start: int, measure: str = "interval",
+                    extras: Optional[Dict[date, Dict[str, Any]]] = None) -> Optional[Dict[str, Any]]:
+        """Phase AK: the page for the 24 hours from minute ``start`` of ``on`` (Phase AI's window, as the Timeline shows
+        it), with ``extras`` counted as if kept, per shift date (``page(extra=...)``). ``views`` holds each day's own
+        view by its distance from ``on``. From minute 0 it is the day's own page."""
+        extras = extras or {}
+        page = self.page(program, on, measure, extras.get(on))
+        if page is None:
+            return None
+        views: Dict[int, Optional[Dict[str, Any]]] = {0: page["view"]}
+        if not start:
+            return dict(page, views=views, start=0)
+        for d in range(start // 1440, (start + 1439) // 1440 + 1):
+            if d:
+                try:
+                    found = self.page(program, on + timedelta(days=d), measure, extras.get(on + timedelta(days=d)))
+                except ValueError:  # a workbook that cannot be read: its hours stay empty
+                    found = None
+                views[d] = (found or {}).get("view")
+        view = window_view(views, start, on)
+        return dict(page, view=view, target=at_target(view["cells"], page["target"]["target"]), views=views,
+                    start=start)
 
     def target_for(self, program: str, on: date, row: Optional[Dict[str, Any]] = None,
                    inputs: Optional[Dict[str, Any]] = None) -> Tuple[float, Dict[str, Any]]:
@@ -1371,12 +1396,45 @@ class DayBook:
         the most intervals 10 minutes over it (Phase AH)."""
         return replan(page["view"], page["inputs"], now, target=page["target"]["target"])
 
+    def _window(self, program: str, on: date, start: int, measure: str = "interval",
+                extras: Optional[Dict[date, Dict[str, Any]]] = None) -> Dict[str, Any]:
+        page = self.window_page(program, on, start, measure, extras)
+        if page is None:
+            raise ValueError(f"No schedule for {program} on {on:%d %b}.")
+        return page
+
+    @staticmethod
+    def _dated(moves: List[Dict[str, Any]], view: Dict[str, Any], on: date, start: int,
+               keys: Tuple[str, ...] = ("from", "to")) -> List[Dict[str, Any]]:
+        """Moves a tool made on the rebased window, back in the window's minutes, each with its shift's ``date`` and
+        ``day_to`` (the new minute in that date's own day; ``day_new`` for Change several breaks)."""
+        when = dates_of(view, on)
+        out = []
+        for m in moves:
+            d = when[(m["name"], m["idx"])]
+            moved = {**m, **{k: m[k] + start for k in keys if isinstance(m.get(k), int)}, "date": d}
+            last = keys[-1]
+            moved["day_to" if last == "to" else "day_new"] = (in_own_day(moved[last], d, on)
+                                                              if isinstance(moved.get(last), int) else moved.get(last))
+            out.append(moved)
+        return out
+
+    def replan_window(self, program: str, on: date, start: int, now: int = 0,
+                      measure: str = "interval") -> Dict[str, Any]:
+        """Phase AK: Fix the day's breaks on the 24 hours from ``start`` (``now`` a minute of that window, 0 for none
+        started): the moves in the window's minutes, each with its shift's date."""
+        page = self._window(program, on, start, measure)
+        view = rebase(page["view"], start, page["views"])
+        found = replan(view, page["inputs"], max(now - start, 0) if now else 0, target=page["target"]["target"])
+        return {**found, "moves": self._dated(found["moves"], view, on, start)}
+
     @journaled
-    def apply_replan(self, program: str, on: date, moves: List[Tuple[str, int, int]], user_id: int) -> int:
-        """Keep the approved moves (each checked again: the day may have changed since the preview)."""
+    def apply_replan(self, program: str, on: date, moves: List[Tuple[Any, ...]], user_id: int) -> int:
+        """Keep the approved moves (each checked again: the day may have changed since the preview). A move is
+        (name, idx, minute) on ``on``, or (name, idx, minute, date) on its shift's own date (Phase AK)."""
         done = 0
-        for name, idx, start in moves:
-            self.move_break(program, on, name, idx, plain_hm(start), user_id, suffix=" (autopilot)")
+        for name, idx, start, *when in moves:
+            self.move_break(program, when[0] if when else on, name, idx, plain_hm(start), user_id, suffix=" (autopilot)")
             done += 1
         return done
 
@@ -1387,29 +1445,54 @@ class DayBook:
                 "target": page["target"]["target"], "short_hours": page["view"]["tiles"]["short_hours"],
                 "safe": page["target"]["safe"], "tight": page["target"]["tight"]}
 
-    def bulk_preview(self, program: str, on: date, names: List[str], which: str, action: str, amount: int = 0,
-                     at: str = "", why: str = "", now: Optional[int] = None) -> Dict[str, Any]:
-        """What Change several breaks would do (``bulk_breaks.plan``) and the day before and after it (intervals at
-        the target, hours short), counted by the page itself. Nothing is kept."""
+    def _bulk_found(self, program: str, on: date, names: List[str], which: str, action: str, amount: int, at: str,
+                    now: Optional[int], start: int) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        """(the page, ``bulk_breaks.plan`` on it): on the day, or (Phase AK) on the 24 hours from ``start``, where
+        ``at`` (a time of ``on``) and ``now`` (a minute of the window) are read in the window and each change gets
+        its shift's ``date`` and ``day_new``."""
         from .bulk_breaks import plan as bulk_plan
-        page = self.page(program, on)
-        if page is None:
-            raise ValueError(f"No schedule for {program} on {on:%d %b}.")
-        found = bulk_plan(page["view"], names, which, action, amount, at, now)
-        after = self.page(program, on, extra={"breaks": {(c["name"], c["idx"]): c["new"] for c in found["changes"]}})
+        if not start:
+            page = self.page(program, on)
+            if page is None:
+                raise ValueError(f"No schedule for {program} on {on:%d %b}.")
+            found = bulk_plan(page["view"], names, which, action, amount, at, now)
+            found["changes"] = [dict(c, date=on, day_new=c["new"]) for c in found["changes"]]
+            return page, found
+        page = self._window(program, on, start)
+        view = rebase(page["view"], start, page["views"])
+        minute = _clock(at)
+        if minute is not None:
+            at = plain_hm(minute + (1440 if minute < start % 1440 else 0) - start % 1440)
+        found = bulk_plan(view, names, which, action, amount, at, None if now is None else max(now - start, -1))
+        found["changes"] = self._dated(found["changes"], view, on, start, keys=("start", "new"))
+        return page, found
+
+    def _recount(self, program: str, on: date, start: int, breaks: List[Tuple[str, int, Any, date]]) -> Dict[str, Any]:
+        """The page (or the window from ``start``) with breaks at other times, as if kept: (name, idx, minute of the
+        shift's own day, ``CANCELLED`` or None for the plan, date)."""
+        if not start:
+            return self.page(program, on, extra={"breaks": {(n, i): v for n, i, v, _ in breaks}})
+        return self._window(program, on, start, extras={d: {"breaks": v} for d, v in by_date(breaks).items()})
+
+    def bulk_preview(self, program: str, on: date, names: List[str], which: str, action: str, amount: int = 0,
+                     at: str = "", why: str = "", now: Optional[int] = None, start: int = 0) -> Dict[str, Any]:
+        """What Change several breaks would do (``bulk_breaks.plan``) and the day before and after it (intervals at
+        the target, hours short), counted by the page itself. Nothing is kept. Phase AK: ``start`` works on the 24
+        hours from there."""
+        page, found = self._bulk_found(program, on, names, which, action, amount, at, now, start)
+        after = self._recount(program, on, start, [(c["name"], c["idx"], c["day_new"], c["date"])
+                                                    for c in found["changes"]])
         return {**found, "before": self._figures(page), "after": self._figures(after)}
 
     def apply_bulk(self, program: str, on: date, names: List[str], which: str, action: str, user_id: int,
-                   amount: int = 0, at: str = "", why: str = "", now: Optional[int] = None) -> int:
+                   amount: int = 0, at: str = "", why: str = "", now: Optional[int] = None, start: int = 0) -> int:
         """Keep a Change several breaks as one bulk change (one step for Undo, held from the group until Send): each
-        change checked again as it is kept. Returns how many breaks changed."""
-        from .bulk_breaks import plan as bulk_plan, verb
+        change checked again as it is kept. Returns how many breaks changed. Phase AK: ``start`` as in
+        ``bulk_preview``, each change kept on its shift's own date."""
+        from .bulk_breaks import verb
         if action == "cancel" and not _tidy(why):
             raise ValueError("Say why the breaks are cancelled.")
-        page = self.page(program, on)
-        if page is None:
-            raise ValueError(f"No schedule for {program} on {on:%d %b}.")
-        found = bulk_plan(page["view"], names, which, action, amount, at, now)
+        _, found = self._bulk_found(program, on, names, which, action, amount, at, now, start)
         if not found["changes"]:
             left = "; ".join(f"{x['name']}: {x['why']}" for x in found["skipped"][:3])
             raise ValueError("Nothing to change" + (f" ({left})." if left else ": pick people and a break."))
@@ -1417,11 +1500,13 @@ class DayBook:
         with self.action(program, on, user_id, bulk=True) as act:
             try:
                 for c in found["changes"]:
+                    when = c["date"]
                     if c["new"] == CANCELLED:
-                        self.cancel_break(program, on, c["name"], c["idx"], why, user_id, now=now)
+                        self.cancel_break(program, when, c["name"], c["idx"], why, user_id,
+                                          now=in_own_day(now, when, on))
                     else:
-                        self.move_break(program, on, c["name"], c["idx"], None if c["new"] is None else plain_hm(c["new"]),
-                                        user_id)
+                        self.move_break(program, when, c["name"], c["idx"],
+                                        None if c["day_new"] is None else plain_hm(c["day_new"]), user_id)
                     done += 1
             finally:
                 act.label = f"Change several breaks: {verb(action, done)}"
@@ -1429,13 +1514,15 @@ class DayBook:
 
     # ------------------------------------------------------------- Rescue the day (Phase AD, sample 02)
     def rescue_plan(self, program: str, on: date, now: Optional[int] = None,
-                    page: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                    page: Optional[Dict[str, Any]] = None, start: int = 0) -> Dict[str, Any]:
         """What Rescue the day proposes (``rescue.solve``), counted again by the page itself: the figures, the
         intervals given up and rescued and the strips come from ``page(extra=...)``, never from the model. ``now``
         is minutes past midnight today (None for another day): intervals over by then that missed the target count
         toward the day's 3. A proposal the page's own count does not confirm (no gain, more given up than allowed,
         an interval below 50%) is not offered, and that is said. Nothing is kept."""
         from .rescue import FLOOR, LIMIT, allowance, lost_so_far, solve
+        if start:  # Phase AK: the 24 hours from ``start``; ``now`` is a minute of that window
+            page = self._window(program, on, start)
         page = page or self.page(program, on)
         if page is None:
             raise ValueError(f"No schedule for {program} on {on:%d %b}.")
@@ -1445,14 +1532,21 @@ class DayBook:
         step = view["interval"]
         lost = [(c["t"], c["pct"]) for c in lost_so_far(target["cells"], now, step)] if now is not None else []
         may = allowance(lost)
-        found = solve(view, page["inputs"], target["target"], now, may)
+        if start:
+            solving = rebase(view, start, page["views"])
+            found = solve(solving, page["inputs"], target["target"], None if now is None else now - start, may)
+            found["moves"] = self._dated(found["moves"], solving, on, start)
+        else:
+            found = solve(view, page["inputs"], target["target"], now, may)
+            found["moves"] = [dict(m, date=on, day_to=m["to"]) for m in found["moves"]]
         out: Dict[str, Any] = {"before": self._figures(page), "after": self._figures(page), "lost": lost, "may": may,
                                "limit": LIMIT, "moves": [], "given_up": [], "rescued": [], "cushioned": [],
                                "said": [], "now": now,
                                "status": found["status"], "solver": found["solver"], "seconds": found["seconds"]}
         after = page
         if found["moves"]:
-            after = self.page(program, on, extra={"breaks": {(m["name"], m["idx"]): m["to"] for m in found["moves"]}})
+            after = self._recount(program, on, start, [(m["name"], m["idx"], m["day_to"], m["date"])
+                                                       for m in found["moves"]])
             given, rescued, low, cushioned = [], [], [], []
             for vb, va, tb, ta in zip(view["cells"], after["view"]["cells"], target["cells"], after["target"]["cells"]):
                 if tb["ok"] is None:
@@ -1527,35 +1621,41 @@ class DayBook:
             return f"spread inside {hm(came)} to {hm(came + step)}"
         return f"from {hm(came)} to {hm(goes)}"
 
-    def apply_rescue(self, program: str, on: date, moves: List[Tuple[str, int, int]], user_id: int,
-                     now: Optional[int] = None) -> int:
+    def apply_rescue(self, program: str, on: date, moves: List[Tuple[Any, ...]], user_id: int,
+                     now: Optional[int] = None, start: int = 0) -> int:
         """Keep the approved Rescue the day moves as one bulk change (one step for Undo, held from the group until
         Send), each checked again as it is kept. A person's breaks are moved in an order that never has one land on
         another on the way (earlier moves first from the earliest, then later moves from the latest). ``now``
-        (today) refuses a break that has started since the preview. Returns how many breaks moved."""
-        page = self.page(program, on)
+        (today) refuses a break that has started since the preview. Returns how many breaks moved. Phase AK: a move
+        is (name, idx, minute) on ``on`` or (name, idx, minute of its own day, date); with ``start``, ``now`` is a
+        minute of the 24 hours from there."""
+        page = self._window(program, on, start) if start else self.page(program, on)
         if page is None:
             raise ValueError(f"No schedule for {program} on {on:%d %b}.")
         where = {(l["name"], b["idx"]): b["start"] for l in page["view"]["lanes"] for s in l["segments"]
                  if s["offset"] == 0 for b in s["breaks"]}
-        first = {name: i for i, (name, _, _) in reversed(list(enumerate(moves)))}
+        dated = []  # (name, idx, minute from on's midnight, date, minute of that date)
+        for name, idx, minute, *when in moves:
+            d = when[0] if when else on
+            dated.append((name, idx, minute + 1440 * (d - on).days, d, minute))
+        first = {move[0]: i for i, move in reversed(list(enumerate(dated)))}
 
         def order(move):
-            name, idx, start = move
-            later = start > where.get((name, idx), start)
+            name, idx, at = move[:3]
+            later = at > where.get((name, idx), at)
             return first[name], later, -idx if later else idx
 
         done = 0
         with self.action(program, on, user_id, bulk=True) as act:
             try:
-                for name, idx, start in sorted(moves, key=order):
+                for name, idx, at, d, minute in sorted(dated, key=order):
                     was = where.get((name, idx))
                     if now is not None and was is not None and was <= now:
                         raise ValueError(f"{name}'s break at {hm(was)} has started since the preview: open Rescue "
                                          "the day again.")
-                    if now is not None and start <= now:
-                        raise ValueError(f"{hm(start)} has passed: open Rescue the day again.")
-                    self.move_break(program, on, name, idx, plain_hm(start), user_id, suffix=" (rescue)")
+                    if now is not None and at <= now:
+                        raise ValueError(f"{hm(at)} has passed: open Rescue the day again.")
+                    self.move_break(program, d, name, idx, plain_hm(minute), user_id, suffix=" (rescue)")
                     done += 1
             finally:
                 act.label = f"Rescue the day moved {done} break{'s' if done != 1 else ''}"

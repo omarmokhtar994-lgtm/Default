@@ -49,3 +49,9 @@ session's branch only.
   is never offered for someone whose shift belongs to the day before. Cost: one list.
 - Samples: none were made first. The cover panel uses the existing form styles of the RTA (the Find a time form), so
   nothing new was designed; screens are in `evidence/phase_aj/screens`. Cost: a restyle if the owner wants it otherwise.
+- Item 4: the languages offered are the day's language rules and the channels' language rules; "None of these" keeps
+  a cover out of every language row. Cost: a free-typed language if the owner wants one not in the rules.
+- Item 5: only overtime warns instead of refusing; a day off cancelled (called in) still keeps the rest gap, and the
+  overtime offers on the board and the Overtime and VTO tab still list only people within it (they are suggestions).
+  The warning is in the day's log line; the group post stays as before. Cost: one rule each if the owner wants them
+  the same way.

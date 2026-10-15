@@ -52,3 +52,14 @@ is not seen". Kind: defect. Root cause: `channel_day._timelines` made a day's ch
 start that day and only up to midnight, so the part of a night shift after 00:00 had a stretch on neither day.
 Fixed: the next day's view carries last night's stretches after midnight (the words stay with the day the shift
 starts), and the 24 hours from a start join them into one stretch.
+
+## Items 4 and 5 (owner, 2026-10-15, after installing the first Phase AJ package)
+
+Owner, verbatim: "For the support tm cover should count in language as well so add language part, and i tried to
+add 4 hours OT for an associate but it was breaking a rule of 12 hours so that stopped it it should show a warning
+but still adds it"
+
+| # | Request | Kind | Reading |
+| --- | --- | --- | --- |
+| 4 | Cover from outside the roster counts in the languages | change | A Language field (the program's languages, or none); the cover counts for that language row and, on its channel, for the channel's language rows |
+| 5 | Overtime breaking the 12-hour rest rule is refused | change | Overtime is kept, with a warning that says the rest it leaves: on the page, in the + Add preview and in the day's log |

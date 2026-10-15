@@ -20,6 +20,32 @@ check it. What they cannot hold is the chat itself: when something here is not e
   the sensible default for the rest and record it as a ruling with what it costs if wrong.
 - Times in Egypt time (Africa/Cairo). The container's clock is UTC.
 
+## Skills at each step (owner, 2026-10-15)
+
+Load each with the Skill tool at the step it covers; following it from memory does not count.
+
+- Every fix and feature: systematic-debugging for any bug (root cause first); test-driven-development (a failing test
+  first); verification-before-completion (evidence before saying anything is done).
+- Each phase: writing-plans, then executing-plans, inline. subagent-driven-development and requesting-code-review only
+  when the owner asks.
+- Engine (CP-SAT): cpsat-engine-modeling with TDD for any engine change or diagnosis.
+- Tests and Python: python-testing-patterns; property-based-testing (Hypothesis is a new dependency: ask first);
+  python-error-handling and python-anti-patterns on changed code only; python-performance-optimization before long
+  full-CPU runs.
+- Website design: frontend-design, ui-ux-pro-max, and the account's design-taste-frontend, impeccable and design-md.
+  New libraries and visual changes go to the owner as samples first.
+- Website review before shipping: web-interface-guidelines on changed files; better-interface, better-accessibility,
+  better-colors, better-layout, better-typography, better-ui, better-writing; web-quality-audit, accessibility,
+  best-practices, performance, core-web-vitals. interface-review only on /interface-review.
+- Browser checks: webapp-testing (Playwright screens) and playwright-cli.
+- Security: security-and-hardening for sign-in, sessions, uploads, group links, secrets or outbound posts.
+- Server logs: observability-and-instrumentation (a metrics stack is a new dependency: ask).
+- Records: documentation-and-adrs in the repo's own layout (plans, evidence); changelog-generator for release notes.
+- External reviews (for example ChatGPT): receiving-code-review.
+- Motion only if an approved sample needs it: gsap-*, lenis, react-bits (ideas only, ported to plain CSS and JS).
+- Other: graphify only on /graphify; find-skills to look for new skills; img2threejs only if asked.
+- Style: caveman for chat replies; the Karpathy guidelines in CLAUDE.md for code.
+
 ## Safety rules the owner set (still in force)
 
 - The server's private key stays with the owner. Never ask for it, never send it, never put it in the repository or

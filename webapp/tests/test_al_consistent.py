@@ -6,7 +6,6 @@ before breaks. Now a passed one with no worse coverage is kept as "Tool, more co
 by itself, and added once to finished runs when the website starts (rulings on the recommended side)."""
 import html
 import json
-import shutil
 import unittest
 
 from webapp.attendance import pick_version

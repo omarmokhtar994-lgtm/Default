@@ -415,6 +415,16 @@ def create_app(config: Dict[str, Any]) -> Flask:
         """Phase AI: a text kept in the schedule's time (a shift, a change) with its times as the RTA shows them."""
         return moved_text(text or "", SHOWN.get())
 
+    @app.template_filter("zone_cell")
+    def _zone_cell(value: str, moved: int) -> str:
+        """Phase AK: a schedule cell ("08:00 - 17:00") read ``moved`` minutes later, said when it then starts the day
+        before or the next day; OFF, Leave and the like as they are."""
+        span = shift_span(value or "") if moved else None
+        if not span:
+            return value
+        start = span[0] + moved
+        return moved_text(value, moved) + (" (day before)" if start < 0 else " (next day)" if start >= 1440 else "")
+
     @app.template_filter("num")
     def _num(value: float) -> str:
         value = round(float(value), 1)
@@ -1985,7 +1995,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 # Phase AC: a damaged kept input says so here instead of turning the whole page into an error
                 input_problem = ("The input workbook kept with this schedule cannot be read, so its channels cannot "
                                  "be checked here. Upload the schedule again to replace it.")
+        own = pick_zone(run.get("tz") or HOME)  # Phase AK: shown in the zone picked, the schedule's own to begin with
+        g.zone = request.args["tz"] if request.args.get("tz") in dict(ZONES) else own
+        first = date.fromisoformat(run["week_start"]) if start_date(run.get("week_start") or "") else datetime.now(EGYPT).date()
+        moved = zone_shift(first, own, g.zone)
         return render_template("schedules.html", run=run, versions=versions, current=current, view=view,
+                               moved=moved, own_zone=own, own_name=dict(ZONES)[own],
                                counts=counts, may_set_in_use=bool(current) and _may_set_in_use(current),
                                days=DAYS, channel_lines=None if input_problem else _channel_lines(run_id),
                                channel_added=added, step=step, input_problem=input_problem,

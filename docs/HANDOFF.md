@@ -2,7 +2,7 @@
 
 © 2026 Omar Mokhtar. All rights reserved.
 
-Written Thu 15 Oct 2026, 13:11 Egypt time, at the end of Phase AI; brought up to date at 18:30, end of Phase AJ. A new chat reads `CLAUDE.md` (it loads by itself)
+Written Thu 15 Oct 2026, 13:11 Egypt time, at the end of Phase AI; brought up to date at 18:30, end of Phase AJ, and at 23:00, end of Phase AK. A new chat reads `CLAUDE.md` (it loads by itself)
 and then this file. Together they hold the rules, the owner's ways of working, where the work stands and how to
 check it. What they cannot hold is the chat itself: when something here is not enough, the record is in git
 (`git log`), the plans (`docs/superpowers/plans/`) and each phase's evidence (`evidence/phase_*/`).
@@ -89,7 +89,37 @@ Load each with the Skill tool at the step it covers; following it from memory do
 6. Package, split into parts, send them, and report in caveman style: what changed, rulings with their cost, what
    is known and left, Egypt times, screens.
 
-## Where things stand (end of Phase AJ)
+## Where things stand (end of Phase AK)
+
+- Phase AK is complete and pushed (branch `ccr-90ec94cc-a37tqk`): channel colours D with letters on the Timeline,
+  Times in on a schedule, Fix breaks / Rescue / Change several breaks on the 24 hours from "Day starts at", the Team
+  manager role with associates assigned and approvals by team manager, and the Roles page (what each role may see and
+  do). Requests and answers: `evidence/phase_ak/REQUESTS.md`; checks: `evidence/phase_ak/CHECKS.md`; release notes:
+  `evidence/phase_ak/RELEASE_NOTES.md`; rulings at the end of `docs/superpowers/plans/2026-10-15-phase-ak-build.md`
+  and in the ledger.
+- Package `RC9_2_2_PRODUCTION_PACKAGE.zip`, 2663 files, 88.89 MB, sha256
+  `708aa29419e5a543e0694aa066e752804e99ffe8202b47203f31c62d027d1afd`, sent as AK_part_0 to AK_part_3; installing it
+  is the owner's step.
+- Open for the owner: the C letter (white on Chat `#C2549F`) measures 4.15:1, under 4.5:1; `#B04A90` would give
+  4.97:1.
+- Check tools for a fresh container: `evidence/phase_ak/tools/` (replace phase_ai with phase_ak in the commands
+  below; `route_sweep.py` takes the output path). Expected on Phase AK: 614 and 530 tests OK (1 skipped), 77
+  browser tests OK, GATE PASS with 1537 tests (2 skipped), page review 0 problems, sweep 0 exceptions and 0 server
+  errors.
+
+### Phase AK decisions to remember
+
+- `webapp/permissions.py` holds the catalogue (14 keys), the endpoint map and `allowed()`; `before_request` checks
+  every mapped endpoint; admins always pass; a `manager_required` route missing from the map is admin-only. The role
+  grid is read once per request (`g`), stored in `role_permissions`.
+- `webapp/approvals.py`: an associate's team manager approves first; backups are admins and supervisors with
+  `approve_tm`; an associate with no team manager is approved by any team manager of the program. Swaps keep
+  `tm_a_id` and `tm_b_id` per side.
+- `webapp/window_tools.py`: the three RTA tools run on the window view rebased to minute 0; moves carry
+  `name|idx|minute|date`; people whose shift began before the window are not moved.
+- Schedules in another zone are shown only; changes happen in the schedule's own zone.
+
+## Earlier: end of Phase AJ
 
 - Phase AI is installed on the server (owner, 2026-10-15).
 - Phase AJ is complete and pushed (branch `ccr-90ec94cc-a37tqk`, from the handoff branch): overtime up to 4 hours,
@@ -210,3 +240,4 @@ read the real clock break when their date passes, so stop the clock with `mock.p
 - AH: one rule for an interval's standing by the week's target, hours needed table, 10-minute cushion.
 - AI: the 12 items above.
 - AJ: overtime up to 4 hours, cover from outside the roster, channel colours after midnight.
+- AK: channel colours D, Times in on a schedule, RTA tools on the day's 24 hours, team managers, Roles.

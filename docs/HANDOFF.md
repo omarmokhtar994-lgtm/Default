@@ -45,6 +45,13 @@ Load each with the Skill tool at the step it covers; following it from memory do
 - Motion only if an approved sample needs it: gsap-*, lenis, react-bits (ideas only, ported to plain CSS and JS).
 - Other: graphify only on /graphify; find-skills to look for new skills; img2threejs only if asked.
 - Style: caveman for chat replies; the Karpathy guidelines in CLAUDE.md for code.
+- Plugins (owner, 2026-10-15): Superpowers (the superpowers:* process skills: brainstorming, writing and executing
+  plans, TDD, systematic debugging, verification, finishing a branch); Headroom (headroom:peek and headroom:headroom
+  to read large files and logs, such as app.py or the suite logs, in parts); burn (burn:burn, the session's cost,
+  when asked or at the end of a phase); claude-code-setup (claude-code-setup:claude-automation-recommender, hooks and
+  automation suggestions, which go to the owner before anything is set); security: the claude-security / Security
+  Guidance plugin is not installed in these sessions, so security-review (on the branch's changes) and
+  security-and-hardening stand in for it.
 
 ## Safety rules the owner set (still in force)
 

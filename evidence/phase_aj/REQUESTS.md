@@ -37,3 +37,10 @@ will logjn to save an interval"
    d. Post to the Slack/Teams group like other changes (with the untick to keep it off)?
    e. Keep them out of the roster's hours, adherence and shrinkage, and list them on their own in Analysis and the
       exports?
+
+## The owner's answers (2026-10-15, about 17:15 and 17:40 Egypt time)
+
+1. Overtime length: "raise it to the options we do have": up to 4 h, the longest "+ Add" offers.
+2. Cover from outside the roster: a. typed in; b. yes, one agent for the minutes logged in; c. they pick a channel
+   when the program has channels; d. yes, post to the group like other changes; e. "Keep an option to add them or
+   not like a check box to include them or not".

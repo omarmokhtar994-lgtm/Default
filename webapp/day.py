@@ -710,10 +710,12 @@ def _short(kind: str) -> str:
     return "L" if kind.lower() == "lunch" else "".join(w[0] for w in kind.split()).upper()[:3]
 
 
-def board(view: Dict[str, Any]) -> List[Dict[str, Any]]:
+def board(view: Dict[str, Any], target: float) -> List[Dict[str, Any]]:
     """The interval board: one row per interval with demand or people on shift: buffer, status,
     the breaks starting in it (lunch and short breaks), late / early / aux starting in it, and
-    the counts (unplanned leave, on break, aux)."""
+    the counts (unplanned leave, on break, aux). Phase AH: the status follows the week's ``target`` as every page's
+    colours do (``band``): below it "short", from it to 99% "under" (Tight when under ``CUSHION`` minutes over it),
+    100% or more "good"."""
     step = view["interval"]
     rows = []
     for c in view["cells"]:
@@ -755,20 +757,26 @@ def board(view: Dict[str, Any]) -> List[Dict[str, Any]]:
                                 f"{a['kind'].lower()} {_hm(a['start'])} to {_hm(a['end'])}, "
                                 f"{'billable' if a.get('billable') else 'non-billable'}")
                         events.append({"name": lane["name"], "text": text})
+        cls = band(c["now"], c["required"], target)
+        over = int(round(minutes_over(c, target))) if c["required"] > 0 else None
+        tight = cls == "warn" and over < CUSHION
         if c["pm"] is None:
             state, label, why = "none", "No demand", ""
+        elif cls == "bad":
+            more = max(1, math.ceil(target * c["required"] - c["now"] - 1e-9))
+            state, label, why = "short", "Below the target", f"{more} more {'person' if more == 1 else 'people'} needed for the target"
+        elif cls == "warn":
+            state, label = "under", "Tight" if tight else "Under 100%"
+            why = (f"only {over} min over the target; {CUSHION} or more is safe" if tight
+                   else f"at the target, {over} min over it")
         else:
             room = c["low"] - c["need"]
-            if room >= 1:
-                state, label, why = "good", "Good buffer", f"room for {room} more on break"
-            elif room >= 0:
-                state, label, why = "tight", "Tight", "on target, no room for another break"
-            else:
-                more = c["need"] - c["low"]
-                state, label, why = "short", "Short", f"{more} more {'person' if more == 1 else 'people'} needed at the lowest point"
+            state, label, why = ("good", "Good buffer", f"room for {room} more on break") if room >= 1 else \
+                ("good", "Covered", "100%, no room for another break")
         langs = [{"name": l["name"], "count": cell["count"], "cls": cell["cls"]}
                  for l in view["languages"] for cell in l["cells"] if cell["t"] == t and cell["count"] is not None]
         rows.append({**c, "end": _hm(t + step), "start": _hm(t), "state": state, "label": label, "why": why,
+                     "cls": cls, "tight": tight, "over": over,
                      "cover": round(c["now"] / c["required"] * 100) if c["required"] > 0 else None,
                      "lunch": sorted(lunch, key=lambda x: x["start"]), "short": sorted(short, key=lambda x: x["start"]),
                      "events": events, "langs": langs})
@@ -932,9 +940,12 @@ def vto_offers(view: Dict[str, Any], after: int = 0, top: int = 6) -> List[Dict[
 
 
 # ---------------------------------------------------------------- the autopilot for the rest of the day's breaks
-def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: int = 400) -> Dict[str, Any]:
+def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: int = 400,
+           target: Optional[float] = None) -> Dict[str, Any]:
     """Re-plot the breaks not yet started (people on shift and present, this day's shifts) to lift the
-    tightest interval, then to cut the hours short; each break stays inside its shift, in its order,
+    tightest interval, then (with the week's ``target``, Phase AH: the owner's 10 minutes) to keep the most
+    intervals at the target with ``CUSHION`` minutes over it, then to cut the hours short; each break stays inside
+    its shift, in its order,
     on a 5-minute step, clear of the person's other breaks, away time and activities, with the gaps to
     its neighbours within the program's rules, and no language drops below its minimum (or loses its
     last person). Greedy: the best single move each round, until nothing improves. Returns the moves
@@ -951,11 +962,19 @@ def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: i
     def pm(k: int, total: float) -> float:
         return round((total / per - req[k]) * step / 60, 2)
 
-    def score(totals: List[float]) -> Tuple[float, float]:
+    def safe(k: int, total: float) -> bool:  # at the target, and 100% or 10 minutes over it (``at_target``)
+        figure = round(total / per, 1)
+        return figure >= target * req[k] - 1e-9 and (
+            figure >= req[k] - 1e-9 or STEP * total - target * req[k] * step >= CUSHION - 1e-9)
+
+    def score(totals: List[float]) -> Tuple[float, ...]:
         values = [pm(k, totals[k]) for k in range(len(cells)) if req[k] > 0]
         if not values:
-            return (0.0, 0.0)
-        return (min(values), -round(sum(-v for v in values if v < 0), 1))
+            return (0.0, 0.0) if target is None else (0.0, 0, 0.0)
+        short = -round(sum(-v for v in values if v < 0), 1)
+        if target is None:
+            return (min(values), short)
+        return (min(values), sum(1 for k in range(len(cells)) if req[k] > 0 and safe(k, totals[k])), short)
 
     people = [(lane, seg) for lane in view["lanes"] for seg in lane["segments"]
               if seg["offset"] == 0 and seg["status"] not in ABSENT]
@@ -1072,8 +1091,11 @@ def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: i
             if starts[key] != original[key]:
                 moves.append({"name": lane["name"], "idx": b["idx"], "kind": b["kind"], "minutes": b["minutes"],
                               "from": original[key], "to": starts[key]})
-    return {"moves": moves, "before": {"tightest": before_score[0], "short_hours": -before_score[1]},
-            "after": {"tightest": current[0], "short_hours": -current[1]}}
+    if target is None:
+        return {"moves": moves, "before": {"tightest": before_score[0], "short_hours": -before_score[1]},
+                "after": {"tightest": current[0], "short_hours": -current[1]}}
+    return {"moves": moves, "before": {"tightest": before_score[0], "safe": before_score[1], "short_hours": -before_score[2]},
+            "after": {"tightest": current[0], "safe": current[1], "short_hours": -current[2]}}
 
 
 def dayoff_offers(view: Dict[str, Any], week: Dict[str, Any], day: int, rest_hours: float, t: int,
@@ -1160,7 +1182,7 @@ def _bends(a: Dict[str, Any], day: int, span: Tuple[int, int], prv: Any, nxt: An
 
 def dayoff_proposals(view: Dict[str, Any], week: Dict[str, Any], day: int, rest_hours: float,
                      minimum: int = DAYOFF_MINIMUM, after: int = 0, near: Optional[Dict[str, Any]] = None,
-                     top: int = 5) -> Dict[str, Any]:
+                     top: int = 5, aim: Optional[float] = None) -> Dict[str, Any]:
     """Rescue the day's proposals (Phase AF, F1 and F2): days off to cancel, then overtime for what is left.
 
     A proposal is a Shift Library shift and how many people to call in on it. Each person must cover at least
@@ -1169,10 +1191,12 @@ def dayoff_proposals(view: Dict[str, Any], week: Dict[str, Any], day: int, rest_
     people off that day are named for it: those who keep every rule first (rest between shifts, the week's days off,
     days in a row), then the smallest bend, each bend said; among equals, whoever works the same shift the day before
     or after (consistent shifts). Whatever is still short becomes overtime per run of intervals, with
-    ``overtime_offers``' people next to their shifts."""
+    ``overtime_offers``' people next to their shifts. Short means under 100%, or with ``aim`` (the week's target,
+    Phase AH) under the target with ``CUSHION`` minutes to spare."""
     step = view["interval"]
     rest = int(rest_hours * 60)
-    need = {c["t"]: math.ceil(c["required"] - c["now"] - 1e-9) for c in view["cells"]
+    need = {c["t"]: math.ceil((c["required"] if aim is None else safe_level(c["required"], aim, step))
+                              - c["now"] - 1e-9) for c in view["cells"]
             if c["pm"] is not None and c["pm"] < 0 and c["t"] + step > after}
     need = {t: n for t, n in need.items() if n > 0}
     working = {l["name"] for l in view["lanes"] for s in l["segments"] if s["offset"] == 0}

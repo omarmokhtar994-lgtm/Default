@@ -16,7 +16,7 @@
   {% for r in w.rows %}<article class="wall-row rb-{{ r.state }}">
     <p class="wall-when">{% if loop.first %}<span class="wall-now">Now</span>{% endif %}{{ r.start }} to {{ r.end }}</p>
     <p class="wall-buf {{ r.state }}">{{ r.pm|hmm if r.pm is not none else '–' }}</p>
-    <p class="wall-st"><span class="st {{ r.state }}">{{ r.label }}</span><small>{{ r.why }}</small></p>
+    <p class="wall-st"><span class="st {{ r.state }}{{ ' tight' if r.tight }}">{{ r.label }}</span><small>{{ r.why }}</small></p>
     <p class="wall-fig">{{ r.now|num }} <small>on the floor · need {{ r.need }}</small></p>
   </article>{% endfor %}
 </section>

@@ -34,7 +34,7 @@
 
 <h2>Next six {{ unit.get(v.interval, 'intervals') }}</h2>
 {% if ahead %}<div class="ahead">{% for c in ahead %}
-  <a class="ahead-cell {{ c.cls }}" href="{{ url_for('day_page', program=program, date=on.isoformat(), view='board', cover=c.t if c.pm < 0 else none) }}#row-{{ c.t }}">
+  <a class="ahead-cell {{ c.cls }}{{ ' tight' if c.tight }}" href="{{ url_for('day_page', program=program, date=on.isoformat(), view='board', cover=c.t if c.pm < 0 else none) }}#row-{{ c.t }}">
     <small>{{ '%02d:%02d'|format(c.t // 60, c.t % 60) }}</small><b>{{ c.pm|hmm }}</b><small>need {{ c.need }}, on {{ c.now|num }}</small></a>
 {% endfor %}</div>{% else %}<p class="empty">Nothing more is needed today.</p>{% endif %}
 

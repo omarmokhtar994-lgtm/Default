@@ -17,8 +17,8 @@
   <section class="panel" aria-labelledby="bp-h">
     <h2 id="bp-h">{{ full[day] }} with these breaks</h2>
     {% if people %}
-    <p class="note">Each {{ 'hour' if interval == 60 else ('half-hour' if interval == 30 else 'interval') }} above (green) or below demand with the breaks as they stand. Press Update after typing to see it again.</p>
-    <div class="bp-strip" role="img" aria-label="The floor against demand through {{ full[day] }}">{% for c in strip %}<span class="{{ c.cls }}" title="{{ hm(c.t) }}: {{ c.pm|hmm if c.pm is not none else 'no demand' }}">{% if c.pm is not none %}{{ '+' if c.pm >= 0 else '−' }}{{ '%.1f'|format(c.pm|abs) }}{% endif %}</span>{% endfor %}</div>
+    <p class="note">Each {{ 'hour' if interval == 60 else ('half-hour' if interval == 30 else 'interval') }} at 100% or more (teal), at the week's target (amber, outlined when under 10 minutes over it) or below it (red), with the breaks as they stand. Press Update after typing to see it again.</p>
+    <div class="bp-strip" role="img" aria-label="The floor against demand through {{ full[day] }}">{% for c in strip %}<span class="{{ c.cls }}{{ ' tight' if c.tight }}" title="{{ hm(c.t) }}: {{ c.pm|hmm if c.pm is not none else 'no demand' }}{% if c.tight %}, tight: under 10 minutes over the target{% endif %}">{% if c.pm is not none %}{{ '+' if c.pm >= 0 else '−' }}{{ '%.1f'|format(c.pm|abs) }}{% endif %}</span>{% endfor %}</div>
     <div class="bp-hours" aria-hidden="true">{% for c in strip %}<span>{{ hm(c.t)[:2] if c.t % 120 == 0 else '' }}</span>{% endfor %}</div>
     <div class="bp-scroll"><table class="adh-t bp-grid">
       <thead><tr><th scope="col">Associate</th><th scope="col">Shift</th>{% for k, m in columns %}<th scope="col">{{ k }}, {{ m }} min</th>{% endfor %}<th scope="col">Check</th></tr></thead>

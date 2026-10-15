@@ -44,6 +44,7 @@
   {% if may_set_in_use and not current.in_use %}
   <form method="post" action="{{ url_for('schedule_in_use', schedule_id=current.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="primary" type="submit">Set as the schedule in use</button></form>
   {% elif current.in_use %}<p class="inuse">This is the schedule in use for the week.</p>{% endif %}
+  {% if recorded %}<p class="inuse-rec">As recorded on the RTA: <b>{{ recorded.now }} of {{ recorded.intervals }}</b> intervals at the target ({{ (100 * recorded.target)|round|int }}%) this week{% if recorded.tight %}, {{ recorded.tight }} tight{% endif %}. Sick days, overtime and other records stay on the RTA; the schedule itself is unchanged. <a href="{{ url_for('week_page', program=run.program, week=run.week_start) }}#needed">Hours needed</a></p>{% endif %}
   <a class="button" href="{{ url_for('schedule_download', schedule_id=current.id) }}">Download (.xlsx)</a>
   <a class="button" href="{{ url_for('schedule_week', schedule_id=current.id) }}">Week view of this version</a>
   {% if channel_lines %}<a class="button" href="{{ url_for('plan_channels', schedule_id=current.id) }}">Plan channels</a>{% endif %}

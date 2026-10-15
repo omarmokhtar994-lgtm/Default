@@ -9,11 +9,11 @@
   <p class="achv-share"><b>{{ (100 * t.now / t.intervals)|round|int }}%</b> of {{ "today's" if is_today or on is none else "the day's" }} intervals reach the target, with attendance as marked. The plan had {{ t.plan }} of {{ t.intervals }}. <a href="{{ week_url }}">Target {{ pct }}% for this week</a></p>
   {% set n = t.cells|length %}
   <div class="achv-strip cols-{{ n }}"{% if is_today and now is not none %} data-now="{{ now }}"{% endif %} role="img" aria-label="{{ t.now }} of {{ t.intervals }} intervals at {{ pct }}% or more, one mark per interval from midnight">
-    {% for c in t.cells %}<i class="{{ 'none' if c.ok is none else ('ok' if c.ok else 'below') }}" title="{{ '%02d:%02d'|format(c.t // 60, c.t % 60) }}{% if c.pct is not none %}: {{ c.pct }}%{% endif %}"></i>{% endfor %}
+    {% for c in t.cells %}<i class="{{ c.cls }}{{ ' tight' if c.tight }}" title="{{ '%02d:%02d'|format(c.t // 60, c.t % 60) }}{% if c.pct is not none %}: {{ c.pct }}%{% endif %}{% if c.tight %}, tight: {{ c.over }} min over the target{% endif %}"></i>{% endfor %}
     {% if is_today and now is not none %}<span class="achv-now" aria-hidden="true"></span>{% endif %}
   </div>
   <div class="achv-hours" aria-hidden="true">{% for h in range(0, 24, 3) %}<span>{{ '%02d'|format(h) }}</span>{% endfor %}</div>
-  <p class="achv-key"><span><i class="ok"></i>At {{ pct }}% or more</span><span><i class="below"></i>Below {{ pct }}%</span>{% if t.cells|selectattr('ok', 'none')|list %}<span><i class="none"></i>No demand</span>{% endif %}<span>One mark per interval</span></p>
+  <p class="achv-key"><span><i class="ok"></i>100% or more</span><span><i class="warn"></i>{{ pct }} to 99%</span>{% if t.tight %}<span><i class="warn tight"></i>Tight ({{ t.tight }}): under 10 minutes over the target</span>{% endif %}<span><i class="bad"></i>Below {{ pct }}%</span>{% if t.cells|selectattr('ok', 'none')|list %}<span><i class="none"></i>No demand</span>{% endif %}<span>One mark per interval</span></p>
   {% else %}
   <p class="achv-num">No intervals with demand on this day. <a href="{{ week_url }}">Target {{ pct }}% for this week</a></p>
   {% endif %}

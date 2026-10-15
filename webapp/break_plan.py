@@ -13,7 +13,7 @@ import copy
 import math
 from typing import Any, Dict, List, Optional, Tuple
 
-from .day import STEP, _tightest, day_view, planned
+from .day import STEP, _tightest, at_target, day_view, planned
 from .versions import DAYS, shift_span
 
 QUARTER = 15
@@ -103,10 +103,13 @@ def week_with(week: Dict[str, Any], d: int, plan: Dict[str, Starts], rules: Dict
 
 
 def floor(week: Dict[str, Any], inputs: Dict[str, Any], d: int, plan: Dict[str, Starts],
-          rules: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """The day's intervals with these breaks: t, the buffer (hours, as RTA shows it) and its colour."""
+          rules: Dict[str, Any], target: Optional[float] = None) -> List[Dict[str, Any]]:
+    """The day's intervals with these breaks: t, the buffer (hours, as RTA shows it), on the floor and its colour by
+    the week's ``target`` (Phase AH; the workbook's own when not given), amber ones marked tight."""
     view = day_view(week_with(week, d, plan, rules), inputs, d, {}, {})
-    return [{"t": c["t"], "pm": c["pm"], "cls": c["cls"]} for c in view["cells"]]
+    found = at_target(view["cells"], inputs.get("target", 0.9) if target is None else target)
+    return [{"t": c["t"], "pm": c["pm"], "now": c["now"], "cls": s["cls"], "tight": s["tight"]}
+            for c, s in zip(view["cells"], found["cells"])]
 
 
 def suggest(week: Dict[str, Any], inputs: Dict[str, Any], rules: Dict[str, Any], d: int,

@@ -63,7 +63,11 @@ def _step(rows: List[list]) -> int:
     return step if 1440 % step == 0 else 30
 
 
-def view(intervals: List[list], side: str = "after") -> Optional[Dict[str, Any]]:
+def view(intervals: List[list], side: str = "after", target: float = 0.9) -> Optional[Dict[str, Any]]:
+    """The grid, short and extra intervals and totals; each cell coloured by the week's ``target`` (Phase AH, owner:
+    "based on the target set"; 90%, the engine's own, when none is known), amber cells marked tight under
+    ``CUSHION`` person-minutes over the target."""
+    from .day import CUSHION
     if not intervals:
         return None
     eff_i, raw_i = SIDES[side]
@@ -81,9 +85,11 @@ def view(intervals: List[list], side: str = "after") -> Optional[Dict[str, Any]]
         need = math.ceil(req / share - 1e-9)
         ratio = eff / req
         cls = ("over" if side == "after" and r[7] else "covered" if ratio + 1e-9 >= 1
-               else "short" if ratio + 1e-9 >= 0.9 else "gap")
+               else "short" if ratio + 1e-9 >= target else "gap")
+        over = int(round((eff - target * req) * step))  # person-minutes over the target
         cell = {"day": day, "time": time, "cls": cls, "pct": int(round(100 * ratio)), "need": need, "have": have,
-                "full": ratio + 1e-9 >= 1}
+                "full": ratio + 1e-9 >= 1, "share": ratio, "over": over,
+                "tight": cls == "short" and over < CUSHION}
         cells[(r[0], time)] = cell
         if have != need:
             people = abs(need - have)
@@ -117,5 +123,5 @@ def view(intervals: List[list], side: str = "after") -> Optional[Dict[str, Any]]
     totals = {"active": len(active), "full": sum(c["full"] for c in active),
               "overtime_people": sum(r["people"] for r in short), "overtime_hours": sum(r["hours"] for r in short),
               "extra_people": sum(r["people"] for r in extra), "extra_hours": sum(r["hours"] for r in extra)}
-    return {"step": step, "side": side, "grid": grid, "days": DAYS, "days_at_full": days_at_full,
+    return {"step": step, "side": side, "target": target, "grid": grid, "days": DAYS, "days_at_full": days_at_full,
             "short": short, "extra": extra, "totals": totals}

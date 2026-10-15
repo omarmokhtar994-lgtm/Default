@@ -352,7 +352,8 @@ class TheAddDialog(unittest.TestCase):
         got = self.days.add_item("AE/AR B2B", WED, "Associate 001", "Break", hm(t), 15, self.sara)
         self.assertEqual(got["text"], f"Break {hm(t)} to {hm(t + 15)}")
         self.assertEqual(self.on_floor(t), before - 1)
-        rows = board(self.days.page("AE/AR B2B", WED)["view"])
+        page = self.days.page("AE/AR B2B", WED)
+        rows = board(page["view"], page["target"]["target"])  # Phase AH: the board takes the week's target
         chip = next(c for r in rows for c in r["short"] if c["name"] == "Associate 001" and c.get("added"))
         self.assertEqual((chip["kind"], chip["start"]), ("Break", hm(t)))
 

@@ -59,6 +59,23 @@ def _cell_class(row: dict) -> str:
     return "gap"
 
 
+def recolour(summary: Dict[str, Any], target: float) -> Dict[str, Any]:
+    """Phase AH (owner, "all pages"): the wall's cells coloured by the week's ``target`` instead of 90%. A summary
+    kept before Phase AH has no shares; its whole percents stand in for them."""
+    def cls(share: float) -> str:
+        return "covered" if share + 1e-9 >= 1 else "short" if share + 1e-9 >= target else "gap"
+
+    for day in summary.get("cells") or []:
+        for c in day:
+            if not c:
+                continue
+            if c.get("cls") != "over":
+                c["cls"] = cls(c.get("share", c.get("pct", 0) / 100))
+            c["before_cls"] = cls(c.get("before_share", c.get("before_pct", 0) / 100))
+    summary["target"] = target
+    return summary
+
+
 def _people(n: float) -> str:
     n = int(n)
     return f"{n} person" if n == 1 else f"{n} people"
@@ -285,6 +302,7 @@ def version_summary(checks: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         cells[int(day) % 7][_minutes(time) // step] = {
             "cls": _cell_class({"after_pct": after, "severe_overage": severe}), "pct": pct, "people": after_raw,
             "before_pct": int(round(before * 100)), "before_cls": _cell_class({"after_pct": before}),
+            "share": after, "before_share": before,
             "title": (f"{DAYS[int(day) % 7]} {time}: {pct}% of need, {_people(after_raw)} on the floor "
                       f"(needs {required:g}, has {after_eff:.2g})"),
         }
@@ -342,6 +360,7 @@ def summarize(results_dir: Path) -> Optional[Dict[str, Any]]:
         people = int(row.get("after_raw_min") or 0)
         cells[int(row["day_index"])][_minutes(row["interval"]) // step] = {
             "cls": _cell_class(row), "pct": pct, "people": people,
+            "share": float(row.get("after_pct", 0)), "before_share": float(row.get("before_pct", 0)),
             "before_pct": int(round(float(row.get("before_pct", 0)) * 100)),
             "before_cls": _cell_class({"after_pct": row.get("before_pct", 0)}),
             "title": (f"{DAYS[int(row['day_index'])]} {row['interval']}: {pct}% of need after breaks, "

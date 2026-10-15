@@ -2,6 +2,7 @@
 """The team scheduler website: Flask application factory and routes."""
 from __future__ import annotations
 
+import copy
 import io
 import json
 import os
@@ -57,7 +58,8 @@ from .run_admin import PICK_UNIT, apply_rename, apply_run_change, preview_rename
 from .bulk_breaks import SHIFTS as BULK_SHIFTS, verb as bulk_verb
 from .schedules import ScheduleBook, group_changes
 from .versions import DAYS, shift_span, stale_blocks, with_notes
-from .results import version_summary
+from . import needed
+from .results import recolour, version_summary
 from .runs import ACTIVE, MODES, OPTION_LABELS, READY, RESUMABLE, RunQueue, parse_options, run_options
 from .store import Store
 from .week import in_zone, view as week_view
@@ -970,7 +972,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                runs=runs, queue=queue, plan=plan, summaries=summaries,
                                active=active, waiting=waiting, latest=latest, latest_week=latest_week,
                                in_use_ids=in_use_ids, not_in_use_ids=not_in_use_ids,
-                               latest_summary=summaries.get(latest["id"]) if latest else None,
+                               latest_summary=_walled(latest, summaries.get(latest["id"])) if latest else None,
                                now=time.time(), known_programs=known,
                                prefill_program=clean_program(request.args.get("program", ""))
                                or (picked if picked in upload_keys else ""),  # the unit picked on the left
@@ -1210,7 +1212,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                has_shortfall=queue.shortfall_schedule(run_id) is not None,
                                has_week=bool(kept_figures(run).get("intervals")),
                                resumable=_can_resume(run),
-                               summary=_ready_figures(run) if run["mode"] == READY else queue.summary(run_id),
+                               summary=_walled(run, _ready_figures(run) if run["mode"] == READY
+                                               else queue.summary(run_id)),
                                said=said,
                                why=outcome_view(found) if found else None,
                                eta=_plan(store.list_runs()).get(run_id), now=time.time(), people=people,
@@ -1642,7 +1645,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         figures = kept_figures(run or {})
         intervals, zone_note = _week_zone(figures.get("intervals"), run, week)
         weeks = [w["week"] for w in reversed(history.get(program, []))]
-        return render_template("week.html", run=run, view=week_view(intervals, side) if intervals else None,
+        target = _week_target(program, week, (run or {}).get("id"))
+        return render_template("week.html", run=run, view=week_view(intervals, side, target) if intervals else None,
                                side=side, program=program, week=week, programs=sorted(history, key=str.lower),
                                weeks=weeks, figures=figures, zone_note=zone_note)
 
@@ -1665,6 +1669,26 @@ def create_app(config: Dict[str, Any]) -> Flask:
         programs = sorted(set(history) | {p for p in kept if _access().can_open(p)}, key=str.lower)
         weeks = sorted({w["week"] for w in history.get(program, [])} | set(_version_weeks(program)), reverse=True)
         return programs, weeks
+
+    def _week_target(program: str, week_start: str, run_id: Optional[str]) -> float:
+        """The interval target that colours a week (Phase AH): the one set for the program and week, else the
+        workbook's own, else 90%."""
+        kept = app.extensions["store"].get_interval_target(program, week_start) if program and week_start else None
+        if kept:
+            return kept["target"] / 100
+        book = app.extensions.get("schedules")
+        source = book.input_path(run_id) if book is not None and run_id else None
+        try:
+            return float(read_inputs(source)["target"]) if source is not None and source.is_file() else 0.9
+        except Exception:  # a workbook that cannot be read is said where it is used; the colours keep 90%
+            return 0.9
+
+    def _walled(run: Dict[str, Any], summary: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """A run's wall coloured by its week's target (Phase AH); the kept summary itself is left as it is."""
+        if not summary:
+            return summary
+        return recolour(copy.deepcopy(summary), _week_target(run.get("program") or "", run.get("week_start") or "",
+                                                             run.get("id")))
 
     def _own_target(row: Dict[str, Any]) -> int:
         """The workbook's own interval target for a version, a whole percent (90 when it cannot be read)."""
@@ -1741,10 +1765,72 @@ def create_app(config: Dict[str, Any]) -> Flask:
         except ValueError:  # a workbook that cannot be read: said on the day page
             return None
 
+    def _hours_needed(program: str, week_start: str, basis: str, aim: str, show: str) -> Dict[str, Any]:
+        """The Weeks page's Hours needed table (Phase AH): each day of the week from the DayBook (as recorded on the
+        RTA, or as planned), and for today and the days to come what to do (days off to cancel, then overtime)."""
+        days, rows = _days(), []
+        clock = datetime.now(EGYPT)
+        first = date.fromisoformat(week_start)
+        for i in range(7):
+            on = first + timedelta(days=i)
+            page, why, plan = None, "", None
+            try:
+                page = days.page(program, on, recorded=basis == "recorded")
+            except ValueError as exc:  # the workbook cannot be read: said in the column
+                why = str(exc)
+            if page is None and not why:
+                why = "No schedule for this day."
+            if page is not None and on >= clock.date():
+                after = clock.hour * 60 + clock.minute if on == clock.date() else 0
+                plan = days.dayoff_plan(page, after, page["target"]["target"] if aim == "target" else None)
+            rows.append({"date": on, "page": page, "plan": plan, "why": why})
+        return {"table": needed.week_table(rows, aim, show), "basis": basis}
+
+    def _needed_choices() -> Tuple[str, str, str]:
+        return (needed.pick(request.args.get("basis"), needed.BASES), needed.pick(request.args.get("aim"), needed.AIMS),
+                needed.pick(request.args.get("show"), needed.SHOWS))
+
+    @app.route("/week/hours-needed.xlsx")
+    @login_required
+    def week_hours_needed():  # type: ignore[no-untyped-def]
+        """The Hours needed table in Excel, as the Weeks page shows it (Phase AH)."""
+        program = clean_program(request.args.get("program", ""))
+        week = start_date(request.args.get("week", ""))
+        if not program or not week:
+            abort(400)
+        if not _access().can_open(program):
+            abort(403)
+        basis, aim, show = _needed_choices()
+        found = _hours_needed(program, week, basis, aim, show)
+        table = found["table"]
+        reach = "100%" if aim == "full" else f"the target ({round(100 * table['target'])}%) with 10 minutes over it"
+        title = (f"{_unit_filter(program)}, week of {date.fromisoformat(week):%a %d %b %Y}. "
+                 f"{'As recorded on the RTA' if basis == 'recorded' else 'As planned'}. Hours needed to reach {reach}.")
+        name = re.sub(r"[^A-Za-z0-9_-]+", "_", f"{program}_{week}_hours_needed").strip("_") + ".xlsx"
+        return send_file(io.BytesIO(needed.workbook(table, title)), as_attachment=True, download_name=name,
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    def _recorded_week(program: str, week_start: str) -> Optional[Dict[str, Any]]:
+        """The week as the RTA records it, for the Schedules page (Phase AH): intervals at the target, tight ones."""
+        days, found = _days(), {"now": 0, "intervals": 0, "tight": 0, "target": None}
+        first = date.fromisoformat(week_start)
+        for i in range(7):
+            try:
+                page = days.page(program, first + timedelta(days=i))
+            except ValueError:
+                continue
+            if page is None:
+                continue
+            t = page["target"]
+            found.update(now=found["now"] + t["now"], intervals=found["intervals"] + t["intervals"],
+                         tight=found["tight"] + t["tight"], target=t["target"])
+        return found if found["intervals"] else None
+
     def _version_week(row: Dict[str, Any], side: str, note: Optional[Dict[str, Any]] = None,
                       target: Optional[Dict[str, Any]] = None,
                       elsewhere: Optional[Dict[str, Any]] = None,
-                      outlook: Optional[List[Dict[str, Any]]] = None):  # type: ignore[no-untyped-def]
+                      outlook: Optional[List[Dict[str, Any]]] = None,
+                      hours: Optional[Dict[str, Any]] = None):  # type: ignore[no-untyped-def]
         """A version's week view; ``note`` (the Week page): why this version, and what else the week has."""
         run = app.extensions["store"].get_run(row["run_id"])
         intervals, zone_note = _week_zone(json.loads(row["checks"] or "{}").get("intervals") or [], run,
@@ -1761,11 +1847,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
             people = (json.loads(row["week"] or "{}") or {}).get("associates") or []
             figures["associates"] = sum(1 for a in people if any(shift_span(d) for d in a.get("days", []))) or None
             figures["associates_from"] = "with a shift this week" if figures["associates"] else ""
-        return render_template("week.html", run=run, view=week_view(intervals, side) if intervals else None,
+        target = _week_target(row["program"], row["week_start"], row["run_id"])
+        return render_template("week.html", run=run, view=week_view(intervals, side, target) if intervals else None,
                                side=side, program=row["program"], week=row["week_start"], programs=programs,
                                weeks=weeks, figures=figures, version=row, week_note=note,
                                may_set_in_use=_may_set_in_use(row), target_panel=target, elsewhere=elsewhere,
-                               switch=switch, outlook=outlook, zone_note=zone_note)
+                               switch=switch, outlook=outlook, zone_note=zone_note, needed=hours)
 
     @app.route("/week")
     @login_required
@@ -1801,7 +1888,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 return _version_week(chosen, side, {"said": said, "workbook": runs.get(chosen["run_id"], ""),
                                                     "others": others, "set_by": set_by},
                                      _target_panel(program, holding, chosen),
-                                     outlook=_outlook(program, holding))
+                                     outlook=_outlook(program, holding),
+                                     hours=_hours_needed(program, holding, *_needed_choices()))
         rows = history.get(program, [])
         if program and not week and rows:
             week = rows[-1]["week"]
@@ -1868,7 +1956,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                channel_added=added, step=step, input_problem=input_problem,
                                week_list=week_list if len(week_list) > 1 else [],
                                may_use={e["shown"]["id"] for e in week_list if _may_set_in_use(e["shown"])},
-                               may_delete=_may_delete(run), running=run["status"] in ACTIVE + ("QUEUED",))
+                               may_delete=_may_delete(run), running=run["status"] in ACTIVE + ("QUEUED",),
+                               recorded=_recorded_week(run["program"], run["week_start"])
+                               if current and current["in_use"] and run.get("program") and start_date(
+                                   run.get("week_start") or "") else None)
 
     # ------------------------------------------------------------- delete a schedule (Phase AA)
     @app.route("/runs/<run_id>/delete", methods=["POST"])
@@ -2055,7 +2146,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         columns = max((p["slots"] for p in people), key=len, default=[])
         run = store.get_run(row["run_id"]) or {}
         return render_template("breaks.html", row=row, run=run, day=day, days=DAYS, people=people, rules=rules,
-                               columns=[(k, m) for (k, m), _ in columns], strip=floor(week, inputs, d, current, rules),
+                               columns=[(k, m) for (k, m), _ in columns], strip=floor(week, inputs, d, current, rules,
+                                                                                  _week_target(row["program"], row["week_start"], row["run_id"])),
                                interval=inputs["interval"], drafted=sorted(draft, key=DAYS.index),
                                may_set_in_use=_may_set_in_use(row), hm=hm)
 
@@ -2571,7 +2663,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                activity_kinds=ACTIVITY_KINDS,
                                measure=measure,
                                measures=MEASURES, tab=tab, statuses=STATUSES, aux=sorted(AUX), hm=hm,
-                               rows=board(page["view"]) if page and tab == "board" else None, week_of=week_start(on),
+                               rows=board(page["view"], page["target"]["target"]) if page and tab == "board" else None, week_of=week_start(on),
                                earlier=on - timedelta(days=1), later=on + timedelta(days=1), **shift_view)
 
     def _zoned_day(program: str, on: date, page: Dict[str, Any], measure: str, own_zone: str, moved: int,
@@ -2990,7 +3082,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             v = page["view"]
             step = v["interval"]
             first = now - now % step
-            rows = [c for c in board(v) if first <= c["t"] < first + 4 * step]
+            rows = [c for c in board(v, page["target"]["target"]) if first <= c["t"] < first + 4 * step]
             on_break, soon = [], []
             for lane in v["lanes"]:
                 for seg in lane["segments"]:

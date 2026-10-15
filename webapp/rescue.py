@@ -6,14 +6,16 @@ goal ... interval wise only not weighted volume"; answer 3: the 3 count the whol
 the press included; sample 02).
 
 A CP-SAT model re-places the breaks that have not started, for people on shift and present, to get as many
-intervals as it can to the week's interval target, every interval counted the same (interval compliance). It may
-give up at most ``may_give_up`` intervals: a given-up interval falls below the target but never below 50% of its
+intervals as it can to the week's interval target, every interval counted the same (interval compliance), and then
+as many of them as it can with 10 person-minutes or more over the target (Phase AH, owner 2026-10-15: "at least 10
+mins is sufficient"; an interval at 100% needs no more). It may give up at most ``may_give_up`` intervals: a given-up interval falls below the target but never below 50% of its
 demand (or below where it is now, if it is lower already); every other interval stays at the target or no worse than
 now. Each break stays inside its shift, on a 5-minute step, clear of the person's away time and activities, in its
 order, within the program's gaps (a gap already outside them may stay as it is; none is held across a cancelled
 break), and no language or channel falls below its need (or below where it is now). In order, each keeping the
-one before: the most intervals at the target, then the fewest given up, then the fewest breaks moved (and,
-among those, the least moving): one solve, with weights that keep that order exactly.
+one before: the most intervals at the target, then the most of them 10 minutes over it, then the fewest given up,
+then the fewest breaks moved (and, among those, the least moving): one solve, with weights that keep that order
+exactly.
 
 The model counts on the floor in the page's own way (5-minute ticks; an interval is at the target when the page's
 rounded figure is), but the figures the page shows come from the page itself (``DayBook.rescue_plan``)."""
@@ -24,7 +26,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ortools.sat.python import cp_model
 
-from .day import ABSENT, AUX, EXTRA_BREAKS, STEP, _across_cancel, _norm
+from .day import ABSENT, AUX, CUSHION, EXTRA_BREAKS, STEP, _across_cancel, _norm
 
 LIMIT = 3  # intervals a day may give up, the ones already lost before the press included (owner, answer 3)
 FLOOR = 0.5  # never below 50% of demand
@@ -41,6 +43,13 @@ def least(per: int, ratio: float, required: float) -> int:
     while round(f / per, 1) < goal:
         f += 1
     return f
+
+
+def safe_least(per: int, target: float, required: float, step: int) -> int:
+    """The fewest person-ticks for an interval at the target with ``CUSHION`` person-minutes over it, or at 100% (the
+    page's own tight rule: ``day.at_target``)."""
+    cushion = int(-(-(target * required * step + CUSHION - 1e-9) // STEP))
+    return max(least(per, target, required), min(cushion, least(per, 1.0, required)))
 
 
 def lost_so_far(cells: List[Dict[str, Any]], now: int, step: int) -> List[Dict[str, Any]]:
@@ -122,6 +131,7 @@ def solve(view: Dict[str, Any], inputs: Dict[str, Any], target: float, now: Opti
     # intervals: at the target, given up, never worse otherwise. One floor variable per interval (person-ticks on
     # the floor), defined once; the conditions are on it alone.
     at_vars, given, base_at, before_at = [], [], 0, 0
+    safe_vars, base_safe, before_safe = [], 0, 0
     flag_hint: Dict[Any, int] = {}
     for i, c in enumerate(cells):
         if c["required"] <= 0 or over(c["t"]):
@@ -129,10 +139,13 @@ def solve(view: Dict[str, Any], inputs: Dict[str, Any], target: float, now: Opti
         ticks = range(i * per, (i + 1) * per)
         before = sum(slots[k] for k in ticks)
         need, half = least(per, target, c["required"]), least(per, FLOOR, c["required"])
+        safe = safe_least(per, target, c["required"], step)
         before_at += before >= need
+        before_safe += before >= safe
         row = away.get(i)
         if not row:
             base_at += before >= need
+            base_safe += before >= safe
             continue
         top = sum(base[k] for k in ticks)
         f = m.NewIntVar(max(0, top - worst[i]), top, f"floor{i}")
@@ -149,6 +162,11 @@ def solve(view: Dict[str, Any], inputs: Dict[str, Any], target: float, now: Opti
             m.Add(f >= need).OnlyEnforceIf(at)
             at_vars.append(at)
             flag_hint[at] = int(before >= need)
+        if top >= safe:  # it can be at the target with 10 minutes to spare
+            ok = m.NewBoolVar(f"safe{i}")
+            m.Add(f >= safe).OnlyEnforceIf(ok)
+            safe_vars.append(ok)
+            flag_hint[ok] = int(before >= safe)
     m.Add(sum(g for g, _ in given) <= max(0, may_give_up))
 
     # languages (as Fix breaks keeps them): per tick, eligible people on the floor never below min(now, minimum)
@@ -251,29 +269,34 @@ def solve(view: Dict[str, Any], inputs: Dict[str, Any], target: float, now: Opti
         return solver, status
 
     out: Dict[str, Any] = {"moves": [], "given_up": [], "status": "no gain", "before_at": before_at,
-                           "after_at": before_at, "moving": len(moving), "solver": ""}
+                           "after_at": before_at, "before_safe": before_safe, "after_safe": before_safe,
+                           "moving": len(moving), "solver": ""}
 
     def done(**more):
         out.update(more, seconds=round(time.time() - started, 1))
         return out
 
-    if not at_vars:
+    if not at_vars and not safe_vars:
         return done()
-    # the most at the target, then the fewest given up, the fewest breaks moved, and among those the least moving (in
-    # 5-minute steps): each weight is larger than everything after it can add up to, so one objective keeps the order
+    # the most at the target, then the most with 10 minutes to spare, the fewest given up, the fewest breaks moved, and
+    # among those the least moving (in 5-minute steps): each weight is larger than everything after it can add up to,
+    # so one objective keeps the order
     steps = [{s: abs(s - item[2]["start"]) // STEP for s in x[j]} for j, item in enumerate(moving)]
     per_move = 1 + sum(max(d.values()) for d in steps)
     per_given = 1 + per_move * (len(moving) + 1)
     rest = (per_given * sum(g for g, _ in given)
             + sum(per_move * (1 - x[j][item[2]["start"]]) + sum(d * x[j][s] for s, d in steps[j].items() if d)
                   for j, item in enumerate(moving)))
+    per_safe = 1 + per_given * (len(given) + 1)
+    per_at = 1 + per_safe * (len(safe_vars) + 1)
     hint()
-    m.Minimize(rest - (1 + per_given * (len(given) + 1)) * sum(at_vars))  # the most at the target above all the rest
+    m.Minimize(rest - per_safe * sum(safe_vars) - per_at * sum(at_vars))  # the most at the target above all the rest
     solver, status = run(seconds)
     out["solver"] = solver.StatusName(status)
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         return done(status="not solved")
-    if base_at + sum(solver.Value(a) for a in at_vars) <= before_at:
+    if (base_at + sum(solver.Value(a) for a in at_vars), base_safe + sum(solver.Value(v) for v in safe_vars)) \
+            <= (before_at, before_safe):
         return done()
     to = {}
     for j, (lane, seg, b, places) in enumerate(moving):
@@ -286,7 +309,7 @@ def solve(view: Dict[str, Any], inputs: Dict[str, Any], target: float, now: Opti
     for j, (lane, seg, b, places) in enumerate(moving):
         for k in cover(seg, to[j], b["minutes"]):
             final[k] -= 1
-    after_at, given_up = base_at, []
+    after_at, after_safe, given_up = base_at, base_safe, []
     for i, c in enumerate(cells):
         if c["required"] <= 0 or over(c["t"]):
             continue
@@ -297,6 +320,7 @@ def solve(view: Dict[str, Any], inputs: Dict[str, Any], target: float, now: Opti
         need = least(per, target, c["required"])
         f = sum(final[k] for k in ticks)
         after_at += f >= need
+        after_safe += f >= safe_least(per, target, c["required"], step)
         if f < min(before, need):
             given_up.append(c["t"])
-    return done(status="rescued", given_up=given_up, after_at=after_at)
+    return done(status="rescued", given_up=given_up, after_at=after_at, after_safe=after_safe)

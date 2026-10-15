@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 
 from .adherence import person_day, team
 from .attendance import with_text
-from .day import ABSENT, AUX, LATE_EARLY, _hm
+from .day import ABSENT, AUX, LATE_EARLY, _hm, band
 
 
 def _own(view: Dict[str, Any]) -> List[tuple]:
@@ -76,6 +76,8 @@ def note(days, program: str, on: date, measure: str = "interval") -> Optional[Di
         tv = later["view"]
         tomorrow.update({
             "short": [(c["t"], c["plan_pm"]) for c in tv["cells"] if c["plan_pm"] is not None and c["plan_pm"] < 0],
+            "short_cls": {c["t"]: band(c["plan"], c["required"], later["target"]["target"]) for c in tv["cells"]
+                          if c["plan_pm"] is not None and c["plan_pm"] < 0},  # Phase AH: by the week's target
             "absent": [{"name": l["name"], "status": s["status"]} for l, s in _own(tv) if s["status"] in ABSENT],
             "plan_short_hours": tv["tiles"]["plan_short_hours"],
             "language_gaps": [{"language": lang["name"],
@@ -84,6 +86,7 @@ def note(days, program: str, on: date, measure: str = "interval") -> Optional[Di
     return {"program": program, "date": on, "version": page["version"], "note": page["note"], "measure": measure,
             "absent": absent, "late_early": late_early, "activities": activities, "moves": moves,
             "short": [(c["t"], c["pm"]) for c in v["cells"] if c["pm"] is not None and c["pm"] < 0],
+            "short_cls": {c["t"]: c["cls"] for c in v["cells"] if c["pm"] is not None and c["pm"] < 0},
             "language_gaps": [g for g in gaps if g["times"]], "tomorrow": tomorrow, "log": page["log"],
             "numbers": {"planned": tiles["planned"], "present": tiles["present"], "absent": tiles["absent"],
                         "late_early": tiles["late_early"], "aux": tiles["aux"], "moved": tiles["moved"],

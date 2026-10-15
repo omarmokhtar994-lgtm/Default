@@ -35,13 +35,13 @@
   {% if n.moves %}<ul class="log">{% for m in n.moves %}<li><b>{{ m.name }}</b>: {{ m.what }}{% if m.by %} (by {{ m.by }}){% endif %}</li>{% endfor %}</ul>{% else %}<p class="empty">Every break as planned.</p>{% endif %}
 </section>
 <section class="panel"><h2>Short intervals</h2>
-  {% if n.short %}<p class="chips-line">{% for t, pm in n.short %}<span class="pill bad">{{ hm(t) }} {{ pm|hmm }}</span>{% endfor %}</p>{% else %}<p class="empty">No interval was short.</p>{% endif %}
+  {% if n.short %}<p class="chips-line">{% for t, pm in n.short %}<span class="pill {{ n.short_cls[t] }}">{{ hm(t) }} {{ pm|hmm }}</span>{% endfor %}</p><p class="note">Below 100% of demand: red below the week's target, amber at the target.</p>{% else %}<p class="empty">No interval was short.</p>{% endif %}
   {% for g in n.language_gaps %}<p><b>{{ g.language }}</b> uncovered at {{ g.times|join(', ') }}</p>{% endfor %}
 </section>
 <section class="panel"><h2>Watch tomorrow ({{ n.tomorrow.date.strftime('%A %d %b') }})</h2>
   {% if not n.tomorrow.planned %}<p class="empty">No schedule for tomorrow yet.</p>
   {% else %}
-  {% if n.tomorrow.short %}<p>Short in the plan already ({{ n.tomorrow.plan_short_hours|num }} h): {% for t, pm in n.tomorrow.short %}<span class="pill bad">{{ hm(t) }} {{ pm|hmm }}</span>{% endfor %}</p>{% else %}<p>The plan covers every interval.</p>{% endif %}
+  {% if n.tomorrow.short %}<p>Short in the plan already ({{ n.tomorrow.plan_short_hours|num }} h): {% for t, pm in n.tomorrow.short %}<span class="pill {{ n.tomorrow.short_cls[t] }}">{{ hm(t) }} {{ pm|hmm }}</span>{% endfor %}</p>{% else %}<p>The plan covers every interval.</p>{% endif %}
   {% if n.tomorrow.absent %}<p>Already marked: {% for p in n.tomorrow.absent %}<b>{{ p.name }}</b> ({{ p.status|lower }}){{ ', ' if not loop.last }}{% endfor %}.</p>{% endif %}
   {% for g in n.tomorrow.language_gaps if g.times %}<p><b>{{ g.language }}</b> uncovered in the plan at {{ g.times|join(', ') }}</p>{% endfor %}
   {% endif %}

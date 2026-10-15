@@ -496,8 +496,10 @@ class DayBook:
         return attendance, actual, stale, acts
 
     def page(self, program: str, on: date, measure: str = "interval",
-             extra: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
-        """The day; ``extra`` (from ``add_item(..., dry_run=True)``) is counted as if it were recorded."""
+             extra: Optional[Dict[str, Any]] = None, recorded: bool = True) -> Optional[Dict[str, Any]]:
+        """The day; ``extra`` (from ``add_item(..., dry_run=True)``) is counted as if it were recorded. With
+        ``recorded`` False, the day as planned: the RTA's records (attendance, break moves, activities) left out
+        (Phase AH, the Weeks page's "As planned")."""
         if measure not in MEASURES:
             raise ValueError(f"Unknown measure: {measure}.")
         row, note = self.version(program, on)
@@ -511,7 +513,7 @@ class DayBook:
             raise ValueError(f"The input workbook kept with {row['label']} is missing, so the day cannot be worked "
                              "out. Run the week again, or ask the admin to restore the server's data folder.")
         inputs = read_inputs(source)
-        attendance, actual, stale, acts = self._records(program, on, row)
+        attendance, actual, stale, acts = self._records(program, on, row) if recorded else ({}, {}, 0, {})
         if extra and extra.get("break"):  # a break at another time (the break advice's channel effect)
             name, idx, minute = extra["break"]
             actual[(0, name, idx)] = minute
@@ -1152,12 +1154,13 @@ class DayBook:
         return {"overtime": overtime_offers(page["view"], week, page["day"], rest, after, near=near),
                 "vto": vto_offers(page["view"], after), "next_known": near["next_known"]}
 
-    def dayoff_plan(self, page: Dict[str, Any], after: int = 0) -> Dict[str, Any]:
-        """Rescue the day's days off to cancel, then overtime for what is left (Phase AF, F1 and F2), from ``after``."""
+    def dayoff_plan(self, page: Dict[str, Any], after: int = 0, aim: Optional[float] = None) -> Dict[str, Any]:
+        """Rescue the day's days off to cancel, then overtime for what is left (Phase AF, F1 and F2), from ``after``;
+        to 100%, or with ``aim`` (the week's target) to the target with 10 minutes to spare (Phase AH)."""
         week = self._week(page["version"])
         rest = float(week.get("settings", {}).get("rest_gap_hours") or 0)
         near = self.neighbours(page["version"]["program"], page["date"], page["version"])
-        return {**dayoff_proposals(page["view"], week, page["day"], rest, after=after, near=near),
+        return {**dayoff_proposals(page["view"], week, page["day"], rest, after=after, near=near, aim=aim),
                 "next_known": near["next_known"]}
 
     LATER_MAX = 14  # days: how far one entry of absences known for later days may reach
@@ -1228,8 +1231,9 @@ class DayBook:
                 "next_known": near["next_known"]}
 
     def replan(self, page: Dict[str, Any], now: int = 0) -> Dict[str, Any]:
-        """The autopilot's proposal for the breaks not yet started (nothing is kept)."""
-        return replan(page["view"], page["inputs"], now)
+        """The autopilot's proposal for the breaks not yet started (nothing is kept); with the week's target, it keeps
+        the most intervals 10 minutes over it (Phase AH)."""
+        return replan(page["view"], page["inputs"], now, target=page["target"]["target"])
 
     @journaled
     def apply_replan(self, program: str, on: date, moves: List[Tuple[str, int, int]], user_id: int) -> int:
@@ -1244,7 +1248,8 @@ class DayBook:
     @staticmethod
     def _figures(page: Dict[str, Any]) -> Dict[str, Any]:
         return {"now": page["target"]["now"], "intervals": page["target"]["intervals"],
-                "target": page["target"]["target"], "short_hours": page["view"]["tiles"]["short_hours"]}
+                "target": page["target"]["target"], "short_hours": page["view"]["tiles"]["short_hours"],
+                "safe": page["target"]["safe"], "tight": page["target"]["tight"]}
 
     def bulk_preview(self, program: str, on: date, names: List[str], which: str, action: str, amount: int = 0,
                      at: str = "", why: str = "", now: Optional[int] = None) -> Dict[str, Any]:
@@ -1306,22 +1311,26 @@ class DayBook:
         may = allowance(lost)
         found = solve(view, page["inputs"], target["target"], now, may)
         out: Dict[str, Any] = {"before": self._figures(page), "after": self._figures(page), "lost": lost, "may": may,
-                               "limit": LIMIT, "moves": [], "given_up": [], "rescued": [], "said": [], "now": now,
+                               "limit": LIMIT, "moves": [], "given_up": [], "rescued": [], "cushioned": [],
+                               "said": [], "now": now,
                                "status": found["status"], "solver": found["solver"], "seconds": found["seconds"]}
         after = page
         if found["moves"]:
             after = self.page(program, on, extra={"breaks": {(m["name"], m["idx"]): m["to"] for m in found["moves"]}})
-            given, rescued, low = [], [], []
+            given, rescued, low, cushioned = [], [], [], []
             for vb, va, tb, ta in zip(view["cells"], after["view"]["cells"], target["cells"], after["target"]["cells"]):
                 if tb["ok"] is None:
                     continue
                 if not tb["ok"] and ta["ok"]:
                     rescued.append(vb["t"])
+                elif tb["tight"] and ta["ok"] and not ta["tight"]:  # Phase AH: now 10 minutes over the target
+                    cushioned.append(vb["t"])
                 if not ta["ok"] and va["now"] < vb["now"] - 1e-9:
                     given.append((vb["t"], ta["pct"]))
                     if va["now"] < min(vb["now"], FLOOR * vb["required"]) - 1e-9:
                         low.append(vb["t"])
-            problem = ("it puts no more of the day at the target" if after["target"]["now"] <= target["now"] else
+            gain = (after["target"]["now"], after["target"]["safe"]) > (target["now"], target["safe"])
+            problem = ("it puts no more of the day at the target, or 10 minutes over it" if not gain else
                        f"it gives up {len(given)}, more than the {may} allowed" if len(given) > may else
                        f"{hm(low[0])} would fall below 50% of demand" if low else "")
             if problem:
@@ -1335,25 +1344,27 @@ class DayBook:
                 given_at = {t for t, _ in given}
                 for m in found["moves"]:
                     m["why"] = self._rescue_why(m, step, given_at, set(rescued))
-                out.update(moves=found["moves"], given_up=given, rescued=rescued, after=self._figures(after))
+                out.update(moves=found["moves"], given_up=given, rescued=rescued, cushioned=cushioned,
+                           after=self._figures(after))
         if not out["moves"] and out["status"] != "refused":
             ahead = [c for c in target["cells"] if c["ok"] is not None and (now is None or c["t"] + step > now)]
             if found["status"] == "not solved":
                 said = (f"No answer was found in the time ({found['seconds']} s), so nothing is proposed. Try again, "
                         "or use Fix the rest of the day's breaks.")
-            elif all(c["ok"] for c in ahead):
+            elif all(c["ok"] and not c["tight"] for c in ahead):
                 said = (f"Nothing to rescue: every interval {'still ahead' if now is not None else 'of the day'} "
-                        "is at the target.")
+                        "is at the target with 10 minutes or more over it.")
             else:
-                said = ("Nothing to rescue: no move of the breaks left puts more of the day at the target within "
-                        "the rules.")
+                said = ("Nothing to rescue: no move of the breaks left puts more of the day at the target, or 10 "
+                        "minutes over it, within the rules.")
             out["said"].append(said)
         elif out["moves"] and found["solver"] == "FEASIBLE":
             out["said"].append("The best found in the time, not proven the best possible.")
         gone, saved = {t for t, _ in out["given_up"]}, set(out["rescued"])
 
         def mark(c: Dict[str, Any], kind: str) -> Dict[str, Any]:
-            return {"cls": kind, "pct": c["pct"], "over": now is not None and c["t"] + step <= now}
+            return {"cls": kind, "pct": c["pct"], "over": now is not None and c["t"] + step <= now,
+                    "tight": bool(c.get("tight")) and kind == "ok"}
 
         out["strip"] = [{"t": tb["t"],
                          "before": mark(tb, "none" if tb["ok"] is None else "ok" if tb["ok"] else "below"),

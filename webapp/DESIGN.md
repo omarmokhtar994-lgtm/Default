@@ -15,9 +15,9 @@ look changes through type, layout, the menu and, from 2026-10-15, the surfaces.
   the surfaces, ink and edges change between them; the status colours (teal, amber, red, violet) and the channel
   colours are the measured v3 set in every look. Every pair is measured in `evidence/phase_ag/colours/CONTRAST.txt`.
 
-- **Channels** (owner's pick 2026-10-15, sample `evidence/phase_ak/samples` ak01 D): Phone `#1A47A8`, Chat
-  `#C2549F`, Email `#A6D96A` (dark text `#1B1F24` on it), the same in every look. They stand apart by lightness as
-  well as hue, and clear of the four status hues (amber means short, so Email is not amber). Where the day has a
+- **Channels** (owner's pick 2026-10-15, sample `evidence/phase_ak/samples` ak01 D; Email changed the same night to
+  sample `evidence/phase_al/samples` al01 C): Phone `#1A47A8`, Chat `#C2549F`, Email `#2F7D5B`, white text on each,
+  the same in every look. They stay clear of the four status hues (amber means short, so Email is not amber). Where the day has a
   channel plan the Timeline's bars are grey (`#9AA1AA`), each channel fills the bar, and P, C, E or A is written on
   stretches of 30 minutes or more that no break covers.
 - **Type:** Archivo (one variable family, self-hosted) replaces Saira Semi Condensed: headings and figures,

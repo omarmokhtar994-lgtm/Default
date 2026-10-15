@@ -97,7 +97,7 @@ CSS = Path(__file__).resolve().parents[1] / "static" / "app.css"
 NIGHT = {"--action": "#E7EBF0", "--action-hover": "#FFFFFF", "--on-action": "#111418", "--edge": "#68727F",
          "--done": "#54749A", "--covered-text": "#2BC4B4", "--over-text": "#9086EE", "--on-covered": "#111418",
          "--on-short": "#111418", "--on-gap": "#111418", "--on-over": "#111418", "--selected": "#20252D",
-         "--ch-email": "#A6D96A"}  # re-pinned in Phase AK: the owner picked channel colours D (sample ak01)
+         "--ch-email": "#2F7D5B"}  # re-pinned in Phase AK (sample ak01 D) and Phase AL (owner: al01 option C)
 DAY = {"--action": "#15191F", "--action-hover": "#2A313B", "--on-action": "#FFFFFF", "--edge": "#7A838F",
        "--done": "#7692B4", "--covered-text": "#0B776C", "--over-text": "#715ED8", "--covered": "#06A496",
        "--short": "#C98304", "--gap": "#D53D38", "--over": "#7560E3", "--on-covered": "#0E1A2B",

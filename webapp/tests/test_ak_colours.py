@@ -2,7 +2,10 @@
 """Phase AK item 1 (owner, 2026-10-15: "Phone and email is very hard to be read on the timeline with those colors";
 answer: sample ak01 option D). Phone #1A47A8, Chat #C2549F, Email #A6D96A on a grey bar #9AA1AA when the day has a
 channel plan, the channel as tall as the bar, and P, C or E written on stretches of 30 minutes or more, never under
-a break (white on Phone and Chat, #1B1F24 on Email)."""
+a break (white on Phone and Chat, #1B1F24 on Email).
+
+Re-pinned in Phase AL: the owner did not like the green (2026-10-15) and picked sample al01 option C, Email #2F7D5B with
+a white E like the others."""
 import re
 import unittest
 from pathlib import Path
@@ -16,12 +19,13 @@ CSS = (Path(__file__).resolve().parents[1] / "static" / "app.css").read_text(enc
 class TheTokens(unittest.TestCase):
     def test_option_d(self):
         line = re.search(r":root \{ --ch-phone:[^}]*\}", CSS).group(0)
-        for token, value in (("--ch-phone", "#1A47A8"), ("--ch-chat", "#C2549F"), ("--ch-email", "#A6D96A"),
-                             ("--ch-email-ink", "#1B1F24"), ("--ch-bar", "#9AA1AA")):
+        for token, value in (("--ch-phone", "#1A47A8"), ("--ch-chat", "#C2549F"), ("--ch-email", "#2F7D5B"),
+                             ("--ch-ink", "#FFFFFF"), ("--ch-bar", "#9AA1AA")):
             self.assertIn(f"{token}: {value}", line)
+        self.assertNotIn("--ch-email-ink", CSS)
 
-    def test_email_text_is_dark(self):
-        self.assertRegex(CSS, r"\.ch-E \{ background: var\(--ch-email\); color: var\(--ch-email-ink\); \}")
+    def test_email_text_is_white_like_the_others(self):
+        self.assertRegex(CSS, r"\.ch-E \{ background: var\(--ch-email\); color: var\(--ch-ink\); \}")
 
 
 class TheLetters(unittest.TestCase):
@@ -45,7 +49,7 @@ class ThePage(ai.TheChannelsOnTheTimeline):
         html = self.client.get(f"/day?program={self.key}&date=2026-10-14").get_data(as_text=True)
         self.assertIn('class="tl-bar has-ch', html)
         self.assertRegex(html, r'<rect class="tl-ch ch-[PCEA]" x="-?\d+" y="8" width="\d+" height="14"')
-        self.assertRegex(html, r'<text class="tl-ch-t( e)?" x="-?\d+" y="19" data-cx="-?\d+" aria-hidden="true">[PCEA]</text>')
+        self.assertRegex(html, r'<text class="tl-ch-t" x="-?\d+" y="19" data-cx="-?\d+" aria-hidden="true">[PCEA]</text>')
 
 
 if __name__ == "__main__":

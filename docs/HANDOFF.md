@@ -2,7 +2,7 @@
 
 © 2026 Omar Mokhtar. All rights reserved.
 
-Written Thu 15 Oct 2026, 13:11 Egypt time, at the end of Phase AI; brought up to date at 18:30, end of Phase AJ, and at 23:00, end of Phase AK. A new chat reads `CLAUDE.md` (it loads by itself)
+Written Thu 15 Oct 2026, 13:11 Egypt time, at the end of Phase AI; brought up to date at 18:30, end of Phase AJ, at 23:00, end of Phase AK, and on Fri 16 Oct, about 02:00, end of Phase AL. A new chat reads `CLAUDE.md` (it loads by itself)
 and then this file. Together they hold the rules, the owner's ways of working, where the work stands and how to
 check it. What they cannot hold is the chat itself: when something here is not enough, the record is in git
 (`git log`), the plans (`docs/superpowers/plans/`) and each phase's evidence (`evidence/phase_*/`).
@@ -89,7 +89,22 @@ Load each with the Skill tool at the step it covers; following it from memory do
 6. Package, split into parts, send them, and report in caveman style: what changed, rulings with their cost, what
    is known and left, Egypt times, screens.
 
-## Where things stand (end of Phase AK)
+## Where things stand (end of Phase AL)
+
+- Phase AL is complete and pushed (branch `ccr-90ec94cc-a37tqk`): Email deep green `#2F7D5B` with a white E; the
+  engine's MORE_CONSISTENT_CANDIDATE kept as "Tool, more consistent" (offered, never set in use by itself; finished
+  runs get it once at start); a Fairness section on Plan channels (`webapp/channel_fair.py`). Requests, root cause and
+  answers: `evidence/phase_al/REQUESTS.md`; checks: `evidence/phase_al/CHECKS.md`; release notes:
+  `evidence/phase_al/RELEASE_NOTES.md`; plan and rulings: `docs/superpowers/plans/2026-10-15-phase-al-build.md`.
+- Package `RC9_2_2_PRODUCTION_PACKAGE.zip`, 2693 files, 92.21 MB, sha256
+  `4281a5eeb81a5626adc7c79543cf64733d41c63eb6e7af0801666f6a07cc1a8a`, sent as AL_part_0 to AL_part_3. The AK package
+  was sent before it; installing either is the owner's step (AL contains AK).
+- Next for fairness (owner's answers): the planner may weigh it later, the week first and the day where the week
+  cannot, and coverage always wins. The view came first, as asked.
+- Check tools: `evidence/phase_al/tools/`. Expected on Phase AL: 618 and 539 tests OK (1 skipped), 77 browser tests
+  OK, GATE PASS with 1537 tests (2 skipped), page review 0 problems, sweep 0 exceptions and 0 server errors.
+
+## Earlier: end of Phase AK
 
 - Phase AK is complete and pushed (branch `ccr-90ec94cc-a37tqk`): channel colours D with letters on the Timeline,
   Times in on a schedule, Fix breaks / Rescue / Change several breaks on the 24 hours from "Day starts at", the Team
@@ -241,3 +256,4 @@ read the real clock break when their date passes, so stop the clock with `mock.p
 - AI: the 12 items above.
 - AJ: overtime up to 4 hours, cover from outside the roster, channel colours after midnight.
 - AK: channel colours D, Times in on a schedule, RTA tools on the day's 24 hours, team managers, Roles.
+- AL: Email deep green, the engine's more consistent schedule as a version, a channel fairness view.

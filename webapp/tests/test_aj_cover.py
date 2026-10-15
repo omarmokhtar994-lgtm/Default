@@ -134,7 +134,7 @@ class TheChecks(_Book):
 
     def test_a_dry_run_keeps_nothing(self):
         found = self.add(dry_run=True)
-        self.assertEqual(found["what"], f"Cover from outside the roster: {TM} (Team manager) 10:00 to 12:00")
+        self.assertEqual(found["what"], "Cover from outside the roster (Team manager) 10:00 to 12:00")
         self.assertEqual(self.days.covers(AR, WED), [])
 
 
@@ -143,13 +143,13 @@ class TheRecord(_Book):
         made = self.add()
         log = self.days.page(AR, WED)["log"]
         self.assertEqual((log[-1]["associate"], log[-1]["what"]),
-                         (TM, f"Cover from outside the roster: {TM} (Team manager) 10:00 to 12:00"))
+                         (TM, "Cover from outside the roster (Team manager) 10:00 to 12:00"))
         self.days.cancel_cover(AR, WED, made, self.sara)
         self.assertEqual(self.days.covers(AR, WED), [])
         self.assertEqual(self.days.page(AR, WED)["log"][-1]["what"],
-                         f"Cancelled: cover from outside the roster: {TM} (Team manager) 10:00 to 12:00")
+                         "Cancelled: cover from outside the roster (Team manager) 10:00 to 12:00")
         self.assertEqual(self.days.undo_last(AR, WED, self.sara),
-                         f"Undone: {TM}, Cancelled: cover from outside the roster: {TM} (Team manager) 10:00 to 12:00.")
+                         f"Undone: {TM}, Cancelled: cover from outside the roster (Team manager) 10:00 to 12:00.")
         self.assertEqual(len(self.days.covers(AR, WED)), 1)
         self.assertEqual(self.days.page(AR, WED)["log"][-1]["what"], "Cover 10:00 to 12:00 back (undone)")
 
@@ -205,7 +205,7 @@ class TheChannels(_Day):
         self.days.add_cover(self.key, date(2026, 10, 14), TM, "Support", "14:00", "15:00", self.omar, channel="P")
         self.assertEqual(self.cell("Phone", 14 * 60)["low"], 1)
         self.assertEqual(self.days.page(self.key, date(2026, 10, 14))["log"][-1]["what"],
-                         f"Cover from outside the roster: {TM} (Support) 14:00 to 15:00, Phone")
+                         "Cover from outside the roster (Support) 14:00 to 15:00, Phone")
 
 
 class ThePage(_Overtime):

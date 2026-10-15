@@ -1138,7 +1138,7 @@ class DayBook:
     @staticmethod
     def _cover_text(name: str, role: str, lo: int, hi: int, channel: str = "") -> str:
         from .channels import CHANNELS
-        return (f"Cover from outside the roster: {name} ({role}) {hm(lo)} to {hm(hi)}"
+        return (f"Cover from outside the roster ({role}) {hm(lo)} to {hm(hi)}"  # the log line and post name them
                 + (f", {CHANNELS.get(channel, channel)}" if channel else ""))
 
     @journaled
@@ -1179,7 +1179,7 @@ class DayBook:
         for r in self.covers(program, on):
             if r["associate"].casefold() == name.casefold() and r["start"] < hi and lo < r["end_min"]:
                 raise ValueError(f"{r['associate']} already covers {hm(r['start'])} to {hm(r['end_min'])}.")
-        what = self._cover_text(name, role, lo, hi, channel)
+        what = self._cover_text(name, role, lo, hi, channel)  # logged under the name
         if dry_run:
             return {"name": name, "role": role, "start": lo, "end": hi, "channel": channel, "what": what}
         made = self.store.add_cover(program=program, shift_date=on.isoformat(), associate=name, role=role, start=lo,

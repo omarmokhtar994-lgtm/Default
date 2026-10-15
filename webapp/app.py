@@ -36,7 +36,7 @@ from .channel_plan import NoPlan, plan_day, score_day
 from .channel_template import channel_workbook
 from .channels import check_lines, has_channel_needs, read_channels, requirement_tab
 from .clock import EGYPT, HOME, SHOWN, ZONES, moved_text, pick_zone, shift as zone_shift, shown, to_schedule, zone_label
-from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, OVERTIME_MAX, STATUSES, BreakRefused, at_target, board, glance, hover_tips, my_day, now_panel, read_inputs, shift_groups, window_view
+from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, OVERTIME_MAX, STATUSES, channel_letters, BreakRefused, at_target, board, glance, hover_tips, my_day, now_panel, read_inputs, shift_groups, window_view
 from .coach import actual_shrinkage, corrected_tab
 from .leave import KINDS as LEAVE_KINDS, LeaveBook
 from .swaps import SwapBook
@@ -446,7 +446,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 "status_words": STATUS_WORDS, "label": label, "modes": MODES, "stages": stages, "in_flight": IN_FLIGHT,
                 "when": _when, "run_options": run_options, "option_labels": OPTION_LABELS,
                 "eta_text": eta_text, "duration": duration, "clock": _clock, "with_text": with_text,
-                "group_changes": group_changes, "zones": ZONES, "home_zone": HOME}
+                "group_changes": group_changes, "zones": ZONES, "home_zone": HOME, "channel_letters": channel_letters}
 
     NAV_ACTIVE = {"home": "home", "overview_page": "overview", "day_page": "day", "week_page": "week",
                   "run_week": "week", "run_schedules": "schedules", "program": "analysis", "programs": "programs",

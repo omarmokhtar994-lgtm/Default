@@ -1396,3 +1396,25 @@ function homeRefresh(now) {
   });
   Array.prototype.forEach.call(document.querySelectorAll("[data-goto-open]"), function (b) { b.addEventListener("click", open); });
 })();
+
+// Phase AK (sample ak01 D): the Timeline's tracks stretch sideways (1440 minutes across the page), so the channel
+// letters on them are drawn back to their true shape: each is narrowed or widened around its own middle by the
+// track's height scale over its width scale.
+(function () {
+  "use strict";
+  var tracks = document.querySelectorAll("svg.tl-track");
+  if (!tracks.length) { return; }
+  function fit() {
+    Array.prototype.forEach.call(tracks, function (svg) {
+      var box = svg.viewBox.baseVal, w = svg.clientWidth, h = svg.clientHeight;
+      if (!box || !w || !h) { return; }
+      var k = (h / box.height) / (w / box.width);
+      Array.prototype.forEach.call(svg.querySelectorAll("text.tl-ch-t"), function (t) {
+        var cx = t.getAttribute("data-cx");
+        t.setAttribute("transform", "translate(" + cx + " 0) scale(" + k.toFixed(4) + " 1) translate(" + (-cx) + " 0)");
+      });
+    });
+  }
+  fit();
+  window.addEventListener("resize", fit);
+})();

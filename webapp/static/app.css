@@ -947,10 +947,11 @@ dialog.dlg.add-dlg { width: 620px; }
 .btnrow { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
 
 /* Phase V: the channels, one colour each wherever they appear */
-:root { --ch-phone: #3E6FD8; --ch-chat: #B4479A; --ch-email: #4D7D8D; --ch-ink: #FFFFFF; }
+/* Phase AK (owner's pick, sample ak01 D): apart by lightness too, and clear of the status hues */
+:root { --ch-phone: #1A47A8; --ch-chat: #C2549F; --ch-email: #A6D96A; --ch-ink: #FFFFFF; --ch-email-ink: #1B1F24; --ch-bar: #9AA1AA; }
 .ch-P { background: var(--ch-phone); color: var(--ch-ink); }
 .ch-C { background: var(--ch-chat); color: var(--ch-ink); }
-.ch-E { background: var(--ch-email); color: var(--ch-ink); }
+.ch-E { background: var(--ch-email); color: var(--ch-email-ink); }
 /* Phase AF (C2): each person's channels as stretches on the RTA */
 .ch-X { background: var(--empty-cell); color: var(--dim); }
 .chr { min-width: 760px; }
@@ -964,6 +965,7 @@ dialog.dlg.add-dlg { width: 620px; }
 .chr-svg rect.ch-B { fill: var(--rail); } .chr-svg rect.ch-X { fill: var(--empty-cell); }
 .chr-t { font: 700 1.0625rem var(--text); fill: var(--ch-ink); text-anchor: middle; pointer-events: none; }
 .chr-svg rect.ch-B + .chr-t, .chr-svg rect.ch-X + .chr-t { fill: var(--paper); }
+.chr-svg rect.ch-E + .chr-t { fill: var(--ch-email-ink); }
 .chr-h { font: 400 1rem var(--text); fill: var(--dim); }
 .chr-svg a { cursor: pointer; outline: none; }
 .chr-svg a:focus-visible rect, .chr-svg a:hover rect { stroke: var(--action); stroke-width: 3; }
@@ -1509,6 +1511,9 @@ table.hours tfoot th, table.hours tfoot td { border-top: 1px solid var(--rail); 
 /* Phase AI: channels on the Timeline's bars (owner: "chsnnels not coloredd here"), under the breaks */
 .tl-track rect.tl-ch.ch-P { fill: var(--ch-phone); } .tl-track rect.tl-ch.ch-C { fill: var(--ch-chat); }
 .tl-track rect.tl-ch.ch-E { fill: var(--ch-email); } .tl-track rect.tl-ch.ch-A { fill: url(#ch-all); }
+[data-day] .tl-bar.has-ch { fill: var(--ch-bar); opacity: 1; }
+.tl-ch-t { font: 700 11px var(--text); fill: var(--ch-ink); text-anchor: middle; pointer-events: none; }
+.tl-ch-t.e { fill: var(--ch-email-ink); }
 .tl-chnote, .tl-chkey { margin: 0 0 8px; }
 /* Phase AI: the wallboard's way back to the RTA */
 .wall-back { font-size: 2vh; color: var(--dim); text-decoration: underline; }

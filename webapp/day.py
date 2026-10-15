@@ -1324,6 +1324,28 @@ def _moved(seg: Dict[str, Any], by: int) -> Dict[str, Any]:
             "activities": later(seg.get("activities", []), "start", "end")}
 
 
+LETTER_MIN = 30  # minutes a channel stretch needs, clear of breaks, to carry its letter (Phase AK, sample ak01 D)
+
+
+def channel_letters(stretches: List[Tuple[int, int, str]], breaks: List[Tuple[int, int]]) -> List[Tuple[int, str]]:
+    """Where to write P, C, E or A on a person's bar: the middle of the longest piece of each channel stretch that no
+    break (start, minutes) covers, when that piece is at least ``LETTER_MIN`` minutes."""
+    out = []
+    for a, b, c in stretches:
+        if c not in ("P", "C", "E", "A"):
+            continue
+        pieces, lo = [], a
+        for s, m in sorted(breaks):
+            if s < b and lo < s + m:
+                pieces.append((lo, max(lo, s)))
+                lo = max(lo, s + m)
+        pieces.append((lo, b))
+        x0, x1 = max(pieces, key=lambda p: (p[1] - p[0], -p[0]))
+        if x1 - x0 >= LETTER_MIN:
+            out.append(((x0 + x1) // 2, c))
+    return out
+
+
 def window_view(views: Dict[int, Optional[Dict[str, Any]]], start: int, on: date) -> Dict[str, Any]:
     """Phase AI (owner, 2026-10-15: one calendar day "with everything"): the RTA's 24 hours from minute ``start`` of
     the schedule's day ``on``, with the day view's shape, so the Timeline, the Interval board and Adherence work on it

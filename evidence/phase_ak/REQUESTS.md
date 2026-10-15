@@ -20,7 +20,11 @@ so they can approve their requests"
 ## Questions only the owner can answer
 
 1. Colours (sample ak01, light and dark): A (grey bar, Phone blue, Chat magenta, Email amber), B (blue bar, Phone
-   orange, Chat purple, Email green) or C (as A with P, C, E written on longer stretches)?
+   orange, Chat purple, Email green), C (as A with P, C, E written on longer stretches) or D (recommended: dark Phone
+   #1A47A8, mid Chat #C2549F, light Email #F4BE55, with letters)? Measured (better-colors): today Phone on the bar is
+   1.00:1 and the three channels 1.04 to 1.08:1 apart in lightness; B puts orange next to green (1.13:1, unreadable
+   with red-green colour blindness); white letters on C's amber are 2.76:1. D: channels 2.0 to 4.9:1 apart, letters
+   4.2:1 or more.
 2. "Schedule tab": the Schedules page in the menu (This week, Schedules), a run's schedule (Runs, a run, Schedules),
    or another page?
 3. Team managers:

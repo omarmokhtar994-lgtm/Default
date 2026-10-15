@@ -12,6 +12,9 @@ OPTS = {
           {"bar": "#3E6FD8", "P": "#E07B24", "C": "#8A4FD8", "E": "#2E9E6A"}, "full"),
     "C": ("Grey bar, channel fills the bar, with its letter", "As A, plus P, C or E written on each stretch of 30 minutes or more",
           {"bar": "#8A929C", "P": "#2F6FE0", "C": "#B4479A", "E": "#D98A1C"}, "letters"),
+    "D": ("Recommended: dark Phone, mid Chat, light Email, with letters",
+          "Told apart by lightness as well as colour, so colour-blind staff can read it too; dark letter on Email",
+          {"bar": "#9AA1AA", "P": "#1A47A8", "C": "#C2549F", "E": "#F4BE55"}, "letters"),
 }
 def svg(rows, c, mode):
     out = []
@@ -20,10 +23,10 @@ def svg(rows, c, mode):
         for a, b, ch in runs:
             s.append(f'<rect x="{a}" y="5" width="{b-a}" height="16" rx="3" fill="{c[ch]}"/>')
             if mode == "letters" and b - a >= 30:
-                s.append(f'<text x="{(a+b)/2}" y="17" font-size="11" font-weight="700" fill="#fff" text-anchor="middle">{ch}</text>')
+                s.append(f'<text x="{(a+b)/2}" y="17" font-size="11" font-weight="700" fill="{'#1B1F24' if ch == 'E' else '#fff'}" text-anchor="middle">{ch}</text>')
         for t, m in breaks:
             s.append(f'<rect x="{t}" y="1" width="{m}" height="24" rx="2" fill="#2B2F35"/>')
-        out.append(f'<div class="row"><span>{name}</span><svg viewBox="0 0 540 26" preserveAspectRatio="none">{"".join(s)}</svg></div>')
+        out.append(f'<div class="row"><span>{name}</span><svg viewBox="0 0 540 26">{"".join(s)}</svg></div>')
     return "".join(out)
 html = ""
 for k, (title, note, c, mode) in OPTS.items():

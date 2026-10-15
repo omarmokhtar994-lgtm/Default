@@ -46,20 +46,20 @@
 </section>
 {% endif %}
 
-{% if needed %}{% set nd = needed.table %}{% set tp = (100 * nd.target)|round|int %}
+{% if needed %}{% set nd = needed.table %}{% set hpct = (100 * nd.target)|round|int %}
 <section class="panel" id="needed" aria-labelledby="hn-h">
   <h2 id="hn-h">Hours needed</h2>
   <div class="hn-bar">
     <nav class="view sidepick" aria-label="Recorded or planned">{% for key, label in (('recorded', 'As recorded on the RTA'), ('planned', 'As planned')) %}<a href="{{ url_for('week_page', program=program, week=week, basis=key, aim=nd.aim, show=nd.show) }}#needed"{% if needed.basis == key %} aria-current="true"{% endif %}>{{ label }}</a>{% endfor %}</nav>
     <form class="hn-aim" method="get" action="{{ url_for('week_page') }}#needed">
       <input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="week" value="{{ week }}"><input type="hidden" name="basis" value="{{ needed.basis }}"><input type="hidden" name="show" value="{{ nd.show }}">
-      <label>Hours needed to reach <select name="aim" data-autosubmit><option value="full"{% if nd.aim == 'full' %} selected{% endif %}>100%</option><option value="target"{% if nd.aim == 'target' %} selected{% endif %}>the target ({{ tp }}%) plus 10 minutes</option></select></label>
+      <label>Hours needed to reach <select name="aim" data-autosubmit><option value="full"{% if nd.aim == 'full' %} selected{% endif %}>100%</option><option value="target"{% if nd.aim == 'target' %} selected{% endif %}>the target ({{ hpct }}%) plus 10 minutes</option></select></label>
       <button class="quiet" type="submit">Show</button>
     </form>
     <a class="button" href="{{ url_for('week_hours_needed', program=program, week=week, basis=needed.basis, aim=nd.aim, show=nd.show) }}">Download this table</a>
   </div>
   <nav class="view sidepick hn-show" aria-label="Which intervals">{% for key, label in (('all', 'All short intervals'), ('ot', 'Overtime needed'), ('dayoff', 'Cancel a day off')) %}<a href="{{ url_for('week_page', program=program, week=week, basis=needed.basis, aim=nd.aim, show=key) }}#needed"{% if nd.show == key %} aria-current="true"{% endif %}>{{ label }} ({{ nd.counts[key] }})</a>{% endfor %}</nav>
-  <p class="hn-legend"><span><i class="key covered"></i>100% or more</span><span><i class="key short"></i>{{ tp }} to 99% (at the target)</span><span><i class="key short tight"></i>Tight: under 10 minutes over the target</span><span><i class="key gap"></i>Below {{ tp }}%</span><span>Each cell: hours needed to reach {{ '100%' if nd.aim == 'full' else 'the target with 10 minutes over it' }}, and the share on the floor{{ ' as the RTA records it' if needed.basis == 'recorded' else ' in the plan' }}</span></p>
+  <p class="hn-legend"><span><i class="key covered"></i>100% or more</span><span><i class="key short"></i>{{ hpct }} to 99% (at the target)</span><span><i class="key short tight"></i>Tight: under 10 minutes over the target</span><span><i class="key gap"></i>Below {{ hpct }}%</span><span>Each cell: hours needed to reach {{ '100%' if nd.aim == 'full' else 'the target with 10 minutes over it' }}, and the share on the floor{{ ' as the RTA records it' if needed.basis == 'recorded' else ' in the plan' }}</span></p>
   <div class="scroll" role="region" tabindex="0" aria-label="Hours needed (scrolls sideways)">
   <table class="hours">
     <thead><tr><th scope="col">Interval</th>{% for d in nd.days %}<th scope="col">{{ d.label }}{% if d.why %}<small>{{ d.why }}</small>{% endif %}</th>{% endfor %}</tr></thead>
@@ -67,8 +67,8 @@
     {% else %}<tr><th scope="row">{{ row.time }}</th>{% for c in row.cells %}{% set dim = row.dim[loop.index0] %}{% if not c %}<td class="hn none"></td>{% elif c.hours <= 0 or dim %}<td class="hn {{ 'dim' if dim else c.cls }}"><small>{{ c.pct }}%</small></td>{% else %}<td class="hn {{ c.cls }}{{ ' tight' if c.tight }}"><b>{{ '%g'|format(c.hours) }} h</b><small>{{ c.pct }}%{{ ', tight' if c.tight }}</small>{% if c.fix %}<i class="fx">{{ c.fix }}</i>{% endif %}</td>{% endif %}{% endfor %}</tr>{% endif %}{% endfor %}</tbody>
     <tfoot>
       <tr><th scope="row">Hours needed</th>{% for t in nd.totals %}<td>{{ '%g'|format(t.hours) }} h</td>{% endfor %}</tr>
-      <tr><th scope="row">Below {{ tp }}%</th>{% for t in nd.totals %}<td>{{ t.bad }}</td>{% endfor %}</tr>
-      <tr><th scope="row">{{ tp }}% to 99%</th>{% for t in nd.totals %}<td>{{ t.warn }}{% if t.tight %} <small>({{ t.tight }} tight)</small>{% endif %}</td>{% endfor %}</tr>
+      <tr><th scope="row">Below {{ hpct }}%</th>{% for t in nd.totals %}<td>{{ t.bad }}</td>{% endfor %}</tr>
+      <tr><th scope="row">{{ hpct }}% to 99%</th>{% for t in nd.totals %}<td>{{ t.warn }}{% if t.tight %} <small>({{ t.tight }} tight)</small>{% endif %}</td>{% endfor %}</tr>
     </tfoot>
   </table>
   </div>
@@ -119,7 +119,7 @@
     <tfoot><tr><th scope="row">At 100%</th>{% for p in view.days_at_full %}<td>{{ p ~ '%' if p is not none else '–' }}</td>{% endfor %}</tr></tfoot>
   </table>
   </div>
-  {% set tp = (100 * view.target)|round|int %}<figcaption class="legend"><span><i class="key covered"></i>Fully covered</span><span><i class="key short"></i>{{ tp }} to 99%</span><span><i class="key gap"></i>Under {{ tp }}%</span><span><i class="key short tight"></i>Tight: under 10 minutes over the target</span>{% if side == 'after' %}<span><i class="key over"></i>Over-staffed</span>{% endif %}<span><i class="key none"></i>No demand</span></figcaption>
+  {% set gpct = (100 * view.target)|round|int %}<figcaption class="legend"><span><i class="key covered"></i>Fully covered</span><span><i class="key short"></i>{{ gpct }} to 99%</span><span><i class="key gap"></i>Under {{ gpct }}%</span><span><i class="key short tight"></i>Tight: under 10 minutes over the target</span>{% if side == 'after' %}<span><i class="key over"></i>Over-staffed</span>{% endif %}<span><i class="key none"></i>No demand</span></figcaption>
 </section>
 
 <div class="pgrid wk-tables">

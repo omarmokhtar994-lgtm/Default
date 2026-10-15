@@ -1847,8 +1847,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             people = (json.loads(row["week"] or "{}") or {}).get("associates") or []
             figures["associates"] = sum(1 for a in people if any(shift_span(d) for d in a.get("days", []))) or None
             figures["associates_from"] = "with a shift this week" if figures["associates"] else ""
-        target = _week_target(row["program"], row["week_start"], row["run_id"])
-        return render_template("week.html", run=run, view=week_view(intervals, side, target) if intervals else None,
+        ratio = _week_target(row["program"], row["week_start"], row["run_id"])
+        return render_template("week.html", run=run, view=week_view(intervals, side, ratio) if intervals else None,
                                side=side, program=row["program"], week=row["week_start"], programs=programs,
                                weeks=weeks, figures=figures, version=row, week_note=note,
                                may_set_in_use=_may_set_in_use(row), target_panel=target, elsewhere=elsewhere,

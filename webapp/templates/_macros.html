@@ -54,8 +54,8 @@
   </div>
   <figcaption class="legend">
     <span><i class="key covered"></i>Fully covered</span>
-    {% set tp = (100 * (summary.target or 0.9))|round|int %}<span><i class="key short"></i>{{ tp }} to 99%</span>
-    <span><i class="key gap"></i>Under {{ tp }}%</span>
+    {% set wpct = (100 * (summary.target or 0.9))|round|int %}<span><i class="key short"></i>{{ wpct }} to 99%</span>
+    <span><i class="key gap"></i>Under {{ wpct }}%</span>
     <span><i class="key over"></i>Over-staffed</span>
     <span><i class="key none"></i>No requirement</span>
     <span class="rule">Each cell is {{ summary.interval_minutes }} minutes, as checked by the independent validator.</span>

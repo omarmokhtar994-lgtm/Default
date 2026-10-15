@@ -328,7 +328,8 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
              attendance: Dict[Tuple[int, str], Dict[str, Any]],
              actual: Dict[Tuple[int, str, int], int], measure: str = "interval",
              activities: Optional[Dict[Tuple[int, str], List[Dict[str, Any]]]] = None,
-             before: Any = SAME_WEEK, channels: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+             before: Any = SAME_WEEK, channels: Optional[Dict[str, Any]] = None,
+             cover: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """The day's lanes, interval cells, language rows and tiles (and, with ``channels``, the channel view of
     ``channel_day``: setup, skills, language_rows, blocks and moves per (offset, name), after, gaps). ``before`` is where the day before is
     read from: (week, column), None for the input's carry-in tab, or this week's previous column. ``attendance``,
@@ -337,7 +338,9 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
     shift's own midnight. ``measure`` is "interval" (billable aux stays on the
     floor) or "sl". Activities: aux kinds (off the floor unless billable under
     interval compliance), "VTO" (off the floor) and "Overtime" (on the floor
-    outside the shift; not in the plan)."""
+    outside the shift; not in the plan). ``cover`` (Phase AJ): people not on the roster logging in, each
+    {"start", "end", "channel"} in minutes from this day's midnight; each counts as one person on the floor for
+    those minutes (never in the plan, a language or a lane)."""
     if measure not in MEASURES:
         raise ValueError(f"unknown measure {measure!r}")
     step = inputs["interval"]
@@ -395,12 +398,14 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
     def overlapping(lo: int, hi: int, t: int) -> bool:
         return lo < t + step and t < hi
 
+    cover = [c for c in (cover or []) if c["start"] < 1440 and c["end"] > 0]
+    extra_ticks = [sum(1 for c in cover if c["start"] <= i * STEP < c["end"]) for i in range(slots)]
     cells = []
     req = inputs["required"].get(day, {})
     for t in range(0, 1440, step):
         r = req.get(t, 0.0)
         idx = range(t // STEP, (t + step) // STEP)
-        ticks = [len(now[i]) for i in idx]
+        ticks = [len(now[i]) + extra_ticks[i] for i in idx]
         here = sum(ticks) / len(ticks)
         planned_here = sum(len(plan[i]) for i in idx) / len(idx)
         counts = {"absent": sum(1 for seg, st, away, br, ac in pieces if st in ABSENT
@@ -417,7 +422,8 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
                   "overtime": sum(1 for seg, st, away, br, ac in pieces
                                   if any(a["kind"] == "Overtime" and overlapping(a["start"], a["end"], t) for a in ac)),
                   "vto": sum(1 for seg, st, away, br, ac in pieces
-                             if any(a["kind"] == "VTO" and overlapping(a["start"], a["end"], t) for a in ac))}
+                             if any(a["kind"] == "VTO" and overlapping(a["start"], a["end"], t) for a in ac)),
+                  "outside": sum(1 for c in cover if overlapping(c["start"], c["end"], t))}
         cell = {"t": t, "required": r, "plan": round(planned_here, 1), "now": round(here, 1), "slots": ticks,
                 "low": min(ticks), **counts}
         if r <= 0:
@@ -465,6 +471,7 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
              "vto": sum(a["end"] - a["start"] for seg, st, away, br, ac in pieces for a in ac if a["kind"] == "VTO"),
              "called_in": sum(seg["end"] - seg["start"] for seg, st, away, br, ac in pieces
                               if seg["called_in"] and seg["offset"] == 0 and st not in ABSENT),
+             "cover": sum(min(c["end"], 1440) - max(c["start"], 0) for c in cover),
              "short_hours": round(short, 1), "plan_short_hours": round(plan_short, 1),
              "short_intervals": sum(1 for c in cells if c["pm"] is not None and c["pm"] < 0),
              "over_hours": round(over, 1), "language_gaps": sum(l["gaps"] for l in languages)}
@@ -477,9 +484,9 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
     found = None
     if channels:  # Phase V
         from .channel_day import channel_view
-        found = channel_view(day, step, now, plan, pieces, lanes, channels)
+        found = channel_view(day, step, now, plan, pieces, lanes, {**channels, "cover": cover})
     return {"interval": step, "measure": measure, "lanes": order, "cells": cells, "languages": languages,
-            "tiles": tiles, "channels": found}
+            "tiles": tiles, "channels": found, "outside": cover}
 
 
 def _hm(minute: int) -> str:
@@ -778,6 +785,10 @@ def board(view: Dict[str, Any], target: float) -> List[Dict[str, Any]]:
                                 f"{a['kind'].lower()} {_hm(a['start'])} to {_hm(a['end'])}, "
                                 f"{'billable' if a.get('billable') else 'non-billable'}")
                         events.append({"name": lane["name"], "text": text})
+        for o in view.get("outside") or []:  # Phase AJ: someone not on the roster logging in
+            if t <= o["start"] < t + step:
+                events.append({"name": o["name"], "text": f"{o['role'].lower()} from outside the roster, covering "
+                                                          f"{_hm(o['start'])} to {_hm(o['end'])}"})
         cls = band(c["now"], c["required"], target)
         over = int(round(minutes_over(c, target))) if c["required"] > 0 else None
         tight = cls == "warn" and over < CUSHION
@@ -1332,7 +1343,7 @@ def window_view(views: Dict[int, Optional[Dict[str, Any]]], start: int, on: date
         if c is None:
             c = {"required": 0, "plan": 0, "now": 0, "slots": [0] * (step // STEP), "low": 0, "need": 0, "pm": None,
                  "plan_pm": None, "cls": "none", **{x: 0 for x in ("absent", "aux", "late_early", "breaks", "overtime",
-                                                                  "vto")}}
+                                                                  "vto", "outside")}}
         cells.append({**c, "t": k, "date": on + timedelta(days=k // 1440)})
     found: Dict[Tuple[str, int], Tuple[Dict[str, Any], Dict[str, Any], int]] = {}
     for d in sorted(views):
@@ -1408,9 +1419,19 @@ def window_view(views: Dict[int, Optional[Dict[str, Any]]], start: int, on: date
                                            if c.get("plan_pm") is not None and c["plan_pm"] < 0), 1),
              "short_intervals": sum(1 for c in with_demand if c["pm"] < 0),
              "over_hours": round(sum(c["pm"] for c in with_demand if c["pm"] > 0), 1),
-             "language_gaps": sum(r["gaps"] for r in languages)}
+             "language_gaps": sum(r["gaps"] for r in languages),
+             "cover": ((views.get(0) or {}).get("tiles") or {}).get("cover", 0)}
+    outside = []  # Phase AJ: each day's cover from outside the roster, in the window's minutes
+    for d, v in sorted(views.items()):
+        for o in (v or {}).get("outside") or []:
+            a, b = max(o["start"] + 1440 * d, start, 1440 * d), min(o["end"] + 1440 * d, start + 1440, 1440 * (d + 1))
+            if a < b and not any(x["name"] == o["name"] and x["end"] == a for x in outside):
+                outside.append({**o, "start": a, "end": b})
+            elif a < b:  # the same cover read again from the next day's view: one stretch
+                x = next(x for x in outside if x["name"] == o["name"] and x["end"] == a)
+                x["end"] = b
     return {"interval": step, "measure": first["measure"], "lanes": order, "cells": cells, "languages": languages,
-            "tiles": tiles, "channels": channels, "start": start}
+            "tiles": tiles, "channels": channels, "start": start, "outside": outside}
 
 
 def shift_groups(view: Dict[str, Any], from_now: Optional[int] = None) -> List[Dict[str, Any]]:

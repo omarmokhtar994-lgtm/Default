@@ -32,7 +32,7 @@ log = logging.getLogger(__name__)
 KINDS = {
     "break": "Breaks and lunches moved, or put back to plan",
     "added_break": "Breaks and lunches added on the day",
-    "overtime": "Overtime and VTO",
+    "overtime": "Overtime, VTO and cover from outside the roster",
     "called_in": "Day off cancelled (called in)",
     "channel": "Channel changes",
     "aux": "Training, coaching, meetings and other aux",

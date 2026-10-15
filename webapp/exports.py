@@ -30,7 +30,8 @@ KINDS = {"attendance": "Attendance", "activities": "Activities", "activity": "Da
          "breaks": "Breaks planned vs taken",
          "changes": "Schedule changes and swaps", "versions": "Versions and in use", "runs": "Runs",
          "worked": "Worked hours and adherence", "summary": "Daily summary",
-         "channels": "Channels planned and changed", "record": "Other actions"}
+         "channels": "Channels planned and changed", "cover": "Cover from outside the roster",
+         "record": "Other actions"}
 VERSION_EVENTS = {"version_created": "New version", "set_in_use": "Set in use"}
 OTHER_EVENTS = {"run_uploaded": "Run uploaded", "run_started": "Run started", "run_stopped": "Run stopped",
                 "run_resumed": "Run resumed", "downloaded": "Downloaded", "exported": "Exported",
@@ -64,9 +65,10 @@ class _Days:
     """The day book as one export sees it: each day worked out once (worked hours and the daily summary ask for the
     same days), and a check that the export is still within its time."""
 
-    def __init__(self, days, deadline: Optional[float]):
+    def __init__(self, days, deadline: Optional[float], cover: bool = True):
         self._days = days
         self._deadline = deadline
+        self.cover = cover  # Phase AJ: people covering from outside the roster counted in the day's figures
         self._pages: Dict[Tuple[str, date, str], Any] = {}
 
     def __getattr__(self, name: str) -> Any:
@@ -74,11 +76,11 @@ class _Days:
 
     def page(self, program: str, on: date, measure: str = "interval", extra: Optional[Dict[str, Any]] = None):
         if extra:
-            return self._days.page(program, on, measure, extra)
+            return self._days.page(program, on, measure, extra, cover=self.cover)
         key = (program, on, measure)
         if key not in self._pages:
             try:
-                self._pages[key] = (self._days.page(program, on, measure), None)
+                self._pages[key] = (self._days.page(program, on, measure, cover=self.cover), None)
             except ValueError as exc:  # said again to every item that asks for this day
                 self._pages[key] = (None, exc)
         found, problem = self._pages[key]
@@ -280,7 +282,7 @@ def _summary(store, days, weeks, start, end, program, user_id, measure):
     yield ["Date", "Program", "Planned", "Present", "Absent", "Late or early", "In aux", "Breaks moved", "Overtime min",
            "VTO min", "Called in min", "Hours short", "Hours short in the plan", "Hours above", "Tightest (hours)",
            "Language gaps", "Adherence %", "Conformance %", "Changes recorded", "Interval target %",
-           "Intervals at target", "Intervals with demand"]
+           "Intervals at target", "Intervals with demand", "Cover min"]
     for p in _programs(days, program):
         for day in _dates(start, end):
             days.check()
@@ -294,7 +296,8 @@ def _summary(store, days, weeks, start, end, program, user_id, measure):
             yield [day.isoformat(), p, n["planned"], n["present"], n["absent"], n["late_early"], n["aux"], n["moved"],
                    n["overtime_minutes"], n["vto_minutes"], n["called_in_minutes"], n["short_hours"],
                    n["plan_short_hours"], n["over_hours"], n["tightest"], n["language_gaps"], n["adherence"],
-                   n["conformance"], n["changes"], n["target"], n["at_target"], n["intervals"]]
+                   n["conformance"], n["changes"], n["target"], n["at_target"], n["intervals"],
+                   days.page(p, day, measure)["view"]["tiles"]["cover"] if days.cover else ""]
 
 
 def _channels(store, days, weeks, start, end, program, user_id, measure):
@@ -325,10 +328,19 @@ def _channels(store, days, weeks, start, end, program, user_id, measure):
                            words.get(was, ""), r["by_name"], _when(r["at"])]
 
 
+def _cover(store, days, weeks, start, end, program, user_id, measure):
+    """Phase AJ: team managers and support members, not on the roster, who logged in to cover intervals."""
+    from .channels import CHANNELS
+    yield ["Shift date", "Program", "Name", "Role", "From", "To", "Minutes", "Channel", "Recorded by", "Recorded at"]
+    for r in store.cover_between(start.isoformat(), end.isoformat(), program, user_id):
+        yield [r["shift_date"], r["program"], r["associate"], r["role"], _hm(r["start"]), _hm(r["end_min"]),
+               r["end_min"] - r["start"], CHANNELS.get(r["channel"], ""), r["by_name"], _when(r["at"])]
+
+
 TABLES: Dict[str, Callable] = {"attendance": _attendance, "activities": _activities, "activity": _activity,
                                "breaks": _breaks,
                                "changes": _changes, "versions": _versions, "runs": _runs, "worked": _worked,
-                               "summary": _summary, "channels": _channels,
+                               "summary": _summary, "channels": _channels, "cover": _cover,
                                "record": _record}
 
 
@@ -361,7 +373,7 @@ def build(store, days, start: date, end: date, kinds: List[str], fmt: str = "xls
     if measure not in MEASURES:
         raise ValueError("Pick a measure.")
     ordered = [k for k in KINDS if k in kinds]
-    days = _Days(days, deadline)
+    days = _Days(days, deadline, cover="cover" in kinds)  # Phase AJ: the owner's tick to include them or not
     weeks = _Weeks(days)
     who = (store.get_user(user_id) or {}).get("display_name", "") if user_id is not None else ""
     if fmt == "csv":

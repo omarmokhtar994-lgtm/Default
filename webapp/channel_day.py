@@ -88,6 +88,10 @@ def channel_view(day: int, step: int, now, plan, pieces, lanes: Dict[str, Any], 
     ch = {**ch, "speaks": speaks, "skills_of": lambda name: can_work(ch["skills"], name),
           "language_of": {seg["name"]: seg.get("language", "") for tick in now for seg in tick}}
     today = _Counts(day, now, ch, rules, moves=True)
+    for c in ch.get("cover") or []:  # Phase AJ: someone not on the roster, on the channel they picked
+        for i in range(max(c["start"], 0) // STEP, min(c["end"], 1440) // STEP):
+            if c.get("channel") in today.channel:
+                today.channel[c["channel"]][i] += 1
     planned = _Counts(day, plan, ch, rules, moves=False)
     letters = [c for c in "PCE" if c in setup["need"]]
     rows, issues = [], {}

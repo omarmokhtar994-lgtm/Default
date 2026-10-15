@@ -25,7 +25,7 @@ from werkzeug.utils import secure_filename
 
 from .adherence import interval_shrinkage, person_day, team as team_figures
 from .analytics import program_weeks, team
-from .attendance import (ACTIVITY_KINDS, ADD_KINDS, DAY_OFF, DayBook, aux_details, hm, pick_version, plain_hm, tomorrow_unchecked, week_start,
+from .attendance import (ACTIVITY_KINDS, ADD_KINDS, COVER_ROLES, DAY_OFF, DayBook, aux_details, hm, pick_version, plain_hm, tomorrow_unchecked, week_start,
                          with_text)
 from .break_plan import check_row, floor, slots_for, suggest
 from .channel_page import (FULL as FULL_DAYS, NAMES as CHANNEL_NAMES, apply_edit, before as channel_before,
@@ -2660,8 +2660,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
             chosen = next((g for g in groups if g["key"] == wanted), None)
             shift_view = {"shift_groups": groups, "shift": wanted,
                           "shift_names": set(chosen["names"]) if chosen else (set() if wanted else None)}
+        outside: Dict[str, Any] = {"rows": [], "roles": COVER_ROLES, "channels": []}
         if page and tab == "cover":
             cover = days.offers(page, from_now)
+            ch = page["view"].get("channels")  # Phase AJ: cover from outside the roster, on a channel when there are
+            outside = {"rows": days.covers(program, on), "roles": COVER_ROLES,
+                       "channels": [(r["letter"], r["name"]) for r in ch["rows"] if "language" not in r] if ch else []}
         proposal = days.replan(page, from_now) if page and tab == "replan" else None
         bulk = _bulk_panel(days, page, program, on, moved) if page and tab == "bulk" else None  # Phase AD (sample 04)
         rescue = None  # Phase AD (sample 02): interval compliance only; the page says so for the other measure
@@ -2767,7 +2771,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                if program and on else {},
                                post_to=SERVICES.get(group["service"], "") if posting else "",
                                post_mode=group["mode"] if posting else "", post_kinds=post_kinds,
-                               people=people, whole=whole, shrink=shrink, finder=finder, cover=cover,
+                               people=people, whole=whole, shrink=shrink, finder=finder, cover=cover, outside=outside,
                                ot_page=_paged(cover["overtime"] if cover else [], "ot_page", "ot-h"),
                                vto_page=_paged(cover["vto"] if cover else [], "vto_page", "vto-h"),
                                log_page=_paged(list(reversed(page["log"])) if page else [], "log_page", "daylog-h"),
@@ -3269,6 +3273,36 @@ def create_app(config: Dict[str, Any]) -> Flask:
         except ValueError as exc:
             _say(str(exc), program, on)
         return _back_to_day(program, on, request.form.get("view", ""), request.form.get("cover", ""))
+
+    @app.route("/day/cover", methods=["POST"])
+    @login_required
+    def day_cover():  # type: ignore[no-untyped-def]
+        """Phase AJ: a team manager or support member, not on the roster, logging in to cover intervals."""
+        program, on = _posted_day()
+        try:
+            if on is None:
+                raise ValueError("Pick a day.")
+            with leave_out(_left_out_asked()):
+                _days().add_cover(program, on, request.form.get("name", ""), request.form.get("role", ""),
+                                  _typed("from", program, on), _typed("to", program, on), g.user["id"],
+                                  channel=request.form.get("channel", ""))
+            flash(f"Recorded: {' '.join(request.form.get('name', '').split())} covering.")
+        except ValueError as exc:
+            _say(str(exc), program, on)
+        return _back_to_day(program, on, "cover")
+
+    @app.route("/day/cover/cancel", methods=["POST"])
+    @login_required
+    def day_cover_cancel():  # type: ignore[no-untyped-def]
+        program, on = _posted_day()
+        try:
+            if on is None:
+                raise ValueError("Pick a day.")
+            _days().cancel_cover(program, on, request.form.get("id", 0, type=int), g.user["id"])
+            flash("Cancelled.")
+        except ValueError as exc:
+            _say(str(exc), program, on)
+        return _back_to_day(program, on, "cover")
 
     @app.route("/day/activity/cancel", methods=["POST"])
     @login_required

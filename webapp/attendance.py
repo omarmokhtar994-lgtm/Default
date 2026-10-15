@@ -38,6 +38,9 @@ FALLBACK = "No version is marked in use for this week, so this is the tool's own
 FALLBACK_READY = "No version is marked in use for this week, so this is the uploaded ready schedule."
 ACTIVITY_KINDS = sorted(AUX) + list(EXTRA_BREAKS) + ["Overtime", "VTO", CALLED_IN]
 WITH_MAX, WHY_MAX = 80, 200  # characters: who an aux is with, and why (Phase T)
+# Phase AJ: someone not on the roster logging in to cover intervals (owner, 2026-10-15: "TM or support")
+COVER_ROLES = ("Team manager", "Support")
+COVER_NAME_MAX, COVER_MAX = 60, 12 * 60  # characters of a typed name; minutes one cover may last
 DAY_OFF = "Day off cancelled"  # "+ Add" calls in someone off that day (owner, 2026-10-09)
 QUARTER = 15  # typed call-in times go in 15-minute steps
 # What RTA's "+ Add" offers in an interval (owner, 2026-10-08), grouped as the dialog shows them.
@@ -321,6 +324,8 @@ class DayBook:
             return f"{row['associate']}'s {row['kind']}"
         if c["table"] == "attendance":
             return f"{row['associate']}'s attendance"
+        if c["table"] == "outside_cover":
+            return f"{row['associate']}'s cover {hm(row['start'])} to {hm(row['end_min'])}"
         if c["table"] == "channel_moves":
             return f"{row['associate']}'s channel change {hm(row['start'])} to {hm(row['end_min'])}"
         return f"{row['associate']}'s {row['kind']} {hm(row['start'])} to {hm(row['end_min'])}"
@@ -360,6 +365,13 @@ class DayBook:
             status = old["status"] if old else "Present"
             self._log(program, on, name, f"Attendance back to {status} (undone)", user_id, PRIVATE,
                       ref=f"status:{name}", before=new["status"] if new else "Present", after=status)
+        elif c["table"] == "outside_cover":
+            ref = f"cover:{row['id']}"
+            if old is None:
+                what, before, after = f"Cover {hm(new['start'])} to {hm(new['end_min'])} removed (undone)", "on", ""
+            else:
+                what, before, after = f"Cover {hm(old['start'])} to {hm(old['end_min'])} back (undone)", "", "on"
+            self._log(program, on, name, what, user_id, "overtime", ref=ref, before=before, after=after)
         else:
             channel = c["table"] == "channel_moves"
             ref = f"channel:{row['id']}" if channel else (f"callin:{row['id']}" if row["kind"] == CALLED_IN
@@ -502,10 +514,12 @@ class DayBook:
         return attendance, actual, stale, acts
 
     def page(self, program: str, on: date, measure: str = "interval",
-             extra: Optional[Dict[str, Any]] = None, recorded: bool = True) -> Optional[Dict[str, Any]]:
+             extra: Optional[Dict[str, Any]] = None, recorded: bool = True,
+             cover: bool = True) -> Optional[Dict[str, Any]]:
         """The day; ``extra`` (from ``add_item(..., dry_run=True)``) is counted as if it were recorded. With
         ``recorded`` False, the day as planned: the RTA's records (attendance, break moves, activities) left out
-        (Phase AH, the Weeks page's "As planned")."""
+        (Phase AH, the Weeks page's "As planned"). With ``cover`` False, people covering from outside the roster
+        (Phase AJ) are left out of the figures."""
         if measure not in MEASURES:
             raise ValueError(f"Unknown measure: {measure}.")
         row, note = self.version(program, on)
@@ -544,7 +558,14 @@ class DayBook:
         if channels and extra and extra.get("channel"):  # Phase AF (C3): a channel change counted as if kept
             who, lo, hi, letter = extra["channel"]
             channels["moves"].setdefault((0, who), []).append({"id": 0, "start": lo, "end": hi, "channel": letter})
-        view = day_view(week, inputs, day_index(on), attendance, actual, measure, acts, before, channels=channels)
+        covering = []
+        if recorded and cover:  # Phase AJ: today's, and last night's that ran past midnight
+            for shift, when in ((0, on), (-1440, on - timedelta(days=1))):
+                covering += [{"start": r["start"] + shift, "end": r["end_min"] + shift, "channel": r["channel"],
+                              "name": r["associate"], "role": r["role"]}
+                             for r in self.store.list_cover(program, [when.isoformat()])]
+        view = day_view(week, inputs, day_index(on), attendance, actual, measure, acts, before, channels=channels,
+                        cover=covering)
         ratio, source_of_target = self.target_for(program, on, row, inputs)
         standing = at_target(view["cells"], ratio)
         for c, s in zip(view["cells"], standing["cells"]):  # Phase AH: every page colours by the week's target
@@ -1108,6 +1129,73 @@ class DayBook:
         self._log(program, on, name, f"Day off cancelled: called in {label}", user_id, "called_in",
                   ref=f"callin:{made}", after="on")
         return made
+
+    # ------------------------------------------------------------- cover from outside the roster (Phase AJ)
+    def covers(self, program: str, on: date) -> List[Dict[str, Any]]:
+        """The cover kept for ``on`` (times from that day's midnight; an end past 1440 runs into the next day)."""
+        return self.store.list_cover(program, [on.isoformat()])
+
+    @staticmethod
+    def _cover_text(name: str, role: str, lo: int, hi: int, channel: str = "") -> str:
+        from .channels import CHANNELS
+        return (f"Cover from outside the roster: {name} ({role}) {hm(lo)} to {hm(hi)}"
+                + (f", {CHANNELS.get(channel, channel)}" if channel else ""))
+
+    @journaled
+    def add_cover(self, program: str, on: date, name: str, role: str, start: str, end: str, user_id: int,
+                  channel: str = "", dry_run: bool = False) -> Any:
+        """Keep a team manager or support member, not on the roster, logging in from ``start`` to ``end`` on ``on``
+        (an end at or before the start runs past midnight). They count as one person on the floor for those minutes,
+        on ``channel`` when the program has channels (then it must be one of them). Returns the id; with ``dry_run``
+        every check runs, nothing is kept, and the record is returned."""
+        from .channels import CHANNELS
+        name = _tidy(name)
+        if not name:
+            raise ValueError("Type the name of the person covering.")
+        if len(name) > COVER_NAME_MAX:
+            raise ValueError(f"Keep the name to {COVER_NAME_MAX} characters.")
+        if role not in COVER_ROLES:
+            raise ValueError(f"Pick {_either(list(COVER_ROLES))}.")
+        lo, hi = _clock(start), _clock(end)
+        if lo is None or hi is None:
+            raise ValueError("Give the start and end like 13:05.")
+        if lo % STEP or hi % STEP:
+            raise ValueError("Cover goes in 5-minute steps.")
+        if hi == lo:
+            raise ValueError("The end time must be after the start time.")
+        hi += 1440 if hi < lo else 0
+        if hi - lo > COVER_MAX:
+            raise ValueError(f"Cover is up to {COVER_MAX // 60} hours.")
+        page = self.page(program, on)
+        if page is None:
+            raise ValueError(f"There is no schedule for {program} in the week of {week_start(on):%d %b}.")
+        ch = page["view"].get("channels")
+        letters = [r["letter"] for r in ch["rows"] if "language" not in r] if ch else []
+        channel = (channel or "").strip()
+        if not letters and channel:
+            raise ValueError("This program has no channels set up, so there is no channel to pick.")
+        if letters and channel not in letters:
+            raise ValueError(f"Pick the channel {name} takes: {_either([CHANNELS[c] for c in letters])}.")
+        for r in self.covers(program, on):
+            if r["associate"].casefold() == name.casefold() and r["start"] < hi and lo < r["end_min"]:
+                raise ValueError(f"{r['associate']} already covers {hm(r['start'])} to {hm(r['end_min'])}.")
+        what = self._cover_text(name, role, lo, hi, channel)
+        if dry_run:
+            return {"name": name, "role": role, "start": lo, "end": hi, "channel": channel, "what": what}
+        made = self.store.add_cover(program=program, shift_date=on.isoformat(), associate=name, role=role, start=lo,
+                                    end_min=hi, channel=channel, user_id=user_id)
+        self._log(program, on, name, what, user_id, "overtime", ref=f"cover:{made}", after="on")
+        return made
+
+    @journaled
+    def cancel_cover(self, program: str, on: date, cover_id: int, user_id: int) -> None:
+        row = self.store.get_cover(cover_id)
+        if row is None or row["program"] != program or row["shift_date"] != on.isoformat():
+            raise ValueError("That cover is not on this day.")
+        self.store.delete_cover(cover_id)
+        text = self._cover_text(row["associate"], row["role"], row["start"], row["end_min"], row["channel"])
+        self._log(program, on, row["associate"], "Cancelled: c" + text[1:], user_id, "overtime",
+                  ref=f"cover:{cover_id}", before="on")
 
     @journaled
     def cancel_activity(self, program: str, on: date, activity_id: int, user_id: int) -> None:

@@ -1517,6 +1517,23 @@ class ThePhaseVInTheBrowser(unittest.TestCase):
             self.assertLessEqual(phone.evaluate("document.scrollingElement.scrollWidth"), 390, url)
         phone.screenshot(path=str(V_SCREENS / "phone_rta_channels.png"), full_page=True)
 
+    def test_a_channel_shows_the_card_of_the_shift_under_it(self):
+        """Phase AI, found in the final review: in the 24 hours from 16:00, Associate 008's shift of 08:00 began before
+        and has Email from 16:00 to 17:00; their next shift starts at 05:00. Hovering the Email showed the 05:00
+        shift's card (the row's), not the card of the shift the Email is on."""
+        page = self.page(width=1440, height=900)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        self.go(page, f"/day?program={self.key.replace(' ', '+')}&date=2026-10-14&start=16:00", errors)
+        track = page.locator('svg.tl-track[aria-label^="Associate 008:"]')
+        track.scroll_into_view_if_needed()
+        track.locator("rect.tl-ch").first.hover()
+        card = page.locator(".tl-tip")
+        expect(card).to_contain_text("Email 16:00 to 17:00")
+        expect(card).to_contain_text("Associate 008, 08:00 - 17:00")
+        self.assertEqual(errors, [])
+
 
 W_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_w" / "screens"
 

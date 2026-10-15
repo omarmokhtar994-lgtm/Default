@@ -98,6 +98,22 @@ class TheWindow(unittest.TestCase):
         begun = segs[("Associate 08", ON)]
         self.assertEqual((begun["start"], begun["offset"]), (480, -1))  # began before the window
 
+    def test_two_shifts_in_the_window_each_have_their_own_card(self):
+        """Found in the final review: a shift at 16:30 and the next day's at 15:30 both start in the 24 hours from
+        16:00, so both are offset 0; hovering the first showed the second's card (its times and its breaks)."""
+        from webapp.day import hover_tips
+        both = {0: day(1.0, [lane("Associate 07", seg(990, 1500, breaks=[("Lunch", 1230, 30)]))]),
+                1: day(1.0, [lane("Associate 07", seg(930, 1440, breaks=[("Lunch", 1170, 60)]))])}
+        found = window_view(both, 960, ON)
+        first, second = found["lanes"][0]["segments"]
+        tips = hover_tips(found, 1200)
+        for s, label, lunch in ((first, "16:30 - 01:00", "Lunch, 20:30 to 21:00"),
+                                (second, "15:30 - 00:00", "Lunch, 19:30 to 20:30")):
+            tip = tips[("Associate 07", s["offset"], s["start"])]
+            self.assertEqual(tip["shift"][0], f"Associate 07, {label}")
+            self.assertEqual(tip["breaks"][0][0], lunch)
+        self.assertEqual(tips[("Associate 07", 0)]["shift"][0], "Associate 07, 16:30 - 01:00")  # the row's card
+
     def test_a_missing_day_shows_no_figures(self):
         found = window_view({0: day(1.0), 1: None}, 960, ON)
         late = found["cells"][10]
@@ -202,6 +218,13 @@ class OneCalendarDay(unittest.TestCase):
         page = self.get(start="16:00")
         nxt = (ON + timedelta(days=1)).isoformat()
         self.assertRegex(page, rf'class="att[^"]*" data-name="[^"]+" data-date="{nxt}"')
+
+    def test_two_shifts_in_the_window_each_show_their_own_card(self):
+        # Associate 014 starts at 21:00, and at 19:00 the next day: both in the 24 hours from 20:00
+        page = self.get(start="20:00")
+        track = re.search(r'<svg class="tl-track"[^>]*aria-label="Associate 014: .*?</svg>', page, re.S).group(0)
+        cards = re.findall(r'<rect class="tl-bar[^"]*"[^>]*><title>([^\n<]*)', track)
+        self.assertEqual([c[:20] for c in cards], ["Associate 014, 21:00", "Associate 014, 19:00"])
 
     def test_the_other_tabs_work_on_the_schedules_day_in_the_zone(self):
         page = self.get(tz="America/New_York", start="16:00", view="cover")

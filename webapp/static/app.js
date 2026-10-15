@@ -1164,12 +1164,18 @@ function homeRefresh(now) {
     el.addEventListener("focus", () => { const r = el.getBoundingClientRect(); show(el, r.left, r.bottom); });
     el.addEventListener("blur", hide);
   });
-  // Phase AI (owner: "when i stand any wheree"): anywhere on a person's row shows their shift card; a break shows its own
+  // Phase AI (owner: "when i stand any wheree"): anywhere on a person's row shows their shift card; a break shows its own,
+  // and a channel the card of the shift it is on (a row can hold two shifts)
   document.querySelectorAll(".tl-lane[data-tip]").forEach((lane) => {
+    const bars = lane.querySelectorAll(".tl-track rect.tl-bar[data-tip]");
+    const under = (x) => Array.prototype.find.call(bars, (bar) => {
+      const r = bar.getBoundingClientRect();
+      return x >= r.left && x <= r.right;
+    });
     const at = (e) => {
       const mark = e.target.closest(".tl-track rect.brk[data-tip], .tl-track rect.tl-bar[data-tip]");
       const channel = e.target.closest(".tl-track rect.tl-ch[data-tip]");
-      show(mark || lane, e.clientX, e.clientY, channel ? channel.dataset.tip : "");
+      show(mark || (channel && under(e.clientX)) || lane, e.clientX, e.clientY, channel ? channel.dataset.tip : "");
     };
     lane.addEventListener("pointerenter", at);
     lane.addEventListener("pointermove", at);

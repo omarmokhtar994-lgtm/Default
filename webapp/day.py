@@ -492,13 +492,14 @@ def _dur(minutes: int) -> str:
     return f"{minutes} min" if minutes < 60 else f"{minutes // 60} h" + (f" {minutes % 60} min" if minutes % 60 else "")
 
 
-def hover_tips(view: Dict[str, Any], now: int) -> Dict[Tuple[str, int], Dict[str, Any]]:
+def hover_tips(view: Dict[str, Any], now: int) -> Dict[Tuple[Any, ...], Dict[str, Any]]:
     """Phase AF (D2, D3): what hovering shows, per (name, offset): the shift's lines (start to end, length, when they
     logged in and for how long, left until logout, breaks taken) and per break index its lines (since the last break
     or the shift start, from the shift start). ``now`` is the minute of the day shown (below 0 before it, past 1440
     after). Phase AI (owner: "howlong is he logged in"): logged in from the RTA's marks: a late login from when they
-    came in, leaving early until they left; a whole-shift absence says so."""
-    out: Dict[Tuple[str, int], Dict[str, Any]] = {}
+    came in, leaving early until they left; a whole-shift absence says so. Each shift is also kept per (name, offset,
+    start): two shifts of one person can both start in the RTA's 24 hours, and (name, offset) is the first of them."""
+    out: Dict[Tuple[Any, ...], Dict[str, Any]] = {}
     for lane in view["lanes"]:
         for seg in lane["segments"]:
             length = seg["end"] - seg["start"]
@@ -527,7 +528,9 @@ def hover_tips(view: Dict[str, Any], now: int) -> Dict[Tuple[str, int], Dict[str
                 per[b["idx"]] = [f"{b['kind']}, {_hm(b['start'])} to {_hm(b['start'] + b['minutes'])}", since,
                                  f"From shift start {_dur(b['start'] - seg['start'])}"]
                 prev = b["start"] + b["minutes"]
-            out[(lane["name"], seg["offset"])] = {"shift": shift, "breaks": per}
+            tip = {"shift": shift, "breaks": per}
+            out[(lane["name"], seg["offset"], seg["start"])] = tip
+            out.setdefault((lane["name"], seg["offset"]), tip)
     return out
 
 

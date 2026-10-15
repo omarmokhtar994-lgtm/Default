@@ -63,16 +63,21 @@ check it. What they cannot hold is the chat itself: when something here is not e
   cover from outside the roster (a TM or support member counted in the intervals), channel colours after midnight.
   Requests, root causes and answers: `evidence/phase_aj/REQUESTS.md`; checks: `evidence/phase_aj/CHECKS.md`; rulings
   at the end of `docs/superpowers/plans/2026-10-15-phase-aj-build.md`.
-- Package: `RC9_2_2_PRODUCTION_PACKAGE.zip`, 2602 files, 79.63 MB, sha256
-  `d2c474ae8c48a1028102a34d779a0157a5c908ea12fd9921f802b5e50a74f6d3`, sent as AJ_part_0 to AJ_part_3. Installing it is
-  the owner's step, the same way as before (four parts now: `cat AJ_part_0 AJ_part_1 AJ_part_2 AJ_part_3 > ...`).
+- The first AJ package (sha256 `d2c474ae...`, items 1 to 3) is installed (owner, 2026-10-15). The second
+  (items 4 and 5: cover language, overtime warns instead of refusing on the rest gap) is
+  `RC9_2_2_PRODUCTION_PACKAGE.zip`, 2604 files, 79.64 MB, sha256
+  `7fdba96a3eca83af0451fc0954211f18fba42ca855287b61eb1210ad4e585a30`, sent as AJ2_part_0 to AJ2_part_3; installing it is
+  the owner's step. In Cloud Shell `$SERVER` is lost when the shell restarts: it is set again from history (`!114`
+  on 2026-10-15), never asked for.
 - Check tools for a fresh container: `evidence/phase_aj/tools/` (replace phase_ai with phase_aj in the commands
   below). Expected on Phase AJ: 502 and 581 tests OK (1 skipped), 77 browser tests OK, GATE PASS with 1537 tests
   (2 skipped), page review 0 problems, sweep 0 exceptions and 0 server errors.
 
 ### Phase AJ decisions to remember
 
-- `OVERTIME_MAX` is 240 minutes, the longest "+ Add" length (owner, 2026-10-15).
+- `OVERTIME_MAX` is 240 minutes, the longest "+ Add" length (owner, 2026-10-15). Overtime breaking the rest gap is
+  kept with a warning (`_rest(..., refuse=False)`); call-ins still refuse; offers still keep the gap.
+- Cover takes a language (`outside_cover.language`, `DayBook.cover_languages`).
 - Cover from outside the roster: table `outside_cover`, `DayBook.add_cover` / `cancel_cover` / `covers`,
   `day_view(cover=...)` adds them to every 5 minutes (cell key `outside`), `page(cover=False)` leaves them out (the
   export's tick). Group posts go under the "overtime" kind.

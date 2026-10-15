@@ -34,3 +34,21 @@ Checks run on code commit c9c0d29 (Thu 15 Oct 2026, finished about 18:20 Egypt t
   the tab's list name them.
 - From Phase AI, unchanged: one attendance box for a row holding two shifts in the RTA's 24 hours; three old
   unused imports.
+
+## Second package (items 4 and 5, Thu 15 Oct 2026, about 19:45 Egypt time)
+
+| # | Owner's item | What changed | Tests |
+| --- | --- | --- | --- |
+| 4 | Cover counts in the languages | Language field on the cover form (the program's languages, or none); counts for that language row and, on its channel, for the channel's language rows; the export's cover sheet has a Language column; databases from the first AJ package get the column on start | test_aj_cover (now 26) |
+| 5 | Overtime breaking the rest gap should warn, not stop | Kept, with the warning on the page, in the + Add preview and in the day's log line | test_aj_rest (5); re-pinned with the reason: test_attendance (2 tests) |
+
+Interface and writing reviews (web-interface-guidelines, better-writing) on the cover form: the name field is not
+spell-checked, each Delete names its cover for screen readers, and three refusals now say what to do next.
+
+Checks on code commit 6a0716c: website suite 584 OK and 510 OK (1 skipped); browser tests 77 OK; GATE PASS, 1537
+tests (2 skipped), run inside the package build; page review 0 problems; route sweep 872 requests, 0 exceptions, 0
+server errors (the same 2 leaks and 222 "None" words by design).
+
+Package: `RC9_2_2_PRODUCTION_PACKAGE.zip`, 2604 files, 79.64 MB, sha256
+`7fdba96a3eca83af0451fc0954211f18fba42ca855287b61eb1210ad4e585a30`, sent as AJ2_part_0 to AJ2_part_3. The release notes
+(`evidence/phase_aj/RELEASE_NOTES.md`) were written after the build copied its files, so they are sent beside it.

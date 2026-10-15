@@ -86,3 +86,14 @@ Questions for the owner:
    (recommended: offered; the engine's rule since 2026-10-04 is "the planner chooses")?
 7. **Runs already finished** on the server: add their more consistent version too, once, when the new package
    starts (recommended), or only for new runs?
+
+## The owner's answers (Thu 15 Oct 2026, about 23:40 Egypt time)
+
+> 1 both / 2 mainly if not possible in week to be day / 3 coverage wins for sure / 4 a / 5 as recommended /
+> Option C for the colors
+
+- Email: option C, deep green `#2F7D5B` with a white E.
+- Fairness: same share and turns; the week mainly, the day where the week cannot; coverage wins; a fairness view
+  first (the planner unchanged); compared among people with the same channels and language.
+- Not answered, ruled on the recommended side (cost if wrong in the plan): the more consistent version is offered,
+  not set in use by itself; finished runs get it once when the new package starts; the C letter stays at 4.15:1.

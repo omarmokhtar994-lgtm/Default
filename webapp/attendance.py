@@ -523,14 +523,21 @@ class DayBook:
 
     def page(self, program: str, on: date, measure: str = "interval",
              extra: Optional[Dict[str, Any]] = None, recorded: bool = True,
-             cover: bool = True) -> Optional[Dict[str, Any]]:
+             cover: bool = True, version_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
         """The day; ``extra`` (from ``add_item(..., dry_run=True)``) is counted as if it were recorded. With
         ``recorded`` False, the day as planned: the RTA's records (attendance, break moves, activities) left out
         (Phase AH, the Weeks page's "As planned"). With ``cover`` False, people covering from outside the roster
-        (Phase AJ) are left out of the figures."""
+        (Phase AJ) are left out of the figures. ``version_id`` (Phase AM, the Weeks page's Version pick): that version
+        of the program's week holding ``on`` in place of the one in use; any other is refused (ValueError)."""
         if measure not in MEASURES:
             raise ValueError(f"Unknown measure: {measure}.")
         row, note = self.version(program, on)
+        if version_id is not None:
+            row = next((v for v in self.store.list_schedules(program=program, covering=on.isoformat())
+                        if v["id"] == version_id), None)
+            if row is None:
+                raise ValueError("That version is not one of this week's schedules.")
+            note = ""
         if row is None:
             return None
         week = self._week(row)

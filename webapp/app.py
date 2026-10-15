@@ -1927,7 +1927,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         except ValueError:  # a workbook that cannot be read: said on the day page
             return None
 
-    def _hours_needed(program: str, week_start: str, basis: str, aim: str, show: str) -> Dict[str, Any]:
+    def _hours_needed(program: str, week_start: str, basis: str, aim: str, show: str,
+                      version_id: Optional[int] = None) -> Dict[str, Any]:
         """The Weeks page's Hours needed table (Phase AH): each day of the week from the DayBook (as recorded on the
         RTA, or as planned), and for today and the days to come what to do (days off to cancel, then overtime)."""
         days, rows = _days(), []
@@ -1937,7 +1938,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             on = first + timedelta(days=i)
             page, why, plan = None, "", None
             try:
-                page = days.page(program, on, recorded=basis == "recorded")
+                page = days.page(program, on, recorded=basis == "recorded",
+                                 version_id=version_id if basis != "recorded" else None)
             except ValueError as exc:  # the workbook cannot be read: said in the column
                 why = str(exc)
             if page is None and not why:
@@ -1947,6 +1949,29 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 plan = days.dayoff_plan(page, after, page["target"]["target"] if aim == "target" else None)
             rows.append({"date": on, "page": page, "plan": plan, "why": why})
         return {"table": needed.week_table(rows, aim, show), "basis": basis}
+
+    def _week_version(program: str, week_start: str) -> Optional[int]:
+        """Phase AM: the version picked on the Weeks page (``v``): one of that program's week, else 404; None when
+        none is picked (the one in use)."""
+        picked = request.args.get("v", type=int)
+        if picked is None:
+            return None
+        if not any(v["id"] == picked for v in app.extensions["store"].list_schedules(program=program,
+                                                                                     week_start=week_start)):
+            abort(404)
+        return picked
+
+    def _version_pick(versions: List[Dict[str, Any]], picked: Optional[int]) -> Dict[str, Any]:
+        """The Weeks page's Version pick: the week's versions, the one in use first, each with its run and whether
+        its breaks are planned."""
+        store = app.extensions["store"]
+        runs = {v["run_id"]: (store.get_run(v["run_id"]) or {}).get("workbook") or v["run_id"] for v in versions}
+        rows = [{"id": v["id"], "in_use": bool(v["in_use"]),
+                 "text": f"{runs[v['run_id']]}: {v['label']}, "
+                         + ("breaks planned" if json.loads(v["week"] or "{}").get("breaks") else "before breaks")
+                         + (" (in use)" if v["in_use"] else "")}
+                for v in sorted(versions, key=lambda v: (not v["in_use"], -(v["created"] or 0), -v["id"]))]
+        return {"rows": rows if len(rows) > 1 else [], "picked": picked}
 
     def _needed_choices() -> Tuple[str, str, str]:
         return (needed.pick(request.args.get("basis"), needed.BASES), needed.pick(request.args.get("aim"), needed.AIMS),
@@ -1963,7 +1988,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if not _access().can_open(program):
             abort(403)
         basis, aim, show = _needed_choices()
-        found = _hours_needed(program, week, basis, aim, show)
+        found = _hours_needed(program, week, basis, aim, show, _week_version(program, week))
         table = found["table"]
         reach = "100%" if aim == "full" else f"the target ({round(100 * table['target'])}%) with 10 minutes over it"
         title = (f"{_unit_filter(program)}, week of {date.fromisoformat(week):%a %d %b %Y}. "
@@ -1992,7 +2017,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                       target: Optional[Dict[str, Any]] = None,
                       elsewhere: Optional[Dict[str, Any]] = None,
                       outlook: Optional[List[Dict[str, Any]]] = None,
-                      hours: Optional[Dict[str, Any]] = None):  # type: ignore[no-untyped-def]
+                      hours: Optional[Dict[str, Any]] = None,
+                      pick: Optional[Dict[str, Any]] = None):  # type: ignore[no-untyped-def]
         """A version's week view; ``note`` (the Week page): why this version, and what else the week has."""
         run = app.extensions["store"].get_run(row["run_id"])
         intervals, zone_note = _week_zone(json.loads(row["checks"] or "{}").get("intervals") or [], run,
@@ -2014,7 +2040,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                side=side, program=row["program"], week=row["week_start"], programs=programs,
                                weeks=weeks, figures=figures, version=row, week_note=note,
                                may_set_in_use=_may_set_in_use(row), target_panel=target, elsewhere=elsewhere,
-                               switch=switch, outlook=outlook, zone_note=zone_note, needed=hours)
+                               switch=switch, outlook=outlook, zone_note=zone_note, needed=hours,
+                               pick=pick or {"rows": [], "picked": None})
 
     @app.route("/week")
     @login_required
@@ -2037,6 +2064,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if holding:
             versions = store.list_schedules(program=program, week_start=holding)
             chosen, said = pick_version(versions)
+            picked = _week_version(program, holding)
+            if picked is not None:  # Phase AM: the Version pick
+                chosen, said = next(v for v in versions if v["id"] == picked), ""
             if chosen is not None:
                 runs = {v["run_id"]: (store.get_run(v["run_id"]) or {}).get("workbook", "") for v in versions}
                 others = [{"run_id": rid, "workbook": wb} for rid, wb in runs.items() if rid != chosen["run_id"]]
@@ -2051,7 +2081,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                                     "others": others, "set_by": set_by},
                                      _target_panel(program, holding, chosen),
                                      outlook=_outlook(program, holding),
-                                     hours=_hours_needed(program, holding, *_needed_choices()))
+                                     hours=_hours_needed(program, holding, *_needed_choices(), picked),
+                                     pick=_version_pick(versions, picked))
         rows = history.get(program, [])
         if program and not week and rows:
             week = rows[-1]["week"]

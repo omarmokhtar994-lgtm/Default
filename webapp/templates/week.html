@@ -24,6 +24,8 @@
       <select name="week">{% for w in weeks %}<option value="{{ w }}"{% if w == week %} selected{% endif %}>{{ w|day_month }} {{ w[:4] }}</option>{% endfor %}</select></label>
     <label>Times in
       <select name="tz">{% for key, name in zones %}<option value="{{ key }}"{% if key == g.zone %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+    {% if pick and pick.rows %}<label>Version
+      <select name="v"><option value="">The one in use</option>{% for r in pick.rows %}<option value="{{ r.id }}"{% if r.id == pick.picked %} selected{% endif %}>{{ r.text }}</option>{% endfor %}</select></label>{% endif %}
     <input type="hidden" name="side" value="{{ side }}">
     <button class="quiet" type="submit">Show</button>
   </form>
@@ -50,15 +52,15 @@
 <section class="panel" id="needed" aria-labelledby="hn-h">
   <h2 id="hn-h">Hours needed</h2>
   <div class="hn-bar">
-    <nav class="view sidepick" aria-label="Recorded or planned">{% for key, label in (('recorded', 'As recorded on the RTA'), ('planned', 'As planned')) %}<a href="{{ url_for('week_page', program=program, week=week, basis=key, aim=nd.aim, show=nd.show) }}#needed"{% if needed.basis == key %} aria-current="true"{% endif %}>{{ label }}</a>{% endfor %}</nav>
+    <nav class="view sidepick" aria-label="Recorded or planned">{% for key, label in (('recorded', 'As recorded on the RTA'), ('planned', 'As planned')) %}<a href="{{ url_for('week_page', program=program, week=week, basis=key, aim=nd.aim, show=nd.show, v=pick.picked if pick else none) }}#needed"{% if needed.basis == key %} aria-current="true"{% endif %}>{{ label }}</a>{% endfor %}</nav>
     <form class="hn-aim" method="get" action="{{ url_for('week_page') }}#needed">
-      <input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="week" value="{{ week }}"><input type="hidden" name="basis" value="{{ needed.basis }}"><input type="hidden" name="show" value="{{ nd.show }}">
+      <input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="week" value="{{ week }}"><input type="hidden" name="basis" value="{{ needed.basis }}"><input type="hidden" name="show" value="{{ nd.show }}">{% if pick and pick.picked %}<input type="hidden" name="v" value="{{ pick.picked }}">{% endif %}
       <label>Hours needed to reach <select name="aim" data-autosubmit><option value="full"{% if nd.aim == 'full' %} selected{% endif %}>100%</option><option value="target"{% if nd.aim == 'target' %} selected{% endif %}>the target ({{ hpct }}%) plus 10 minutes</option></select></label>
       <button class="quiet" type="submit">Show</button>
     </form>
-    <a class="button" href="{{ url_for('week_hours_needed', program=program, week=week, basis=needed.basis, aim=nd.aim, show=nd.show) }}">Download this table</a>
+    <a class="button" href="{{ url_for('week_hours_needed', program=program, week=week, basis=needed.basis, aim=nd.aim, show=nd.show, v=pick.picked if pick else none) }}">Download this table</a>
   </div>
-  <nav class="view sidepick hn-show" aria-label="Which intervals">{% for key, label in (('all', 'All short intervals'), ('ot', 'Overtime needed'), ('dayoff', 'Cancel a day off')) %}<a href="{{ url_for('week_page', program=program, week=week, basis=needed.basis, aim=nd.aim, show=key) }}#needed"{% if nd.show == key %} aria-current="true"{% endif %}>{{ label }} ({{ nd.counts[key] }})</a>{% endfor %}</nav>
+  <nav class="view sidepick hn-show" aria-label="Which intervals">{% for key, label in (('all', 'All short intervals'), ('ot', 'Overtime needed'), ('dayoff', 'Cancel a day off')) %}<a href="{{ url_for('week_page', program=program, week=week, basis=needed.basis, aim=nd.aim, show=key, v=pick.picked if pick else none) }}#needed"{% if nd.show == key %} aria-current="true"{% endif %}>{{ label }} ({{ nd.counts[key] }})</a>{% endfor %}</nav>
   <p class="hn-legend"><span><i class="key covered"></i>100% or more</span><span><i class="key short"></i>{{ hpct }} to 99% (at the target)</span><span><i class="key short tight"></i>Tight: under 10 minutes over the target</span><span><i class="key gap"></i>Below {{ hpct }}%</span><span>Each cell: hours needed to reach {{ '100%' if nd.aim == 'full' else 'the target with 10 minutes over it' }}, and the share on the floor{{ ' as the RTA records it' if needed.basis == 'recorded' else ' in the plan' }}</span></p>
   <div class="scroll" role="region" tabindex="0" aria-label="Hours needed (scrolls sideways)">
   <table class="hours">

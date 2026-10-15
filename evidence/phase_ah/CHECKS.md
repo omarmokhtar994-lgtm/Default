@@ -62,3 +62,9 @@ Built from the approved sample (`SAMPLES.md`, `samples/`), the owner's answers o
   - 9 in test_channel_day and 2 browser tests (bulk change, Phase V screens) fail the same way on 5c46cd3, before
     this phase: not this phase's.
 - The browser tests rewrite the old phases' screenshots; those files were restored before packaging.
+- Release gate (run_tests.sh, tests_staged/GATE_MINIMUMS.json), Thu 15 Oct, ended 04:16: GATE PASS, 77 suites,
+  1537 tests (2 skipped), 2 selfchecks, call signatures, undefined-name sweep; again inside the staged package
+  (04:16 to 04:33).
+- Package: dist/RC9_2_2_PRODUCTION_PACKAGE.zip, 2672 files, 74.02 MB,
+  sha256 56162281e99ef07c3e35e1bfcb556b757e6be6768c6cb8c01c27800e2cdfe310. Sent in three parts (AH_part_0 to
+  AH_part_2); joined in order they give the same sha256. It replaces the AG2 package.

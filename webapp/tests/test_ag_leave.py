@@ -119,7 +119,8 @@ class Leave(unittest.TestCase):
         before = self.app.extensions["days"].version(self.key, WED)[0]["id"]
         rid = self.ask("Associate 007", WED, SUN2, note="Family visit")
         self.assertEqual(self.store.get_leave(rid)["status"], "waiting_tm")
-        with self.assertRaisesRegex(ValueError, "The first approval is the TM's: a supervisor or an admin."):
+        # re-pinned in Phase AK: the owner added team managers; a planner is still refused, told who decides
+        with self.assertRaisesRegex(ValueError, "Waiting for a team manager."):
             self.book.decide(rid, self.users["rta1"], approve=True)
         self.book.decide(rid, self.users["tm1"], approve=True)
         self.assertEqual(self.store.get_leave(rid)["status"], "waiting_rta")

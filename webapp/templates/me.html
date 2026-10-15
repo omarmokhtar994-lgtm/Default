@@ -46,10 +46,10 @@
 </details>
 <section class="panel" aria-labelledby="mine-h">
   <h2 id="mine-h">My requests</h2>
-  <ul class="req-done">{% for r in mine %}<li><b>{{ r.label }}</b>: {{ {'waiting_tm': 'waiting for your TM', 'waiting_rta': 'approved by your TM, waiting for the RTA', 'applying': 'being approved'}.get(r.status, r.status) }}{% if r.reason %} ({{ r.reason }}){% endif %}
+  <ul class="req-done">{% for r in mine %}<li><b>{{ r.label }}</b>: {{ (r.waiting_on[:1]|lower ~ r.waiting_on[1:]) if r.waiting_on else {'applying': 'being approved'}.get(r.status, r.status) }}{% if r.reason %} ({{ r.reason }}){% endif %}
     {% if r.status in ('waiting_tm', 'waiting_rta') %}<form method="post" action="{{ url_for('me_leave_cancel', request_id=r.id) }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="quiet">Cancel</button></form>{% endif %}</li>
   {% endfor %}
-  {% for w in swaps %}<li><b>Swap with {{ w.asker if w.other == user.roster_name else w.other }}</b>, {{ w.label }}: {{ w.status_words }}
+  {% for w in swaps %}<li><b>Swap with {{ w.asker if w.other == user.roster_name else w.other }}</b>, {{ w.label }}: {{ (w.waiting_on[:1]|lower ~ w.waiting_on[1:]) if w.waiting_on else w.status_words }}
     {% if w.status == 'waiting_other' and w.other == user.roster_name %}<form method="post" action="{{ url_for('me_swap_answer', swap_id=w.id, action='answer') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="quiet" name="decision" value="accept">Accept</button><button class="quiet" name="decision" value="decline">Decline</button></form>{% endif %}
     {% if w.status in ('waiting_other', 'waiting_tm') and w.asker == user.roster_name %}<form method="post" action="{{ url_for('me_swap_answer', swap_id=w.id, action='cancel') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="quiet">Cancel</button></form>{% endif %}</li>
   {% endfor %}

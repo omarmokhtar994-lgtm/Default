@@ -969,10 +969,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
         for r in waiting:
             r["mine"] = leave.may_decide(r, g.user)
         swaps = app.extensions.get("swaps")
+        swap_rows = swaps.waiting(key) if swaps and key else []
+        for w in swap_rows:  # Phase AK: their team managers, or a backup
+            w["mine"] = swaps.may_decide(w, g.user)
         return render_template("requests.html", unit=key, label=_unit_filter(key) if key else "", waiting=waiting,
                                decided=_paged(leave.decided(key, limit=None) if leave and key else [], "done_page",
                                               "done-h"),
-                               swaps=swaps.waiting(key) if swaps and key else [],
+                               swaps=swap_rows,
                                swaps_decided=_paged(swaps.decided(key, limit=None) if swaps and key else [],
                                                     "swaps_done_page", "done-h"),
                                manager=bool(g.user["is_admin"] or g.user["is_supervisor"]),

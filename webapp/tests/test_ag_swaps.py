@@ -133,7 +133,8 @@ class Swaps(unittest.TestCase):
             self.book.answer(sid, self.users["a008"], accept=True)
         self.assertEqual(self.book.answer(sid, self.users["a014"], accept=True),
                          "Accepted. Your TM decides next.")
-        with self.assertRaisesRegex(ValueError, "A supervisor or an admin approves swaps."):
+        # re-pinned in Phase AK: the owner added team managers; a planner is still refused, told who decides
+        with self.assertRaisesRegex(ValueError, r"Waiting for a team manager \(Associate \d+\) and a team manager"):
             self.book.decide(sid, self.users["rta1"], approve=True)
         said = self.book.decide(sid, self.users["tm1"], approve=True)
         self.assertEqual(said, "Approved: Associate 007 works 21:00 - 06:00 and Associate 014 works 18:00 - 03:00 "

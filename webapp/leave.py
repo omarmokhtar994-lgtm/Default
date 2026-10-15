@@ -15,6 +15,7 @@ import time
 from datetime import date, timedelta
 from typing import Any, Dict, List, Optional
 
+from .approvals import may_approve_for, who_approves
 from .attendance import day_index, hm
 from .versions import DAYS, shift_span
 
@@ -132,8 +133,8 @@ class LeaveBook:
             raise ValueError(self._decided(request_id))
         reason, now = " ".join((reason or "").split())[:NOTE_MAX], time.time()
         if row["status"] == "waiting_tm":
-            if not is_staff_manager(user):
-                raise ValueError("The first approval is the TM's: a supervisor or an admin.")
+            if not may_approve_for(self.store, user, row["user_id"]):  # Phase AK: their team manager, or a backup
+                raise ValueError(f"{self.waiting_on(row)}.")
             moved = self.store.move_leave(request_id, "waiting_tm", status="waiting_rta" if approve else "refused",
                                           tm_id=user["id"], tm_at=now, reason="" if approve else reason)
             if not moved:
@@ -258,8 +259,17 @@ class LeaveBook:
     # ------------------------------------------------------------------ the inbox
     def may_decide(self, row: Dict[str, Any], user: Dict[str, Any]) -> bool:
         if row["status"] == "waiting_tm":
-            return is_staff_manager(user)
+            return may_approve_for(self.store, user, row["user_id"])
         return row["status"] == "waiting_rta" and row["tm_id"] != user["id"]
+
+    def waiting_on(self, row: Dict[str, Any]) -> str:
+        """Phase AK: where a request waits, in words."""
+        if row["status"] == "waiting_tm":
+            return "Waiting for " + who_approves(self.store, row["user_id"], row["associate"])
+        if row["status"] == "waiting_rta":
+            by = self.store.get_user(row["tm_id"]) if row["tm_id"] else None
+            return f"Approved by {by['display_name'] if by else 'the TM'}, waiting for the RTA"
+        return ""
 
     def waiting(self, program: str) -> List[Dict[str, Any]]:
         """Requests waiting for a decision, each day with its cell and what it costs, and the balance."""
@@ -281,7 +291,7 @@ class LeaveBook:
                 text = (f"No balance set for {first.year}." if balance is None else
                         f"Asks {asked} day{'s' if asked != 1 else ''}; {number(balance['days'] - balance['used'])} "
                         "left this year.")
-            out.append(dict(row, days=days, balance=balance, balance_text=text,
+            out.append(dict(row, days=days, balance=balance, balance_text=text, waiting_on=self.waiting_on(row),
                             label=f"{row['kind']}, {span_text(first, last)}", short=balance is not None
                             and balance["left"] < 0, step="tm" if row["status"] == "waiting_tm" else "rta"))
         return out
@@ -297,5 +307,5 @@ class LeaveBook:
         return sum(1 for r in self.store.list_leave(program=program, statuses=list(WAITING)) if self.may_decide(r, user))
 
     def mine(self, program: str, name: str) -> List[Dict[str, Any]]:
-        return [dict(r, label=f"{r['kind']}, {span_text(date.fromisoformat(r['first_day']), date.fromisoformat(r['last_day']))}")
+        return [dict(r, waiting_on=self.waiting_on(r), label=f"{r['kind']}, {span_text(date.fromisoformat(r['first_day']), date.fromisoformat(r['last_day']))}")
                 for r in self.store.list_leave(program=program, associate=name)]

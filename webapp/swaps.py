@@ -15,12 +15,13 @@ from __future__ import annotations
 import json
 import time
 from datetime import date
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .access import Access
 from .attendance import day_index, hm
 from .channel_people import ChannelPeople, can_work, channel_words
-from .leave import WAITING as LEAVE_WAITING, is_staff_manager, nice
+from .approvals import is_backup, may_approve_for, team_manager_of
+from .leave import WAITING as LEAVE_WAITING, nice
 from .versions import DAYS, shift_span
 
 OPEN = ("waiting_other", "waiting_tm", "applying")
@@ -168,18 +169,54 @@ class SwapBook:
                 swap_id, row["status"], status="cancelled"):
             raise ValueError(self._decided(swap_id))
 
+    # ------------------------------------------------------------------ approvals (Phase AK: both team managers)
+    def _sides(self, row: Dict[str, Any]) -> List[Tuple[Optional[int], str, str]]:
+        """(associate's account id, name, the field that keeps who approved that side) for both people."""
+        other = self.account(row["program"], row["other"])
+        return [(row["asker_user"], row["asker"], "tm_a_id"), (other["id"] if other else None, row["other"], "tm_b_id")]
+
+    def _mine(self, row: Dict[str, Any], user: Dict[str, Any]) -> List[Tuple[Optional[int], str, str]]:
+        """The sides still waiting that ``user`` may approve."""
+        return [s for s in self._sides(row) if row.get(s[2]) is None and may_approve_for(self.store, user, s[0])]
+
+    def may_decide(self, row: Dict[str, Any], user: Dict[str, Any]) -> bool:
+        return row["status"] == "waiting_tm" and bool(self._mine(row, user))
+
+    def waiting_on(self, row: Dict[str, Any]) -> str:
+        """Where a swap waits, in words: the colleague, then each team manager still to approve."""
+        if row["status"] == "waiting_other":
+            return f"Waiting for {row['other']} to accept"
+        if row["status"] != "waiting_tm":
+            return ""
+        left = []
+        for uid, name, field in self._sides(row):
+            if row.get(field) is None:
+                manager = team_manager_of(self.store, uid)
+                left.append(f"{manager['display_name'] if manager else 'a team manager'} ({name})")
+        return "Waiting for " + " and ".join(left)
+
     def decide(self, swap_id: int, user: Dict[str, Any], approve: bool, reason: str = "") -> str:
+        """Phase AK: each person's team manager approves their side (one approval when they share one); an admin or
+        a supervisor approves both at once; a refusal by any of them ends it."""
         row = self._get(swap_id)
         if row["status"] != "waiting_tm":
             raise ValueError(self._decided(swap_id))
-        if not is_staff_manager(user):
-            raise ValueError("A supervisor or an admin approves swaps.")
+        mine = self._mine(row, user)
+        if not mine:
+            raise ValueError(f"{self.waiting_on(row)}.")
         now = time.time()
         if not approve:
             if not self.store.move_swap(swap_id, "waiting_tm", status="refused", decided_by=user["id"], decided_at=now,
                                         reason=" ".join((reason or "").split())[:200]):
                 raise ValueError(self._decided(swap_id))
             return "Refused."
+        if not is_backup(user):
+            for _, _, field in mine:
+                if not self.store.move_swap(swap_id, "waiting_tm", **{field: user["id"]}):
+                    raise ValueError(self._decided(swap_id))
+            row = self._get(swap_id)
+            if any(row.get(field) is None for _, _, field in self._sides(row)):
+                return f"Approved for {' and '.join(name for _, name, _ in mine)}. {self.waiting_on(row)}."
         if not self.store.move_swap(swap_id, "waiting_tm", status="applying", decided_by=user["id"], decided_at=now):
             raise ValueError(self._decided(swap_id))
         try:
@@ -212,7 +249,7 @@ class SwapBook:
     def _label(self, row: Dict[str, Any]) -> Dict[str, Any]:
         on = date.fromisoformat(row["day"])
         return dict(row, label=f"{nice(on)}: {row['asker_cell']} for {row['other_cell']}",
-                    status_words=STATUS_WORDS.get(row["status"], row["status"]))
+                    status_words=STATUS_WORDS.get(row["status"], row["status"]), waiting_on=self.waiting_on(row))
 
     def waiting(self, program: str) -> List[Dict[str, Any]]:
         return [self._label(r) for r in self.store.list_swaps(program=program, statuses=["waiting_other", "waiting_tm"])]
@@ -226,4 +263,4 @@ class SwapBook:
         return [self._label(r) for r in self.store.list_swaps(program=program) if name in (r["asker"], r["other"])]
 
     def count_for(self, program: str, user: Dict[str, Any]) -> int:
-        return len(self.store.list_swaps(program=program, statuses=["waiting_tm"])) if is_staff_manager(user) else 0
+        return sum(1 for r in self.store.list_swaps(program=program, statuses=["waiting_tm"]) if self.may_decide(r, user))

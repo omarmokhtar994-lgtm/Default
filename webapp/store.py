@@ -400,6 +400,11 @@ class Store:
                 db.execute("alter table actual_breaks add column cancelled integer not null default 0")
             if "why" not in have:
                 db.execute("alter table actual_breaks add column why text not null default ''")
+            # Phase AK: each side of a swap is approved by its own team manager (who approved, per side)
+            have = {row["name"] for row in db.execute("pragma table_info(swap_requests)")}
+            for name in ("tm_a_id", "tm_b_id"):
+                if name not in have:
+                    db.execute(f"alter table swap_requests add column {name} integer")
             # Phase AJ: a cover from outside the roster says its language; covers kept before have none.
             have = {row["name"] for row in db.execute("pragma table_info(outside_cover)")}
             if "language" not in have:
@@ -836,7 +841,7 @@ class Store:
                 "select * from swap_requests" + (" where " + " and ".join(where) if where else "") + " order by day, id",
                 args)]
 
-    SWAP_FIELDS = ("status", "answered_at", "decided_by", "decided_at", "reason", "outcome")
+    SWAP_FIELDS = ("status", "answered_at", "decided_by", "decided_at", "reason", "outcome", "tm_a_id", "tm_b_id")
 
     def move_swap(self, swap_id: int, was: str, **fields: Any) -> bool:
         """Change a swap only while its status is still ``was``."""

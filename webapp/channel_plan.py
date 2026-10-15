@@ -29,6 +29,9 @@ from .break_plan import check_row, edge_margin, hm
 from .channels import QUARTER, blended_at, in_email_hours, inside
 
 LANGUAGE, BALANCED, LONG, MOVE, SWITCH, FAIR = 200, (100, 60, 30), 40, 5, 2, 1
+# Phase AM: a quarter hour on another channel than the one a person is on now (Fix channels on the RTA): above the
+# fair spread (FAIR * 2 at most), so fairness alone never moves anyone; below any shortfall, so coverage always does
+KEEP = 3
 # Phase AF (B2): a quarter hour of break that leaves nobody else able to take the person's queue, and one that leaves
 # only colleagues of another language; someone who starts alone has the first break within FIRST_BY minutes
 ALONE, ALONE_LANGUAGE, FIRST_BY = 50, 10, 240
@@ -88,15 +91,22 @@ def _candidates(rules: Dict[str, Any], person: Dict[str, Any], kind: str, minute
 def plan_day(people: List[Dict[str, Any]], setup: Dict[str, Any], rules: Dict[str, Any], day: int,
              carry: Optional[Dict[str, Dict[str, int]]] = None, move_breaks: bool = True,
              locked: FrozenSet[Tuple[str, int]] = frozenset(),
-             before: Optional[Dict[str, Dict[int, int]]] = None) -> Dict[str, Any]:
+             before: Optional[Dict[str, Dict[int, int]]] = None,
+             carry_in: Optional[Dict[str, str]] = None,
+             keep: Optional[Dict[Tuple[str, int], str]] = None) -> Dict[str, Any]:
     """The day's plan: ``blocks`` (name -> [(start, end, letter)], A in all-channels times), ``breaks`` (name ->
     starts, in the people's break order), ``moved`` ([(name, kind, old, new)]), ``status`` and ``metrics`` (the
     model's own shortfall in hours). ``people``: name, language, start, end (minutes; past 1440 for a shift
     crossing midnight), breaks [(kind, start or None, minutes)], skills (letters), counts_for (languages).
     ``carry``: minutes per channel each person had earlier this week (fair spread). ``locked``: (name, break index)
-    typed on the page. ``before``: people per channel and slot from the previous day's overnight shifts."""
+    typed on the page. ``before``: people per channel and slot from the previous day's overnight shifts.
+    ``carry_in`` (Phase AM, the RTA's Fix channels from now): the channel each person is on just before their first
+    slot; carrying on with it is a continuation (no minimum stretch for that first run), and another channel there
+    is a change of channel. ``keep`` ((name, slot) -> channel, Phase AM): the channel each person is on now; each
+    quarter hour on another costs KEEP. Without either the model is as before."""
     started = time.time()
-    first = _solve(people, setup, rules, day, carry or {}, False, locked, before or {}, solver_settings=KEPT)
+    first = _solve(people, setup, rules, day, carry or {}, False, locked, before or {}, solver_settings=KEPT,
+                   carry_in=carry_in or {}, keep=keep or {})
     first["note"] = ""
     movable = any(start is not None and (p["name"], k) not in locked
                   for p in people for k, (_, start, _) in enumerate(p["breaks"]))
@@ -104,7 +114,7 @@ def plan_day(people: List[Dict[str, Any]], setup: Dict[str, Any], rules: Dict[st
         return first
     try:
         second = _solve(people, setup, rules, day, carry or {}, True, locked, before or {}, hint=first,
-                        solver_settings=MOVING)
+                        solver_settings=MOVING, carry_in=carry_in or {}, keep=keep or {})
     except NoPlan as exc:
         first["note"] = f"Breaks were kept as they are. {exc}"
         first["seconds"] = round(time.time() - started, 1)
@@ -115,7 +125,7 @@ def plan_day(people: List[Dict[str, Any]], setup: Dict[str, Any], rules: Dict[st
 
 
 def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=None,
-           solver_settings=None) -> Dict[str, Any]:
+           solver_settings=None, carry_in=None, keep=None) -> Dict[str, Any]:
     started = time.time()
     m = cp_model.CpModel()
     order = list(setup["rules"]["order"])
@@ -185,6 +195,8 @@ def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=N
             if not any((name, t, c) in x for t in ts):
                 continue
             for i in range(len(ts)):
+                if i == 0 and (carry_in or {}).get(name) == c:
+                    continue  # Phase AM: carrying on from before the first slot is not a new stint
                 for length in range(1, block):
                     run, j = ts[i:i + length], i + length
                     if len(run) < length or j >= len(ts) or any((name, t, c) not in x for t in run):
@@ -215,6 +227,13 @@ def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=N
                         m.Add(sum(x[name, t, c] for t in window) <= most + over)
                         cost.append(LONG * over)
                         longs.setdefault(name, []).append(over)
+        for t in ts:  # Phase AM: staying on the channel one is on now
+            now_on = (keep or {}).get((name, t))
+            if (name, t, now_on) in x:
+                cost.append(KEEP * (1 - x[name, t, now_on]))
+        was = (carry_in or {}).get(name)
+        if was in ("P", "C", "E") and ts:
+            cost += [SWITCH * x[name, ts[0], c] for c in "PCE" if c != was and (name, ts[0], c) in x]
         for prev, t in zip(ts, ts[1:]):
             for c in "PCE":
                 if (name, t, c) in x:

@@ -756,6 +756,154 @@ class DayBook:
                  for r in self.store.list_channel_moves(program, [on.isoformat()]) if r["associate"] == name]
         return lo, hi, letter_at(blocks, moved, lo, False)
 
+    def channel_fix_plan(self, program: str, on: date, now: Optional[int] = None) -> Dict[str, Any]:
+        """Phase AM (owner, 2026-10-16: one click to fix the channels on the RTA; answers: the channel planner
+        re-plans channels from now on, channels only, coverage first then fairness): what re-planning today's shifts
+        from the next quarter hour would change, before anything is kept.
+
+        People: today's shifts that are on the floor (whole-shift absences left out), from the next quarter hour
+        after ``now`` (the clock's minute when None) to the end of the shift or its overtime. Their breaks, away
+        time and activities other than overtime stay where they are (the planner may not move them). Last night's
+        people count on the channels they are on. Carrying on with the channel someone is on is free; each
+        change of channel costs, and fairness over the week decides between plans that cover the same.
+
+        Returns ``changes`` [(name, start, end, channel, was)], the shortfall in person-hours per channel from then
+        on before and after (``short_before``, ``short_after``), ``from`` and ``seconds``."""
+        from .channel_people import can_work
+        from .channel_plan import NoPlan, counts_for, need_at, plan_day
+        from .channels import QUARTER, blended_at, inside
+        page = self.page(program, on)
+        if page is None:
+            raise ValueError(f"No schedule for {program} on {on:%d %b}.")
+        view = page["view"]
+        ch_view = view.get("channels")
+        if not ch_view:
+            raise ValueError(page.get("channel_problem") or "This day has no channel needs, so there are no channels "
+                             "to fix.")
+        hold = ch_view["hold"]
+        setup = dict(hold.setup, rules=dict(hold.setup["rules"], fair=True))  # fairness between equal plans
+        skills, rows, d = hold.ch["skills"], hold.ch["language_rows"], day_index(on)
+        now = hold.ch["after"] if now is None else now
+        if now >= 1440 and not any(s["end"] > now for l in view["lanes"] for s in l["segments"] if s["offset"] == 0):
+            raise ValueError("This day is over: nothing is left to fix.")
+        first = -(-max(now + 1, 0) // QUARTER) * QUARTER
+        runs = ch_view["runs"]
+
+        def letter(name: str, t: int) -> str:
+            return next((c for a, b, c in runs.get(name, []) if a <= t < b), "")
+
+        people, carry_in, before = [], {}, {}
+        for lane in view["lanes"]:
+            for seg in lane["segments"]:
+                if seg["offset"] == -1:  # last night's people: held, and counted on the channels they are on
+                    for t in range(first, seg["end"], QUARTER):
+                        c = letter(lane["name"], t)
+                        if c in ("P", "C", "E"):
+                            before.setdefault(c, {}).setdefault(t, 0)
+                            before[c][t] += 1
+                    continue
+                if seg["offset"] != 0 or seg["status"] in ABSENT:
+                    continue
+                extra = [a for a in seg.get("activities", []) if a["kind"] in ("Overtime", CALLED_IN)]
+                lo = max(first, min([seg["start"]] + [a["start"] for a in extra]))
+                hi = max([seg["end"]] + [a["end"] for a in extra]) // QUARTER * QUARTER
+                lo = -(-lo // QUARTER) * QUARTER
+                if hi - lo < QUARTER:
+                    continue
+                busy = [(b["start"], b["minutes"]) for b in seg["breaks"]]
+                busy += [(a["start"], a["end"] - a["start"]) for a in seg.get("activities", [])
+                         if a["kind"] not in ("Overtime", CALLED_IN)]
+                if seg["away"][1] > seg["away"][0]:
+                    busy.append((seg["away"][0], seg["away"][1] - seg["away"][0]))
+                busy = [(s, m) for s, m in busy if s < hi and s + m > lo and m > 0]
+                people.append({"name": lane["name"], "language": lane.get("language", ""), "start": lo, "end": hi,
+                               "breaks": [("Busy", s, m) for s, m in sorted(busy)],
+                               "skills": can_work(skills, lane["name"]),
+                               "counts_for": counts_for(lane.get("language", ""), rows)})
+                was = letter(lane["name"], lo - STEP)
+                if was in ("P", "C", "E"):
+                    carry_in[lane["name"]] = was
+        if not people:
+            return {"changes": [], "short_before": {}, "short_after": {}, "from": first, "seconds": 0.0}
+        week = page["week"]
+        carry: Dict[str, Dict[str, int]] = {}
+        for e in range(d):  # the week so far, from the schedule (fair spread)
+            for a in week.get("associates", []):
+                for b in channel_blocks(week, e, a["name"]):
+                    carry.setdefault(a["name"], {}).setdefault(b["channel"], 0)
+                    carry[a["name"]][b["channel"]] += b["end"] - b["start"]
+        for p in people:  # and today before the plan starts
+            for t in range(0, p["start"], STEP):
+                c = letter(p["name"], t)
+                if c in ("P", "C", "E"):
+                    carry.setdefault(p["name"], {}).setdefault(c, 0)
+                    carry[p["name"]][c] += STEP
+        try:
+            found = plan_day(people, setup, {}, d, carry=carry, move_breaks=False, before=before, carry_in=carry_in,
+                             keep={(p["name"], t): letter(p["name"], t) for p in people
+                                   for t in range(p["start"], p["end"], QUARTER)})
+        except NoPlan as exc:
+            raise ValueError(f"The channels cannot be re-planned now: {exc}") from exc
+        new = {(p["name"], t): c for p in people for a, b, c in found["blocks"].get(p["name"], [])
+               for t in range(a, b, QUARTER)}
+
+        def shortfall(read) -> Dict[str, float]:
+            out = {}
+            for c in setup["need"]:
+                missing = 0.0
+                for t in range(first, max(p["end"] for p in people), QUARTER):
+                    need = need_at(setup, c, d, t)
+                    if need <= 0:
+                        continue
+                    have = before.get(c, {}).get(t, 0) + sum(
+                        1 for p in people if p["start"] <= t < p["end"]
+                        and (read(p, t) == c or (read(p, t) == "A" and c in p["skills"])))
+                    missing += max(need - have, 0)
+                out[c] = round(missing * QUARTER / 60, 2)
+            missing = 0.0  # the Language Setup minimums per channel ("Phone, Arabic: at least 1")
+            for rule in setup["languages"]:
+                if not rule["active"] or rule["minimum"] <= 0:
+                    continue
+                lang = rule["language"].casefold()
+                for t in range(first, max(p["end"] for p in people), QUARTER):
+                    if inside(rule["days"], rule["start"], rule["end"], (d + t // 1440) % 7, t % 1440):
+                        have = sum(1 for p in people if p["start"] <= t < p["end"] and lang in p["counts_for"]
+                                   and (read(p, t) == rule["channel"]
+                                        or (read(p, t) == "A" and rule["channel"] in p["skills"])))
+                        missing += max(rule["minimum"] - have, 0)
+            out["languages"] = round(missing * QUARTER / 60, 2)
+            return out
+
+        changes: List[Tuple[str, int, int, str, str]] = []
+        for p in people:
+            for t in range(p["start"], p["end"], QUARTER):
+                c, old = new.get((p["name"], t)), letter(p["name"], t)
+                if c not in ("P", "C", "E") or c == old or blended_at(setup, d, t):
+                    continue
+                if changes and changes[-1][0] == p["name"] and changes[-1][2] == t and changes[-1][3] == c:
+                    changes[-1] = (p["name"], changes[-1][1], t + QUARTER, c, changes[-1][4])
+                else:
+                    changes.append((p["name"], t, t + QUARTER, c, old))
+        return {"changes": changes, "from": first, "seconds": found.get("seconds", 0.0),
+                "short_before": shortfall(lambda p, t: letter(p["name"], t)),
+                "short_after": shortfall(lambda p, t: new.get((p["name"], t), ""))}
+
+    def apply_channel_fix(self, program: str, on: date, changes: List[Tuple[str, int, int, str]], user_id: int,
+                          now: Optional[int] = None) -> int:
+        """Keep the approved Fix channels changes as one bulk change (one step for Undo), each checked again as a
+        channel change is. A change that starts at or before ``now`` (today) is refused: the preview is old."""
+        done = 0
+        with self.action(program, on, user_id, bulk=True) as act:
+            try:
+                for name, lo, hi, channel in changes:
+                    if now is not None and lo <= now:
+                        raise ValueError(f"{hm(lo)} has passed: open Fix channels again.")
+                    self.channel_move(program, on, name, lo, hi, channel, user_id)
+                    done += 1
+            finally:
+                act.label = f"Fix channels changed {done} stretch{'es' if done != 1 else ''}"
+        return done
+
     @journaled
     def cancel_channel_move(self, program: str, on: date, move_id: int, user_id: int) -> None:
         from .channels import CHANNELS

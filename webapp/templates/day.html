@@ -171,7 +171,7 @@
   <h2 id="chg-h">Change a channel</h2>
   <p class="note">Click a stretch above, or fill in who and when. Preview says what the change would cause and the fixes for it; nothing changes until you apply it. It goes in today's changes, with Undo.</p>
   <form method="post" action="{{ url_for('day_channel') }}" id="chg-form" class="cp-row" data-ch-form>{{ hidden_day('channels') }}<input type="hidden" name="action" value="swap">
-    <label>Who <select name="associate">{% for name in chv.runs %}<option>{{ name }}</option>{% endfor %}</select></label>
+    <label>Who <select name="associate">{% for name in chv.timelines %}<option>{{ name }}</option>{% endfor %}</select></label>
     <label>From <input type="time" name="from" step="300" required></label>
     <label>To <input type="time" name="to" step="300" required></label>
     <label>Channel <select name="channel"><option value="P">Phone</option><option value="C">Chat</option><option value="E">Email</option></select></label>

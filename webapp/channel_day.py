@@ -152,9 +152,9 @@ def _timelines(pieces, today: "_Counts") -> Tuple[Dict[str, List[str]], Dict[str
     out: Dict[str, List[str]] = {}
     runs: Dict[str, List[Tuple[int, int, str]]] = {}
     for seg, status, away, breaks, acts in pieces:
-        if seg["offset"] != 0:
+        if seg["offset"] not in (0, -1):
             continue
-        key, line, last = (0, seg["name"]), [], None
+        key, line, last = (seg["offset"], seg["name"]), [], None
         mine: List[Tuple[int, int, str]] = []
         for t in range(max(seg["start"], 0), min(seg["end"], 1440), STEP):
             letter = today.who[t // STEP].get(key)
@@ -178,8 +178,10 @@ def _timelines(pieces, today: "_Counts") -> Tuple[Dict[str, List[str]], Dict[str
                 mine.append((t, t + STEP, code or label))
             else:
                 mine[-1] = (mine[-1][0], t + STEP, mine[-1][2])
-        out[seg["name"]] = line
-        runs[seg["name"]] = mine
+        if seg["offset"] == 0:  # the words: this day's shifts
+            out[seg["name"]] = line
+        # the stretches: last night's shift after midnight too (Phase AJ: the Timeline showed no channel after 00:00)
+        runs[seg["name"]] = sorted(runs.get(seg["name"], []) + mine)
     return out, runs
 
 

@@ -44,3 +44,11 @@ will logjn to save an interval"
 2. Cover from outside the roster: a. typed in; b. yes, one agent for the minutes logged in; c. they pick a channel
    when the program has channels; d. yes, post to the group like other changes; e. "Keep an option to add them or
    not like a check box to include them or not".
+
+## Item 3 (owner, 2026-10-15, with a photo of the Timeline from 07:00)
+
+Owner, verbatim: "One more but not showing after 00;00 the channel and phone blue color on the timeline blue color
+is not seen". Kind: defect. Root cause: `channel_day._timelines` made a day's channel stretches only for shifts that
+start that day and only up to midnight, so the part of a night shift after 00:00 had a stretch on neither day.
+Fixed: the next day's view carries last night's stretches after midnight (the words stay with the day the shift
+starts), and the 24 hours from a start join them into one stretch.

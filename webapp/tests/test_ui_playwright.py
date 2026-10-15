@@ -883,6 +883,55 @@ class TheRtaActionsInTheBrowser(unittest.TestCase):
         expect(page.locator("#row-900 a.chip.added", has_text="Associate 001")).to_be_visible()
         self.assertEqual(errors, [])
 
+    def test_a_board_chip_drops_anywhere_on_a_row(self):
+        """Phase AI (owner, 2026-10-15: "Drag and drop for breacks is lagging needs to be jn specefic place sevral places
+        in the box are lagging and not working"): a break dragged with the mouse lands on any part of a row that can be
+        seen, says the time it moves to while it is carried, and a drop back on its own time asks nothing."""
+        page = self.page(width=1440, height=900)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        self.go(page, "/day?program=AE/AR+B2B&date=2026-10-15&view=board", errors)
+        rows = page.locator(".rb-row[data-t]")
+        step = int(rows.nth(1).get_attribute("data-t")) - int(rows.nth(0).get_attribute("data-t"))
+        source = rows.nth(9)
+        chip = source.locator("button.chip[data-idx]").first
+        target = rows.nth(10)
+        start = chip.get_attribute("data-start")
+        want = int(target.get_attribute("data-t")) + (int(start[:2]) * 60 + int(start[3:])) % step
+        want = f"{want // 60:02d}:{want % 60:02d}"
+        board = page.locator(".rb-scroll").bounding_box()
+        cells, missed = target.locator(".rb-c"), []
+        for i in range(cells.count()):
+            for fx in (0.1, 0.5, 0.9):
+                source.scroll_into_view_if_needed()
+                from_box, box = chip.bounding_box(), cells.nth(i).bounding_box()
+                x, y = box["x"] + box["width"] * fx, box["y"] + box["height"] / 2
+                if not board["x"] + 2 < x < board["x"] + board["width"] - 2:
+                    continue  # scrolled out of sight: nobody can drop there
+                page.mouse.move(from_box["x"] + from_box["width"] / 2, from_box["y"] + from_box["height"] / 2)
+                page.mouse.down()
+                page.mouse.move(x, y, steps=8)
+                carried = page.locator(".chip-ghost").text_content() if page.locator(".chip-ghost").count() else ""
+                page.mouse.up()
+                heading = page.locator("dialog[open] #brk-h")
+                if not heading.count() or not (heading.text_content() or "").endswith(f" to {want}?") \
+                        or not carried.endswith(want):
+                    missed.append((i, fx))
+                if page.locator("dialog[open]").count():
+                    page.keyboard.press("Escape")
+        self.assertEqual(missed, [])
+        source.scroll_into_view_if_needed()
+        from_box, own = chip.bounding_box(), source.locator(".rb-c").nth(2).bounding_box()
+        page.mouse.move(from_box["x"] + 5, from_box["y"] + 5)
+        page.mouse.down()
+        page.mouse.move(own["x"] + 10, own["y"] + 10, steps=6)
+        page.mouse.up()
+        self.assertEqual(page.locator("dialog[open]").count(), 0)  # the same time: nothing to ask
+        row_box, last = target.bounding_box(), cells.last.bounding_box()
+        self.assertGreaterEqual(row_box["x"] + row_box["width"] + 1, last["x"] + last["width"])  # the row holds its cells
+        self.assertEqual(errors, [])
+
     def test_delete_overtime_from_the_person_dialog(self):
         from datetime import date
         days = self.app.extensions["days"]

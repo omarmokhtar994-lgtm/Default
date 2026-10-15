@@ -9,7 +9,7 @@
 <link rel="icon" href="{{ url_for('static', filename='mark.svg') }}" type="image/svg+xml">
 </head>
 <body class="wall" data-wallboard data-live="{{ 'yes' if live else 'no' }}">
-<header class="wall-head"><h1>{{ program|unit }}</h1><p class="wall-clock">{{ on.strftime('%a %d %b') }} · <b>{{ hm(now) }}</b>{% if not live %} <small>(not live)</small>{% endif %}</p></header>
+<header class="wall-head"><a class="wall-back" href="{{ url_for('day_page', program=program, date=on.isoformat()) }}">Back to the RTA</a><h1>{{ program|unit }}</h1><p class="wall-clock">{{ on.strftime('%a %d %b') }} · <b>{{ hm(now) }}</b>{% if not live %} <small>(not live)</small>{% endif %}</p></header>
 <main>
 {% if not w %}<p class="wall-empty">No schedule for {{ program|unit if program else 'this program' }} today.</p>{% else %}
 <section class="wall-rows">

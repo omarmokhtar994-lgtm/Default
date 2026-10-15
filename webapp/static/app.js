@@ -612,8 +612,10 @@ function homeRefresh(now) {
     });
   });
 
-  // board: drag a break chip to another row (same minute within the interval), or click it
-  var dragged = null;
+  // board: drag a break chip to another row (same minute within the interval), or click it. Phase AI (owner: "Drag and
+  // drop for breacks is lagging ... several places in the box are lagging and not working"): a pointer drag, not the
+  // browser's own, so any part of a row takes it, the chip says the time it moves to while carried, the page scrolls
+  // near its edges, and it works with a finger too.
   Array.prototype.forEach.call(root.querySelectorAll("button.chip-move"), function (b) {  // from one person's day
     b.addEventListener("click", function () {
       var person = document.getElementById("person-dialog");
@@ -621,21 +623,78 @@ function homeRefresh(now) {
       openBreak(b);
     });
   });
+  var board = root.querySelector(".rb"), scroller = root.querySelector(".rb-scroll");
+  var carry = null;  // {chip, x0, y0, ghost, row, at, lifted}
+  function rowAt(x, y) {
+    var el = document.elementFromPoint(x, y);
+    return el && board && board.contains(el) ? el.closest(".rb-row[data-t]") : null;
+  }
+  function timeFor(chip, row) {
+    return toHm(parseInt(row.dataset.t, 10) + toMin(chip.dataset.start) % step);
+  }
+  function mark(row) {
+    if (carry.row === row) { return; }
+    if (carry.row) { carry.row.classList.remove("rb-drop"); }
+    carry.row = row;
+    carry.at = row ? timeFor(carry.chip, row) : null;
+    if (row) { row.classList.add("rb-drop"); }
+    carry.ghost.lastChild.textContent = carry.at ? " to " + carry.at : "";
+  }
+  function edgeScroll(x, y) {  // carried near an edge: the page (and the board sideways) follows
+    var dy = y < 70 ? -18 : (y > window.innerHeight - 70 ? 18 : 0);
+    if (dy) { window.scrollBy(0, dy); }
+    if (scroller) {
+      var r = scroller.getBoundingClientRect();
+      var dx = x < r.left + 50 ? -18 : (x > r.right - 50 ? 18 : 0);
+      if (dx) { scroller.scrollLeft += dx; }
+    }
+  }
+  function drop() {
+    if (!carry) { return; }
+    var done = carry;
+    carry = null;
+    if (done.row) { done.row.classList.remove("rb-drop"); }
+    if (done.ghost) { done.ghost.remove(); }
+    done.chip.classList.remove("lifted");
+    if (done.lifted) {
+      done.chip.dataset.dragged = "1";  // the click that follows a drag opens nothing
+      if (done.at && done.at !== done.chip.dataset.start) { openBreak(done.chip, done.at); }
+    }
+  }
   Array.prototype.forEach.call(root.querySelectorAll("button.chip[data-idx]"), function (chip) {
-    chip.addEventListener("click", function () { openBreak(chip); });
-    chip.addEventListener("dragstart", function (e) { dragged = chip; e.dataTransfer.setData("text/plain", chip.dataset.name); });
-  });
-  Array.prototype.forEach.call(root.querySelectorAll(".rb-row[data-t]"), function (row) {
-    row.addEventListener("dragover", function (e) { if (dragged) { e.preventDefault(); row.classList.add("drop"); } });
-    row.addEventListener("dragleave", function () { row.classList.remove("drop"); });
-    row.addEventListener("drop", function (e) {
-      e.preventDefault();
-      row.classList.remove("drop");
-      if (!dragged) { return; }
-      var start = toMin(dragged.dataset.start);
-      openBreak(dragged, toHm(parseInt(row.dataset.t, 10) + start % step));
-      dragged = null;
+    chip.addEventListener("click", function () {
+      if (chip.dataset.dragged) { delete chip.dataset.dragged; return; }
+      openBreak(chip);
     });
+    chip.addEventListener("pointerdown", function (e) {
+      if (e.button !== 0) { return; }
+      carry = { chip: chip, x0: e.clientX, y0: e.clientY, ghost: null, row: null, at: null, lifted: false };
+      chip.setPointerCapture(e.pointerId);
+    });
+    chip.addEventListener("pointermove", function (e) {
+      if (!carry || carry.chip !== chip) { return; }
+      if (!carry.lifted) {
+        if (Math.abs(e.clientX - carry.x0) + Math.abs(e.clientY - carry.y0) < 6) { return; }
+        carry.lifted = true;
+        chip.classList.add("lifted");
+        carry.ghost = document.createElement("div");
+        carry.ghost.className = "chip-ghost";
+        carry.ghost.setAttribute("aria-hidden", "true");
+        var what = document.createElement("b");
+        what.textContent = chip.dataset.name + ", " + chip.dataset.kind + " " + chip.dataset.start;
+        carry.ghost.appendChild(what);
+        carry.ghost.appendChild(document.createElement("span"));
+        document.body.appendChild(carry.ghost);
+      }
+      carry.ghost.style.transform = "translate(" + (e.clientX + 12) + "px, " + (e.clientY + 12) + "px)";
+      mark(rowAt(e.clientX, e.clientY));
+      edgeScroll(e.clientX, e.clientY);
+    });
+    chip.addEventListener("pointerup", drop);
+    chip.addEventListener("pointercancel", function () { if (carry) { carry.lifted = false; } drop(); });
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && carry && carry.lifted) { carry.lifted = false; carry.row && carry.row.classList.remove("rb-drop"); carry.row = null; drop(); }
   });
 })();
 
@@ -1074,15 +1133,15 @@ function homeRefresh(now) {
 // Phase AF (D2, D3): hovering (or focusing) a shift bar or a break on the timeline shows its lines in a card
 // (from the element's title, which stays the plain tooltip without a script)
 (function () {
-  const marks = document.querySelectorAll(".tl-track rect.tl-bar, .tl-track rect.brk");
+  const marks = document.querySelectorAll(".tl-track rect.tl-bar, .tl-track rect.brk, .tl-track rect.tl-ch");
   if (!marks.length) return;
   const card = document.createElement("div");
   card.className = "tl-tip";
   card.hidden = true;
   card.setAttribute("role", "tooltip");
   document.body.appendChild(card);
-  const show = (el, x, y) => {
-    const lines = (el.dataset.tip || "").split("\n").filter(Boolean);
+  const show = (el, x, y, more) => {
+    const lines = ((more ? more + "\n" : "") + (el.dataset.tip || "")).split("\n").filter(Boolean);
     if (!lines.length) return;
     card.textContent = "";
     lines.forEach((text, i) => { const p = document.createElement(i ? "span" : "b"); p.textContent = text; card.appendChild(p); });
@@ -1097,11 +1156,19 @@ function homeRefresh(now) {
     if (!title) return;
     el.dataset.tip = title.textContent;
     title.remove();
-    el.addEventListener("pointerenter", (e) => show(el, e.clientX, e.clientY));
-    el.addEventListener("pointermove", (e) => { if (!card.hidden) show(el, e.clientX, e.clientY); });
-    el.addEventListener("pointerleave", hide);
     el.addEventListener("focus", () => { const r = el.getBoundingClientRect(); show(el, r.left, r.bottom); });
     el.addEventListener("blur", hide);
+  });
+  // Phase AI (owner: "when i stand any wheree"): anywhere on a person's row shows their shift card; a break shows its own
+  document.querySelectorAll(".tl-lane[data-tip]").forEach((lane) => {
+    const at = (e) => {
+      const mark = e.target.closest(".tl-track rect.brk[data-tip], .tl-track rect.tl-bar[data-tip]");
+      const channel = e.target.closest(".tl-track rect.tl-ch[data-tip]");
+      show(mark || lane, e.clientX, e.clientY, channel ? channel.dataset.tip : "");
+    };
+    lane.addEventListener("pointerenter", at);
+    lane.addEventListener("pointermove", at);
+    lane.addEventListener("pointerleave", hide);
   });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") hide(); });
   window.addEventListener("scroll", hide, { passive: true });

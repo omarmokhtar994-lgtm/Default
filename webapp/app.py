@@ -2657,7 +2657,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                add_panel=add_panel, person_panel=person_panel, lengths=ADD_LENGTHS, bar=bar,
                                bulk=bulk, shifts=BULK_SHIFTS, bulk_verb=bulk_verb, rescue=rescue, dayoff=dayoff,
                                team_names=sorted({u["display_name"] for u in app.extensions["store"].list_users()
-                                                  if u["active"]}, key=str.lower),  # "With": pick one or type
+                                                  if u["active"] and not u["is_associate"] and program
+                                                  and Access(app.extensions["store"], u).can_open(program)},
+                                                 key=str.lower),  # "With": the program's own staff (Phase AI)
                                with_lists=_with_lists(program) if program else [],  # or from the lists (Phase U)
                                tomorrow_unchecked=tomorrow_unchecked(on) if on else "",
                                activity_kinds=ACTIVITY_KINDS,

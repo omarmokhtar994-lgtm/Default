@@ -24,7 +24,10 @@ class WhatHoveringShows(unittest.TestCase):
         length = seg["end"] - seg["start"]
         self.assertEqual(lines[0], f"{self.lane['name']}, {seg['label']}")
         self.assertIn(f"Length {length // 60} h" + (f" {length % 60} min" if length % 60 else ""), lines)
-        self.assertIn("Worked so far 3 h 20 min", lines)
+        # Re-pinned in Phase AI: the owner (2026-10-15) asked "howlong is he logged in", so the line counts from the
+        # login the RTA has (was "Worked so far"); a person present from the start logs in at the shift start.
+        self.assertIn(f"Logged in at {seg['start'] // 60 % 24:02d}:{seg['start'] % 60:02d}", lines)
+        self.assertIn("Logged in for 3 h 20 min", lines)
         left = length - 200
         self.assertIn(f"Left until logout {left // 60} h" + (f" {left % 60} min" if left % 60 else ""), lines)
         taken = sum(1 for b in seg["breaks"] if b["start"] + b["minutes"] <= now)
@@ -32,7 +35,7 @@ class WhatHoveringShows(unittest.TestCase):
 
     def test_before_and_after_the_shift(self):
         before = hover_tips(self.view, self.seg["start"] - 30)[(self.lane["name"], 0)]["shift"]
-        self.assertIn("Worked so far 0 min", before)
+        self.assertIn(f"Logs in at {self.seg['start'] // 60 % 24:02d}:{self.seg['start'] % 60:02d}", before)  # Phase AI
         after = hover_tips(self.view, self.seg["end"] + 30)[(self.lane["name"], 0)]["shift"]
         self.assertIn("Left until logout 0 min", after)
 

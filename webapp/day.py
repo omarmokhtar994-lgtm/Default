@@ -491,18 +491,32 @@ def _dur(minutes: int) -> str:
 
 
 def hover_tips(view: Dict[str, Any], now: int) -> Dict[Tuple[str, int], Dict[str, Any]]:
-    """Phase AF (D2, D3): what hovering shows, per (name, offset): the shift's lines (start to end, length, worked
-    so far, left until logout, breaks taken) and per break index its lines (since the last break or the shift
-    start, from the shift start). ``now`` is the minute of the day shown (below 0 before it, past 1440 after)."""
+    """Phase AF (D2, D3): what hovering shows, per (name, offset): the shift's lines (start to end, length, when they
+    logged in and for how long, left until logout, breaks taken) and per break index its lines (since the last break
+    or the shift start, from the shift start). ``now`` is the minute of the day shown (below 0 before it, past 1440
+    after). Phase AI (owner: "howlong is he logged in"): logged in from the RTA's marks: a late login from when they
+    came in, leaving early until they left; a whole-shift absence says so."""
     out: Dict[Tuple[str, int], Dict[str, Any]] = {}
     for lane in view["lanes"]:
         for seg in lane["segments"]:
             length = seg["end"] - seg["start"]
-            worked = min(max(now - seg["start"], 0), length)
+            login, logout = seg["start"], seg["end"]
+            if seg["status"] == "Late" and seg["away"][1] > seg["away"][0]:
+                login = seg["away"][1]
+            if seg["status"] == "Left early" and seg["away"][1] > seg["away"][0]:
+                logout = seg["away"][0]
             breaks = sorted(seg["breaks"], key=lambda b: b["start"])
             taken = sum(1 for b in breaks if b["start"] + b["minutes"] <= now)
-            shift = [f"{lane['name']}, {seg['label']}", f"Length {_dur(length)}", f"Worked so far {_dur(worked)}",
-                     f"Left until logout {_dur(length - worked)}", f"Breaks {taken} of {len(breaks)} taken"]
+            shift = [f"{lane['name']}, {seg['label']}", f"Length {_dur(length)}"]
+            if seg["status"] in ABSENT:
+                shift.append(f"{seg['status']}: not on shift today")
+            elif now < login:
+                shift.append(f"Logs in at {_hm(login)}")
+            else:
+                shift += [f"Logged in at {_hm(login)}", f"Logged in for {_dur(max(0, min(now, logout) - login))}"]
+            if seg["status"] not in ABSENT:
+                shift.append(f"Left until logout {_dur(max(0, logout - max(now, login)))}")
+            shift.append(f"Breaks {taken} of {len(breaks)} taken")
             per: Dict[int, List[str]] = {}
             prev = None
             for b in breaks:

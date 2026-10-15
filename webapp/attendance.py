@@ -889,7 +889,7 @@ class DayBook:
                      billable: bool = False, note: str = "", dry_run: bool = False, with_whom: str = "",
                      why: str = "", with_dept: str = "") -> Any:
         """Record an activity for the shift that starts on ``on``: an aux, a break or lunch added on the day,
-        or VTO (each inside the shift), or overtime (touching the shift, at most 2 hours, keeping the rest
+        or VTO (each inside the shift), or overtime (touching the shift, at most OVERTIME_MAX, keeping the rest
         gap). Returns its id; with ``dry_run`` every check runs, nothing is kept, and the record is returned."""
         if kind not in ACTIVITY_KINDS:
             raise ValueError(f"Unknown activity: {kind}.")

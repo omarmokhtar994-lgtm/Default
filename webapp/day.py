@@ -806,7 +806,7 @@ def board(view: Dict[str, Any], target: float) -> List[Dict[str, Any]]:
 
 # ---------------------------------------------------------------- meetings, overtime and VTO (Phase O)
 MEETING_MARGIN = 10  # minutes kept clear before and after a break
-OVERTIME_MAX = 120  # minutes of overtime offered next to a shift
+OVERTIME_MAX = 240  # minutes of overtime offered next to a shift (owner, 2026-10-15: up to the longest "+ Add" length)
 
 
 def _own(view: Dict[str, Any], name: str) -> Optional[Dict[str, Any]]:
@@ -881,7 +881,7 @@ def overtime_offers(view: Dict[str, Any], week: Dict[str, Any], day: int, rest_h
                     ) -> List[Dict[str, Any]]:
     """For each short interval (from ``after``), or only the interval at ``only``: people present that day
     whose shift ends just before it or starts just after it, offered to stay on or come in early (at most
-    2 hours), keeping the rest gap to the previous and next day's work; the shortest offers first."""
+    OVERTIME_MAX), keeping the rest gap to the previous and next day's work; the shortest offers first."""
     step = view["interval"]
     rest = int(rest_hours * 60)
     out = []
@@ -908,7 +908,7 @@ def overtime_offers(view: Dict[str, Any], week: Dict[str, Any], day: int, rest_h
             if any(x["start"] < hi and lo < x["end"] for x in seg.get("activities", [])):
                 continue
             side = "after" if lo == seg["end"] else "before"
-            if side == "after":  # the longest the rules allow: 2 hours, the rest gap to tomorrow
+            if side == "after":  # the longest the rules allow: OVERTIME_MAX, the rest gap to tomorrow
                 most = OVERTIME_MAX if not nxt else min(OVERTIME_MAX, nxt[0] + 1440 - rest - seg["end"])
             else:
                 most = OVERTIME_MAX if not prv else min(OVERTIME_MAX, seg["start"] - (prv[1] - 1440 + rest))

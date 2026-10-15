@@ -234,7 +234,7 @@ class TheDay(unittest.TestCase):
             for o in row["offers"]:
                 seg = self.own(v, o["name"])
                 self.assertTrue(o["end"] == seg["start"] or o["start"] == seg["end"])  # next to the shift
-                self.assertLessEqual(o["end"] - o["start"], 120)
+                self.assertLessEqual(o["end"] - o["start"], 240)  # Phase AJ: the owner raised the cap to 4 hours
                 a = next(x for x in WEEK["associates"] if x["name"] == o["name"])
                 nxt, prv = shift_span(a["days"][WED + 1]), shift_span(a["days"][WED - 1])
                 if nxt:
@@ -244,7 +244,7 @@ class TheDay(unittest.TestCase):
 
     def test_overtime_offer_says_side_and_max(self):
         """Phase R task 6: each offer says whether it is after or before the shift and the longest overtime
-        the rules allow there (2 hours, less where the rest gap to the next or previous shift is shorter)."""
+        the rules allow there (4 hours since Phase AJ, the owner's raised cap; less where the rest gap to the next or previous shift is shorter)."""
         v = self.view({(0, someone(WED, 20 * 60)[0]["name"]): {"status": "Unplanned leave"}})
         seen = 0
         for row in overtime_offers(v, WEEK, WED, rest_hours=12):
@@ -253,7 +253,7 @@ class TheDay(unittest.TestCase):
                 seg = self.own(v, o["name"])
                 self.assertEqual(o["side"], "after" if o["start"] == seg["end"] else "before")
                 self.assertLessEqual(o["end"] - o["start"], o["max"])
-                self.assertLessEqual(o["max"], 120)
+                self.assertLessEqual(o["max"], 240)  # Phase AJ: the owner raised the cap to 4 hours
                 a = next(x for x in WEEK["associates"] if x["name"] == o["name"])
                 nxt, prv = shift_span(a["days"][WED + 1]), shift_span(a["days"][WED - 1])
                 if o["side"] == "after" and nxt:

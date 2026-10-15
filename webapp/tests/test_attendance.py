@@ -146,8 +146,9 @@ class TheAttendance(unittest.TestCase):
             self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Coaching", "15:30", "16:30", self.sara)
         with self.assertRaises(ValueError):  # overtime must touch the shift
             self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Overtime", "22:00", "23:00", self.sara)
-        with self.assertRaises(ValueError):  # at most 2 hours
-            self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Overtime", "21:00", "23:30", self.sara)
+        # re-pinned in Phase AJ: the owner raised the overtime cap from 2 to 4 hours (2026-10-15)
+        with self.assertRaises(ValueError):  # at most 4 hours
+            self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Overtime", "21:00", "01:05", self.sara)
         with self.assertRaises(ValueError):  # Tuesday 14:00 - 23:00: in at 09:00 leaves 10 hours' rest
             self.days.add_activity("AE/AR B2B", WED, "Associate 013", "Overtime", "09:00", "11:00", self.sara)
         with self.assertRaises(ValueError):  # Thursday 05:00 - 14:00: staying to 19:00 leaves 10 hours' rest

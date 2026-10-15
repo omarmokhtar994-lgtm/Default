@@ -467,7 +467,7 @@
     <h3 id="cover-h">Cover {{ hm(cp.t) }} to {{ hm(cp.end) }} <small>buffer {{ cp.cell.pm|hmm if cp.cell.pm is not none else '–' }}, need {{ cp.cell.need }}, on the floor {{ cp.cell.now|num }}</small></h3>
     {% if not cp.next_known %}<p class="note warn-note">{{ tomorrow_unchecked }}</p>{% endif %}
     <div class="cover-cols">
-      <div><h4>Overtime</h4><p class="note">Stay on after the shift or come in early, up to 2 hours, keeping the rest gap. Press a name once they accept.</p>
+      <div><h4>Overtime</h4><p class="note">Stay on after the shift or come in early, up to {{ overtime_hours }} hours, keeping the rest gap. Press a name once they accept.</p>
         {% for o in cp.overtime %}{{ overtime(o, 'board', cp.t, cp.date) }}{% else %}<p class="empty">Nobody's shift ends just before or starts just after this {{ unit.get(v.interval, 'interval')[:-1] }} within the rules.</p>{% endfor %}</div>
       <div><h4>Day off cancelled</h4><p class="note">People off today who could come in on a Shift Library shift covering this {{ unit.get(v.interval, 'interval')[:-1] }}, keeping the rest gap to yesterday and tomorrow; those covering the most short intervals first. Their breaks follow the plan's for that shift.</p>
         {% for o in cp.dayoff %}{{ accept(o.name, 'Called in', o.start, o.end, o.shift ~ (' · covers ' ~ o.covers ~ ' short' if o.covers else '') ~ ' · ' ~ o.language[:3]|upper, 'board', cp.t, cp.date) }}{% else %}<p class="empty">Nobody off today could come in for this {{ unit.get(v.interval, 'interval')[:-1] }} within the rest gap.</p>{% endfor %}</div>

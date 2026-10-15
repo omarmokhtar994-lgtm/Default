@@ -36,7 +36,7 @@ from .channel_plan import NoPlan, plan_day, score_day
 from .channel_template import channel_workbook
 from .channels import check_lines, has_channel_needs, read_channels, requirement_tab
 from .clock import EGYPT, HOME, SHOWN, ZONES, moved_text, pick_zone, shift as zone_shift, shown, to_schedule, zone_label
-from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, at_target, board, glance, hover_tips, my_day, now_panel, read_inputs, shift_groups, window_view
+from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, OVERTIME_MAX, STATUSES, BreakRefused, at_target, board, glance, hover_tips, my_day, now_panel, read_inputs, shift_groups, window_view
 from .coach import actual_shrinkage, corrected_tab
 from .leave import KINDS as LEAVE_KINDS, LeaveBook
 from .swaps import SwapBook
@@ -2707,7 +2707,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             first = own[0][1] if nobody else None
             side = "after" if first and first["start"] < t + step else "before"  # before, as always, unless it ended
             reach = (first["start"] - t if side == "before" else t + step - first["end"]) if first else 0
-            minutes = min([m for m in ADD_LENGTHS if reach <= m <= 120] or [120]) if first else None
+            minutes = min([m for m in ADD_LENGTHS if reach <= m <= OVERTIME_MAX] or [OVERTIME_MAX]) if first else None
             off = days.off_today(program, held_on)  # for "Day off cancelled" (Phase S)
             shifts = days.shift_library(program, held_on)
             add_panel = {"t": t, "end": t + step, "person": request.args.get("person", ""), "date": held_on,
@@ -2774,6 +2774,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                proposal=proposal, from_now=from_now, cover_panel=cover_panel,
                                tile_now=now_at if window else (from_now if clock_now.date() == on else None),
                                add_panel=add_panel, person_panel=person_panel, lengths=ADD_LENGTHS, bar=bar,
+                               overtime_hours=OVERTIME_MAX // 60,
                                bulk=bulk, shifts=BULK_SHIFTS, bulk_verb=bulk_verb, rescue=rescue, dayoff=dayoff,
                                team_names=sorted({u["display_name"] for u in app.extensions["store"].list_users()
                                                   if u["active"] and not u["is_associate"] and program

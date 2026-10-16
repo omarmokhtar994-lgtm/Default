@@ -94,7 +94,8 @@ class Associates(unittest.TestCase):
         self.assertIsNone(self.user("x"))
         for url in ("/me", "/static/app.css", "/account/password"):
             with self.subTest(url):
-                self.assertEqual(me.get(url).status_code, 200)
+                # AN followup: close the static-file response after checking access.
+                self.assertEqual(me.get(url, buffered=True).status_code, 200)
 
     def test_their_menu_has_my_week_only(self):
         page = self.signed_in("assoc11", "Associate 011").get("/me").get_data(as_text=True)

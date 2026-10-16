@@ -40,7 +40,8 @@ class TheLook(unittest.TestCase):
         for path in ("/static/fonts/archivo.woff2", "/static/fonts/atkinson-hyperlegible-next.woff2",
                      "/static/fonts/OFL", "/static/icons.css", "/static/LICENSE-phosphor"):
             with self.subTest(path):
-                self.assertEqual(client.get(path).status_code, 200)
+                # AN followup: exhaust and close the streamed file response.
+                self.assertEqual(client.get(path, buffered=True).status_code, 200)
 
     def test_the_stylesheet_uses_them(self):
         css = (STATIC / "app.css").read_text()

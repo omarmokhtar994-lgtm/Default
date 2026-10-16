@@ -101,7 +101,7 @@
       {% for a in view.week.associates %}{% set tool_days = view.tool_days.get(a.name, []) %}
       <tr><th scope="row"><b>{{ a.name }}</b><small>{% if a.slot %}Slot {{ a.slot }} · {% endif %}{{ a.language }}{% if a.tl %} · {{ a.tl }}{% endif %}</small></th>
         {% for d in days %}{% set value = a.days[loop.index0] %}{% set was = tool_days[loop.index0] if tool_days|length > loop.index0 else value %}{% set sev = m.cells.get(a.name ~ '|' ~ d) or m.cells.get(a.name ~ '|*') %}
-        <td><button type="button" class="ed{% if value != was %} changed{% endif %}{% if sev %} sev-{{ sev }}{% endif %}{% if value == 'OFF' %} off{% elif value == 'Leave' %} leave{% endif %}" data-name="{{ a.name }}" data-day="{{ d }}" data-value="{{ value }}"{% if moved %} disabled{% endif %}>{% if sev %}<span class="flag {{ sev }}">{{ 'rule broken' if sev == 'red' else 'warning' }}</span>{% endif %}{{ value|zone_cell(moved) if value else '–' }}{% if value != was %}<s>{{ was|zone_cell(moved) }}</s>{% endif %}</button></td>
+        <td><button type="button" class="ed{% if value != was %} changed{% endif %}{% if sev %} sev-{{ sev }}{% endif %}{% if value == 'OFF' %} off{% elif value == 'Leave' %} leave{% endif %}" data-name="{{ a.name }}" data-day="{{ d }}" data-value="{{ value }}"{% if moved %} disabled{% endif %}>{% if sev %}<span class="flag {{ sev }}">{{ 'rule broken' if sev == 'red' else 'warning' }}</span>{% endif %}{{ value|zone_cell(moved, zone_dates[d], own_zone, g.zone) if value else '–' }}{% if value != was %}<s>{{ was|zone_cell(moved, zone_dates[d], own_zone, g.zone) }}</s>{% endif %}</button></td>
         {% endfor %}
       </tr>
       {% endfor %}

@@ -3,6 +3,7 @@
 {% from "_target_tile.html" import target_tile with context %}{% from "_macros.html" import pager with context %}
 {% block title %}The day: {{ program|unit if program else 'no program' }} on Team Scheduler{% endblock %}
 {% block content %}
+{% if g.rta_clock_notice %}<p class="notice" role="status">{{ g.rta_clock_notice }}</p>{% endif %}
 {# Phase AI: every form says the zone its times were shown in and the day the page showed #}
 {% macro zone_fields() %}<input type="hidden" name="tz" value="{{ g.zone }}"><input type="hidden" name="anchor" value="{{ on.isoformat() }}">{% endmacro %}
 {% macro with_fields(dept='', who='', disabled=False, required=False) -%}
@@ -155,7 +156,7 @@
     {% if chfix.changes %}<form method="post" action="{{ url_for('day_channel_fix') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}">
       <ul class="log">{% for name, lo, hi, c, was in chfix.changes %}<li><input type="hidden" name="change" value="{{ name }}|{{ lo }}|{{ hi }}|{{ c }}">{{ name }}: {{ c|channel_name }} {{ hm(lo) }} to {{ hm(hi) }}{% if lo >= 1440 %} (after midnight){% endif %}{% if was in ('P', 'C', 'E') %}, was {{ was|channel_name }}{% elif not was %}, no channel planned{% endif %}</li>{% endfor %}</ul>
       <p><button class="primary" type="submit">Apply all {{ chfix.changes|length }}</button> <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='channels') }}">Cancel</a></p>
-    </form>{% else %}<p class="note">Nothing to change: every channel and language is covered as well as it can be from {{ hm(chfix['from']) }}. <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='channels') }}">Close</a></p>{% endif %}
+    </form>{% else %}<p class="note">No channel changes were found from {{ hm(chfix['from']) }}. <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='channels') }}">Close</a></p>{% endif %}
   {% endif %}</div>{% endif %}
   {% if chv.now %}<p class="cp-sum">{% for c, n in chv.now.items() %}<span><b>{{ c|channel_name }}</b> {{ n.have }} on{% if n.need %}, {{ n.need|num }} needed{% endif %}</span>{% endfor %}</p>{% endif %}
   {% for w in chv.warnings %}

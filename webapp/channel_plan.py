@@ -27,6 +27,7 @@ from ortools.sat.python import cp_model
 
 from .break_plan import check_row, edge_margin, hm
 from .channels import QUARTER, blended_at, in_email_hours, inside
+from .channel_solver import SolverStopped, solve as solve_channels
 
 LANGUAGE, BALANCED, LONG, MOVE, SWITCH, FAIR = 200, (100, 60, 30), 40, 5, 2, 1
 # Phase AM: a quarter hour on another channel than the one a person is on now (Fix channels on the RTA): above the
@@ -74,6 +75,33 @@ def allowed(setup: Dict[str, Any], day: int, person: Dict[str, Any], t: int) -> 
     return mine
 
 
+def coverage_slots(people, before=None, horizon=None):
+    """All quarters in the measured day, including demand with no staff and overnight tails.
+
+    RTA callers pass the remaining extent of today's own shifts; ordinary planning measures
+    the calendar day plus the tails of its shifts. Fixed cover uses P or P:language keys.
+    """
+    if horizon is not None:
+        lo, hi = horizon
+    else:
+        lo = min([0] + [p["start"] for p in people])
+        hi = max([1440] + [p["end"] for p in people]
+                 + [t + QUARTER for counts in (before or {}).values() for t in counts])
+    return list(range(lo - lo % QUARTER, hi, QUARTER))
+
+
+def email_goals(setup, day):
+    target = setup["email_hours"][day]
+    return [(target["start"], target["end"],
+             [(lang, int(round(hours * 60 / QUARTER)))
+              for lang, hours in [(None, target["hours"])] + list(target["languages"].items())])]
+
+
+def fixed_cover(before, channel, t, language=None):
+    key = channel if language is None else f"{channel}:{language.casefold()}"
+    return (before or {}).get(key, {}).get(t, 0)
+
+
 def _candidates(rules: Dict[str, Any], person: Dict[str, Any], kind: str, minutes: int) -> List[int]:
     """Break starts inside the rules for this kind (window, edge margin), on quarter hours."""
     lo, hi = person["start"], person["end"]
@@ -93,7 +121,8 @@ def plan_day(people: List[Dict[str, Any]], setup: Dict[str, Any], rules: Dict[st
              locked: FrozenSet[Tuple[str, int]] = frozenset(),
              before: Optional[Dict[str, Dict[int, int]]] = None,
              carry_in: Optional[Dict[str, str]] = None,
-             keep: Optional[Dict[Tuple[str, int], str]] = None) -> Dict[str, Any]:
+             keep: Optional[Dict[Tuple[str, int], str]] = None,
+             horizon: Optional[Tuple[int, int]] = None) -> Dict[str, Any]:
     """The day's plan: ``blocks`` (name -> [(start, end, letter)], A in all-channels times), ``breaks`` (name ->
     starts, in the people's break order), ``moved`` ([(name, kind, old, new)]), ``status`` and ``metrics`` (the
     model's own shortfall in hours). ``people``: name, language, start, end (minutes; past 1440 for a shift
@@ -106,7 +135,7 @@ def plan_day(people: List[Dict[str, Any]], setup: Dict[str, Any], rules: Dict[st
     quarter hour on another costs KEEP. Without either the model is as before."""
     started = time.time()
     first = _solve(people, setup, rules, day, carry or {}, False, locked, before or {}, solver_settings=KEPT,
-                   carry_in=carry_in or {}, keep=keep or {})
+                   carry_in=carry_in or {}, keep=keep or {}, horizon=horizon)
     first["note"] = ""
     movable = any(start is not None and (p["name"], k) not in locked
                   for p in people for k, (_, start, _) in enumerate(p["breaks"]))
@@ -114,7 +143,7 @@ def plan_day(people: List[Dict[str, Any]], setup: Dict[str, Any], rules: Dict[st
         return first
     try:
         second = _solve(people, setup, rules, day, carry or {}, True, locked, before or {}, hint=first,
-                        solver_settings=MOVING, carry_in=carry_in or {}, keep=keep or {})
+                        solver_settings=MOVING, carry_in=carry_in or {}, keep=keep or {}, horizon=horizon)
     except NoPlan as exc:
         first["note"] = f"Breaks were kept as they are. {exc}"
         first["seconds"] = round(time.time() - started, 1)
@@ -125,7 +154,7 @@ def plan_day(people: List[Dict[str, Any]], setup: Dict[str, Any], rules: Dict[st
 
 
 def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=None,
-           solver_settings=None, carry_in=None, keep=None) -> Dict[str, Any]:
+           solver_settings=None, carry_in=None, keep=None, horizon=None) -> Dict[str, Any]:
     started = time.time()
     m = cp_model.CpModel()
     order = list(setup["rules"]["order"])
@@ -180,7 +209,7 @@ def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=N
                 x[name, t, c] = m.NewBoolVar(f"x{name}{t}{c}")
             m.Add(sum(x[name, t, c] for c in chans) + (off[name, t] if (name, t) in off else 0) == 1)
     cap = rules.get("max_concurrent") or 0
-    every = sorted({t for ts in slots.values() for t in ts})
+    every = coverage_slots(people, before, horizon)
     if cap:
         for t in every:
             here = [off[n, t] for n in slots if (n, t) in off]
@@ -266,24 +295,22 @@ def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=N
             if need <= 0:
                 continue
             short = m.NewIntVar(0, need, "")
-            m.AddMaxEquality(short, [need - sum(cover(c, t)) - (before.get(c, {}).get(t, 0)), 0])
+            m.AddMaxEquality(short, [need - sum(cover(c, t)) - fixed_cover(before, c, t), 0])
             shorts[c].append(short)
             worst[c] = worst.get(c, 0) + need
     email: List[Any] = []
     if setup["email_mode"] == "hours":
-        target = setup["email_hours"][day]
-        lo, hi = target["start"], target["end"]  # past 1440 when the window runs past midnight (Phase AF, A2)
-        placed = [x[n, t, "E"] for n in slots for t in slots[n] if lo <= t < hi and (n, t, "E") in x]
-        for lang, hours in [(None, target["hours"])] + list(target["languages"].items()):
-            want = int(round(hours * 60 / QUARTER))
-            if want <= 0:
-                continue
-            mine = placed if lang is None else [x[p["name"], t, "E"] for p in people if lang.casefold() in p["counts_for"]
-                                                for t in slots[p["name"]] if lo <= t < hi and (p["name"], t, "E") in x]
-            short = m.NewIntVar(0, want, "")
-            m.AddMaxEquality(short, [want - sum(mine), 0])
-            email.append(short)
-            worst["E"] = worst.get("E", 0) + want
+        for lo, hi, targets in email_goals(setup, day):
+            for lang, want in targets:
+                if want <= 0:
+                    continue
+                mine = [v for t in every if lo <= t < hi
+                        for v in cover("E", t, {lang.casefold()} if lang else None)]
+                fixed = sum(fixed_cover(before, "E", t, lang) for t in every if lo <= t < hi)
+                short = m.NewIntVar(0, want, "")
+                m.AddMaxEquality(short, [want - sum(mine) - fixed, 0])
+                email.append(short)
+                worst["E"] = worst.get("E", 0) + want
     lang_short: List[Any] = []
     for rule in setup["languages"]:
         if not rule["active"] or rule["minimum"] <= 0:
@@ -291,7 +318,8 @@ def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=N
         for t in every:
             if inside(rule["days"], rule["start"], rule["end"], (day + t // 1440) % 7, t % 1440):
                 short = m.NewIntVar(0, rule["minimum"], "")
-                m.AddMaxEquality(short, [rule["minimum"] - sum(cover(rule["channel"], t, {rule["language"].casefold()})),
+                m.AddMaxEquality(short, [rule["minimum"] - sum(cover(rule["channel"], t, {rule["language"].casefold()}))
+                                         - fixed_cover(before, rule["channel"], t, rule["language"]),
                                          0])
                 lang_short.append(short)
     weight = _weights(order, strict, worst)
@@ -310,39 +338,40 @@ def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=N
         for (name, t, c), v in x.items():
             m.AddHint(v, int(given.get((name, t)) == c))
     m.Minimize(sum(cost))
-    solver = cp_model.CpSolver()
-    for key, value in (solver_settings or MOVING).items():
-        setattr(solver.parameters, key, value)
-    status = solver.Solve(m)
+    try:
+        solver = solve_channels(m, solver_settings or MOVING)
+    except SolverStopped as exc:
+        raise NoPlan(str(exc)) from exc
+    status = solver.status
     if status == cp_model.MODEL_INVALID:  # a fault in this module, never "no plan"
         raise RuntimeError(f"The channel plan model is invalid: {m.Validate()}")
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         if status == cp_model.INFEASIBLE:
             raise NoPlan("The breaks cannot all fit their rules on this day with channels planned around them.")
         raise NoPlan("No plan was found in the time allowed. Try again, or keep the breaks as they are.")
-    out = {"blocks": {}, "breaks": {}, "moved": [], "status": solver.StatusName(status),
+    out = {"blocks": {}, "breaks": {}, "moved": [], "status": solver.status_name,
            "seconds": round(time.time() - started, 1)}
     for p in people:
         name = p["name"]
-        chosen = [next(c for c, v in picks[name, k].items() if solver.Value(v)) for k in range(len(p["breaks"]))]
+        chosen = [next(c for c, v in picks[name, k].items() if solver.value(v)) for k in range(len(p["breaks"]))]
         out["breaks"][name] = chosen
         out["moved"] += [(name, kind, old, new) for (kind, old, _), new in zip(p["breaks"], chosen)
                          if old is not None and old != new]
         runs: List[Tuple[int, int, str]] = []
         for t in slots[name]:
-            if (name, t) in off and solver.Value(off[name, t]):
+            if (name, t) in off and solver.value(off[name, t]):
                 continue
             letter = "A" if blended_at(setup, day, t) else next(c for c in "PCE" if (name, t, c) in x
-                                                                and solver.Value(x[name, t, c]))
+                                                                and solver.value(x[name, t, c]))
             if runs and runs[-1][1] == t and runs[-1][2] == letter:
                 runs[-1] = (runs[-1][0], t + QUARTER, letter)
             else:
                 runs.append((t, t + QUARTER, letter))
         out["blocks"][name] = runs
-    out["metrics"] = {"short": {c: sum(solver.Value(s) for s in items) * QUARTER / 60 for c, items in shorts.items()},
-                      "language_short": sum(solver.Value(s) for s in lang_short) * QUARTER / 60,
-                      "long": {n: sum(solver.Value(v) for v in vs) for n, vs in longs.items()
-                               if any(solver.Value(v) for v in vs)}}
+    out["metrics"] = {"short": {c: sum(solver.value(s) for s in items) * QUARTER / 60 for c, items in shorts.items()},
+                      "language_short": sum(solver.value(s) for s in lang_short) * QUARTER / 60,
+                      "long": {n: sum(solver.value(v) for v in vs) for n, vs in longs.items()
+                               if any(solver.value(v) for v in vs)}}
     return out
 
 
@@ -389,7 +418,7 @@ def _weights(order: List[str], strict: bool, worst: Dict[str, int]) -> Dict[str,
 
 
 def score_day(people: List[Dict[str, Any]], plan: Dict[str, Any], setup: Dict[str, Any], day: int,
-              rules: Dict[str, Any]) -> Dict[str, Any]:
+              rules: Dict[str, Any], before=None, horizon=None) -> Dict[str, Any]:
     """A plan recounted from its blocks and breaks alone: hours short per channel and per language minimum, email
     hours placed, channel changes mid-stretch, runs longer than a channel's maximum (per person), and every rule it
     breaks in plain words (``problems``)."""
@@ -423,7 +452,7 @@ def score_day(people: List[Dict[str, Any]], plan: Dict[str, Any], setup: Dict[st
             if (name, t) not in at:
                 problems.append(f"{name}: nothing planned at {hm(t)}.")
     cap = rules.get("max_concurrent") or 0
-    every = sorted({t for p in people for t in range(p["start"], p["end"], QUARTER)})
+    every = coverage_slots(people, before, horizon)
     for t in every:
         resting = sum(1 for p in people if at.get((p["name"], t)) == "B")
         if cap and resting > cap:
@@ -456,7 +485,7 @@ def score_day(people: List[Dict[str, Any]], plan: Dict[str, Any], setup: Dict[st
         for t in every:
             have = sum(1 for p in people if at.get((p["name"], t)) == c
                        or (at.get((p["name"], t)) == "A" and c in p["skills"]))
-            short[c] += max(0.0, round(need_at(setup, c, day, t)) - have) * QUARTER / 60
+            short[c] += max(0.0, round(need_at(setup, c, day, t)) - have - fixed_cover(before, c, t)) * QUARTER / 60
     language_short = 0.0
     for rule in setup["languages"]:
         if not rule["active"]:
@@ -466,12 +495,21 @@ def score_day(people: List[Dict[str, Any]], plan: Dict[str, Any], setup: Dict[st
                 have = sum(1 for p in people if rule["language"].casefold() in p["counts_for"]
                            and (at.get((p["name"], t)) == rule["channel"]
                                 or (at.get((p["name"], t)) == "A" and rule["channel"] in p["skills"])))
-                language_short += max(0, rule["minimum"] - have) * QUARTER / 60
+                language_short += max(0, rule["minimum"] - have - fixed_cover(before, rule["channel"], t, rule["language"])) * QUARTER / 60
     if setup["email_mode"] == "hours":
         target = setup["email_hours"][day]
         email = sum(1 for p in people for t in every if at.get((p["name"], t)) == "E"
                     and target["start"] <= t < target["end"]) * QUARTER / 60
     else:
         email = sum(1 for p in people for t in every if at.get((p["name"], t)) == "E") * QUARTER / 60
-    return {"short": short, "language_short": language_short, "email": email, "switches": switches,
+    email_short = 0.0
+    if setup["email_mode"] == "hours":
+        for lo, hi, targets in email_goals(setup, day):
+            for lang, want in targets:
+                have = sum(fixed_cover(before, "E", t, lang) + sum(
+                    1 for p in people if (lang is None or lang.casefold() in p["counts_for"])
+                    and (at.get((p["name"], t)) == "E" or (at.get((p["name"], t)) == "A" and "E" in p["skills"])))
+                    for t in every if lo <= t < hi)
+                email_short += max(0, want - have) * QUARTER / 60
+    return {"short": short, "language_short": language_short, "email": email, "email_short": email_short, "switches": switches,
             "long": long_runs, "problems": problems}

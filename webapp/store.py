@@ -9,6 +9,8 @@ from __future__ import annotations
 import json
 import sqlite3
 import time
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -368,6 +370,7 @@ def hash_password(password: str) -> str:
 class Store:
     def __init__(self, path: Path):
         self.path = Path(path)
+        self._connection = ContextVar(f"store-{id(self)}", default=None)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._db() as db:
             db.executescript(SCHEMA)
@@ -422,10 +425,33 @@ class Store:
                     if name not in have:
                         db.execute(f"alter table {table} add column {name} text not null default ''")
 
-    def _db(self) -> sqlite3.Connection:
+    @contextmanager
+    def _db(self):
+        current = self._connection.get()
+        if current is not None:
+            yield current
+            return
         db = sqlite3.connect(self.path, timeout=30)
         db.row_factory = sqlite3.Row
-        return db
+        try:
+            with db:
+                yield db
+        finally:
+            db.close()
+
+    @contextmanager
+    def transaction(self):
+        """All nested Store operations commit together, or all roll back."""
+        if self._connection.get() is not None:
+            yield
+            return
+        with self._db() as db:
+            db.execute("begin immediate")
+            token = self._connection.set(db)
+            try:
+                yield
+            finally:
+                self._connection.reset(token)
 
     # ------------------------------------------------------------------ users
     def add_user(self, username: str, display_name: str, password: str, is_admin: bool = False,

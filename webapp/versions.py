@@ -373,23 +373,29 @@ def apply_change(src: Path, dst: Path, name: str, day: str, value: str) -> None:
     wb.save(dst)
 
 
-def zoned_label(value: str, moved: int) -> str:
-    """Phase AK: a schedule cell ("08:00 - 17:00") read ``moved`` minutes later, said when it then starts the day
-    before or the next day; OFF, Leave and the like as they are."""
-    from .clock import moved_text
-    span = shift_span(value or "") if moved else None
+def zoned_label(value: str, moved: int, *, on=None, from_zone=None, to_zone=None) -> str:
+    """Read both dated endpoints in the selected zone; retain the original day column."""
+    from .clock import converted, dated_label, moved_text
+    span = shift_span(value or "")
     if not span:
         return value
+    if on is not None and from_zone and to_zone:
+        start = converted(on, span[0], from_zone, to_zone)
+        end = converted(on, span[1], from_zone, to_zone)
+        delta = (start.date() - on).days
+        return f"{dated_label(start)} - {dated_label(end)}" + (" (day before)" if delta < 0 else " (next day)" if delta > 0 else "")
     start = span[0] + moved
     return moved_text(value, moved) + (" (day before)" if start < 0 else " (next day)" if start >= 1440 else "")
 
 
-def zoned_copy(src: Path, dst: Path, moved: int) -> None:
-    """Phase AM: the workbook in another zone's clock, as the Schedules page shows it: every shift cell of the
-    schedule tabs as ``zoned_label`` reads it, and each break's shift and start ``moved`` minutes later."""
-    from datetime import time as clock_time
-    from .clock import moved_text
+def zoned_copy(src: Path, dst: Path, moved: int, *, on=None, from_zone=None, to_zone=None) -> None:
+    """A display copy. Convert each shift and break at its actual date, not the week's offset."""
+    from datetime import time as clock_time, timedelta
+    from .clock import converted, dated_label, moved_text
     wb = load_workbook(src)
+    dates = {day: on + timedelta(days=((i + 6) % 7 - on.weekday()) % 7)
+             for i, day in enumerate(DAYS)} if on is not None else {}
+    shifts = {}
     for tab in SCHEDULE_TABS:
         if tab not in wb.sheetnames:
             continue
@@ -399,20 +405,55 @@ def zoned_copy(src: Path, dst: Path, moved: int) -> None:
             for day in DAYS:
                 c = cols.get(_norm(day))
                 if c and isinstance(ws.cell(r, c).value, str):
-                    ws.cell(r, c).value = zoned_label(ws.cell(r, c).value, moved)
+                    value = ws.cell(r, c).value
+                    shifts[(_norm(ws.cell(r, _name_col(cols)).value), day)] = value
+                    ws.cell(r, c).value = zoned_label(value, moved, on=dates.get(day),
+                                                    from_zone=from_zone, to_zone=to_zone)
     for tab in BREAK_TABS:
         if tab not in wb.sheetnames:
             continue
         ws = wb[tab]
         row, cols = _header(ws, ("associate",))
-        for key in ("shift", "start"):
-            c = cols.get(key)
-            for r in range(row + 1, ws.max_row + 1) if c else ():
-                value = ws.cell(r, c).value
+        for r in range(row + 1, ws.max_row + 1):
+            day = str(ws.cell(r, cols["day"]).value or "").strip()[:3].title() if "day" in cols else ""
+            when = dates.get(day)
+            original = ws.cell(r, cols["shift"]).value if "shift" in cols else shifts.get(
+                (_norm(ws.cell(r, cols["associate"]).value), day), "")
+            span = shift_span(original)
+            for key in ("shift", "start"):
+                if key not in cols:
+                    continue
+                value = ws.cell(r, cols[key]).value
                 if isinstance(value, clock_time):
                     value = f"{value.hour:02d}:{value.minute:02d}"
-                if isinstance(value, str):
-                    ws.cell(r, c).value = moved_text(value, moved)
+                if not isinstance(value, str):
+                    continue
+                if when is not None and from_zone and to_zone:
+                    if key == "shift":
+                        value = zoned_label(value, moved, on=when, from_zone=from_zone, to_zone=to_zone)
+                    elif re.fullmatch(r"\d{1,2}:\d{2}", value.strip()):
+                        minute = _minutes(value.strip())
+                        if span and minute < span[0]:
+                            minute += 1440
+                        at = converted(when, minute, from_zone, to_zone)
+                        value = dated_label(at)
+                else:
+                    value = moved_text(value, moved)
+                ws.cell(r, cols[key]).value = value
+    if on is not None and from_zone and to_zone:
+        title = "Time zone notes"
+        if title in wb.sheetnames:
+            del wb[title]
+        ws = wb.create_sheet(title)
+        for row in [("Schedule and break times", to_zone), ("Original times", from_zone),
+                    ("Day columns", "Original shift date; shifted starts marked day before or next day"),
+                    ("Other sheets", "Demand, rules, channel plans and diagnostics retain the original timezone"),
+                    ("Repeated source times", "Conversion refused when the source hour occurs twice; no occurrence field"),
+                    ("Repeated destination times", "UTC offset identifies the occurrence in each converted clock label"),
+                    ("Use", "Display copy; use the original workbook for planning or validation")]:
+            ws.append(row)
+        ws.column_dimensions["A"].width = 30
+        ws.column_dimensions["B"].width = 100
     wb.save(dst)
 
 

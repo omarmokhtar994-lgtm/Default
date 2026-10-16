@@ -10,7 +10,8 @@ stops at start-up with ZoneInfoNotFoundError rather than show times an hour out.
 import re
 from contextlib import contextmanager
 from contextvars import ContextVar
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta, timezone
+from functools import lru_cache
 from typing import Iterator
 from zoneinfo import ZoneInfo
 
@@ -40,6 +41,62 @@ def offset(zone: str, on: date) -> int:
 def shift(on: date, from_zone: str, to_zone: str) -> int:
     """Minutes to add to a time of day in ``from_zone`` to read it in ``to_zone``, on the date ``on``."""
     return offset(to_zone, on) - offset(from_zone, on)
+
+
+def converted(on: date, minute: int, from_zone: str, to_zone: str) -> datetime:
+    """Convert an actual dated wall time, including overnight and DST transitions.
+
+    Workbooks have no occurrence field. Repeated and nonexistent source times
+    are refused rather than guessing which instant the author intended.
+    """
+    wall = datetime.combine(on, time()) + timedelta(minutes=minute)
+    source = wall.replace(tzinfo=ZoneInfo(pick_zone(from_zone)), fold=0)
+    back = source.astimezone(timezone.utc).astimezone(source.tzinfo)
+    if back.replace(tzinfo=None) != wall:
+        raise ValueError(f"{wall:%d %b %Y %H:%M} does not exist in {from_zone} because the clocks change.")
+    if source.utcoffset() != source.replace(fold=1).utcoffset():
+        raise ValueError(f"{wall:%d %b %Y %H:%M} occurs twice in {from_zone} because the clocks change. "
+                         "The workbook does not identify the occurrence; use the original-zone workbook.")
+    return source.astimezone(ZoneInfo(pick_zone(to_zone)))
+
+
+def dated_label(value: datetime) -> str:
+    """A converted clock label, including its offset when the hour repeats."""
+    text = value.strftime("%H:%M")
+    if value.replace(fold=0).utcoffset() != value.replace(fold=1).utcoffset():
+        offset_text = value.strftime("%z")
+        text += f" (UTC{offset_text[:3]}:{offset_text[3:]})"
+    return text
+
+
+@lru_cache(maxsize=512)
+def rta_shift(on: date, from_zone: str, to_zone: str):
+    """A constant RTA offset, or None when the wall-clock view cannot convert it.
+
+    RTA can include yesterday's shift and tomorrow's hours. Check that entire
+    source range, including both occurrences of a repeated hour. Its fixed
+    1,440-minute layout cannot represent a changing offset within that range.
+    """
+    if from_zone == to_zone:
+        return 0
+    source_zone = ZoneInfo(pick_zone(from_zone))
+    target_zone = ZoneInfo(pick_zone(to_zone))
+    offsets = set()
+    for minute in range(-1440, 2881, 60):
+        wall = datetime.combine(on, time()) + timedelta(minutes=minute)
+        for fold in (0, 1):
+            source = wall.replace(tzinfo=source_zone, fold=fold)
+            target = source.astimezone(timezone.utc).astimezone(target_zone)
+            offsets.add(int((target.utcoffset() - source.utcoffset()).total_seconds() // 60))
+            if len(offsets) > 1:
+                return None
+    return offsets.pop()
+
+
+def minute_now(on: date, zone: str, clock=None) -> int:
+    """Now in the schedule's wall-clock minutes from its anchor date."""
+    current = (clock or datetime.now(timezone.utc)).astimezone(ZoneInfo(pick_zone(zone)))
+    return (current.date() - on).days * 1440 + current.hour * 60 + current.minute
 
 
 def zone_label(zone: str, on: date) -> str:

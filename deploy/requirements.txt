@@ -2,6 +2,8 @@
 # Python packages for the server. The solver build is pinned: the runner's
 # runtime check (tools/runtime_environment_check.py) refuses any other.
 ortools==9.15.6755
+# AN followup: patched protobuf, within the pinned solver's >=6.33.1,<6.34 range.
+protobuf==6.33.6
 openpyxl>=3.1.2
 pandas>=2.2.0
 numpy>=1.26.0

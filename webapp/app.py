@@ -36,7 +36,7 @@ from .channel_people import ChannelPeople, can_work, channel_words
 from .channel_plan import NoPlan, plan_day, score_day
 from .channel_template import channel_workbook
 from .channels import check_lines, has_channel_needs, read_channels, requirement_tab
-from .clock import EGYPT, HOME, SHOWN, ZONES, moved_text, pick_zone, shift as zone_shift, shown, to_schedule, zone_label
+from .clock import minute_now, EGYPT, HOME, SHOWN, ZONES, moved_text, pick_zone, rta_shift, shift as zone_shift, shown, to_schedule, zone_label
 from .permissions import CATALOGUE as PERMISSIONS, ENDPOINTS as PERMISSION_ENDPOINTS, ROLE_NAMES, allowed, matrix
 from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, OVERTIME_MAX, STATUSES, channel_letters, BreakRefused, at_target, board, glance, hover_tips, my_day, now_panel, read_inputs, shift_groups, window_view
 from .coach import actual_shrinkage, corrected_tab
@@ -323,6 +323,19 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 g.error_hint = "Your account opens only the programs given to you. Ask an admin to add this one to your programs."
                 label = _unit_filter(key)  # a real program or LOB is named; words from a link are never repeated back
                 abort(403, description=f"{label if key in g.unit_labels else 'This program'} is not one of your programs")
+        # AN: an old cross-zone RTA form must not save through a clock change.
+        # Authentication, role/program permission and CSRF checks remain first.
+        if g.get("user") and request.method == "POST" and request.path.startswith("/day/"):
+            program = clean_program(request.form.get("program", ""))
+            on = _date(request.form.get("date", ""))
+            zone = request.form.get("tz", "")
+            if program and on and zone in dict(ZONES) and rta_shift(on, _own_zone(program, on), zone) is None:
+                message = "Clocks change in this RTA window. Reopen the day in the schedule's own time zone before editing."
+                if request.accept_mimetypes.best == "application/json":
+                    return jsonify(error=message), 400
+                flash(message)
+                return redirect(url_for("day_page", program=program, date=on.isoformat(),
+                                        tz=_own_zone(program, on)), code=303)
 
     def _can(key: str) -> bool:
         """Phase AK: whether the person signed in may do ``key`` (Roles), read once per request."""
@@ -429,10 +442,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return moved_text(text or "", SHOWN.get())
 
     @app.template_filter("zone_cell")
-    def _zone_cell(value: str, moved: int) -> str:
+    def _zone_cell(value: str, moved: int, on=None, from_zone=None, to_zone=None) -> str:
         """Phase AK: a schedule cell ("08:00 - 17:00") read ``moved`` minutes later, said when it then starts the day
         before or the next day; OFF, Leave and the like as they are."""
-        return zoned_label(value, moved)
+        try:
+            return zoned_label(value, moved, on=on, from_zone=from_zone, to_zone=to_zone)
+        except ValueError as exc:
+            return f"{value} (invalid source clock time: {exc})"
 
     @app.template_filter("num")
     def _num(value: float) -> str:
@@ -2146,9 +2162,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
         own = pick_zone(run.get("tz") or HOME)  # Phase AK: shown in the zone picked, the schedule's own to begin with
         g.zone = request.args["tz"] if request.args.get("tz") in dict(ZONES) else own
         first = date.fromisoformat(run["week_start"]) if start_date(run.get("week_start") or "") else datetime.now(EGYPT).date()
-        moved = zone_shift(first, own, g.zone)
+        moved = own != g.zone
+        zone_dates = {d: first + timedelta(days=((i + 6) % 7 - first.weekday()) % 7) for i, d in enumerate(DAYS)}
         return render_template("schedules.html", run=run, versions=versions, current=current, view=view,
-                               moved=moved, own_zone=own, own_name=dict(ZONES)[own],
+                               moved=moved, zone_dates=zone_dates, own_zone=own, own_name=dict(ZONES)[own],
                                counts=counts, may_set_in_use=bool(current) and _may_set_in_use(current),
                                days=DAYS, channel_lines=None if input_problem else _channel_lines(run_id),
                                channel_added=added, step=step, input_problem=input_problem,
@@ -2261,6 +2278,15 @@ def create_app(config: Dict[str, Any]) -> Flask:
             typed[name] = [_clock_of(request.form.get(f"at-{i}-{k}", ""), span)
                            for k in range(len(slots_for(rules, span[1] - span[0])))]
         return typed
+
+
+    def _channel_before(row, week, rules, draft, d, skills, language_rows):
+        previous = None
+        if d == 0 and start_date(row.get("week_start") or ""):
+            prior_on = date.fromisoformat(start_date(row["week_start"])) - timedelta(days=1)
+            prior, _ = _days().version(row["program"], prior_on)
+            previous = json.loads(prior["week"] or "{}") if prior else None
+        return channel_before(week, rules, draft, d, skills, language_rows, previous_week=previous)
 
     @app.route("/schedules/<int:schedule_id>/breaks", methods=["GET", "POST"])
     @login_required
@@ -2407,7 +2433,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 if action == "suggest":
                     found = plan_day(people, setup, rules, d, carry=channel_carry(week, rules, draft, d),
                                      move_breaks=request.form.get("move") == "1",
-                                     before=channel_before(week, rules, draft, d, skills))
+                                     before=_channel_before(row, week, rules, draft, d, skills, inputs["languages"]))
                     store.set_channel_draft(schedule_id, day, {"blocks": found["blocks"], "breaks": found["breaks"],
                                                                "moved": found["moved"], "note": found["note"]},
                                             g.user["id"])
@@ -2428,7 +2454,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                         try:
                             found = plan_day(theirs, setup, rules, o, carry=channel_carry(week, rules, draft, o),
                                              move_breaks=request.form.get("move") == "1",
-                                             before=channel_before(week, rules, draft, o, skills))
+                                             before=_channel_before(row, week, rules, draft, o, skills, inputs["languages"]))
                         except NoPlan as exc:
                             refused.append(f"{FULL_DAYS[other]}: {exc}")
                             continue
@@ -2500,13 +2526,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
             except ValueError as exc:  # NoPlan is a ValueError
                 flash(str(exc))
             return redirect(url_for("plan_channels", schedule_id=schedule_id, day=day), code=303)
-        score = score_day(people, plan, setup, d, rules) if planned_anything(plan) else None
+        score = score_day(people, plan, setup, d, rules, before=_channel_before(row, week, rules, draft, d, skills, inputs["languages"]))
         target = setup["email_hours"][d]["hours"] if setup["email_mode"] == "hours" else None
         run = store.get_run(row["run_id"]) or {}
         return render_template("channels.html", row=row, run=run, day=day, days=DAYS, full=FULL_DAYS, setup=setup,
                                grid=channel_grid(people, plan), people=people, score=score, target=target,
-                               cover=channel_coverage(people, plan, setup, d, inputs["interval"]),
-                               plan=plan, drafted=sorted(draft, key=DAYS.index), names=CHANNEL_NAMES,
+                               cover=channel_coverage(people, plan, setup, d, inputs["interval"], before=_channel_before(row, week, rules, draft, d, skills, inputs["languages"])),
+                               plan=plan, planned=planned_anything(plan), drafted=sorted(draft, key=DAYS.index), names=CHANNEL_NAMES,
                                stale=[] if day in draft else stale_blocks(week, d),
                                may_set_in_use=_may_set_in_use(row), hm=hm,
                                fair=fairness(week, rules, draft, skills, inputs["languages"], d))
@@ -2585,17 +2611,22 @@ def create_app(config: Dict[str, Any]) -> Flask:
         own = pick_zone((_book().store.get_run(row["run_id"]) or {}).get("tz") or HOME)
         tz = request.args.get("tz", "")
         first = start_date(row["week_start"] or "")
-        moved = zone_shift(date.fromisoformat(first), own, tz) if tz in dict(ZONES) and tz != own and first else 0
-        if moved:
+        convert = tz in dict(ZONES) and tz != own and bool(first)
+        if convert:
             stem = secure_filename(f"{stem}_{dict(ZONES)[tz].split(' (')[0]} time") or stem
         _record("downloaded", program=row["program"], week_start=row["week_start"], run_id=row["run_id"],
                 schedule_id=schedule_id, subject=f"{stem}.xlsx")
-        if moved:
+        if convert:
             source = book.path(schedule_id) if row["kind"] != "edited" else with_notes(book.path(schedule_id),
                                                                                        book.view(schedule_id))
-            out = Path(tempfile.mkdtemp()) / "zoned.xlsx"
-            zoned_copy(source, out, moved)
-            return send_file(io.BytesIO(out.read_bytes()), as_attachment=True, download_name=f"{stem}.xlsx",
+            try:
+                with tempfile.TemporaryDirectory() as tmp:
+                    out = Path(tmp) / "zoned.xlsx"
+                    zoned_copy(source, out, 0, on=date.fromisoformat(first), from_zone=own, to_zone=tz)
+                    data = out.read_bytes()
+            except ValueError as exc:
+                return render_template("error.html", code=400, message=str(exc)), 400
+            return send_file(io.BytesIO(data), as_attachment=True, download_name=f"{stem}.xlsx",
                              mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         if row["kind"] != "edited":
             return send_file(book.path(schedule_id), as_attachment=True, download_name=f"{stem}.xlsx")
@@ -2768,8 +2799,14 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if not program and programs:
             program = next((p for p in programs if days.version(p, on)[0]), programs[0])
         own_zone = _own_zone(program, on)
-        g.zone, start_at = _rta_choice(program, lambda zone: zone_shift(on, own_zone, zone))
-        moved = zone_shift(on, own_zone, g.zone)
+        g.zone, start_at = _rta_choice(program, lambda zone: rta_shift(on, own_zone, zone) or 0)
+        moved = rta_shift(on, own_zone, g.zone)
+        g.rta_clock_notice = ""
+        if moved is None:
+            g.zone, moved = own_zone, 0
+            g.rta_clock_notice = ("Clocks change in this window. Times and edits are shown in the schedule's own "
+                                  "time zone. This schedule records wall-clock times and does not distinguish "
+                                  "the two occurrences of a repeated hour.")
         with shown(moved):
             return _day_body(days, programs, on, program, own_zone, moved, start_at)
 
@@ -2799,7 +2836,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 found = window_view({d: (x or {}).get("view") for d, x in sources.items()}, start, on)
                 page = dict(page, view=found, target=at_target(found["cells"], page["target"]["target"]))
         window = bool(page and "start" in page["view"])
-        clock_now = datetime.now(EGYPT)
+        clock_now = datetime.now(ZoneInfo(own_zone))
         now_at = (clock_now.date() - on).days * 1440 + clock_now.hour * 60 + clock_now.minute  # from on's midnight
 
         def source(t: int):  # type: ignore[no-untyped-def]
@@ -2829,7 +2866,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                                          to_schedule(finder["to"], moved), finder["billable"], measure)
                 except ValueError as exc:
                     finder["error"] = str(exc)
-        clock_now = datetime.now(EGYPT)
+        clock_now = datetime.now(ZoneInfo(own_zone))
         from_now = clock_now.hour * 60 + clock_now.minute if clock_now.date() == on else 0
         shift_view: Dict[str, Any] = {"shift_groups": [], "shift": "", "shift_names": None}
         if page and tab == "timeline":  # the Timeline by shift start (Phase W)
@@ -2859,7 +2896,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if page and tab == "channels" and request.args.get("fix") == "1" and allowed(app.extensions["store"], g.user,
                                                                                     "rta_change"):
             try:
-                chfix = days.channel_fix_plan(program, on, now=_window_now(on, 0))
+                chfix = days.channel_fix_plan(program, on, now=minute_now(on, own_zone, datetime.now(EGYPT)))
             except ValueError as exc:
                 chfix = {"error": str(exc)}
         cover_panel = None
@@ -3020,7 +3057,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
 
         items: List[Dict[str, str]] = []
         manager = allowed(app.extensions["store"], g.user, "setup")
+        can_rta = allowed(app.extensions["store"], g.user, "rta_view")
         for label, endpoint, needs in GOTO_PAGES:
+            permission = PERMISSION_ENDPOINTS.get(endpoint)
+            if permission and not allowed(app.extensions["store"], g.user, permission):
+                continue
             if (needs == "unit" and not program) or (needs == "manager" and not manager) or \
                     (needs == "admin" and not g.user["is_admin"]) or not hit(label):
                 continue
@@ -3031,8 +3072,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                           "url": url_for(endpoint, **args)})
         units = sorted(k for k in unit_keys(app.extensions["store"]) if _access().can_open(k))
         items += [{"group": "Programs", "label": _unit_name(k), "note": "RTA", "url": url_for("day_page", program=k)}
-                  for k in units if words and (hit(k) or hit(_unit_name(k)))][:GOTO_MAX]
-        if program and words:
+                  for k in units if can_rta and words and (hit(k) or hit(_unit_name(k)))][:GOTO_MAX]
+        if can_rta and program and words:
             found = []
             for name, cell in _days().roster(program, on):
                 if not hit(name):
@@ -3321,20 +3362,23 @@ def create_app(config: Dict[str, Any]) -> Flask:
             return _refused(exc, *_posted_day())
         return jsonify(ok=True)
 
-    def _minute_now(on: Optional[date]) -> Optional[int]:
-        """Minutes past midnight now, Egypt time, when ``on`` is today; None for any other day."""
-        clock_now = datetime.now(EGYPT)
-        return clock_now.hour * 60 + clock_now.minute if clock_now.date() == on else None
+    def _minute_now(on: Optional[date], program=None) -> Optional[int]:
+        """Now in the schedule timezone when ``on`` is today; None for another date."""
+        if on is None:
+            return None
+        program = program or clean_program(request.values.get("program", ""))
+        at = minute_now(on, _own_zone(program, on), datetime.now(EGYPT))
+        return at if 0 <= at < 1440 else None
 
     MINUTE = re.compile(r"^-?\d{1,4}$")  # a minute of the page's 24 hours (Phase AI: before 0 too)
 
-    def _window_now(on: Optional[date], start: int) -> Optional[int]:
+    def _window_now(on: Optional[date], start: int, program=None) -> Optional[int]:
         """Phase AK: now as a minute from ``on``'s midnight when it falls in the 24 hours from ``start``, else None
         (from 0, as ``_minute_now``)."""
         if on is None:
             return None
-        clock_now = datetime.now(EGYPT)
-        at = (clock_now.date() - on).days * 1440 + clock_now.hour * 60 + clock_now.minute
+        program = program or clean_program(request.values.get("program", ""))
+        at = minute_now(on, _own_zone(program, on), datetime.now(EGYPT))
         return at if start <= at < start + 1440 else None
 
     def _form_start() -> int:
@@ -3418,10 +3462,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 changes.append((name, int(lo), int(hi), letter))
             if not changes:
                 raise ValueError("No changes to keep.")
-            done = _days().apply_channel_fix(program, on, changes, g.user["id"], now=_window_now(on, 0))
+            done = _days().apply_channel_fix(program, on, changes, g.user["id"], now=minute_now(on, _own_zone(program, on), datetime.now(EGYPT)))
             flash(f"Fix channels changed {done} stretch{'es' if done != 1 else ''}. Undo takes them all back.")
         except ValueError as exc:
-            _say(f"Stopped: {exc} Anything changed before it was kept, and Undo takes it all back.", program, on)
+            _say(f"No changes were saved: {exc}", program, on)
         return _back_to_day(program, on, "channels")
 
     @app.route("/day/handover")

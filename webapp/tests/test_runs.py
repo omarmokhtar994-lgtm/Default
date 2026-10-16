@@ -84,6 +84,8 @@ class UploadAndCheck(unittest.TestCase):
                       if page.status_code == 302 else page.get_data(as_text=True))
         self.assertEqual(store.list_runs(), [])
         big = upload(client, data=b"x" * (26 * 1024 * 1024))
+        # AN followup: the test client owns the temporary multipart input stream.
+        self.addCleanup(big.request.environ["wsgi.input"].close)
         self.assertEqual(big.status_code, 413)
 
     def test_check_rejection_is_shown_with_its_message(self):
@@ -105,11 +107,12 @@ class RunningAndResults(unittest.TestCase):
         run = wait(store, run_id)
         self.assertEqual((run["status"], run["exit_code"]), ("DONE", 0))
         self.assertIn("RELEASABLE", run["verdict"])
-        download = client.get(f"/runs/{run_id}/download")
+        # AN followup: exhaust downloaded files so their response iterators close.
+        download = client.get(f"/runs/{run_id}/download", buffered=True)
         self.assertEqual(download.status_code, 200)
         names = zipfile.ZipFile(io.BytesIO(download.data)).namelist()
         self.assertTrue(any(n.endswith("_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx") for n in names), names)
-        schedule = client.get(f"/runs/{run_id}/schedule")
+        schedule = client.get(f"/runs/{run_id}/schedule", buffered=True)
         self.assertEqual((schedule.status_code, schedule.data), (200, b"schedule"))
 
     def test_review_required_verdict_is_never_shown_as_approved(self):
@@ -124,7 +127,8 @@ class RunningAndResults(unittest.TestCase):
         self.assertIn("Needs review", page)
         self.assertNotIn(">Approved<", page)
         self.assertIn("REVIEW_REQUIRED", page)
-        self.assertEqual(client.get(f"/runs/{run_id}/schedule").status_code, 200)
+        # AN followup: close the streamed workbook as well as checking its status.
+        self.assertEqual(client.get(f"/runs/{run_id}/schedule", buffered=True).status_code, 200)
         self.assertIn("Needs review", client.get("/").get_data(as_text=True))
 
     def test_readiness_check_says_ready_not_approved(self):
@@ -612,7 +616,8 @@ class TheEngineOutcome(unittest.TestCase):
         self.assertIn("Sun 03:00: Nobody on the floor after breaks, needs 1, short by 1", body)
         self.assertIn("Download the shortfall schedule (for review)", body)
         self.assertNotIn(">Download the schedule<", body)
-        got = client.get(f"/runs/{run_id}/shortfall")
+        # AN followup: consume and close the streamed shortfall workbook.
+        got = client.get(f"/runs/{run_id}/shortfall", buffered=True)
         self.assertEqual(got.data, b"shortfall")
 
     def test_crash_without_outcome_keeps_resume(self):
@@ -758,7 +763,8 @@ class TheCleanWorkbooks(unittest.TestCase):
         home = client.get("/").get_data(as_text=True)
         for name in ("Scheduler_Input_Blank.xlsx", "Scheduler_Input_Example.xlsx"):
             self.assertIn(f'href="/workbooks/{name}"', home)
-            got = client.get(f"/workbooks/{name}")
+            # AN followup: close each workbook response before the next download.
+            got = client.get(f"/workbooks/{name}", buffered=True)
             self.assertEqual((got.status_code, got.data[:2]), (200, b"PK"), name)
             self.assertIn("attachment", got.headers["Content-Disposition"])
         for bad in ("other.xlsx", "..%2Fapp.py", "Scheduler_Input_Blank.xlsx.bak"):
@@ -930,10 +936,11 @@ class TheSchedulesPage(unittest.TestCase):
         self.assertEqual(self.app.extensions["schedules"].in_use("AE/AR B2B", "2026-10-11")["id"], self.tool)
 
     def test_download_a_version(self):
-        tool = self.client.get(f"/schedules/{self.tool}/download")
+        # AN followup: exhaust both streamed workbooks to release their file handles.
+        tool = self.client.get(f"/schedules/{self.tool}/download", buffered=True)
         self.assertEqual((tool.status_code, tool.data[:2]), (200, b"PK"))
         draft = self.app.extensions["schedules"].change(self.tool, 1, "Associate 002", "Sun", "OFF", "leave")
-        got = self.client.get(f"/schedules/{draft}/download")
+        got = self.client.get(f"/schedules/{draft}/download", buffered=True)
         from openpyxl import load_workbook
         book = load_workbook(io.BytesIO(got.data))
         self.assertEqual(book.sheetnames[0], "Version Notes")
@@ -1427,7 +1434,8 @@ class TheRecord(unittest.TestCase):
         client = client_for(app)
         run_id = run_id_of(upload(client))
         wait(store, run_id)
-        self.assertEqual(client.get(f"/runs/{run_id}/download").status_code, 200)
+        # AN followup: close the download response after recording the access event.
+        self.assertEqual(client.get(f"/runs/{run_id}/download", buffered=True).status_code, 200)
         kind, by, subject = self.events(store)[-1]
         self.assertEqual((kind, by), ("downloaded", "Sara"))
         self.assertTrue(subject.endswith(".zip"))

@@ -38,7 +38,8 @@ class TheDownload(ots._Overtime):
 
     def get(self, tz=""):
         _, v = self.version()
-        return self.client.get(f"/schedules/{v['id']}/download" + (f"?tz={tz}" if tz else ""))
+        # AN followup: consume the download and close its file before fixture cleanup.
+        return self.client.get(f"/schedules/{v['id']}/download" + (f"?tz={tz}" if tz else ""), buffered=True)
 
     def test_the_link_carries_the_zone(self):
         run, v = self.version()

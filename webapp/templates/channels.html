@@ -13,8 +13,8 @@
 <section class="panel cp-facts" aria-labelledby="cp-facts-h">
   <h2 id="cp-facts-h">{{ full[day] }}{% if day in drafted %} <small class="dim">unsaved</small>{% endif %}</h2>
   {% if not people %}<p class="empty">Nobody works on {{ full[day] }} in this schedule. Pick another day.</p>
-  {% elif not score %}<p class="empty">Not planned yet: Suggest the day, or set blocks by hand.</p>
-  {% else %}
+  {% elif not planned %}<p class="empty">Not planned yet: Suggest the day, or set blocks by hand.</p>{% endif %}
+  {% if score %}
   <p class="cp-sum">{% for c, h in score.short.items() %}<span><b>{{ '%g'|format(h) }} h</b> short on {{ names[c] }}</span>{% endfor %}{% if target is not none %}<span><b>{{ '%g'|format(score.email) }} h</b> of Email placed, {{ '%g'|format(target) }} h needed</span>{% endif %}<span><b>{{ score.switches }}</b> channel change{{ 's' if score.switches != 1 }} mid-stretch</span></p>
   <p class="note">{% if score.language_short %}{{ '%g'|format(score.language_short) }} h below a language minimum.{% elif setup.languages %}Every language minimum is met.{% endif %}{% for name, n in score.long.items() %} {{ name }} has {{ n }} stretch{{ 'es' if n != 1 }} longer than a channel's maximum (said, not hidden: they cannot always follow it).{% endfor %}</p>
   {% endif %}
@@ -26,7 +26,6 @@
     <ul class="log">{% for p in score.problems[:60] %}<li>{{ p }}</li>{% endfor %}</ul></details>{% endif %}
 </section>
 
-{% if people %}
 {% if cover %}<section class="panel" aria-labelledby="cp-cov-h">
   <h2 id="cp-cov-h">Coverage</h2>
   <p class="note">People on each channel per interval against the channel tab's need; each language row is its lowest point in the interval against its minimum.</p>
@@ -36,6 +35,7 @@
   </table></div>
 </section>{% endif %}
 
+{% if people %}
 <section class="panel" aria-labelledby="cp-grid-h">
   <h2 id="cp-grid-h">Who is on what</h2>
   <p class="note">One box per stretch. The letters after a name are the channels the person works. Click a box to fill in the change below.</p>

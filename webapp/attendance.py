@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
-from .clock import SHOWN
+from .clock import HOME, SHOWN, minute_now, pick_zone
 from .day import (ABSENT, AUX, CALLED_IN, CANCELLED, EXTRA_BREAKS, LATE_EARLY, MEASURES, OVERTIME_MAX, STATUSES, STEP, TIMED,
                   BreakRefused, _busy, advice, at_target,
                   check_break, day_view, dayoff_offers, dayoff_proposals, meeting_slots, overtime_offers, pattern_breaks, planned,
@@ -687,11 +687,14 @@ class DayBook:
                 moves.setdefault((offset, r["associate"]), []).append(
                     {"id": r["id"], "start": r["start"] + 1440 * offset, "end": r["end_min"] + 1440 * offset,
                      "channel": r["channel"]})
-        clock = datetime.now(EGYPT)
-        after = clock.hour * 60 + clock.minute if on == clock.date() else (0 if on > clock.date() else 1440)
+        row, _ = self.version(program, on)
+        run = self.store.get_run(row["run_id"]) if row else None
+        zone = pick_zone((run or {}).get("tz") or HOME)
+        at = minute_now(on, zone, datetime.now(EGYPT))
+        after = max(0, min(at, 1440))
         return {"setup": setup, "skills": ChannelPeople(self.store).skills_for_unit(program),
                 "language_rows": inputs["languages"], "blocks": blocks, "moves": moves, "after": after,
-                "gaps": (inputs.get("gap_min"), inputs.get("gap_max")), "today": on == clock.date()}, ""
+                "gaps": (inputs.get("gap_min"), inputs.get("gap_max")), "today": 0 <= at < 1440}, ""
 
     @journaled
     def channel_move(self, program: str, on: date, name: str, start: Any, end: Any, channel: str,
@@ -771,7 +774,7 @@ class DayBook:
         on before and after (``short_before``, ``short_after``), ``from`` and ``seconds``."""
         from .channel_people import can_work
         from .channel_plan import NoPlan, counts_for, need_at, plan_day
-        from .channels import QUARTER, blended_at, inside
+        from .channels import QUARTER, blended_at, inside as channel_inside
         page = self.page(program, on)
         if page is None:
             raise ValueError(f"No schedule for {program} on {on:%d %b}.")
@@ -783,7 +786,9 @@ class DayBook:
         hold = ch_view["hold"]
         setup = dict(hold.setup, rules=dict(hold.setup["rules"], fair=True))  # fairness between equal plans
         skills, rows, d = hold.ch["skills"], hold.ch["language_rows"], day_index(on)
-        now = hold.ch["after"] if now is None else now
+        if now is None:
+            run = self.store.get_run(page["version"]["run_id"]) or {}
+            now = minute_now(on, pick_zone(run.get("tz") or HOME), datetime.now(EGYPT))
         if now >= 1440 and not any(s["end"] > now for l in view["lanes"] for s in l["segments"] if s["offset"] == 0):
             raise ValueError("This day is over: nothing is left to fix.")
         first = -(-max(now + 1, 0) // QUARTER) * QUARTER
@@ -795,12 +800,17 @@ class DayBook:
         people, carry_in, before = [], {}, {}
         for lane in view["lanes"]:
             for seg in lane["segments"]:
+                if seg["status"] in ABSENT:
+                    continue
                 if seg["offset"] == -1:  # last night's people: held, and counted on the channels they are on
                     for t in range(first, seg["end"], QUARTER):
                         c = letter(lane["name"], t)
-                        if c in ("P", "C", "E"):
-                            before.setdefault(c, {}).setdefault(t, 0)
-                            before[c][t] += 1
+                        channels = can_work(skills, lane["name"]) if c == "A" else c if c in "PCE" else ""
+                        languages = counts_for(lane.get("language", ""), rows)
+                        for channel in channels:
+                            for key in [channel] + [f"{channel}:{lang}" for lang in languages]:
+                                before.setdefault(key, {}).setdefault(t, 0)
+                                before[key][t] += 1
                     continue
                 if seg["offset"] != 0 or seg["status"] in ABSENT:
                     continue
@@ -825,6 +835,17 @@ class DayBook:
                     carry_in[lane["name"]] = was
         if not people:
             return {"changes": [], "short_before": {}, "short_after": {}, "from": first, "seconds": 0.0}
+        # Outside cover stays fixed, just like the prior night's shifts.
+        for cover in view.get("outside", []):
+            channel = cover.get("channel")
+            if channel not in ("P", "C", "E"):
+                continue
+            languages = counts_for(cover.get("language", ""), rows) if cover.get("language") else set()
+            lo = -(-max(first, cover["start"]) // QUARTER) * QUARTER
+            for t in range(lo, cover["end"] - QUARTER + 1, QUARTER):
+                for key in [channel] + [f"{channel}:{lang}" for lang in languages]:
+                    before.setdefault(key, {}).setdefault(t, 0)
+                    before[key][t] += 1
         week = page["week"]
         carry: Dict[str, Dict[str, int]] = {}
         for e in range(d):  # the week so far, from the schedule (fair spread)
@@ -841,7 +862,8 @@ class DayBook:
         try:
             found = plan_day(people, setup, {}, d, carry=carry, move_breaks=False, before=before, carry_in=carry_in,
                              keep={(p["name"], t): letter(p["name"], t) for p in people
-                                   for t in range(p["start"], p["end"], QUARTER)})
+                                   for t in range(p["start"], p["end"], QUARTER)},
+                             horizon=(first, max(p["end"] for p in people)))
         except NoPlan as exc:
             raise ValueError(f"The channels cannot be re-planned now: {exc}") from exc
         new = {(p["name"], t): c for p in people for a, b, c in found["blocks"].get(p["name"], [])
@@ -866,8 +888,9 @@ class DayBook:
                     continue
                 lang = rule["language"].casefold()
                 for t in range(first, max(p["end"] for p in people), QUARTER):
-                    if inside(rule["days"], rule["start"], rule["end"], (d + t // 1440) % 7, t % 1440):
-                        have = sum(1 for p in people if p["start"] <= t < p["end"] and lang in p["counts_for"]
+                    if channel_inside(rule["days"], rule["start"], rule["end"], (d + t // 1440) % 7, t % 1440):
+                        have = before.get(f"{rule['channel']}:{lang}", {}).get(t, 0) + sum(
+                            1 for p in people if p["start"] <= t < p["end"] and lang in p["counts_for"]
                                    and (read(p, t) == rule["channel"]
                                         or (read(p, t) == "A" and rule["channel"] in p["skills"])))
                         missing += max(rule["minimum"] - have, 0)
@@ -890,19 +913,22 @@ class DayBook:
 
     def apply_channel_fix(self, program: str, on: date, changes: List[Tuple[str, int, int, str]], user_id: int,
                           now: Optional[int] = None) -> int:
-        """Keep the approved Fix channels changes as one bulk change (one step for Undo), each checked again as a
-        channel change is. A change that starts at or before ``now`` (today) is refused: the preview is old."""
-        done = 0
-        with self.action(program, on, user_id, bulk=True) as act:
-            try:
-                for name, lo, hi, channel in changes:
-                    if now is not None and lo <= now:
-                        raise ValueError(f"{hm(lo)} has passed: open Fix channels again.")
+        """Validate today's complete batch and commit it atomically as one Undo step."""
+        prepared = []
+        # Match other day edits' lock order: day lock first, then SQLite. The
+        # action below re-enters this same RLock while using the shared transaction.
+        with self._lock(program, on), self.store.transaction():
+            for name, lo, hi, channel in changes:
+                if now is not None and lo <= now:
+                    raise ValueError(f"{hm(lo)} has passed: open Fix channels again.")
+                self._channel_change(program, on, name, lo, hi, channel)
+                prepared.append((name, lo, hi, channel))
+            with self.action(program, on, user_id, bulk=True) as act:
+                for name, lo, hi, channel in prepared:
                     self.channel_move(program, on, name, lo, hi, channel, user_id)
-                    done += 1
-            finally:
+                done = len(prepared)
                 act.label = f"Fix channels changed {done} stretch{'es' if done != 1 else ''}"
-        return done
+        return len(prepared)
 
     @journaled
     def cancel_channel_move(self, program: str, on: date, move_id: int, user_id: int) -> None:

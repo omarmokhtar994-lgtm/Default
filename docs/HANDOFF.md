@@ -2,7 +2,7 @@
 
 © 2026 Omar Mokhtar. All rights reserved.
 
-Written Thu 15 Oct 2026, 13:11 Egypt time, at the end of Phase AI; brought up to date at 18:30, end of Phase AJ, at 23:00, end of Phase AK, on Fri 16 Oct, 00:10, end of Phase AL, and at 03:05, end of Phase AM. A new chat reads `CLAUDE.md` (it loads by itself)
+Written Thu 15 Oct 2026, 13:11 Egypt time, at the end of Phase AI; brought up to date at 18:30, end of Phase AJ, at 23:00, end of Phase AK, on Fri 16 Oct, 00:10, end of Phase AL, at 03:05, end of Phase AM, and on Fri 16 Oct, about 21:30, end of Phase AN. A new chat reads `CLAUDE.md` (it loads by itself)
 and then this file. Together they hold the rules, the owner's ways of working, where the work stands and how to
 check it. What they cannot hold is the chat itself: when something here is not enough, the record is in git
 (`git log`), the plans (`docs/superpowers/plans/`) and each phase's evidence (`evidence/phase_*/`).
@@ -89,7 +89,25 @@ Load each with the Skill tool at the step it covers; following it from memory do
 6. Package, split into parts, send them, and report in caveman style: what changed, rulings with their cost, what
    is known and left, Egypt times, screens.
 
-## Where things stand (end of Phase AM)
+## Where things stand (end of Phase AN)
+
+- Phase AN is complete and pushed (branch `ccr-90ec94cc-a37tqk`). It brings in ChatGPT's reviewed work, checked by
+  Claude over three rounds, with the owner's decisions A yes, B Fix channels as in AM, C short manual blocks warn,
+  D no draft lock (`evidence/phase_an/REQUESTS.md`, plan `docs/superpowers/plans/2026-10-16-phase-an-build.md`):
+  - times in another zone convert on each day's own clock rules; a repeated or missing source hour is refused;
+  - the RTA reads "now" in the schedule's zone and falls back to it on a clock-change night;
+  - Plan channels counts demand with no staff, overnight and outside cover; Sunday uses the week before;
+  - channel solves run in a child process (`webapp/channel_solver.py`);
+  - Fix channels applies all or nothing; Go-to search follows permissions.
+- Not taken from ChatGPT: the rewrite of the gate's `tests_staged/test_rc9_2_19_joint_solve_isolation.py` (its sandbox
+  had a different `/proc`) and its `/proc` helper. Gate tests are not edited to suit a sandbox.
+- Package `RC9_2_2_PRODUCTION_PACKAGE.zip`, 2744 files, 93.70 MB, sha256
+  `c656f55950604befad3d4c859395210df8753804d5b4b362193ba3e4d04c20ad`, sent as AN_part_0 to AN_part_3. It contains AK
+  to AM too. Installing it is the owner's step.
+- Expected on Phase AN: suite halves 595 (1 skipped) and 658 OK; browser tests 77 OK; GATE PASS with 1537 tests
+  (2 skipped); page review 0 problems; sweep 0 exceptions and 0 server errors.
+
+## Earlier: end of Phase AM
 
 - Phase AM is complete and pushed (branch `ccr-90ec94cc-a37tqk`):
   - Fix channels on the RTA's Channels tab (`DayBook.channel_fix_plan` / `apply_channel_fix`; `plan_day` gained
@@ -281,3 +299,4 @@ read the real clock break when their date passes, so stop the clock with `mock.p
 - AK: channel colours D, Times in on a schedule, RTA tools on the day's 24 hours, team managers, Roles.
 - AL: Email deep green, the engine's more consistent schedule as a version, a channel fairness view.
 - AM: Fix channels on the RTA, download in the zone picked, a Version pick on Weeks, percentages for before-breaks runs.
+- AN: ChatGPT's reviewed fixes: time-zone dates and clock-change safety, channel coverage, solver in a child process, Go-to permissions.

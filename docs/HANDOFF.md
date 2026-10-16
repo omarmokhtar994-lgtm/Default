@@ -2,7 +2,7 @@
 
 © 2026 Omar Mokhtar. All rights reserved.
 
-Written Thu 15 Oct 2026, 13:11 Egypt time, at the end of Phase AI; brought up to date at 18:30, end of Phase AJ, at 23:00, end of Phase AK, and on Fri 16 Oct, 00:10, end of Phase AL. A new chat reads `CLAUDE.md` (it loads by itself)
+Written Thu 15 Oct 2026, 13:11 Egypt time, at the end of Phase AI; brought up to date at 18:30, end of Phase AJ, at 23:00, end of Phase AK, on Fri 16 Oct, 00:10, end of Phase AL, and at 03:05, end of Phase AM. A new chat reads `CLAUDE.md` (it loads by itself)
 and then this file. Together they hold the rules, the owner's ways of working, where the work stands and how to
 check it. What they cannot hold is the chat itself: when something here is not enough, the record is in git
 (`git log`), the plans (`docs/superpowers/plans/`) and each phase's evidence (`evidence/phase_*/`).
@@ -89,7 +89,30 @@ Load each with the Skill tool at the step it covers; following it from memory do
 6. Package, split into parts, send them, and report in caveman style: what changed, rulings with their cost, what
    is known and left, Egypt times, screens.
 
-## Where things stand (end of Phase AL)
+## Where things stand (end of Phase AM)
+
+- Phase AM is complete and pushed (branch `ccr-90ec94cc-a37tqk`):
+  - Fix channels on the RTA's Channels tab (`DayBook.channel_fix_plan` / `apply_channel_fix`; `plan_day` gained
+    `carry_in` and `keep`).
+  - Download in the zone picked (`versions.zoned_copy`).
+  - A Version pick on Weeks (`DayBook.page(version_id=)`).
+  - Home and the run page read the version in use, else the engine's figures, else the version shown
+    (`_run_figures`).
+  - A finished run's outcome is stamped before its status.
+  - Requests and answers: `evidence/phase_am/REQUESTS.md`; checks: `evidence/phase_am/CHECKS.md`; plan and rulings:
+    `docs/superpowers/plans/2026-10-16-phase-am-build.md`.
+- Package `RC9_2_2_PRODUCTION_PACKAGE.zip`, 2729 files, 93.66 MB, sha256
+  `0aabe9d44f8003b92ebed8073bbe08d0e421cc9d17d2fdf7123f68435c4d0a79`, sent as AM_part_0 to AM_part_3.
+  - It contains AK and AL.
+  - Installing it is the owner's step.
+- Check tools: `evidence/phase_am/tools/` (`am_screens.py` and `am_audit.py` stop the clock with
+  `mock.patch("webapp.app.datetime", _Clock)`).
+- Expected on Phase AM:
+  - Suite halves: 624 and 559 tests OK (1 skipped). Browser tests: 77 OK.
+  - GATE PASS with 1537 tests (2 skipped).
+  - Page review: 0 problems. Sweep: 0 exceptions and 0 server errors.
+
+## Earlier: end of Phase AL
 
 - Phase AL is complete and pushed (branch `ccr-90ec94cc-a37tqk`): Email deep green `#2F7D5B` with a white E; the
   engine's MORE_CONSISTENT_CANDIDATE kept as "Tool, more consistent" (offered, never set in use by itself; finished
@@ -257,3 +280,4 @@ read the real clock break when their date passes, so stop the clock with `mock.p
 - AJ: overtime up to 4 hours, cover from outside the roster, channel colours after midnight.
 - AK: channel colours D, Times in on a schedule, RTA tools on the day's 24 hours, team managers, Roles.
 - AL: Email deep green, the engine's more consistent schedule as a version, a channel fairness view.
+- AM: Fix channels on the RTA, download in the zone picked, a Version pick on Weeks, percentages for before-breaks runs.

@@ -101,10 +101,13 @@ Load each with the Skill tool at the step it covers; following it from memory do
   - Fix channels applies all or nothing; Go-to search follows permissions.
 - Not taken from ChatGPT: the rewrite of the gate's `tests_staged/test_rc9_2_19_joint_solve_isolation.py` (its sandbox
   had a different `/proc`) and its `/proc` helper. Gate tests are not edited to suit a sandbox.
-- Package `RC9_2_2_PRODUCTION_PACKAGE.zip`, 2744 files, 93.70 MB, sha256
-  `c656f55950604befad3d4c859395210df8753804d5b4b362193ba3e4d04c20ad`, sent as AN_part_0 to AN_part_3. It contains AK
+- The first AN package (sha256 `c656f559...`) gave a 500 on Home on the owner's server: a schedule whose "Next Sunday"
+  finding held only steps between quarter hours (no `interval`) crashed `results._finding`. It was an AM bug (Home
+  reads the schedule's own checks since AM) met first on real data. Fixed in c9671ba (`test_an_next_sunday`).
+- Package `RC9_2_2_PRODUCTION_PACKAGE.zip`, 2745 files, 93.70 MB, sha256
+  `67ccb39fd1671ce1ec67e70e50d583f14b54c1cc2e4ff9a897d3edc223568acb`, sent as AN2_part_0 to AN2_part_3. It contains AK
   to AM too. Installing it is the owner's step.
-- Expected on Phase AN: suite halves 595 (1 skipped) and 658 OK; browser tests 77 OK; GATE PASS with 1537 tests
+- Expected on Phase AN: suite halves 669 and 589 (1 skipped) OK (1258 in all); browser tests 77 OK; GATE PASS with 1537 tests
   (2 skipped); page review 0 problems; sweep 0 exceptions and 0 server errors.
 
 ## Earlier: end of Phase AM

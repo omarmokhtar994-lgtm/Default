@@ -2129,8 +2129,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         for i in range(7):
             try:
                 page = days.page(program, first + timedelta(days=i))
-            except ValueError:
-                page = None
+            except (ValueError, KeyError, StopIteration, OSError, zipfile.BadZipFile, InvalidFileException):
+                page = None  # a kept input that cannot be read: the page says so elsewhere
             views.append(page["view"] if page else None)
         if not any(views):
             return None

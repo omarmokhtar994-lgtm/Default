@@ -250,6 +250,10 @@ class LeaveBook:
                                       label=f"Approved leave for {len(out['applied'])} "
                                             f"{'person' if len(out['applied']) == 1 else 'people'}")
             book.set_in_use(new_id, next(iter(by.values())))
+        before = self.last_applied(run["id"]) or {}
+        for kept in before.get("applied", []):  # a second run applies nothing new: what the first did stays said
+            if not any(a["request"] == kept["request"] and a["name"] == kept["name"] for a in out["applied"]):
+                out["applied"].append(kept)
         if out["applied"] or out["skipped"] or out["notes"]:
             self._applied_path(run["id"]).write_text(json.dumps(out), encoding="utf-8")
         return out

@@ -111,7 +111,10 @@ Load each with the Skill tool at the step it covers; following it from memory do
   forged and edited cookies, cookies after a password change or delete, form tampering, CSRF on every POST, `next`
   redirects, security headers, escaping, exports scoped to the program. Fixed: the exports person filter named a person
   of another program; the key file is created 0600; CSP gains base-uri, form-action, object-src; `no-store`.
-  Not done (owner decides): a sign-in rate limit, a dependency audit tool.
+  Owner said yes (2026-10-21) to both open items. Sign-in: an account already locked for 15 minutes after 5 wrong
+  passwords (`Store.authenticate`); `webapp/throttle.py` now also holds an address after 40 wrong sign-ins in 15
+  minutes (in memory, 429). Dependency audit: `pip install pip-audit` into the web venv, then
+  `pip-audit -r deploy/requirements.txt` (2026-10-21: no known vulnerabilities); not added to the requirements.
 - Release gate 2026-10-21: 1551 tests (floor raised from 1537). `evidence/phase_aq/CHECKS.md` has the A/B result.
 - Rules learned: a container restart kills background runs started with nohup; keep the session active while a long
   run goes. Check `git status` for rewritten old screenshots before every commit.

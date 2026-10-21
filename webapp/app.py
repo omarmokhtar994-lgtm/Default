@@ -66,6 +66,7 @@ from .paging import page_of
 from .results import recolour, version_summary
 from .runs import ACTIVE, MODES, OPTION_LABELS, READY, RESUMABLE, RunQueue, parse_options, run_options
 from .store import Store
+from .throttle import SignInThrottle
 from werkzeug.datastructures import ImmutableMultiDict
 from .change_requests import ChangeBook, level_of
 from .bulk_users import new_password, passwords_workbook, read_people, template_bytes
@@ -279,6 +280,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
     )
     app.config.update({k: v for k, v in config.items() if k not in {"SECRET_KEY"}})
     app.extensions["store"] = Store(data_dir / "scheduler.db")
+    app.extensions["throttle"] = SignInThrottle()  # Phase AT: one address, many usernames
     if config.get("PACKAGE_ROOT"):
         queue = RunQueue(app.extensions["store"], Path(config["PACKAGE_ROOT"]),
                          Path(config.get("RUNS_DIR") or data_dir / "runs"),
@@ -604,8 +606,14 @@ def create_app(config: Dict[str, Any]) -> Flask:
     def login():  # type: ignore[no-untyped-def]
         error = ""
         if request.method == "POST":
+            throttle, address = app.extensions["throttle"], request.remote_addr or ""
+            if throttle.held(address):  # Phase AT: too many wrong sign-ins from this address; not even a right password
+                return render_template("login.html", error="Too many sign-in attempts from this device. Wait 15 "
+                                                           "minutes and try again."), 429
             user, reason = app.extensions["store"].authenticate(request.form.get("username", ""),
                                                                 request.form.get("password", ""))
+            if user is None and reason != "disabled":
+                throttle.failed(address)
             if user is not None:
                 session.clear()
                 session.permanent = True

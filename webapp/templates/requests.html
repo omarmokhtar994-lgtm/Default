@@ -9,7 +9,7 @@
   <h2 id="chg-h">Break changes and coaching</h2>
   {% if can_ask_coaching %}<p><a class="button" href="{{ url_for('requests_coaching', program=unit) }}">Ask for coaching</a></p>{% endif %}
   {% for r in changes %}
-  <article class="req">
+  <article class="req req-change">
     <div class="req-who"><b>{{ r.names_list|join(', ') }}</b><small>Asked {{ when(r.asked) }} by {{ r.requester_name }}</small>{% if r.why %}<small>“{{ r.why }}”</small>{% endif %}</div>
     <div class="req-what">
       <h3>{{ r.what }}, {{ r.on.strftime('%a %d %b') }}</h3>

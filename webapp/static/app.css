@@ -1545,3 +1545,12 @@ table.hours tfoot th, table.hours tfoot td { border-top: 1px solid var(--rail); 
 .slots { border: 0; padding: 0; margin: .5rem 0; display: flex; flex-direction: column; gap: .35rem; }
 .slots .slot { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
 .slot-warn { color: var(--gap-ink); }
+
+/* Phase AU: a break or coaching request keeps its buttons and the nearest times under the impact, not beside it */
+.req-list .req.req-change { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(0, 4fr); gap: 12px 24px; padding: 14px 0; border-top: 1px solid var(--rail); }
+.req-change .req-act { grid-column: 1 / -1; }
+.req-change .req-act form { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: end; }
+.req-change .req-act form label { flex: 1 1 18rem; order: 0; font-size: 0.8125rem; color: var(--dim); }
+.req-change .alts { flex: 1 1 100%; order: 4; border: 0; padding: 0; margin: 4px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-width: 0; }
+.req-change .alts legend { padding: 0; margin-bottom: 4px; color: var(--dim); font-size: 0.8125rem; }
+@media (max-width: 720px) { .req-change { grid-template-columns: minmax(0, 1fr); } }

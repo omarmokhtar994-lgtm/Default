@@ -186,12 +186,13 @@ class TheCoachingRequests(_Fixture):
             self.assertEqual([(a["start"], a["end"]) for a in acts], [(first, first + 30)], name)
 
     def test_the_impact_counts_every_person_taken_off(self):
-        first = next(c["start"] for c in self.book.coaching_options(self.key, WED, [ME, MATE], 30, at(WED, 9))
-                     if c["start"] % 30 == 0)  # a whole interval, so the two people are two off its average
-        rid = self.book.ask_coaching(self.key, [ME, MATE], self.tm, WED, f"{first // 60:02d}:{first % 60:02d}", 30,
+        first = next(c["start"] for c in self.book.coaching_options(self.key, WED, [ME, MATE], 60, at(WED, 9))
+                     if c["start"] % 60 == 0)  # a whole hour of an hourly day, so the two people are two off its average
+        rid = self.book.ask_coaching(self.key, [ME, MATE], self.tm, WED, f"{first // 60:02d}:{first % 60:02d}", 60,
                                      "", "", at(WED, 9))
         rows = self.book.impact(self.store.get_change_request(rid))
-        self.assertTrue(all(abs((r["before"] - r["after"]) - 2) < 1e-6 for r in rows))
+        self.assertTrue(rows)
+        self.assertTrue(all(abs((r["before"] - r["after"]) - 2) < 1e-6 for r in rows), rows)
 
     def test_one_person_who_cannot_be_coached_stops_the_whole_request(self):
         first = self.book.coaching_options(self.key, WED, [ME], 30, at(WED, 9))[0]["start"]

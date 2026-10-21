@@ -118,6 +118,23 @@ create table if not exists leave_requests (
     reason text not null default '',
     outcome text not null default ''
 );
+create table if not exists change_requests (
+    id integer primary key autoincrement,
+    kind text not null,
+    program text not null,
+    shift_date text not null,
+    names text not null default '[]',
+    requester_id integer not null,
+    requester_name text not null default '',
+    detail text not null default '{}',
+    why text not null default '',
+    status text not null default 'waiting',
+    asked real not null,
+    decided_by integer,
+    decided_at real,
+    decision text not null default '',
+    outcome text not null default ''
+);
 create table if not exists swap_requests (
     id integer primary key autoincrement,
     program text not null,
@@ -829,6 +846,40 @@ class Store:
         return int(row["start"]) if row else None
 
     # ------------------------------------------------------------------ leave (Phase AG)
+    # ------------------------------------------------------------- break changes and coaching requests (Phase AS)
+    def add_change_request(self, **fields: Any) -> int:
+        fields.setdefault("asked", time.time())
+        with self._db() as db:
+            cur = db.execute(f"insert into change_requests ({', '.join(fields)}) values ({', '.join('?' for _ in fields)})",
+                             tuple(fields.values()))
+            return int(cur.lastrowid)
+
+    def get_change_request(self, request_id: int) -> Optional[Dict[str, Any]]:
+        with self._db() as db:
+            row = db.execute("select * from change_requests where id = ?", (request_id,)).fetchone()
+        return dict(row) if row else None
+
+    def list_change_requests(self, program: Optional[str] = None, statuses: Optional[List[str]] = None,
+                     requester_id: Optional[int] = None, kind: Optional[str] = None) -> List[Dict[str, Any]]:
+        where, args = [], []
+        for column, value in (("program", program), ("requester_id", requester_id), ("kind", kind)):
+            if value is not None:
+                where.append(f"{column} = ?")
+                args.append(value)
+        if statuses:
+            where.append(f"status in ({', '.join('?' for _ in statuses)})")
+            args += statuses
+        with self._db() as db:
+            return [dict(r) for r in db.execute("select * from change_requests"
+                                                + (" where " + " and ".join(where) if where else "")
+                                                + " order by asked, id", args)]
+
+    def update_change_request(self, request_id: int, **fields: Any) -> None:
+        if fields:
+            with self._db() as db:
+                db.execute(f"update change_requests set {', '.join(f'{k} = ?' for k in fields)} where id = ?",
+                           (*fields.values(), request_id))
+
     def add_leave(self, **fields: Any) -> int:
         fields.setdefault("asked", time.time())
         names = ", ".join(fields)

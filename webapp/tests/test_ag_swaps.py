@@ -177,7 +177,9 @@ class Swaps(unittest.TestCase):
         me = sign_in(self.app, "a029", "Associate-pass-1")
         page = me.get("/me?swap=2026-10-15").get_data(as_text=True)
         self.assertIn('name="other" value="Associate 038"', page)
-        self.assertNotIn('name="other" value="Associate 033"', page)  # has an account, but the rest gap breaks
+        # re-pinned (Phase AO, owner: "it should show the option with warning"): a colleague whose swap breaks the
+        # rest gap is listed too, with the warning and an "Offer with the warning" button
+        self.assertIn("Warning: Associate 029 would rest 11 hours", page)
         tok = TOKEN.search(page).group(1)
         from unittest import mock
         from webapp.tests.test_ag_leave import _Clock

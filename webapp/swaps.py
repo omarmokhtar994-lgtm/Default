@@ -43,16 +43,18 @@ class SwapBook:
     def check(self, program: str, on: date, a: str, b: str) -> Dict[str, Any]:
         """Whether ``a`` and ``b`` may swap ``on``: problems (empty when it keeps every rule) and facts."""
         cells = dict(self.days.roster(program, on))
-        out: Dict[str, Any] = {"ok": False, "problems": [], "facts": [], "a_cell": cells.get(a, ""),
-                               "b_cell": cells.get(b, "")}
+        out: Dict[str, Any] = {"ok": False, "blocked": False, "problems": [], "facts": [],
+                               "a_cell": cells.get(a, ""), "b_cell": cells.get(b, "")}
         problems, facts = out["problems"], out["facts"]
         for name in (a, b):
             if not shift_span(cells.get(name, "")):
                 problems.append(f"{name} does not work on {nice(on)}.")
         if problems:
+            out["blocked"] = True  # Phase AO: nothing to swap, so no warning can make it a swap
             return out
         if out["a_cell"].strip().casefold() == out["b_cell"].strip().casefold():
             problems.append("They work the same shift that day.")
+            out["blocked"] = True
             return out
         row = self.days.version(program, on)[0]
         week = json.loads(row["week"] or "{}")
@@ -111,7 +113,7 @@ class SwapBook:
                 continue
             found = self.check(program, on, name, other)
             out.append({"name": other, "cell": cell, "ok": found["ok"], "problems": found["problems"],
-                        "facts": found["facts"]})
+                        "facts": found["facts"], "has_account": self.account(program, other) is not None})
         return out
 
     # ------------------------------------------------------------------ asking and answering
@@ -123,11 +125,14 @@ class SwapBook:
                 return user
         return None
 
-    def offer(self, program: str, on: date, name: str, user_id: int, other: str, note: str, today: date) -> int:
+    def offer(self, program: str, on: date, name: str, user_id: int, other: str, note: str, today: date,
+              allow_warnings: bool = False) -> int:
+        """Phase AO: with ``allow_warnings`` a swap that breaks a rule is kept with its warnings, which the approvers
+        see; two people with nothing to swap (one is off, or the same shift) are never kept."""
         if on < today:
             raise ValueError("Pick today or a later day.")
         found = self.check(program, on, name, other)
-        if not found["ok"]:
+        if found["blocked"] or (not found["ok"] and not allow_warnings):
             raise ValueError(" ".join(found["problems"]))
         if self.account(program, other) is None:
             raise ValueError(f"{other} has no account to accept it. Ask your TM to swap you instead.")
@@ -141,7 +146,7 @@ class SwapBook:
                     raise ValueError(f"{who} has asked for leave on {nice(on)}.")
         return self.store.add_swap(program=program, day=on.isoformat(), asker=name, asker_user=user_id, other=other,
                                    asker_cell=found["a_cell"], other_cell=found["b_cell"],
-                                   note=" ".join((note or "").split())[:200])
+                                   note=" ".join((note or "").split())[:200], warnings="\n".join(found["problems"]))
 
     def _get(self, swap_id: int) -> Dict[str, Any]:
         row = self.store.get_swap(swap_id)
@@ -235,20 +240,22 @@ class SwapBook:
                 raise ValueError(f"The schedule changed since it was asked: {name} now has "
                                  f"{cells.get(name) or 'nothing'} on {nice(on)}.")
         found = self.check(program, on, a, b)
-        if not found["ok"]:
+        if found["blocked"] or (not found["ok"] and not row.get("warnings")):
             raise ValueError("The swap no longer keeps the rules: " + " ".join(found["problems"]))
         version = self.days.version(program, on)[0]
         book = self.days.book
         new_id = book.swap_day(version["id"], user_id, a, b, DAYS[day_index(on)], reason=f"Swap approved (request "
                                f"{row['id']})", label=f"Swap of {a} and {b}")
         book.set_in_use(new_id, user_id)
+        kept = f" Warning kept: {' '.join(found['problems'])}" if found["problems"] else ""
         return (f"{a} works {row['other_cell']} and {b} works {row['asker_cell']} on {nice(on)}, each with the "
-                "other's breaks and channels.")
+                "other's breaks and channels." + kept)
 
     # ------------------------------------------------------------------ lists
     def _label(self, row: Dict[str, Any]) -> Dict[str, Any]:
         on = date.fromisoformat(row["day"])
         return dict(row, label=f"{nice(on)}: {row['asker_cell']} for {row['other_cell']}",
+                    warning_list=[w for w in (row.get("warnings") or "").split("\n") if w],
                     status_words=STATUS_WORDS.get(row["status"], row["status"]), waiting_on=self.waiting_on(row))
 
     def waiting(self, program: str) -> List[Dict[str, Any]]:

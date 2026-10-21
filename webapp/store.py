@@ -414,6 +414,12 @@ class Store:
             for name in ("tm_a_id", "tm_b_id"):
                 if name not in have:
                     db.execute(f"alter table swap_requests add column {name} integer")
+            # Phase AO: a swap sent with its rule warnings keeps them for the approvers; a full-week swap says so and
+            # keeps each day's cells (scope 'week', detail as JSON); rows from before are one-day swaps with none.
+            for name, ddl in (("warnings", "text not null default ''"), ("scope", "text not null default 'day'"),
+                              ("detail", "text not null default ''")):
+                if name not in have:
+                    db.execute(f"alter table swap_requests add column {name} {ddl}")
             # Phase AJ: a cover from outside the roster says its language; covers kept before have none.
             have = {row["name"] for row in db.execute("pragma table_info(outside_cover)")}
             if "language" not in have:

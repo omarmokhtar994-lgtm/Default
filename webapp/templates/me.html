@@ -39,10 +39,12 @@
     <label>Day <input type="date" name="swap" value="{{ swap_day.isoformat() if swap_day else '' }}" required></label>
     <button>Find colleagues</button>
   </form>
-  {% if swap_day %}<p class="hint">Only colleagues whose shift keeps the rules are listed: rest between shifts, language and channels.</p>
+  {% if swap_day %}<p class="hint">Colleagues on another shift that day are listed. One who breaks a rule (rest between shifts, language or channels) shows the warning; you can still offer the swap, and your team manager and the RTA see the warning when they decide.</p>
   <ul class="req-done">{% for c in offers %}<li><b>{{ c.name }}</b> {{ c.cell }}
-    <form method="post" action="{{ url_for('me_swap') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="day" value="{{ swap_day.isoformat() }}"><input type="hidden" name="other" value="{{ c.name }}"><button class="quiet">Offer</button></form></li>
-  {% else %}<li class="empty">{{ swap_note or 'Nobody can take your shift that day within the rules.' }}</li>{% endfor %}</ul>{% endif %}
+    {% if not c.has_account %}<span class="hint">{{ c.name }} has no account to accept it. Ask your team manager to swap you instead.</span>
+    {% else %}{% if c.problems %}<span class="swap-warn" role="note">Warning: {{ c.problems|join(' ') }}</span>{% endif %}
+    <form method="post" action="{{ url_for('me_swap') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="day" value="{{ swap_day.isoformat() }}"><input type="hidden" name="other" value="{{ c.name }}">{% if c.problems %}<input type="hidden" name="anyway" value="1"><button class="quiet">Offer with the warning</button>{% else %}<button class="quiet">Offer</button>{% endif %}</form>{% endif %}</li>
+  {% else %}<li class="empty">{{ swap_note or 'Nobody else works a different shift that day.' }}</li>{% endfor %}</ul>{% endif %}
 </details>
 <section class="panel" aria-labelledby="mine-h">
   <h2 id="mine-h">My requests</h2>

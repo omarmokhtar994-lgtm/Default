@@ -864,8 +864,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         swap_day = _date(request.args.get("swap", ""))
         offers, swap_note = [], ""
         if key and swap_day:
-            offers = [c for c in swaps.candidates(key, swap_day, name)
-                      if c["ok"] and swaps.account(key, c["name"]) is not None]
+            offers = swaps.candidates(key, swap_day, name)  # Phase AO: every colleague on another shift, with its warnings
             # Phase AI: when nobody is listed because there is nothing to swap, say why
             if any(r["first_day"] <= swap_day.isoformat() <= r["last_day"] for r in app.extensions["store"].list_leave(
                     program=key, associate=name, statuses=["waiting_tm", "waiting_rta", "applying", "approved"])):
@@ -953,7 +952,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             if on is None or not other:
                 raise ValueError("Pick a day and a colleague.")
             app.extensions["swaps"].offer(key, on, g.user["roster_name"], g.user["id"], other,
-                                          request.form.get("note", ""), datetime.now(EGYPT).date())
+                                          request.form.get("note", ""), datetime.now(EGYPT).date(),
+                                          allow_warnings=request.form.get("anyway") == "1")
         except ValueError as exc:
             flash(str(exc))
         else:

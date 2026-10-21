@@ -17,4 +17,8 @@ Run on the final tree, 2026-10-21 (Egypt evening). What it built: `docs/HANDOFF.
 - Leftovers added after that run, re-checked 2026-10-21 evening: website suite both halves OK after re-pinning two
   event-list tests (a sign-in is an event now) and one browser heading match ("People" now matched exactly, other headings
   contain the word); browser tests 85 (one re-pinned heading, rerun OK); route sweep 872 requests, 0 exceptions, 0 errors.
+- Second walk, final tree 2026-10-21 night: website suite both halves OK (the first run of half 1 caught that the new zip
+  check refused the fake workbooks the run tests upload; the check now leaves an unreadable zip to the workbook readers,
+  `test_runs` 154 OK); browser tests 85 OK; route sweep 872 requests, 0 exceptions, 0 errors; accessibility tool
+  `tools/a11y.py` 0 problems (two found and fixed: sideways scroll of the impact tables on a phone, supervisor chip contrast).
 - Not run here: the release gate and package (the owner has not asked for the build yet).

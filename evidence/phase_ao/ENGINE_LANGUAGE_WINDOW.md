@@ -34,7 +34,21 @@ No English start at 23:00 or 01:00 in this version. UK is a 24-hour language, so
    To forbid them, the window must end earlier for starts (for example 16:00 to 22:00), which would also change the
    coverage the Language Setup row asks for. A start limit for everyone is the separate "Allowed Shift Start Window".
 
-## Check run
+## Check runs (2026-10-21, scratch copies of the owner's input, Quick, before breaks only; none are in the repository)
 
-A Quick run of the owner's input with `--language-working-window ALL_ROWS` was started on 2026-10-21 (scratch copy,
-not in the repository). Its result is added below when it finishes.
+1. **The ALL_ROWS run** was stopped after more than an hour (the machine was busy). The start-window arithmetic above
+   is from the engine's own rule, not from that run.
+2. **Coverage Split, group written "English, UK":** four variants (exclusive or not, ratio 1 or blank, blank staffing
+   allowed) all gave "No schedule satisfies all hard rules together". Cause, from the engine log: "English, UK cannot
+   cover its own window: 0 eligible associates". The sheet finds a group's members by a single language name from the
+   "Can Cover Languages" lists, not by the "English, UK" label of the Coverage Group column.
+3. **Control (the unmodified input):** still searching after 25 minutes, so the input itself is feasible.
+4. **Coverage Split, group written "UK", 07:00 to 16:00, ratio 1, Exclusive Yes, Active Yes:** RELEASABLE in 15 minutes.
+   Starts by language in the best before-breaks schedule: English 16:00 to 22:00 only, French 16:00 to 22:00 only,
+   Bilingual 16:00 to 22:00 only (no 23:00, 00:00 or 01:00 start for any of the three); UK and Trilingual keep the late
+   and early starts (UK 23:00, 01:00, 03:00, 07:00 to 13:00; the one Trilingual person 23:00). Coverage before breaks:
+   135 of 140 active intervals at the 100% target, all 140 at the 80% floor.
+
+Row that works: Coverage Split sheet, below the grey help row: `UK` | 07:00 | 16:00 | 1 | Yes | Yes.
+Catches: no days column (all 7 days); Trilingual belongs to the UK group, so that person may still start late; with
+Language Working Window ALL_ROWS the UK weekend window (10:00 to 04:00) would clash with a 07:00 start on weekends.

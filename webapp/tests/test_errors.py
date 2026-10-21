@@ -28,7 +28,10 @@ class TheErrorPages(unittest.TestCase):
     def test_a_program_you_do_not_have_says_so_and_who_can_fix_it(self):
         code, page = self.get(self.planner, "/day?program=" + self.tier2.replace(" ", "+"))
         self.assertEqual(code, 403)
-        self.assertIn("SAKS, NMG Tier 2 is not one of your programs", page)
+        # Phase AR re-pin (owner, 2026-10-21: "no one can view it except if they have access"): the refusal used to name
+        # the real program ("SAKS, NMG Tier 2 is not ..."), which told a person who has no access that it exists.
+        self.assertIn("This program is not one of your programs", page)
+        self.assertNotIn("NMG Tier 2", page)
         self.assertIn("Ask an admin to add this one to your programs.", page)
         self.assertNotIn("This page is for admins.", page)
 

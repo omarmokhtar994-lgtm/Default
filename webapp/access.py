@@ -70,6 +70,14 @@ class Access:
             return False
         return bool(self.program_ids() & set(self.store.user_program_ids(target["id"])))
 
+    def sees(self, target: Dict[str, Any]) -> bool:
+        """Phase AR (owner: nothing of another program is visible): whether ``target`` is someone this person may see in a
+        list: themselves, anyone when they have every program, an admin or anyone with every program (they have this
+        person's programs too), and anyone who shares a program with them."""
+        if target["id"] == self.user["id"] or self.everything() or target.get("is_admin") or target.get("all_programs"):
+            return True
+        return bool(self.program_ids() & set(self.store.user_program_ids(target["id"])))
+
     def team_managers_for(self, associate: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Phase AK: the active team managers who share one of ``associate``'s programs (or have every program)."""
         mine = set(self.store.user_program_ids(associate["id"]))

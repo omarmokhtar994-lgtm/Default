@@ -328,8 +328,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 clean_program(request.values.get("program", ""))
             if key and not _access().can_open(key):
                 g.error_hint = "Your account opens only the programs given to you. Ask an admin to add this one to your programs."
-                label = _unit_filter(key)  # a real program or LOB is named; words from a link are never repeated back
-                abort(403, description=f"{label if key in g.unit_labels else 'This program'} is not one of your programs")
+                # Phase AR (owner, 2026-10-21: nothing of another program is visible): the refusal never says whether the
+                # program exists or what it is called; words from a link are never repeated back either.
+                abort(403, description="This program is not one of your programs")
         # Phase AP: a change posted from a merged RTA page is saved on the LOB the person belongs to.
         if g.get("user") and request.method == "POST" and request.path.startswith("/day/") \
                 and request.form.get("merge") == "1" and request.form.get("associate"):
@@ -1219,8 +1220,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return cards
 
     def _upload_choices(runs: list) -> Tuple[list, set]:
-        """New schedule is open to everyone for any program: each program with its LOBs, and the defaults
-        it starts from (a program's saved defaults, else the weekday its schedules usually start on)."""
+        """New schedule is open to everyone, for the programs they have (Phase AR; admins have all): each program with
+        its LOBs, and the defaults it starts from (a program's saved defaults, else the weekday its schedules usually start on)."""
         book = ProgramBook(app.extensions["store"])
         book.sync()
         usual = usual_start_days(runs)
@@ -1229,6 +1230,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
             choices = [(l["key"], f"{p['name']}, {l['name']}") for l in p["lobs"]]
             if p["key"] in p["units"]:
                 choices.append((p["key"], p["name"] if not p["lobs"] else f"{p['name']} (whole program)"))
+            choices = [(k, t) for k, t in choices if _access().can_open(k)]  # Phase AR: only the programs a person has
+            if not choices:
+                continue
             keys |= {k for k, _ in choices}
             defaults = ({"start_day": p["start_day"], "run_mode": p["run_mode"], "options": p["options"]}
                         if p["saved"] else ({"start_day": usual[p["key"]]} if p["key"] in usual else {}))
@@ -1310,6 +1314,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
             flash(problem)
             return redirect(url_for("home"))
         program = clean_program(request.form.get("program", ""))
+        if program and not _access().can_open(program):  # Phase AR: a program is uploaded to only by those who have it
+            g.error_hint = "Your account opens only the programs given to you. Ask an admin to add this one to your programs."
+            abort(403, description="That is not one of your programs")
         week = request.form.get("week_start", "").strip()
         week_start = start_date(week) if week else ""
         if week_start is None:
@@ -1522,6 +1529,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             flash("Pick the date the schedule starts.")
             return redirect(back)
         new: Dict[str, Any] = {"program": clean_program(request.form.get("program", "")), "week_start": week_start}
+        if new["program"] and new["program"] != run["program"] and not _access().can_open(new["program"]):
+            abort(403, description="That is not one of your programs")  # Phase AR
         if new["program"] and new["program"] != run["program"] and new["program"] not in unit_keys(store):
             flash(PICK_UNIT)  # picked from the list; a typed name would start a stray program
             return redirect(back)
@@ -4042,7 +4051,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return render_template("exports.html", kinds=EXPORT_KINDS, counts=counts, presets=presets, error=error,
                                programs=_my_programs(_days().programs()) if app.extensions.get("days") else [],
                                pick_tree=_access().programs(), everything=_access().everything(),
-                               users=store.list_users(), measures=MEASURES, **a), status
+                               users=[u for u in store.list_users() if _access().sees(u)],  # Phase AR: this program's people
+                               measures=MEASURES, **a), status
 
     def _coach_args() -> Dict[str, Any]:
         days = _days()

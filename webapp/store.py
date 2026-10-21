@@ -841,6 +841,17 @@ class Store:
                 "select * from leave_requests" + (" where " + " and ".join(where) if where else "")
                 + " order by first_day, id", args)]
 
+    def leave_between(self, start: str, end: str, program: Any = None) -> List[Dict[str, Any]]:
+        """Phase AO (Exports): leave requests touching ``start`` to ``end`` (ISO dates), with who decided."""
+        extra, more = self._program_filter("leave_requests.program", program)
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                "select leave_requests.*, coalesce(tm.display_name, '') as tm_name,"
+                " coalesce(rta.display_name, '') as rta_name from leave_requests"
+                " left join users tm on tm.id = leave_requests.tm_id left join users rta on rta.id = leave_requests.rta_id"
+                " where first_day <= ? and last_day >= ?" + extra + " order by first_day, program, associate, id",
+                [end, start] + more)]
+
     LEAVE_FIELDS = ("status", "tm_id", "tm_at", "rta_id", "rta_at", "reason", "outcome")
 
     def move_leave(self, request_id: int, was: str, **fields: Any) -> bool:

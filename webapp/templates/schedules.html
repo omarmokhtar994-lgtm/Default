@@ -9,6 +9,17 @@
   <p class="byline rundetails">Workbook <b>{{ run.workbook }}</b> · {{ run.program|unit if run.program else 'no program set' }} · {% if run.week_start %}starts {{ run.week_start|start_day }}{% else %}no start date set{% endif %}{% if user.is_admin %} · <a href="{{ url_for('run_detail', run_id=run.id, edit=1) }}#edit">Edit the name, program or start date</a>{% elif user.id == run.user_id %} · <a href="{{ url_for('run_detail', run_id=run.id, edit=1) }}#edit">Change the program or start date</a>{% endif %}</p>
 </div></div>
 
+{% if leave_after %}
+<section class="panel" id="leave-after" aria-labelledby="leave-after-h">
+  <h2 id="leave-after-h">Approved leave and this schedule</h2>
+  <p class="note">Leave approved before this week had a schedule was not known to the tool when it built the week. After the schedule was kept, the days below were marked Leave in a new version set in use; coverage on those days can be short, as that version's problems show. Nothing here stopped the schedule.</p>
+  <ul class="req-done">
+    {% for a in leave_after.applied %}<li><b>{{ a.name }}</b>: Leave on {{ a.dates|map('day_month')|join(', ') }}</li>{% endfor %}
+    {% for s in leave_after.skipped %}<li class="swap-warn" role="note"><b>Warning:</b> {{ s.why }} It stays in Exports, under Leave requests.</li>{% endfor %}
+    {% for n in leave_after.notes %}<li><b>{{ n.name }}</b>: {{ n.why }}</li>{% endfor %}
+  </ul>
+</section>
+{% endif %}
 {% if week_list %}
 <section class="panel weeklist" id="week-list" aria-labelledby="weeklist-h">
   <h2 id="weeklist-h">Schedules for the week of {{ run.week_start|day_month }} ({{ week_list|length }})</h2>

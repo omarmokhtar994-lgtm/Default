@@ -31,6 +31,7 @@ KINDS = {"attendance": "Attendance", "activities": "Activities", "activity": "Da
          "changes": "Schedule changes and swaps", "versions": "Versions and in use", "runs": "Runs",
          "worked": "Worked hours and adherence", "summary": "Daily summary",
          "channels": "Channels planned and changed", "cover": "Cover from outside the roster",
+         "leave": "Leave requests",
          "record": "Other actions"}
 VERSION_EVENTS = {"version_created": "New version", "set_in_use": "Set in use"}
 OTHER_EVENTS = {"run_uploaded": "Run uploaded", "run_started": "Run started", "run_stopped": "Run stopped",
@@ -339,10 +340,22 @@ def _cover(store, days, weeks, start, end, program, user_id, measure):
                _when(r["at"])]
 
 
+def _leave(store, days, weeks, start, end, program, user_id, measure):
+    """Phase AO: leave requests touching the period, whatever their status, so approved leave for a week that had no
+    schedule yet can be taken from here for that week later."""
+    yield ["Program", "Name", "Kind", "First day", "Last day", "Status", "Note", "Team manager", "RTA", "Outcome",
+           "Reason"]
+    words = {"waiting_tm": "Waiting for the team manager", "waiting_rta": "Waiting for the RTA",
+             "applying": "Being approved", "approved": "Approved", "refused": "Refused", "cancelled": "Cancelled"}
+    for r in store.leave_between(start.isoformat(), end.isoformat(), program):
+        yield [r["program"], r["associate"], r["kind"], r["first_day"], r["last_day"], words.get(r["status"], r["status"]),
+               r["note"], r["tm_name"], r["rta_name"], r["outcome"], r["reason"]]
+
+
 TABLES: Dict[str, Callable] = {"attendance": _attendance, "activities": _activities, "activity": _activity,
                                "breaks": _breaks,
                                "changes": _changes, "versions": _versions, "runs": _runs, "worked": _worked,
-                               "summary": _summary, "channels": _channels, "cover": _cover,
+                               "summary": _summary, "channels": _channels, "cover": _cover, "leave": _leave,
                                "record": _record}
 
 

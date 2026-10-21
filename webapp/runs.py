@@ -99,6 +99,7 @@ class RunQueue:
         self._stopping: set = set()
         self._threads: List[threading.Thread] = []
         self.schedules = None  # the ScheduleBook (Phase N), set by the website
+        self.on_kept = None  # Phase AO: called with the run id once its schedules are kept (approved leave is applied)
         self.days = None  # the DayBook (attendance and actual breaks), set by the website
         self.recover()
 
@@ -170,6 +171,17 @@ class RunQueue:
             with self.log_path(run_id).open("a", encoding="utf-8") as log:
                 log.write(f"\n(website) could not keep this run's schedules as versions: {exc!r}\n")
         self._keep_consistent(run_id)
+        self._kept(run_id)
+
+    def _kept(self, run_id: str) -> None:
+        """Whatever the website does once a week's schedule is kept; a failure here never fails the run."""
+        if self.on_kept is None:
+            return
+        try:
+            self.on_kept(run_id)
+        except Exception as exc:
+            with self.log_path(run_id).open("a", encoding="utf-8") as log:
+                log.write(f"\n(website) could not apply the approved leave to this week: {exc!r}\n")
 
     def _keep_consistent(self, run_id: str) -> None:
         """The steadier week as a version, on its own: a bad file elsewhere in the run never keeps it out."""
@@ -272,6 +284,7 @@ class RunQueue:
             except Exception as exc:  # said on the run page, with the file kept for a look
                 problems = [f"The ready schedule could not be kept: {exc}"]
             else:
+                self._kept(run_id)
                 people = len(json.loads(versions[0]["week"] or "{}").get("associates", []))
         if problems:
             shown = problems[:25] + ([f"…and {len(problems) - 25} more."] if len(problems) > 25 else [])

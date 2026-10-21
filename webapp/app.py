@@ -286,6 +286,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         app.extensions["days"] = queue.days = DayBook(app.extensions["store"], book)
         app.extensions["leave"] = LeaveBook(app.extensions["store"], app.extensions["days"])  # Phase AG
         app.extensions["leave"].recover()  # Phase AI: an approval a stopped server left half done goes back to the RTA
+        # Phase AO: leave approved while a week had no schedule is applied once that week's schedule is kept
+        queue.on_kept = lambda run_id: app.extensions["leave"].apply_waiting(app.extensions["store"].get_run(run_id))
         app.extensions["swaps"] = SwapBook(app.extensions["store"], app.extensions["days"])
         # Phase AB: RTA changes posted to each LOB's Teams or Slack group, on the notifier's own thread.
         notifier = Notifier(app.extensions["store"], transport=config.get("NOTIFY_TRANSPORT") or post_json,
@@ -2223,7 +2225,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         moved = own != g.zone
         zone_dates = {d: first + timedelta(days=((i + 6) % 7 - first.weekday()) % 7) for i, d in enumerate(DAYS)}
         return render_template("schedules.html", run=run, versions=versions, current=current, view=view,
-                               moved=moved, zone_dates=zone_dates, own_zone=own, own_name=dict(ZONES)[own],
+                               leave_after=app.extensions["leave"].last_applied(run_id), moved=moved, zone_dates=zone_dates, own_zone=own, own_name=dict(ZONES)[own],
                                counts=counts, may_set_in_use=bool(current) and _may_set_in_use(current),
                                days=DAYS, channel_lines=None if input_problem else _channel_lines(run_id),
                                channel_added=added, step=step, input_problem=input_problem,

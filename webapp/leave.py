@@ -185,8 +185,74 @@ class LeaveBook:
             said.append(f"{joined([nice(d) for d in off])} {'is a day off' if len(off) == 1 else 'are days off'}.")
         if missing:
             said.append(f"{joined([nice(d) for d in missing])} {'has' if len(missing) == 1 else 'have'} no schedule "
-                        "yet: mark it when that week is planned.")
+                        "yet: it is kept, and marked Leave when that week's schedule is uploaded.")
         return " ".join(said)
+
+    # ------------------------------------------------------------------ leave for a week not yet planned (Phase AO)
+    def _applied_path(self, run_id: str):
+        return self.days.book.root / run_id / "leave_after_run.json"
+
+    def last_applied(self, run_id: str) -> Optional[Dict[str, Any]]:
+        """What the last run of ``apply_waiting`` did for this run's week, or None when it never had leave to apply."""
+        try:
+            return json.loads(self._applied_path(run_id).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+
+    def apply_waiting(self, run: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Leave the RTA approved while this run's week had no schedule: once the week's schedule is kept, each approved
+        day the person works is marked Leave in a new version set in use (the engine did not consider it when it built
+        the week). A name not on the schedule, or a day already off, is said and never stops anything. Safe to run
+        again: days already Leave are left alone. Nothing is done for a week with no approved leave."""
+        program = run.get("program") or ""
+        try:
+            first = date.fromisoformat(run.get("week_start") or "")
+        except ValueError:
+            return None
+        last = first + timedelta(days=6)
+        rows = [r for r in self.store.list_leave(program=program, statuses=["approved"])
+                if r["first_day"] <= last.isoformat() and r["last_day"] >= first.isoformat()]
+        version = self.days.version(program, first)[0] if rows else None
+        if version is None:
+            return None
+        names = {a["name"] for a in json.loads(version["week"] or "{}").get("associates", [])}
+        out: Dict[str, Any] = {"week": first.isoformat(), "applied": [], "skipped": [], "notes": []}
+        changes: List[Any] = []
+        by: Dict[str, Any] = {}
+        for row in rows:
+            name = row["associate"]
+            if name not in names:
+                out["skipped"].append({"name": name, "request": row["id"], "dates": [],
+                                       "why": f"{name} is not on the schedule uploaded for the week of {nice(first)}, "
+                                              "so the approved leave was not applied."})
+                continue
+            marked, off = [], []
+            for i in range(7):
+                on = first + timedelta(days=i)
+                if not row["first_day"] <= on.isoformat() <= row["last_day"]:
+                    continue
+                cell = dict(self.days.roster(program, on)).get(name, "")
+                if shift_span(cell):
+                    changes.append((name, DAYS[i], "Leave"))
+                    marked.append(on.isoformat())
+                elif cell.strip().casefold() != "leave":
+                    off.append(on.isoformat())
+            if marked:
+                out["applied"].append({"name": name, "request": row["id"], "dates": marked})
+                by[name] = row.get("rta_id") or row.get("tm_id") or row["user_id"]
+            if off:
+                out["notes"].append({"name": name, "request": row["id"], "dates": off,
+                                     "why": f"{', '.join(nice(date.fromisoformat(d)) for d in off)}: already a day off."})
+        if changes:
+            book = self.days.book
+            new_id = book.change_many(version["id"], next(iter(by.values())), changes,
+                                      reason="Leave approved before this week was planned",
+                                      label=f"Approved leave for {len(out['applied'])} "
+                                            f"{'person' if len(out['applied']) == 1 else 'people'}")
+            book.set_in_use(new_id, next(iter(by.values())))
+        if out["applied"] or out["skipped"] or out["notes"]:
+            self._applied_path(run["id"]).write_text(json.dumps(out), encoding="utf-8")
+        return out
 
     # ------------------------------------------------------------------ what it costs
     def impact(self, program: str, name: str, on: date, base: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:

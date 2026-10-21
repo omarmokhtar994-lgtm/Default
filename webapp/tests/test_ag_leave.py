@@ -129,7 +129,10 @@ class Leave(unittest.TestCase):
             self.book.decide(rid, self.users["tm1"], approve=True)
         said = self.book.decide(rid, self.users["rta1"], approve=True)
         self.assertEqual(said, "Approved: Leave on Wed 14 Oct and Sat 17 Oct. Thu 15 Oct and Fri 16 Oct are days off. "
-                               "Sun 18 Oct has no schedule yet: mark it when that week is planned.")
+                               # re-pinned (Phase AO): the leave is now kept and applied when that week's schedule
+                               # is uploaded
+                               "Sun 18 Oct has no schedule yet: it is kept, and marked Leave when that week's "
+                               "schedule is uploaded.")
         self.assertEqual([self.cell("Associate 007", d) for d in (WED, THU, FRI, SAT)], ["Leave", "OFF", "OFF", "Leave"])
         now = self.app.extensions["days"].version(self.key, WED)[0]
         self.assertNotEqual(now["id"], before)

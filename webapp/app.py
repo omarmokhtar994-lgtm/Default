@@ -69,7 +69,7 @@ from .store import Store
 from .throttle import SignInThrottle
 from werkzeug.datastructures import ImmutableMultiDict
 from .change_requests import ChangeBook, level_of
-from .bulk_users import new_password, passwords_workbook, read_people, template_bytes
+from .bulk_users import people_workbook, new_password, passwords_workbook, read_people, template_bytes
 from .daily_views import people_of, workbook as daily_workbook
 from .merge import merge_intervals
 from .merged_day import lob_of, merged_page
@@ -985,6 +985,55 @@ def create_app(config: Dict[str, Any]) -> Flask:
         _bulk_held().pop(sheet_token, None)
         return send_file(io.BytesIO(held["sheet"]), as_attachment=True, download_name="Temporary_passwords.xlsx",
                          mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    @app.route("/admin/users/export.xlsx")
+    @manager_required
+    def admin_users_export():  # type: ignore[no-untyped-def]
+        """Phase AU: the people this person manages, as a sheet in the bulk upload's columns."""
+        store, access = app.extensions["store"], Access(app.extensions["store"], g.user)
+        admin = bool(g.user["is_admin"])
+        tree = access.book.tree()
+        names = {u["id"]: u["username"] for u in store.list_users()}
+        rows = []
+        for u in store.list_users():
+            if not (admin or access.can_manage(u)):
+                continue
+            ids = store.user_program_ids(u["id"])
+            rows.append({"username": u["username"], "display_name": u["display_name"],
+                         "role": role(u).lower().replace(" ", "_"),
+                         "programs": "ALL" if u["all_programs"] else "; ".join(
+                             {p["id"]: p["name"] for p in tree}.get(i, "?") for i in ids),
+                         "roster_name": u["roster_name"], "team_manager": names.get(u["team_manager_id"], ""),
+                         "active": u["active"]})
+        _record("users_exported", detail=f"{len(rows)} people")
+        return send_file(io.BytesIO(people_workbook(rows)), as_attachment=True, download_name="People.xlsx",
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    @app.route("/admin/users/switch", methods=["POST"])
+    @manager_required
+    def admin_users_switch():  # type: ignore[no-untyped-def]
+        """Phase AU: switch several people off or on at once; the same walls as one at a time (only people this person
+        manages, never themselves)."""
+        store, access = app.extensions["store"], Access(app.extensions["store"], g.user)
+        ids = [int(x) for x in request.form.getlist("who") if x.isdigit()]
+        on = request.form.get("decision") == "on"
+        if not ids:
+            flash("Tick the people first.")
+            return redirect(url_for("admin_users"))
+        done, skipped = [], []
+        for uid in ids:
+            target = store.get_user(uid)
+            if target is None or target["id"] == g.user["id"] or not access.can_manage(target):
+                skipped.append(uid)
+                continue
+            store.set_active(uid, on)
+            _record("user_enabled" if on else "user_disabled", subject=target["username"])
+            done.append(uid)
+        said = f"{len(done)} {'person' if len(done) == 1 else 'people'} switched {'on' if on else 'off'}."
+        if skipped:
+            said += f" {len(skipped)} left as they were: not yours to change, or your own account."
+        flash(said)
+        return redirect(url_for("admin_users"))
 
     @app.route("/admin/users/<int:user_id>/<action>", methods=["POST"])
     @manager_required
@@ -3409,7 +3458,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             session["rta_merge"] = kept
         return units if kept.get(pid) == "1" else None
 
-    MERGE_TABS = ("timeline", "board", "adherence")  # Phase AP: the tabs that read, and change one person at a time
+    MERGE_TABS = ("timeline", "board", "adherence", "requests")  # Phase AP: the tabs that read, and change one person at a time
 
     def _day_body(days, programs: List[str], on: date, program: str, own_zone: str, moved: int,
                   start_at: int, merge: Optional[List[str]] = None):  # type: ignore[no-untyped-def]
@@ -3646,22 +3695,29 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                measure=measure,
                                measures=MEASURES, tab=tab, statuses=STATUSES, aux=sorted(AUX), hm=hm,
                                rows=board(page["view"], page["target"]["target"]) if page and tab == "board" else None, week_of=week_start(on),
-                               **_requests_tab(program, on, tab),
+                               **_requests_tab(program, on, tab, merge),
                                earlier=on - timedelta(days=1), later=on + timedelta(days=1), **shift_view,
                                **_window_context(program, on, own_zone, moved, start_at, page, anchor, start, tab))
 
-    def _requests_tab(program: str, on: date, tab: str) -> Dict[str, Any]:
-        """Phase AU: break changes and coaching on the RTA tab itself: the count for the tab, and (on the tab) the rows."""
+    def _requests_tab(program: str, on: date, tab: str, merge: Optional[List[str]] = None) -> Dict[str, Any]:
+        """Phase AU: break changes and coaching on the RTA tab itself: the count for the tab, and (on the tab) the rows.
+        In the view with every LOB of a program the rows are all those LOBs', each with its LOB."""
         if not program:
             return {"changes_n": 0}
-        book = app.extensions["changes"]
-        found = {"changes_n": book.count(program)}
+        book, units = app.extensions["changes"], (merge or [program])
+        found = {"changes_n": sum(book.count(u) for u in units)}
         if tab == "requests":
-            found.update(changes=_change_rows(program), changes_decided=book.decided(program), unit=program,
+            rows = []
+            for u in units:
+                for r in _change_rows(u):
+                    r["lob"] = ((ProgramBook(app.extensions["store"]).unit(u) or {}).get("lob") or {}).get("name") or u
+                    rows.append(r)
+            decided = sorted((r for u in units for r in book.decided(u)), key=lambda r: -(r["decided_at"] or r["asked"]))[:20]
+            found.update(changes=rows, changes_decided=decided, unit=program,
                          may_change=allowed(app.extensions["store"], g.user, "rta_change"),
                          can_ask_coaching=_can_ask_coaching(),
                          back=url_for("day_page", program=program, date=on.isoformat(), view="requests", tz=g.zone,
-                                      start=request.args.get("start") or None))
+                                      start=request.args.get("start") or None, merge="1" if merge else None))
         return found
 
     def _window_context(program: str, on: date, own_zone: str, moved: int, start_at: int, page, anchor, start: int,

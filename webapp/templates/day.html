@@ -125,7 +125,7 @@
     {% if not merged %}<a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='meeting') }}"{% if tab == 'meeting' %} class="on" aria-current="page"{% endif %}>Find a time</a>
     <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='cover') }}"{% if tab == 'cover' %} class="on" aria-current="page"{% endif %}>Overtime and VTO</a>{% endif %}
     {% if v.channels and not merged %}<a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='channels') }}"{% if tab == 'channels' %} class="on" aria-current="page"{% endif %}>Channels</a>{% endif %}
-    {% if not merged %}<a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='requests') }}"{% if tab == 'requests' %} class="on" aria-current="page"{% endif %}>Requests{% if changes_n %} <span class="count">{{ changes_n }}</span>{% endif %}</a>{% endif %}
+    <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='requests', merge='1' if merged else none) }}"{% if tab == 'requests' %} class="on" aria-current="page"{% endif %}>Requests{% if changes_n %} <span class="count">{{ changes_n }}</span>{% endif %}</a>
   </nav>
   <form class="sel" method="get" action="{{ url_for('day_page') }}">
     <input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="view" value="{{ tab }}">{% if merged %}<input type="hidden" name="merge" value="1">{% endif %}

@@ -137,3 +137,43 @@ class ThePolish(_Pages):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheMergedRequests(unittest.TestCase):
+    """Phase AU: the Requests tab in the view with every LOB of a program: one list, each request with its LOB."""
+    @classmethod
+    def setUpClass(cls):
+        from webapp.tests import test_ap_merge_day as fx
+        cls.fx = fx
+        fx._TwoLobs.setUpClass.__func__(cls)
+        for key, who in ((cls.one, "Associate 006"), (cls.two, "Associate B007")):
+            cls.store.add_change_request(
+                kind="coaching", program=key, shift_date=fx.WED.isoformat(), names=json.dumps([who]),
+                requester_id=1, requester_name="Made-up TM", why="Made-up",
+                detail=json.dumps({"start": 840, "end": 870, "minutes": 30, "dept": "Quality", "billable": False}))
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.fx._TwoLobs.tearDownClass.__func__(cls)
+
+    def tab(self, **more):
+        query = {"program": self.one, "date": self.fx.WED.isoformat(), "tz": self.fx.CAIRO, "view": "requests", **more}
+        return html.unescape(self.admin.get("/day", query_string=query).get_data(as_text=True))
+
+    def test_the_merged_tab_lists_both_lobs_requests_with_the_lob_and_stays_merged(self):
+        page = self.tab(merge="1")
+        self.assertIn("Associate 006", page)
+        self.assertIn("Associate B007", page)
+        self.assertRegex(page, r'class="tl-tag lob">Tier 1<')
+        self.assertRegex(page, r'class="tl-tag lob">Tier 2<')
+        self.assertRegex(page, r'name="back" value="/day\?[^"]*merge=1')
+        self.assertRegex(page, r'Requests <span class="count">2</span>')
+
+    def test_one_lob_shows_only_its_own(self):
+        page = self.tab()
+        self.assertIn("Associate 006", page)
+        self.assertNotIn("Associate B007", page)
+
+
+import html  # noqa: E402
+import json  # noqa: E402

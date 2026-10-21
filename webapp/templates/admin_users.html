@@ -19,7 +19,7 @@
 {% endmacro %}
 <section class="panel" aria-labelledby="add-h">
   <h2 id="add-h">Add a person</h2>
-  <p><a href="{{ url_for('admin_users_bulk') }}">Add many people from a file</a></p>
+  <p><a href="{{ url_for('admin_users_bulk') }}">Add many people from a file</a> · <a href="{{ url_for('admin_users_export') }}">Download the people list (.xlsx)</a></p>
   <form method="post" class="people-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Username <input name="username" required></label>
@@ -43,6 +43,16 @@
     <fieldset class="exp-kinds pick-list" id="team-list"><legend>Associates <span class="hint" data-count-for="team-list" aria-live="polite"></span></legend>{% for u in managed %}<label class="exp-kind"><input type="checkbox" name="who" value="{{ u.id }}" data-programs="{{ u.program_ids|join(' ') }}"> {{ u.roster_name or u.display_name }}{% if u.team_manager %} <small>({{ u.team_manager }})</small>{% endif %}</label>{% endfor %}</fieldset>
     <label>Team manager <select name="team_manager"><option value="">None</option>{% for t in leaders %}<option value="{{ t.id }}" data-programs="{{ 'all' if t.all_programs or t.is_admin else t.program_ids|join(' ') }}">{{ t.display_name }}</option>{% endfor %}</select></label>
     <button class="primary">Set team manager</button>
+  </form>
+</section>{% endif %}
+{% set switchable = users|selectattr('manageable')|rejectattr('id', 'equalto', user.id)|list %}
+{% if switchable %}<section class="panel" aria-labelledby="switch-h">
+  <h2 id="switch-h">Switch several people off or on</h2>
+  <p class="note">A person switched off cannot sign in; their account and history stay. Switch them on again at any time.</p>
+  <form method="post" action="{{ url_for('admin_users_switch') }}" class="people-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Find a person <input type="search" data-filter="switch-list" autocomplete="off" placeholder="Type a name…"></label>
+    <fieldset class="exp-kinds pick-list" id="switch-list"><legend>People <span class="hint" data-count-for="switch-list" aria-live="polite"></span></legend>{% for u in switchable %}<label class="exp-kind"><input type="checkbox" name="who" value="{{ u.id }}"> {{ u.display_name }} <small>{{ u.username }}, {{ u.role }}{% if not u.active %}, switched off{% endif %}</small></label>{% endfor %}</fieldset>
+    <button class="quiet" name="decision" value="off">Switch off</button> <button class="quiet" name="decision" value="on">Switch on</button>
   </form>
 </section>{% endif %}
 <datalist id="roster-names">{% for n, ids in roster_names %}<option value="{{ n }}" data-programs="{{ ids|sort|join(' ') }}">{% endfor %}</datalist>

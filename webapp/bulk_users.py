@@ -65,6 +65,25 @@ def template_bytes() -> bytes:
     return out.getvalue()
 
 
+def people_workbook(people: List[Dict[str, Any]]) -> bytes:
+    """Phase AU: the people an admin or supervisor manages, in the upload's own columns (so a sheet can be edited and
+    uploaded for new people), with Active last. No password column: nobody's password is kept in a readable form."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "People"
+    ws.append(HEAD[:-1] + ["Active"])
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+    for p in people:
+        ws.append([_safe(p.get(k, "")) for k in ("username", "display_name", "role", "programs", "roster_name",
+                                                  "team_manager")] + ["Yes" if p.get("active") else "No"])
+    for col, width in zip("ABCDEFG", (20, 22, 14, 28, 22, 20, 8)):
+        ws.column_dimensions[col].width = width
+    out = io.BytesIO()
+    wb.save(out)
+    return out.getvalue()
+
+
 def _rows(data: bytes, filename: str) -> List[List[Any]]:
     if filename.lower().endswith(".csv"):
         text = data.decode("utf-8-sig", errors="replace")

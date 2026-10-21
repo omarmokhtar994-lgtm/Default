@@ -89,7 +89,28 @@ Load each with the Skill tool at the step it covers; following it from memory do
 6. Package, split into parts, send them, and report in caveman style: what changed, rulings with their cost, what
    is known and left, Egypt times, screens.
 
-## Where things stand (end of Phase AO)
+## Where things stand (end of Phase AS; the package is built after the AQ A/B)
+
+- **AP** (merged LOBs): `webapp/merge.py`, `merged_day.py`, `channel_hours.py`, `daily_views.py`. A View pick (this LOB or
+  all LOBs of the program) on the RTA, Week and Schedules; hours per channel per day and week (RTA, Schedules, Exports);
+  a daily-views workbook per associate from the RTA. Edits on the merged page go to the person's LOB in a
+  before_request hook (`merge=1` plus `associate`).
+- **AQ** (engine, owner-approved): Instructions row `Language Working Window Shift Rule`, `START` (default) or
+  `WHOLE_SHIFT`; engine, independent validator and clean-room checker read it; recorded in the contract hash only when
+  WHOLE_SHIFT; the web workbooks carry the row. Pre-registered A/B in `evidence/phase_aq/REQUESTS.md`; the arms were
+  killed twice by container restarts and rerun with a 1500 s budget (a recorded deviation). Engine identity refreshed
+  with `tools/refresh_engine_identity.py`.
+- **AR** (walls and people): `webapp/tests/test_ar_walls.py` crawls every GET and POST route as people without a
+  program (found and fixed four leaks); delete a person (`Store.delete_user`, soft); bulk users
+  (`webapp/bulk_users.py`, `/admin/users/bulk`); blank password made up and shown once.
+- **AS** (requests): `webapp/change_requests.py` (`ChangeBook`): an associate asks to move a break on the running day
+  (past 00:00 for night shifts), a team manager asks for coaching, the RTA decides on the Requests page with the impact,
+  the nearest times, a comment, billable correction. Buffer words High (one above the need) / Moderate / Low; off-queue
+  warning over 30%; billable follows the program's Coverage measure (Programs setup; `ProgramBook.day_measure`).
+- Rules learned: a container restart kills background runs started with nohup; keep the session active while a long
+  run goes. Check `git status` for rewritten old screenshots before every commit.
+
+## Earlier: end of Phase AO
 
 - Phase AO is complete and pushed (branch `ccr-90ec94cc-a37tqk`): overtime after 00:00, name and team manager lists by
   program, swap offers with warnings, a full-week swap, My week with a week picker and the RTA's aux, leave for weeks
@@ -317,4 +338,5 @@ read the real clock break when their date passes, so stop the clock with `mock.p
 - AL: Email deep green, the engine's more consistent schedule as a version, a channel fairness view.
 - AM: Fix channels on the RTA, download in the zone picked, a Version pick on Weeks, percentages for before-breaks runs.
 - AN: ChatGPT's reviewed fixes: time-zone dates and clock-change safety, channel coverage, solver in a child process, Go-to permissions.
+- AP to AS: merged LOBs and channel hours; WHOLE_SHIFT language window; program walls, delete user, bulk users; break change and coaching requests.
 - AO: My week picker, week swap, swap warnings, leave for later weeks, name lists by program, overtime after 00:00.

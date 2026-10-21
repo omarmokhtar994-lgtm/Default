@@ -67,6 +67,7 @@ from .results import recolour, version_summary
 from .runs import ACTIVE, MODES, OPTION_LABELS, READY, RESUMABLE, RunQueue, parse_options, run_options
 from .store import Store
 from werkzeug.datastructures import ImmutableMultiDict
+from .daily_views import people_of, workbook as daily_workbook
 from .merge import merge_intervals
 from .merged_day import lob_of, merged_page
 from .week import in_zone, view as week_view
@@ -2996,16 +2997,22 @@ def create_app(config: Dict[str, Any]) -> Flask:
         units = _merge_units(program)  # Phase AP: a View pick when the program has two or more LOBs
         g.merge_pick = f"All LOBs of {ProgramBook(app.extensions['store']).unit(program)['program']['name']}" \
             if len(units) > 1 else ""
-        merge = None
-        if len(units) > 1:  # the pick is kept for the program in the session, like the zone and the start
-            kept = dict(session.get("rta_merge") or {})
-            pid = str(ProgramBook(app.extensions["store"]).unit(program)["program"]["id"])
-            if "merge" in request.args:
-                kept[pid] = "1" if request.args.get("merge") == "1" else ""
-                session["rta_merge"] = kept
-            merge = units if kept.get(pid) == "1" else None
+        merge = _merge_choice(program)
         with shown(moved):
             return _day_body(days, programs, on, program, own_zone, moved, start_at, merge)
+
+    def _merge_choice(program: str) -> Optional[List[str]]:
+        """Phase AP: the LOBs the RTA page shows as one (the program's LOBs) when "All LOBs" is picked, else None.
+        The pick is kept for the program in the session, like the zone and the start."""
+        units = _merge_units(program)
+        if len(units) < 2:
+            return None
+        kept = dict(session.get("rta_merge") or {})
+        pid = str(ProgramBook(app.extensions["store"]).unit(program)["program"]["id"])
+        if "merge" in request.args:
+            kept[pid] = "1" if request.args.get("merge") == "1" else ""
+            session["rta_merge"] = kept
+        return units if kept.get(pid) == "1" else None
 
     MERGE_TABS = ("timeline", "board", "adherence")  # Phase AP: the tabs that read, and change one person at a time
 
@@ -3695,6 +3702,43 @@ def create_app(config: Dict[str, Any]) -> Flask:
         except ValueError as exc:
             _say(f"No changes were saved: {exc}", program, on)
         return _back_to_day(program, on, "channels")
+
+    @app.route("/day/daily-views.xlsx")
+    @login_required
+    def day_daily_views():  # type: ignore[no-untyped-def]
+        """Phase AP (sample ap01, D): a workbook with a sheet for each associate on the page the RTA shows (one LOB, or
+        the merged page), after the day's changes, in the zone and from the start picked."""
+        days = _days()
+        program, on = clean_program(request.args.get("program", "")), _date(request.args.get("date", ""))
+        if not program or on is None:
+            abort(400)
+        own_zone = _own_zone(program, on)
+        g.zone, start_at = _rta_choice(program, lambda zone: rta_shift(on, own_zone, zone) or 0)
+        moved = rta_shift(on, own_zone, g.zone)
+        if moved is None:
+            g.zone, moved = own_zone, 0
+        merge = _merge_choice(program)
+        try:
+            if merge:
+                page = merged_page(days, program, merge, on, "interval", start_at - moved, g.zone, _own_zone)
+            else:
+                page = days.page(program, on)
+                if page is not None:
+                    start = start_at - moved
+                    page = days.window_page(program, on, start - start % page["view"]["interval"])
+        except ValueError as exc:
+            flash(str(exc))
+            return redirect(url_for("day_page", program=program, date=on.isoformat()), code=303)
+        if page is None:
+            abort(404)
+        shown_at = start_at
+        people = people_of(page["view"], moved, _lob_names(merge) if merge else None)
+        heading = (f"{on:%A %d %b %Y}, times in {dict(ZONES)[g.zone]}, the 24 hours from {plain_hm(shown_at)}. "
+                   "As recorded on the RTA when this was downloaded.")
+        name = secure_filename(f"Daily_views_{(_merged_name(program, merge) if merge else program)}_{on}") + ".xlsx"
+        _record("downloaded", subject=name, program=program, detail="Daily views")
+        return send_file(io.BytesIO(daily_workbook(people, heading)), as_attachment=True, download_name=name,
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     @app.route("/day/handover")
     @login_required

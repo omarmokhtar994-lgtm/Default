@@ -47,3 +47,19 @@ Received Wed 21 Oct 2026. A visual sample comes first: `samples/as01_break_and_c
 3. Coaching: only the running day like the break change, or also later days?
 4. Buffer thresholds: is "one person above the need = High, at the need = Moderate, below = Low" right, or should
    High be more (two people, or a percentage of the need)?
+
+## Owner's answers (21 Oct 2026) and later changes
+
+Answers to the four questions: all breaks and lunch may be moved; a team manager sends coaching for a department; coaching
+may be for the running day or later days; High is one person above the need, Moderate at the need, Low below it.
+
+Added by the owner after the first build:
+
+1. **Reality, not the plan.** The choices, the buffer and the impact are worked out from what the RTA tab holds now:
+   absences, moved breaks, overtime, activities already booked. (They already were: the day the RTA shows is the one used.
+   Tests pin it: a colleague marked sick lowers the buffer; a break the RTA moved is the one the associate changes.)
+2. **Coaching is billable or not billable.** The requester says which; the buffer follows it (billable coaching under
+   interval compliance keeps people on the floor); the RTA can correct it when approving and sees the impact the other way.
+3. **The nearest time.** When the RTA will not approve a time he sees the nearest times (High or Moderate first), may
+   approve the request at one of them, and writes a comment when he changes the time or rejects. The associate (or the
+   team manager) sees the new time, what was asked, and the comment.

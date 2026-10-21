@@ -13,6 +13,10 @@
       {% for n in roster %}<label class="exp-kind"><input type="checkbox" name="who" value="{{ n }}"{% if n in names %} checked{% endif %}> {{ n }}</label>{% endfor %}
     </fieldset>
     <label>Day <input type="date" name="date" value="{{ on.isoformat() }}"></label>
+    <fieldset class="exp-kinds"><legend>Is it billable?</legend>
+      <label class="exp-kind"><input type="radio" name="billable" value="0"{% if not billable %} checked{% endif %}> Not billable</label>
+      <label class="exp-kind"><input type="radio" name="billable" value="1"{% if billable %} checked{% endif %}> Billable</label>
+    </fieldset>
     <label>Length <select name="minutes">{% for m in (15, 30, 45, 60, 90) %}<option value="{{ m }}"{% if m == minutes %} selected{% endif %}>{{ m }} minutes</option>{% endfor %}</select></label>
     <button class="quiet">Show times</button>
   </form>
@@ -20,11 +24,11 @@
 {% if problem %}<p class="error" role="alert">{{ problem }}</p>{% endif %}
 {% if options is not none %}
 <section class="panel" aria-labelledby="times-h">
-  <h2 id="times-h">Times for {{ names|join(', ') }}</h2>
-  <p class="note">The buffer is what each interval has once all of them are off the queue. <span class="lv lv-high">High</span> and <span class="lv lv-moderate">Moderate</span> are most likely approved; <span class="lv lv-low">Low</span> is most likely rejected.</p>
+  <h2 id="times-h">Times for {{ names|join(', ') }}, {{ 'billable' if billable else 'not billable' }}</h2>
+  <p class="note">The buffer is what each interval has once all of them are off the queue (billable coaching under interval compliance keeps them on it). The RTA can correct billable or not. <span class="lv lv-high">High</span> and <span class="lv lv-moderate">Moderate</span> are most likely approved; <span class="lv lv-low">Low</span> is most likely rejected.</p>
   <form method="post" action="{{ url_for('requests_coaching_ask') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ unit }}">
-    <input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="minutes" value="{{ minutes }}">
+    <input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="minutes" value="{{ minutes }}"><input type="hidden" name="billable" value="{{ '1' if billable else '0' }}">
     {% for n in names %}<input type="hidden" name="who" value="{{ n }}">{% endfor %}
     <fieldset class="slots"><legend>Pick a time</legend>
       {% for c in options %}<label class="slot"><input type="radio" name="start" value="{{ hm(c.start) }}" required> {{ hm(c.start) }} to {{ hm(c.end) }}

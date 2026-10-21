@@ -16,15 +16,22 @@
       <p class="req-facts"><span class="lv lv-{{ r.d.level }}">{{ r.d.level|capitalize }} buffer when asked</span></p>
       {% if r.impact %}<table class="runs small"><caption class="sr-only">What it does to the intervals</caption>
         <thead><tr><th scope="col">Interval</th><th scope="col">Needed</th><th scope="col">On the floor now</th><th scope="col">After this change</th><th scope="col">Buffer after</th></tr></thead>
-        <tbody>{% for i in r.impact %}<tr><th scope="row">{{ hm(i.t) }}</th><td>{{ i.need|num }}</td><td>{{ i.before|num }}</td><td>{{ i.after|num }}</td><td><span class="lv lv-{{ i.level }}">{{ i.level|capitalize }} buffer</span>{% if i.level == 'low' %} <small class="slot-warn">short by {{ (0 - i.people_above)|num }}</small>{% endif %}</td></tr>{% endfor %}</tbody></table>
-      {% elif r.impact_note %}<p class="req-warn">{{ r.impact_note }}</p>{% endif %}
+        <tbody>{% for i in r.impact %}<tr><th scope="row">{{ hm(i.t) }}</th><td>{{ i.need|num }}</td><td>{{ i.before|num }}</td><td>{{ i.after|num }}</td><td><span class="lv lv-{{ i.level }}">{{ i.level|capitalize }} buffer</span>{% if i.level == 'low' %} <small class="slot-warn">short by {{ (0 - i.people_above)|num }}</small>{% endif %}</td></tr>{% endfor %}</tbody></table>{% endif %}
+      {% if not r.impact and r.impact_note %}<p class="req-warn">{{ r.impact_note }}</p>{% endif %}
+      {% if r.other_impact %}<details><summary>If it is {{ 'not billable' if r.d.billable else 'billable' }} instead</summary>
+        <table class="runs small"><thead><tr><th scope="col">Interval</th><th scope="col">After this change</th><th scope="col">Buffer after</th></tr></thead>
+        <tbody>{% for i in r.other_impact %}<tr><th scope="row">{{ hm(i.t) }}</th><td>{{ i.after|num }}</td><td><span class="lv lv-{{ i.level }}">{{ i.level|capitalize }} buffer</span></td></tr>{% endfor %}</tbody></table></details>{% endif %}
     </div>
     <div class="req-act">{% if may_change %}
       <form method="post" action="{{ url_for('request_change_decide', request_id=r.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button class="primary" name="decision" value="approve"><span class="ico i-check-circle" aria-hidden="true"></span>Approve</button>
-        <label>Reason, if you reject <input name="reason" maxlength="200" autocomplete="off"></label>
+        {% if r.kind == 'coaching' %}<label>Coaching is <select name="billable"><option value="0"{% if not r.d.billable %} selected{% endif %}>Not billable</option><option value="1"{% if r.d.billable %} selected{% endif %}>Billable</option></select></label>{% endif %}
+        <label>Comment (needed if you reject or change the time) <input name="reason" maxlength="200" autocomplete="off"></label>
+        <button class="primary" name="decision" value="approve"><span class="ico i-check-circle" aria-hidden="true"></span>Approve as asked</button>
         <button name="decision" value="reject">Reject</button>
+        {% if r.alternatives %}<fieldset class="alts"><legend>Or approve at the nearest time</legend>
+          {% for a in r.alternatives %}<button name="change_at" value="{{ a.start }}">{{ hm(a.start) }} to {{ hm(a.end) }}</button> <span class="lv lv-{{ a.level }}">{{ a.level|capitalize }} buffer</span> <small>{{ a.distance }} minutes from the time asked for</small><br>{% endfor %}
+        </fieldset>{% endif %}
       </form>{% else %}<p class="hint">The RTA decides.</p>{% endif %}
     </div>
   </article>

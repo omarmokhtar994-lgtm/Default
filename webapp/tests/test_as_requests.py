@@ -203,5 +203,125 @@ class TheCoachingRequests(_Fixture):
         self.assertEqual(self.store.get_change_request(rid)["status"], "refused")
 
 
+class TheRealityView(_Fixture):
+    """Owner, 2026-10-21: the choices and the impact follow what the RTA tab holds now (absences, moved breaks, overtime,
+    activities), not what was planned."""
+
+    def setUp(self):
+        self.clear()
+
+    def levels(self, name=ME):
+        options = self.book.break_options(self.key, name, 0, at(WED, 12))
+        return {c["start"]: c["people_above"] for c in options["choices"]}
+
+    def test_a_colleague_marked_sick_takes_cover_out_of_the_buffer(self):
+        planned = self.levels()
+        self.app.extensions["days"].set_status(self.key, WED, MATE, "Sick", self.rta["id"])
+        real = self.levels()
+        self.assertEqual(planned.keys(), real.keys())
+        self.assertTrue(all(real[t] is None or planned[t] is None or real[t] < planned[t] for t in real))
+
+    def test_a_break_the_rta_moved_is_the_one_the_associate_changes(self):
+        days = self.app.extensions["days"]
+        days.move_break(self.key, WED, ME, 0, "12:30", self.rta["id"])
+        options = self.book.break_options(self.key, ME, 0, at(WED, 12))
+        self.assertEqual(options["current"], 12 * 60 + 30)
+        self.assertEqual([c["start"] for c in options["choices"] if c["current"]], [12 * 60 + 30])
+
+    def test_coaching_the_rta_already_booked_is_busy_time(self):
+        before = {c["start"] for c in self.book.coaching_options(self.key, WED, [ME], 30, at(WED, 9))}
+        self.app.extensions["days"].add_activity(self.key, WED, ME, "Meeting", "14:00", "15:00", self.rta["id"],
+                                                 with_whom="Made-up", why="Made-up", with_dept="")
+        after = {c["start"] for c in self.book.coaching_options(self.key, WED, [ME], 30, at(WED, 9))}
+        self.assertTrue(before - after)
+        self.assertNotIn(14 * 60 + 15, after)
+
+
+class TheBillableChoice(_Fixture):
+    def setUp(self):
+        self.clear()
+        self.tm = self.users["tm1"]
+
+    def test_billable_coaching_keeps_people_on_the_floor_so_the_buffer_is_higher(self):
+        non = {c["start"]: c["people_above"] for c in self.book.coaching_options(self.key, WED, [ME, MATE], 60, at(WED, 9))}
+        bill = {c["start"]: c["people_above"] for c in self.book.coaching_options(self.key, WED, [ME, MATE], 60, at(WED, 9),
+                                                                                    billable=True)}
+        both = [t for t in non if t in bill and non[t] is not None and t % 60 == 0]  # whole hours of an hourly day
+        self.assertTrue(both)
+        self.assertTrue(all(abs(bill[t] - non[t] - 2) < 1e-6 for t in both))
+
+    def test_the_request_says_which_and_the_rta_can_correct_it_when_approving(self):
+        first = self.book.coaching_options(self.key, WED, [ME], 30, at(WED, 9))[0]["start"]
+        rid = self.book.ask_coaching(self.key, [ME], self.tm, WED, f"{first // 60:02d}:{first % 60:02d}", 30, "Quality",
+                                     "Made-up", at(WED, 9), billable=False)
+        self.assertIn("not billable", self.book._label(self.store.get_change_request(rid))["what"].lower())
+        self.book.decide(rid, self.rta, True, "It is billable, set by Quality", at(WED, 9, 5), billable=True)
+        lane = next(l for l in self.app.extensions["days"].page(self.key, WED)["view"]["lanes"] if l["name"] == ME)
+        acts = [a for s in lane["segments"] for a in s["activities"] if a["kind"] == "Coaching"]
+        self.assertEqual([a["billable"] for a in acts], [True])
+        self.assertTrue(json.loads(self.store.get_change_request(rid)["detail"])["billable"])
+
+
+class TheNearestTime(_Fixture):
+    """When the RTA will not approve a time he sees the nearest ones, may change the request to one of them, and writes why;
+    the requester reads it."""
+
+    def setUp(self):
+        self.clear()
+
+    def ask(self):
+        options = self.book.break_options(self.key, ME, 0, at(WED, 12))
+        clock, to = self.other(options, 2)
+        return self.book.ask_break(self.key, ME, self.me, 0, clock, "", at(WED, 12)), to
+
+    def test_the_nearest_times_come_nearest_first_and_skip_a_low_one_when_a_better_exists(self):
+        rid, to = self.ask()
+        near = self.book.alternatives(self.store.get_change_request(rid), at(WED, 12))
+        self.assertTrue(near)
+        self.assertEqual([abs(n["start"] - to) for n in near], sorted(abs(n["start"] - to) for n in near))
+        self.assertTrue(all(n["start"] != to for n in near))
+        if any(n["level"] != LOW for n in near):
+            self.assertTrue(all(n["level"] != LOW for n in near))
+
+    def test_changing_to_a_nearer_time_applies_that_time_keeps_what_was_asked_and_needs_a_comment(self):
+        rid, to = self.ask()
+        near = self.book.alternatives(self.store.get_change_request(rid), at(WED, 12))[0]["start"]
+        with self.assertRaises(ValueError):
+            self.book.decide(rid, self.rta, True, "", at(WED, 12, 5), at=near)
+        self.book.decide(rid, self.rta, True, "Phones are busy at your time", at(WED, 12, 5), at=near)
+        row = self.store.get_change_request(rid)
+        detail = json.loads(row["detail"])
+        self.assertEqual((row["status"], detail["to"], detail["asked_to"]), ("approved", near, to))
+        lane = next(l for l in self.app.extensions["days"].page(self.key, WED)["view"]["lanes"] if l["name"] == ME)
+        moved = next(b for s in lane["segments"] if s["offset"] == 0 for b in s["breaks"] if b["idx"] == 0)
+        self.assertEqual(moved["start"], near)
+        words = self.book._label(row)
+        self.assertIn("instead", words["status_words"])
+        self.assertEqual(words["decision"], "Phones are busy at your time")
+
+    def test_a_time_that_is_not_one_of_the_choices_cannot_be_the_change(self):
+        rid, _ = self.ask()
+        with self.assertRaises(ValueError):
+            self.book.decide(rid, self.rta, True, "x", at(WED, 12, 5), at=3 * 60)
+
+    def test_the_associate_reads_the_new_time_and_the_comment(self):
+        rid, _ = self.ask()
+        near = self.book.alternatives(self.store.get_change_request(rid), at(WED, 12))[0]["start"]
+        self.book.decide(rid, self.rta, True, "Phones are busy at your time", at(WED, 12, 5), at=near)
+        mine = self.book.mine(self.key, self.me["id"])[0]
+        self.assertIn("Phones are busy at your time", mine["decision"])
+        self.assertIn(f"{(near // 60) % 24:02d}:{near % 60:02d}", mine["what"] + mine["status_words"])
+
+    def test_coaching_can_be_moved_to_the_nearest_time_too(self):
+        tm = self.users["tm1"]
+        opts = self.book.coaching_options(self.key, WED, [ME, MATE], 30, at(WED, 9))
+        rid = self.book.ask_coaching(self.key, [ME, MATE], tm, WED, f"{opts[4]['start'] // 60:02d}:{opts[4]['start'] % 60:02d}",
+                                     30, "", "", at(WED, 9), billable=False)
+        near = self.book.alternatives(self.store.get_change_request(rid), at(WED, 9))
+        self.assertTrue(near)
+        self.book.decide(rid, self.rta, True, "Moved to a quieter time", at(WED, 9, 5), at=near[0]["start"])
+        self.assertEqual(json.loads(self.store.get_change_request(rid)["detail"])["start"], near[0]["start"])
+
+
 if __name__ == "__main__":
     unittest.main()

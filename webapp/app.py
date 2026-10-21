@@ -1249,12 +1249,15 @@ def create_app(config: Dict[str, Any]) -> Flask:
 
     def _change_rows(key: str) -> List[Dict[str, Any]]:
         """Phase AS: the waiting break changes and coaching, each with the intervals it touches (before, after, buffer)."""
-        book, rows = app.extensions["changes"], []
+        book, rows, now = app.extensions["changes"], [], _local_now(key)
         for r in book.waiting(key):
             try:
                 r["impact"], r["impact_note"] = book.impact(r), ""
+                r["alternatives"] = book.alternatives(r, now)  # the nearest times, from what the RTA holds now
+                if r["kind"] == "coaching":  # the other answer to "billable?", so the RTA sees what correcting it does
+                    r["other_impact"] = book.impact(r, billable=not r["d"].get("billable"))
             except (ValueError, KeyError, StopIteration) as exc:  # a day that cannot be worked out is said, not hidden
-                r["impact"], r["impact_note"] = [], f"The impact cannot be worked out: {exc}"
+                r["impact"], r["impact_note"], r["alternatives"] = [], f"The impact cannot be worked out: {exc}", []
             rows.append(r)
         return rows
 
@@ -1356,14 +1359,15 @@ def create_app(config: Dict[str, Any]) -> Flask:
         names = [n for n in request.args.getlist("who") if n in (leave.names(key) if key else [])]
         on = _date(request.args.get("date", "")) or (now.date() if now else datetime.now(EGYPT).date())
         minutes = request.args.get("minutes", 30, type=int)
+        billable = request.args.get("billable") == "1"
         options, problem = None, ""
         if key and names:
             try:
-                options = book.coaching_options(key, on, names, minutes, now)
+                options = book.coaching_options(key, on, names, minutes, now, billable=billable)
             except ValueError as exc:
                 problem = str(exc)
         return render_template("requests_coaching.html", unit=key, label=_unit_filter(key) if key else "",
-                               roster=sorted(leave.names(key)) if key else [], names=names, on=on, minutes=minutes,
+                               roster=sorted(leave.names(key)) if key else [], names=names, on=on, minutes=minutes, billable=billable,
                                options=options, problem=problem, depts=[d["name"] if isinstance(d, dict) else d
                                                                         for d in (_with_lists(key) if key else [])],
                                mine=book.mine(key, g.user["id"]) if key else [], hm=hm, may_decide=allowed(
@@ -1384,7 +1388,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 raise ValueError("Pick the day.")
             app.extensions["changes"].ask_coaching(key, names, g.user, on, request.form.get("start", ""),
                                                    request.form.get("minutes", 30, type=int), request.form.get("dept", ""),
-                                                   request.form.get("why", ""), _local_now(key))
+                                                   request.form.get("why", ""), _local_now(key),
+                                                   billable=request.form.get("billable") == "1")
             flash("Sent to the RTA.")
         except ValueError as exc:
             flash(str(exc))
@@ -1402,8 +1407,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if not _access().can_open(row["program"]):
             abort(403, description="This request is on a program that is not one of yours.")
         try:
-            said = app.extensions["changes"].decide(request_id, g.user, request.form.get("decision") == "approve",
-                                                    request.form.get("reason", ""), _local_now(row["program"]))
+            moved = request.form.get("change_at", type=int)  # "Approve at 13:45 instead": a nearest time, in minutes
+            billable = {"1": True, "0": False}.get(request.form.get("billable", ""))
+            said = app.extensions["changes"].decide(request_id, g.user,
+                                                    request.form.get("decision") == "approve" or moved is not None,
+                                                    request.form.get("reason", ""), _local_now(row["program"]),
+                                                    at=moved, billable=billable)
         except ValueError as exc:
             said = str(exc)
         _record("change_decided", subject=f"{row['kind']} for {', '.join(json.loads(row['names']))}", detail=said[:300])

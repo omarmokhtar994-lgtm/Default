@@ -284,10 +284,10 @@ class ChangeBook:
                                 max(s["end"] for s in spans), billable=billable, now=at)
 
     def ask_coaching(self, program: str, names: List[str], user: Dict[str, Any], on: date, start: str, minutes: int,
-                     dept: str, why: str, now: datetime) -> int:
+                     dept: str, why: str, now: datetime, billable: bool = False) -> int:
         if not names:
             raise ValueError("Pick who the coaching is for.")
-        options = self.coaching_options(program, on, names, minutes, now)
+        options = self.coaching_options(program, on, names, minutes, now, billable=billable)
         found = self.coaching_view(program, on, names)
         m = _minute(start)
         m += 1440 if m < found["lo"] - 240 else 0
@@ -295,14 +295,14 @@ class ChangeBook:
         if chosen is None:
             raise ValueError("Pick one of the times in the list.")
         detail = {"start": m, "end": m + minutes, "minutes": minutes, "dept": " ".join((dept or "").split())[:80],
-                  "level": chosen["level"], "people_above": chosen["people_above"]}
+                  "billable": bool(billable), "level": chosen["level"], "people_above": chosen["people_above"]}
         return self.store.add_change_request(kind=COACHING, program=program, shift_date=on.isoformat(),
                                      names=json.dumps(sorted(names)), requester_id=user["id"],
                                      requester_name=user["display_name"], detail=json.dumps(detail),
                                      why=" ".join((why or "").split())[:200])
 
     # ------------------------------------------------------------------ what the RTA sees, and decides
-    def impact(self, row: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def impact(self, row: Dict[str, Any], billable: Optional[bool] = None) -> List[Dict[str, Any]]:
         names, d, on = json.loads(row["names"]), json.loads(row["detail"]), date.fromisoformat(row["shift_date"])
         if row["kind"] == BREAK:
             page = self.days.page(row["program"], on)
@@ -312,7 +312,27 @@ class ChangeBook:
             view = self._window(row["program"], on, start - start % page["view"]["interval"])["view"]
             return break_impact(view, names[0], d["idx"], d["to"])
         found = self.coaching_view(row["program"], on, names)
-        return coaching_impact(found["view"], names, d["start"], d["minutes"])
+        return coaching_impact(found["view"], names, d["start"], d["minutes"],
+                               d.get("billable", False) if billable is None else billable)
+
+    def _all_options(self, row: Dict[str, Any], now: datetime, billable: Optional[bool] = None):
+        """Every time the request could be at now (from today's records), and the time it asks for: (options, asked)."""
+        names, d, on = json.loads(row["names"]), json.loads(row["detail"]), date.fromisoformat(row["shift_date"])
+        if row["kind"] == BREAK:
+            got = self.break_options(row["program"], names[0], d["idx"], now)
+            return [c for c in got["choices"] if not c["current"]], d["to"]
+        want = d.get("billable", False) if billable is None else billable
+        return self.coaching_options(row["program"], on, names, d["minutes"], now, billable=want), d["start"]
+
+    def alternatives(self, row: Dict[str, Any], now: datetime, billable: Optional[bool] = None,
+                     top: int = 3) -> List[Dict[str, Any]]:
+        """The times nearest to the one asked for, nearest first: the ones with High or Moderate buffer when there are
+        any, else the nearest Low ones. The time asked for is not among them."""
+        options, asked = self._all_options(row, now, billable)
+        others = [dict(c, distance=abs(c["start"] - asked)) for c in options if c["start"] != asked]
+        good = [c for c in others if c["level"] != LOW]
+        pool = good or others
+        return sorted(pool, key=lambda c: (c["distance"], c["start"]))[:top]
 
     def _label(self, row: Dict[str, Any]) -> Dict[str, Any]:
         d = json.loads(row["detail"])
@@ -320,10 +340,21 @@ class ChangeBook:
         words = {"waiting": "waiting for the RTA", "approved": "approved", "rejected": "rejected",
                  "cancelled": "cancelled", "refused": "could not be applied"}
         if row["kind"] == BREAK:
-            what = f"{d['kind']} from {hm(d['from'])} to {hm(d['to'])}"
+            what = f"{d['kind']} from {hm(d['from'])} to {hm(d['to'] if 'asked_to' not in d else d['asked_to'])}"
         else:
-            what = f"Coaching {hm(d['start'])} to {hm(d['end'])}" + (f" ({d['dept']})" if d.get("dept") else "")
-        return {**row, "names_list": names, "d": d, "what": what, "status_words": words.get(row["status"], row["status"]),
+            what = (f"Coaching {hm(d['start'] if 'asked_start' not in d else d['asked_start'])} to "
+                    f"{hm(d['end'] if 'asked_start' not in d else d['asked_start'] + d['minutes'])}, "
+                    f"{'billable' if d.get('asked_billable', d.get('billable')) else 'not billable'}"
+                    + (f" ({d['dept']})" if d.get("dept") else ""))
+        said = words.get(row["status"], row["status"])
+        if row["status"] == "approved":
+            if "asked_to" in d:
+                said = f"approved at {hm(d['to'])} instead of {hm(d['asked_to'])}"
+            elif "asked_start" in d:
+                said = f"approved at {hm(d['start'])} instead of {hm(d['asked_start'])}"
+            if "asked_billable" in d:
+                said += f", changed to {'billable' if d['billable'] else 'not billable'}"
+        return {**row, "names_list": names, "d": d, "what": what, "status_words": said,
                 "on": date.fromisoformat(row["shift_date"])}
 
     def waiting(self, program: str) -> List[Dict[str, Any]]:
@@ -348,9 +379,12 @@ class ChangeBook:
             raise ValueError("That request has been decided already.")
         self.store.update_change_request(request_id, status="cancelled", decided_at=time.time(), decided_by=user["id"])
 
-    def decide(self, request_id: int, user: Dict[str, Any], approve: bool, reason: str, now: datetime) -> str:
+    def decide(self, request_id: int, user: Dict[str, Any], approve: bool, reason: str, now: datetime,
+               at: Optional[int] = None, billable: Optional[bool] = None) -> str:
         """The RTA's answer. Approve makes the change on the day with every check the RTA's own forms run; if one
-        refuses, nothing is changed and the request says it could not be applied. Reject needs a reason."""
+        refuses, nothing is changed and the request says it could not be applied. Reject needs a reason. ``at`` (minutes,
+        one of the times the request could be at) approves it at that time instead, and needs a reason too; ``billable``
+        corrects whether coaching is billable."""
         row = self.store.get_change_request(request_id)
         if row is None:
             raise ValueError("There is no such request.")
@@ -366,29 +400,40 @@ class ChangeBook:
                                      decision=reason)
             return f"Rejected: {who}, {label['what'].lower()}."
         on, d = label["on"], label["d"]
+        asked = d["to"] if row["kind"] == BREAK else d["start"]
+        if at is not None and at != asked:
+            if not reason:
+                raise ValueError("Say why you changed the time: the person sees it.")
+            options, _ = self._all_options(row, now, billable)
+            if at not in {c["start"] for c in options}:
+                raise ValueError("That time is not one the request can be moved to.")
+            d = dict(d, **({"asked_to": d["to"], "to": at} if row["kind"] == BREAK else
+                           {"asked_start": d["start"], "start": at, "end": at + d["minutes"]}))
+        if row["kind"] == COACHING and billable is not None and bool(billable) != bool(d.get("billable")):
+            d = dict(d, asked_billable=bool(d.get("billable")), billable=bool(billable))
         try:
             if row["kind"] == BREAK:
-                at = (now.date() - on).days * 1440 + now.hour * 60 + now.minute
-                if d["to"] < at or d["from"] < at:
+                clock_at = (now.date() - on).days * 1440 + now.hour * 60 + now.minute
+                if d["to"] < clock_at or d["from"] < clock_at:
                     raise ValueError("That time has passed: ask again for a later one.")
                 self.days.move_break(row["program"], on, label["names_list"][0], d["idx"], hm(d["to"]), user["id"],
                                      suffix=f" (asked by {row['requester_name']})")
             else:
-                at = (now.date() - on).days * 1440 + now.hour * 60 + now.minute
-                if d["start"] < at:
+                clock_at = (now.date() - on).days * 1440 + now.hour * 60 + now.minute
+                if d["start"] < clock_at:
                     raise ValueError("That time has passed: ask again for a later one.")
                 for name in label["names_list"]:  # every check first, then the changes
                     self.days.add_activity(row["program"], on, name, "Coaching", hm(d["start"]), hm(d["end"]), user["id"],
-                                           dry_run=True, with_whom=row["requester_name"], why=row["why"] or "Coaching",
-                                           with_dept=d.get("dept", ""))
+                                           billable=bool(d.get("billable")), dry_run=True, with_whom=row["requester_name"],
+                                           why=row["why"] or "Coaching", with_dept=d.get("dept", ""))
                 for name in label["names_list"]:
                     self.days.add_activity(row["program"], on, name, "Coaching", hm(d["start"]), hm(d["end"]), user["id"],
-                                           with_whom=row["requester_name"], why=row["why"] or "Coaching",
-                                           with_dept=d.get("dept", ""))
+                                           billable=bool(d.get("billable")), with_whom=row["requester_name"],
+                                           why=row["why"] or "Coaching", with_dept=d.get("dept", ""))
         except (ValueError, BreakRefused) as exc:
             self.store.update_change_request(request_id, status="refused", decided_by=user["id"], decided_at=time.time(),
                                     outcome=str(exc))
             raise ValueError(f"Not applied: {exc}") from exc
         self.store.update_change_request(request_id, status="approved", decided_by=user["id"], decided_at=time.time(),
-                                 decision=reason)
+                                 decision=reason, detail=json.dumps(d))
         return f"Approved: {who}, {label['what'].lower()}."

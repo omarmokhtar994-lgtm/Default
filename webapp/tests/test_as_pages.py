@@ -114,6 +114,31 @@ class TheAssociatesBreaks(_Pages):
         self.post(self.assoc, "/me/breaks", idx=0, to=first)
         self.assertEqual(self.app.extensions["changes"].count(self.key), 1)
 
+    def ask_far(self):
+        page = self.get(self.assoc, "/me/breaks", change=0)
+        times = re.findall(r'name="to" value="([0-9:]+)"(?! disabled)', page)
+        self.post(self.assoc, "/me/breaks", idx=0, to=times[2])
+        return self.store.list_change_requests()[-1]["id"]
+
+    def test_the_rta_sees_the_nearest_times_and_changes_to_one_with_a_comment_the_associate_reads(self):
+        rid = self.ask_far()
+        rta = self.get(self.staff, "/requests", program=self.key)
+        self.assertIn("Or approve at the nearest time", rta)
+        near = re.search(r'name="change_at" value="(\d+)"', rta).group(1)
+        refused = self.post(self.staff, f"/requests/change/{rid}", change_at=near, reason="")
+        self.assertEqual(self.store.get_change_request(rid)["status"], "waiting")
+        self.post(self.staff, f"/requests/change/{rid}", change_at=near, reason="Phones are busy at your time")
+        row = self.store.get_change_request(rid)
+        self.assertEqual((row["status"], json.loads(row["detail"])["to"]), ("approved", int(near)))
+        mine = self.get(self.assoc, "/me/breaks")
+        self.assertIn("instead of", mine)
+        self.assertIn("Phones are busy at your time", mine)
+
+    def test_a_rejection_comment_is_shown_to_the_associate_too(self):
+        rid = self.ask_far()
+        self.post(self.staff, f"/requests/change/{rid}", decision="reject", reason="No cover then; try after lunch")
+        self.assertIn("No cover then; try after lunch", self.get(self.assoc, "/me/breaks"))
+
 
 class TheCoachingForm(_Pages):
     def test_a_team_manager_sees_the_times_for_the_people_picked_and_sends_a_request(self):
@@ -128,6 +153,20 @@ class TheCoachingForm(_Pages):
         rta = self.get(self.staff, "/requests", program=self.key)
         self.assertIn("Coaching", rta)
         self.assertIn("Team Manager 07", rta)
+
+    def test_the_form_asks_billable_or_not_and_the_rta_can_correct_it(self):
+        page = self.get(self.tm, "/requests/coaching", program=self.key, who=[ME], date="2026-10-14", minutes=30, billable=1)
+        self.assertIn("Is it billable?", page)
+        self.assertIn("billable", page.split("Times for")[1].split("</h2>")[0])
+        first = re.search(r'name="start" value="([0-9:]+)"', page).group(1)
+        self.post(self.tm, "/requests/coaching", program=self.key, who=[ME], date="2026-10-14", minutes=30, start=first,
+                  billable="0")
+        rid = self.store.list_change_requests(kind="coaching")[-1]["id"]
+        rta = self.get(self.staff, "/requests", program=self.key)
+        self.assertIn("not billable", rta)
+        self.assertIn("If it is billable instead", rta)
+        self.post(self.staff, f"/requests/change/{rid}", decision="approve", billable="1", reason="Quality set it billable")
+        self.assertTrue(json.loads(self.store.get_change_request(rid)["detail"])["billable"])
 
     def test_someone_with_rta_rights_approves_their_own_request(self):
         page = self.get(self.sup, "/requests/coaching", program=self.key, who=[ME], date="2026-10-14", minutes=30)

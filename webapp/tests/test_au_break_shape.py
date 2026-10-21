@@ -6,7 +6,7 @@ arms: evidence/phase_au/BREAKS_RULE.md (arm A, the old placement: 15 of 184 peop
 1.75, 3.25, 3.0, 2.75, 2.75, 2.0, 1.75)."""
 import unittest
 
-from webapp.break_plan import check_row, floor, shape_fit, slots_for, suggest
+from webapp.break_plan import check_row, cushion_slack, floor, shape_fit, slots_for, suggest
 from webapp.tests import test_break_plan
 from webapp.versions import shift_span
 
@@ -33,6 +33,31 @@ class TheShape(unittest.TestCase):
     def test_a_shift_without_lunch_has_the_first_and_last_parts_only(self):
         found = shape_fit(0, 480, [150, 300], [("Break 1", 15), ("Break 2", 15)])
         self.assertEqual(found, (True, None, True))
+
+
+class TheCushion(unittest.TestCase):
+    """Safe is what the autopilot and the RTA colours call safe: 100% of the need, or at the target and at least 10
+    minutes over it (day.CUSHION). Interval 30 minutes, need 4 people."""
+    def view(self):
+        return {"interval": 30, "cells": [{"t": 600, "required": 4.0}]}
+
+    def slack(self, on_floor, target):
+        return cushion_slack(self.view(), [on_floor] * 288, 600, 630, target)
+
+    def test_at_the_need_is_safe(self):
+        self.assertGreaterEqual(self.slack(4.0, 0.9), 0)
+
+    def test_over_the_target_by_less_than_ten_minutes_is_not_safe(self):
+        self.assertLess(self.slack(3.9, 0.9), 0)   # 0.3 over a 3.6 target for 30 minutes = 9 minutes
+        self.assertLess(self.slack(3.5, 0.9), 0)   # under the target
+
+    def test_over_the_target_by_ten_minutes_is_safe(self):
+        self.assertGreaterEqual(self.slack(3.6, 0.8), 0)   # 0.4 over a 3.2 target for 30 minutes = 12 minutes
+        self.assertLess(self.slack(3.4, 0.8), 0)           # 6 minutes
+
+    def test_an_interval_with_no_need_does_not_count(self):
+        view = {"interval": 30, "cells": [{"t": 600, "required": 0.0}]}
+        self.assertIsNone(cushion_slack(view, [0] * 288, 600, 630, 0.9))
 
 
 class TheSuggestion(test_break_plan.TheBreakPlan):
@@ -62,6 +87,14 @@ class TheSuggestion(test_break_plan.TheBreakPlan):
             worst = min(c["pm"] for c in cells if c["pm"] is not None)
             self.assertGreaterEqual(worst, ARM_A_TIGHTEST[d] - 0.75, f"day {d}")  # owner, 2026-10-21: up to 0.75 h less
             self.assertGreater(worst, 1.0, f"day {d}: still well above the need")
+
+    def test_no_interval_is_left_under_the_cushion_when_a_time_exists_that_keeps_it(self):
+        # the cushion is the rule the autopilot uses; Suggest holds it too (owner, 2026-10-21)
+        target = self.inputs.get("target", 0.9)
+        for d in range(7):
+            plan = suggest(self.week, self.inputs, self.rules, d, {})
+            cells = floor(self.week, self.inputs, d, plan, self.rules, target)
+            self.assertFalse([c for c in cells if c["cls"] == "bad"], f"day {d}: an interval under the target")
 
     def test_a_break_typed_by_hand_is_kept(self):
         d = 3

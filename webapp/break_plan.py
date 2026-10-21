@@ -13,7 +13,7 @@ import copy
 import math
 from typing import Any, Dict, List, Optional, Tuple
 
-from .day import STEP, _tightest, at_target, day_view, planned
+from .day import CUSHION, STEP, _tightest, at_target, day_view, planned
 from .versions import DAYS, shift_span
 
 QUARTER = 15
@@ -55,6 +55,20 @@ FIRST_FROM, FIRST_TO = 120, 210      # the first break starts this long after th
 LUNCH_FROM, LUNCH_TO = 120, 180      # the lunch starts this much work after the first break ends
 LAST_CLEAR = 60                      # the last break ends at least this long before the shift ends
 SHAPE_TOLERANCE = 0.25               # when no time keeps the buffer at or above the need, the hours it may give up (BREAKS_RULE.md)
+
+
+def cushion_slack(view: Dict[str, Any], slots: List[float], lo: int, hi: int, target: float) -> Optional[float]:
+    """The least, over the intervals a break touches, of how far each is from safe, in hours of buffer: 0 or more is
+    safe. Safe is what the autopilot and the RTA colours call safe (day.at_target): 100% of the need, or at the target
+    and at least CUSHION minutes over it. None when none of the intervals has a need."""
+    step = view["interval"]
+    found = []
+    for c in view["cells"]:
+        if c["required"] > 0 and c["t"] < hi and lo < c["t"] + step:
+            here = slots[c["t"] // STEP:(c["t"] + step) // STEP]
+            pm = (sum(here) / len(here) - c["required"]) * step / 60
+            found.append(max(pm, pm + (1 - target) * c["required"] * step / 60 - CUSHION / 60))
+    return min(found) if found else None
 
 
 def _fits(k: int, c: int, lo: int, hi: int, starts: Starts, slots: List[Tuple[str, int]]) -> Optional[bool]:
@@ -230,17 +244,19 @@ def suggest(week: Dict[str, Any], inputs: Dict[str, Any], rules: Dict[str, Any],
                     if 0 <= t < 1440:
                         trial[t // STEP] -= 1
                 tight = _tightest(view, trial, c, c + minutes)
+                slack = cushion_slack(view, trial, c, c + minutes, inputs.get("target", 0.9))
                 found.append((c, not crowded, gap is None or most is None or gap <= most,
                               _fits(k, c, lo, hi, starts, slots) is not False,
                               tight if tight is not None else float("inf"),
+                              slack if slack is not None else float("inf"),
                               -abs(c - ideal) - (abs(gap - preferred) if gap is not None and preferred else 0)))
             best, best_key = None, None
-            # the shape is held while the interval stays at or above the need; only when no allowed time does that, a time
+            # the shape is held while the interval stays safe (day.at_target: the need, or the target and CUSHION minutes over it); only when no allowed time does that, a time
             # within SHAPE_TOLERANCE of the best buffer counts as safe (owner, 2026-10-21: "unless an interval goes short")
-            room_ok = [f[4] for f in found if f[1] and f[2]]
+            room_ok = [f[5] for f in found if f[1] and f[2]]
             top = max(room_ok) if room_ok else None
-            for c, calm, within, shaped, tight, near in found:
-                safe = top is None or tight >= (min(0.0, top) - (SHAPE_TOLERANCE if top < 0 else 0.0))
+            for c, calm, within, shaped, tight, slack, near in found:
+                safe = top is None or slack >= (min(0.0, top) - (SHAPE_TOLERANCE if top < 0 else 0.0))
                 key = (calm, within, safe and shaped, tight, near)
                 if best_key is None or key > best_key:
                     best, best_key = c, key

@@ -35,3 +35,10 @@ Arm B2 (hold the shape while the interval stays at or above the need): 184 of 18
 1.75, 1.5 h: at most 0.75 h below arm A, always at least 1.5 h above the need.
 The owner picked B2, so rule 3 is amended to "not lower than A by more than 0.75 h and still above the need". Rules 1, 2 and
 4 hold: the validator break checks still pass (tested), and typed breaks are kept.
+
+## Cushion (owner, 2026-10-21: "keep at least 10 minutes in the interval")
+
+Suggest's "safe" now means what the autopilot and the RTA colours mean (`day.at_target`): 100% of the need, or at the
+target and at least `CUSHION` (10) person-minutes over it. The shape is held while a break leaves its intervals safe;
+only when no allowed time does, a time within 0.25 h of the best is taken. Re-measured on the test week: 184 of 184 fit;
+tightest buffers by day unchanged (1.5, 2.5, 3.0, 2.75, 2.25, 1.75, 1.5 h); no interval under the target.

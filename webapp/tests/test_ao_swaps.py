@@ -8,7 +8,8 @@ import unittest
 from datetime import date
 from unittest import mock
 
-from webapp.tests.test_ag_swaps import TUE, WED, Swaps as _Fixture
+from webapp.tests import test_ag_swaps
+from webapp.tests.test_ag_swaps import TUE, WED
 THU = date(2026, 10, 15)
 from webapp.tests.test_runs import TOKEN, sign_in
 
@@ -16,13 +17,13 @@ from webapp.tests.test_runs import TOKEN, sign_in
 class TheWarnings(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        _Fixture.setUpClass.__func__(cls)
+        test_ag_swaps.Swaps.setUpClass.__func__(cls)
         cls.taken = set()
         cls.book = cls.app.extensions["swaps"]
 
     @classmethod
     def tearDownClass(cls):
-        _Fixture.tearDownClass.__func__(cls)
+        test_ag_swaps.Swaps.tearDownClass.__func__(cls)
 
     def offer(self, a, b, on=WED, **kw):
         return self.book.offer(self.key, on, f"Associate {a}", self.users[f"a{a}"]["id"], f"Associate {b}", "",

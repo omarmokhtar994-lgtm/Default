@@ -46,6 +46,20 @@
     <form method="post" action="{{ url_for('me_swap') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="day" value="{{ swap_day.isoformat() }}"><input type="hidden" name="other" value="{{ c.name }}">{% if c.problems %}<input type="hidden" name="anyway" value="1"><button class="quiet">Offer with the warning</button>{% else %}<button class="quiet">Offer</button>{% endif %}</form>{% endif %}</li>
   {% else %}<li class="empty">{{ swap_note or 'Nobody else works a different shift that day.' }}</li>{% endfor %}</ul>{% endif %}
 </details>
+<details class="sheet"{% if swap_week %} open{% endif %}>
+  <summary>Swap the whole week</summary>
+  {% if weeks %}<form method="get" action="{{ url_for('me') }}" class="me-form">
+    <label>Week <select name="swapweek">{% for w in weeks %}<option value="{{ w.isoformat() }}"{% if w == swap_week %} selected{% endif %}>{{ week_labels[w.isoformat()] }}</option>{% endfor %}</select></label>
+    <button>Find colleagues</button>
+  </form>
+  {% if swap_week %}<p class="hint">You and a colleague exchange each day of the week from today on: the shift or the day off, with its breaks and channels. A day with Leave, a day that has passed and a day you both work the same shift stay as they are. A day that breaks a rule shows its warning; you can still offer it, and your team manager and the RTA see the warning.</p>
+  <ul class="req-done">{% for c in week_offers %}<li><b>{{ c.name }}</b> {{ c.swap_days }} day{{ 's' if c.swap_days != 1 }} change
+    {% if not c.has_account %}<span class="hint">{{ c.name }} has no account to accept it. Ask your team manager to swap you instead.</span>
+    {% else %}{% for t in c.problems %}<span class="swap-warn" role="note">Warning: {{ t }}</span>{% endfor %}
+    <form method="post" action="{{ url_for('me_swap') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="week" value="{{ swap_week.isoformat() }}"><input type="hidden" name="other" value="{{ c.name }}">{% if c.problems %}<input type="hidden" name="anyway" value="1"><button class="quiet">Offer the week with the warnings</button>{% else %}<button class="quiet">Offer the week</button>{% endif %}</form>{% endif %}</li>
+  {% else %}<li class="empty">Nobody else has a different shift or day off in that week from today on.</li>{% endfor %}</ul>{% endif %}
+  {% else %}<p class="empty">No schedule is kept for this week or a later one yet.</p>{% endif %}
+</details>
 <section class="panel" aria-labelledby="mine-h">
   <h2 id="mine-h">My requests</h2>
   <ul class="req-done">{% for r in mine %}<li><b>{{ r.label }}</b>: {{ (r.waiting_on[:1]|lower ~ r.waiting_on[1:]) if r.waiting_on else {'applying': 'being approved'}.get(r.status, r.status) }}{% if r.reason %} ({{ r.reason }}){% endif %}

@@ -861,6 +861,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
         key = _my_unit()
         leave, swaps = app.extensions.get("leave"), app.extensions.get("swaps")
         name = g.user["roster_name"]
+        clock_now = datetime.now(EGYPT)
+        today = clock_now.date()
+        weeks = _my_weeks(key, today) if key else []
+        swap_week = _date(request.args.get("swapweek", ""))
+        week_offers = swaps.week_candidates(key, swap_week, name, today) if swap_week in weeks else []
         swap_day = _date(request.args.get("swap", ""))
         offers, swap_note = [], ""
         if key and swap_day:
@@ -871,8 +876,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 swap_note = f"You asked for leave on {swap_day:%a %d %b}, so there is no shift to swap."
             elif not shift_span(dict(app.extensions["days"].roster(key, swap_day)).get(name, "")):
                 swap_note = f"You do not work on {swap_day:%a %d %b}."
-        clock_now = datetime.now(EGYPT)
-        today, card, week = clock_now.date(), None, []
+        card, week = None, []
         mine = leave.mine(key, name) if leave and key else []
         my_swaps = swaps.mine(key, name) if swaps and key else []
         if key:
@@ -890,8 +894,17 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 week.append({"date": on, "cell": dict(days.roster(key, on)).get(name, ""), "notes": notes,
                              "today": on == today})
         return render_template("me.html", unit=key, kinds=LEAVE_KINDS, mine=mine, swaps=my_swaps, swap_day=swap_day,
-                               swap_note=swap_note,
+                               swap_note=swap_note, weeks=weeks, week_labels={w.isoformat(): f"{w:%d %b} to {(w + timedelta(days=6)):%d %b}" for w in weeks}, swap_week=swap_week, week_offers=week_offers,
                                offers=offers, today=today, card=card, week=week, hm=hm)
+
+    def _my_weeks(key: str, today: date) -> List[date]:
+        """Phase AO: the Sundays of this week and every later week that has a schedule kept for ``key``."""
+        found = []
+        for w in app.extensions["schedules"].kept_weeks(key):
+            first = _date(w["week"])
+            if first and first + timedelta(days=6) >= today:
+                found.append(first)
+        return found
 
     MY_STATUS = {"waiting_tm": "waiting for your TM", "waiting_rta": "approved by your TM, waiting for the RTA",
                  "applying": "being approved", "approved": "approved", "refused": "refused"}
@@ -948,7 +961,19 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if not g.user["is_associate"] or not key:
             abort(403, description="Only an associate on a schedule offers swaps here.")
         on, other = _date(request.form.get("day", "")), " ".join(request.form.get("other", "").split())
+        week_first = _date(request.form.get("week", ""))
         try:
+            if week_first is not None:  # Phase AO: the whole week from today on, one request
+                if not other:
+                    raise ValueError("Pick a colleague.")
+                today = datetime.now(EGYPT).date()
+                if week_first not in _my_weeks(key, today):
+                    raise ValueError("Pick this week or a later week that has a schedule.")
+                app.extensions["swaps"].offer_week(key, week_first, g.user["roster_name"], g.user["id"], other,
+                                                   request.form.get("note", ""), today,
+                                                   allow_warnings=request.form.get("anyway") == "1")
+                flash(f"Sent to {other}: the week from {week_first:%a %d %b}. Once they accept, your TM decides.")
+                return redirect(url_for("me"))
             if on is None or not other:
                 raise ValueError("Pick a day and a colleague.")
             app.extensions["swaps"].offer(key, on, g.user["roster_name"], g.user["id"], other,

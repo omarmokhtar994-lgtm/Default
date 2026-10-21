@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from .clock import EGYPT
-from .versions import (DAYS, added, apply_change, channel_blocks, marks, problems, read_week, shift_span, swap_shifts,
+from .versions import (DAYS, added, apply_change, channel_blocks, marks, problems, read_week, shift_span, swap_days, swap_shifts,
                        swap_slots,
                        validate, write_breaks, write_channels)
 
@@ -468,6 +468,27 @@ class ScheduleBook:
                 self.store.add_change(schedule_id=row["id"], user_id=user_id, associate=who, day=day,
                                       old=olds.get(who, ""), new=olds.get(other, ""), reason=reason,
                                       severity=worst(new), problems=json.dumps([p["text"] for p in new]))
+            return int(row["id"])
+
+    def swap_week_days(self, schedule_id: int, user_id: int, first: str, second: str, days: List[str], reason: str,
+                       label: str) -> int:
+        """Two people swap several days (Phase AO: an approved full-week swap) as one new version named ``label``;
+        each person's change is logged per day."""
+        start = self.store.get_schedule(schedule_id)
+        if start is None:
+            raise KeyError(schedule_id)
+        with self._lock(start["run_id"]):
+            row = self.store.get_schedule(schedule_id)
+            olds = {a["name"]: a["days"] for a in json.loads(row["week"] or "{}").get("associates", [])}
+            row, new = self._save(row, user_id, lambda src, dst: swap_days(src, dst, first, second, days),
+                                  {(who, day) for who in (first, second) for day in days}, fresh=True, label=label)
+            for day in days:
+                i = DAYS.index(day)
+                for who, other in ((first, second), (second, first)):
+                    self.store.add_change(schedule_id=row["id"], user_id=user_id, associate=who, day=day,
+                                          old=(olds.get(who) or [""] * 7)[i], new=(olds.get(other) or [""] * 7)[i],
+                                          reason=reason, severity=worst(new),
+                                          problems=json.dumps([p["text"] for p in new]))
             return int(row["id"])
 
     def swap(self, schedule_id: int, user_id: int, first: str, second: str, reason: str) -> int:

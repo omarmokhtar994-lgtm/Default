@@ -296,10 +296,18 @@ def swap_slots(src: Path, dst: Path, first: str, second: str) -> None:
 def swap_shifts(src: Path, dst: Path, first: str, second: str, day: str) -> None:
     """Two people swap one day (Phase AG): their shift cells on both schedule tabs, and that day's break and
     channel rows follow the new names, so each takes the other's breaks and channel stretches."""
-    if day not in DAYS:
-        raise ValueError(f"unknown day {day!r}")
+    swap_days(src, dst, first, second, [day])
+
+
+def swap_days(src: Path, dst: Path, first: str, second: str, days: List[str]) -> None:
+    """Two people swap each of ``days`` (Phase AO: a whole week's swap is one saved version)."""
+    for day in days:
+        if day not in DAYS:
+            raise ValueError(f"unknown day {day!r}")
     if _norm(first) == _norm(second):
         raise ValueError("Pick two different people to swap.")
+    if not days:
+        raise ValueError("Pick at least one day to swap.")
     wb = load_workbook(src)
     found = 0
     for tab in SCHEDULE_TABS:
@@ -307,16 +315,19 @@ def swap_shifts(src: Path, dst: Path, first: str, second: str, day: str) -> None
             continue
         ws = wb[tab]
         row, cols = _header(ws, ("sf name", "associate name"))
-        name_col, day_col = _name_col(cols), cols.get(_norm(day))
+        name_col = _name_col(cols)
         rows = {_norm(ws.cell(r, name_col).value): r for r in range(row + 1, ws.max_row + 1)}
         missing = [n for n in (first, second) if _norm(n) not in rows]
         if missing:
             raise ValueError(f"{missing[0]!r} is not on this schedule")
         a, b = rows[_norm(first)], rows[_norm(second)]
-        ws.cell(a, day_col).value, ws.cell(b, day_col).value = ws.cell(b, day_col).value, ws.cell(a, day_col).value
+        for day in days:
+            day_col = cols.get(_norm(day))
+            ws.cell(a, day_col).value, ws.cell(b, day_col).value = ws.cell(b, day_col).value, ws.cell(a, day_col).value
         found += 1
     if not found:
         raise ValueError("no schedule tab to swap on")
+    wanted = {_norm(d) for d in days}
     for tab in (*BREAK_TABS, CHANNEL_TAB):
         if tab not in wb.sheetnames:
             continue
@@ -326,7 +337,7 @@ def swap_shifts(src: Path, dst: Path, first: str, second: str, day: str) -> None
         if day_col is None:
             continue
         for r in range(row + 1, ws.max_row + 1):
-            if _norm(ws.cell(r, day_col).value) != _norm(day):
+            if _norm(ws.cell(r, day_col).value) not in wanted:
                 continue
             who = _norm(ws.cell(r, who_col).value)
             if who == _norm(first):

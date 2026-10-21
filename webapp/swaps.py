@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import date
+from datetime import date, timedelta
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .access import Access
@@ -40,14 +40,19 @@ class SwapBook:
         self.skills = skills or ChannelPeople(store).skills_for_unit
 
     # ------------------------------------------------------------------ the rules
-    def check(self, program: str, on: date, a: str, b: str) -> Dict[str, Any]:
-        """Whether ``a`` and ``b`` may swap ``on``: problems (empty when it keeps every rule) and facts."""
+    def check(self, program: str, on: date, a: str, b: str, one_may_be_off: bool = False) -> Dict[str, Any]:
+        """Whether ``a`` and ``b`` may swap ``on``: problems (empty when it keeps every rule) and facts. With
+        ``one_may_be_off`` (Phase AO, a full-week swap) one of them may have the day off: then they exchange the
+        shift and the day off, and the rules are checked for the one who takes the shift."""
         cells = dict(self.days.roster(program, on))
         out: Dict[str, Any] = {"ok": False, "blocked": False, "problems": [], "facts": [],
                                "a_cell": cells.get(a, ""), "b_cell": cells.get(b, "")}
         problems, facts = out["problems"], out["facts"]
+        works = [n for n in (a, b) if shift_span(cells.get(n, ""))]
+        if one_may_be_off and works:
+            works = [a, b]
         for name in (a, b):
-            if not shift_span(cells.get(name, "")):
+            if name not in works:
                 problems.append(f"{name} does not work on {nice(on)}.")
         if problems:
             out["blocked"] = True  # Phase AO: nothing to swap, so no warning can make it a swap
@@ -60,6 +65,8 @@ class SwapBook:
         week = json.loads(row["week"] or "{}")
         rest = int(float((week.get("settings") or {}).get("rest_gap_hours") or 0) * 60)
         for name, cell in ((a, out["b_cell"]), (b, out["a_cell"])):
+            if not shift_span(cell):
+                continue  # takes a day off: no shift to rest before
             lo, hi = shift_span(cell)
             try:
                 self.days._rest(program, on, row, name, lo, hi, rest)
@@ -116,6 +123,89 @@ class SwapBook:
                         "facts": found["facts"], "has_account": self.account(program, other) is not None})
         return out
 
+    # ------------------------------------------------------------------ a whole week (Phase AO)
+    def week_check(self, program: str, first: date, a: str, b: str, today: date) -> Dict[str, Any]:
+        """Each day of the week from Sunday ``first``: what a full-week swap of ``a`` and ``b`` does that day.
+        ``status`` is "swap" (they exchange their shift or day off; ``problems`` say what rule it breaks), or why the
+        day is left as it is: "past", "leave" (either has Leave), "same" (the same shift or both off), "none" (no
+        schedule, or nothing for either)."""
+        days = []
+        for i in range(7):
+            on = first + timedelta(days=i)
+            cells = dict(self.days.roster(program, on))
+            ca, cb = cells.get(a, ""), cells.get(b, "")
+            day = {"date": on, "day": DAYS[i], "a_cell": ca, "b_cell": cb, "status": "swap", "problems": [],
+                   "facts": []}
+            if on < today:
+                day["status"] = "past"
+            elif "leave" in (ca.strip().casefold(), cb.strip().casefold()):
+                day["status"] = "leave"
+            elif self.days.version(program, on)[0] is None or not (shift_span(ca) or shift_span(cb)):
+                day["status"] = "none"
+            elif ca.strip().casefold() == cb.strip().casefold():
+                day["status"] = "same"
+            else:
+                found = self.check(program, on, a, b, one_may_be_off=True)
+                day["problems"], day["facts"] = found["problems"], found["facts"]
+            days.append(day)
+        return {"days": days, "swap": [d for d in days if d["status"] == "swap"]}
+
+    def week_candidates(self, program: str, first: date, name: str, today: date) -> List[Dict[str, Any]]:
+        """Everyone else on the week's schedule with whom a full-week swap changes at least one day, with the days
+        it changes and each day's warnings."""
+        names = set()
+        for i in range(7):
+            names |= set(dict(self.days.roster(program, first + timedelta(days=i))))
+        out = []
+        for other in sorted(names - {name}):
+            found = self.week_check(program, first, name, other, today)
+            if found["swap"]:
+                out.append({"name": other, "swap_days": len(found["swap"]),
+                            "problems": [f"{nice(d['date'])}: {p}" for d in found["swap"] for p in d["problems"]],
+                            "has_account": self.account(program, other) is not None})
+        return out
+
+    def _open_days(self, program: str, who: List[str]) -> Dict[str, set]:
+        """The days each of ``who`` already has a swap waiting for (a day swap's day, or a week swap's days)."""
+        taken: Dict[str, set] = {w: set() for w in who}
+        for row in self.store.list_swaps(program=program, statuses=list(OPEN)):
+            days = ({d["date"] for d in json.loads(row.get("detail") or "{}").get("days", [])}
+                    if row.get("scope") == "week" else {row["day"]})
+            for w in who:
+                if w in (row["asker"], row["other"]):
+                    taken[w] |= days
+        return taken
+
+    def offer_week(self, program: str, first: date, name: str, user_id: int, other: str, note: str, today: date,
+                   allow_warnings: bool = False) -> int:
+        """A full-week swap request for the week from Sunday ``first``: one request holding each day it changes."""
+        found = self.week_check(program, first, name, other, today)
+        swap = found["swap"]
+        if not swap:
+            raise ValueError("Nothing to swap in that week from today on.")
+        problems = [f"{nice(d['date'])}: {p}" for d in swap for p in d["problems"]]
+        if problems and not allow_warnings:
+            raise ValueError(" ".join(problems))
+        if self.account(program, other) is None:
+            raise ValueError(f"{other} has no account to accept it. Ask your TM to swap you instead.")
+        dates = {d["date"].isoformat() for d in swap}
+        for who, taken in self._open_days(program, [name, other]).items():
+            if taken & dates:
+                raise ValueError(f"{who} already has a swap waiting for a day that week.")
+        for who in (name, other):
+            for row in self.store.list_leave(program=program, associate=who, statuses=[*LEAVE_WAITING, "approved"]):
+                if any(row["first_day"] <= d <= row["last_day"] for d in dates):
+                    raise ValueError(f"{who} has asked for leave in that week.")
+        detail = {"week": first.isoformat(),
+                  "days": [{"date": d["date"].isoformat(), "day": d["day"], "a": d["a_cell"], "b": d["b_cell"],
+                            "warnings": d["problems"]} for d in swap],
+                  "skipped": [{"date": d["date"].isoformat(), "why": d["status"]} for d in found["days"]
+                              if d["status"] != "swap"]}
+        return self.store.add_swap(program=program, day=swap[0]["date"].isoformat(), asker=name, asker_user=user_id,
+                                   other=other, asker_cell=f"{len(swap)} days", other_cell=f"{len(swap)} days",
+                                   note=" ".join((note or "").split())[:200], warnings="\n".join(problems),
+                                   scope="week", detail=json.dumps(detail))
+
     # ------------------------------------------------------------------ asking and answering
     def account(self, program: str, name: str) -> Optional[Dict[str, Any]]:
         """The associate account linked to ``name`` on ``program``, if any."""
@@ -136,10 +226,9 @@ class SwapBook:
             raise ValueError(" ".join(found["problems"]))
         if self.account(program, other) is None:
             raise ValueError(f"{other} has no account to accept it. Ask your TM to swap you instead.")
-        for row in self.store.list_swaps(program=program, statuses=list(OPEN), day=on.isoformat()):
-            for who in (name, other):
-                if who in (row["asker"], row["other"]):
-                    raise ValueError(f"{who} already has a swap waiting for {nice(on)}.")
+        for who, taken in self._open_days(program, [name, other]).items():
+            if on.isoformat() in taken:
+                raise ValueError(f"{who} already has a swap waiting for {nice(on)}.")
         for who in (name, other):
             for row in self.store.list_leave(program=program, associate=who, statuses=[*LEAVE_WAITING, "approved"]):
                 if row["first_day"] <= on.isoformat() <= row["last_day"]:
@@ -232,7 +321,37 @@ class SwapBook:
         self.store.move_swap(swap_id, "applying", status="approved", outcome=outcome)
         return f"Approved: {outcome}"
 
+    def _apply_week(self, row: Dict[str, Any], user_id: int) -> str:
+        program, a, b = row["program"], row["asker"], row["other"]
+        detail = json.loads(row["detail"] or "{}")
+        versions = set()
+        for d in detail["days"]:
+            on = date.fromisoformat(d["date"])
+            cells = dict(self.days.roster(program, on))
+            for name, was in ((a, d["a"]), (b, d["b"])):
+                if cells.get(name, "") != was:
+                    raise ValueError(f"The schedule changed since it was asked: {name} now has "
+                                     f"{cells.get(name) or 'nothing'} on {nice(on)}.")
+            found = self.check(program, on, a, b, one_may_be_off=True)
+            if found["blocked"] or (not found["ok"] and not row.get("warnings")):
+                raise ValueError(f"The swap no longer keeps the rules on {nice(on)}: " + " ".join(found["problems"]))
+            versions.add(self.days.version(program, on)[0]["id"])
+        if len(versions) != 1:
+            raise ValueError("That week is on more than one schedule version, so it cannot be swapped as one. "
+                             "Ask the TM to swap them one day at a time.")
+        book = self.days.book
+        new_id = book.swap_week_days(versions.pop(), user_id, a, b, [d["day"] for d in detail["days"]],
+                                     reason=f"Week swap approved (request {row['id']})",
+                                     label=f"Week swap of {a} and {b}")
+        book.set_in_use(new_id, user_id)
+        kept = f" Warnings kept: {' '.join(row['warnings'].splitlines())}" if row.get("warnings") else ""
+        return (f"{a} and {b} swapped {len(detail['days'])} day{'s' if len(detail['days']) != 1 else ''} "
+                f"({', '.join(nice(date.fromisoformat(d['date'])) for d in detail['days'])}), each with the other's "
+                "breaks and channels." + kept)
+
     def _apply(self, row: Dict[str, Any], user_id: int) -> str:
+        if row.get("scope") == "week":
+            return self._apply_week(row, user_id)
         program, on, a, b = row["program"], date.fromisoformat(row["day"]), row["asker"], row["other"]
         cells = dict(self.days.roster(program, on))
         for name, was in ((a, row["asker_cell"]), (b, row["other_cell"])):
@@ -254,7 +373,9 @@ class SwapBook:
     # ------------------------------------------------------------------ lists
     def _label(self, row: Dict[str, Any]) -> Dict[str, Any]:
         on = date.fromisoformat(row["day"])
-        return dict(row, label=f"{nice(on)}: {row['asker_cell']} for {row['other_cell']}",
+        what = (f"Week from {nice(on)}: {row['asker_cell']}" if row.get("scope") == "week"
+                else f"{nice(on)}: {row['asker_cell']} for {row['other_cell']}")
+        return dict(row, label=what,
                     warning_list=[w for w in (row.get("warnings") or "").split("\n") if w],
                     status_words=STATUS_WORDS.get(row["status"], row["status"]), waiting_on=self.waiting_on(row))
 

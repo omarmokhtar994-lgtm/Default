@@ -2805,7 +2805,10 @@ class ThePhaseADInTheBrowser(unittest.TestCase):
         cls.dir = Path(tempfile.mkdtemp())
         cls.addClassCleanup(shutil.rmtree, cls.dir, True)
         cls.today = datetime.now(EGYPT).date()
-        cls.sunday = cls.today - timedelta(days=(cls.today.weekday() + 1) % 7)
+        # re-pinned (Phase AO, 2026-10-21): the week was the current one, so on a real Wednesday "wed" was today and a
+        # break that had passed was refused (400): the tests were not independent of the clock as this class says.
+        # The week is now next week, so no day in it is ever today.
+        cls.sunday = cls.today - timedelta(days=(cls.today.weekday() + 1) % 7) + timedelta(days=7)
         cls.day_of = {name: cls.sunday + timedelta(days=i) for i, name in
                       enumerate(("sun", "mon", "tue", "wed", "thu", "fri", "sat"))}
         ready = make_ready(cls.dir / "ready.xlsx")

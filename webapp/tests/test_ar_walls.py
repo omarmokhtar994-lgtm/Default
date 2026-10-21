@@ -83,7 +83,8 @@ class _Walls(unittest.TestCase):
         values = self.values_for_bravo()
         queries = ({}, {"program": self.bravo, "date": "2026-10-14", "week": WEEK},
                    {"program": self.bravo, "q": "Zor", "who": "Zorro Person One", "from": "2026-10-01",
-                    "to": "2026-10-31", "start": WEEK, "pick": f"key:{self.bravo}"})
+                    "to": "2026-10-31", "start": WEEK, "pick": f"key:{self.bravo}"},
+                   {"q": "Zor"}, {"q": "Bra"})  # a search with no program in the address
         for rule in self.rules():
             args = {a: values[a] for a in rule.arguments if a in values}
             if set(rule.arguments) - set(args):
@@ -99,7 +100,7 @@ class _Walls(unittest.TestCase):
                 for echoed in (url.split("?")[0], unquote(url.split("?")[0])):
                     text = text.replace(echoed, "")  # the address itself, repeated in a sign-in link, is not a leak
                 found = bool(STRICT.search(text)) or bool(STRICT.search(got.headers.get("Location", "")))
-                if not query:
+                if "program" not in query:  # nothing of BRAVO's, not even its name, was asked for: none may come back
                     found = found or bool(BARE.search(text))
                 seen.append((url, got.status_code, found))
         return seen, skipped
@@ -125,6 +126,15 @@ class TheWalls(_Walls):
         admin = sign_in(self.app, "omar", "Owner-pass-123").get("/").get_data(as_text=True)
         self.assertIn('optgroup label="BRAVO"', admin)
 
+    def test_another_programs_run_in_the_queue_is_only_a_wait_never_a_name(self):
+        rid = self.runs[self.bravo]
+        self.store.update_run(rid, status="RUNNING")
+        try:
+            page = sign_in(self.app, "plan_a", PASSWORD).get("/").get_data(as_text=True)
+        finally:
+            self.store.update_run(rid, status="DONE")
+        self.assertNotRegex(page, r"(?i)zorro|bravo")
+
     def test_a_person_cannot_upload_into_a_program_they_do_not_have(self):
         import io
         client = sign_in(self.app, "plan_a", PASSWORD)
@@ -142,6 +152,58 @@ class TheWalls(_Walls):
             "csrf_token": self.token(client), "program": self.bravo, "week_start": WEEK, "reason": "mistake"})
         self.assertEqual(got.status_code, 403)
         self.assertEqual(self.store.get_run(self.runs[self.alpha])["program"], self.alpha)
+
+
+# What a form for another program's data might carry, whatever the page: the fields any route reads.
+FORM = {"date": "2026-10-14", "anchor": "2026-10-14", "week": WEEK, "week_start": WEEK, "associate": "Zorro Person One",
+        "name": "Zorro Person One", "status": "Sick", "kind": "Sick", "from": "09:00", "to": "10:00", "at": "10:00",
+        "idx": "0", "id": "1", "first": "2026-10-14", "last": "2026-10-14", "decision": "approve", "reason": "x",
+        "tz": "Africa/Cairo", "mode": "QUICK", "target": "90", "start": "08:00", "note": "x", "channel": "P",
+        "action": "add", "dept": "Zorro Dept", "contact": "Zorro Contact", "text": "x", "role": "planner",
+        "day": "2026-10-14", "other": "Zorro Person Two", "team_manager": "", "confirm": "1", "post": "1",
+        "span": "09:00|10:00", "with_whom": "x", "why": "x", "service": "slack", "link": "https://hooks.slack.com/x"}
+SKIPPED = {"login", "logout", "set_theme", "change_password"}  # about the signed-in person, not a program
+ACTIONS = ("disable", "enable", "reset", "team", "programs", "delete", "answer", "cancel")
+
+
+class ThePostWalls(_Walls):
+    """Every form route, asked by people without BRAVO to change BRAVO's data (its ids, its program, its people), must
+    change nothing: the whole database is the same before and after."""
+
+    def snapshot(self):
+        with self.store._db() as db:
+            tables = [r[0] for r in db.execute("select name from sqlite_master where type = 'table' order by name")]
+            return {t: [tuple(r) for r in db.execute(f"select * from {t} order by rowid")] for t in tables
+                    if t not in ("login_attempts",)}
+
+    def test_no_form_changes_another_programs_data(self):
+        import io
+        values = self.values_for_bravo()
+        values.update(request_id=1, swap_id=1)
+        for who in ("plan_a", "sup_a", "tm_a"):
+            client = sign_in(self.app, who, PASSWORD)
+            tok = self.token(client)
+            for rule in sorted(self.app.url_map.iter_rules(), key=lambda r: r.rule):
+                if "POST" not in rule.methods or rule.endpoint in SKIPPED or rule.rule.startswith("/me"):
+                    continue
+                tries = [dict()]
+                if "action" in rule.arguments:
+                    tries = [{"action": a} for a in ACTIONS]
+                for extra in tries:
+                    args = {a: values.get(a, extra.get(a)) for a in rule.arguments}
+                    if None in args.values():
+                        self.fail(f"{rule.rule}: no value for {sorted(rule.arguments)}")
+                    for form in (dict(FORM, program=self.bravo),):
+                        with self.app.test_request_context():
+                            from flask import url_for
+                            url = url_for(rule.endpoint, **args)
+                        before = self.snapshot()
+                        data = {**form, "csrf_token": tok, "programs": [str(self.bravo_id)]}
+                        if rule.rule == "/runs":
+                            data["workbook"] = (io.BytesIO(b"PK\x03\x04 not a workbook"), "w.xlsx")
+                        got = client.post(url, data=data, content_type="multipart/form-data")
+                        self.assertEqual(self.snapshot(), before, f"{who} changed data: POST {url} {form['program']}")
+                        self.assertNotIn(b"zorrosecret", got.data.lower(), f"{who}: {url}")
 
 
 if __name__ == "__main__":

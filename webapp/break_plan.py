@@ -49,6 +49,46 @@ def edge_margin(rules: Dict[str, Any], duration_min: int) -> int:
     return QUARTER * max(2, min(4, (duration_min // QUARTER) // 10))
 
 
+# Phase AU (owner, 2026-10-21): the usual shape of a shift's breaks. A preferred shape, not a rule: Suggest tries it
+# first and gives way when the interval floor needs it. Minutes.
+FIRST_FROM, FIRST_TO = 120, 210      # the first break starts this long after the shift starts
+LUNCH_FROM, LUNCH_TO = 120, 180      # the lunch starts this much work after the first break ends
+LAST_CLEAR = 60                      # the last break ends at least this long before the shift ends
+SHAPE_TOLERANCE = 0.25               # when no time keeps the buffer at or above the need, the hours it may give up (BREAKS_RULE.md)
+
+
+def _fits(k: int, c: int, lo: int, hi: int, starts: Starts, slots: List[Tuple[str, int]]) -> Optional[bool]:
+    """Does placing break ``k`` at ``c`` fit the shape, given the breaks placed before it? None: the shape says nothing."""
+    kinds = [kind.casefold() for kind, _ in slots]
+    if k == 0:
+        return FIRST_FROM <= c - lo <= FIRST_TO
+    verdicts: List[bool] = []
+    if kinds[k] == "lunch" and starts[k - 1] is not None:
+        verdicts.append(LUNCH_FROM <= c - (starts[k - 1] + slots[k - 1][1]) <= LUNCH_TO)
+    if k == len(slots) - 1:
+        if "lunch" in kinds[:k] and starts[kinds.index("lunch")] is not None:
+            i = kinds.index("lunch")
+            verdicts.append(c >= starts[i] + slots[i][1])
+        verdicts.append(c + slots[k][1] <= hi - LAST_CLEAR)
+    return all(verdicts) if verdicts else None
+
+
+def shape_fit(lo: int, hi: int, starts: Starts, slots: List[Tuple[str, int]]) -> Tuple[Optional[bool], ...]:
+    """(first break, lunch, last break) against the usual shape; None for a part that is not placed or not asked."""
+    kinds = [kind.casefold() for kind, _ in slots]
+    starts = (list(starts) + [None] * len(slots))[:len(slots)]
+    first = None if starts[0] is None else _fits(0, starts[0], lo, hi, starts, slots)
+    lunch = None
+    if "lunch" in kinds[1:]:
+        i = kinds.index("lunch")
+        if starts[i] is not None and starts[i - 1] is not None:
+            lunch = LUNCH_FROM <= starts[i] - (starts[i - 1] + slots[i - 1][1]) <= LUNCH_TO
+    last = None
+    if len(slots) >= 2 and starts[-1] is not None:
+        last = bool(_fits(len(slots) - 1, starts[-1], lo, hi, starts, slots))
+    return first, lunch, last
+
+
 def check_row(rules: Dict[str, Any], label: str, starts: Starts) -> Tuple[str, str]:
     """("ok", "OK"), ("none", "Not placed yet") or ("warn", what breaks a rule, in plain words)."""
     lo, hi = _span(label)
@@ -180,7 +220,7 @@ def suggest(week: Dict[str, Any], inputs: Dict[str, Any], rules: Dict[str, Any],
             first += -first % QUARTER
             room = hi - lo
             ideal = lo + (k + 1) * room // (len(slots) + 1) - minutes // 2
-            best, best_key = None, None
+            found = []
             for c in range(first, last + 1, QUARTER):
                 gap = c - (prev[0] + prev[1]) if prev else None
                 quarters = range(c // QUARTER, (c + minutes) // QUARTER)
@@ -190,9 +230,18 @@ def suggest(week: Dict[str, Any], inputs: Dict[str, Any], rules: Dict[str, Any],
                     if 0 <= t < 1440:
                         trial[t // STEP] -= 1
                 tight = _tightest(view, trial, c, c + minutes)
-                key = (not crowded, gap is None or most is None or gap <= most,
-                       tight if tight is not None else float("inf"),
-                       -abs(c - ideal) - (abs(gap - preferred) if gap is not None and preferred else 0))
+                found.append((c, not crowded, gap is None or most is None or gap <= most,
+                              _fits(k, c, lo, hi, starts, slots) is not False,
+                              tight if tight is not None else float("inf"),
+                              -abs(c - ideal) - (abs(gap - preferred) if gap is not None and preferred else 0)))
+            best, best_key = None, None
+            # the shape is held while the interval stays at or above the need; only when no allowed time does that, a time
+            # within SHAPE_TOLERANCE of the best buffer counts as safe (owner, 2026-10-21: "unless an interval goes short")
+            room_ok = [f[4] for f in found if f[1] and f[2]]
+            top = max(room_ok) if room_ok else None
+            for c, calm, within, shaped, tight, near in found:
+                safe = top is None or tight >= (min(0.0, top) - (SHAPE_TOLERANCE if top < 0 else 0.0))
+                key = (calm, within, safe and shaped, tight, near)
                 if best_key is None or key > best_key:
                     best, best_key = c, key
             if best is None:

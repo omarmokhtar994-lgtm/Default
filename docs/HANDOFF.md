@@ -89,7 +89,7 @@ Load each with the Skill tool at the step it covers; following it from memory do
 6. Package, split into parts, send them, and report in caveman style: what changed, rulings with their cost, what
    is known and left, Egypt times, screens.
 
-## Where things stand (end of Phase AT; package AP to AT)
+## Where things stand (end of Phase AU; package AP to AU, not yet built)
 
 - **AP** (merged LOBs): `webapp/merge.py`, `merged_day.py`, `channel_hours.py`, `daily_views.py`. A View pick (this LOB or
   all LOBs of the program) on the RTA, Week and Schedules; hours per channel per day and week (RTA, Schedules, Exports);
@@ -115,6 +115,16 @@ Load each with the Skill tool at the step it covers; following it from memory do
   passwords (`Store.authenticate`); `webapp/throttle.py` now also holds an address after 40 wrong sign-ins in 15
   minutes (in memory, 429). Dependency audit: `pip install pip-audit` into the web venv, then
   `pip-audit -r deploy/requirements.txt` (2026-10-21: no known vulnerabilities); not added to the requirements.
+- **AU** (owner feedback on AR/AS/AT screens): break changes and coaching are decided on the RTA tab "Requests"
+  (`_change_requests.html`, shared with the Requests page; `back` returns to the tab); an associate has two tabs, Today
+  (`/me/breaks`: the day card, breaks, change for today and tomorrow, `ChangeBook.tomorrow_shift`) and Weeks (`/me`: the
+  week with its breaks, leave, swaps); landing is Today. A team manager cancels own coaching request. Group posts keep only
+  the latest change to one break and add "Breaks now: ..." (`notify.latest_changes`, `Notifier._finals`). Suggest builds
+  the usual shape (first break 2 to 3.5 h, lunch 2 to 3 h after, last before the last hour) and holds it while an interval
+  stays safe in the autopilot's sense (target plus 10 minutes): `evidence/phase_au/BREAKS_RULE.md` has the rule and arms
+  (engine break stage untouched). Pages offer only what the role may use (Home's New schedule, auto-breaks form;
+  `TheOffersMatchTheRole`). Sign-in: `webapp/throttle.py` holds an address after 40 wrong sign-ins in 15 minutes.
+  Not done: messages to people when a request is decided (needs a channel: email or Teams, the owner decides).
 - Release gate 2026-10-21: 1551 tests (floor raised from 1537). `evidence/phase_aq/CHECKS.md` has the A/B result.
 - Rules learned: a container restart kills background runs started with nohup; keep the session active while a long
   run goes. Check `git status` for rewritten old screenshots before every commit.

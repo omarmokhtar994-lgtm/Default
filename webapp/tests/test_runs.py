@@ -1417,7 +1417,10 @@ class TheRecord(unittest.TestCase):
     """Phase O task 1: runs, downloads and people admin are recorded with who and when."""
 
     def events(self, store):
-        return [(e["kind"], e["by_name"], e["subject"]) for e in store.list_events(0, time.time() + 60)]
+        # Re-pinned in Phase AU (owner: sign-in history for the admin): a sign-in is an event now; these tests are about
+        # what people did after it, so the sign-in lines are left out here (test_at_throttle.TheHistory covers them)
+        return [(e["kind"], e["by_name"], e["subject"]) for e in store.list_events(0, time.time() + 60)
+                if e["kind"] not in ("signed_in", "sign_in_failed", "sign_in_held")]
 
     def test_upload_stop_resume_recorded(self):
         app, store, *_ = make_app(start_worker=False)
@@ -1427,7 +1430,8 @@ class TheRecord(unittest.TestCase):
         client.post(f"/runs/{run_id}/resume", data={"csrf_token": token(client)})
         self.assertEqual(self.events(store), [("run_uploaded", "Sara", "week42.xlsx"), ("run_stopped", "Sara", "week42.xlsx"),
                                               ("run_resumed", "Sara", "week42.xlsx")])
-        self.assertEqual({e["run_id"] for e in store.list_events(0, time.time() + 60)}, {run_id})
+        self.assertEqual({e["run_id"] for e in store.list_events(0, time.time() + 60) if e["kind"] != "signed_in"},
+                         {run_id})  # Re-pinned in Phase AU: a sign-in is an event, and belongs to no run
 
     def test_downloads_recorded(self):
         app, store, *_ = make_app()

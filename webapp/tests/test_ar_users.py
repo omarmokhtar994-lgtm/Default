@@ -53,6 +53,10 @@ class ThePasswordOnAdd(_Users):
         self.assertTrue(self.can_sign_in("typed_one", "Typed-pass-1234"))
         self.assertEqual(self.store.authenticate("typed_one", "Typed-pass-1234")[0]["must_change"], 1)
 
+    def test_a_pasted_password_with_spaces_around_it_still_signs_in(self):
+        self.add(username="spaced_one", password="  Spaced-pass-1234 \t", programs=[str(self.alpha_id)])
+        self.assertTrue(self.can_sign_in("spaced_one", "Spaced-pass-1234"))
+
     def test_a_blank_password_is_made_up_and_shown_once(self):
         page = html.unescape(self.add(username="made_one", password="", programs=[str(self.alpha_id)]).get_data(as_text=True))
         found = re.search(r'data-password-of="made_one">([^<]+)<', page)

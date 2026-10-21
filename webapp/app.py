@@ -703,8 +703,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         error, made = "", []
         if request.method == "POST":
             username = request.form.get("username", "").strip().lower()
-            password = request.form.get("password", "")
-            generated = not password.strip()  # Phase AR: left blank, one is made up and shown once
+            password = request.form.get("password", "").strip()  # a pasted password with a space at the end still works
+            generated = not password  # Phase AR: left blank, one is made up and shown once
             if generated:
                 password = new_password()
             kind = request.form.get("role") or ("admin" if request.form.get("is_admin") == "on" else "planner")

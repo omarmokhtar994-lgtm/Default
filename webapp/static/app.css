@@ -538,7 +538,8 @@ input[aria-invalid=true] { border-color: var(--gap); }
 }
 
 /* ---- The day (Phase N): timeline lanes, number rows, interval board, break dialog ---- */
-main:has([data-day]) { max-width: 1560px; }  /* the board and the lanes need the width */
+/* Phase AU (owner: the width did not fit a wide screen): the day and the week use the whole width beside the menu */
+.frame > main:has([data-day]), .frame > main:has(.wkgrid) { max-width: none; }
 .daynav { display: flex; gap: 14px; margin: 0 0 2px; font-size: 0.8125rem; }
 .daybar { display: flex; gap: 18px; align-items: flex-end; flex-wrap: wrap; margin: 0 0 14px; }
 .daybar .sel { margin: 0; }

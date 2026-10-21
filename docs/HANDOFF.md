@@ -89,7 +89,7 @@ Load each with the Skill tool at the step it covers; following it from memory do
 6. Package, split into parts, send them, and report in caveman style: what changed, rulings with their cost, what
    is known and left, Egypt times, screens.
 
-## Where things stand (end of Phase AS; the package is built after the AQ A/B)
+## Where things stand (end of Phase AT; package AP to AT)
 
 - **AP** (merged LOBs): `webapp/merge.py`, `merged_day.py`, `channel_hours.py`, `daily_views.py`. A View pick (this LOB or
   all LOBs of the program) on the RTA, Week and Schedules; hours per channel per day and week (RTA, Schedules, Exports);
@@ -107,6 +107,12 @@ Load each with the Skill tool at the step it covers; following it from memory do
   (past 00:00 for night shifts), a team manager asks for coaching, the RTA decides on the Requests page with the impact,
   the nearest times, a comment, billable correction. Buffer words High (one above the need) / Moderate / Low; off-queue
   warning over 30%; billable follows the program's Coverage measure (Programs setup; `ProgramBook.day_measure`).
+- **AT** (security): `webapp/tests/test_at_security.py` (25 tests): every route per role against the permission matrix,
+  forged and edited cookies, cookies after a password change or delete, form tampering, CSRF on every POST, `next`
+  redirects, security headers, escaping, exports scoped to the program. Fixed: the exports person filter named a person
+  of another program; the key file is created 0600; CSP gains base-uri, form-action, object-src; `no-store`.
+  Not done (owner decides): a sign-in rate limit, a dependency audit tool.
+- Release gate 2026-10-21: 1551 tests (floor raised from 1537). `evidence/phase_aq/CHECKS.md` has the A/B result.
 - Rules learned: a container restart kills background runs started with nohup; keep the session active while a long
   run goes. Check `git status` for rewritten old screenshots before every commit.
 

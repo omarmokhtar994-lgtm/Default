@@ -443,6 +443,9 @@ class Store:
             for table in ("leave_requests", "swap_requests"):
                 if "seen" not in {row["name"] for row in db.execute(f"pragma table_info({table})")}:
                     db.execute(f"alter table {table} add column seen integer not null default 0")
+            # Phase AU: when the person last looked at the changes made to their breaks
+            if "day_seen_at" not in people:
+                db.execute("alter table users add column day_seen_at real not null default 0")
             # Phase AU: a temporary password is good for TEMP_PASSWORD_DAYS (0 = no end: one the person chose themselves)
             if "temp_until" not in people:
                 db.execute("alter table users add column temp_until real not null default 0")
@@ -948,6 +951,19 @@ class Store:
                 "select * from change_requests where requester_id = ? and seen = 0"
                 " and ((decided_by is not null and decided_by != requester_id and status in"
                 " ('approved', 'rejected', 'refused')) or status = 'expired') order by decided_at", (user_id,))]
+
+    def break_changes_for(self, program: str, name: str, user_id: int, since: float) -> List[Dict[str, Any]]:
+        """Phase AU: moves, cancellations and returns to plan of ``name``'s breaks that someone else made after ``since``
+        (not the ones made for their own request, which they hear about as an answer)."""
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                "select * from day_log where program = ? and associate = ? and at > ? and user_id != ?"
+                " and (what like 'Break%' or what like 'Lunch%') and what not like '%(asked by%' order by at",
+                (program, name, since, user_id))]
+
+    def mark_day_seen(self, user_id: int, at: float) -> None:
+        with self._db() as db:
+            db.execute("update users set day_seen_at = ? where id = ?", (at, user_id))
 
     def unseen_leave_swap(self, user_id: int) -> Dict[str, List[Dict[str, Any]]]:
         """Phase AU: final answers to this person's leave requests and swaps that they have not looked at yet."""

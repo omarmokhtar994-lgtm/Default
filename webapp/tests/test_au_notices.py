@@ -6,7 +6,7 @@ import re
 import unittest
 
 from webapp.tests.test_as_pages import _Pages
-from webapp.tests.test_as_requests import ME, MATE, WED
+from webapp.tests.test_as_requests import ME, MATE, NIGHT, WED
 
 
 class TheNotices(_Pages):
@@ -126,3 +126,36 @@ class TheGroupMessages(TheNotices):
         rid = self.ask_break()
         self.post(self.staff, f"/requests/change/{rid}", decision="reject", reason="No")
         self.assertEqual([i["status"] for i in self.said()], ["skipped"])
+
+
+class TheDayChanges(_Pages):
+    """Phase AU: the associate is told, in the site, when the RTA or a planner changes one of their breaks."""
+    def setUp(self):
+        super().setUp()
+        with self.store._db() as db:
+            db.execute("delete from day_log")
+            db.execute("update users set day_seen_at = 0")
+
+    def move_by_rta(self, to="13:15"):
+        self.app.extensions["days"].move_break(self.key, WED, ME, 0, to, self.users["rta1"]["id"])
+
+    def test_a_break_the_rta_moved_is_told_once_on_today_and_counted_on_the_menu(self):
+        self.assertNotIn("Your breaks changed", self.get(self.assoc, "/me/breaks"))
+        self.move_by_rta()
+        self.assertRegex(self.get(self.assoc, "/me"), r'My day <span class="count"[^>]*>1</span>')
+        today = self.get(self.assoc, "/me/breaks")
+        self.assertIn("Your breaks changed", today)
+        self.assertIn("Break 1 moved 13:00 to 13:15", today)
+        self.assertNotIn("Your breaks changed", self.get(self.assoc, "/me/breaks"))
+        self.assertNotRegex(self.get(self.assoc, "/me"), r'My day <span class="count"')
+
+    def test_a_move_made_for_a_request_is_not_told_twice(self):
+        rid = TheNotices.ask_break(self)
+        self.post(self.staff, f"/requests/change/{rid}", decision="approve")
+        today = self.get(self.assoc, "/me/breaks")
+        self.assertIn("New answer", today)                    # the answer to the request
+        self.assertNotIn("Your breaks changed", today)         # not the same move again
+
+    def test_someone_elses_break_is_not_news_to_me(self):
+        self.app.extensions["days"].move_break(self.key, WED, NIGHT, 0, "00:45", self.users["rta1"]["id"])
+        self.assertNotIn("Your breaks changed", self.get(self.assoc, "/me/breaks"))

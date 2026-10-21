@@ -521,6 +521,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         who = g.get("user")
         news_n = app.extensions["changes"].news_count(who["id"]) if who and app.extensions.get("changes") else 0
         if who and who["is_associate"]:
+            news_n += len(_day_changes(who))
             found = app.extensions["store"].unseen_leave_swap(who["id"])
             news_weeks = len(found["leave"]) + len(found["swaps"])
         else:
@@ -1228,6 +1229,15 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                swap_note=swap_note, weeks=weeks, shown=shown, week_labels={w.isoformat(): f"{w:%d %b} to {(w + timedelta(days=6)):%d %b}" for w in weeks}, swap_week=swap_week, week_offers=week_offers,
                                offers=offers, today=today, week=week, hm=hm)
 
+    def _day_changes(user: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Phase AU: changes to this associate's breaks made by someone else since they last looked (never older than
+        two days)."""
+        key = _my_unit()
+        if not key or not user["roster_name"]:
+            return []
+        since = max(user.get("day_seen_at") or 0, time.time() - 2 * 86400)
+        return app.extensions["store"].break_changes_for(key, user["roster_name"], user["id"], since)
+
     def _leave_swap_answers(user_id: int) -> List[str]:
         """Phase AU: the final answers to this person's leave requests and swaps they have not seen, as lines; marks them seen."""
         store = app.extensions["store"]
@@ -1464,7 +1474,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
             book.expire_overdue(key, now)  # Phase AU
         rules = app.extensions["changes"].settings_of(key) if key else {"enabled": True}
         news = book.news(g.user["id"], read=True)  # Phase AU: the answers since they last looked, shown once
-        return render_template("me_breaks.html", unit=key, card=card, news=news, requests_on=rules.get("enabled", True), tomorrow=tomorrow, tseg=tseg, found=found, seg=seg, options=options, problem=problem,
+        changed = _day_changes(g.user)
+        app.extensions["store"].mark_day_seen(g.user["id"], time.time())
+        return render_template("me_breaks.html", unit=key, card=card, news=news, changed=changed, requests_on=rules.get("enabled", True), tomorrow=tomorrow, tseg=tseg, found=found, seg=seg, options=options, problem=problem,
                                today=now.date() if now else None,
                                mine=book.mine(key, g.user["id"]) if key else [], hm=hm,
                                now_at=found["now"] if found else 0)

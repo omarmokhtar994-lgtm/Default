@@ -212,3 +212,38 @@ class TheBulkUpload(_Users):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ThePasswordTypedOrPasted(_Users):
+    """Phase AU (owner, 2026-10-21: a password given as "Password1!" shows wrong password at sign-in, so it is reset each
+    time): not reproduced with a clean string, so the likeliest cause is what a pasted or typed password carries along:
+    a space or line break at the end, a non-breaking space, a zero-width character from a chat app. Sign-in forgives those;
+    a different letter or case is still wrong, and a wrong try still counts once."""
+    count = 0
+
+    def setUp(self):
+        type(self).count += 1
+        self.name = f"paste_{self.count}"
+        self.add(username=self.name, password="Password1!", programs=[str(self.alpha_id)])
+
+    def test_what_a_paste_carries_along_does_not_matter(self):
+        for typed in ("Password1!", "Password1! ", " Password1!", "Password1!\n", "Password1!\r\n", " Password1!",
+                      "​Password1!", "Password1!​", "﻿Password1!", "Password1!\t"):
+            self.assertTrue(self.can_sign_in(self.name, typed), repr(typed))
+
+    def test_a_different_password_is_still_wrong_and_counts_once(self):
+        for typed in ("password1!", "Password1", "Password1!!", "Passw0rd1!", "Pass word1!"):
+            self.assertFalse(self.can_sign_in(self.name, typed), repr(typed))
+        row = next(u for u in self.store.list_users() if u["username"] == self.name)
+        self.assertEqual(row["failed"], 0)          # five wrong tries lock the account: it is locked now, not at 5 of 5 + 1
+        self.assertGreater(row["locked_until"], 0)
+
+    def test_a_password_set_with_a_space_inside_keeps_it(self):
+        self.add(username="paste_two", password="Pass word 1234!", programs=[str(self.alpha_id)])
+        self.assertTrue(self.can_sign_in("paste_two", "Pass word 1234!"))
+        self.assertFalse(self.can_sign_in("paste_two", "Password1234!"))
+
+    def test_the_password_the_user_chooses_later_is_cleaned_the_same_way(self):
+        uid = next(u["id"] for u in self.store.list_users() if u["username"] == self.name)
+        self.store.set_password(uid, "Chosen-pass-123 ​", must_change=False)
+        self.assertTrue(self.can_sign_in(self.name, "Chosen-pass-123"))

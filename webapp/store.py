@@ -381,8 +381,17 @@ create table if not exists notify_posts (
 """
 
 
+_PASTE_JUNK = " \t\r\n\x0b\x0c\u00a0\u200b\u200c\u200d\u2060\ufeff"
+
+
+def clean_password(password: str) -> str:
+    """Phase AU: a password without what a paste or a chat app adds around it: spaces, line breaks, a non-breaking space,
+    zero-width characters at either end. What is inside is untouched."""
+    return (password or "").strip(_PASTE_JUNK)
+
+
 def hash_password(password: str) -> str:
-    return generate_password_hash(password, method="scrypt")
+    return generate_password_hash(clean_password(password), method="scrypt")
 
 
 class Store:
@@ -803,7 +812,9 @@ class Store:
                 return None, "disabled"
             if row["locked_until"] > now:
                 return None, "locked"
-            if not check_password_hash(row["password_hash"], password or ""):
+            typed = password or ""  # as typed first (a password set before Phase AU may carry a space), then cleaned
+            if not (check_password_hash(row["password_hash"], typed) or (
+                    clean_password(typed) != typed and check_password_hash(row["password_hash"], clean_password(typed)))):
                 failed = row["failed"] + 1
                 locked = now + LOCK_SECONDS if failed >= LOCK_AFTER_FAILURES else 0
                 db.execute("update users set failed = ?, locked_until = ? where id = ?",

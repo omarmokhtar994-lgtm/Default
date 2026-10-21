@@ -213,7 +213,10 @@ class TheSession(_Secured):
         got = self.client_with(f"{edited}.{rest}").get("/admin/users")
         self.assertEqual(got.status_code, 302)
         self.assertIn("/login", got.headers["Location"])
-        flipped = cookie[:-1] + ("A" if cookie[-1] != "A" else "B")  # one character of the signature
+        # one character of the signature: from the middle, since the last character of a base64 string can carry bits
+        # that are dropped when it is read (flipping it may leave the signature the same)
+        at = cookie.rindex(".") + 1 + 5
+        flipped = cookie[:at] + ("A" if cookie[at] != "A" else "B") + cookie[at + 1:]
         self.assertEqual(self.client_with(flipped).get("/admin/users").status_code, 302)
 
     def test_a_copy_of_a_cookie_stops_working_when_the_password_changes_the_account_is_switched_off_or_deleted(self):

@@ -41,8 +41,8 @@ class TheCheck(unittest.TestCase):
         with mock.patch.object(zipcheck, "MAX_MEMBERS", 3):
             self.assertEqual(zipcheck.zip_problem(bomb(1, members=4)), zipcheck.PROBLEM)
 
-    def test_a_file_that_is_not_a_zip_says_so(self):
-        self.assertIn("not a readable", zipcheck.zip_problem(b"PK\x03\x04 broken"))
+    def test_a_file_that_is_not_a_readable_zip_is_not_a_bomb_and_is_left_to_the_readers(self):
+        self.assertEqual(zipcheck.zip_problem(b"PK\x03\x04 broken"), "")
 
 
 class TheUploads(unittest.TestCase):

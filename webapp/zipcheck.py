@@ -19,11 +19,12 @@ PROBLEM = ("That file is far larger once opened than its size says, so it was no
 
 
 def zip_problem(source: Union[str, Path, bytes]) -> str:
-    """"" when the zip is a sane size once opened; else what to tell the person. Nothing is extracted."""
+    """"" when the zip is a sane size once opened; else what to tell the person. Nothing is extracted. A file that is not
+    a readable zip is not a bomb: it is left to the workbook readers, which say what is wrong with it."""
     try:
         handle = zipfile.ZipFile(io.BytesIO(source) if isinstance(source, bytes) else source)
     except (zipfile.BadZipFile, OSError):
-        return "That file is not a readable Excel workbook (.xlsx)."
+        return ""
     with handle:
         infos = handle.infolist()
         total = sum(i.file_size for i in infos)

@@ -159,3 +159,19 @@ class TheDayChanges(_Pages):
     def test_someone_elses_break_is_not_news_to_me(self):
         self.app.extensions["days"].move_break(self.key, WED, NIGHT, 0, "00:45", self.users["rta1"]["id"])
         self.assertNotIn("Your breaks changed", self.get(self.assoc, "/me/breaks"))
+
+
+class TheClockOnThePages(_Pages):
+    """Phase AU: every time an associate sees is in the schedule's own time, so the pages say which one, and how far
+    Egypt's clock is from it when it is another."""
+    def test_both_pages_name_the_zone_the_times_are_in(self):
+        for url in ("/me/breaks", "/me"):
+            self.assertIn("Times are in Cairo (Egypt) time", self.get(self.assoc, url))
+
+    def test_a_schedule_in_another_zone_says_how_far_apart(self):
+        from webapp.clock import zone_gap_words
+        from datetime import date
+        self.assertEqual(zone_gap_words("America/New_York", date(2026, 10, 14)),
+                         "Egypt's clock is 7 hours ahead of it.")
+        self.assertEqual(zone_gap_words("Europe/London", date(2026, 10, 14)), "Egypt's clock is 2 hours ahead of it.")
+        self.assertEqual(zone_gap_words("Africa/Cairo", date(2026, 10, 14)), "")

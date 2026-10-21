@@ -37,7 +37,7 @@ from .channel_people import ChannelPeople, can_work, channel_words
 from .channel_plan import NoPlan, plan_day, score_day
 from .channel_template import channel_workbook
 from .channels import check_lines, has_channel_needs, read_channels, requirement_tab
-from .clock import minute_now, EGYPT, HOME, SHOWN, ZONES, moved_text, pick_zone, rta_shift, shift as zone_shift, shown, to_schedule, zone_label
+from .clock import minute_now, EGYPT, HOME, SHOWN, ZONES, moved_text, pick_zone, rta_shift, shift as zone_shift, shown, to_schedule, zone_gap_words, zone_label
 from .permissions import CATALOGUE as PERMISSIONS, ENDPOINTS as PERMISSION_ENDPOINTS, ROLE_NAMES, allowed, matrix
 from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, OVERTIME_MAX, STATUSES, channel_letters, BreakRefused, at_target, board, glance, hover_tips, my_day, my_items, now_panel, read_inputs, shift_groups, window_view
 from .coach import actual_shrinkage, corrected_tab
@@ -527,7 +527,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         else:
             news_weeks = 0
         return {"csrf_token": csrf_token, "copyright": COPYRIGHT, "user": g.get("user"), "news_n": news_n,
-                "news_weeks": news_weeks,
+                "news_weeks": news_weeks, "zone_words": _zone_words,
                 "theme": theme if theme in THEMES else "", "back": back,
                 "status_words": STATUS_WORDS, "label": label, "modes": MODES, "stages": stages, "in_flight": IN_FLIGHT,
                 "when": _when, "run_options": run_options, "option_labels": OPTION_LABELS,
@@ -1228,6 +1228,17 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return render_template("me.html", unit=key, answers=answers, kinds=LEAVE_KINDS, mine=mine, swaps=my_swaps, swap_day=swap_day,
                                swap_note=swap_note, weeks=weeks, shown=shown, week_labels={w.isoformat(): f"{w:%d %b} to {(w + timedelta(days=6)):%d %b}" for w in weeks}, swap_week=swap_week, week_offers=week_offers,
                                offers=offers, today=today, week=week, hm=hm)
+
+    def _zone_words() -> str:
+        """Phase AU: "Times are in Cairo (Egypt) time." for an associate's pages, with the gap when it is another zone."""
+        key = _my_unit()
+        if not key:
+            return ""
+        today = datetime.now(EGYPT).date()
+        zone = _own_zone(key, today)
+        words = f"Times are in {dict(ZONES)[zone]} time, the schedule's own."
+        gap = zone_gap_words(zone, today)
+        return f"{words} {gap}" if gap else words
 
     def _day_changes(user: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Phase AU: changes to this associate's breaks made by someone else since they last looked (never older than

@@ -140,3 +140,18 @@ def to_schedule(value: str, minutes: int) -> str:
     caller to refuse, as before."""
     m = TIME.fullmatch((value or "").strip())
     return _clock(int(m.group(1)) * 60 + int(m.group(2)) - minutes) if m and minutes else value
+
+
+def zone_gap_words(zone: str, on) -> str:
+    """Phase AU: how far Egypt's clock is from ``zone``'s on ``on``, in words ("" when it is Egypt's own)."""
+    from datetime import datetime, time as _time
+    from zoneinfo import ZoneInfo
+    if zone == HOME:
+        return ""
+    noon = datetime.combine(on, _time(12, 0))
+    gap = (noon.replace(tzinfo=ZoneInfo(HOME)).utcoffset() - noon.replace(tzinfo=ZoneInfo(zone)).utcoffset())
+    hours = gap.total_seconds() / 3600
+    if hours == 0:
+        return "Egypt's clock is the same as it."
+    word = f"{abs(hours):g} hour{'' if abs(hours) == 1 else 's'}"
+    return f"Egypt's clock is {word} {'ahead of' if hours > 0 else 'behind'} it."

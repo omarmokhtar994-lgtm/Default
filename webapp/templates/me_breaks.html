@@ -6,6 +6,7 @@
   <p class="byline">{{ user.roster_name }}{% if today %}, {{ today.strftime('%A %d %b') }}{% endif %}. You can ask the RTA to move a break on the day you are working, up to the end of your shift. The RTA decides.</p>
 </div></div>
 {% set here = 'today' %}{% include "_me_tabs.html" %}
+{% if zone_words() %}<p class="note">{{ zone_words() }}</p>{% endif %}
 {% include "_news.html" %}
 {% if not requests_on %}<p class="note panel" role="note">Break change requests are switched off for this program. Ask your team manager or the RTA.</p>{% endif %}
 {% if problem %}<p class="error" role="alert">{{ problem }}</p>{% endif %}

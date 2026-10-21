@@ -6,6 +6,11 @@
   <p class="byline">{% if admin %}Admins manage everyone. Supervisors manage the planners, team managers and associates of their own programs.{% else %}You manage the planners, team managers and associates of your programs: their programs, passwords, switched on or off, and each associate's team manager.{% endif %}</p>
 </div></div>
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+{% if made %}<section class="panel" aria-labelledby="made-h" role="status">
+  <h2 id="made-h">Temporary password</h2>
+  {% for username, password in made %}<p><b>{{ username }}</b>: <code data-password-of="{{ username }}">{{ password }}</code></p>{% endfor %}
+  <p class="note">Shown once. They choose their own password at first sign-in.</p>
+</section>{% endif %}
 {% macro program_boxes(chosen, everything) %}
   <fieldset class="exp-kinds"><legend>Programs</legend>
     {% if admin %}<label class="exp-kind"><input type="checkbox" name="all_programs" value="1"{% if everything %} checked{% endif %}> All programs</label>{% endif %}
@@ -14,11 +19,13 @@
 {% endmacro %}
 <section class="panel" aria-labelledby="add-h">
   <h2 id="add-h">Add a person</h2>
+  <p><a href="{{ url_for('admin_users_bulk') }}">Add many people from a file</a></p>
   <form method="post" class="people-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Username <input name="username" required></label>
     <label>Name <input name="display_name"></label>
-    <label>Temporary password <input name="password" type="text" minlength="10" required></label>
+    <label>Temporary password <input name="password" type="text" autocomplete="off" placeholder="Leave blank to make one" aria-describedby="pw-hint"></label>
+    <p class="hint" id="pw-hint">At least 10 characters. Left blank, one is made up and shown once after you add them.</p>
     <label>Role <select name="role">{% for key, name in roles.items() %}<option value="{{ key }}">{{ name }}</option>{% endfor %}</select></label>
     <label>Name on the schedule <input name="roster_name" list="roster-names" autocomplete="off" aria-describedby="roster-hint"></label>
     <p class="hint" id="roster-hint">For associates only: their name as it is on the program's schedule. They see that person's week.</p>
@@ -48,6 +55,11 @@
     {% for action, label in ([('disable','Switch off')] if u.active else [('enable','Switch on')]) + [('reset','Reset password')] %}
     <form method="post" action="{{ url_for('admin_user_action', user_id=u.id, action=action) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="quiet">{{ label }}</button></form>
     {% endfor %}
+    <details class="advanced"><summary>Delete</summary>
+      <form method="post" action="{{ url_for('admin_user_action', user_id=u.id, action='delete') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <p class="note">They cannot sign in again and the username is free for a new person. Their name stays in the history of what they did.</p>
+        <label><input type="checkbox" name="confirm" value="1" required> Yes, delete {{ u.username }}</label>
+        <button class="quiet">Delete person</button></form></details>
     {% if u.is_associate %}<form method="post" action="{{ url_for('admin_user_action', user_id=u.id, action='team') }}" class="team-pick"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label>Team manager <select name="team_manager"><option value="">None</option>{% for t in u.team_choices %}<option value="{{ t.id }}"{% if t.id == u.team_manager_id %} selected{% endif %}>{{ t.display_name }}</option>{% endfor %}</select></label>
       <button class="quiet">Save team manager</button></form>{% endif %}

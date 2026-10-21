@@ -7,6 +7,7 @@ passwords lock the account for 15 minutes; a successful login clears it.
 from __future__ import annotations
 
 import json
+import secrets
 import sqlite3
 import time
 from contextlib import contextmanager
@@ -394,6 +395,9 @@ class Store:
                 db.execute("alter table users add column is_associate integer not null default 0")
             if "roster_name" not in people:
                 db.execute("alter table users add column roster_name text not null default ''")
+            # Phase AR: a deleted person's account is closed and hidden; the row stays so the history still names them
+            if "deleted" not in people:
+                db.execute("alter table users add column deleted integer not null default 0")
             # Phase AK: team managers, and the team manager an associate belongs to (none for everyone from before)
             if "is_team_manager" not in people:
                 db.execute("alter table users add column is_team_manager integer not null default 0")
@@ -729,8 +733,20 @@ class Store:
         return dict(row) if row else None
 
     def list_users(self) -> List[Dict[str, Any]]:
+        """Everyone with an account (a deleted person is not listed; ``get_user`` still finds them for the history)."""
         with self._db() as db:
-            return [dict(r) for r in db.execute("select * from users order by username")]
+            return [dict(r) for r in db.execute("select * from users where deleted = 0 order by username")]
+
+    def delete_user(self, user_id: int) -> None:
+        """Phase AR: close a person's account. Sign-in, role, programs, roster link and team link go and the username is
+        free again; the row and the display name stay, because the history of what they did names them."""
+        with self._db() as db:
+            db.execute("update users set deleted = 1, active = 0, username = ?, password_hash = ?, must_change = 0,"
+                       " is_admin = 0, is_supervisor = 0, is_team_manager = 0, is_associate = 0, all_programs = 0,"
+                       " roster_name = '', team_manager_id = null, failed = 0, locked_until = 0 where id = ?",
+                       (f"deleted-{user_id}", hash_password(secrets.token_urlsafe(24)), user_id))
+            db.execute("delete from user_programs where user_id = ?", (user_id,))
+            db.execute("update users set team_manager_id = null where team_manager_id = ?", (user_id,))
 
     def authenticate(self, username: str, password: str) -> Tuple[Optional[Dict[str, Any]], str]:
         """(user, "ok") or (None, "bad" | "locked" | "disabled")."""

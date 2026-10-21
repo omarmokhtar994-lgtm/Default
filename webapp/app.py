@@ -67,6 +67,7 @@ from .results import recolour, version_summary
 from .runs import ACTIVE, MODES, OPTION_LABELS, READY, RESUMABLE, RunQueue, parse_options, run_options
 from .store import Store
 from werkzeug.datastructures import ImmutableMultiDict
+from .bulk_users import new_password, passwords_workbook, read_people, template_bytes
 from .daily_views import people_of, workbook as daily_workbook
 from .merge import merge_intervals
 from .merged_day import lob_of, merged_page
@@ -699,10 +700,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
         store = app.extensions["store"]
         access = Access(store, g.user)
         admin = bool(g.user["is_admin"])
-        error = ""
+        error, made = "", []
         if request.method == "POST":
             username = request.form.get("username", "").strip().lower()
             password = request.form.get("password", "")
+            generated = not password.strip()  # Phase AR: left blank, one is made up and shown once
+            if generated:
+                password = new_password()
             kind = request.form.get("role") or ("admin" if request.form.get("is_admin") == "on" else "planner")
             everything = admin and request.form.get("all_programs") == "1" and kind != "associate"
             roster = request.form.get("roster_name", "").strip()
@@ -727,7 +731,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             elif any(u["username"] == username for u in store.list_users()):
                 error = f"{username} already exists."
             elif len(password) < MIN_PASSWORD:
-                error = f"Give a temporary password of at least {MIN_PASSWORD} characters."
+                error = f"Give a temporary password of at least {MIN_PASSWORD} characters, or leave it blank to make one."
             else:
                 uid = store.add_user(username, request.form.get("display_name", ""), password,
                                      is_admin=kind == "admin", must_change=True)
@@ -739,7 +743,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
                         detail=f"{ROLES[kind]}; " + ("all programs" if everything else
                                                      _program_names(programs, access.book.tree()) or "no programs"))
                 flash(f"Added {username}. They choose their own password at first sign-in.")
-                return redirect(url_for("admin_users"))
+                if generated:  # shown on this answer only, never kept: the page is not a redirect
+                    made = [(username, password)]
+                else:
+                    return redirect(url_for("admin_users"))
         tree = access.book.tree()
         names = {u["id"]: u["display_name"] for u in store.list_users()}
         people = [dict(u, role=role(u), programs=_program_names(store.user_program_ids(u["id"]), tree),
@@ -747,7 +754,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                        team_manager=names.get(u["team_manager_id"], ""),
                        team_choices=access.team_managers_for(u) if u["is_associate"] else [])
                   for u in store.list_users() if admin or access.can_manage(u)]
-        return render_template("admin_users.html", users=people, error=error, grantable=access.grantable(),
+        return render_template("admin_users.html", users=people, error=error, made=made, grantable=access.grantable(),
                                roles=ROLES if admin else {k: ROLES[k] for k in STAFF_ADDS}, admin=admin,
                                roster_names=sorted(_roster_index([p["id"] for p in access.grantable()], tree).items()))
 
@@ -801,6 +808,160 @@ def create_app(config: Dict[str, Any]) -> Flask:
             flash("Pick the associates.")
         return redirect(url_for("admin_users"))
 
+    # ------------------------------------------------------------- people from a file (Phase AR)
+    BULK_MINUTES = 30  # how long a checked file waits to be added, and the passwords to be downloaded
+
+    def _bulk_held() -> Dict[str, Dict[str, Any]]:
+        """Checked files and password sheets waiting for their owner, in memory only (a restart drops them)."""
+        held = app.extensions.setdefault("bulk_users", {})
+        now = time.time()
+        for key in [k for k, v in held.items() if v["expires"] < now]:
+            held.pop(key, None)
+        return held
+
+    def _bulk_plan(rows: List[Dict[str, Any]], access: Access) -> List[Dict[str, Any]]:
+        """Each row of an uploaded people sheet with what would be added and, when it cannot be, the reasons. The same
+        rules as Add a person: a supervisor adds planners, associates and team managers of their own programs only."""
+        store, admin, tree = app.extensions["store"], bool(g.user["is_admin"]), access.book.tree()
+        by_name = {" ".join(p["name"].split()).casefold(): p["id"] for p in access.grantable()}
+        taken = {u["username"] for u in store.list_users()}
+        in_file = {r["username"].strip().lower() for r in rows}
+        planned: List[Dict[str, Any]] = []
+        seen: set = set()
+        for r in rows:
+            username = r["username"].strip().lower()
+            problems: List[str] = []
+            kind = " ".join(r["role"].lower().replace("_", " ").split()).replace(" ", "_") or "planner"
+            everything = False
+            programs: List[int] = []
+            for name in [x for x in re.split(r"[;,]", r["programs"]) if x.strip()]:
+                key = " ".join(name.split()).casefold()
+                if key == "all" and admin:
+                    everything = True
+                elif key in by_name:
+                    programs.append(by_name[key])
+                else:
+                    problems.append(f"{name.strip()} is not one of your programs.")
+            programs = sorted(set(programs))
+            roster = r["roster_name"].strip()
+            if username_problem(username):
+                problems.append(USERNAME_RULE)
+            elif username in taken:
+                problems.append(f"{username} already exists.")
+            elif username in seen:
+                problems.append(f"{username} is in the file twice.")
+            seen.add(username)
+            if kind not in ROLES:
+                problems.append("Pick a role.")
+            elif kind not in STAFF_ADDS and not admin:
+                problems.append("Only an admin adds supervisors and admins.")
+            elif everything and kind == "associate":
+                problems.append("An associate has named programs, not all of them.")
+            elif not everything and not programs and not problems:
+                problems.append("Give them at least one of your programs.")
+            if kind == "associate" and programs and not problems:
+                found = _roster_problem(roster, programs, tree)
+                if found:
+                    problems.append(found)
+                else:
+                    roster = _roster_canonical(roster, programs, tree) or roster
+            elif kind != "associate":
+                roster = ""
+            if r["password"] and len(r["password"]) < MIN_PASSWORD:
+                problems.append(f"A password of at least {MIN_PASSWORD} characters, or leave it blank to make one.")
+            planned.append({**r, "typed": r["username"].strip(), "username": username, "kind": kind, "programs_ids": programs, "everything": everything,
+                            "roster": roster, "problems": problems, "has_password": bool(r["password"])})
+        for p in planned:  # the team manager: someone already here, or a team manager added by this same file
+            wanted = p["team_manager"].strip().lower()
+            if not wanted or p["problems"]:
+                continue
+            found = next((u for u in store.list_users() if u["username"] == wanted and u["is_team_manager"] and u["active"]
+                          and (u["all_programs"] or set(p["programs_ids"]) & set(store.user_program_ids(u["id"])))), None)
+            mate = next((q for q in planned if q["username"] == wanted and q["kind"] == "team_manager" and not q["problems"]
+                         and (q["everything"] or set(p["programs_ids"]) & set(q["programs_ids"]))), None)
+            if p["kind"] != "associate":
+                p["problems"].append("Only an associate has a team manager.")
+            elif found is None and mate is None:
+                p["problems"].append(f"{wanted} is not a team manager of their programs.")
+        return planned
+
+    @app.route("/admin/users/bulk", methods=["GET", "POST"])
+    @manager_required
+    def admin_users_bulk():  # type: ignore[no-untyped-def]
+        """Add many people from one sheet: check it first (every row with its reason), then add the good rows."""
+        access, error, plan, token = Access(app.extensions["store"], g.user), "", None, ""
+        if request.method == "POST":
+            upload = request.files.get("people")
+            try:
+                if upload is None or not upload.filename:
+                    raise ValueError("Pick the people sheet to upload.")
+                plan = _bulk_plan(read_people(upload.read(), upload.filename), access)
+                token = secrets.token_urlsafe(16)
+                _bulk_held()[token] = {"user": g.user["id"], "rows": [{k: p[k] for k in ("n", *[
+                    "username", "display_name", "role", "programs", "roster_name", "team_manager", "password"])}
+                    for p in plan], "expires": time.time() + 60 * BULK_MINUTES}
+            except ValueError as exc:
+                error = str(exc)
+        return render_template("admin_users_bulk.html", error=error, plan=plan, token=token, roles=ROLES,
+                               good=sum(1 for p in plan or [] if not p["problems"]), minutes=BULK_MINUTES)
+
+    @app.route("/admin/users/bulk/template.xlsx")
+    @manager_required
+    def admin_users_bulk_template():  # type: ignore[no-untyped-def]
+        return send_file(io.BytesIO(template_bytes()), as_attachment=True, download_name="People_template.xlsx",
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    @app.route("/admin/users/bulk/add", methods=["POST"])
+    @manager_required
+    def admin_users_bulk_add():  # type: ignore[no-untyped-def]
+        """Add the rows of a checked file that can be added. The checks run again first: nothing is trusted from the
+        earlier answer but the rows the person uploaded."""
+        held = _bulk_held().get(request.form.get("token", ""))
+        if held is None or held["user"] != g.user["id"]:
+            abort(404)
+        _bulk_held().pop(request.form["token"], None)
+        store, access = app.extensions["store"], Access(app.extensions["store"], g.user)
+        plan = _bulk_plan(held["rows"], access)
+        order = sorted((p for p in plan if not p["problems"]), key=lambda p: p["kind"] == "associate")  # team managers first
+        made, shown = {}, []
+        for p in order:
+            password = p["password"] or new_password()
+            uid = store.add_user(p["username"], p["display_name"], password, is_admin=p["kind"] == "admin",
+                                 must_change=True)
+            store.update_user(uid, is_supervisor=int(p["kind"] == "supervisor"), all_programs=int(p["everything"]),
+                              is_associate=int(p["kind"] == "associate"),
+                              roster_name=p["roster"] if p["kind"] == "associate" else "",
+                              is_team_manager=int(p["kind"] == "team_manager"))
+            store.set_user_programs(uid, p["programs_ids"])
+            made[p["username"]] = uid
+            shown.append({"username": p["username"], "display_name": p["display_name"] or p["username"],
+                          "role": ROLES[p["kind"]], "password": "" if p["password"] else password,
+                          "given": bool(p["password"])})
+        for p in order:  # their team managers, now that everyone is here
+            wanted = p["team_manager"].strip().lower()
+            if p["kind"] == "associate" and wanted:
+                chosen = made.get(wanted) or next((u["id"] for u in store.list_users() if u["username"] == wanted), None)
+                if chosen is not None:
+                    store.update_user(made[p["username"]], team_manager_id=chosen)
+        _record("users_bulk_added", detail=f"{len(shown)} added, {len(plan) - len(shown)} left out")  # never the passwords
+        sheet_token = secrets.token_urlsafe(16)
+        _bulk_held()[sheet_token] = {"user": g.user["id"], "expires": time.time() + 60 * BULK_MINUTES,
+                                     "sheet": passwords_workbook([s for s in shown if not s["given"]])}
+        return render_template("admin_users_bulk.html", error="", plan=None, token="", roles=ROLES, good=0,
+                               minutes=BULK_MINUTES, added=shown, skipped=[p for p in plan if p["problems"]],
+                               sheet_token=sheet_token)
+
+    @app.route("/admin/users/bulk/<sheet_token>/passwords.xlsx")
+    @manager_required
+    def admin_users_bulk_passwords(sheet_token: str):  # type: ignore[no-untyped-def]
+        """The temporary passwords made up for a file's people: once, for the person who added them."""
+        held = _bulk_held().get(sheet_token)
+        if held is None or held["user"] != g.user["id"] or "sheet" not in held:
+            abort(404)
+        _bulk_held().pop(sheet_token, None)
+        return send_file(io.BytesIO(held["sheet"]), as_attachment=True, download_name="Temporary_passwords.xlsx",
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
     @app.route("/admin/users/<int:user_id>/<action>", methods=["POST"])
     @manager_required
     def admin_user_action(user_id: int, action: str):  # type: ignore[no-untyped-def]
@@ -822,6 +983,17 @@ def create_app(config: Dict[str, Any]) -> Flask:
             store.set_active(user_id, True)
             _record("user_enabled", subject=target["username"])
             flash(f"{target['username']} is switched on.")
+        elif action == "delete":  # Phase AR: the account goes; the name stays in the history of what they did
+            if request.form.get("confirm") != "1":
+                flash(f"Tick the box to confirm, then press Delete person for {target['username']}.")
+                return redirect(url_for("admin_users"))
+            if target["is_admin"] and sum(1 for u in store.list_users() if u["is_admin"] and u["active"]) <= 1:
+                flash("That is the last admin. Make another admin before deleting this one.")
+                return redirect(url_for("admin_users"))
+            store.delete_user(user_id)
+            _record("user_deleted", subject=target["username"], detail=role(target))
+            flash(f"{target['username']} is deleted: they cannot sign in and the username is free again. "
+                  "Their name stays in the history of what they did.")
         elif action == "reset":
             temporary = secrets.token_urlsafe(9)
             store.set_password(user_id, temporary, must_change=True)

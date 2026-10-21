@@ -49,7 +49,8 @@ ENDPOINTS: Dict[str, str] = {
     **{e: "exports" for e in ("exports_page", "exports_download")},
     **{e: "coaching" for e in ("coach_page", "coach_download")},
     "team_page": "team",
-    **{e: "people" for e in ("admin_users", "admin_user_action", "admin_users_team")},
+    **{e: "people" for e in ("admin_users", "admin_user_action", "admin_users_team", "admin_users_bulk",
+                                  "admin_users_bulk_template", "admin_users_bulk_add", "admin_users_bulk_passwords")},
     **{e: "setup" for e in ("with_setup", "channel_setup", "day_shrinkage_map", "week_target", "day_operating_start",
                             "request_balances")},
 }

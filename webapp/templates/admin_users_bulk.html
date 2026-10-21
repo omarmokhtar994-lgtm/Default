@@ -1,0 +1,59 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{% extends "base.html" %}{% block title %}Add people from a file on Team Scheduler{% endblock %}
+{% block content %}
+<div class="phead"><div>
+  <h1>Add people from a file</h1>
+  <p class="byline"><a href="{{ url_for('admin_users') }}">Back to People</a></p>
+</div></div>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+
+{% if added is defined %}
+<section class="panel" aria-labelledby="done-h">
+  <h2 id="done-h">Added {{ added|length }} {{ 'person' if added|length == 1 else 'people' }}</h2>
+  {% if added %}
+  <p class="note">The temporary passwords below are shown once, here and in the download. Each person chooses their own password at first sign-in.</p>
+  <div class="scroll" role="region" tabindex="0" aria-label="People added (scrolls sideways)">
+    <table class="runs small">
+      <thead><tr><th scope="col">Username</th><th scope="col">Name</th><th scope="col">Role</th><th scope="col">Temporary password</th></tr></thead>
+      <tbody>{% for a in added %}<tr><td>{{ a.username }}</td><td>{{ a.display_name }}</td><td>{{ a.role }}</td>
+        <td>{% if a.given %}As in your file{% else %}<code data-password-of="{{ a.username }}">{{ a.password }}</code>{% endif %}</td></tr>{% endfor %}</tbody>
+    </table>
+  </div>
+  {% if added|rejectattr('given')|list %}<p><a class="button" href="{{ url_for('admin_users_bulk_passwords', sheet_token=sheet_token) }}">Download the temporary passwords (.xlsx)</a> The download works once.</p>{% endif %}
+  {% endif %}
+  {% if skipped %}<h3>Left out ({{ skipped|length }})</h3>
+  <ul class="log">{% for p in skipped %}<li>Row {{ p.n }}, {{ p.typed or 'no username' }}: {{ p.problems|join(' ') }}</li>{% endfor %}</ul>
+  <p class="note">Fix these rows in the file and upload it again to add them.</p>{% endif %}
+  <p><a class="button" href="{{ url_for('admin_users') }}">Back to People</a></p>
+</section>
+{% else %}
+{% if plan is not none and plan %}
+<section class="panel" aria-labelledby="check-h">
+  <h2 id="check-h">Checked: {{ good }} of {{ plan|length }} rows can be added</h2>
+  <div class="scroll" role="region" tabindex="0" aria-label="The rows of your file (scrolls sideways)">
+    <table class="runs small">
+      <thead><tr><th scope="col">Row</th><th scope="col">Username</th><th scope="col">Name</th><th scope="col">Role</th><th scope="col">Programs</th><th scope="col">Password</th><th scope="col">Result</th></tr></thead>
+      <tbody>{% for p in plan %}<tr><td>{{ p.n }}</td><td>{{ p.typed }}</td><td>{{ p.display_name }}</td><td>{{ roles.get(p.kind, p.role) }}</td>
+        <td>{{ 'All programs' if p.everything else p.programs }}</td><td>{{ 'In your file' if p.has_password else 'Made up' }}</td>
+        <td>{% if p.problems %}<span class="gap-ink">Left out: {{ p.problems|join(' ') }}</span>{% else %}Ready{% endif %}</td></tr>{% endfor %}</tbody>
+    </table>
+  </div>
+  {% if good %}<form method="post" action="{{ url_for('admin_users_bulk_add') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="token" value="{{ token }}">
+    <p class="note">Rows that are left out are not added. The file is held for {{ minutes }} minutes for this step.</p>
+    <button class="primary">Add {{ good }} {{ 'person' if good == 1 else 'people' }}</button>
+  </form>{% else %}<p class="empty">Nothing in this file can be added yet. Fix the rows and upload it again.</p>{% endif %}
+</section>
+{% endif %}
+<section class="panel" aria-labelledby="up-h">
+  <h2 id="up-h">{{ 'Check another file' if plan else 'Upload the people sheet' }}</h2>
+  <p>One row for each person. <a href="{{ url_for('admin_users_bulk_template') }}">Download the template (.xlsx)</a>; it has an example row and what to write in each column. An Excel or CSV file works.</p>
+  <form method="post" enctype="multipart/form-data" class="people-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>People sheet <input type="file" name="people" accept=".xlsx,.csv" required></label>
+    <button class="primary">Check the file</button>
+  </form>
+  <p class="note">Nothing is added by this step. Passwords left blank are made up and shown once after you add the people.</p>
+</section>
+{% endif %}
+{% endblock %}

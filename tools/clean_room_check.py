@@ -219,6 +219,12 @@ def read_contract(path: Path) -> Contract:
                      else "REQUIRED_LANGUAGE_ONLY" if "required" in raw_mode or "exclusive" in raw_mode
                      else "MINIMUM_ROWS")
 
+    # Phase AQ: with WHOLE_SHIFT a shift must also end by the window's close (START, the default, checks the start only).
+    shift_rule = re.sub(r"[^a-z0-9]", "", n(get(im, "Language Working Window Shift Rule", "Language Window Shift Rule",
+                                               "Language Working Window Applies To")))
+    k.window_whole = shift_rule in ("wholeshift", "wholeshifts", "entireshift", "startandend", "wholeshiftstartandend",
+                                    "shiftstartandend", "bothends")
+
     # Roster: Schedule sheet, located by header text.
     ws = wb["Schedule"]
     hr = header_row(ws, ("language",))
@@ -552,7 +558,10 @@ def check(k: Contract, sched: Dict[str, List[str]], breaks, exceptions) -> Dict[
                 todays = [w for w in entries if d in w[3]]
                 if not todays:
                     continue  # no window opens this day: the engine reads that as unrestricted
-                if not any((ss[d][0] - w[0]) % 1440 < ((w[1] - w[0]) % 1440 or 1440) for w in todays):
+                if not any((ss[d][0] - w[0]) % 1440 < ((w[1] - w[0]) % 1440 or 1440)
+                           and (not k.window_whole or ((w[1] - w[0]) % 1440 or 1440) == 1440
+                                or (ss[d][0] - w[0]) % 1440 + ss[d][1] <= ((w[1] - w[0]) % 1440 or 1440))
+                           for w in todays):
                     v.append({"rule": "language_working_window", "who": nm, "day": DAYS[d], "shift": row[d]})
 
     # Breaks
@@ -658,7 +667,7 @@ def check(k: Contract, sched: Dict[str, List[str]], breaks, exceptions) -> Dict[
     for row in v:
         by_rule[row["rule"]] += 1
     return {"metrics": dict(m), "violation_count": len(v), "violations_by_rule": dict(by_rule),
-            "violations": v[:200], "language_window_mode": k.window_mode,
+            "violations": v[:200], "language_window_mode": k.window_mode, "language_window_whole_shift": k.window_whole,
             "language_rules": [{**r, "days": sorted(r["days"]), "eligible": sorted(r["eligible"])} for r in k.rules]}
 
 

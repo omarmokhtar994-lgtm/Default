@@ -994,7 +994,7 @@ def validate(input_path: Path, output_path: Path, engine_path: Path,
             if kind=="shift" and parsed.language_working_window_mode in {"ALL_ROWS", "MINIMUM_ROWS", "REQUIRED_LANGUAGE_ONLY"}:
                 entries = eng.associate_language_windows(parsed, assoc, day=d)
                 if entries and not any(
-                    eng.shift_within_language_window(shift_map[norm(value)], window)
+                    eng.language_window_allows(parsed, shift_map[norm(value)], window)
                     for window in entries
                 ):
                     failures.append({

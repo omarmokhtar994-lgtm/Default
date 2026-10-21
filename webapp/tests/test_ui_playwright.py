@@ -3333,3 +3333,21 @@ class TheRequestsInTheBrowser(_au_tomorrow.TheNextDay):
         page.get_by_label("Find an associate").fill("")
         self.assertEqual(page.locator("#coach-list .exp-kind:visible").count(), total)
         self.assertEqual(problems, [])
+
+    def test_the_operating_day_window_fits_its_hours(self):
+        from webapp.programs import ProgramBook
+        pid = self.pid
+        ProgramBook(self.store).set_rta_defaults(pid, None, 9 * 60, None)
+        self.addCleanup(ProgramBook(self.store).set_rta_defaults, pid, None, None, None)
+        page, problems = self.watched()
+        self.sign_in(page, "rta1", "Staff-pass-123")
+        with mock.patch("webapp.app.operating_span", return_value=15 * 60):
+            page.goto(self.base + "/day?" + urllib.parse.urlencode(
+                {"program": self.key, "date": "2026-10-14", "tz": "Africa/Cairo", "start": "09:00"}))
+            self.assertEqual(page.locator("svg.tl-track").first.get_attribute("viewBox"), "540 0 900 30")
+            self.assertEqual(page.locator(".tl-ticks span").count(), 8)          # every 2 hours across 15 hours
+            cols = page.locator(".tl").first.get_attribute("class")
+            self.assertIn("cols-15", cols)                                    # 15 hours of hourly intervals (this program's)
+            expect(page.locator(".achv-strip").first).to_have_attribute("data-span", "900")
+            self.assertGreater(page.locator("svg.tl-track rect.brk").count(), 0)
+        self.assertEqual(problems, [])

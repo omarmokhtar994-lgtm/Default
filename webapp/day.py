@@ -1350,15 +1350,17 @@ def channel_letters(stretches: List[Tuple[int, int, str]], breaks: List[Tuple[in
     return out
 
 
-def window_view(views: Dict[int, Optional[Dict[str, Any]]], start: int, on: date) -> Dict[str, Any]:
+def window_view(views: Dict[int, Optional[Dict[str, Any]]], start: int, on: date, length: int = 1440) -> Dict[str, Any]:
     """Phase AI (owner, 2026-10-15: one calendar day "with everything"): the RTA's 24 hours from minute ``start`` of
     the schedule's day ``on``, with the day view's shape, so the Timeline, the Interval board and Adherence work on it
     as on a day. Times are minutes from ``on``'s midnight (below 0 or past 1440 where the window reaches the day
     before or after); ``views`` holds those days' views by their distance from ``on`` (None: no schedule kept).
     Each cell and row comes from the day that holds it; each shift once, as its own day has it, with its ``date``,
-    and ``offset`` 0 when it starts in the window (-1 when it began before). A day with no schedule shows no figures."""
+    and ``offset`` 0 when it starts in the window (-1 when it began before). A day with no schedule shows no figures.
+    ``length`` (Phase AU, operating hours) is how many minutes it covers: 1440, or less when the window ends with the last
+    shift of the operating day."""
     first = next(v for v in views.values() if v)
-    step, end = first["interval"], start + 1440
+    step, end = first["interval"], start + length
 
     def held(k: int) -> Tuple[Optional[Dict[str, Any]], int]:
         d, t = divmod(k, 1440)
@@ -1452,14 +1454,14 @@ def window_view(views: Dict[int, Optional[Dict[str, Any]]], start: int, on: date
     outside = []  # Phase AJ: each day's cover from outside the roster, in the window's minutes
     for d, v in sorted(views.items()):
         for o in (v or {}).get("outside") or []:
-            a, b = max(o["start"] + 1440 * d, start, 1440 * d), min(o["end"] + 1440 * d, start + 1440, 1440 * (d + 1))
+            a, b = max(o["start"] + 1440 * d, start, 1440 * d), min(o["end"] + 1440 * d, end, 1440 * (d + 1))
             if a < b and not any(x["name"] == o["name"] and x["end"] == a for x in outside):
                 outside.append({**o, "start": a, "end": b})
             elif a < b:  # the same cover read again from the next day's view: one stretch
                 x = next(x for x in outside if x["name"] == o["name"] and x["end"] == a)
                 x["end"] = b
     return {"interval": step, "measure": first["measure"], "lanes": order, "cells": cells, "languages": languages,
-            "tiles": tiles, "channels": channels, "start": start, "outside": outside}
+            "tiles": tiles, "channels": channels, "start": start, "outside": outside, "span": length}
 
 
 def shift_groups(view: Dict[str, Any], from_now: Optional[int] = None) -> List[Dict[str, Any]]:

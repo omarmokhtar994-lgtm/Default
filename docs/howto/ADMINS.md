@@ -16,7 +16,8 @@ program's).
 - **Coverage measure** (interval, service level, volume): the RTA, Weeks, Overview, wallboard, exports and the handover note
   start from it, and so does a new run's coverage option.
 - **Default target** (percent): colours intervals everywhere unless a week has its own; blank follows the workbook.
-- **Operating day starts**: offered on the RTA under "Day starts at" (the RTA still opens on the calendar day).
+- **Operating day starts**: offered on the RTA under "Day starts at" (the RTA still opens on the calendar day). Picked,
+  the page runs from that start to the end of the last shift that starts in it (24 hours when that cannot be worked out).
 - **What counts as shrinkage**: the in-office and out-of-office mapping for all LOBs of the program.
 - **Coverage measure** (interval, service level, volume) decides how billable time counts.
 - **Break change requests**: on or off, a lead time in minutes, and a daily limit per associate (0 = none).

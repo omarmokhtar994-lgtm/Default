@@ -60,7 +60,7 @@
       <form method="post" class="setup-defaults"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="rta_defaults"><input type="hidden" name="program_id" value="{{ p.id }}">
         {% set rd = rta_def[p.id] %}
         <label>Default target, percent <input type="number" name="target" min="1" max="100" value="{{ rd.target if rd.target else '' }}" placeholder="Follow the workbook" inputmode="numeric"></label>
-        <label>Operating day starts, in the schedule's time <input name="day_start" value="{{ hm(rd.day_start) if rd.day_start is not none else '' }}" placeholder="Blank: the calendar day" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" inputmode="numeric" autocomplete="off"></label>
+        <label>Operating day starts, in the schedule's time <span class="hint">It runs to the end of the last shift that starts in it; 24 hours if that cannot be worked out.</span><input name="day_start" value="{{ hm(rd.day_start) if rd.day_start is not none else '' }}" placeholder="Blank: the calendar day" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" inputmode="numeric" autocomplete="off"></label>
         <button type="submit">Save target and day</button>
         <p class="note">Every page of this program starts from these: the RTA, Weeks, Overview and the wallboard colour intervals by the target, and the RTA offers the operating day under Day starts at (it still opens on the calendar day). A week's own target, or a LOB's own operating day or shrinkage set on the RTA, still wins.</p>
       </form>

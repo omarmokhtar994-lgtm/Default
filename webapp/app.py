@@ -26,7 +26,7 @@ from werkzeug.utils import secure_filename
 from .adherence import interval_shrinkage, person_day, team as team_figures
 from .analytics import program_weeks, team
 from .channel_hours import combine, week_hours
-from .attendance import (ACTIVITY_KINDS, ADD_KINDS, COVER_ROLES, DAY_OFF, DayBook, aux_details, hm, pick_version, plain_hm, tomorrow_unchecked, week_start,
+from .attendance import (ACTIVITY_KINDS, operating_span, ADD_KINDS, COVER_ROLES, DAY_OFF, DayBook, aux_details, hm, pick_version, plain_hm, tomorrow_unchecked, week_start,
                          with_text)
 from .break_plan import check_row, floor, slots_for, suggest
 from .channel_fair import fairness
@@ -3662,6 +3662,14 @@ def create_app(config: Dict[str, Any]) -> Flask:
                         except ValueError:  # a workbook that cannot be read: its hours stay empty
                             sources[d] = None
                 found = window_view({d: (x or {}).get("view") for d, x in sources.items()}, start, on)
+                begins = app.extensions["store"].get_day_start(program)  # Phase AU: the operating day runs to its last shift
+                if begins is not None and start == begins - begins % step:
+                    try:
+                        length = operating_span(found)
+                    except (ValueError, KeyError, TypeError, StopIteration):
+                        length = 1440  # it cannot be worked out: 24 hours from the start
+                    if length < 1440:
+                        found = window_view({d: (x or {}).get("view") for d, x in sources.items()}, start, on, length)
                 page = dict(page, view=found, target=at_target(found["cells"], page["target"]["target"]))
         window = bool(page and "start" in page["view"])
         clock_now = datetime.now(ZoneInfo(own_zone))

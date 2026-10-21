@@ -146,7 +146,9 @@ Load each with the Skill tool at the step it covers; following it from memory do
   store (`rta_default`, `get_day_start`, `get_shrinkage_map`) and `DayBook.target_for` (week's own, then the program's, then
   the workbook's); `DayBook.page(measure=None)` takes the program's measure, so pages that name none (Weeks, Overview,
   wallboard, coach, exports, handover) follow it; a new run's coverage option starts from it. The RTA still opens on the
-  calendar day (owner, 2026-10-15). Tests: `test_au_defaults.py`.
+  calendar day (owner, 2026-10-15). Operating hours (owner, 2026-10-21: only the start; the end is the last shift's, else 24 hours):
+  `attendance.operating_span`, `window_view(length=)`, `view["span"]`; used when the start picked is the operating day's. Tests:
+  `test_au_defaults.py`, `test_au_hours.py`.
 - Release gate 2026-10-21: 1551 tests (floor raised from 1537). `evidence/phase_aq/CHECKS.md` has the A/B result.
 - Rules learned: a container restart kills background runs started with nohup; keep the session active while a long
   run goes. Check `git status` for rewritten old screenshots before every commit.

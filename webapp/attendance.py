@@ -209,6 +209,19 @@ def _either(names: List[str]) -> str:
     return " or ".join([", ".join(names[:-1]), names[-1]]) if len(names) > 1 else "".join(names)
 
 
+def operating_span(view: Dict[str, Any]) -> int:
+    """Phase AU: minutes from the start of a 24-hour window to the end of the last shift that starts in it, rounded up to
+    a whole interval; ValueError when no shift starts in it (the window then stays 24 hours)."""
+    ends = [s["end"] for ln in view["lanes"] for s in ln["segments"] if s["offset"] == 0]
+    if not ends:
+        raise ValueError("No shift starts in the operating day.")
+    step = view["interval"]
+    length = -(-(max(ends) - view["start"]) // step) * step
+    if length <= 0:
+        raise ValueError("The last shift ends before the operating day starts.")
+    return min(length, 1440)
+
+
 class DayBook:
     def __init__(self, store, book: ScheduleBook):
         self.store = store
@@ -597,10 +610,11 @@ class DayBook:
                 "log": self.store.list_day_log(program, on.isoformat())}
 
     def window_page(self, program: str, on: date, start: int, measure: Optional[str] = None,
-                    extras: Optional[Dict[date, Dict[str, Any]]] = None) -> Optional[Dict[str, Any]]:
+                    extras: Optional[Dict[date, Dict[str, Any]]] = None, fit: bool = False) -> Optional[Dict[str, Any]]:
         """Phase AK: the page for the 24 hours from minute ``start`` of ``on`` (Phase AI's window, as the Timeline shows
         it), with ``extras`` counted as if kept, per shift date (``page(extra=...)``). ``views`` holds each day's own
-        view by its distance from ``on``. From minute 0 it is the day's own page."""
+        view by its distance from ``on``. From minute 0 it is the day's own page. With ``fit`` (Phase AU, the operating
+        day) the window ends with the last shift that starts in it, or runs the 24 hours when that cannot be worked out."""
         extras = extras or {}
         measure = measure or self.measure_of(program)
         page = self.page(program, on, measure, extras.get(on))
@@ -617,6 +631,13 @@ class DayBook:
                     found = None
                 views[d] = (found or {}).get("view")
         view = window_view(views, start, on)
+        if fit:
+            try:
+                length = operating_span(view)
+            except (ValueError, KeyError, TypeError, StopIteration):
+                length = 1440
+            if length < 1440:
+                view = window_view(views, start, on, length)
         return dict(page, view=view, target=at_target(view["cells"], page["target"]["target"]), views=views,
                     start=start)
 

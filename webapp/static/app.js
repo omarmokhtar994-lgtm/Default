@@ -601,7 +601,7 @@ function homeRefresh(now) {
       var startX = e.clientX, moved = 0;
       rect.setPointerCapture(e.pointerId);
       function move(ev) {
-        moved = Math.round((ev.clientX - startX) / box.width * 1440 / 5) * 5;
+        moved = Math.round((ev.clientX - startX) / box.width * svg.viewBox.baseVal.width / 5) * 5;
         rect.setAttribute("x", x0 + moved);
       }
       function up() {
@@ -1301,7 +1301,8 @@ function homeRefresh(now) {
     var mark = strip.querySelector(".achv-now");
     var minutes = parseInt(strip.getAttribute("data-now"), 10);
     if (!mark || isNaN(minutes)) return;
-    mark.style.left = (Math.min(Math.max(minutes, 0), 1440) / 1440 * 100) + "%";
+    var span = parseInt(strip.getAttribute("data-span"), 10) || 1440;  // Phase AU: an operating day can be shorter than 24 hours
+    mark.style.left = (Math.min(Math.max(minutes, 0), span) / span * 100) + "%";
     mark.classList.add("placed");
   });
 })();

@@ -622,7 +622,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                                            "minutes and try again."), 429
             user, reason = app.extensions["store"].authenticate(request.form.get("username", ""),
                                                                 request.form.get("password", ""))
-            if user is None and reason != "disabled":
+            if user is None and reason not in ("disabled", "expired"):
                 throttle.failed(address)
             if user is None:
                 app.extensions["store"].add_event(kind="sign_in_failed", detail=f"from {address}: {reason}", **who)
@@ -637,7 +637,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 csrf_token()
                 return redirect(safe_next(request.args.get("next", "")) or url_for("home"))
             error = {"locked": "Too many wrong passwords: this account is locked for 15 minutes.",
-                     "disabled": "This account is switched off. Ask your admin."}.get(
+                     "disabled": "This account is switched off. Ask your admin.",
+                     "expired": "Your temporary password has expired. Ask your admin for a new one."}.get(
                          reason, "Wrong username or password.")
         return render_template("login.html", error=error)
 

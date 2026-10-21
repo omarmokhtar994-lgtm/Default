@@ -9,6 +9,7 @@ import csv
 import html
 import io
 import re
+import time
 import unittest
 
 from openpyxl import Workbook, load_workbook
@@ -247,3 +248,57 @@ class ThePasswordTypedOrPasted(_Users):
         uid = next(u["id"] for u in self.store.list_users() if u["username"] == self.name)
         self.store.set_password(uid, "Chosen-pass-123 ​", must_change=False)
         self.assertTrue(self.can_sign_in(self.name, "Chosen-pass-123"))
+
+
+class TheTemporaryPasswordExpires(_Users):
+    """Phase AU: a temporary password (a new person's, or after a reset) is good for 7 days; after that it says so and
+    does not count as a wrong try. One the person has chosen themselves never expires."""
+    count = 0
+
+    def person(self):
+        type(self).count += 1
+        name = f"temp_{self.count}"
+        self.add(username=name, password="Temporary-1234", programs=[str(self.alpha_id)])
+        return name, next(u["id"] for u in self.store.list_users() if u["username"] == name)
+
+    def age(self, uid, days):
+        with self.store._db() as db:
+            db.execute("update users set temp_until = ? where id = ?", (time.time() - days * 86400, uid))
+
+    def test_a_fresh_temporary_password_works_and_an_old_one_says_it_expired(self):
+        name, uid = self.person()
+        self.assertTrue(self.can_sign_in(name, "Temporary-1234"))
+        self.age(uid, 1)
+        user, why = self.store.authenticate(name, "Temporary-1234")
+        self.assertEqual((user, why), (None, "expired"))
+
+    def test_an_expired_one_is_not_a_wrong_try_and_a_wrong_password_is_still_just_wrong(self):
+        name, uid = self.person()
+        self.age(uid, 1)
+        for _ in range(7):
+            self.assertEqual(self.store.authenticate(name, "Temporary-1234")[1], "expired")
+        self.assertEqual(self.store.authenticate(name, "Not-the-password-1")[1], "bad")     # no hint that it expired
+        self.assertEqual(next(u for u in self.store.list_users() if u["id"] == uid)["locked_until"], 0)
+
+    def test_a_reset_gives_a_fresh_week(self):
+        name, uid = self.person()
+        self.age(uid, 1)
+        self.store.set_password(uid, "Another-temp-1234", must_change=True)
+        self.assertTrue(self.can_sign_in(name, "Another-temp-1234"))
+
+    def test_a_password_the_person_chose_never_expires(self):
+        name, uid = self.person()
+        self.store.set_password(uid, "Chosen-by-me-1234", must_change=False)
+        with self.store._db() as db:
+            db.execute("update users set temp_until = ? where id = ?", (time.time() - 99 * 86400, uid))
+        self.assertTrue(self.can_sign_in(name, "Chosen-by-me-1234"))
+
+    def test_the_sign_in_page_says_what_to_do(self):
+        name, uid = self.person()
+        self.age(uid, 1)
+        import re as _re
+        client = self.app.test_client()
+        tok = _re.search(r'name="csrf_token" value="([^"]+)"', client.get("/login").get_data(as_text=True)).group(1)
+        page = client.post("/login", data={"username": name, "password": "Temporary-1234", "csrf_token": tok}).get_data(as_text=True)
+        self.assertIn("temporary password has expired", page)
+        self.assertIn("Ask your admin", page)

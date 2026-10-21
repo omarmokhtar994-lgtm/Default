@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from werkzeug.security import check_password_hash, generate_password_hash
 
 LOCK_AFTER_FAILURES = 5
+TEMP_PASSWORD_DAYS = 7
 LOCK_SECONDS = 15 * 60
 
 SCHEMA = """
@@ -438,6 +439,9 @@ class Store:
                 db.execute("update notify_settings set kinds = kinds || ',request' where (',' || kinds || ',') like"
                            " '%,break,%' and (',' || kinds || ',') not like '%,request,%'")
             # Phase AR: a deleted person's account is closed and hidden; the row stays so the history still names them
+            # Phase AU: a temporary password is good for TEMP_PASSWORD_DAYS (0 = no end: one the person chose themselves)
+            if "temp_until" not in people:
+                db.execute("alter table users add column temp_until real not null default 0")
             # Phase AU: "sign out other devices": a session started before this time is no longer good
             if "sessions_from" not in people:
                 db.execute("alter table users add column sessions_from real not null default 0")
@@ -516,10 +520,10 @@ class Store:
             raise ValueError("username and password are required")
         with self._db() as db:
             cur = db.execute(
-                "insert into users (username, display_name, password_hash, is_admin, must_change, created)"
-                " values (?, ?, ?, ?, ?, ?)",
+                "insert into users (username, display_name, password_hash, is_admin, must_change, created, temp_until)"
+                " values (?, ?, ?, ?, ?, ?, ?)",
                 (username, display_name.strip() or username, hash_password(password), int(is_admin),
-                 int(must_change), time.time()))
+                 int(must_change), time.time(), time.time() + TEMP_PASSWORD_DAYS * 86400 if must_change else 0))
             return int(cur.lastrowid)
 
     PERSON_FIELDS = ("display_name", "is_admin", "is_supervisor", "all_programs", "is_associate", "roster_name",
@@ -824,6 +828,8 @@ class Store:
                 db.execute("update users set failed = ?, locked_until = ? where id = ?",
                            (0 if locked else failed, locked, row["id"]))
                 return None, "locked" if locked else "bad"
+            if row["must_change"] and row["temp_until"] and row["temp_until"] < now:
+                return None, "expired"  # the right temporary password, too late: not a wrong try
             db.execute("update users set failed = 0, locked_until = 0 where id = ?", (row["id"],))
             return dict(row), "ok"
 
@@ -832,8 +838,9 @@ class Store:
 
     def set_password(self, user_id: int, password: str, must_change: bool = False) -> None:
         with self._db() as db:
-            db.execute("update users set password_hash = ?, must_change = ?, failed = 0, locked_until = 0"
-                       " where id = ?", (hash_password(password), int(must_change), user_id))
+            db.execute("update users set password_hash = ?, must_change = ?, failed = 0, locked_until = 0, temp_until = ?"
+                       " where id = ?", (hash_password(password), int(must_change),
+                                         time.time() + TEMP_PASSWORD_DAYS * 86400 if must_change else 0, user_id))
 
     def set_active(self, user_id: int, active: bool) -> None:
         with self._db() as db:

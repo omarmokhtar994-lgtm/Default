@@ -57,7 +57,7 @@
        text, so the four stay apart for colour-blind readers too (palette validator: worst pair ΔE 8.6) */
     --covered: #06A496; --short: #C98304; --gap: #D53D38; --over: #7560E3;
     --on-covered: #0E1A2B; --on-short: #0E1A2B; --on-gap: #FFFFFF; --on-over: #FFFFFF;
-    --covered-text: #0B776C; --over-text: #715ED8; --short-ink: #8C5300; --gap-ink: #B3261E;
+    --covered-text: #0B776C; --over-text: #5F4CCB; --short-ink: #8C5300; --gap-ink: #B3261E;
     --action: #15191F; --action-hover: #2A313B; --on-action: #FFFFFF; --edge: #7A838F; --selected: #E8EBEF;
     --done: #7692B4; --panel: rgba(255, 255, 255, .92); --header: rgba(241, 242, 244, .9); --well: #F6F7F9;
     --bg-line: rgba(21, 25, 31, .045); --empty-cell: #E8EBEF; --empty-key: #D8DCE2;
@@ -74,7 +74,7 @@
   --rail-bg: #FFFFFF; --night: #F1F2F4; --console: #FFFFFF; --console-2: #F6F7F9; --rail: #D8DCE2; --paper: #15191F; --dim: #525C68;
   --covered: #06A496; --short: #C98304; --gap: #D53D38; --over: #7560E3;
   --on-covered: #0E1A2B; --on-short: #0E1A2B; --on-gap: #FFFFFF; --on-over: #FFFFFF;
-  --covered-text: #0B776C; --over-text: #715ED8; --short-ink: #8C5300; --gap-ink: #B3261E;
+  --covered-text: #0B776C; --over-text: #5F4CCB; --short-ink: #8C5300; --gap-ink: #B3261E;
   --action: #15191F; --action-hover: #2A313B; --on-action: #FFFFFF; --edge: #7A838F; --selected: #E8EBEF;
   --done: #7692B4; --panel: rgba(255, 255, 255, .92); --header: rgba(241, 242, 244, .9); --well: #F6F7F9;
   --bg-line: rgba(21, 25, 31, .045); --empty-cell: #E8EBEF; --empty-key: #D8DCE2;

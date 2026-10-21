@@ -3070,3 +3070,74 @@ class ThePhaseADInTheBrowser(unittest.TestCase):
                 self.go(phone, self.url(on), errors)
                 phone.locator("#act-bar").screenshot(path=str(AD_SCREENS / "phone_bar.png"))
         self.assertEqual(errors, [])
+
+
+@unittest.skipIf(sync_playwright is None, "Playwright is not installed here; UI tests skipped")
+class ThePeoplePickersInTheBrowser(unittest.TestCase):
+    """Phase AO (owner, 2026-10-20): on People the name list shows only the ticked programs' names, and the bulk team
+    manager list only team managers who share a program with every ticked associate."""
+
+    @classmethod
+    def setUpClass(cls):
+        from webapp.programs import ProgramBook
+        from webapp.tests.test_channel_people import add_version
+        cls.app, cls.store, _, _ = make_app(start_worker=False)
+        cls.store.add_user("omar", "Omar Mokhtar", "Owner-pass-123", is_admin=True, must_change=False)
+        programs = ProgramBook(cls.store)
+        saks, gdi = programs.add_program("SAKS"), programs.add_program("GDI")
+        add_version(cls.store, programs.add_lob(saks, "NMG Tier 2"), "2026-10-11", [("Associate 101", "English")])
+        add_version(cls.store, programs.add_lob(gdi, "GDI English"), "2026-10-11", [("Associate 201", "French")])
+        for name, program in (("tm_saks", saks), ("tm_gdi", gdi)):
+            uid = cls.store.add_user(name, name, "Manager-pass-1", must_change=False)
+            cls.store.update_user(uid, is_team_manager=1)
+            cls.store.set_user_programs(uid, [program])
+        for name, who, program in (("a_saks", "Associate 101", saks), ("a_gdi", "Associate 201", gdi)):
+            uid = cls.store.add_user(name, who, "Associate-pass-1", must_change=False)
+            cls.store.update_user(uid, is_associate=1, roster_name=who)
+            cls.store.set_user_programs(uid, [program])
+        cls.server = make_server("127.0.0.1", 0, cls.app, threaded=True)
+        cls.base = f"http://127.0.0.1:{cls.server.server_port}"
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.pw = sync_playwright().start()
+        launch = {"headless": True}
+        if os.path.exists(CHROMIUM):
+            launch["executable_path"] = CHROMIUM
+        try:
+            cls.browser = cls.pw.chromium.launch(**launch)
+        except Exception as exc:  # pragma: no cover
+            cls.pw.stop()
+            cls.server.shutdown()
+            raise unittest.SkipTest(f"Chromium could not start: {exc}")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.pw.stop()
+        cls.server.shutdown()
+
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+
+    def test_the_name_list_follows_the_ticked_program(self):
+        page = self.page()
+        self.sign_in(page)
+        page.goto(self.base + "/admin/users")
+        form = page.locator("form.people-form").first
+        listing = form.locator("input[name=roster_name]").get_attribute("list")
+        names = lambda: page.eval_on_selector_all(f"#{listing} option", "o => o.map(x => x.value)")
+        self.assertEqual(names(), [])  # nothing ticked yet
+        form.get_by_label("GDI").check()
+        self.assertEqual(names(), ["Associate 201"])
+        form.get_by_label("GDI").uncheck()
+        form.get_by_label("SAKS").check()
+        self.assertEqual(names(), ["Associate 101"])
+
+    def test_the_bulk_team_manager_list_follows_the_ticked_associates(self):
+        page = self.page()
+        self.sign_in(page)
+        page.goto(self.base + "/admin/users")
+        bulk = page.locator("form[action$='/admin/users/team']")
+        usable = lambda: bulk.locator("select[name=team_manager] option:not([disabled])").all_inner_texts()
+        self.assertEqual(sorted(usable()), ["None", "tm_gdi", "tm_saks"])
+        bulk.get_by_label("Associate 201").check()
+        self.assertEqual(sorted(usable()), ["None", "tm_gdi"])

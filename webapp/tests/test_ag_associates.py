@@ -77,7 +77,9 @@ class Associates(unittest.TestCase):
     def test_the_form_lists_the_names_on_the_schedule(self):
         page = self.admin.get("/admin/users").get_data(as_text=True)
         self.assertIn('<datalist id="roster-names">', page)
-        self.assertIn('<option value="Associate 013">', page)
+        # re-pinned (Phase AO): each name now carries the programs whose schedules hold it (data-programs), so the
+        # form can list only the ticked programs' names
+        self.assertRegex(page, r'<option value="Associate 013" data-programs="\d+( \d+)*">')
 
     def test_an_associate_reaches_only_their_own_pages(self):
         me = self.signed_in("assoc10", "Associate 010")

@@ -1418,3 +1418,52 @@ function homeRefresh(now) {
   fit();
   window.addEventListener("resize", fit);
 })();
+
+// Phase AO (owner, 2026-10-20): on People, "Name on the schedule" lists only the names on the schedules of the programs
+// ticked in the same form, and the bulk team manager list only team managers who share a program with every ticked
+// associate. Each name and team manager carries the program ids it belongs to (data-programs); the server still checks.
+(function () {
+  "use strict";
+  var master = document.getElementById("roster-names");
+  function ids(text) { return (text || "").split(" ").filter(Boolean); }
+  function meets(have, want) { return have.some(function (id) { return want.indexOf(id) !== -1; }); }
+  if (master) {
+    var options = Array.prototype.slice.call(master.querySelectorAll("option"));
+    Array.prototype.forEach.call(document.querySelectorAll("input[list='roster-names']"), function (field, n) {
+      var form = field.form;
+      if (!form) { return; }
+      var own = document.createElement("datalist");
+      own.id = "roster-names-" + n;
+      master.parentNode.insertBefore(own, master.nextSibling);
+      field.setAttribute("list", own.id);
+      function fill() {
+        var boxes = Array.prototype.slice.call(form.querySelectorAll("input[name='programs']"));
+        var all = form.querySelector("input[name='all_programs']");
+        var want = boxes.filter(function (b) { return b.checked || (all && all.checked); }).map(function (b) { return b.value; });
+        own.textContent = "";
+        options.forEach(function (o) {
+          if (meets(ids(o.getAttribute("data-programs")), want)) { own.appendChild(o.cloneNode(true)); }
+        });
+      }
+      form.addEventListener("change", fill);
+      fill();
+    });
+  }
+  var bulk = document.querySelector("form[action$='/admin/users/team']");
+  if (bulk) {
+    var select = bulk.querySelector("select[name='team_manager']");
+    var narrow = function () {
+      var asked = Array.prototype.slice.call(bulk.querySelectorAll("input[name='who']:checked"))
+        .map(function (b) { return ids(b.getAttribute("data-programs")); });
+      Array.prototype.forEach.call(select.options, function (o) {
+        if (!o.value) { return; }
+        var theirs = ids(o.getAttribute("data-programs"));
+        var fits = theirs[0] === "all" || asked.every(function (have) { return meets(have, theirs); });
+        o.hidden = o.disabled = !fits;
+        if (!fits && o.selected) { select.value = ""; }
+      });
+    };
+    bulk.addEventListener("change", narrow);
+    narrow();
+  }
+})();

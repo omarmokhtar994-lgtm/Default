@@ -605,33 +605,49 @@ def create_app(config: Dict[str, Any]) -> Flask:
              "admin": "Admin"}
     STAFF_ADDS = ("planner", "associate", "team_manager")  # what a supervisor may add for their programs
 
-    def _roster_names(program_ids: list, tree: list) -> List[str]:
-        """Names on the newest kept week's schedules of these programs' LOBs (Phase AG: an associate's account is
-        linked to one of them)."""
+    ROSTER_WEEKS = 4  # Phase AO: the names on a program's last kept weeks, not only its newest (a partly filled newer week)
+
+    def _roster_index(program_ids: list, tree: list) -> Dict[str, set]:
+        """Phase AO: each name on the recent kept weeks' schedules of these programs' LOBs, with the ids of the
+        programs holding it (Phase AG: an associate's account is linked to one of them)."""
         book, store = app.extensions.get("schedules"), app.extensions["store"]
-        names: set = set()
+        found: Dict[str, set] = {}
         if book is None:  # no package installed: no schedules kept, so no names
-            return []
+            return found
         for p in tree:
             if p["id"] not in program_ids:
                 continue
             for key in p["units"]:
-                weeks = book.kept_weeks(key)
-                if weeks:
-                    for v in store.list_schedules(program=key, week_start=weeks[-1]["week"]):
-                        names |= {a["name"] for a in json.loads(v["week"] or "{}").get("associates", [])}
-        return sorted(names)
+                for week in book.kept_weeks(key)[-ROSTER_WEEKS:]:
+                    for v in store.list_schedules(program=key, week_start=week["week"]):
+                        for a in json.loads(v["week"] or "{}").get("associates", []):
+                            found.setdefault(a["name"], set()).add(p["id"])
+        return found
+
+    def _roster_names(program_ids: list, tree: list) -> List[str]:
+        return sorted(_roster_index(program_ids, tree))
+
+    def _roster_canonical(name: str, programs: list, tree: list) -> str:
+        """``name`` as the schedule spells it: exactly, or else the one name that matches without regard to case or
+        extra spaces; "" when none (or several) does."""
+        names = _roster_names(programs, tree)
+        if name in names:
+            return name
+        tidy = " ".join(name.split()).casefold()
+        matches = [n for n in names if " ".join(n.split()).casefold() == tidy]
+        return matches[0] if len(matches) == 1 else ""
 
     def _roster_problem(name: str, programs: list, tree: list, user_id: Optional[int] = None) -> str:
         """Why ``name`` cannot be an associate's name on the schedule of ``programs``, or ""."""
         if not name:
             return "Pick their name on the schedule."
-        if name not in _roster_names(programs, tree):
+        found = _roster_canonical(name, programs, tree)
+        if not found:
             return f"{name} is not on a schedule of {_program_names(programs, tree) or 'the programs picked'}."
         for u in app.extensions["store"].list_users():
-            if (u["is_associate"] and u["roster_name"] == name and u["id"] != user_id
+            if (u["is_associate"] and u["roster_name"] == found and u["id"] != user_id
                     and set(app.extensions["store"].user_program_ids(u["id"])) & set(programs)):
-                return f"{name} already has an account ({u['username']})."
+                return f"{found} already has an account ({u['username']})."
         return ""
 
     def _chosen_programs(access: Access, values: list, keep: Optional[list] = None) -> list:
@@ -678,6 +694,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 error = "Give them at least one of your programs."
             elif kind == "associate" and _roster_problem(roster, programs, access.book.tree()):
                 error = _roster_problem(roster, programs, access.book.tree())
+            elif kind == "associate" and not (roster := _roster_canonical(roster, programs, access.book.tree())):
+                error = "Pick their name on the schedule."
             elif username_problem(username):
                 error = USERNAME_RULE
             elif any(u["username"] == username for u in store.list_users()):
@@ -705,7 +723,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                   for u in store.list_users() if admin or access.can_manage(u)]
         return render_template("admin_users.html", users=people, error=error, grantable=access.grantable(),
                                roles=ROLES if admin else {k: ROLES[k] for k in STAFF_ADDS}, admin=admin,
-                               roster_names=_roster_names([p["id"] for p in access.grantable()], tree))
+                               roster_names=sorted(_roster_index([p["id"] for p in access.grantable()], tree).items()))
 
     def _set_team_manager(access: Access, target: Dict[str, Any], value: str) -> str:
         """Phase AK: ``target``'s team manager from a form value (a user id, or "" for none). Returns what to say."""
@@ -813,7 +831,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 if problem:
                     flash(f"{target['username']}: {problem}")
                     return redirect(url_for("admin_users"))
-                changes = {"is_associate": 1, "roster_name": roster}
+                changes = {"is_associate": 1,
+                           "roster_name": _roster_canonical(roster, programs, access.book.tree()) or roster}
             if admin:
                 changes.update({"is_admin": int(kind == "admin"), "is_supervisor": int(kind == "supervisor"),
                                 "is_team_manager": int(kind == "team_manager"),

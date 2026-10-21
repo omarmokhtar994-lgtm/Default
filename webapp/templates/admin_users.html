@@ -32,12 +32,12 @@
   <h2 id="team-h">Set the team manager of several associates</h2>
   <p class="note">Their team manager gives the first approval of their leave and swaps. Admins and supervisors can approve in their place.</p>
   <form method="post" action="{{ url_for('admin_users_team') }}" class="people-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <fieldset class="exp-kinds"><legend>Associates</legend>{% for u in managed %}<label class="exp-kind"><input type="checkbox" name="who" value="{{ u.id }}"> {{ u.roster_name or u.display_name }}{% if u.team_manager %} <small>({{ u.team_manager }})</small>{% endif %}</label>{% endfor %}</fieldset>
-    <label>Team manager <select name="team_manager"><option value="">None</option>{% for t in leaders %}<option value="{{ t.id }}">{{ t.display_name }}</option>{% endfor %}</select></label>
+    <fieldset class="exp-kinds"><legend>Associates</legend>{% for u in managed %}<label class="exp-kind"><input type="checkbox" name="who" value="{{ u.id }}" data-programs="{{ u.program_ids|join(' ') }}"> {{ u.roster_name or u.display_name }}{% if u.team_manager %} <small>({{ u.team_manager }})</small>{% endif %}</label>{% endfor %}</fieldset>
+    <label>Team manager <select name="team_manager"><option value="">None</option>{% for t in leaders %}<option value="{{ t.id }}" data-programs="{{ 'all' if t.all_programs or t.is_admin else t.program_ids|join(' ') }}">{{ t.display_name }}</option>{% endfor %}</select></label>
     <button class="primary">Set team manager</button>
   </form>
 </section>{% endif %}
-<datalist id="roster-names">{% for n in roster_names %}<option value="{{ n }}">{% endfor %}</datalist>
+<datalist id="roster-names">{% for n, ids in roster_names %}<option value="{{ n }}" data-programs="{{ ids|sort|join(' ') }}">{% endfor %}</datalist>
 <table class="people"><thead><tr><th>Person</th><th>Role</th><th>Programs</th><th>State</th><th></th></tr></thead><tbody>
 {% for u in users %}<tr>
   <td><b>{{ u.display_name }}</b><br><small>{{ u.username }}</small></td>

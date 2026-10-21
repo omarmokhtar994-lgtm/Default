@@ -69,7 +69,7 @@ def workbook(people: List[Dict[str, Any]], heading: str) -> bytes:
     first.title = "Everyone"
     first.append(["Name", "LOB", "Shift", "Status"])
     for person in people:
-        first.append([_safe(person["name"]), person["lob"], person["shift"], person["status"]])
+        first.append([_safe(person["name"]), _safe(person["lob"]), person["shift"], person["status"]])
     first.append([])
     first.append([heading])
     for cell in first[1]:
@@ -77,7 +77,7 @@ def workbook(people: List[Dict[str, Any]], heading: str) -> bytes:
     taken = {"everyone"}
     for person in people:
         ws = wb.create_sheet(sheet_name(person["name"], taken))
-        ws.append([_safe(person["name"]) + (f" ({person['lob']})" if person["lob"] else "")])
+        ws.append([_safe(person["name"] + (f" ({person['lob']})" if person["lob"] else ""))])
         ws["A1"].font = Font(bold=True, size=13)
         ws.append([heading])
         ws.append(["Shift", person["shift"]])

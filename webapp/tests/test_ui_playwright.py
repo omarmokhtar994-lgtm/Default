@@ -9,6 +9,7 @@ import sys
 import tempfile
 import threading
 import unittest
+import urllib.parse
 from unittest import mock
 from pathlib import Path
 
@@ -3144,3 +3145,80 @@ class ThePeoplePickersInTheBrowser(unittest.TestCase):
         self.assertEqual(sorted(usable()), ["None", "tm_gdi", "tm_saks"])
         bulk.get_by_label("Associate 201").check()
         self.assertEqual(sorted(usable()), ["None", "tm_gdi"])
+
+
+@unittest.skipIf(sync_playwright is None, "Playwright is not installed here; UI tests skipped")
+class TheMergedViewsInTheBrowser(unittest.TestCase):
+    """Phase AP (sample ap01): the RTA and the Week page with every LOB of a program together, in a real browser: the
+    View pick, the LOB chips, the strict CSP (no console errors) and the daily views download."""
+
+    @classmethod
+    def setUpClass(cls):
+        from webapp.tests import test_ap_merge_day as fx
+        cls.fx = fx
+        fx._TwoLobs.setUpClass.__func__(cls)
+        cls.server = make_server("127.0.0.1", 0, cls.app, threaded=True)
+        cls.base = f"http://127.0.0.1:{cls.server.server_port}"
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.pw = sync_playwright().start()
+        launch = {"headless": True}
+        if os.path.exists(CHROMIUM):
+            launch["executable_path"] = CHROMIUM
+        try:
+            cls.browser = cls.pw.chromium.launch(**launch)
+        except Exception as exc:  # pragma: no cover
+            cls.pw.stop()
+            cls.server.shutdown()
+            raise unittest.SkipTest(f"Chromium could not start: {exc}")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.pw.stop()
+        cls.server.shutdown()
+        cls.fx._TwoLobs.tearDownClass.__func__(cls)
+
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+
+    def day_url(self, **more):
+        query = {"program": self.one, "date": self.fx.WED.isoformat(), "tz": self.fx.CAIRO, **more}
+        return self.base + "/day?" + urllib.parse.urlencode(query)
+
+    def test_the_merged_day_shows_both_lobs_and_the_pick_goes_back(self):
+        page = self.page()
+        problems = []
+        page.on("console", lambda m: problems.append(m.text) if m.type == "error" else None)
+        page.on("pageerror", lambda e: problems.append(str(e)))
+        self.sign_in(page)
+        page.goto(self.day_url(merge="1"))
+        chips = page.locator(".tl-who .tl-tag.lob")
+        texts = set(chips.all_inner_texts())
+        self.assertEqual(texts, {"Tier 1", "Tier 2"})
+        expect(page.locator("select[name=merge]")).to_have_value("1")
+        page.locator("select[name=merge]").select_option("")
+        page.wait_for_load_state()
+        expect(page.locator(".tl-tag.lob")).to_have_count(0)
+        self.assertEqual(problems, [])
+
+    def test_the_daily_views_download_is_an_excel_file_with_a_sheet_each(self):
+        page = self.page()
+        self.sign_in(page)
+        page.goto(self.day_url(merge="1"))
+        with page.expect_download() as taken:
+            page.get_by_role("link", name="Download daily views").click()
+        saved = Path(tempfile.mkdtemp()) / "daily.xlsx"  # the browser's own copy has no extension
+        taken.value.save_as(str(saved))
+        from openpyxl import load_workbook
+        names = load_workbook(saved).sheetnames
+        self.assertEqual(names[0], "Everyone")
+        self.assertIn("Associate 027", names)
+        self.assertIn("Associate B027", names)
+
+    def test_the_merged_week_draws_one_grid(self):
+        page = self.page()
+        self.sign_in(page)
+        page.goto(self.base + "/week?" + urllib.parse.urlencode(
+            {"program": self.one, "week": "2026-10-11", "merge": "1", "tz": self.fx.CAIRO}))
+        expect(page.get_by_role("heading", name="SAKS, Tier 1 + Tier 2, week of")).to_be_visible()
+        expect(page.locator("table.wkgrid")).to_be_visible()

@@ -39,7 +39,8 @@
   <h2 id="team-h">Set the team manager of several associates</h2>
   <p class="note">Their team manager gives the first approval of their leave and swaps. Admins and supervisors can approve in their place.</p>
   <form method="post" action="{{ url_for('admin_users_team') }}" class="people-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <fieldset class="exp-kinds"><legend>Associates</legend>{% for u in managed %}<label class="exp-kind"><input type="checkbox" name="who" value="{{ u.id }}" data-programs="{{ u.program_ids|join(' ') }}"> {{ u.roster_name or u.display_name }}{% if u.team_manager %} <small>({{ u.team_manager }})</small>{% endif %}</label>{% endfor %}</fieldset>
+    <label>Find an associate <input type="search" data-filter="team-list" autocomplete="off" placeholder="Type a name…"></label>
+    <fieldset class="exp-kinds pick-list" id="team-list"><legend>Associates <span class="hint" data-count-for="team-list" aria-live="polite"></span></legend>{% for u in managed %}<label class="exp-kind"><input type="checkbox" name="who" value="{{ u.id }}" data-programs="{{ u.program_ids|join(' ') }}"> {{ u.roster_name or u.display_name }}{% if u.team_manager %} <small>({{ u.team_manager }})</small>{% endif %}</label>{% endfor %}</fieldset>
     <label>Team manager <select name="team_manager"><option value="">None</option>{% for t in leaders %}<option value="{{ t.id }}" data-programs="{{ 'all' if t.all_programs or t.is_admin else t.program_ids|join(' ') }}">{{ t.display_name }}</option>{% endfor %}</select></label>
     <button class="primary">Set team manager</button>
   </form>

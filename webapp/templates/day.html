@@ -125,6 +125,7 @@
     {% if not merged %}<a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='meeting') }}"{% if tab == 'meeting' %} class="on" aria-current="page"{% endif %}>Find a time</a>
     <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='cover') }}"{% if tab == 'cover' %} class="on" aria-current="page"{% endif %}>Overtime and VTO</a>{% endif %}
     {% if v.channels and not merged %}<a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='channels') }}"{% if tab == 'channels' %} class="on" aria-current="page"{% endif %}>Channels</a>{% endif %}
+    {% if not merged %}<a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='requests') }}"{% if tab == 'requests' %} class="on" aria-current="page"{% endif %}>Requests{% if changes_n %} <span class="count">{{ changes_n }}</span>{% endif %}</a>{% endif %}
   </nav>
   <form class="sel" method="get" action="{{ url_for('day_page') }}">
     <input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="view" value="{{ tab }}">{% if merged %}<input type="hidden" name="merge" value="1">{% endif %}
@@ -446,6 +447,10 @@
   <ul class="log">{% for lane in v.lanes %}{% for seg in lane.segments if seg.offset == 0 %}{% for a in seg.activities %}{% set _ = listed.append(1) %}<li><b>{{ lane.name }}, {% if a.kind == 'Called in' %}Day off cancelled: called in {{ hm(a.start) }} - {{ hm(a.end) }}{% elif a.kind == 'Overtime' %}Overtime {{ hm(a.start) }} to {{ hm(a.end) }}{% elif a.kind == 'VTO' %}VTO {{ hm(a.start) }} to {{ hm(a.end) }}{% elif a.kind in ('Break', 'Lunch') %}{{ a.kind }} {{ hm(a.start) }} to {{ hm(a.end) }}, added today{% else %}{{ a.kind }} {{ hm(a.start) }} to {{ hm(a.end) }} ({{ 'billable' if a.billable else 'non-billable' }}){{ with_text(a.with_whom, a.why, a.with_dept) }}{% endif %}</b>
     <form method="post" action="{{ url_for('day_activity_cancel') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ zone_fields() }}<input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="id" value="{{ a.id }}"><input type="hidden" name="view" value="cover"><button type="submit" class="link danger">Delete</button></form></li>{% endfor %}{% endfor %}{% endfor %}</ul>
   {% if not listed %}<p class="empty">No meetings, training, overtime or VTO recorded for this day.</p>{% endif %}
+</section>
+{% elif tab == 'requests' %}
+<section class="panel req-list" id="changes" aria-labelledby="chg-h">
+  {% include "_change_requests.html" %}
 </section>
 {% elif tab == 'adherence' %}
 <section class="tiles" aria-label="Adherence in numbers">

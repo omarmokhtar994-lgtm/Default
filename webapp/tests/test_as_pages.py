@@ -48,7 +48,7 @@ class _Pages(_Fixture):
 class TheAssociatesBreaks(_Pages):
     def test_the_page_lists_todays_breaks_and_offers_a_change_for_each_that_has_not_started(self):
         page = self.get(self.assoc, "/me/breaks")
-        self.assertIn("My breaks today", page)
+        self.assertIn("My day", page)  # Re-pinned in Phase AU: the page is My day, the Today tab
         self.assertIn("Break 1", page)
         self.assertRegex(page, r'href="/me/breaks\?change=0')
 

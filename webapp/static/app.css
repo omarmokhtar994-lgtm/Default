@@ -1554,3 +1554,10 @@ table.hours tfoot th, table.hours tfoot td { border-top: 1px solid var(--rail); 
 .req-change .alts { flex: 1 1 100%; order: 4; border: 0; padding: 0; margin: 4px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-width: 0; }
 .req-change .alts legend { padding: 0; margin-bottom: 4px; color: var(--dim); font-size: 0.8125rem; }
 @media (max-width: 720px) { .req-change { grid-template-columns: minmax(0, 1fr); } }
+.tabs a .count { margin-left: 4px; min-width: 1.4rem; padding: 0 6px; border-radius: 999px; background: var(--short); color: #10141B; font-size: 0.75rem; font-weight: 700; text-align: center; display: inline-block; line-height: 1.4rem; }
+.pick-list { max-height: 16rem; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); column-gap: 16px; }
+.pick-list legend { grid-column: 1 / -1; }
+.pick-list .exp-kind[hidden] { display: none; }
+/* Phase AU: a note under a table or a form keeps its distance */
+.scroll + .note, .scroll + p, .people-form + .note, .setup-defaults .note { margin-top: 12px; }
+.setup-defaults button + .note { display: block; }

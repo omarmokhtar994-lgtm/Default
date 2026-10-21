@@ -77,10 +77,11 @@ SHOTS = [  # (file, user, password, path, steps, sizes)
     ("ar1_people", "admin_demo", "Admin-pass-1234", "/admin/users", "made", "d"),
     ("ar2_bulk_choose", "admin_demo", "Admin-pass-1234", "/admin/users/bulk", "", "d"),
     ("ar3_bulk_checked", "admin_demo", "Admin-pass-1234", "/admin/users/bulk", "bulk", "d"),
-    ("as1_my_breaks", "a027", "Associate-pass-1", "/me/breaks", "", "dp"),
+    ("as1_my_day", "a027", "Associate-pass-1", "/me/breaks", "", "dp"),
+    ("au1_my_weeks", "a027", "Associate-pass-1", "/me", "", "dp"),
     ("as2_pick_time", "a027", "Associate-pass-1", "/me/breaks?change=1", "", "dp"),
     ("as3_coaching_form", "tm_only", "Manager-pass-123", "/requests/coaching", "", "d"),
-    ("as4_rta_requests", "rta1", "Staff-pass-123", f"/requests?program={Q}", "", "d"),
+    ("as4_rta_requests", "rta1", "Staff-pass-123", f"/day?program={Q}&date=2026-10-14&view=requests", "", "d"),
     ("as5_measure_setup", "admin_demo", "Admin-pass-1234", "/setup/programs", "", "d"),
     ("at1_sign_in", "", "", "/login", "", "dp"),
 ]

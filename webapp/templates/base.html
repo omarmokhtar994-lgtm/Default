@@ -40,7 +40,8 @@
 <aside class="leftnav" aria-label="Pages">
   <details class="menu" open data-menu><summary>Menu</summary>
   {% if user.is_associate %}<nav aria-label="Main">
-    {{ navlink('me', url_for('me'), 'My week') }}
+    {{ navlink('me_day', url_for('me_breaks'), 'My day') }}
+    {{ navlink('me', url_for('me'), 'My weeks') }}
   </nav>{% else %}
   {% if can('runs') %}<a class="button primary newrun" href="{{ url_for('home', program=nav_unit or none) }}#newrun">New schedule</a>{% endif %}
   {% if nav_units %}<label class="unitpick">Program and LOB

@@ -89,7 +89,8 @@ class Associates(unittest.TestCase):
             with self.subTest(url):
                 got = me.get(url)
                 self.assertEqual(got.status_code, 302)
-                self.assertTrue(got.headers["Location"].endswith("/me"), got.headers["Location"])
+                # Re-pinned in Phase AU (owner, 2026-10-21): an associate opens on Today, which is /me/breaks.
+                self.assertTrue(got.headers["Location"].endswith("/me/breaks"), got.headers["Location"])
         mine = TOKEN.search(me.get("/me").get_data(as_text=True)).group(1)  # their Home is My week
         refused = me.post("/admin/users", data={"csrf_token": mine, "username": "x", "password": "y" * 12})
         self.assertEqual(refused.status_code, 403)

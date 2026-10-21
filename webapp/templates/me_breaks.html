@@ -1,19 +1,34 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
-{% extends "base.html" %}{% block title %}My breaks on Team Scheduler{% endblock %}
+{% extends "base.html" %}{% block title %}My day on Team Scheduler{% endblock %}
 {% block content %}
 <div class="phead"><div>
-  <h1>My breaks today</h1>
-  <p class="byline"><a href="{{ url_for('me') }}">Back to My week</a>. You can ask the RTA to move a break on the day you are working, up to the end of your shift. The RTA decides.</p>
+  <h1>My day</h1>
+  <p class="byline">{{ user.roster_name }}{% if today %}, {{ today.strftime('%A %d %b') }}{% endif %}. You can ask the RTA to move a break on the day you are working, up to the end of your shift. The RTA decides.</p>
 </div></div>
+{% set here = 'today' %}{% include "_me_tabs.html" %}
 {% if problem %}<p class="error" role="alert">{{ problem }}</p>{% endif %}
 
 {% if not unit %}
-<p class="empty panel">Your name is not on a schedule yet, so there are no breaks to show.</p>
+<p class="empty panel">Your name is not on a schedule yet, so there is nothing to show.</p>
+{% else %}
+<section class="panel me-today" aria-labelledby="today-h">
+  <h2 id="today-h">Today, {{ today.strftime('%A') }}</h2>
+  {% if card %}
+  <b class="me-shift">{{ card.label }}</b>
+  {% set span = card.end - card.start %}
+  <svg class="me-band" viewBox="0 0 {{ span }} 12" preserveAspectRatio="none" role="img" aria-label="Your shift, part by part">{% for p in card.band %}<rect class="b-{{ p.kind }}" x="{{ p.lo - card.start }}" y="0" width="{{ p.hi - p.lo }}" height="12" rx="2"><title>{{ (p.what or 'Working')|capitalize }}, {{ hm(p.lo) }} to {{ hm(p.hi) }}</title></rect>{% endfor %}</svg>
+  <p class="me-ends"><span>{{ hm(card.start) }}</span><span>{{ hm(card.end) }}</span></p>
+  {% if card.status != 'Present' %}<p class="me-said">Recorded today: {{ card.status|lower }}.</p>{% endif %}
+  <p class="me-said">{{ card.said }}</p>
+  {% else %}<p class="me-said">You do not work today.</p>{% endif %}
+</section>
+{% endif %}
+{% if not unit %}
 {% elif not found %}
 <p class="empty panel">You have no shift running or still to come today, so there is no break to change.</p>
 {% else %}
-<section class="panel" aria-labelledby="today-h">
-  <h2 id="today-h">Your shift, {{ found.label }}{% if found.on != today %} (started {{ found.on.strftime('%a %d %b') }}){% endif %}</h2>
+<section class="panel" aria-labelledby="shift-h">
+  <h2 id="shift-h">Your shift, {{ found.label }}{% if found.on != today %} (started {{ found.on.strftime('%a %d %b') }}){% endif %}</h2>
   <table class="runs small">
     <thead><tr><th scope="col">Break</th><th scope="col">Planned</th><th scope="col">Now</th><th scope="col">Length</th><th scope="col"><span class="sr-only">Change</span></th></tr></thead>
     <tbody>{% for b in seg.breaks %}<tr><th scope="row">{{ b.kind }}</th><td>{{ hm(b.planned_start) }}</td><td>{{ hm(b.start) }}{% if b.moved %} (moved){% endif %}</td><td>{{ b.minutes }} min</td>

@@ -1,23 +1,12 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
-{% extends "base.html" %}{% block title %}My week on Team Scheduler{% endblock %}
+{% extends "base.html" %}{% block title %}My weeks on Team Scheduler{% endblock %}
 {% block content %}
 <div class="phead"><div>
-  <h1>My week</h1>
+  <h1>My weeks</h1>
   <p class="byline">{{ user.roster_name }}{% if week %}, {{ week[0].date.strftime('%d %b') }} to {{ week[-1].date.strftime('%d %b') }}{% endif %}</p>
 </div></div>
+{% set here = 'weeks' %}{% include "_me_tabs.html" %}
 {% if unit %}
-<section class="panel me-today" aria-labelledby="today-h">
-  <h2 id="today-h">Today, {{ today.strftime('%A') }}</h2>
-  {% if card %}
-  <b class="me-shift">{{ card.label }}</b>
-  {% set span = card.end - card.start %}
-  <svg class="me-band" viewBox="0 0 {{ span }} 12" preserveAspectRatio="none" role="img" aria-label="Your shift, part by part">{% for p in card.band %}<rect class="b-{{ p.kind }}" x="{{ p.lo - card.start }}" y="0" width="{{ p.hi - p.lo }}" height="12" rx="2"><title>{{ (p.what or 'Working')|capitalize }}, {{ hm(p.lo) }} to {{ hm(p.hi) }}</title></rect>{% endfor %}</svg>
-  <p class="me-ends"><span>{{ hm(card.start) }}</span><span>{{ hm(card.end) }}</span></p>
-  {% if card.status != 'Present' %}<p class="me-said">Recorded today: {{ card.status|lower }}.</p>{% endif %}
-  <p class="me-said">{{ card.said }}</p>
-  <p><a href="{{ url_for('me_breaks') }}">See my breaks and ask to move one</a></p>
-  {% else %}<p class="me-said">You do not work today.</p>{% endif %}
-</section>
 <section class="panel" aria-labelledby="week-h">
   <h2 id="week-h">The week</h2>
   {% if weeks|length > 1 %}<form method="get" action="{{ url_for('me') }}" class="me-form"><label>Week <select name="week" data-autosubmit>{% for w in weeks %}<option value="{{ w.isoformat() }}"{% if w == shown %} selected{% endif %}>{{ week_labels[w.isoformat()] }}</option>{% endfor %}</select></label><noscript><button>Show the week</button></noscript></form>{% endif %}

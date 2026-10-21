@@ -321,8 +321,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         # form is refused, whatever address they type.
         if g.get("user") and g.user["is_associate"] and not associate_allowed(request.endpoint):
             if request.method in ("GET", "HEAD"):
-                return redirect(url_for("me"))
-            abort(403, description="Your account opens My week only.")
+                return redirect(url_for("me_breaks"))  # Phase AU: an associate opens on Today
+            abort(403, description="Your account opens My day and My weeks only.")
         # Phase AK: what this person's role may open or do, as the admin set it on Roles (checked here, not only hidden)
         if g.get("user") and not g.user["is_associate"] and request.endpoint in PERMISSION_ENDPOINTS and \
                 not _can(PERMISSION_ENDPOINTS[request.endpoint]):
@@ -528,7 +528,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                   "run_week": "week", "run_schedules": "schedules", "program": "analysis", "programs": "programs",
                   "exports_page": "exports", "team_page": "team", "admin_users": "people", "program_setup": "setup",
                   "with_setup": "with", "channel_setup": "channels", "notifications_page": "notify", "roles_page": "roles",
-                  "day_wallboard": "wallboard", "me": "me", "requests_page": "requests"}
+                  "day_wallboard": "wallboard", "me": "me", "me_breaks": "me_day", "requests_page": "requests"}
     PROGRAM_PAGES = {"overview": "/overview?program={key}", "day": "/day?program={key}", "week": "/week?program={key}",
                      "schedules": "/schedules?program={key}", "analysis": "/programs/{key}",
                      "home": "/?program={key}",  # Home shows the program picked (owner, 2026-10-08)
@@ -1097,14 +1097,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 offers = []  # Phase AO: the list shows every colleague now, so a day you asked leave for shows none
             elif not shift_span(dict(app.extensions["days"].roster(key, swap_day)).get(name, "")):
                 swap_note = f"You do not work on {swap_day:%a %d %b}."
-        card, week = None, []
+        week = []
         mine = leave.mine(key, name) if leave and key else []
         my_swaps = swaps.mine(key, name) if swaps and key else []
         shown = None
         if key:
             days = app.extensions["days"]
-            page = days.page(key, today)
-            card = my_day(page["view"], name, clock_now.hour * 60 + clock_now.minute) if page else None
             shown = _date(request.args.get("week", ""))
             if shown not in weeks:  # Phase AO: this week, else the first later one with a schedule
                 shown = week_start(today) if week_start(today) in weeks else (weeks[0] if weeks else None)
@@ -1130,7 +1128,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 week.append({"date": on, "cell": cell, "notes": notes, "items": items, "today": on == today})
         return render_template("me.html", unit=key, kinds=LEAVE_KINDS, mine=mine, swaps=my_swaps, swap_day=swap_day,
                                swap_note=swap_note, weeks=weeks, shown=shown, week_labels={w.isoformat(): f"{w:%d %b} to {(w + timedelta(days=6)):%d %b}" for w in weeks}, swap_week=swap_week, week_offers=week_offers,
-                               offers=offers, today=today, card=card, week=week, hm=hm)
+                               offers=offers, today=today, week=week, hm=hm)
 
     def _my_weeks(key: str, today: date) -> List[date]:
         """Phase AO: the Sundays of this week and every later week that has a schedule kept for ``key``."""
@@ -1330,7 +1328,14 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if found is not None:
             seg = next(s for lane in found["view"]["lanes"] if lane["name"] == name for s in lane["segments"]
                        if s["offset"] == 0)
-        return render_template("me_breaks.html", unit=key, found=found, seg=seg, options=options, problem=problem,
+        card = None  # Phase AU: Today carries the day's card (it was on My week)
+        if key and now is not None:
+            try:
+                page = app.extensions["days"].page(key, now.date())
+                card = my_day(page["view"], name, now.hour * 60 + now.minute) if page else None
+            except ValueError:  # a day whose input workbook is not kept: the breaks say so, the card is left out
+                card = None
+        return render_template("me_breaks.html", unit=key, card=card, found=found, seg=seg, options=options, problem=problem,
                                today=now.date() if now else None,
                                mine=book.mine(key, g.user["id"]) if key else [], hm=hm,
                                now_at=found["now"] if found else 0)
@@ -1434,7 +1439,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             said = str(exc)
         _record("change_decided", subject=f"{row['kind']} for {', '.join(json.loads(row['names']))}", detail=said[:300])
         flash(said)
-        return redirect(url_for("requests_page", program=row["program"]), code=303)
+        back = safe_next(request.form.get("back", ""))  # Phase AU: decided on the RTA tab, back to the tab
+        return redirect(back or url_for("requests_page", program=row["program"]), code=303)
 
     @app.route("/requests/leave/<int:request_id>", methods=["POST"])
     @login_required
@@ -3382,7 +3388,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         measure = measure if measure in MEASURES else (ProgramBook(app.extensions["store"]).day_measure(program)
                                                        if program else "interval")
         tab = request.args.get("view", "")
-        tab = tab if tab in ("board", "adherence", "meeting", "cover", "replan", "channels", "bulk", "rescue") else "timeline"
+        tab = tab if tab in ("board", "adherence", "meeting", "cover", "replan", "channels", "bulk", "rescue", "requests") else "timeline"
         if merge and tab not in MERGE_TABS:
             flash("Pick one LOB for that tab: it plans or changes one LOB's schedule.")
             return redirect(url_for("day_page", program=program, date=on.isoformat(), merge="1", tz=g.zone,
@@ -3610,8 +3616,23 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                measure=measure,
                                measures=MEASURES, tab=tab, statuses=STATUSES, aux=sorted(AUX), hm=hm,
                                rows=board(page["view"], page["target"]["target"]) if page and tab == "board" else None, week_of=week_start(on),
+                               **_requests_tab(program, on, tab),
                                earlier=on - timedelta(days=1), later=on + timedelta(days=1), **shift_view,
                                **_window_context(program, on, own_zone, moved, start_at, page, anchor, start, tab))
+
+    def _requests_tab(program: str, on: date, tab: str) -> Dict[str, Any]:
+        """Phase AU: break changes and coaching on the RTA tab itself: the count for the tab, and (on the tab) the rows."""
+        if not program:
+            return {"changes_n": 0}
+        book = app.extensions["changes"]
+        found = {"changes_n": book.count(program)}
+        if tab == "requests":
+            found.update(changes=_change_rows(program), changes_decided=book.decided(program), unit=program,
+                         may_change=allowed(app.extensions["store"], g.user, "rta_change"),
+                         can_ask_coaching=_can_ask_coaching(),
+                         back=url_for("day_page", program=program, date=on.isoformat(), view="requests", tz=g.zone,
+                                      start=request.args.get("start") or None))
+        return found
 
     def _window_context(program: str, on: date, own_zone: str, moved: int, start_at: int, page, anchor, start: int,
                         tab: str) -> Dict[str, Any]:

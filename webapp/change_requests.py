@@ -421,7 +421,7 @@ class ChangeBook:
         words = {"waiting": "waiting for the RTA", "approved": "approved", "rejected": "rejected",
                  "cancelled": "cancelled", "refused": "could not be applied"}
         if row["kind"] == BREAK:
-            what = f"{d['kind']} from {hm(d['from'])} to {hm(d['to'] if 'asked_to' not in d else d['asked_to'])}"
+            what = f"{d['kind']}, move from {hm(d['from'])} to {hm(d['to'] if 'asked_to' not in d else d['asked_to'])}"
         else:
             what = (f"Coaching {hm(d['start'] if 'asked_start' not in d else d['asked_start'])} to "
                     f"{hm(d['end'] if 'asked_start' not in d else d['asked_start'] + d['minutes'])}, "

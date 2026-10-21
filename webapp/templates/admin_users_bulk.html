@@ -32,9 +32,9 @@
   <h2 id="check-h">Checked: {{ good }} of {{ plan|length }} rows can be added</h2>
   <div class="scroll" role="region" tabindex="0" aria-label="The rows of your file (scrolls sideways)">
     <table class="runs small">
-      <thead><tr><th scope="col">Row</th><th scope="col">Username</th><th scope="col">Name</th><th scope="col">Role</th><th scope="col">Programs</th><th scope="col">Password</th><th scope="col">Result</th></tr></thead>
+      <thead><tr><th scope="col">Row</th><th scope="col">Username</th><th scope="col">Name</th><th scope="col">Role</th><th scope="col">Programs</th><th scope="col">Result</th></tr></thead>
       <tbody>{% for p in plan %}<tr><td>{{ p.n }}</td><td>{{ p.typed }}</td><td>{{ p.display_name }}</td><td>{{ roles.get(p.kind, p.role) }}</td>
-        <td>{{ 'All programs' if p.everything else p.programs }}</td><td>{{ 'In your file' if p.has_password else 'Made up' }}</td>
+        <td>{{ 'All programs' if p.everything else p.programs }}</td>
         <td>{% if p.problems %}<span class="gap-ink">Left out: {{ p.problems|join(' ') }}</span>{% else %}Ready{% endif %}</td></tr>{% endfor %}</tbody>
     </table>
   </div>

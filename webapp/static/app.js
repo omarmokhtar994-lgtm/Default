@@ -1467,4 +1467,24 @@ function homeRefresh(now) {
     bulk.addEventListener("change", narrow);
     narrow();
   }
+  // Phase AU: a long list of people with a search box (data-filter names the list) and a count of those ticked
+  Array.prototype.forEach.call(document.querySelectorAll("input[data-filter]"), function (box) {
+    var list = document.getElementById(box.getAttribute("data-filter"));
+    if (!list) { return; }
+    var count = document.querySelector("[data-count-for='" + list.id + "']");
+    var tally = function () {
+      if (count) {
+        var n = list.querySelectorAll("input[type='checkbox']:checked").length;
+        count.textContent = n ? n + " picked" : "";
+      }
+    };
+    box.addEventListener("input", function () {
+      var text = box.value.trim().toLowerCase();
+      Array.prototype.forEach.call(list.querySelectorAll(".exp-kind"), function (row) {
+        row.hidden = text !== "" && row.textContent.toLowerCase().indexOf(text) === -1;
+      });
+    });
+    list.addEventListener("change", tally);
+    tally();
+  });
 })();

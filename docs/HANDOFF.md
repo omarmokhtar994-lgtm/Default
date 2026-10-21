@@ -131,6 +131,16 @@ Load each with the Skill tool at the step it covers; following it from memory do
   with release; "Sign out other devices" on Settings (`users.sessions_from`, `session["at"]`); `tools/audit_dependencies.py`
   runs pip-audit (manual step before a release, needs internet). Still not done: the engine's own break stage does not
   follow the break shape (needs a pre-registered A/B); the password-on-create symptom needs the owner's exact message.
+- **AU second walk** (owner: "fix the rest"): `ChangeBook.overlaps`, `stale_note`, `expire_overdue`, `_tell_the_group_asked`,
+  urgency order, per-program rules (`ProgramBook.request_settings`, program setup "Break change requests"); leave and
+  swap answers (in-site `seen` columns, group posts, `LeaveBook`/`SwapBook.decide` wrappers); the associate is told when
+  someone else changes their breaks (`users.day_seen_at`, `break_changes_for`); temporary passwords expire in 7 days
+  (`users.temp_until`); `webapp/zipcheck.py` refuses zip bombs on every upload; renamed LOBs keep requests and leavers
+  have none waiting; a new password must differ. Accessibility check tool: `evidence/phase_au/tools/a11y.py` (0 problems).
+  Deliberately not done: the replan and rescue tools do not use the break shape (they only move a break to lift the floor,
+  so they never undo the shape without a floor reason); showing associates a converted zone (the pages name the zone and the
+  gap instead; converting needs the owner's choice of which zone they should see); two-factor sign-in (owner: skip).
+  How-to pages: `docs/howto/`.
 - Release gate 2026-10-21: 1551 tests (floor raised from 1537). `evidence/phase_aq/CHECKS.md` has the A/B result.
 - Rules learned: a container restart kills background runs started with nohup; keep the session active while a long
   run goes. Check `git status` for rewritten old screenshots before every commit.

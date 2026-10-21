@@ -63,6 +63,11 @@
 </div>
 
 {% if chhours %}{{ channel_hours(chhours) }}{% endif %}
+{% if together %}<section class="panel" aria-labelledby="merged-h">
+  <h2 id="merged-h">{{ together.name }} together</h2>
+  <p>{{ together.have }} of {{ together.of }} LOBs have a schedule for this week. <a href="{{ together.url }}">Week view of all LOBs together</a>: one requirement and one staffed count, on the clock picked.</p>
+</section>
+{% if together.hours %}{{ channel_hours(together.hours, 'Scheduled hours per channel, all LOBs together', 'chm-h') }}{% endif %}{% endif %}
 {% if input_problem %}<section class="panel chpanel" id="channels" aria-labelledby="chan-h">
   <h2 id="chan-h">Channels</h2>
   <p class="error">{{ input_problem }}</p>

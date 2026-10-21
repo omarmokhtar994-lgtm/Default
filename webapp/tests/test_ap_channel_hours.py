@@ -3,7 +3,7 @@
 C approved). The hours each channel is staffed come from the channel stretches a day view holds."""
 import unittest
 
-from webapp.channel_hours import day_hours, week_hours
+from webapp.channel_hours import combine, day_hours, week_hours
 
 
 def view(runs):
@@ -41,6 +41,18 @@ class TheChannelHours(unittest.TestCase):
         week = week_hours([None] * 7)
         self.assertEqual(week["rows"], [])
         self.assertEqual(week["unplanned"], [0, 1, 2, 3, 4, 5, 6])
+
+    def test_lobs_weeks_are_added_row_by_row_and_a_day_is_unplanned_only_when_no_lob_has_a_plan(self):
+        a = week_hours([view({"x": [(0, 60, "P")]}), None, None, None, None, None, None])
+        b = week_hours([view({"y": [(0, 120, "P"), (120, 180, "C")]}), view({"y": [(0, 60, "E")]}),
+                        None, None, None, None, None])
+        got = combine([a, b])
+        phone = next(r for r in got["rows"] if r["letter"] == "P")
+        self.assertEqual((phone["days"][0], phone["total"]), (3.0, 3.0))
+        self.assertEqual([r["letter"] for r in got["rows"]], ["P", "C", "E"])
+        self.assertEqual(got["total"]["days"][:2], [4.0, 1.0])
+        self.assertEqual(got["unplanned"], [2, 3, 4, 5, 6])
+        self.assertEqual(combine([a]), a)
 
 
 if __name__ == "__main__":

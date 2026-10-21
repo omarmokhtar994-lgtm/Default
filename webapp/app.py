@@ -25,7 +25,7 @@ from werkzeug.utils import secure_filename
 
 from .adherence import interval_shrinkage, person_day, team as team_figures
 from .analytics import program_weeks, team
-from .channel_hours import week_hours
+from .channel_hours import combine, week_hours
 from .attendance import (ACTIVITY_KINDS, ADD_KINDS, COVER_ROLES, DAY_OFF, DayBook, aux_details, hm, pick_version, plain_hm, tomorrow_unchecked, week_start,
                          with_text)
 from .break_plan import check_row, floor, slots_for, suggest
@@ -66,6 +66,7 @@ from .paging import page_of
 from .results import recolour, version_summary
 from .runs import ACTIVE, MODES, OPTION_LABELS, READY, RESUMABLE, RunQueue, parse_options, run_options
 from .store import Store
+from .merge import merge_intervals
 from .week import in_zone, view as week_view
 
 COPYRIGHT = "© 2026 Omar Mokhtar. All rights reserved."
@@ -2108,6 +2109,57 @@ def create_app(config: Dict[str, Any]) -> Flask:
         labels = [f"{first + timedelta(days=i):%a %d}" for i in range(7)]
         return {**table, "labels": labels, "unplanned_labels": [labels[i] for i in table["unplanned"]]}
 
+    def _merge_units(program: str) -> List[str]:
+        """Phase AP (sample ap01; owner: only LOBs of one program): the units a merged view of ``program`` holds, its
+        program's LOBs, when there are two or more; else just ``program``. A person is given a whole program, so
+        every unit listed is one they may open."""
+        found = ProgramBook(app.extensions["store"]).unit(program) if program else None
+        if found is None:
+            return [program]
+        units = sorted(u for u in found["program"]["units"] if _access().can_open(u))
+        return units if len(units) > 1 and program in units else [program]
+
+    def _merged_name(program: str, units: List[str]) -> str:
+        """"ZED, One + Two": the program and its LOBs' own names."""
+        book = ProgramBook(app.extensions["store"])
+        found = book.unit(program)
+        names = [(book.unit(u) or {}).get("lob") or {} for u in units]
+        return f"{found['program']['name']}, " + " + ".join(n.get("name") or u for n, u in zip(names, units))
+
+    def _merged_week(program: str, units: List[str], week: str, side: str):  # type: ignore[no-untyped-def]
+        """Phase AP: the Week page of every LOB of ``program`` as one grid, in the zone picked, with one target (the
+        LOBs' targets weighted by what each LOB needs). None when none of the LOBs has a schedule for the week."""
+        store = app.extensions["store"]
+        kept = sorted({w for u in units for w in _version_weeks(u)})
+        holding = next((w for w in reversed(kept) if week and 0 <= (date.fromisoformat(week)
+                                                                    - date.fromisoformat(w)).days <= 6), None)
+        if holding is None and not week and kept:
+            holding = kept[-1]
+        if holding is None:
+            return None
+        rows, targets, notes, missing = {}, [], [], []
+        for u in units:
+            chosen, _ = pick_version(store.list_schedules(program=u, week_start=holding))
+            if chosen is None:
+                missing.append(u)
+                continue
+            intervals, note = _week_zone(json.loads(chosen["checks"] or "{}").get("intervals") or [],
+                                         store.get_run(chosen["run_id"]), holding)
+            rows[u] = intervals
+            targets.append((_week_target(u, holding, chosen["run_id"]), sum(r[2] for r in intervals)))
+            if note and note not in notes:
+                notes.append(note)
+        weight = sum(w for _, w in targets)
+        target = sum(t * w for t, w in targets) / weight if weight else 0.9
+        merged = merge_intervals(rows)
+        programs, weeks = _week_choices(program, program_weeks(_all_runs(), store.in_use_runs()))
+        info = {"name": _merged_name(program, units), "units": units,
+                "missing": [(ProgramBook(store).label(u)) for u in missing],
+                "target": int(round(100 * target)), "differs": len({round(t, 4) for t, _ in targets}) > 1}
+        return render_template("week.html", run=None, view=week_view(merged, side, target) if merged else None,
+                               side=side, program=program, week=holding, programs=programs, weeks=weeks, figures={},
+                               zone_note=" ".join(notes), merged=info)
+
     def _version_week(row: Dict[str, Any], side: str, note: Optional[Dict[str, Any]] = None,
                       target: Optional[Dict[str, Any]] = None,
                       elsewhere: Optional[Dict[str, Any]] = None,
@@ -2151,6 +2203,14 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if not program and history:
             latest = max((w for rows in history.values() for w in rows), key=lambda w: w["finished"] or 0)
             program, week = latest["program"], latest["week"]
+        units = _merge_units(program)  # Phase AP: a View pick when the program has two or more LOBs
+        g.merge_pick = f"All LOBs of {ProgramBook(store).unit(program)['program']['name']}" if len(units) > 1 else ""
+        if request.args.get("merge") == "1" and len(units) > 1:
+            if not _access().can_open(program):
+                abort(403)
+            found = _merged_week(program, units, week, side)
+            if found is not None:
+                return found
         kept = _version_weeks(program)
         holding = next((w for w in reversed(kept) if week and 0 <= (date.fromisoformat(week)
                                                                     - date.fromisoformat(w)).days <= 6), None)
@@ -2242,9 +2302,21 @@ def create_app(config: Dict[str, Any]) -> Flask:
         g.zone = request.args["tz"] if request.args.get("tz") in dict(ZONES) else own
         first = date.fromisoformat(run["week_start"]) if start_date(run.get("week_start") or "") else datetime.now(EGYPT).date()
         moved = own != g.zone
+        together = None  # Phase AP: every LOB of the program as one, when it has two or more
+        units = _merge_units(run["program"]) if run.get("program") and start_date(run.get("week_start") or "") else []
+        if len(units) > 1:
+            weeks_of = [w for w in (_channel_hours_week(u, run["week_start"]) for u in units) if w]
+            together = {"name": _merged_name(run["program"], units), "of": len(units),
+                        "have": sum(1 for u in units if app.extensions["store"].list_schedules(
+                            program=u, week_start=run["week_start"])),
+                        "url": url_for("week_page", program=run["program"], week=run["week_start"], merge="1",
+                                       tz=g.zone if moved else None),
+                        "hours": {**combine(weeks_of), "labels": weeks_of[0]["labels"],
+                                  "unplanned_labels": [weeks_of[0]["labels"][i] for i in combine(weeks_of)["unplanned"]]}
+                        if weeks_of else None}
         zone_dates = {d: first + timedelta(days=((i + 6) % 7 - first.weekday()) % 7) for i, d in enumerate(DAYS)}
         return render_template("schedules.html", run=run, versions=versions, current=current, view=view,
-                               leave_after=app.extensions["leave"].last_applied(run_id), moved=moved, zone_dates=zone_dates, own_zone=own, own_name=dict(ZONES)[own],
+                               leave_after=app.extensions["leave"].last_applied(run_id), moved=moved, together=together, zone_dates=zone_dates, own_zone=own, own_name=dict(ZONES)[own],
                                counts=counts, may_set_in_use=bool(current) and _may_set_in_use(current),
                                days=DAYS, channel_lines=None if input_problem else _channel_lines(run_id),
                                chhours=_channel_hours_week(run["program"], run["week_start"])

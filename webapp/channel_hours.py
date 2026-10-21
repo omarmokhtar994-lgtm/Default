@@ -32,3 +32,17 @@ def week_hours(days: List[Optional[Dict[str, Any]]]) -> Dict[str, Any]:
     totals = [round(sum(d.values()), 2) for d in per_day]
     return {"rows": rows, "total": {"days": totals, "total": round(sum(totals), 2)},
             "unplanned": [i for i, d in enumerate(per_day) if not d]}
+
+
+def combine(weeks: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Several ``week_hours`` tables (one per LOB) as one: each channel's hours added by day; a day has no channel
+    plan only when no LOB has one."""
+    letters = sorted({r["letter"] for w in weeks for r in w["rows"]}, key=ORDER.index)
+    rows = []
+    for k in letters:
+        days = [round(sum(next((r["days"][i] for r in w["rows"] if r["letter"] == k), 0) for w in weeks), 2)
+                for i in range(7)]
+        rows.append({"letter": k, "name": CHANNEL_NAMES.get(k, k), "days": days, "total": round(sum(days), 2)})
+    totals = [round(sum(w["total"]["days"][i] for w in weeks), 2) for i in range(7)]
+    return {"rows": rows, "total": {"days": totals, "total": round(sum(totals), 2)},
+            "unplanned": [i for i in range(7) if all(i in w["unplanned"] for w in weeks)]}

@@ -1,8 +1,8 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
 {# Phase AP (sample ap01, C): the hours each channel is staffed, per day and for the week. #}
-{% macro channel_hours(ch) %}
-<section class="panel" aria-labelledby="chh-h">
-  <h2 id="chh-h">Scheduled hours per channel</h2>
+{% macro channel_hours(ch, heading='Scheduled hours per channel', hid='chh-h') %}
+<section class="panel" aria-labelledby="{{ hid }}">
+  <h2 id="{{ hid }}">{{ heading }}</h2>
   {% if ch.rows %}
   <div class="scroll" role="region" tabindex="0" aria-label="Scheduled hours per channel (scrolls sideways)">
     <table class="runs small">

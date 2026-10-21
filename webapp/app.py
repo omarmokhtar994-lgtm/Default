@@ -66,7 +66,9 @@ from .paging import page_of
 from .results import recolour, version_summary
 from .runs import ACTIVE, MODES, OPTION_LABELS, READY, RESUMABLE, RunQueue, parse_options, run_options
 from .store import Store
+from werkzeug.datastructures import ImmutableMultiDict
 from .merge import merge_intervals
+from .merged_day import lob_of, merged_page
 from .week import in_zone, view as week_view
 
 COPYRIGHT = "© 2026 Omar Mokhtar. All rights reserved."
@@ -327,6 +329,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 g.error_hint = "Your account opens only the programs given to you. Ask an admin to add this one to your programs."
                 label = _unit_filter(key)  # a real program or LOB is named; words from a link are never repeated back
                 abort(403, description=f"{label if key in g.unit_labels else 'This program'} is not one of your programs")
+        # Phase AP: a change posted from a merged RTA page is saved on the LOB the person belongs to.
+        if g.get("user") and request.method == "POST" and request.path.startswith("/day/") \
+                and request.form.get("merge") == "1" and request.form.get("associate"):
+            _route_to_lob()
         # AN: an old cross-zone RTA form must not save through a clock change.
         # Authentication, role/program permission and CSRF checks remain first.
         if g.get("user") and request.method == "POST" and request.path.startswith("/day/"):
@@ -340,6 +346,20 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 flash(message)
                 return redirect(url_for("day_page", program=program, date=on.isoformat(),
                                         tz=_own_zone(program, on)), code=303)
+
+    def _route_to_lob() -> None:
+        """Phase AP (owner, 2026-10-21: edits go through to each person's own LOB): a form from the merged RTA page
+        names the page's program; swap it for the LOB that lists the person, so every route works as before on that
+        LOB, in that LOB's own time."""
+        program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
+        units = _merge_units(program) if program else []
+        if len(units) < 2 or on is None:
+            return
+        own = lob_of(_days(), units, on, request.form.get("associate", "").strip())
+        if own and own != program:
+            fields = request.form.to_dict(flat=False)
+            fields["program"] = [own]
+            request.__dict__["form"] = ImmutableMultiDict(fields)  # the cached form, as the routes will read it
 
     def _can(key: str) -> bool:
         """Phase AK: whether the person signed in may do ``key`` (Roles), read once per request."""
@@ -2092,6 +2112,14 @@ def create_app(config: Dict[str, Any]) -> Flask:
                          tight=found["tight"] + t["tight"], target=t["target"])
         return found if found["intervals"] else None
 
+    def _channel_hours_for(units: List[str], week_start: str) -> Optional[Dict[str, Any]]:
+        """Phase AP: the week's hours per channel of one LOB, or of several added up (a merged page)."""
+        found = [w for w in (_channel_hours_week(u, week_start) for u in units) if w]
+        if len(found) < 2:
+            return found[0] if found else None
+        table = combine(found)
+        return {**table, "labels": found[0]["labels"], "unplanned_labels": [found[0]["labels"][i] for i in table["unplanned"]]}
+
     def _channel_hours_week(program: str, week_start: str) -> Optional[Dict[str, Any]]:
         """Phase AP (sample ap01, C): the week's scheduled hours per channel for ``program`` (None when the week has
         no schedule in use at all), with the day labels and the days that have no channel plan."""
@@ -2125,6 +2153,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
         found = book.unit(program)
         names = [(book.unit(u) or {}).get("lob") or {} for u in units]
         return f"{found['program']['name']}, " + " + ".join(n.get("name") or u for n, u in zip(names, units))
+
+    def _lob_names(units: List[str]) -> Dict[str, str]:
+        """Phase AP: the short name of each unit ("Tier 2"), for the chip on each person of a merged page."""
+        book = ProgramBook(app.extensions["store"])
+        return {u: ((book.unit(u) or {}).get("lob") or {}).get("name") or u for u in units}
 
     def _merged_week(program: str, units: List[str], week: str, side: str):  # type: ignore[no-untyped-def]
         """Phase AP: the Week page of every LOB of ``program`` as one grid, in the zone picked, with one target (the
@@ -2960,22 +2993,45 @@ def create_app(config: Dict[str, Any]) -> Flask:
             g.rta_clock_notice = ("Clocks change in this window. Times and edits are shown in the schedule's own "
                                   "time zone. This schedule records wall-clock times and does not distinguish "
                                   "the two occurrences of a repeated hour.")
+        units = _merge_units(program)  # Phase AP: a View pick when the program has two or more LOBs
+        g.merge_pick = f"All LOBs of {ProgramBook(app.extensions['store']).unit(program)['program']['name']}" \
+            if len(units) > 1 else ""
+        merge = None
+        if len(units) > 1:  # the pick is kept for the program in the session, like the zone and the start
+            kept = dict(session.get("rta_merge") or {})
+            pid = str(ProgramBook(app.extensions["store"]).unit(program)["program"]["id"])
+            if "merge" in request.args:
+                kept[pid] = "1" if request.args.get("merge") == "1" else ""
+                session["rta_merge"] = kept
+            merge = units if kept.get(pid) == "1" else None
         with shown(moved):
-            return _day_body(days, programs, on, program, own_zone, moved, start_at)
+            return _day_body(days, programs, on, program, own_zone, moved, start_at, merge)
+
+    MERGE_TABS = ("timeline", "board", "adherence")  # Phase AP: the tabs that read, and change one person at a time
 
     def _day_body(days, programs: List[str], on: date, program: str, own_zone: str, moved: int,
-                  start_at: int):  # type: ignore[no-untyped-def]
+                  start_at: int, merge: Optional[List[str]] = None):  # type: ignore[no-untyped-def]
         measure = request.args.get("measure", "")
         measure = measure if measure in MEASURES else "interval"
         tab = request.args.get("view", "")
         tab = tab if tab in ("board", "adherence", "meeting", "cover", "replan", "channels", "bulk", "rescue") else "timeline"
+        if merge and tab not in MERGE_TABS:
+            flash("Pick one LOB for that tab: it plans or changes one LOB's schedule.")
+            return redirect(url_for("day_page", program=program, date=on.isoformat(), merge="1", tz=g.zone,
+                                    start=request.args.get("start") or None), code=303)
         problem = ""
         try:
-            page = days.page(program, on, measure) if program else None
+            if merge:
+                page = merged_page(days, program, merge, on, measure, start_at - moved, g.zone, _own_zone) \
+                    if program else None
+            else:
+                page = days.page(program, on, measure) if program else None
         except ValueError as exc:  # said on the page, not a server error
             page, problem = None, str(exc)
         anchor, sources, start = page, {0: page}, 0
-        if page:  # Phase AI: the 24 hours from the start picked, stitched from the schedule's days
+        if page and merge:  # the merged page is already the 24 hours from the start picked
+            start = page["view"]["start"]
+        elif page:  # Phase AI: the 24 hours from the start picked, stitched from the schedule's days
             step = page["view"]["interval"]
             start = start_at - moved
             start -= start % step
@@ -3121,11 +3177,19 @@ def create_app(config: Dict[str, Any]) -> Flask:
             # Phase AI: each interval's planned shrinkage from the day that holds it
             planned = {t + 1440 * d: x for d, src in sources.items() if src
                        for t, x in src["inputs"].get("planned_shrinkage", {}).get(src["day"], {}).items()}
+            if merge:  # Phase AP: each LOB's planned figure on the shared clock, the LOBs' mean at each interval
+                found: Dict[int, List[float]] = {}
+                for u, src in page["pages"].items():
+                    for t, x in src["inputs"].get("planned_shrinkage", {}).get(src["day"], {}).items():
+                        found.setdefault(t + page["merged"]["delta"][u], []).append(x)
+                planned = {t: sum(xs) / len(xs) for t, xs in found.items()}
             shrink = interval_shrinkage(v, {"planned_shrinkage": {0: planned}}, 0)
-        bar = {"undo": days.undoable(program, on, g.user["id"]) if program and page else None,  # Phase AD
-               "send": _send_bar(program, on) if program and page else None,
+        bar = {"undo": days.undoable(program, on, g.user["id"]) if program and page and not merge else None,  # Phase AD
+               "send": _send_bar(program, on) if program and page and not merge else None,
                "resend": request.args.get("resend", 0, type=int)}
-        group = app.extensions["store"].get_notify(program) if program else None  # Phase AB: group posts
+        # Phase AB: group posts (Phase AP: a merged page changes several LOBs, so it posts to no group and has no
+        # Undo or Send bar: open the LOB for those)
+        group = app.extensions["store"].get_notify(program) if program and not merge else None
         posting = bool(group and group["link"] and group["mode"] in ("on", "preview"))
         post_kinds = [k for k in (group or {}).get("kinds", "").split(",") if k] if posting else []
         now_of_day = now_at if window else (clock_now.hour * 60 + clock_now.minute if clock_now.date() == on
@@ -3137,10 +3201,17 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if page:
             kept = app.extensions["store"].get_shrinkage_map(program)
             mapping = read_mapping(kept["mapping"] if kept else None)
+            leave_of = {n: k for u in (merge or [program]) for n, k in app.extensions["leave"].approved_on(u, on).items()}
             shrinkage = {**day_shrinkage(anchor["view"], anchor["week"], anchor["day"], mapping, anchor["inputs"],
-                                         app.extensions["leave"].approved_on(program, on)),
+                                         leave_of),
                          "mapping": mapping, "items": SHRINKAGE_ITEMS,
                          "may_set": allowed(app.extensions["store"], g.user, "setup")}
+            if merge:  # Phase AP: the planned figure is the mean of the LOBs' own
+                planned = [day_shrinkage(p["view"], p["week"], p["day"], mapping, p["inputs"])["in_office"]["planned"]
+                           for p in page["pages"].values()]
+                planned = [x for x in planned if x is not None]
+                shrinkage["in_office"] = {**shrinkage["in_office"],
+                                          "planned": sum(planned) / len(planned) if planned else None}
         return render_template("day.html", page=page, problem=problem, program=program, programs=programs, on=on,
                                today=clock_now.date(), tips=tips, at_a_glance=at_a_glance, shrinkage=shrinkage,
                                now_box=now_box, requests_waiting=_requests_waiting(program, g.user) if now_box else 0,
@@ -3164,7 +3235,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                with_lists=_with_lists(program) if program else [],  # or from the lists (Phase U)
                                tomorrow_unchecked=tomorrow_unchecked(on) if on else "",
                                activity_kinds=ACTIVITY_KINDS,
-                               chhours=_channel_hours_week(program, page["week_start"]) if page and tab == "timeline" else None,
+                               chhours=_channel_hours_for(merge or [program], page["week_start"])
+                               if page and tab == "timeline" else None,
+                               merged=bool(merge), lob_names=_lob_names(merge) if merge else {},
+                               lob_by_name={l["name"]: l["lob"] for l in page["view"]["lanes"]} if page and merge else {},
                                measure=measure,
                                measures=MEASURES, tab=tab, statuses=STATUSES, aux=sorted(AUX), hm=hm,
                                rows=board(page["view"], page["target"]["target"]) if page and tab == "board" else None, week_of=week_start(on),

@@ -102,5 +102,70 @@ class TheMergedDayData(_TwoLobs):
         self.assertIsNone(lob_of(self.days, [self.one, self.two], WED, "Nobody Here"))
 
 
+class TheMergedDayPage(_TwoLobs):
+    def get(self, **query):
+        query = {"program": self.one, "date": WED.isoformat(), "tz": CAIRO, "merge": "1", **query}
+        return self.admin.get("/day", query_string=query)
+
+    def text(self, **query):
+        return html.unescape(self.get(**query).get_data(as_text=True))
+
+    def test_the_view_pick_offers_all_lobs_of_the_program(self):
+        page = html.unescape(self.admin.get("/day", query_string={"program": self.one, "date": WED.isoformat()})
+                             .get_data(as_text=True))
+        self.assertIn('name="merge"', page)
+        self.assertIn("All LOBs of SAKS", page)
+
+    def test_the_merged_timeline_lists_both_lobs_people_each_with_their_lob(self):
+        page = self.text()
+        self.assertIn("Associate 027", page)
+        self.assertIn("Associate B027", page)
+        self.assertIn('Associate B027</a></b><span class="tl-tag lob">Tier 2</span>', page)
+        self.assertIn('Associate 027</a></b><span class="tl-tag lob">Tier 1</span>', page)
+
+    def test_the_other_tabs_send_you_back_to_the_timeline_with_a_word_about_it(self):
+        got = self.get(view="channels")
+        self.assertEqual(got.status_code, 303)
+        self.assertIn("merge=1", got.headers["Location"])
+        self.assertNotIn("view=channels", got.headers["Location"])
+        again = self.admin.get(got.headers["Location"]).get_data(as_text=True)
+        self.assertIn("Pick one LOB for that tab", html.unescape(again))
+
+    def test_the_merged_page_has_one_set_of_figures_and_no_single_lob_bars(self):
+        page = self.text()
+        self.assertIn("Every LOB of the program together", page)
+        self.assertIn("Scheduled hours per channel", page)
+        self.assertNotIn('id="act-bar"', page)  # Undo and Send belong to one LOB
+        self.assertEqual(page.count("On shift today"), 1)
+
+    def test_the_board_and_adherence_work_merged(self):
+        for tab in ("board", "adherence"):
+            self.assertEqual(self.get(view=tab).status_code, 200, tab)
+
+    def test_the_page_names_a_lob_that_cannot_be_read_together_with_the_others(self):
+        # Clocks that change between the LOBs' zones make the sum meaningless: it says so instead of guessing
+        got = self.text(date="2026-10-25", tz="America/New_York")  # 25 Oct: the UK changes clocks, the US does not
+        self.assertTrue("Clocks change" in got or "No schedule" in got)
+
+    def test_a_change_made_on_the_merged_page_is_saved_on_the_persons_own_lob(self):
+        got = self.admin.post("/day/attendance", data={
+            "csrf_token": token(self.admin), "program": self.one, "merge": "1", "date": WED.isoformat(), "tz": CAIRO,
+            "anchor": WED.isoformat(), "associate": "Associate B027", "status": "Sick"})
+        self.assertEqual(got.status_code, 200, got.get_data(as_text=True)[:300])
+
+        def status(unit, name):
+            lane = next(l for l in self.days.page(unit, WED)["view"]["lanes"] if l["name"] == name)
+            return next(s["status"] for s in lane["segments"] if s["offset"] == 0)
+
+        self.assertEqual(status(self.two, "Associate B027"), "Sick")
+        self.assertEqual(status(self.one, "Associate 027"), "Present")
+
+    def test_without_the_merge_flag_a_name_from_the_other_lob_is_refused_as_before(self):
+        got = self.admin.post("/day/attendance", data={
+            "csrf_token": token(self.admin), "program": self.one, "date": WED.isoformat(), "tz": CAIRO,
+            "anchor": WED.isoformat(), "associate": "Associate B028", "status": "Sick"})
+        self.assertEqual(got.status_code, 400)
+
+
 if __name__ == "__main__":
     unittest.main()

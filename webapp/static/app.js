@@ -395,6 +395,7 @@ function homeRefresh(now) {
     body.append("csrf_token", token ? token.value : "");
     body.append("program", root.dataset.program);
     body.append("tz", root.dataset.tz || "");  // the server reads the times as shown in this zone
+    if (root.dataset.merge) { body.append("merge", "1"); }  // Phase AP: the page shows every LOB of the program; the server finds the person's LOB
     return fetch(url, { method: "POST", credentials: "same-origin", body: body, headers: { "Accept": "application/json" } })
       .then(function (r) { return r.json().then(function (d) { d._ok = r.ok; return d; }); });
   }

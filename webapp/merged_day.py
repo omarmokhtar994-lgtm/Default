@@ -28,7 +28,7 @@ def merged_page(days: DayBook, program: str, units: List[str], on: date, measure
     if home is None:
         raise ValueError(CLOCK)
     pages: Dict[str, Dict[str, Any]] = {}
-    views: Dict[str, Dict[str, Any]] = {}
+    delta: Dict[str, int] = {}
     missing: List[str] = []
     for unit in units:
         if days.version(unit, on)[0] is None:
@@ -37,12 +37,17 @@ def merged_page(days: DayBook, program: str, units: List[str], on: date, measure
         moved = rta_shift(on, own_zone_of(unit, on), zone)
         if moved is None:
             raise ValueError(CLOCK)
-        delta = moved - home  # its minutes + delta = the page's minutes
-        page = days.page(unit, on, measure)
-        step = page["view"]["interval"]
-        start = start_frame - delta
-        if start % step:
-            raise ValueError("These LOBs' clocks do not line up on the interval, so they cannot be shown as one. "
+        delta[unit] = moved - home  # its minutes + delta = the page's minutes
+        pages[unit] = days.page(unit, on, measure)
+    if not pages:
+        return None
+    step = next(iter(pages.values()))["view"]["interval"]
+    start_frame -= start_frame % step
+    views: Dict[str, Dict[str, Any]] = {}
+    for unit, page in pages.items():
+        start = start_frame - delta[unit]
+        if start % step or page["view"]["interval"] != step:
+            raise ValueError("These LOBs' clocks or intervals do not line up, so they cannot be shown as one. "
                              "Pick one LOB.")
         held: Dict[int, Optional[Dict[str, Any]]] = {0: page["view"]}
         for d in range(start // 1440, (start + 1439) // 1440 + 1):
@@ -51,8 +56,7 @@ def merged_page(days: DayBook, program: str, units: List[str], on: date, measure
                     held[d] = (days.page(unit, on + timedelta(days=d), measure) or {}).get("view")
                 except ValueError:  # a workbook that cannot be read: its hours stay empty
                     held[d] = None
-        pages[unit] = page
-        views[unit] = shift_view(window_view(held, start, on), delta)
+        views[unit] = shift_view(window_view(held, start, on), delta[unit])
     if not views:
         return None
     merged = merge_views(views)
@@ -70,8 +74,7 @@ def merged_page(days: DayBook, program: str, units: List[str], on: date, measure
             "stale": sum(p["stale"] for p in pages.values()),
             "unlisted": [x for p in pages.values() for x in p["unlisted"]],
             "log": log, "week": {"associates": [a for p in pages.values() for a in p["week"].get("associates", [])]},
-            "merged": {"units": list(pages), "missing": missing,
-                       "delta": {u: rta_shift(on, own_zone_of(u, on), zone) - home for u in pages}},
+            "merged": {"units": list(pages), "missing": missing, "delta": delta},
             "pages": pages}
 
 

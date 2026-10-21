@@ -63,3 +63,10 @@ Added by the owner after the first build:
 3. **The nearest time.** When the RTA will not approve a time he sees the nearest times (High or Moderate first), may
    approve the request at one of them, and writes a comment when he changes the time or rejects. The associate (or the
    team manager) sees the new time, what was asked, and the comment.
+4. **Billable follows the program's setup** (owner, 21 Oct): under interval compliance billable coaching keeps people on
+   the floor and does not touch the intervals; under service level or volume weighted it counts like any other. The
+   program has a "Coverage measure" setting on Programs (Interval compliance by default). The RTA opens on it (its own
+   pick still wins) and so do the break and coaching choices and the RTA's impact.
+5. **Off-queue warning**: whatever the measure and whether or not it is billable, more than 30% of the associates on shift
+   off the queue at the same moment is a warning with the percentage, on the associate's choices, the coaching form and
+   the RTA's impact (before and after). Off the queue means on a break, away, in aux (billable too), VTO or an extra break.

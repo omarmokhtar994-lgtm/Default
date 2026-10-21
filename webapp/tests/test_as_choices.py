@@ -6,7 +6,8 @@ Moderate, below it is Low). The times offered for a break, and for coaching, wit
 past 00:00."""
 import unittest
 
-from webapp.change_requests import HIGH, LOW, MODERATE, break_choices, coaching_choices, level_of
+from webapp.change_requests import (HIGH, LOW, MODERATE, OFF_QUEUE_WARN, break_choices, break_impact, coaching_choices,
+                                    coaching_impact, level_of)
 
 STEP = 30
 START = 20 * 60          # the window opens at 20:00 and runs 24 hours: 1200 to 2640 minutes
@@ -94,6 +95,64 @@ class TheCoachingChoices(unittest.TestCase):
         by = {c["start"]: c for c in coaching_choices(v, ["Associate 014", "Associate 021"], 30, SHIFT[0], SHIFT[1],
                                                        now=SHIFT[0])}
         self.assertEqual(by[1530]["people_above"], 0)  # 4 needed; 6 on the floor, 2 away: 4 left
+
+
+def crowd(n, breaks_at=()):
+    """``n`` colleagues on the same 22:00 to 07:00 shift; the first len(breaks_at) are on a 15-minute break from each time."""
+    out = []
+    for i in range(n):
+        br = [{"idx": 0, "kind": "Break 1", "start": breaks_at[i], "planned_start": breaks_at[i], "minutes": 15, "moved": False}] \
+            if i < len(breaks_at) else []
+        out.append({"name": f"Associate {i + 100}", "slot": "", "language": "English", "segments": [
+            {"offset": 0, "called_in": False, "label": "22:00 - 07:00", "start": SHIFT[0], "end": SHIFT[1],
+             "status": "Present", "billable": False, "away": (0, 0), "breaks": br, "cancelled": [], "activities": []}]})
+    return out
+
+
+class TheOffQueueWarning(unittest.TestCase):
+    """Owner, 2026-10-21: even when billable coaching keeps people on the floor, more than 30% of the people on shift off the
+    queue in an interval is a warning, with the percentage."""
+
+    def view_with(self, colleagues):
+        v = view()
+        v["lanes"] = v["lanes"] + colleagues  # Associate 014 plus the crowd
+        return v
+
+    def test_the_threshold_is_thirty_percent(self):
+        self.assertEqual(OFF_QUEUE_WARN, 0.30)
+
+    def test_a_break_into_an_interval_that_would_pass_thirty_percent_warns_with_the_percentage(self):
+        # nine colleagues: three already on break from 01:30 to 01:45; Associate 014 would be the fourth of ten
+        v = self.view_with(crowd(9, breaks_at=[1530, 1530, 1530]))
+        by = {c["start"]: c for c in break_choices(v, INPUTS, "Associate 014", 0, now=SHIFT[0])["choices"]}
+        self.assertTrue(by[1530]["off_warn"])
+        self.assertAlmostEqual(by[1530]["off_pct"], 40, delta=0.5)   # 4 of 10 for the 15 minutes
+        self.assertFalse(by[1380]["off_warn"])
+        self.assertAlmostEqual(by[1380]["off_pct"], 10, delta=0.5)   # only the one person, 1 of 10
+
+    def test_exactly_thirty_percent_is_not_a_warning(self):
+        v = self.view_with(crowd(9, breaks_at=[1530, 1530]))      # three of ten
+        by = {c["start"]: c for c in break_choices(v, INPUTS, "Associate 014", 0, now=SHIFT[0])["choices"]}
+        self.assertFalse(by[1530]["off_warn"])
+        self.assertAlmostEqual(by[1530]["off_pct"], 30, delta=0.5)
+
+    def test_billable_coaching_still_warns_when_it_would_take_a_third_of_the_people_off_the_queue(self):
+        v = self.view_with(crowd(9))
+        names = ["Associate 014", "Associate 100", "Associate 101", "Associate 102"]  # four of ten
+        got = {c["start"]: c for c in coaching_choices(v, names, 30, SHIFT[0], SHIFT[1], billable=True, now=SHIFT[0])}
+        self.assertEqual(got[1530]["level"], HIGH)           # billable under interval compliance: no impact on the buffer
+        self.assertTrue(got[1530]["off_warn"])
+        self.assertAlmostEqual(got[1530]["off_pct"], 40, delta=0.5)
+
+    def test_the_rta_impact_shows_the_off_queue_percentage_before_and_after(self):
+        v = self.view_with(crowd(9, breaks_at=[1530, 1530, 1530]))
+        rows = break_impact(v, "Associate 014", 0, 1530)
+        landed = next(r for r in rows if r["t"] == 1530)
+        self.assertAlmostEqual(landed["off_before"], 30, delta=0.5)
+        self.assertAlmostEqual(landed["off_after"], 40, delta=0.5)
+        self.assertTrue(landed["off_warn"])
+        coach = coaching_impact(v, ["Associate 014", "Associate 100"], 1530, 30, billable=True)
+        self.assertTrue(all(r["off_after"] > r["off_before"] for r in coach))
 
 
 if __name__ == "__main__":

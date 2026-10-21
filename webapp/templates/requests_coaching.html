@@ -32,7 +32,8 @@
     {% for n in names %}<input type="hidden" name="who" value="{{ n }}">{% endfor %}
     <fieldset class="slots"><legend>Pick a time</legend>
       {% for c in options %}<label class="slot"><input type="radio" name="start" value="{{ hm(c.start) }}" required> {{ hm(c.start) }} to {{ hm(c.end) }}
-        <span class="lv lv-{{ c.level }}">{{ c.level|capitalize }} buffer</span>{% if c.level == 'low' %} <small class="slot-warn">Likely to be rejected: not enough cover.</small>{% endif %}</label>
+        <span class="lv lv-{{ c.level }}">{{ c.level|capitalize }} buffer</span>{% if c.level == 'low' %} <small class="slot-warn">Likely to be rejected: not enough cover.</small>{% endif %}
+        {% if c.off_warn %} <small class="slot-warn">{{ c.off_pct|round|int }}% of the associates on shift would be off the queue{% if billable %}, even though it is billable{% endif %}.</small>{% endif %}</label>
       {% else %}<p class="empty">Nobody can be coached together for {{ minutes }} minutes that day: they are never free at the same time.</p>{% endfor %}
     </fieldset>
     <label>Department <select name="dept"><option value="">None</option>{% for d in depts %}<option>{{ d }}</option>{% endfor %}</select></label>

@@ -32,7 +32,8 @@
       <label class="slot"><input type="radio" name="to" value="{{ hm(c.start) }}"{% if c.current %} disabled{% endif %} required>
         {{ hm(c.start) }} to {{ hm(c.end) }}{% if c.start >= 1440 %} <small>(next day)</small>{% endif %}
         {% if c.current %}<span class="dim">the time it has now</span>{% else %}<span class="lv lv-{{ c.level }}">{{ c.level|capitalize }} buffer</span>{% endif %}
-        {% if c.level == 'low' and not c.current %}<small class="slot-warn">Likely to be rejected: no spare cover in that interval.</small>{% endif %}</label>
+        {% if c.level == 'low' and not c.current %}<small class="slot-warn">Likely to be rejected: no spare cover in that interval.</small>{% endif %}
+        {% if c.off_warn and not c.current %}<small class="slot-warn">{{ c.off_pct|round|int }}% of the associates on shift would be off the queue then.</small>{% endif %}</label>
       {% else %}<p class="empty">No other time is allowed for this break: the gaps to your other breaks leave none.</p>{% endfor %}
     </fieldset>
     <label>Why (optional) <input name="why" maxlength="200" autocomplete="off"></label>

@@ -50,6 +50,12 @@
         <details class="advanced"><summary>Advanced options</summary>{{ advanced_options(p.options) }}</details>
         <button type="submit">Save defaults</button>{% if not p.saved %} <small>Not saved yet: new schedules start from the day its runs usually start on.</small>{% endif %}
       </form>
+      <h3>How billable time counts</h3>
+      <form method="post" class="setup-defaults"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="measure"><input type="hidden" name="program_id" value="{{ p.id }}">
+        <label>Coverage measure <select name="coverage_measure">{% for k, name in measures.items() %}<option value="{{ k }}"{% if k == p.measure_value %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+        <button type="submit">Save measure</button>
+        <p class="note">Interval compliance: billable aux (for example billable coaching) keeps people on the floor, so it does not touch the intervals. Service level and volume weighted: billable time counts against the intervals like any other. The RTA opens on this; the RTA's own pick still wins.</p>
+      </form>
       <h3>People on {{ p.name }}</h3>
       <p>{{ people.get(p.id)|join(', ') or 'Nobody yet.' }} <a href="{{ url_for('admin_users') }}">People</a></p>
       <details class="advanced"><summary>Rename {{ p.name }}</summary><form method="post" class="tagrow"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="rename_program"><input type="hidden" name="program_id" value="{{ p.id }}"><label>New name <input name="name" maxlength="80" required value="{{ p.name }}"></label><button>Rename</button></form></details>

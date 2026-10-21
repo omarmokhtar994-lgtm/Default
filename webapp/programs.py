@@ -54,7 +54,8 @@ class ProgramBook:
             except ValueError:
                 options = {}
             out.append({"id": p["id"], "name": p["name"], "key": p["key"], "start_day": p["start_day"],
-                        "run_mode": p["run_mode"], "options": options, "saved": bool(p["options"]),
+                        "run_mode": p["run_mode"], "measure": p.get("measure", ""), "options": options,
+                        "saved": bool(p["options"]),
                         "lobs": mine, "units": units})
         return out
 
@@ -122,6 +123,27 @@ class ProgramBook:
             raise ValueError("Pick a run length.")
         self.store.update_program(program_id, start_day=start_day, run_mode=run_mode,
                                   options=json.dumps(options or {}, sort_keys=True))
+
+    MEASURES = {"interval": "Interval compliance", "sl": "Service level", "volume": "Volume weighted"}
+
+    def measure_setting(self, program_id: int) -> str:
+        """Phase AS: how the program counts billable time (interval, sl or volume); interval until it says otherwise."""
+        row = next((p for p in self.store.list_programs() if p["id"] == program_id), None)
+        return (row or {}).get("measure") or "interval"
+
+    def set_measure(self, program_id: int, value: str) -> None:
+        self.program(program_id)
+        if value not in self.MEASURES:
+            raise ValueError("Pick interval compliance, service level or volume weighted.")
+        self.store.update_program(program_id, measure="" if value == "interval" else value)
+
+    def day_measure(self, key: str) -> str:
+        """The RTA's measure for the unit ``key``: ``interval`` (billable aux stays on the floor) or ``sl`` (it does not:
+        service level and volume weighted). A key that is not a unit is interval compliance."""
+        found = self.unit(key) if key else None
+        if found is None:
+            return "interval"
+        return "interval" if self.measure_setting(found["program"]["id"]) == "interval" else "sl"
 
     def rename(self, program_id: Optional[int], lob_id: Optional[int], name: str) -> None:
         """New display names; keys stay as they are."""

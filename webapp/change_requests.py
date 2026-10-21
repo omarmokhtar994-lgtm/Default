@@ -9,10 +9,12 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from .day import MEETING_MARGIN, STEP, _busy, _own, break_window
+from .day import ABSENT, AUX, EXTRA_BREAKS, MEETING_MARGIN, STEP, _busy, _own, break_window
 
 HIGH, MODERATE, LOW = "high", "moderate", "low"
 PEOPLE_FOR_HIGH = 1  # people above the need that make the buffer High
+OFF_QUEUE_WARN = 0.30  # more than this share of the people on shift off the queue at once is a warning, billable or not
+OFF_QUEUE_KINDS = set(AUX) | {"VTO"} | set(EXTRA_BREAKS)  # activities that take a person off the queue, whatever the measure
 
 
 def level_of(people_above: Optional[float]) -> str:
@@ -20,6 +22,42 @@ def level_of(people_above: Optional[float]) -> str:
     if people_above is None or people_above >= PEOPLE_FOR_HIGH - 1e-9:
         return HIGH
     return MODERATE if people_above >= -1e-9 else LOW
+
+
+def _off_at(seg: Dict[str, Any], t: int, skip_break: Optional[int] = None) -> bool:
+    """Whether the person is off the queue at minute ``t``: on a break, away (a status), or in an aux, VTO or extra
+    break. Billable aux counts: this is about people at their desks, not about the interval measure."""
+    if seg["away"][0] <= t < seg["away"][1]:
+        return True
+    if any(b["start"] <= t < b["start"] + b["minutes"] for b in seg["breaks"] if b["idx"] != skip_break):
+        return True
+    return any(a["kind"] in OFF_QUEUE_KINDS and a["start"] <= t < a["end"] for a in seg.get("activities", []))
+
+
+def _queue(view: Dict[str, Any]) -> tuple:
+    """(people on shift, people off the queue) in each 5-minute slot of the view; absent people are in neither."""
+    v0, n = view.get("start", 0), len(view["cells"]) * (view["interval"] // STEP)
+    on_shift, off = [0] * n, [0] * n
+    for lane in view["lanes"]:
+        for seg in lane["segments"]:
+            if seg["status"] in ABSENT:
+                continue
+            for t in range(max(seg["start"], v0), min(seg["end"], v0 + n * STEP), STEP):
+                i = (t - v0) // STEP
+                on_shift[i] += 1
+                off[i] += 1 if _off_at(seg, t) else 0
+    return on_shift, off
+
+
+def _peak(on_shift: List[int], off: List[int], lo: int, hi: int, v0: int) -> float:
+    """The largest share of the people on shift that is off the queue at once in minutes ``lo`` to ``hi``, as a percent."""
+    found = [100 * off[i] / on_shift[i] for i in range((lo - v0) // STEP, -(-(hi - v0) // STEP))
+             if 0 <= i < len(off) and on_shift[i] > 0]
+    return round(max(found), 1) if found else 0.0
+
+
+def _warn(pct: float) -> bool:
+    return pct > 100 * OFF_QUEUE_WARN + 1e-9
 
 
 def _slots(view: Dict[str, Any]) -> List[float]:
@@ -64,9 +102,14 @@ def break_choices(view: Dict[str, Any], inputs: Dict[str, Any], name: str, idx: 
         return i if 0 <= i < len(base) else None
 
     given = list(base)
+    on_shift, off_now = _queue(view)
+    off_given = list(off_now)
     for t in range(me["start"], me["start"] + me["minutes"], STEP):  # as if this break were not taken
         if free(t) and slot(t) is not None:
             given[slot(t)] += 1
+        i = slot(t)
+        if i is not None and seg["start"] <= t < seg["end"] and not _off_at(seg, t, skip_break=idx):
+            off_given[i] -= 1
     choices = []
     wanted = list(range(lo + (-lo) % step, hi + 1, step))
     if lo <= me["start"] <= hi and me["start"] not in wanted:
@@ -77,8 +120,14 @@ def break_choices(view: Dict[str, Any], inputs: Dict[str, Any], name: str, idx: 
             if free(t) and slot(t) is not None:
                 trial[slot(t)] -= 1
         above = _tightest(view, trial, m, m + me["minutes"])
+        off_trial = list(off_given)
+        for t in range(m, m + me["minutes"], STEP):  # this person off the queue on the break
+            i = slot(t)
+            if i is not None and seg["start"] <= t < seg["end"] and not _off_at(seg, t, skip_break=idx):
+                off_trial[i] += 1
+        pct = _peak(on_shift, off_trial, m, m + me["minutes"], v0)
         choices.append({"start": m, "end": m + me["minutes"], "people_above": above, "level": level_of(above),
-                        "current": m == me["start"]})
+                        "current": m == me["start"], "off_pct": pct, "off_warn": _warn(pct)})
     return {"kind": me["kind"], "minutes": me["minutes"], "planned": me["planned_start"], "current": me["start"],
             "choices": choices}
 
@@ -98,6 +147,7 @@ def coaching_choices(view: Dict[str, Any], names: List[str], minutes: int, earli
         raise ValueError("Pick a length in 5-minute steps.")
     v0, base = view.get("start", 0), _slots(view)
     off_floor = 0 if (billable and view["measure"] == "interval") else len(names)
+    on_shift, off_now = _queue(view)
     first = max(earliest, now if now is not None else earliest)
     out = []
     for start in range(first + (-first) % step, latest - minutes + 1, step):
@@ -109,15 +159,24 @@ def coaching_choices(view: Dict[str, Any], names: List[str], minutes: int, earli
             if 0 <= i < len(trial):
                 trial[i] -= off_floor
         above = _tightest(view, trial, start, start + minutes)
-        out.append({"start": start, "end": start + minutes, "people_above": above, "level": level_of(above)})
+        off_trial = list(off_now)  # everyone coached is off the queue, billable or not
+        for t in range(start, start + minutes, STEP):
+            i = (t - v0) // STEP
+            if 0 <= i < len(off_trial):
+                off_trial[i] += sum(1 for seg in segs if not _off_at(seg, t))
+        pct = _peak(on_shift, off_trial, start, start + minutes, v0)
+        out.append({"start": start, "end": start + minutes, "people_above": above, "level": level_of(above),
+                    "off_pct": pct, "off_warn": _warn(pct)})
     return out
 
 
 # ----------------------------------------------------------------------------- the impact the RTA sees
-def _rows(view: Dict[str, Any], before: List[float], after: List[float], spans: List[Any]) -> List[Dict[str, Any]]:
+def _rows(view: Dict[str, Any], before: List[float], after: List[float], spans: List[Any],
+          off_before: Optional[List[int]] = None, off_after: Optional[List[int]] = None) -> List[Dict[str, Any]]:
     """For each interval of ``view`` that overlaps one of ``spans`` ((lo, hi) minutes): the people needed, on the floor
     before and after (averaged over the interval), the people above the need after, and its buffer word."""
     step, v0 = view["interval"], view.get("start", 0)
+    on_shift = _queue(view)[0]
     out = []
     for c in view["cells"]:
         if not any(c["t"] < hi and lo < c["t"] + step for lo, hi in spans):
@@ -127,8 +186,14 @@ def _rows(view: Dict[str, Any], before: List[float], after: List[float], spans: 
             continue
         was, now = sum(before[i:j]) / len(before[i:j]), sum(after[i:j]) / len(after[i:j])
         above = round(now - c["required"], 2) if c["required"] > 0 else None
-        out.append({"t": c["t"], "need": c["required"], "before": round(was, 2), "after": round(now, 2),
-                    "people_above": above, "level": level_of(above)})
+        row = {"t": c["t"], "need": c["required"], "before": round(was, 2), "after": round(now, 2),
+               "people_above": above, "level": level_of(above)}
+        if off_before is not None:
+            lo, hi = c["t"], c["t"] + step
+            row["off_before"] = _peak(on_shift, off_before, lo, hi, v0)
+            row["off_after"] = _peak(on_shift, off_after, lo, hi, v0)
+            row["off_warn"] = _warn(row["off_after"])
+        out.append(row)
     return out
 
 
@@ -154,7 +219,18 @@ def break_impact(view: Dict[str, Any], name: str, idx: int, to: int) -> List[Dic
         i = (t - v0) // STEP
         if free(t) and 0 <= i < len(after):
             after[i] -= 1
-    return _rows(view, before, after, [(me["start"], me["start"] + me["minutes"]), (to, to + me["minutes"])])
+    _, off_before = _queue(view)
+    off_after = list(off_before)
+    for t in range(me["start"], me["start"] + me["minutes"], STEP):
+        i = (t - v0) // STEP
+        if 0 <= i < len(off_after) and seg["start"] <= t < seg["end"] and not _off_at(seg, t, skip_break=idx):
+            off_after[i] -= 1
+    for t in range(to, to + me["minutes"], STEP):
+        i = (t - v0) // STEP
+        if 0 <= i < len(off_after) and seg["start"] <= t < seg["end"] and not _off_at(seg, t, skip_break=idx):
+            off_after[i] += 1
+    return _rows(view, before, after, [(me["start"], me["start"] + me["minutes"]), (to, to + me["minutes"])],
+                 off_before, off_after)
 
 
 def coaching_impact(view: Dict[str, Any], names: List[str], start: int, minutes: int,
@@ -163,11 +239,15 @@ def coaching_impact(view: Dict[str, Any], names: List[str], start: int, minutes:
     v0, before = view.get("start", 0), _slots(view)
     after = list(before)
     off = 0 if (billable and view["measure"] == "interval") else len(names)
+    segs = [s for n in names for s in [_own(view, n)] if s is not None]
+    _, off_before = _queue(view)
+    off_after = list(off_before)
     for t in range(start, start + minutes, STEP):
         i = (t - v0) // STEP
         if 0 <= i < len(after):
             after[i] -= off
-    return _rows(view, before, after, [(start, start + minutes)])
+            off_after[i] += sum(1 for seg in segs if not _off_at(seg, t))  # everyone coached is off the queue
+    return _rows(view, before, after, [(start, start + minutes)], off_before, off_after)
 
 
 # ----------------------------------------------------------------------------- the requests
@@ -195,12 +275,13 @@ class ChangeBook:
     """Break changes an associate asks for on the running day, and coaching a team manager asks for; the RTA decides
     each with the impact in front of them (Phase AS)."""
 
-    def __init__(self, store, days):
+    def __init__(self, store, days, measure_of=None):
         self.store, self.days = store, days
+        self.measure_of = measure_of or (lambda program: "interval")  # the program's setup: how billable time counts
 
     # ------------------------------------------------------------------ the running shift
     def _window(self, program: str, on: date, start: int) -> Dict[str, Any]:
-        return self.days.window_page(program, on, start)
+        return self.days.window_page(program, on, start, self.measure_of(program))
 
     def running_shift(self, program: str, name: str, now: datetime) -> Optional[Dict[str, Any]]:
         """The shift ``name`` is on now or starts later today, in the schedule's own time (``now`` is read there): the
@@ -209,7 +290,7 @@ class ChangeBook:
         today = now.date()
         for on in (today - timedelta(days=1), today):
             try:
-                page = self.days.page(program, on)
+                page = self.days.page(program, on, self.measure_of(program))
             except ValueError:
                 continue
             seg = next((s for lane in (page["view"]["lanes"] if page else []) if lane["name"] == name
@@ -258,7 +339,7 @@ class ChangeBook:
     # ------------------------------------------------------------------ coaching
     def coaching_view(self, program: str, on: date, names: List[str]) -> Dict[str, Any]:
         """The window the RTA shows ``on`` that holds every one of ``names``'s shifts that start that day."""
-        page = self.days.page(program, on)
+        page = self.days.page(program, on, self.measure_of(program))
         if page is None:
             raise ValueError("There is no schedule for that day.")
         starts = []
@@ -305,7 +386,7 @@ class ChangeBook:
     def impact(self, row: Dict[str, Any], billable: Optional[bool] = None) -> List[Dict[str, Any]]:
         names, d, on = json.loads(row["names"]), json.loads(row["detail"]), date.fromisoformat(row["shift_date"])
         if row["kind"] == BREAK:
-            page = self.days.page(row["program"], on)
+            page = self.days.page(row["program"], on, self.measure_of(row["program"]))
             seg = next(s for lane in page["view"]["lanes"] if lane["name"] == names[0] for s in lane["segments"]
                        if s["offset"] == 0)
             start = max(0, seg["start"] - WINDOW_BEFORE)

@@ -412,6 +412,11 @@ class Store:
                 db.execute("alter table users add column is_associate integer not null default 0")
             if "roster_name" not in people:
                 db.execute("alter table users add column roster_name text not null default ''")
+            # Phase AS: how the program counts billable time against the intervals: '' or 'interval' (billable aux stays on
+            # the floor, the default), 'sl' (service level) or 'volume' (volume weighted): billable time counts there
+            have = {row["name"] for row in db.execute("pragma table_info(programs)")}
+            if "measure" not in have:
+                db.execute("alter table programs add column measure text not null default ''")
             # Phase AR: a deleted person's account is closed and hidden; the row stays so the history still names them
             if "deleted" not in people:
                 db.execute("alter table users add column deleted integer not null default 0")
@@ -528,7 +533,7 @@ class Store:
             return [dict(r) for r in db.execute("select * from programs order by name collate nocase")]
 
     def update_program(self, program_id: int, **fields: Any) -> None:
-        unknown = set(fields) - {"name", "start_day", "run_mode", "options"}
+        unknown = set(fields) - {"name", "start_day", "run_mode", "options", "measure"}
         if unknown:
             raise ValueError(f"Not a program detail: {', '.join(sorted(unknown))}.")
         if fields:

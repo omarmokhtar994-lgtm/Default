@@ -69,6 +69,8 @@ class TheAssociatesBreaks(_Pages):
         self.assertIn("Break changes and coaching", rta)
         self.assertIn(ME, rta)
         self.assertIn("After this change", rta)
+        self.assertRegex(rta, r"Off the queue \(before, after\)")
+        self.assertRegex(rta, r"\d+% to \d+%")
         self.assertIn("Made-up: appointment", rta)
 
     def test_the_rta_approves_and_the_day_changes_and_the_associate_sees_it(self):

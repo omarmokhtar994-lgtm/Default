@@ -296,7 +296,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         # Phase AO: leave approved while a week had no schedule is applied once that week's schedule is kept
         queue.on_kept = lambda run_id: app.extensions["leave"].apply_waiting(app.extensions["store"].get_run(run_id))
         app.extensions["swaps"] = SwapBook(app.extensions["store"], app.extensions["days"])
-        app.extensions["changes"] = ChangeBook(app.extensions["store"], app.extensions["days"])  # Phase AS
+        app.extensions["changes"] = ChangeBook(app.extensions["store"], app.extensions["days"],
+                                               lambda unit: ProgramBook(app.extensions["store"]).day_measure(unit))  # Phase AS
         # Phase AB: RTA changes posted to each LOB's Teams or Slack group, on the notifier's own thread.
         notifier = Notifier(app.extensions["store"], transport=config.get("NOTIFY_TRANSPORT") or post_json,
                             label=ProgramBook(app.extensions["store"]).label, days=app.extensions["days"])
@@ -2128,6 +2129,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
                     book.set_defaults(pid, request.form.get("start_day", type=int, default=-1),
                                       request.form.get("run_mode", ""), options)
                     said = f"Saved the defaults for {book.program(pid)['name']}."
+                elif action == "measure":  # Phase AS
+                    book.set_measure(pid, request.form.get("coverage_measure", ""))
+                    said = f"{book.program(pid)['name']} now counts billable time as {book.MEASURES[book.measure_setting(pid)].lower()}."
                 elif action == "rename_program":
                     book.rename(pid, None, name)
                     said = f"Renamed to {book.program(pid)['name']}."
@@ -2163,7 +2167,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
         loose = [p for p in tree if not p["lobs"]]  # names that can be put in a program as a LOB
         blockers = {k: book.blocker(n, k) for p in tree for n, k in [(p["name"], p["key"])] +
                     [(l["name"], l["key"]) for l in p["lobs"]]}
+        for p in tree:
+            p["measure_value"] = p.get("measure") or "interval"
         return render_template("program_setup.html", programs=tree, people=people, loose=loose, modes=MODES,
+                               measures=ProgramBook.MEASURES,
                                blockers=blockers, unit_groups=_unit_choices(tree),
                                look_alike={p["key"]: book.look_alike(p["id"]) for p in tree if not p["lobs"]},
                                days=["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"])
@@ -3355,7 +3362,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
     def _day_body(days, programs: List[str], on: date, program: str, own_zone: str, moved: int,
                   start_at: int, merge: Optional[List[str]] = None):  # type: ignore[no-untyped-def]
         measure = request.args.get("measure", "")
-        measure = measure if measure in MEASURES else "interval"
+        # Phase AS: with none in the address the RTA opens on the program's own (interval compliance until it says otherwise)
+        measure = measure if measure in MEASURES else (ProgramBook(app.extensions["store"]).day_measure(program)
+                                                       if program else "interval")
         tab = request.args.get("view", "")
         tab = tab if tab in ("board", "adherence", "meeting", "cover", "replan", "channels", "bulk", "rescue") else "timeline"
         if merge and tab not in MERGE_TABS:

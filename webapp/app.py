@@ -876,6 +876,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             if any(r["first_day"] <= swap_day.isoformat() <= r["last_day"] for r in app.extensions["store"].list_leave(
                     program=key, associate=name, statuses=["waiting_tm", "waiting_rta", "applying", "approved"])):
                 swap_note = f"You asked for leave on {swap_day:%a %d %b}, so there is no shift to swap."
+                offers = []  # Phase AO: the list shows every colleague now, so a day you asked leave for shows none
             elif not shift_span(dict(app.extensions["days"].roster(key, swap_day)).get(name, "")):
                 swap_note = f"You do not work on {swap_day:%a %d %b}."
         card, week = None, []

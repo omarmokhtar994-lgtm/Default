@@ -26,6 +26,7 @@ from __future__ import annotations
 import math
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 from openpyxl import load_workbook
@@ -59,6 +60,34 @@ INPUT_TAB_COLOUR = "ED7D31"
 PHONE_SHARE = 0.6
 BLANK_SETTINGS = {"Program Name": None, "Count of Associates": None, "Interval Minutes": "30",
                   "Requirements Source": "FT Wise 30 Min", "Shrinkage Source": "Shrinkage 30 Min"}
+
+
+# Phase AO (owner, 2026-10-21: an 11-hour shift gets four breaks, in the input sheet the website offers): an Instructions
+# row the engine already reads (audit F-20). A shift of 11 hours or more gets these breaks in this order (30 minutes or
+# more is a lunch); a shorter shift keeps the Short Break and Lunch counts. The row sits in the Breaks group.
+LONG_BREAKS_ROW = "Break Set For Shifts Of 11 Hours Or More"
+LONG_BREAKS_VALUE = "15, 30, 15, 15"
+LONG_BREAKS_HELP = ("Shifts of 11 hours or more get these breaks in this order, in minutes (30 or more is a lunch): "
+                    "15, 30, 15, 15 = two short breaks around a lunch, then one more. Shorter shifts keep the counts above.")
+
+
+def offer_long_shift_breaks(source: Path, kept: Path) -> Path:
+    """``source`` with the row added (so the engine reads the built template exactly as it reads its source), and the
+    template builder told to lay the row out in the Breaks group. Written to ``kept``."""
+    wb = load_workbook(source)
+    ws = wb["Instructions"]
+    if any(str(r[1] or "").strip() == LONG_BREAKS_ROW for r in ws.iter_rows(values_only=True)):
+        raise SystemExit(f"{source.name} already has {LONG_BREAKS_ROW!r}; nothing written")
+    row = ws.max_row + 1
+    ws.cell(row, 2, LONG_BREAKS_ROW)
+    ws.cell(row, 3, LONG_BREAKS_VALUE)
+    wb.save(kept)
+    if not any(key == LONG_BREAKS_ROW for _name, items in B.SETUP_LAYOUT for key, _c in items):  # once per process
+        B.SETUP_LAYOUT = [(name, items + [(LONG_BREAKS_ROW, None)]) if name == "Breaks" else (name, items)
+                          for name, items in B.SETUP_LAYOUT]
+    B.HELP[LONG_BREAKS_ROW] = LONG_BREAKS_HELP
+    B.NUMBER_RULES[LONG_BREAKS_ROW] = ("textLength", None, 40, None)
+    return kept
 
 
 def blank_from(example: Path, blank: Path) -> None:
@@ -154,8 +183,10 @@ def main(argv: list) -> int:
     out = Path(argv[1]) if len(argv) > 1 else ROOT / "webapp" / "workbooks"
     out.mkdir(parents=True, exist_ok=True)
     example = out / EXAMPLE_NAME
-    if B.main(["build", str(ROOT / SOURCE), str(example)]) != 0:
-        return 2
+    with tempfile.TemporaryDirectory() as tmp:
+        source = offer_long_shift_breaks(ROOT / SOURCE, Path(tmp) / "source_with_long_breaks.xlsx")
+        if B.main(["build", str(source), str(example)]) != 0:
+            return 2
     blank_from(example, out / BLANK_NAME)
     print(f"{BLANK_NAME}: every tab and dropdown, no people or demand, 30-minute tabs selected")
     print(with_channel_tabs(example, filled=True))

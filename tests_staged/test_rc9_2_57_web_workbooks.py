@@ -33,7 +33,12 @@ class TheWebWorkbooks(unittest.TestCase):
     def test_example_reads_like_its_synthetic_source(self):
         with tempfile.TemporaryDirectory() as tmp:
             fresh = Path(tmp) / "fresh.xlsx"
-            self.assertEqual(B.main(["build", str(SOURCE), str(fresh)]), 0)  # the builder's own engine check
+            # Re-pinned in Phase AO (owner, 2026-10-21: an 11-hour shift gets four breaks, in the input sheet the website
+            # offers): the Example carries the Instructions row "Break Set For Shifts Of 11 Hours Or More = 15, 30, 15, 15"
+            # that its source does not, so it is rebuilt from the source with that one row added. Every other setting,
+            # shift and number is still compared with the source's reading.
+            source = W.offer_long_shift_breaks(SOURCE, Path(tmp) / "source_with_long_breaks.xlsx")
+            self.assertEqual(B.main(["build", str(source), str(fresh)]), 0)  # the builder's own engine check
             self.assertEqual(B.engine_reading(EXAMPLE), B.engine_reading(fresh))
 
     def test_example_passes_the_input_check(self):

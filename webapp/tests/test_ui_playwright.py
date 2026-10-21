@@ -266,8 +266,9 @@ class InTheBrowser(unittest.TestCase):
         page = self.page()
         self.sign_in(page)
         # re-pinned (Phase U): the menu also has "Departments and people", so the People link is matched exactly
+        # re-pinned (Phase AU): other headings on the page now contain "people" too, so the heading is matched exactly
         page.get_by_role("link", name="People", exact=True).click()
-        expect(page.get_by_role("heading", name="People")).to_be_visible()
+        expect(page.get_by_role("heading", name="People", exact=True)).to_be_visible()
         page.screenshot(path=str(SCREENS / "08_people.png"), full_page=True)
 
 

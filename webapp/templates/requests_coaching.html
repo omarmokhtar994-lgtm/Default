@@ -22,6 +22,7 @@
     <button class="quiet">Show times</button>
   </form>
 </section>
+{% include "_news.html" %}
 {% if problem %}<p class="error" role="alert">{{ problem }}</p>{% endif %}
 {% if options is not none %}
 <section class="panel" aria-labelledby="times-h">

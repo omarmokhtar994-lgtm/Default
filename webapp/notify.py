@@ -37,8 +37,9 @@ KINDS = {
     "channel": "Channel changes",
     "aux": "Training, coaching, meetings and other aux",
     "late": "Late and left early",
+    "request": "Answers to break change and coaching requests",
 }
-DEFAULT_KINDS = ["break", "added_break", "overtime", "called_in", "channel"]
+DEFAULT_KINDS = ["break", "added_break", "overtime", "called_in", "channel", "request"]
 PRIVATE = "private"
 MODES = ("off", "preview", "on")
 HOLDS = {0: "At once", 120: "2 minutes", 300: "5 minutes"}  # seconds a LOB's changes wait so a burst goes as one

@@ -40,7 +40,7 @@
 <aside class="leftnav" aria-label="Pages">
   <details class="menu" open data-menu><summary>Menu</summary>
   {% if user.is_associate %}<nav aria-label="Main">
-    {{ navlink('me_day', url_for('me_breaks'), 'My day') }}
+    <a href="{{ url_for('me_breaks') }}"{% if nav_active == 'me_day' %} class="on" aria-current="page"{% endif %}>My day{% if news_n %} <span class="count" title="New answers">{{ news_n }}</span>{% endif %}</a>
     {{ navlink('me', url_for('me'), 'My weeks') }}
   </nav>{% else %}
   {% if can('runs') %}<a class="button primary newrun" href="{{ url_for('home', program=nav_unit or none) }}#newrun">New schedule</a>{% endif %}
@@ -56,7 +56,7 @@
     {{ navlink('week', url_for('week_page', program=nav_unit), 'Weeks') }}
     {{ navlink('schedules', url_for('schedules_for', program=nav_unit), 'Schedules') }}{% endif %}
     <p class="navhead">Requests</p>
-    <a href="{{ url_for('requests_page', program=nav_unit) }}"{% if nav_active == 'requests' %} class="on" aria-current="page"{% endif %}>Leave and swaps{% if nav_requests %} <span class="count" title="Waiting for you">{{ nav_requests }}</span>{% endif %}</a>{% endif %}
+    <a href="{{ url_for('requests_page', program=nav_unit) }}"{% if nav_active == 'requests' %} class="on" aria-current="page"{% endif %}>Leave and swaps{% if (nav_requests or 0) + (news_n or 0) %} <span class="count" title="Waiting for you, or answered">{{ (nav_requests or 0) + (news_n or 0) }}</span>{% endif %}</a>{% endif %}
     <p class="navhead">Insights</p>
     {% if nav_unit and can('analysis') %}{{ navlink('analysis', url_for('program', name=nav_unit), 'Analysis') }}{% endif %}
     {% if can('analysis') %}{{ navlink('programs', url_for('programs'), 'Programs') }}{% endif %}

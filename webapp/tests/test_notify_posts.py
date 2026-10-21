@@ -67,9 +67,10 @@ class TheLinks(unittest.TestCase):
 
 class TheKinds(unittest.TestCase):
     def test_kinds_in_order_and_defaults(self):
-        self.assertEqual(list(KINDS), ["break", "added_break", "overtime", "called_in", "channel", "aux", "late"])
+        # Re-pinned in Phase AU (owner, 2026-10-21: answers to requests go to the group like the RTA's changes): "request"
+        self.assertEqual(list(KINDS), ["break", "added_break", "overtime", "called_in", "channel", "aux", "late", "request"])
         self.assertEqual(KINDS["break"], "Breaks and lunches moved, or put back to plan")
-        self.assertEqual(DEFAULT_KINDS, ["break", "added_break", "overtime", "called_in", "channel"])
+        self.assertEqual(DEFAULT_KINDS, ["break", "added_break", "overtime", "called_in", "channel", "request"])
 
 
 class ThePost(unittest.TestCase):

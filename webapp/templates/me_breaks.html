@@ -6,6 +6,7 @@
   <p class="byline">{{ user.roster_name }}{% if today %}, {{ today.strftime('%A %d %b') }}{% endif %}. You can ask the RTA to move a break on the day you are working, up to the end of your shift. The RTA decides.</p>
 </div></div>
 {% set here = 'today' %}{% include "_me_tabs.html" %}
+{% include "_news.html" %}
 {% if problem %}<p class="error" role="alert">{{ problem }}</p>{% endif %}
 
 {% if not unit %}
@@ -28,7 +29,7 @@
 <p class="empty panel">You have no shift running or still to come today, so there is no break to change.</p>
 {% else %}
 <section class="panel" aria-labelledby="shift-h">
-  <h2 id="shift-h">Your shift, {{ found.label }}{% if found.on != today %} (started {{ found.on.strftime('%a %d %b') }}){% endif %}</h2>
+  <h2 id="shift-h">Your breaks, {{ found.label }}{% if found.on != today %} (started {{ found.on.strftime('%a %d %b') }}){% endif %}</h2>
   <table class="runs small">
     <thead><tr><th scope="col">Break</th><th scope="col">Planned</th><th scope="col">Now</th><th scope="col">Length</th><th scope="col"><span class="sr-only">Change</span></th></tr></thead>
     <tbody>{% for b in seg.breaks %}<tr><th scope="row">{{ b.kind }}</th><td>{{ hm(b.planned_start) }}</td><td>{{ hm(b.start) }}{% if b.moved %} (moved){% endif %}</td><td>{{ b.minutes }} min</td>

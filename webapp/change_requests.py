@@ -252,6 +252,7 @@ def coaching_impact(view: Dict[str, Any], names: List[str], start: int, minutes:
 
 # ----------------------------------------------------------------------------- the requests
 import json  # noqa: E402
+import logging  # noqa: E402
 import time  # noqa: E402
 from datetime import date, datetime, timedelta  # noqa: E402
 
@@ -476,8 +477,38 @@ class ChangeBook:
     def mine(self, program: str, user_id: int) -> List[Dict[str, Any]]:
         return [self._label(r) for r in reversed(self.store.list_change_requests(program=program, requester_id=user_id))][:20]
 
+    def news(self, user_id: int, read: bool = False) -> List[Dict[str, Any]]:
+        """Phase AU: the answers this person has not seen; ``read`` marks them seen (the page that shows them says so)."""
+        rows = self.store.unseen_answers(user_id)
+        if read:
+            self.store.mark_answers_seen([r["id"] for r in rows])
+        return [self._label(r) for r in rows]
+
+    def news_count(self, user_id: int) -> int:
+        return len(self.store.unseen_answers(user_id))
+
     def count(self, program: str) -> int:
         return len(self.store.list_change_requests(program=program, statuses=[WAITING]))
+
+    def _tell_the_group(self, request_id: int, user: Dict[str, Any]) -> None:
+        """Phase AU (owner: "message on Slack/Teams same as the changes being done now"): the LOB's group is told how
+        the request was answered, in the same posts as the RTA's changes. A plain approval of a break change is only the
+        move itself (already posted); a rejection, a changed time, a comment and every coaching answer are posted."""
+        notifier = getattr(self.days, "notifier", None)
+        row = self.store.get_change_request(request_id)
+        if notifier is None or row is None:
+            return
+        label = self._label(row)
+        said = label["status_words"]
+        if row["kind"] == BREAK and row["status"] == "approved" and said == "approved" and not row["decision"]:
+            return
+        text = f"{label['what']}: {said}" + (f" (“{row['decision']}”)" if row["decision"] else "")
+        try:
+            for name in label["names_list"]:
+                notifier.queue(None, row["program"], row["shift_date"], name, "request", text, user["display_name"],
+                               ref=f"request:{request_id}")
+        except Exception:  # noqa: BLE001 (the answer stands; the group post is what is lost, and logged)
+            logging.getLogger(__name__).exception("group posts: could not queue the answer to request %s", request_id)
 
     def cancel(self, request_id: int, user: Dict[str, Any]) -> None:
         row = self.store.get_change_request(request_id)
@@ -506,6 +537,7 @@ class ChangeBook:
                 raise ValueError("Say why it is rejected: the person sees it.")
             self.store.update_change_request(request_id, status="rejected", decided_by=user["id"], decided_at=time.time(),
                                      decision=reason)
+            self._tell_the_group(request_id, user)
             return f"Rejected: {who}, {label['what'].lower()}."
         on, d = label["on"], label["d"]
         asked = d["to"] if row["kind"] == BREAK else d["start"]
@@ -544,4 +576,5 @@ class ChangeBook:
             raise ValueError(f"Not applied: {exc}") from exc
         self.store.update_change_request(request_id, status="approved", decided_by=user["id"], decided_at=time.time(),
                                  decision=reason, detail=json.dumps(d))
+        self._tell_the_group(request_id, user)
         return f"Approved: {who}, {label['what'].lower()}."

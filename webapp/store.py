@@ -417,6 +417,14 @@ class Store:
             have = {row["name"] for row in db.execute("pragma table_info(programs)")}
             if "measure" not in have:
                 db.execute("alter table programs add column measure text not null default ''")
+            # Phase AU: whether the person who asked has looked at the answer to a break change or coaching request
+            have_cr = {row["name"] for row in db.execute("pragma table_info(change_requests)")}
+            if "seen" not in have_cr:
+                db.execute("alter table change_requests add column seen integer not null default 0")
+                # the answers to requests join the group posts of every LOB that already posts break changes (once;
+                # an admin may untick them on Notifications)
+                db.execute("update notify_settings set kinds = kinds || ',request' where (',' || kinds || ',') like"
+                           " '%,break,%' and (',' || kinds || ',') not like '%,request,%'")
             # Phase AR: a deleted person's account is closed and hidden; the row stays so the history still names them
             if "deleted" not in people:
                 db.execute("alter table users add column deleted integer not null default 0")
@@ -878,6 +886,19 @@ class Store:
             return [dict(r) for r in db.execute("select * from change_requests"
                                                 + (" where " + " and ".join(where) if where else "")
                                                 + " order by asked, id", args)]
+
+    def unseen_answers(self, user_id: int) -> List[Dict[str, Any]]:
+        """Phase AU: requests this person asked that someone else has answered and they have not looked at yet."""
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                "select * from change_requests where requester_id = ? and seen = 0 and decided_by is not null"
+                " and decided_by != requester_id and status in ('approved', 'rejected', 'refused')"
+                " order by decided_at", (user_id,))]
+
+    def mark_answers_seen(self, ids: List[int]) -> None:
+        if ids:
+            with self._db() as db:
+                db.execute(f"update change_requests set seen = 1 where id in ({', '.join('?' for _ in ids)})", ids)
 
     def update_change_request(self, request_id: int, **fields: Any) -> None:
         if fields:

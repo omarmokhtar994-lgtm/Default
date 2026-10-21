@@ -516,7 +516,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
         theme = request.cookies.get("theme", "")
         endpoint = request.endpoint or ""
         back = None if endpoint in ("home", "login", "static") else _parent_url(endpoint, request.view_args)
-        return {"csrf_token": csrf_token, "copyright": COPYRIGHT, "user": g.get("user"),
+        who = g.get("user")
+        news_n = app.extensions["changes"].news_count(who["id"]) if who and app.extensions.get("changes") else 0
+        return {"csrf_token": csrf_token, "copyright": COPYRIGHT, "user": g.get("user"), "news_n": news_n,
                 "theme": theme if theme in THEMES else "", "back": back,
                 "status_words": STATUS_WORDS, "label": label, "modes": MODES, "stages": stages, "in_flight": IN_FLIGHT,
                 "when": _when, "run_options": run_options, "option_labels": OPTION_LABELS,
@@ -1344,7 +1346,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 card = my_day(page["view"], name, now.hour * 60 + now.minute) if page else None
             except ValueError:  # a day whose input workbook is not kept: the breaks say so, the card is left out
                 card = None
-        return render_template("me_breaks.html", unit=key, card=card, tomorrow=tomorrow, tseg=tseg, found=found, seg=seg, options=options, problem=problem,
+        news = book.news(g.user["id"], read=True)  # Phase AU: the answers since they last looked, shown once
+        return render_template("me_breaks.html", unit=key, card=card, news=news, tomorrow=tomorrow, tseg=tseg, found=found, seg=seg, options=options, problem=problem,
                                today=now.date() if now else None,
                                mine=book.mine(key, g.user["id"]) if key else [], hm=hm,
                                now_at=found["now"] if found else 0)
@@ -1414,7 +1417,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 options = book.coaching_options(key, on, names, minutes, now, billable=billable)
             except ValueError as exc:
                 problem = str(exc)
-        return render_template("requests_coaching.html", unit=key, label=_unit_filter(key) if key else "",
+        news = book.news(g.user["id"], read=True)  # Phase AU
+        return render_template("requests_coaching.html", unit=key, news=news, label=_unit_filter(key) if key else "",
                                roster=sorted(leave.names(key)) if key else [], names=names, on=on, minutes=minutes, billable=billable,
                                options=options, problem=problem, depts=[d["name"] if isinstance(d, dict) else d
                                                                         for d in (_with_lists(key) if key else [])],

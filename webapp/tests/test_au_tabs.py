@@ -64,7 +64,7 @@ class TheAssociatesTabs(_Pages):
 
     def test_today_holds_the_shift_the_breaks_and_the_requests_and_weeks_does_not_hold_today(self):
         today = self.get(self.assoc, "/me/breaks")
-        self.assertIn("Your shift", today)
+        self.assertIn("Your breaks", today)  # Re-pinned in Phase AU: the second panel is named for what it holds
         self.assertIn("Break 1", today)
         weeks = self.get(self.assoc, "/me")
         self.assertIn("The week", weeks)

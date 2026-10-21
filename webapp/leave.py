@@ -50,13 +50,12 @@ class LeaveBook:
 
     # ------------------------------------------------------------------ the schedule
     def names(self, program: str) -> List[str]:
-        """Names on the newest kept week's schedules of ``program``."""
-        weeks = self.days.book.kept_weeks(program)
-        if not weeks:
-            return []
+        """Names on the schedules of ``program``'s last four kept weeks (Phase AO: not only the newest, which may be
+        partly filled)."""
         found = set()
-        for v in self.store.list_schedules(program=program, week_start=weeks[-1]["week"]):
-            found |= {a["name"] for a in json.loads(v["week"] or "{}").get("associates", [])}
+        for week in self.days.book.kept_weeks(program)[-4:]:
+            for v in self.store.list_schedules(program=program, week_start=week["week"]):
+                found |= {a["name"] for a in json.loads(v["week"] or "{}").get("associates", [])}
         return sorted(found)
 
     def days_of(self, program: str, name: str, first: date, last: date) -> List[Dict[str, Any]]:

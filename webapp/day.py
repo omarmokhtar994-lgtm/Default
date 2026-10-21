@@ -1543,6 +1543,22 @@ def at_target(cells: List[Dict[str, Any]], target: float) -> Dict[str, Any]:
 CHANNEL_WORD = {"P": "Phone", "C": "Chat", "E": "Email", "A": "all channels"}
 
 
+def my_items(view: Dict[str, Any], name: str) -> List[Dict[str, Any]]:
+    """Phase AO (My week): what one person's shift starting that day holds besides the work, in time order: its
+    breaks (as planned or moved) and the aux, meetings, coaching, overtime and the like the RTA recorded. Each is
+    {"lo", "hi", "what"} in minutes from that day's midnight."""
+    lane = next((l for l in view["lanes"] if l["name"] == name), None)
+    seg = next((s for s in lane["segments"] if s["offset"] == 0), None) if lane else None
+    if seg is None:
+        return []
+    found = [{"lo": b["start"], "hi": b["start"] + b["minutes"], "what": b["kind"]} for b in seg["breaks"]]
+    for a in seg.get("activities", []):
+        if a["kind"] == CALLED_IN:
+            continue
+        found.append({"lo": a["start"], "hi": a["end"], "what": a["kind"]})
+    return sorted(found, key=lambda x: (x["lo"], x["hi"]))
+
+
 def my_day(view: Dict[str, Any], name: str, now: Optional[int] = None) -> Optional[Dict[str, Any]]:
     """One person's day for My week (Phase AG, T7): their shift starting that day as a band of what they are on
     (channel stretches, breaks; "work" where no channel is planned), and in words what they are on at ``now``

@@ -38,7 +38,7 @@ from .channel_template import channel_workbook
 from .channels import check_lines, has_channel_needs, read_channels, requirement_tab
 from .clock import minute_now, EGYPT, HOME, SHOWN, ZONES, moved_text, pick_zone, rta_shift, shift as zone_shift, shown, to_schedule, zone_label
 from .permissions import CATALOGUE as PERMISSIONS, ENDPOINTS as PERMISSION_ENDPOINTS, ROLE_NAMES, allowed, matrix
-from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, OVERTIME_MAX, STATUSES, channel_letters, BreakRefused, at_target, board, glance, hover_tips, my_day, now_panel, read_inputs, shift_groups, window_view
+from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, OVERTIME_MAX, STATUSES, channel_letters, BreakRefused, at_target, board, glance, hover_tips, my_day, my_items, now_panel, read_inputs, shift_groups, window_view
 from .coach import actual_shrinkage, corrected_tab
 from .leave import KINDS as LEAVE_KINDS, LeaveBook
 from .swaps import SwapBook
@@ -879,22 +879,36 @@ def create_app(config: Dict[str, Any]) -> Flask:
         card, week = None, []
         mine = leave.mine(key, name) if leave and key else []
         my_swaps = swaps.mine(key, name) if swaps and key else []
+        shown = None
         if key:
             days = app.extensions["days"]
             page = days.page(key, today)
             card = my_day(page["view"], name, clock_now.hour * 60 + clock_now.minute) if page else None
+            shown = _date(request.args.get("week", ""))
+            if shown not in weeks:  # Phase AO: this week, else the first later one with a schedule
+                shown = week_start(today) if week_start(today) in weeks else (weeks[0] if weeks else None)
             version = days.version(key, today)[0]
-            first = date.fromisoformat(version["week_start"]) if version and version["week_start"] else week_start(today)
+            first = shown or (date.fromisoformat(version["week_start"]) if version and version["week_start"]
+                              else week_start(today))
             for i in range(7):
                 on = first + timedelta(days=i)
                 notes = [f"{r['kind']}: {MY_STATUS.get(r['status'], r['status'])}" for r in mine
                          if r["status"] != "cancelled" and r["first_day"] <= on.isoformat() <= r["last_day"]]
                 notes += [f"Swap with {w['other'] if w['asker'] == name else w['asker']}: {w['status_words']}"
-                          for w in my_swaps if w["day"] == on.isoformat() and w["status"] != "cancelled"]
-                week.append({"date": on, "cell": dict(days.roster(key, on)).get(name, ""), "notes": notes,
-                             "today": on == today})
+                          for w in my_swaps if (w["day"] == on.isoformat() or (w.get("scope") == "week" and any(
+                              d["date"] == on.isoformat() for d in json.loads(w.get("detail") or "{}").get("days", []))))
+                          and w["status"] != "cancelled"]
+                cell = dict(days.roster(key, on)).get(name, "")
+                items = []
+                if shift_span(cell):
+                    try:
+                        found = days.page(key, on)
+                        items = [f"{x['what']} {hm(x['lo'])} to {hm(x['hi'])}" for x in my_items(found["view"], name)] if found else []
+                    except ValueError:  # a week whose input workbook is not kept: its shifts show, its breaks do not
+                        items = []
+                week.append({"date": on, "cell": cell, "notes": notes, "items": items, "today": on == today})
         return render_template("me.html", unit=key, kinds=LEAVE_KINDS, mine=mine, swaps=my_swaps, swap_day=swap_day,
-                               swap_note=swap_note, weeks=weeks, week_labels={w.isoformat(): f"{w:%d %b} to {(w + timedelta(days=6)):%d %b}" for w in weeks}, swap_week=swap_week, week_offers=week_offers,
+                               swap_note=swap_note, weeks=weeks, shown=shown, week_labels={w.isoformat(): f"{w:%d %b} to {(w + timedelta(days=6)):%d %b}" for w in weeks}, swap_week=swap_week, week_offers=week_offers,
                                offers=offers, today=today, card=card, week=week, hm=hm)
 
     def _my_weeks(key: str, today: date) -> List[date]:

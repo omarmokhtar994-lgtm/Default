@@ -19,7 +19,8 @@
 </section>
 <section class="panel" aria-labelledby="week-h">
   <h2 id="week-h">The week</h2>
-  <table class="me-week"><tbody>{% for d in week %}<tr{% if d.today %} class="me-now" aria-current="date"{% endif %}><th scope="row">{{ d.date.strftime('%a %d %b') }}</th><td>{{ d.cell or 'Not planned yet' }}</td><td>{{ d.notes|join('; ') }}</td></tr>{% endfor %}</tbody></table>
+  {% if weeks|length > 1 %}<form method="get" action="{{ url_for('me') }}" class="me-form"><label>Week <select name="week" data-autosubmit>{% for w in weeks %}<option value="{{ w.isoformat() }}"{% if w == shown %} selected{% endif %}>{{ week_labels[w.isoformat()] }}</option>{% endfor %}</select></label><noscript><button>Show the week</button></noscript></form>{% endif %}
+  <table class="me-week"><tbody>{% for d in week %}<tr{% if d.today %} class="me-now" aria-current="date"{% endif %}><th scope="row">{{ d.date.strftime('%a %d %b') }}</th><td>{{ d.cell or 'Not planned yet' }}</td><td>{{ (d['items'] + d.notes)|join('; ') }}</td></tr>{% endfor %}</tbody></table>
 </section>
 <details class="sheet"{% if not swap_day %} open{% endif %}>
   <summary>Request leave</summary>

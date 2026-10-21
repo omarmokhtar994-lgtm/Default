@@ -76,7 +76,9 @@ class TheGroupMessages(TheNotices):
                               service="slack", mode="on", kinds=",".join(DEFAULT_KINDS), hold=0)
 
     def said(self):
-        return [i for i in self.store.notify_items(unit=self.key) if i["kind"] == "request"]
+        # the answers; the post that a request was made (ref "asked:...") is checked in test_au_requests_more
+        return [i for i in self.store.notify_items(unit=self.key)
+                if i["kind"] == "request" and not i["ref"].startswith("asked:")]
 
     def test_the_kind_exists_and_is_on_by_default(self):
         from webapp.notify import DEFAULT_KINDS, KINDS

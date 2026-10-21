@@ -137,6 +137,31 @@ class ProgramBook:
             raise ValueError("Pick interval compliance, service level or volume weighted.")
         self.store.update_program(program_id, measure="" if value == "interval" else value)
 
+    REQUEST_DEFAULTS = {"enabled": True, "lead": 0, "limit": 0}
+
+    def request_settings(self, program_id: int) -> Dict[str, Any]:
+        """Phase AU: a program's rules for associate break change requests: whether they are on, the minutes a new time
+        must be after now (the lead), and how many an associate may ask for one day (0 = no limit)."""
+        row = next((p for p in self.store.list_programs() if p["id"] == program_id), None)
+        try:
+            saved = json.loads((row or {}).get("requests") or "{}")
+        except ValueError:
+            saved = {}
+        return {**self.REQUEST_DEFAULTS, **{k: saved[k] for k in self.REQUEST_DEFAULTS if k in saved}}
+
+    def request_settings_for_unit(self, key: str) -> Dict[str, Any]:
+        found = self.unit(key) if key else None
+        return self.request_settings(found["program"]["id"]) if found else dict(self.REQUEST_DEFAULTS)
+
+    def set_request_settings(self, program_id: int, enabled: bool, lead: int, limit: int) -> None:
+        self.program(program_id)
+        if not 0 <= int(lead) <= 240:
+            raise ValueError("The lead time is 0 to 240 minutes.")
+        if not 0 <= int(limit) <= 10:
+            raise ValueError("The daily limit is 0 to 10 (0 means no limit).")
+        self.store.update_program(program_id, requests=json.dumps({"enabled": bool(enabled), "lead": int(lead),
+                                                                   "limit": int(limit)}))
+
     def day_measure(self, key: str) -> str:
         """The RTA's measure for the unit ``key``: ``interval`` (billable aux stays on the floor) or ``sl`` (it does not:
         service level and volume weighted). A key that is not a unit is interval compliance."""

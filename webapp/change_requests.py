@@ -276,9 +276,11 @@ class ChangeBook:
     """Break changes an associate asks for on the running day, and coaching a team manager asks for; the RTA decides
     each with the impact in front of them (Phase AS)."""
 
-    def __init__(self, store, days, measure_of=None):
+    def __init__(self, store, days, measure_of=None, settings_of=None):
         self.store, self.days = store, days
         self.measure_of = measure_of or (lambda program: "interval")  # the program's setup: how billable time counts
+        # the program's rules for associate break requests (Phase AU): on or off, the lead minutes, the daily limit
+        self.settings_of = settings_of or (lambda program: {"enabled": True, "lead": 0, "limit": 0})
 
     # ------------------------------------------------------------------ the running shift
     def _window(self, program: str, on: date, start: int) -> Dict[str, Any]:
@@ -339,11 +341,15 @@ class ChangeBook:
         if found is None:
             raise ValueError("You have no shift running today to change a break in." if on is None else
                              f"You have no shift on {on:%a %d %b} to change a break in.")
-        options = break_choices(found["view"], found["inputs"], name, idx, found["now"] + LEAD_MINUTES)
+        options = break_choices(found["view"], found["inputs"], name, idx,
+                                found["now"] + max(LEAD_MINUTES, int(self.settings_of(program).get("lead", 0))))
         return {**options, "shift": found}
 
     def ask_break(self, program: str, name: str, user: Dict[str, Any], idx: int, to: str, why: str,
                   now: datetime, on: Optional[date] = None) -> int:
+        rules = self.settings_of(program)
+        if not rules.get("enabled", True):
+            raise ValueError("Break change requests are switched off for this program. Ask your team manager or the RTA.")
         options = self.break_options(program, name, idx, now, on)
         found = options["shift"]
         m = _minute(to)
@@ -357,12 +363,21 @@ class ChangeBook:
             d = json.loads(r["detail"])
             if r["shift_date"] == found["on"].isoformat() and json.loads(r["names"]) == [name] and d["idx"] == idx:
                 raise ValueError("You already asked to move this break. Cancel that request first.")
+        limit = int(rules.get("limit", 0))
+        if limit:
+            used = [r for r in self.store.list_change_requests(program=program, requester_id=user["id"], kind=BREAK)
+                    if r["shift_date"] == found["on"].isoformat() and r["status"] in (WAITING, "approved")]
+            if len(used) >= limit:
+                raise ValueError(f"This program allows {limit} request{'s' if limit != 1 else ''} a day and you have "
+                                 f"asked for {len(used)}. Ask the RTA directly.")
         detail = {"idx": idx, "kind": options["kind"], "minutes": options["minutes"], "from": options["current"],
                   "to": m, "level": chosen["level"], "people_above": chosen["people_above"]}
-        return self.store.add_change_request(kind=BREAK, program=program, shift_date=found["on"].isoformat(),
+        made = self.store.add_change_request(kind=BREAK, program=program, shift_date=found["on"].isoformat(),
                                      names=json.dumps([name]), requester_id=user["id"],
                                      requester_name=user["display_name"], detail=json.dumps(detail),
                                      why=" ".join((why or "").split())[:200])
+        self._tell_the_group_asked(made, user)
+        return made
 
     # ------------------------------------------------------------------ coaching
     def coaching_view(self, program: str, on: date, names: List[str]) -> Dict[str, Any]:
@@ -405,10 +420,12 @@ class ChangeBook:
             raise ValueError("Pick one of the times in the list.")
         detail = {"start": m, "end": m + minutes, "minutes": minutes, "dept": " ".join((dept or "").split())[:80],
                   "billable": bool(billable), "level": chosen["level"], "people_above": chosen["people_above"]}
-        return self.store.add_change_request(kind=COACHING, program=program, shift_date=on.isoformat(),
+        made = self.store.add_change_request(kind=COACHING, program=program, shift_date=on.isoformat(),
                                      names=json.dumps(sorted(names)), requester_id=user["id"],
                                      requester_name=user["display_name"], detail=json.dumps(detail),
                                      why=" ".join((why or "").split())[:200])
+        self._tell_the_group_asked(made, user)
+        return made
 
     # ------------------------------------------------------------------ what the RTA sees, and decides
     def impact(self, row: Dict[str, Any], billable: Optional[bool] = None) -> List[Dict[str, Any]]:
@@ -447,7 +464,8 @@ class ChangeBook:
         d = json.loads(row["detail"])
         names = json.loads(row["names"])
         words = {"waiting": "waiting for the RTA", "approved": "approved", "rejected": "rejected",
-                 "cancelled": "cancelled", "refused": "could not be applied"}
+                 "cancelled": "cancelled", "refused": "could not be applied",
+                 "expired": "expired: nobody decided it before the time passed"}
         if row["kind"] == BREAK:
             what = f"{d['kind']}, move from {hm(d['from'])} to {hm(d['to'] if 'asked_to' not in d else d['asked_to'])}"
         else:
@@ -466,11 +484,72 @@ class ChangeBook:
         return {**row, "names_list": names, "d": d, "what": what, "status_words": said,
                 "on": date.fromisoformat(row["shift_date"])}
 
+    @staticmethod
+    def _urgency(row: Dict[str, Any]) -> tuple:
+        d = row["d"]
+        return (row["shift_date"], min(d["from"], d["to"]) if row["kind"] == BREAK else d["start"], row["id"])
+
     def waiting(self, program: str) -> List[Dict[str, Any]]:
-        return [self._label(r) for r in self.store.list_change_requests(program=program, statuses=[WAITING])]
+        """The requests waiting for the RTA, the soonest time first (Phase AU)."""
+        rows = [self._label(r) for r in self.store.list_change_requests(program=program, statuses=[WAITING])]
+        return sorted(rows, key=self._urgency)
+
+    def overlaps(self, row: Dict[str, Any], waiting: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Phase AU: the other waiting requests of that day that land on the same time as ``row``, and the most people
+        off at once if all of them were approved (this one counted). Each request is judged alone on the RTA's page, so
+        two that look High each can be Low together."""
+        def span(r: Dict[str, Any]) -> tuple:
+            d = r["d"]
+            return (d["to"], d["to"] + d["minutes"]) if r["kind"] == BREAK else (d["start"], d["end"])
+        lo, hi = span(row)
+        near = [r for r in waiting if r["id"] != row["id"] and r["shift_date"] == row["shift_date"]
+                and span(r)[0] < hi and lo < span(r)[1]]
+        peak = 0
+        for t in range(lo, hi, 5):
+            here = len(row["names_list"]) + sum(len(r["names_list"]) for r in near if span(r)[0] <= t < span(r)[1])
+            peak = max(peak, here)
+        return {"others": [{"id": r["id"], "names": r["names_list"], "what": r["what"]} for r in near], "peak": peak}
+
+    def stale_note(self, row: Dict[str, Any], now: datetime) -> str:
+        """Phase AU: "" while a waiting break is where the request found it; else what to do. A break the RTA moved after
+        the request was made cannot be approved from the old time."""
+        if row["kind"] != BREAK:
+            return ""
+        d = json.loads(row["detail"]) if isinstance(row["detail"], str) else row["detail"]
+        names, on = json.loads(row["names"]), date.fromisoformat(row["shift_date"])
+        try:
+            page = self.days.page(row["program"], on, self.measure_of(row["program"]))
+        except ValueError:
+            return ""
+        seg = next((s for lane in (page["view"]["lanes"] if page else []) if lane["name"] == names[0]
+                    for s in lane["segments"] if s["offset"] == 0), None)
+        if seg is None:
+            return f"{names[0]} is no longer on the schedule that day. Reject this request."
+        found = next((b for b in seg["breaks"] if b["idx"] == d["idx"]), None)
+        if found is None:
+            return f"{d['kind']} is no longer on the schedule. Reject this request."
+        if found["start"] != d["from"]:
+            return (f"{d['kind']} is no longer at {hm(d['from'])}: it is at {hm(found['start'])}. "
+                    "Reject this request and ask again.")
+        return ""
+
+    def expire_overdue(self, program: str, now: datetime) -> int:
+        """Phase AU: a waiting request whose time has come is closed as expired, so the asker is told and the RTA's list
+        keeps only what can still be decided. Returns how many were closed."""
+        closed = 0
+        for r in self.store.list_change_requests(program=program, statuses=[WAITING]):
+            d, on = json.loads(r["detail"]), date.fromisoformat(r["shift_date"])
+            clock_at = (now.date() - on).days * 1440 + now.hour * 60 + now.minute
+            first = min(d["from"], d["to"]) if r["kind"] == BREAK else d["start"]
+            if first < clock_at:
+                self.store.update_change_request(r["id"], status="expired", decided_at=time.time(),
+                                                 outcome="Nobody decided it before the time passed.")
+                closed += 1
+        return closed
 
     def decided(self, program: str, limit: int = 20) -> List[Dict[str, Any]]:
-        rows = self.store.list_change_requests(program=program, statuses=["approved", "rejected", "refused", "cancelled"])
+        rows = self.store.list_change_requests(program=program, statuses=["approved", "rejected", "refused", "cancelled",
+                                                                          "expired"])
         rows.sort(key=lambda r: -(r["decided_at"] or r["asked"]))
         return [self._label(r) for r in rows[:limit]]
 
@@ -489,6 +568,22 @@ class ChangeBook:
 
     def count(self, program: str) -> int:
         return len(self.store.list_change_requests(program=program, statuses=[WAITING]))
+
+    def _tell_the_group_asked(self, request_id: int, user: Dict[str, Any]) -> None:
+        """Phase AU: a new request is posted to the LOB's group (without the reason: that is for the RTA), so the RTA does not
+        have to be looking at the tab."""
+        notifier = getattr(self.days, "notifier", None)
+        row = self.store.get_change_request(request_id)
+        if notifier is None or row is None:
+            return
+        label = self._label(row)
+        try:
+            for name in label["names_list"]:
+                notifier.queue(None, row["program"], row["shift_date"], name, "request",
+                               f"{label['what']}: asked, waiting for the RTA", user["display_name"],
+                               ref=f"asked:{request_id}")
+        except Exception:  # noqa: BLE001 (the request stands; the group post is what is lost, and logged)
+            logging.getLogger(__name__).exception("group posts: could not queue the new request %s", request_id)
 
     def _tell_the_group(self, request_id: int, user: Dict[str, Any]) -> None:
         """Phase AU (owner: "message on Slack/Teams same as the changes being done now"): the LOB's group is told how
@@ -539,6 +634,9 @@ class ChangeBook:
                                      decision=reason)
             self._tell_the_group(request_id, user)
             return f"Rejected: {who}, {label['what'].lower()}."
+        stale = self.stale_note(row, now)
+        if stale:
+            raise ValueError(stale)
         on, d = label["on"], label["d"]
         asked = d["to"] if row["kind"] == BREAK else d["start"]
         if at is not None and at != asked:

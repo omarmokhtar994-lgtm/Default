@@ -156,6 +156,13 @@ class TheMergedRequests(unittest.TestCase):
     def tearDownClass(cls):
         cls.fx._TwoLobs.tearDownClass.__func__(cls)
 
+    def setUp(self):
+        from unittest import mock
+        from webapp.tests.test_as_pages import _Noon
+        patch = mock.patch("webapp.app.datetime", _Noon)  # the rows are for Wednesday 14 October: a request is open until then
+        patch.start()
+        self.addCleanup(patch.stop)
+
     def tab(self, **more):
         query = {"program": self.one, "date": self.fx.WED.isoformat(), "tz": self.fx.CAIRO, "view": "requests", **more}
         return html.unescape(self.admin.get("/day", query_string=query).get_data(as_text=True))

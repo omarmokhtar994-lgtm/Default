@@ -426,6 +426,9 @@ class Store:
             have = {row["name"] for row in db.execute("pragma table_info(programs)")}
             if "measure" not in have:
                 db.execute("alter table programs add column measure text not null default ''")
+            # Phase AU: the program's rules for associate break change requests, as JSON ('' = the defaults)
+            if "requests" not in have:
+                db.execute("alter table programs add column requests text not null default ''")
             # Phase AU: whether the person who asked has looked at the answer to a break change or coaching request
             have_cr = {row["name"] for row in db.execute("pragma table_info(change_requests)")}
             if "seen" not in have_cr:
@@ -553,7 +556,7 @@ class Store:
             return [dict(r) for r in db.execute("select * from programs order by name collate nocase")]
 
     def update_program(self, program_id: int, **fields: Any) -> None:
-        unknown = set(fields) - {"name", "start_day", "run_mode", "options", "measure"}
+        unknown = set(fields) - {"name", "start_day", "run_mode", "options", "measure", "requests"}
         if unknown:
             raise ValueError(f"Not a program detail: {', '.join(sorted(unknown))}.")
         if fields:
@@ -931,9 +934,9 @@ class Store:
         """Phase AU: requests this person asked that someone else has answered and they have not looked at yet."""
         with self._db() as db:
             return [dict(r) for r in db.execute(
-                "select * from change_requests where requester_id = ? and seen = 0 and decided_by is not null"
-                " and decided_by != requester_id and status in ('approved', 'rejected', 'refused')"
-                " order by decided_at", (user_id,))]
+                "select * from change_requests where requester_id = ? and seen = 0"
+                " and ((decided_by is not null and decided_by != requester_id and status in"
+                " ('approved', 'rejected', 'refused')) or status = 'expired') order by decided_at", (user_id,))]
 
     def mark_answers_seen(self, ids: List[int]) -> None:
         if ids:

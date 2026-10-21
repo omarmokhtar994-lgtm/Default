@@ -300,7 +300,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         queue.on_kept = lambda run_id: app.extensions["leave"].apply_waiting(app.extensions["store"].get_run(run_id))
         app.extensions["swaps"] = SwapBook(app.extensions["store"], app.extensions["days"])
         app.extensions["changes"] = ChangeBook(app.extensions["store"], app.extensions["days"],
-                                               lambda unit: ProgramBook(app.extensions["store"]).day_measure(unit))  # Phase AS
+                                               lambda unit: ProgramBook(app.extensions["store"]).day_measure(unit),  # Phase AS
+                                               lambda unit: ProgramBook(app.extensions["store"]).request_settings_for_unit(unit))
         # Phase AB: RTA changes posted to each LOB's Teams or Slack group, on the notifier's own thread.
         notifier = Notifier(app.extensions["store"], transport=config.get("NOTIFY_TRANSPORT") or post_json,
                             label=ProgramBook(app.extensions["store"]).label, days=app.extensions["days"])
@@ -586,6 +587,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             return 0
         found = book.count_for(key, user) + swaps.count_for(key, user)
         if allowed(app.extensions["store"], user, "rta_change"):  # Phase AS: break changes and coaching for the RTA
+            app.extensions["changes"].expire_overdue(key, _local_now(key))  # Phase AU
             found += app.extensions["changes"].count(key)
         return found
 
@@ -1352,7 +1354,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
     def _change_rows(key: str) -> List[Dict[str, Any]]:
         """Phase AS: the waiting break changes and coaching, each with the intervals it touches (before, after, buffer)."""
         book, rows, now = app.extensions["changes"], [], _local_now(key)
-        for r in book.waiting(key):
+        book.expire_overdue(key, now)  # Phase AU: a request whose time has come is closed, and its asker told
+        waiting = book.waiting(key)
+        for r in waiting:
+            r["overlaps"], r["stale"] = book.overlaps(r, waiting), book.stale_note(r, now)
             try:
                 r["impact"], r["impact_note"] = book.impact(r), ""
                 r["alternatives"] = book.alternatives(r, now)  # the nearest times, from what the RTA holds now
@@ -1431,8 +1436,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 card = my_day(page["view"], name, now.hour * 60 + now.minute) if page else None
             except ValueError:  # a day whose input workbook is not kept: the breaks say so, the card is left out
                 card = None
+        if key:
+            book.expire_overdue(key, now)  # Phase AU
+        rules = app.extensions["changes"].settings_of(key) if key else {"enabled": True}
         news = book.news(g.user["id"], read=True)  # Phase AU: the answers since they last looked, shown once
-        return render_template("me_breaks.html", unit=key, card=card, news=news, tomorrow=tomorrow, tseg=tseg, found=found, seg=seg, options=options, problem=problem,
+        return render_template("me_breaks.html", unit=key, card=card, news=news, requests_on=rules.get("enabled", True), tomorrow=tomorrow, tseg=tseg, found=found, seg=seg, options=options, problem=problem,
                                today=now.date() if now else None,
                                mine=book.mine(key, g.user["id"]) if key else [], hm=hm,
                                now_at=found["now"] if found else 0)
@@ -1502,6 +1510,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 options = book.coaching_options(key, on, names, minutes, now, billable=billable)
             except ValueError as exc:
                 problem = str(exc)
+        if key:
+            book.expire_overdue(key, now)
         news = book.news(g.user["id"], read=True)  # Phase AU
         return render_template("requests_coaching.html", unit=key, news=news, label=_unit_filter(key) if key else "",
                                roster=sorted(leave.names(key)) if key else [], names=names, on=on, minutes=minutes, billable=billable,
@@ -2269,6 +2279,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 elif action == "measure":  # Phase AS
                     book.set_measure(pid, request.form.get("coverage_measure", ""))
                     said = f"{book.program(pid)['name']} now counts billable time as {book.MEASURES[book.measure_setting(pid)].lower()}."
+                elif action == "requests":  # Phase AU: associate break change requests for this program
+                    book.set_request_settings(pid, request.form.get("enabled") == "1",
+                                              request.form.get("lead", type=int, default=0),
+                                              request.form.get("limit", type=int, default=0))
+                    said = f"Saved the break change request rules for {book.program(pid)['name']}."
                 elif action == "rename_program":
                     book.rename(pid, None, name)
                     said = f"Renamed to {book.program(pid)['name']}."
@@ -2307,7 +2322,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         for p in tree:
             p["measure_value"] = p.get("measure") or "interval"
         return render_template("program_setup.html", programs=tree, people=people, loose=loose, modes=MODES,
-                               measures=ProgramBook.MEASURES,
+                               measures=ProgramBook.MEASURES, request_rules={p["id"]: book.request_settings(p["id"]) for p in tree},
                                blockers=blockers, unit_groups=_unit_choices(tree),
                                look_alike={p["key"]: book.look_alike(p["id"]) for p in tree if not p["lobs"]},
                                days=["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"])
@@ -3741,6 +3756,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if not program:
             return {"changes_n": 0}
         book, units = app.extensions["changes"], (merge or [program])
+        for u in units:
+            book.expire_overdue(u, _local_now(u))  # Phase AU
         found = {"changes_n": sum(book.count(u) for u in units)}
         if tab == "requests":
             rows = []

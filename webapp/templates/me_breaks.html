@@ -7,6 +7,7 @@
 </div></div>
 {% set here = 'today' %}{% include "_me_tabs.html" %}
 {% include "_news.html" %}
+{% if not requests_on %}<p class="note panel" role="note">Break change requests are switched off for this program. Ask your team manager or the RTA.</p>{% endif %}
 {% if problem %}<p class="error" role="alert">{{ problem }}</p>{% endif %}
 
 {% if not unit %}
@@ -33,7 +34,7 @@
   <table class="runs small">
     <thead><tr><th scope="col">Break</th><th scope="col">Planned</th><th scope="col">Now</th><th scope="col">Length</th><th scope="col"><span class="sr-only">Change</span></th></tr></thead>
     <tbody>{% for b in seg.breaks %}<tr><th scope="row">{{ b.kind }}</th><td>{{ hm(b.planned_start) }}</td><td>{{ hm(b.start) }}{% if b.moved %} (moved){% endif %}</td><td>{{ b.minutes }} min</td>
-      <td>{% if b.start >= now_at %}<a href="{{ url_for('me_breaks', change=b.idx) }}#change">Change</a>{% else %}<span class="dim">Started</span>{% endif %}</td></tr>{% endfor %}</tbody>
+      <td>{% if b.start >= now_at %}{% if requests_on %}<a href="{{ url_for('me_breaks', change=b.idx) }}#change">Change</a>{% else %}<span class="dim">Not on</span>{% endif %}{% else %}<span class="dim">Started</span>{% endif %}</td></tr>{% endfor %}</tbody>
   </table>
 </section>
 
@@ -67,7 +68,7 @@
   <table class="runs small">
     <thead><tr><th scope="col">Break</th><th scope="col">Planned</th><th scope="col">Length</th><th scope="col"><span class="sr-only">Change</span></th></tr></thead>
     <tbody>{% for b in tseg.breaks %}<tr><th scope="row">{{ b.kind }}</th><td>{{ hm(b.start) }}{% if b.moved %} (moved){% endif %}</td><td>{{ b.minutes }} min</td>
-      <td><a href="{{ url_for('me_breaks', day='tomorrow', change=b.idx) }}#change">Change</a></td></tr>{% else %}<tr><td colspan="4" class="empty">No breaks planned yet.</td></tr>{% endfor %}</tbody>
+      <td>{% if requests_on %}<a href="{{ url_for('me_breaks', day='tomorrow', change=b.idx) }}#change">Change</a>{% else %}<span class="dim">Not on</span>{% endif %}</td></tr>{% else %}<tr><td colspan="4" class="empty">No breaks planned yet.</td></tr>{% endfor %}</tbody>
   </table>
 </section>
 {% endif %}

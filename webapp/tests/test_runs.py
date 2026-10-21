@@ -1812,8 +1812,12 @@ class TheProgramAccess(unittest.TestCase):
         self.assertNotIn("AE_week.xlsx", home)
         exports = html.unescape(self.lina.get("/exports").get_data(as_text=True))
         self.assertNotIn('value="AE/AR B2B"', exports)
-        mine = run_id_of(upload(self.lina, name="Lina_AE.xlsx", program="AE/AR B2B", week_start="2026-10-18"))
-        self.assertEqual(self.lina.get(f"/runs/{mine}").status_code, 200)  # New schedule: any program, her run
+        # Re-pinned in Phase AR (owner, 2026-10-21: each program keeps its own uploads): a new schedule is for one of
+        # her own programs only. It used to accept any program.
+        refused = upload(self.lina, name="Lina_AE.xlsx", program="AE/AR B2B", week_start="2026-10-18")
+        self.assertEqual(refused.status_code, 403)
+        mine = run_id_of(upload(self.lina, name="Lina_NMG.xlsx", program="NMG", week_start="2026-10-18"))
+        self.assertEqual(self.lina.get(f"/runs/{mine}").status_code, 200)  # New schedule: her own program, her run
 
     def test_all_programs_means_all_of_yours(self):
         self.store.add_activity(program="AE/AR B2B", shift_date="2026-10-14", associate="Associate 001",

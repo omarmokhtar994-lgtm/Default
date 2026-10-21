@@ -67,6 +67,7 @@ from .results import recolour, version_summary
 from .runs import ACTIVE, MODES, OPTION_LABELS, READY, RESUMABLE, RunQueue, parse_options, run_options
 from .store import Store
 from werkzeug.datastructures import ImmutableMultiDict
+from .change_requests import ChangeBook, level_of
 from .bulk_users import new_password, passwords_workbook, read_people, template_bytes
 from .daily_views import people_of, workbook as daily_workbook
 from .merge import merge_intervals
@@ -295,6 +296,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         # Phase AO: leave approved while a week had no schedule is applied once that week's schedule is kept
         queue.on_kept = lambda run_id: app.extensions["leave"].apply_waiting(app.extensions["store"].get_run(run_id))
         app.extensions["swaps"] = SwapBook(app.extensions["store"], app.extensions["days"])
+        app.extensions["changes"] = ChangeBook(app.extensions["store"], app.extensions["days"])  # Phase AS
         # Phase AB: RTA changes posted to each LOB's Teams or Slack group, on the notifier's own thread.
         notifier = Notifier(app.extensions["store"], transport=config.get("NOTIFY_TRANSPORT") or post_json,
                             label=ProgramBook(app.extensions["store"]).label, days=app.extensions["days"])
@@ -569,7 +571,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
         book, swaps = app.extensions.get("leave"), app.extensions.get("swaps")
         if not (book and key) or user["is_associate"]:
             return 0
-        return book.count_for(key, user) + swaps.count_for(key, user)
+        found = book.count_for(key, user) + swaps.count_for(key, user)
+        if allowed(app.extensions["store"], user, "rta_change"):  # Phase AS: break changes and coaching for the RTA
+            found += app.extensions["changes"].count(key)
+        return found
 
     # ------------------------------------------------------------- theme
     @app.route("/theme", methods=["POST"])
@@ -1242,6 +1247,17 @@ def create_app(config: Dict[str, Any]) -> Flask:
         remembered = session.get("unit", "")
         return remembered if remembered in units else (units[0] if units else "")
 
+    def _change_rows(key: str) -> List[Dict[str, Any]]:
+        """Phase AS: the waiting break changes and coaching, each with the intervals it touches (before, after, buffer)."""
+        book, rows = app.extensions["changes"], []
+        for r in book.waiting(key):
+            try:
+                r["impact"], r["impact_note"] = book.impact(r), ""
+            except (ValueError, KeyError, StopIteration) as exc:  # a day that cannot be worked out is said, not hidden
+                r["impact"], r["impact_note"] = [], f"The impact cannot be worked out: {exc}"
+            rows.append(r)
+        return rows
+
     @app.route("/requests")
     @login_required
     def requests_page():  # type: ignore[no-untyped-def]
@@ -1258,11 +1274,141 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return render_template("requests.html", unit=key, label=_unit_filter(key) if key else "", waiting=waiting,
                                decided=_paged(leave.decided(key, limit=None) if leave and key else [], "done_page",
                                               "done-h"),
-                               swaps=swap_rows,
+                               swaps=swap_rows, changes=_change_rows(key) if key else [],
+                               changes_decided=app.extensions["changes"].decided(key) if key else [],
+                               may_change=allowed(app.extensions["store"], g.user, "rta_change"), hm=hm,
+                               can_ask_coaching=_can_ask_coaching(),
                                swaps_decided=_paged(swaps.decided(key, limit=None) if swaps and key else [],
                                                     "swaps_done_page", "done-h"),
                                manager=allowed(app.extensions["store"], g.user, "setup"),
                                year=datetime.now(EGYPT).year)
+
+    # ------------------------------------------------------------- break changes and coaching (Phase AS)
+    def _local_now(key: str) -> datetime:
+        """Now on the clock the program's schedule is kept in (a break time is in the schedule's own time)."""
+        return datetime.now(ZoneInfo(_own_zone(key, datetime.now(EGYPT).date())))
+
+    @app.route("/me/breaks")
+    @login_required
+    def me_breaks():  # type: ignore[no-untyped-def]
+        """An associate's breaks on the running day, and the times they may ask each to move to (Phase AS)."""
+        if not g.user["is_associate"]:
+            return redirect(url_for("home"))
+        key, name = _my_unit(), g.user["roster_name"]
+        book = app.extensions["changes"]
+        now, found, options, problem = _local_now(key) if key else None, None, None, ""
+        if key:
+            try:
+                found = book.running_shift(key, name, now)
+                picked = request.args.get("change", type=int)
+                if found is not None and picked is not None:
+                    options = book.break_options(key, name, picked, now)
+                    options["picked"] = picked
+            except ValueError as exc:
+                problem = str(exc)
+        seg = None
+        if found is not None:
+            seg = next(s for lane in found["view"]["lanes"] if lane["name"] == name for s in lane["segments"]
+                       if s["offset"] == 0)
+        return render_template("me_breaks.html", unit=key, found=found, seg=seg, options=options, problem=problem,
+                               today=now.date() if now else None,
+                               mine=book.mine(key, g.user["id"]) if key else [], hm=hm,
+                               now_at=found["now"] if found else 0)
+
+    @app.route("/me/breaks", methods=["POST"])
+    @login_required
+    def me_breaks_ask():  # type: ignore[no-untyped-def]
+        """Ask the RTA to move a break; the name comes from the account, never from the form."""
+        key = _my_unit()
+        if not g.user["is_associate"] or not key:
+            abort(403, description="Only an associate on a schedule asks to move a break here.")
+        try:
+            app.extensions["changes"].ask_break(key, g.user["roster_name"], g.user, request.form.get("idx", type=int, default=-1),
+                                                request.form.get("to", ""), request.form.get("why", ""), _local_now(key))
+            flash("Sent to the RTA. You can cancel it until it is decided.")
+        except ValueError as exc:
+            flash(str(exc))
+        return redirect(url_for("me_breaks"), code=303)
+
+    @app.route("/me/breaks/<int:request_id>/cancel", methods=["POST"])
+    @login_required
+    def me_breaks_cancel(request_id: int):  # type: ignore[no-untyped-def]
+        try:
+            app.extensions["changes"].cancel(request_id, g.user)
+            flash("Cancelled.")
+        except ValueError as exc:
+            flash(str(exc))
+        return redirect(url_for("me_breaks"), code=303)
+
+    def _can_ask_coaching() -> bool:
+        store = app.extensions["store"]
+        return allowed(store, g.user, "approve_tm") or allowed(store, g.user, "rta_change")
+
+    @app.route("/requests/coaching")
+    @login_required
+    def requests_coaching():  # type: ignore[no-untyped-def]
+        """A team manager asks for coaching for one or more associates; the times show the buffer for them together."""
+        if g.user["is_associate"] or not _can_ask_coaching():
+            abort(403, description="Your role cannot ask for coaching here.")
+        key = _requests_unit()
+        book, leave = app.extensions["changes"], app.extensions["leave"]
+        now = _local_now(key) if key else None
+        names = [n for n in request.args.getlist("who") if n in (leave.names(key) if key else [])]
+        on = _date(request.args.get("date", "")) or (now.date() if now else datetime.now(EGYPT).date())
+        minutes = request.args.get("minutes", 30, type=int)
+        options, problem = None, ""
+        if key and names:
+            try:
+                options = book.coaching_options(key, on, names, minutes, now)
+            except ValueError as exc:
+                problem = str(exc)
+        return render_template("requests_coaching.html", unit=key, label=_unit_filter(key) if key else "",
+                               roster=sorted(leave.names(key)) if key else [], names=names, on=on, minutes=minutes,
+                               options=options, problem=problem, depts=[d["name"] if isinstance(d, dict) else d
+                                                                        for d in (_with_lists(key) if key else [])],
+                               mine=book.mine(key, g.user["id"]) if key else [], hm=hm, may_decide=allowed(
+                                   app.extensions["store"], g.user, "rta_change"))
+
+    @app.route("/requests/coaching", methods=["POST"])
+    @login_required
+    def requests_coaching_ask():  # type: ignore[no-untyped-def]
+        if g.user["is_associate"] or not _can_ask_coaching():
+            abort(403, description="Your role cannot ask for coaching here.")
+        key = clean_program(request.form.get("program", ""))
+        if not key or not _access().can_open(key):
+            abort(403, description="That is not one of your programs")
+        names = request.form.getlist("who")
+        on = _date(request.form.get("date", ""))
+        try:
+            if on is None:
+                raise ValueError("Pick the day.")
+            app.extensions["changes"].ask_coaching(key, names, g.user, on, request.form.get("start", ""),
+                                                   request.form.get("minutes", 30, type=int), request.form.get("dept", ""),
+                                                   request.form.get("why", ""), _local_now(key))
+            flash("Sent to the RTA.")
+        except ValueError as exc:
+            flash(str(exc))
+        return redirect(url_for("requests_coaching", program=key), code=303)
+
+    @app.route("/requests/change/<int:request_id>", methods=["POST"])
+    @login_required
+    def request_change_decide(request_id: int):  # type: ignore[no-untyped-def]
+        """The RTA's answer to a break change or a coaching request (changes the day when approved)."""
+        row = app.extensions["store"].get_change_request(request_id)
+        if row is None:
+            abort(404)
+        if g.user["is_associate"] or not allowed(app.extensions["store"], g.user, "rta_change"):
+            abort(403, description="Your role cannot change the RTA's day.")
+        if not _access().can_open(row["program"]):
+            abort(403, description="This request is on a program that is not one of yours.")
+        try:
+            said = app.extensions["changes"].decide(request_id, g.user, request.form.get("decision") == "approve",
+                                                    request.form.get("reason", ""), _local_now(row["program"]))
+        except ValueError as exc:
+            said = str(exc)
+        _record("change_decided", subject=f"{row['kind']} for {', '.join(json.loads(row['names']))}", detail=said[:300])
+        flash(said)
+        return redirect(url_for("requests_page", program=row["program"]), code=303)
 
     @app.route("/requests/leave/<int:request_id>", methods=["POST"])
     @login_required

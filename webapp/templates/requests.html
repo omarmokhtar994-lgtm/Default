@@ -5,6 +5,32 @@
   <h1>Leave and swaps</h1>
   <p class="byline">{{ label or 'Pick a program' }}. Each associate's team manager approves first (an admin or a supervisor can approve in their place), then the RTA; the RTA's approval changes the schedule in use. A swap needs the team managers of both people.</p>
 </div></div>
+{% if may_change or can_ask_coaching or changes %}<section class="panel req-list" id="changes" aria-labelledby="chg-h">
+  <h2 id="chg-h">Break changes and coaching</h2>
+  {% if can_ask_coaching %}<p><a class="button" href="{{ url_for('requests_coaching', program=unit) }}">Ask for coaching</a></p>{% endif %}
+  {% for r in changes %}
+  <article class="req">
+    <div class="req-who"><b>{{ r.names_list|join(', ') }}</b><small>Asked {{ when(r.asked) }} by {{ r.requester_name }}</small>{% if r.why %}<small>“{{ r.why }}”</small>{% endif %}</div>
+    <div class="req-what">
+      <h3>{{ r.what }}, {{ r.on.strftime('%a %d %b') }}</h3>
+      <p class="req-facts"><span class="lv lv-{{ r.d.level }}">{{ r.d.level|capitalize }} buffer when asked</span></p>
+      {% if r.impact %}<table class="runs small"><caption class="sr-only">What it does to the intervals</caption>
+        <thead><tr><th scope="col">Interval</th><th scope="col">Needed</th><th scope="col">On the floor now</th><th scope="col">After this change</th><th scope="col">Buffer after</th></tr></thead>
+        <tbody>{% for i in r.impact %}<tr><th scope="row">{{ hm(i.t) }}</th><td>{{ i.need|num }}</td><td>{{ i.before|num }}</td><td>{{ i.after|num }}</td><td><span class="lv lv-{{ i.level }}">{{ i.level|capitalize }} buffer</span>{% if i.level == 'low' %} <small class="slot-warn">short by {{ (0 - i.people_above)|num }}</small>{% endif %}</td></tr>{% endfor %}</tbody></table>
+      {% elif r.impact_note %}<p class="req-warn">{{ r.impact_note }}</p>{% endif %}
+    </div>
+    <div class="req-act">{% if may_change %}
+      <form method="post" action="{{ url_for('request_change_decide', request_id=r.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="primary" name="decision" value="approve"><span class="ico i-check-circle" aria-hidden="true"></span>Approve</button>
+        <label>Reason, if you reject <input name="reason" maxlength="200" autocomplete="off"></label>
+        <button name="decision" value="reject">Reject</button>
+      </form>{% else %}<p class="hint">The RTA decides.</p>{% endif %}
+    </div>
+  </article>
+  {% else %}<p class="empty">No break change or coaching request is waiting.</p>{% endfor %}
+  {% if changes_decided %}<h3>Decided lately</h3><ul class="log">{% for r in changes_decided %}<li>{{ r.names_list|join(', ') }}: {{ r.what }}, {{ r.on.strftime('%a %d %b') }}: {{ r.status_words }}{% if r.decision %}. “{{ r.decision }}”{% endif %}{% if r.outcome %}. {{ r.outcome }}{% endif %}</li>{% endfor %}</ul>{% endif %}
+</section>{% endif %}
 <section class="panel req-list" aria-labelledby="wait-h">
   <h2 id="wait-h">Waiting</h2>
   {% for r in waiting %}

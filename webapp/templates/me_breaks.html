@@ -1,0 +1,52 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{% extends "base.html" %}{% block title %}My breaks on Team Scheduler{% endblock %}
+{% block content %}
+<div class="phead"><div>
+  <h1>My breaks today</h1>
+  <p class="byline"><a href="{{ url_for('me') }}">Back to My week</a>. You can ask the RTA to move a break on the day you are working, up to the end of your shift. The RTA decides.</p>
+</div></div>
+{% if problem %}<p class="error" role="alert">{{ problem }}</p>{% endif %}
+
+{% if not unit %}
+<p class="empty panel">Your name is not on a schedule yet, so there are no breaks to show.</p>
+{% elif not found %}
+<p class="empty panel">You have no shift running or still to come today, so there is no break to change.</p>
+{% else %}
+<section class="panel" aria-labelledby="today-h">
+  <h2 id="today-h">Your shift, {{ found.label }}{% if found.on != today %} (started {{ found.on.strftime('%a %d %b') }}){% endif %}</h2>
+  <table class="runs small">
+    <thead><tr><th scope="col">Break</th><th scope="col">Planned</th><th scope="col">Now</th><th scope="col">Length</th><th scope="col"><span class="sr-only">Change</span></th></tr></thead>
+    <tbody>{% for b in seg.breaks %}<tr><th scope="row">{{ b.kind }}</th><td>{{ hm(b.planned_start) }}</td><td>{{ hm(b.start) }}{% if b.moved %} (moved){% endif %}</td><td>{{ b.minutes }} min</td>
+      <td>{% if b.start >= now_at %}<a href="{{ url_for('me_breaks', change=b.idx) }}#change">Change</a>{% else %}<span class="dim">Started</span>{% endif %}</td></tr>{% endfor %}</tbody>
+  </table>
+</section>
+
+{% if options %}
+<section class="panel" id="change" aria-labelledby="change-h">
+  <h2 id="change-h">Move {{ options.kind }} (now {{ hm(options.current) }}, {{ options.minutes }} minutes)</h2>
+  <p class="note">Each time shows how much spare cover that interval has without you. <span class="lv lv-high">High buffer</span> and <span class="lv lv-moderate">Moderate buffer</span> are most likely approved. <span class="lv lv-low">Low buffer</span> is most likely rejected: there is nobody to spare.</p>
+  <form method="post" action="{{ url_for('me_breaks_ask') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="idx" value="{{ options.picked }}">
+    <fieldset class="slots"><legend>Pick a time</legend>
+      {% for c in options.choices %}
+      <label class="slot"><input type="radio" name="to" value="{{ hm(c.start) }}"{% if c.current %} disabled{% endif %} required>
+        {{ hm(c.start) }} to {{ hm(c.end) }}{% if c.start >= 1440 %} <small>(next day)</small>{% endif %}
+        {% if c.current %}<span class="dim">the time it has now</span>{% else %}<span class="lv lv-{{ c.level }}">{{ c.level|capitalize }} buffer</span>{% endif %}
+        {% if c.level == 'low' and not c.current %}<small class="slot-warn">Likely to be rejected: no spare cover in that interval.</small>{% endif %}</label>
+      {% else %}<p class="empty">No other time is allowed for this break: the gaps to your other breaks leave none.</p>{% endfor %}
+    </fieldset>
+    <label>Why (optional) <input name="why" maxlength="200" autocomplete="off"></label>
+    <button class="primary">Send to the RTA</button>
+  </form>
+</section>
+{% endif %}
+{% endif %}
+
+{% if mine %}
+<section class="panel" aria-labelledby="mine-h">
+  <h2 id="mine-h">My requests</h2>
+  <ul class="log">{% for r in mine %}<li><b>{{ r.what }}</b> on {{ r.on.strftime('%a %d %b') }}: {{ r.status_words }}{% if r.decision %}. “{{ r.decision }}”{% endif %}{% if r.outcome %}. {{ r.outcome }}{% endif %}
+    {% if r.status == 'waiting' and r.kind == 'break' %}<form method="post" action="{{ url_for('me_breaks_cancel', request_id=r.id) }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="quiet">Cancel</button></form>{% endif %}</li>{% endfor %}</ul>
+</section>
+{% endif %}
+{% endblock %}

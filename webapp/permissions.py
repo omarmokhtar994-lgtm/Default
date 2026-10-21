@@ -35,7 +35,7 @@ ENDPOINTS: Dict[str, str] = {
                                  "day_attendance", "day_book", "day_break", "day_break_advice", "day_break_cancel",
                                  "day_bulk_apply", "day_channel", "day_channel_fix", "day_channel_preview", "day_cover",
                                  "day_cover_cancel", "day_replan_apply", "day_rescue_apply", "day_send", "day_undo",
-                                 "day_undo_last")},
+                                 "day_undo_last", "request_change_decide")},
     **{e: "overview" for e in ("overview_page", "day_wallboard")},
     **{e: "schedules_view" for e in ("schedules_for", "week_page", "week_hours_needed", "run_detail", "run_status",
                                      "run_download", "run_schedule", "run_shortfall", "run_week", "run_schedules",

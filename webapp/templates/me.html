@@ -15,6 +15,7 @@
   <p class="me-ends"><span>{{ hm(card.start) }}</span><span>{{ hm(card.end) }}</span></p>
   {% if card.status != 'Present' %}<p class="me-said">Recorded today: {{ card.status|lower }}.</p>{% endif %}
   <p class="me-said">{{ card.said }}</p>
+  <p><a href="{{ url_for('me_breaks') }}">See my breaks and ask to move one</a></p>
   {% else %}<p class="me-said">You do not work today.</p>{% endif %}
 </section>
 <section class="panel" aria-labelledby="week-h">

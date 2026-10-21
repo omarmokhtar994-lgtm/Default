@@ -143,9 +143,10 @@ def stages(run: Dict[str, Any]) -> list:
 
 def _secret_key(data_dir: Path) -> str:
     path = data_dir / "secret_key"
-    if not path.exists():
-        path.write_text(secrets.token_urlsafe(48), encoding="utf-8")
-        os.chmod(path, 0o600)
+    if not path.exists():  # Phase AT: created private from the start, never world-readable even for a moment
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(secrets.token_urlsafe(48))
     return path.read_text(encoding="utf-8").strip()
 
 
@@ -413,7 +414,14 @@ def create_app(config: Dict[str, Any]) -> Flask:
         response.headers.setdefault(
             "Content-Security-Policy",
             "default-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; "
-            "frame-ancestors 'none'")  # Phase AG: fonts and icons are served by the site itself
+            "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'")  # Phase AG: fonts and icons are served by the site itself; Phase AT: no base tag, forms post here only
+        # Phase AT: a signed-in page is never kept by the browser or a proxy (the back button after sign-out shows nothing)
+        if request.endpoint != "static":
+            response.headers.setdefault("Cache-Control", "no-store")
+        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
+        response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+        if app.config.get("SESSION_COOKIE_SECURE"):
+            response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
         return response
 
     @app.template_filter("unit")
@@ -4348,6 +4356,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
         program = clean_program(value if kind == "key" else request.args.get("program", "")) or None
         if program is not None and not _access().can_open(program):
             abort(403)
+        wanted = request.args.get("user", type=int)
+        if wanted is not None:  # Phase AT: filtering by a person is only for a person this user may see
+            person = app.extensions["store"].get_user(wanted)
+            if person is None or not _access().sees(person):
+                abort(403)
         if kind == "group":  # a whole program: all of its LOBs
             found = next((p for p in _access().programs() if str(p["id"]) == value), None)
             if found is None:

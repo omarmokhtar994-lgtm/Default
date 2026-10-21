@@ -67,6 +67,7 @@ from .results import recolour, version_summary
 from .runs import ACTIVE, MODES, OPTION_LABELS, READY, RESUMABLE, RunQueue, parse_options, run_options
 from .store import Store, clean_password
 from .throttle import SignInThrottle
+from .zipcheck import zip_problem
 from werkzeug.datastructures import ImmutableMultiDict
 from .change_requests import ChangeBook, level_of
 from .bulk_users import people_workbook, new_password, passwords_workbook, read_people, template_bytes
@@ -1812,6 +1813,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
             path.unlink()
             flash("Upload an Excel workbook (.xlsx): that file is not one.")
             return redirect(url_for("home"))
+        too_big = zip_problem(path)  # Phase AU: before any workbook library opens it
+        if too_big:
+            path.unlink()
+            flash(too_big)
+            return redirect(url_for("home"))
         refusal, warnings = _channel_upload_check(path)
         if refusal:
             path.unlink()
@@ -2925,6 +2931,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
         incoming.mkdir(exist_ok=True)
         path = incoming / f"{secrets.token_hex(8)}.upload"
         upload.save(path)
+        too_big = zip_problem(path)  # Phase AU
+        if too_big:
+            path.unlink(missing_ok=True)
+            flash(too_big)
+            return back
         try:
             lines = _book().attach_channels(run_id, path)
         except ValueError as exc:

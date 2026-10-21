@@ -14,6 +14,8 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font
 from openpyxl.utils.exceptions import InvalidFileException
 
+from .zipcheck import zip_problem
+
 HEAD = ["Username", "Display name", "Role", "Programs", "Roster name", "Team manager", "Password"]
 MAX_ROWS = 500
 NOT_A_SHEET = ("Upload the people sheet: an Excel (.xlsx) or CSV file with the columns " + ", ".join(HEAD)
@@ -88,6 +90,9 @@ def _rows(data: bytes, filename: str) -> List[List[Any]]:
     if filename.lower().endswith(".csv"):
         text = data.decode("utf-8-sig", errors="replace")
         return [row for row in csv.reader(io.StringIO(text))]
+    too_big = zip_problem(data)  # Phase AU: a small file that opens huge is not read
+    if too_big:
+        raise ValueError(too_big)
     try:
         ws = load_workbook(io.BytesIO(data), read_only=True, data_only=True).worksheets[0]
         return [[cell for cell in row] for row in ws.iter_rows(values_only=True)]

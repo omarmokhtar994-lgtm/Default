@@ -201,9 +201,11 @@ def _yesterday(week: Dict[str, Any], day: int, before: Any) -> Optional[Tuple[Di
     return before
 
 
-def _segments(week: Dict[str, Any], inputs: Dict[str, Any], day: int, before: Any = SAME_WEEK) -> List[Dict[str, Any]]:
+def _segments(week: Dict[str, Any], inputs: Dict[str, Any], day: int, before: Any = SAME_WEEK,
+              carried: frozenset = frozenset()) -> List[Dict[str, Any]]:
     """Shift pieces touching this day: the day's own shifts and the previous day's overnight ones (from
-    ``before``: the (week, column) holding the day before, or None for the input's carry-in tab)."""
+    ``before``: the (week, column) holding the day before, or None for the input's carry-in tab). ``carried``
+    (Phase AO): names whose shift yesterday ended at 24:00 but has overtime past it, so it reaches today."""
     out = []
     for offset in (-1, 0):
         source, d = (week, day) if offset == 0 else (_yesterday(week, day, before) or (None, None))
@@ -220,7 +222,7 @@ def _segments(week: Dict[str, Any], inputs: Dict[str, Any], day: int, before: An
             if not span:
                 continue
             start, end = span[0] + 1440 * offset, span[1] + 1440 * offset
-            if end <= 0 or start >= 1440:
+            if (end <= 0 and not (offset == -1 and a["name"] in carried)) or start >= 1440:
                 continue
             out.append({"name": a["name"], "slot": a.get("slot", ""), "language": a["language"], "offset": offset,
                         "called_in": False, "label": a["days"][d],
@@ -349,7 +351,9 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
     plan = [[] for _ in range(slots)]
     lanes: Dict[str, Dict[str, Any]] = {}
     pieces = []
-    segments = _segments(week, inputs, day, before)
+    carried = frozenset(name for (offset, name), found in (activities or {}).items() if offset == -1
+                        and any(a["kind"] == "Overtime" and a["end"] > 1440 for a in found))
+    segments = _segments(week, inputs, day, before, carried)
     segments += _called_in(week, day, activities, {(x["offset"], x["name"]) for x in segments}, before)
     for seg in segments:
         mark = attendance.get((seg["offset"], seg["name"])) or {}

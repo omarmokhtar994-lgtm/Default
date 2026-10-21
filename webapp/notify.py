@@ -126,9 +126,26 @@ def day_url(site: str, unit: str, shift_date: str) -> str:
     return f"{site}day?program={quote_plus(unit)}&date={shift_date}" if site and LINK_TO_RTA else ""
 
 
-def change_post(label: str, shift_date: str, items: List[Dict[str, Any]], site: str, unit: str) -> Post:
-    """One post for a LOB's changes on one day, oldest first, saying who made them."""
+def latest_changes(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Phase AU (owner, 2026-10-21): of several changes to one thing (the same ref) for one person, only the last."""
     items = sorted(items, key=lambda i: i["at"])
+    last = {(i["associate"], i["ref"]): n for n, i in enumerate(items) if i.get("ref")}
+    return [i for n, i in enumerate(items) if not i.get("ref") or last[(i["associate"], i["ref"])] == n]
+
+
+def change_post(label: str, shift_date: str, items: List[Dict[str, Any]], site: str, unit: str,
+                finals: Optional[Dict[str, str]] = None) -> Post:
+    """One post for a LOB's changes on one day, oldest first, saying who made them. ``finals`` is each person's
+    breaks as they now stand; one whose break changed gets that as a line after their changes (Phase AU)."""
+    items = sorted(items, key=lambda i: i["at"])
+    shown = latest_changes(items)
+    lines: List[Tuple[str, str]] = []
+    for n, i in enumerate(shown):
+        lines.append((i["associate"], i["text"]))
+        later = [j for j in shown[n + 1:] if j["associate"] == i["associate"]]
+        if (finals or {}).get(i["associate"]) and str(i.get("ref") or "").startswith("break:") and not any(
+                str(j.get("ref") or "").startswith("break:") for j in later):
+            lines.append((i["associate"], f"Breaks now: {finals[i['associate']]}"))
     people: List[str] = []
     for i in items:
         if i["by_name"] not in people:
@@ -137,7 +154,7 @@ def change_post(label: str, shift_date: str, items: List[Dict[str, Any]], site: 
     footer = (f"Changed on the RTA by {people[0]}, {last}." if len(people) == 1 else
               f"Changed on the RTA by {_names(people)}; last at {last}." if people else "")
     return Post(title=f"{label}: changes for {_day(shift_date)}",
-                sections=[("", [(i["associate"], i["text"]) for i in items])],
+                sections=[("", lines)],
                 footer=footer, url=day_url(site, unit, shift_date))
 
 
@@ -419,6 +436,25 @@ class Notifier:
                 log.exception("group posts: could not send post %s", post["id"])
         return tried
 
+    def _finals(self, unit: str, shift_date: str, items: List[Dict[str, Any]]) -> Dict[str, str]:
+        """Phase AU: each person whose break changed, with their breaks as they stand now ("Break 1 13:15, Lunch ...")."""
+        names = {i["associate"] for i in items if str(i.get("ref") or "").startswith("break:")}
+        if not names or self.days is None:
+            return {}
+        try:
+            page = self.days.page(unit, date.fromisoformat(shift_date))
+        except ValueError:
+            return {}
+        found: Dict[str, str] = {}
+        for lane in (page or {}).get("view", {}).get("lanes", []):
+            if lane["name"] not in names:
+                continue
+            for seg in lane["segments"]:
+                if seg["offset"] == 0 and seg["breaks"]:
+                    breaks = sorted(seg["breaks"], key=lambda b: b["start"])
+                    found[lane["name"]] = ", ".join(f"{b['kind']} {_clock_text(b['start'])}" for b in breaks)
+        return found
+
     def _due(self, items: List[Dict[str, Any]], hold: int) -> float:
         return min(max(i["at"] for i in items) + hold, min(i["at"] for i in items) + MAX_HOLD)
 
@@ -436,7 +472,8 @@ class Notifier:
         for shift_date, items in sorted(days.items()):
             if now < self._due(items, int(settings["hold"])):
                 continue
-            post = change_post(self.label(unit), shift_date, items, settings["site"], unit)
+            post = change_post(self.label(unit), shift_date, items, settings["site"], unit,
+                               self._finals(unit, shift_date, items))
             preview = settings["mode"] == "preview"
             made = self.store.add_notify_post(unit=unit, shift_date=shift_date, what="changes",
                                               service=settings["service"], count=len(items),

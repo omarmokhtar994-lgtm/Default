@@ -105,6 +105,32 @@ class ThePost(unittest.TestCase):
                           item("Associate 019", "Lunch moved 12:15 to 12:45", when="19:10")])
         self.assertEqual([n for n, _ in post.sections[0][1]], ["Associate 019", "Associate 008"])
 
+    def test_only_the_latest_change_to_one_break_of_one_person_is_posted(self):
+        # Phase AU (owner, 2026-10-21): "X break 1 from 00:00 to 00:15 then X break 1 from 00:15 to 00:30: only the last"
+        first = dict(item("Associate 001", "Break 1 moved 00:00 to 00:15", when="09:40"), ref="break:Associate 001:0")
+        second = dict(item("Associate 001", "Break 1 moved 00:15 to 00:30", when="09:41"), ref="break:Associate 001:0")
+        other = dict(item("Associate 001", "Lunch moved 03:00 to 03:15", when="09:42"), ref="break:Associate 001:1")
+        mate = dict(item("Associate 002", "Break 1 moved 00:00 to 00:15", when="09:43"), ref="break:Associate 002:0")
+        post = self.post([first, second, other, mate])
+        self.assertEqual(post.sections[0][1], [("Associate 001", "Break 1 moved 00:15 to 00:30"),
+                                               ("Associate 001", "Lunch moved 03:00 to 03:15"),
+                                               ("Associate 002", "Break 1 moved 00:00 to 00:15")])
+
+    def test_changes_without_a_ref_are_all_kept(self):
+        post = self.post([item("Associate 001", "Overtime 17:00 to 18:00", when="09:40"),
+                          item("Associate 001", "Overtime 17:00 to 18:00", when="09:41")])
+        self.assertEqual(len(post.sections[0][1]), 2)
+
+    def test_a_person_whose_break_changed_gets_their_breaks_as_they_now_stand(self):
+        mine = dict(item("Associate 001", "Break 1 moved 00:00 to 00:15", when="09:40"), ref="break:Associate 001:0")
+        ot = item("Associate 002", "Overtime 17:00 to 18:00", when="09:41")
+        post = change_post("SAKS, NMG Tier 2", "2026-10-10", [mine, ot], "", "SAKS NMG Tier 2",
+                           finals={"Associate 001": "Break 1 00:15, Lunch 03:00, Break 3 05:30",
+                                   "Associate 002": "Break 1 12:00"})
+        self.assertEqual(post.sections[0][1], [("Associate 001", "Break 1 moved 00:00 to 00:15"),
+                                               ("Associate 001", "Breaks now: Break 1 00:15, Lunch 03:00, Break 3 05:30"),
+                                               ("Associate 002", "Overtime 17:00 to 18:00")])  # no break changed: no list
+
     def test_footer_for_several_people(self):
         post = self.post([item("Associate 001", "Break 1 moved 10:00 to 10:15", by="Sara", when="09:40"),
                           item("Associate 002", "Overtime 17:00 to 18:00", by="Omar Mokhtar", when="09:41"),

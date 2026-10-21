@@ -789,6 +789,7 @@ class Store:
                        (f"deleted-{user_id}", hash_password(secrets.token_urlsafe(24)), user_id))
             db.execute("delete from user_programs where user_id = ?", (user_id,))
             db.execute("update users set team_manager_id = null where team_manager_id = ?", (user_id,))
+        self.cancel_open_requests(user_id)
 
     def end_other_sessions(self, user_id: int, at: float) -> None:
         with self._db() as db:
@@ -834,6 +835,22 @@ class Store:
     def set_active(self, user_id: int, active: bool) -> None:
         with self._db() as db:
             db.execute("update users set active = ? where id = ?", (int(active), user_id))
+        if not active:
+            self.cancel_open_requests(user_id)
+
+    def cancel_open_requests(self, user_id: int) -> None:
+        """Phase AU: a person switched off or deleted has nothing left waiting for the RTA or their team manager: their
+        open break, coaching, leave and swap requests are cancelled. An answer already given stays; switching them on
+        again does not revive anything."""
+        now = time.time()
+        said = "Cancelled: the account was switched off or closed."
+        with self._db() as db:
+            db.execute("update change_requests set status = 'cancelled', decided_at = ?, outcome = ?"
+                       " where requester_id = ? and status = 'waiting'", (now, said, user_id))
+            db.execute("update leave_requests set status = 'cancelled', outcome = ?"
+                       " where user_id = ? and status in ('waiting_tm', 'waiting_rta')", (said, user_id))
+            db.execute("update swap_requests set status = 'cancelled', outcome = ?"
+                       " where asker_user = ? and status in ('waiting_other', 'waiting_tm')", (said, user_id))
 
     # ------------------------------------------------------------------- runs
     def add_run(self, run_id: str, user_id: int, workbook: str, mode: str, status: str, message: str = "",
@@ -1538,6 +1555,7 @@ class Store:
             db.execute("update or ignore operating_days set program = ? where program = ?", (new, old))
             db.execute("delete from operating_days where program = ?", (old,))
             # Phase AG: leave requests and balances go with the name
+            db.execute("update change_requests set program = ? where program = ?", (new, old))  # Phase AU
             db.execute("update leave_requests set program = ? where program = ?", (new, old))
             db.execute("update swap_requests set program = ? where program = ?", (new, old))
             db.execute("update or ignore leave_balances set program = ? where program = ?", (new, old))

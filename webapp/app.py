@@ -65,7 +65,7 @@ from . import needed
 from .paging import page_of
 from .results import recolour, version_summary
 from .runs import ACTIVE, MODES, OPTION_LABELS, READY, RESUMABLE, RunQueue, parse_options, run_options
-from .store import Store
+from .store import Store, clean_password
 from .throttle import SignInThrottle
 from werkzeug.datastructures import ImmutableMultiDict
 from .change_requests import ChangeBook, level_of
@@ -666,6 +666,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             else:
                 error = password_problem(request.form.get("new", ""), request.form.get("confirm", ""),
                                          g.user["username"])
+            if not error and clean_password(request.form.get("new", "")) == clean_password(request.form.get("current", "")):
+                error = "Choose a password different from your current one."  # a temporary one cannot be kept (Phase AU)
             if not error:
                 store.set_password(g.user["id"], request.form["new"], must_change=False)
                 session["pw"] = session_stamp(store.get_user(g.user["id"]))  # this device stays; others sign in again

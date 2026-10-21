@@ -76,7 +76,7 @@ class _Days:
     def __getattr__(self, name: str) -> Any:
         return getattr(self._days, name)
 
-    def page(self, program: str, on: date, measure: str = "interval", extra: Optional[Dict[str, Any]] = None):
+    def page(self, program: str, on: date, measure: Optional[str] = None, extra: Optional[Dict[str, Any]] = None):
         if extra:
             return self._days.page(program, on, measure, extra, cover=self.cover)
         key = (program, on, measure)

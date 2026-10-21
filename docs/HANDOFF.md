@@ -141,6 +141,12 @@ Load each with the Skill tool at the step it covers; following it from memory do
   so they never undo the shape without a floor reason); showing associates a converted zone (the pages name the zone and the
   gap instead; converting needs the owner's choice of which zone they should see); two-factor sign-in (owner: skip).
   How-to pages: `docs/howto/`.
+- **Program defaults** (owner, 2026-10-21: "LOBs and defaults should hold all default settings"): `programs.rta` JSON
+  (`ProgramBook.rta_defaults`/`set_rta_defaults`: target, operating day start, shrinkage mapping) with fallbacks in the
+  store (`rta_default`, `get_day_start`, `get_shrinkage_map`) and `DayBook.target_for` (week's own, then the program's, then
+  the workbook's); `DayBook.page(measure=None)` takes the program's measure, so pages that name none (Weeks, Overview,
+  wallboard, coach, exports, handover) follow it; a new run's coverage option starts from it. The RTA still opens on the
+  calendar day (owner, 2026-10-15). Tests: `test_au_defaults.py`.
 - Release gate 2026-10-21: 1551 tests (floor raised from 1537). `evidence/phase_aq/CHECKS.md` has the A/B result.
 - Rules learned: a container restart kills background runs started with nohup; keep the session active while a long
   run goes. Check `git status` for rewritten old screenshots before every commit.

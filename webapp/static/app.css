@@ -146,7 +146,7 @@ input:focus, select:focus { outline: 2px solid var(--action); outline-offset: 2p
 
 /* ------------------------------------------------------------ forms */
 label { display: block; font-weight: 600; margin: 0 0 14px; }
-input[type=text], input[type=password], input[type=date], input:not([type]), select {
+input[type=text], input[type=password], input[type=date], input[type=number], input[type=search], input:not([type]), select {
   display: block; width: 100%; margin-top: 6px; padding: 10px 12px; font: inherit; color: var(--paper);
   background: var(--night); border: 1px solid var(--edge); border-radius: 4px; }
 input[type=time] { display: block; margin-top: 6px; padding: 10px 12px; font: inherit; color: var(--paper);
@@ -1562,3 +1562,7 @@ table.hours tfoot th, table.hours tfoot td { border-top: 1px solid var(--rail); 
 /* Phase AU: a note under a table or a form keeps its distance */
 .scroll + .note, .scroll + p, .people-form + .note, .setup-defaults .note { margin-top: 12px; }
 .setup-defaults button + .note { display: block; }
+/* Phase AU: the program defaults on LOBs and defaults: full-width fields, and room between the groups */
+.setup-defaults input[type="number"], .setup-defaults input:not([type]) { width: 100%; max-width: 360px; }
+.setup-cols h3 { margin-top: 28px; }
+.setup-cols .shr-t { width: 100%; }

@@ -427,6 +427,9 @@ class Store:
             have = {row["name"] for row in db.execute("pragma table_info(programs)")}
             if "measure" not in have:
                 db.execute("alter table programs add column measure text not null default ''")
+            # Phase AU: the program's defaults for its RTA pages as JSON: target, operating day start, shrinkage mapping
+            if "rta" not in have:
+                db.execute("alter table programs add column rta text not null default ''")
             # Phase AU: the program's rules for associate break change requests, as JSON ('' = the defaults)
             if "requests" not in have:
                 db.execute("alter table programs add column requests text not null default ''")
@@ -567,7 +570,7 @@ class Store:
             return [dict(r) for r in db.execute("select * from programs order by name collate nocase")]
 
     def update_program(self, program_id: int, **fields: Any) -> None:
-        unknown = set(fields) - {"name", "start_day", "run_mode", "options", "measure", "requests"}
+        unknown = set(fields) - {"name", "start_day", "run_mode", "options", "measure", "requests", "rta"}
         if unknown:
             raise ValueError(f"Not a program detail: {', '.join(sorted(unknown))}.")
         if fields:
@@ -910,10 +913,35 @@ class Store:
             db.execute("insert or replace into operating_days (program, start, user_id, at) values (?, ?, ?, ?)",
                        (program, int(start), user_id, time.time()))
 
-    def get_day_start(self, program: str) -> Optional[int]:
+    def _day_start_own(self, program: str) -> Optional[int]:
         with self._db() as db:
             row = db.execute("select start from operating_days where program = ?", (program,)).fetchone()
         return int(row["start"]) if row else None
+
+    def get_day_start(self, program: str) -> Optional[int]:
+        """The LOB's own operating day start, else its program's default (Phase AU), else None (the calendar day)."""
+        own = self._day_start_own(program)
+        return own if own is not None else self.rta_default(program, "day_start")
+
+    def clear_day_start(self, program: str) -> None:
+        with self._db() as db:
+            db.execute("delete from operating_days where program = ?", (program,))
+
+    def clear_shrinkage_map(self, program: str) -> None:
+        with self._db() as db:
+            db.execute("delete from shrinkage_maps where program = ?", (program,))
+
+    def rta_default(self, unit: str, field: str) -> Any:
+        """Phase AU: a program's default (``target``, ``day_start`` or ``shrinkage``) for the program or LOB ``unit``;
+        None when it has none."""
+        with self._db() as db:
+            row = db.execute("select programs.rta from lobs join programs on programs.id = lobs.program_id"
+                             " where lobs.key = ?", (unit,)).fetchone() or db.execute(
+                "select rta from programs where key = ?", (unit,)).fetchone()
+        try:
+            return json.loads((row["rta"] if row else "") or "{}").get(field)
+        except ValueError:
+            return None
 
     # ------------------------------------------------------------------ leave (Phase AG)
     # ------------------------------------------------------------- break changes and coaching requests (Phase AS)
@@ -1093,9 +1121,14 @@ class Store:
         return row[0] if row else None
 
     def get_shrinkage_map(self, program: str) -> Optional[Dict[str, Any]]:
+        """The LOB's own mapping, else its program's default (Phase AU), else None (the standard)."""
         with self._db() as db:
             row = db.execute("select * from shrinkage_maps where program = ?", (program,)).fetchone()
-        return dict(row) if row else None
+        if row:
+            return dict(row)
+        inherited = self.rta_default(program, "shrinkage")
+        return {"program": program, "mapping": json.dumps(inherited, sort_keys=True), "user_id": None, "at": 0} \
+            if inherited else None
 
     def get_interval_target(self, program: str, week_start: str) -> Optional[Dict[str, Any]]:
         with self._db() as db:

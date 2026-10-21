@@ -137,6 +137,30 @@ class ProgramBook:
             raise ValueError("Pick interval compliance, service level or volume weighted.")
         self.store.update_program(program_id, measure="" if value == "interval" else value)
 
+    RTA_EMPTY = {"target": None, "day_start": None, "shrinkage": None}
+
+    def rta_defaults(self, program_id: int) -> Dict[str, Any]:
+        """Phase AU: the program's defaults for its RTA pages, used wherever a LOB has none of its own: the interval
+        target (a whole percent), when the operating day starts (minutes of the schedule's time) and what counts as
+        shrinkage (a mapping). None for each one not set (the workbook's target, the calendar day, the standard)."""
+        row = next((p for p in self.store.list_programs() if p["id"] == program_id), None)
+        try:
+            saved = json.loads((row or {}).get("rta") or "{}")
+        except ValueError:
+            saved = {}
+        return {**self.RTA_EMPTY, **{k: saved[k] for k in self.RTA_EMPTY if k in saved}}
+
+    def set_rta_defaults(self, program_id: int, target: Optional[int], day_start: Optional[int],
+                         shrinkage: Optional[Dict[str, List[str]]]) -> None:
+        self.program(program_id)
+        if target is not None and not 1 <= int(target) <= 100:
+            raise ValueError("The default target is 1 to 100 percent.")
+        if day_start is not None and (not 0 <= int(day_start) < 1440 or int(day_start) % 15):
+            raise ValueError("The operating day starts on a quarter hour, from 00:00 to 23:45.")
+        self.store.update_program(program_id, rta=json.dumps({
+            "target": None if target is None else int(target),
+            "day_start": None if day_start is None else int(day_start), "shrinkage": shrinkage}, sort_keys=True))
+
     REQUEST_DEFAULTS = {"enabled": True, "lead": 0, "limit": 0}
 
     def request_settings(self, program_id: int) -> Dict[str, Any]:

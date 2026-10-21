@@ -67,7 +67,7 @@
 <dialog id="resend-dialog" class="dlg" aria-labelledby="resend-h"><h2 id="resend-h">Already posted to the group</h2><p data-resend-said></p><p>Send the same post again?</p>
   <div class="btns"><button class="primary" type="button" data-resend-yes>Send again</button><button type="button" data-resend-no>Keep it as it is</button></div></dialog>
 {% endif %}
-{{ target_tile(page.target, url_for('week_page', program=program, week=page.week_start) ~ '#target', on, today, tile_now, vx) }}
+{{ target_tile(page.target, url_for('week_page', program=program, week=page.week_start) ~ '#target', on, today, tile_now, vx, page.target_source) }}
 <section class="glance" aria-label="Today at a glance">{% for g in at_a_glance %}<p class="glance-t {{ g.level }}"><small>{{ g.label }}</small><b>{% if g.label == 'Channel warnings' %}<a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='channels') }}">{{ g.value }}</a>{% else %}{{ g.value }}{% endif %}</b><small>{{ g.note }}</small></p>{% endfor %}</section>
 {% if now_box %}<section class="nowbox" aria-labelledby="now-h">
   <h2 id="now-h">Now, {{ hm(from_now) }}</h2>

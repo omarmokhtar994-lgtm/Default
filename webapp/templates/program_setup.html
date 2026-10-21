@@ -56,6 +56,27 @@
         <button type="submit">Save measure</button>
         <p class="note">Interval compliance: billable aux (for example billable coaching) keeps people on the floor, so it does not touch the intervals. Service level and volume weighted: billable time counts against the intervals like any other. The RTA opens on this; the RTA's own pick still wins.</p>
       </form>
+      <h3>Default target and operating day</h3>
+      <form method="post" class="setup-defaults"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="rta_defaults"><input type="hidden" name="program_id" value="{{ p.id }}">
+        {% set rd = rta_def[p.id] %}
+        <label>Default target, percent <input type="number" name="target" min="1" max="100" value="{{ rd.target if rd.target else '' }}" placeholder="Follow the workbook" inputmode="numeric"></label>
+        <label>Operating day starts, in the schedule's time <input name="day_start" value="{{ hm(rd.day_start) if rd.day_start is not none else '' }}" placeholder="Blank: the calendar day" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" inputmode="numeric" autocomplete="off"></label>
+        <button type="submit">Save target and day</button>
+        <p class="note">Every page of this program starts from these: the RTA, Weeks, Overview and the wallboard colour intervals by the target, and the RTA offers the operating day under Day starts at (it still opens on the calendar day). A week's own target, or a LOB's own operating day or shrinkage set on the RTA, still wins.</p>
+      </form>
+      <h3>What counts as shrinkage</h3>
+      <form method="post" class="setup-defaults"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="shrinkage"><input type="hidden" name="program_id" value="{{ p.id }}">
+        <div class="scroll" role="region" tabindex="0" aria-label="What counts as shrinkage (scrolls sideways)"><table class="shr-t">
+          <thead><tr><th scope="col">Status</th><th scope="col">In office</th><th scope="col">Out of office, Sutherland</th><th scope="col">Out of office, client</th></tr></thead>
+          <tbody>{% for key, label, allowed in shrink_items %}<tr><th scope="row">{{ label }}</th>{% for m in ('in', 'sutherland', 'client') %}<td>{% if m in allowed %}<input type="checkbox" name="{{ key }}:{{ m }}" value="1" aria-label="{{ label }}: {{ {'in': 'in office', 'sutherland': 'out of office, Sutherland', 'client': 'out of office, client'}[m] }}"{% if m in shrink_now[p.id][key] %} checked{% endif %}>{% endif %}</td>{% endfor %}</tr>{% endfor %}</tbody>
+        </table></div>
+        <button type="submit">Save what counts</button>
+        {% if rd.shrinkage %}<button type="submit" name="action" value="shrinkage_standard" class="quiet">Use the standard again</button>{% endif %}
+      </form>
+      {% if own_units[p.id] %}<h3>LOBs with their own settings</h3>
+      <ul class="log">{% for u in own_units[p.id] %}<li><b>{{ u.label }}</b>:
+        {% if u.day_start %}its own operating day ({{ u.day_start }}) <form method="post" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="reset_unit"><input type="hidden" name="program_id" value="{{ p.id }}"><input type="hidden" name="unit" value="{{ u.key }}"><input type="hidden" name="field" value="day_start"><button class="quiet">Use the program's</button></form>{% endif %}
+        {% if u.shrinkage %}its own shrinkage mapping <form method="post" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="reset_unit"><input type="hidden" name="program_id" value="{{ p.id }}"><input type="hidden" name="unit" value="{{ u.key }}"><input type="hidden" name="field" value="shrinkage"><button class="quiet">Use the program's</button></form>{% endif %}</li>{% endfor %}</ul>{% endif %}
       <h3>Break change requests</h3>
       <form method="post" class="setup-defaults"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="requests"><input type="hidden" name="program_id" value="{{ p.id }}">
         {% set rq = request_rules[p.id] %}

@@ -300,6 +300,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         # Phase AO: leave approved while a week had no schedule is applied once that week's schedule is kept
         queue.on_kept = lambda run_id: app.extensions["leave"].apply_waiting(app.extensions["store"].get_run(run_id))
         app.extensions["swaps"] = SwapBook(app.extensions["store"], app.extensions["days"])
+        app.extensions["days"].measure_of = lambda unit: ProgramBook(app.extensions["store"]).day_measure(unit)  # Phase AU
         app.extensions["changes"] = ChangeBook(app.extensions["store"], app.extensions["days"],
                                                lambda unit: ProgramBook(app.extensions["store"]).day_measure(unit),  # Phase AS
                                                lambda unit: ProgramBook(app.extensions["store"]).request_settings_for_unit(unit))
@@ -1758,6 +1759,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
             keys |= {k for k, _ in choices}
             defaults = ({"start_day": p["start_day"], "run_mode": p["run_mode"], "options": p["options"]}
                         if p["saved"] else ({"start_day": usual[p["key"]]} if p["key"] in usual else {}))
+            if p.get("measure"):  # Phase AU: how the program counts is also how a new run is built, unless it says otherwise
+                options = dict(defaults.get("options") or {})
+                options.setdefault("coverage_measure", "INTERVAL_COUNT" if p["measure"] == "interval" else "VOLUME_WEIGHTED")
+                defaults = {**defaults, "options": options}
             out.append({"name": p["name"], "choices": choices, "defaults": defaults})
         return out, keys
 
@@ -2331,6 +2336,32 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 elif action == "measure":  # Phase AS
                     book.set_measure(pid, request.form.get("coverage_measure", ""))
                     said = f"{book.program(pid)['name']} now counts billable time as {book.MEASURES[book.measure_setting(pid)].lower()}."
+                elif action == "rta_defaults":  # Phase AU: the program's default target and operating day
+                    target_text, start_text = request.form.get("target", "").strip(), request.form.get("day_start", "").strip()
+                    if target_text and not target_text.isdigit():
+                        raise ValueError("The default target is 1 to 100 percent.")
+                    m = re.match(r"^([01]\d|2[0-3]):([0-5]\d)$", start_text) if start_text else None
+                    if start_text and not m:
+                        raise ValueError("Give the operating day start as a time on the quarter hour, like 16:00.")
+                    kept = book.rta_defaults(pid)
+                    book.set_rta_defaults(pid, int(target_text) if target_text else None,
+                                          int(m.group(1)) * 60 + int(m.group(2)) if m else None, kept["shrinkage"])
+                    said = f"Saved the target and operating day defaults for {book.program(pid)['name']}."
+                elif action == "shrinkage":  # Phase AU: what counts as shrinkage, for the program's LOBs
+                    kept = book.rta_defaults(pid)
+                    book.set_rta_defaults(pid, kept["target"], kept["day_start"], mapping_from_form(request.form))
+                    said = f"Saved what counts as shrinkage for {book.program(pid)['name']}."
+                elif action == "shrinkage_standard":
+                    kept = book.rta_defaults(pid)
+                    book.set_rta_defaults(pid, kept["target"], kept["day_start"], None)
+                    said = f"{book.program(pid)['name']} counts shrinkage the standard way again."
+                elif action == "reset_unit":  # a LOB's own operating day or shrinkage goes back to the program's
+                    unit, field = request.form.get("unit", ""), request.form.get("field", "")
+                    if not _access().can_open(unit) or field not in ("day_start", "shrinkage"):
+                        abort(400)
+                    (app.extensions["store"].clear_day_start if field == "day_start"
+                     else app.extensions["store"].clear_shrinkage_map)(unit)
+                    said = f"{book.label(unit)} uses the program's {'operating day' if field == 'day_start' else 'shrinkage'} again."
                 elif action == "requests":  # Phase AU: associate break change requests for this program
                     book.set_request_settings(pid, request.form.get("enabled") == "1",
                                               request.form.get("lead", type=int, default=0),
@@ -2375,9 +2406,30 @@ def create_app(config: Dict[str, Any]) -> Flask:
             p["measure_value"] = p.get("measure") or "interval"
         return render_template("program_setup.html", programs=tree, people=people, loose=loose, modes=MODES,
                                measures=ProgramBook.MEASURES, request_rules={p["id"]: book.request_settings(p["id"]) for p in tree},
+                               hm=hm, rta_def={p["id"]: book.rta_defaults(p["id"]) for p in tree},
+                               shrink_items=SHRINKAGE_ITEMS,
+                               shrink_now={p["id"]: read_mapping(json.dumps(book.rta_defaults(p["id"])["shrinkage"])
+                                                                 if book.rta_defaults(p["id"])["shrinkage"] else None)
+                                           for p in tree},
+                               own_units=_own_unit_settings(tree),
                                blockers=blockers, unit_groups=_unit_choices(tree),
                                look_alike={p["key"]: book.look_alike(p["id"]) for p in tree if not p["lobs"]},
                                days=["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"])
+
+    def _own_unit_settings(tree: List[Dict[str, Any]]) -> Dict[int, List[Dict[str, Any]]]:
+        """Phase AU: the LOBs (and a program without LOBs) that have their own operating day or shrinkage mapping, which
+        win over the program's defaults until they are reset."""
+        store, found = app.extensions["store"], {}
+        for p in tree:
+            rows = []
+            for key in p["units"]:
+                own_start, own_map = store._day_start_own(key), store.get_shrinkage_map(key)
+                inherited = not (own_map and own_map["at"])
+                if own_start is not None or not inherited:
+                    rows.append({"key": key, "label": ProgramBook(store).label(key),
+                                 "day_start": None if own_start is None else hm(own_start), "shrinkage": not inherited})
+            found[p["id"]] = rows
+        return found
 
     @app.route("/programs/rename", methods=["POST"])
     @admin_required
@@ -2485,6 +2537,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
         kept = app.extensions["store"].get_interval_target(program, week_start) if program and week_start else None
         if kept:
             return kept["target"] / 100
+        default = app.extensions["store"].rta_default(program, "target") if program else None  # Phase AU
+        if default:
+            return int(default) / 100
         book = app.extensions.get("schedules")
         source = book.input_path(run_id) if book is not None and run_id else None
         try:
@@ -2508,6 +2563,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         """The Week page's interval target (Phase W): the choice and each day's intervals at it, as the RTA counts."""
         kept = app.extensions["store"].get_interval_target(program, week_start)
         own = _own_target(row)
+        default = app.extensions["store"].rta_default(program, "target")  # Phase AU: the program's default target
+        base = int(default) if default else own
         days = []
         first = date.fromisoformat(week_start)
         for i in range(7):
@@ -2517,8 +2574,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             except ValueError:  # the workbook is missing: said on the day page
                 page = None
             days.append({"date": on, "label": f"{on:%a %d}", "t": page["target"] if page else None})
-        return {"current": kept["target"] if kept else own, "own": own, "kept": kept, "days": days,
-                "choices": sorted({100, 95, 90, 85, 80, own}, reverse=True),
+        return {"current": kept["target"] if kept else base, "own": own, "base": base, "from_program": bool(default),
+                "kept": kept, "days": days, "choices": sorted({100, 95, 90, 85, 80, own, base}, reverse=True),
                 "may_set": allowed(app.extensions["store"], g.user, "setup")}
 
     @app.route("/day/shrinkage", methods=["POST"])
@@ -2554,7 +2611,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             target = int(request.form.get("target", ""))
         except ValueError:
             target = -1
-        if target not in {100, 95, 90, 85, 80, _own_target(row)}:
+        base = app.extensions["store"].rta_default(program, "target")
+        if target not in {100, 95, 90, 85, 80, _own_target(row), int(base) if base else -1}:
             abort(400)
         store.set_interval_target(program, week, target, g.user["id"])
         _record("interval_target_changed", program=program, week_start=week, subject=f"{target}%",
@@ -3807,6 +3865,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                earlier=on - timedelta(days=1), later=on + timedelta(days=1), **shift_view,
                                **_window_context(program, on, own_zone, moved, start_at, page, anchor, start, tab))
 
+    def _measure_arg(raw: str, program: Any) -> str:
+        """Phase AU: the measure asked for, else the program's own (LOBs and defaults), else interval compliance."""
+        if raw in MEASURES:
+            return raw
+        unit = program[0] if isinstance(program, (list, tuple)) and program else program
+        return ProgramBook(app.extensions["store"]).day_measure(unit) if isinstance(unit, str) and unit else "interval"
+
     def _requests_tab(program: str, on: date, tab: str, merge: Optional[List[str]] = None) -> Dict[str, Any]:
         """Phase AU: break changes and coaching on the RTA tab itself: the count for the tab, and (on the tab) the rows.
         In the view with every LOB of a program the rows are all those LOBs', each with its LOB."""
@@ -4324,7 +4389,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         """The shift handover note: printable, one page."""
         on = _date(request.args.get("date", "")) or datetime.now(EGYPT).date()
         program = clean_program(request.args.get("program", ""))
-        measure = request.args.get("measure", "") if request.args.get("measure", "") in MEASURES else "interval"
+        measure = _measure_arg(request.args.get("measure", ""), program)
         try:
             found = handover_note(_days(), program, on, measure) if program else None
         except ValueError as exc:
@@ -4502,7 +4567,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         try:
             program, on, name, what, start, minutes, billable = _add_fields()
             found = _days().preview_item(program, on, name, what, start, minutes, billable,
-                                         measure if measure in MEASURES else "interval",
+                                         _measure_arg(measure, request.form.get("program", "")),
                                          end=_typed("to", program, on),  # who and why are asked on Add
                                          side=request.form.get("side", ""))
         except ValueError as exc:
@@ -4566,7 +4631,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         try:
             program, on, name = _day_form()
             found = _days().break_advice(program, on, name, _break_idx(), _typed("at", program, on),
-                                         measure if measure in MEASURES else "interval")
+                                         _measure_arg(measure, request.form.get("program", "")))
         except ValueError as exc:
             return _refused(exc, *_posted_day())
         return jsonify(_shown_data(found, _shift_of(program, on)))
@@ -4599,7 +4664,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             end = min(max(today, latest or today), start + timedelta(days=MAX_EXPORT_DAYS - 1))
         return {"start": start, "end": end, "program": program, "pick": pick,
                 "user_id": request.args.get("user", type=int),
-                "measure": request.args.get("measure", "") if request.args.get("measure", "") in MEASURES else "interval"}
+                "measure": _measure_arg(request.args.get("measure", ""), program)}
 
     def _exports_page(error: str = "", status: int = 200):  # type: ignore[no-untyped-def]
         store = app.extensions["store"]

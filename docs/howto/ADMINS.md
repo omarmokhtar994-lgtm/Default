@@ -9,7 +9,15 @@
   An address held after too many wrong sign-ins is listed on People with a button to lift it.
 - **Settings, Sign out other devices** ends every other session of the same account.
 
-## Programs
+## Programs (LOBs and defaults)
+One page holds every default of a program and its LOBs. They are the defaults on every other page; a week's own target, or
+a LOB's own operating day or shrinkage set on the RTA, still wins (the page lists those and lets you go back to the
+program's).
+- **Coverage measure** (interval, service level, volume): the RTA, Weeks, Overview, wallboard, exports and the handover note
+  start from it, and so does a new run's coverage option.
+- **Default target** (percent): colours intervals everywhere unless a week has its own; blank follows the workbook.
+- **Operating day starts**: offered on the RTA under "Day starts at" (the RTA still opens on the calendar day).
+- **What counts as shrinkage**: the in-office and out-of-office mapping for all LOBs of the program.
 - **Coverage measure** (interval, service level, volume) decides how billable time counts.
 - **Break change requests**: on or off, a lead time in minutes, and a daily limit per associate (0 = none).
 

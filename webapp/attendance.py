@@ -213,6 +213,7 @@ class DayBook:
     def __init__(self, store, book: ScheduleBook):
         self.store = store
         self.book = book
+        self.measure_of = lambda program: "interval"  # the program's own measure; the site sets it (Phase AU)
         self.notifier = None  # Phase AB: hands each change to its LOB's group rule (webapp/notify.py)
         self._locks: Dict[Tuple[str, str], threading.RLock] = {}  # Phase AD: one change at a time per LOB and day
         self._locks_lock = threading.Lock()
@@ -521,14 +522,17 @@ class DayBook:
                 actual[(offset, r["associate"], r["idx"])] = CANCELLED if r.get("cancelled") else r["start"]
         return attendance, actual, stale, acts
 
-    def page(self, program: str, on: date, measure: str = "interval",
+    def page(self, program: str, on: date, measure: Optional[str] = None,
              extra: Optional[Dict[str, Any]] = None, recorded: bool = True,
              cover: bool = True, version_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
         """The day; ``extra`` (from ``add_item(..., dry_run=True)``) is counted as if it were recorded. With
         ``recorded`` False, the day as planned: the RTA's records (attendance, break moves, activities) left out
         (Phase AH, the Weeks page's "As planned"). With ``cover`` False, people covering from outside the roster
         (Phase AJ) are left out of the figures. ``version_id`` (Phase AM, the Weeks page's Version pick): that version
-        of the program's week holding ``on`` in place of the one in use; any other is refused (ValueError)."""
+        of the program's week holding ``on`` in place of the one in use; any other is refused (ValueError). With no
+        ``measure`` the program's own is used (Phase AU: LOBs and defaults)."""
+        if measure is None:
+            measure = self.measure_of(program)
         if measure not in MEASURES:
             raise ValueError(f"Unknown measure: {measure}.")
         row, note = self.version(program, on)
@@ -592,12 +596,13 @@ class DayBook:
                 "week_start": row["week_start"], "day": day_index(on), "inputs": inputs, "week": week,
                 "log": self.store.list_day_log(program, on.isoformat())}
 
-    def window_page(self, program: str, on: date, start: int, measure: str = "interval",
+    def window_page(self, program: str, on: date, start: int, measure: Optional[str] = None,
                     extras: Optional[Dict[date, Dict[str, Any]]] = None) -> Optional[Dict[str, Any]]:
         """Phase AK: the page for the 24 hours from minute ``start`` of ``on`` (Phase AI's window, as the Timeline shows
         it), with ``extras`` counted as if kept, per shift date (``page(extra=...)``). ``views`` holds each day's own
         view by its distance from ``on``. From minute 0 it is the day's own page."""
         extras = extras or {}
+        measure = measure or self.measure_of(program)
         page = self.page(program, on, measure, extras.get(on))
         if page is None:
             return None
@@ -618,7 +623,7 @@ class DayBook:
     def target_for(self, program: str, on: date, row: Optional[Dict[str, Any]] = None,
                    inputs: Optional[Dict[str, Any]] = None) -> Tuple[float, Dict[str, Any]]:
         """The interval target of the week holding ``on`` (Phase W): the one set for this program and week (with who
-        set it), else the workbook's own "Target"; (0.9, workbook) when there is no schedule."""
+        set it), else the program's default, else the workbook's own "Target"; (0.9, workbook) when there is no schedule."""
         if row is None:
             row, _ = self.version(program, on)
         if row is None:
@@ -626,6 +631,9 @@ class DayBook:
         kept = self.store.get_interval_target(program, row["week_start"])
         if kept:
             return kept["target"] / 100, {"kind": "set", "by": kept.get("by_name") or "someone", "at": kept["at"]}
+        default = self.store.rta_default(program, "target")  # Phase AU: LOBs and defaults
+        if default:
+            return int(default) / 100, {"kind": "program"}
         if inputs is None:
             source = self.book.input_path(row["run_id"])
             inputs = read_inputs(source) if source.is_file() else {}

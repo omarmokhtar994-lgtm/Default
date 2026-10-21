@@ -1,6 +1,6 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
 {% extends "base.html" %}
-{% from "_auto_breaks.html" import auto_breaks with context %}
+{% from "_auto_breaks.html" import auto_breaks with context %}{% from "_channel_hours.html" import channel_hours %}
 {% block title %}Schedules: {{ run.program|unit if run.program else run.workbook }} on Team Scheduler{% endblock %}
 {% block content %}
 <div class="phead"><div>
@@ -62,6 +62,7 @@
   <button type="button" class="button" data-swap-open>Swap slots</button>
 </div>
 
+{% if chhours %}{{ channel_hours(chhours) }}{% endif %}
 {% if input_problem %}<section class="panel chpanel" id="channels" aria-labelledby="chan-h">
   <h2 id="chan-h">Channels</h2>
   <p class="error">{{ input_problem }}</p>

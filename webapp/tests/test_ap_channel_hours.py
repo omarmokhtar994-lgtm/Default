@@ -19,6 +19,10 @@ class TheChannelHours(unittest.TestCase):
         self.assertEqual(day_hours({"channels": None}), {})
         self.assertEqual(day_hours(None), {})
 
+    def test_breaks_are_not_hours_and_a_stretch_with_no_channel_is_its_own_row(self):
+        v = view({"Associate 01": [(0, 60, "Break 1"), (60, 120, "No channel planned")]})
+        self.assertEqual(day_hours(v), {"No channel planned": 1.0})
+
     def test_a_stretch_on_all_channels_is_counted_as_its_own_row(self):
         self.assertEqual(day_hours(view({"Associate 01": [(0, 60, "A")]})), {"A": 1.0})
 

@@ -31,7 +31,7 @@ KINDS = {"attendance": "Attendance", "activities": "Activities", "activity": "Da
          "changes": "Schedule changes and swaps", "versions": "Versions and in use", "runs": "Runs",
          "worked": "Worked hours and adherence", "summary": "Daily summary",
          "channels": "Channels planned and changed", "cover": "Cover from outside the roster",
-         "leave": "Leave requests",
+         "leave": "Leave requests", "channel_hours": "Hours per channel",
          "record": "Other actions"}
 VERSION_EVENTS = {"version_created": "New version", "set_in_use": "Set in use"}
 OTHER_EVENTS = {"run_uploaded": "Run uploaded", "run_started": "Run started", "run_stopped": "Run stopped",
@@ -352,10 +352,25 @@ def _leave(store, days, weeks, start, end, program, user_id, measure):
                r["note"], r["tm_name"], r["rta_name"], r["outcome"], r["reason"]]
 
 
+def _channel_hours(store, days, weeks, start, end, program, user_id, measure):
+    """Phase AP (sample ap01, C): the hours each channel is staffed, per program and day, from the schedule in use."""
+    from .channel_hours import CHANNEL_NAMES, day_hours
+    yield ["Date", "Program", "Channel", "Hours"]
+    for p in _programs(days, program):
+        for day in _dates(start, end):
+            days.check()
+            try:
+                page = days.page(p, day, measure)
+            except ValueError:
+                continue
+            for letter, hours in sorted(day_hours(page["view"] if page else None).items()):
+                yield [day.isoformat(), p, CHANNEL_NAMES.get(letter, letter), hours]
+
+
 TABLES: Dict[str, Callable] = {"attendance": _attendance, "activities": _activities, "activity": _activity,
                                "breaks": _breaks,
                                "changes": _changes, "versions": _versions, "runs": _runs, "worked": _worked,
-                               "summary": _summary, "channels": _channels, "cover": _cover, "leave": _leave,
+                               "summary": _summary, "channels": _channels, "cover": _cover, "leave": _leave, "channel_hours": _channel_hours,
                                "record": _record}
 
 

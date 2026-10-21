@@ -1,6 +1,6 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
 {% extends "base.html" %}
-{% from "_target_tile.html" import target_tile with context %}{% from "_macros.html" import pager with context %}
+{% from "_target_tile.html" import target_tile with context %}{% from "_macros.html" import pager with context %}{% from "_channel_hours.html" import channel_hours %}
 {% block title %}The day: {{ program|unit if program else 'no program' }} on Team Scheduler{% endblock %}
 {% block content %}
 {% if g.rta_clock_notice %}<p class="notice" role="status">{{ g.rta_clock_notice }}</p>{% endif %}
@@ -207,6 +207,7 @@
 {% endif %}
 
 {% if tab == 'timeline' %}
+{% if chhours %}{{ channel_hours(chhours) }}{% endif %}
 <section class="panel" aria-labelledby="floor-h">
   <h2 id="floor-h">Who is on the floor</h2>
   <p class="autopilot"><a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='replan') }}">Fix the rest of the day's breaks</a>{% if measure == 'interval' %} <a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='rescue') }}">Rescue the day</a>{% endif %} <a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='bulk') }}">Change several breaks</a></p>

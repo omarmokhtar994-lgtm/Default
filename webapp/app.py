@@ -25,6 +25,7 @@ from werkzeug.utils import secure_filename
 
 from .adherence import interval_shrinkage, person_day, team as team_figures
 from .analytics import program_weeks, team
+from .channel_hours import week_hours
 from .attendance import (ACTIVITY_KINDS, ADD_KINDS, COVER_ROLES, DAY_OFF, DayBook, aux_details, hm, pick_version, plain_hm, tomorrow_unchecked, week_start,
                          with_text)
 from .break_plan import check_row, floor, slots_for, suggest
@@ -2090,6 +2091,23 @@ def create_app(config: Dict[str, Any]) -> Flask:
                          tight=found["tight"] + t["tight"], target=t["target"])
         return found if found["intervals"] else None
 
+    def _channel_hours_week(program: str, week_start: str) -> Optional[Dict[str, Any]]:
+        """Phase AP (sample ap01, C): the week's scheduled hours per channel for ``program`` (None when the week has
+        no schedule in use at all), with the day labels and the days that have no channel plan."""
+        days, views = _days(), []
+        first = date.fromisoformat(week_start)
+        for i in range(7):
+            try:
+                page = days.page(program, first + timedelta(days=i))
+            except ValueError:
+                page = None
+            views.append(page["view"] if page else None)
+        if not any(views):
+            return None
+        table = week_hours(views)
+        labels = [f"{first + timedelta(days=i):%a %d}" for i in range(7)]
+        return {**table, "labels": labels, "unplanned_labels": [labels[i] for i in table["unplanned"]]}
+
     def _version_week(row: Dict[str, Any], side: str, note: Optional[Dict[str, Any]] = None,
                       target: Optional[Dict[str, Any]] = None,
                       elsewhere: Optional[Dict[str, Any]] = None,
@@ -2229,6 +2247,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                leave_after=app.extensions["leave"].last_applied(run_id), moved=moved, zone_dates=zone_dates, own_zone=own, own_name=dict(ZONES)[own],
                                counts=counts, may_set_in_use=bool(current) and _may_set_in_use(current),
                                days=DAYS, channel_lines=None if input_problem else _channel_lines(run_id),
+                               chhours=_channel_hours_week(run["program"], run["week_start"])
+                               if current and run.get("program") and start_date(run.get("week_start") or "") else None,
                                channel_added=added, step=step, input_problem=input_problem,
                                week_list=week_list if len(week_list) > 1 else [],
                                may_use={e["shown"]["id"] for e in week_list if _may_set_in_use(e["shown"])},
@@ -3072,6 +3092,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                with_lists=_with_lists(program) if program else [],  # or from the lists (Phase U)
                                tomorrow_unchecked=tomorrow_unchecked(on) if on else "",
                                activity_kinds=ACTIVITY_KINDS,
+                               chhours=_channel_hours_week(program, page["week_start"]) if page and tab == "timeline" else None,
                                measure=measure,
                                measures=MEASURES, tab=tab, statuses=STATUSES, aux=sorted(AUX), hm=hm,
                                rows=board(page["view"], page["target"]["target"]) if page and tab == "board" else None, week_of=week_start(on),

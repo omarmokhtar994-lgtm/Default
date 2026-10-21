@@ -89,7 +89,21 @@ Load each with the Skill tool at the step it covers; following it from memory do
 6. Package, split into parts, send them, and report in caveman style: what changed, rulings with their cost, what
    is known and left, Egypt times, screens.
 
-## Where things stand (end of Phase AN)
+## Where things stand (end of Phase AO)
+
+- Phase AO is complete and pushed (branch `ccr-90ec94cc-a37tqk`): overtime after 00:00, name and team manager lists by
+  program, swap offers with warnings, a full-week swap, My week with a week picker and the RTA's aux, leave for weeks
+  with no schedule (applied after the run), the 11-hour break row in the web workbooks
+  (`evidence/phase_ao/`, plan `docs/superpowers/plans/2026-10-20-phase-ao-build.md`).
+- Engine findings (no engine change): a blank Language Working Window means OFF; a Coverage Split row with group `UK`
+  works (`evidence/phase_ao/ENGINE_LANGUAGE_WINDOW.md`).
+- Expected on Phase AO: suite halves 616 (1 skipped) and 677 OK; browser tests 79 OK; GATE PASS with 1537 tests
+  (2 skipped); page review 0 problems; sweep 0 exceptions and 0 server errors.
+- Next: Phase AP (merge LOBs of one program in RTA, Week and Schedules; hours per channel; per-associate daily
+  download). Sample first.
+
+## Earlier: end of Phase AN
+
 
 - Phase AN is complete and pushed (branch `ccr-90ec94cc-a37tqk`). It brings in ChatGPT's reviewed work, checked by
   Claude over three rounds, with the owner's decisions A yes, B Fix channels as in AM, C short manual blocks warn,
@@ -303,3 +317,4 @@ read the real clock break when their date passes, so stop the clock with `mock.p
 - AL: Email deep green, the engine's more consistent schedule as a version, a channel fairness view.
 - AM: Fix channels on the RTA, download in the zone picked, a Version pick on Weeks, percentages for before-breaks runs.
 - AN: ChatGPT's reviewed fixes: time-zone dates and clock-change safety, channel coverage, solver in a child process, Go-to permissions.
+- AO: My week picker, week swap, swap warnings, leave for later weeks, name lists by program, overtime after 00:00.

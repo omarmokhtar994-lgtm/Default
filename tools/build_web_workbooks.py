@@ -71,6 +71,33 @@ LONG_BREAKS_HELP = ("Shifts of 11 hours or more get these breaks in this order, 
                     "15, 30, 15, 15 = two short breaks around a lunch, then one more. Shorter shifts keep the counts above.")
 
 
+# Phase AQ (owner, 2026-10-21: "go ahead with WHOLE_SHIFT as optional row"): the Instructions row that says what a
+# Language Working Window limits. START (the default) is what the engine always did: only a shift's start has to be inside
+# the window. WHOLE_SHIFT makes the shift start and end inside it. The row sits in the Language / Skill group.
+SHIFT_RULE_ROW = "Language Working Window Shift Rule"
+SHIFT_RULE_VALUE = "START"
+SHIFT_RULE_HELP = ("START = a shift only has to begin inside the language window (the default). WHOLE_SHIFT = it must begin "
+                   "and end inside it. Used only when Language Working Window above is not OFF.")
+
+
+def offer_language_shift_rule(source: Path, kept: Path) -> Path:
+    """``source`` with the shift-rule row added after the Language Working Window row, and the template builder told to
+    lay it out in the Language / Skill group with a START or WHOLE_SHIFT dropdown. Written to ``kept``."""
+    wb = load_workbook(source)
+    ws = wb["Instructions"]
+    if any(str(r[1] or "").strip() == SHIFT_RULE_ROW for r in ws.iter_rows(values_only=True)):
+        raise SystemExit(f"{source.name} already has {SHIFT_RULE_ROW!r}; nothing written")
+    row = ws.max_row + 1
+    ws.cell(row, 2, SHIFT_RULE_ROW)
+    ws.cell(row, 3, SHIFT_RULE_VALUE)
+    wb.save(kept)
+    if not any(key == SHIFT_RULE_ROW for _name, items in B.SETUP_LAYOUT for key, _c in items):  # once per process
+        B.SETUP_LAYOUT = [(name, items + [(SHIFT_RULE_ROW, '"START,WHOLE_SHIFT"')]) if name == "Language / Skill"
+                          else (name, items) for name, items in B.SETUP_LAYOUT]
+    B.HELP[SHIFT_RULE_ROW] = SHIFT_RULE_HELP
+    return kept
+
+
 def offer_long_shift_breaks(source: Path, kept: Path) -> Path:
     """``source`` with the row added (so the engine reads the built template exactly as it reads its source), and the
     template builder told to lay the row out in the Breaks group. Written to ``kept``."""
@@ -185,6 +212,7 @@ def main(argv: list) -> int:
     example = out / EXAMPLE_NAME
     with tempfile.TemporaryDirectory() as tmp:
         source = offer_long_shift_breaks(ROOT / SOURCE, Path(tmp) / "source_with_long_breaks.xlsx")
+        source = offer_language_shift_rule(source, Path(tmp) / "source_with_shift_rule.xlsx")
         if B.main(["build", str(source), str(example)]) != 0:
             return 2
     blank_from(example, out / BLANK_NAME)

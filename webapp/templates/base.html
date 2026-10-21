@@ -41,7 +41,7 @@
   <details class="menu" open data-menu><summary>Menu</summary>
   {% if user.is_associate %}<nav aria-label="Main">
     <a href="{{ url_for('me_breaks') }}"{% if nav_active == 'me_day' %} class="on" aria-current="page"{% endif %}>My day{% if news_n %} <span class="count" title="New answers">{{ news_n }}</span>{% endif %}</a>
-    {{ navlink('me', url_for('me'), 'My weeks') }}
+    <a href="{{ url_for('me') }}"{% if nav_active == 'me' %} class="on" aria-current="page"{% endif %}>My weeks{% if news_weeks %} <span class="count" title="New answers">{{ news_weeks }}</span>{% endif %}</a>
   </nav>{% else %}
   {% if can('runs') %}<a class="button primary newrun" href="{{ url_for('home', program=nav_unit or none) }}#newrun">New schedule</a>{% endif %}
   {% if nav_units %}<label class="unitpick">Program and LOB

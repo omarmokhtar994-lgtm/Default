@@ -11,6 +11,7 @@ managers, is shown to the approvers: it warns, it does not refuse.
 from __future__ import annotations
 
 import json
+import logging
 import time
 from datetime import date, timedelta
 from typing import Any, Dict, List, Optional
@@ -123,7 +124,27 @@ class LeaveBook:
         return f"This request was already decided: {'being applied' if status == 'applying' else status}."
 
     def decide(self, request_id: int, user: Dict[str, Any], approve: bool, reason: str = "") -> str:
-        """The TM's approval (the first) or the RTA's (the second, which changes the schedule); a refusal ends it."""
+        """The TM's approval (the first) or the RTA's (the second, which changes the schedule); a refusal ends it.
+        A final answer (approved or refused) is also posted to the LOB's group (Phase AU)."""
+        said = self._decide(request_id, user, approve, reason)
+        row = self._get(request_id)
+        if row["status"] in ("approved", "refused"):
+            self._tell_the_group(row, user)
+        return said
+
+    def _tell_the_group(self, row: Dict[str, Any], user: Dict[str, Any]) -> None:
+        notifier = getattr(self.days, "notifier", None)
+        if notifier is None:
+            return
+        label = f"{row['kind']}, {span_text(date.fromisoformat(row['first_day']), date.fromisoformat(row['last_day']))}"
+        text = f"{label}: {row['status']}" + (f" (“{row['reason']}”)" if row["status"] == "refused" and row["reason"] else "")
+        try:
+            notifier.queue(None, row["program"], row["first_day"], row["associate"], "request", text,
+                           user["display_name"], ref=f"leave:{row['id']}")
+        except Exception:  # noqa: BLE001 (the answer stands; the group post is what is lost, and logged)
+            logging.getLogger(__name__).exception("group posts: could not queue the answer to leave %s", row["id"])
+
+    def _decide(self, request_id: int, user: Dict[str, Any], approve: bool, reason: str = "") -> str:
         row = self._get(request_id)
         if row["status"] not in WAITING:
             raise ValueError(self._decided(request_id))

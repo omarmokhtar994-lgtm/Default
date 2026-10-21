@@ -6,6 +6,10 @@
   <p class="byline">{{ user.roster_name }}{% if week %}, {{ week[0].date.strftime('%d %b') }} to {{ week[-1].date.strftime('%d %b') }}{% endif %}</p>
 </div></div>
 {% set here = 'weeks' %}{% include "_me_tabs.html" %}
+{% if answers %}<section class="panel news" aria-labelledby="news-h" role="status">
+  <h2 id="news-h">New {{ 'answer' if answers|length == 1 else 'answers' }}</h2>
+  <ul class="log">{% for line in answers %}<li>{{ line }}</li>{% endfor %}</ul>
+</section>{% endif %}
 {% if unit %}
 <section class="panel" aria-labelledby="week-h">
   <h2 id="week-h">The week</h2>

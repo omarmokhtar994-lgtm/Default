@@ -13,6 +13,7 @@ the swap is saved as a new version of the schedule, set in use (the earlier one 
 from __future__ import annotations
 
 import json
+import logging
 import time
 from datetime import date, timedelta
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -23,6 +24,11 @@ from .channel_people import ChannelPeople, can_work, channel_words
 from .approvals import is_backup, may_approve_for, team_manager_of
 from .leave import WAITING as LEAVE_WAITING, nice
 from .versions import DAYS, shift_span
+
+
+def _day_words(row: Dict[str, Any]) -> str:
+    return date.fromisoformat(row['day']).strftime('%a %d %b')
+
 
 OPEN = ("waiting_other", "waiting_tm", "applying")
 STATUS_WORDS = {"waiting_other": "waiting for the colleague", "waiting_tm": "accepted, waiting for the TM",
@@ -291,7 +297,28 @@ class SwapBook:
 
     def decide(self, swap_id: int, user: Dict[str, Any], approve: bool, reason: str = "") -> str:
         """Phase AK: each person's team manager approves their side (one approval when they share one); an admin or
-        a supervisor approves both at once; a refusal by any of them ends it."""
+        a supervisor approves both at once; a refusal by any of them ends it. A final answer is posted to the group too
+        (Phase AU)."""
+        said = self._decide(swap_id, user, approve, reason)
+        row = self._get(swap_id)
+        if row["status"] in ("approved", "refused"):
+            self._tell_the_group(row, user)
+        return said
+
+    def _tell_the_group(self, row: Dict[str, Any], user: Dict[str, Any]) -> None:
+        notifier = getattr(self.days, "notifier", None)
+        if notifier is None:
+            return
+        try:
+            for who, other in ((row["asker"], row["other"]), (row["other"], row["asker"])):
+                text = f"Swap with {other} on {_day_words(row)}: {row['status']}" + (
+                    f" (“{row['reason']}”)" if row["status"] == "refused" and row["reason"] else "")
+                notifier.queue(None, row["program"], row["day"], who, "request", text, user["display_name"],
+                               ref=f"swap:{row['id']}")
+        except Exception:  # noqa: BLE001 (the answer stands; the group post is what is lost, and logged)
+            logging.getLogger(__name__).exception("group posts: could not queue the answer to swap %s", row["id"])
+
+    def _decide(self, swap_id: int, user: Dict[str, Any], approve: bool, reason: str = "") -> str:
         row = self._get(swap_id)
         if row["status"] != "waiting_tm":
             raise ValueError(self._decided(swap_id))

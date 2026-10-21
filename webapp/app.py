@@ -41,7 +41,7 @@ from .clock import minute_now, EGYPT, HOME, SHOWN, ZONES, moved_text, pick_zone,
 from .permissions import CATALOGUE as PERMISSIONS, ENDPOINTS as PERMISSION_ENDPOINTS, ROLE_NAMES, allowed, matrix
 from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, OVERTIME_MAX, STATUSES, channel_letters, BreakRefused, at_target, board, glance, hover_tips, my_day, my_items, now_panel, read_inputs, shift_groups, window_view
 from .coach import actual_shrinkage, corrected_tab
-from .leave import KINDS as LEAVE_KINDS, LeaveBook
+from .leave import KINDS as LEAVE_KINDS, LeaveBook, span_text
 from .swaps import SwapBook
 from .shrinkage import ITEMS as SHRINKAGE_ITEMS, day_shrinkage, mapping_from_form, read_mapping
 from .contacts import ContactBook, pick_contact
@@ -520,7 +520,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
         back = None if endpoint in ("home", "login", "static") else _parent_url(endpoint, request.view_args)
         who = g.get("user")
         news_n = app.extensions["changes"].news_count(who["id"]) if who and app.extensions.get("changes") else 0
+        if who and who["is_associate"]:
+            found = app.extensions["store"].unseen_leave_swap(who["id"])
+            news_weeks = len(found["leave"]) + len(found["swaps"])
+        else:
+            news_weeks = 0
         return {"csrf_token": csrf_token, "copyright": COPYRIGHT, "user": g.get("user"), "news_n": news_n,
+                "news_weeks": news_weeks,
                 "theme": theme if theme in THEMES else "", "back": back,
                 "status_words": STATUS_WORDS, "label": label, "modes": MODES, "stages": stages, "in_flight": IN_FLIGHT,
                 "when": _when, "run_options": run_options, "option_labels": OPTION_LABELS,
@@ -1217,9 +1223,25 @@ def create_app(config: Dict[str, Any]) -> Flask:
                     except ValueError:  # a week whose input workbook is not kept: its shifts show, its breaks do not
                         items = []
                 week.append({"date": on, "cell": cell, "notes": notes, "items": items, "today": on == today})
-        return render_template("me.html", unit=key, kinds=LEAVE_KINDS, mine=mine, swaps=my_swaps, swap_day=swap_day,
+        answers = _leave_swap_answers(g.user["id"])  # Phase AU: the answers since they last looked, shown once
+        return render_template("me.html", unit=key, answers=answers, kinds=LEAVE_KINDS, mine=mine, swaps=my_swaps, swap_day=swap_day,
                                swap_note=swap_note, weeks=weeks, shown=shown, week_labels={w.isoformat(): f"{w:%d %b} to {(w + timedelta(days=6)):%d %b}" for w in weeks}, swap_week=swap_week, week_offers=week_offers,
                                offers=offers, today=today, week=week, hm=hm)
+
+    def _leave_swap_answers(user_id: int) -> List[str]:
+        """Phase AU: the final answers to this person's leave requests and swaps they have not seen, as lines; marks them seen."""
+        store = app.extensions["store"]
+        found = store.unseen_leave_swap(user_id)
+        lines = []
+        for r in found["leave"]:
+            span = span_text(date.fromisoformat(r["first_day"]), date.fromisoformat(r["last_day"]))
+            lines.append(f"{r['kind']}, {span}: {r['status']}" + (f". “{r['reason']}”" if r["status"] == "refused" and r["reason"] else "")
+                         + (f". {r['outcome']}" if r["status"] == "approved" and r["outcome"] else ""))
+        for r in found["swaps"]:
+            lines.append(f"Swap with {r['other']} on {date.fromisoformat(r['day']):%a %d %b}: {r['status']}"
+                         + (f". “{r['reason']}”" if r["reason"] else ""))
+        store.mark_leave_swap_seen([r["id"] for r in found["leave"]], [r["id"] for r in found["swaps"]])
+        return lines
 
     def _my_weeks(key: str, today: date) -> List[date]:
         """Phase AO: the Sundays of this week and every later week that has a schedule kept for ``key``."""

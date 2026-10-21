@@ -439,6 +439,10 @@ class Store:
                 db.execute("update notify_settings set kinds = kinds || ',request' where (',' || kinds || ',') like"
                            " '%,break,%' and (',' || kinds || ',') not like '%,request,%'")
             # Phase AR: a deleted person's account is closed and hidden; the row stays so the history still names them
+            # Phase AU: whether the asker has looked at the answer to a leave request or a swap
+            for table in ("leave_requests", "swap_requests"):
+                if "seen" not in {row["name"] for row in db.execute(f"pragma table_info({table})")}:
+                    db.execute(f"alter table {table} add column seen integer not null default 0")
             # Phase AU: a temporary password is good for TEMP_PASSWORD_DAYS (0 = no end: one the person chose themselves)
             if "temp_until" not in people:
                 db.execute("alter table users add column temp_until real not null default 0")
@@ -944,6 +948,23 @@ class Store:
                 "select * from change_requests where requester_id = ? and seen = 0"
                 " and ((decided_by is not null and decided_by != requester_id and status in"
                 " ('approved', 'rejected', 'refused')) or status = 'expired') order by decided_at", (user_id,))]
+
+    def unseen_leave_swap(self, user_id: int) -> Dict[str, List[Dict[str, Any]]]:
+        """Phase AU: final answers to this person's leave requests and swaps that they have not looked at yet."""
+        with self._db() as db:
+            leave = [dict(r) for r in db.execute(
+                "select * from leave_requests where user_id = ? and seen = 0 and status in ('approved', 'refused')"
+                " order by asked", (user_id,))]
+            swaps = [dict(r) for r in db.execute(
+                "select * from swap_requests where asker_user = ? and seen = 0 and status in ('approved', 'refused',"
+                " 'declined') order by asked", (user_id,))]
+        return {"leave": leave, "swaps": swaps}
+
+    def mark_leave_swap_seen(self, leave_ids: List[int], swap_ids: List[int]) -> None:
+        with self._db() as db:
+            for table, ids in (("leave_requests", leave_ids), ("swap_requests", swap_ids)):
+                if ids:
+                    db.execute(f"update {table} set seen = 1 where id in ({', '.join('?' for _ in ids)})", ids)
 
     def mark_answers_seen(self, ids: List[int]) -> None:
         if ids:

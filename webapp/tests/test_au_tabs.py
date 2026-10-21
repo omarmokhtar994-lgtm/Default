@@ -81,6 +81,46 @@ class TheAssociatesTabs(_Pages):
         self.assertRegex(page, r'(?s)<nav aria-label="Main">.*My day.*My weeks')
 
 
+class TheCoachingCancel(_Pages):
+    def ask(self):
+        self.post(self.tm, "/requests/coaching", program=self.key, date="2026-10-14", start="14:00", minutes="30",
+                  dept="Quality", why="Made-up", who=["Associate 027"])
+        return self.store.list_change_requests()[-1]
+
+    def test_the_team_manager_cancels_their_own_coaching_request(self):
+        row = self.ask()
+        self.assertEqual((row["kind"], row["status"]), ("coaching", "waiting"))
+        mine = self.get(self.tm, "/requests/coaching", program=self.key)
+        self.assertIn(f"/requests/coaching/{row['id']}/cancel", mine)
+        got = self.post(self.tm, f"/requests/coaching/{row['id']}/cancel")
+        self.assertEqual(got.status_code, 303)
+        self.assertEqual(self.store.get_change_request(row["id"])["status"], "cancelled")
+
+    def test_someone_else_cannot_cancel_it(self):
+        row = self.ask()
+        self.post(self.staff, f"/requests/coaching/{row['id']}/cancel")
+        self.assertEqual(self.store.get_change_request(row["id"])["status"], "waiting")
+        self.assertEqual(self.post(self.assoc, f"/requests/coaching/{row['id']}/cancel").status_code, 403)
+
+    def test_a_decided_request_has_no_cancel_button(self):
+        row = self.ask()
+        self.post(self.staff, f"/requests/change/{row['id']}", decision="reject", reason="Busy then")
+        self.assertNotIn(f"/requests/coaching/{row['id']}/cancel", self.get(self.tm, "/requests/coaching", program=self.key))
+
+
+class TheHomeMatchesTheRole(_Pages):
+    """Phase AU: the page offers what the role may do (a form the server would refuse is not offered)."""
+    def test_a_team_manager_without_the_runs_permission_is_not_offered_a_new_schedule(self):
+        home = self.get(self.tm, "/")
+        self.assertNotIn('id="newrun"', home)
+        self.assertNotIn("New schedule", home)
+        self.assertNotIn("week-check", home)
+
+    def test_a_planner_who_may_start_runs_still_is(self):
+        home = self.get(self.staff, "/")
+        self.assertIn('id="newrun"', home)
+
+
 class ThePolish(_Pages):
     def test_the_coaching_list_has_a_search_box_and_scrolls(self):
         page = self.get(self.tm, "/requests/coaching", program=self.key)

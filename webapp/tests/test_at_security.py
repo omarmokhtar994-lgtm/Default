@@ -10,6 +10,7 @@ Four things are checked from outside, the way a person with a text editor would:
  3. the forms: fields that name a role, a program, a person or a request never reach beyond the account's own rights;
  4. the answers: every response carries the security headers, escapes what people typed, and never leaves the site."""
 import base64
+import html
 import io
 import json
 import os
@@ -137,6 +138,44 @@ class TheRoleRules(_Secured):
             self.assertEqual(got.status_code, 403)
         finally:
             self.store.set_role_permissions(kept)
+
+
+class TheOffersMatchTheRole(_Secured):
+    """Phase AU (owner: "all rules matching in all tabs"): a page offers only the links and forms its reader's role may
+    use, so nobody meets a button that the server then refuses."""
+    PAGES = ("/", "/overview", "/week", "/schedules", "/requests", "/exports", "/team", "/admin/users", "/programs",
+             "/day", "/requests/coaching")
+
+    def offered(self, who):
+        client = sign_in(self.app, who, PASSWORD)
+        user = self.store.get_user(self.users[who])
+        adapter = self.app.url_map.bind("localhost")
+        found = []
+        pages = ("/me", "/me/breaks") if user["is_associate"] else self.PAGES
+        for path in pages:
+            sep = "&" if "?" in path else "?"
+            got = client.get(path + sep + "program=" + self.alpha.replace(" ", "+"), follow_redirects=True)
+            html_text = got.get_data(as_text=True)
+            for kind, attr in (("GET", "href"), ("POST", "action")):
+                for target in re.findall(rf'{attr}="(/[^"#]*)', html_text):
+                    target = html.unescape(target).split("?")[0]
+                    if target.startswith("/static") or target in ("/logout", "/theme", "/account/password") or (
+                            target == "/" and user["is_associate"]):  # an associate's Home sends them to Today
+                        continue
+                    try:
+                        endpoint, _ = adapter.match(target, method=kind)
+                    except Exception:  # noqa: BLE001 (not a route of ours: a file, or a method the route lacks)
+                        continue
+                    found.append((path, kind, target, endpoint))
+        return user, found
+
+    def test_no_page_offers_what_the_role_is_refused(self):
+        for who in ("plan_a", "tm_a", "sup_a", "assoc_a"):
+            with self.subTest(who):
+                user, found = self.offered(who)
+                wrong = [(path, kind, target) for path, kind, target, endpoint in found
+                         if TheRoleRules.expected_open(self, user, endpoint) is False]
+                self.assertEqual(wrong, [])
 
 
 # ---------------------------------------------------------------------------------------------- 2. the session

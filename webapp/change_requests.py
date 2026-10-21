@@ -283,40 +283,67 @@ class ChangeBook:
     def _window(self, program: str, on: date, start: int) -> Dict[str, Any]:
         return self.days.window_page(program, on, start, self.measure_of(program))
 
+    def _shift_of(self, program: str, name: str, on: date, at: int) -> Optional[Dict[str, Any]]:
+        """``name``'s shift that starts on ``on``, in the window the RTA shows it in; ``at`` is now in that day's minutes
+        (negative before it starts). None when the day has no schedule or the person no shift that starts then."""
+        try:
+            page = self.days.page(program, on, self.measure_of(program))
+        except ValueError:
+            return None
+        seg = next((s for lane in (page["view"]["lanes"] if page else []) if lane["name"] == name
+                    for s in lane["segments"] if s["offset"] == 0), None)
+        if seg is None:
+            return None
+        start = max(0, seg["start"] - WINDOW_BEFORE)
+        window = self._window(program, on, start - start % page["view"]["interval"])
+        return {"on": on, "page": window, "view": window["view"], "inputs": window["inputs"], "now": at,
+                "start": seg["start"], "end": seg["end"], "label": f"{hm(seg['start'])} - {hm(seg['end'])}"}
+
     def running_shift(self, program: str, name: str, now: datetime) -> Optional[Dict[str, Any]]:
         """The shift ``name`` is on now or starts later today, in the schedule's own time (``now`` is read there): the
         day it started on, the window the RTA shows it in and ``now`` in that window's minutes; None when there is none
         (nothing yet today, or it is over). An overnight shift that began yesterday counts until it ends."""
         today = now.date()
         for on in (today - timedelta(days=1), today):
-            try:
-                page = self.days.page(program, on, self.measure_of(program))
-            except ValueError:
-                continue
-            seg = next((s for lane in (page["view"]["lanes"] if page else []) if lane["name"] == name
-                        for s in lane["segments"] if s["offset"] == 0), None)
-            if seg is None:
-                continue
             at = (today - on).days * 1440 + now.hour * 60 + now.minute
-            if seg["end"] <= at or (on < today and seg["end"] <= 1440):
+            found = self._shift_of(program, name, on, at)
+            if found is None:
+                continue
+            if found["end"] <= at or (on < today and found["end"] <= 1440):
                 continue  # over, or yesterday's day shift
-            start = max(0, seg["start"] - WINDOW_BEFORE)
-            window = self._window(program, on, start - start % page["view"]["interval"])
-            return {"on": on, "page": window, "view": window["view"], "inputs": window["inputs"], "now": at,
-                    "start": seg["start"], "end": seg["end"], "label": f"{hm(seg['start'])} - {hm(seg['end'])}"}
+            return found
         return None
 
-    # ------------------------------------------------------------------ break changes
-    def break_options(self, program: str, name: str, idx: int, now: datetime) -> Dict[str, Any]:
+    def tomorrow_shift(self, program: str, name: str, now: datetime) -> Optional[Dict[str, Any]]:
+        """Phase AU (owner, 2026-10-21: "today and tomorrow max"): the shift that starts tomorrow. ``now`` is negative
+        in its minutes, so every break of it may be asked to move."""
+        tomorrow = now.date() + timedelta(days=1)
+        return self._shift_of(program, name, tomorrow, -1440 + now.hour * 60 + now.minute)
+
+    def shift_on(self, program: str, name: str, now: datetime, on: Optional[date]) -> Optional[Dict[str, Any]]:
+        """The shift a break may be changed in: the running one (``on`` None or its day) or tomorrow's; nothing later."""
+        if on is not None and on == now.date() + timedelta(days=1):
+            return self.tomorrow_shift(program, name, now)
         found = self.running_shift(program, name, now)
+        if found is not None and on is not None and found["on"] != on:
+            raise ValueError("A break can be changed for today and tomorrow only.")
+        if found is None and on is not None:
+            raise ValueError("A break can be changed for today and tomorrow only.")
+        return found
+
+    # ------------------------------------------------------------------ break changes
+    def break_options(self, program: str, name: str, idx: int, now: datetime,
+                      on: Optional[date] = None) -> Dict[str, Any]:
+        found = self.shift_on(program, name, now, on)
         if found is None:
-            raise ValueError("You have no shift running today to change a break in.")
+            raise ValueError("You have no shift running today to change a break in." if on is None else
+                             f"You have no shift on {on:%a %d %b} to change a break in.")
         options = break_choices(found["view"], found["inputs"], name, idx, found["now"] + LEAD_MINUTES)
         return {**options, "shift": found}
 
     def ask_break(self, program: str, name: str, user: Dict[str, Any], idx: int, to: str, why: str,
-                  now: datetime) -> int:
-        options = self.break_options(program, name, idx, now)
+                  now: datetime, on: Optional[date] = None) -> int:
+        options = self.break_options(program, name, idx, now, on)
         found = options["shift"]
         m = _minute(to)
         m += 1440 if m < found["start"] else 0
@@ -400,7 +427,7 @@ class ChangeBook:
         """Every time the request could be at now (from today's records), and the time it asks for: (options, asked)."""
         names, d, on = json.loads(row["names"]), json.loads(row["detail"]), date.fromisoformat(row["shift_date"])
         if row["kind"] == BREAK:
-            got = self.break_options(row["program"], names[0], d["idx"], now)
+            got = self.break_options(row["program"], names[0], d["idx"], now, on)
             return [c for c in got["choices"] if not c["current"]], d["to"]
         want = d.get("billable", False) if billable is None else billable
         return self.coaching_options(row["program"], on, names, d["minutes"], now, billable=want), d["start"]

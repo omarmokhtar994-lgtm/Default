@@ -15,6 +15,8 @@ from pathlib import Path
 
 from werkzeug.serving import make_server
 
+from webapp.tests import test_au_tomorrow as _au_tomorrow
+
 from webapp.tests.test_runs import REPO, make_app, seed_week, versioned_run
 
 # Phase J (owner-approved control-room redesign): screenshots of the new look.
@@ -3222,3 +3224,111 @@ class TheMergedViewsInTheBrowser(unittest.TestCase):
             {"program": self.one, "week": "2026-10-11", "merge": "1", "tz": self.fx.CAIRO}))
         expect(page.get_by_role("heading", name="SAKS, Tier 1 + Tier 2, week of")).to_be_visible()
         expect(page.locator("table.wkgrid")).to_be_visible()
+
+
+@unittest.skipIf(sync_playwright is None, "Playwright is not installed here; UI tests skipped")
+class TheRequestsInTheBrowser(_au_tomorrow.TheNextDay):
+    """Phase AU: an associate's Today and Weeks tabs, a break change for tomorrow, the RTA deciding on its own tab, and
+    the coaching list's search box, in a real browser with the strict CSP (no console errors). The clock is stopped on
+    Wednesday 14 October 2026 at 12:00 Cairo time."""
+
+    @classmethod
+    def setUpClass(cls):
+        from unittest import mock
+        from webapp.tests.test_as_pages import _Noon
+        super().setUpClass()
+        cls.clock = mock.patch("webapp.app.datetime", _Noon)
+        cls.clock.start()
+        cls.server = make_server("127.0.0.1", 0, cls.app, threaded=True)
+        cls.base = f"http://127.0.0.1:{cls.server.server_port}"
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.pw = sync_playwright().start()
+        launch = {"headless": True}
+        if os.path.exists(CHROMIUM):
+            launch["executable_path"] = CHROMIUM
+        try:
+            cls.browser = cls.pw.chromium.launch(**launch)
+        except Exception as exc:  # pragma: no cover
+            cls.clock.stop()
+            cls.pw.stop()
+            cls.server.shutdown()
+            raise unittest.SkipTest(f"Chromium could not start: {exc}")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.clock.stop()
+        cls.pw.stop()
+        cls.server.shutdown()
+        super().tearDownClass()
+
+    def setUp(self):
+        self.clear()
+
+    page = InTheBrowser.page
+
+    for _name in [n for n in dir(_au_tomorrow.TheNextDay) if n.startswith("test_")]:
+        locals()[_name] = None  # the fixture's own tests run in their own module, not again here
+    del _name
+
+    def sign_in(self, page, username, password):
+        page.goto(self.base + "/login")
+        page.get_by_label("Username").fill(username)
+        page.get_by_label("Password").fill(password)
+        page.get_by_role("button", name="Sign in").click()
+        page.wait_for_load_state()
+
+    def watched(self):
+        page = self.page()
+        problems = []
+        page.on("console", lambda m: problems.append(m.text) if m.type == "error" else None)
+        page.on("pageerror", lambda e: problems.append(str(e)))
+        page.on("response", lambda r: problems.append(f"{r.status} {r.url}") if r.status in (403, 404, 500) else None)
+        return page, problems
+
+    def test_an_associate_moves_between_today_and_weeks_and_asks_for_tomorrow(self):
+        with self.store._db() as db:
+            db.execute("delete from change_requests")
+        page, problems = self.watched()
+        self.sign_in(page, "a027", "Associate-pass-1")
+        expect(page.get_by_role("heading", name="My day")).to_be_visible()
+        expect(page.locator("nav.tabs a[aria-current=page]")).to_have_text("Today")
+        page.locator("nav.tabs").get_by_role("link", name="Weeks").click()
+        expect(page.get_by_role("heading", name="My weeks")).to_be_visible()
+        page.locator("nav.tabs").get_by_role("link", name="Today").click()
+        page.get_by_role("link", name="Change").nth(2).click()  # tomorrow's first break
+        expect(page.get_by_role("heading", name="Move Break 1 tomorrow")).to_be_visible()
+        page.locator("input[name=to]:not([disabled])").first.check()
+        page.get_by_role("button", name="Send to the RTA").click()
+        expect(page.get_by_text("waiting for the RTA")).to_be_visible()
+        self.assertEqual(problems, [])
+
+    def test_the_rta_decides_on_its_own_tab_and_stays_there(self):
+        with self.store._db() as db:
+            db.execute("delete from change_requests")
+        page, problems = self.watched()
+        self.sign_in(page, "a027", "Associate-pass-1")
+        page.goto(self.base + "/me/breaks?change=0")
+        page.locator("input[name=to]:not([disabled])").first.check()
+        page.get_by_role("button", name="Send to the RTA").click()
+        other = self.page()
+        self.sign_in(other, "rta1", "Staff-pass-123")
+        other.goto(self.base + "/day?" + urllib.parse.urlencode({"program": self.key, "date": "2026-10-14", "view": "requests"}))
+        expect(other.locator("nav.tabs a[aria-current=page]")).to_contain_text("Requests")
+        other.get_by_role("button", name="Approve as asked").click()
+        other.wait_for_load_state()
+        self.assertIn("view=requests", other.url)
+        expect(other.get_by_text("Approved:")).to_be_visible()
+        self.assertEqual(problems, [])
+
+    def test_the_coaching_list_filters_by_name(self):
+        page, problems = self.watched()
+        self.sign_in(page, "tm_only", "Manager-pass-123")
+        page.goto(self.base + "/requests/coaching?" + urllib.parse.urlencode({"program": self.key}))
+        rows = page.locator("#coach-list .exp-kind")
+        total = rows.count()
+        page.get_by_label("Find an associate").fill("027")
+        self.assertEqual(page.locator("#coach-list .exp-kind:visible").count(), 1)
+        page.get_by_label("Find an associate").fill("")
+        self.assertEqual(page.locator("#coach-list .exp-kind:visible").count(), total)
+        self.assertEqual(problems, [])

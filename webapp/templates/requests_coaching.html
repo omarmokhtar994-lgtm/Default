@@ -44,5 +44,5 @@
 </section>
 {% endif %}
 {% if mine %}<section class="panel" aria-labelledby="mine-h"><h2 id="mine-h">My requests</h2>
-  <ul class="log">{% for r in mine %}<li>{{ r.names_list|join(', ') }}: {{ r.what }} on {{ r.on.strftime('%a %d %b') }}: {{ r.status_words }}{% if r.decision %}. “{{ r.decision }}”{% endif %}{% if r.outcome %}. {{ r.outcome }}{% endif %}</li>{% endfor %}</ul></section>{% endif %}
+  <ul class="log">{% for r in mine %}<li>{{ r.names_list|join(', ') }}: {{ r.what }} on {{ r.on.strftime('%a %d %b') }}: {{ r.status_words }}{% if r.decision %}. “{{ r.decision }}”{% endif %}{% if r.outcome %}. {{ r.outcome }}{% endif %}{% if r.status == 'waiting' %} <form method="post" action="{{ url_for('requests_coaching_cancel', request_id=r.id) }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="quiet">Cancel</button></form>{% endif %}</li>{% endfor %}</ul></section>{% endif %}
 {% endblock %}

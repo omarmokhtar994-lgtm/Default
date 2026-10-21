@@ -1314,12 +1314,17 @@ def create_app(config: Dict[str, Any]) -> Flask:
             return redirect(url_for("home"))
         key, name = _my_unit(), g.user["roster_name"]
         book = app.extensions["changes"]
-        now, found, options, problem = _local_now(key) if key else None, None, None, ""
+        now, found, options, problem, tomorrow = _local_now(key) if key else None, None, None, "", None
         if key:
             try:
                 found = book.running_shift(key, name, now)
+                tomorrow = book.tomorrow_shift(key, name, now)  # Phase AU: today and tomorrow, no later
                 picked = request.args.get("change", type=int)
-                if found is not None and picked is not None:
+                next_day = request.args.get("day") == "tomorrow"
+                if picked is not None and next_day and tomorrow is not None:
+                    options = book.break_options(key, name, picked, now, tomorrow["on"])
+                    options["picked"], options["day"] = picked, "tomorrow"
+                elif found is not None and picked is not None:
                     options = book.break_options(key, name, picked, now)
                     options["picked"] = picked
             except ValueError as exc:
@@ -1328,6 +1333,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if found is not None:
             seg = next(s for lane in found["view"]["lanes"] if lane["name"] == name for s in lane["segments"]
                        if s["offset"] == 0)
+        tseg = None
+        if tomorrow is not None:
+            tseg = next(s for lane in tomorrow["view"]["lanes"] if lane["name"] == name for s in lane["segments"]
+                        if s["offset"] == 0)
         card = None  # Phase AU: Today carries the day's card (it was on My week)
         if key and now is not None:
             try:
@@ -1335,7 +1344,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 card = my_day(page["view"], name, now.hour * 60 + now.minute) if page else None
             except ValueError:  # a day whose input workbook is not kept: the breaks say so, the card is left out
                 card = None
-        return render_template("me_breaks.html", unit=key, card=card, found=found, seg=seg, options=options, problem=problem,
+        return render_template("me_breaks.html", unit=key, card=card, tomorrow=tomorrow, tseg=tseg, found=found, seg=seg, options=options, problem=problem,
                                today=now.date() if now else None,
                                mine=book.mine(key, g.user["id"]) if key else [], hm=hm,
                                now_at=found["now"] if found else 0)
@@ -1348,8 +1357,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if not g.user["is_associate"] or not key:
             abort(403, description="Only an associate on a schedule asks to move a break here.")
         try:
-            app.extensions["changes"].ask_break(key, g.user["roster_name"], g.user, request.form.get("idx", type=int, default=-1),
-                                                request.form.get("to", ""), request.form.get("why", ""), _local_now(key))
+            now = _local_now(key)
+            book = app.extensions["changes"]
+            on = (now.date() + timedelta(days=1)) if request.form.get("day") == "tomorrow" else None
+            book.ask_break(key, g.user["roster_name"], g.user, request.form.get("idx", type=int, default=-1),
+                           request.form.get("to", ""), request.form.get("why", ""), now, on)
             flash("Sent to the RTA. You can cancel it until it is decided.")
         except ValueError as exc:
             flash(str(exc))
@@ -1364,6 +1376,20 @@ def create_app(config: Dict[str, Any]) -> Flask:
         except ValueError as exc:
             flash(str(exc))
         return redirect(url_for("me_breaks"), code=303)
+
+    @app.route("/requests/coaching/<int:request_id>/cancel", methods=["POST"])
+    @login_required
+    def requests_coaching_cancel(request_id: int):  # type: ignore[no-untyped-def]
+        """Phase AU: the one who asked for coaching takes the request back until the RTA has decided it."""
+        if g.user["is_associate"] or not _can_ask_coaching():
+            abort(403, description="Your role cannot ask for coaching here.")
+        row = app.extensions["store"].get_change_request(request_id)
+        try:
+            app.extensions["changes"].cancel(request_id, g.user)
+            flash("Cancelled.")
+        except ValueError as exc:
+            flash(str(exc))
+        return redirect(url_for("requests_coaching", program=row["program"] if row else None), code=303)
 
     def _can_ask_coaching() -> bool:
         store = app.extensions["store"]

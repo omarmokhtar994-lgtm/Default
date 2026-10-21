@@ -1,6 +1,6 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
 {# Phase W: plan every break of a version at once (fill, or plan again), as a new version. #}
-{% macro auto_breaks(version, breaks, may_use, back='') %}
+{% macro auto_breaks(version, breaks, may_use, back='') %}{% if can('schedules_change') %}
 <details class="autobreaks">
   <summary class="button{% if not breaks %} primary{% endif %}">{{ 'Re-plan breaks automatically' if breaks else 'Plan breaks automatically' }}</summary>
   <form method="post" action="{{ url_for('auto_breaks', schedule_id=version.id) }}" class="panel autobreaks-form">
@@ -13,5 +13,5 @@
     {% if may_use %}<label class="exp-kind"><input type="checkbox" name="use" value="1" checked><span>Use the new version for this week (RTA reads it)</span></label>{% endif %}
     <p><button class="primary" type="submit">{{ 'Re-plan breaks' if breaks else 'Plan breaks' }}</button></p>
   </form>
-</details>
+</details>{% endif %}
 {% endmacro %}

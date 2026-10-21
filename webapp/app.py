@@ -609,24 +609,46 @@ def create_app(config: Dict[str, Any]) -> Flask:
         error = ""
         if request.method == "POST":
             throttle, address = app.extensions["throttle"], request.remote_addr or ""
+            typed = (request.form.get("username", "") or "").strip().lower()
+            account = app.extensions["store"].get_user_by_name(typed) if typed else None
+            # the typed name is kept only when it is an account: a wrong box may hold a password
+            who = {"subject": account["username"] if account else "(no such username)",
+                   "user_id": account["id"] if account else None}
             if throttle.held(address):  # Phase AT: too many wrong sign-ins from this address; not even a right password
+                app.extensions["store"].add_event(kind="sign_in_held", detail=f"from {address}", **who)
                 return render_template("login.html", error="Too many sign-in attempts from this device. Wait 15 "
                                                            "minutes and try again."), 429
             user, reason = app.extensions["store"].authenticate(request.form.get("username", ""),
                                                                 request.form.get("password", ""))
             if user is None and reason != "disabled":
                 throttle.failed(address)
+            if user is None:
+                app.extensions["store"].add_event(kind="sign_in_failed", detail=f"from {address}: {reason}", **who)
+            else:
+                app.extensions["store"].add_event(kind="signed_in", detail=f"from {address}", **who)
             if user is not None:
                 session.clear()
                 session.permanent = True
                 session["user_id"] = user["id"]
                 session["pw"] = session_stamp(user)
+                session["at"] = time.time()  # Phase AU: when this session began (see end_other_sessions)
                 csrf_token()
                 return redirect(safe_next(request.args.get("next", "")) or url_for("home"))
             error = {"locked": "Too many wrong passwords: this account is locked for 15 minutes.",
                      "disabled": "This account is switched off. Ask your admin."}.get(
                          reason, "Wrong username or password.")
         return render_template("login.html", error=error)
+
+    @app.route("/account/sessions/end", methods=["POST"])
+    @login_required
+    def end_other_sessions():  # type: ignore[no-untyped-def]
+        """Phase AU: every other device is signed out (a lost phone); this one stays."""
+        now = time.time()
+        app.extensions["store"].end_other_sessions(g.user["id"], now)
+        session["at"] = now + 0.001  # after the mark, so this device is the one that stays
+        _record("sessions_ended", subject=g.user["username"])
+        flash("Every other device is signed out.")
+        return redirect(url_for("change_password"))
 
     @app.route("/logout", methods=["POST"])
     def logout():  # type: ignore[no-untyped-def]
@@ -778,7 +800,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
                        team_manager=names.get(u["team_manager_id"], ""),
                        team_choices=access.team_managers_for(u) if u["is_associate"] else [])
                   for u in store.list_users() if admin or access.can_manage(u)]
+        held = app.extensions["throttle"].held_now() if admin else []
         return render_template("admin_users.html", users=people, error=error, made=made, grantable=access.grantable(),
+                               held=held,
                                roles=ROLES if admin else {k: ROLES[k] for k in STAFF_ADDS}, admin=admin,
                                roster_names=sorted(_roster_index([p["id"] for p in access.grantable()], tree).items()))
 
@@ -985,6 +1009,16 @@ def create_app(config: Dict[str, Any]) -> Flask:
         _bulk_held().pop(sheet_token, None)
         return send_file(io.BytesIO(held["sheet"]), as_attachment=True, download_name="Temporary_passwords.xlsx",
                          mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    @app.route("/admin/signins/release", methods=["POST"])
+    @admin_required
+    def admin_signins_release():  # type: ignore[no-untyped-def]
+        """Phase AU: an admin lifts the hold on an address (a whole office behind one address, a tester)."""
+        address = (request.form.get("address") or "").strip()
+        app.extensions["throttle"].release(address)
+        _record("sign_in_released", subject=address)
+        flash(f"{address} may sign in again.")
+        return redirect(url_for("admin_users"))
 
     @app.route("/admin/users/export.xlsx")
     @manager_required

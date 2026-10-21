@@ -36,7 +36,8 @@ KINDS = {"attendance": "Attendance", "activities": "Activities", "activity": "Da
 VERSION_EVENTS = {"version_created": "New version", "set_in_use": "Set in use"}
 OTHER_EVENTS = {"run_uploaded": "Run uploaded", "run_started": "Run started", "run_stopped": "Run stopped",
                 "run_resumed": "Run resumed", "roles_changed": "Roles changed", "team_manager_set": "Team manager set", "downloaded": "Downloaded", "exported": "Exported",
-                "user_added": "Person added", "user_deleted": "Person deleted", "users_bulk_added": "People added from a file", "user_disabled": "Person switched off", "user_enabled": "Person switched on",
+                "user_added": "Person added", "user_deleted": "Person deleted", "users_bulk_added": "People added from a file", "signed_in": "Signed in", "sign_in_failed": "Sign-in failed",
+                "sign_in_held": "Sign-in held (too many tries)", "sign_in_released": "Sign-in hold lifted", "sessions_ended": "Other devices signed out", "users_exported": "People list downloaded", "user_disabled": "Person switched off", "user_enabled": "Person switched on",
                 "password_reset": "Password reset", "run_details_changed": "Run details changed",
                 "program_renamed": "Program renamed", "user_programs_changed": "Programs or role changed",
                 "program_set_up": "Programs and LOBs", "program_deleted": "Program deleted",

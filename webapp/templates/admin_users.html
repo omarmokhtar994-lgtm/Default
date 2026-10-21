@@ -55,6 +55,11 @@
     <button class="quiet" name="decision" value="off">Switch off</button> <button class="quiet" name="decision" value="on">Switch on</button>
   </form>
 </section>{% endif %}
+{% if held %}<section class="panel" aria-labelledby="held-h">
+  <h2 id="held-h">Addresses held after too many wrong sign-ins</h2>
+  <ul class="log">{% for address, n, until in held %}<li><b>{{ address }}</b>: {{ n }} wrong sign-ins in 15 minutes.
+    <form method="post" action="{{ url_for('admin_signins_release') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="address" value="{{ address }}"><button class="quiet">Let this address sign in again</button></form></li>{% endfor %}</ul>
+</section>{% endif %}
 <datalist id="roster-names">{% for n, ids in roster_names %}<option value="{{ n }}" data-programs="{{ ids|sort|join(' ') }}">{% endfor %}</datalist>
 <table class="people"><thead><tr><th>Person</th><th>Role</th><th>Programs</th><th>State</th><th></th></tr></thead><tbody>
 {% for u in users %}<tr>

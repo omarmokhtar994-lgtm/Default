@@ -14,7 +14,7 @@ from flask import abort, current_app, g, redirect, request, session, url_for
 # Phase AG: the only pages an associate's account opens; anything else sends them to My week (or is refused).
 ASSOCIATE_PAGES = frozenset({"static", "login", "logout", "set_theme", "change_password", "me", "me_leave",
                              "me_leave_cancel", "me_swap", "me_swap_answer", "me_breaks", "me_breaks_ask",
-                             "me_breaks_cancel"})
+                             "me_breaks_cancel", "end_other_sessions"})
 SAFE_NEXT = re.compile(r"/(?![/\\])[^\x00-\x20\x7f\\]*")  # a path here: no second slash, no backslash or control character
 
 
@@ -64,6 +64,9 @@ def load_user() -> None:
         session["pw"] = stamp  # a session from before Phase AC: kept, and stamped now
     elif session["pw"] != stamp:
         session.clear()  # the password changed since this session signed in (a reset, or changed elsewhere)
+        return
+    if session.get("at", 0) < user.get("sessions_from", 0):
+        session.clear()  # "sign out other devices" was pressed after this session signed in (Phase AU)
         return
     g.user = user
 

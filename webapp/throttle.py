@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import threading
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 
 class SignInThrottle:
@@ -34,3 +34,18 @@ class SignInThrottle:
             for other in [a for a, times in self._seen.items() if not times or now - times[-1] >= self.seconds]:
                 del self._seen[other]  # forget addresses that have been quiet for a whole window
             self._seen.setdefault(address, self._recent(address, now)).append(now)
+
+    def held_now(self, now: Optional[float] = None) -> List[Tuple[str, int, float]]:
+        """The addresses held now: (address, wrong sign-ins in the window, when the hold ends)."""
+        now = time.time() if now is None else now
+        with self._lock:
+            out = []
+            for address in list(self._seen):
+                recent = self._recent(address, now)
+                if len(recent) >= self.limit:
+                    out.append((address, len(recent), recent[-self.limit] + self.seconds))
+            return sorted(out)
+
+    def release(self, address: str) -> None:
+        with self._lock:
+            self._seen.pop(address, None)

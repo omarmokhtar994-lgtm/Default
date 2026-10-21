@@ -120,7 +120,7 @@ class TheRoleRules(_Secured):
 
     def test_the_admin_only_pages_are_the_ones_that_name_it(self):
         self.assertEqual(ADMIN_ONLY, {"roles_page", "notifications_page", "notifications_remove", "notifications_test",
-                                      "program_rename", "program_setup"})
+                                      "program_rename", "program_setup", "admin_signins_release"})  # + Phase AU
 
     def test_an_admin_changing_a_role_changes_every_route_for_that_role_at_once(self):
         from webapp.permissions import matrix
@@ -233,6 +233,22 @@ class TheSession(_Secured):
             got = copy.get("/day", query_string={"program": self.alpha})
             self.assertEqual(got.status_code, 302, how)
             self.assertIn("/login", got.headers["Location"], how)
+
+    def test_sign_out_other_devices_ends_every_other_session_and_keeps_this_one(self):
+        # Phase AU: a button on Settings; the password change did this already, this is for a lost phone
+        here = sign_in(self.app, "plan_a", PASSWORD)
+        there = sign_in(self.app, "plan_a", PASSWORD)
+        self.assertEqual(there.get("/exports").status_code, 200)
+        page = here.get("/account/password").get_data(as_text=True)
+        self.assertIn("/account/sessions/end", page)
+        csrf = re.search(r'name="csrf_token" value="([^"]+)"', page).group(1)
+        got = here.post("/account/sessions/end", data={"csrf_token": csrf})
+        self.assertEqual(got.status_code, 302)
+        self.assertEqual(here.get("/exports").status_code, 200)
+        gone = there.get("/exports")
+        self.assertEqual(gone.status_code, 302)
+        self.assertIn("/login", gone.headers["Location"])
+        self.assertEqual(sign_in(self.app, "plan_a", PASSWORD).get("/exports").status_code, 200)  # a new sign-in works
 
     def test_a_role_taken_away_takes_effect_on_the_next_request(self):
         uid = self.store.add_user("demoted", "Demoted", PASSWORD, must_change=False)
@@ -443,6 +459,16 @@ class TheExportsStayInTheirProgram(_Secured):
             text = self.cells(got.data)
             self.assertIn("Alpha Person One", text, who)
             self.assertNotRegex(text, r"(?i)zorro|bravo", who)
+
+    def test_sign_in_history_is_for_people_who_see_everything_only(self):
+        self.store.add_event(kind="sign_in_failed", subject="plan_b", detail="from 198.51.100.9: bad",
+                             user_id=self.users["plan_b"])
+        query = {"from": "2026-10-01", "to": "2026-10-31", "format": "xlsx", "kind": list(KINDS)}
+        for who in ("plan_a", "sup_a"):
+            got = sign_in(self.app, who, PASSWORD).get("/exports/download", query_string=query)
+            self.assertNotIn("198.51.100.9", self.cells(got.data), who)
+        admin = sign_in(self.app, "omar", "Owner-pass-123")
+        self.assertIn("198.51.100.9", self.cells(admin.get("/exports/download", query_string=query).data))
 
     def test_asking_for_another_programs_download_by_any_route_is_refused(self):
         client = sign_in(self.app, "plan_a", PASSWORD)

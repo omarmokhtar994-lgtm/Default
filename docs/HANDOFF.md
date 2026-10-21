@@ -124,7 +124,13 @@ Load each with the Skill tool at the step it covers; following it from memory do
   stays safe in the autopilot's sense (target plus 10 minutes): `evidence/phase_au/BREAKS_RULE.md` has the rule and arms
   (engine break stage untouched). Pages offer only what the role may use (Home's New schedule, auto-breaks form;
   `TheOffersMatchTheRole`). Sign-in: `webapp/throttle.py` holds an address after 40 wrong sign-ins in 15 minutes.
-  Not done: messages to people when a request is decided (needs a channel: email or Teams, the owner decides).
+  Leftovers finished: answers to requests reach the asker in the site (menu count and a banner, `change_requests.seen`)
+  and the LOB's group (kind `request`, `ChangeBook._tell_the_group`; on by default, added once to LOBs that post
+  breaks); the Requests tab works in the all-LOBs view; people list download and switch several off or on
+  (`bulk_users.people_workbook`, `/admin/users/switch`); sign-in history events and an admin list of held addresses
+  with release; "Sign out other devices" on Settings (`users.sessions_from`, `session["at"]`); `tools/audit_dependencies.py`
+  runs pip-audit (manual step before a release, needs internet). Still not done: the engine's own break stage does not
+  follow the break shape (needs a pre-registered A/B); the password-on-create symptom needs the owner's exact message.
 - Release gate 2026-10-21: 1551 tests (floor raised from 1537). `evidence/phase_aq/CHECKS.md` has the A/B result.
 - Rules learned: a container restart kills background runs started with nohup; keep the session active while a long
   run goes. Check `git status` for rewritten old screenshots before every commit.

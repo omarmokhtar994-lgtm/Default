@@ -426,6 +426,9 @@ class Store:
                 db.execute("update notify_settings set kinds = kinds || ',request' where (',' || kinds || ',') like"
                            " '%,break,%' and (',' || kinds || ',') not like '%,request,%'")
             # Phase AR: a deleted person's account is closed and hidden; the row stays so the history still names them
+            # Phase AU: "sign out other devices": a session started before this time is no longer good
+            if "sessions_from" not in people:
+                db.execute("alter table users add column sessions_from real not null default 0")
             if "deleted" not in people:
                 db.execute("alter table users add column deleted integer not null default 0")
             # Phase AK: team managers, and the team manager an associate belongs to (none for everyone from before)
@@ -777,6 +780,15 @@ class Store:
                        (f"deleted-{user_id}", hash_password(secrets.token_urlsafe(24)), user_id))
             db.execute("delete from user_programs where user_id = ?", (user_id,))
             db.execute("update users set team_manager_id = null where team_manager_id = ?", (user_id,))
+
+    def end_other_sessions(self, user_id: int, at: float) -> None:
+        with self._db() as db:
+            db.execute("update users set sessions_from = ? where id = ?", (at, user_id))
+
+    def get_user_by_name(self, username: str) -> Optional[Dict[str, Any]]:
+        with self._db() as db:
+            row = db.execute("select * from users where username = ?", ((username or "").strip().lower(),)).fetchone()
+        return dict(row) if row else None
 
     def authenticate(self, username: str, password: str) -> Tuple[Optional[Dict[str, Any]], str]:
         """(user, "ok") or (None, "bad" | "locked" | "disabled")."""

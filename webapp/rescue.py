@@ -239,6 +239,8 @@ def solve(view: Dict[str, Any], inputs: Dict[str, Any], target: float, now: Opti
                 m.Add(int(round((now_count + c["back"]) * 100)) - 100 * sum(c["terms"]) >= int(round(keep * 100)))
 
     # gaps between a person's breaks, in the order they are in now (so none can come to overlap another)
+    soft_gaps: List[Tuple[int, Any]] = []  # Phase AX: the workbook's "Normal Maximum Gap" is a normal, not an absolute
+    soft_most = 0
     index = {id(item[2]): j for j, item in enumerate(moving)}
 
     def start_of(seg, b):
@@ -255,7 +257,14 @@ def solve(view: Dict[str, Any], inputs: Dict[str, Any], target: float, now: Opti
             gap_now = q["start"] - p["start"] - p["minutes"]
             m.Add(sq - sp - p["minutes"] >= min(lo_gap or 0, gap_now))
             if hi_gap is not None and not _across_cancel(seg, p["idx"], q["idx"]):
-                m.Add(sq - sp - p["minutes"] <= max(hi_gap, gap_now))
+                if defaults is None:
+                    m.Add(sq - sp - p["minutes"] <= max(hi_gap, gap_now))
+                else:  # past it is allowed, by as little as it takes: steps over, weighed with the engine's other rules
+                    room = max(1, (seg["end"] - seg["start"]) // STEP)
+                    over_by = m.NewIntVar(0, room, "")
+                    m.Add(STEP * over_by >= sq - sp - p["minutes"] - hi_gap)
+                    soft_gaps.append((1, over_by))
+                    soft_most += room
 
     def hint(solver=None):
         m.ClearHints()
@@ -304,6 +313,8 @@ def solve(view: Dict[str, Any], inputs: Dict[str, Any], target: float, now: Opti
                     rule_terms.append((-(-outside // STEP), v))
                     worst_rule = max(worst_rule, -(-outside // STEP))
             shape_most, rule_most = shape_most + worst_shape, rule_most + worst_rule
+    rule_terms += soft_gaps
+    rule_most += soft_most
     unit = per_move * (len(moving) + 1)  # more than every break moved and every step moved can add up to
     per_rule = unit
     per_shape = per_rule * rule_most + unit

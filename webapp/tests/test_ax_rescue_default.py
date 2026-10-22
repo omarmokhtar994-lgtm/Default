@@ -39,11 +39,38 @@ class TheDefaultInRescue(unittest.TestCase):
     def test_without_a_default_the_answer_is_the_one_it_always_gave(self):
         _, a = self.solve(2)
         _, b = self.solve(2, None)
-        self.assertEqual(a["moves"], b["moves"])
+        key = lambda f: (f["status"], f["after_at"], f["after_safe"], len(f["given_up"]), len(f["moves"]))  # noqa: E731
+        self.assertEqual(key(a), key(b))  # equally good answers can differ in who moves (four workers): what they win cannot
 
 
 def penalty_for(name, idx, at):
     return penalty(at)
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+class TheNormalMaximumGapIsANormal(unittest.TestCase):
+    """The workbook says "Break Normal Maximum Gap Minutes: two breaks are normally no further apart than this" and "Break
+    Absolute Minimum Gap Minutes: never closer": the minimum is absolute, the maximum is a normal, and the engine's own
+    breaks deviate from it. With a default given, Rescue may pass the maximum by as little as it takes."""
+    PEOPLE = [("Associate 001", "ENG", "11:00 - 15:00", [("Break 1", "11:15", 15), ("Lunch", "12:45", 60)]),
+              ("Associate 002", "ENG", "11:00 - 15:00", [("Break 1", "11:30", 15), ("Lunch", "13:00", 60)]),
+              ("Associate 003", "ENG", "11:00 - 15:00", [("Break 1", "11:45", 15), ("Lunch", "13:15", 60)]),
+              ("Associate 004", "ENG", "11:00 - 15:00", [("Break 1", "12:00", 15), ("Lunch", "13:30", 60)])]
+
+    def run_with(self, gap_max, defaults):
+        wk, inp = _tr.week(self.PEOPLE), {**_tr.inputs(), "gap_min": 0, "gap_max": gap_max}
+        view = day_view(wk, inp, _tr.D, {}, {})
+        return rescue.solve(view, inp, 0.9, 0, 3, seconds=20.0, defaults=defaults)
+
+    def test_with_a_default_it_is_never_worse_than_when_the_maximum_is_absolute(self):
+        for gap_max in (30, 60, 120):
+            hard = self.run_with(gap_max, None)
+            soft = self.run_with(gap_max, lambda name, idx, at: (0, 0))
+            self.assertGreaterEqual((soft["after_at"], soft["after_safe"]), (hard["after_at"], hard["after_safe"]), gap_max)
+
 
 
 if __name__ == "__main__":

@@ -56,6 +56,15 @@ class ThePreferredShape(unittest.TestCase):
         first = planned(needs=needs)[0]
         self.assertFalse(first < 840 and first + 15 > 720, hm(first))
 
+    def test_when_the_shape_cannot_be_held_the_nearest_time_to_it_is_taken(self):
+        # Phone needs this one person from 12:00 to 14:00, so the first break (wanted 12:00 to 13:30) cannot be there. 11:45
+        # is 15 minutes short of the band; 14:00 would be 30 past it: it takes 11:45, the nearest
+        needs = setup(need={"P": grid(lambda t: 1 if 720 <= t < 840 else 0)}, email_mode="none", languages=[],
+                      email_hours={d: {"hours": 0.0, "languages": {}, "start": 0, "end": 1440} for d in range(7)})
+        needs["rules"] = {**needs["rules"], "max_run": {"P": 0, "C": 0, "E": 0}}
+        first = planned(needs=needs)[0]
+        self.assertEqual(first, 11 * H + 45, hm(first))
+
     def test_nothing_moves_when_breaks_may_not_move(self):
         self.assertEqual([s / H for s in planned(move=False)], [10.75, 12, 15])
 

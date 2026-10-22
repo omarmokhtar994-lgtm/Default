@@ -32,9 +32,10 @@ from .channel_solver import SolverStopped, solve as solve_channels
 LANGUAGE, BALANCED, LONG, MOVE, SWITCH, FAIR = 200, (100, 60, 30), 40, 5, 2, 1
 # Phase AX (owner, 2026-10-22: "prefer more the usual shape, followed by the engine layer"): each part of the usual shape a
 # break misses (first break 2 to 3.5 hours in, lunch 2 to 3 hours of work after it, last break ending an hour before the
-# shift does) costs this: above leaving a break where it is (MOVE), below a channel's or a language's need and below
-# a long run, so the shape never costs coverage. The engine's rules are limits, not costs.
-SHAPE = 12
+# shift does) costs this per quarter hour it is off: a break a quarter hour off is cheaper than one left where it was
+# (MOVE), but two or more off is not, and a whole hour off (12) stays below a channel's or a language's need and below
+# a long run, so the shape never costs coverage; when it cannot be held the nearest time to it is taken.
+SHAPE = 3
 # Phase AM: a quarter hour on another channel than the one a person is on now (Fix channels on the RTA): above the
 # fair spread (FAIR * 2 at most), so fairness alone never moves anyone; below any shortfall, so coverage always does
 KEEP = 3
@@ -160,21 +161,28 @@ def plan_day(people: List[Dict[str, Any]], setup: Dict[str, Any], rules: Dict[st
 
 def _shape(m: Any, cost: List[Any], p: Dict[str, Any], picks: Dict[Tuple[str, int], Dict[int, Any]],
            starts: List[Tuple[Any, int, bool]]) -> None:
-    """The usual shape of a person's breaks as costs (``SHAPE`` each part missed): see ``break_plan.shape_fit``."""
+    """The usual shape of a person's breaks as costs, graded by how far a part is off, ``SHAPE`` per quarter hour (so when
+    it cannot be held the nearest time to it is taken): see ``break_plan.shape_distance``."""
     name, lo, hi, n = p["name"], p["start"], p["end"], len(p["breaks"])
     kinds = [kind.casefold() for kind, _, _ in p["breaks"]]
+
+    def quarters(far: int) -> int:
+        return -(-far // QUARTER)
+
     if n:
-        cost.append(SHAPE * sum(v for c, v in picks[name, 0].items() if not FIRST_FROM <= c - lo <= FIRST_TO))
+        cost.append(sum(SHAPE * quarters(max(0, FIRST_FROM - (c - lo)) + max(0, (c - lo) - FIRST_TO)) * v
+                        for c, v in picks[name, 0].items()))
     if n >= 2:
         minutes = p["breaks"][-1][2]
-        cost.append(SHAPE * sum(v for c, v in picks[name, n - 1].items() if c + minutes > hi - LAST_CLEAR))
+        cost.append(sum(SHAPE * quarters(max(0, c + minutes - (hi - LAST_CLEAR))) * v
+                        for c, v in picks[name, n - 1].items()))
     if "lunch" in kinds[1:]:
         i = kinds.index("lunch", 1)
         gap = starts[i][0] - (starts[i - 1][0] + starts[i - 1][1])
-        right = m.NewBoolVar("")
-        m.Add(gap >= LUNCH_FROM).OnlyEnforceIf(right)
-        m.Add(gap <= LUNCH_TO).OnlyEnforceIf(right)
-        cost.append(SHAPE * (1 - right))
+        off = m.NewIntVar(0, 24 * 60 // QUARTER, "")  # quarter hours off the 2 to 3 hours of work after the first break
+        m.Add(QUARTER * off >= LUNCH_FROM - gap)
+        m.Add(QUARTER * off >= gap - LUNCH_TO)
+        cost.append(SHAPE * off)
 
 
 def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=None,

@@ -1009,6 +1009,8 @@ def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: i
     slots = [x for c in cells for x in c["slots"]]
     sums = [sum(slots[k * per:(k + 1) * per]) for k in range(len(cells))]
     lo_gap, hi_gap = inputs.get("gap_min"), inputs.get("gap_max")
+    if fit is not None or desired:  # Phase AX (owner, 2026-10-22: the engine deviates from its own rules, "to the nearest"): the
+        hi_gap = None  # workbook's "Normal Maximum Gap" is a normal, not an absolute: the fit measures it, the minimum stays hard
     interval_mode = view["measure"] == "interval"
 
     def pm(k: int, total: float) -> float:

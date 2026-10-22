@@ -1091,7 +1091,8 @@ class DayBook:
                     f"{plan[idx]['kind']} moved {hm(was)} to {hm(m)}{suffix}")
         if missed:  # Phase AV: the associate missed this break; kept as an incident for the analysis
             self.store.add_incident(program=program, shift_date=on.isoformat(), associate=name, kind="missed_break",
-                                    idx=idx, minutes=0, note=plan[idx]["kind"], user_id=user_id, at=time.time())
+                                    idx=idx, minutes=int(plan[idx].get("minutes") or 0), note=plan[idx]["kind"],
+                                    user_id=user_id, at=time.time())
         self._log(program, on, name, what, user_id, "break", ref=f"break:{name}:{idx}",
                   before="cancelled" if was_cancelled else hm(was), after=hm(plan[idx]["start"] if at is None else m))
 

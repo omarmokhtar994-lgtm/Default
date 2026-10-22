@@ -47,8 +47,11 @@ class TheBreakChoices(unittest.TestCase):
     def test_every_legal_time_is_offered_past_midnight_and_inside_the_gaps(self):
         got = break_choices(view(), INPUTS, "Associate 014", 0, now=SHIFT[0])
         starts = [c["start"] for c in got["choices"]]
-        self.assertEqual(starts[0], 1365)   # Break 1 must end 240 minutes or less before Lunch at 03:00
-        self.assertEqual(starts[-1], 1545)  # and 60 minutes or more before it
+        # Re-pinned (Phase AX, owner 2026-10-22: what people pick by hand shows warnings and never stops them): the gaps no longer
+        # limit the list, they mark a time (test_ax_requests_warn). Before: 1365 to 1545, 240 minutes or less and 60 or more
+        # before Lunch at 03:00. Now: from the shift's start to the last quarter hour before Lunch.
+        self.assertEqual(starts[0], 1320)
+        self.assertEqual(starts[-1], 1605)
         self.assertEqual(starts, sorted(starts))
         self.assertTrue(all(s % 15 == 0 for s in starts))
         self.assertIn(1470, starts)         # the time it has now is a choice, marked as the current one
@@ -72,7 +75,9 @@ class TheBreakChoices(unittest.TestCase):
 
     def test_the_other_break_is_the_limit_after_it_has_moved(self):
         got = break_choices(view(lunch_start=1700), INPUTS, "Associate 014", 0, now=SHIFT[0])
-        self.assertEqual(got["choices"][-1]["start"], 1620)  # the latest quarter hour at least 60 minutes before 03:00+
+        # Re-pinned (Phase AX, as above): the other break is still the limit, no longer with the 60 minutes: the latest quarter hour
+        # before it (Lunch at 1700 less this break's 15 minutes is 1685; 1680 on the quarter hour)
+        self.assertEqual(got["choices"][-1]["start"], 1680)
 
     def test_someone_with_no_such_break_is_refused(self):
         with self.assertRaises(ValueError):

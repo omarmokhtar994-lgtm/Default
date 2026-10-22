@@ -51,3 +51,14 @@ post only the latest, followed by "Breaks now: ...".
 - The Incidents page has **Counts by type**: a count and the time for each kind (missed breaks, unplanned leave, sick,
   planned leave, late logins, early leave, coaching, training, meetings, system issues, tasks, bio breaks), for everyone in
   the period and for one associate when one is open.
+
+## The break rules, in one model (Phase AX)
+- The workbook's break rules are three layers. Intervals come first in the RTA tools (Fix the rest, Rescue). Then the default
+  shape (first break 2 to 3.5 hours into the shift, lunch 2 to 3 hours of work after it, the last break ending an hour before
+  the shift does). Then the engine's rules. When a tool has to give something up for an interval it gives up the least: it is
+  measured in minutes off the shape and off the rules.
+- The minimum gap ("Break Absolute Minimum Gap") is absolute for the tools. The maximum ("Break Normal Maximum Gap") is a
+  normal: the tools may pass it by as little as needed, and Plan channels does too when a channel's need asks for it.
+- What people choose by hand never stops them. A single move, Change several breaks and an associate's break request list
+  every time the shift and the other breaks allow, and mark a time that is closer than the minimum gap, further than the
+  normal maximum or off the default with what it breaks. The RTA sees the same words on the request.

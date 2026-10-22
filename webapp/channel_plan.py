@@ -35,7 +35,7 @@ LANGUAGE, BALANCED, LONG, MOVE, SWITCH, FAIR = 200, (100, 60, 30), 40, 5, 2, 1
 # shift does) costs this per quarter hour it is off: a break a quarter hour off is cheaper than one left where it was
 # (MOVE), but two or more off is not, and a whole hour off (12) stays below a channel's or a language's need and below
 # a long run, so the shape never costs coverage; when it cannot be held the nearest time to it is taken.
-SHAPE = 3
+SHAPE, GAP = 3, 2  # GAP: a quarter hour past the workbook's Normal Maximum Gap (a normal, not an absolute)
 # Phase AM: a quarter hour on another channel than the one a person is on now (Fix channels on the RTA): above the
 # fair spread (FAIR * 2 at most), so fairness alone never moves anyone; below any shortfall, so coverage always does
 KEEP = 3
@@ -227,8 +227,10 @@ def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=N
             if f1 and f2:
                 continue  # both as they are: the row check reports them
             m.Add(s2 - (s1 + m1) >= (rules.get("min_gap") or 0))
-            if rules.get("max_gap"):
-                m.Add(s2 - (s1 + m1) <= rules["max_gap"])
+            if rules.get("max_gap"):  # Phase AX (owner: the engine deviates from it too): a normal, not an absolute: it costs
+                past = m.NewIntVar(0, 24 * 60 // QUARTER, "")  # quarter hours past it, ``GAP`` each, so it is passed only
+                m.Add(QUARTER * past >= s2 - (s1 + m1) - rules["max_gap"])  # for a channel's need and by the least
+                cost.append(GAP * past)
         for t in slots[name]:
             cover = [v for k, (kind, _, minutes) in enumerate(p["breaks"]) for c, v in picks[name, k].items()
                      if c < t + QUARTER and t < c + minutes]

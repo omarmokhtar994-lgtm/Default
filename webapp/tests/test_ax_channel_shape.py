@@ -71,3 +71,23 @@ class ThePreferredShape(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheNormalMaximumGapInPlanChannels(unittest.TestCase):
+    """The workbook's "Break Normal Maximum Gap" is a normal (the validator has no failure for it): Plan channels passes it only
+    when a channel's need asks for it, and by the least."""
+    def test_with_nothing_asking_for_it_the_gaps_stay_inside_the_maximum(self):
+        first, lunch, last = planned(breaks=(12.5, 15, 17.25))
+        self.assertLessEqual(lunch - (first + 15), RULES["max_gap"])
+        self.assertLessEqual(last - (lunch + 30), RULES["max_gap"])
+
+    def test_a_need_that_forces_a_longer_gap_gets_it_by_the_least(self):
+        # Phone needs this one person from 12:30 to 16:30: Break 1 must end by 12:30 (12:15), the lunch waits for 16:30: 240 minutes between
+        needs = setup(need={"P": grid(lambda t: 1 if 750 <= t < 990 else 0)}, email_mode="none", languages=[],
+                      email_hours={d: {"hours": 0.0, "languages": {}, "start": 0, "end": 1440} for d in range(7)})
+        needs["rules"] = {**needs["rules"], "max_run": {"P": 0, "C": 0, "E": 0}}
+        first, lunch, last = planned(needs=needs, breaks=(12.5, 15.5, 17.25))
+        past = lunch - (first + 15) - RULES["max_gap"]
+        self.assertGreater(past, 0)               # the need left no room inside the maximum ...
+        self.assertLessEqual(past, 30)            # ... and it is passed by the least it takes (240 against 210), not by hours
+        self.assertEqual(check_row({**RULES, "max_gap": 10 ** 6}, label(), [first, lunch, last])[0], "ok")

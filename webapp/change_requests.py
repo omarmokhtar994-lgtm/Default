@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from .day import ABSENT, AUX, EXTRA_BREAKS, MEETING_MARGIN, STEP, _busy, _own, break_window
+from .day import ABSENT, AUX, EXTRA_BREAKS, MEETING_MARGIN, STEP, _across_cancel, _busy, _own, break_window
 
 HIGH, MODERATE, LOW = "high", "moderate", "low"
 PEOPLE_FOR_HIGH = 1  # people above the need that make the buffer High
@@ -75,19 +75,43 @@ def _tightest(view: Dict[str, Any], slots: List[float], lo: int, hi: int) -> Opt
     return round(min(found), 2) if found else None
 
 
+def _gap_words(seg: Dict[str, Any], me: Dict[str, Any], m: int, lo_gap: Optional[int], hi_gap: Optional[int]) -> List[str]:
+    """What break ``me`` at ``m`` breaks of the program's gap rules, with the neighbours where they are: closer than the
+    minimum, further than the normal maximum (not held across a cancelled break), in minutes."""
+    said: List[str] = []
+    others = sorted((b for b in seg["breaks"] if b["idx"] != me["idx"]), key=lambda b: b["idx"])
+    before = [b for b in others if b["idx"] < me["idx"]]
+    after = [b for b in others if b["idx"] > me["idx"]]
+    pairs = []
+    if before:
+        pairs.append((before[-1]["kind"], before[-1]["idx"], m - (before[-1]["start"] + before[-1]["minutes"])))
+    if after:
+        pairs.append((after[0]["kind"], after[0]["idx"], after[0]["start"] - (m + me["minutes"])))
+    for kind, other, gap in pairs:
+        if lo_gap is not None and gap < lo_gap:
+            said.append(f"{gap} minutes from your {kind}: this program's minimum gap between breaks is {lo_gap}, "
+                        f"{lo_gap - gap} minutes short.")
+        elif hi_gap is not None and gap > hi_gap and not _across_cancel(seg, min(me["idx"], other), max(me["idx"], other)):
+            said.append(f"{gap} minutes from your {kind}: this program's normal maximum gap between breaks is {hi_gap}, "
+                        f"{gap - hi_gap} minutes more.")
+    return said
+
+
 def break_choices(view: Dict[str, Any], inputs: Dict[str, Any], name: str, idx: int, now: int,
-                  step: int = 15) -> Dict[str, Any]:
-    """Every legal start for break ``idx`` of ``name``'s shift in ``view`` that begins at or after ``now`` (minutes of the
-    view): inside the shift, off the other breaks and within the program's gaps. Each is {"start", "end",
-    "people_above", "level", "current"}; the time it has now is among them."""
+                  step: int = 15, words: Optional[Any] = None) -> Dict[str, Any]:
+    """Every start for break ``idx`` of ``name``'s shift in ``view`` that begins at or after ``now`` (minutes of the view):
+    inside the shift and off the other breaks, in their order. Phase AX (owner: what people pick by hand shows warnings and
+    never stops them): the program's gaps no longer limit the list; a time that breaks one, or (``words(start)``) the default,
+    says so in ``warnings``. Each is {"start", "end", "people_above", "level", "current", "warnings"}; the time it has now is
+    among them."""
     seg = _own(view, name)
     if seg is None:
         raise ValueError(f"{name} has no shift this day.")
     me = next((b for b in seg["breaks"] if b["idx"] == idx), None)
     if me is None:
         raise ValueError("That break is not on the plan.")
-    lo, hi = break_window(seg, me, {b["idx"]: b["start"] for b in seg["breaks"]}, now,
-                          inputs.get("gap_min"), inputs.get("gap_max"))
+    lo_gap, hi_gap = inputs.get("gap_min"), inputs.get("gap_max")
+    lo, hi = break_window(seg, me, {b["idx"]: b["start"] for b in seg["breaks"]}, now, 0, None)
     others = [b for b in seg["breaks"] if b["idx"] != idx]
     v0, base = view.get("start", 0), _slots(view)
     counts_away = not (seg["billable"] and view["measure"] == "interval")
@@ -127,7 +151,8 @@ def break_choices(view: Dict[str, Any], inputs: Dict[str, Any], name: str, idx: 
                 off_trial[i] += 1
         pct = _peak(on_shift, off_trial, m, m + me["minutes"], v0)
         choices.append({"start": m, "end": m + me["minutes"], "people_above": above, "level": level_of(above),
-                        "current": m == me["start"], "off_pct": pct, "off_warn": _warn(pct)})
+                        "current": m == me["start"], "off_pct": pct, "off_warn": _warn(pct),
+                        "warnings": _gap_words(seg, me, m, lo_gap, hi_gap) + (list(words(m)) if words else [])})
     return {"kind": me["kind"], "minutes": me["minutes"], "planned": me["planned_start"], "current": me["start"],
             "choices": choices}
 
@@ -342,7 +367,8 @@ class ChangeBook:
             raise ValueError("You have no shift running today to change a break in." if on is None else
                              f"You have no shift on {on:%a %d %b} to change a break in.")
         options = break_choices(found["view"], found["inputs"], name, idx,
-                                found["now"] + max(LEAD_MINUTES, int(self.settings_of(program).get("lead", 0))))
+                                found["now"] + max(LEAD_MINUTES, int(self.settings_of(program).get("lead", 0))),
+                                words=lambda at: self.days._default_words(program, found["on"], found["view"], name, idx, at))
         return {**options, "shift": found}
 
     def ask_break(self, program: str, name: str, user: Dict[str, Any], idx: int, to: str, why: str,
@@ -371,7 +397,8 @@ class ChangeBook:
                 raise ValueError(f"This program allows {limit} request{'s' if limit != 1 else ''} a day and you have "
                                  f"asked for {len(used)}. Ask the RTA directly.")
         detail = {"idx": idx, "kind": options["kind"], "minutes": options["minutes"], "from": options["current"],
-                  "to": m, "level": chosen["level"], "people_above": chosen["people_above"]}
+                  "to": m, "level": chosen["level"], "people_above": chosen["people_above"],
+                  "warnings": chosen.get("warnings", [])}
         made = self.store.add_change_request(kind=BREAK, program=program, shift_date=found["on"].isoformat(),
                                      names=json.dumps([name]), requester_id=user["id"],
                                      requester_name=user["display_name"], detail=json.dumps(detail),

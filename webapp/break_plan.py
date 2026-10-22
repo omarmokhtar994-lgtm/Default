@@ -191,7 +191,7 @@ SHAPE_WORDS = ("The first break is normally 2 to 3.5 hours into the shift.",
                "The last break normally ends at least an hour before the shift does.")
 
 
-def fit_words(rules: Dict[str, Any], label: str, before: Starts, after: Starts) -> List[str]:
+def fit_words(rules: Dict[str, Any], label: str, before: Starts, after: Starts, gaps: bool = False) -> List[str]:
     """What the move from ``before`` to ``after`` takes a person's breaks out of, in words: each part of the usual shape it
     newly misses, then each engine rule it newly breaks. A break already out of the default is not blamed again."""
     lo, hi = _span(label)
@@ -200,9 +200,10 @@ def fit_words(rules: Dict[str, Any], label: str, before: Starts, after: Starts) 
     now = shape_fit(lo, hi, (list(after) + [None] * len(slots))[:len(slots)], slots)
     said = [SHAPE_WORDS[i] for i in range(3) if now[i] is False and had[i] is not False]
     old = set(rule_problems(rules, label, before, steps=False, adjacent=True))
-    # the gaps are said already, in the program's own words (day.advice), so they are not said twice
+    # the gaps are said already, in the program's own words, by a single move's advice: not said twice there (``gaps``: here they are)
     return said + [x for x in rule_problems(rules, label, after, steps=False, adjacent=True)
-                   if x not in old and "is not placed yet" not in x and "minimum gap" not in x and "normal maximum" not in x]
+                   if x not in old and "is not placed yet" not in x
+                   and (gaps or ("minimum gap" not in x and "normal maximum" not in x))]
 
 
 def break_default(rules: Dict[str, Any], label: str, k: int, count: int, start: int) -> Tuple[int, int]:

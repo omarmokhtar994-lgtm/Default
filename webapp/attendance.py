@@ -1789,7 +1789,8 @@ class DayBook:
                        fit=self.fit_for(program, on, start, view))
         return {**found, "moves": self._dated(found["moves"], view, on, start)}
 
-    def _default_words(self, program: str, on: date, view: Dict[str, Any], name: str, idx: int, at: int) -> List[str]:
+    def _default_words(self, program: str, on: date, view: Dict[str, Any], name: str, idx: int, at: int,
+                       gaps: bool = False) -> List[str]:
         """Phase AX (owner: "prioritize the default, followed by the engine"): what moving break ``idx`` of ``name`` to ``at``
         takes the person's breaks out of (the usual shape, then the engine's rules); nothing when the rules cannot be read.
         A warning, not a refusal: the move can be kept anyway."""
@@ -1805,7 +1806,7 @@ class DayBook:
             before[b["idx"]] = b["start"]
         after = list(before)
         after[idx] = at
-        return fit_words(rules, label, before, after)
+        return fit_words(rules, label, before, after, gaps)
 
     def _rule_people(self, program: str, on: date, view: Dict[str, Any]):  # type: ignore[no-untyped-def]
         """name -> (the break rules, the shift's label, the breaks the rules give it, the shift's date offset in minutes) for
@@ -1986,7 +1987,8 @@ class DayBook:
             if isinstance(c.get("day_new"), int):
                 if c["date"] not in views:
                     views[c["date"]] = (self.page(program, c["date"]) or {}).get("view") or {"lanes": []}
-                c["words"] = self._default_words(program, c["date"], views[c["date"]], c["name"], c["idx"], c["day_new"])
+                c["words"] = self._default_words(program, c["date"], views[c["date"]], c["name"], c["idx"], c["day_new"],
+                                                 gaps=True)
         return {**found, "before": self._figures(page), "after": self._figures(after)}
 
     def apply_bulk(self, program: str, on: date, names: List[str], which: str, action: str, user_id: int,

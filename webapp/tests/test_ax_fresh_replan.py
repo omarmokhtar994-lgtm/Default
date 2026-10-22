@@ -451,3 +451,19 @@ class TheBulkPreviewNamesWhatItTakesOutOfTheDefault(_cb._Cancel):
         fine = f"{(seg['start'] + 150) // 60 % 24:02d}:{(seg['start'] + 150) % 60:02d}"
         got = self.days.bulk_preview(self.key, _WED, names, "Break 1", "set", at=fine)
         self.assertEqual([w for c in got["changes"] for w in c.get("words", [])], [])
+
+
+class TheBulkPreviewSaysTheGapsToo(_cb._Cancel):
+    """Owner, 2026-10-22: what people pick by hand shows warnings and never stops: Change several breaks keeps every change and
+    says what each takes a break out of, the program's gaps included."""
+    def test_a_set_time_that_leaves_a_gap_is_kept_and_said(self):
+        lane = next(l for l in self.days.page(self.key, _WED)["view"]["lanes"]
+                    if any(s["offset"] == 0 and s["status"] == "Present" and len(s["breaks"]) >= 2 for s in l["segments"]))
+        seg = next(s for s in lane["segments"] if s["offset"] == 0)
+        first, second = seg["breaks"][0], seg["breaks"][1]
+        near = second["start"] - first["minutes"] - 10  # 10 minutes after the first break would end: under the minimum gap
+        at = f"{near // 60 % 24:02d}:{near % 60:02d}"
+        got = self.days.bulk_preview(self.key, _WED, [lane["name"]], first["kind"], "set", at=at)
+        self.assertTrue(got["changes"], got["skipped"])  # never stopped
+        said = " ".join(w for c in got["changes"] for w in c.get("words", []))
+        self.assertIn("minimum gap", said)

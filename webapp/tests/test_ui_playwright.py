@@ -3351,3 +3351,80 @@ class TheRequestsInTheBrowser(_au_tomorrow.TheNextDay):
             expect(page.locator(".achv-strip").first).to_have_attribute("data-span", "900")
             self.assertGreater(page.locator("svg.tl-track rect.brk").count(), 0)
         self.assertEqual(problems, [])
+
+
+class TheFittedDayInTheBrowser(unittest.TestCase):
+    """Phase AV (found by the owner on the live site): with "Day starts at" 13:00 the RTA fits the window to the last
+    shift (16 hours), and the interval rows were drawn stacked in one column because the style rules only knew 24, 48,
+    72, 96, 144 and 288 cells. Every cell count lays out as a row of columns. Made-up data, Wednesday 14 Oct 2026."""
+
+    @classmethod
+    def setUpClass(cls):
+        from webapp.tests.test_as_pages import _Noon
+        from webapp.tests.test_as_requests import _Fixture
+        from webapp.programs import ProgramBook
+        _Fixture.setUpClass.__func__(cls)
+        cls._fixture = _Fixture
+        ProgramBook(cls.store).set_rta_defaults(cls.pid, None, 13 * 60, None)  # "Day starts at" 13:00, as on the live site
+        cls.clock = mock.patch("webapp.app.datetime", _Noon)
+        cls.clock.start()
+        cls.server = make_server("127.0.0.1", 0, cls.app, threaded=True)
+        cls.base = f"http://127.0.0.1:{cls.server.server_port}"
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.pw = sync_playwright().start()
+        launch = {"headless": True}
+        if os.path.exists(CHROMIUM):
+            launch["executable_path"] = CHROMIUM
+        try:
+            cls.browser = cls.pw.chromium.launch(**launch)
+        except Exception as exc:  # pragma: no cover
+            cls.clock.stop()
+            cls.pw.stop()
+            cls.server.shutdown()
+            raise unittest.SkipTest(f"Chromium could not start: {exc}")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.clock.stop()
+        cls.pw.stop()
+        cls.server.shutdown()
+        cls._fixture.tearDownClass.__func__(cls)
+
+    def rows(self, hours, start="13:00", view=None):
+        page = self.browser.new_page(viewport={"width": 1280, "height": 900})
+        self.addCleanup(page.close)
+        page.goto(self.base + "/login")
+        page.get_by_label("Username").fill("rta1")
+        page.get_by_label("Password").fill("Staff-pass-123")
+        page.get_by_role("button", name="Sign in").click()
+        page.wait_for_load_state()
+        query = {"program": self.key, "date": "2026-10-14", "start": start, "tz": "Africa/Cairo"}
+        if view:
+            query["view"] = view
+        with mock.patch("webapp.app.operating_span", return_value=hours * 60), \
+                mock.patch("webapp.attendance.operating_span", return_value=hours * 60):
+            page.goto(self.base + "/day?" + urllib.parse.urlencode(query))
+        return page
+
+    def test_the_interval_rows_run_across_for_any_window_length(self):
+        for hours in (16, 15, 10, 7):
+            page = self.rows(hours)
+            cells = page.locator(".tl-cells").first.locator(".tc")
+            n = cells.count()
+            self.assertGreater(n, 6, hours)
+            first, second, last = cells.nth(0).bounding_box(), cells.nth(1).bounding_box(), cells.nth(n - 1).bounding_box()
+            self.assertAlmostEqual(first["y"], second["y"], delta=2, msg=f"{hours} h: the second cell is below the first")
+            self.assertGreater(second["x"], first["x"], hours)
+            self.assertAlmostEqual(first["y"], last["y"], delta=2, msg=f"{hours} h: the last cell is on another row")
+            self.assertLess(page.locator(".tl-cells").first.bounding_box()["height"], 60, hours)
+
+    def test_the_target_strip_runs_across_too(self):
+        page = self.rows(16, view="board")
+        strip = page.locator(".achv-strip").first
+        if strip.count() == 0:
+            self.skipTest("this day has no target strip")
+        items = strip.locator("i")
+        n = items.count()
+        self.assertGreater(n, 6)
+        self.assertAlmostEqual(items.nth(0).bounding_box()["y"], items.nth(n - 1).bounding_box()["y"], delta=2)

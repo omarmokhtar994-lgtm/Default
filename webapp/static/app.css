@@ -580,7 +580,7 @@ svg.defs { position: absolute; width: 0; height: 0; }
 [data-day] .tl-ghost { fill: none; stroke: var(--dim); stroke-width: 1.5; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
 [data-day] .tl-num { height: 24px; margin-top: 2px; }
 [data-day] .tl-lbl { font-size: 0.75rem; color: var(--dim); text-align: right; padding-right: 10px; }
-[data-day] .tl-cells { display: grid; gap: 1px; height: 100%; }
+[data-day] .tl-cells { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 1px; height: 100%; }  /* a column per cell, whatever their number: a fitted operating day has 16, 32 or 64 */
 [data-day] .cols-24 .tl-cells { grid-template-columns: repeat(24, 1fr); } [data-day] .cols-48 .tl-cells { grid-template-columns: repeat(48, 1fr); }
 [data-day] .cols-72 .tl-cells { grid-template-columns: repeat(72, 1fr); } [data-day] .cols-96 .tl-cells { grid-template-columns: repeat(96, 1fr); }
 [data-day] .cols-144 .tl-cells { grid-template-columns: repeat(144, 1fr); } [data-day] .cols-288 .tl-cells { grid-template-columns: repeat(288, 1fr); }
@@ -1127,7 +1127,7 @@ select.pending, input.pending, [data-day] select.att.pending { border-style: das
 .achv-num b { font: 700 semi-condensed 2rem/1.1 var(--display); color: var(--paper); margin-right: 6px; font-variant-numeric: tabular-nums; }
 .achv-share { margin: 4px 0 12px; font-size: 0.875rem; max-width: 76ch; }
 .achv-share > b { color: var(--paper); }
-.achv-strip { position: relative; display: grid; gap: 3px; height: 22px; margin-top: 14px; }
+.achv-strip { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 3px; height: 22px; margin-top: 14px; }
 .achv-strip.cols-24 { grid-template-columns: repeat(24, 1fr); } .achv-strip.cols-48 { grid-template-columns: repeat(48, 1fr); gap: 2px; }
 .achv-strip.cols-72 { grid-template-columns: repeat(72, 1fr); gap: 1px; } .achv-strip.cols-96 { grid-template-columns: repeat(96, 1fr); gap: 1px; }
 .achv-strip.cols-144 { grid-template-columns: repeat(144, 1fr); gap: 0; } .achv-strip.cols-288 { grid-template-columns: repeat(288, 1fr); gap: 0; }

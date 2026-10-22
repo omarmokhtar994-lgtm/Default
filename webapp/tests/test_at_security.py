@@ -204,7 +204,9 @@ class TheSession(_Secured):
     def test_a_cookie_edited_by_hand_is_refused(self):
         client = sign_in(self.app, "plan_a", PASSWORD)
         cookie = client.get_cookie("session").value
-        body, rest = cookie.split(".", 1)
+        lead = "." if cookie.startswith(".") else ""  # Flask marks a compressed session with a leading dot, which this split took for the end
+        body, rest = cookie[len(lead):].split(".", 1)
+        body = lead + body
         raw = json.loads(zlib.decompress(base64.urlsafe_b64decode(body[1:] + "=" * (-len(body[1:]) % 4))) if body.startswith(".")
                          else base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
         self.assertEqual(raw["user_id"], self.users["plan_a"])

@@ -17,11 +17,11 @@ from .shrinkage import day_shrinkage, read_mapping
 KINDS: Tuple[Tuple[str, str], ...] = (
     ("missed_break", "Missed breaks"), ("unplanned", "Unplanned leave"), ("sick", "Sick"),
     ("planned", "Planned leave"), ("late", "Late logins"), ("early", "Early leave"), ("coaching", "Coaching"),
-    ("training", "Training"), ("meeting", "Meetings"), ("system_issue", "System issues"), ("task", "Tasks"),
+    ("training", "Training"), ("meeting", "Meetings"), ("system_issue", "System issues"), ("task", "Tasks"), ("bio_break", "Bio breaks"),
     ("non_adherence", "Out of adherence"))
 LABEL = dict(KINDS)
 BEHAVIOUR = ("missed_break", "unplanned", "late", "early", "non_adherence")  # what a team manager coaches on
-AUX_KEY = {"Coaching": "coaching", "Training": "training", "Meeting": "meeting", "System issue": "system_issue",
+AUX_KEY = {"Coaching": "coaching", "Training": "training", "Meeting": "meeting", "System issue": "system_issue", "Bio break": "bio_break",
            "Task": "task"}
 LEAVE_KEY = {"Unplanned leave": "unplanned", "Sick": "sick"}
 

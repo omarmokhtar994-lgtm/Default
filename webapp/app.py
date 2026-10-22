@@ -39,7 +39,7 @@ from .channel_template import channel_workbook
 from .channels import check_lines, has_channel_needs, read_channels, requirement_tab
 from .clock import minute_now, EGYPT, HOME, SHOWN, ZONES, moved_text, pick_zone, rta_shift, shift as zone_shift, shown, to_schedule, zone_gap_words, zone_label
 from .permissions import CATALOGUE as PERMISSIONS, ENDPOINTS as PERMISSION_ENDPOINTS, ROLE_NAMES, allowed, matrix
-from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, OVERTIME_MAX, STATUSES, channel_letters, BreakRefused, at_target, board, glance, hover_tips, my_day, my_items, now_panel, read_inputs, shift_groups, window_view
+from .day import ABSENT as ABSENT_STATES, AUX, BIO, EXTRA_BREAKS, MEASURES, OVERTIME_MAX, STATUSES, channel_letters, BreakRefused, at_target, board, glance, hover_tips, my_day, my_items, now_panel, read_inputs, shift_groups, window_view
 from .coach import actual_shrinkage, corrected_tab
 from .leave import KINDS as LEAVE_KINDS, LeaveBook, span_text
 from .swaps import SwapBook
@@ -4554,7 +4554,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         """(department, with, why) for an aux, from the form: every way of booking one asks who it is with and why
         (Phase T); from the program's lists when it has them, typed when it has none (Phase U)."""
         dept, with_whom = request.form.get("with_dept", ""), request.form.get("with_whom", "")
-        lists = _with_lists(program) if kind in AUX else []
+        lists = _with_lists(program) if kind in AUX and kind != BIO else []
         if lists:
             dept, with_whom = pick_contact(lists, kind, dept, with_whom)
         with_whom, why = aux_details(kind, with_whom, request.form.get("why", ""))

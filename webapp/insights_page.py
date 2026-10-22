@@ -12,7 +12,7 @@ from .insights import ABSENT_VIEWS, BEHAVIOUR, KINDS, LABEL, figures, grouped, p
 LEVELS = (("overview", "Overview"), ("lobs", "LOBs"), ("associates", "Associates"))
 SHORT = {"missed_break": "Missed", "unplanned": "Unplanned", "sick": "Sick", "planned": "Planned", "late": "Late",
          "early": "Early", "coaching": "Coaching", "training": "Training", "meeting": "Meetings",
-         "system_issue": "System", "task": "Tasks", "non_adherence": "Adherence"}
+         "system_issue": "System", "task": "Tasks", "bio_break": "Bio", "non_adherence": "Adherence"}
 TILES = (("absenteeism", "Absenteeism", "what is ticked under Absenteeism counts, of shifts scheduled", True),
          ("shrink_out", "Shrinkage, out of office", "unplanned, planned and sick, of shifts scheduled", True),
          ("shrink_client", "Shrinkage, the client's", "adds public holiday and exam leave", True),

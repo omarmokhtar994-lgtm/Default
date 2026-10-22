@@ -26,7 +26,7 @@ from datetime import date, datetime, timedelta
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from .clock import HOME, SHOWN, minute_now, pick_zone
-from .day import (ABSENT, AUX, CALLED_IN, CANCELLED, EXTRA_BREAKS, LATE_EARLY, MEASURES, OVERTIME_MAX, STATUSES, STEP, TIMED,
+from .day import (ABSENT, AUX, BIO, CALLED_IN, CANCELLED, EXTRA_BREAKS, LATE_EARLY, MEASURES, OVERTIME_MAX, STATUSES, STEP, TIMED,
                   BreakRefused, _busy, advice, at_target,
                   check_break, day_view, dayoff_offers, dayoff_proposals, meeting_slots, overtime_offers, pattern_breaks, planned,
                   read_inputs, replan, vto_offers, window_view)
@@ -46,7 +46,7 @@ COVER_NAME_MAX, COVER_MAX = 60, 12 * 60  # characters of a typed name; minutes o
 DAY_OFF = "Day off cancelled"  # "+ Add" calls in someone off that day (owner, 2026-10-09)
 QUARTER = 15  # typed call-in times go in 15-minute steps
 # What RTA's "+ Add" offers in an interval (owner, 2026-10-08), grouped as the dialog shows them.
-ADD_KINDS = {"Off the floor": ["Break", "Lunch", "Coaching", "Meeting", "Training", "System issue", "Task"],
+ADD_KINDS = {"Off the floor": ["Break", "Lunch", "Coaching", "Meeting", "Training", "System issue", "Task", "Bio break"],
              "Attendance": ["Unplanned leave", "Sick", "Public holiday", "Exam leave", "Late", "Left early"],
              "Hours": ["Overtime", "VTO"],
              "Day off": [DAY_OFF]}
@@ -55,7 +55,7 @@ ADD_KINDS = {"Off the floor": ["Break", "Lunch", "Coaching", "Meeting", "Trainin
 def aux_details(kind: str, with_whom: str, why: str) -> Tuple[str, str]:
     """Who an aux (Coaching, Meeting, Training, System issue) is with and why, tidied: both are required, and a
     long answer is refused, never cut (owner, 2026-10-09). Anything else asks for neither: ("", "")."""
-    if kind not in AUX:
+    if kind not in AUX or kind == BIO:
         return "", ""
     with_whom, why = " ".join((with_whom or "").split()), " ".join((why or "").split())
     if not with_whom:
@@ -1040,7 +1040,7 @@ class DayBook:
                 raise ValueError("Give both times, or neither for the whole shift.")
             if lo is not None and lo >= hi:
                 raise ValueError("The end time must be after the start time.")
-            kind = f"{status} ({'billable' if billable else 'non-billable'})"
+            kind = status if status == BIO else f"{status} ({'billable' if billable else 'non-billable'})"
             what = f"{kind} {hm(lo)} to {hm(hi)}" if lo is not None else f"{kind}, whole shift"
         else:
             lo = hi = None
@@ -1048,14 +1048,14 @@ class DayBook:
         with_whom, why, with_dept = (_tidy(with_whom), _tidy(why), _tidy(with_dept)) if status in AUX else ("", "", "")
         post = what + with_text(with_whom, "", with_dept)  # Phase AB: what a group may see, never the why
         what += with_text(with_whom, why, with_dept)
-        record = {"name": name, "status": status, "from": lo, "to": hi, "billable": bool(billable) and status in AUX,
+        record = {"name": name, "status": status, "from": lo, "to": hi, "billable": bool(billable) and status in AUX and status != BIO,
                   "what": what, "span": span, "with_whom": with_whom, "why": why, "with_dept": with_dept}
         if dry_run:
             return record
         was = next((r["status"] for r in self.store.list_attendance(program, [on.isoformat()])
                     if r["associate"] == name), "Present")
         self.store.set_attendance(program=program, shift_date=on.isoformat(), associate=name, status=status,
-                                  from_min=lo, to_min=hi, billable=int(bool(billable) and status in AUX),
+                                  from_min=lo, to_min=hi, billable=int(bool(billable) and status in AUX and status != BIO),
                                   user_id=user_id, with_whom=with_whom, why=why, with_dept=with_dept)
         kind = "late" if status in LATE_EARLY else "aux" if status in AUX else PRIVATE  # sick, leave, present
         self._log(program, on, name, what, user_id, kind, post=post, ref=f"status:{name}", before=was, after=status)
@@ -1151,7 +1151,7 @@ class DayBook:
             return f"Overtime {hm(lo)} to {hm(hi)}"
         if kind == "VTO":
             return f"VTO {hm(lo)} to {hm(hi)}"  # any stretch of the shift (owner, 2026-10-08)
-        if kind in EXTRA_BREAKS:
+        if kind in EXTRA_BREAKS or kind == BIO:
             return f"{kind} {hm(lo)} to {hm(hi)}"
         return (f"{kind} {hm(lo)} to {hm(hi)} ({'billable' if billable else 'non-billable'})"
                 + with_text(with_whom, why, with_dept))
@@ -1205,7 +1205,7 @@ class DayBook:
         for r in self.store.list_activities(program, [on.isoformat()]):  # a call-in is the shift itself
             if r["associate"] == name and r["kind"] != CALLED_IN and r["start"] < hi and lo < r["end_min"]:
                 raise ValueError(f"{name} already has {r['kind'].lower()} from {hm(r['start'])} to {hm(r['end_min'])}.")
-        billable = bool(billable) and kind in AUX or kind == "Overtime"
+        billable = bool(billable) and kind in AUX and kind != BIO or kind == "Overtime"
         with_whom, why, with_dept = (_tidy(with_whom), _tidy(why), _tidy(with_dept)) if kind in AUX else ("", "", "")
         what = self._describe(kind, lo, hi, billable, with_whom, why, with_dept)
         if dry_run:

@@ -421,7 +421,7 @@ function homeRefresh(now) {
       var from = att.querySelector("[data-from]"), to = att.querySelector("[data-to]");
       var hint = att.querySelector("[data-hint]"), result = att.querySelector(".dlg-result");
       att.querySelector("#att-h").textContent = state === "Late" ? "Late login" : state === "Left early" ? "Early leave" :
-        state + (parts[1] === "1" ? " (billable)" : " (non-billable)");
+        state + (state === "Bio break" ? "" : parts[1] === "1" ? " (billable)" : " (non-billable)");
       att.querySelector("[data-who]").textContent = sel.dataset.name + ", shift " + sel.dataset.shift;
       from.hidden = state === "Late";
       to.hidden = state === "Left early";
@@ -431,7 +431,7 @@ function homeRefresh(now) {
       from.querySelector("input").value = ""; to.querySelector("input").value = ""; result.textContent = "";
       var auxBox = att.querySelector("[data-aux]");  // an aux says who it is with and why (Phase T)
       if (auxBox) {
-        auxBox.hidden = parts.length < 2;
+        auxBox.hidden = parts.length < 2 || state === "Bio break";
         Array.prototype.forEach.call(auxBox.querySelectorAll("input, select"), function (i) {
           i.value = ""; i.dispatchEvent(new Event("change"));
         });
@@ -894,9 +894,9 @@ function homeRefresh(now) {
   var effect = form.querySelector("[data-effect]"), length = form.querySelector("[data-length]");
   var billable = form.querySelector("[data-billable]"), from = form.querySelector("[data-from-label]");
   var submit = form.querySelector("button[type=submit]"), minutes = form.querySelector("select[name=minutes]");
-  var whole = ["Unplanned leave", "Sick", "Public holiday", "Exam leave"], aux = ["Coaching", "Meeting", "Training", "System issue", "Task"];
+  var whole = ["Unplanned leave", "Sick", "Public holiday", "Exam leave"], aux = ["Coaching", "Meeting", "Training", "System issue", "Task", "Bio break"];  // Phase AV: Bio break needs no who or why
   var usual = { "Break": "15", "Lunch": "30", "Overtime": "60", "VTO": "60", "Coaching": "30", "Meeting": "30",
-                "Training": "60", "System issue": "15", "Task": "30" };
+                "Training": "60", "System issue": "15", "Task": "30", "Bio break": "10" };
   var seq = 0;
   // Day off cancelled (Phase S): the people off today, a Shift Library shift or typed start and end
   var working = form.querySelector("[data-who-working]"), off = form.querySelector("[data-who-off]");
@@ -935,12 +935,13 @@ function homeRefresh(now) {
   function shape(changedKind) {
     var k = kind(), calling = k === "Day off cancelled", isAux = aux.indexOf(k) >= 0;
     var auxFields = form.querySelector("[data-aux-fields]");
+    var asks = isAux && k !== "Bio break";  // a bio break is never billable and says no who or why
     if (auxFields) {
-      auxFields.hidden = !isAux;
-      Array.prototype.forEach.call(auxFields.querySelectorAll("input, select"), function (i) { i.disabled = !isAux; i.required = isAux; });
+      auxFields.hidden = !asks;
+      Array.prototype.forEach.call(auxFields.querySelectorAll("input, select"), function (i) { i.disabled = !asks; i.required = asks; });
     }
     length.hidden = whole.indexOf(k) >= 0 || k === "Late" || k === "Left early" || calling;
-    billable.hidden = aux.indexOf(k) < 0;
+    billable.hidden = !asks;
     from.hidden = whole.indexOf(k) >= 0 || k === "Overtime";
     from.querySelector("span").textContent = k === "Late" ? "Arrived at" : k === "Left early" ? "Left at" : "From";
     if (changedKind && usual[k]) { minutes.value = usual[k]; }

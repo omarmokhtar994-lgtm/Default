@@ -98,13 +98,14 @@ def day_facts(page: Dict[str, Any], unit: str, program: str, lob: str, mapping: 
 
 
 def collect(days, store, leave, units: Dict[str, Tuple[str, str]], start: date, end: date, measure: str,
-            check: Callable[[], None] = lambda: None) -> List[Dict[str, Any]]:
-    """Every fact row for ``units`` (key: (program name, LOB name)) over ``start`` to ``end``."""
+            check: Callable[[], None] = lambda: None, mapping_override: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """Every fact row for ``units`` (key: (program name, LOB name)) over ``start`` to ``end``. ``mapping_override`` is what
+    counts as shrinkage when the page chose it (else each unit's own mapping)."""
     facts: List[Dict[str, Any]] = []
     span = [(start + timedelta(days=i)) for i in range((end - start).days + 1)]
     for unit, (program, lob) in units.items():
         kept = store.get_shrinkage_map(unit)
-        mapping = read_mapping(kept["mapping"] if kept else None)
+        mapping = mapping_override or read_mapping(kept["mapping"] if kept else None)
         missed = store.list_incidents(unit, [d.isoformat() for d in span])
         for day in span:
             check()

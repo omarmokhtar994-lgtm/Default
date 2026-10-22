@@ -21,21 +21,6 @@ def _hours(minutes: float) -> str:
     return f"{minutes / 60:.1f} h"
 
 
-def _weekday_grids(per_day: Dict[str, Dict[int, List[float]]], show: str, first: int, last: int,
-                   week_start: int) -> List[Dict[str, Any]]:
-    """Phase AX: intervals down, the days of the week across; ``show`` both draws two (out and in office)."""
-    grids = []
-    for which, name in (("out", "Out of office"), ("inn", "In office")):
-        if (which == "out" and show == "in") or (which == "inn" and show == "out"):
-            continue
-        days, rows = weekday_grid(per_day, which, first, last, week_start)
-        top_cell = max([v for r in rows for v in r["cells"] if v is not None] + [0])
-        grids.append({"title": name, "days": days, "rows": [
-            {"time": _hm(r["t"]), "cells": [(v, 0 if not v else min(3, 1 + int(3 * v / top_cell)) if top_cell else 0)
-                                            for v in r["cells"]]} for r in rows]})
-    return grids
-
-
 def build(facts: List[Dict[str, Any]], per_day: Dict[str, Dict[int, List[float]]], show: str, by: str,
           out_ticks: Sequence[str], in_ticks: Sequence[str], step: int, first: int, last: int, focus: str,
           start_days: Optional[Dict[str, int]] = None, week_start: int = 0) -> Dict[str, Any]:
@@ -63,9 +48,6 @@ def build(facts: List[Dict[str, Any]], per_day: Dict[str, Dict[int, List[float]]
                                       label=f"Shrinkage {('by day' if by == 'day' else 'by week')}") if rows else charts.EMPTY
         found["table"] = [{"label": l, "days": r["days"], "shifts": r["shifts"], "out": r["out"], "out_n": r["out_n"],
                            "inn": r["inn"], "in_h": _hours(r["in_min"])} for l, r in zip(labels, rows)]
-    elif by == "weekday":  # Phase AX: the grids are the figures: no line chart, no day list
-        found["weekday_grids"] = _weekday_grids(per_day, show, first, last, week_start)
-        found["table"] = []
     else:
         cells = interval_series(per_day, first, last)
         labels = [_hm(c["t"]) for c in cells]
@@ -84,7 +66,15 @@ def build(facts: List[Dict[str, Any]], per_day: Dict[str, Dict[int, List[float]]
         found["heat"] = [{"day": _day(r["day"]), "cells": [
             (v, 0 if v is None or not v else min(3, 1 + int(3 * v / top_cell)) if top_cell else 0) for v in r["cells"]]}
             for r in grid]
-        found["weekday_grids"] = _weekday_grids(per_day, show, first, last, week_start)
+        found["weekday_grids"] = []  # Phase AX: intervals down, the days of the week across; both draws two
+        for which, name in (("out", "Out of office"), ("inn", "In office")):
+            if (which == "out" and show == "in") or (which == "inn" and show == "out"):
+                continue
+            days, rows = weekday_grid(per_day, which, first, last, week_start)
+            top_cell = max([v for r in rows for v in r["cells"] if v is not None] + [0])
+            found["weekday_grids"].append({"title": name, "days": days, "rows": [
+                {"time": _hm(r["t"]), "cells": [(v, 0 if not v else min(3, 1 + int(3 * v / top_cell)) if top_cell else 0)
+                                                for v in r["cells"]]} for r in rows]})
         found["table"] = [{"label": l, "out": c["out"], "inn": c["inn"]} for l, c in zip(labels, cells)]
     found["both_shown"] = show == "both"
     return found

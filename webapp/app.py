@@ -4942,8 +4942,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 units[k] = (found["program"]["name"], (found["lob"] or {}).get("name") or found["program"]["name"])
         show = request.args.get("show", "both")
         show = show if show in dict(SHRINK_SHOW) else "both"
-        by = request.args.get("by", "weekday")  # Phase AX (owner, 2026-10-22): intervals down, days of the week across
-        by = by if by in dict(SHRINK_BY) else "weekday"
+        by = request.args.get("by", "day")
+        by = by if by in dict(SHRINK_BY) else "day"
         step = request.args.get("step", 30, type=int)
         step = step if step in SHRINK_STEPS else 30
         first = request.args.get("first", 0, type=int) or 0
@@ -4969,7 +4969,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                      a["end"], a["measure"], check, mapping_override=shrink_mapping(out_ticks, in_ticks))
             if dows:
                 facts = [r for r in facts if SHRINK_DAYS[(date.fromisoformat(r["date"]).weekday() + 1) % 7] in dows]
-            if by in ("interval", "weekday"):
+            if by == "interval":
                 per_day = shrink_intervals(wrapped, units, a["start"], a["end"], a["measure"], out_ticks, in_ticks, step, check)
                 if dows:
                     per_day = {d: v for d, v in per_day.items()

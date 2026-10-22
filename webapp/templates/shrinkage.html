@@ -45,8 +45,8 @@
 {% else %}
 <div class="ins-tiles">{% for label, value, note in view.tiles %}<section class="ins-tile" aria-label="{{ label }}"><span class="tile-label">{{ label }}</span><b>{{ pct(value) }}</b><small class="dim">{{ note }}</small></section>{% endfor %}</div>
 <p class="dim ins-note">{{ view.days }} day{{ 's' if view.days != 1 }}, {{ view.shifts }} shifts. Weeks begin on {{ week_starts|join(' or ') or 'Sunday' }}, as set for the program under LOBs and defaults. A week or day figure adds people and minutes up; it is never an average of percentages. Planned leave has no times, so it counts in the day and week figures and not in the per interval ones.</p>
-{% if by != 'weekday' %}<section class="panel chart-panel" aria-labelledby="sh-h"><h2 id="sh-h">{{ dict(by_choices)[by] }}</h2><div class="chart-scroll">{{ view.chart }}</div></section>{% endif %}
-{% if by in ('interval', 'weekday') %}{% for g in view.weekday_grids %}
+<section class="panel chart-panel" aria-labelledby="sh-h"><h2 id="sh-h">{{ dict(by_choices)[by] }}</h2><div class="chart-scroll">{{ view.chart }}</div></section>
+{% if by == 'interval' %}{% for g in view.weekday_grids %}
 <section class="panel chart-panel" aria-labelledby="wd-h{{ loop.index }}"><h2 id="wd-h{{ loop.index }}">{{ g.title }} by weekday and interval</h2>
   <p class="dim ins-note">All the Mondays in the period are added up into the Monday column, and so on. Weeks begin on {{ week_starts|first|default('Sunday') }}.</p>
   <div class="tscroll"><table class="ins-heat"><thead><tr><td></td>{% for d in g.days %}<th scope="col">{{ d }}</th>{% endfor %}</tr></thead>
@@ -57,12 +57,12 @@
   <div class="tscroll"><table class="ins-heat"><thead><tr><td></td>{% for c in view.heat_cols %}<th scope="col">{{ c }}</th>{% endfor %}</tr></thead>
   <tbody>{% for r in view.heat %}<tr><th scope="row">{{ r.day }}</th>{% for v, lv in r.cells %}<td class="lv{{ lv }}">{% if v is not none %}{{ v|round|int }}{% endif %}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div>
 </section>{% endif %}
-{% if by != 'weekday' %}<section class="panel" aria-labelledby="tb-h"><h2 id="tb-h">The numbers</h2>
+<section class="panel" aria-labelledby="tb-h"><h2 id="tb-h">The numbers</h2>
   <div class="tscroll"><table class="adh-t ins-t"><thead><tr><th scope="col">{{ 'Time' if by == 'interval' else ('Week' if by == 'week' else 'Day') }}</th>
     {% if by != 'interval' %}<th scope="col" class="n">Shifts</th>{% endif %}{% if show != 'in' %}{% if by != 'interval' %}<th scope="col" class="n">People out</th>{% endif %}<th scope="col" class="n">Out of office</th>{% endif %}{% if show != 'out' %}{% if by != 'interval' %}<th scope="col" class="n">Off the floor</th>{% endif %}<th scope="col" class="n">In office</th>{% endif %}</tr></thead>
   <tbody>{% for r in view.table %}<tr><th scope="row">{{ r.label }}</th>
     {% if by != 'interval' %}<td class="n">{{ r.shifts }}</td>{% endif %}{% if show != 'in' %}{% if by != 'interval' %}<td class="n">{{ r.out_n }}</td>{% endif %}<td class="n">{{ pct(r.out) }}</td>{% endif %}{% if show != 'out' %}{% if by != 'interval' %}<td class="n">{{ r.in_h }}</td>{% endif %}<td class="n">{{ pct(r.inn) }}</td>{% endif %}</tr>{% endfor %}</tbody></table></div>
-</section>{% endif %}
+</section>
 {% endif %}
 </div>
 {% endblock %}

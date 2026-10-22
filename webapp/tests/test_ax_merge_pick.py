@@ -75,6 +75,11 @@ class ThePickOfLobs(unittest.TestCase):
         page = self.text(merge="1", pick="1", lobs=[self.two, self.three], program=self.one)
         self.assertIn("Associate 027", page)
 
+    def test_the_page_says_which_lobs_it_shows_together(self):
+        page = self.text(merge="1", pick="1", lobs=[self.two])
+        self.assertIn("Tier 1 + Tier 2 together.", page)
+        self.assertNotIn("Every LOB of the program together", page)
+
     def test_every_lob_ticked_shows_all_three(self):
         page = self.text(merge="1", pick="1", lobs=[self.two, self.three])
         for who in ("Associate 027", "Associate B027", "Associate C027"):
@@ -94,7 +99,8 @@ class ThePickOfLobs(unittest.TestCase):
     def test_a_name_that_is_not_a_lob_of_the_program_is_ignored(self):
         page = self.text(merge="1", pick="1", lobs=[self.two, "Elsewhere LOB"])
         self.assertIn("Associate B027", page)
-        self.assertNotIn("Elsewhere", page)
+        self.assertNotIn('value="Elsewhere LOB"', page)
+        self.assertNotIn("Associate C027", page)
 
     def test_the_pick_lists_each_lob_with_a_tick_box_ticked_as_chosen(self):
         page = self.text(merge="1", pick="1", lobs=[self.three])
@@ -107,8 +113,53 @@ class ThePickOfLobs(unittest.TestCase):
         self.text(merge="1", pick="1", lobs=[self.two])
         got = html.unescape(self.admin.get("/week", query_string={
             "program": self.one, "week": "2026-10-11", "tz": CAIRO, "merge": "1"}).get_data(as_text=True))
-        self.assertIn("Tier 1 + Tier 2", got)
-        self.assertNotIn("Tier 3", got)
+        self.assertIn("<title>SAKS, Tier 1 + Tier 2, week of", got)
+
+
+class ThePickInTheBrowser(ThePickOfLobs):
+    """The tick boxes work as a person uses them: open the pick, tick a LOB, press Show together."""
+    SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_ax" / "screens"
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        import threading
+        from playwright.sync_api import sync_playwright
+        from werkzeug.serving import make_server
+        cls.server = make_server("127.0.0.1", 0, cls.app, threaded=True)
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.pw = sync_playwright().start()
+        cls.browser = cls.pw.chromium.launch(headless=True, executable_path="/opt/pw-browsers/chromium")
+        cls.SCREENS.mkdir(parents=True, exist_ok=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.pw.stop()
+        cls.server.shutdown()
+        super().tearDownClass()
+
+    def test_ticking_one_other_lob_and_pressing_show_together_shows_two_of_three(self):
+        page = self.browser.new_page(viewport={"width": 1280, "height": 860})
+        self.addCleanup(page.close)
+        base = f"http://127.0.0.1:{self.server.server_port}"
+        page.goto(base + "/login")
+        page.get_by_label("Username").fill("omar")
+        page.get_by_label("Password").fill("Owner-pass-123")
+        page.get_by_role("button", name="Sign in").click()
+        page.wait_for_url(base + "/")
+        page.goto(f"{base}/day?program={self.one}&date={WED.isoformat()}&tz={CAIRO}")
+        page.get_by_text("View: This LOB").click()
+        page.get_by_role("checkbox", name="Tier 3").check()
+        page.screenshot(path=str(self.SCREENS / "pick_open.png"))
+        page.get_by_role("button", name="Show together").click()
+        page.wait_for_load_state()
+        body = page.content()
+        self.assertIn("Associate C027", body)
+        self.assertNotIn("Associate B027", body)
+        self.assertIn("View: Tier 1 + Tier 3", body)
+        page.wait_for_timeout(700)  # the page-to-page crossfade
+        page.screenshot(path=str(self.SCREENS / "two_of_three.png"))
 
 
 if __name__ == "__main__":

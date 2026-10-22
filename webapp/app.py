@@ -2823,7 +2823,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         target = sum(t * w for t, w in targets) / weight if weight else 0.9
         merged = merge_intervals(rows)
         programs, weeks = _week_choices(program, program_weeks(_all_runs(), store.in_use_runs()))
-        info = {"name": _merged_name(program, units), "units": units,
+        info = {"name": _merged_name(program, units), "units": units, "all": len(units) == len(_merge_units(program)),
                 "missing": [(ProgramBook(store).label(u)) for u in missing],
                 "target": int(round(100 * target)), "differs": len({round(t, 4) for t, _ in targets}) > 1}
         return render_template("week.html", run=None, view=week_view(merged, side, target) if merged else None,
@@ -2874,11 +2874,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
             latest = max((w for rows in history.values() for w in rows), key=lambda w: w["finished"] or 0)
             program, week = latest["program"], latest["week"]
         units = _merge_units(program)  # Phase AP: a View pick when the program has two or more LOBs
-        g.merge_pick = f"All LOBs of {ProgramBook(store).unit(program)['program']['name']}" if len(units) > 1 else ""
-        if request.args.get("merge") == "1" and len(units) > 1:
-            if not _access().can_open(program):
-                abort(403)
-            found = _merged_week(program, units, week, side)
+        merge = _merge_choice(program) if program and _access().can_open(program) else None
+        _merge_pick_for(program, units, merge)
+        if merge:
+            found = _merged_week(program, merge, week, side)
             if found is not None:
                 return found
         kept = _version_weeks(program)
@@ -3640,24 +3639,44 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                   "time zone. This schedule records wall-clock times and does not distinguish "
                                   "the two occurrences of a repeated hour.")
         units = _merge_units(program)  # Phase AP: a View pick when the program has two or more LOBs
-        g.merge_pick = f"All LOBs of {ProgramBook(app.extensions['store']).unit(program)['program']['name']}" \
-            if len(units) > 1 else ""
         merge = _merge_choice(program)
+        _merge_pick_for(program, units, merge)
         with shown(moved):
             return _day_body(days, programs, on, program, own_zone, moved, start_at, merge)
 
     def _merge_choice(program: str) -> Optional[List[str]]:
-        """Phase AP: the LOBs the RTA page shows as one (the program's LOBs) when "All LOBs" is picked, else None.
-        The pick is kept for the program in the session, like the zone and the start."""
+        """Phase AP: the LOBs the RTA page shows as one, else None. Phase AX (owner, 2026-10-22: two out of five): the
+        LOBs ticked in the View pick, the one the page is opened on always among them; "merge=1" alone keeps the
+        choice made, or means all. The pick is kept for the program in the session, like the zone and the start."""
         units = _merge_units(program)
         if len(units) < 2:
             return None
         kept = dict(session.get("rta_merge") or {})
         pid = str(ProgramBook(app.extensions["store"]).unit(program)["program"]["id"])
         if "merge" in request.args:
-            kept[pid] = "1" if request.args.get("merge") == "1" else ""
+            if request.args.get("merge") != "1":
+                kept[pid] = ""
+            elif "pick" in request.args:
+                want = set(request.args.getlist("lobs"))
+                chosen = [u for u in units if u == program or u in want]
+                kept[pid] = "1" if len(chosen) == len(units) else (chosen if len(chosen) > 1 else "")
+            elif not kept.get(pid):
+                kept[pid] = "1"
             session["rta_merge"] = kept
-        return units if kept.get(pid) == "1" else None
+        held = kept.get(pid)
+        if isinstance(held, list):
+            chosen = [u for u in units if u == program or u in held]
+            return chosen if len(chosen) > 1 else None
+        return units if held == "1" else None
+
+    def _merge_pick_for(program: str, units: List[str], merge: Optional[List[str]]) -> None:
+        """Phase AX: what the View pick shows: a tick box per LOB, the ones merged ticked, the open one fixed."""
+        names = _lob_names(units) if len(units) > 1 else {}
+        g.merge_pick = f"All LOBs of {ProgramBook(app.extensions['store']).unit(program)['program']['name']}" \
+            if len(units) > 1 else ""
+        g.merge_lobs = [{"unit": u, "name": names[u], "home": u == program, "on": bool(merge) and u in merge}
+                        for u in units] if len(units) > 1 else []
+        g.merge_summary = " + ".join(names[u] for u in merge) if merge else "This LOB"
 
     MERGE_TABS = ("timeline", "board", "adherence", "requests")  # Phase AP: the tabs that read, and change one person at a time
 
@@ -3678,6 +3697,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
             if merge:
                 page = merged_page(days, program, merge, on, measure, start_at - moved, g.zone, _own_zone) \
                     if program else None
+                if page and len(merge) < len(_merge_units(program)):  # Phase AX: some of the LOBs, said as such
+                    page["note"] = (f"{' + '.join(_lob_names(merge).values())} together. A change made here is saved "
+                                    "on the person's own LOB.")
             else:
                 page = days.page(program, on, measure) if program else None
         except ValueError as exc:  # said on the page, not a server error

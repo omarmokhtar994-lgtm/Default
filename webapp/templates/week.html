@@ -13,7 +13,7 @@
     {% if version and not week_note %}<p class="byline">Version: <a href="{{ url_for('run_schedules', run_id=version.run_id, v=version.id) }}">{{ version.label }}</a>{% if version.in_use %} (in use){% endif %}.</p>{% endif %}
     {% if switch %}<div class="wk-switch" role="group" aria-label="Schedule shown"><span>Schedule</span>{% for s in switch %}<a href="{{ s.url }}"{% if s.here %} aria-current="true"{% endif %}>{{ s.workbook }}<small>{{ 'in use' if s.in_use else 'not in use' }}</small></a>{% endfor %}<a href="{{ url_for('schedules_for', program=program, week=week) }}">Compare the week's schedules</a></div>{% endif %}
     {% if elsewhere %}<div class="wk-notice"><p>Not in use: the RTA, exports and analysis use {{ elsewhere.workbook }} for this week.{% if not switch %} <a href="{{ url_for('run_schedules', run_id=elsewhere.run_id) }}#week-list">See the week's schedules</a>{% endif %}</p>{% if may_set_in_use %}<form method="post" action="{{ url_for('schedule_in_use', schedule_id=version.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="primary" type="submit">Set {{ run.workbook if run else version.label }} in use</button></form>{% endif %}</div>{% endif %}
-    {% if merged %}<p class="byline">Every LOB of the program together: the requirement and the staff of {{ merged.units|length }} LOBs added up, on the clock picked. Target {{ merged.target }}%{% if merged.differs %} (the LOBs' own targets weighted by what each needs){% endif %}.{% if merged.missing %} No schedule this week for {{ merged.missing|join(', ') }}.{% endif %}</p>{% endif %}
+    {% if merged %}<p class="byline">{% if merged.all %}Every LOB of the program together{% else %}{{ merged.units|length }} of the program's LOBs together{% endif %}: the requirement and the staff of {{ merged.units|length }} LOBs added up, on the clock picked. Target {{ merged.target }}%{% if merged.differs %} (the LOBs' own targets weighted by what each needs){% endif %}.{% if merged.missing %} No schedule this week for {{ merged.missing|join(', ') }}.{% endif %}</p>{% endif %}
     {% if run %}<p class="byline">From <a href="{{ url_for('run_detail', run_id=run.id) }}">{{ run.workbook }}</a> ({{ run.mode|lower }} run by {{ run.by_name }}, {{ label(run) }}).
       {% if view %}Every {{ unit }}, {{ 'before' if side == 'before' else 'after' }} breaks. Needed = associates on the floor for 100% of demand after shrinkage.{% endif %}</p>{% endif %}
   </div>
@@ -25,8 +25,7 @@
       <select name="week">{% for w in weeks %}<option value="{{ w }}"{% if w == week %} selected{% endif %}>{{ w|day_month }} {{ w[:4] }}</option>{% endfor %}</select></label>
     <label>Times in
       <select name="tz">{% for key, name in zones %}<option value="{{ key }}"{% if key == g.zone %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
-    {% if g.merge_pick %}<label>View
-      <select name="merge" data-autosubmit><option value="">This LOB</option><option value="1"{% if merged %} selected{% endif %}>{{ g.merge_pick }}</option></select></label>{% endif %}
+    {% include "_lob_pick.html" %}
     {% if pick and pick.rows %}<label>Version
       <select name="v"><option value="">The one in use</option>{% for r in pick.rows %}<option value="{{ r.id }}"{% if r.id == pick.picked %} selected{% endif %}>{{ r.text }}</option>{% endfor %}</select></label>{% endif %}
     <input type="hidden" name="side" value="{{ side }}">

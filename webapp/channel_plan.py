@@ -207,12 +207,13 @@ def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=N
         starts = []
         for k, (kind, start, minutes) in enumerate(p["breaks"]):
             fixed = start is not None and (not move_breaks or (name, k) in locked)
-            cands = [start] if fixed else sorted(set(_candidates(rules, p, kind, minutes)) | ({start} - {None}))
+            here = {start} if start is not None and lo <= start and start + minutes <= hi else set()  # Phase AX: where it is is
+            cands = [start] if fixed else sorted(set(_candidates(rules, p, kind, minutes)) | here)  # a choice only in the shift
             if not cands:
                 raise NoPlan(f"{name}'s {kind} has no time inside the break rules.")
             picks[name, k] = {c: m.NewBoolVar(f"b{name}{k}{c}") for c in cands}
             m.AddExactlyOne(picks[name, k].values())
-            if start is not None and not fixed:
+            if start is not None and not fixed and start in picks[name, k]:
                 cost.append(MOVE * (1 - picks[name, k][start]))
                 m.AddHint(picks[name, k][start], 1)
             if fixed:

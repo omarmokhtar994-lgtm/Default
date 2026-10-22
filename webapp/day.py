@@ -1112,6 +1112,35 @@ def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: i
 
     before_score = score(sums)
     current = before_score
+    if not fresh:  # Phase AX: a break outside its shift takes nothing off the floor, so no interval ever asks for it to move
+        for lane, seg in people:
+            for b in seg["breaks"]:
+                key = (lane["name"], b["idx"])
+                if starts[key] < now or (seg["start"] <= starts[key] and starts[key] + b["minutes"] <= seg["end"]):
+                    continue
+                best = None
+                for new in positions(lane, seg, b):
+                    change = delta(lane, seg, b, new)
+                    if not languages_hold(lane, change) or (hold is not None and not hold.holds(lane["name"], change)):
+                        continue
+                    totals = list(sums)
+                    for i, d in change.items():
+                        totals[i // per] += d
+                    rank = (score(totals), tuple(-x for x in fit_with(lane["name"], b["idx"], new)), -abs(new - original[key]))
+                    if best is None or rank > best[0]:
+                        best = (rank, new, change, totals)
+                if best is None:
+                    continue
+                _, new, change, totals = best
+                if hold is not None:
+                    hold.apply(lane["name"], change)
+                for i, d in change.items():
+                    for L in langs:
+                        if lang_of[lane["name"]] in L["eligible"]:
+                            L["counts"][i] += d
+                starts[key] = new
+                sums = totals
+        current = score(sums)
     if fresh:
         rounds = 0
 

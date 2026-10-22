@@ -529,3 +529,81 @@ class TheApplyKeepsEveryMove(_cb._Cancel):
             "tz": "Africa/Cairo", "anchor": _WED.isoformat(),
             "move": [f"{m[0]}|{m[1]}|{m[2]}|{_WED.isoformat()}" for m in moves]}, follow_redirects=True)
         self.assertIn("Moved 2 breaks.", _html.unescape(got.get_data(as_text=True)))
+
+
+class FixTheRestBringsABreakBackIntoItsShift(unittest.TestCase):
+    """Owner, 2026-10-23, from a screenshot: breaks that were planned outside their shift, and Fix "does the same or doesn't change
+    it": a break outside the shift takes nothing off the floor, so no interval ever asked for it to move. It is moved inside."""
+    def setUp(self):
+        day = _td.TheDay("view")
+        self.view, self.own = day.view, day.own
+
+    def outside(self, past_end=True):
+        v = self.view()
+        for lane in v["lanes"]:
+            for seg in lane["segments"]:
+                if seg["offset"] == 0 and seg["status"] == "Present" and len(seg["breaks"]) >= 2 and seg["start"] >= 240:
+                    b = seg["breaks"][0]
+                    b["start"] = seg["end"] + 90 if past_end else seg["start"] - 120
+                    return v, lane["name"], b["idx"]
+        self.fail("nobody with two breaks")
+
+    def test_a_break_after_the_shift_is_moved_inside_it(self):
+        v, name, idx = self.outside()
+        plan = replan(v, INPUTS, 0)
+        seg = self.own(v, name)
+        got = next((m for m in plan["moves"] if (m["name"], m["idx"]) == (name, idx)), None)
+        self.assertIsNotNone(got, plan["moves"])
+        self.assertTrue(seg["start"] <= got["to"] and got["to"] + got["minutes"] <= seg["end"], got)
+
+    def test_a_break_before_the_shift_is_moved_inside_it_too(self):
+        v, name, idx = self.outside(past_end=False)
+        plan = replan(v, INPUTS, 0)
+        got = next((m for m in plan["moves"] if (m["name"], m["idx"]) == (name, idx)), None)
+        seg = self.own(v, name)
+        self.assertIsNotNone(got, plan["moves"])
+        self.assertTrue(seg["start"] <= got["to"] and got["to"] + got["minutes"] <= seg["end"], got)
+
+    def test_the_move_keeps_the_breaks_in_order_and_apart(self):
+        v, name, idx = self.outside()
+        plan = replan(v, INPUTS, 0)
+        got = next(m for m in plan["moves"] if (m["name"], m["idx"]) == (name, idx))
+        seg = self.own(v, name)
+        others = [b for b in seg["breaks"] if b["idx"] != idx]
+        for b in others:
+            moved = next((m["to"] for m in plan["moves"] if (m["name"], m["idx"]) == (name, b["idx"])), b["start"])
+            self.assertTrue(got["to"] >= moved + b["minutes"] or moved >= got["to"] + got["minutes"])
+
+    def test_a_break_that_has_started_is_left_alone(self):
+        v, name, idx = self.outside()
+        plan = replan(v, INPUTS, 10 * 24 * 60)  # everything started
+        self.assertEqual(plan["moves"], [])
+
+    def test_replan_the_days_breaks_brings_it_inside_too(self):
+        v, name, idx = self.outside()
+        plan = replan(v, INPUTS, 0, fresh=True)
+        seg = self.own(v, name)
+        got = next((m for m in plan["moves"] if (m["name"], m["idx"]) == (name, idx)), None)
+        self.assertIsNotNone(got, plan["moves"])
+        self.assertTrue(seg["start"] <= got["to"] and got["to"] + got["minutes"] <= seg["end"], got)
+
+
+class TheDaySaysWhenBreaksAreOutsideTheirShifts(_cb._Cancel):
+    def test_the_timeline_names_a_break_outside_its_shift(self):
+        row, _ = self.days.version(self.key, _WED)
+        week = __import__("json").loads(row["week"])
+        shifts = {a["name"]: a["days"][3] for a in week["associates"]}
+        name = next(b["associate"] for b in week["breaks"] if b["day"] == "Wed" and shifts.get(b["associate"], "OFF") not in ("OFF", ""))
+        for b in week["breaks"]:
+            if b["associate"] == name and b["day"] == "Wed" and b["kind"] == "Break 2":
+                b["start"] = "05:55"  # well before this shift starts (it is not an overnight one)
+        self.store.update_schedule(row["id"], week=__import__("json").dumps(week))
+        self.addCleanup(self.store.update_schedule, row["id"], week=row["week"])
+        self.days._pages.clear()
+        page = _html.unescape(self.client.get(f"/day?program={self.key.replace(' ', '+')}&date={_WED.isoformat()}").get_data(as_text=True))
+        self.assertIn("outside their shift", page)
+        self.assertIn(name, page.split("outside their shift", 1)[1][:400])
+
+    def test_a_normal_day_has_no_such_notice(self):
+        page = _html.unescape(self.client.get(f"/day?program={self.key.replace(' ', '+')}&date={_WED.isoformat()}").get_data(as_text=True))
+        self.assertNotIn("outside their shift", page)

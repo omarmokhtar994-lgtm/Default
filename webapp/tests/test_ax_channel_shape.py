@@ -91,3 +91,27 @@ class TheNormalMaximumGapInPlanChannels(unittest.TestCase):
         self.assertGreater(past, 0)               # the need left no room inside the maximum ...
         self.assertLessEqual(past, 30)            # ... and it is passed by the least it takes (240 against 210), not by hours
         self.assertEqual(check_row({**RULES, "max_gap": 10 ** 6}, label(), [first, lunch, last])[0], "ok")
+
+
+class ABreakOutsideTheShiftIsNeverKept(unittest.TestCase):
+    """Owner, 2026-10-23, from a screenshot: "in channel plan it planned breaks not in the shift's start and end". A break whose
+    current time lies outside its shift (stale data) was kept as one of its own candidates ("where it is" is always a choice, to
+    avoid moving what need not move). Where it is is a choice only when it is inside the shift."""
+    def test_a_last_break_after_the_shift_ends_is_moved_inside_it(self):
+        first, lunch, last = planned(breaks=(12.5, 15, 20.5))  # the shift ends at 19:00
+        self.assertTrue(LO <= first and last + 15 <= HI, [hm(first), hm(lunch), hm(last)])
+        self.assertTrue(LO <= lunch and lunch + 30 <= HI)
+
+    def test_a_first_break_before_the_shift_starts_is_moved_inside_it(self):
+        first, lunch, last = planned(breaks=(8.5, 12, 15))  # the shift starts at 10:00
+        self.assertGreaterEqual(first, LO)
+
+    def test_a_lunch_outside_the_shift_is_moved_inside_it_too(self):
+        first, lunch, last = planned(breaks=(12.5, 20, 17.25))  # the lunch would be an hour past the end
+        self.assertTrue(LO <= lunch and lunch + 30 <= HI, hm(lunch))
+
+    def test_a_break_inside_the_shift_still_stays_where_it_is_when_nothing_asks_otherwise(self):
+        self.assertEqual([s / H for s in planned(breaks=(12.5, 15, 17.25))], [12.5, 15, 17.25])
+
+    def test_with_breaks_not_allowed_to_move_nothing_is_changed(self):
+        self.assertEqual([s / H for s in planned(breaks=(12.5, 15, 20.5), move=False)], [12.5, 15, 20.5])

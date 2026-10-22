@@ -211,6 +211,7 @@
 
 {% if tab == 'timeline' %}
 {% if chhours %}{{ channel_hours(chhours) }}{% endif %}
+{% if outside_breaks %}<p class="notice" role="note"><b>{{ outside_breaks|length }} break{{ 's' if outside_breaks|length != 1 }} outside their shift:</b> {% for name, kind, at in outside_breaks[:6] %}{{ name }} ({{ kind }} at {{ hm(at) }}){{ ', ' if not loop.last }}{% endfor %}{% if outside_breaks|length > 6 %} and {{ outside_breaks|length - 6 }} more{% endif %}. They take nothing off the floor where they are. Fix the rest of the day's breaks, or Replan the day's breaks, moves them inside.</p>{% endif %}
 <section class="panel" aria-labelledby="floor-h">
   <h2 id="floor-h">Who is on the floor</h2>
   <p class="autopilot"><a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='replan') }}">Fix the rest of the day's breaks</a> <a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='replan', how='fresh') }}">Replan the day's breaks</a>{% if measure == 'interval' %} <a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='rescue') }}">Rescue the day</a>{% endif %} <a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='bulk') }}">Change several breaks</a></p>

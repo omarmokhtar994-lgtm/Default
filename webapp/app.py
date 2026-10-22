@@ -3878,6 +3878,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
                         found.setdefault(t + page["merged"]["delta"][u], []).append(x)
                 planned = {t: sum(xs) / len(xs) for t, xs in found.items()}
             shrink = interval_shrinkage(v, {"planned_shrinkage": {0: planned}}, 0)
+        outside_breaks = []  # Phase AX: breaks that lie outside their shift (stale data); said, and Fix moves them inside
+        for lane in (page["view"]["lanes"] if page else []):
+            for seg in lane["segments"]:
+                if seg["offset"] == 0:
+                    outside_breaks += [(lane["name"], b["kind"], b["start"]) for b in seg["breaks"]
+                                       if b["start"] < seg["start"] or b["start"] + b["minutes"] > seg["end"]]
         bar = {"undo": days.undoable(program, on, g.user["id"]) if program and page and not merge else None,  # Phase AD
                "send": _send_bar(program, on) if program and page and not merge else None,
                "resend": request.args.get("resend", 0, type=int)}
@@ -3906,7 +3912,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 planned = [x for x in planned if x is not None]
                 shrinkage["in_office"] = {**shrinkage["in_office"],
                                           "planned": sum(planned) / len(planned) if planned else None}
-        return render_template("day.html", page=page, problem=problem, program=program, programs=programs, on=on,
+        return render_template("day.html", outside_breaks=outside_breaks, page=page, problem=problem, program=program, programs=programs, on=on,
                                today=clock_now.date(), tips=tips, at_a_glance=at_a_glance, shrinkage=shrinkage,
                                now_box=now_box, requests_waiting=_requests_waiting(program, g.user) if now_box else 0,
                                posts=app.extensions["notifier"].statuses(program, on.isoformat())

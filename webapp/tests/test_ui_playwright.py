@@ -968,8 +968,14 @@ class TheRtaActionsInTheBrowser(unittest.TestCase):
         expect(page.locator("dialog[open] #brk-h")).to_have_text(re.compile(rf" to {want}\?$"))
         with page.expect_navigation():
             page.locator("dialog[open] [data-keep]").click()
-            if page.locator("dialog[open] .dlg-ask:not([hidden])").count():
+            # A move that takes the break out of the default (Phase AX) asks "Keep this time anyway?" once the advice has come
+            # back, which can be after the click: wait for the question a moment rather than look once.
+            from playwright.sync_api import TimeoutError as PwTimeout
+            try:
+                page.locator("dialog[open] .dlg-ask:not([hidden])").wait_for(timeout=1500)
                 page.locator("dialog[open] [data-keep]").click()
+            except PwTimeout:
+                pass
         moved = next(b for lane in self.app.extensions["days"].page("AE/AR B2B", date.fromisoformat(day))["view"]["lanes"]
                      if lane["name"] == name for s in lane["segments"] if s["offset"] == 0 for b in s["breaks"]
                      if b["idx"] == idx)

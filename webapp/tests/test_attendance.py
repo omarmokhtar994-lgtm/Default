@@ -111,7 +111,10 @@ class TheAttendance(unittest.TestCase):
         self.assertEqual(advice["warnings"], ["Break 1 ends and Lunch starts 30 minutes apart; this program's "
                                               "minimum gap between breaks is 60 minutes.",
                                               "Lunch ends and Break 2 starts 270 minutes apart; this program's "
-                                              "normal maximum gap between breaks is 210 minutes."])
+                                              "normal maximum gap between breaks is 210 minutes.",
+                                              # Re-pinned (Phase AX, owner 2026-10-22: a manual move that takes a break out of
+                                              # the default says so): lunch 30 minutes after the first break is off the shape
+                                              "Lunch is normally 2 to 3 hours of work after the first break."])
         fits = advice["fits"]
         self.assertTrue(0 < len(fits) <= 3)
         for fit in fits:  # Lunch between Break 1 and Break 2, within the 60 to 210 minute gaps

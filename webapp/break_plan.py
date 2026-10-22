@@ -140,8 +140,9 @@ def fit_words(rules: Dict[str, Any], label: str, before: Starts, after: Starts) 
     now = shape_fit(lo, hi, (list(after) + [None] * len(slots))[:len(slots)], slots)
     said = [SHAPE_WORDS[i] for i in range(3) if now[i] is False and had[i] is not False]
     old = set(rule_problems(rules, label, before, steps=False, adjacent=True))
+    # the gaps are said already, in the program's own words (day.advice), so they are not said twice
     return said + [x for x in rule_problems(rules, label, after, steps=False, adjacent=True)
-                   if x not in old and "is not placed yet" not in x]
+                   if x not in old and "is not placed yet" not in x and "minimum gap" not in x and "normal maximum" not in x]
 
 
 def break_default(rules: Dict[str, Any], label: str, k: int, count: int, start: int) -> Tuple[int, int]:

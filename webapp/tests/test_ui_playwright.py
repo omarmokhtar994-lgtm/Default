@@ -3198,8 +3198,12 @@ class TheMergedViewsInTheBrowser(unittest.TestCase):
         chips = page.locator(".tl-who .tl-tag.lob")
         texts = set(chips.all_inner_texts())
         self.assertEqual(texts, {"Tier 1", "Tier 2"})
-        expect(page.locator("select[name=merge]")).to_have_value("1")
-        page.locator("select[name=merge]").select_option("")
+        # Re-pinned (Phase AX, owner 2026-10-22: tick the LOBs to show together): the View pick is a set of tick
+        # boxes now, not a select with "This LOB" / "All LOBs"; going back is unticking the others.
+        expect(page.locator(".lob-pick summary")).to_have_text("View: Tier 1 + Tier 2")
+        page.locator(".lob-pick summary").click()
+        page.get_by_role("checkbox", name="Tier 2").uncheck()
+        page.get_by_role("button", name="Show together").click()
         page.wait_for_load_state()
         expect(page.locator(".tl-tag.lob")).to_have_count(0)
         self.assertEqual(problems, [])

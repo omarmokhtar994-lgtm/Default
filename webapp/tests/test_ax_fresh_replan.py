@@ -382,7 +382,7 @@ class TheRescuePrefersTheDefault(_cb._Cancel):
         lane = next(l for l in page["view"]["lanes"] for s in l["segments"] if s["offset"] == 0 and s["breaks"])
         seg = next(s for s in lane["segments"] if s["offset"] == 0)
         first = seg["breaks"][0]
-        self.assertEqual(defaults(lane["name"], first["idx"], seg["start"] + 15)[0], 1)  # 15 minutes in: not the shape
+        self.assertEqual(defaults(lane["name"], first["idx"], seg["start"] + 15)[0], 105)  # 15 minutes in: 105 short of 2 hours
         self.assertEqual(defaults(lane["name"], first["idx"], seg["start"] + 150)[0], 0)
 
     def test_rescue_still_runs_with_it_and_without_the_rules(self):

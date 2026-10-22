@@ -69,9 +69,10 @@ def solve(view: Dict[str, Any], inputs: Dict[str, Any], target: float, now: Opti
     solver's status in ``solver`` (OPTIMAL proves it the best; FEASIBLE is the best found in the time). ``now`` is
     minutes past midnight today, or None for another day (nothing started, nothing over).
 
-    ``defaults`` (Phase AX, owner: "prioritize the default, followed by the engine", the intervals first) is ``(name, break
-    index, start) -> (1 if the start misses the usual shape else 0, 1 if it breaks an engine rule of that break else 0)``.
-    The shape comes after the intervals and the fewest given up, then the engine's rules, then the fewest breaks moved."""
+    ``defaults`` (Phase AX, owner: "prioritize the default, followed by the engine", the intervals first, a sacrifice "to the
+    nearest") is ``(name, break index, start) -> (minutes the start is off the usual shape, minutes it is off the engine's
+    margin and window for that break)``. After the intervals and the fewest given up come the fewest minutes off the shape,
+    then the fewest off the engine's rules, then the fewest breaks moved."""
     started = time.time()
     step = view["interval"]
     per = step // STEP
@@ -288,21 +289,27 @@ def solve(view: Dict[str, Any], inputs: Dict[str, Any], target: float, now: Opti
     # so one objective keeps the order
     steps = [{s: abs(s - item[2]["start"]) // STEP for s in x[j]} for j, item in enumerate(moving)]
     per_move = 1 + sum(max(d.values()) for d in steps)
-    shape_terms: List[Any] = []
-    rule_terms: List[Any] = []
+    shape_terms: List[Tuple[int, Any]] = []  # (5-minute steps off the usual shape, the start's variable)
+    rule_terms: List[Tuple[int, Any]] = []
+    shape_most = rule_most = 0
     if defaults is not None:
         for j, (lane, seg, b, places) in enumerate(moving):
+            worst_shape = worst_rule = 0
             for s, v in x[j].items():
-                miss, broke = defaults(lane["name"], b["idx"], s)
-                if miss:
-                    shape_terms.append(v)
-                if broke:
-                    rule_terms.append(v)
-    per_rule = 1 + per_move * (len(moving) + 1)
-    per_shape = 1 + per_rule * (len(rule_terms) + 1)
-    per_given = 1 + (per_shape * (len(shape_terms) + 1) if shape_terms else per_rule * (len(rule_terms) + 1) if rule_terms
-                     else per_move * (len(moving) + 1))
-    rest = (per_given * sum(g for g, _ in given) + per_shape * sum(shape_terms) + per_rule * sum(rule_terms)
+                far, outside = defaults(lane["name"], b["idx"], s)
+                if far:
+                    shape_terms.append((-(-far // STEP), v))
+                    worst_shape = max(worst_shape, -(-far // STEP))
+                if outside:
+                    rule_terms.append((-(-outside // STEP), v))
+                    worst_rule = max(worst_rule, -(-outside // STEP))
+            shape_most, rule_most = shape_most + worst_shape, rule_most + worst_rule
+    unit = per_move * (len(moving) + 1)  # more than every break moved and every step moved can add up to
+    per_rule = unit
+    per_shape = per_rule * rule_most + unit
+    per_given = (per_shape * shape_most + per_rule * rule_most + unit) if (shape_most or rule_most) else 1 + unit
+    rest = (per_given * sum(g for g, _ in given) + per_shape * sum(n * v for n, v in shape_terms)
+            + per_rule * sum(n * v for n, v in rule_terms)
             + sum(per_move * (1 - x[j][item[2]["start"]]) + sum(d * x[j][s] for s, d in steps[j].items() if d)
                   for j, item in enumerate(moving)))
     per_safe = 1 + per_given * (len(given) + 1)

@@ -9,8 +9,8 @@ from webapp.day import day_view
 from webapp.tests import test_rescue as _tr
 
 
-def penalty(at):  # a stand-in default: a break that starts on the hour misses it
-    return (1 if at % 60 == 0 else 0, 0)
+def penalty(at):  # a stand-in default: a break that starts on the hour is 30 minutes off it
+    return (30 if at % 60 == 0 else 0, 0)
 
 
 class TheDefaultInRescue(unittest.TestCase):

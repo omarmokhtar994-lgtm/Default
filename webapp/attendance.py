@@ -1833,9 +1833,10 @@ class DayBook:
         return people
 
     def fit_for(self, program: str, on: date, start: int, view: Dict[str, Any]):  # type: ignore[no-untyped-def]
-        """Phase AX (owner: "prioritize the default, followed by the engine"): for the tools that move breaks on a window
-        (``rebase``d ``view``), ``(name, break index -> start in the window) -> (parts of the usual shape missed, engine
-        rules broken)``, from the program's break rules; None when they cannot be read (the tools then work as before)."""
+        """Phase AX (owner: "prioritize the default, followed by the engine"; "to the nearest"): for the tools that move breaks
+        on a window (``rebase``d ``view``), ``(name, break index -> start in the window) -> (minutes off the usual shape,
+        minutes off the engine's rules)``, from the program's break rules; None when they cannot be read (the tools then work
+        as before)."""
         from .break_plan import fit as break_fit
         people = self._rule_people(program, on, view)
         if people is None:
@@ -1849,13 +1850,12 @@ class DayBook:
             own: List[Optional[int]] = [None] * count
             for i, at in starts.items():
                 own[i] = at + start - shift
-            missed, said = break_fit(rules, label, own)
-            return (missed, len(said))
+            return break_fit(rules, label, own)
         return fit
 
     def defaults_for(self, program: str, on: date, start: int, view: Dict[str, Any]):  # type: ignore[no-untyped-def]
-        """What Rescue weighs: ``(name, break index, start in the window) -> (1 if it misses the usual shape, 1 if it breaks
-        an engine rule of that break)``; None when the rules cannot be read."""
+        """What Rescue weighs: ``(name, break index, start in the window) -> (minutes off the usual shape, minutes off the
+        engine's margin and window for that break)``; None when the rules cannot be read."""
         from .break_plan import break_default
         people = self._rule_people(program, on, view)
         if people is None:

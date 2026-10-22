@@ -114,16 +114,62 @@ def check_row(rules: Dict[str, Any], label: str, starts: Starts) -> Tuple[str, s
     return ("warn", "; ".join(said)) if said else ("ok", "OK")
 
 
-def fit(rules: Dict[str, Any], label: str, starts: Starts) -> Tuple[int, List[str]]:
-    """How well a person's breaks fit the two layers (Phase AX, owner: "prioritize the default, followed by the engine"):
-    (the parts of the usual shape missed, 0 to 3; what breaks the engine's rules, in words, not counting the 15-minute
-    step, which the RTA does not keep, nor a break that is not there). Lower is better, the shape first."""
+def shape_distance(rules: Dict[str, Any], label: str, starts: Starts) -> int:
+    """Minutes the usual shape is missed by (Phase AX, owner: "the default timing makes the most sense"): the first break
+    outside 2 to 3.5 hours into the shift, the lunch outside 2 to 3 hours of work after the first break, the last break
+    ending after the hour before the shift's end, each measured to the nearest edge of what is wanted."""
     lo, hi = _span(label)
     slots = slots_for(rules, hi - lo)
     starts = (list(starts) + [None] * len(slots))[:len(slots)]
-    missed = sum(1 for part in shape_fit(lo, hi, starts, slots) if part is False)
-    said = [x for x in rule_problems(rules, label, starts, steps=False, adjacent=True) if "is not placed yet" not in x]
-    return missed, said
+    kinds = [kind.casefold() for kind, _ in slots]
+    far = 0
+    if starts and starts[0] is not None:
+        far += max(0, FIRST_FROM - (starts[0] - lo)) + max(0, (starts[0] - lo) - FIRST_TO)
+    if "lunch" in kinds[1:]:
+        i = kinds.index("lunch", 1)
+        if starts[i] is not None and starts[i - 1] is not None:
+            gap = starts[i] - (starts[i - 1] + slots[i - 1][1])
+            far += max(0, LUNCH_FROM - gap) + max(0, gap - LUNCH_TO)
+    if len(slots) >= 2 and starts[-1] is not None:
+        far += max(0, starts[-1] + slots[-1][1] - (hi - LAST_CLEAR))
+    return far
+
+
+def rule_distance(rules: Dict[str, Any], label: str, starts: Starts) -> int:
+    """Minutes the engine's rules are missed by: inside the edge margin, outside a break's window, closer than the minimum
+    gap or further than the normal maximum (a gap is not held across a break that is not there). Not the 15-minute step."""
+    lo, hi = _span(label)
+    slots = slots_for(rules, hi - lo)
+    starts = (list(starts) + [None] * len(slots))[:len(slots)]
+    far = 0
+    for (kind, minutes), s in zip(slots, starts):
+        if s is not None:
+            far += _one_rule_distance(rules, hi - lo, kind, minutes, s - lo)
+    for k in range(len(slots) - 1):
+        if starts[k] is None or starts[k + 1] is None:
+            continue
+        gap = starts[k + 1] - (starts[k] + slots[k][1])
+        far += max(0, (rules.get("min_gap") or 0) - gap)
+        if rules.get("max_gap"):
+            far += max(0, gap - rules["max_gap"])
+    return far
+
+
+def _one_rule_distance(rules: Dict[str, Any], span: int, kind: str, minutes: int, rel: int) -> int:
+    margin = edge_margin(rules, span)
+    far = max(0, margin - rel) + max(0, rel + minutes - (span - margin))
+    window = (rules.get("windows") or {}).get(kind.casefold()) or {}
+    if window.get("earliest") is not None:
+        far += max(0, window["earliest"] - rel)
+    if window.get("latest") is not None:
+        far += max(0, rel - window["latest"])
+    return far
+
+
+def fit(rules: Dict[str, Any], label: str, starts: Starts) -> Tuple[int, int]:
+    """How far a person's breaks are from the two layers (Phase AX, owner: "prioritize the default, followed by the engine",
+    "to the nearest"): (minutes off the usual shape, minutes off the engine's rules). Lower is better, the shape first."""
+    return shape_distance(rules, label, starts), rule_distance(rules, label, starts)
 
 
 SHAPE_WORDS = ("The first break is normally 2 to 3.5 hours into the shift.",
@@ -146,24 +192,18 @@ def fit_words(rules: Dict[str, Any], label: str, before: Starts, after: Starts) 
 
 
 def break_default(rules: Dict[str, Any], label: str, k: int, count: int, start: int) -> Tuple[int, int]:
-    """What one break decides alone of the two layers: (1 if it misses the usual shape: the first break not 2 to 3.5 hours
-    into the shift, the last of two or more ending less than an hour before the shift's end; else 0, 1 if it breaks the
-    engine's edge margin or its window; else 0). The lunch's place after the first break is a pair's, not one's."""
+    """What one break decides alone of the two layers, in minutes: (how far it is off the usual shape: the first break from 2
+    to 3.5 hours into the shift, the last of two or more from ending an hour before the shift's end; how far it is off the
+    engine's edge margin and its window). The lunch's place after the first break is a pair's, not one's."""
     lo, hi = _span(label)
     slots = slots_for(rules, hi - lo)
     kind, minutes = slots[k] if k < len(slots) else ("", 0)
-    miss = 0
-    if k == 0 and not FIRST_FROM <= start - lo <= FIRST_TO:
-        miss = 1
-    if count >= 2 and k == count - 1 and start + minutes > hi - LAST_CLEAR:
-        miss = 1
-    rel = start - lo
-    margin = edge_margin(rules, hi - lo)
-    window = (rules.get("windows") or {}).get(kind.casefold()) or {}
-    broke = int(rel < margin or rel + minutes > hi - lo - margin
-                or (window.get("earliest") is not None and rel < window["earliest"])
-                or (window.get("latest") is not None and rel > window["latest"]))
-    return miss, broke
+    far = 0
+    if k == 0:
+        far += max(0, FIRST_FROM - (start - lo)) + max(0, (start - lo) - FIRST_TO)
+    if count >= 2 and k == count - 1:
+        far += max(0, start + minutes - (hi - LAST_CLEAR))
+    return far, _one_rule_distance(rules, hi - lo, kind, minutes, start - lo)
 
 
 def rule_problems(rules: Dict[str, Any], label: str, starts: Starts, steps: bool = True,

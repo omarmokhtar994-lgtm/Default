@@ -430,3 +430,24 @@ class TheManualMoveWarns(_cb._Cancel):
         with mock.patch.object(self.days.book, "break_rules", side_effect=ValueError("no rules")):
             got = self.days.break_advice(self.key, _WED, name, b["idx"], self.at(seg["start"] + 30))
         self.assertNotIn("normally", " ".join(got["warnings"]))
+
+
+class TheBulkPreviewNamesWhatItTakesOutOfTheDefault(_cb._Cancel):
+    def test_a_set_time_that_misses_the_usual_shape_is_named_in_the_preview(self):
+        names = [l["name"] for l in self.days.page(self.key, _WED)["view"]["lanes"]
+                 if any(s["offset"] == 0 and s["status"] == "Present" and s["breaks"] for s in l["segments"])][:3]
+        first = self.days.page(self.key, _WED)["view"]["lanes"]
+        seg = next(s for l in first if l["name"] == names[0] for s in l["segments"] if s["offset"] == 0)
+        early = f"{(seg['start'] + 20) // 60 % 24:02d}:{(seg['start'] + 20) % 60:02d}"
+        got = self.days.bulk_preview(self.key, _WED, names[:1], "Break 1", "set", at=early)
+        words = [w for c in got["changes"] for w in c.get("words", [])]
+        self.assertTrue(any("first break is normally" in w for w in words), got["changes"])
+
+    def test_a_change_that_stays_in_the_default_has_no_words(self):
+        names = [l["name"] for l in self.days.page(self.key, _WED)["view"]["lanes"]
+                 if any(s["offset"] == 0 and s["status"] == "Present" and s["breaks"] for s in l["segments"])][:1]
+        seg = next(s for l in self.days.page(self.key, _WED)["view"]["lanes"] if l["name"] == names[0]
+                   for s in l["segments"] if s["offset"] == 0)
+        fine = f"{(seg['start'] + 150) // 60 % 24:02d}:{(seg['start'] + 150) % 60:02d}"
+        got = self.days.bulk_preview(self.key, _WED, names, "Break 1", "set", at=fine)
+        self.assertEqual([w for c in got["changes"] for w in c.get("words", [])], [])

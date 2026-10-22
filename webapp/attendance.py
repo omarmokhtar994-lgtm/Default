@@ -1981,6 +1981,12 @@ class DayBook:
         page, found = self._bulk_found(program, on, names, which, action, amount, at, now, start)
         after = self._recount(program, on, start, [(c["name"], c["idx"], c["day_new"], c["date"])
                                                     for c in found["changes"]])
+        views: Dict[date, Dict[str, Any]] = {}
+        for c in found["changes"]:  # Phase AX: what a change takes the person's breaks out of (said, not refused)
+            if isinstance(c.get("day_new"), int):
+                if c["date"] not in views:
+                    views[c["date"]] = (self.page(program, c["date"]) or {}).get("view") or {"lanes": []}
+                c["words"] = self._default_words(program, c["date"], views[c["date"]], c["name"], c["idx"], c["day_new"])
         return {**found, "before": self._figures(page), "after": self._figures(after)}
 
     def apply_bulk(self, program: str, on: date, names: List[str], which: str, action: str, user_id: int,

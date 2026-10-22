@@ -247,3 +247,29 @@ class TheDefaultRules(_cb._Cancel):
             page = _html.unescape(self.client.get(
                 f"/day?program={self.key.replace(' ', '+')}&date={_WED.isoformat()}&view=replan&how=fresh").get_data(as_text=True))
         self.assertIn("default break rules", page)
+
+
+from webapp.tests import test_channel_day as _cd  # noqa: E402
+
+
+class TheFreshReplanWithChannels(_cd._Day):
+    """The default times come from a planner that does not know about channels, so the day's channel guard has the last
+    word: no move leaves a channel, or a language inside it, below its need."""
+    def test_no_move_it_proposes_leaves_a_channel_short(self):
+        before = {w["text"] for w in self.view()["channels"]["warnings"]}
+        found = self.days.fresh_replan_window(self.key, _cd.WED, 0, 0)
+        for m in found["moves"]:
+            at = f"{m['to'] // 60 % 24:02d}:{m['to'] % 60:02d}"
+            self.days.move_break(self.key, _cd.WED, m["name"], m["idx"], at, self.omar)
+        self.assertEqual({w["text"] for w in self.warnings()} - before, set())
+
+    def test_a_default_time_that_would_leave_a_channel_empty_is_not_used(self):
+        # Associate 031 is the only one on Phone from 15:00 to 16:00 (test_channel_day: "nobody on Phone"), so a default
+        # of 15:00 for their break must give way to the nearest time the channel allows
+        page = self.days.page(self.key, _cd.WED)
+        found = replan(page["view"], page["inputs"], 0, target=page["target"]["target"], fresh=True,
+                       desired={("Associate 031", 0): 15 * 60})
+        moved = [m for m in found["moves"] if m["name"] == "Associate 031"]
+        self.assertTrue(moved)
+        self.assertNotEqual(moved[0]["to"], 15 * 60)
+        self.assertNotIn(moved[0]["to"] // 60, (15,))

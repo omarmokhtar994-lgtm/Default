@@ -4377,8 +4377,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                  f"{n} break{'s' if n != 1 else ''}")
             flash(f"Moved {done} break{'s' if done != 1 else ''}.")
         except ValueError as exc:
-            _say(f"Stopped: {exc} The moves before it were kept; open the autopilot again for a fresh proposal.", program,
-                 on)
+            _say(f"{exc} Undo takes back what was kept; open it again for a fresh proposal.", program, on)
         return _back_to_day(program, on, "")
 
     @app.route("/day/rescue/apply", methods=["POST"])

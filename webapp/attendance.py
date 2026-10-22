@@ -1931,12 +1931,46 @@ class DayBook:
     @journaled
     def apply_replan(self, program: str, on: date, moves: List[Tuple[Any, ...]], user_id: int) -> int:
         """Keep the approved moves (each checked again: the day may have changed since the preview). A move is
-        (name, idx, minute) on ``on``, or (name, idx, minute, date) on its shift's own date (Phase AK)."""
+        (name, idx, minute) on ``on``, or (name, idx, minute, date) on its shift's own date (Phase AK).
+
+        Phase AX (owner: "it showed 68 changes, I pressed apply, only a few were applied"): each move is checked as it is
+        kept, so a break moving into the place another break of the same person has not yet left looks like an overlap. The
+        set is kept in passes: what cannot be kept yet waits for what moves away first, and what is still refused when
+        nothing more can be kept is said (ValueError, after everything else was kept), never silently left."""
+        pending = list(moves)
         done = 0
-        for name, idx, start, *when in moves:
-            self.move_break(program, when[0] if when else on, name, idx, plain_hm(start), user_id, suffix=" (autopilot)")
-            done += 1
+        refused: List[Tuple[Tuple[Any, ...], Exception]] = []
+        while pending:
+            later: List[Tuple[Tuple[Any, ...], Exception]] = []
+            kept = 0
+            for move in pending:
+                name, idx, start, *when = move
+                try:
+                    self.move_break(program, when[0] if when else on, name, idx, plain_hm(start), user_id,
+                                    suffix=" (autopilot)")
+                    kept += 1
+                except BreakRefused as exc:
+                    later.append((move, exc))
+            done += kept
+            if not later or not kept:
+                refused = later
+                break
+            pending = [move for move, _ in later]
+        if refused:
+            said = "; ".join(f"{m[0]}, {self._kind_of(program, m[3] if len(m) > 3 else on, m[0], m[1])}: {exc}"
+                             for m, exc in refused[:4])
+            more = f" (and {len(refused) - 4} more)" if len(refused) > 4 else ""
+            raise ValueError(f"{len(refused)} of {len(moves)} moves could not be kept ({said}{more}). The other "
+                             f"{done} were kept.")
         return done
+
+    def _kind_of(self, program: str, on: date, name: str, idx: int) -> str:
+        """The name of break ``idx`` of ``name``'s shift on ``on`` ("Lunch"), for what is said about it."""
+        try:
+            week = self._shift(program, on, name)[1]
+            return next((b["kind"] for b in self.plan_for(program, on, name, week) if b["idx"] == idx), f"break {idx + 1}")
+        except ValueError:
+            return f"break {idx + 1}"
 
     # ------------------------------------------------------------- Change several breaks (Phase AD, sample 04)
     @staticmethod

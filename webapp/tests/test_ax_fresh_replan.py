@@ -467,3 +467,65 @@ class TheBulkPreviewSaysTheGapsToo(_cb._Cancel):
         self.assertTrue(got["changes"], got["skipped"])  # never stopped
         said = " ".join(w for c in got["changes"] for w in c.get("words", []))
         self.assertIn("minimum gap", said)
+
+
+class TheApplyKeepsEveryMove(_cb._Cancel):
+    """Owner, 2026-10-22: "it showed 68 changes, I pressed apply, only a few were applied". The moves are checked one by one as
+    they are kept, so a break moving into the place another break of the same person has not yet left looked like an overlap
+    and stopped everything after it. The set is kept in an order that works, and what cannot be kept is said, not silently
+    left."""
+    def person(self):
+        for lane in self.days.page(self.key, _WED)["view"]["lanes"]:
+            for seg in lane["segments"]:
+                if seg["offset"] == 0 and seg["status"] == "Present" and len(seg["breaks"]) >= 3:
+                    return lane["name"], seg
+        self.fail("nobody with three breaks")
+
+    def swap_moves(self):
+        name, seg = self.person()
+        b1, b2 = seg["breaks"][1], seg["breaks"][2]
+        # the lunch takes the place the last break has now, the last break moves 60 minutes later
+        return name, b1, b2, [(name, b1["idx"], b2["start"], _WED), (name, b2["idx"], b2["start"] + 60, _WED)]
+
+    def test_a_break_moving_into_the_place_of_another_that_moves_away_is_kept(self):
+        name, b1, b2, moves = self.swap_moves()
+        for m in moves:
+            self.addCleanup(self.days.move_break, self.key, _WED, m[0], m[1], None, self.omar)
+        self.assertEqual(self.days.apply_replan(self.key, _WED, moves, self.omar), 2)
+        now = {b["idx"]: b["start"] for l in self.days.page(self.key, _WED)["view"]["lanes"] if l["name"] == name
+               for s in l["segments"] if s["offset"] == 0 for b in s["breaks"]}
+        self.assertEqual((now[b1["idx"]], now[b2["idx"]]), (b2["start"], b2["start"] + 60))
+
+    def test_the_other_order_works_too(self):
+        name, b1, b2, moves = self.swap_moves()
+        for m in moves:
+            self.addCleanup(self.days.move_break, self.key, _WED, m[0], m[1], None, self.omar)
+        self.assertEqual(self.days.apply_replan(self.key, _WED, list(reversed(moves)), self.omar), 2)
+
+    def test_one_move_that_cannot_be_kept_does_not_stop_the_rest_and_is_said(self):
+        name, b1, b2, moves = self.swap_moves()
+        other = next(l["name"] for l in self.days.page(self.key, _WED)["view"]["lanes"] if l["name"] != name
+                     and any(s["offset"] == 0 and s["status"] == "Present" and s["breaks"] for s in l["segments"]))
+        seg = next(s for l in self.days.page(self.key, _WED)["view"]["lanes"] if l["name"] == other
+                   for s in l["segments"] if s["offset"] == 0)
+        bad = (other, seg["breaks"][0]["idx"], seg["end"] + 300, _WED)  # far outside their shift: refused
+        for m in moves:
+            self.addCleanup(self.days.move_break, self.key, _WED, m[0], m[1], None, self.omar)
+        with self.assertRaises(ValueError) as said:
+            self.days.apply_replan(self.key, _WED, [bad] + moves, self.omar)
+        self.assertIn("1 of 3", str(said.exception))
+        self.assertIn(other, str(said.exception))
+        now = {b["idx"]: b["start"] for l in self.days.page(self.key, _WED)["view"]["lanes"] if l["name"] == name
+               for s in l["segments"] if s["offset"] == 0 for b in s["breaks"]}
+        self.assertEqual(now[b1["idx"]], b2["start"])  # the others were kept
+
+    def test_through_the_page_every_move_is_kept_and_the_count_says_so(self):
+        name, b1, b2, moves = self.swap_moves()
+        for m in moves:
+            self.addCleanup(self.days.move_break, self.key, _WED, m[0], m[1], None, self.omar)
+        self.addCleanup(self.days.undo_last, self.key, _WED, self.omar)
+        got = self.client.post("/day/replan/apply", data={
+            "csrf_token": _token(self.client), "program": self.key, "date": _WED.isoformat(), "how": "fresh", "start": "0",
+            "tz": "Africa/Cairo", "anchor": _WED.isoformat(),
+            "move": [f"{m[0]}|{m[1]}|{m[2]}|{_WED.isoformat()}" for m in moves]}, follow_redirects=True)
+        self.assertIn("Moved 2 breaks.", _html.unescape(got.get_data(as_text=True)))

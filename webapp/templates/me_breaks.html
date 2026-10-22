@@ -14,8 +14,9 @@
 {% if not unit %}
 <p class="empty panel">Your name is not on a schedule yet, so there is nothing to show.</p>
 {% else %}
-<section class="panel me-today" aria-labelledby="today-h">
-  <h2 id="today-h">Today, {{ today.strftime('%A') }}</h2>
+{% macro day_card(card, heading, hid) %}
+<section class="panel me-today" aria-labelledby="{{ hid }}">
+  <h2 id="{{ hid }}">{{ heading }}</h2>
   {% if card %}
   <b class="me-shift">{{ card.label }}</b>
   {% set span = card.end - card.start %}
@@ -25,6 +26,10 @@
   <p class="me-said">{{ card.said }}</p>
   {% else %}<p class="me-said">You do not work today.</p>{% endif %}
 </section>
+{% endmacro %}
+{% if running %}{{ day_card(running, 'Your shift now, started ' ~ found.on.strftime('%A %d %b'), 'now-h') }}
+{% if card %}{{ day_card(card, 'Later today, ' ~ today.strftime('%A'), 'today-h') }}{% endif %}
+{% else %}{{ day_card(card, 'Today, ' ~ today.strftime('%A'), 'today-h') }}{% endif %}
 {% endif %}
 {% if not unit %}
 {% elif not found %}

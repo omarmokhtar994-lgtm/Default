@@ -1484,6 +1484,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if tomorrow is not None:
             tseg = next(s for lane in tomorrow["view"]["lanes"] if lane["name"] == name for s in lane["segments"]
                         if s["offset"] == 0)
+        running = None  # Phase AX: a shift that began yesterday and is still running is what "now" is, after midnight
+        if found is not None and now is not None and found["on"] < now.date():
+            running = my_day(found["view"], name, found["now"])
         card = None  # Phase AU: Today carries the day's card (it was on My week)
         if key and now is not None:
             try:
@@ -1497,7 +1500,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         news = book.news(g.user["id"], read=True)  # Phase AU: the answers since they last looked, shown once
         changed = _day_changes(g.user)
         app.extensions["store"].mark_day_seen(g.user["id"], time.time())
-        return render_template("me_breaks.html", unit=key, card=card, news=news, changed=changed, requests_on=rules.get("enabled", True), tomorrow=tomorrow, tseg=tseg, found=found, seg=seg, options=options, problem=problem,
+        return render_template("me_breaks.html", unit=key, card=card, running=running, news=news, changed=changed, requests_on=rules.get("enabled", True), tomorrow=tomorrow, tseg=tseg, found=found, seg=seg, options=options, problem=problem,
                                today=now.date() if now else None,
                                mine=book.mine(key, g.user["id"]) if key else [], hm=hm,
                                now_at=found["now"] if found else 0)

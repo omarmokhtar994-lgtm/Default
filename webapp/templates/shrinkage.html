@@ -48,7 +48,7 @@
 <section class="panel chart-panel" aria-labelledby="sh-h"><h2 id="sh-h">{{ dict(by_choices)[by] }}</h2><div class="chart-scroll">{{ view.chart }}</div></section>
 {% if by == 'interval' and view.heat %}
 <section class="panel chart-panel" aria-labelledby="hm-h"><h2 id="hm-h">{{ view.heat_title }} by day and interval</h2>
-  <div class="chart-scroll"><table class="ins-heat"><thead><tr><td></td>{% for c in view.heat_cols %}<th scope="col">{{ c }}</th>{% endfor %}</tr></thead>
+  <div class="tscroll"><table class="ins-heat"><thead><tr><td></td>{% for c in view.heat_cols %}<th scope="col">{{ c }}</th>{% endfor %}</tr></thead>
   <tbody>{% for r in view.heat %}<tr><th scope="row">{{ r.day }}</th>{% for v, lv in r.cells %}<td class="lv{{ lv }}">{% if v is not none %}{{ v|round|int }}{% endif %}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div>
 </section>{% endif %}
 <section class="panel" aria-labelledby="tb-h"><h2 id="tb-h">The numbers</h2>

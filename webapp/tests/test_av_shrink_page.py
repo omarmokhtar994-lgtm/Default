@@ -37,6 +37,11 @@ class TheShrinkagePage(_cb.ThePage):
         self.assertIn(">08:00<", page)
         self.assertNotIn(">13:00<", page.split("by day and interval", 1)[1])
 
+    def test_the_heat_table_scrolls_inside_its_panel_not_the_page(self):
+        # found by the accessibility check: 24 hourly columns made the whole page scroll sideways at 1280 px
+        page = self.get("&by=interval&step=60").get_data(as_text=True)
+        self.assertIn('<div class="tscroll"><table class="ins-heat">', page)
+
     def test_the_ticks_are_kept_and_changed_by_the_url(self):
         page = self.get("&out=unplanned&inn=breaks").get_data(as_text=True)
         self.assertRegex(page, r'name="out" value="unplanned" checked')

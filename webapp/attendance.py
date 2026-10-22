@@ -16,6 +16,7 @@ import copy
 import functools
 import inspect
 import json
+import os
 import logging
 import re
 import threading
@@ -163,6 +164,45 @@ def _group_kind(kind: str) -> str:
 
 PAGE_KEEP = 30  # Phase AV: seconds a built day is kept at most, as a safety net behind the write counter
 PAGE_MAX = 256  # and how many days are kept
+VERIFY_PAGES = os.environ.get("SCHEDULER_VERIFY_PAGES") == "1"  # tests: on every hit, build the day again and compare
+
+
+def fingerprint(x: Any) -> Any:
+    """A day as plain comparable values (functions by name, the replan counters by their numbers), for ``VERIFY_PAGES``."""
+    t = type(x)
+    if t is dict:
+        return {k: fingerprint(v) for k, v in x.items()}
+    if t in (list, tuple):
+        return [fingerprint(v) for v in x]
+    if t in (str, int, float, bool, type(None), date):
+        return x
+    if callable(x):
+        return "<function>"
+    if hasattr(x, "channel") and hasattr(x, "language"):  # ChannelHold
+        return ["hold", x.day, x.step, fingerprint(x.channel), fingerprint(x.language)]
+    return repr(x)
+
+
+def first_difference(a: Any, b: Any, path: str = "") -> str:
+    if type(a) != type(b):
+        return f"{path}: {type(a).__name__} != {type(b).__name__}"
+    if isinstance(a, dict):
+        for k in sorted(set(a) | set(b), key=str):
+            if k not in a or k not in b:
+                return f"{path}/{k}: only in one"
+            found = first_difference(a[k], b[k], f"{path}/{k}")
+            if found:
+                return found
+        return ""
+    if isinstance(a, list):
+        if len(a) != len(b):
+            return f"{path}: length {len(a)} != {len(b)}"
+        for i, (x, y) in enumerate(zip(a, b)):
+            found = first_difference(x, y, f"{path}[{i}]")
+            if found:
+                return found
+        return ""
+    return "" if a == b else f"{path}: {a!r} != {b!r}"
 UNDO_DEPTH = 2  # owner, 2026-10-11: "undo last move or 2 ... max 2 moves back"; your own only (answer 2)
 NOTHING_TO_UNDO = "Nothing of yours to undo on this day: Undo goes back 2 changes at most."
 _ACTION: contextvars.ContextVar = contextvars.ContextVar("day_action", default=None)
@@ -561,6 +601,8 @@ class DayBook:
         key = (program, on, measure)
         found = self._kept(key, shared)
         if found is not None:
+            if VERIFY_PAGES:
+                self._verify(key, found, program, on, measure)
             return found
         with self._build_lock:  # one thread builds a day, the others wait for it rather than build it too
             found = self._kept(key, shared)
@@ -574,6 +616,13 @@ class DayBook:
                 while len(self._pages) > PAGE_MAX:
                     self._pages.popitem(last=False)
             return page if shared else self._copy(page)
+
+    def _verify(self, key, found, program, on, measure) -> None:
+        fresh = self._build_page(program, on, measure, None, True, True, None)
+        same = first_difference(fingerprint({k: v for k, v in (found or {}).items() if k != "inputs"}),
+                                fingerprint({k: v for k, v in (fresh or {}).items() if k != "inputs"}))
+        if same:
+            raise AssertionError(f"A kept day differs from a fresh build of it ({key}): {same}")
 
     def _kept(self, key, shared: bool = False):
         entry = self._pages.get(key)

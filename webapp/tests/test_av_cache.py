@@ -18,6 +18,7 @@ class TheCache(_Tagged):
         """Count the full builds of a day while the block runs."""
         return mock.patch.object(att, "day_view", wraps=att.day_view)
 
+    @unittest.skipIf(att.VERIFY_PAGES, "the checking mode builds the day again on purpose")
     def test_the_second_look_at_a_day_is_not_built_again(self):
         self.days.page(self.key, WED)
         with self.builds() as built:
@@ -76,6 +77,16 @@ class TheCache(_Tagged):
             self.days.page(self.key, WED, cover=False)
             self.days.page(self.key, WED, extra={"break": (name, idx, start + 5)})
         self.assertEqual(built.call_count, 3)
+
+    def test_the_checking_mode_names_a_kept_day_that_is_out_of_date(self):
+        self.days.page(self.key, WED)
+        key = (self.key, WED, self.days.measure_of(self.key))
+        generation, built_at, page = self.days._pages[key]
+        page["view"]["cells"][0]["now"] = -123  # a kept day that no longer matches the data
+        with mock.patch.object(att, "VERIFY_PAGES", True), self.assertRaises(AssertionError) as said:
+            self.days.page(self.key, WED)
+        self.assertIn("differs from a fresh build", str(said.exception))
+        self.assertIn("cells", str(said.exception))
 
     def test_time_alone_clears_it_after_the_safety_expiry(self):
         self.days.page(self.key, WED)

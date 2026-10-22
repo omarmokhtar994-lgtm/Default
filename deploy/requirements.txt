@@ -5,6 +5,8 @@ ortools==9.15.6755
 # AN followup: patched protobuf, within the pinned solver's >=6.33.1,<6.34 range.
 protobuf==6.33.6
 openpyxl>=3.1.2
+# Phase AV: openpyxl refuses XML entity bombs and external entities in a workbook only when this is installed
+defusedxml==0.7.1
 pandas>=2.2.0
 numpy>=1.26.0
 scipy>=1.11.0

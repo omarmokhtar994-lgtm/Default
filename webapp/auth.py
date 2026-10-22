@@ -65,6 +65,9 @@ def load_user() -> None:
     elif session["pw"] != stamp:
         session.clear()  # the password changed since this session signed in (a reset, or changed elsewhere)
         return
+    if current_app.extensions["store"].session_revoked(user_id, session.get("at", 0)):
+        session.clear()  # this session was signed out: a copy of its cookie is no use (Phase AV)
+        return
     if session.get("at", 0) < user.get("sessions_from", 0):
         session.clear()  # "sign out other devices" was pressed after this session signed in (Phase AU)
         return

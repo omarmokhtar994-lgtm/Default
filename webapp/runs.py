@@ -77,6 +77,12 @@ BEFORE_SCHEDULE_SUFFIX = "_BEST_BEFORE_BREAKS_SCHEDULE.xlsx"
 CONSISTENT_SCHEDULE_SUFFIX = "_MORE_CONSISTENT_CANDIDATE.xlsx"
 
 
+def _short_name(name: str, longest: int = 100) -> str:
+    """Phase AV: a file name the server's disk can keep (a very long one was a server error): the end is cut, the extension kept."""
+    stem, dot, ext = name.rpartition(".")
+    return name if len(name) <= longest else (stem[: longest - len(ext) - 1] + dot + ext if dot else name[:longest])
+
+
 class RunQueue:
     def __init__(self, store: Store, package_root: Path, runs_root: Path, runner_cmd: Optional[List[str]] = None,
                  parallel: int = 1, check_cmd: Optional[List[str]] = None, score_cmd: Optional[List[str]] = None,
@@ -236,7 +242,7 @@ class RunQueue:
         if mode not in MODES:
             raise ValueError(f"unknown mode {mode!r}")
         run_id = secrets.token_hex(6)
-        safe = secure_filename(workbook_name) or "workbook.xlsx"
+        safe = _short_name(secure_filename(workbook_name) or "workbook.xlsx")
         if not safe.lower().endswith(".xlsx"):
             safe += ".xlsx"
         target = self.run_dir(run_id) / "input" / safe
@@ -268,7 +274,7 @@ class RunQueue:
         seconds and kept as the run's version 1; the engine does not run, so nothing is queued."""
         from .ready import check_ready
         run_id = secrets.token_hex(6)
-        safe = secure_filename(workbook_name) or "workbook.xlsx"
+        safe = _short_name(secure_filename(workbook_name) or "workbook.xlsx")
         if not safe.lower().endswith(".xlsx"):
             safe += ".xlsx"
         target = self.run_dir(run_id) / "input" / safe

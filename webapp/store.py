@@ -309,6 +309,12 @@ create table if not exists outside_cover (
     user_id integer not null,
     at real not null
 );
+create table if not exists revoked_sessions (
+    user_id integer not null,
+    at real not null,
+    revoked real not null,
+    primary key (user_id, at)
+);
 create table if not exists app_settings (
     key text primary key,
     value text not null
@@ -413,13 +419,16 @@ def hash_password(password: str) -> str:
     return generate_password_hash(clean_password(password), method="scrypt")
 
 
+_DUMMY_HASH = generate_password_hash("Dummy-never-matches-1!", method="scrypt")
+
+
 _GENERATIONS: Dict[str, int] = {}  # Phase AV
 _WRITE = re.compile(r"\s*(?:insert\s+(?:or\s+\w+\s+)?into|update(?:\s+or\s+\w+)?|delete\s+from)\s+\"?(\w+)", re.I)
 # Tables no kept day is built from: sign-ins and sessions, the event record, group posts, requests and their answers, the
 # journal, run status, incidents and site settings. Every other table (and any new one) clears the kept days when written.
 QUIET_TABLES = frozenset({"users", "events", "notify_items", "notify_posts", "notify_settings", "change_requests",
                           "swap_requests", "leave_requests", "day_actions", "runs", "incidents", "app_settings",
-                          "role_permissions", "leave_balances"})
+                          "role_permissions", "leave_balances", "revoked_sessions"})
 _GENERATION_LOCK = threading.Lock()
 
 
@@ -873,7 +882,7 @@ class Store:
         with self._db() as db:
             row = db.execute("select * from users where username = ?", (username,)).fetchone()
             if row is None:
-                check_password_hash(hash_password("x"), password or "")  # same cost either way
+                check_password_hash(_DUMMY_HASH, password or "")  # one check, as for a real name with a wrong password
                 return None, "bad"
             if not row["active"]:
                 return None, "disabled"
@@ -1372,6 +1381,19 @@ class Store:
         marks = ", ".join("?" for _ in fields)
         with self._db() as db:
             return int(db.execute(f"insert into day_log ({names}) values ({marks})", tuple(fields.values())).lastrowid)
+
+    SESSION_KEEP_SECONDS = 30 * 86400  # an ended session is remembered this long (cookies last 12 hours)
+
+    def revoke_session(self, user_id: int, at: float, now: Optional[float] = None) -> None:
+        """Phase AV: the session that began at ``at`` was signed out; its cookie works no more."""
+        now = time.time() if now is None else now
+        with self._db() as db:
+            db.execute("delete from revoked_sessions where revoked < ?", (now - self.SESSION_KEEP_SECONDS,))
+            db.execute("insert or replace into revoked_sessions (user_id, at, revoked) values (?, ?, ?)", (user_id, at, now))
+
+    def session_revoked(self, user_id: int, at: float) -> bool:
+        with self._db() as db:
+            return db.execute("select 1 from revoked_sessions where user_id = ? and at = ?", (user_id, at)).fetchone() is not None
 
     def get_app_setting(self, key: str, default: str = "") -> str:
         """Phase AV: a site-wide setting an admin keeps (text)."""

@@ -671,6 +671,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
 
     @app.route("/logout", methods=["POST"])
     def logout():  # type: ignore[no-untyped-def]
+        if session.get("user_id") is not None:  # Phase AV: end this session on the server, not only in the browser
+            app.extensions["store"].revoke_session(session["user_id"], session.get("at", 0))
         session.clear()
         return redirect(url_for("login"))
 

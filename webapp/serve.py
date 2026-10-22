@@ -45,6 +45,9 @@ def main() -> None:
 
     from .app import create_app
 
+    from openpyxl.xml import DEFUSEDXML
+    if not DEFUSEDXML:  # Phase AV: without it a workbook with an XML entity bomb could use up the server
+        sys.exit("defusedxml is not installed: run pip install -r deploy/requirements.txt (a workbook's XML is not safe to read without it).")
     config = config_from_env(os.environ)
     app = create_app(config)
     # Caddy (on this machine) tells the app the visitor's address and that it came in over HTTPS.

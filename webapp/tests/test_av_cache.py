@@ -82,6 +82,7 @@ class TheCache(_Tagged):
         self.days.page(self.key, WED)
         key = (self.key, WED, self.days.measure_of(self.key))
         generation, built_at, page = self.days._pages[key]
+        self.addCleanup(self.days._pages.clear)  # the tampered day must not outlive this test
         page["view"]["cells"][0]["now"] = -123  # a kept day that no longer matches the data
         with mock.patch.object(att, "VERIFY_PAGES", True), self.assertRaises(AssertionError) as said:
             self.days.page(self.key, WED)

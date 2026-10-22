@@ -52,11 +52,13 @@ def _mix(total: Dict[str, Any]) -> Dict[str, Any]:
                                  " h", "Time by type, in hours")}
 
 
-def _heat(rows: List[Dict[str, Any]], limit: int = 14) -> Any:
+def _heat(rows: List[Dict[str, Any]], limit: int = 14) -> List[Dict[str, Any]]:
+    """A table of counts, a row per group and a column per incident type, each cell level 0 (none) to 4 (the most)."""
     shown = rows[:limit]
-    return charts.heat([r["name"] for r in shown], [SHORT[k] for k, _ in KINDS],
-                       [[r["incidents"][k]["n"] for k, _ in KINDS] for r in shown], " incidents",
-                       "Incidents by type and " + "group")
+    top = max([r["incidents"][k]["n"] for r in shown for k, _ in KINDS] + [1])
+    return [{"name": r["name"], "cells": [(r["incidents"][k]["n"], 0 if not r["incidents"][k]["n"] else
+                                           min(4, 1 + int(3 * (r["incidents"][k]["n"] - 1) / max(1, top - 1) + 0.5)))
+                                          for k, _ in KINDS]} for r in shown]
 
 
 def _trend_chart(days: List[Dict[str, Any]]) -> Any:

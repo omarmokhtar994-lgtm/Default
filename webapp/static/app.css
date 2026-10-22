@@ -1574,7 +1574,7 @@ table.hours tfoot th, table.hours tfoot td { border-top: 1px solid var(--rail); 
 /* Incidents and shrinkage (Phase AV) */
 .ins-filter { margin-bottom: 16px; }
 .ins-tabs { margin: 0 0 16px; }
-.ins-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 2px; margin: 4px 0 10px;
+.ins-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; margin: 4px 0 10px;
   border: 1px solid var(--rail); border-radius: 10px; overflow: hidden; background: var(--rail); }
 .ins-tile { padding: 14px 16px; background: var(--console); display: grid; gap: 2px; align-content: start; }
 .ins-tile b { font: 700 2.25rem/1.05 var(--display); }
@@ -1587,3 +1587,13 @@ table.hours tfoot th, table.hours tfoot td { border-top: 1px solid var(--rail); 
 .ins-top { max-width: 90ch; }
 .tscroll { overflow-x: auto; }
 .ins-person > h2 { margin-top: 0; }
+@media (max-width: 560px) { .ins-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ins-heat { border-collapse: separate; border-spacing: 2px; width: 100%; }
+.ins-heat th { font-weight: 600; font-size: 0.8125rem; text-align: left; color: var(--dim); padding: 2px 6px; white-space: nowrap; }
+.ins-heat thead th { text-align: center; }
+.ins-heat td { text-align: center; min-width: 38px; height: 30px; border-radius: 4px; font-weight: 700; font-size: 0.8125rem; background: var(--console-2); color: var(--paper); }
+.ins-heat td.lv1 { background: var(--h1); } .ins-heat td.lv2 { background: var(--h2); } .ins-heat td.lv3, .ins-heat td.lv4 { background: var(--h3); }
+.ins-t th[scope=row] { white-space: nowrap; }
+.ins-t th[scope=row] small { display: block; font-weight: 400; }
+.ins-t th, .ins-t td { padding: 6px 8px; }
+.ins-t td small { white-space: nowrap; }

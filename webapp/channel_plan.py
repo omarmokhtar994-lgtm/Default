@@ -25,11 +25,16 @@ from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Set, Tuple
 
 from ortools.sat.python import cp_model
 
-from .break_plan import check_row, edge_margin, hm
+from .break_plan import FIRST_FROM, FIRST_TO, LAST_CLEAR, LUNCH_FROM, LUNCH_TO, check_row, edge_margin, hm
 from .channels import QUARTER, blended_at, in_email_hours, inside
 from .channel_solver import SolverStopped, solve as solve_channels
 
 LANGUAGE, BALANCED, LONG, MOVE, SWITCH, FAIR = 200, (100, 60, 30), 40, 5, 2, 1
+# Phase AX (owner, 2026-10-22: "prefer more the usual shape, followed by the engine layer"): each part of the usual shape a
+# break misses (first break 2 to 3.5 hours in, lunch 2 to 3 hours of work after it, last break ending an hour before the
+# shift does) costs this: above leaving a break where it is (MOVE), below a channel's or a language's need and below
+# a long run, so the shape never costs coverage. The engine's rules are limits, not costs.
+SHAPE = 12
 # Phase AM: a quarter hour on another channel than the one a person is on now (Fix channels on the RTA): above the
 # fair spread (FAIR * 2 at most), so fairness alone never moves anyone; below any shortfall, so coverage always does
 KEEP = 3
@@ -153,6 +158,25 @@ def plan_day(people: List[Dict[str, Any]], setup: Dict[str, Any], rules: Dict[st
     return second
 
 
+def _shape(m: Any, cost: List[Any], p: Dict[str, Any], picks: Dict[Tuple[str, int], Dict[int, Any]],
+           starts: List[Tuple[Any, int, bool]]) -> None:
+    """The usual shape of a person's breaks as costs (``SHAPE`` each part missed): see ``break_plan.shape_fit``."""
+    name, lo, hi, n = p["name"], p["start"], p["end"], len(p["breaks"])
+    kinds = [kind.casefold() for kind, _, _ in p["breaks"]]
+    if n:
+        cost.append(SHAPE * sum(v for c, v in picks[name, 0].items() if not FIRST_FROM <= c - lo <= FIRST_TO))
+    if n >= 2:
+        minutes = p["breaks"][-1][2]
+        cost.append(SHAPE * sum(v for c, v in picks[name, n - 1].items() if c + minutes > hi - LAST_CLEAR))
+    if "lunch" in kinds[1:]:
+        i = kinds.index("lunch", 1)
+        gap = starts[i][0] - (starts[i - 1][0] + starts[i - 1][1])
+        right = m.NewBoolVar("")
+        m.Add(gap >= LUNCH_FROM).OnlyEnforceIf(right)
+        m.Add(gap <= LUNCH_TO).OnlyEnforceIf(right)
+        cost.append(SHAPE * (1 - right))
+
+
 def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=None,
            solver_settings=None, carry_in=None, keep=None, horizon=None) -> Dict[str, Any]:
     started = time.time()
@@ -189,6 +213,8 @@ def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=N
             s = m.NewIntVar(min(cands), max(cands), "")
             m.Add(s == sum(c * v for c, v in picks[name, k].items()))
             starts.append((s, minutes, fixed))
+        if move_breaks:
+            _shape(m, cost, p, picks, starts)
         for (s1, m1, f1), (s2, _, f2) in zip(starts, starts[1:]):
             if f1 and f2:
                 continue  # both as they are: the row check reports them

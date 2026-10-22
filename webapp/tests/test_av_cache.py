@@ -96,6 +96,32 @@ class TheCache(_Tagged):
         self.assertEqual(built.call_count, 1)
 
 
+class AFileChangeClearsItToo(_Tagged):
+    """The checking mode found this one: channel needs added to a schedule are a file, so no row changed and the kept day
+    went on showing the schedule as it was before they were added."""
+    def test_adding_channel_needs_clears_the_kept_day(self):
+        from webapp.tests.test_channel_needs import filled
+        import tempfile
+        from pathlib import Path
+        version = self.days.version(self.key, WED)[0]
+        self.days.page(self.key, WED)
+        before = self.store.generation
+        path = filled(Path(tempfile.mkdtemp()) / "needs.xlsx", 60)
+        self.addCleanup(path.unlink, True)
+        run = version["run_id"]
+        try:
+            self.app.extensions["schedules"].attach_channels(run, path)
+        except ValueError:
+            self.skipTest("these channel needs do not fit this fixture's week")
+        self.addCleanup((self.app.extensions["schedules"].root / run / "channels.xlsx").unlink, True)
+        self.assertGreater(self.store.generation, before)
+
+    def test_an_expired_run_clears_it(self):
+        before = self.store.generation
+        self.store.invalidate_days()
+        self.assertGreater(self.store.generation, before)
+
+
 class EveryWriteClearsIt(_Tagged):
     def seg(self, name):
         lane = next(l for l in self.days.page(self.key, WED)["view"]["lanes"] if l["name"] == name)

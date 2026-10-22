@@ -1382,6 +1382,12 @@ class Store:
         with self._db() as db:
             return int(db.execute(f"insert into day_log ({names}) values ({marks})", tuple(fields.values())).lastrowid)
 
+    def invalidate_days(self) -> None:
+        """Phase AV: something a day is built from changed outside the database (a workbook file added, replaced or
+        deleted): every kept copy of a day is out of date."""
+        with _GENERATION_LOCK:
+            _GENERATIONS[self._gen_key] = _GENERATIONS.get(self._gen_key, 0) + 1
+
     SESSION_KEEP_SECONDS = 30 * 86400  # an ended session is remembered this long (cookies last 12 hours)
 
     def revoke_session(self, user_id: int, at: float, now: Optional[float] = None) -> None:

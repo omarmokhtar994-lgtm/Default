@@ -535,6 +535,7 @@ class RunQueue:
             if run["status"] in ("EXPIRED", "QUEUED", "CHECKING") + ACTIVE or run["created"] >= cutoff:
                 continue
             shutil.rmtree(self.run_dir(run["id"]), ignore_errors=True)
+            self.store.invalidate_days()  # Phase AV: the files a kept day is built from are gone
             self.store.update_run(run["id"], status="EXPIRED",
                                   message=f"Files deleted after {self.keep_days} days.")
             expired += 1

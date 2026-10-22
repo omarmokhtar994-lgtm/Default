@@ -139,6 +139,7 @@ class ScheduleBook:
                     raise ValueError("This workbook asks for nobody on any channel: fill in how many people Chat, "
                                      "Phone or Email need (or Email Hours), then add it again.")
                 os.replace(trial, self.root / run_id / "channels.xlsx")
+                self.store.invalidate_days()  # Phase AV: the channel needs a day is built from are a file, not a row
             finally:
                 trial.unlink(missing_ok=True)
         return check_lines(setup, inputs, source)
@@ -261,6 +262,7 @@ class ScheduleBook:
                                  "another schedule in use first.")
             count = self.store.delete_run(run_id)
             shutil.rmtree(self.root / run_id, ignore_errors=True)
+            self.store.invalidate_days()
         return count
 
     def kept_weeks(self, program: str) -> List[Dict[str, Any]]:
@@ -763,4 +765,5 @@ class ScheduleBook:
             gone += 1
             if not self.store.list_schedules(run_id=row["run_id"]):
                 shutil.rmtree(self.root / row["run_id"], ignore_errors=True)
+                self.store.invalidate_days()
         return gone

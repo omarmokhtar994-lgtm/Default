@@ -43,11 +43,13 @@ from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, OVERTIME_
 from .coach import actual_shrinkage, corrected_tab
 from .leave import KINDS as LEAVE_KINDS, LeaveBook, span_text
 from .swaps import SwapBook
+from .insights import collect as collect_insights
+from .insights_page import LEVELS as INSIGHT_LEVELS, build as insights_view, dur as insights_dur
 from .shrinkage import ITEMS as SHRINKAGE_ITEMS, day_shrinkage, mapping_from_form, read_mapping
 from .contacts import ContactBook, pick_contact
 from .eta import queue_plan
 from .handover import note as handover_note
-from .exports import EXPORT_SECONDS, KINDS as EXPORT_KINDS, MAX_DAYS as MAX_EXPORT_DAYS, build as build_export
+from .exports import _Days as ExportDays, EXPORT_SECONDS, KINDS as EXPORT_KINDS, MAX_DAYS as MAX_EXPORT_DAYS, build as build_export
 from .outcome import cannot_schedule, read as read_outcome, view as outcome_view
 from .access import Access, role
 from .notify import (DEFAULT_HOLD, DEFAULT_KINDS as NOTIFY_DEFAULT_KINDS, HOLDS, KINDS as NOTIFY_KINDS, MODE_WORDS,
@@ -429,6 +431,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
         return response
 
+    app.add_template_filter(insights_dur, "dur")
+
     @app.template_filter("unit")
     def _unit_filter(key: Any) -> Any:
         """A program key as people know it: "AE, AR B2B" for a LOB, the program's name otherwise."""
@@ -538,7 +542,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
 
     NAV_ACTIVE = {"home": "home", "overview_page": "overview", "day_page": "day", "week_page": "week",
                   "run_week": "week", "run_schedules": "schedules", "program": "analysis", "programs": "programs",
-                  "exports_page": "exports", "team_page": "team", "admin_users": "people", "program_setup": "setup",
+                  "exports_page": "exports", "incidents_page": "incidents", "team_page": "team", "admin_users": "people", "program_setup": "setup",
                   "with_setup": "with", "channel_setup": "channels", "notifications_page": "notify", "roles_page": "roles",
                   "day_wallboard": "wallboard", "me": "me", "me_breaks": "me_day", "requests_page": "requests"}
     PROGRAM_PAGES = {"overview": "/overview?program={key}", "day": "/day?program={key}", "week": "/week?program={key}",
@@ -4772,6 +4776,54 @@ def create_app(config: Dict[str, Any]) -> Flask:
     @login_required
     def exports_page():  # type: ignore[no-untyped-def]
         return _exports_page()
+
+    INSIGHT_DAYS = 92  # three months a page; a longer look is an export
+
+    @app.route("/incidents")
+    @login_required
+    def incidents_page():  # type: ignore[no-untyped-def]
+        """Phase AV: incidents, absenteeism and shrinkage per associate, LOB and program for any period."""
+        a = _export_args()
+        today = datetime.now(EGYPT).date()
+        if not request.args.get("to"):
+            a["end"] = min(a["end"], today) if a["start"] <= today else a["end"]
+        error = ""
+        if (a["end"] - a["start"]).days + 1 > INSIGHT_DAYS:
+            a["start"] = a["end"] - timedelta(days=INSIGHT_DAYS - 1)
+            error = f"A page shows up to {INSIGHT_DAYS} days; showing the last {INSIGHT_DAYS} days of the period. Exports go further."
+        book = _access().book
+        keys = ([a["program"]] if isinstance(a["program"], str) else list(a["program"] or [])
+                or [k for p in _access().programs() for k in p["units"]])
+        units = {}
+        for k in keys:
+            found = book.unit(k)
+            if found and _access().can_open(k):
+                units[k] = (found["program"]["name"], (found["lob"] or {}).get("name") or found["program"]["name"])
+        level = request.args.get("view", "")
+        if level not in ("overview", "lobs", "associates"):
+            level = "associates" if role(g.user) == "Team manager" else "overview"
+        who = request.args.get("who", "")
+        deadline = time.monotonic() + EXPORT_SECONDS
+        wrapped = ExportDays(_days(), deadline)
+
+        def check() -> None:
+            if time.monotonic() > deadline:
+                raise ValueError("This took too long: pick a shorter period or one program.")
+        try:
+            facts = collect_insights(wrapped, app.extensions["store"], app.extensions.get("leave"), units,
+                                     a["start"], a["end"], a["measure"], check)
+        except ValueError as exc:
+            facts, error = [], str(exc)
+        sunday = today - timedelta(days=(today.weekday() + 1) % 7)
+        first = today.replace(day=1)
+        last_month_end = first - timedelta(days=1)
+        presets = [("This week", sunday, today), ("Last week", sunday - timedelta(days=7), sunday - timedelta(days=1)),
+                   ("This month", first, today), ("Last month", last_month_end.replace(day=1), last_month_end),
+                   ("Last 30 days", today - timedelta(days=29), today)]
+        return render_template("insights.html", view=insights_view(facts, level, who, a["start"], a["end"]),
+                               presets=presets, error=error, pick_tree=_access().programs(),
+                               everything=_access().everything(), measures=MEASURES, level=level, who=who,
+                               levels=INSIGHT_LEVELS, units=len(units), **a)
 
     @app.route("/exports/download")
     @login_required

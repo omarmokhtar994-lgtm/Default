@@ -1570,3 +1570,20 @@ table.hours tfoot th, table.hours tfoot td { border-top: 1px solid var(--rail); 
 .setup-defaults input[type="number"], .setup-defaults input:not([type]) { width: 100%; max-width: 360px; }
 .setup-cols h3 { margin-top: 28px; }
 .setup-cols .shr-t { width: 100%; }
+
+/* Incidents and shrinkage (Phase AV) */
+.ins-filter { margin-bottom: 16px; }
+.ins-tabs { margin: 0 0 16px; }
+.ins-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 2px; margin: 4px 0 10px;
+  border: 1px solid var(--rail); border-radius: 10px; overflow: hidden; background: var(--rail); }
+.ins-tile { padding: 14px 16px; background: var(--console); display: grid; gap: 2px; align-content: start; }
+.ins-tile b { font: 700 2.25rem/1.05 var(--display); }
+.ins-tile small { max-width: 28ch; }
+.ins-spark .spark { width: 100%; max-width: 140px; height: 30px; display: block; }
+.ins-note { margin: 0 0 18px; max-width: 90ch; }
+.ins-t td small { display: block; color: var(--dim); font-weight: 400; }
+.ins-t td b { font-weight: 700; }
+.ins-t .none { color: var(--dim); }
+.ins-top { max-width: 90ch; }
+.tscroll { overflow-x: auto; }
+.ins-person > h2 { margin-top: 0; }

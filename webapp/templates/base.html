@@ -60,6 +60,7 @@
     <p class="navhead">Insights</p>
     {% if nav_unit and can('analysis') %}{{ navlink('analysis', url_for('program', name=nav_unit), 'Analysis') }}{% endif %}
     {% if can('analysis') %}{{ navlink('programs', url_for('programs'), 'Programs') }}{% endif %}
+    {% if can('analysis') %}{{ navlink('incidents', url_for('incidents_page', program=nav_unit or none), 'Incidents') }}{% endif %}
     {% if can('exports') %}{{ navlink('exports', url_for('exports_page'), 'Exports') }}{% endif %}
     {% if can('team') %}{{ navlink('team', url_for('team_page'), 'Team') }}{% endif %}
     {% if can('people') or can('setup') %}<p class="navhead">Setup</p>

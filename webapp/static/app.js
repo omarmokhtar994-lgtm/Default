@@ -1484,7 +1484,7 @@ function homeRefresh(now) {
     };
     box.addEventListener("input", function () {
       var text = box.value.trim().toLowerCase();
-      Array.prototype.forEach.call(list.querySelectorAll(".exp-kind"), function (row) {
+      Array.prototype.forEach.call(list.querySelectorAll(".exp-kind, [data-filter-row]"), function (row) {
         row.hidden = text !== "" && row.textContent.toLowerCase().indexOf(text) === -1;
       });
     });

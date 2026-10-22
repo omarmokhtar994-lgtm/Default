@@ -45,7 +45,7 @@ ENDPOINTS: Dict[str, str] = {
                                        "schedule_check", "schedule_in_use", "schedule_swap", "schedule_swap_check")},
     **{e: "runs" for e in ("submit_run", "run_zone", "week_check", "run_tag", "run_delete", "run_start", "run_stop",
                            "run_resume", "channel_needs_add")},
-    **{e: "analysis" for e in ("program", "programs")},
+    **{e: "analysis" for e in ("program", "programs", "incidents_page")},
     **{e: "exports" for e in ("exports_page", "exports_download")},
     **{e: "coaching" for e in ("coach_page", "coach_download")},
     "team_page": "team",

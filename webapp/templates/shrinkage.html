@@ -2,7 +2,7 @@
 {% extends "base.html" %}
 {% block title %}Shrinkage on Team Scheduler{% endblock %}
 {% macro pct(v) %}{% if v is none %}-{% else %}{{ v }}%{% endif %}{% endmacro %}
-{% block content %}
+{% block content %}<div data-downloads="shrinkage">
 <div class="phead"><div>
   <h1>Shrinkage</h1>
   <p class="byline">Out of office shrinkage (leave and sick, of the shifts scheduled), in office shrinkage (time off the floor, of the minutes scheduled), or both, day over day, week over week or per interval, for any period. You choose what counts. Times are Egypt time.</p>
@@ -64,4 +64,5 @@
     {% if by != 'interval' %}<td class="n">{{ r.shifts }}</td>{% endif %}{% if show != 'in' %}{% if by != 'interval' %}<td class="n">{{ r.out_n }}</td>{% endif %}<td class="n">{{ pct(r.out) }}</td>{% endif %}{% if show != 'out' %}{% if by != 'interval' %}<td class="n">{{ r.in_h }}</td>{% endif %}<td class="n">{{ pct(r.inn) }}</td>{% endif %}</tr>{% endfor %}</tbody></table></div>
 </section>
 {% endif %}
+</div>
 {% endblock %}

@@ -49,7 +49,7 @@ for f in meta["files"]:
     rel = f["path"]
     have = pkg / rel
     now = hashlib.sha256(have.read_bytes()).hexdigest() if have.is_file() else None
-    if now not in (f["old_sha256"], f["new_sha256"]):
+    if now not in (f["old_sha256"], f["new_sha256"], *f.get("also_sha256", [])):
         bad.append(rel)
     if hashlib.sha256((work / "files" / rel).read_bytes()).hexdigest() != f["new_sha256"]:
         print("PATCH STOPPED: the patch file is damaged:", rel); sys.exit(1)

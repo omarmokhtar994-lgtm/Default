@@ -110,5 +110,41 @@ class ThePatch(unittest.TestCase):
         self.assertIn("damaged", got.stdout)
 
 
+class TheSecondPatch(ThePatch):
+    """Phase AX: a second patch, made against the same package, goes on top of the first one (or on the package alone)."""
+    def second(self, after=True):
+        first = self.make()
+        (self.root / "webapp/static/x.css").write_text("body { color: green }\n")
+        return first, make_patch.build(self.base, "fix2", self.dir / "out", self.root, after=[first] if after else [])
+
+    def test_it_goes_on_top_of_the_first_patch(self):
+        first, second = self.second()
+        self.assertEqual(self.apply(first).returncode, 0)
+        got = self.apply(second)
+        self.assertEqual(got.returncode, 0, got.stdout + got.stderr)
+        self.assertEqual(self.read("webapp/static/x.css"), "body { color: green }\n")
+
+    def test_it_also_goes_on_the_package_alone(self):
+        _, second = self.second()
+        got = self.apply(second)
+        self.assertEqual(got.returncode, 0, got.stdout + got.stderr)
+        self.assertEqual(self.read("webapp/static/x.css"), "body { color: green }\n")
+
+    def test_without_the_first_patch_named_it_stops_on_a_site_that_has_the_first(self):
+        first, second = self.second(after=False)
+        self.assertEqual(self.apply(first).returncode, 0)
+        got = self.apply(second)
+        self.assertNotEqual(got.returncode, 0)
+        self.assertEqual(self.read("webapp/static/x.css"), "body { color: blue }\n")
+
+    def test_rolling_the_second_back_leaves_the_first_in_place(self):
+        first, second = self.second()
+        self.apply(first)
+        self.apply(second)
+        backup = sorted((self.app_dir / "patch-backups").iterdir())[-1]
+        self.assertEqual(self.apply("--rollback", backup).returncode, 0)
+        self.assertEqual(self.read("webapp/static/x.css"), "body { color: blue }\n")
+
+
 if __name__ == "__main__":
     unittest.main()

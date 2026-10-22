@@ -1493,3 +1493,138 @@ function homeRefresh(now) {
     tally();
   });
 })();
+
+
+// Downloads (Phase AX): on a page marked data-downloads, each chart is saved as a picture (PNG) or a drawing (SVG), each
+// table as a CSV file that Excel opens. Built in the browser from what the page shows, so it is always what you see.
+(function () {
+  "use strict";
+  var root = document.querySelector("[data-downloads]");
+  if (!root) { return; }
+  var page = root.getAttribute("data-downloads");
+  var SVG_STYLE = ["fill", "stroke", "stroke-width", "stroke-dasharray", "stroke-linecap", "stroke-linejoin", "opacity",
+    "fill-opacity", "stroke-opacity", "font-family", "font-size", "font-weight", "text-anchor", "dominant-baseline"];
+
+  var slug = function (text) {
+    return (text || "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 60);
+  };
+  var period = function () {
+    var from = document.querySelector("input[name=from]"), to = document.querySelector("input[name=to]");
+    return from && to && from.value && to.value ? from.value + "_to_" + to.value : "";
+  };
+  var nameFor = function (panel, ext) {
+    var heading = panel.querySelector("h1, h2, h3");
+    return [page, slug(heading ? heading.textContent : panel.getAttribute("aria-label")), period()]
+      .filter(Boolean).join("_") + "." + ext;
+  };
+  var save = function (blob, name) {
+    var link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.setTimeout(function () { URL.revokeObjectURL(link.href); }, 4000);
+  };
+
+  var csvOf = function (table) {
+    var cell = function (text) {
+      text = text.replace(/\s+/g, " ").trim();
+      return /[",\r\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
+    };
+    return Array.prototype.map.call(table.querySelectorAll("tr"), function (row) {
+      return Array.prototype.map.call(row.children, function (c) { return cell(c.textContent); }).join(",");
+    }).join("\r\n") + "\r\n";
+  };
+
+  var background = function (node) {
+    for (; node; node = node.parentElement) {
+      var colour = window.getComputedStyle(node).backgroundColor;
+      if (colour && colour !== "transparent" && !/rgba\(.*,\s*0\)$/.test(colour)) { return colour; }
+    }
+    return "#ffffff";
+  };
+  // The chart's colours come from the page's stylesheet, which a saved file does not have: write them into the file.
+  // (Attributes, not a style attribute: the page's content security policy allows no inline style.)
+  var drawing = function (svg) {
+    var copy = svg.cloneNode(true);
+    var from = [svg].concat(Array.prototype.slice.call(svg.querySelectorAll("*")));
+    var to = [copy].concat(Array.prototype.slice.call(copy.querySelectorAll("*")));
+    from.forEach(function (node, i) {
+      var seen = window.getComputedStyle(node);
+      SVG_STYLE.forEach(function (prop) {
+        var value = seen.getPropertyValue(prop);
+        if (value) { to[i].setAttribute(prop, value); }
+      });
+      to[i].removeAttribute("class");
+    });
+    var box = svg.viewBox.baseVal;
+    var width = box && box.width ? box.width : svg.getBoundingClientRect().width;
+    var height = box && box.height ? box.height : svg.getBoundingClientRect().height;
+    copy.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    copy.setAttribute("width", String(width));
+    copy.setAttribute("height", String(height));
+    var back = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    back.setAttribute("x", box ? String(box.x) : "0");
+    back.setAttribute("y", box ? String(box.y) : "0");
+    back.setAttribute("width", String(width));
+    back.setAttribute("height", String(height));
+    back.setAttribute("fill", background(svg));
+    copy.insertBefore(back, copy.firstChild);
+    return { text: new XMLSerializer().serializeToString(copy), width: width, height: height };
+  };
+  var picture = function (svg, name) {
+    var made = drawing(svg);
+    var scale = 2, image = new Image();
+    image.onload = function () {
+      var canvas = document.createElement("canvas");
+      canvas.width = Math.round(made.width * scale);
+      canvas.height = Math.round(made.height * scale);
+      var ctx = canvas.getContext("2d");
+      ctx.scale(scale, scale);
+      ctx.drawImage(image, 0, 0, made.width, made.height);
+      canvas.toBlob(function (blob) { if (blob) { save(blob, name); } }, "image/png");
+    };
+    image.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(made.text);
+  };
+
+  var rows = new Map();
+  var rowFor = function (panel) {
+    if (!rows.has(panel)) {
+      var row = document.createElement("p");
+      row.className = "dl-row";
+      panel.appendChild(row);
+      rows.set(panel, row);
+    }
+    return rows.get(panel);
+  };
+  var button = function (panel, label, act) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "quiet";
+    b.textContent = label;
+    b.addEventListener("click", act);
+    rowFor(panel).appendChild(b);
+  };
+  var tally = function (n, total) { return total > 1 ? " (" + n + ")" : ""; };
+  var panels = Array.prototype.slice.call(root.querySelectorAll(".panel"));
+  panels.forEach(function (panel) {
+    var own = function (sel) {
+      return Array.prototype.filter.call(panel.querySelectorAll(sel), function (n) {
+        return n.closest(".panel") === panel;
+      });
+    };
+    var charts = own("svg.chart"), tables = own("table");
+    charts.forEach(function (svg, i) {
+      button(panel, "Chart as PNG" + tally(i + 1, charts.length), function () { picture(svg, nameFor(panel, "png")); });
+      button(panel, "Chart as SVG" + tally(i + 1, charts.length), function () {
+        save(new Blob([drawing(svg).text], { type: "image/svg+xml" }), nameFor(panel, "svg"));
+      });
+    });
+    tables.forEach(function (table, i) {
+      button(panel, "Table as CSV" + tally(i + 1, tables.length), function () {
+        save(new Blob(["﻿" + csvOf(table)], { type: "text/csv;charset=utf-8" }), nameFor(panel, "csv"));
+      });
+    });
+  });
+})();

@@ -8,7 +8,7 @@
   <b>{% if t.value is none %}-{% else %}{{ t.value }}{{ t.unit }}{% endif %}</b>
   <span class="ins-spark">{{ t.spark }}</span>
   <small class="dim">{{ t.note }}</small>{% if t.change %}<small class="ins-change">{{ t.change }}</small>{% endif %}</section>{% endfor %}</div>{% endmacro %}
-{% block content %}
+{% block content %}<div data-downloads="incidents">
 <div class="phead"><div>
   <h1>Incidents and shrinkage</h1>
   <p class="byline">Missed breaks, leave, late logins, early leave, coaching, tasks and system issues, with how many and for how long, beside absenteeism and shrinkage, for any period. Times are Egypt time. The numbers come from what the RTA recorded; <a href="{{ url_for('exports_page') }}">Exports</a> has the rows behind them.</p>
@@ -106,4 +106,5 @@
     <tbody>{% for r in view.heat %}<tr><th scope="row">{{ r.name }}</th>{% for n, lv in r.cells %}<td class="lv{{ lv }}">{{ n or '' }}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div></section>
 {% endif %}
 {% endif %}
+</div>
 {% endblock %}

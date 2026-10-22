@@ -5,6 +5,7 @@ import csv
 import io
 import threading
 import unittest
+from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 from werkzeug.serving import make_server
@@ -66,7 +67,19 @@ class TheDownloadsInTheBrowser(_cb._Cancel):
         page = self.open(self.shrinkage())
         got = self.saved(page, "Chart as PNG")
         self.assertTrue(got.suggested_filename.endswith(".png"))
-        self.assertEqual(open(got.path(), "rb").read(8), PNG)
+        data = open(got.path(), "rb").read()
+        self.assertEqual(data[:8], PNG)
+        import base64
+        colours = page.evaluate("""async (b64) => {
+            const img = new Image(); img.src = 'data:image/png;base64,' + b64; await img.decode();
+            const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+            const x = c.getContext('2d'); x.drawImage(img, 0, 0);
+            const d = x.getImageData(0, 0, c.width, c.height).data, seen = new Set();
+            for (let i = 0; i < d.length; i += 4 * 97) { seen.add(d[i] + ',' + d[i + 1] + ',' + d[i + 2]); }
+            return [img.width, img.height, seen.size];
+        }""", base64.b64encode(data).decode())
+        self.assertGreater(colours[0], 600)  # drawn at twice its size
+        self.assertGreater(colours[2], 2)  # a background, a line and text: not one flat colour
 
     def test_a_chart_downloads_as_an_svg_drawing_that_keeps_its_look(self):
         page = self.open(self.shrinkage())
@@ -74,7 +87,7 @@ class TheDownloadsInTheBrowser(_cb._Cancel):
         text = open(got.path(), encoding="utf-8").read()
         self.assertTrue(text.startswith("<svg") or text.startswith("<?xml"))
         self.assertIn("xmlns=", text)
-        self.assertIn("stroke:", text)  # the colours are written into the file, not left to the page's stylesheet
+        self.assertRegex(text, r'stroke="rgb')  # the colours are written into the file, not left to the page's stylesheet
 
     def test_a_cell_with_a_comma_or_a_quote_stays_one_cell(self):
         page = self.open(self.shrinkage())
@@ -86,6 +99,11 @@ class TheDownloadsInTheBrowser(_cb._Cancel):
     def test_the_weekday_grid_downloads_too(self):
         page = self.open(self.shrinkage("&by=interval&step=60"))
         self.assertGreaterEqual(page.get_by_role("button", name="Table as CSV").count(), 2)
+        page.locator(".dl-row").first.scroll_into_view_if_needed()
+        page.wait_for_timeout(700)  # the page-to-page crossfade
+        out = Path(__file__).resolve().parents[2] / "evidence" / "phase_ax" / "screens"
+        out.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(out / "shrinkage_downloads.png"))
 
     def test_the_incidents_page_has_the_buttons(self):
         page = self.open("/incidents?from=2026-10-11&to=2026-10-15")

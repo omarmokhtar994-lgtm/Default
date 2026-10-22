@@ -2,7 +2,7 @@
 # © 2026 Omar Mokhtar. All rights reserved.
 """Make a small patch for the website from the files changed since a package was built (Phase AW).
 
-    python3 tools/make_patch.py BASE_PACKAGE.zip NAME [--output DIR]
+    python3 tools/make_patch.py BASE_PACKAGE.zip NAME [--output DIR] [--after EARLIER_PATCH.zip ...]
 
 BASE_PACKAGE.zip is the package that is installed on the server. The patch holds the website, deploy and tool files of this
 working tree that differ from it (or are new), with the sha256 of each file as the package has it, and ``apply_patch.sh``.
@@ -15,7 +15,7 @@ import json
 import sys
 import zipfile
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence
 
 ROOT = Path(__file__).resolve().parents[1]
 TREES = ("webapp/", "deploy/", "tools/")  # what a package carries of the website; the engine is never patched
@@ -54,11 +54,20 @@ def changed(base: Path, root: Path = ROOT) -> List[Dict[str, Optional[str]]]:
     return out
 
 
-def build(base: Path, name: str, out: Path, root: Path = ROOT) -> Optional[Path]:
-    """Write ``out/name.zip``; None when nothing differs from the package."""
+def build(base: Path, name: str, out: Path, root: Path = ROOT, after: Sequence[Path] = ()) -> Optional[Path]:
+    """Write ``out/name.zip``; None when nothing differs from the package. ``after`` names patches made earlier against the
+    same package: this patch then also goes on a site that has them (their files count as files it was made for)."""
     files = changed(base, root)
     if not files:
         return None
+    earlier: Dict[str, List[str]] = {}
+    for prior in after:
+        with zipfile.ZipFile(prior) as z:
+            for f in json.loads(z.read("PATCH.json"))["files"]:
+                earlier.setdefault(f["path"], []).append(f["new_sha256"])
+    for f in files:
+        if f["path"] in earlier:
+            f["also_sha256"] = sorted(set(earlier[f["path"]]) - {f["new_sha256"]})
     out.mkdir(parents=True, exist_ok=True)
     target = out / f"{name}.zip"
     meta = {"name": name, "base_package_sha256": sha(base.read_bytes()), "files": files}
@@ -75,8 +84,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("base")
     ap.add_argument("name")
     ap.add_argument("--output", default=str(ROOT / "dist"))
+    ap.add_argument("--after", action="append", default=[], help="a patch made earlier against the same package (repeat)")
     args = ap.parse_args(argv)
-    target = build(Path(args.base), args.name, Path(args.output))
+    target = build(Path(args.base), args.name, Path(args.output), after=[Path(a) for a in args.after])
     if target is None:
         print("Nothing differs from that package: no patch needed.")
         return 1

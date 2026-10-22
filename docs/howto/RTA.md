@@ -38,3 +38,5 @@ post only the latest, followed by "Breaks now: ...".
   nothing. Undo takes an applied replan back.
 - **View** (day and week): tick the LOBs of the program to show together, for example two out of five. The LOB the page is
   opened on is always shown. Untick the others to go back to one LOB.
+- **Download** buttons sit under each chart (PNG picture, SVG drawing) and each table (CSV, opens in Excel) on the
+  Shrinkage and Incidents pages. They save what the page shows for the period and choices picked.

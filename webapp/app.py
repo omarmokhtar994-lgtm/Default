@@ -4134,7 +4134,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             program, on, name = _day_form()
             at = _typed("at", program, on) or None
             with leave_out(_left_out_asked()):
-                _days().move_break(program, on, name, _break_idx(), at, g.user["id"])
+                _days().move_break(program, on, name, _break_idx(), at, g.user["id"],
+                                   missed=request.form.get("missed") == "1")
         except ValueError as exc:  # BreakRefused is a ValueError
             return _refused(exc, *_posted_day())
         return jsonify(ok=True)
@@ -4185,7 +4186,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             start = _form_start()
             done = _days().apply_bulk(program, on, form["names"], form["which"], form["action"], g.user["id"],
                                       amount=form["amount"], at=_typed("at", program, on), why=form["why"],
-                                      now=_window_now(on, start), start=start)
+                                      now=_window_now(on, start), start=start,
+                                      missed=request.form.get("missed") == "1")
             said = bulk_verb(form["action"], done)
             _say(said[0].upper() + said[1:] + ".", program, on)
         except ValueError as exc:

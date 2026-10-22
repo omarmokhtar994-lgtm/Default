@@ -342,6 +342,8 @@ class DayBook:
             return f"{row['associate']}'s attendance"
         if c["table"] == "outside_cover":
             return f"{row['associate']}'s cover {hm(row['start'])} to {hm(row['end_min'])}"
+        if c["table"] == "incidents":
+            return f"{row['associate']}'s missed-break note"
         if c["table"] == "channel_moves":
             return f"{row['associate']}'s channel change {hm(row['start'])} to {hm(row['end_min'])}"
         return f"{row['associate']}'s {row['kind']} {hm(row['start'])} to {hm(row['end_min'])}"
@@ -381,6 +383,9 @@ class DayBook:
             status = old["status"] if old else "Present"
             self._log(program, on, name, f"Attendance back to {status} (undone)", user_id, PRIVATE,
                       ref=f"status:{name}", before=new["status"] if new else "Present", after=status)
+        elif c["table"] == "incidents":
+            self._log(program, on, name, "Missed-break note " + ("removed" if new else "back") + " (undone)", user_id,
+                      PRIVATE, ref=f"incident:{row['id']}", before="on" if new else "", after="" if new else "on")
         elif c["table"] == "outside_cover":
             ref = f"cover:{row['id']}"
             if old is None:
@@ -1057,7 +1062,7 @@ class DayBook:
 
     @journaled
     def move_break(self, program: str, on: date, name: str, idx: int, at: Optional[str], user_id: int,
-                   suffix: str = "") -> None:
+                   suffix: str = "", missed: bool = False) -> None:
         """Move a break of the shift that starts on ``on`` to ``at`` (HH:MM), or back to the plan (None)."""
         row, week, span = self._shift(program, on, name)
         plan = {b["idx"]: b for b in self.plan_for(program, on, name, week)}
@@ -1083,6 +1088,9 @@ class DayBook:
                                         kind=plan[idx]["kind"], start=m, user_id=user_id, cancelled=0, why="")
             what = (f"{plan[idx]['kind']} brought back at {hm(m)}{suffix}" if was_cancelled else
                     f"{plan[idx]['kind']} moved {hm(was)} to {hm(m)}{suffix}")
+        if missed:  # Phase AV: the associate missed this break; kept as an incident for the analysis
+            self.store.add_incident(program=program, shift_date=on.isoformat(), associate=name, kind="missed_break",
+                                    idx=idx, minutes=0, note=plan[idx]["kind"], user_id=user_id, at=time.time())
         self._log(program, on, name, what, user_id, "break", ref=f"break:{name}:{idx}",
                   before="cancelled" if was_cancelled else hm(was), after=hm(plan[idx]["start"] if at is None else m))
 
@@ -1695,7 +1703,8 @@ class DayBook:
         return {**found, "before": self._figures(page), "after": self._figures(after)}
 
     def apply_bulk(self, program: str, on: date, names: List[str], which: str, action: str, user_id: int,
-                   amount: int = 0, at: str = "", why: str = "", now: Optional[int] = None, start: int = 0) -> int:
+                   amount: int = 0, at: str = "", why: str = "", now: Optional[int] = None, start: int = 0,
+                   missed: bool = False) -> int:
         """Keep a Change several breaks as one bulk change (one step for Undo, held from the group until Send): each
         change checked again as it is kept. Returns how many breaks changed. Phase AK: ``start`` as in
         ``bulk_preview``, each change kept on its shift's own date."""
@@ -1716,7 +1725,8 @@ class DayBook:
                                           now=in_own_day(now, when, on))
                     else:
                         self.move_break(program, when, c["name"], c["idx"],
-                                        None if c["day_new"] is None else plain_hm(c["day_new"]), user_id)
+                                        None if c["day_new"] is None else plain_hm(c["day_new"]), user_id,
+                                        missed=missed)
                     done += 1
             finally:
                 act.label = f"Change several breaks: {verb(action, done)}"

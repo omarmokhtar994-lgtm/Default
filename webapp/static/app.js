@@ -540,6 +540,7 @@ function homeRefresh(now) {
       (el.dataset.shift ? " · shift " + el.dataset.shift : "") + " · planned " + el.dataset.planned +
       (el.dataset.start !== el.dataset.planned ? " · now " + el.dataset.start : "");
     input.value = at || el.dataset.start;
+    var missedBox = dlg.querySelector("input[name=missed]"); if (missedBox) { missedBox.checked = false; }
     keep.disabled = false;
     dlg.showModal();
     input.focus();
@@ -555,6 +556,8 @@ function homeRefresh(now) {
     var fields = { date: current.date, associate: current.name, idx: current.idx, at: at };
     var tick = dlg.querySelector("input[name=post]");  // Phase AB: "Post to the group", unticked for one change
     if (tick) { fields.post_asked = "1"; if (tick.checked) { fields.post = "1"; } }
+    var missed = dlg.querySelector("input[name=missed]");  // Phase AV: the break was missed, kept as an incident
+    if (missed && missed.checked && at) { fields.missed = "1"; }
     post(root.dataset.breakUrl, fields)
       .then(function (r) {
         if (r._ok) { window.location.reload(); return; }

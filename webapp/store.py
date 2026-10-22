@@ -307,6 +307,18 @@ create table if not exists outside_cover (
     user_id integer not null,
     at real not null
 );
+create table if not exists incidents (
+    id integer primary key autoincrement,
+    program text not null,
+    shift_date text not null,
+    associate text not null,
+    kind text not null,
+    idx integer not null default 0,
+    minutes integer not null default 0,
+    note text not null default '',
+    user_id integer not null,
+    at real not null
+);
 create table if not exists day_log (
     id integer primary key autoincrement,
     program text not null,
@@ -1319,6 +1331,20 @@ class Store:
         with self._db() as db:
             return int(db.execute(f"insert into day_log ({names}) values ({marks})", tuple(fields.values())).lastrowid)
 
+    def add_incident(self, **fields: Any) -> int:
+        """Phase AV: keep one incident (a missed break so far) for the analysis."""
+        names, marks = ", ".join(fields), ", ".join("?" for _ in fields)
+        with self._db() as db:
+            return int(db.execute(f"insert into incidents ({names}) values ({marks})",
+                                  tuple(fields.values())).lastrowid)
+
+    def list_incidents(self, program: str, dates: List[str]) -> List[Dict[str, Any]]:
+        marks = ", ".join("?" for _ in dates)
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                f"select * from incidents where program = ? and shift_date in ({marks}) order by id",
+                (program, *dates))]
+
     def list_day_log(self, program: str, shift_date: str) -> List[Dict[str, Any]]:
         with self._db() as db:
             return [dict(r) for r in db.execute(
@@ -1328,7 +1354,8 @@ class Store:
     # ------------------------------------------------------------- the day's change journal (Phase AD)
     DAY_ROW_KEYS = {"attendance": ("program", "shift_date", "associate"),
                     "actual_breaks": ("program", "shift_date", "associate", "idx"),
-                    "activities": ("id",), "channel_moves": ("id",), "outside_cover": ("id",)}
+                    "activities": ("id",), "channel_moves": ("id",), "outside_cover": ("id",),
+                    "incidents": ("id",)}  # Phase AV
 
     def day_rows(self, program: str, dates: List[str]) -> Dict[str, Dict[Tuple[Any, ...], Dict[str, Any]]]:
         """Every record of ``program`` on ``dates`` in the tables an RTA change writes, keyed by each table's key."""
@@ -1400,7 +1427,7 @@ class Store:
             db.execute("delete from day_actions where shift_date < ?", (shift_date,))  # Phase AD: the journal goes too
             return sum(db.execute(f"delete from {table} where shift_date < ?", (shift_date,)).rowcount
                        for table in ("attendance", "actual_breaks", "activities", "day_log", "notify_items",
-                                     "notify_posts", "outside_cover"))
+                                     "notify_posts", "outside_cover", "incidents"))
 
     # ------------------------------------------------------------- group posts (Phase AB)
     def get_notify(self, unit: str) -> Optional[Dict[str, Any]]:
@@ -1615,7 +1642,8 @@ class Store:
 
     DAY_TABLES = (("attendance", "attendance"), ("breaks", "actual_breaks"), ("activities", "activities"),
                   ("log", "day_log"), ("channels", "channel_moves"),  # channels: Phase V
-                  ("cover", "outside_cover"))  # Phase AJ
+                  ("cover", "outside_cover"),  # Phase AJ
+                  ("incidents", "incidents"))  # Phase AV
 
     def rename_program(self, old: str, new: str, stop_in_use: List[int]) -> Dict[str, int]:
         """Move everything kept under program ``old`` to ``new`` in one transaction (runs, versions and day

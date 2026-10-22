@@ -12,7 +12,7 @@ from .insights import ABSENT_VIEWS, BEHAVIOUR, KINDS, LABEL, figures, grouped, p
 LEVELS = (("overview", "Overview"), ("lobs", "LOBs"), ("associates", "Associates"))
 SHORT = {"missed_break": "Missed", "unplanned": "Unplanned", "sick": "Sick", "planned": "Planned", "late": "Late",
          "early": "Early", "coaching": "Coaching", "training": "Training", "meeting": "Meetings",
-         "system_issue": "System", "task": "Tasks", "bio_break": "Bio", "non_adherence": "Adherence"}
+         "system_issue": "System", "task": "Tasks", "bio_break": "Bio"}
 TILES = (("absenteeism", "Absenteeism", "what is ticked under Absenteeism counts, of shifts scheduled", True),
          ("shrink_out", "Shrinkage, out of office", "unplanned, planned and sick, of shifts scheduled", True),
          ("shrink_client", "Shrinkage, the client's", "adds public holiday and exam leave", True),
@@ -49,7 +49,7 @@ def _tiles(total: Dict[str, Any], days: List[Dict[str, Any]], before: Optional[D
         out.append({"label": label, "note": note, "value": total[key], "unit": "%", "lower_is_better": lower_is_better,
                     "change": _change(total[key], before[key] if before else None, "%"),
                     "spark": charts.spark(values, charts.AQUA, f"{label} by day")})
-    out.append({"label": "Incidents", "note": "missed breaks, unplanned leave, late, early and out of adherence",
+    out.append({"label": "Incidents", "note": "missed breaks, unplanned leave, late logins and early leave",
                 "value": total["total"], "unit": "", "lower_is_better": True,
                 "change": _change(total["total"], before["total"] if before else None, ""),
                 "spark": charts.spark([d["total"] for d in days], charts.ORANGE, "Incidents by day")})
@@ -61,6 +61,11 @@ def _mix(total: Dict[str, Any]) -> Dict[str, Any]:
     return {"count": charts.hbars([(name, v["n"], charts.BLUE) for name, v in kinds], "", "Incidents by type"),
             "time": charts.hbars([(name, round(v["min"] / 60, 1), charts.AQUA) for name, v in kinds if v["min"]],
                                  " h", "Time by type, in hours")}
+
+
+def _counts(incidents: Dict[str, Dict[str, int]]) -> List[Dict[str, Any]]:
+    """Phase AX: every kind of incident with its count and time, a zero too (it is information)."""
+    return [{"key": k, "label": label, "n": incidents[k]["n"], "min": incidents[k]["min"]} for k, label in KINDS]
 
 
 def _heat(rows: List[Dict[str, Any]], limit: int = 14) -> List[Dict[str, Any]]:
@@ -86,7 +91,7 @@ def build(facts: List[Dict[str, Any]], level: str, who: str, start: date, end: d
     """Everything the page draws for ``level`` (overview, lobs or associates), and ``who`` when one associate is open."""
     total, days = figures(facts, counts), trend(facts, counts)
     found: Dict[str, Any] = {"level": level, "total": total, "empty": not facts, "tiles": _tiles(total, days, figures(before, counts) if before else None),
-                             "trend": _trend_chart(days), "mix": _mix(total), "kinds": KINDS, "short": SHORT,
+                             "trend": _trend_chart(days), "mix": _mix(total), "counts": _counts(total["incidents"]), "kinds": KINDS, "short": SHORT,
                              "behaviour": BEHAVIOUR, "days": len(days)}
     found["programs"] = grouped(facts, "programs", counts)
     found["lobs"] = grouped(facts, "lobs", counts)
@@ -109,5 +114,6 @@ def build(facts: List[Dict[str, Any]], level: str, who: str, start: date, end: d
         mine = [r for r in facts if r["name"] == who]
         mine_days = trend(mine, counts)
         found["person_tiles"] = _tiles(found["person"], mine_days)
+        found["person_counts"] = _counts(found["person"]["incidents"])
         found["person_trend"] = _trend_chart(mine_days)
     return found

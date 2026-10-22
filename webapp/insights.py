@@ -17,10 +17,9 @@ from .shrinkage import day_shrinkage, read_mapping
 KINDS: Tuple[Tuple[str, str], ...] = (
     ("missed_break", "Missed breaks"), ("unplanned", "Unplanned leave"), ("sick", "Sick"),
     ("planned", "Planned leave"), ("late", "Late logins"), ("early", "Early leave"), ("coaching", "Coaching"),
-    ("training", "Training"), ("meeting", "Meetings"), ("system_issue", "System issues"), ("task", "Tasks"), ("bio_break", "Bio breaks"),
-    ("non_adherence", "Out of adherence"))
+    ("training", "Training"), ("meeting", "Meetings"), ("system_issue", "System issues"), ("task", "Tasks"), ("bio_break", "Bio breaks"))
 LABEL = dict(KINDS)
-BEHAVIOUR = ("missed_break", "unplanned", "late", "early", "non_adherence")  # what a team manager coaches on
+BEHAVIOUR = ("missed_break", "unplanned", "late", "early")  # what a team manager coaches on
 AUX_KEY = {"Coaching": "coaching", "Training": "training", "Meeting": "meeting", "System issue": "system_issue", "Bio break": "bio_break",
            "Task": "task"}
 LEAVE_KEY = {"Unplanned leave": "unplanned", "Sick": "sick"}
@@ -76,8 +75,6 @@ def day_facts(page: Dict[str, Any], unit: str, program: str, lob: str, mapping: 
                 if a["kind"] in AUX_KEY:
                     r["inc"][AUX_KEY[a["kind"]]][0] += 1
                     r["inc"][AUX_KEY[a["kind"]]][1] += a["end"] - a["start"]
-            if pd["out_of_schedule"] > 0:
-                r["inc"]["non_adherence"] = [1, pd["out_of_schedule"]]
         for m in missed:
             if m["associate"] == name:
                 r["inc"]["missed_break"][0] += 1

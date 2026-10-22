@@ -8,6 +8,8 @@
   <b>{% if t.value is none %}-{% else %}{{ t.value }}{{ t.unit }}{% endif %}</b>
   <span class="ins-spark">{{ t.spark }}</span>
   <small class="dim">{{ t.note }}</small>{% if t.change %}<small class="ins-change">{{ t.change }}</small>{% endif %}</section>{% endfor %}</div>{% endmacro %}
+{% macro kind_counts(items, key) %}<section class="panel ins-counts" aria-labelledby="{{ key }}"><h2 id="{{ key }}">Counts by type</h2>
+  <div class="ins-tiles">{% for c in items %}<section class="ins-tile" aria-label="{{ c.label }}"><span class="tile-label">{{ c.label }}</span><b>{{ c.n }}</b><small class="dim">{{ c.min|dur if c.min else 'no time recorded' }}</small></section>{% endfor %}</div></section>{% endmacro %}
 {% block content %}<div data-downloads="incidents">
 <div class="phead"><div>
   <h1>Incidents and shrinkage</h1>
@@ -44,6 +46,7 @@
 {{ tiles(view.tiles) }}
 <p class="ins-export"><a class="button" href="{{ url_for('exports_download', **{'from': start.isoformat(), 'to': end.isoformat(), 'pick': pick or none, 'measure': measure, 'kind': ['incident_summary', 'absence', 'incidents'], 'format': 'xlsx'}) }}">Download these figures</a></p>
 <p class="dim ins-note">{{ view.total.people }} people, {{ view.total.shifts }} shifts over {{ view.days }} day{{ 's' if view.days != 1 }}. Absenteeism is {{ counts|map('replace', '_', ' ')|join(' + ') }} over shifts scheduled (change it under Absenteeism counts). Shrinkage out of office and the client's follow the program's own settings under <a href="{{ url_for('program_setup') }}">LOBs and defaults</a>.</p>
+{% if not (who and view.person) %}{{ kind_counts(view.counts, 'cn-all') }}{% endif %}
 
 {% if who and view.person %}
 {% set pr = view.person %}
@@ -51,6 +54,7 @@
   <p class="crumbs"><a href="{{ url_for('incidents_page', **{'from': start.isoformat(), 'to': end.isoformat(), 'pick': pick or none, 'view': 'associates'}) }}">‹ All associates</a></p>
   <h2 id="who-h">{{ pr.name }}</h2>
   {{ tiles(view.person_tiles) }}
+  {{ kind_counts(view.person_counts, 'cn-who') }}
   <div class="charts"><section class="panel chart-panel"><h3>Absenteeism and shrinkage by day</h3><div class="chart-scroll">{{ view.person_trend }}</div></section>
   <section class="panel chart-panel"><h3>Incidents</h3>
     <table class="adh-t"><thead><tr><th scope="col">Type</th><th scope="col" class="n">Count</th><th scope="col" class="n">Time</th></tr></thead>

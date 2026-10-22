@@ -1612,3 +1612,8 @@ table.hours tfoot th, table.hours tfoot td { border-top: 1px solid var(--rail); 
 
 /* Phase AX: the download buttons under a chart or table */
 .dl-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.6rem 0 0; }
+
+/* Phase AX: a count and the time for each kind of incident */
+.ins-counts .ins-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.ins-counts .ins-tile b { font-size: 1.75rem; }
+@media (max-width: 800px) { .ins-counts .ins-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

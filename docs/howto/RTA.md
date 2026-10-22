@@ -40,3 +40,11 @@ post only the latest, followed by "Breaks now: ...".
   opened on is always shown. Untick the others to go back to one LOB.
 - **Download** buttons sit under each chart (PNG picture, SVG drawing) and each table (CSV, opens in Excel) on the
   Shrinkage and Incidents pages. They save what the page shows for the period and choices picked.
+
+## Adherence and the Incidents counts (Phase AX)
+- Adherence is measured against the schedule as the RTA holds it. Moving a break in the RTA is not a miss, and costs no
+  adherence. A break ticked as **Missed break** is out of adherence for its minutes, once however often it is moved.
+- "Out of adherence" is no longer an incident type on the Incidents page. The Adherence percentage stays.
+- The Incidents page has **Counts by type**: a count and the time for each kind (missed breaks, unplanned leave, sick,
+  planned leave, late logins, early leave, coaching, training, meetings, system issues, tasks, bio breaks), for everyone in
+  the period and for one associate when one is open.

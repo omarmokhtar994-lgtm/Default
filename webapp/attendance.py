@@ -731,6 +731,16 @@ class DayBook:
                              for r in self.store.list_cover(program, [when.isoformat()])]
         view = day_view(week, inputs, day_index(on), attendance, actual, measure, acts, before, channels=channels,
                         cover=covering)
+        if recorded:  # Phase AX: breaks ticked as missed are out of adherence (once each, however often they were moved)
+            missed: Dict[str, Dict[int, int]] = {}
+            for r in self.store.list_incidents(program, [on.isoformat()]):
+                if r["kind"] == "missed_break":
+                    missed.setdefault(r["associate"], {})[r["idx"]] = int(r["minutes"] or 0)
+            for lane in view["lanes"]:
+                if lane["name"] in missed:
+                    for seg in lane["segments"]:
+                        if seg["offset"] == 0:
+                            seg["missed_min"] = sum(missed[lane["name"]].values())
         ratio, source_of_target = self.target_for(program, on, row, inputs)
         standing = at_target(view["cells"], ratio)
         for c, s in zip(view["cells"], standing["cells"]):  # Phase AH: every page colours by the week's target

@@ -98,6 +98,46 @@ class TheInsights(unittest.TestCase):
         self.assertEqual([d["date"] for d in p["days"]], ["2026-10-15", "2026-10-14"])
         self.assertEqual(p["incidents"]["late"]["n"], 1)
 
+    # Phase AX (owner, 2026-10-22): a moved break is the schedule; only a break ticked as missed is out of adherence
+    def lost(self, name, on=WED):
+        r = self.of(name, on)[0]
+        return r["adh_den"] - r["adh_num"]
+
+    def test_a_missed_break_is_out_of_adherence_for_the_break_length(self):
+        minutes = self.of("Associate 008", WED)[0]["inc"]["missed_break"][1]
+        self.assertEqual(self.lost("Associate 008"), minutes)
+
+    def test_a_break_moved_without_the_tick_costs_no_adherence(self):
+        taken = {"Associate 001", "Associate 008", "Associate 021"}
+        name, brk = next((l["name"], s["breaks"][-1]) for l in self.days.page(KEY, WED)["view"]["lanes"]
+                         if l["name"] not in taken for s in l["segments"]
+                         if s["offset"] == 0 and s["status"] == "Present" and s["breaks"])
+        for step in (10, -10, 15, -15, 20, -20):
+            try:
+                self.days.move_break(KEY, WED, name, brk["idx"], f"{(brk['start'] + step) // 60 % 24:02d}:{(brk['start'] + step) % 60:02d}", self.lina)
+                break
+            except ValueError:
+                continue
+        facts = insights.collect(self.days, self.store, None, {KEY: ("AE", "AR B2B")}, WED, THU, "interval")
+        r = next(r for r in facts if r["name"] == name and r["date"] == WED.isoformat())
+        now = next(b for l in self.days.page(KEY, WED)["view"]["lanes"] if l["name"] == name for s in l["segments"]
+                   if s["offset"] == 0 for b in s["breaks"] if b["idx"] == brk["idx"])
+        self.assertTrue(now["moved"])  # it really was moved, so the zero below says something
+        self.assertEqual(r["adh_den"] - r["adh_num"], 0)
+
+    def test_ticking_the_same_break_twice_counts_it_once(self):
+        before = self.lost("Associate 008")
+        self.days.move_break(KEY, WED, "Associate 008", 1, "13:15", self.lina, missed=True)
+        facts = insights.collect(self.days, self.store, None, {KEY: ("AE", "AR B2B")}, WED, THU, "interval")
+        r = next(r for r in facts if r["name"] == "Associate 008" and r["date"] == WED.isoformat())
+        self.assertEqual(r["adh_den"] - r["adh_num"], before)
+
+    def test_out_of_adherence_is_not_an_incident_any_more(self):
+        self.assertNotIn("non_adherence", [k for k, _ in insights.KINDS])
+        self.assertNotIn("non_adherence", insights.BEHAVIOUR)
+        for r in self.facts:
+            self.assertNotIn("non_adherence", r["inc"])
+
 
 class ThePatterns(TheInsights):  # noqa
     def test_weekdays_put_wednesday_and_thursday_where_the_records_are(self):

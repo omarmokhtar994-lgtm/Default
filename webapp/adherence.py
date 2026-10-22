@@ -6,7 +6,8 @@ Per person and shift, minute by minute (5-minute steps): the schedule says
 leave, sick, late, left early: no break taken while away), "break" (the break
 as taken), "aux" (training, coaching, meeting, system issue) or "work".
 
-  adherence   = minutes doing what the schedule says / the shift's minutes
+  adherence   = minutes doing what the schedule says / the shift's minutes (the schedule is what the RTA holds: a break
+                moved there is not a miss; a break ticked as missed is out of adherence for its minutes)
   conformance = minutes worked / minutes scheduled to work (shift less planned breaks)
 
 Under Interval compliance a billable aux counts as work (it stays billable);
@@ -27,7 +28,9 @@ def _pct(part: int, whole: int) -> Optional[int]:
 def person_day(view: Dict[str, Any], name: str) -> Dict[str, Any]:
     """Minutes and percentages for ``name``'s shift that starts this day."""
     seg = next(s for l in view["lanes"] if l["name"] == name for s in l["segments"] if s["offset"] == 0)
-    planned = [(b["planned_start"], b["planned_start"] + b["minutes"]) for b in seg["breaks"]]
+    # Phase AX (owner, 2026-10-22): the schedule is what the RTA holds, so a break moved there is not out of adherence;
+    # only a break ticked as missed is (``missed_min``, below).
+    planned = [(b["start"], b["start"] + b["minutes"]) for b in seg["breaks"]]
     taken = [(b["start"], b["start"] + b["minutes"]) for b in seg["breaks"]]
     taken += [(a["start"], a["end"]) for a in seg.get("activities", []) if a["kind"] in EXTRA_BREAKS]  # added on the day
     status, (lo, hi) = seg["status"], seg["away"]
@@ -69,6 +72,8 @@ def person_day(view: Dict[str, Any], name: str) -> Dict[str, Any]:
             out["worked"] += STEP
         if now != due:
             out["out_of_schedule"] += STEP
+    if status not in ABSENT and seg.get("missed_min"):
+        out["out_of_schedule"] = min(out["scheduled"], out["out_of_schedule"] + int(seg["missed_min"]))
     if status not in ABSENT:
         out["overtime"] = sum(max(0, min(a["end"], seg["start"]) - a["start"]) + max(0, a["end"] - max(a["start"], seg["end"]))
                               for a in acts if a["kind"] == "Overtime")

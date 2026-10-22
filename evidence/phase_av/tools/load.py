@@ -61,6 +61,30 @@ PORT = 18765
 
 
 def serve():
+    """The site as waitress serves it, with a stopwatch round each request (the time the site itself spent on it)."""
+    import atexit
+    import json
+    import signal
+    spent = defaultdict(list)
+    inner = app.wsgi_app
+
+    def timed(environ, start_response):
+        t0, c0 = time.perf_counter(), time.thread_time()
+        try:
+            return list(inner(environ, start_response))
+        finally:
+            path = environ.get("PATH_INFO", "")
+            spent[("POST " if environ.get("REQUEST_METHOD") == "POST" else "") + (path if len(path) < 14 else path[:14])].append(
+                (time.perf_counter() - t0, time.thread_time() - c0))
+
+    app.wsgi_app = timed
+
+    def dump(*_):
+        out = {k: {"n": len(v), "wall_s": round(sum(a for a, _ in v) / len(v), 3), "cpu_s": round(sum(b for _, b in v) / len(v), 3)}
+               for k, v in spent.items()}
+        open("/tmp/service_times.json", "w").write(json.dumps(out, indent=1))
+        os._exit(0)
+    signal.signal(signal.SIGTERM, dump)
     create_server(app, host="127.0.0.1", port=PORT, threads=8, max_request_body_size=26 * 1024 * 1024,
                   connection_limit=CONNECTION_LIMIT).run()
 

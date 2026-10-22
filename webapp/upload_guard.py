@@ -18,8 +18,8 @@ from typing import Dict, List, Optional, Tuple
 from openpyxl import load_workbook
 
 MAX_CELLS = 400_000  # a scan stops here; the workbook check refuses an over-large file anyway
-REQUIRED = ("Instructions", "Schedule", "Shift Library")  # in every real input workbook and in the template
-DEMAND_TAB = re.compile(r"^FT Wise \d+ Min$", re.I)
+REQUIRED = ("Instructions", "Schedule", "Shift Library")  # in every real input workbook and in the template; the requirement
+# tab is not asked for here, because the Instructions tab may name any tab as the requirement (the later check says so)
 ACTIVE_PARTS = ("vbaproject", "xl/externallinks/", "xl/embeddings/", "xl/activex/", "xl/ctrlprops/")
 CARD = re.compile(r"(?<![\w/\\.:-])(?:\d{4}[ -]?){3}\d{1,7}(?![\w/\\.:-])")  # 4-4-4-4 style, not inside a path or a code
 STREET = re.compile(r"\b\d{1,5}\s+(?:[A-Z][a-z]+\s+){1,3}(?:Street|St|Road|Rd|Avenue|Ave|Boulevard|Blvd|Lane|Ln|Drive|Dr|Court|Ct|"
@@ -87,8 +87,6 @@ def look(path: Path, structure: bool = True, personal: bool = True) -> Optional[
         names = wb.sheetnames
         if structure:
             missing = [t for t in REQUIRED if t not in names]
-            if not any(DEMAND_TAB.match(n) for n in names):
-                missing.append("FT Wise <interval> Min (the requirement tab)")
             if missing:
                 return ("structure", "This file does not match the Team Scheduler input workbook (missing tab"
                         + ("s" if len(missing) > 1 else "") + ": " + ", ".join(missing) + "). It looks like outsourced data "

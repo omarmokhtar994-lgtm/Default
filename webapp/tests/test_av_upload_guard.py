@@ -49,10 +49,8 @@ class TheGuard(unittest.TestCase):
         self.assertIn("deleted", found[1])
         self.assertIn("Instructions", found[1])
 
-    def test_the_requirement_tab_is_needed(self):
-        found = self.look(tabs=("Instructions", "Schedule", "Shift Library"))
-        self.assertEqual(found[0], "structure")
-        self.assertIn("FT Wise", found[1])
+    def test_the_requirement_tab_may_have_any_name(self):
+        self.assertIsNone(self.look(tabs=("Instructions", "Schedule", "Shift Library", "Demand by hour")))
 
     def test_a_card_number_is_refused_and_never_repeated(self):
         found = self.look(cells=[("Schedule", "A1", f"Paid with {CARD}")])

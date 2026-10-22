@@ -21,7 +21,7 @@ MAX_CELLS = 400_000  # a scan stops here; the workbook check refuses an over-lar
 REQUIRED = ("Instructions", "Schedule", "Shift Library")  # in every real input workbook and in the template; the requirement
 # tab is not asked for here, because the Instructions tab may name any tab as the requirement (the later check says so)
 ACTIVE_PARTS = ("vbaproject", "xl/externallinks/", "xl/embeddings/", "xl/activex/", "xl/ctrlprops/")
-CARD = re.compile(r"(?<![\w/\\.:-])(?:\d{4}[ -]?){3}\d{1,7}(?![\w/\\.:-])")  # 4-4-4-4 style, not inside a path or a code
+CARD = re.compile(r"(?<![\w/\\.-])(?:\d{4}[ -]?){3}\d{1,7}(?![\w/\\.:-])")  # 4-4-4-4 style, not inside a path or a code
 STREET = re.compile(r"\b\d{1,5}\s+(?:[A-Z][a-z]+\s+){1,3}(?:Street|St|Road|Rd|Avenue|Ave|Boulevard|Blvd|Lane|Ln|Drive|Dr|Court|Ct|"
                     r"Square|Sq)\b\.?")
 IBAN = re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b")
@@ -46,8 +46,13 @@ def kind_of(value: object) -> Optional[str]:
     """What sensitive thing a cell holds, or None."""
     if value is None or isinstance(value, bool):
         return None
-    if isinstance(value, float):
-        return None  # a measurement, never a card
+    if isinstance(value, (int, float)):
+        # Phase AX (owner, 2026-10-23: a card number typed into a cell was accepted): a number is kept as a number, and Excel
+        # keeps only 15 digits of it (4111111111111111 becomes 4111111111111110), so the check digit cannot be used. A whole
+        # number of 15 to 19 digits is a card, whatever its last digits; shorter ones are counts, ids and phone numbers.
+        if isinstance(value, float) and (value != value or not value.is_integer()):
+            return None  # a measurement
+        return "card" if 15 <= len(str(abs(int(value)))) <= 19 else None
     text = str(value)
     if text.startswith("="):
         return "formula" if RISKY_FORMULA.search(text) else None
@@ -62,6 +67,25 @@ def kind_of(value: object) -> Optional[str]:
     if IBAN.search(text.replace(" ", "")) and re.search(r"[A-Z]{2}\d{2}", text.replace(" ", "")) and len(text.replace(" ", "")) <= 40:
         return "iban"
     return None
+
+
+def personal_message(found: Dict[str, List[str]]) -> str:
+    """What was found, by kind and tab, never by value (``found``: kind -> the tabs it is on)."""
+    what = "; ".join(f"{LABELS[k]} (tab {', '.join(tabs[:3])}{'…' if len(tabs) > 3 else ''})" for k, tabs in found.items())
+    return (f"This file contains {what}. Team Scheduler workbooks hold no such data, so it could be "
+            "outsourced or personal data. It was refused and deleted from the server to avoid any leak; "
+            "remove those cells and upload again.")
+
+
+def look_rows(rows: List[List[object]], tab: str = "the sheet") -> Optional[str]:
+    """The refusal for a sheet already read into ``rows`` (a people sheet, an .xlsx or a .csv), or None."""
+    found: Dict[str, List[str]] = {}
+    for row in rows:
+        for value in row:
+            k = kind_of(value)
+            if k and tab not in found.setdefault(k, []):
+                found[k].append(tab)
+    return personal_message(found) if found else None
 
 
 def look(path: Path, structure: bool = True, personal: bool = True) -> Optional[Tuple[str, str]]:
@@ -109,10 +133,7 @@ def look(path: Path, structure: bool = True, personal: bool = True) -> Optional[
                 if seen > MAX_CELLS:
                     break
             if found:
-                what = "; ".join(f"{LABELS[k]} (tab {', '.join(tabs[:3])}{'…' if len(tabs) > 3 else ''})" for k, tabs in found.items())
-                return ("personal", f"This file contains {what}. Team Scheduler workbooks hold no such data, so it could be "
-                        "outsourced or personal data. It was refused and deleted from the server to avoid any leak; "
-                        "remove those cells and upload again.")
+                return ("personal", personal_message(found))
     finally:
         wb.close()
         handle.close()

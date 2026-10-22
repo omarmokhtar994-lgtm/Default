@@ -143,3 +143,36 @@ class TheUploadRoutes(unittest.TestCase):
     def test_the_example_template_is_not_refused_by_the_guard(self):
         got = self.upload(REPO / "webapp/workbooks/Scheduler_Input_Example.xlsx", kind="engine")
         self.assertNotIn("outsourced", got.get_data(as_text=True))
+
+
+class TheNumbersExcelKeeps(unittest.TestCase):
+    """Owner, 2026-10-23: "I tried adding credit card information in one of the cells and it was accepted, I just added the card
+    number". A number typed into a cell is kept as a number, and Excel keeps 15 digits of it (4111111111111111 is stored as
+    4111111111111110), so the check digit no longer fits and the card was not recognised. A whole number of 15 to 19 digits is a
+    card (or something as unwanted); shorter numbers are counts, ids and phone numbers, as before."""
+    def test_a_card_typed_as_a_number_is_a_card(self):
+        for value in (4111111111111110, 4111111111111111, 5500000000000004, 378282246310005, 4.11111111111111e15):
+            self.assertEqual(guard.kind_of(value), "card", value)
+
+    def test_the_longest_numbers_too(self):
+        self.assertEqual(guard.kind_of(6011000000000000004), "card")  # 19 digits
+
+    def test_counts_ids_phone_numbers_and_measurements_are_not_cards(self):
+        for value in (0.9, 12, 1234567890, 201001234567, 20100123456789, 1234.5, 2026.1014, True):
+            self.assertIsNone(guard.kind_of(value), value)
+
+    def test_a_card_after_a_colon_or_without_spaces_is_found_in_text(self):
+        for text in ("Card:4111 1111 1111 1111", "Visa 4111111111111111", "4111-1111-1111-1111", "paid: 4111111111111111 ok"):
+            self.assertEqual(guard.kind_of(text), "card", text)
+
+    def test_times_dates_and_codes_in_text_are_still_not_cards(self):
+        for text in ("2026-10-14 12:00:00", "Week 2026-10-11 to 2026-10-17", "ABC-12345678", "12:30 - 21:30"):
+            self.assertIsNone(guard.kind_of(text), text)
+
+    def test_a_workbook_with_the_number_in_a_cell_is_refused(self):
+        d = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, d, True)
+        found = guard.look(book(d / "w.xlsx", cells=[("Schedule", "C3", 4111111111111110)]))
+        self.assertEqual(found[0], "personal")
+        self.assertIn("card number", found[1])
+        self.assertNotIn("4111", found[1])

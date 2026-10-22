@@ -302,3 +302,39 @@ class TheTemporaryPasswordExpires(_Users):
         page = client.post("/login", data={"username": name, "password": "Temporary-1234", "csrf_token": tok}).get_data(as_text=True)
         self.assertIn("temporary password has expired", page)
         self.assertIn("Ask your admin", page)
+
+
+class ThePeopleSheetHoldsNoCardNumbers(TheBulkUpload):
+    """Owner, 2026-10-23: a card number in a cell was accepted. The people sheet is checked like the other uploads: a card number,
+    typed as text or as a number, in any cell refuses the file and keeps nothing."""
+    def sheet(self, extra):
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "People"
+        ws.append(HEAD)
+        ws.append(["card_test", "Card Test", "Associate", "", "Associate 099", "", "Pass-12345"])
+        ws["H2"] = extra
+        out = io.BytesIO()
+        wb.save(out)
+        return out.getvalue()
+
+    def test_a_card_number_typed_as_a_number_refuses_the_sheet(self):
+        page = html.unescape(self.check(self.sheet(4111111111111110)).get_data(as_text=True))
+        self.assertIn("card number", page)
+        self.assertNotIn("4111", page)
+        self.assertNotIn('name="token"', page)  # nothing to confirm: nothing was held
+
+    def test_a_card_number_typed_as_text_refuses_it_too(self):
+        page = html.unescape(self.check(self.sheet("4111 1111 1111 1111")).get_data(as_text=True))
+        self.assertIn("card number", page)
+        self.assertNotIn('name="token"', page)
+
+    def test_a_csv_with_one_is_refused_as_well(self):
+        data = ("username,display name,role,programs,roster name,team manager,password,notes\n"
+                "card_test,Card Test,Associate,,Associate 099,,Pass-12345,4111 1111 1111 1111\n").encode()
+        page = html.unescape(self.check(data, name="people.csv").get_data(as_text=True))
+        self.assertIn("card number", page)
+
+    def test_an_ordinary_sheet_is_still_accepted(self):
+        page = html.unescape(self.check(self.sheet("")).get_data(as_text=True))
+        self.assertNotIn("card number", page)

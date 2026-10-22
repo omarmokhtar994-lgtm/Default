@@ -14,6 +14,7 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font
 from openpyxl.utils.exceptions import InvalidFileException
 
+from .upload_guard import look_rows
 from .zipcheck import zip_problem
 
 HEAD = ["Username", "Display name", "Role", "Programs", "Roster name", "Team manager", "Password"]
@@ -104,6 +105,9 @@ def read_people(data: bytes, filename: str) -> List[Dict[str, Any]]:
     """The rows of an uploaded people sheet as dicts ({"n": the row's number in the file, plus a key for each column}),
     blank rows left out. ValueError, in words, for a file that is not a people sheet or holds too many rows."""
     rows = _rows(data, filename)
+    refused = look_rows(rows, "the people sheet")  # Phase AX (owner, 2026-10-23): a card number in a cell was accepted
+    if refused:
+        raise ValueError(refused)
     head = next((i for i, row in enumerate(rows) if any(_norm(c) == "username" for c in row)), None)
     if head is None:
         raise ValueError(NOT_A_SHEET)

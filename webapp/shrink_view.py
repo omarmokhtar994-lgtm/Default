@@ -19,7 +19,7 @@ LABEL = {k: label for k, label, _ in ITEMS}
 PRESETS = (("sutherland", "Sutherland", ("unplanned", "planned", "sick")),
            ("client", "The client's", ("unplanned", "planned", "sick", "holiday", "exam")))
 SHOW = (("both", "Out and in office"), ("out", "Out of office"), ("in", "In office"))
-BY = (("day", "Day over day"), ("week", "Week over week"), ("interval", "Per interval"))
+BY = (("weekday", "Weekday and interval"), ("day", "Day over day"), ("week", "Week over week"), ("interval", "Per interval"))  # Phase AX: the first opens
 STEPS = (15, 30, 60)
 STATUS_KEY = {"Unplanned leave": "unplanned", "Sick": "sick", "Public holiday": "holiday", "Exam leave": "exam"}
 

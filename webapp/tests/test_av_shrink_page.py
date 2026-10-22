@@ -12,7 +12,8 @@ class TheShrinkagePage(_cb.ThePage):
         return self.client.get(f"/shrinkage?program={unit}&from=2026-10-11&to=2026-10-15{extra}")
 
     def test_both_by_day_has_two_tiles_and_a_chart(self):
-        page = self.get().get_data(as_text=True)
+        # Re-pinned (Phase AX, owner 2026-10-22): the page opens on the weekday and interval view now, so day over day is asked for.
+        page = self.get("&by=day").get_data(as_text=True)
         for text in ("Out of office", "In office", "Day over day", "The numbers"):
             self.assertIn(text, page)
         self.assertIn('<svg class="chart"', page)

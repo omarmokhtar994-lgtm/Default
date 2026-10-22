@@ -79,6 +79,27 @@ class TheWeekdayGridOnThePage(_cb.ThePage):
         self.assertIn(">08:00<", grids)
         self.assertNotIn(">13:00<", grids)
 
+    def test_the_weekday_view_is_the_grid_and_nothing_else_of_the_day_view(self):
+        page = self.client.get(f"/shrinkage?program={self.key.replace(' ', '+')}&from=2026-10-11&to=2026-10-17&by=weekday&step=60"
+                               ).get_data(as_text=True)
+        self.assertIn("Out of office by weekday and interval", page)
+        self.assertIn("In office by weekday and interval", page)
+        self.assertNotIn("The numbers", page)
+        self.assertNotIn("by day and interval", page)
+        self.assertNotIn('<svg class="chart"', page)  # the grids are the figures
+
+    def test_it_is_what_opens_when_nothing_is_picked(self):
+        page = self.client.get(f"/shrinkage?program={self.key.replace(' ', '+')}&from=2026-10-11&to=2026-10-17"
+                               ).get_data(as_text=True)
+        self.assertIn("Out of office by weekday and interval", page)
+        self.assertRegex(page, r'name="by" value="weekday" checked')
+
+    def test_the_choice_is_named_for_what_it_shows(self):
+        page = self.client.get(f"/shrinkage?program={self.key.replace(' ', '+')}&from=2026-10-11&to=2026-10-17"
+                               ).get_data(as_text=True)
+        self.assertIn("Weekday and interval", page)
+        self.assertIn("Day over day", page)  # the others stay one click away
+
     def test_the_other_views_have_no_weekday_grid(self):
         self.assertNotIn("by weekday and interval", self.client.get(
             f"/shrinkage?program={self.key.replace(' ', '+')}&from=2026-10-11&to=2026-10-17&by=day").get_data(as_text=True))

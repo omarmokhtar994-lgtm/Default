@@ -7,7 +7,7 @@ from datetime import date
 from typing import Any, Dict, List, Optional, Tuple
 
 from . import charts
-from .insights import ABSENT_VIEWS, BEHAVIOUR, KINDS, LABEL, figures, grouped, person, trend
+from .insights import ABSENT_VIEWS, BEHAVIOUR, KINDS, LABEL, figures, grouped, person, repeats, trend, weekdays
 
 LEVELS = (("overview", "Overview"), ("lobs", "LOBs"), ("associates", "Associates"))
 SHORT = {"missed_break": "Missed", "unplanned": "Unplanned", "sick": "Sick", "planned": "Planned", "late": "Late",
@@ -33,14 +33,25 @@ def _short(day: str) -> str:
     return date.fromisoformat(day).strftime("%d %b").lstrip("0")
 
 
-def _tiles(total: Dict[str, Any], days: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _change(now: Optional[float], before: Optional[float], unit: str) -> str:
+    """"up 1.2 points on the period before" (or "down", "same"), or "" when either is missing."""
+    if now is None or before is None:
+        return ""
+    d = round(now - before, 1)
+    word = "points" if unit == "%" else ""
+    return "same as the period before" if d == 0 else f"{'up' if d > 0 else 'down'} {abs(d):g} {word}".rstrip() + " on the period before"
+
+
+def _tiles(total: Dict[str, Any], days: List[Dict[str, Any]], before: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     out = []
     for key, label, note, lower_is_better in TILES:
         values = [d[key] for d in days]
         out.append({"label": label, "note": note, "value": total[key], "unit": "%", "lower_is_better": lower_is_better,
+                    "change": _change(total[key], before[key] if before else None, "%"),
                     "spark": charts.spark(values, charts.AQUA, f"{label} by day")})
     out.append({"label": "Incidents", "note": "missed breaks, unplanned leave, late, early and out of adherence",
                 "value": total["total"], "unit": "", "lower_is_better": True,
+                "change": _change(total["total"], before["total"] if before else None, ""),
                 "spark": charts.spark([d["total"] for d in days], charts.ORANGE, "Incidents by day")})
     return out
 
@@ -71,10 +82,10 @@ def _trend_chart(days: List[Dict[str, Any]]) -> Any:
 
 
 def build(facts: List[Dict[str, Any]], level: str, who: str, start: date, end: date,
-          counts: Tuple[str, ...] = ABSENT_VIEWS[0][2]) -> Dict[str, Any]:
+          counts: Tuple[str, ...] = ABSENT_VIEWS[0][2], before: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """Everything the page draws for ``level`` (overview, lobs or associates), and ``who`` when one associate is open."""
     total, days = figures(facts, counts), trend(facts, counts)
-    found: Dict[str, Any] = {"level": level, "total": total, "empty": not facts, "tiles": _tiles(total, days),
+    found: Dict[str, Any] = {"level": level, "total": total, "empty": not facts, "tiles": _tiles(total, days, figures(before, counts) if before else None),
                              "trend": _trend_chart(days), "mix": _mix(total), "kinds": KINDS, "short": SHORT,
                              "behaviour": BEHAVIOUR, "days": len(days)}
     found["programs"] = grouped(facts, "programs", counts)
@@ -88,6 +99,10 @@ def build(facts: List[Dict[str, Any]], level: str, who: str, start: date, end: d
                                       "Associates with the most incidents")
     found["day_columns"] = charts.columns([_short(d["date"]) for d in days], [d["total"] for d in days], "",
                                           None, charts.BLUE, "Incidents by day")
+    week = weekdays(facts)
+    found["weekday"] = charts.columns([w["day"] for w in week], [w["rate"] for w in week], " per 100 shifts", None,
+                                      charts.ORANGE, "Incidents per 100 shifts, by weekday")
+    found["repeats"] = repeats(facts)
     found["person"] = None
     if who:
         found["person"] = person(facts, who, counts)

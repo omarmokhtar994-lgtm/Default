@@ -32,6 +32,7 @@ KINDS = {"attendance": "Attendance", "activities": "Activities", "activity": "Da
          "worked": "Worked hours and adherence", "summary": "Daily summary",
          "channels": "Channels planned and changed", "cover": "Cover from outside the roster",
          "leave": "Leave requests", "channel_hours": "Hours per channel",
+         "absence": "Absenteeism and shrinkage", "incident_summary": "Incidents per associate",
          "incidents": "Incidents (missed breaks)", "sessions": "Booked sessions",
          "break_requests": "Break and coaching requests", "swaps": "Swap requests",
          "record": "Other actions"}
@@ -368,6 +369,51 @@ def _leave(store, days, weeks, start, end, program, user_id, measure):
                r["note"], r["tm_name"], r["rta_name"], r["outcome"], r["reason"]]
 
 
+def _units_of(days, program):
+    from .programs import ProgramBook
+    book = ProgramBook(days.store)
+    out = {}
+    for p in _programs(days, program):
+        found = book.unit(p)
+        out[p] = ((found["program"]["name"], (found["lob"] or {}).get("name") or found["program"]["name"])
+                  if found else (p, p))
+    return out
+
+
+def _absence(store, days, weeks, start, end, program, user_id, measure):
+    """Phase AV: absenteeism (the RTA's and client's view, and Sutherland's) and the three shrinkage figures, per LOB and day."""
+    from . import insights
+    yield ["Date", "Program", "LOB", "Shifts scheduled", "Unplanned leave", "Sick", "Planned leave",
+           "Absenteeism % (RTA and client: unplanned + sick)", "Absenteeism % (Sutherland: unplanned)",
+           "Shrinkage out of office %", "Shrinkage, the client's %", "Shrinkage in office %", "Adherence %", "Late", "Early",
+           "Missed breaks"]
+    facts = insights.collect(days, store, None, _units_of(days, program), start, end, measure, days.check)
+    by: Dict[Tuple[str, str, str], List[Dict[str, Any]]] = {}
+    for r in facts:
+        by.setdefault((r["date"], r["program"], r["lob"]), []).append(r)
+    for (day, p, lob), rows in sorted(by.items()):
+        f, i = insights.figures(rows), insights.figures(rows, ("unplanned",))
+        n = f["incidents"]
+        yield [day, p, lob, f["shifts"], n["unplanned"]["n"], n["sick"]["n"], n["planned"]["n"], f["absenteeism"],
+               i["absenteeism"], f["shrink_out"], f["shrink_client"], f["shrink_in"], f["adherence"], n["late"]["n"],
+               n["early"]["n"], n["missed_break"]["n"]]
+
+
+def _incident_summary(store, days, weeks, start, end, program, user_id, measure):
+    """Phase AV: each associate's count and minutes for every incident type over the period."""
+    from . import insights
+    head = ["Associate", "Program", "LOB", "Shifts"]
+    for _, label in insights.KINDS:
+        head += [f"{label} (count)", f"{label} (min)"]
+    yield head + ["Adherence %"]
+    facts = insights.collect(days, store, None, _units_of(days, program), start, end, measure, days.check)
+    for g in insights.grouped(facts, "associates"):
+        row = [g["name"], g["program"], g["lob"], g["shifts"]]
+        for k, _ in insights.KINDS:
+            row += [g["incidents"][k]["n"], g["incidents"][k]["min"]]
+        yield row + [g["adherence"]]
+
+
 def _incidents(store, days, weeks, start, end, program, user_id, measure):
     """Phase AV: what was ticked as an incident when a break was moved (a missed break so far)."""
     yield ["Shift date", "Program", "Associate", "Slot", "Shift", "Incident", "Break", "Note", "Recorded by",
@@ -435,7 +481,7 @@ TABLES: Dict[str, Callable] = {"attendance": _attendance, "activities": _activit
                                "breaks": _breaks,
                                "changes": _changes, "versions": _versions, "runs": _runs, "worked": _worked,
                                "summary": _summary, "channels": _channels, "cover": _cover, "leave": _leave, "channel_hours": _channel_hours,
-                               "incidents": _incidents, "sessions": _sessions, "break_requests": _break_requests,
+                               "absence": _absence, "incident_summary": _incident_summary, "incidents": _incidents, "sessions": _sessions, "break_requests": _break_requests,
                                "swaps": _swaps, "record": _record}
 
 

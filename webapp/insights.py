@@ -182,3 +182,30 @@ def person(facts: List[Dict[str, Any]], name: str, counts: Tuple[str, ...] = ABS
     days = [{"date": r["date"], "lob": r["lob"], "incidents": {k: v for k, v in r["inc"].items() if v[0]}}
             for r in sorted(mine, key=lambda r: r["date"], reverse=True) if any(v[0] for v in r["inc"].values())]
     return {"name": name, **figures(mine, counts), "days": days}
+
+
+WEEKDAYS = ("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
+
+
+def weekdays(facts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Incidents per weekday, and per 100 shifts, to show which days go wrong (Sunday first, as the schedule's week)."""
+    out = []
+    for i, name in enumerate(WEEKDAYS):
+        rows = [r for r in facts if (date.fromisoformat(r["date"]).weekday() + 1) % 7 == i]
+        f = figures(rows)
+        out.append({"day": name, "total": f["total"], "shifts": f["shifts"],
+                    "rate": round(100 * f["total"] / f["shifts"], 1) if f["shifts"] else None})
+    return out
+
+
+def repeats(facts: List[Dict[str, Any]], minimum: int = 3) -> List[Dict[str, Any]]:
+    """Associates with the same incident ``minimum`` times or more (a missed break, late login, early leave or unplanned
+    leave): the pattern a team manager talks about, most first."""
+    seen: Dict[Tuple[str, str, str], int] = {}
+    for r in facts:
+        for k in ("missed_break", "unplanned", "late", "early"):
+            if r["inc"][k][0]:
+                key = (r["name"], r["lob"], k)
+                seen[key] = seen.get(key, 0) + r["inc"][k][0]
+    return sorted(({"name": n, "lob": l, "kind": k, "label": LABEL[k], "n": c} for (n, l, k), c in seen.items()
+                   if c >= minimum), key=lambda x: (-x["n"], x["name"].casefold(), x["kind"]))

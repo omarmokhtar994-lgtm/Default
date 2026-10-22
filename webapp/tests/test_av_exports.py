@@ -39,6 +39,17 @@ class TheNewExports(_ex.TheExports):
                          [(n, 30, 2) for n in names])
         self.assertEqual(len({r["Session"] for r in got}), 1)
 
+    def test_absence_has_both_absenteeism_views_per_lob_and_day(self):
+        self.days.set_status(KEY, WED, "Associate 033", "Sick", self.sara)
+        got = self.rows("absence", "Absenteeism and shrinkage")
+        row = next(r for r in got if r["Date"] == "2026-10-14")
+        self.assertEqual(row["Sick"], 1)
+        self.assertGreater(row["Absenteeism % (RTA and client: unplanned + sick)"], row["Absenteeism % (Sutherland: unplanned)"])
+
+    def test_the_summary_has_a_row_per_associate_with_counts_and_minutes(self):
+        got = {r["Associate"]: r for r in self.rows("incident_summary", "Incidents per associate")}
+        self.assertEqual((got["Associate 001"]["Late logins (count)"], got["Associate 001"]["Late logins (min)"]), (1, 60))
+
     def test_the_request_tabs_open_even_when_empty(self):
         for kind in ("break_requests", "swaps"):
             data, *_ = self.export(kinds=[kind])

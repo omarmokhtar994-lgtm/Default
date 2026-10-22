@@ -99,6 +99,21 @@ class TheInsights(unittest.TestCase):
         self.assertEqual(p["incidents"]["late"]["n"], 1)
 
 
+class ThePatterns(TheInsights):  # noqa
+    def test_weekdays_put_wednesday_and_thursday_where_the_records_are(self):
+        w = {d["day"]: d for d in insights.weekdays(self.facts)}
+        self.assertGreater(w["Wed"]["total"], 0)
+        self.assertEqual(w["Fri"]["rate"], None)
+
+    def test_repeats_need_the_same_incident_the_minimum_times(self):
+        again = [dict(r, date="2026-10-15") if r["name"] == "Associate 001" and r["date"] == "2026-10-14" else r for r in self.facts]
+        late = [dict(r, date=d) for r in self.facts if r["name"] == "Associate 001" and r["inc"]["late"][0]
+                for d in ("2026-10-11", "2026-10-12")]
+        found = insights.repeats(self.facts + late, 3)
+        self.assertEqual([(r["name"], r["kind"], r["n"]) for r in found if r["name"] == "Associate 001"], [("Associate 001", "late", 3)])
+        self.assertEqual(insights.repeats(self.facts, 3), [])
+
+
 class ThePlannedLeave(unittest.TestCase):
     """Associate 090 has Leave on the schedule and Associate 091 has an approved public holiday there: only the first is
     planned leave (a public holiday counts for the client's shrinkage, not as an incident)."""

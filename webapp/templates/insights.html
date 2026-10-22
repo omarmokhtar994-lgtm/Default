@@ -7,7 +7,7 @@
   <span class="tile-label">{{ t.label }}</span>
   <b>{% if t.value is none %}-{% else %}{{ t.value }}{{ t.unit }}{% endif %}</b>
   <span class="ins-spark">{{ t.spark }}</span>
-  <small class="dim">{{ t.note }}</small></section>{% endfor %}</div>{% endmacro %}
+  <small class="dim">{{ t.note }}</small>{% if t.change %}<small class="ins-change">{{ t.change }}</small>{% endif %}</section>{% endfor %}</div>{% endmacro %}
 {% block content %}
 <div class="phead"><div>
   <h1>Incidents and shrinkage</h1>
@@ -42,6 +42,7 @@
 <section class="panel"><p class="empty">Nothing to show for {{ start.strftime('%d %b') }} to {{ end.strftime('%d %b %Y') }}{% if not units %}: no program is open to you{% else %}: no schedule was in use on those days{% endif %}. Pick another period or program.</p></section>
 {% else %}
 {{ tiles(view.tiles) }}
+<p class="ins-export"><a class="button" href="{{ url_for('exports_download', **{'from': start.isoformat(), 'to': end.isoformat(), 'pick': pick or none, 'measure': measure, 'kind': ['incident_summary', 'absence', 'incidents'], 'format': 'xlsx'}) }}">Download these figures</a></p>
 <p class="dim ins-note">{{ view.total.people }} people, {{ view.total.shifts }} shifts over {{ view.days }} day{{ 's' if view.days != 1 }}. Absenteeism is {{ counts|map('replace', '_', ' ')|join(' + ') }} over shifts scheduled (change it under Absenteeism counts). Shrinkage out of office and the client's follow the program's own settings under <a href="{{ url_for('program_setup') }}">LOBs and defaults</a>.</p>
 
 {% if who and view.person %}
@@ -64,6 +65,7 @@
 <div class="charts">
   <section class="panel chart-panel" aria-labelledby="c-trend"><h2 id="c-trend">Absenteeism and shrinkage by day</h2><div class="chart-scroll">{{ view.trend }}</div></section>
   <section class="panel chart-panel" aria-labelledby="c-days"><h2 id="c-days">Incidents by day</h2><div class="chart-scroll">{{ view.day_columns }}</div></section>
+  <section class="panel chart-panel" aria-labelledby="c-wd"><h2 id="c-wd">Which days go wrong</h2><div class="chart-scroll">{{ view.weekday }}</div></section>
   <section class="panel chart-panel" aria-labelledby="c-mix"><h2 id="c-mix">What happened, by number</h2><div class="chart-scroll">{{ view.mix.count }}</div></section>
   <section class="panel chart-panel" aria-labelledby="c-time"><h2 id="c-time">What it cost, in hours</h2><div class="chart-scroll">{{ view.mix.time }}</div></section>
 </div>
@@ -75,6 +77,9 @@
 </section>{% endif %}
 <section class="panel chart-panel" aria-labelledby="h-h"><h2 id="h-h">Incidents by type: {{ view.heat_title }}</h2><div class="chart-scroll"><table class="ins-heat"><thead><tr><td></td>{% for k, name in view.kinds %}<th scope="col">{{ view.short[k] }}</th>{% endfor %}</tr></thead>
     <tbody>{% for r in view.heat %}<tr><th scope="row">{{ r.name }}</th>{% for n, lv in r.cells %}<td class="lv{{ lv }}">{{ n or '' }}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div></section>
+{% if view.repeats %}<section class="panel" aria-labelledby="rep-h"><h2 id="rep-h">Repeated: the same incident 3 times or more</h2>
+  <table class="adh-t ins-t"><thead><tr><th scope="col">Associate</th><th scope="col">LOB</th><th scope="col">Incident</th><th scope="col" class="n">Times</th></tr></thead>
+  <tbody>{% for r in view.repeats[:15] %}<tr><th scope="row"><a href="{{ url_for('incidents_page', **{'from': start.isoformat(), 'to': end.isoformat(), 'pick': pick or none, 'view': 'associates', 'who': r.name, 'abs': counts}) }}">{{ r.name }}</a></th><td>{{ r.lob }}</td><td>{{ r.label }}</td><td class="n"><b>{{ r.n }}</b></td></tr>{% endfor %}</tbody></table></section>{% endif %}
 {% if view.top %}<section class="panel" aria-labelledby="top-h"><h2 id="top-h">Most incidents</h2>
   <div class="chart-scroll">{{ view.top_chart }}</div>
   <p class="ins-top">{% for r in view.top %}<a href="{{ url_for('incidents_page', **{'from': start.isoformat(), 'to': end.isoformat(), 'pick': pick or none, 'view': 'associates', 'who': r.name}) }}">{{ r.name }}</a>{% if not loop.last %}, {% endif %}{% endfor %}: open one for the day by day.</p></section>{% endif %}

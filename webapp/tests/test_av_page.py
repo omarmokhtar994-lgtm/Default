@@ -16,6 +16,7 @@ class ThePage(_cb.ThePage):
 
     def moved_with_a_miss(self):
         name, idx, kind, start, _ = self.with_breaks()
+        self.addCleanup(self.store.delete_day_before, "2999-01-01")  # the incident is a record of its own
         self.addCleanup(self.days.move_break, self.key, WED, name, idx, None, self.omar)
         self.days.move_break(self.key, WED, name, idx, hm(start + 5), self.omar, missed=True)
         return name
@@ -54,6 +55,13 @@ class ThePage(_cb.ThePage):
         body = page.split("<main", 1)[1]
         self.assertNotRegex(body, r"<script(?![^>]*src=)")
         self.assertNotRegex(body, r' style="')
+
+    def test_it_says_up_or_down_on_the_period_before_and_offers_the_download(self):
+        self.moved_with_a_miss()
+        page = self.get().get_data(as_text=True)
+        self.assertIn("Which days go wrong", page)
+        self.assertIn("Download these figures", page)
+        self.assertEqual(self.client.get(f"/exports/download?from=2026-10-14&to=2026-10-14&kind=absence&kind=incident_summary&format=xlsx").status_code, 200)
 
     def test_absenteeism_counts_follow_the_ticks(self):
         both = self.get().get_data(as_text=True)

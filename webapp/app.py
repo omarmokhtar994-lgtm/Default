@@ -4815,13 +4815,22 @@ def create_app(config: Dict[str, Any]) -> Flask:
         except ValueError as exc:
             facts, error = [], str(exc)
         counts = absent_kinds(request.args.getlist("abs"))
+        before = []
+        if facts and level == "overview" and not who:  # the same number of days just before, for "up or down on"
+            length = (a["end"] - a["start"]).days + 1
+            try:
+                before = collect_insights(wrapped, app.extensions["store"], app.extensions.get("leave"), units,
+                                          a["start"] - timedelta(days=length), a["start"] - timedelta(days=1),
+                                          a["measure"], check)
+            except ValueError:
+                before = []
         sunday = today - timedelta(days=(today.weekday() + 1) % 7)
         first = today.replace(day=1)
         last_month_end = first - timedelta(days=1)
         presets = [("This week", sunday, today), ("Last week", sunday - timedelta(days=7), sunday - timedelta(days=1)),
                    ("This month", first, today), ("Last month", last_month_end.replace(day=1), last_month_end),
                    ("Last 30 days", today - timedelta(days=29), today)]
-        return render_template("insights.html", view=insights_view(facts, level, who, a["start"], a["end"], counts),
+        return render_template("insights.html", view=insights_view(facts, level, who, a["start"], a["end"], counts, before),
                                presets=presets, error=error, pick_tree=_access().programs(),
                                everything=_access().everything(), measures=MEASURES, level=level, who=who,
                                levels=INSIGHT_LEVELS, units=len(units), counts=counts, absent_choices=ABSENT_CHOICES,

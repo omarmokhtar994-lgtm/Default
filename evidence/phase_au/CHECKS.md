@@ -21,4 +21,6 @@ Run on the final tree, 2026-10-21 (Egypt evening). What it built: `docs/HANDOFF.
   check refused the fake workbooks the run tests upload; the check now leaves an unreadable zip to the workbook readers,
   `test_runs` 154 OK); browser tests 85 OK; route sweep 872 requests, 0 exceptions, 0 errors; accessibility tool
   `tools/a11y.py` 0 problems (two found and fixed: sideways scroll of the impact tables on a phone, supervisor chip contrast).
+- Program defaults and operating hours (final tree, 2026-10-22 early): website suite both halves OK (742 + 882 tests),
+  browser tests 86 OK (one new: the operating-day window fits its hours), route sweep and accessibility tool clean.
 - Not run here: the release gate and package (the owner has not asked for the build yet).

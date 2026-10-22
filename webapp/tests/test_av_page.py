@@ -71,9 +71,11 @@ class ThePage(_cb.ThePage):
         self.assertRegex(suth, r'name="abs" value="unplanned" checked')
 
     def test_a_long_period_is_cut_and_said(self):
+        # re-pinned in Phase AV: the page's own 92-day cap became the setting "weeks at a time" (13 by default) for
+        # people who are not admins, supervisors or RTAs; this admin is limited only by the 13 months of records kept
         unit = self.key.replace(" ", "+")
-        page = self.client.get(f"/incidents?program={unit}&from=2026-01-01&to=2026-10-14").get_data(as_text=True)
-        self.assertIn("A page shows up to 92 days", page)
+        page = self.client.get(f"/incidents?program={unit}&from=2025-01-01&to=2026-10-14").get_data(as_text=True)
+        self.assertIn("Records are kept 13 months; showing the last 400 days", page)
 
 
 if __name__ == "__main__":

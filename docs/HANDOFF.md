@@ -241,7 +241,8 @@ Load each with the Skill tool at the step it covers; following it from memory do
   people who are not admins, supervisors or RTAs (`rta_change`); default 13, recommended 6; the exempt are capped only by the 13 months kept.
 - Bio break is an aux (`day.BIO`); `webapp/upload_guard.py` refuses and deletes uploads with other tabs, card numbers, street
   addresses, bank numbers, macros or outside links (phone numbers and emails are not looked for); Shrinkage page `/shrinkage`.
-- Screens: `evidence/phase_av/tools/screens.py`. Not packed. Not yet done: gate minimum, package.
+- Screens: `evidence/phase_av/tools/screens.py`. Package (AP to AV): `792da06b92ad38fb5024c4ae217c14f059d2a18050a60662e21f40ead22ef606`, sent as AV_part_0 to AV_part_4; gate passed (1551 tests, 2 skipped).
+- Day cache (`DayBook.page`): see `evidence/phase_av/LOAD.md`; run the website tests with `SCHEDULER_VERIFY_PAGES=1` to rebuild a day on every hit and compare it (it found four real faults: channel needs files, viewing zone, writes inside an open change, write timing). Install note: `pip install -r deploy/requirements.txt` (defusedxml).
 
 ## Earlier: end of Phase AK
 

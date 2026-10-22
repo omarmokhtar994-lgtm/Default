@@ -117,3 +117,17 @@ class ThePlannedLeave(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheAbsenteeismViews(TheInsights):  # noqa
+    """Sick counts for the RTA and the client; Sutherland leaves it to shrinkage; the kinds are the user's to pick."""
+    def test_sick_counts_in_the_client_view_and_not_in_sutherlands(self):
+        client = insights.figures(self.facts, ("unplanned", "sick"))
+        suth = insights.figures(self.facts, ("unplanned",))
+        self.assertEqual(client["absenteeism"], round(100 * 1 / client["shifts"], 1))
+        self.assertEqual(suth["absenteeism"], 0.0)
+        self.assertEqual(client["shrink_out"], suth["shrink_out"])  # sick stays in shrinkage either way
+
+    def test_any_pick_is_kept_in_order_and_nothing_valid_falls_back(self):
+        self.assertEqual(insights.absent_kinds(["sick", "planned", "x"]), ("sick", "planned"))
+        self.assertEqual(insights.absent_kinds([]), ("unplanned", "sick"))

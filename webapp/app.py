@@ -43,7 +43,7 @@ from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, OVERTIME_
 from .coach import actual_shrinkage, corrected_tab
 from .leave import KINDS as LEAVE_KINDS, LeaveBook, span_text
 from .swaps import SwapBook
-from .insights import collect as collect_insights
+from .insights import ABSENT_CHOICES, ABSENT_VIEWS, absent_kinds, collect as collect_insights
 from .insights_page import LEVELS as INSIGHT_LEVELS, build as insights_view, dur as insights_dur
 from .shrinkage import ITEMS as SHRINKAGE_ITEMS, day_shrinkage, mapping_from_form, read_mapping
 from .contacts import ContactBook, pick_contact
@@ -4814,16 +4814,18 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                      a["start"], a["end"], a["measure"], check)
         except ValueError as exc:
             facts, error = [], str(exc)
+        counts = absent_kinds(request.args.getlist("abs"))
         sunday = today - timedelta(days=(today.weekday() + 1) % 7)
         first = today.replace(day=1)
         last_month_end = first - timedelta(days=1)
         presets = [("This week", sunday, today), ("Last week", sunday - timedelta(days=7), sunday - timedelta(days=1)),
                    ("This month", first, today), ("Last month", last_month_end.replace(day=1), last_month_end),
                    ("Last 30 days", today - timedelta(days=29), today)]
-        return render_template("insights.html", view=insights_view(facts, level, who, a["start"], a["end"]),
+        return render_template("insights.html", view=insights_view(facts, level, who, a["start"], a["end"], counts),
                                presets=presets, error=error, pick_tree=_access().programs(),
                                everything=_access().everything(), measures=MEASURES, level=level, who=who,
-                               levels=INSIGHT_LEVELS, units=len(units), **a)
+                               levels=INSIGHT_LEVELS, units=len(units), counts=counts, absent_choices=ABSENT_CHOICES,
+                               absent_views=ABSENT_VIEWS, **a)
 
     @app.route("/exports/download")
     @login_required

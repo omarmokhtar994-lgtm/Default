@@ -15,7 +15,7 @@
 </div></div>
 {% if error %}<p class="notice" role="alert">{{ error }}</p>{% endif %}
 <form method="get" action="{{ url_for('incidents_page') }}" class="ins-filter panel" aria-label="Choose the period and programs">
-  <p class="exp-presets">{% for label, a, b in presets %}<a href="{{ url_for('incidents_page', **{'from': a.isoformat(), 'to': b.isoformat(), 'pick': pick or none, 'view': level}) }}"{% if a == start and b == end %} class="on" aria-current="true"{% endif %}>{{ label }}</a>{% endfor %}</p>
+  <p class="exp-presets">{% for label, a, b in presets %}<a href="{{ url_for('incidents_page', **{'from': a.isoformat(), 'to': b.isoformat(), 'pick': pick or none, 'view': level, 'abs': counts}) }}"{% if a == start and b == end %} class="on" aria-current="true"{% endif %}>{{ label }}</a>{% endfor %}</p>
   <div class="exp-row">
     <label>From <input type="date" name="from" value="{{ start.isoformat() }}" required></label>
     <label>To <input type="date" name="to" value="{{ end.isoformat() }}" required></label>
@@ -26,19 +26,23 @@
     <label>Measure
       <select name="measure">{% for key, name in measures.items() %}<option value="{{ key }}"{% if key == measure %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
     <input type="hidden" name="view" value="{{ level }}">
+    <fieldset class="exp-kinds abs-pick"><legend>Absenteeism counts</legend>
+      {% for k, name in absent_choices %}<label class="exp-kind"><input type="checkbox" name="abs" value="{{ k }}"{% if k in counts %} checked{% endif %}><span>{{ name }}</span></label>{% endfor %}
+      <span class="dim">Quick pick:{% for key, name, kinds in absent_views %} <a href="{{ url_for('incidents_page', **{'from': start.isoformat(), 'to': end.isoformat(), 'pick': pick or none, 'view': level, 'abs': kinds}) }}">{{ name }}</a>{% endfor %}. Sutherland leaves sick to shrinkage only.</span>
+    </fieldset>
     <button class="primary" type="submit">Show</button>
   </div>
 </form>
 
 <nav class="tabs ins-tabs" aria-label="Level of detail">
-  {% for key, name in levels %}<a href="{{ url_for('incidents_page', **{'from': start.isoformat(), 'to': end.isoformat(), 'pick': pick or none, 'program': program if program is string and not pick else none, 'measure': measure, 'view': key}) }}"{% if key == level %} class="on" aria-current="page"{% endif %}>{{ name }}</a>{% endfor %}
+  {% for key, name in levels %}<a href="{{ url_for('incidents_page', **{'from': start.isoformat(), 'to': end.isoformat(), 'pick': pick or none, 'program': program if program is string and not pick else none, 'measure': measure, 'view': key, 'abs': counts}) }}"{% if key == level %} class="on" aria-current="page"{% endif %}>{{ name }}</a>{% endfor %}
 </nav>
 
 {% if view.empty %}
 <section class="panel"><p class="empty">Nothing to show for {{ start.strftime('%d %b') }} to {{ end.strftime('%d %b %Y') }}{% if not units %}: no program is open to you{% else %}: no schedule was in use on those days{% endif %}. Pick another period or program.</p></section>
 {% else %}
 {{ tiles(view.tiles) }}
-<p class="dim ins-note">{{ view.total.people }} people, {{ view.total.shifts }} shifts over {{ view.days }} day{{ 's' if view.days != 1 }}. Absenteeism is unplanned leave and sick over shifts scheduled. Shrinkage out of office and the client's follow the program's own settings under <a href="{{ url_for('program_setup') }}">LOBs and defaults</a>.</p>
+<p class="dim ins-note">{{ view.total.people }} people, {{ view.total.shifts }} shifts over {{ view.days }} day{{ 's' if view.days != 1 }}. Absenteeism is {{ counts|map('replace', '_', ' ')|join(' + ') }} over shifts scheduled (change it under Absenteeism counts). Shrinkage out of office and the client's follow the program's own settings under <a href="{{ url_for('program_setup') }}">LOBs and defaults</a>.</p>
 
 {% if who and view.person %}
 {% set pr = view.person %}

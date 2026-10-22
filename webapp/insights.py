@@ -124,8 +124,20 @@ def _pct(num: float, den: float) -> Optional[float]:
     return round(100 * num / den, 1) if den else None
 
 
-def figures(rows: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
-    """The totals over some fact rows: counts and minutes per incident, and the percentages."""
+# What counts as absenteeism is a choice: the client's and the RTA's view counts sick, Sutherland's leaves it to shrinkage.
+ABSENT_CHOICES = (("unplanned", "Unplanned leave"), ("sick", "Sick"), ("planned", "Planned leave"))
+ABSENT_VIEWS = (("client", "RTA and client", ("unplanned", "sick")), ("sutherland", "Sutherland", ("unplanned",)))
+
+
+def absent_kinds(picked: Iterable[str]) -> Tuple[str, ...]:
+    """The ticked kinds that can count as absenteeism, in order (the client's view when nothing valid is ticked)."""
+    found = tuple(k for k, _ in ABSENT_CHOICES if k in set(picked))
+    return found or ABSENT_VIEWS[0][2]
+
+
+def figures(rows: Iterable[Dict[str, Any]], counts: Tuple[str, ...] = ABSENT_VIEWS[0][2]) -> Dict[str, Any]:
+    """The totals over some fact rows: counts and minutes per incident, and the percentages. ``counts`` names the
+    incident kinds that make up absenteeism."""
     inc = _zero()
     t = {"people": set(), "shifts": 0, "out": 0, "client": 0, "in_off": 0, "in_sched": 0, "adh_num": 0, "adh_den": 0}
     for r in rows:
@@ -135,14 +147,14 @@ def figures(rows: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
         for k, (n, m) in r["inc"].items():
             inc[k][0] += n
             inc[k][1] += m
-    absent = inc["unplanned"][0] + inc["sick"][0]
+    absent = sum(inc[k][0] for k in counts)
     return {"people": len(t["people"]), "shifts": t["shifts"], "incidents": {k: {"n": v[0], "min": v[1]} for k, v in inc.items()},
             "total": sum(inc[k][0] for k in BEHAVIOUR), "absenteeism": _pct(absent, t["shifts"]),
             "shrink_out": _pct(t["out"], t["shifts"]), "shrink_client": _pct(t["client"], t["shifts"]),
             "shrink_in": _pct(t["in_off"], t["in_sched"]), "adherence": _pct(t["adh_num"], t["adh_den"])}
 
 
-def grouped(facts: List[Dict[str, Any]], level: str) -> List[Dict[str, Any]]:
+def grouped(facts: List[Dict[str, Any]], level: str, counts: Tuple[str, ...] = ABSENT_VIEWS[0][2]) -> List[Dict[str, Any]]:
     """Figures per associate, LOB or program, the most incidents first."""
     key = {"associates": lambda r: (r["name"], r["lob"], r["program"]), "lobs": lambda r: (r["lob"], r["program"]),
            "programs": lambda r: (r["program"],)}[level]
@@ -151,22 +163,22 @@ def grouped(facts: List[Dict[str, Any]], level: str) -> List[Dict[str, Any]]:
         found.setdefault(key(r), []).append(r)
     out = []
     for k, rows in found.items():
-        f = figures(rows)
+        f = figures(rows, counts)
         out.append({"key": "|".join(k), "name": k[0], "lob": rows[0]["lob"], "program": rows[0]["program"], **f})
     return sorted(out, key=lambda g: (-g["total"], g["name"].casefold()))
 
 
-def trend(facts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def trend(facts: List[Dict[str, Any]], counts: Tuple[str, ...] = ABSENT_VIEWS[0][2]) -> List[Dict[str, Any]]:
     """Figures per day, oldest first, for the charts."""
     by_day: Dict[str, List[Dict[str, Any]]] = {}
     for r in facts:
         by_day.setdefault(r["date"], []).append(r)
-    return [{"date": d, **figures(rows)} for d, rows in sorted(by_day.items())]
+    return [{"date": d, **figures(rows, counts)} for d, rows in sorted(by_day.items())]
 
 
-def person(facts: List[Dict[str, Any]], name: str) -> Dict[str, Any]:
+def person(facts: List[Dict[str, Any]], name: str, counts: Tuple[str, ...] = ABSENT_VIEWS[0][2]) -> Dict[str, Any]:
     """One associate: the totals, and each day with something recorded (newest first)."""
     mine = [r for r in facts if r["name"] == name]
     days = [{"date": r["date"], "lob": r["lob"], "incidents": {k: v for k, v in r["inc"].items() if v[0]}}
             for r in sorted(mine, key=lambda r: r["date"], reverse=True) if any(v[0] for v in r["inc"].values())]
-    return {"name": name, **figures(mine), "days": days}
+    return {"name": name, **figures(mine, counts), "days": days}

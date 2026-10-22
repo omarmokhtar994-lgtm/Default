@@ -55,6 +55,13 @@ class ThePage(_cb.ThePage):
         self.assertNotRegex(body, r"<script(?![^>]*src=)")
         self.assertNotRegex(body, r' style="')
 
+    def test_absenteeism_counts_follow_the_ticks(self):
+        both = self.get().get_data(as_text=True)
+        self.assertRegex(both, r'name="abs" value="sick" checked')
+        suth = self.get("&abs=unplanned").get_data(as_text=True)
+        self.assertNotRegex(suth, r'name="abs" value="sick" checked')
+        self.assertRegex(suth, r'name="abs" value="unplanned" checked')
+
     def test_a_long_period_is_cut_and_said(self):
         unit = self.key.replace(" ", "+")
         page = self.client.get(f"/incidents?program={unit}&from=2026-01-01&to=2026-10-14").get_data(as_text=True)

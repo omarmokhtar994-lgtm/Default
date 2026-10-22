@@ -4,16 +4,16 @@ Seniors open on the overview (programs and LOBs side by side); team managers ope
 from __future__ import annotations
 
 from datetime import date
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from . import charts
-from .insights import BEHAVIOUR, KINDS, LABEL, figures, grouped, person, trend
+from .insights import ABSENT_VIEWS, BEHAVIOUR, KINDS, LABEL, figures, grouped, person, trend
 
 LEVELS = (("overview", "Overview"), ("lobs", "LOBs"), ("associates", "Associates"))
 SHORT = {"missed_break": "Missed", "unplanned": "Unplanned", "sick": "Sick", "planned": "Planned", "late": "Late",
          "early": "Early", "coaching": "Coaching", "training": "Training", "meeting": "Meetings",
          "system_issue": "System", "task": "Tasks", "non_adherence": "Adherence"}
-TILES = (("absenteeism", "Absenteeism", "unplanned leave and sick, of shifts scheduled", True),
+TILES = (("absenteeism", "Absenteeism", "what is ticked under Absenteeism counts, of shifts scheduled", True),
          ("shrink_out", "Shrinkage, out of office", "unplanned, planned and sick, of shifts scheduled", True),
          ("shrink_client", "Shrinkage, the client's", "adds public holiday and exam leave", True),
          ("shrink_in", "Shrinkage, in office", "time off the floor, of minutes scheduled", True),
@@ -70,15 +70,16 @@ def _trend_chart(days: List[Dict[str, Any]]) -> Any:
                         y_max=charts.nice(top * 1.15), y_min=0, label="Absenteeism and shrinkage by day")
 
 
-def build(facts: List[Dict[str, Any]], level: str, who: str, start: date, end: date) -> Dict[str, Any]:
+def build(facts: List[Dict[str, Any]], level: str, who: str, start: date, end: date,
+          counts: Tuple[str, ...] = ABSENT_VIEWS[0][2]) -> Dict[str, Any]:
     """Everything the page draws for ``level`` (overview, lobs or associates), and ``who`` when one associate is open."""
-    total, days = figures(facts), trend(facts)
+    total, days = figures(facts, counts), trend(facts, counts)
     found: Dict[str, Any] = {"level": level, "total": total, "empty": not facts, "tiles": _tiles(total, days),
                              "trend": _trend_chart(days), "mix": _mix(total), "kinds": KINDS, "short": SHORT,
                              "behaviour": BEHAVIOUR, "days": len(days)}
-    found["programs"] = grouped(facts, "programs")
-    found["lobs"] = grouped(facts, "lobs")
-    found["associates"] = grouped(facts, "associates")
+    found["programs"] = grouped(facts, "programs", counts)
+    found["lobs"] = grouped(facts, "lobs", counts)
+    found["associates"] = grouped(facts, "associates", counts)
     rows = {"overview": found["lobs"], "lobs": found["lobs"], "associates": found["associates"]}[level]
     found["heat"] = _heat(rows)
     found["heat_title"] = {"overview": "LOBs", "lobs": "LOBs", "associates": "Associates with the most incidents"}[level]
@@ -89,9 +90,9 @@ def build(facts: List[Dict[str, Any]], level: str, who: str, start: date, end: d
                                           None, charts.BLUE, "Incidents by day")
     found["person"] = None
     if who:
-        found["person"] = person(facts, who)
+        found["person"] = person(facts, who, counts)
         mine = [r for r in facts if r["name"] == who]
-        mine_days = trend(mine)
+        mine_days = trend(mine, counts)
         found["person_tiles"] = _tiles(found["person"], mine_days)
         found["person_trend"] = _trend_chart(mine_days)
     return found

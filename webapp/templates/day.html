@@ -267,7 +267,7 @@
 {% set pr = proposal %}
 <section class="panel" aria-labelledby="rp-h">
   <h2 id="rp-h">{{ "Replan the day's breaks" if fresh else "Fix the rest of the day's breaks" }}</h2>
-  {% if fresh %}<p class="note">Lifts every break that has not started{% if from_now %} (after {{ hm(from_now) }}){% endif %} and places it again from scratch, person by person, for people on shift and present: at the time that leaves the day best, inside the same rules (inside the shift, in order, the program's gaps, clear of away time and activities, no language below its minimum). Breaks that have started, attendance, shifts and everything else stay as they are. Nothing is kept until you apply it.</p>
+  {% if fresh %}<p class="note">Lifts every break that has not started{% if from_now %} (after {{ hm(from_now) }}){% endif %} and places it again from scratch, person by person, for people on shift and present: at the time that leaves the day best, inside the same rules (inside the shift, in order, the program's gaps, clear of away time and activities, no language below its minimum). Breaks that have started, attendance, shifts and everything else stay as they are. Nothing is kept until you apply it.</p>{% if passed %}<p class="notice">This day has passed. Only breaks that have not started are replanned, so there is nothing to propose.</p>{% endif %}
   {% else %}<p class="note">The autopilot moves breaks that have not started{% if from_now %} (after {{ hm(from_now) }}){% endif %}, for people on shift and present, to lift the tightest interval, then to keep the most intervals at the target with 10 minutes or more over it, then to cut the hours short. Each break stays inside its shift, in its order, on a 5-minute step, clear of the person's other breaks, away time and activities, with the gaps to its neighbours within this program's rules{% if page.inputs.gap_min %} ({{ page.inputs.gap_min }} to {{ page.inputs.gap_max }} minutes){% endif %}, and no language loses its last person or drops below its minimum. Nothing is kept until you apply it.</p>{% endif %}
   <section class="tiles" aria-label="Before and after">
     <p class="tile"><span class="tile-label">Tightest interval</span><b>{{ pr.after.tightest|hmm }}</b><small class="dim">now {{ pr.before.tightest|hmm }}</small></p>
@@ -282,7 +282,7 @@
       <tbody>{% for m in pr.moves %}<tr><td><b>{{ m.name }}</b><input type="hidden" name="move" value="{{ m.name }}|{{ m.idx }}|{{ m.day_to }}|{{ m.date.isoformat() }}"></td><td>{{ m.kind }} ({{ m.minutes }} min)</td><td>{{ hm(m['from']) }}</td><td><b>{{ hm(m.to) }}</b></td></tr>{% endfor %}</tbody></table>
     <p><button class="primary" type="submit">Apply all {{ pr.moves|length }}</button> <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure) }}">Cancel</a></p>
   </form>
-  {% elif fresh %}<p class="empty">A fresh plan is no better than the breaks as they stand, so nothing is proposed. The gaps left are staffing gaps (overtime can help: see Overtime and VTO).</p>
+  {% elif fresh and not passed %}<p class="empty">A fresh plan is no better than the breaks as they stand, so nothing is proposed. The gaps left are staffing gaps (overtime can help: see Overtime and VTO).</p>
   {% else %}<p class="empty">No single move makes the day better within the rules: the gaps left are staffing gaps (overtime can help: see Overtime and VTO).</p>{% endif %}
 </section>
 {% elif tab == 'bulk' %}{% set bk = bulk %}{% set pct = (100 * page.target.target)|round|int %}

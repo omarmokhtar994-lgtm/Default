@@ -3778,8 +3778,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
                        "channels": [(r["letter"], r["name"]) for r in ch["rows"] if "language" not in r] if ch else [],
                        "languages": days.cover_languages(page)}
         fresh = request.args.get("how") == "fresh"  # Phase AX: "Replan the day's breaks", from scratch
-        proposal = days.replan_window(program, on, start, _window_now(on, start) or 0, fresh=fresh) \
-            if page and tab == "replan" else None
+        replan_now = _window_now(on, start) or 0
+        passed = bool(fresh and page and minute_now(on, own_zone, datetime.now(EGYPT)) >= start + 1440)
+        if passed:  # owner, 2026-10-22: only for what is still to come, so a day that has passed has nothing to replan
+            replan_now = start + 1440
+        proposal = days.replan_window(program, on, start, replan_now, fresh=fresh) if page and tab == "replan" else None
         bulk = _bulk_panel(days, page, program, on, moved, start) if page and tab == "bulk" else None  # Phase AD (sample 04)
         rescue = None  # Phase AD (sample 02): interval compliance only; the page says so for the other measure
         if page and tab == "rescue" and measure == "interval":
@@ -3910,7 +3913,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                ot_page=_paged(cover["overtime"] if cover else [], "ot_page", "ot-h"),
                                vto_page=_paged(cover["vto"] if cover else [], "vto_page", "vto-h"),
                                log_page=_paged(list(reversed(page["log"])) if page else [], "log_page", "daylog-h"),
-                               proposal=proposal, fresh=fresh, from_now=from_now, cover_panel=cover_panel,
+                               proposal=proposal, fresh=fresh, passed=passed, from_now=from_now, cover_panel=cover_panel,
                                tile_now=now_at if window else (from_now if clock_now.date() == on else None),
                                add_panel=add_panel, person_panel=person_panel, lengths=ADD_LENGTHS, bar=bar,
                                overtime_hours=OVERTIME_MAX // 60,

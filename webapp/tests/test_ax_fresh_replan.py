@@ -84,6 +84,9 @@ if __name__ == "__main__":
 
 
 import html as _html
+from datetime import datetime
+from unittest import mock
+from zoneinfo import ZoneInfo
 
 from webapp.tests import test_cancel_break as _cb
 from webapp.tests.test_notify_daybook import WED as _WED
@@ -124,3 +127,42 @@ class TheReplanButton(_cb._Cancel):
             "anchor": _WED.isoformat()}, follow_redirects=True)
         self.assertIn("Moved 1 break.", _html.unescape(got.get_data(as_text=True)))
         self.assertIn("Replan breaks moved 1 break", _html.unescape(self.text()))
+
+
+def clock(year, month, day, hour, minute=0):
+    """A stopped clock, in Cairo time, for ``webapp.app.datetime``."""
+    class Stopped(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            at = datetime(year, month, day, hour, minute, tzinfo=ZoneInfo("Africa/Cairo"))
+            return at.astimezone(tz) if tz else at.replace(tzinfo=None)
+    return Stopped
+
+
+class TheReplanIsForWhatIsStillToCome(TheReplanButton):
+    """Owner, 2026-10-22: it applies to the day picked, from the "Day starts at" picked, and only for the future: a day that
+    has passed has nothing to replan, today is replanned from now, a day to come is replanned whole."""
+    def page_at(self, now, **more):
+        with mock.patch("webapp.app.datetime", now):
+            return self.text(view="replan", how="fresh", **more)
+
+    def test_a_day_that_has_passed_has_nothing_to_replan(self):
+        page = self.page_at(clock(2026, 10, 16, 8))
+        self.assertIn("has passed", page)
+        self.assertNotIn('name="move"', page)
+
+    def test_today_is_replanned_from_now(self):
+        page = self.page_at(clock(2026, 10, 14, 12))
+        self.assertIn("after 12:00", page)
+        self.assertNotIn("has passed", page)
+
+    def test_a_day_to_come_is_replanned_whole(self):
+        page = self.page_at(clock(2026, 10, 12, 12))
+        self.assertNotIn("has passed", page)
+        self.assertNotIn("(after ", page)
+
+    def test_it_follows_the_day_starts_at_that_was_picked(self):
+        self.text(start="13:00")  # picking it on the day page keeps it for the program
+        page = self.page_at(clock(2026, 10, 12, 12))
+        self.assertIn('name="start" value="780"', page)
+        self.text(start="00:00")

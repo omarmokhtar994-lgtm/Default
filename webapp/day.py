@@ -980,7 +980,8 @@ def vto_offers(view: Dict[str, Any], after: int = 0, top: int = 6) -> List[Dict[
 
 # ---------------------------------------------------------------- the autopilot for the rest of the day's breaks
 def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: int = 400,
-           target: Optional[float] = None, fresh: bool = False) -> Dict[str, Any]:
+           target: Optional[float] = None, fresh: bool = False,
+           desired: Optional[Dict[Tuple[str, int], int]] = None) -> Dict[str, Any]:
     """Re-plot the breaks not yet started (people on shift and present, this day's shifts) to lift the
     tightest interval, then (with the week's ``target``, Phase AH: the owner's 10 minutes) to keep the most
     intervals at the target with ``CUSHION`` minutes over it, then to cut the hours short; each break stays inside
@@ -993,7 +994,9 @@ def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: i
     ``fresh`` (Phase AX, "Replan the day's breaks"): every break not yet started is lifted and placed again from
     scratch, person by person in the order of their shifts, each at the time that leaves the day best (the same score),
     nearest to where it was when the score is no different, inside the same rules. When the result is worse than the
-    day as it stands, nothing is proposed."""
+    day as it stands, nothing is proposed. With ``desired`` ((name, break index) -> the time the default break rules
+    give it, in this view's minutes) each break goes to the allowed time nearest its desired one, and the result is
+    shown whether or not it beats the day as it stands: the rules are what was asked for."""
     step = view["interval"]
     per = step // STEP
     cells = view["cells"]
@@ -1135,7 +1138,8 @@ def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: i
                     totals = list(sums)
                     for i, d in change.items():
                         totals[i // per] += d
-                    rank = (score(totals), -abs(s - original[(name, b["idx"])]))
+                    want = (desired or {}).get((name, b["idx"]))
+                    rank = ((-abs(s - want) if want is not None else 0), score(totals), -abs(s - original[(name, b["idx"])]))
                     if best is None or rank > best[0]:
                         best = (rank, s, change)
                 if best is None:
@@ -1152,7 +1156,7 @@ def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: i
             for b in mine:
                 starts[(name, b["idx"])] = new[b["idx"]][0]
         current = score(sums)
-        if current < before_score:  # worse than the day as it stands: nothing is proposed
+        if current < before_score and not desired:  # worse than the day as it stands: nothing is proposed
             starts.update(original)
             current = before_score
     for _ in range(rounds):

@@ -32,10 +32,13 @@ post only the latest, followed by "Breaks now: ...".
 
 ## Replan the day's breaks, and choosing LOBs to view together (Phase AX)
 - **Replan the day's breaks** sits next to "Fix the rest of the day's breaks". It lifts every break that has not started and
-  places each one again from scratch, inside the same rules as moving a break by hand. You see the moves, the tightest
-  interval and the hours short before and after, and nothing is kept until you press Apply. It changes nothing else:
-  attendance, shifts and breaks that have started stay. If a fresh plan is no better than the day as it is, it proposes
-  nothing. Undo takes an applied replan back.
+  places each one again as the program's default break rules place it (the same planner as Plan breaks > Suggest), for
+  the day and "Day starts at" picked, from now on for today, whole for a day to come, nothing for a day that has passed.
+  A time the day itself refuses (away time, an activity, the program's gaps, a language below its minimum) gives way to the
+  nearest allowed one. You see the moves, the tightest interval and the hours short before and after, and nothing is kept
+  until you press Apply. It changes nothing else: attendance, shifts and breaks that have started stay. Undo takes an
+  applied replan back. The first time for a schedule it reads the break rules from its workbook, which can take a minute;
+  if they cannot be read it says so and places the breaks by the day page's own score instead.
 - **View** (day and week): tick the LOBs of the program to show together, for example two out of five. The LOB the page is
   opened on is always shown. Untick the others to go back to one LOB.
 - **Download** buttons sit under each chart (PNG picture, SVG drawing) and each table (CSV, opens in Excel) on the

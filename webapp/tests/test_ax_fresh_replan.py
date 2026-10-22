@@ -74,6 +74,27 @@ class TheFreshReplan(unittest.TestCase):
             for sb, sa in zip(lane_b["segments"], lane_a["segments"]):
                 self.assertEqual((sb["start"], sb["end"], sb["status"]), (sa["start"], sa["end"], sa["status"]))
 
+    def test_the_times_the_default_rules_give_win_over_the_best_score(self):
+        v = self.view()
+        everyone = {(lane["name"], b["idx"]): b["start"] for lane in v["lanes"] for seg in lane["segments"]
+                    if seg["offset"] == 0 for b in seg["breaks"]}
+        plan = replan(v, INPUTS, 0, fresh=True, desired=everyone)
+        # where every break already is, is what was asked for: only a break whose own time breaks the program's gap moves
+        for m in plan["moves"]:
+            seg = self.own(v, m["name"])
+            before = [b for b in seg["breaks"] if b["idx"] < m["idx"]]
+            gap = m["from"] - (before[-1]["start"] + before[-1]["minutes"]) if before else 0
+            self.assertGreater(gap, INPUTS["gap_max"], m)
+        self.assertLess(len(plan["moves"]), len(everyone) // 4)
+
+    def test_a_desired_time_that_cannot_be_kept_gives_the_nearest_allowed_one(self):
+        v = self.view()
+        name, idx = next((lane["name"], b["idx"]) for lane in v["lanes"] for seg in lane["segments"]
+                         if seg["offset"] == 0 and seg["breaks"] for b in seg["breaks"][:1])
+        plan = replan(v, INPUTS, 0, fresh=True, desired={(name, idx): 0})  # before the shift: not allowed
+        seg = self.own(self.applied({}, plan)[0], name)
+        self.assertTrue(seg["start"] <= min(b["start"] for b in seg["breaks"]))
+
     def test_the_other_mode_is_unchanged(self):
         att = self.short_day()
         self.assertEqual(replan(self.view(att), INPUTS), replan(self.view(att), INPUTS, fresh=False))
@@ -164,5 +185,65 @@ class TheReplanIsForWhatIsStillToCome(TheReplanButton):
     def test_it_follows_the_day_starts_at_that_was_picked(self):
         self.text(start="13:00")  # picking it on the day page keeps it for the program
         page = self.page_at(clock(2026, 10, 12, 12))
-        self.assertIn('name="start" value="780"', page)
+        self.assertIn("The 24 hours from 13:00", page)
         self.text(start="00:00")
+
+
+from webapp import break_plan as _bp  # noqa: E402
+from webapp.attendance import day_index as _day_index  # noqa: E402
+from webapp.day import read_inputs as _read_inputs  # noqa: E402
+
+
+class TheDefaultRules(_cb._Cancel):
+    """Owner, 2026-10-22: "it is not rescheduling based on the default": the replan places the breaks as the program's
+    default break rules do (the planner behind Plan breaks > Suggest), then keeps whatever the day's own rules refuse
+    out of it."""
+    def rules_and_week(self):
+        row, _ = self.days.version(self.key, _WED)
+        return row, self.days._week(row), self.days.book.break_rules(row["id"])
+
+    def test_every_move_is_the_time_the_default_rules_give(self):
+        row, week, rules = self.rules_and_week()
+        inputs = _read_inputs(self.days.book.input_path(row["run_id"]))
+        d = _day_index(_WED)
+        # a few people's breaks are moved away from the plan by hand: the replan puts them back where the rules put them
+        shifted = []
+        for lane in self.days.page(self.key, _WED)["view"]["lanes"][:6]:
+            for seg in lane["segments"]:
+                if seg["offset"] == 0 and seg["status"] == "Present" and seg["breaks"]:
+                    b = seg["breaks"][-1]
+                    for step in (30, -30, 20, -20, 10, -10):
+                        try:
+                            self.days.move_break(self.key, _WED, lane["name"], b["idx"],
+                                                 f"{(b['start'] + step) // 60 % 24:02d}:{(b['start'] + step) % 60:02d}", self.omar)
+                            shifted.append((lane["name"], b["idx"]))
+                            self.addCleanup(self.days.move_break, self.key, _WED, lane["name"], b["idx"], None, self.omar)
+                            break
+                        except ValueError:
+                            continue
+        self.assertTrue(shifted)
+        found = self.days.fresh_replan_window(self.key, _WED, 0, 0)
+        # the rules' own plan with every break empty: what Plan breaks > Suggest gives
+        empty = {a["name"]: [None] * len(_bp.slots_for(rules, _bp.shift_span(a["days"][d])[1] - _bp.shift_span(a["days"][d])[0]))
+                 for a in week["associates"] if _bp.shift_span(a["days"][d])}
+        want = _bp.suggest(week, inputs, rules, d, empty)
+        self.assertTrue(found["moves"], "breaks moved away from the plan are put back")
+        for m in found["moves"]:
+            self.assertEqual(m["to"], want[m["name"]][m["idx"]], m)
+        self.assertTrue({(m["name"], m["idx"]) for m in found["moves"]} >= set(shifted[:1]))
+
+    def test_a_break_that_has_started_is_not_in_it(self):
+        found = self.days.fresh_replan_window(self.key, _WED, 0, 18 * 60)
+        self.assertTrue(all(m["from"] >= 18 * 60 and m["to"] >= 18 * 60 for m in found["moves"]))
+
+    def test_when_the_rules_cannot_be_read_it_says_so_and_still_replans(self):
+        with mock.patch.object(self.days.book, "break_rules", side_effect=ValueError("no rules")):
+            found = self.days.fresh_replan_window(self.key, _WED, 0, 0)
+        self.assertIn("could not be read", found["note"])
+        self.assertIn("moves", found)
+
+    def test_the_page_names_the_rules_it_followed(self):
+        with mock.patch("webapp.app.datetime", clock(2026, 10, 10, 12)):
+            page = _html.unescape(self.client.get(
+                f"/day?program={self.key.replace(' ', '+')}&date={_WED.isoformat()}&view=replan&how=fresh").get_data(as_text=True))
+        self.assertIn("default break rules", page)

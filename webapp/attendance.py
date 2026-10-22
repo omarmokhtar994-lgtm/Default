@@ -1778,14 +1778,71 @@ class DayBook:
         return out
 
     def replan_window(self, program: str, on: date, start: int, now: int = 0,
-                      measure: str = "interval", fresh: bool = False) -> Dict[str, Any]:
+                      measure: str = "interval") -> Dict[str, Any]:
         """Phase AK: Fix the day's breaks on the 24 hours from ``start`` (``now`` a minute of that window, 0 for none
         started): the moves in the window's minutes, each with its shift's date."""
         page = self._window(program, on, start, measure)
         view = rebase(page["view"], start, page["views"])
-        found = replan(view, page["inputs"], max(now - start, 0) if now else 0, target=page["target"]["target"],
-                       fresh=fresh)
+        found = replan(view, page["inputs"], max(now - start, 0) if now else 0, target=page["target"]["target"])
         return {**found, "moves": self._dated(found["moves"], view, on, start)}
+
+    def fresh_replan_window(self, program: str, on: date, start: int, now: int = 0,
+                            measure: str = "interval") -> Dict[str, Any]:
+        """Phase AX, "Replan the day's breaks" (owner, 2026-10-22: "it is not rescheduling based on the default"): every
+        break not yet started on the 24 hours from ``start`` (``now``: a minute from ``on``'s midnight, 0 for none
+        started) is placed as the program's default break rules place it (``break_plan.suggest``, the planner behind
+        Plan breaks), the breaks that have started kept where they are. A time the day itself refuses (away time, an
+        activity, a gap, a language below its minimum) gives way to the nearest allowed one. The moves, dated as the
+        other tools' are; ``note`` says when the rules could not be read and the day's own score was used instead."""
+        from .break_plan import slots_for, suggest
+        page = self._window(program, on, start, measure)
+        view = rebase(page["view"], start, page["views"])
+        by_day: Dict[date, List[Tuple[str, Dict[str, Any]]]] = {}
+        for lane in view["lanes"]:
+            for seg in lane["segments"]:
+                if seg["offset"] == 0 and seg["status"] not in ABSENT and seg["breaks"]:
+                    by_day.setdefault(seg.get("date") or on, []).append((lane["name"], seg))
+        desired: Dict[Tuple[str, int], int] = {}
+        note = ""
+        try:
+            for day, people in sorted(by_day.items()):
+                row, _ = self.version(program, day)
+                if row is None:
+                    continue
+                week, rules = self._week(row), self.book.break_rules(row["id"])
+                inputs = read_inputs(self.book.input_path(row["run_id"]))
+                d, shift = day_index(day), 1440 * (day - on).days
+                spans = {a["name"]: shift_span(a["days"][d]) for a in week.get("associates", [])}
+                plan: Dict[str, List[Optional[int]]] = {
+                    n: [None] * len(slots_for(rules, sp[1] - sp[0])) for n, sp in spans.items() if sp}
+                movable = []
+                for name, seg in people:
+                    sp = spans.get(name)
+                    slots = slots_for(rules, sp[1] - sp[0]) if sp else []
+                    live = sorted(list(seg["breaks"]) + list(seg.get("cancelled", [])), key=lambda b: b["idx"])
+                    if [b["idx"] for b in live] != list(range(len(slots))) or any(
+                            str(b["kind"]).casefold() != k.casefold() for b, (k, _) in zip(live, slots)):
+                        for b in seg["breaks"]:  # not the rules' shape of breaks: kept as it is, for the others' sake
+                            if b["idx"] < len(plan.get(name, [])):
+                                plan[name][b["idx"]] = b["start"] + start - shift
+                        continue
+                    for b in seg["breaks"]:
+                        at = b["start"] + start - shift  # in the shift's own day
+                        if now and at < now - shift:  # started: where it is
+                            plan[name][b["idx"]] = at
+                    movable.append((name, seg))
+                want = suggest(week, inputs, rules, d, plan)
+                for name, seg in movable:
+                    for b in seg["breaks"]:
+                        got = want.get(name, [None] * (b["idx"] + 1))[b["idx"]]
+                        if got is not None and not (now and b["start"] + start < now):
+                            desired[(name, b["idx"])] = got + shift - start
+        except ValueError:
+            desired, note = {}, ("The program's break rules could not be read from the schedule's workbook, so the "
+                                 "breaks were placed by the day page's own rules and score instead.")
+        found = replan(view, page["inputs"], max(now - start, 0) if now else 0, target=page["target"]["target"],
+                       fresh=True, desired=desired or None)
+        return {**found, "note": note, "moves": self._dated(found["moves"], view, on, start)}
 
     @journaled
     def apply_replan(self, program: str, on: date, moves: List[Tuple[Any, ...]], user_id: int) -> int:

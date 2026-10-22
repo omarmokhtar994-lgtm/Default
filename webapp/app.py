@@ -3782,7 +3782,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         passed = bool(fresh and page and minute_now(on, own_zone, datetime.now(EGYPT)) >= start + 1440)
         if passed:  # owner, 2026-10-22: only for what is still to come, so a day that has passed has nothing to replan
             replan_now = start + 1440
-        proposal = days.replan_window(program, on, start, replan_now, fresh=fresh) if page and tab == "replan" else None
+        proposal = (days.fresh_replan_window if fresh else days.replan_window)(program, on, start, replan_now) \
+            if page and tab == "replan" else None
         bulk = _bulk_panel(days, page, program, on, moved, start) if page and tab == "bulk" else None  # Phase AD (sample 04)
         rescue = None  # Phase AD (sample 02): interval compliance only; the page says so for the other measure
         if page and tab == "rescue" and measure == "interval":

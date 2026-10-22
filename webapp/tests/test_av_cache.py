@@ -123,6 +123,39 @@ class TheZoneOfTheViewer(_Tagged):
         self.assertEqual(built.call_count, 1)
 
 
+class InsideAnOpenChange(_Tagged):
+    """The checking mode found this one: the preview of better times writes inside a change it later rolls back and looks
+    at the day between its writes; a day kept from before the change would show those looks the old day."""
+    def seg(self, name):
+        lane = next(l for l in self.days.page(self.key, WED)["view"]["lanes"] if l["name"] == name)
+        return next(s for s in lane["segments"] if s["offset"] == 0)
+
+    def test_a_day_looked_at_inside_a_change_shows_that_changes_own_writes(self):
+        name = self.with_breaks()[0]
+        self.days.page(self.key, WED)  # kept, as before the change
+        with self.days.store.transaction():
+            self.days.store.set_attendance(program=self.key, shift_date=WED.isoformat(), associate=name, status="Sick",
+                                      from_min=None, to_min=None, user_id=self.omar)
+            self.assertEqual(self.seg(name)["status"], "Sick")
+            self.store._db  # noqa: B018 - the write is not committed yet
+            raise_back = True
+        self.addCleanup(self.days.set_status, self.key, WED, name, "Present", self.omar)
+        self.assertTrue(raise_back)
+
+    def test_a_change_rolled_back_leaves_the_kept_day_as_it_was(self):
+        name = self.with_breaks()[0]
+        before = self.seg(name)["status"]
+        try:
+            with self.days.store.transaction():
+                self.days.store.set_attendance(program=self.key, shift_date=WED.isoformat(), associate=name, status="Sick",
+                                          from_min=None, to_min=None, user_id=self.omar)
+                self.assertEqual(self.seg(name)["status"], "Sick")
+                raise RuntimeError("rolled back")
+        except RuntimeError:
+            pass
+        self.assertEqual(self.seg(name)["status"], before)
+
+
 class AFileChangeClearsItToo(_Tagged):
     """The checking mode found this one: channel needs added to a schedule are a file, so no row changed and the kept day
     went on showing the schedule as it was before they were added."""

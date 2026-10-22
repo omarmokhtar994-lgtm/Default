@@ -591,12 +591,13 @@ class DayBook:
              cover: bool = True, version_id: Optional[int] = None, shared: bool = False) -> Optional[Dict[str, Any]]:
         """The day, kept (Phase AV): the plain day of a program, date and measure is built once and handed out as a
         copy until anything is written to the database (``Store.generation``) or ``PAGE_KEEP`` seconds pass. A day
-        asked for with ``extra``, as planned, without cover or as another version is built every time. See
+        asked for with ``extra``, as planned, without cover or as another version, or from inside an open change (whose own
+        writes are not committed yet), is built every time. See
         ``_build_page`` for what a day is. With ``shared`` the kept day itself is returned, not a copy: only for a caller
         that reads it and never changes it."""
         if measure is None:
             measure = self.measure_of(program)
-        if extra or not recorded or not cover or version_id is not None:
+        if extra or not recorded or not cover or version_id is not None or self.store.in_transaction:
             return self._build_page(program, on, measure, extra, recorded, cover, version_id)
         key = (program, on, measure, SHOWN.get())  # the wording is in the zone the viewer has chosen
         found = self._kept(key, shared)

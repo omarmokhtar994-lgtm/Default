@@ -1382,6 +1382,12 @@ class Store:
         with self._db() as db:
             return int(db.execute(f"insert into day_log ({names}) values ({marks})", tuple(fields.values())).lastrowid)
 
+    @property
+    def in_transaction(self) -> bool:
+        """Phase AV: inside a ``transaction()``: its writes are visible to this thread before they are committed, so a kept
+        day (built from what is committed) would be out of date for it."""
+        return self._connection.get() is not None
+
     def invalidate_days(self) -> None:
         """Phase AV: something a day is built from changed outside the database (a workbook file added, replaced or
         deleted): every kept copy of a day is out of date."""

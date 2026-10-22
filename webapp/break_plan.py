@@ -54,6 +54,8 @@ def edge_margin(rules: Dict[str, Any], duration_min: int) -> int:
 FIRST_FROM, FIRST_TO = 120, 210      # the first break starts this long after the shift starts
 LUNCH_FROM, LUNCH_TO = 120, 180      # the lunch starts this much work after the first break ends
 LAST_CLEAR = 60                      # the last break ends at least this long before the shift ends
+SPREAD_REACH = 120                    # minutes from the even-spaced time within which a break may move to spread the people on break
+AMPLE = 1.0                         # hours of spare cover at which more spare no longer matters when breaks are placed
 SHAPE_TOLERANCE = 0.25               # when no time keeps the buffer at or above the need, the hours it may give up (BREAKS_RULE.md)
 
 
@@ -371,17 +373,20 @@ def suggest(week: Dict[str, Any], inputs: Dict[str, Any], rules: Dict[str, Any],
                               tight if tight is not None else float("inf"),
                               slack if slack is not None else float("inf"),
                               -abs(c - ideal) - (abs(gap - preferred) if gap is not None and preferred else 0),
-                              _shape_far(k, c, lo, hi, starts, slots)))
+                              _shape_far(k, c, lo, hi, starts, slots),
+                              max((on_break[q] for q in quarters if q < len(on_break)), default=0)))
             best, best_key = None, None
             # the shape is held while the interval stays safe (day.at_target: the need, or the target and CUSHION minutes over it); only when no allowed time does that, a time
             # within SHAPE_TOLERANCE of the best buffer counts as safe (owner, 2026-10-21: "unless an interval goes short")
             room_ok = [f[5] for f in found if f[1] and f[2]]
             top = max(room_ok) if room_ok else None
-            for c, calm, within, shaped, tight, slack, near, far in found:
+            for c, calm, within, shaped, tight, slack, near, far, crowd in found:
                 safe = top is None or slack >= (min(0.0, top) - (SHAPE_TOLERANCE if top < 0 else 0.0))
                 # Phase AX (owner: "the default timing makes the most sense"): when the shape cannot be held with the intervals
                 # safe, the nearest time to it, among those that keep them safe, before the best buffer
-                key = (calm, within, safe and shaped, safe, -far, tight, near)
+                # Phase AX (owner, 2026-10-23: "not perfect even though there is buffer"): where the buffer is ample (``AMPLE`` hours
+                # or more) it no longer tells times apart, so the breaks are spread: the fewest people already on a break then
+                key = (calm, within, safe and shaped, safe, -far, min(tight, AMPLE), -crowd if near >= -SPREAD_REACH else -99, tight, near)
                 if best_key is None or key > best_key:
                     best, best_key = c, key
             if best is None:

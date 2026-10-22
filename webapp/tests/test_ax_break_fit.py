@@ -79,3 +79,50 @@ class TheWords(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+import collections  # noqa: E402
+
+from webapp.break_plan import suggest  # noqa: E402
+from webapp.tests.test_day import INPUTS, WED, WEEK  # noqa: E402
+from webapp.versions import shift_span  # noqa: E402
+
+
+class TheBreaksAreSpreadWhereTheBufferIsAmple(unittest.TestCase):
+    """Owner, 2026-10-23, from a screenshot of a replanned day: "not that perfect even though there is buffer in the intervals":
+    people on the same shift all took their breaks at the same times. Where the spare cover is ample it no longer tells times
+    apart, so the breaks are spread over the quarter hours the usual shape allows. The real Voice Wednesday (29 people, 12 shifts)."""
+    @classmethod
+    def setUpClass(cls):
+        cls.got = suggest(WEEK, INPUTS, RULES, WED, {})
+        cls.by_shift = collections.defaultdict(list)
+        for a in WEEK["associates"]:
+            if a["name"] in cls.got and shift_span(a["days"][WED]):
+                cls.by_shift[a["days"][WED]].append((a["name"], cls.got[a["name"]]))
+
+    def test_no_more_than_three_of_a_shift_start_the_same_break_at_the_same_time(self):
+        big = {k: v for k, v in self.by_shift.items() if len(v) >= 5}
+        self.assertTrue(big)
+        for shift, people in big.items():
+            for k in range(3):
+                most = max(collections.Counter(row[k] for _, row in people).values())
+                self.assertLessEqual(most, 3, (shift, k))  # measured: before the spread 4, now 3 at worst
+
+    def test_a_shift_of_seven_has_seven_different_first_breaks(self):
+        seven = next(v for v in self.by_shift.values() if len(v) == 7)
+        self.assertEqual(len({row[0] for _, row in seven}), 7)
+
+    def test_the_spread_keeps_the_engines_rules_and_is_no_further_from_the_shape_than_before(self):
+        # measured on this day: before the spread 5 people sat 15 to 60 minutes off the usual shape, after it 3 sit 15, 15 and 45 off
+        off = []
+        for shift, people in self.by_shift.items():
+            for name, row in people:
+                shape, rules = fit(RULES, shift, row)
+                self.assertEqual(rules, 0, (name, shift, row))
+                if shape:
+                    off.append(shape)
+        self.assertLessEqual(len(off), 3)
+        self.assertLessEqual(max(off, default=0), 45)
+
+    def test_the_same_day_gives_the_same_plan(self):
+        self.assertEqual(suggest(WEEK, INPUTS, RULES, WED, {}), self.got)

@@ -4829,7 +4829,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                           a["measure"], check)
             except ValueError:
                 before = []
-        sunday = today - timedelta(days=(today.weekday() + 1) % 7)
+        sunday = _sv.week_begin(today, next(iter([(book.unit(k) or {}).get("program", {}).get("start_day", 0) or 0 for k in units]), 0))  # the program's week start
         first = today.replace(day=1)
         last_month_end = first - timedelta(days=1)
         presets = [("This week", sunday, today), ("Last week", sunday - timedelta(days=7), sunday - timedelta(days=1)),
@@ -4897,7 +4897,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                if SHRINK_DAYS[(date.fromisoformat(d).weekday() + 1) % 7] in dows}
         except ValueError as exc:
             error = str(exc)
-        sunday = today - timedelta(days=(today.weekday() + 1) % 7)
+        sunday = _sv.week_begin(today, next(iter([(book.unit(k) or {}).get("program", {}).get("start_day", 0) or 0 for k in units]), 0))  # the program's week start
         first_of = today.replace(day=1)
         last_month_end = first_of - timedelta(days=1)
         presets = [("This week", sunday, today), ("Last week", sunday - timedelta(days=7), sunday - timedelta(days=1)),

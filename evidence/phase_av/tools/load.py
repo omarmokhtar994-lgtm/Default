@@ -17,6 +17,8 @@ from unittest import mock
 import requests
 from waitress import create_server
 
+from webapp.serve import CONNECTION_LIMIT
+
 from webapp.tests.test_as_pages import _Noon
 from webapp.tests.test_as_requests import WED, _Fixture
 
@@ -59,7 +61,8 @@ PORT = 18765
 
 
 def serve():
-    create_server(app, host="127.0.0.1", port=PORT, threads=8, max_request_body_size=26 * 1024 * 1024).run()
+    create_server(app, host="127.0.0.1", port=PORT, threads=8, max_request_body_size=26 * 1024 * 1024,
+                  connection_limit=CONNECTION_LIMIT).run()
 
 
 server = multiprocessing.get_context("fork").Process(target=serve, daemon=True)

@@ -87,6 +87,20 @@ def _fits(k: int, c: int, lo: int, hi: int, starts: Starts, slots: List[Tuple[st
     return all(verdicts) if verdicts else None
 
 
+def _shape_far(k: int, c: int, lo: int, hi: int, starts: Starts, slots: List[Tuple[str, int]]) -> int:
+    """Minutes break ``k`` at ``c`` is off the usual shape, given the breaks placed before it (what ``_fits`` says yes or no to)."""
+    kinds = [kind.casefold() for kind, _ in slots]
+    far = 0
+    if k == 0:
+        far += max(0, FIRST_FROM - (c - lo)) + max(0, (c - lo) - FIRST_TO)
+    if kinds[k] == "lunch" and k > 0 and starts[k - 1] is not None:
+        gap = c - (starts[k - 1] + slots[k - 1][1])
+        far += max(0, LUNCH_FROM - gap) + max(0, gap - LUNCH_TO)
+    if k == len(slots) - 1 and len(slots) >= 2:
+        far += max(0, c + slots[k][1] - (hi - LAST_CLEAR))
+    return far
+
+
 def shape_fit(lo: int, hi: int, starts: Starts, slots: List[Tuple[str, int]]) -> Tuple[Optional[bool], ...]:
     """(first break, lunch, last break) against the usual shape; None for a part that is not placed or not asked."""
     kinds = [kind.casefold() for kind, _ in slots]
@@ -355,15 +369,18 @@ def suggest(week: Dict[str, Any], inputs: Dict[str, Any], rules: Dict[str, Any],
                               _fits(k, c, lo, hi, starts, slots) is not False,
                               tight if tight is not None else float("inf"),
                               slack if slack is not None else float("inf"),
-                              -abs(c - ideal) - (abs(gap - preferred) if gap is not None and preferred else 0)))
+                              -abs(c - ideal) - (abs(gap - preferred) if gap is not None and preferred else 0),
+                              _shape_far(k, c, lo, hi, starts, slots)))
             best, best_key = None, None
             # the shape is held while the interval stays safe (day.at_target: the need, or the target and CUSHION minutes over it); only when no allowed time does that, a time
             # within SHAPE_TOLERANCE of the best buffer counts as safe (owner, 2026-10-21: "unless an interval goes short")
             room_ok = [f[5] for f in found if f[1] and f[2]]
             top = max(room_ok) if room_ok else None
-            for c, calm, within, shaped, tight, slack, near in found:
+            for c, calm, within, shaped, tight, slack, near, far in found:
                 safe = top is None or slack >= (min(0.0, top) - (SHAPE_TOLERANCE if top < 0 else 0.0))
-                key = (calm, within, safe and shaped, tight, near)
+                # Phase AX (owner: "the default timing makes the most sense"): when the shape cannot be held with the intervals
+                # safe, the nearest time to it, among those that keep them safe, before the best buffer
+                key = (calm, within, safe and shaped, safe, -far, tight, near)
                 if best_key is None or key > best_key:
                     best, best_key = c, key
             if best is None:

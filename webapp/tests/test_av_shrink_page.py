@@ -50,6 +50,9 @@ class TheShrinkagePage(_cb.ThePage):
         self.assertNotRegex(body, r"<script(?![^>]*src=)")
         self.assertNotRegex(body, r' style="')
 
+    def test_the_page_says_which_day_weeks_begin_on(self):
+        self.assertIn("Weeks begin on Sunday", self.get("&by=week").get_data(as_text=True))
+
     def test_a_nonsense_choice_falls_back(self):
         self.assertEqual(self.get("&show=zzz&by=zzz&step=7&first=30&last=2").status_code, 200)
 

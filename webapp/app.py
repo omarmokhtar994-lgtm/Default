@@ -4903,13 +4903,16 @@ def create_app(config: Dict[str, Any]) -> Flask:
         presets = [("This week", sunday, today), ("Last week", sunday - timedelta(days=7), sunday - timedelta(days=1)),
                    ("This month", first_of, today), ("Last month", last_month_end.replace(day=1), last_month_end),
                    ("Last 30 days", today - timedelta(days=29), today)]
-        view = shrink_page(facts, per_day, show, by, out_ticks, in_ticks, step, first, last, focus)
+        start_days = {k: (book.unit(k) or {}).get("program", {}).get("start_day", 0) or 0 for k in units}
+        week_days = sorted({start_days[k] for k in units})
+        view = shrink_page(facts, per_day, show, by, out_ticks, in_ticks, step, first, last, focus, start_days)
         return render_template("shrinkage.html", view=view, presets=presets, error=error, pick_tree=_access().programs(),
                                everything=_access().everything(), measures=MEASURES, units=len(units), show=show, by=by,
                                step=step, first_h=first // 60, last_h=last // 60, focus=focus, dows=dows,
                                out_ticks=out_ticks, in_ticks=in_ticks, show_choices=SHRINK_SHOW, by_choices=SHRINK_BY,
                                steps=SHRINK_STEPS, out_items=SHRINK_OUT, in_items=SHRINK_IN, item_label=SHRINK_LABEL,
-                               presets_out=SHRINK_PRESETS, day_names=SHRINK_DAYS, **a)
+                               presets_out=SHRINK_PRESETS, day_names=SHRINK_DAYS,
+                               week_starts=[("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")[d] for d in week_days], **a)
 
     @app.route("/exports/download")
     @login_required

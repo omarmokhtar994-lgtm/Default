@@ -22,7 +22,8 @@ def _hours(minutes: float) -> str:
 
 
 def build(facts: List[Dict[str, Any]], per_day: Dict[str, Dict[int, List[float]]], show: str, by: str,
-          out_ticks: Sequence[str], in_ticks: Sequence[str], step: int, first: int, last: int, focus: str) -> Dict[str, Any]:
+          out_ticks: Sequence[str], in_ticks: Sequence[str], step: int, first: int, last: int, focus: str,
+          start_days: Optional[Dict[str, int]] = None) -> Dict[str, Any]:
     """The page's figures for ``show`` (both, out or in) laid out ``by`` day, week or interval."""
     both = periods(facts, "day")
     whole_shifts = sum(r["shifts"] for r in both)
@@ -36,7 +37,7 @@ def build(facts: List[Dict[str, Any]], per_day: Dict[str, Dict[int, List[float]]
     found["tiles"] = [t for t in found["tiles"] if t]
     series = []
     if by in ("day", "week"):
-        rows = periods(facts, by)
+        rows = periods(facts, by, start_days)
         labels = [_day(r["key"]) if by == "day" else "Week of " + _day(r["key"]) for r in rows]
         if show != "in":
             series.append(("Out of office", charts.ORANGE, [r["out"] for r in rows]))

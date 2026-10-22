@@ -44,7 +44,7 @@
 <section class="panel"><p class="empty">Nothing to show for {{ start.strftime('%d %b') }} to {{ end.strftime('%d %b %Y') }}{% if not units %}: no program is open to you{% else %}: no schedule was in use on those days{% endif %}. Pick another period or program.</p></section>
 {% else %}
 <div class="ins-tiles">{% for label, value, note in view.tiles %}<section class="ins-tile" aria-label="{{ label }}"><span class="tile-label">{{ label }}</span><b>{{ pct(value) }}</b><small class="dim">{{ note }}</small></section>{% endfor %}</div>
-<p class="dim ins-note">{{ view.days }} day{{ 's' if view.days != 1 }}, {{ view.shifts }} shifts. Weeks run Sunday to Saturday. A week or day figure adds people and minutes up; it is never an average of percentages. Planned leave has no times, so it counts in the day and week figures and not in the per interval ones.</p>
+<p class="dim ins-note">{{ view.days }} day{{ 's' if view.days != 1 }}, {{ view.shifts }} shifts. Weeks begin on {{ week_starts|join(' or ') or 'Sunday' }}, as set for the program under LOBs and defaults. A week or day figure adds people and minutes up; it is never an average of percentages. Planned leave has no times, so it counts in the day and week figures and not in the per interval ones.</p>
 <section class="panel chart-panel" aria-labelledby="sh-h"><h2 id="sh-h">{{ dict(by_choices)[by] }}</h2><div class="chart-scroll">{{ view.chart }}</div></section>
 {% if by == 'interval' and view.heat %}
 <section class="panel chart-panel" aria-labelledby="hm-h"><h2 id="hm-h">{{ view.heat_title }} by day and interval</h2>

@@ -70,6 +70,14 @@ class ThePeriods(_Base):
         rows = sv.periods(self.facts(("unplanned", "sick"), ("breaks",)), "day")
         self.assertEqual([r["key"] for r in rows], ["2026-10-14", "2026-10-15"])
 
+    def test_weeks_begin_on_the_programs_start_day(self):
+        facts = self.facts(("unplanned",), ("breaks",))
+        monday = sv.periods(facts, "week", {KEY: 1})  # Wednesday 14 and Thursday 15 Oct: the week of Monday 12 Oct
+        self.assertEqual([r["key"] for r in monday], ["2026-10-12"])
+        thursday = sv.periods(facts, "week", {KEY: 4})  # weeks from Thursday: Wed is in the week of 8 Oct, Thu starts 15 Oct
+        self.assertEqual([r["key"] for r in thursday], ["2026-10-08", "2026-10-15"])
+        self.assertEqual(sv.week_begin(date(2026, 10, 11), 0), date(2026, 10, 11))  # a Sunday starts its own week
+
     def test_week_over_week_sums_days_not_averages_percentages(self):
         facts = self.facts(("unplanned", "sick"), ("breaks",))
         week = sv.periods(facts, "week")

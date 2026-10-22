@@ -47,12 +47,18 @@ def _pct(n: float, d: float) -> Optional[float]:
     return round(100 * n / d, 1) if d else None
 
 
-def periods(facts: List[Dict[str, Any]], by: str) -> List[Dict[str, Any]]:
-    """Out and in office per day, or per week (Sunday to Saturday, the schedule's week), oldest first."""
+def week_begin(on: date, start_day: int = 0) -> date:
+    """The first day of the week holding ``on``; ``start_day`` is the weekday the program's weeks begin on, Sunday 0."""
+    return on - timedelta(days=((on.weekday() + 1) % 7 - start_day) % 7)
+
+
+def periods(facts: List[Dict[str, Any]], by: str, start_days: Optional[Dict[str, int]] = None) -> List[Dict[str, Any]]:
+    """Out and in office per day, or per week (each LOB's weeks begin on its program's start day, from the LOBs and
+    defaults settings; Sunday when not set), oldest first."""
     groups: Dict[str, List[Dict[str, Any]]] = {}
     for r in facts:
         on = date.fromisoformat(r["date"])
-        key = r["date"] if by == "day" else (on - timedelta(days=(on.weekday() + 1) % 7)).isoformat()
+        key = r["date"] if by == "day" else week_begin(on, (start_days or {}).get(r["unit"], 0)).isoformat()
         groups.setdefault(key, []).append(r)
     out = []
     for key, rows in sorted(groups.items()):

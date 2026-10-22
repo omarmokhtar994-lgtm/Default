@@ -135,9 +135,10 @@ class TheProgramRename(TheRunChange):
         self.assertEqual((found["merge"], found["runs"], found["versions"]), (False, 2, 2))  # one version each
         # Re-pinned in Phase V: channel changes made on the day are day records too and move with a rename (none
         # here), so the counts carry a "channels" entry. Re-pinned in Phase AJ: cover from outside the roster is a day
-        # record too and moves with a rename (none here), so the counts carry a "cover" entry.
+        # record too and moves with a rename (none here), so the counts carry a "cover" entry. Re-pinned in Phase AV:
+        # incidents (a missed break ticked on a move) are day records too, so the counts carry an "incidents" entry.
         self.assertEqual(found["records"], {"attendance": 1, "breaks": 1, "activities": 1, "log": 3, "channels": 0,
-                                            "cover": 0})
+                                            "cover": 0, "incidents": 0})
         self.assertEqual((found["stop_in_use"], found["clashes"]), ([], []))
         apply_rename(self.store, "AE/AR B2B", "AE-AR B2B", self.sara, "new name")
         self.assertEqual({r["program"] for r in self.store.list_runs()}, {"AE-AR B2B"})

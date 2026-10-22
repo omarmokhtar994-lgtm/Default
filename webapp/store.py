@@ -1347,6 +1347,29 @@ class Store:
             return int(db.execute(f"insert into incidents ({names}) values ({marks})",
                                   tuple(fields.values())).lastrowid)
 
+    def incidents_between(self, start: str, end: str, program: Any = None,
+                          user_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        return self._between("select incidents.*, coalesce(users.display_name, '') as by_name from incidents"
+                             " left join users on users.id = incidents.user_id where shift_date between ? and ?",
+                             [start, end], program, user_id, "incidents", "shift_date, program, associate, id")
+
+    def requests_between(self, start: str, end: str, program: Any = None) -> List[Dict[str, Any]]:
+        """Phase AV: break and coaching change requests for shifts on ``start`` to ``end``, with who decided."""
+        extra, more = self._program_filter("change_requests.program", program)
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                "select change_requests.*, coalesce(users.display_name, '') as decided_name from change_requests"
+                " left join users on users.id = change_requests.decided_by where shift_date between ? and ?" + extra
+                + " order by shift_date, program, id", [start, end] + more)]
+
+    def swaps_between(self, start: str, end: str, program: Any = None) -> List[Dict[str, Any]]:
+        extra, more = self._program_filter("swap_requests.program", program)
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                "select swap_requests.*, coalesce(users.display_name, '') as decided_name from swap_requests"
+                " left join users on users.id = swap_requests.decided_by where day between ? and ?" + extra
+                + " order by day, program, id", [start, end] + more)]
+
     def list_incidents(self, program: str, dates: List[str]) -> List[Dict[str, Any]]:
         marks = ", ".join("?" for _ in dates)
         with self._db() as db:

@@ -23,7 +23,7 @@ from openpyxl.styles import Font
 from .adherence import person_day
 from .clock import EGYPT
 from .day import ABSENT, AUX, CALLED_IN, EXTRA_BREAKS, MEASURES, pattern_breaks, planned
-from .versions import DAYS
+from .versions import DAYS, shift_span
 
 MAX_DAYS = 400
 KINDS = {"attendance": "Attendance", "activities": "Activities", "activity": "Day activity",
@@ -32,6 +32,8 @@ KINDS = {"attendance": "Attendance", "activities": "Activities", "activity": "Da
          "worked": "Worked hours and adherence", "summary": "Daily summary",
          "channels": "Channels planned and changed", "cover": "Cover from outside the roster",
          "leave": "Leave requests", "channel_hours": "Hours per channel",
+         "incidents": "Incidents (missed breaks)", "sessions": "Booked sessions",
+         "break_requests": "Break and coaching requests", "swaps": "Swap requests",
          "record": "Other actions"}
 VERSION_EVENTS = {"version_created": "New version", "set_in_use": "Set in use"}
 OTHER_EVENTS = {"run_uploaded": "Run uploaded", "run_started": "Run started", "run_stopped": "Run stopped",
@@ -143,15 +145,28 @@ class _Weeks:
         return next((a for a in self.week(program, day).get("associates", []) if a["name"] == name), {})
 
 
+def _minutes_off(status: str, shift: str, lo: Optional[int], hi: Optional[int]) -> Any:
+    """Phase AV: how long a Late (shift start to arrival), a Left early (leaving to shift end) or a timed absence was."""
+    span = shift_span(shift)
+    if status == "Late" and span and hi is not None:
+        return hi + (1440 if hi < span[0] else 0) - span[0]
+    if status == "Left early" and span and lo is not None:
+        return span[1] - (lo + (1440 if lo < span[0] else 0))
+    if lo is not None and hi is not None:
+        return hi - lo
+    return ""
+
+
 def _attendance(store, days, weeks, start, end, program, user_id, measure):
-    yield ["Shift date", "Program", "Associate", "Slot", "Shift", "Status", "From", "To", "Billable", "With department",
-           "With", "Why", "Recorded by", "Recorded at"]
+    yield ["Shift date", "Program", "Associate", "Slot", "Shift", "Status", "From", "To", "Minutes", "Billable",
+           "With department", "With", "Why", "Recorded by", "Recorded at"]
     for r in store.attendance_between(start.isoformat(), end.isoformat(), program, user_id):
         day = date.fromisoformat(r["shift_date"])
         person = weeks.person(r["program"], day, r["associate"])
         billable = "Yes" if r["billable"] else ("No" if r["status"] in AUX else "")
-        yield [r["shift_date"], r["program"], r["associate"], person.get("slot", ""),
-               (person.get("days") or [""] * 7)[_day_index(day)], r["status"], _hm(r["from_min"]), _hm(r["to_min"]),
+        shift = (person.get("days") or [""] * 7)[_day_index(day)]
+        yield [r["shift_date"], r["program"], r["associate"], person.get("slot", ""), shift, r["status"],
+               _hm(r["from_min"]), _hm(r["to_min"]), _minutes_off(r["status"], shift, r["from_min"], r["to_min"]),
                billable, r.get("with_dept", ""), r.get("with_whom", ""), r.get("why", ""), r["by_name"], _when(r["at"])]
 
 
@@ -353,6 +368,54 @@ def _leave(store, days, weeks, start, end, program, user_id, measure):
                r["note"], r["tm_name"], r["rta_name"], r["outcome"], r["reason"]]
 
 
+def _incidents(store, days, weeks, start, end, program, user_id, measure):
+    """Phase AV: what was ticked as an incident when a break was moved (a missed break so far)."""
+    yield ["Shift date", "Program", "Associate", "Slot", "Shift", "Incident", "Break", "Note", "Recorded by",
+           "Recorded at"]
+    for r in store.incidents_between(start.isoformat(), end.isoformat(), program, user_id):
+        person = weeks.person(r["program"], date.fromisoformat(r["shift_date"]), r["associate"])
+        shift = (person.get("days") or [""] * 7)[_day_index(date.fromisoformat(r["shift_date"]))]
+        yield [r["shift_date"], r["program"], r["associate"], person.get("slot", ""), shift,
+               "Missed break" if r["kind"] == "missed_break" else r["kind"], r["idx"] + 1, r["note"], r["by_name"],
+               _when(r["at"])]
+
+
+def _sessions(store, days, weeks, start, end, program, user_id, measure):
+    """Phase AV: meetings, training and coaching booked for people together, one row per person."""
+    yield ["Shift date", "Program", "Session", "Associate", "Activity", "From", "To", "Minutes", "Billable", "With",
+           "Why", "People in it", "Recorded by", "Recorded at"]
+    rows = [r for r in store.activities_between(start.isoformat(), end.isoformat(), program, user_id) if r.get("session")]
+    size: Dict[Tuple[str, str], int] = {}
+    for r in rows:
+        size[(r["shift_date"], r["session"])] = size.get((r["shift_date"], r["session"]), 0) + 1
+    for r in sorted(rows, key=lambda r: (r["shift_date"], r["program"], r["session"], r["start"], r["associate"])):
+        yield [r["shift_date"], r["program"], r["session"], r["associate"], r["kind"], _hm(r["start"]), _hm(r["end_min"]),
+               r["end_min"] - r["start"], "Yes" if r["billable"] else "No", r.get("with_whom", ""), r.get("why", ""),
+               size[(r["shift_date"], r["session"])], r["by_name"], _when(r["at"])]
+
+
+def _break_requests(store, days, weeks, start, end, program, user_id, measure):
+    """Phase AV: break and coaching change requests, and how each was answered."""
+    yield ["Shift date", "Program", "Kind", "People", "Asked by", "Asked at", "Detail", "Why", "Status", "Decided by",
+           "Decided at", "Decision", "Outcome"]
+    for r in store.requests_between(start.isoformat(), end.isoformat(), program):
+        try:
+            people = ", ".join(json.loads(r["names"] or "[]"))
+        except ValueError:
+            people = r["names"]
+        yield [r["shift_date"], r["program"], r["kind"], people, r["requester_name"], _when(r["asked"]), r["detail"],
+               r["why"], r["status"], r["decided_name"], _when(r["decided_at"]), r["decision"], r["outcome"]]
+
+
+def _swaps(store, days, weeks, start, end, program, user_id, measure):
+    """Phase AV: shift swap requests for days in the period, whatever their status."""
+    yield ["Day", "Program", "Asked by", "Swap with", "Their shift", "Other's shift", "Note", "Status", "Asked at",
+           "Decided by", "Decided at", "Reason", "Outcome"]
+    for r in store.swaps_between(start.isoformat(), end.isoformat(), program):
+        yield [r["day"], r["program"], r["asker"], r["other"], r["asker_cell"], r["other_cell"], r["note"], r["status"],
+               _when(r["asked"]), r["decided_name"], _when(r["decided_at"]), r["reason"], r["outcome"]]
+
+
 def _channel_hours(store, days, weeks, start, end, program, user_id, measure):
     """Phase AP (sample ap01, C): the hours each channel is staffed, per program and day, from the schedule in use."""
     from .channel_hours import CHANNEL_NAMES, day_hours
@@ -372,7 +435,8 @@ TABLES: Dict[str, Callable] = {"attendance": _attendance, "activities": _activit
                                "breaks": _breaks,
                                "changes": _changes, "versions": _versions, "runs": _runs, "worked": _worked,
                                "summary": _summary, "channels": _channels, "cover": _cover, "leave": _leave, "channel_hours": _channel_hours,
-                               "record": _record}
+                               "incidents": _incidents, "sessions": _sessions, "break_requests": _break_requests,
+                               "swaps": _swaps, "record": _record}
 
 
 def _text_cell(ws, value: Any) -> WriteOnlyCell:

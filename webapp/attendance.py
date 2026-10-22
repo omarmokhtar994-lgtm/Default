@@ -1272,6 +1272,7 @@ class DayBook:
         page = self.page(program, on, measure)
         m += 1440 if m < span[0] else 0
         found = advice(page["view"], page["inputs"], name, idx, m)
+        found["warnings"] += self._default_words(program, on, page["view"], name, idx, m)
         if page["view"].get("channels") is not None:  # Phase V: what the move does to the channels
             old = {w["text"] for w in page["view"]["channels"]["warnings"]}
             moved = self.page(program, on, measure, extra={"break": (name, idx, m)})["view"]["channels"]
@@ -1787,6 +1788,24 @@ class DayBook:
         found = replan(view, page["inputs"], max(now - start, 0) if now else 0, target=page["target"]["target"],
                        fit=self.fit_for(program, on, start, view))
         return {**found, "moves": self._dated(found["moves"], view, on, start)}
+
+    def _default_words(self, program: str, on: date, view: Dict[str, Any], name: str, idx: int, at: int) -> List[str]:
+        """Phase AX (owner: "prioritize the default, followed by the engine"): what moving break ``idx`` of ``name`` to ``at``
+        takes the person's breaks out of (the usual shape, then the engine's rules); nothing when the rules cannot be read.
+        A warning, not a refusal: the move can be kept anyway."""
+        from .break_plan import fit_words, slots_for
+        people = self._rule_people(program, on, view)
+        found = (people or {}).get(name)
+        seg = next((s for l in view["lanes"] if l["name"] == name for s in l["segments"] if s["offset"] == 0), None)
+        if found is None or seg is None or any(b["idx"] >= found[2] for b in seg["breaks"]):
+            return []
+        rules, label, count, _ = found
+        before: List[Optional[int]] = [None] * count
+        for b in seg["breaks"]:
+            before[b["idx"]] = b["start"]
+        after = list(before)
+        after[idx] = at
+        return fit_words(rules, label, before, after)
 
     def _rule_people(self, program: str, on: date, view: Dict[str, Any]):  # type: ignore[no-untyped-def]
         """name -> (the break rules, the shift's label, the breaks the rules give it, the shift's date offset in minutes) for

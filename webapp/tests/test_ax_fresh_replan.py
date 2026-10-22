@@ -390,3 +390,43 @@ class TheRescuePrefersTheDefault(_cb._Cancel):
         self.assertIn("status", found)
         with mock.patch.object(self.days.book, "break_rules", side_effect=ValueError("no rules")):
             self.assertIn("status", self.days.rescue_plan(self.key, _WED, None))
+
+
+class TheManualMoveWarns(_cb._Cancel):
+    """Owner, 2026-10-22: a manual move that takes a break out of the default (the usual shape, then the engine's rules) says
+    so and asks "Keep this time anyway?"; it is not refused."""
+    def first(self):
+        for lane in self.days.page(self.key, _WED)["view"]["lanes"]:
+            for seg in lane["segments"]:
+                if seg["offset"] == 0 and seg["status"] == "Present" and seg["breaks"]:
+                    return lane["name"], seg, seg["breaks"][0]
+        self.fail("nobody with breaks")
+
+    @staticmethod
+    def at(minute):
+        return f"{minute // 60 % 24:02d}:{minute % 60:02d}"
+
+    def said(self, minute):
+        name, seg, b = self.first()
+        got = self.days.break_advice(self.key, _WED, name, b["idx"], self.at(minute))
+        return " ".join(got["warnings"])
+
+    def test_a_first_break_taken_out_of_the_usual_shape_says_so(self):
+        name, seg, b = self.first()
+        self.assertIn("first break is normally 2 to 3.5 hours into the shift", self.said(seg["start"] + 30))
+
+    def test_a_move_inside_the_shape_says_nothing_about_it(self):
+        name, seg, b = self.first()
+        self.assertNotIn("normally", self.said(seg["start"] + 150))
+
+    def test_a_break_that_was_already_out_of_shape_is_not_blamed_for_a_nudge(self):
+        name, seg, b = self.first()
+        self.days.move_break(self.key, _WED, name, b["idx"], self.at(seg["start"] + 60), self.omar)
+        self.addCleanup(self.days.move_break, self.key, _WED, name, b["idx"], None, self.omar)
+        self.assertNotIn("normally", self.said(seg["start"] + 65))
+
+    def test_the_moves_it_proposes_are_unaffected_when_the_rules_cannot_be_read(self):
+        name, seg, b = self.first()
+        with mock.patch.object(self.days.book, "break_rules", side_effect=ValueError("no rules")):
+            got = self.days.break_advice(self.key, _WED, name, b["idx"], self.at(seg["start"] + 30))
+        self.assertNotIn("normally", " ".join(got["warnings"]))

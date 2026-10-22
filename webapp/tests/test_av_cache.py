@@ -293,3 +293,36 @@ class TheBusyHour(unittest.TestCase):
                             (rta, f"/shrinkage?program={q}&from=2026-10-11&to=2026-10-14")):
             self.assertEqual(client.get(url).status_code, 200, url)
         self.assertEqual(self.store.generation, before)
+
+
+class WhileOthersAreLooking(_Tagged):
+    """Many people look at a day while one changes it: after each change returns, the one who made it (and anyone who
+    looks next) sees it, however the others' looks fell in between."""
+    def test_a_writer_always_reads_its_own_write_with_readers_racing(self):
+        import threading
+        name = self.with_breaks()[0]
+        stop, errors = threading.Event(), []
+
+        def look():
+            while not stop.is_set():
+                try:
+                    self.days.page(self.key, WED)
+                except Exception as exc:  # pragma: no cover - reported below
+                    errors.append(exc)
+                    return
+        readers = [threading.Thread(target=look) for _ in range(6)]
+        for t in readers:
+            t.start()
+        try:
+            for i in range(30):
+                status = "Sick" if i % 2 == 0 else "Present"
+                self.days.set_status(self.key, WED, name, status, self.omar)
+                lane = next(l for l in self.days.page(self.key, WED)["view"]["lanes"] if l["name"] == name)
+                seen = next(s for s in lane["segments"] if s["offset"] == 0)["status"]
+                self.assertEqual(seen, status, f"change {i}")
+        finally:
+            stop.set()
+            for t in readers:
+                t.join()
+            self.days.set_status(self.key, WED, name, "Present", self.omar)
+        self.assertEqual(errors, [])

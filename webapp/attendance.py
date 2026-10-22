@@ -619,10 +619,22 @@ class DayBook:
             return page if shared else self._copy(page)
 
     def _verify(self, key, found, program, on, measure) -> None:
-        fresh = self._build_page(program, on, measure, None, True, True, None)  # under the same zone as the hit
-        same = first_difference(fingerprint({k: v for k, v in (found or {}).items() if k != "inputs"}),
-                                fingerprint({k: v for k, v in (fresh or {}).items() if k != "inputs"}))
-        if same:
+        """Checking mode: the day kept must equal a fresh build of it. Another thread may be writing, so a comparison
+        counts only when the kept day is still the one kept and no write happened while the fresh day was built; a
+        difference that stands under those two conditions is a day kept out of date."""
+        for _ in range(8):
+            entry = self._pages.get(key)
+            if entry is None or entry[0] != self.store.generation:
+                return  # no longer kept: a write got there first
+            before = self.store.generation
+            fresh = self._build_page(program, on, measure, None, True, True, None)  # under the same zone as the hit
+            if self.store.generation != before:
+                time.sleep(0.02)
+                continue  # a write happened while it was built: try again
+            same = first_difference(fingerprint({k: v for k, v in entry[2].items() if k != "inputs"}),
+                                    fingerprint({k: v for k, v in (fresh or {}).items() if k != "inputs"}))
+            if not same:
+                return
             raise AssertionError(f"A kept day differs from a fresh build of it ({key}): {same}")
 
     def _kept(self, key, shared: bool = False):

@@ -552,19 +552,31 @@ class Store:
         db.row_factory = sqlite3.Row
         touched = []
 
+        def bump() -> None:
+            with _GENERATION_LOCK:
+                _GENERATIONS[self._gen_key] = _GENERATIONS.get(self._gen_key, 0) + 1
+
         def watch(statement: str) -> None:  # a write to a table a kept day may be built from
             found = _WRITE.match(statement)
             if found and found.group(1).lower() not in QUIET_TABLES:
+                if not touched:
+                    bump()  # at once: a day kept before this write is out of date before it is even committed ...
                 touched.append(1)
         db.set_trace_callback(watch)
         try:
-            with db:
+            try:
                 yield db
+            except BaseException:
+                db.rollback()
+                if touched:
+                    bump()
+                raise
+            else:
+                db.commit()
+                if touched:
+                    bump()  # ... and again the moment it is committed, for a day built in between
         finally:
-            db.close()  # after the commit: such a write makes every kept copy of a day out of date
-            if touched:
-                with _GENERATION_LOCK:
-                    _GENERATIONS[self._gen_key] = _GENERATIONS.get(self._gen_key, 0) + 1
+            db.close()
 
     @contextmanager
     def transaction(self):

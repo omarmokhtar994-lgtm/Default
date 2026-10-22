@@ -20,3 +20,12 @@ last hour. It bends when an interval would go short (the target plus the 10-minu
 Notifications (admin) picks, per LOB, which changes post. "Answers to break change and coaching requests" covers new
 requests, rejections, changed-time approvals, coaching answers and leave and swap decisions. A break's repeated moves
 post only the latest, followed by "Breaks now: ...".
+
+## Booking several people, and the missed-break tick (Phase AV)
+- **Find a time** books the same people at a time you type: tick them, set the length, type the time under "Or a time you
+  choose" and press "Book everyone at this time". If anyone is not free, nobody is booked. On the Interval board, "Book
+  several" next to an interval opens Find a time with that interval filled in.
+- **Booked sessions** lists each group booked together. Tick some or all of the people, then move them to a new time or
+  take them out. A move happens for everyone ticked or for nobody; Undo reverses it.
+- **Missed break**: tick it on the break dialog, or on Change several breaks, when the associate missed the break. It is
+  kept as an incident and shows on the Incidents page and in the Incidents export.

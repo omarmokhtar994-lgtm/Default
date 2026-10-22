@@ -10,3 +10,11 @@
 - The RTA approves, rejects, or approves at a nearby time (with a comment) and may correct billable. You see the answer
   and comment as **New answer**, once. You can **Cancel** a request until it is decided. If you hold RTA rights you can
   approve your own request.
+
+## Incidents and shrinkage (Phase AV)
+Insights, Incidents. Pick the period (presets or dates) and program or LOB. Overview shows absenteeism, shrinkage out of
+office, the client's shrinkage, in-office shrinkage, adherence and incident counts, each with its change on the period
+before; LOBs puts LOBs side by side; Associates lists everyone with the count and time of each incident, repeated
+incidents (3 or more) and one associate day by day. Absenteeism counts are yours to pick: "RTA and client" counts
+unplanned leave and sick, "Sutherland" counts unplanned leave only (sick stays in shrinkage). "Download these figures"
+gives the matching exports.

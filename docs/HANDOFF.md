@@ -226,6 +226,19 @@ Load each with the Skill tool at the step it covers; following it from memory do
 - Check tools: `evidence/phase_al/tools/`. Expected on Phase AL: 618 and 539 tests OK (1 skipped), 77 browser tests
   OK, GATE PASS with 1537 tests (2 skipped), page review 0 problems, sweep 0 exceptions and 0 server errors.
 
+## Phase AV (owner, 2026-10-22): bulk coaching, missed breaks, exports, Incidents page
+- `activities.session` groups people booked together (`DayBook.book_session`, `sessions`, `move_session`, `cancel_session`,
+  `session_start`); routes `/day/book` (typed `at`), `/day/session/move`, `/day/session/cancel`; tab "Booked sessions".
+- `incidents` table (missed break ticked on `move_break(missed=True)` / `apply_bulk`), journaled, undone and purged with
+  the day (`DAY_ROW_KEYS`, `DAY_TABLES`, `delete_day_before`).
+- Exports: Attendance has Minutes (Late, Left early); new kinds `incidents`, `sessions`, `break_requests`, `swaps`,
+  `absence`, `incident_summary`. The `absence` and `incident_summary` exports pass no leave book, so an approved public
+  holiday request is not applied there.
+- `webapp/insights.py` (fact row per person and day from `DayBook.page`; sums per associate, LOB, program, weekday,
+  repeats), `insights_page.py` (tiles, charts), `/incidents`, `templates/insights.html`. Absenteeism counts are chosen on
+  the page (`abs=`): RTA and client = unplanned + sick, Sutherland = unplanned. Planned leave has a count, no duration.
+- Screens: `evidence/phase_av/tools/screens.py`. Not packed. Not yet done: gate minimum, package.
+
 ## Earlier: end of Phase AK
 
 - Phase AK is complete and pushed (branch `ccr-90ec94cc-a37tqk`): channel colours D with letters on the Timeline,

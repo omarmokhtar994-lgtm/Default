@@ -15,6 +15,7 @@ speaks the language when one is short) without leaving their own channel short, 
 moving the break."""
 from __future__ import annotations
 
+import copy
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from .attendance import with_text
@@ -200,6 +201,14 @@ class ChannelHold:
         self.channel = {c: list(v) for c, v in counts.channel.items()}
         self.language = [list(v) for v in counts.language]
         self.who = counts.who
+
+    def __deepcopy__(self, memo):
+        """Phase AV: a kept day hands out copies; only the counters ``apply`` changes are copied, the rest (the setup,
+        the rules and who covers what, never changed) is shared."""
+        twin = copy.copy(self)
+        twin.channel = {c: list(v) for c, v in self.channel.items()}
+        twin.language = [list(v) for v in self.language]
+        return twin
 
     def _covered(self, name: str, i: int) -> str:
         t = i * STEP

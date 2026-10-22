@@ -548,21 +548,22 @@ class DayBook:
 
     def page(self, program: str, on: date, measure: Optional[str] = None,
              extra: Optional[Dict[str, Any]] = None, recorded: bool = True,
-             cover: bool = True, version_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+             cover: bool = True, version_id: Optional[int] = None, shared: bool = False) -> Optional[Dict[str, Any]]:
         """The day, kept (Phase AV): the plain day of a program, date and measure is built once and handed out as a
         copy until anything is written to the database (``Store.generation``) or ``PAGE_KEEP`` seconds pass. A day
         asked for with ``extra``, as planned, without cover or as another version is built every time. See
-        ``_build_page`` for what a day is."""
+        ``_build_page`` for what a day is. With ``shared`` the kept day itself is returned, not a copy: only for a caller
+        that reads it and never changes it."""
         if measure is None:
             measure = self.measure_of(program)
         if extra or not recorded or not cover or version_id is not None:
             return self._build_page(program, on, measure, extra, recorded, cover, version_id)
         key = (program, on, measure)
-        found = self._kept(key)
+        found = self._kept(key, shared)
         if found is not None:
             return found
         with self._build_lock:  # one thread builds a day, the others wait for it rather than build it too
-            found = self._kept(key)
+            found = self._kept(key, shared)
             if found is not None:
                 return found
             generation, built_at = self.store.generation, time.monotonic()  # read before building: a write during it
@@ -572,9 +573,9 @@ class DayBook:
                 self._pages.move_to_end(key)
                 while len(self._pages) > PAGE_MAX:
                     self._pages.popitem(last=False)
-            return self._copy(page)
+            return page if shared else self._copy(page)
 
-    def _kept(self, key):
+    def _kept(self, key, shared: bool = False):
         entry = self._pages.get(key)
         if entry is None:
             return None
@@ -582,14 +583,28 @@ class DayBook:
         if generation != self.store.generation or time.monotonic() - built_at > PAGE_KEEP:
             self._pages.pop(key, None)
             return None
-        return self._copy(page)
+        return page if shared else self._copy(page)
 
     @staticmethod
     def _copy(page):
         """A copy a caller may change; the workbook's inputs (read once, never changed) are shared, not copied."""
         if page is None:
             return None
-        return copy.deepcopy(page, {id(page["inputs"]): page["inputs"]})
+        shared = page["inputs"]
+
+        def clone(x):
+            t = type(x)
+            if t is dict:
+                return {k: clone(v) for k, v in x.items()}
+            if t is list:
+                return [clone(v) for v in x]
+            if t is tuple:
+                return tuple(clone(v) for v in x)
+            if t in (str, int, float, bool, type(None), date):
+                return x
+            return copy.deepcopy(x)  # anything else a day holds: copied the slow, sure way
+
+        return {k: (v if v is shared else clone(v)) for k, v in page.items()}
 
     def _build_page(self, program: str, on: date, measure: Optional[str] = None,
                     extra: Optional[Dict[str, Any]] = None, recorded: bool = True,

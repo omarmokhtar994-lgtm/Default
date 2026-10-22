@@ -290,7 +290,7 @@ class ChangeBook:
         """``name``'s shift that starts on ``on``, in the window the RTA shows it in; ``at`` is now in that day's minutes
         (negative before it starts). None when the day has no schedule or the person no shift that starts then."""
         try:
-            page = self.days.page(program, on, self.measure_of(program))
+            page = self.days.page(program, on, self.measure_of(program), shared=True)
         except ValueError:
             return None
         seg = next((s for lane in (page["view"]["lanes"] if page else []) if lane["name"] == name
@@ -382,7 +382,7 @@ class ChangeBook:
     # ------------------------------------------------------------------ coaching
     def coaching_view(self, program: str, on: date, names: List[str]) -> Dict[str, Any]:
         """The window the RTA shows ``on`` that holds every one of ``names``'s shifts that start that day."""
-        page = self.days.page(program, on, self.measure_of(program))
+        page = self.days.page(program, on, self.measure_of(program), shared=True)
         if page is None:
             raise ValueError("There is no schedule for that day.")
         starts = []
@@ -431,7 +431,7 @@ class ChangeBook:
     def impact(self, row: Dict[str, Any], billable: Optional[bool] = None) -> List[Dict[str, Any]]:
         names, d, on = json.loads(row["names"]), json.loads(row["detail"]), date.fromisoformat(row["shift_date"])
         if row["kind"] == BREAK:
-            page = self.days.page(row["program"], on, self.measure_of(row["program"]))
+            page = self.days.page(row["program"], on, self.measure_of(row["program"]), shared=True)
             seg = next(s for lane in page["view"]["lanes"] if lane["name"] == names[0] for s in lane["segments"]
                        if s["offset"] == 0)
             start = max(0, seg["start"] - WINDOW_BEFORE)
@@ -518,7 +518,7 @@ class ChangeBook:
         d = json.loads(row["detail"]) if isinstance(row["detail"], str) else row["detail"]
         names, on = json.loads(row["names"]), date.fromisoformat(row["shift_date"])
         try:
-            page = self.days.page(row["program"], on, self.measure_of(row["program"]))
+            page = self.days.page(row["program"], on, self.measure_of(row["program"]), shared=True)
         except ValueError:
             return ""
         seg = next((s for lane in (page["view"]["lanes"] if page else []) if lane["name"] == names[0]

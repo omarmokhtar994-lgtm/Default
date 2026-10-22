@@ -41,6 +41,25 @@ class TheCache(_Tagged):
         self.assertNotEqual(again["view"]["cells"][0]["now"], -999)
         self.assertNotEqual(again["target"]["target"], -1)
 
+    def test_a_reader_that_only_reads_may_ask_for_the_kept_day_itself(self):
+        one = self.days.page(self.key, WED, shared=True)
+        two = self.days.page(self.key, WED, shared=True)
+        self.assertIs(one, two)
+        self.assertIsNot(self.days.page(self.key, WED), one)  # everyone else still gets a copy
+
+    def test_the_channel_counters_a_replan_changes_are_not_shared_between_copies(self):
+        one = self.days.page(self.key, WED)
+        hold = (one["view"].get("channels") or {}).get("hold")
+        if hold is None:
+            self.skipTest("this fixture's day has no channel counters")
+        name = next(iter(hold.who[0]), (0, ""))[1] if hold.who else ""
+        before = [list(v) for v in self.days.page(self.key, WED)["view"]["channels"]["hold"].language]
+        for row in hold.language:
+            for i in range(len(row)):
+                row[i] += 99
+        again = self.days.page(self.key, WED)["view"]["channels"]["hold"].language
+        self.assertEqual([list(v) for v in again], before)
+
     def test_days_programs_and_measures_are_kept_apart(self):
         self.days.page(self.key, WED)
         with self.builds() as built:

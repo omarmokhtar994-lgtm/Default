@@ -71,6 +71,7 @@ from .results import recolour, version_summary
 from .runs import ACTIVE, MODES, OPTION_LABELS, READY, RESUMABLE, RunQueue, parse_options, run_options
 from .store import Store, clean_password
 from .throttle import SignInThrottle
+from .upload_guard import look as upload_look
 from .zipcheck import zip_problem
 from werkzeug.datastructures import ImmutableMultiDict
 from .change_requests import ChangeBook, level_of
@@ -1795,6 +1796,16 @@ def create_app(config: Dict[str, Any]) -> Flask:
             abort(403)
         return run
 
+    def _upload_refused(path: Path, name: str, structure: bool = True) -> str:
+        """Phase AV: "" when the uploaded workbook may be kept; else the file is deleted at once and the reason (by kind
+        and tab, never the values found) is returned to say and is recorded."""
+        found = upload_look(path, structure=structure)
+        if not found:
+            return ""
+        path.unlink(missing_ok=True)
+        _record("upload_refused", subject=os.path.basename(name)[:120], detail=f"{found[0]}: file deleted")
+        return found[1]
+
     def _channel_upload_check(path: Path) -> Tuple[Optional[str], Optional[int]]:
         """Phase V: (refusal, warnings) for an uploaded workbook; (None, None) when it has no channel tabs. Refused
         when the channel tabs cannot be used, or when the requirement tab is not named (the engine could then read
@@ -1873,6 +1884,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if too_big:
             path.unlink()
             flash(too_big)
+            return redirect(url_for("home"))
+        refused = _upload_refused(path, name)  # Phase AV: other tabs, card numbers, addresses, macros: deleted
+        if refused:
+            flash(refused)
             return redirect(url_for("home"))
         refusal, warnings = _channel_upload_check(path)
         if refusal:
@@ -3044,6 +3059,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if too_big:
             path.unlink(missing_ok=True)
             flash(too_big)
+            return back
+        refused = _upload_refused(path, upload.filename or "", structure=False)  # Phase AV
+        if refused:
+            flash(refused)
             return back
         try:
             lines = _book().attach_channels(run_id, path)

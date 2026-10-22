@@ -77,9 +77,11 @@ def look(path: Path, structure: bool = True, personal: bool = True) -> Optional[
         return ("active", "This file carries macros, embedded objects or links to other files, which a Team Scheduler "
                 "workbook never has. It could be outsourced or unsafe data, so it was refused and deleted from the "
                 "server to avoid any leak.")
+    handle = open(path, "rb")  # a file object, so any name works (an upload is saved as .upload)
     try:
-        wb = load_workbook(path, read_only=True, data_only=False)
+        wb = load_workbook(handle, read_only=True, data_only=False)
     except Exception:  # unreadable by the library: left to the checks that follow
+        handle.close()
         return None
     try:
         names = wb.sheetnames
@@ -115,4 +117,5 @@ def look(path: Path, structure: bool = True, personal: bool = True) -> Optional[
                         "remove those cells and upload again.")
     finally:
         wb.close()
+        handle.close()
     return None

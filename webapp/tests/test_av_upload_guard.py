@@ -98,3 +98,50 @@ class TheGuard(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheUploadRoutes(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        import io
+        from webapp.tests.test_runs import make_app, sign_in
+        cls.io = io
+        cls.app, cls.store, *_ = make_app(start_worker=False)
+        cls.store.add_user("omar", "Omar", "Owner-pass-123", is_admin=True, must_change=False)
+        cls.client = sign_in(cls.app, "omar", "Owner-pass-123")
+        cls.dir = Path(tempfile.mkdtemp())
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.dir, True)
+
+    def upload(self, path, kind="ready"):
+        from webapp.tests.test_runs import token
+        return self.client.post("/runs", data={"csrf_token": token(self.client), "kind": kind, "mode": "QUICK", "week_start": "2026-10-11",
+                                               "workbook": (self.io.BytesIO(Path(path).read_bytes()), "week.xlsx")},
+                                content_type="multipart/form-data", follow_redirects=True)
+
+    def incoming(self):
+        root = self.app.extensions["runs"].runs_root / "_incoming"
+        return list(root.glob("*")) if root.exists() else []
+
+    def test_a_workbook_with_other_tabs_is_deleted_and_said(self):
+        before = len(self.store.list_runs())
+        got = self.upload(book(self.dir / "p.xlsx", tabs=("Sheet1", "Payroll")))
+        text = got.get_data(as_text=True)
+        self.assertIn("outsourced", text)
+        self.assertEqual(self.incoming(), [])
+        self.assertEqual(len(self.store.list_runs()), before)
+        self.assertTrue(any(e["kind"] == "upload_refused" for e in self.store.list_events(0, 2 ** 31)))
+
+    def test_a_card_number_is_deleted_and_never_shown_or_logged(self):
+        got = self.upload(book(self.dir / "c.xlsx", cells=[("Schedule", "A1", CARD)]))
+        self.assertIn("card number", got.get_data(as_text=True))
+        self.assertNotIn("4111", got.get_data(as_text=True))
+        self.assertEqual(self.incoming(), [])
+        for e in self.store.list_events(0, 2 ** 31):
+            self.assertNotIn("4111", str(e))
+
+    def test_the_example_template_is_not_refused_by_the_guard(self):
+        got = self.upload(REPO / "webapp/workbooks/Scheduler_Input_Example.xlsx", kind="engine")
+        self.assertNotIn("outsourced", got.get_data(as_text=True))

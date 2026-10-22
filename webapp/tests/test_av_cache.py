@@ -93,8 +93,17 @@ class EveryWriteClearsIt(_Tagged):
         before = self.store.generation
         self.days.page(self.key, WED)
         self.assertEqual(self.store.generation, before)
-        self.store.add_incident(program=self.key, shift_date=WED.isoformat(), associate="Associate 008", kind="x", user_id=self.omar, at=1.0)
+        self.store.set_attendance(program=self.key, shift_date=WED.isoformat(), associate="Associate 008", status="Present",
+                                  from_min=None, to_min=None, user_id=self.omar)
         self.assertGreater(self.store.generation, before)
+
+    def test_sign_ins_events_requests_and_incidents_do_not_clear_it(self):
+        before = self.store.generation
+        self.store.add_user("quiet1", "Quiet One", "Quiet-pass-123", must_change=False)
+        self.store.authenticate("quiet1", "Quiet-pass-123")
+        self.store.add_event(kind="signed_in", detail="x", user_id=self.omar)
+        self.store.add_incident(program=self.key, shift_date=WED.isoformat(), associate="Associate 008", kind="x", user_id=self.omar, at=1.0)
+        self.assertEqual(self.store.generation, before)
 
     def test_attendance(self):
         name = self.with_breaks()[0]
@@ -160,3 +169,29 @@ class TheServer(unittest.TestCase):
             serve.main()
         self.assertEqual(run.call_args.kwargs["connection_limit"], 1000)
         self.assertEqual(run.call_args.kwargs["threads"], 8)
+
+
+class TheBusyHour(unittest.TestCase):
+    """What the people of a busy hour do (sign in, look at their day and their weeks, look at the RTA's pages) writes
+    nothing a kept day is built from, so it does not clear it."""
+    @classmethod
+    def setUpClass(cls):
+        from webapp.tests.test_as_requests import _Fixture
+        _Fixture.setUpClass.__func__(cls)
+        cls._fixture = _Fixture
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._fixture.tearDownClass.__func__(cls)
+
+    def test_signing_in_and_looking_at_pages_keeps_the_days(self):
+        from webapp.tests.test_runs import sign_in
+        before = self.store.generation
+        associate = sign_in(self.app, "a027", "Associate-pass-1")
+        rta = sign_in(self.app, "rta1", "Staff-pass-123")
+        q = self.key.replace(" ", "+")
+        for client, url in ((associate, "/me/breaks"), (associate, "/me"), (rta, f"/day?program={q}&date=2026-10-14"),
+                            (rta, f"/incidents?program={q}&from=2026-10-11&to=2026-10-14"),
+                            (rta, f"/shrinkage?program={q}&from=2026-10-11&to=2026-10-14")):
+            self.assertEqual(client.get(url).status_code, 200, url)
+        self.assertEqual(self.store.generation, before)

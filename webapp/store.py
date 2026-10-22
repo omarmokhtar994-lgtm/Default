@@ -7,6 +7,7 @@ passwords lock the account for 15 minutes; a successful login clears it.
 from __future__ import annotations
 
 import json
+import re
 import secrets
 import sqlite3
 import threading
@@ -413,6 +414,12 @@ def hash_password(password: str) -> str:
 
 
 _GENERATIONS: Dict[str, int] = {}  # Phase AV
+_WRITE = re.compile(r"\s*(?:insert\s+(?:or\s+\w+\s+)?into|update(?:\s+or\s+\w+)?|delete\s+from)\s+\"?(\w+)", re.I)
+# Tables no kept day is built from: sign-ins and sessions, the event record, group posts, requests and their answers, the
+# journal, run status, incidents and site settings. Every other table (and any new one) clears the kept days when written.
+QUIET_TABLES = frozenset({"users", "events", "notify_items", "notify_posts", "notify_settings", "change_requests",
+                          "swap_requests", "leave_requests", "day_actions", "runs", "incidents", "app_settings",
+                          "role_permissions", "leave_balances"})
 _GENERATION_LOCK = threading.Lock()
 
 
@@ -534,13 +541,19 @@ class Store:
             return
         db = sqlite3.connect(self.path, timeout=30)
         db.row_factory = sqlite3.Row
+        touched = []
+
+        def watch(statement: str) -> None:  # a write to a table a kept day may be built from
+            found = _WRITE.match(statement)
+            if found and found.group(1).lower() not in QUIET_TABLES:
+                touched.append(1)
+        db.set_trace_callback(watch)
         try:
             with db:
                 yield db
         finally:
-            changed = db.total_changes > 0  # after the commit: anything written, so kept copies of days are stale
-            db.close()
-            if changed:
+            db.close()  # after the commit: such a write makes every kept copy of a day out of date
+            if touched:
                 with _GENERATION_LOCK:
                     _GENERATIONS[self._gen_key] = _GENERATIONS.get(self._gen_key, 0) + 1
 

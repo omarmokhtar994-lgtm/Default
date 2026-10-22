@@ -980,7 +980,7 @@ def vto_offers(view: Dict[str, Any], after: int = 0, top: int = 6) -> List[Dict[
 
 # ---------------------------------------------------------------- the autopilot for the rest of the day's breaks
 def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: int = 400,
-           target: Optional[float] = None) -> Dict[str, Any]:
+           target: Optional[float] = None, fresh: bool = False) -> Dict[str, Any]:
     """Re-plot the breaks not yet started (people on shift and present, this day's shifts) to lift the
     tightest interval, then (with the week's ``target``, Phase AH: the owner's 10 minutes) to keep the most
     intervals at the target with ``CUSHION`` minutes over it, then to cut the hours short; each break stays inside
@@ -988,7 +988,12 @@ def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: i
     on a 5-minute step, clear of the person's other breaks, away time and activities, with the gaps to
     its neighbours within the program's rules, and no language drops below its minimum (or loses its
     last person). Greedy: the best single move each round, until nothing improves. Returns the moves
-    and the day before and after (tightest buffer and hours short, as the day page shows them)."""
+    and the day before and after (tightest buffer and hours short, as the day page shows them).
+
+    ``fresh`` (Phase AX, "Replan the day's breaks"): every break not yet started is lifted and placed again from
+    scratch, person by person in the order of their shifts, each at the time that leaves the day best (the same score),
+    nearest to where it was when the score is no different, inside the same rules. When the result is worse than the
+    day as it stands, nothing is proposed."""
     step = view["interval"]
     per = step // STEP
     cells = view["cells"]
@@ -1088,6 +1093,68 @@ def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: i
     hold = (view.get("channels") or {}).get("hold")
     before_score = score(sums)
     current = before_score
+    if fresh:
+        rounds = 0
+
+        def settle(lane: Dict[str, Any], change: Dict[int, int]) -> None:  # floor changes into the day's figures
+            for i, d in change.items():
+                sums[i // per] += d
+                for L in langs:
+                    if lang_of[lane["name"]] in L["eligible"]:
+                        L["counts"][i] += d
+            if hold is not None:
+                hold.apply(lane["name"], change)
+
+        def taken(seg: Dict[str, Any], at: int, minutes: int) -> Dict[int, int]:  # the floor a break at ``at`` takes
+            out: Dict[int, int] = {}
+            for t in window(at, minutes):
+                if free(seg, t):
+                    out[t // STEP] = out.get(t // STEP, 0) + 1
+            return out
+
+        for lane, seg in sorted(people, key=lambda p: (p[1]["start"], p[0]["name"])):
+            name = lane["name"]
+            mine = sorted((b for b in seg["breaks"] if starts[(name, b["idx"])] >= now), key=lambda b: b["idx"])
+            if not mine:
+                continue
+            for b in mine:
+                settle(lane, taken(seg, starts[(name, b["idx"])], b["minutes"]))  # lifted back onto the floor
+            placed = {b["idx"]: starts[(name, b["idx"])] for b in seg["breaks"] if b not in mine}
+            new: Dict[int, Tuple[int, Dict[int, int]]] = {}
+            for n, b in enumerate(mine):
+                shadow = {**seg, "breaks": [o for o in seg["breaks"] if o["idx"] in placed or o is b]}
+                lo, hi = break_window(shadow, b, placed, now, lo_gap, hi_gap)
+                hi = min(hi, seg["end"] - b["minutes"] - sum(x["minutes"] + (lo_gap or 0) for x in mine[n + 1:]))
+                best = None
+                for s in range(lo + (-lo) % STEP, hi + 1, STEP):
+                    if not all(free(seg, t) for t in range(s, s + b["minutes"], STEP)):
+                        continue
+                    change = {i: -c for i, c in taken(seg, s, b["minutes"]).items()}
+                    if not languages_hold(lane, change) or (hold is not None and not hold.holds(name, change)):
+                        continue
+                    totals = list(sums)
+                    for i, d in change.items():
+                        totals[i // per] += d
+                    rank = (score(totals), -abs(s - original[(name, b["idx"])]))
+                    if best is None or rank > best[0]:
+                        best = (rank, s, change)
+                if best is None:
+                    break
+                settle(lane, best[2])
+                placed[b["idx"]] = best[1]
+                new[b["idx"]] = (best[1], best[2])
+            if len(new) < len(mine):  # no time fits the rules for one of them: this person is left as they were
+                for s, change in new.values():
+                    settle(lane, {i: -d for i, d in change.items()})
+                for b in mine:
+                    settle(lane, {i: -d for i, d in taken(seg, starts[(name, b["idx"])], b["minutes"]).items()})
+                continue
+            for b in mine:
+                starts[(name, b["idx"])] = new[b["idx"]][0]
+        current = score(sums)
+        if current < before_score:  # worse than the day as it stands: nothing is proposed
+            starts.update(original)
+            current = before_score
     for _ in range(rounds):
         tight = {k for k in range(len(cells)) if req[k] > 0 and pm(k, sums[k]) < step / 60}  # under one person spare
         best = None

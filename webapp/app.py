@@ -3777,7 +3777,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
             outside = {"rows": days.covers(program, on), "roles": COVER_ROLES,
                        "channels": [(r["letter"], r["name"]) for r in ch["rows"] if "language" not in r] if ch else [],
                        "languages": days.cover_languages(page)}
-        proposal = days.replan_window(program, on, start, _window_now(on, start) or 0) if page and tab == "replan" else None
+        fresh = request.args.get("how") == "fresh"  # Phase AX: "Replan the day's breaks", from scratch
+        proposal = days.replan_window(program, on, start, _window_now(on, start) or 0, fresh=fresh) \
+            if page and tab == "replan" else None
         bulk = _bulk_panel(days, page, program, on, moved, start) if page and tab == "bulk" else None  # Phase AD (sample 04)
         rescue = None  # Phase AD (sample 02): interval compliance only; the page says so for the other measure
         if page and tab == "rescue" and measure == "interval":
@@ -3908,7 +3910,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                ot_page=_paged(cover["overtime"] if cover else [], "ot_page", "ot-h"),
                                vto_page=_paged(cover["vto"] if cover else [], "vto_page", "vto-h"),
                                log_page=_paged(list(reversed(page["log"])) if page else [], "log_page", "daylog-h"),
-                               proposal=proposal, from_now=from_now, cover_panel=cover_panel,
+                               proposal=proposal, fresh=fresh, from_now=from_now, cover_panel=cover_panel,
                                tile_now=now_at if window else (from_now if clock_now.date() == on else None),
                                add_panel=add_panel, person_panel=person_panel, lengths=ADD_LENGTHS, bar=bar,
                                overtime_hours=OVERTIME_MAX // 60,
@@ -4367,7 +4369,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                     done = days.apply_replan(program, on, moves, g.user["id"])
                 finally:
                     n = len(act.logs)
-                    act.label = f"Fix breaks moved {n} break{'s' if n != 1 else ''}"
+                    act.label = (f"{'Replan' if request.form.get('how') == 'fresh' else 'Fix'} breaks moved "
+                                 f"{n} break{'s' if n != 1 else ''}")
             flash(f"Moved {done} break{'s' if done != 1 else ''}.")
         except ValueError as exc:
             _say(f"Stopped: {exc} The moves before it were kept; open the autopilot again for a fresh proposal.", program,

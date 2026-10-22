@@ -1768,12 +1768,13 @@ class DayBook:
         return out
 
     def replan_window(self, program: str, on: date, start: int, now: int = 0,
-                      measure: str = "interval") -> Dict[str, Any]:
+                      measure: str = "interval", fresh: bool = False) -> Dict[str, Any]:
         """Phase AK: Fix the day's breaks on the 24 hours from ``start`` (``now`` a minute of that window, 0 for none
         started): the moves in the window's minutes, each with its shift's date."""
         page = self._window(program, on, start, measure)
         view = rebase(page["view"], start, page["views"])
-        found = replan(view, page["inputs"], max(now - start, 0) if now else 0, target=page["target"]["target"])
+        found = replan(view, page["inputs"], max(now - start, 0) if now else 0, target=page["target"]["target"],
+                       fresh=fresh)
         return {**found, "moves": self._dated(found["moves"], view, on, start)}
 
     @journaled

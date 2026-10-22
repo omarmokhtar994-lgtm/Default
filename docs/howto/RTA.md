@@ -29,3 +29,12 @@ post only the latest, followed by "Breaks now: ...".
   take them out. A move happens for everyone ticked or for nobody; Undo reverses it.
 - **Missed break**: tick it on the break dialog, or on Change several breaks, when the associate missed the break. It is
   kept as an incident and shows on the Incidents page and in the Incidents export.
+
+## Replan the day's breaks, and choosing LOBs to view together (Phase AX)
+- **Replan the day's breaks** sits next to "Fix the rest of the day's breaks". It lifts every break that has not started and
+  places each one again from scratch, inside the same rules as moving a break by hand. You see the moves, the tightest
+  interval and the hours short before and after, and nothing is kept until you press Apply. It changes nothing else:
+  attendance, shifts and breaks that have started stay. If a fresh plan is no better than the day as it is, it proposes
+  nothing. Undo takes an applied replan back.
+- **View** (day and week): tick the LOBs of the program to show together, for example two out of five. The LOB the page is
+  opened on is always shown. Untick the others to go back to one LOB.

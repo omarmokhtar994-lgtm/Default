@@ -213,7 +213,7 @@
 {% if chhours %}{{ channel_hours(chhours) }}{% endif %}
 <section class="panel" aria-labelledby="floor-h">
   <h2 id="floor-h">Who is on the floor</h2>
-  <p class="autopilot"><a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='replan') }}">Fix the rest of the day's breaks</a>{% if measure == 'interval' %} <a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='rescue') }}">Rescue the day</a>{% endif %} <a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='bulk') }}">Change several breaks</a></p>
+  <p class="autopilot"><a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='replan') }}">Fix the rest of the day's breaks</a> <a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='replan', how='fresh') }}">Replan the day's breaks</a>{% if measure == 'interval' %} <a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='rescue') }}">Rescue the day</a>{% endif %} <a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='bulk') }}">Change several breaks</a></p>
   <p class="note">Shifts are the blue bars; breaks are the marks on them. Drag a break to move it in 5-minute steps, or select it and press Enter to type the time; the dashed outline is where the engine planned it. Set attendance on the left.</p>
   {% if shift_groups %}{% set everyone = v.lanes|length %}
   <div class="shiftpick">
@@ -266,21 +266,23 @@
 {% elif tab == 'replan' %}
 {% set pr = proposal %}
 <section class="panel" aria-labelledby="rp-h">
-  <h2 id="rp-h">Fix the rest of the day's breaks</h2>
-  <p class="note">The autopilot moves breaks that have not started{% if from_now %} (after {{ hm(from_now) }}){% endif %}, for people on shift and present, to lift the tightest interval, then to keep the most intervals at the target with 10 minutes or more over it, then to cut the hours short. Each break stays inside its shift, in its order, on a 5-minute step, clear of the person's other breaks, away time and activities, with the gaps to its neighbours within this program's rules{% if page.inputs.gap_min %} ({{ page.inputs.gap_min }} to {{ page.inputs.gap_max }} minutes){% endif %}, and no language loses its last person or drops below its minimum. Nothing is kept until you apply it.</p>
+  <h2 id="rp-h">{{ "Replan the day's breaks" if fresh else "Fix the rest of the day's breaks" }}</h2>
+  {% if fresh %}<p class="note">Lifts every break that has not started{% if from_now %} (after {{ hm(from_now) }}){% endif %} and places it again from scratch, person by person, for people on shift and present: at the time that leaves the day best, inside the same rules (inside the shift, in order, the program's gaps, clear of away time and activities, no language below its minimum). Breaks that have started, attendance, shifts and everything else stay as they are. Nothing is kept until you apply it.</p>
+  {% else %}<p class="note">The autopilot moves breaks that have not started{% if from_now %} (after {{ hm(from_now) }}){% endif %}, for people on shift and present, to lift the tightest interval, then to keep the most intervals at the target with 10 minutes or more over it, then to cut the hours short. Each break stays inside its shift, in its order, on a 5-minute step, clear of the person's other breaks, away time and activities, with the gaps to its neighbours within this program's rules{% if page.inputs.gap_min %} ({{ page.inputs.gap_min }} to {{ page.inputs.gap_max }} minutes){% endif %}, and no language loses its last person or drops below its minimum. Nothing is kept until you apply it.</p>{% endif %}
   <section class="tiles" aria-label="Before and after">
     <p class="tile"><span class="tile-label">Tightest interval</span><b>{{ pr.after.tightest|hmm }}</b><small class="dim">now {{ pr.before.tightest|hmm }}</small></p>
     <p class="tile"><span class="tile-label">Hours short</span><b>{{ pr.after.short_hours|num }} h</b><small class="dim">now {{ pr.before.short_hours|num }} h</small></p>
     {% if pr.after.safe is defined %}<p class="tile"><span class="tile-label">10 minutes over the target</span><b>{{ pr.after.safe }}</b><small class="dim">now {{ pr.before.safe }}; at 100% counts too</small></p>{% endif %}
-    <p class="tile"><span class="tile-label">Breaks to move</span><b>{{ pr.moves|length }}</b><small class="dim">{{ 'nothing better within the rules' if not pr.moves else 'one click keeps them all' }}</small></p>
+    <p class="tile"><span class="tile-label">Breaks to move</span><b>{{ pr.moves|length }}</b><small class="dim">{{ ('already as good as a fresh plan' if fresh else 'nothing better within the rules') if not pr.moves else 'one click keeps them all' }}</small></p>
   </section>
   {% if pr.moves %}
   <form method="post" action="{{ url_for('day_replan_apply') }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="start" value="{{ vx }}">{{ zone_fields() }}<input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="start" value="{{ vx }}">{{ zone_fields() }}<input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}">{% if fresh %}<input type="hidden" name="how" value="fresh">{% endif %}
     <table class="adh-t"><thead><tr><th scope="col">Associate</th><th scope="col">Break</th><th scope="col">From</th><th scope="col">To</th></tr></thead>
       <tbody>{% for m in pr.moves %}<tr><td><b>{{ m.name }}</b><input type="hidden" name="move" value="{{ m.name }}|{{ m.idx }}|{{ m.day_to }}|{{ m.date.isoformat() }}"></td><td>{{ m.kind }} ({{ m.minutes }} min)</td><td>{{ hm(m['from']) }}</td><td><b>{{ hm(m.to) }}</b></td></tr>{% endfor %}</tbody></table>
     <p><button class="primary" type="submit">Apply all {{ pr.moves|length }}</button> <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure) }}">Cancel</a></p>
   </form>
+  {% elif fresh %}<p class="empty">A fresh plan is no better than the breaks as they stand, so nothing is proposed. The gaps left are staffing gaps (overtime can help: see Overtime and VTO).</p>
   {% else %}<p class="empty">No single move makes the day better within the rules: the gaps left are staffing gaps (overtime can help: see Overtime and VTO).</p>{% endif %}
 </section>
 {% elif tab == 'bulk' %}{% set bk = bulk %}{% set pct = (100 * page.target.target)|round|int %}
@@ -510,7 +512,7 @@
 {% elif tab != 'channels' %}
 <section class="panel" aria-labelledby="board-h">
   <h2 id="board-h">Interval board</h2>
-  <p class="autopilot"><a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='replan') }}">Fix the rest of the day's breaks</a>{% if measure == 'interval' %} <a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='rescue') }}">Rescue the day</a>{% endif %} <a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='bulk') }}">Change several breaks</a></p>
+  <p class="autopilot"><a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='replan') }}">Fix the rest of the day's breaks</a> <a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='replan', how='fresh') }}">Replan the day's breaks</a>{% if measure == 'interval' %} <a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='rescue') }}">Rescue the day</a>{% endif %} <a class="button" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='bulk') }}">Change several breaks</a></p>
   <p class="note">Each row is one {{ unit.get(v.interval, 'interval')[:-1] }}: who goes on a break in it, who is late, leaves early or is in aux, and whether the floor still holds. Drag a break to another row, or click it to set the time in 5-minute steps; you see the warnings and the best times before anything is kept.</p>
   {% set gone = [] %}{% for lane in v.lanes %}{% for s in lane.segments if s.offset == 0 and s.status in absent_states %}{% set _ = gone.append(lane.name ~ ' (' ~ s.status|lower ~ ')') %}{% endfor %}{% endfor %}
   {% if gone %}<p class="board-gone">Not on the floor today: <b>{{ gone|join(', ') }}</b>.</p>{% endif %}

@@ -4978,7 +4978,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                    ("Last 30 days", today - timedelta(days=29), today)]
         start_days = {k: (book.unit(k) or {}).get("program", {}).get("start_day", 0) or 0 for k in units}
         week_days = sorted({start_days[k] for k in units})
-        view = shrink_page(facts, per_day, show, by, out_ticks, in_ticks, step, first, last, focus, start_days)
+        view = shrink_page(facts, per_day, show, by, out_ticks, in_ticks, step, first, last, focus, start_days,
+                           week_days[0] if week_days else 0)
         return render_template("shrinkage.html", view=view, presets=presets, error=error, pick_tree=_access().programs(),
                                everything=_access().everything(), measures=MEASURES, units=len(units), show=show, by=by,
                                step=step, first_h=first // 60, last_h=last // 60, focus=focus, dows=dows,

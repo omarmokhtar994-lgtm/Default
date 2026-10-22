@@ -140,6 +140,33 @@ def interval_grid(per_day: Dict[str, Dict[int, List[float]]], which: str, first:
     return cols, rows
 
 
+WEEKDAYS = ("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+
+
+def weekday_grid(per_day: Dict[str, Dict[int, List[float]]], which: str, first: int = 0, last: int = 1440,
+                 start_day: int = 0) -> Tuple[List[str], List[Dict[str, Any]]]:
+    """A row per interval and a column per day of the week (``which`` is ``out`` or ``inn``), the weeks beginning on
+    ``start_day`` (Sunday 0). Every day of that name in the period is added up; a day of the week with no schedule in the
+    period has no column, and a cell is None where nobody was scheduled."""
+    total: Dict[int, Dict[int, List[float]]] = {}
+    for day, found in per_day.items():
+        weekday = (date.fromisoformat(day).weekday() + 1) % 7
+        for t, v in found.items():
+            slot = total.setdefault(weekday, {}).setdefault(t % 1440, [0.0, 0.0, 0.0, 0.0])
+            for i in range(4):
+                slot[i] += v[i]
+    order = [d for d in ((start_day + i) % 7 for i in range(7)) if d in total]
+    times = sorted({t for d in order for t in total[d] if first <= t < last})
+    rows = []
+    for t in times:
+        cells = []
+        for d in order:
+            v = total[d].get(t)
+            cells.append(None if not v else (_pct(v[0], v[1]) if which == "out" else _pct(v[2], v[3])))
+        rows.append({"t": t, "cells": cells})
+    return [WEEKDAYS[d] for d in order], rows
+
+
 def collect_intervals(days, units: Iterable[str], start: date, end: date, measure: str, out: Sequence[str],
                       inn: Sequence[str], step: int, check: Callable[[], None] = lambda: None) -> Dict[str, Dict[int, List[float]]]:
     """Per day, the interval rows of every unit added together."""

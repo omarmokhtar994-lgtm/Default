@@ -6,7 +6,7 @@ from datetime import date
 from typing import Any, Dict, List, Optional, Sequence
 
 from . import charts
-from .shrink_view import interval_grid, interval_series, periods
+from .shrink_view import interval_grid, interval_series, periods, weekday_grid
 
 
 def _day(key: str) -> str:
@@ -23,7 +23,7 @@ def _hours(minutes: float) -> str:
 
 def build(facts: List[Dict[str, Any]], per_day: Dict[str, Dict[int, List[float]]], show: str, by: str,
           out_ticks: Sequence[str], in_ticks: Sequence[str], step: int, first: int, last: int, focus: str,
-          start_days: Optional[Dict[str, int]] = None) -> Dict[str, Any]:
+          start_days: Optional[Dict[str, int]] = None, week_start: int = 0) -> Dict[str, Any]:
     """The page's figures for ``show`` (both, out or in) laid out ``by`` day, week or interval."""
     both = periods(facts, "day")
     whole_shifts = sum(r["shifts"] for r in both)
@@ -66,6 +66,15 @@ def build(facts: List[Dict[str, Any]], per_day: Dict[str, Dict[int, List[float]]
         found["heat"] = [{"day": _day(r["day"]), "cells": [
             (v, 0 if v is None or not v else min(3, 1 + int(3 * v / top_cell)) if top_cell else 0) for v in r["cells"]]}
             for r in grid]
+        found["weekday_grids"] = []  # Phase AX: intervals down, the days of the week across; both draws two
+        for which, name in (("out", "Out of office"), ("inn", "In office")):
+            if (which == "out" and show == "in") or (which == "inn" and show == "out"):
+                continue
+            days, rows = weekday_grid(per_day, which, first, last, week_start)
+            top_cell = max([v for r in rows for v in r["cells"] if v is not None] + [0])
+            found["weekday_grids"].append({"title": name, "days": days, "rows": [
+                {"time": _hm(r["t"]), "cells": [(v, 0 if not v else min(3, 1 + int(3 * v / top_cell)) if top_cell else 0)
+                                                for v in r["cells"]]} for r in rows]})
         found["table"] = [{"label": l, "out": c["out"], "inn": c["inn"]} for l, c in zip(labels, cells)]
     found["both_shown"] = show == "both"
     return found

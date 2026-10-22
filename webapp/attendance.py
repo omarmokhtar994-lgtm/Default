@@ -11,6 +11,7 @@ logged with who and when. Kept 13 months, like the schedules.
 from __future__ import annotations
 
 import contextvars
+from collections import OrderedDict
 import copy
 import functools
 import inspect
@@ -160,6 +161,8 @@ def _group_kind(kind: str) -> str:
     return "called_in" if kind == CALLED_IN else "aux"
 
 
+PAGE_KEEP = 30  # Phase AV: seconds a built day is kept at most, as a safety net behind the write counter
+PAGE_MAX = 256  # and how many days are kept
 UNDO_DEPTH = 2  # owner, 2026-10-11: "undo last move or 2 ... max 2 moves back"; your own only (answer 2)
 NOTHING_TO_UNDO = "Nothing of yours to undo on this day: Undo goes back 2 changes at most."
 _ACTION: contextvars.ContextVar = contextvars.ContextVar("day_action", default=None)
@@ -231,6 +234,8 @@ class DayBook:
         self.notifier = None  # Phase AB: hands each change to its LOB's group rule (webapp/notify.py)
         self._locks: Dict[Tuple[str, str], threading.RLock] = {}  # Phase AD: one change at a time per LOB and day
         self._locks_lock = threading.Lock()
+        self._pages: "OrderedDict[Tuple[str, date, str], Tuple[int, float, Dict[str, Any]]]" = OrderedDict()  # Phase AV
+        self._build_lock = threading.Lock()
 
     def _log(self, program: str, on: date, name: str, what: str, user_id: int, kind: str, post: str = "",
              ref: str = "", before: str = "", after: str = "") -> None:
@@ -544,6 +549,51 @@ class DayBook:
     def page(self, program: str, on: date, measure: Optional[str] = None,
              extra: Optional[Dict[str, Any]] = None, recorded: bool = True,
              cover: bool = True, version_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        """The day, kept (Phase AV): the plain day of a program, date and measure is built once and handed out as a
+        copy until anything is written to the database (``Store.generation``) or ``PAGE_KEEP`` seconds pass. A day
+        asked for with ``extra``, as planned, without cover or as another version is built every time. See
+        ``_build_page`` for what a day is."""
+        if measure is None:
+            measure = self.measure_of(program)
+        if extra or not recorded or not cover or version_id is not None:
+            return self._build_page(program, on, measure, extra, recorded, cover, version_id)
+        key = (program, on, measure)
+        found = self._kept(key)
+        if found is not None:
+            return found
+        with self._build_lock:  # one thread builds a day, the others wait for it rather than build it too
+            found = self._kept(key)
+            if found is not None:
+                return found
+            generation, built_at = self.store.generation, time.monotonic()  # read before building: a write during it
+            page = self._build_page(program, on, measure, None, True, True, None)  # leaves the copy out of date
+            if page is not None:
+                self._pages[key] = (generation, built_at, page)
+                self._pages.move_to_end(key)
+                while len(self._pages) > PAGE_MAX:
+                    self._pages.popitem(last=False)
+            return self._copy(page)
+
+    def _kept(self, key):
+        entry = self._pages.get(key)
+        if entry is None:
+            return None
+        generation, built_at, page = entry
+        if generation != self.store.generation or time.monotonic() - built_at > PAGE_KEEP:
+            self._pages.pop(key, None)
+            return None
+        return self._copy(page)
+
+    @staticmethod
+    def _copy(page):
+        """A copy a caller may change; the workbook's inputs (read once, never changed) are shared, not copied."""
+        if page is None:
+            return None
+        return copy.deepcopy(page, {id(page["inputs"]): page["inputs"]})
+
+    def _build_page(self, program: str, on: date, measure: Optional[str] = None,
+                    extra: Optional[Dict[str, Any]] = None, recorded: bool = True,
+                    cover: bool = True, version_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
         """The day; ``extra`` (from ``add_item(..., dry_run=True)``) is counted as if it were recorded. With
         ``recorded`` False, the day as planned: the RTA's records (attendance, break moves, activities) left out
         (Phase AH, the Weeks page's "As planned"). With ``cover`` False, people covering from outside the roster

@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import secrets
 import sqlite3
+import threading
 import time
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -411,10 +412,15 @@ def hash_password(password: str) -> str:
     return generate_password_hash(clean_password(password), method="scrypt")
 
 
+_GENERATIONS: Dict[str, int] = {}  # Phase AV
+_GENERATION_LOCK = threading.Lock()
+
+
 class Store:
     def __init__(self, path: Path):
         self.path = Path(path)
         self._connection = ContextVar(f"store-{id(self)}", default=None)
+        self._gen_key = str(self.path.resolve())  # Phase AV: one count per database file, whichever Store wrote
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._db() as db:
             db.executescript(SCHEMA)
@@ -514,6 +520,12 @@ class Store:
                     if name not in have:
                         db.execute(f"alter table {table} add column {name} text not null default ''")
 
+    @property
+    def generation(self) -> int:
+        """Phase AV: how many committed writes this database file has seen in this process, so a kept copy of a day knows
+        when it is out of date (another process's writes are caught by the copy's own expiry)."""
+        return _GENERATIONS.get(self._gen_key, 0)
+
     @contextmanager
     def _db(self):
         current = self._connection.get()
@@ -526,7 +538,11 @@ class Store:
             with db:
                 yield db
         finally:
+            changed = db.total_changes > 0  # after the commit: anything written, so kept copies of days are stale
             db.close()
+            if changed:
+                with _GENERATION_LOCK:
+                    _GENERATIONS[self._gen_key] = _GENERATIONS.get(self._gen_key, 0) + 1
 
     @contextmanager
     def transaction(self):

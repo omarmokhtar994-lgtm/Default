@@ -36,6 +36,9 @@ def config_from_env(env: Mapping[str, str]) -> Dict[str, Any]:
     }
 
 
+CONNECTION_LIMIT = 1000
+
+
 def main() -> None:
     from waitress import serve
     from werkzeug.middleware.proxy_fix import ProxyFix
@@ -48,8 +51,9 @@ def main() -> None:
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)  # type: ignore[method-assign]
     print(f"Team Scheduler on http://{HOST}:{config['PORT']} (data {config['DATA_DIR']}, "
           f"package {config['PACKAGE_ROOT']})", flush=True)
+    # Phase AV: waitress refuses new connections past 100 open ones, and people waiting on a busy page each hold one
     serve(app, host=HOST, port=config["PORT"], threads=8, max_request_body_size=26 * 1024 * 1024,
-          ident="TeamScheduler")
+          connection_limit=CONNECTION_LIMIT, ident="TeamScheduler")
 
 
 if __name__ == "__main__":

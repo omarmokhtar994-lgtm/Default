@@ -1,0 +1,61 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{% extends "base.html" %}
+{% block title %}Shrinkage on Team Scheduler{% endblock %}
+{% macro pct(v) %}{% if v is none %}-{% else %}{{ v }}%{% endif %}{% endmacro %}
+{% block content %}
+<div class="phead"><div>
+  <h1>Shrinkage</h1>
+  <p class="byline">Out of office shrinkage (leave and sick, of the shifts scheduled), in office shrinkage (time off the floor, of the minutes scheduled), or both, day over day, week over week or per interval, for any period. You choose what counts. Times are Egypt time.</p>
+</div></div>
+{% if error %}<p class="notice" role="alert">{{ error }}</p>{% endif %}
+<form method="get" action="{{ url_for('shrinkage_page') }}" class="ins-filter panel" aria-label="Choose what to show">
+  <p class="exp-presets">{% for label, a, b in presets %}<a href="{{ url_for('shrinkage_page', **{'from': a.isoformat(), 'to': b.isoformat(), 'pick': pick or none, 'show': show, 'by': by, 'out': out_ticks, 'inn': in_ticks}) }}"{% if a == start and b == end %} class="on" aria-current="true"{% endif %}>{{ label }}</a>{% endfor %}</p>
+  <div class="exp-row">
+    <label>From <input type="date" name="from" value="{{ start.isoformat() }}" required></label>
+    <label>To <input type="date" name="to" value="{{ end.isoformat() }}" required></label>
+    <label>Program
+      <select name="pick"><option value="">{{ 'All programs' if everything else 'All my programs' }}</option>
+        {% for p in pick_tree %}{% if p.lobs %}<optgroup label="{{ p.name }}"><option value="group:{{ p.id }}"{% if pick == 'group:' ~ p.id %} selected{% endif %}>All of {{ p.name }}</option>{% for k in p.units %}<option value="key:{{ k }}"{% if pick == 'key:' ~ k or (program is string and program == k) %} selected{% endif %}>{{ k|unit }}</option>{% endfor %}</optgroup>
+        {% else %}{% for k in p.units %}<option value="key:{{ k }}"{% if pick == 'key:' ~ k or (program is string and program == k) %} selected{% endif %}>{{ k|unit }}</option>{% endfor %}{% endif %}{% endfor %}</select></label>
+    <label>Measure
+      <select name="measure">{% for key, name in measures.items() %}<option value="{{ key }}"{% if key == measure %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+  </div>
+  <div class="exp-row">
+    <fieldset class="exp-format"><legend>Show</legend>{% for key, name in show_choices %}<label><input type="radio" name="show" value="{{ key }}"{% if key == show %} checked{% endif %}> {{ name }}</label>{% endfor %}</fieldset>
+    <fieldset class="exp-format"><legend>Compare</legend>{% for key, name in by_choices %}<label><input type="radio" name="by" value="{{ key }}"{% if key == by %} checked{% endif %}> {{ name }}</label>{% endfor %}</fieldset>
+  </div>
+  <div class="exp-row">
+    <label>Interval <select name="step">{% for s in steps %}<option value="{{ s }}"{% if s == step %} selected{% endif %}>{{ s }} min</option>{% endfor %}</select></label>
+    <label>From hour <select name="first">{% for h in range(0, 24) %}<option value="{{ h }}"{% if h == first_h %} selected{% endif %}>{{ '%02d' % h }}:00</option>{% endfor %}</select></label>
+    <label>To hour <select name="last">{% for h in range(1, 25) %}<option value="{{ h }}"{% if h == last_h %} selected{% endif %}>{{ '%02d' % (h % 24) }}:00{% if h == 24 %} (end){% endif %}</option>{% endfor %}</select></label>
+    <label>Heat map shows <select name="focus"><option value="inn"{% if focus == 'inn' %} selected{% endif %}>In office</option><option value="out"{% if focus == 'out' %} selected{% endif %}>Out of office</option></select></label>
+  </div>
+  <fieldset class="exp-kinds abs-pick"><legend>Days of the week (none ticked: all)</legend>
+    {% for d in day_names %}<label class="exp-kind"><input type="checkbox" name="dow" value="{{ d }}"{% if d in dows %} checked{% endif %}><span>{{ d }}</span></label>{% endfor %}</fieldset>
+  <fieldset class="exp-kinds abs-pick"><legend>Out of office counts</legend>
+    {% for k in out_items %}<label class="exp-kind"><input type="checkbox" name="out" value="{{ k }}"{% if k in out_ticks %} checked{% endif %}><span>{{ item_label[k] }}</span></label>{% endfor %}
+    <span class="dim">Quick pick:{% for key, name, kinds in presets_out %} <a href="{{ url_for('shrinkage_page', **{'from': start.isoformat(), 'to': end.isoformat(), 'pick': pick or none, 'show': show, 'by': by, 'out': kinds, 'inn': in_ticks}) }}">{{ name }}</a>{% endfor %}. Sutherland leaves public holiday and exam leave out.</span></fieldset>
+  <fieldset class="exp-kinds abs-pick"><legend>In office counts</legend>
+    {% for k in in_items %}<label class="exp-kind"><input type="checkbox" name="inn" value="{{ k }}"{% if k in in_ticks %} checked{% endif %}><span>{{ item_label[k] }}</span></label>{% endfor %}</fieldset>
+  <p><button class="primary" type="submit">Show</button></p>
+</form>
+
+{% if view.empty %}
+<section class="panel"><p class="empty">Nothing to show for {{ start.strftime('%d %b') }} to {{ end.strftime('%d %b %Y') }}{% if not units %}: no program is open to you{% else %}: no schedule was in use on those days{% endif %}. Pick another period or program.</p></section>
+{% else %}
+<div class="ins-tiles">{% for label, value, note in view.tiles %}<section class="ins-tile" aria-label="{{ label }}"><span class="tile-label">{{ label }}</span><b>{{ pct(value) }}</b><small class="dim">{{ note }}</small></section>{% endfor %}</div>
+<p class="dim ins-note">{{ view.days }} day{{ 's' if view.days != 1 }}, {{ view.shifts }} shifts. Weeks run Sunday to Saturday. A week or day figure adds people and minutes up; it is never an average of percentages. Planned leave has no times, so it counts in the day and week figures and not in the per interval ones.</p>
+<section class="panel chart-panel" aria-labelledby="sh-h"><h2 id="sh-h">{{ dict(by_choices)[by] }}</h2><div class="chart-scroll">{{ view.chart }}</div></section>
+{% if by == 'interval' and view.heat %}
+<section class="panel chart-panel" aria-labelledby="hm-h"><h2 id="hm-h">{{ view.heat_title }} by day and interval</h2>
+  <div class="chart-scroll"><table class="ins-heat"><thead><tr><td></td>{% for c in view.heat_cols %}<th scope="col">{{ c }}</th>{% endfor %}</tr></thead>
+  <tbody>{% for r in view.heat %}<tr><th scope="row">{{ r.day }}</th>{% for v, lv in r.cells %}<td class="lv{{ lv }}">{% if v is not none %}{{ v|round|int }}{% endif %}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div>
+</section>{% endif %}
+<section class="panel" aria-labelledby="tb-h"><h2 id="tb-h">The numbers</h2>
+  <div class="tscroll"><table class="adh-t ins-t"><thead><tr><th scope="col">{{ 'Time' if by == 'interval' else ('Week' if by == 'week' else 'Day') }}</th>
+    {% if by != 'interval' %}<th scope="col" class="n">Shifts</th>{% endif %}{% if show != 'in' %}{% if by != 'interval' %}<th scope="col" class="n">People out</th>{% endif %}<th scope="col" class="n">Out of office</th>{% endif %}{% if show != 'out' %}{% if by != 'interval' %}<th scope="col" class="n">Off the floor</th>{% endif %}<th scope="col" class="n">In office</th>{% endif %}</tr></thead>
+  <tbody>{% for r in view.table %}<tr><th scope="row">{{ r.label }}</th>
+    {% if by != 'interval' %}<td class="n">{{ r.shifts }}</td>{% endif %}{% if show != 'in' %}{% if by != 'interval' %}<td class="n">{{ r.out_n }}</td>{% endif %}<td class="n">{{ pct(r.out) }}</td>{% endif %}{% if show != 'out' %}{% if by != 'interval' %}<td class="n">{{ r.in_h }}</td>{% endif %}<td class="n">{{ pct(r.inn) }}</td>{% endif %}</tr>{% endfor %}</tbody></table></div>
+</section>
+{% endif %}
+{% endblock %}

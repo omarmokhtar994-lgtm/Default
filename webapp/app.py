@@ -43,6 +43,8 @@ from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, OVERTIME_
 from .coach import actual_shrinkage, corrected_tab
 from .leave import KINDS as LEAVE_KINDS, LeaveBook, span_text
 from .swaps import SwapBook
+from . import shrink_view as _sv
+from .shrink_page import build as shrink_page
 from .insights import ABSENT_CHOICES, ABSENT_VIEWS, absent_kinds, collect as collect_insights
 from .insights_page import LEVELS as INSIGHT_LEVELS, build as insights_view, dur as insights_dur
 from .shrinkage import ITEMS as SHRINKAGE_ITEMS, day_shrinkage, mapping_from_form, read_mapping
@@ -542,7 +544,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
 
     NAV_ACTIVE = {"home": "home", "overview_page": "overview", "day_page": "day", "week_page": "week",
                   "run_week": "week", "run_schedules": "schedules", "program": "analysis", "programs": "programs",
-                  "exports_page": "exports", "incidents_page": "incidents", "team_page": "team", "admin_users": "people", "program_setup": "setup",
+                  "exports_page": "exports", "incidents_page": "incidents", "shrinkage_page": "shrinkage", "team_page": "team", "admin_users": "people", "program_setup": "setup",
                   "with_setup": "with", "channel_setup": "channels", "notifications_page": "notify", "roles_page": "roles",
                   "day_wallboard": "wallboard", "me": "me", "me_breaks": "me_day", "requests_page": "requests"}
     PROGRAM_PAGES = {"overview": "/overview?program={key}", "day": "/day?program={key}", "week": "/week?program={key}",
@@ -4777,6 +4779,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
     def exports_page():  # type: ignore[no-untyped-def]
         return _exports_page()
 
+    SHRINK_SHOW, SHRINK_BY, SHRINK_STEPS, SHRINK_DAYS = _sv.SHOW, _sv.BY, _sv.STEPS, ("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
+    SHRINK_OUT, SHRINK_IN, SHRINK_LABEL, SHRINK_PRESETS = _sv.OUT_ITEMS, _sv.IN_ITEMS, _sv.LABEL, _sv.PRESETS
+    shrink_ticks, shrink_mapping, shrink_intervals = _sv.ticks_from, _sv.mapping_of, _sv.collect_intervals
     INSIGHT_DAYS = 92  # three months a page; a longer look is an export
 
     @app.route("/incidents")
@@ -4835,6 +4840,76 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                everything=_access().everything(), measures=MEASURES, level=level, who=who,
                                levels=INSIGHT_LEVELS, units=len(units), counts=counts, absent_choices=ABSENT_CHOICES,
                                absent_views=ABSENT_VIEWS, **a)
+
+    @app.route("/shrinkage")
+    @login_required
+    def shrinkage_page():  # type: ignore[no-untyped-def]
+        """Phase AV: shrinkage out of office, in office or both, day over day, week over week or per interval."""
+        a = _export_args()
+        today = datetime.now(EGYPT).date()
+        if not request.args.get("to") and a["start"] <= today:
+            a["end"] = min(a["end"], today)
+        error = ""
+        if (a["end"] - a["start"]).days + 1 > INSIGHT_DAYS:
+            a["start"] = a["end"] - timedelta(days=INSIGHT_DAYS - 1)
+            error = f"A page shows up to {INSIGHT_DAYS} days; showing the last {INSIGHT_DAYS} days of the period."
+        book = _access().book
+        keys = ([a["program"]] if isinstance(a["program"], str) else list(a["program"] or [])
+                or [k for p in _access().programs() for k in p["units"]])
+        units = {}
+        for k in keys:
+            found = book.unit(k)
+            if found and _access().can_open(k):
+                units[k] = (found["program"]["name"], (found["lob"] or {}).get("name") or found["program"]["name"])
+        show = request.args.get("show", "both")
+        show = show if show in dict(SHRINK_SHOW) else "both"
+        by = request.args.get("by", "day")
+        by = by if by in dict(SHRINK_BY) else "day"
+        step = request.args.get("step", 30, type=int)
+        step = step if step in SHRINK_STEPS else 30
+        first = request.args.get("first", 0, type=int) or 0
+        last = request.args.get("last", 24, type=int) or 24
+        first, last = (max(0, min(first, 23)) * 60, max(1, min(last, 24)) * 60)
+        if last <= first:
+            first, last = 0, 1440
+        focus = request.args.get("focus", "inn")
+        focus = focus if focus in ("inn", "out") else "inn"
+        dows = {d for d in request.args.getlist("dow") if d in SHRINK_DAYS}
+        first_unit = next(iter(units), "")
+        kept = app.extensions["store"].get_shrinkage_map(first_unit) if first_unit else None
+        out_ticks, in_ticks = shrink_ticks(kept, request.args.getlist("out"), request.args.getlist("inn"))
+        deadline = time.monotonic() + EXPORT_SECONDS
+        wrapped = ExportDays(_days(), deadline)
+
+        def check() -> None:
+            if time.monotonic() > deadline:
+                raise ValueError("This took too long: pick a shorter period or one program.")
+        facts, per_day = [], {}
+        try:
+            facts = collect_insights(wrapped, app.extensions["store"], app.extensions.get("leave"), units, a["start"],
+                                     a["end"], a["measure"], check, mapping_override=shrink_mapping(out_ticks, in_ticks))
+            if dows:
+                facts = [r for r in facts if SHRINK_DAYS[(date.fromisoformat(r["date"]).weekday() + 1) % 7] in dows]
+            if by == "interval":
+                per_day = shrink_intervals(wrapped, units, a["start"], a["end"], a["measure"], out_ticks, in_ticks, step, check)
+                if dows:
+                    per_day = {d: v for d, v in per_day.items()
+                               if SHRINK_DAYS[(date.fromisoformat(d).weekday() + 1) % 7] in dows}
+        except ValueError as exc:
+            error = str(exc)
+        sunday = today - timedelta(days=(today.weekday() + 1) % 7)
+        first_of = today.replace(day=1)
+        last_month_end = first_of - timedelta(days=1)
+        presets = [("This week", sunday, today), ("Last week", sunday - timedelta(days=7), sunday - timedelta(days=1)),
+                   ("This month", first_of, today), ("Last month", last_month_end.replace(day=1), last_month_end),
+                   ("Last 30 days", today - timedelta(days=29), today)]
+        view = shrink_page(facts, per_day, show, by, out_ticks, in_ticks, step, first, last, focus)
+        return render_template("shrinkage.html", view=view, presets=presets, error=error, pick_tree=_access().programs(),
+                               everything=_access().everything(), measures=MEASURES, units=len(units), show=show, by=by,
+                               step=step, first_h=first // 60, last_h=last // 60, focus=focus, dows=dows,
+                               out_ticks=out_ticks, in_ticks=in_ticks, show_choices=SHRINK_SHOW, by_choices=SHRINK_BY,
+                               steps=SHRINK_STEPS, out_items=SHRINK_OUT, in_items=SHRINK_IN, item_label=SHRINK_LABEL,
+                               presets_out=SHRINK_PRESETS, day_names=SHRINK_DAYS, **a)
 
     @app.route("/exports/download")
     @login_required

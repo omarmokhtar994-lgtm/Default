@@ -237,6 +237,10 @@ Load each with the Skill tool at the step it covers; following it from memory do
 - `webapp/insights.py` (fact row per person and day from `DayBook.page`; sums per associate, LOB, program, weekday,
   repeats), `insights_page.py` (tiles, charts), `/incidents`, `templates/insights.html`. Absenteeism counts are chosen on
   the page (`abs=`): RTA and client = unplanned + sick, Sutherland = unplanned. Planned leave has a count, no duration.
+- Setting `heavy_weeks` (`app_settings` table, LOBs and defaults page): the most weeks Incidents, Shrinkage and Exports allow
+  people who are not admins, supervisors or RTAs (`rta_change`); default 13, recommended 6; the exempt are capped only by the 13 months kept.
+- Bio break is an aux (`day.BIO`); `webapp/upload_guard.py` refuses and deletes uploads with other tabs, card numbers, street
+  addresses, bank numbers, macros or outside links (phone numbers and emails are not looked for); Shrinkage page `/shrinkage`.
 - Screens: `evidence/phase_av/tools/screens.py`. Not packed. Not yet done: gate minimum, package.
 
 ## Earlier: end of Phase AK

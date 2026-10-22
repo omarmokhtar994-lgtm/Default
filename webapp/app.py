@@ -2348,6 +2348,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
                     key = request.form.get("key", "")
                     book.adopt(key, pid, name)
                     said = f"{key} is now {book.label(key)}."
+                elif action == "heavy_pages":  # Phase AV: how many weeks the heavy pages allow most people
+                    weeks = request.form.get("weeks", type=int)
+                    if weeks is None or not 1 <= weeks <= 52:
+                        raise ValueError("Give a whole number of weeks from 1 to 52.")
+                    store.set_app_setting("heavy_weeks", str(weeks))
+                    _record("heavy_weeks_set", detail=f"{weeks} weeks")
+                    said = f"People other than admins, supervisors and RTAs can now look at up to {weeks} weeks at a time."
                 elif action == "defaults":
                     options = {k: request.form.get(k) for k, plain in ADVANCED_DEFAULTS.items()
                                if request.form.get(k) and request.form.get(k) != plain}
@@ -2425,7 +2432,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                     [(l["name"], l["key"]) for l in p["lobs"]]}
         for p in tree:
             p["measure_value"] = p.get("measure") or "interval"
-        return render_template("program_setup.html", programs=tree, people=people, loose=loose, modes=MODES,
+        return render_template("program_setup.html", heavy_weeks=int(store.get_app_setting("heavy_weeks", str(HEAVY_WEEKS_DEFAULT))),
+                               heavy_recommended=HEAVY_WEEKS_RECOMMENDED, programs=tree, people=people, loose=loose, modes=MODES,
                                measures=ProgramBook.MEASURES, request_rules={p["id"]: book.request_settings(p["id"]) for p in tree},
                                hm=hm, rta_def={p["id"]: book.rta_defaults(p["id"]) for p in tree},
                                shrink_items=SHRINKAGE_ITEMS,
@@ -4801,7 +4809,25 @@ def create_app(config: Dict[str, Any]) -> Flask:
     SHRINK_SHOW, SHRINK_BY, SHRINK_STEPS, SHRINK_DAYS = _sv.SHOW, _sv.BY, _sv.STEPS, ("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
     SHRINK_OUT, SHRINK_IN, SHRINK_LABEL, SHRINK_PRESETS = _sv.OUT_ITEMS, _sv.IN_ITEMS, _sv.LABEL, _sv.PRESETS
     shrink_ticks, shrink_mapping, shrink_intervals = _sv.ticks_from, _sv.mapping_of, _sv.collect_intervals
-    INSIGHT_DAYS = 92  # three months a page; a longer look is an export
+    HEAVY_WEEKS_DEFAULT, HEAVY_WEEKS_RECOMMENDED = 13, 6
+
+    def _heavy_limit() -> Tuple[int, bool]:
+        """Phase AV: (the most days of a period this person may ask of the Incidents, Shrinkage and Exports pages, whether
+        they are exempt). Admins, supervisors and RTAs (who may change the day) have no limit but the 13 months kept;
+        everyone else gets the weeks an admin set under LOBs and defaults."""
+        user = g.user
+        if user.get("is_admin") or user.get("is_supervisor") or allowed(app.extensions["store"], user, "rta_change"):
+            return MAX_EXPORT_DAYS, True
+        weeks = app.extensions["store"].get_app_setting("heavy_weeks", str(HEAVY_WEEKS_DEFAULT))
+        return 7 * (int(weeks) if weeks.isdigit() and int(weeks) > 0 else HEAVY_WEEKS_DEFAULT), False
+
+    def _too_long(start: date, end: date) -> str:
+        limit, exempt = _heavy_limit()
+        if exempt or (end - start).days + 1 <= limit:
+            return ""
+        return (f"Your account can look at up to {limit // 7} weeks at a time. Pick a shorter period, or ask an admin, "
+                "a supervisor or the RTA for a longer look.")
+
 
     @app.route("/incidents")
     @login_required
@@ -4812,9 +4838,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if not request.args.get("to"):
             a["end"] = min(a["end"], today) if a["start"] <= today else a["end"]
         error = ""
-        if (a["end"] - a["start"]).days + 1 > INSIGHT_DAYS:
-            a["start"] = a["end"] - timedelta(days=INSIGHT_DAYS - 1)
-            error = f"A page shows up to {INSIGHT_DAYS} days; showing the last {INSIGHT_DAYS} days of the period. Exports go further."
+        limit, exempt = _heavy_limit()
+        if (a["end"] - a["start"]).days + 1 > limit:
+            a["start"] = a["end"] - timedelta(days=limit - 1)
+            error = (f"Your account can look at up to {limit // 7} weeks at a time; showing the last {limit // 7} weeks of the period."
+                     if not exempt else f"Records are kept 13 months; showing the last {limit} days of the period.")
         book = _access().book
         keys = ([a["program"]] if isinstance(a["program"], str) else list(a["program"] or [])
                 or [k for p in _access().programs() for k in p["units"]])
@@ -4869,9 +4897,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if not request.args.get("to") and a["start"] <= today:
             a["end"] = min(a["end"], today)
         error = ""
-        if (a["end"] - a["start"]).days + 1 > INSIGHT_DAYS:
-            a["start"] = a["end"] - timedelta(days=INSIGHT_DAYS - 1)
-            error = f"A page shows up to {INSIGHT_DAYS} days; showing the last {INSIGHT_DAYS} days of the period."
+        limit, exempt = _heavy_limit()
+        if (a["end"] - a["start"]).days + 1 > limit:
+            a["start"] = a["end"] - timedelta(days=limit - 1)
+            error = (f"Your account can look at up to {limit // 7} weeks at a time; showing the last {limit // 7} weeks of the period."
+                     if not exempt else f"Records are kept 13 months; showing the last {limit} days of the period.")
         book = _access().book
         keys = ([a["program"]] if isinstance(a["program"], str) else list(a["program"] or [])
                 or [k for p in _access().programs() for k in p["units"]])
@@ -4940,6 +4970,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
         kinds = request.args.getlist("kind")
         fmt = request.args.get("format", "xlsx")
         try:
+            too_long = _too_long(a["start"], a["end"])  # Phase AV: the weeks an admin allows this account
+            if too_long:
+                raise ValueError(too_long)
             data, name, mime = build_export(app.extensions["store"], _days(), a["start"], a["end"], kinds, fmt,
                                             a["program"], a["user_id"], g.user["display_name"], a["measure"],
                                             deadline=time.monotonic() + EXPORT_SECONDS)

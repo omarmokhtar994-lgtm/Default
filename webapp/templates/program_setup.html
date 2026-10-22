@@ -7,6 +7,13 @@
   <h1>Programs and LOBs</h1>
   <p class="byline">Each program keeps its LOBs and the defaults a new schedule starts from. Names you change here change everywhere; what is stored is not touched.</p>
 </div></div>
+<section class="panel setup-add" aria-labelledby="heavy-h">
+  <h2 id="heavy-h">Longest look on the heavy pages</h2>
+  <p class="note">Incidents, Shrinkage and Exports read every day of the period, so a long period on a small server slows everyone down. Set how many weeks at a time most people may ask for. Admins, supervisors and RTAs (anyone who can change the day) are never limited. <b>Recommended: {{ heavy_recommended }} weeks</b>, enough for a month-end look and the weeks before; a longer look is for the RTA or a supervisor.</p>
+  <form method="post" class="tagrow"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="heavy_pages">
+    <label>Weeks at a time <input type="number" name="weeks" min="1" max="52" value="{{ heavy_weeks }}" required></label>
+    <button class="primary" type="submit">Save</button></form>
+</section>
 <section class="panel setup-add" aria-labelledby="addp-h">
   <h2 id="addp-h">Add a program</h2>
   <form method="post" class="tagrow"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="add_program">

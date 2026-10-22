@@ -307,6 +307,10 @@ create table if not exists outside_cover (
     user_id integer not null,
     at real not null
 );
+create table if not exists app_settings (
+    key text primary key,
+    value text not null
+);
 create table if not exists incidents (
     id integer primary key autoincrement,
     program text not null,
@@ -1339,6 +1343,17 @@ class Store:
         marks = ", ".join("?" for _ in fields)
         with self._db() as db:
             return int(db.execute(f"insert into day_log ({names}) values ({marks})", tuple(fields.values())).lastrowid)
+
+    def get_app_setting(self, key: str, default: str = "") -> str:
+        """Phase AV: a site-wide setting an admin keeps (text)."""
+        with self._db() as db:
+            row = db.execute("select value from app_settings where key = ?", (key,)).fetchone()
+        return row["value"] if row else default
+
+    def set_app_setting(self, key: str, value: str) -> None:
+        with self._db() as db:
+            db.execute("insert into app_settings (key, value) values (?, ?) on conflict(key) do update set value = excluded.value",
+                       (key, value))
 
     def add_incident(self, **fields: Any) -> int:
         """Phase AV: keep one incident (a missed break so far) for the analysis."""

@@ -110,6 +110,29 @@ def check_row(rules: Dict[str, Any], label: str, starts: Starts) -> Tuple[str, s
     starts = (list(starts) + [None] * len(slots))[:len(slots)]
     if all(s is None for s in starts):
         return "none", "Not placed yet"
+    said = rule_problems(rules, label, starts)
+    return ("warn", "; ".join(said)) if said else ("ok", "OK")
+
+
+def fit(rules: Dict[str, Any], label: str, starts: Starts) -> Tuple[int, List[str]]:
+    """How well a person's breaks fit the two layers (Phase AX, owner: "prioritize the default, followed by the engine"):
+    (the parts of the usual shape missed, 0 to 3; what breaks the engine's rules, in words, not counting the 15-minute
+    step, which the RTA does not keep, nor a break that is not there). Lower is better, the shape first."""
+    lo, hi = _span(label)
+    slots = slots_for(rules, hi - lo)
+    starts = (list(starts) + [None] * len(slots))[:len(slots)]
+    missed = sum(1 for part in shape_fit(lo, hi, starts, slots) if part is False)
+    said = [x for x in rule_problems(rules, label, starts, steps=False, adjacent=True) if "is not placed yet" not in x]
+    return missed, said
+
+
+def rule_problems(rules: Dict[str, Any], label: str, starts: Starts, steps: bool = True,
+                   adjacent: bool = False) -> List[str]:
+    """What breaks the engine's rules, in plain words (the 15-minute step only with ``steps``; with ``adjacent`` no gap
+    is held across a break that is not there)."""
+    lo, hi = _span(label)
+    slots = slots_for(rules, hi - lo)
+    starts = (list(starts) + [None] * len(slots))[:len(slots)]
     said: List[str] = []
     margin = edge_margin(rules, hi - lo)
     windows = rules.get("windows") or {}
@@ -117,7 +140,7 @@ def check_row(rules: Dict[str, Any], label: str, starts: Starts) -> Tuple[str, s
         if s is None:
             said.append(f"{kind} is not placed yet")
             continue
-        if s % QUARTER:
+        if steps and s % QUARTER:
             said.append(f"{kind} {hm(s)}: breaks go in 15-minute steps")
         if s < lo or s + minutes > hi:
             said.append(f"{kind} {hm(s)} is outside the shift ({hm(lo)} to {hm(hi)})")
@@ -129,16 +152,19 @@ def check_row(rules: Dict[str, Any], label: str, starts: Starts) -> Tuple[str, s
         if (w.get("earliest") is not None and rel < w["earliest"]) or (w.get("latest") is not None and rel > w["latest"]):
             said.append(f"{kind} has to start between {w.get('earliest') or 0} and {w.get('latest')} minutes into the shift")
     placed = [(s, kind, minutes) for (kind, minutes), s in zip(slots, starts) if s is not None]
+    where = [i for (kind, minutes), s, i in zip(slots, starts, range(len(slots))) if s is not None]
     if [k for _, k, _ in sorted(placed)] != [k for _, k, _ in placed]:
         said.append("The breaks are out of order: " + ", ".join(k for k, _ in slots))
     else:
-        for (s1, k1, m1), (s2, k2, _) in zip(placed, placed[1:]):
+        for ((s1, k1, m1), (s2, k2, _)), (i1, i2) in zip(zip(placed, placed[1:]), zip(where, where[1:])):
+            if adjacent and i2 != i1 + 1:
+                continue
             gap = s2 - (s1 + m1)
             if gap < (rules.get("min_gap") or 0):
                 said.append(f"{k2} starts {gap} minutes after {k1} ends; the minimum gap is {rules.get('min_gap')}")
             elif rules.get("max_gap") and gap > rules["max_gap"]:
                 said.append(f"{k2} starts {gap} minutes after {k1} ends; the normal maximum is {rules['max_gap']}")
-    return ("warn", "; ".join(said)) if said else ("ok", "OK")
+    return said
 
 
 def week_with(week: Dict[str, Any], d: int, plan: Dict[str, Starts], rules: Dict[str, Any]) -> Dict[str, Any]:

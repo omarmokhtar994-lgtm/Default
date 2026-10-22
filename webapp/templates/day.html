@@ -123,6 +123,7 @@
     <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='board') }}"{% if tab == 'board' %} class="on" aria-current="page"{% endif %}>Interval board</a>
     <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='adherence') }}"{% if tab == 'adherence' %} class="on" aria-current="page"{% endif %}>Adherence</a>
     {% if not merged %}<a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='meeting') }}"{% if tab == 'meeting' %} class="on" aria-current="page"{% endif %}>Find a time</a>
+    <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='sessions') }}"{% if tab == 'sessions' %} class="on" aria-current="page"{% endif %}>Booked sessions</a>
     <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='cover') }}"{% if tab == 'cover' %} class="on" aria-current="page"{% endif %}>Overtime and VTO</a>{% endif %}
     {% if v.channels and not merged %}<a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='channels') }}"{% if tab == 'channels' %} class="on" aria-current="page"{% endif %}>Channels</a>{% endif %}
     <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='requests', merge='1' if merged else none) }}"{% if tab == 'requests' %} class="on" aria-current="page"{% endif %}>Requests{% if changes_n %} <span class="count">{{ changes_n }}</span>{% endif %}</a>
@@ -374,6 +375,28 @@
   </table></div>
   {% else %}<p class="empty">Nothing short{% if from_now %} from {{ hm(from_now) }}{% endif %}: no day off to cancel and no overtime needed.</p>{% endif %}
 </section>{% endif %}
+{% elif tab == 'sessions' %}
+<div class="adh">
+<section class="panel" aria-labelledby="ss-h">
+  <h2 id="ss-h">Booked sessions</h2>
+  <p class="note">Meetings, training and coaching booked for several people at once. Tick the people to change, then move them to a new time or take them out. A move happens for everyone ticked or for nobody, and Undo takes it back.</p>
+  {% for ss in sessions %}
+  <form method="post" class="session" aria-labelledby="ss-{{ ss.session }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ zone_fields() }}<input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="session" value="{{ ss.session }}">
+    <h3 id="ss-{{ ss.session }}">{{ ss.kind }} {{ hm(ss.start) }} to {{ hm(ss.end) }}</h3>
+    <p class="dim">{{ ss.members|length }} {{ 'person' if ss.members|length == 1 else 'people' }}{% if ss.with_whom %} · with {{ ss.with_whom }}{% endif %}{% if ss.why %} · {{ ss.why }}{% endif %}{% if ss.billable %} · billable{% endif %}</p>
+    <fieldset class="exp-kinds who-list"><legend>Who to change</legend>
+      {% for m in ss.members %}<label class="exp-kind"><input type="checkbox" name="who" value="{{ m.name }}" checked><span><b>{{ m.name }}</b><small>{{ hm(m.start) }} to {{ hm(m.end) }}</small></span></label>{% endfor %}
+    </fieldset>
+    {% if can('rta_change') %}<div class="exp-row">
+      <label>New start <input type="time" name="at" step="300" value="{{ hm(ss.start) }}"></label>
+      <button class="primary" type="submit" formaction="{{ url_for('day_session_move') }}">Move the ticked</button>
+      <button class="danger" type="submit" formaction="{{ url_for('day_session_cancel') }}">Take the ticked out</button>
+    </div>{% endif %}
+  </form>
+  {% else %}<p class="empty">Nothing booked for several people on this day yet. <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='meeting') }}">Find a time</a> books a group.</p>{% endfor %}
+</section>
+</div>
 {% elif tab == 'meeting' %}
 <div class="adh">
 <section class="panel" aria-labelledby="mt-h">
@@ -396,6 +419,12 @@
     </div>
     <label class="exp-kind"><input type="checkbox" name="billable" value="1"{% if finder.billable %} checked{% endif %}><span>Billable (stays on the floor under interval compliance)</span></label>
     <p><button class="primary" type="submit">Find times</button></p>
+    {% if can('rta_change') %}<div class="exp-row set-time">
+      <label>Or a time you choose <input type="time" name="at" step="300" value="{{ finder['at'] }}"></label>
+      <button class="primary" type="submit" formmethod="post" formaction="{{ url_for('day_book') }}">Book everyone at this time</button>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ zone_fields() }}
+    </div>
+    <p class="note">Books all the people ticked above at the time you typed, for the length chosen. If anyone is not free then, nobody is booked. You can move or remove some of them later under Booked sessions.</p>{% endif %}
   </form>
 </section>
 <section class="panel" aria-labelledby="fits-h">
@@ -491,7 +520,7 @@
     {% set at_target = {} %}{% for c in page.target.cells %}{% set _ = at_target.update({c.t: c.ok}) %}{% endfor %}
     {% for r in rows %}
     <div class="rb-row rb-{{ r.state }}" role="row" data-t="{{ r.t }}" id="row-{{ r.t }}">
-      <span class="rb-c rb-t" role="cell"><b>{{ r.start }}</b><small>to {{ r.end }}</small><a class="rb-add" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='board', add=r.t) }}#add">+ Add<span class="sr-only"> to {{ r.start }}</span></a><span class="rb-ticks">{% for x in r.slots %}<i class="tk {{ 'none' if r.required <= 0 else ('ok' if x >= r.required else ('warn' if x >= page.target.target * r.required - 1e-9 else 'bad')) }}" title="{{ hm(r.t + 5 * loop.index0) }}: {{ x }} on the floor"></i>{% endfor %}</span></span>
+      <span class="rb-c rb-t" role="cell"><b>{{ r.start }}</b><small>to {{ r.end }}</small><a class="rb-add" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='board', add=r.t) }}#add">+ Add<span class="sr-only"> to {{ r.start }}</span></a><a class="rb-book" href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='meeting', at=r.start, **{'from': r.start, 'to': r.end}) }}">Book several<span class="sr-only"> at {{ r.start }}</span></a><span class="rb-ticks">{% for x in r.slots %}<i class="tk {{ 'none' if r.required <= 0 else ('ok' if x >= r.required else ('warn' if x >= page.target.target * r.required - 1e-9 else 'bad')) }}" title="{{ hm(r.t + 5 * loop.index0) }}: {{ x }} on the floor"></i>{% endfor %}</span></span>
       <span class="rb-c rb-n" role="cell">{{ r.need if r.pm is not none else '–' }}</span>
       <span class="rb-c rb-n" role="cell">{{ r.now|num }}<small>plan {{ r.plan|num }}</small></span>
       <span class="rb-c rb-n rb-buf {{ r.state }}" role="cell">{{ r.pm|hmm if r.pm is not none else '–' }}{% if r.plan_pm is not none %}<small>plan {{ r.plan_pm|hmm }}</small>{% endif %}</span>

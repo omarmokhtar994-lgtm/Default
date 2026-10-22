@@ -845,6 +845,10 @@ button.danger:disabled { opacity: .55; cursor: not-allowed; }
 /* Phase R: RTA's "+ Add" and one person's day */
 .rb-add { display: inline-block; margin-top: 6px; padding: 1px 8px; font: 600 0.75rem/1.5 var(--text); color: var(--action);
   border: 1px dashed var(--edge); border-radius: 4px; text-decoration: none; }
+.rb-book { display: inline-block; margin: 6px 0 0 6px; font: 600 0.75rem/1.5 var(--text); color: var(--action); }
+.set-time { align-items: flex-end; border-top: 1px solid var(--edge); padding-top: 12px; margin-top: 12px; }
+.session { border-top: 1px solid var(--edge); padding: 12px 0; }
+.session:first-of-type { border-top: 0; }
 .rb-add:hover, .rb-add:focus-visible { background: var(--hover); border-style: solid; border-color: var(--action); }
 a.chip { text-decoration: none; color: inherit; }
 .chip.added { border-style: dashed; }

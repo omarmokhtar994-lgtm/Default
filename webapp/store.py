@@ -499,6 +499,10 @@ class Store:
             have = {row["name"] for row in db.execute("pragma table_info(outside_cover)")}
             if "language" not in have:
                 db.execute("alter table outside_cover add column language text not null default ''")
+            # Phase AV: people booked together share a session, so some of them can be moved or removed together later.
+            have = {row["name"] for row in db.execute("pragma table_info(activities)")}
+            if "session" not in have:
+                db.execute("alter table activities add column session text not null default ''")
             # Phase T: an aux says who it is with and why; rows from before keep both empty.
             for table in ("attendance", "activities"):
                 have = {row["name"] for row in db.execute(f"pragma table_info({table})")}
@@ -1263,6 +1267,11 @@ class Store:
         with self._db() as db:
             row = db.execute("select * from activities where id = ?", (activity_id,)).fetchone()
         return dict(row) if row else None
+
+    def update_activity(self, activity_id: int, **fields: Any) -> None:
+        sets = ", ".join(f"{name} = ?" for name in fields)
+        with self._db() as db:
+            db.execute(f"update activities set {sets} where id = ?", (*fields.values(), activity_id))
 
     def delete_activity(self, activity_id: int) -> None:
         with self._db() as db:

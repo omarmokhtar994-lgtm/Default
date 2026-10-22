@@ -19,6 +19,7 @@ import logging
 import re
 import threading
 import time
+import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
@@ -1157,7 +1158,7 @@ class DayBook:
     @journaled
     def add_activity(self, program: str, on: date, name: str, kind: str, start: str, end: str, user_id: int,
                      billable: bool = False, note: str = "", dry_run: bool = False, with_whom: str = "",
-                     why: str = "", with_dept: str = "") -> Any:
+                     why: str = "", with_dept: str = "", session: str = "") -> Any:
         """Record an activity for the shift that starts on ``on``: an aux, a break or lunch added on the day,
         or VTO (each inside the shift), or overtime (touching the shift, at most OVERTIME_MAX, keeping the rest
         gap). Returns its id; with ``dry_run`` every check runs, nothing is kept, and the record is returned."""
@@ -1211,7 +1212,8 @@ class DayBook:
                     "with_whom": with_whom, "why": why, "with_dept": with_dept, "warning": warning}
         made = self.store.add_activity(program=program, shift_date=on.isoformat(), associate=name, kind=kind, start=lo,
                                        end_min=hi, billable=int(billable), note=" ".join(note.split())[:200],
-                                       user_id=user_id, with_whom=with_whom, why=why, with_dept=with_dept)
+                                       user_id=user_id, with_whom=with_whom, why=why, with_dept=with_dept,
+                                       session=session)
         self._log(program, on, name, what + (f". Warning: {warning}" if warning else ""), user_id, _group_kind(kind),
                   post=self._describe(kind, lo, hi, billable, with_whom, "", with_dept), ref=f"activity:{made}",
                   after="on")
@@ -1898,9 +1900,78 @@ class DayBook:
                 busy.append(name)
         if busy:
             raise ValueError(f"Not free then: {', '.join(busy)}. Nobody was booked.")
+        session = uuid.uuid4().hex[:8]  # Phase AV: these people stay a group, to move or remove together later
         for name in names:
             self.add_activity(program, on, name, kind, plain_hm(start), plain_hm(start + minutes), user_id, billable=billable,
-                              with_whom=with_whom, why=why, with_dept=with_dept)
+                              with_whom=with_whom, why=why, with_dept=with_dept, session=session)
+
+    def sessions(self, program: str, on: date) -> List[Dict[str, Any]]:
+        """Phase AV: the day's booked sessions, earliest first, each with its members (activity id and name)."""
+        found: Dict[str, Dict[str, Any]] = {}
+        for r in self.store.list_activities(program, [on.isoformat()]):
+            if not r.get("session"):
+                continue
+            s = found.setdefault(r["session"], {"session": r["session"], "kind": r["kind"], "start": r["start"],
+                                                "end": r["end_min"], "with_whom": r.get("with_whom", ""),
+                                                "why": r.get("why", ""), "billable": bool(r["billable"]), "members": []})
+            s["members"].append({"id": r["id"], "name": r["associate"], "start": r["start"], "end": r["end_min"]})
+        return sorted(found.values(), key=lambda s: (s["start"], s["session"]))
+
+    def session_start(self, program: str, on: date, names: List[str], at: str, session: str = "") -> int:
+        """Phase AV: a typed time (HH:MM) as minutes in the day those people work: the day's own, or the next day when it
+        falls before their shift starts (an overnight shift)."""
+        m = _clock(at)
+        if m is None:
+            raise ValueError("Give the time like 13:05.")
+        page = self.page(program, on)
+        if page is None:
+            raise ValueError("There is no schedule for this day.")
+        if session:
+            names = names or [r["associate"] for r in self.store.list_activities(program, [on.isoformat()])
+                              if r.get("session") == session]
+        starts = [s["start"] for l in page["view"]["lanes"] if l["name"] in names for s in l["segments"]
+                  if s["offset"] == 0]
+        return m + (1440 if starts and m < min(starts) else 0)
+
+    def _session_rows(self, program: str, on: date, session: str, names: List[str]) -> List[Dict[str, Any]]:
+        rows = [r for r in self.store.list_activities(program, [on.isoformat()]) if r.get("session") == session]
+        if not rows:
+            raise ValueError("That session is not on this day.")
+        chosen = [r for r in rows if r["associate"] in names] if names else []
+        if not chosen:
+            raise ValueError("Pick who in the session to change.")
+        return chosen
+
+    @journaled
+    def move_session(self, program: str, on: date, session: str, names: List[str], start: int, user_id: int) -> None:
+        """Phase AV: move the chosen members of a session to ``start`` (minutes), each keeping its length; all of them or
+        none, and nobody is booked on top of a break, an absence or another activity (their own old time is theirs)."""
+        chosen = self._session_rows(program, on, session, names)
+        page = self.page(program, on)
+        if page is None:
+            raise ValueError("There is no schedule for this day.")
+        busy = []
+        for r in chosen:
+            seg = next((s for l in page["view"]["lanes"] if l["name"] == r["associate"] for s in l["segments"]
+                        if s["offset"] == 0), None)
+            span = r["end_min"] - r["start"]
+            if seg is None or any(_busy(seg, t) and not r["start"] <= t < r["end_min"]
+                                  for t in range(start, start + span, STEP)):
+                busy.append(r["associate"])
+        if busy:
+            raise ValueError(f"Not free then: {', '.join(busy)}. Nobody was moved.")
+        for r in chosen:
+            span = r["end_min"] - r["start"]
+            self.store.update_activity(r["id"], start=start, end_min=start + span)
+            self._log(program, on, r["associate"], f"{r['kind']} {hm(r['start'])} to {hm(r['end_min'])} moved to "
+                      f"{hm(start)} to {hm(start + span)}", user_id, _group_kind(r["kind"]), ref=f"activity:{r['id']}",
+                      before=hm(r["start"]), after=hm(start))
+
+    @journaled
+    def cancel_session(self, program: str, on: date, session: str, names: List[str], user_id: int) -> None:
+        """Phase AV: take the chosen members out of a session (the others stay)."""
+        for r in self._session_rows(program, on, session, names):
+            self.cancel_activity(program, on, r["id"], user_id)
 
     # ------------------------------------------------------------- retention
     def cleanup(self, now: Optional[float] = None) -> int:

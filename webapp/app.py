@@ -3633,7 +3633,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         measure = measure if measure in MEASURES else (ProgramBook(app.extensions["store"]).day_measure(program)
                                                        if program else "interval")
         tab = request.args.get("view", "")
-        tab = tab if tab in ("board", "adherence", "meeting", "cover", "replan", "channels", "bulk", "rescue", "requests") else "timeline"
+        tab = tab if tab in ("board", "adherence", "meeting", "sessions", "cover", "replan", "channels", "bulk", "rescue", "requests") else "timeline"
         if merge and tab not in MERGE_TABS:
             flash("Pick one LOB for that tab: it plans or changes one LOB's schedule.")
             return redirect(url_for("day_page", program=program, date=on.isoformat(), merge="1", tz=g.zone,
@@ -3689,12 +3689,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
         people = shrink = whole = None
         finder: Dict[str, Any] = {}
         cover = None
+        sessions = days.sessions(program, on) if page and tab == "sessions" else []
         if page and tab == "meeting":
             finder = {"who": request.args.getlist("who"), "minutes": request.args.get("minutes", 30, type=int),
                       "from": request.args.get("from", "09:00"), "to": request.args.get("to", "18:00"),
                       "kind": request.args.get("kind", "Meeting"), "billable": request.args.get("billable") == "1",
                       "with_whom": request.args.get("with_whom", ""), "why": request.args.get("why", ""),
-                      "with_dept": request.args.get("with_dept", "")}
+                      "with_dept": request.args.get("with_dept", ""), "at": request.args.get("at", "")}
             if finder["who"]:
                 try:
                     finder["slots"] = days.meeting_slots(program, on, finder["who"], finder["minutes"],
@@ -3846,7 +3847,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                if program and on else {},
                                post_to=SERVICES.get(group["service"], "") if posting else "",
                                post_mode=group["mode"] if posting else "", post_kinds=post_kinds,
-                               people=people, whole=whole, shrink=shrink, finder=finder, cover=cover, outside=outside,
+                               people=people, whole=whole, shrink=shrink, finder=finder, sessions=sessions, cover=cover, outside=outside,
                                ot_page=_paged(cover["overtime"] if cover else [], "ot_page", "ot-h"),
                                vto_page=_paged(cover["vto"] if cover else [], "vto_page", "vto-h"),
                                log_page=_paged(list(reversed(page["log"])) if page else [], "log_page", "daylog-h"),
@@ -4220,7 +4221,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         flash(said)
         if not posted and said.startswith("Already posted"):  # asked on the page (the script asks in a dialog)
             args = {"program": program, "date": on.isoformat(), "resend": action["id"],
-                    "view": view if view in ("board", "adherence", "meeting", "cover", "replan", "channels", "bulk", "rescue") else None}
+                    "view": view if view in ("board", "adherence", "meeting", "sessions", "cover", "replan", "channels", "bulk", "rescue") else None}
             return redirect(url_for("day_page", **{k: v for k, v in args.items() if v}) + "#act-bar", code=303)
         return _back_to_day(program, on, view)
 
@@ -4612,6 +4613,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             if on is None:
                 raise ValueError("Pick a day.")
             start, minutes = request.form.get("start", -1, type=int), request.form.get("minutes", 0, type=int)
+            if request.form.get("at"):  # Phase AV: a time typed in, not one of the suggestions
+                start = _days().session_start(program, on, who, _typed("at", program, on))
             kind = request.form.get("kind", "Meeting")
             with_dept, with_whom, why = _aux_answers(kind, program)
             _days().book_session(program, on, who, start, minutes, kind, g.user["id"],
@@ -4620,7 +4623,39 @@ def create_app(config: Dict[str, Any]) -> Flask:
             _say(f"Booked: {kind.lower()} {hm(start)} to {hm(start + minutes)} for {', '.join(who)}.", program, on)
         except ValueError as exc:
             _say(str(exc), program, on)
-        return _back_to_day(program, on, "meeting")
+        return _back_to_day(program, on, "sessions" if request.form.get("at") else "meeting")
+
+    @app.route("/day/session/move", methods=["POST"])
+    @login_required
+    def day_session_move():  # type: ignore[no-untyped-def]
+        """Phase AV: move some or all of a booked session to another time, all or none."""
+        program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
+        who = request.form.getlist("who")
+        try:
+            if on is None:
+                raise ValueError("Pick a day.")
+            session = request.form.get("session", "")
+            start = _days().session_start(program, on, who, _typed("at", program, on), session)
+            _days().move_session(program, on, session, who, start, g.user["id"])
+            _say(f"Moved {', '.join(who)} to {hm(start)}.", program, on)
+        except ValueError as exc:
+            _say(str(exc), program, on)
+        return _back_to_day(program, on, "sessions")
+
+    @app.route("/day/session/cancel", methods=["POST"])
+    @login_required
+    def day_session_cancel():  # type: ignore[no-untyped-def]
+        """Phase AV: take some or all of a booked session out."""
+        program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
+        who = request.form.getlist("who")
+        try:
+            if on is None:
+                raise ValueError("Pick a day.")
+            _days().cancel_session(program, on, request.form.get("session", ""), who, g.user["id"])
+            _say(f"Took {', '.join(who)} out of the session.", program, on)
+        except ValueError as exc:
+            _say(str(exc), program, on)
+        return _back_to_day(program, on, "sessions")
 
     @app.route("/day/channel-preview", methods=["POST"])
     @login_required

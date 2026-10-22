@@ -80,7 +80,7 @@
   <tbody>{% for r in rows %}<tr><th scope="row">{{ r.name }}{% if view.programs|length <= 1 %}<small class="dim"> {{ r.program }}</small>{% endif %}</th><td class="n">{{ r.people }}</td><td class="n">{{ pct(r.absenteeism) }}</td><td class="n">{{ pct(r.shrink_out) }}</td><td class="n">{{ pct(r.shrink_in) }}</td><td class="n">{{ pct(r.adherence) }}</td><td class="n"><b>{{ r.total }}</b></td></tr>{% endfor %}</tbody></table>
 </section>{% endif %}
 <section class="panel chart-panel" aria-labelledby="h-h"><h2 id="h-h">Incidents by type: {{ view.heat_title }}</h2><div class="tscroll"><table class="ins-heat"><thead><tr><td></td>{% for k, name in view.kinds %}<th scope="col">{{ view.short[k] }}</th>{% endfor %}</tr></thead>
-    <tbody>{% for r in view.heat %}<tr><th scope="row">{{ r.name }}</th>{% for n, lv in r.cells %}<td class="lv{{ lv }}">{{ n or '' }}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div></section>
+    <tbody>{% for r in view.heat %}<tr><th scope="row">{{ r.name }}</th>{% for n, lv, m in r.cells %}<td class="lv{{ lv }}">{{ n or '' }}{% if m %}<small>{{ m|dur }}</small>{% endif %}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div></section>
 {% if view.repeats %}<section class="panel" aria-labelledby="rep-h"><h2 id="rep-h">Repeated: the same incident 3 times or more</h2>
   <table class="adh-t ins-t"><thead><tr><th scope="col">Associate</th><th scope="col">LOB</th><th scope="col">Incident</th><th scope="col" class="n">Times</th></tr></thead>
   <tbody>{% for r in view.repeats[:15] %}<tr><th scope="row"><a href="{{ url_for('incidents_page', **{'from': start.isoformat(), 'to': end.isoformat(), 'pick': pick or none, 'view': 'associates', 'who': r.name, 'abs': counts}) }}">{{ r.name }}</a></th><td>{{ r.lob }}</td><td>{{ r.label }}</td><td class="n"><b>{{ r.n }}</b></td></tr>{% endfor %}</tbody></table></section>{% endif %}
@@ -94,7 +94,7 @@
   <tbody>{% for r in view.lobs %}<tr><th scope="row">{{ r.name }}<small class="dim"> {{ r.program }}</small></th><td class="n">{{ r.people }}</td><td class="n">{{ pct(r.absenteeism) }}</td><td class="n">{{ pct(r.shrink_out) }}</td><td class="n">{{ pct(r.shrink_in) }}</td><td class="n">{{ pct(r.adherence) }}</td>{% for k, name in view.kinds %}<td class="n">{{ inc(r, k) }}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div>
 </section>
 <section class="panel chart-panel" aria-labelledby="h-h"><h2 id="h-h">Incidents by type: LOBs</h2><div class="tscroll"><table class="ins-heat"><thead><tr><td></td>{% for k, name in view.kinds %}<th scope="col">{{ view.short[k] }}</th>{% endfor %}</tr></thead>
-    <tbody>{% for r in view.heat %}<tr><th scope="row">{{ r.name }}</th>{% for n, lv in r.cells %}<td class="lv{{ lv }}">{{ n or '' }}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div></section>
+    <tbody>{% for r in view.heat %}<tr><th scope="row">{{ r.name }}</th>{% for n, lv, m in r.cells %}<td class="lv{{ lv }}">{{ n or '' }}{% if m %}<small>{{ m|dur }}</small>{% endif %}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div></section>
 <div class="charts">
   <section class="panel chart-panel"><h2>Absenteeism and shrinkage by day</h2><div class="chart-scroll">{{ view.trend }}</div></section>
   <section class="panel chart-panel"><h2>What it cost, in hours</h2><div class="chart-scroll">{{ view.mix.time }}</div></section>
@@ -107,7 +107,7 @@
   <tbody>{% for r in view.associates %}<tr data-filter-row><th scope="row"><a href="{{ url_for('incidents_page', **{'from': start.isoformat(), 'to': end.isoformat(), 'pick': pick or none, 'view': 'associates', 'who': r.name}) }}">{{ r.name }}</a><small class="dim"> {{ r.lob }}</small></th><td class="n">{{ r.incidents.unplanned.n + r.incidents.sick.n or '-' }}</td><td class="n">{{ pct(r.adherence) }}</td>{% for k, name in view.kinds %}<td class="n">{{ inc(r, k) }}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div>
 </section>
 <section class="panel chart-panel" aria-labelledby="h-h"><h2 id="h-h">{{ view.heat_title }}</h2><div class="tscroll"><table class="ins-heat"><thead><tr><td></td>{% for k, name in view.kinds %}<th scope="col">{{ view.short[k] }}</th>{% endfor %}</tr></thead>
-    <tbody>{% for r in view.heat %}<tr><th scope="row">{{ r.name }}</th>{% for n, lv in r.cells %}<td class="lv{{ lv }}">{{ n or '' }}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div></section>
+    <tbody>{% for r in view.heat %}<tr><th scope="row">{{ r.name }}</th>{% for n, lv, m in r.cells %}<td class="lv{{ lv }}">{{ n or '' }}{% if m %}<small>{{ m|dur }}</small>{% endif %}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div></section>
 {% endif %}
 {% endif %}
 </div>

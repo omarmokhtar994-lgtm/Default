@@ -1591,7 +1591,7 @@ table.hours tfoot th, table.hours tfoot td { border-top: 1px solid var(--rail); 
 .ins-heat { border-collapse: separate; border-spacing: 2px; width: 100%; }
 .ins-heat th { font-weight: 600; font-size: 0.8125rem; text-align: left; color: var(--dim); padding: 2px 6px; white-space: nowrap; }
 .ins-heat thead th { text-align: center; }
-.ins-heat td { text-align: center; min-width: 38px; height: 30px; border-radius: 4px; font-weight: 700; font-size: 0.8125rem; background: var(--console-2); color: var(--paper); }
+.ins-heat td { text-align: center; min-width: 38px; min-height: 30px; height: 30px; border-radius: 4px; font-weight: 700; font-size: 0.8125rem; background: var(--console-2); color: var(--paper); }
 .ins-heat td.lv1 { background: var(--h1); } .ins-heat td.lv2 { background: var(--h2); } .ins-heat td.lv3, .ins-heat td.lv4 { background: var(--h3); }
 .ins-t th[scope=row] { white-space: nowrap; }
 .ins-t th[scope=row] small { display: block; font-weight: 400; }
@@ -1617,3 +1617,4 @@ table.hours tfoot th, table.hours tfoot td { border-top: 1px solid var(--rail); 
 .ins-counts .ins-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .ins-counts .ins-tile b { font-size: 1.75rem; }
 @media (max-width: 800px) { .ins-counts .ins-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ins-heat td small { display: block; font-weight: 400; font-size: 0.6875rem; line-height: 1.1; white-space: nowrap; }

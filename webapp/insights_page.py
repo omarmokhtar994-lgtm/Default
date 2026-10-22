@@ -69,11 +69,12 @@ def _counts(incidents: Dict[str, Dict[str, int]]) -> List[Dict[str, Any]]:
 
 
 def _heat(rows: List[Dict[str, Any]], limit: int = 14) -> List[Dict[str, Any]]:
-    """A table of counts, a row per group and a column per incident type, each cell level 0 (none) to 4 (the most)."""
+    """A table of counts, a row per group and a column per incident type, each cell (count, level 0 (none) to 4 (the most), minutes)."""
     shown = rows[:limit]
     top = max([r["incidents"][k]["n"] for r in shown for k, _ in KINDS] + [1])
     return [{"name": r["name"], "cells": [(r["incidents"][k]["n"], 0 if not r["incidents"][k]["n"] else
-                                           min(4, 1 + int(3 * (r["incidents"][k]["n"] - 1) / max(1, top - 1) + 0.5)))
+                                           min(4, 1 + int(3 * (r["incidents"][k]["n"] - 1) / max(1, top - 1) + 0.5)),
+                                           r["incidents"][k]["min"])  # Phase AX: the time goes under the count
                                           for k, _ in KINDS]} for r in shown]
 
 

@@ -28,6 +28,16 @@ class TheCountsByType(_ins.TheInsights):
         self.assertEqual(mine["Missed breaks"], 1)
         self.assertEqual(mine["Late logins"], 0)
 
+    def test_the_grid_cells_carry_the_time_as_well_as_the_count(self):
+        heat = insights_page.build(self.facts, "overview", "", _ins.WED, _ins.THU)["heat"]
+        row = heat[0]
+        kinds = [k for k, _ in insights.KINDS]
+        late = row["cells"][kinds.index("late")]
+        self.assertEqual((late[0], late[2]), (1, 60))  # count, level, minutes
+        sick = row["cells"][kinds.index("sick")]
+        self.assertEqual(sick[2], 540)
+        self.assertEqual(row["cells"][kinds.index("coaching")][2], 0)
+
     def test_the_incidents_tile_no_longer_names_out_of_adherence(self):
         tiles = insights_page.build(self.facts, "overview", "", _ins.WED, _ins.THU)["tiles"]
         self.assertNotIn("adherence", next(t for t in tiles if t["label"] == "Incidents")["note"].replace("Adherence", ""))
@@ -47,6 +57,16 @@ class TheCountsOnThePage(_cb.ThePage):
         for label in ("Missed breaks", "Coaching", "Meetings", "Tasks", "Training", "System issues", "Bio breaks"):
             self.assertIn(f'aria-label="{label}"', page)
         self.assertNotIn("Out of adherence", page)
+
+    def test_the_grid_shows_a_duration_under_a_count(self):
+        from webapp.tests.test_notify_daybook import WED, hm
+        name, idx, kind, start, _ = self.with_breaks()
+        self.addCleanup(self.store.delete_day_before, "2999-01-01")
+        self.addCleanup(self.days.move_break, self.key, WED, name, idx, None, self.omar)
+        self.days.move_break(self.key, WED, name, idx, hm(start + 5), self.omar, missed=True)
+        page = self.get("&view=lobs")
+        grid = page.split('class="ins-heat"', 1)[1].split("</table>", 1)[0]
+        self.assertRegex(grid, r'<td class="lv\d">\d+<small>[^<]*(min|h)[^<]*</small></td>')
 
     def test_the_adherence_percentage_is_still_there(self):
         self.assertIn('aria-label="Adherence"', self.get())

@@ -126,6 +126,27 @@ def fit(rules: Dict[str, Any], label: str, starts: Starts) -> Tuple[int, List[st
     return missed, said
 
 
+def break_default(rules: Dict[str, Any], label: str, k: int, count: int, start: int) -> Tuple[int, int]:
+    """What one break decides alone of the two layers: (1 if it misses the usual shape: the first break not 2 to 3.5 hours
+    into the shift, the last of two or more ending less than an hour before the shift's end; else 0, 1 if it breaks the
+    engine's edge margin or its window; else 0). The lunch's place after the first break is a pair's, not one's."""
+    lo, hi = _span(label)
+    slots = slots_for(rules, hi - lo)
+    kind, minutes = slots[k] if k < len(slots) else ("", 0)
+    miss = 0
+    if k == 0 and not FIRST_FROM <= start - lo <= FIRST_TO:
+        miss = 1
+    if count >= 2 and k == count - 1 and start + minutes > hi - LAST_CLEAR:
+        miss = 1
+    rel = start - lo
+    margin = edge_margin(rules, hi - lo)
+    window = (rules.get("windows") or {}).get(kind.casefold()) or {}
+    broke = int(rel < margin or rel + minutes > hi - lo - margin
+                or (window.get("earliest") is not None and rel < window["earliest"])
+                or (window.get("latest") is not None and rel > window["latest"]))
+    return miss, broke
+
+
 def rule_problems(rules: Dict[str, Any], label: str, starts: Starts, steps: bool = True,
                    adjacent: bool = False) -> List[str]:
     """What breaks the engine's rules, in plain words (the 15-minute step only with ``steps``; with ``adjacent`` no gap

@@ -1752,7 +1752,8 @@ class DayBook:
     def replan(self, page: Dict[str, Any], now: int = 0) -> Dict[str, Any]:
         """The autopilot's proposal for the breaks not yet started (nothing is kept); with the week's target, it keeps
         the most intervals 10 minutes over it (Phase AH)."""
-        return replan(page["view"], page["inputs"], now, target=page["target"]["target"])
+        return replan(page["view"], page["inputs"], now, target=page["target"]["target"],
+                      fit=self.fit_for(page["version"]["program"], page["date"], 0, page["view"]))
 
     def _window(self, program: str, on: date, start: int, measure: str = "interval",
                 extras: Optional[Dict[date, Dict[str, Any]]] = None) -> Dict[str, Any]:
@@ -1783,8 +1784,71 @@ class DayBook:
         started): the moves in the window's minutes, each with its shift's date."""
         page = self._window(program, on, start, measure)
         view = rebase(page["view"], start, page["views"])
-        found = replan(view, page["inputs"], max(now - start, 0) if now else 0, target=page["target"]["target"])
+        found = replan(view, page["inputs"], max(now - start, 0) if now else 0, target=page["target"]["target"],
+                       fit=self.fit_for(program, on, start, view))
         return {**found, "moves": self._dated(found["moves"], view, on, start)}
+
+    def _rule_people(self, program: str, on: date, view: Dict[str, Any]):  # type: ignore[no-untyped-def]
+        """name -> (the break rules, the shift's label, the breaks the rules give it, the shift's date offset in minutes) for
+        the people of a window's ``view`` who have breaks; None when the rules cannot be read."""
+        from .break_plan import slots_for
+        people: Dict[str, Tuple[Dict[str, Any], str, int, int]] = {}
+        try:
+            weeks: Dict[date, Tuple[Dict[str, Any], Dict[str, Any]]] = {}
+            for lane in view["lanes"]:
+                seg = next((s for s in lane["segments"] if s["offset"] == 0), None)
+                if seg is None or not seg["breaks"]:
+                    continue
+                day = seg.get("date") or on
+                if day not in weeks:
+                    row, _ = self.version(program, day)
+                    weeks[day] = (self._week(row), self.book.break_rules(row["id"])) if row else ({}, {})
+                week, rules = weeks[day]
+                a = next((x for x in week.get("associates", []) if x["name"] == lane["name"]), None)
+                span = shift_span(a["days"][day_index(day)]) if a else None
+                if span:
+                    people[lane["name"]] = (rules, a["days"][day_index(day)], len(slots_for(rules, span[1] - span[0])),
+                                            1440 * (day - on).days)
+        except ValueError:
+            return None
+        return people
+
+    def fit_for(self, program: str, on: date, start: int, view: Dict[str, Any]):  # type: ignore[no-untyped-def]
+        """Phase AX (owner: "prioritize the default, followed by the engine"): for the tools that move breaks on a window
+        (``rebase``d ``view``), ``(name, break index -> start in the window) -> (parts of the usual shape missed, engine
+        rules broken)``, from the program's break rules; None when they cannot be read (the tools then work as before)."""
+        from .break_plan import fit as break_fit
+        people = self._rule_people(program, on, view)
+        if people is None:
+            return None
+
+        def fit(name: str, starts: Dict[int, int]) -> Tuple[int, int]:
+            found = people.get(name)
+            if found is None or any(i >= found[2] for i in starts):
+                return (0, 0)
+            rules, label, count, shift = found
+            own: List[Optional[int]] = [None] * count
+            for i, at in starts.items():
+                own[i] = at + start - shift
+            missed, said = break_fit(rules, label, own)
+            return (missed, len(said))
+        return fit
+
+    def defaults_for(self, program: str, on: date, start: int, view: Dict[str, Any]):  # type: ignore[no-untyped-def]
+        """What Rescue weighs: ``(name, break index, start in the window) -> (1 if it misses the usual shape, 1 if it breaks
+        an engine rule of that break)``; None when the rules cannot be read."""
+        from .break_plan import break_default
+        people = self._rule_people(program, on, view)
+        if people is None:
+            return None
+
+        def defaults(name: str, idx: int, at: int) -> Tuple[int, int]:
+            found = people.get(name)
+            if found is None or idx >= found[2]:
+                return (0, 0)
+            rules, label, count, shift = found
+            return break_default(rules, label, idx, count, at + start - shift)
+        return defaults
 
     def fresh_replan_window(self, program: str, on: date, start: int, now: int = 0,
                             measure: str = "interval") -> Dict[str, Any]:
@@ -1952,10 +2016,12 @@ class DayBook:
         may = allowance(lost)
         if start:
             solving = rebase(view, start, page["views"])
-            found = solve(solving, page["inputs"], target["target"], None if now is None else now - start, may)
+            found = solve(solving, page["inputs"], target["target"], None if now is None else now - start, may,
+                          defaults=self.defaults_for(program, on, start, solving))
             found["moves"] = self._dated(found["moves"], solving, on, start)
         else:
-            found = solve(view, page["inputs"], target["target"], now, may)
+            found = solve(view, page["inputs"], target["target"], now, may,
+                          defaults=self.defaults_for(program, on, 0, view))
             found["moves"] = [dict(m, date=on, day_to=m["to"]) for m in found["moves"]]
         out: Dict[str, Any] = {"before": self._figures(page), "after": self._figures(page), "lost": lost, "may": may,
                                "limit": LIMIT, "moves": [], "given_up": [], "rescued": [], "cushioned": [],

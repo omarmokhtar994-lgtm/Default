@@ -23,7 +23,7 @@ import re
 import threading
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from openpyxl import load_workbook
 
@@ -981,7 +981,8 @@ def vto_offers(view: Dict[str, Any], after: int = 0, top: int = 6) -> List[Dict[
 # ---------------------------------------------------------------- the autopilot for the rest of the day's breaks
 def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: int = 400,
            target: Optional[float] = None, fresh: bool = False,
-           desired: Optional[Dict[Tuple[str, int], int]] = None) -> Dict[str, Any]:
+           desired: Optional[Dict[Tuple[str, int], int]] = None,
+           fit: Optional[Callable[[str, Dict[int, int]], Tuple[int, int]]] = None) -> Dict[str, Any]:
     """Re-plot the breaks not yet started (people on shift and present, this day's shifts) to lift the
     tightest interval, then (with the week's ``target``, Phase AH: the owner's 10 minutes) to keep the most
     intervals at the target with ``CUSHION`` minutes over it, then to cut the hours short; each break stays inside
@@ -996,7 +997,11 @@ def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: i
     nearest to where it was when the score is no different, inside the same rules. When the result is worse than the
     day as it stands, nothing is proposed. With ``desired`` ((name, break index) -> the time the default break rules
     give it, in this view's minutes) each break goes to the allowed time nearest its desired one, and the result is
-    shown whether or not it beats the day as it stands: the rules are what was asked for."""
+    shown whether or not it beats the day as it stands: the rules are what was asked for.
+
+    ``fit`` (Phase AX, owner: "prioritize the default, followed by the engine", the intervals first) is ``(name, break
+    index -> start) -> (parts of the usual shape missed, engine rules broken)``, lower better. Among moves that score the
+    same it takes the better fit, and when the loop is done it moves a break to a better fit wherever no interval pays."""
     step = view["interval"]
     per = step // STEP
     cells = view["cells"]
@@ -1094,6 +1099,15 @@ def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: i
         return True
 
     hold = (view.get("channels") or {}).get("hold")
+    kept_by = {lane["name"]: seg["breaks"] for lane, seg in people}
+
+    def fit_with(name: str, idx: int, new: int) -> Tuple[int, int]:
+        if fit is None:
+            return (0, 0)
+        mine = {o["idx"]: starts[(name, o["idx"])] for o in kept_by[name]}
+        mine[idx] = new
+        return fit(name, mine)
+
     before_score = score(sums)
     current = before_score
     if fresh:
@@ -1179,7 +1193,7 @@ def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: i
                     for i, d in change.items():
                         totals[i // per] += d
                     candidate = score(totals)
-                    rank = (candidate, -abs(new - original[key]))
+                    rank = (candidate, tuple(-x for x in fit_with(lane["name"], b["idx"], new)), -abs(new - original[key]))
                     if candidate > current and (best is None or rank > best[0]):
                         best = (rank, lane, seg, b, new, change, totals)
         if best is None:
@@ -1194,6 +1208,45 @@ def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: i
         starts[(lane["name"], b["idx"])] = new
         sums = totals
         current = score(sums)
+    if fit is not None and not fresh:  # the intervals are settled: a better fit wherever no interval pays for it
+        for _ in range(rounds):
+            best = None
+            for lane, seg in people:
+                for b in seg["breaks"]:
+                    key = (lane["name"], b["idx"])
+                    if starts[key] < now:
+                        continue
+                    here = fit_with(lane["name"], b["idx"], starts[key])
+                    if here == (0, 0):
+                        continue
+                    for new in positions(lane, seg, b):
+                        there = fit_with(lane["name"], b["idx"], new)
+                        if there >= here:
+                            continue
+                        change = delta(lane, seg, b, new)
+                        if not languages_hold(lane, change) or (hold is not None and not hold.holds(lane["name"], change)):
+                            continue
+                        totals = list(sums)
+                        for i, d in change.items():
+                            totals[i // per] += d
+                        candidate = score(totals)
+                        if candidate < current:
+                            continue
+                        rank = (tuple(-x for x in there), candidate, -abs(new - original[key]))
+                        if best is None or rank > best[0]:
+                            best = (rank, lane, seg, b, new, change, totals)
+            if best is None:
+                break
+            _, lane, seg, b, new, change, totals = best
+            if hold is not None:
+                hold.apply(lane["name"], change)
+            for i, d in change.items():
+                for L in langs:
+                    if lang_of[lane["name"]] in L["eligible"]:
+                        L["counts"][i] += d
+            starts[(lane["name"], b["idx"])] = new
+            sums = totals
+            current = score(sums)
     moves = []
     for lane, seg in people:
         for b in seg["breaks"]:

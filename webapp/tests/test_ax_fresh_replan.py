@@ -273,3 +273,120 @@ class TheFreshReplanWithChannels(_cd._Day):
         self.assertTrue(moved)
         self.assertNotEqual(moved[0]["to"], 15 * 60)
         self.assertNotIn(moved[0]["to"] // 60, (15,))
+
+
+class TheOldToolPrefersTheDefaultAfterTheIntervals(unittest.TestCase):
+    """Owner, 2026-10-22: Fix the rest of the day's breaks and Rescue consider the default (the usual shape, then the engine's
+    rules) but the intervals stay first: a time that costs an interval is never traded for a better fit."""
+    def setUp(self):
+        day = _td.TheDay("view")
+        self.view, self.short_day, self.applied = day.view, day.short_day, day.applied
+
+    @staticmethod
+    def toward_16_40(name, starts):  # a stand-in "fit": nearer to 16:40 is better; the engine's part is always clear
+        return (sum(abs(v - 1000) for v in starts.values()) // 5, 0)
+
+    def total_distance(self, plan, v):
+        moved = {(m["name"], m["idx"]): m["to"] for m in plan["moves"]}
+        return sum(abs(moved.get((l["name"], b["idx"]), b["start"]) - 1000) for l in v["lanes"] for s in l["segments"]
+                   if s["offset"] == 0 for b in s["breaks"])
+
+    def test_the_intervals_are_never_worse_for_it(self):
+        att = self.short_day()
+        v = self.view(att)
+        without, with_fit = replan(v, INPUTS, 0), replan(v, INPUTS, 0, fit=self.toward_16_40)
+        self.assertGreaterEqual(with_fit["after"]["tightest"], without["after"]["tightest"])
+        self.assertLessEqual(with_fit["after"]["short_hours"], without["after"]["short_hours"])
+
+    def test_it_moves_breaks_toward_a_better_fit_when_no_interval_pays_for_it(self):
+        att = self.short_day()
+        v = self.view(att)
+        without, with_fit = replan(v, INPUTS, 0), replan(v, INPUTS, 0, fit=self.toward_16_40)
+        self.assertLess(self.total_distance(with_fit, v), self.total_distance(without, v))
+
+    def test_what_it_proposes_is_still_inside_the_day_rules(self):
+        att = self.short_day()
+        plan = replan(self.view(att), INPUTS, 0, fit=self.toward_16_40)
+        after, _ = self.applied(att, plan)
+        for m in plan["moves"]:
+            seg = next(s for l in after["lanes"] if l["name"] == m["name"] for s in l["segments"] if s["offset"] == 0)
+            brks = sorted(seg["breaks"], key=lambda b: b["idx"])
+            self.assertEqual([b["idx"] for b in sorted(brks, key=lambda b: b["start"])], [b["idx"] for b in brks])
+            for a, b in zip(brks, brks[1:]):
+                if m["idx"] in (a["idx"], b["idx"]):
+                    gap = b["start"] - (a["start"] + a["minutes"])
+                    self.assertTrue(INPUTS["gap_min"] <= gap <= INPUTS["gap_max"], (m["name"], gap))
+
+    def test_without_a_fit_nothing_changes(self):
+        att = self.short_day()
+        self.assertEqual(replan(self.view(att), INPUTS, 0), replan(self.view(att), INPUTS, 0, fit=None))
+
+
+from webapp.window_tools import rebase as _rebase  # noqa: E402
+
+
+class TheFixTheRestPrefersTheDefault(_cb._Cancel):
+    def shifted(self):
+        done = []
+        for lane in self.days.page(self.key, _WED)["view"]["lanes"][:8]:
+            for seg in lane["segments"]:
+                if seg["offset"] == 0 and seg["status"] == "Present" and seg["breaks"]:
+                    b = seg["breaks"][0]
+                    for step in (-60, -45, -30, 30, 45, 60):
+                        try:
+                            self.days.move_break(self.key, _WED, lane["name"], b["idx"],
+                                                 f"{(b['start'] + step) // 60 % 24:02d}:{(b['start'] + step) % 60:02d}", self.omar)
+                            done.append((lane["name"], b["idx"]))
+                            self.addCleanup(self.days.move_break, self.key, _WED, lane["name"], b["idx"], None, self.omar)
+                            break
+                        except ValueError:
+                            continue
+        return done
+
+    def total(self, view, fit, moved):
+        shape = rules = 0
+        for lane in view["lanes"]:
+            for seg in lane["segments"]:
+                if seg["offset"] == 0 and seg["breaks"]:
+                    got = fit(lane["name"], {b["idx"]: moved.get((lane["name"], b["idx"]), b["start"]) for b in seg["breaks"]})
+                    shape, rules = shape + got[0], rules + got[1]
+        return shape, rules
+
+    def test_it_leaves_the_breaks_no_further_from_the_default_than_it_found_them(self):
+        self.assertTrue(self.shifted())
+        page = self.days._window(self.key, _WED, 0)
+        view = _rebase(page["view"], 0, page["views"])
+        fit = self.days.fit_for(self.key, _WED, 0, view)
+        self.assertIsNotNone(fit)
+        found = self.days.replan_window(self.key, _WED, 0, 0)
+        moved = {(m["name"], m["idx"]): m["to"] for m in found["moves"]}
+        self.assertLessEqual(self.total(view, fit, moved), self.total(view, fit, {}))
+
+    def test_the_intervals_are_no_worse_than_without_the_default(self):
+        self.shifted()
+        found = self.days.replan_window(self.key, _WED, 0, 0)
+        self.assertGreaterEqual(found["after"]["tightest"], found["before"]["tightest"])
+        self.assertLessEqual(found["after"]["short_hours"], found["before"]["short_hours"])
+
+    def test_when_the_rules_cannot_be_read_it_works_as_it_did(self):
+        with mock.patch.object(self.days.book, "break_rules", side_effect=ValueError("no rules")):
+            found = self.days.replan_window(self.key, _WED, 0, 0)
+        self.assertIn("moves", found)
+
+
+class TheRescuePrefersTheDefault(_cb._Cancel):
+    def test_the_defaults_are_read_from_the_programs_rules(self):
+        page = self.days.page(self.key, _WED)
+        defaults = self.days.defaults_for(self.key, _WED, 0, page["view"])
+        self.assertIsNotNone(defaults)
+        lane = next(l for l in page["view"]["lanes"] for s in l["segments"] if s["offset"] == 0 and s["breaks"])
+        seg = next(s for s in lane["segments"] if s["offset"] == 0)
+        first = seg["breaks"][0]
+        self.assertEqual(defaults(lane["name"], first["idx"], seg["start"] + 15)[0], 1)  # 15 minutes in: not the shape
+        self.assertEqual(defaults(lane["name"], first["idx"], seg["start"] + 150)[0], 0)
+
+    def test_rescue_still_runs_with_it_and_without_the_rules(self):
+        found = self.days.rescue_plan(self.key, _WED, None)
+        self.assertIn("status", found)
+        with mock.patch.object(self.days.book, "break_rules", side_effect=ValueError("no rules")):
+            self.assertIn("status", self.days.rescue_plan(self.key, _WED, None))

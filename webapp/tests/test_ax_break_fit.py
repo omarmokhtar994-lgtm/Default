@@ -46,3 +46,29 @@ class TheFitOfABreakSet(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+from webapp.break_plan import break_default  # noqa: E402
+
+
+class TheFitOfOneBreak(unittest.TestCase):
+    """The parts of the two layers that one break decides alone (Rescue weighs these): the first break's and the last
+    break's place in the shape, and the engine's margin and window for it."""
+    def test_a_first_break_inside_the_band_misses_nothing(self):
+        self.assertEqual(break_default(RULES, LABEL, 0, 3, 12.5 * H), (0, 0))
+
+    def test_a_first_break_too_early_or_too_late_misses_the_shape(self):
+        self.assertEqual(break_default(RULES, LABEL, 0, 3, 10.75 * H), (1, 0))
+        self.assertEqual(break_default(RULES, LABEL, 0, 3, 14 * H), (1, 0))
+
+    def test_the_last_break_ending_too_near_the_end_misses_the_shape(self):
+        self.assertEqual(break_default(RULES, LABEL, 2, 3, 18 * H), (1, 0))  # ends 18:15; the engine's margin is 45 minutes, so 18:15 is the latest
+        self.assertEqual(break_default(RULES, LABEL, 2, 3, 17.25 * H), (0, 0))
+
+    def test_a_middle_break_has_no_shape_of_its_own(self):
+        self.assertEqual(break_default(RULES, LABEL, 1, 3, 10.25 * H)[0], 0)
+
+    def test_the_engines_edge_margin_and_window_count_as_the_engines(self):
+        windowed = {**RULES, "windows": {**RULES["windows"], "lunch": {"earliest": 240, "latest": None}}}
+        self.assertEqual(break_default(windowed, LABEL, 1, 3, 12 * H), (0, 1))  # 2 hours in; the window says 4
+        self.assertEqual(break_default({**RULES, "edge_margin": 30}, LABEL, 0, 3, 10.25 * H), (1, 1))

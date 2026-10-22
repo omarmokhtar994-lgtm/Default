@@ -37,7 +37,11 @@ class TheWindow(ta.TheAttendance.__bases__[0]):
 
     def test_from_midnight_nothing_changes(self):
         page = self.days.page(AR, WED)
-        self.assertEqual(self.days.replan(page)["moves"], self.days.replan_window(AR, WED, 0)["moves"])
+        # Re-pinned (Phase AX): the moves were both empty before, so comparing whole rows said nothing; now there are moves
+        # (a better fit with the default break rules), and the window's carry their date, so what must match is each
+        # break and its times.
+        key = lambda found: [(m["name"], m["idx"], m["from"], m["to"]) for m in found["moves"]]  # noqa: E731
+        self.assertEqual(key(self.days.replan(page)), key(self.days.replan_window(AR, WED, 0)))
 
     def short(self):
         """Sick people on both days, so the window has short intervals for the tools to work on."""

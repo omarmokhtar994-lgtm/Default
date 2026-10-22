@@ -80,7 +80,7 @@ class TheCache(_Tagged):
 
     def test_the_checking_mode_names_a_kept_day_that_is_out_of_date(self):
         self.days.page(self.key, WED)
-        key = (self.key, WED, self.days.measure_of(self.key))
+        key = (self.key, WED, self.days.measure_of(self.key), 0)
         generation, built_at, page = self.days._pages[key]
         self.addCleanup(self.days._pages.clear)  # the tampered day must not outlive this test
         page["view"]["cells"][0]["now"] = -123  # a kept day that no longer matches the data
@@ -93,6 +93,33 @@ class TheCache(_Tagged):
         self.days.page(self.key, WED)
         with self.builds() as built, mock.patch.object(att.time, "monotonic", return_value=time.monotonic() + att.PAGE_KEEP + 1):
             self.days.page(self.key, WED)
+        self.assertEqual(built.call_count, 1)
+
+
+class TheZoneOfTheViewer(_Tagged):
+    """The checking mode found this one: a day's wording (the channel timelines, a shift's label) is written in the zone the
+    person looking has chosen, so a day built for an RTA in Cairo must not be handed to an RTA in New York."""
+    def timeline(self, minutes):
+        from webapp.clock import shown
+        with shown(minutes):
+            page = self.days.page(self.key, WED)
+        lines = (page["view"].get("channels") or {}).get("timelines") or {}
+        return page, next(iter(lines.values()))[0] if lines else None
+
+    def test_each_zone_gets_its_own_day(self):
+        cairo, cairo_line = self.timeline(0)
+        new_york, ny_line = self.timeline(-420)
+        again, again_line = self.timeline(0)
+        if cairo_line is None:
+            self.skipTest("this fixture's day has no channel timelines")
+        self.assertNotEqual(cairo_line, ny_line)
+        self.assertEqual(cairo_line, again_line)
+
+    def test_the_zone_is_part_of_what_is_kept(self):
+        self.days._pages.clear()
+        self.timeline(0)
+        with mock.patch.object(att, "day_view", wraps=att.day_view) as built:
+            self.timeline(-420)
         self.assertEqual(built.call_count, 1)
 
 

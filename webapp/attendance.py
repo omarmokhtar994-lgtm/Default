@@ -274,7 +274,7 @@ class DayBook:
         self.notifier = None  # Phase AB: hands each change to its LOB's group rule (webapp/notify.py)
         self._locks: Dict[Tuple[str, str], threading.RLock] = {}  # Phase AD: one change at a time per LOB and day
         self._locks_lock = threading.Lock()
-        self._pages: "OrderedDict[Tuple[str, date, str], Tuple[int, float, Dict[str, Any]]]" = OrderedDict()  # Phase AV
+        self._pages: "OrderedDict[Tuple[str, date, str, int], Tuple[int, float, Dict[str, Any]]]" = OrderedDict()  # Phase AV
         self._build_lock = threading.Lock()
 
     def _log(self, program: str, on: date, name: str, what: str, user_id: int, kind: str, post: str = "",
@@ -598,7 +598,7 @@ class DayBook:
             measure = self.measure_of(program)
         if extra or not recorded or not cover or version_id is not None:
             return self._build_page(program, on, measure, extra, recorded, cover, version_id)
-        key = (program, on, measure)
+        key = (program, on, measure, SHOWN.get())  # the wording is in the zone the viewer has chosen
         found = self._kept(key, shared)
         if found is not None:
             if VERIFY_PAGES:
@@ -618,7 +618,7 @@ class DayBook:
             return page if shared else self._copy(page)
 
     def _verify(self, key, found, program, on, measure) -> None:
-        fresh = self._build_page(program, on, measure, None, True, True, None)
+        fresh = self._build_page(program, on, measure, None, True, True, None)  # under the same zone as the hit
         same = first_difference(fingerprint({k: v for k, v in (found or {}).items() if k != "inputs"}),
                                 fingerprint({k: v for k, v in (fresh or {}).items() if k != "inputs"}))
         if same:

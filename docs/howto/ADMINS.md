@@ -24,3 +24,13 @@ program's).
 
 ## Before a release
 `python tools/audit_dependencies.py` (needs internet and `pip install pip-audit`), then the gate and the package.
+
+## The limit on people on a break at once (Phase AY)
+
+The blank and example workbooks (Home, "Download a clean input sheet") now show three rows in the Breaks group of the Instructions sheet. They used to sit on the hidden Engine Defaults sheet, so nobody saw that a limit existed. Left as they come, nothing changes:
+
+- **Maximum Concurrent Breaks:** most people on a break at the same time. Default 4.
+- **Maximum Concurrent Break Ratio:** most share of the people on shift on a break at once. Default 30%. Kept between 5% and 75%.
+- **Break Concurrency Gate Mode:** **Warn** (default) = more breaks at once than the limit costs about as much as a missed target interval, so the engine exceeds it only when that keeps an interval at target. **Fail** = never more than the limit. **Off** = no limit: the intervals decide.
+
+A blank or empty cell gives the defaults (4 and 30%). Do not use 0: it means the smallest limit (1 person, 5%), not "none". For no limit set the gate mode to Off. The limit used is the smallest of the people on shift minus one, the share and the count. The website's break tools read these rows from the input workbook kept with each schedule, so a change reaches a schedule only after it is run or uploaded again.

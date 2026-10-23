@@ -98,6 +98,47 @@ def offer_language_shift_rule(source: Path, kept: Path) -> Path:
     return kept
 
 
+# Phase AY (owner, 2026-10-23: the limit on people on a break at once was invisible, "edit the default download sheet to include that
+# option"): three Instructions rows the engine already reads. With no row it uses 4 at a time and 30% of the people on shift,
+# so count and share are offered blank (nothing changes until someone fills them in) and the gate mode on Warn, its default.
+# Warn counts an excess as a cost (about the cost of missing a target interval), Fail forbids it, Off lifts the limit. They sit in
+# the Breaks group of the visible Instructions sheet (the template builder keeps them on a hidden sheet otherwise).
+CONCURRENCY_ROWS = (
+    ("Maximum Concurrent Breaks", None,
+     "Most people on a break at the same time. Blank = 4. Not above one less than the people on shift."),
+    ("Maximum Concurrent Break Ratio", None,
+     "Most share of the people on shift on a break at once, like 30% or 0.30. Blank = 30%. Kept between 5% and 75%."),
+    ("Break Concurrency Gate Mode", "Warn",
+     "Warn = more breaks at once than the limit costs about as much as a missed target interval (the default). "
+     "Fail = never more than the limit. Off = no limit on breaks at once: intervals decide."),
+)
+
+
+def offer_break_concurrency(source: Path, kept: Path) -> Path:
+    """``source`` with the three concurrency rows added (so the engine reads the built template exactly as it reads its
+    source), and their help lines given to the template builder. Written to ``kept``."""
+    wb = load_workbook(source)
+    ws = wb["Instructions"]
+    have = {str(r[1] or "").strip() for r in ws.iter_rows(values_only=True)}
+    row = ws.max_row + 1
+    for label, value, help_text in CONCURRENCY_ROWS:
+        if label in have:
+            raise SystemExit(f"{source.name} already has {label!r}; nothing written")
+        ws.cell(row, 2, label)
+        ws.cell(row, 3, value)
+        row += 1
+    wb.save(kept)
+    for label, _value, help_text in CONCURRENCY_ROWS:
+        B.HELP[label] = help_text
+    if not any(key == CONCURRENCY_ROWS[0][0] for _name, items in B.SETUP_LAYOUT for key, _c in items):  # once per process
+        # The template builder keeps these three on its hidden "Engine Defaults" sheet; move them to the visible Instructions
+        # sheet, into the Breaks group, so that nobody has to know they exist to find them.
+        moved = [item for name, items in B.ADVANCED_LAYOUT if name == "Break Concurrency" for item in items]
+        B.ADVANCED_LAYOUT = [(name, items) for name, items in B.ADVANCED_LAYOUT if name != "Break Concurrency"]
+        B.SETUP_LAYOUT = [(name, items + moved) if name == "Breaks" else (name, items) for name, items in B.SETUP_LAYOUT]
+    return kept
+
+
 def offer_long_shift_breaks(source: Path, kept: Path) -> Path:
     """``source`` with the row added (so the engine reads the built template exactly as it reads its source), and the
     template builder told to lay the row out in the Breaks group. Written to ``kept``."""
@@ -213,6 +254,7 @@ def main(argv: list) -> int:
     with tempfile.TemporaryDirectory() as tmp:
         source = offer_long_shift_breaks(ROOT / SOURCE, Path(tmp) / "source_with_long_breaks.xlsx")
         source = offer_language_shift_rule(source, Path(tmp) / "source_with_shift_rule.xlsx")
+        source = offer_break_concurrency(source, Path(tmp) / "source_with_concurrency.xlsx")
         if B.main(["build", str(source), str(example)]) != 0:
             return 2
     blank_from(example, out / BLANK_NAME)

@@ -28,6 +28,7 @@ pressure. Patches (`AX_all_in_one`) did not change `MANIFEST.json` (mtime 22 Oct
 | Day off cancelled (call in) that breaks the rest gap is kept with a warning (`_call_in`, `add_item`, `/day/activity`); `add_activity(..., "Called in", dry_run=True)` no longer keeps the record | `webapp/tests/test_ay_callin_rest.py` (8), failed first; `test_attendance` re-pinned in 4 places with the reason |
 | Cover from outside the roster: "Delete cover" button on the tab list, "Remove" beside the entry on the Interval board (returns to the board) | `webapp/tests/test_ay_cover_remove.py` (5), 3 failed first |
 | Long group posts: a Slack change that does not fit in one message goes as "(1 of N)" messages, every line, retries resume at the failed message (`bodies_for`, `post_from_body`, `parts_done`) | `webapp/tests/test_ay_group_parts.py` (8), failed first; `test_notify_posts` re-pinned (it pinned the cut note) |
+| Break concurrency rows (count, share, gate mode) on the visible Instructions sheet of the blank and example workbooks, showing the engine defaults 4, 30%, Warn; they were on the hidden Engine Defaults sheet | `tests_staged/test_rc9_2_57_web_workbooks.py` `TheBreakConcurrencyRows` (6); measured: blank or empty cell gives 4 / 30%, 0 gives 1 / 5%, 99 and 99% give 99 and 75% |
 | Open pages ask whether they changed | `webapp/tests/test_ay_live.py` (15), 3 browser tests |
 | Breaks of one shift spread over the quarter hours | `test_ax_break_fit` (4); `AMPLE` 1 h lost 0.25 h of the tightest interval in `test_au_break_shape`, so it is 3 h |
 

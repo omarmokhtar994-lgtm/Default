@@ -1,9 +1,10 @@
 # © 2026 Omar Mokhtar. All rights reserved.
 """Phase AY (owner, 2026-10-23: "for early leave and late logins it should be maximum of 2 hours on maximum 2 times per month; a warning mentioning
 duration and count while booking them, asking for the account manager's approval as an exception, but still booked if the RTA writes a comment
-and says it was approved"): a Late login (minutes from the shift's start to the arrival) or an Early leave (minutes from the leaving time to the shift's
+and says it was approved"; then "for late login this can first choose if it's from the 2 hours or it's an incident, counted on the associate anyway"): a Late login (minutes from the shift's start to the arrival) or an Early leave (minutes from the leaving time to the shift's
 end) is booked freely up to 2 hours, and while the person has had fewer than 2 this month (Late and Left early together). Past either limit it is
-refused until the booking says the account manager approved it, with a comment; the comment goes to the day's log. Made-up names, October 2026."""
+refused until the booking says the account manager approved it, with a comment; the comment goes to the day's log. A booking is either taken from the allowance (``late_kind="allowance"``, the default) or an incident (``"incident"``): an incident does not use the
+allowance, is not held to its limits, and is kept in the incidents for the analysis. Made-up names, October 2026."""
 import re
 import unittest
 from datetime import date, timedelta
@@ -16,7 +17,7 @@ AR = "AE/AR B2B"
 WHO = "Associate 001"
 
 
-class TheLatePolicy(unittest.TestCase):
+class _Late(unittest.TestCase):
     setUpClass = classmethod(ta.TheAttendance.setUpClass.__func__)
     tearDownClass = classmethod(ta.TheAttendance.tearDownClass.__func__)
     setUp = ta.TheAttendance.setUp
@@ -40,6 +41,8 @@ class TheLatePolicy(unittest.TestCase):
         at = shift["start"] + minutes
         return self.days.set_status(AR, on, WHO, "Late", self.sara, end=f"{at // 60:02d}:{at % 60:02d}", **more)
 
+
+class TheLatePolicy(_Late):
     def test_the_limits_are_two_hours_and_two_a_month(self):
         self.assertEqual((LATE_MAX_MINUTES, LATE_MAX_COUNT), (120, 2))
 
@@ -86,6 +89,38 @@ class TheLatePolicy(unittest.TestCase):
         seen = self.days.set_status(AR, on, WHO, "Left early", self.sara, start=f"{left // 60 % 24:02d}:{left % 60:02d}", dry_run=True)
         self.assertEqual(seen["policy"]["minutes"], 180)
         self.assertEqual(seen["policy"]["over"], ["longer than 2 hours"])
+
+
+class TheIncident(_Late):
+    """The same fixture: a late login that is an incident, not from the allowance."""
+
+    def test_an_incident_has_no_limits_and_does_not_use_up_the_allowance(self):
+        a, b, c = self.days_worked(WHO, 3)
+        self.late(a, 200, late_kind="incident")        # longer than 2 hours: no approval asked, it is not from the allowance
+        self.late(b, 30, late_kind="incident")
+        self.late(c, 30)                               # the allowance is untouched: this is the first of 2
+        seen = self.late(c, 30, dry_run=True)["policy"]
+        self.assertEqual(seen["count"], 1)
+
+    def test_an_incident_is_kept_for_the_analysis_with_its_minutes(self):
+        on = self.days_worked(WHO, 1)[0]
+        self.late(on, 75, late_kind="incident")
+        kept = [r for r in self.store.list_incidents(AR, [on.isoformat()]) if r["associate"] == WHO]
+        self.assertEqual([(r["kind"], r["minutes"]) for r in kept], [("late_login", 75)])
+        self.days.set_status(AR, on, WHO, "Present", self.sara)  # changing the status takes the incident back with it
+        self.assertEqual([r for r in self.store.list_incidents(AR, [on.isoformat()]) if r["associate"] == WHO], [])
+
+    def test_an_early_leave_incident_has_its_own_kind(self):
+        on = self.days_worked(WHO, 1)[0]
+        shift = next(s for l in self.days.page(AR, on)["view"]["lanes"] if l["name"] == WHO for s in l["segments"] if s["offset"] == 0)
+        left = shift["end"] - 60
+        self.days.set_status(AR, on, WHO, "Left early", self.sara, start=f"{left // 60 % 24:02d}:{left % 60:02d}", late_kind="incident")
+        self.assertEqual([r["kind"] for r in self.store.list_incidents(AR, [on.isoformat()]) if r["associate"] == WHO], ["early_leave"])
+
+    def test_an_unknown_choice_is_refused(self):
+        on = self.days_worked(WHO, 1)[0]
+        with self.assertRaises(ValueError):
+            self.late(on, 30, late_kind="whatever")
 
 
 if __name__ == "__main__":

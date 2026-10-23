@@ -39,3 +39,19 @@ Measured on test_day Wednesday (29 people), `webapp/tests/test_ay_cap_mode.py` p
 | 2 | B (Warn or Off) | 1 | 15 min | 6 |
 
 Rules 1 to 4 hold (the tests check the tightest interval within 0.25 h, engine-rule distance 0, and Fail unchanged): ACCEPTED.
+
+## Bilingual counting by need (owner, 2026-10-23: "go for A, or it can be shown as per the actual requirements: if the bilingual is needed to cover English and not French, count them there as a whole 1 and 0 for French; if both need them, split")
+
+Today a person counts in full in every language row their label can cover, so one bilingual agent counts twice in the same interval and can hide a gap.
+
+**Rule (pre-registered, RTA day view only).** For each 5-minute slot, the people on the floor are spread over the language rows whose window is open:
+1. A person whose label serves one open row counts there (1).
+2. A person whose label serves several open rows is given, one person at a time, to the row that is furthest below its minimum. Rows tied for furthest below share the person equally (½ and ½, or ⅓ each).
+3. When no row they serve is below its minimum, the person is split equally over the rows they serve.
+4. Labels with fewer rows are spread first, then by name, so the result does not depend on the order people are listed in.
+5. A person is counted once in total: the counts of all rows add up to the people who serve an open row.
+A row's count for an interval is its lowest count over the interval's 5-minute slots, as before; a count that is not whole shows with up to 2 decimals.
+
+**Not changed:** the engine, the validator and the workbook (no new row), so no baseline workbook or result moves; Fix breaks, Rescue and the other RTA tools still check a break against the earlier, wider count. The RTA page can therefore show a language gap the validator does not report; that is the point.
+
+**Checks:** (1) one bilingual needed by English only counts 1 in English and 0 in French; (2) both rows short by the same amount: ½ each; (3) nobody short: split equally; (4) a label serving one row behaves as before; (5) the counts add up to the people; (6) the order of people does not change the result.

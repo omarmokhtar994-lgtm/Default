@@ -24,6 +24,7 @@ pressure. Patches (`AX_all_in_one`) did not change `MANIFEST.json` (mtime 22 Oct
 |---|---|
 | Input check names the rule in use (`tools/check_input_workbook.py`) | `TheInputCheckSaysWhichRuleIsSet` (2 tests), failed first for WHOLE_SHIFT |
 | `GRACE_SECONDS = 3000`, `engine_timeout(budget, rounds)` in the runner: Quick 6600 s, Deep 13200 s, Overnight 19800 s | `test_rc9_2_20_depth_presets` (2 tests), failed first |
+| Rescue on timeout: `RUN_PORTFOLIO.py --collect-only`, `seed_return_code`, `rc921_runner.run_portfolio` keeps the finished seeds; `rescue_note` on the run page | `test_rc9_2_59_portfolio_rescue` (13: 2, 4 and 6 seeds, none finished, unvalidated, in time), `webapp/tests/test_ay_rescue_note.py` (5), all failed first |
 | Open pages ask whether they changed | `webapp/tests/test_ay_live.py` (15), 3 browser tests |
 | Breaks of one shift spread over the quarter hours | `test_ax_break_fit` (4); `AMPLE` 1 h lost 0.25 h of the tightest interval in `test_au_break_shape`, so it is 3 h |
 
@@ -32,6 +33,5 @@ between the target and 100% (134 cells over, 34 covered), so it lays a cell of t
 
 ## Not decided, not built
 
-- Rescue on timeout (keep a finished, validated seed when the cap is hit).
 - Whether WHOLE_SHIFT is what lengthens the stages after the search: run the same workbook with the row at START and compare when the seeds finish.
 - Deep and Overnight are Quick seeds in rounds (4 and 6 seeds, 2 at a time), so the grace is per round: caps 3 h 40 m and 5 h 30 m.

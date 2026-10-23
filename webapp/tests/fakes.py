@@ -52,6 +52,10 @@ def runner(argv):
     if kind:
         source = {"NOTREADY": "conflict", "READY": "ready", "CONFLICT": "conflict", "SHORTFALL": "shortfall"}[kind]
         (case / "BUSINESS_OUTCOME.json").write_bytes((outcomes / f"{source}.json").read_bytes())
+    if "RESCUED" in stem:  # Phase AY: the real runner's ledger for a portfolio that reached its time cap and kept 3 of 4 seeds
+        (results / "RUN_LEDGER.json").write_text(json.dumps({"runs": [{
+            "scenario_id": stem, "exit_code": 0, "seeds": 4, "seeds_finished": 3, "rescued_after_timeout": True}]}),
+            encoding="utf-8")
     print("[run] fake runner done", flush=True)
     return 2 if "FAILS" in stem or kind else 0
 

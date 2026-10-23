@@ -106,9 +106,11 @@ Load each with the Skill tool at the step it covers; following it from memory do
   **Runner**: the longest a run may take is `(search budget + GRACE_SECONDS) * rounds`, `GRACE_SECONDS = 3000`
   (`packages/rc9_2_2_production/runners/rc921_runner.py`; was 1800). A real Quick run (2 seeds side by side, WHOLE_SHIFT) was
   killed at 5400 s with both seeds valid (slowest seed 5146 s). **Input check**: the line about when a shift is inside a
-  language window names the Shift Rule the workbook sets. Not built, and open: rescue on timeout (keep a finished, validated
-  seed when the cap is hit); whether WHOLE_SHIFT is what lengthens the stages after the search (test: the same workbook with
-  the row set to START). The gate runs once after a full package install (15 to 30 min before the first run); patches do not
+  language window names the Shift Rule the workbook sets. **Rescue on timeout**: when the cap stops a portfolio, the runner
+  runs `RUN_PORTFOLIO.py --collect-only` on the seed folders; a seed counts only if its `UNIVERSAL_RUN_STATUS.json` has
+  `top_level_copies` (the engine's last write), and every rule for a winner is unchanged; the record carries
+  `rescued_after_timeout` and the run page says so (`webapp/runs.py: rescue_note`); with no finished seed the timeout stands.
+  Open: whether WHOLE_SHIFT is what lengthens the stages after the search (test: the same workbook with the row set to START). The gate runs once after a full package install (15 to 30 min before the first run); patches do not
   change `MANIFEST.json`, so they do not trigger it. Evidence: `evidence/phase_ay/CHECKS.md`.
 
 ## Where things stand (end of Phase AU; package AP to AU, not yet built)

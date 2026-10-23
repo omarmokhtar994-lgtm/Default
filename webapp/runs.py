@@ -433,6 +433,7 @@ class RunQueue:
             status, message = readiness(found)
         elif code == 0:
             status, message = outcome(run["mode"], verdict)
+            message += rescue_note(results)
         else:
             status = "FAILED"
             message = (str(found.get("headline") or "") if found else "") or (
@@ -657,6 +658,20 @@ def outcome(mode: str, verdict: str) -> tuple:
     return "REVIEW", ("The independent validator passed this schedule, but its release verdict is "
                       f"{level or 'missing'}: a person must review it before it is published. "
                       "The verdict lines below and the schedule's Read Me First tab say what to check.")
+
+
+def rescue_note(results: Path) -> str:
+    """Phase AY: words for a run whose portfolio reached the runner's time cap and kept the best seed that had finished
+    (``rescued_after_timeout`` in RUN_LEDGER.json); "" for every other run, or when the ledger cannot be read."""
+    try:
+        runs = json.loads((Path(results) / "RUN_LEDGER.json").read_text(encoding="utf-8")).get("runs") or []
+    except (OSError, ValueError, AttributeError):
+        return ""
+    for record in runs:
+        if isinstance(record, dict) and record.get("rescued_after_timeout"):
+            return (f" The time limit was reached: this is the best of the {record.get('seeds_finished', '?')} of "
+                    f"{record.get('seeds', '?')} seeds that had finished, the rest were stopped.")
+    return ""
 
 
 def passed(stamp: Optional[dict]) -> bool:

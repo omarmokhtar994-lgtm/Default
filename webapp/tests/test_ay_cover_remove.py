@@ -65,5 +65,28 @@ class TheCoverCanBeRemoved(_Overtime):
         self.assertNotIn(f'name="id" value="{late}"', body)
 
 
+class TheCoverAfterMidnightInAWindow(_Overtime):
+    """Owner, 2026-10-23 (screenshot: "That cover is not on this day."): with "Day starts at" 13:00 the board shows the hours after midnight, and a
+    cover there belongs to the next date; its Remove button has to send that date, not the page's."""
+
+    def test_the_remove_button_sends_the_covers_own_date(self):
+        from datetime import timedelta
+        thu = WED + timedelta(days=1)
+        cover = self.days.add_cover(self.key, thu, "Made-up Support 03", "Support", "00:30", "02:00", 1)
+        self.addCleanup(lambda: self.days.store.get_cover(cover) and self.days.cancel_cover(self.key, thu, cover, 1))
+        got = self.client.get("/day", query_string={"program": self.key, "date": WED.isoformat(), "view": "board", "start": "13:00",
+                                                    "tz": "Africa/Cairo"})
+        body = html.unescape(got.get_data(as_text=True))
+        form = re.search(r'<form[^>]*action="/day/cover/cancel"[^>]*>(?:(?!</form>).)*name="id" value="' + str(cover) +
+                         r'"(?:(?!</form>).)*</form>', body, re.S)
+        self.assertTrue(form, "no remove form for the cover after midnight")
+        self.assertIn(f'name="date" value="{thu.isoformat()}"', form.group(0))
+        data = dict(re.findall(r'name="([^"]+)" value="([^"]*)"', form.group(0)))
+        data["csrf_token"] = token(self.client)
+        got = self.client.post("/day/cover/cancel", data=data)
+        self.assertEqual(got.status_code, 303)
+        self.assertEqual(self.days.covers(self.key, thu), [])
+
+
 if __name__ == "__main__":
     unittest.main()

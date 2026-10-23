@@ -839,7 +839,8 @@ def board(view: Dict[str, Any], target: float) -> List[Dict[str, Any]]:
             if t <= o["start"] < t + step:
                 events.append({"name": o["name"], "text": f"{o['role'].lower()} from outside the roster, covering "
                                                           f"{_hm(o['start'])} to {_hm(o['end'])}",
-                               "cover_id": o.get("id") if o.get("today") else None})  # Phase AY: last night's is not removed here
+                               "cover_id": o.get("id") if o.get("today") else None,  # Phase AY: last night's is not removed here
+                               "cover_date": o.get("date") if o.get("today") else None})
         cls = band(c["now"], c["required"], target)
         over = int(round(minutes_over(c, target))) if c["required"] > 0 else None
         tight = cls == "warn" and over < CUSHION

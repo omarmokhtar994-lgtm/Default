@@ -501,6 +501,23 @@ class TheDayInTheBrowser(unittest.TestCase):
     sign_in = InTheBrowser.sign_in
     url = "/day?program=AE/AR+B2B&date=2026-10-14"
 
+    def test_the_split_view_shows_two_embedded_days_without_the_page_header(self):
+        # Phase AY (owner: split the RTA between 2 or 3 LOBs or programs)
+        page = self.page(width=1500, height=1000)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        page.goto(self.base + "/day/split?p1=AE/AR+B2B&d1=2026-10-14&p2=AE/AR+B2B&d2=2026-10-15&layout=cols")
+        page.wait_for_load_state("load")
+        expect(page.locator("iframe.split-pane")).to_have_count(2)
+        for n in (0, 1):
+            frame = page.frame_locator("iframe.split-pane").nth(n)
+            expect(frame.locator("h1")).to_contain_text("the day", timeout=20000)
+            expect(frame.locator("header.top")).to_be_hidden()
+        left, right = [page.locator("iframe.split-pane").nth(n).bounding_box() for n in (0, 1)]
+        self.assertGreater(right["x"], left["x"] + left["width"] - 2)  # side by side
+        self.assertEqual(errors, [])
+
     def test_day_page(self):
         page = self.page(width=1500, height=1000)
         errors = []
@@ -520,7 +537,7 @@ class TheDayInTheBrowser(unittest.TestCase):
         page.locator("#att-dialog [data-keep]").click()
         expect(page.locator("#att-dialog .dlg-result")).to_contain_text("Choose whether this late login is from the allowance or an incident")
         page.locator("#att-dialog input[name=late_kind][value=allowance]").check()
-        expect(page.locator("#att-dialog [data-policy-text]")).to_contain_text("Late login 120 min", timeout=15000)
+        expect(page.locator("#att-dialog [data-policy-text]")).to_contain_text("this month (allowance: 2 hours, 2 times a month)", timeout=15000)
         page.locator("#att-dialog [data-keep]").click()
         expect(page.locator(".log")).to_contain_text("Associate 001, Late, arrived 13:00", timeout=15000)
         page.wait_for_load_state("load")  # the reloaded page's script is attached
@@ -1063,9 +1080,8 @@ class ThePhaseRInTheBrowser(unittest.TestCase):
         panel.scroll_into_view_if_needed()
         panel.screenshot(path=str(R_SCREENS / "ot_lengths.png"))
         self.go(page, "/day?program=AE/AR+B2B&date=2026-10-14&view=cover", errors)
-        vto = page.locator("section[aria-labelledby=vto-h]")
-        expect(vto.locator("form.vto-offer").first).to_be_visible()
-        vto.screenshot(path=str(R_SCREENS / "vto_stretch.png"))
+        # re-pinned (Phase AY, owner: "remove VTO option"): the panel that offered a VTO stretch is gone
+        expect(page.locator("section[aria-labelledby=vto-h]")).to_have_count(0)
         self.go(page, "/setup/programs", errors)
         stray = page.locator("section.setup-program", has=page.locator("h2", has_text="SAKS, NMG Tier 2"))
         expect(stray).to_contain_text("Move all of it into")

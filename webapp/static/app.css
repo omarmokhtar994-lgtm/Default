@@ -540,7 +540,7 @@ input[aria-invalid=true] { border-color: var(--gap); }
 /* ---- The day (Phase N): timeline lanes, number rows, interval board, break dialog ---- */
 /* Phase AU (owner: the width did not fit a wide screen): the day and the week use the whole width beside the menu */
 .frame > main:has([data-day]), .frame > main:has(.wkgrid) { max-width: none; }
-.daynav { display: flex; gap: 14px; margin: 0 0 2px; font-size: 0.8125rem; }
+.daynav { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 2px; font-size: 0.8125rem; }  /* wraps: the links no longer fit one line at 320px (Phase AY: Split view) */
 .daybar { display: flex; gap: 18px; align-items: flex-end; flex-wrap: wrap; margin: 0 0 14px; }
 .daybar .sel { margin: 0; }
 .daybar .measure-note { margin: 0 0 6px; font-size: 0.8125rem; max-width: 46ch; }

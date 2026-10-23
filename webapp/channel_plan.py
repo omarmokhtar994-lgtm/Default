@@ -39,6 +39,12 @@ SHAPE, GAP = 3, 2  # GAP: a quarter hour past the workbook's Normal Maximum Gap 
 # Phase AM: a quarter hour on another channel than the one a person is on now (Fix channels on the RTA): above the
 # fair spread (FAIR * 2 at most), so fairness alone never moves anyone; below any shortfall, so coverage always does
 KEEP = 3
+# Phase AY: with the consistency tick on, a quarter hour on another channel than before costs this, also across a break;
+# below every shortfall (a channel 30 to 100, a language 200), so it only chooses between plans that cover alike
+CONSISTENT = 20
+# and a stretch on a channel that lasts under SHORT_STRETCH quarter hours (breaks do not break it) costs this more:
+# the owner wants a couple of hours on a channel, not an hour here and an hour there
+SHORT_STRETCH, STRETCH_COST = 8, 15
 # Phase AF (B2): a quarter hour of break that leaves nobody else able to take the person's queue, and one that leaves
 # only colleagues of another language; someone who starts alone has the first break within FIRST_BY minutes
 ALONE, ALONE_LANGUAGE, FIRST_BY = 50, 10, 240
@@ -307,6 +313,30 @@ def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=N
         was = (carry_in or {}).get(name)
         if was in ("P", "C", "E") and ts:
             cost += [SWITCH * x[name, ts[0], c] for c in "PCE" if c != was and (name, ts[0], c) in x]
+        if setup["rules"].get("consistent"):
+            for k, t in enumerate(ts):  # a change of channel counts across up to 3 quarters of break between
+                for lag in (1, 2, 3, 4):
+                    if k < lag:
+                        break
+                    back = ts[k - lag]
+                    between = ts[k - lag + 1:k]
+                    if any((name, u) not in off for u in between):
+                        continue
+                    for c in "PCE":
+                        if (name, t, c) not in x or (name, back, c) not in x:
+                            continue
+                        move = m.NewBoolVar("")
+                        m.Add(move >= x[name, t, c] - x[name, back, c] - sum(1 - off[name, u] for u in between)
+                              - (off[name, back] if (name, back) in off else 0))
+                        cost.append(CONSISTENT * move)
+                        for j in range(1, SHORT_STRETCH):  # the stretch that starts here should last
+                            if k + j >= len(ts):
+                                break
+                            u = ts[k + j]
+                            if (name, u, c) in x:
+                                short = m.NewBoolVar("")
+                                m.Add(short >= move - x[name, u, c] - (off[name, u] if (name, u) in off else 0))
+                                cost.append(STRETCH_COST * short)
         for prev, t in zip(ts, ts[1:]):
             for c in "PCE":
                 if (name, t, c) in x:
@@ -501,9 +531,18 @@ def score_day(people: List[Dict[str, Any]], plan: Dict[str, Any], setup: Dict[st
         resting = sum(1 for p in people if at.get((p["name"], t)) == "B")
         if cap and resting > cap:
             problems.append(f"{resting} people on a break at {hm(t)}; at most {cap}.")
-    switches, long_runs = 0, {}
+    switches, moves, short_stretches, long_runs = 0, 0, 0, {}
     for p in people:
         name, ts = p["name"], list(range(p["start"], p["end"], QUARTER))
+        worked = [at.get((name, t)) for t in ts if at.get((name, t)) in ("P", "C", "E")]
+        moves += sum(a != b for a, b in zip(worked, worked[1:]))  # Phase AY: changes of channel, breaks ignored
+        stretches = [[w, 1] for w in worked[:1]]  # Phase AY: stretches on one channel, breaks ignored
+        for a, b in zip(worked, worked[1:]):
+            if a == b:
+                stretches[-1][1] += 1
+            else:
+                stretches.append([b, 1])
+        short_stretches += sum(1 for _, n in stretches[:-1] if n < SHORT_STRETCH)
         runs: List[Tuple[str, int, int]] = []
         for i, t in enumerate(ts):
             letter = at.get((name, t))
@@ -555,5 +594,5 @@ def score_day(people: List[Dict[str, Any]], plan: Dict[str, Any], setup: Dict[st
                     and (at.get((p["name"], t)) == "E" or (at.get((p["name"], t)) == "A" and "E" in p["skills"])))
                     for t in every if lo <= t < hi)
                 email_short += max(0, want - have) * QUARTER / 60
-    return {"short": short, "language_short": language_short, "email": email, "email_short": email_short, "switches": switches,
+    return {"short": short, "language_short": language_short, "email": email, "email_short": email_short, "switches": switches, "moves": moves, "short_stretches": short_stretches,
             "long": long_runs, "problems": problems}

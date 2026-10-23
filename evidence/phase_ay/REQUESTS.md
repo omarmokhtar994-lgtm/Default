@@ -55,3 +55,12 @@ A row's count for an interval is its lowest count over the interval's 5-minute s
 **Not changed:** the engine, the validator and the workbook (no new row), so no baseline workbook or result moves; Fix breaks, Rescue and the other RTA tools still check a break against the earlier, wider count. The RTA page can therefore show a language gap the validator does not report; that is the point.
 
 **Checks:** (1) one bilingual needed by English only counts 1 in English and 0 in French; (2) both rows short by the same amount: ½ each; (3) nobody short: split equally; (4) a label serving one row behaves as before; (5) the counts add up to the people; (6) the order of people does not change the result.
+
+## Channel consistency tick (owner, 2026-10-23: "make channel planning more consistent and avoid multiple changes in channel for the same associate during the day, optional like a tick")
+
+**Rule (pre-registered, channel planner only).** A new setting `consistent` (Channel Setup row "Keep each person on the same channel through the day", and a tick on the Plan channels page that overrides it for that Suggest). Default off.
+1. Off: the plan is exactly what it was.
+2. On: a change of channel costs 20 per quarter hour changed, also across a break or lunch (a change at a break was free). This is below every shortfall cost (a language 200, a channel 30 to 100), so coverage and language minimums still come first; the tick only chooses between plans that cover alike.
+3. Measured by `score_day()["moves"]` (channel changes per person over the day, breaks ignored): on must have at least 25% fewer moves than off on the 16-person test day (the timed search moves by 1 or 2 between runs), with hours short per channel and language not worse than off by more than 0.5 h in total.
+Not changed: the engine, the validator, the workbooks.
+4. (owner, same day: "consistent is to stay on the same channel for a couple of hours, not chat for an hour, back to voice for an hour, back to chat") With the tick on, a stretch on one channel (breaks do not end it) that lasts under 2 hours and is followed by another channel costs 15 more. Measured by `score_day()["short_stretches"]`: on must have at most 60% of off's. Measured on the 16-person day: 16 short stretches off, 6 on; channel changes 34 and 20; hours short unchanged.

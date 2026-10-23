@@ -37,7 +37,8 @@ REQUIREMENT_ALIASES = ("FT Wise 30 Min", "FT Wise 60 Min", "FT Wise", "Required 
 SETTINGS = {"minimum block minutes": "min_block", "phone maximum continuous minutes": "max_P",
             "chat maximum continuous minutes": "max_C", "email maximum continuous minutes": "max_E",
             "priority when short": "order", "how strict is the order": "strict",
-            "spread channels fairly over the week": "fair"}
+            "spread channels fairly over the week": "fair",
+            "keep each person on the same channel through the day": "consistent"}
 YES, NO = ("yes", "y", "true"), ("no", "n", "false")
 EPS = 1e-6
 KEEP = 8
@@ -335,7 +336,7 @@ def _setup(ws, step: int, problems: List[str], notes: List[str],
         except ValueError as exc:
             problems.append(str(exc))
     rules = {"min_block": max(QUARTER, step - step % QUARTER), "max_run": {"P": 0, "C": 0, "E": 0},
-             "order": ["P", "C", "E"], "strict": True, "fair": True}
+             "order": ["P", "C", "E"], "strict": True, "fair": True, "consistent": False}
     said = {"min_block": f"a minimum block of {rules['min_block']} minutes", "max_P": "no Phone maximum",
             "max_C": "no Chat maximum", "max_E": "no Email maximum", "order": "Phone > Chat > Email",
             "strict": "Strict", "fair": "channels spread fairly"}
@@ -364,10 +365,10 @@ def _setup(ws, step: int, problems: List[str], notes: List[str],
                 if _norm(value) not in ("strict", "balanced"):
                     raise ValueError(f"{where}: {label} must be Strict or Balanced; it reads {value}.")
                 rules["strict"] = _norm(value) == "strict"
-            elif key == "fair":
+            elif key in ("fair", "consistent"):
                 if _norm(value) not in YES + NO:
                     raise ValueError(f"{where}: {label} must be Yes or No; it reads {value}.")
-                rules["fair"] = _norm(value) in YES
+                rules[key] = _norm(value) in YES
         except ValueError as exc:
             problems.append(str(exc))
     return rules, languages, blended
@@ -522,7 +523,7 @@ def read_channels(path: Path, step: int) -> Optional[Dict[str, Any]]:
         rules, languages, blended = _setup(setup_ws, step, problems, notes, coverage)
     else:
         rules = {"min_block": max(QUARTER, step - step % QUARTER), "max_run": {"P": 0, "C": 0, "E": 0},
-                 "order": ["P", "C", "E"], "strict": True, "fair": True}
+                 "order": ["P", "C", "E"], "strict": True, "fair": True, "consistent": False}
         languages, blended = [], []
         notes.append(f"No Channel Setup tab: defaults used (a minimum block of {rules['min_block']} minutes, no "
                      "maximums, Phone > Chat > Email, Strict, no language minimums per channel, no all-channels "

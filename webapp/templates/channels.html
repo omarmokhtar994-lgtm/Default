@@ -72,6 +72,7 @@
   <form method="post" class="cp-row">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="day" value="{{ day }}">
     <label class="exp-kind"><input type="checkbox" name="move" value="1" checked><span>Move breaks if it helps (inside the break rules)</span></label>
+    <label class="exp-kind"><input type="checkbox" name="consistent" value="1"{% if r.consistent %} checked{% endif %}><span>Keep each person on the same channel through the day (when coverage allows)</span></label>
     <button type="submit" name="action" value="suggest" class="primary">Suggest the day</button>
     <button type="submit" name="action" value="suggest_week" title="Each working day in turn; up to about 20 seconds a day">Suggest every day</button>
     <a class="button" href="{{ url_for('channel_plan_download', schedule_id=row.id) }}">Download the channel plan (Excel)</a>

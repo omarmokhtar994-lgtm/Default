@@ -178,9 +178,15 @@ class TheChannelTabs(unittest.TestCase):
     def test_without_channel_setup_the_defaults_are_used_and_said(self):
         found = read_channels(self.book(settings=None, languages=None, blended=None), 60)
         self.assertEqual(found["rules"], {"min_block": 60, "max_run": {"P": 0, "C": 0, "E": 0},
-                                          "order": ["P", "C", "E"], "strict": True, "fair": True})
+                                          "order": ["P", "C", "E"], "strict": True, "fair": True,
+                                          "consistent": False})  # Phase AY: the new rule, off by default
         self.assertEqual((found["languages"], found["blended"]), ([], []))
         self.assertTrue(any(n.startswith("No Channel Setup tab") for n in found["notes"]))
+
+    def test_keep_each_person_on_the_same_channel_is_read_and_is_off_by_default(self):
+        on = read_channels(self.book(settings=[("Keep each person on the same channel through the day", "Yes")]), 60)
+        self.assertIs(on["rules"]["consistent"], True)
+        self.assertIs(read_channels(self.book(), 60)["rules"]["consistent"], False)
 
     def test_a_cell_it_cannot_use_is_refused_with_its_tab_and_row(self):
         bad_grid = lambda value: (lambda d, t: value if (d, t) == (2, 10 * 60) else phone_grid(d, t))  # noqa: E731

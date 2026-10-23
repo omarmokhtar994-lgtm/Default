@@ -3355,6 +3355,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         people = people_for(week, d, rules, plan, skills, inputs["languages"])
         if request.method == "POST":
             action = request.form.get("action", "")
+            if action in ("suggest", "suggest_week"):  # Phase AY: the tick on the page decides, not only the workbook
+                setup = dict(setup, rules=dict(setup["rules"], consistent=request.form.get("consistent") == "1"))
             try:
                 if action == "suggest":
                     found = plan_day(people, setup, rules, d, carry=channel_carry(week, rules, draft, d),

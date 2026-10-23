@@ -4593,6 +4593,19 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return render_template("wallboard.html", w=board_now, program=program, on=on, now=now, hm=hm,
                                live=not found and on == clock.date())
 
+    def _plan_asked_breaks(program: str, on: date, name: str, kind: str) -> None:
+        """Phase AY: the "Short breaks" and "Lunches" counts on the form that adds overtime or a call-in (0 and 0 by default) are placed
+        at once, in the same journal entry as the record. A refusal is said, and the record stays."""
+        shorts, lunches = request.form.get("shorts", 0, type=int) or 0, request.form.get("lunches", 0, type=int) or 0
+        if kind not in ("Overtime", "Called in", DAY_OFF) or not (shorts or lunches):
+            return
+        try:
+            made = _days().plan_extra_breaks(program, on, name, shorts, lunches, g.user["id"])
+            _say(f"Planned {len(made)} of the {shorts + lunches} breaks asked for {name}." if len(made) < shorts + lunches
+                 else f"Planned {len(made)} breaks for {name}.", program, on)
+        except ValueError as exc:
+            _say(f"Recorded, but the breaks were not planned: {exc}", program, on)
+
     @app.route("/day/activity", methods=["POST"])
     @login_required
     def day_activity():  # type: ignore[no-untyped-def]
@@ -4610,9 +4623,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
             warning = _days().add_activity(program, on, name, kind, start, end, g.user["id"], dry_run=True,
                                            with_whom=with_whom, why=why, with_dept=with_dept).get("warning", "") \
                 if kind in ("Overtime", "Called in") else ""
-            _days().add_activity(program, on, name, kind, start, end,
-                                 g.user["id"], billable=request.form.get("billable") == "1",
-                                 note=request.form.get("note", ""), with_whom=with_whom, why=why, with_dept=with_dept)
+            with _days().action(program, on, g.user["id"]):
+                _days().add_activity(program, on, name, kind, start, end,
+                                     g.user["id"], billable=request.form.get("billable") == "1",
+                                     note=request.form.get("note", ""), with_whom=with_whom, why=why, with_dept=with_dept)
+                _plan_asked_breaks(program, on, name, kind)
             flash(f"Recorded: {name}, {'day off cancelled (called in)' if kind == 'Called in' else kind.lower()}.")
             if warning:
                 _say(f"Warning: {warning}", program, on)
@@ -4639,6 +4654,14 @@ def create_app(config: Dict[str, Any]) -> Flask:
             _say(str(exc), program, on)
         return _back_to_day(program, on, "cover")
 
+    EDIT_DAYS_BACK = 2  # Phase AY (owner, 2026-10-23): overtime, call-ins and cover can be removed for today and 2 days before
+
+    def _still_editable(on: date, what: str) -> None:
+        today = app.config.get("TODAY") or datetime.now(EGYPT).date()
+        if on < today - timedelta(days=EDIT_DAYS_BACK):
+            raise ValueError(f"{what} of {on:%a %d %b} cannot be changed any more: it can be removed for today and the "
+                             f"{EDIT_DAYS_BACK} days before only.")
+
     @app.route("/day/cover/cancel", methods=["POST"])
     @login_required
     def day_cover_cancel():  # type: ignore[no-untyped-def]
@@ -4646,6 +4669,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         try:
             if on is None:
                 raise ValueError("Pick a day.")
+            _still_editable(on, "Cover")
             _days().cancel_cover(program, on, request.form.get("id", 0, type=int), g.user["id"])
             flash("Cancelled.")
         except ValueError as exc:
@@ -4660,6 +4684,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
         try:
             if on is None:
                 raise ValueError("Pick a day.")
+            held = app.extensions["store"].get_activity(request.form.get("id", 0, type=int))
+            if held and held["kind"] in ("Overtime", "Called in"):
+                _still_editable(on, "A call-in" if held["kind"] == "Called in" else "Overtime")
             _days().cancel_activity(program, on, request.form.get("id", 0, type=int), g.user["id"])
             flash("Cancelled.")
         except ValueError as exc:
@@ -4702,11 +4729,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
         try:
             program, on, name, what, start, minutes, billable = _add_fields()
             with_dept, with_whom, why = _aux_answers(what, program)
-            with leave_out(_left_out_asked()):
+            with leave_out(_left_out_asked()), _days().action(program, on, g.user["id"]):
                 found = _days().add_item(program, on, name, what, start, minutes, g.user["id"], billable=billable,
                                          note=request.form.get("note", ""), end=_typed("to", program, on),
                                          with_whom=with_whom, why=why, with_dept=with_dept,
                                          side=request.form.get("side", ""))
+                _plan_asked_breaks(program, on, name, what)
             _say(f"Recorded: {name}, {found['text']}.", program, on)
             if found.get("warning"):
                 _say(f"Warning: {found['warning']}", program, on)

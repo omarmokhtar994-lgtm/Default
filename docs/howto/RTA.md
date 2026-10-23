@@ -103,3 +103,9 @@ So with enough buffer the first breaks go where the usual shape puts them, even 
 ## Breaks for a call-in (Phase AY)
 
 The Timeline already draws a call-in as a bar and overtime beside the shift. A call-in for a Shift Library shift takes the breaks of the people on that shift. A call-in for typed times that nobody else works has none: on the Overtime and VTO tab, its row in "Activities on this day" shows **Plan their breaks**. It places the breaks the workbook gives a shift of that length, by the same rules as Plan breaks automatically (the usual shape first, then the engine's gaps), with everyone else's breaks where they are. They are kept as breaks added on the day, each named in the log, and one Undo takes them all back. The button does not show once the person has breaks. Overtime needs nothing: it extends a shift that has its breaks already.
+
+## Breaks while adding overtime or a call-in, and how far back records can be removed (Phase AY)
+
+- **Counts on the add forms.** The "+ Add" dialog and the overtime offers have **Short breaks** and **Lunches** (0 by default). Any other number is placed at once, inside the overtime or call-in time, by the same rules as Plan breaks automatically, with everyone else's breaks where they are; the lengths are the workbook's. The record and its breaks are one Undo. If the planner finds no room, the record stays and the page says the breaks were not planned.
+- **Removing overtime, a call-in or cover** works for today and the 2 days before (Egypt time), including last night's. Older days are closed: the page says so. Other activities are not held by this.
+- **Hour labels** on the Timeline now sit at their true hour on a short window ("Day starts at", the operating day); they were laid out for 24 hours and drifted from the intervals below.

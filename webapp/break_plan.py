@@ -34,6 +34,25 @@ def slots_for(rules: Dict[str, Any], duration_min: int) -> List[Tuple[str, int]]
     return [(str(label), int(minutes)) for minutes, label in chosen]
 
 
+def slots_of(rules: Dict[str, Any], name: str, duration_min: int) -> List[Tuple[str, int]]:
+    """``slots_for`` for one person: ``rules["extra_slots"]`` (Phase AY, breaks asked for overtime or a call-in) names the
+    breaks of a stand-in person, every other person takes the workbook's."""
+    given = (rules.get("extra_slots") or {}).get(name)
+    return list(given) if given is not None else slots_for(rules, duration_min)
+
+
+def break_minutes(rules: Dict[str, Any]) -> Tuple[Optional[int], Optional[int]]:
+    """(minutes of a short break, minutes of a lunch) as the workbook's break sets give them; None for one it never gives."""
+    short = lunch = None
+    for segments in [rules.get("segments") or []] + [s for _, s in rules.get("by_length") or []]:
+        for minutes, label in segments:
+            if str(label).strip().casefold().startswith("lunch"):
+                lunch = lunch or int(minutes)
+            else:
+                short = short or int(minutes)
+    return short, lunch
+
+
 def _span(label: str) -> Tuple[int, int]:
     span = shift_span(label)
     if not span:
@@ -273,7 +292,7 @@ def week_with(week: Dict[str, Any], d: int, plan: Dict[str, Starts], rules: Dict
         span = shift_span(shifts.get(name, ""))
         if not span:
             continue
-        for (kind, minutes), s in zip(slots_for(rules, span[1] - span[0]), starts):
+        for (kind, minutes), s in zip(slots_of(rules, name, span[1] - span[0]), starts):
             if s is not None:
                 out["breaks"].append({"associate": name, "day": DAYS[d], "kind": kind, "start": hm(s), "minutes": minutes})
     return out
@@ -296,7 +315,7 @@ def suggest(week: Dict[str, Any], inputs: Dict[str, Any], rules: Dict[str, Any],
                      if shift_span(a["days"][d])), key=lambda p: (p[1][0], p[0]))
     out: Dict[str, Starts] = {}
     for name, (lo, hi) in people:
-        slots = slots_for(rules, hi - lo)
+        slots = slots_of(rules, name, hi - lo)
         out[name] = (list(plan.get(name) or []) + [None] * len(slots))[:len(slots)]
     view = day_view(week_with(week, d, out, rules), inputs, d, {}, {})
     slots_now = [x for c in view["cells"] for x in c["slots"]]  # on the floor per 5 minutes, typed breaks taken
@@ -305,7 +324,7 @@ def suggest(week: Dict[str, Any], inputs: Dict[str, Any], rules: Dict[str, Any],
     for name, (lo, hi) in people:
         for q in range(lo // QUARTER, min(len(staffed), -(-hi // QUARTER))):
             staffed[q] += 1
-        for (kind, minutes), s in zip(slots_for(rules, hi - lo), out[name]):
+        for (kind, minutes), s in zip(slots_of(rules, name, hi - lo), out[name]):
             if s is not None:
                 for q in range(s // QUARTER, (s + minutes) // QUARTER):
                     on_break[q] += 1
@@ -342,7 +361,7 @@ def suggest(week: Dict[str, Any], inputs: Dict[str, Any], rules: Dict[str, Any],
 
     windows = rules.get("windows") or {}
     for name, (lo, hi) in people:
-        slots = slots_for(rules, hi - lo)
+        slots = slots_of(rules, name, hi - lo)
         margin = edge_margin(rules, hi - lo)
         starts = out[name]
         for k, (kind, minutes) in enumerate(slots):

@@ -1425,6 +1425,24 @@ function homeRefresh(now) {
   window.addEventListener("resize", fit);
 })();
 
+// Phase AY (owner, 2026-10-23: "the hours timeline does not match the intervals below"): the Timeline's hour labels and hour lines
+// were laid out for a 24-hour day, so on a shorter window ("Day starts at", the operating day) they drifted from the bars and the
+// interval cells. They are placed here from the window's length in minutes (data-span on the axis row): a label every 2 hours, a
+// line every hour.
+(function () {
+  "use strict";
+  var axis = document.querySelector(".tl-axis[data-span]");
+  if (!axis) { return; }
+  var span = parseInt(axis.getAttribute("data-span"), 10);
+  if (!span || span <= 0) { return; }
+  var ticks = axis.querySelector(".tl-ticks");
+  Array.prototype.forEach.call(ticks.children, function (t, i) { t.style.left = (100 * i * 120 / span).toFixed(3) + "%"; });
+  ticks.classList.add("placed");
+  Array.prototype.forEach.call(document.querySelectorAll("svg.tl-track"), function (svg) {
+    svg.style.backgroundSize = (100 * 60 / span).toFixed(4) + "% 100%";
+  });
+})();
+
 // Phase AO (owner, 2026-10-20): on People, "Name on the schedule" lists only the names on the schedules of the programs
 // ticked in the same form, and the bulk team manager list only team managers who share a program with every ticked
 // associate. Each name and team manager carries the program ids it belongs to (data-programs); the server still checks.

@@ -565,7 +565,10 @@ svg.defs { position: absolute; width: 0; height: 0; }
 [data-day] select.att.gone { border-color: var(--gap); color: var(--gap-ink); }
 [data-day] select.att.away { border-color: var(--short); color: var(--short-ink); }
 [data-day] .tl-track { display: block; width: 100%; height: 30px;
-  background: repeating-linear-gradient(90deg, transparent 0 calc(100% / 24 - 1px), var(--rail) calc(100% / 24 - 1px) calc(100% / 24)); }
+  background: linear-gradient(90deg, transparent calc(100% - 1px), var(--rail) 0) left top / calc(100% / 24) 100% repeat-x; }
+/* Phase AY: the hour lines and the hour labels are placed by app.js from the window's length (data-span), not from a 24-hour day */
+[data-day] .tl-axis .tl-ticks.placed { display: block; position: relative; }
+[data-day] .tl-axis .tl-ticks.placed span { position: absolute; top: 0; white-space: nowrap; }
 [data-day] .tl-bar { fill: var(--c-blue); opacity: .85; }
 [data-day] .tl-bar.gone { opacity: .25; }
 [data-day] .tl-away { stroke: var(--gap); stroke-width: 1; vector-effect: non-scaling-stroke; }
@@ -1620,3 +1623,4 @@ table.hours tfoot th, table.hours tfoot td { border-top: 1px solid var(--rail); 
 .ins-heat td small { display: block; font-weight: 400; font-size: 0.6875rem; line-height: 1.1; white-space: nowrap; }
 .edit-act { margin-left: .75rem; }
 .edit-act input[type="time"] { width: 7rem; }
+.ot-offer .count { width: 4em; }

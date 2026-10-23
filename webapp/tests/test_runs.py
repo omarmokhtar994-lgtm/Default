@@ -4,6 +4,7 @@
 The production runner, input check, gate and scorer are replaced by
 webapp/tests/fakes.py so the website's own logic is tested in seconds; the
 real runner is exercised end to end separately (evidence/phase_i)."""
+from datetime import date
 import html
 import io
 import json
@@ -35,7 +36,7 @@ def make_app(start_worker=True, gate_fails=False, **extra):
     config = {"DATA_DIR": str(data), "SECRET_KEY": "t", "TESTING": True, "HTTPS": False,
               "PACKAGE_ROOT": str(package), "START_WORKER": start_worker,
               "RUNNER_CMD": fake + ["runner"], "CHECK_CMD": fake + ["check"],
-              "SCORE_CMD": fake + ["score"], "GATE_CMD": fake + ["gate", str(gate_marker)]}
+              "SCORE_CMD": fake + ["score"], "GATE_CMD": fake + ["gate", str(gate_marker)], "TODAY": date(2026, 10, 1)}  # Phase AY: Egypt's today, before the weeks the tests use
     config.update(extra)
     app = create_app(config)
     store = Store(data / "scheduler.db")

@@ -3422,6 +3422,26 @@ class TheRequestsInTheBrowser(_au_tomorrow.TheNextDay):
             self.assertGreater(page.locator("svg.tl-track rect.brk").count(), 0)
         self.assertEqual(problems, [])
 
+    def test_the_hour_labels_sit_where_their_hours_are_on_a_short_window(self):
+        # Phase AY (owner: "the hours timeline does not match the intervals below"): the labels were laid out for 24 hours
+        from webapp.programs import ProgramBook
+        pid = self.pid
+        ProgramBook(self.store).set_rta_defaults(pid, None, 9 * 60, None)
+        self.addCleanup(ProgramBook(self.store).set_rta_defaults, pid, None, None, None)
+        page, problems = self.watched()
+        self.sign_in(page, "rta1", "Staff-pass-123")
+        with mock.patch("webapp.app.operating_span", return_value=15 * 60):
+            page.goto(self.base + "/day?" + urllib.parse.urlencode(
+                {"program": self.key, "date": "2026-10-14", "tz": "Africa/Cairo", "start": "09:00"}))
+            box = page.locator(".tl-ticks").first.bounding_box()
+            labels = page.locator(".tl-ticks span")
+            for i in (1, 4, 7):  # 11:00, 17:00, 23:00: 2, 8 and 14 hours into a 15-hour window
+                at = labels.nth(i).bounding_box()["x"] - box["x"]
+                self.assertAlmostEqual(at / box["width"], i * 120 / 900, delta=0.01, msg=f"label {i}")
+            track = page.locator("svg.tl-track").first
+            self.assertEqual(track.evaluate("e => e.style.backgroundSize.split(' ')[0]"), "6.6667%")  # an hour line each 60 of 900 minutes
+        self.assertEqual(problems, [])
+
 
 class TheFittedDayInTheBrowser(unittest.TestCase):
     """Phase AV (found by the owner on the live site): with "Day starts at" 13:00 the RTA fits the window to the last

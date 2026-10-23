@@ -1347,8 +1347,13 @@ class DayBook:
             # owner, 2026-10-15: overtime that breaks the rest gap is kept, with a warning
             warning = self._rest(program, on, row, name, lo, hi, rest, refuse=False)
         else:
-            if lo < span[0] or hi > span[1]:
-                raise ValueError(f"{kind} has to fall inside {name}'s shift ({hm(span[0])} to {hm(span[1])}).")
+            room = span
+            if kind in EXTRA_BREAKS:  # Phase AY: a break may sit in the overtime the person has that day too
+                for r in self.store.list_activities(program, [on.isoformat()]):
+                    if r["associate"] == name and r["kind"] == "Overtime":
+                        room = (min(room[0], r["start"]), max(room[1], r["end_min"]))
+            if lo < room[0] or hi > room[1]:
+                raise ValueError(f"{kind} has to fall inside {name}'s shift ({hm(room[0])} to {hm(room[1])}).")
             if hi <= lo:
                 raise ValueError("The end time must be after the start time.")
         if kind in EXTRA_BREAKS:  # not on top of a break the person already has (as planned or as moved)
@@ -1360,7 +1365,8 @@ class DayBook:
                     raise ValueError(f"{name} is already on {b['kind'].lower()} from {hm(b['start'])} to "
                                      f"{hm(b['start'] + b['minutes'])} then.")
         for r in self.store.list_activities(program, [on.isoformat()]):  # a call-in is the shift itself
-            if r["associate"] == name and r["kind"] != CALLED_IN and r["start"] < hi and lo < r["end_min"]:
+            if r["associate"] == name and r["kind"] != CALLED_IN and r["start"] < hi and lo < r["end_min"] \
+                    and not (kind in EXTRA_BREAKS and r["kind"] == "Overtime"):  # a break may sit in overtime (Phase AY)
                 raise ValueError(f"{name} already has {r['kind'].lower()} from {hm(r['start'])} to {hm(r['end_min'])}.")
         billable = bool(billable) and kind in AUX and kind != BIO or kind == "Overtime"
         with_whom, why, with_dept = (_tidy(with_whom), _tidy(why), _tidy(with_dept)) if kind in AUX else ("", "", "")
@@ -1582,6 +1588,47 @@ class DayBook:
             made.append(self.add_activity(program, on, name, "Lunch" if kind.casefold().startswith("lunch") else "Break", plain_hm(at), plain_hm(at + minutes), user_id))
         if not made:
             raise ValueError(f"No place was found for {name}'s breaks.")
+        return made
+
+    @journaled
+    def plan_extra_breaks(self, program: str, on: date, name: str, shorts: int, lunches: int, user_id: int) -> List[int]:
+        """Phase AY (owner, 2026-10-23: "state the count of breaks, how many shorts and how many lunches; if not, keep 0; if there,
+        plan it automatically"): ``shorts`` short breaks and ``lunches`` lunches inside the person's call-in, or inside their latest
+        overtime that day, placed by ``break_plan.suggest`` as a stand-in person working just that stretch (everyone else's breaks
+        stay where they are), and kept as breaks added on the day. The lengths are the workbook's. [] for 0 and 0."""
+        from .break_plan import break_minutes, suggest
+        if not (0 <= shorts <= 4 and 0 <= lunches <= 2):
+            raise ValueError("Ask for 0 to 4 short breaks and 0 to 2 lunches.")
+        if not shorts and not lunches:
+            return []
+        rows = [r for r in self.store.list_activities(program, [on.isoformat()]) if r["associate"] == name]
+        row = next((r for r in rows if r["kind"] == CALLED_IN), None) or max(
+            (r for r in rows if r["kind"] == "Overtime"), key=lambda r: r["id"], default=None)
+        if row is None:
+            raise ValueError(f"{name} has no overtime or call-in that day to put breaks in.")
+        version, _ = self.version(program, on)
+        week, d = self._week(version), day_index(on)
+        rules, inputs = self.book.break_rules(version["id"]), read_inputs(self.book.input_path(version["run_id"]))
+        short, lunch = break_minutes(rules)
+        if (shorts and not short) or (lunches and not lunch):
+            raise ValueError("The program's break rules do not say how long that break is.")
+        kinds = ["Extra break"] * shorts
+        kinds[shorts // 2:shorts // 2] = ["Extra lunch"] * lunches  # the lunches in the middle of the shorts
+        slots = [(k, lunch if k == "Extra lunch" else short) for k in kinds]
+        stand, virtual = copy.deepcopy(week), f"{name} (extra)"
+        person = next((a for a in stand["associates"] if a["name"] == name), {})
+        stand["associates"].append({**person, "name": virtual, "days": ["Off"] * 7})
+        stand["associates"][-1]["days"][d] = f"{plain_hm(row['start'] % 1440)} - {plain_hm(row['end_min'] % 1440)}"
+        plan = {a["name"]: [b["start"] for b in planned(stand, d, a["name"])] for a in stand["associates"]}
+        plan[virtual] = [None] * len(slots)
+        want = suggest(stand, inputs, {**rules, "extra_slots": {virtual: slots}}, d, plan).get(virtual) or []
+        made = []
+        for (kind, minutes), at in zip(slots, want):
+            if at is not None:
+                made.append(self.add_activity(program, on, name, "Lunch" if kind == "Extra lunch" else "Break",
+                                              plain_hm(at % 1440), plain_hm((at + minutes) % 1440), user_id))
+        if not made:
+            raise ValueError(f"No place was found for {name}'s breaks in that stretch.")
         return made
 
     # ------------------------------------------------------------- cover from outside the roster (Phase AJ)

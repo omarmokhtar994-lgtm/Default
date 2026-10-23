@@ -998,6 +998,23 @@ function homeRefresh(now) {
     from.querySelector("span").textContent = k === "Late" ? "Arrived at" : k === "Left early" ? "Left at" : "From";
     if (changedKind && usual[k]) { minutes.value = usual[k]; }
     overtimeSides(k === "Overtime");
+    // Phase AY: the counts of breaks belong to overtime and a call-in only; the allowance or incident choice to a late login or early leave only
+    var extra = form.querySelector("[data-extra-breaks]"), lateBox = form.querySelector("[data-add-late]");
+    var lateKind = k === "Late" || k === "Left early";
+    if (extra) {
+      extra.hidden = !(k === "Overtime" || calling);
+      Array.prototype.forEach.call(extra.querySelectorAll("input"), function (i) { i.disabled = extra.hidden; });
+    }
+    if (lateBox) {
+      lateBox.hidden = !lateKind;
+      Array.prototype.forEach.call(lateBox.querySelectorAll("input"), function (i) { i.disabled = !lateKind; });
+      var incident = lateBox.querySelector("[data-incident]");  // an early leave is always from the allowance
+      if (incident) {
+        incident.hidden = k !== "Late";
+        incident.querySelector("input").disabled = k !== "Late";
+        if (k !== "Late") { lateBox.querySelector("input[value=allowance]").checked = true; }
+      }
+    }
     if (off) {
       off.hidden = !calling; off.querySelector("select").disabled = !calling;
       working.hidden = calling; working.querySelector("select").disabled = calling;

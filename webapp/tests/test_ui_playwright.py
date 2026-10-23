@@ -501,6 +501,24 @@ class TheDayInTheBrowser(unittest.TestCase):
     sign_in = InTheBrowser.sign_in
     url = "/day?program=AE/AR+B2B&date=2026-10-14"
 
+    def test_the_add_dialog_shows_the_break_counts_and_the_late_choice_only_where_they_belong(self):
+        # Phase AY (owner: the counts of breaks showed for every kind): counts for overtime and a call-in only, the allowance or incident choice for a
+        # late login or early leave only, and an early leave cannot be an incident
+        page = self.page(width=1500, height=1000)
+        self.sign_in(page)
+        page.goto(self.base + self.url + "&view=board&add=600")
+        page.wait_for_load_state("load")
+        counts, late = page.locator("[data-extra-breaks]"), page.locator("[data-add-late]")
+        for kind, want_counts, want_late in (("Break", False, False), ("Coaching", False, False), ("Overtime", True, False),
+                                             ("Late", False, True), ("Left early", False, True), ("Sick", False, False)):
+            page.locator(f'#add-dialog input[name=what][value="{kind}"]').check(force=True)
+            self.assertEqual(counts.is_visible(), want_counts, kind)
+            self.assertEqual(late.is_visible(), want_late, kind)
+            if kind == "Left early":
+                self.assertFalse(page.locator("[data-incident]").is_visible())
+            if kind == "Late":
+                self.assertTrue(page.locator("[data-incident]").is_visible())
+
     def test_the_split_view_shows_two_embedded_days_without_the_page_header(self):
         # Phase AY (owner: split the RTA between 2 or 3 LOBs or programs)
         page = self.page(width=1500, height=1000)

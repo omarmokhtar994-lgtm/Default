@@ -36,7 +36,7 @@
     <label>Times in <select name="tz" data-autosubmit>{% for key, name in zones %}<option value="{{ key }}"{% if key == g.zone %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
     <label>Day starts at <select name="start" data-autosubmit>{% for value, text in starts %}<option value="{{ value }}"{% if value == start_at %} selected{% endif %}>{{ text }}</option>{% endfor %}</select></label>
     <input type="hidden" name="measure" value="{{ measure }}"><input type="hidden" name="view" value="{{ tab }}">
-    <p class="daynav">{% if program %}<a href="{{ url_for('day_split', p1=program, d1=on.isoformat()) }}">Split view</a><a href="{{ url_for('day_handover', program=program, date=on.isoformat()) }}">Handover note</a><a href="{{ url_for('day_wallboard', program=program) }}">Wallboard</a>{% if page %}<a href="{{ url_for('day_daily_views', program=program, date=on.isoformat(), tz=g.zone, start=start_at) }}">Download daily views</a>{% endif %}{% endif %}<a href="{{ url_for('day_page', program=program, date=earlier.isoformat(), measure=measure, view=tab) }}">‹ {{ earlier.strftime('%a %d %b') }}</a>
+    <p class="daynav">{% if program %}{% if not embed %}<a href="{{ url_for('day_split', p1=program, d1=on.isoformat()) }}">Split view</a>{% endif %}<a href="{{ url_for('day_handover', program=program, date=on.isoformat()) }}">Handover note</a><a href="{{ url_for('day_wallboard', program=program) }}">Wallboard</a>{% if page %}<a href="{{ url_for('day_daily_views', program=program, date=on.isoformat(), tz=g.zone, start=start_at) }}">Download daily views</a>{% endif %}{% endif %}<a href="{{ url_for('day_page', program=program, date=earlier.isoformat(), measure=measure, view=tab) }}">‹ {{ earlier.strftime('%a %d %b') }}</a>
       <a href="{{ url_for('day_page', program=program, date=later.isoformat(), measure=measure, view=tab) }}">{{ later.strftime('%a %d %b') }} ›</a></p>
     <noscript><button type="submit">Show</button></noscript>
   </form>
@@ -604,16 +604,16 @@
       <label data-length><span>Length</span> <select name="minutes">{% for m in lengths %}<option value="{{ m }}"{% if m == (ap.default_minutes or 15) %} selected{% endif %}>{% if m < 60 %}{{ m }} min{% else %}{{ m // 60 }} h{% if m % 60 %} {{ m % 60 }}{% endif %}{% endif %}</option>{% endfor %}</select></label>
       {% if ap.off %}<label data-to-label hidden><span>To</span> <input type="time" name="to" value="{{ hm(ap.shift_pick[2]) if ap.shift_pick else '' }}" step="900"></label>{% endif %}
     </div>
-    <div class="dlg-grid extra-breaks" data-extra-breaks><label><span>Short breaks</span> <input type="number" name="shorts" min="0" max="4" value="0" inputmode="numeric"></label><label><span>Lunches</span> <input type="number" name="lunches" min="0" max="2" value="0" inputmode="numeric"></label><p class="note">Overtime and a call-in only: how many breaks they take. 0 adds none. Any other number is placed for you inside that time, by the same rules as Plan breaks automatically.</p></div>
+    <div class="dlg-grid extra-breaks" data-extra-breaks hidden><label><span>Short breaks</span> <input type="number" name="shorts" min="0" max="4" value="0" inputmode="numeric"></label><label><span>Lunches</span> <input type="number" name="lunches" min="0" max="2" value="0" inputmode="numeric"></label><p class="note">Overtime and a call-in only: how many breaks they take. 0 adds none. Any other number is placed for you inside that time, by the same rules as Plan breaks automatically.</p></div>
     <label class="exp-kind" data-billable hidden><input type="checkbox" name="billable" value="1"><span>Billable (stays on the floor under interval compliance)</span></label>
     <div class="dlg-grid" data-aux-fields hidden>
       {{ with_fields(disabled=True) }}
       <label><span>Why</span> <input name="why" maxlength="200" placeholder="A short reason" disabled></label>
       {% if not with_lists and can('setup') %}<p class="note">With is typed until this program has its lists: <a href="{{ url_for('with_setup', program=program) }}">Set the departments and people</a>.</p>{% endif %}
     </div>
-    <fieldset class="late-kind" data-add-late><legend>Late login or early leave</legend>
+    <fieldset class="late-kind" data-add-late hidden><legend>Late login or early leave</legend>
       <label class="exp-kind"><input type="radio" name="late_kind" value="allowance" checked><span>From the allowance (2 hours, 2 times a month)</span></label>
-      <label class="exp-kind"><input type="radio" name="late_kind" value="incident"><span>An incident (a late login only): counted on the associate, not from the allowance</span></label>
+      <label class="exp-kind" data-incident><input type="radio" name="late_kind" value="incident"><span>An incident (a late login only): counted on the associate, not from the allowance</span></label>
       <label class="exp-kind"><input type="checkbox" name="am_ok" value="1"><span>The account manager approved this as an exception (needed past 2 hours or the 3rd in a month)</span></label>
       <label>Comment <input name="am_note" maxlength="200" placeholder="Who approved it and why"></label>
     </fieldset>

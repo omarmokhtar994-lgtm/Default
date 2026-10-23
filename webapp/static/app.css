@@ -1640,15 +1640,18 @@ table.hours tfoot th, table.hours tfoot td { border-top: 1px solid var(--rail); 
 .ot-offer .count { width: 4em; }
 
 /* Phase AY (owner, 2026-10-23: split view): panes are the ordinary RTA page embedded, without the page header */
-body.embed .top, body.embed .skip, body.embed .back { display: none; }
+body.embed .top, body.embed .skip, body.embed .back, body.embed .leftnav, body.embed .crumbs { display: none; }
 body.embed { padding-top: 0; }
+body.embed .frame { grid-template-columns: minmax(0, 1fr); }
+body.embed .frame > main { max-width: none; padding: 10px 14px 24px; }
+.frame > main:has(.split) { max-width: none; }  /* the split page uses the whole width */
 .split-bar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; margin: 8px 0 12px; }
 .split-pick { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-end; border: 1px solid var(--rail); border-radius: 6px; padding: 6px 10px; }
 .split-panes { display: grid; gap: 10px; }
 .split-rows { grid-template-columns: 1fr; }
 .split-cols.panes-2 { grid-template-columns: 1fr 1fr; }
 .split-cols.panes-3 { grid-template-columns: 1fr 1fr 1fr; }
-.split-pane { width: 100%; border: 1px solid var(--rail); border-radius: 6px; background: var(--paper); height: 78vh; min-height: 480px; }
-.split-rows.panes-2 .split-pane { height: 46vh; }
-.split-rows.panes-3 .split-pane { height: 34vh; min-height: 360px; }
+.split-pane { width: 100%; border: 1px solid var(--rail); border-radius: 6px; background: var(--paper); height: 82vh; min-height: 520px; }
+.split-rows.panes-2 .split-pane { height: 72vh; }
+.split-rows.panes-3 .split-pane { height: 60vh; min-height: 440px; }
 @media (max-width: 900px) { .split-cols.panes-2, .split-cols.panes-3 { grid-template-columns: 1fr; } }

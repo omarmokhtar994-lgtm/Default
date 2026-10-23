@@ -14,7 +14,6 @@
     {% endfor %}
     <label>Layout <select name="layout"><option value="rows"{% if layout == 'rows' %} selected{% endif %}>Stacked</option><option value="cols"{% if layout == 'cols' %} selected{% endif %}>Side by side</option></select></label>
     <button type="submit" class="primary">Show</button>
-    {% if can_add %}<span class="dim">Pick a program in the new pane to add it, then press Show. Add a pane: use the empty one.</span>{% endif %}
   </form>
   {% for n in missing %}<p class="notice">Pane {{ n }} is not one of your programs, so it is not shown.</p>{% endfor %}
   {% if panes|length == 1 and can_add %}<p class="notice">Add a pane: pick a second program in the empty pane above and press Show.</p>{% endif %}

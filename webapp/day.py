@@ -108,6 +108,30 @@ def _grid(wb, name: str) -> Dict[int, Dict[int, float]]:
     return out
 
 
+def spread_languages(people: Dict[str, int], serves: Dict[str, List[str]], minimum: Dict[str, int]) -> Dict[str, float]:
+    """Phase AY (owner, 2026-10-23: a bilingual is counted where they are needed, split only when both languages need them; the rule is in
+    evidence/phase_ay/REQUESTS.md): the people on the floor in one slot, by language label, spread over the open language rows (``minimum``).
+    ``serves[label]`` lists the rows a label can cover. A label that serves one row counts there; one that serves several is given, a
+    person at a time, to the row furthest below its minimum (rows tied share the person equally), or split equally when none is below.
+    Labels with fewer rows go first, then by name, so the order of ``people`` never matters. Everyone counts once in total."""
+    got = {row: 0.0 for row in minimum}
+    several = []
+    for label in sorted(people):
+        rows = [r for r in serves.get(label, []) if r in minimum]
+        if len(rows) == 1:
+            got[rows[0]] += people[label]
+        elif len(rows) > 1:
+            several.append((len(rows), label, rows))
+    for _, label, rows in sorted(several):
+        for _ in range(people[label]):
+            short = {r: minimum[r] - got[r] for r in rows}
+            worst = max(short.values())
+            tied = [r for r in rows if abs(short[r] - worst) < 1e-9] if worst > 1e-9 else rows
+            for r in tied:
+                got[r] += 1 / len(tied)
+    return got
+
+
 def _languages(wb) -> List[Dict[str, Any]]:
     ws = next((wb[n] for n in wb.sheetnames if _norm(n) in ("language setup", "skill setup", "skills setup")), None)
     if ws is None:
@@ -442,26 +466,45 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
     groups: Dict[str, List[Dict[str, Any]]] = {}  # Phase AF (X2): a language's rows show as one row
     for rule in inputs["languages"]:
         groups.setdefault(_norm(rule["name"]), []).append(rule)
+    eligible_of = {key: {_norm(r["name"]) for r in inputs["languages"] if key in r["covers"]} for key in groups}
+    # Phase AY: per interval, the rows open (with their minimum) and the count each gets once the people are spread over them by need
+    held: Dict[int, Tuple[Dict[str, int], Dict[str, float]]] = {}
+    memo: Dict[Any, Dict[str, float]] = {}
+    for t in range(0, 1440, step):
+        # Phase AF (X1): an overnight window belongs to the day it starts, as the engine reads it
+        wanted = {key: max(r["minimum"] for r in rules if window_inside(r["days"], r["start"], r["end"], day, t))
+                  for key, rules in groups.items() if any(window_inside(r["days"], r["start"], r["end"], day, t) for r in rules)}
+        lows: Dict[str, float] = {}
+        if wanted:
+            for i in range(t // STEP, (t + step) // STEP):
+                people: Dict[str, int] = {}
+                for seg in now[i]:
+                    people[_norm(seg["language"])] = people.get(_norm(seg["language"]), 0) + 1
+                for c in cover:  # Phase AJ: cover in a language
+                    if c["start"] <= i * STEP < c["end"] and c.get("language"):
+                        people[_norm(c["language"])] = people.get(_norm(c["language"]), 0) + 1
+                serves = {label: [key for key in sorted(wanted) if label in eligible_of[key]] for label in people}
+                signature = (tuple(sorted(people.items())), tuple(sorted(wanted.items())))
+                if signature not in memo:
+                    memo[signature] = spread_languages(people, serves, wanted)
+                got = memo[signature]
+                lows = dict(got) if not lows else {k: min(lows[k], got[k]) for k in got}
+        held[t] = (wanted, lows)
     for key, rules in groups.items():
         rule = rules[0]
-        eligible = {_norm(r["name"]) for r in inputs["languages"] if key in r["covers"]}
         row = []
         for t in range(0, 1440, step):
-            # Phase AF (X1): an overnight window belongs to the day it starts, as the engine reads it
-            minimums = [r["minimum"] for r in rules if window_inside(r["days"], r["start"], r["end"], day, t)]
-            if not minimums:
+            wanted, lows = held[t]
+            if key not in wanted:
                 row.append({"t": t, "count": None, "cls": "none"})
                 continue
-            count = min(sum(1 for seg in now[i] if _norm(seg["language"]) in eligible)
-                        + sum(1 for c in cover if c["start"] <= i * STEP < c["end"]  # Phase AJ: cover in a language
-                              and c.get("language") and _norm(c["language"]) in eligible)
-                        for i in range(t // STEP, (t + step) // STEP))
-            minimum = max(minimums)
+            count, minimum = lows[key], wanted[key]
+            count = int(round(count)) if abs(count - round(count)) < 1e-9 else round(count, 2)
             cls = "bad" if count < minimum else ("warn" if count == 0 else "lok")
             row.append({"t": t, "count": count, "cls": cls, "minimum": minimum})
         languages.append({"name": rule["name"], "start": rule["start"], "end": rule["end"],
                           "minimum": max(r["minimum"] for r in rules),
-                          "eligible": sorted(eligible), "cells": row,
+                          "eligible": sorted(eligible_of[key]), "cells": row,
                           "gaps": sum(1 for c in row if c["cls"] in ("bad", "warn"))})
     mine = [(seg, st) for seg, st, away, br, ac in pieces if seg["offset"] == 0]
     with_aux = sum(1 for seg, st, away, br, ac in pieces if seg["offset"] == 0

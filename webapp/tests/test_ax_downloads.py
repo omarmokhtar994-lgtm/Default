@@ -12,6 +12,11 @@ from werkzeug.serving import make_server
 
 from webapp.tests import test_cancel_break as _cb
 
+import os
+
+# Phase AY: pages default to the zone of the computer (the pc_tz cookie); the browser here is in Egypt, as the expected times are
+os.environ["TZ"] = "Africa/Cairo"
+
 PNG = b"\x89PNG\r\n\x1a\n"
 
 

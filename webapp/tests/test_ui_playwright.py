@@ -19,6 +19,9 @@ from webapp.tests import test_au_tomorrow as _au_tomorrow
 
 from webapp.tests.test_runs import REPO, make_app, seed_week, versioned_run
 
+# Phase AY: pages default to the zone of the computer (the pc_tz cookie); the browser here is in Egypt, as the expected times are
+os.environ["TZ"] = "Africa/Cairo"
+
 # Phase J (owner-approved control-room redesign): screenshots of the new look.
 SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_j" / "screens"
 CHROMIUM = "/opt/pw-browsers/chromium"

@@ -338,7 +338,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 not _can(PERMISSION_ENDPOINTS[request.endpoint]):
             g.error_hint = "An admin sets what each role may open on Roles."
             abort(403, description="Your role cannot open this page or do this")
-        g.zone = pick_zone(request.args.get("tz", ""))  # Phase AF (D5): Egypt unless the page asks for another
+        # Phase AF (D5): the page asks for a zone; Phase AY (owner, 2026-10-23: "everything by default should match the pc timezone unless it
+        # has been changed manually"): without one, the zone of the person's computer, else Egypt
+        g.zone = request.args["tz"] if request.args.get("tz") in dict(ZONES) else (_pc_zone() or HOME)
         if g.get("user") and request.method == "POST" and request.endpoint in DAY_WRITES:
             try:
                 _still_editable(_date(request.form.get("date", "")), _date(request.form.get("first", "")))
@@ -3050,7 +3052,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 input_problem = ("The input workbook kept with this schedule cannot be read, so its channels cannot "
                                  "be checked here. Upload the schedule again to replace it.")
         own = pick_zone(run.get("tz") or HOME)  # Phase AK: shown in the zone picked, the schedule's own to begin with
-        g.zone = request.args["tz"] if request.args.get("tz") in dict(ZONES) else own
+        g.zone = request.args["tz"] if request.args.get("tz") in dict(ZONES) else (_pc_zone() or own)  # Phase AY: the computer's zone, else the schedule's own
         first = date.fromisoformat(run["week_start"]) if start_date(run.get("week_start") or "") else datetime.now(EGYPT).date()
         moved = own != g.zone
         together = None  # Phase AP: every LOB of the program as one, when it has two or more
@@ -3686,7 +3688,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         kept = dict(every.get(program) or {})
         if request.args.get("tz") in dict(ZONES):
             kept["tz"] = request.args["tz"]
-        zone = pick_zone(kept.get("tz", ""))
+        zone = kept["tz"] if kept.get("tz") in dict(ZONES) else (_pc_zone() or HOME)  # a zone picked here stays; else the computer's
         if START.match(request.args.get("start", "")):
             kept["start"] = request.args["start"]
         elif request.args.get("window") == "operating" and program:
@@ -4685,6 +4687,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
             except (ZoneInfoNotFoundError, ValueError, OSError):
                 continue
         return datetime.now(EGYPT).date()
+
+    def _pc_zone() -> Optional[str]:
+        """The zone this person's computer is in (``pc_tz``, kept by app.js), when it is one the pages can show times in."""
+        name = request.cookies.get("pc_tz", "")
+        return name if name in dict(ZONES) else None
 
     def _back_limit() -> Optional[int]:
         """Days back this person may change; None for no limit."""

@@ -19,6 +19,11 @@ from webapp.tests.test_ready import make_ready
 from webapp.tests.test_runs import make_app, sign_in, token, wait
 from webapp.tests.test_schedules import REPO
 
+import os
+
+# Phase AY: pages default to the zone of the computer (the pc_tz cookie); the browser here is in Egypt, as the expected times are
+os.environ["TZ"] = "Africa/Cairo"
+
 WED = date(2026, 10, 14)
 
 

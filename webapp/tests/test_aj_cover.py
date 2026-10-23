@@ -251,7 +251,10 @@ class TheBoard(_Book):
         self.add("10:00", "12:00", role="Support")
         rows = board(self.days.page(AR, WED)["view"], 0.9)
         row = next(r for r in rows if r["t"] == 600)
-        self.assertIn({"name": TM, "text": "support from outside the roster, covering 10:00 to 12:00"}, row["events"])
+        # re-pinned (Phase AY): the event also carries the cover's id, for the board's Remove button (test_ay_cover_remove)
+        found = next(e for e in row["events"] if e["name"] == TM)
+        self.assertEqual(found["text"], "support from outside the roster, covering 10:00 to 12:00")
+        self.assertIsInstance(found["cover_id"], int)
 
     def test_the_24_hours_from_a_start_keep_one_stretch_past_midnight(self):
         from webapp.day import window_view

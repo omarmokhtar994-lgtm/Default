@@ -138,7 +138,7 @@
 <p id="day-status" class="notice" role="status" hidden></p>
 
 <div data-day data-merge="{{ '1' if merged else '' }}" data-program="{{ program }}" data-step="{{ v.interval }}" data-measure="{{ measure }}" data-tz="{{ g.zone }}" data-shift="{{ moved }}"
-     data-att-url="{{ url_for('day_attendance') }}" data-break-url="{{ url_for('day_break') }}" data-cancel-url="{{ url_for('day_break_cancel') }}" data-advice-url="{{ url_for('day_break_advice') }}"
+     data-att-url="{{ url_for('day_attendance') }}" data-att-check-url="{{ url_for('day_attendance_check') }}" data-break-url="{{ url_for('day_break') }}" data-cancel-url="{{ url_for('day_break_cancel') }}" data-advice-url="{{ url_for('day_break_advice') }}"
      data-person-url="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view=tab if tab in ('board',) else none) }}">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ zone_fields() }}
 <svg class="defs" aria-hidden="true" focusable="false" width="0" height="0"><defs><pattern id="hatch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="10" class="hatch-line"/></pattern><pattern id="hatch-ok" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="10" class="hatch-line ok"/></pattern><linearGradient id="ch-all"><stop offset="0" class="g-p"/><stop offset=".33" class="g-p"/><stop offset=".33" class="g-c"/><stop offset=".66" class="g-c"/><stop offset=".66" class="g-e"/><stop offset="1" class="g-e"/></linearGradient></defs></svg>
@@ -611,6 +611,12 @@
       <label><span>Why</span> <input name="why" maxlength="200" placeholder="A short reason" disabled></label>
       {% if not with_lists and can('setup') %}<p class="note">With is typed until this program has its lists: <a href="{{ url_for('with_setup', program=program) }}">Set the departments and people</a>.</p>{% endif %}
     </div>
+    <fieldset class="late-kind" data-add-late><legend>Late login or early leave</legend>
+      <label class="exp-kind"><input type="radio" name="late_kind" value="allowance" checked><span>From the allowance (2 hours, 2 times a month)</span></label>
+      <label class="exp-kind"><input type="radio" name="late_kind" value="incident"><span>An incident (a late login only): counted on the associate, not from the allowance</span></label>
+      <label class="exp-kind"><input type="checkbox" name="am_ok" value="1"><span>The account manager approved this as an exception (needed past 2 hours or the 3rd in a month)</span></label>
+      <label>Comment <input name="am_note" maxlength="200" placeholder="Who approved it and why"></label>
+    </fieldset>
     <p class="effect" data-effect aria-live="polite">The effect on the floor shows here before anything is kept.</p>
     <div class="effect-ch" data-channel-effect hidden aria-live="polite"></div>
     {% if post_to %}<input type="hidden" name="post_asked" value="1">{{ post_tick() }}{% endif %}
@@ -651,6 +657,16 @@
     <label data-from>From <input type="time" name="from"></label>
     <label data-to>To <input type="time" name="to"></label>
     <div data-aux hidden>{{ with_fields() }}<label>Why <input name="why" maxlength="200" placeholder="A short reason"></label></div>
+    <fieldset class="late-kind" data-late-kind hidden><legend>How does this late login count?</legend>
+      <label class="exp-kind"><input type="radio" name="late_kind" value="allowance"><span>From the allowance (2 hours, 2 times a month)</span></label>
+      <label class="exp-kind"><input type="radio" name="late_kind" value="incident"><span>An incident: counted on the associate, not from the allowance</span></label>
+    </fieldset>
+    <div class="policy" data-policy hidden aria-live="polite"><p data-policy-text></p>
+      <div data-approval hidden>
+        <label class="exp-kind"><input type="checkbox" name="am_ok" value="1"><span>The account manager approved this exception</span></label>
+        <label>Comment <input name="am_note" maxlength="200" placeholder="Who approved it and why"></label>
+      </div>
+    </div>
     <p class="note" data-hint></p>
     <div class="dlg-result" aria-live="polite"></div>
     <div class="btns"><button class="primary" type="button" data-keep>Save</button><button type="button" data-cancel>Cancel</button></div>

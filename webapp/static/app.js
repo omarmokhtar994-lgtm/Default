@@ -405,6 +405,45 @@ function homeRefresh(now) {
 
   // ---- attendance
   var att = document.getElementById("att-dialog");
+  // Phase AY (owner, 2026-10-23): a late login is from the allowance (2 hours, 2 times a month) or an incident; an early leave is always
+  // from the allowance. The dialog says the duration and count as the time is typed, and past a limit asks for the account manager's
+  // approval and a comment.
+  var lateState = "", lateTimer = 0;
+  function lateField(name) { return att ? att.querySelector("[name=" + name + "]") : null; }
+  function lateKind() {
+    if (lateState === "Left early") { return "allowance"; }
+    var on = att.querySelector("input[name=late_kind]:checked");
+    return on ? on.value : "";
+  }
+  function lateSetup(state) {
+    lateState = state === "Late" || state === "Left early" ? state : "";
+    if (!att) { return; }
+    var box = att.querySelector("[data-late-kind]"), pol = att.querySelector("[data-policy]"), ok = att.querySelector("[data-approval]");
+    box.hidden = lateState !== "Late";
+    pol.hidden = !lateState; ok.hidden = true;
+    Array.prototype.forEach.call(att.querySelectorAll("input[name=late_kind]"), function (r) { r.checked = false; });
+    lateField("am_ok").checked = false; lateField("am_note").value = "";
+    att.querySelector("[data-policy-text]").textContent = lateState === "Late" ? "Choose how this late login counts, then the time." : "";
+  }
+  function lateCheck() {
+    if (!lateState) { return; }
+    var kind = lateKind(), text = att.querySelector("[data-policy-text]"), ok = att.querySelector("[data-approval]");
+    var when = (lateState === "Late" ? att.querySelector("input[name=to]") : att.querySelector("input[name=from]")).value;
+    if (!kind) { text.textContent = "Choose how this late login counts, then the time."; ok.hidden = true; return; }
+    if (!when) { text.textContent = ""; ok.hidden = true; return; }
+    var pending = JSON.parse(att.dataset.pending || "{}");
+    post(root.dataset.attCheckUrl, { date: pending.date, associate: pending.associate, status: lateState, from: att.querySelector("input[name=from]").value,
+                                      to: att.querySelector("input[name=to]").value, late_kind: kind }).then(function (r) {
+      if (!r._ok) { text.textContent = r.error || ""; ok.hidden = true; return; }
+      text.textContent = r.policy.text + (r.policy.over.length ? " Over the allowance: " + r.policy.over.join("; ") +
+        ". Needs the account manager's approval as an exception: tick it and write a comment to book it anyway." : "");
+      ok.hidden = !r.policy.over.length;
+      att.classList.toggle("yellow", r.policy.over.length > 0);
+    });
+  }
+  if (att) {
+    att.addEventListener("input", function () { window.clearTimeout(lateTimer); lateTimer = window.setTimeout(lateCheck, 250); });
+  }
   Array.prototype.forEach.call(root.querySelectorAll("select.att"), function (sel) {
     var was = sel.value;
     keyedPick(sel, function () {
@@ -437,6 +476,7 @@ function homeRefresh(now) {
         });
       }
       att.dataset.pending = JSON.stringify(fields);
+      lateSetup(state);
       att.showModal();
       (state === "Late" ? to : from).querySelector("input").focus();
       att.onclose = function () { if (att.returnValue !== "saved") { sel.value = was; } att.returnValue = ""; };
@@ -449,6 +489,18 @@ function homeRefresh(now) {
       var fields = JSON.parse(att.dataset.pending || "{}");
       fields.from = att.querySelector("input[name=from]").value;
       fields.to = att.querySelector("input[name=to]").value;
+      if (lateState) {
+        var kind = lateKind(), result0 = att.querySelector(".dlg-result");
+        if (!kind) { result0.textContent = "Choose whether this late login is from the allowance or an incident."; return; }
+        fields.late_kind = kind;
+        var approval = att.querySelector("[data-approval]");
+        if (!approval.hidden) {
+          if (!lateField("am_ok").checked || !lateField("am_note").value.trim()) {
+            result0.textContent = "Tick that the account manager approved it and write a comment to book it."; return;
+          }
+          fields.am_ok = "1"; fields.am_note = lateField("am_note").value.trim();
+        }
+      }
       var withWhom = att.querySelector("[name=with_whom]"), why = att.querySelector("input[name=why]");
       var dept = att.querySelector("select[name=with_dept]");
       if (withWhom && !withWhom.closest("[hidden]")) {

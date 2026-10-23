@@ -158,9 +158,17 @@ def _minutes_off(status: str, shift: str, lo: Optional[int], hi: Optional[int]) 
     return ""
 
 
+def _counted_as(r: Dict[str, Any]) -> str:
+    """Phase AY (owner, 2026-10-23: the exports state whether a late login was an incident or from the allowance): a late login is an incident
+    or from the allowance, an early leave is always from the allowance; blank for every other status."""
+    if r["status"] == "Late":
+        return "Incident" if r.get("late_kind") == "incident" else "From the allowance"
+    return "From the allowance" if r["status"] == "Left early" else ""
+
+
 def _attendance(store, days, weeks, start, end, program, user_id, measure):
     yield ["Shift date", "Program", "Associate", "Slot", "Shift", "Status", "From", "To", "Minutes", "Billable",
-           "With department", "With", "Why", "Recorded by", "Recorded at"]
+           "Counted as", "With department", "With", "Why", "Recorded by", "Recorded at"]
     for r in store.attendance_between(start.isoformat(), end.isoformat(), program, user_id):
         day = date.fromisoformat(r["shift_date"])
         person = weeks.person(r["program"], day, r["associate"])
@@ -168,7 +176,7 @@ def _attendance(store, days, weeks, start, end, program, user_id, measure):
         shift = (person.get("days") or [""] * 7)[_day_index(day)]
         yield [r["shift_date"], r["program"], r["associate"], person.get("slot", ""), shift, r["status"],
                _hm(r["from_min"]), _hm(r["to_min"]), _minutes_off(r["status"], shift, r["from_min"], r["to_min"]),
-               billable, r.get("with_dept", ""), r.get("with_whom", ""), r.get("why", ""), r["by_name"], _when(r["at"])]
+               billable, _counted_as(r), r.get("with_dept", ""), r.get("with_whom", ""), r.get("why", ""), r["by_name"], _when(r["at"])]
 
 
 def _activities(store, days, weeks, start, end, program, user_id, measure):
@@ -414,15 +422,18 @@ def _incident_summary(store, days, weeks, start, end, program, user_id, measure)
         yield row + [g["adherence"]]
 
 
+INCIDENT_NAMES = {"missed_break": "Missed break", "late_login": "Late login"}
+
+
 def _incidents(store, days, weeks, start, end, program, user_id, measure):
-    """Phase AV: what was ticked as an incident when a break was moved (a missed break so far)."""
+    """Phase AV: what was ticked as an incident when a break was moved (a missed break); Phase AY: a late login booked as an incident."""
     yield ["Shift date", "Program", "Associate", "Slot", "Shift", "Incident", "Break", "Note", "Recorded by",
            "Recorded at"]
     for r in store.incidents_between(start.isoformat(), end.isoformat(), program, user_id):
         person = weeks.person(r["program"], date.fromisoformat(r["shift_date"]), r["associate"])
         shift = (person.get("days") or [""] * 7)[_day_index(date.fromisoformat(r["shift_date"]))]
         yield [r["shift_date"], r["program"], r["associate"], person.get("slot", ""), shift,
-               "Missed break" if r["kind"] == "missed_break" else r["kind"], r["idx"] + 1, r["note"], r["by_name"],
+               INCIDENT_NAMES.get(r["kind"], r["kind"]), r["idx"] + 1 if r["kind"] == "missed_break" else "", r["note"], r["by_name"],
                _when(r["at"])]
 
 

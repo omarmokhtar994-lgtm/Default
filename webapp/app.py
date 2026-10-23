@@ -4254,6 +4254,28 @@ def create_app(config: Dict[str, Any]) -> Flask:
             _say(str(exc), program, on)
         return _back_to_day(program, on, "channels")
 
+    def _late_answers() -> Dict[str, str]:
+        """Phase AY: what the form says about a late login or early leave: from the allowance or an incident (the allowance when it says
+        nothing), and the account manager's approval of an exception (counted only when ticked and commented)."""
+        approved = request.form.get("am_ok") == "1"
+        return {"late_kind": request.form.get("late_kind", "") or "allowance",
+                "am_note": request.form.get("am_note", "").strip() if approved else ""}
+
+    @app.route("/day/attendance-check", methods=["POST"])
+    @login_required
+    def day_attendance_check():  # type: ignore[no-untyped-def]
+        """Phase AY: what a late login or early leave would come to against the allowance, before it is kept (JSON)."""
+        try:
+            program, on, name = _day_form()
+            status = request.form.get("status", "")
+            if status not in ("Late", "Left early"):
+                raise ValueError("Only a late login or an early leave is checked against the allowance.")
+            found = _days().set_status(program, on, name, status, g.user["id"], start=_typed("from", program, on),
+                                       end=_typed("to", program, on), dry_run=True, **_late_answers())
+        except ValueError as exc:
+            return _refused(exc, *_posted_day())
+        return jsonify(policy=found["policy"], text=found["what"])
+
     @app.route("/day/attendance", methods=["POST"])
     @login_required
     def day_attendance():  # type: ignore[no-untyped-def]
@@ -4264,7 +4286,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             _days().set_status(program, on, name, status, g.user["id"],
                                start=_typed("from", program, on), end=_typed("to", program, on),
                                billable=request.form.get("billable") == "1", with_whom=with_whom, why=why,
-                               with_dept=with_dept)
+                               with_dept=with_dept, **_late_answers())
         except ValueError as exc:
             return _refused(exc, *_posted_day())
         return jsonify(ok=True)
@@ -4793,7 +4815,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 found = _days().add_item(program, on, name, what, start, minutes, g.user["id"], billable=billable,
                                          note=request.form.get("note", ""), end=_typed("to", program, on),
                                          with_whom=with_whom, why=why, with_dept=with_dept,
-                                         side=request.form.get("side", ""))
+                                         side=request.form.get("side", ""), **_late_answers())
                 _plan_asked_breaks(program, on, name, what)
             _say(f"Recorded: {name}, {found['text']}.", program, on)
             if found.get("warning"):

@@ -1434,7 +1434,8 @@ class DayBook:
     @journaled
     def add_item(self, program: str, on: date, name: str, what: str, start: str, minutes: int, user_id: int,
                  billable: bool = False, note: str = "", dry_run: bool = False, end: str = "", with_whom: str = "",
-                 why: str = "", with_dept: str = "", side: str = "") -> Dict[str, Any]:
+                 why: str = "", with_dept: str = "", side: str = "", late_kind: str = "allowance",
+                 am_note: str = "") -> Dict[str, Any]:
         """Anything RTA's "+ Add" offers: Unplanned leave or Sick (the whole shift); Late (``start`` is when
         they arrived); Left early (``start`` is when they left); a break, lunch, aux, overtime or VTO from
         ``start`` for ``minutes``; a day off cancelled from ``start`` to ``end``. Overtime with ``side``
@@ -1449,12 +1450,13 @@ class DayBook:
         if what in ABSENT or what in LATE_EARLY:
             arrived = start if what == "Late" else ""
             left = start if what == "Left early" else ""
-            rec = self.set_status(program, on, name, what, user_id, start=left, end=arrived, dry_run=True)
+            rec = self.set_status(program, on, name, what, user_id, start=left, end=arrived, dry_run=True, late_kind=late_kind,
+                                  am_note=am_note)
             span = rec["span"]
             lo = span[0] if rec["from"] is None else rec["from"]
             hi = span[1] if rec["to"] is None else rec["to"]
             if not dry_run:
-                self.set_status(program, on, name, what, user_id, start=left, end=arrived)
+                self.set_status(program, on, name, what, user_id, start=left, end=arrived, late_kind=late_kind, am_note=am_note)
             return {"text": rec["what"], "lo": lo, "hi": hi, "record": rec}
         if what == "VTO":
             raise ValueError(NO_VTO)

@@ -137,5 +137,22 @@ class TheIncident(_Late):
             self.late(on, 30, late_kind="whatever")
 
 
+class TheExports(_Late):
+    def test_the_attendance_sheet_says_incident_or_from_the_allowance_and_the_incidents_sheet_names_the_late_login(self):
+        from webapp.exports import INCIDENT_NAMES, _counted_as
+        self.assertEqual(_counted_as({"status": "Late", "late_kind": "incident"}), "Incident")
+        self.assertEqual(_counted_as({"status": "Late", "late_kind": "allowance"}), "From the allowance")
+        self.assertEqual(_counted_as({"status": "Late", "late_kind": ""}), "From the allowance")   # a record from before
+        self.assertEqual(_counted_as({"status": "Left early", "late_kind": ""}), "From the allowance")
+        self.assertEqual(_counted_as({"status": "Sick", "late_kind": ""}), "")
+        self.assertEqual(INCIDENT_NAMES["late_login"], "Late login")
+
+    def test_the_exception_comment_is_kept_with_the_booking(self):
+        on = self.days_worked(WHO, 1)[0]
+        self.late(on, 150, am_note="Approved by the account manager, bus strike")
+        row = next(r for r in self.store.list_attendance(AR, [on.isoformat()]) if r["associate"] == WHO)
+        self.assertIn("bus strike", row["why"])
+
+
 if __name__ == "__main__":
     unittest.main()

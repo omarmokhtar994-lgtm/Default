@@ -516,6 +516,11 @@ class TheDayInTheBrowser(unittest.TestCase):
         page.select_option('select.att[data-name="Associate 001"]', "Late")
         expect(page.locator("#att-dialog")).to_be_visible()
         page.fill("#att-dialog input[name=to]", "13:00")
+        # re-pinned (Phase AY, owner: a late login is first said to be from the allowance or an incident): the dialog asks before it saves
+        page.locator("#att-dialog [data-keep]").click()
+        expect(page.locator("#att-dialog .dlg-result")).to_contain_text("Choose whether this late login is from the allowance or an incident")
+        page.locator("#att-dialog input[name=late_kind][value=allowance]").check()
+        expect(page.locator("#att-dialog [data-policy-text]")).to_contain_text("Late login 120 min", timeout=15000)
         page.locator("#att-dialog [data-keep]").click()
         expect(page.locator(".log")).to_contain_text("Associate 001, Late, arrived 13:00", timeout=15000)
         page.wait_for_load_state("load")  # the reloaded page's script is attached
@@ -609,7 +614,8 @@ class TheFloorToolsInTheBrowser(unittest.TestCase):
         afternoon, cls.free = everyone[:9], everyone[9:11]  # nine with records, two left free for a meeting
         for name in afternoon[:7]:
             days.set_status("AE/AR B2B", wed, name, "Unplanned leave", omar)
-        days.set_status("AE/AR B2B", wed, afternoon[7], "Late", omar, end="14:20")
+        # re-pinned (Phase AY: a late login over 2 hours needs the account manager's approval as an exception): the scenario stays the same
+        days.set_status("AE/AR B2B", wed, afternoon[7], "Late", omar, end="14:20", am_note="Approved by the account manager (test fixture)")
         days.add_activity("AE/AR B2B", wed, afternoon[8], "Coaching", "15:00", "15:30", omar, billable=True)
 
     def go(self, page, url, errors):

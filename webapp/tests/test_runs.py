@@ -1046,8 +1046,9 @@ class TheDayPage(unittest.TestCase):
         self.assertIn("Add for 10:00 to", dialog)
         self.assertIn('action="/day/add"', dialog)
         for kind in ("Break", "Lunch", "Coaching", "Meeting", "Training", "System issue", "Unplanned leave", "Sick",
-                     "Late", "Left early", "Overtime", "VTO"):
+                     "Late", "Left early", "Overtime"):  # re-pinned (Phase AY): VTO is no longer offered
             self.assertIn(f'name="what" value="{kind}"', dialog)
+        self.assertNotIn('name="what" value="VTO"', dialog)
         self.assertIn('name="from" value="10:00"', dialog)
         self.assertIn('<input type="hidden" name="at" value="600">', dialog)
         self.assertRegex(dialog, r'<option value="Associate \d+"')
@@ -1136,14 +1137,12 @@ class TheDayPage(unittest.TestCase):
             for a in acts:
                 self.app.extensions["days"].cancel_activity("AE/AR B2B", date(2026, 10, 16), a["id"], 1)
 
-    def test_vto_offers_pick_from_and_to(self):
+    def test_the_vto_offers_are_gone(self):
+        # re-pinned (Phase AY, owner: "remove VTO option"): the panel that offered voluntary time off, with its From and To pickers, is removed
         body = html.unescape(self.client.get(self.url + "&view=cover").get_data(as_text=True))
-        vto = body[body.index('id="vto-h"'):]
-        form = re.search(r'(?s)<form[^>]*class="vto-offer"[^>]*>.*?</form>', vto)
-        self.assertIsNotNone(form)
-        self.assertRegex(form.group(0), r'<select name="from"')
-        self.assertRegex(form.group(0), r'<select name="to"')
-        self.assertRegex(form.group(0), r'>Add VTO</button>')
+        self.assertNotIn('id="vto-h"', body)
+        self.assertNotIn('class="vto-offer"', body)
+        self.assertNotIn(">Add VTO</button>", body)
 
     def test_overview_and_rta_are_separate(self):
         body = html.unescape(self.client.get("/overview?program=AE/AR+B2B&date=2026-10-14").get_data(as_text=True))
@@ -1327,10 +1326,12 @@ class TheDayPage(unittest.TestCase):
                                                     "why": "Process update"}, follow_redirects=True)
         self.assertIn("Not free then: Associate 001. Nobody was booked.", html.unescape(again.get_data(as_text=True)))
 
-    def test_overtime_and_vto_tab(self):
+    def test_overtime_tab(self):
+        # re-pinned (Phase AY, owner: "remove VTO option"): the tab is "Overtime" and the voluntary time off panel is gone
         body = html.unescape(self.client.get(self.url + "&view=cover").get_data(as_text=True))
-        for words in ("Short: offer overtime", "Above demand: offer voluntary time off", "Activities on this day"):
+        for words in ("Short: offer overtime", "Activities on this day"):
             self.assertIn(words, body)
+        self.assertNotIn("Above demand: offer voluntary time off", body)
         got = self.client.post("/day/activity", data={"csrf_token": token(self.client), "program": "AE/AR B2B",
                                                       "date": "2026-10-14", "associate": "Associate 028",
                                                       "kind": "Overtime", "from": "07:00", "to": "09:00", "view": "cover"})

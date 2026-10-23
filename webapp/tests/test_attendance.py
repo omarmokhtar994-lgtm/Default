@@ -160,8 +160,10 @@ class TheAttendance(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Lunch party", "15:00", "16:00", self.sara)
         self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Overtime", "21:00", "22:00", self.sara)
-        self.days.add_activity("AE/AR B2B", WED, "Associate 001", "VTO", "20:00", "21:00", self.sara)
-        self.assertEqual([a[0] for a in self.acts("Associate 001")], ["Training", "VTO", "Overtime"])
+        # re-pinned (Phase AY, owner: "remove VTO option"): a VTO can no longer be booked; the other activities are listed as before
+        with self.assertRaises(ValueError):
+            self.days.add_activity("AE/AR B2B", WED, "Associate 001", "VTO", "20:00", "21:00", self.sara)
+        self.assertEqual([a[0] for a in self.acts("Associate 001")], ["Training", "Overtime"])
 
     def test_booking_a_meeting_is_all_or_nothing(self):
         slot = self.days.meeting_slots("AE/AR B2B", WED, ["Associate 001", "Associate 013"], 30, "13:00", "19:00")[0]
@@ -435,11 +437,11 @@ class TheAddDialog(unittest.TestCase):
         self.days.add_item("AE/AR B2B", WED, "Associate 002", "Day off cancelled", "12:00", 0, self.sara, end="21:00")
         self.assertNotIn("Associate 002", [name for name, _ in self.days.off_today("AE/AR B2B", WED)])
 
-    def test_vto_any_stretch_inside_the_shift(self):
-        got = self.days.add_item("AE/AR B2B", WED, "Associate 001", "VTO", "14:00", 60, self.sara)
-        self.assertEqual(got["text"], "VTO 14:00 to 15:00")
-        with self.assertRaises(ValueError):  # before the shift
-            self.days.add_item("AE/AR B2B", WED, "Associate 001", "VTO", "06:00", 60, self.sara)
+    def test_vto_is_no_longer_offered(self):
+        # re-pinned (Phase AY, owner: "remove VTO option"): it was any stretch inside the shift; now it is refused wherever it is asked for
+        with self.assertRaises(ValueError) as said:
+            self.days.add_item("AE/AR B2B", WED, "Associate 001", "VTO", "14:00", 60, self.sara)
+        self.assertIn("no longer offered", str(said.exception))
 
     def test_added_break_cannot_overlap_a_planned_break(self):
         planned = self.seg()["breaks"][0]

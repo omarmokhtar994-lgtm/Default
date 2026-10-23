@@ -61,7 +61,7 @@ class TheRecordsOfLastNight(_Overtime):
         self.assertEqual(self.days.covers(self.key, WED), [])
 
     def test_a_shift_that_ended_before_midnight_is_not_listed_on_the_next_day(self):
-        got = self.days.add_activity(self.key, WED, "Associate 008", "VTO", "15:00", "16:00", 1)
+        got = self.days.add_activity(self.key, WED, "Associate 008", "Training", "15:00", "15:30", 1, with_whom="Lina", why="Fixture")  # was a VTO (Phase AY)
         self.addCleanup(lambda: self.days.store.get_activity(got) and self.days.cancel_activity(self.key, WED, got, 1))
         self.assertFalse(self.form_for(self.page(), "/day/activity/cancel", got))
 

@@ -18,7 +18,9 @@ class _Window(_Overtime):
     def setUp(self):
         self.was = self.app.config.get("TODAY")
         self.addCleanup(lambda: self.app.config.__setitem__("TODAY", self.was))
-        self.sara = self.store.get_user_by_name("sara")["id"]
+        self.sara = self.store.get_user_by_name("omar")["id"]  # the signed-in user of this fixture, an admin: made an ordinary user for these tests
+        self.was_user = {k: self.store.get_user(self.sara)[k] for k in ("is_admin", "is_supervisor", "all_programs")}
+        self.store.update_user(self.sara, is_admin=0, is_supervisor=0, all_programs=1)
         self.ot = self.days.add_activity(self.key, WED, "Associate 021", "Overtime", "17:00", "18:00", 1)
         self.call = self.days.add_activity(self.key, WED, "Associate 004", "Called in", "10:00", "18:00", 1)
         self.aux = self.days.add_activity(self.key, WED, "Associate 008", "Training", "10:00", "10:30", 1)
@@ -30,7 +32,7 @@ class _Window(_Overtime):
                     self.store.delete_activity(i)
             if self.store.get_cover(self.cover):
                 self.store.delete_cover(self.cover)
-            self.store.update_user(self.sara, is_admin=0, is_supervisor=0)
+            self.store.update_user(self.sara, **self.was_user)
         self.addCleanup(clean)
 
     def post(self, where, **more):
@@ -43,7 +45,7 @@ class _Window(_Overtime):
     def everything_refused(self):
         pages = [self.post("/day/activity/cancel", id=str(self.ot)), self.post("/day/activity/cancel", id=str(self.call)),
                  self.post("/day/activity/cancel", id=str(self.aux)), self.post("/day/cover/cancel", id=str(self.cover)),
-                 self.post("/day/undo-last"), self.post("/day/attendance", associate="Associate 008", status="Present"),
+                 self.post("/day/book", who="Associate 008"), self.post("/day/attendance", associate="Associate 008", status="Present"),
                  self.post("/day/break", associate="Associate 008", idx="0", at="12:00")]
         return [CLOSED in p for p in pages]
 
@@ -63,7 +65,7 @@ class TheEditWindow(_Window):
         for i in (self.ot, self.call, self.aux):
             self.assertIsNotNone(self.store.get_activity(i))
         self.assertIsNotNone(self.store.get_cover(self.cover))
-        self.assertIn("1 day back", self.post("/day/undo-last"))
+        self.assertIn("1 day back", self.post("/day/book", who="Associate 008"))
 
     def test_a_script_gets_the_refusal_as_json(self):
         self.today(5)

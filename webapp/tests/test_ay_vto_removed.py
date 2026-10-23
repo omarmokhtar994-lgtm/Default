@@ -47,7 +47,7 @@ class TheVtoIsGone(unittest.TestCase):
         self.assertIn("VTO", row["why"])
         self.assertEqual(self.vtos(), [])
         said = " ".join(e["what"] for e in self.days.page(AR, WED)["log"] if e["associate"] == WHO)
-        self.assertIn("Left early at 14:00", said)
+        self.assertIn("changed to Early leave at 14:00", said)
 
     def test_two_vtos_on_one_shift_use_the_earliest_start(self):
         self.old_vto(lo=18 * 60, hi=19 * 60)

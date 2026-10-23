@@ -895,7 +895,7 @@ function homeRefresh(now) {
   var billable = form.querySelector("[data-billable]"), from = form.querySelector("[data-from-label]");
   var submit = form.querySelector("button[type=submit]"), minutes = form.querySelector("select[name=minutes]");
   var whole = ["Unplanned leave", "Sick", "Public holiday", "Exam leave"], aux = ["Coaching", "Meeting", "Training", "System issue", "Task", "Bio break"];  // Phase AV: Bio break needs no who or why
-  var usual = { "Break": "15", "Lunch": "30", "Overtime": "60", "VTO": "60", "Coaching": "30", "Meeting": "30",
+  var usual = { "Break": "15", "Lunch": "30", "Overtime": "60", "Coaching": "30", "Meeting": "30",
                 "Training": "60", "System issue": "15", "Task": "30", "Bio break": "10" };
   var seq = 0;
   // Day off cancelled (Phase S): the people off today, a Shift Library shift or typed start and end

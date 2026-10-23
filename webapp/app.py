@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import io
 import json
+import logging
 import os
 import re
 import secrets
@@ -302,6 +303,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
         app.extensions["schedules"] = book
         queue.schedules = book
         app.extensions["days"] = queue.days = DayBook(app.extensions["store"], book)
+        try:  # Phase AY (owner, 2026-10-23): VTO is gone; every VTO already recorded becomes an Early leave, back dated
+            found = app.extensions["days"].convert_vto_to_early_leave()
+            if found["converted"] or found["skipped"]:
+                logging.getLogger(__name__).info("VTO converted to Early leave: %s done, %s skipped %s", found["converted"],
+                                                 len(found["skipped"]), found["skipped"])
+        except Exception:  # noqa: BLE001 (a failed conversion never stops the site; the VTO records stay as they are)
+            logging.getLogger(__name__).exception("VTO conversion failed")
         app.extensions["leave"] = LeaveBook(app.extensions["store"], app.extensions["days"])  # Phase AG
         app.extensions["leave"].recover()  # Phase AI: an approval a stopped server left half done goes back to the RTA
         # Phase AO: leave approved while a week had no schedule is applied once that week's schedule is kept
@@ -4013,7 +4021,6 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                post_mode=group["mode"] if posting else "", post_kinds=post_kinds,
                                people=people, whole=whole, shrink=shrink, finder=finder, sessions=sessions, cover=cover, outside=outside, prev_on=on - timedelta(days=1),
                                ot_page=_paged(cover["overtime"] if cover else [], "ot_page", "ot-h"),
-                               vto_page=_paged(cover["vto"] if cover else [], "vto_page", "vto-h"),
                                log_page=_paged(list(reversed(page["log"])) if page else [], "log_page", "daylog-h"),
                                proposal=proposal, fresh=fresh, passed=passed, from_now=from_now, cover_panel=cover_panel,
                                tile_now=now_at if window else (from_now if clock_now.date() == on else None),
@@ -4629,7 +4636,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
     @app.route("/day/activity", methods=["POST"])
     @login_required
     def day_activity():  # type: ignore[no-untyped-def]
-        """Record an activity (aux, overtime, VTO) from a form; back to the day with what happened."""
+        """Record an activity (aux, overtime) from a form; back to the day with what happened."""
         program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
         try:
             if on is None:
@@ -4777,7 +4784,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
     @app.route("/day/add", methods=["POST"])
     @login_required
     def day_add():  # type: ignore[no-untyped-def]
-        """RTA's "+ Add": anything in an interval (a break, lunch, aux, attendance, overtime or VTO)."""
+        """RTA's "+ Add": anything in an interval (a break, lunch, aux, attendance or overtime)."""
         program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
         try:
             program, on, name, what, start, minutes, billable = _add_fields()

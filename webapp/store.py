@@ -535,6 +535,11 @@ class Store:
                 for name in ("with_whom", "why", "with_dept"):  # with_dept: Phase U
                     if name not in have:
                         db.execute(f"alter table {table} add column {name} text not null default ''")
+            # Phase AY: how a late login was booked: 'allowance' (taken from the 2 hours, 2 times a month), 'incident' (kept as an incident,
+            # not from the allowance); '' for every record from before, which the allowance never counts
+            have = {row["name"] for row in db.execute("pragma table_info(attendance)")}
+            if "late_kind" not in have:
+                db.execute("alter table attendance add column late_kind text not null default ''")
 
     @property
     def generation(self) -> int:
@@ -1326,6 +1331,11 @@ class Store:
         sets = ", ".join(f"{name} = ?" for name in fields)
         with self._db() as db:
             db.execute(f"update activities set {sets} where id = ?", (*fields.values(), activity_id))
+
+    def vto_activities(self) -> List[Dict[str, Any]]:
+        """Phase AY: every VTO still recorded, any program and date (they are converted to Early leaves at start-up)."""
+        with self._db() as db:
+            return [dict(r) for r in db.execute("select * from activities where kind = 'VTO' order by program, shift_date, id")]
 
     def delete_activity(self, activity_id: int) -> None:
         with self._db() as db:

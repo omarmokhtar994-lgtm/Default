@@ -31,7 +31,7 @@ from .clock import HOME, SHOWN, minute_now, pick_zone
 from .day import (ABSENT, AUX, BIO, CALLED_IN, CANCELLED, EXTRA_BREAKS, LATE_EARLY, MEASURES, OVERTIME_MAX, STATUSES, STEP, TIMED,
                   BreakRefused, _busy, advice, at_target,
                   check_break, day_view, dayoff_offers, dayoff_proposals, meeting_slots, overtime_offers, pattern_breaks, planned,
-                  read_inputs, replan, vto_offers, window_view)
+                  read_inputs, replan, window_view)
 from .notify import PRIVATE, left_out_now
 from .schedules import EGYPT, KEEP_DAYS, ScheduleBook
 from .window_tools import by_date, dates_of, in_own_day, rebase
@@ -40,7 +40,8 @@ from .versions import DAYS, channel_blocks, shift_span
 HHMM = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
 FALLBACK = "No version is marked in use for this week, so this is the tool's own schedule."
 FALLBACK_READY = "No version is marked in use for this week, so this is the uploaded ready schedule."
-ACTIVITY_KINDS = sorted(AUX) + list(EXTRA_BREAKS) + ["Overtime", "VTO", CALLED_IN]
+ACTIVITY_KINDS = sorted(AUX) + list(EXTRA_BREAKS) + ["Overtime", CALLED_IN]  # Phase AY: VTO is no longer offered (convert_vto_to_early_leave)
+NO_VTO = "VTO is no longer offered: record an Early leave instead."  # Phase AY (owner, 2026-10-23)
 WITH_MAX, WHY_MAX = 80, 200  # characters: who an aux is with, and why (Phase T)
 # Phase AJ: someone not on the roster logging in to cover intervals (owner, 2026-10-15: "TM or support")
 COVER_ROLES = ("Team manager", "Support")
@@ -50,7 +51,7 @@ QUARTER = 15  # typed call-in times go in 15-minute steps
 # What RTA's "+ Add" offers in an interval (owner, 2026-10-08), grouped as the dialog shows them.
 ADD_KINDS = {"Off the floor": ["Break", "Lunch", "Coaching", "Meeting", "Training", "System issue", "Task", "Bio break"],
              "Attendance": ["Unplanned leave", "Sick", "Public holiday", "Exam leave", "Late", "Left early"],
-             "Hours": ["Overtime", "VTO"],
+             "Hours": ["Overtime"],
              "Day off": [DAY_OFF]}
 
 
@@ -1320,6 +1321,8 @@ class DayBook:
         """Record an activity for the shift that starts on ``on``: an aux, a break or lunch added on the day,
         or VTO (each inside the shift), or overtime (touching the shift, at most OVERTIME_MAX, keeping the rest
         gap). Returns its id; with ``dry_run`` every check runs, nothing is kept, and the record is returned."""
+        if kind == "VTO":
+            raise ValueError(NO_VTO)
         if kind not in ACTIVITY_KINDS:
             raise ValueError(f"Unknown activity: {kind}.")
         if kind == CALLED_IN:
@@ -1408,6 +1411,8 @@ class DayBook:
             if not dry_run:
                 self.set_status(program, on, name, what, user_id, start=left, end=arrived)
             return {"text": rec["what"], "lo": lo, "hi": hi, "record": rec}
+        if what == "VTO":
+            raise ValueError(NO_VTO)
         if what not in ACTIVITY_KINDS or what == CALLED_IN:
             raise ValueError(f"Unknown: {what}.")
         if what == "Overtime" and side in ("before", "after"):
@@ -1590,6 +1595,37 @@ class DayBook:
             raise ValueError(f"No place was found for {name}'s breaks.")
         return made
 
+    def convert_vto_to_early_leave(self) -> Dict[str, Any]:
+        """Phase AY (owner, 2026-10-23: "anything that was marked as VTO to be changed to Early leave, back dated automatically"): every VTO already
+        recorded, on any date, becomes a Left early at the VTO's start (the earliest, when a shift had several) on its own date, with a note of the
+        VTO it came from; the VTO record is dropped so nothing counts twice. A person whose shift already carries another status is skipped (their
+        VTO stays as history) and returned. An Early leave already earlier than the VTO is kept. Run once at start-up; a second run finds no VTO left to
+        convert. No group post is made. Returns {"converted": n, "skipped": [{program, date, associate, status}]}."""
+        groups: Dict[Tuple[str, str, str], List[Dict[str, Any]]] = {}
+        for r in self.store.vto_activities():
+            groups.setdefault((r["program"], r["shift_date"], r["associate"]), []).append(r)
+        converted, skipped = 0, []
+        for (program, day, name), rows in sorted(groups.items()):
+            rows.sort(key=lambda r: r["start"])
+            first = rows[0]
+            now = next((a for a in self.store.list_attendance(program, [day]) if a["associate"] == name), None)
+            if now is not None and now["status"] not in ("Present", "Left early"):
+                skipped.append({"program": program, "date": day, "associate": name, "status": now["status"]})
+                continue
+            was = [f"{plain_hm(r['start'] % 1440)} to {plain_hm(r['end_min'] % 1440)}" for r in rows]
+            leave = first["start"]
+            if now is not None and now["status"] == "Left early" and now["from_min"] is not None:
+                leave = min(leave, now["from_min"])
+            self.store.set_attendance(program=program, shift_date=day, associate=name, status="Left early", from_min=leave,
+                                      to_min=None, billable=0, user_id=first["user_id"], with_whom="", why="Converted from VTO " + ", ".join(was),
+                                      with_dept="", late_kind="")
+            for r in rows:
+                self.store.delete_activity(r["id"])
+            self.store.add_day_log(program=program, shift_date=day, associate=name, user_id=first["user_id"],
+                                   what=f"VTO {', '.join(was)} changed to Early leave at {plain_hm(leave % 1440)}")
+            converted += 1
+        return {"converted": converted, "skipped": skipped}
+
     @journaled
     def plan_extra_breaks(self, program: str, on: date, name: str, shorts: int, lunches: int, user_id: int) -> List[int]:
         """Phase AY (owner, 2026-10-23: "state the count of breaks, how many shorts and how many lunches; if not, keep 0; if there,
@@ -1765,12 +1801,12 @@ class DayBook:
         return meeting_slots(page["view"], names, minutes, lo, hi, billable)
 
     def offers(self, page: Dict[str, Any], after: int = 0) -> Dict[str, List[Dict[str, Any]]]:
-        """Overtime next to short intervals and VTO where the floor stays covered (from ``after``)."""
+        """Overtime next to short intervals (from ``after``)."""
         week = self._week(page["version"])
         rest = float(week.get("settings", {}).get("rest_gap_hours") or 0)
         near = self.neighbours(page["version"]["program"], page["date"], page["version"])
         return {"overtime": overtime_offers(page["view"], week, page["day"], rest, after, near=near),
-                "vto": vto_offers(page["view"], after), "next_known": near["next_known"]}
+                "next_known": near["next_known"]}
 
     def dayoff_plan(self, page: Dict[str, Any], after: int = 0, aim: Optional[float] = None) -> Dict[str, Any]:
         """Rescue the day's days off to cancel, then overtime for what is left (Phase AF, F1 and F2), from ``after``;

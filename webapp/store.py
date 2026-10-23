@@ -1332,6 +1332,12 @@ class Store:
         with self._db() as db:
             db.execute(f"update activities set {sets} where id = ?", (*fields.values(), activity_id))
 
+    def delete_late_incidents(self, program: str, shift_date: str, associate: str) -> None:
+        """Phase AY: a late login kept as an incident goes when that shift's status is booked again."""
+        with self._db() as db:
+            db.execute("delete from incidents where program = ? and shift_date = ? and associate = ? and kind = 'late_login'",
+                       (program, shift_date, associate))
+
     def vto_activities(self) -> List[Dict[str, Any]]:
         """Phase AY: every VTO still recorded, any program and date (they are converted to Early leaves at start-up)."""
         with self._db() as db:

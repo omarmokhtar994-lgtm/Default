@@ -41,6 +41,8 @@ HHMM = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
 FALLBACK = "No version is marked in use for this week, so this is the tool's own schedule."
 FALLBACK_READY = "No version is marked in use for this week, so this is the uploaded ready schedule."
 ACTIVITY_KINDS = sorted(AUX) + list(EXTRA_BREAKS) + ["Overtime", CALLED_IN]  # Phase AY: VTO is no longer offered (convert_vto_to_early_leave)
+LATE_MAX_MINUTES, LATE_MAX_COUNT = 120, 2  # Phase AY (owner, 2026-10-23): a late login or early leave from the allowance: 2 hours, 2 times a month
+LATE_KINDS = ("allowance", "incident")
 NO_VTO = "VTO is no longer offered: record an Early leave instead."  # Phase AY (owner, 2026-10-23)
 WITH_MAX, WHY_MAX = 80, 200  # characters: who an aux is with, and why (Phase T)
 # Phase AJ: someone not on the roster logging in to cover intervals (owner, 2026-10-15: "TM or support")
@@ -390,7 +392,7 @@ class DayBook:
         if c["table"] == "outside_cover":
             return f"{row['associate']}'s cover {hm(row['start'])} to {hm(row['end_min'])}"
         if c["table"] == "incidents":
-            return f"{row['associate']}'s missed-break note"
+            return f"{row['associate']}'s " + ("late-login incident" if row.get("kind") == "late_login" else "missed-break note")
         if c["table"] == "channel_moves":
             return f"{row['associate']}'s channel change {hm(row['start'])} to {hm(row['end_min'])}"
         return f"{row['associate']}'s {row['kind']} {hm(row['start'])} to {hm(row['end_min'])}"
@@ -431,7 +433,8 @@ class DayBook:
             self._log(program, on, name, f"Attendance back to {status} (undone)", user_id, PRIVATE,
                       ref=f"status:{name}", before=new["status"] if new else "Present", after=status)
         elif c["table"] == "incidents":
-            self._log(program, on, name, "Missed-break note " + ("removed" if new else "back") + " (undone)", user_id,
+            self._log(program, on, name, ("Late-login incident " if row.get("kind") == "late_login" else "Missed-break note ")
+                      + ("removed" if new else "back") + " (undone)", user_id,
                       PRIVATE, ref=f"incident:{row['id']}", before="on" if new else "", after="" if new else "on")
         elif c["table"] == "outside_cover":
             ref = f"cover:{row['id']}"
@@ -1161,10 +1164,31 @@ class DayBook:
         return made
 
     # ------------------------------------------------------------- what people record
+    def _late_policy(self, program: str, on: date, name: str, status: str, minutes: int, late_kind: str) -> Dict[str, Any]:
+        """Phase AY: how a late login or early leave stands against the allowance (2 hours, 2 times a month, Late and Left early together, the
+        records booked as incidents and every one from before the policy not counted): what it comes to and what it is over."""
+        word = "Late login" if status == "Late" else "Early leave"
+        if late_kind == "incident":
+            return {"minutes": minutes, "count": 0, "kind": late_kind, "limit_minutes": LATE_MAX_MINUTES, "limit_count": LATE_MAX_COUNT,
+                    "over": [], "text": f"{word} {minutes} min: kept as an incident on {name}, not from the allowance."}
+        month = [d.isoformat() for d in (on.replace(day=1) + timedelta(days=i) for i in range(31)) if d.month == on.month]
+        before = sum(1 for r in self.store.list_attendance(program, month)
+                     if r["associate"] == name and r["status"] in LATE_EARLY and r.get("late_kind") == "allowance" and r["shift_date"] != on.isoformat())
+        count = before + 1
+        over = []
+        if minutes > LATE_MAX_MINUTES:
+            over.append(f"longer than {LATE_MAX_MINUTES // 60} hours")
+        if count > LATE_MAX_COUNT:
+            over.append(f"the {count}{'th' if 10 <= count % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(count % 10, 'th')} this month (the limit is {LATE_MAX_COUNT})")
+        ordinal = f"{count}{'th' if 10 <= count % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(count % 10, 'th')}"
+        return {"minutes": minutes, "count": count, "kind": late_kind, "limit_minutes": LATE_MAX_MINUTES, "limit_count": LATE_MAX_COUNT,
+                "over": over, "text": f"{word} {minutes} min, the {ordinal} this month (allowance: {LATE_MAX_MINUTES // 60} hours, {LATE_MAX_COUNT} times a month)."}
+
     @journaled
     def set_status(self, program: str, on: date, name: str, status: str, user_id: int,
                    start: str = "", end: str = "", billable: bool = False, dry_run: bool = False,
-                   with_whom: str = "", why: str = "", with_dept: str = "") -> Dict[str, Any]:
+                   with_whom: str = "", why: str = "", with_dept: str = "", late_kind: str = "allowance",
+                   am_note: str = "") -> Dict[str, Any]:
         """Record a status for the shift that starts on ``on``. Late needs the arrival (``end``),
         Left early the leaving time (``start``); an aux (Training, Coaching, Meeting, System issue)
         takes an optional from/to and is billable or not."""
@@ -1205,15 +1229,36 @@ class DayBook:
         with_whom, why, with_dept = (_tidy(with_whom), _tidy(why), _tidy(with_dept)) if status in AUX else ("", "", "")
         post = what + with_text(with_whom, "", with_dept)  # Phase AB: what a group may see, never the why
         what += with_text(with_whom, why, with_dept)
+        policy, kept_kind = None, ""
+        if status in LATE_EARLY:  # Phase AY: the allowance (2 hours, 2 times a month) or, for a late login only, an incident
+            if late_kind not in LATE_KINDS:
+                raise ValueError("Say whether this is from the allowance or an incident.")
+            if status == "Left early" and late_kind == "incident":
+                raise ValueError("Only a late login can be an incident: an early leave is always from the allowance.")
+            policy = self._late_policy(program, on, name, status, (hi - span[0]) if status == "Late" else (span[1] - lo), late_kind)
+            kept_kind = late_kind
+            if policy["over"] and am_note.strip():
+                why = f"Exception approved by the account manager: {_tidy(am_note)}"
+                what += f". {why}"
+            if late_kind == "incident":
+                what += " (incident)"
         record = {"name": name, "status": status, "from": lo, "to": hi, "billable": bool(billable) and status in AUX and status != BIO,
-                  "what": what, "span": span, "with_whom": with_whom, "why": why, "with_dept": with_dept}
+                  "what": what, "span": span, "with_whom": with_whom, "why": why, "with_dept": with_dept, "policy": policy}
         if dry_run:
             return record
+        if policy and policy["over"] and not am_note.strip():
+            raise ValueError(f"{name}: {policy['text']} That is over the allowance ({'; '.join(policy['over'])}), so it needs the account manager's "
+                             "approval as an exception. Tick that the account manager approved it and write a comment to book it anyway.")
         was = next((r["status"] for r in self.store.list_attendance(program, [on.isoformat()])
                     if r["associate"] == name), "Present")
+        self.store.delete_late_incidents(program, on.isoformat(), name)
         self.store.set_attendance(program=program, shift_date=on.isoformat(), associate=name, status=status,
                                   from_min=lo, to_min=hi, billable=int(bool(billable) and status in AUX and status != BIO),
-                                  user_id=user_id, with_whom=with_whom, why=why, with_dept=with_dept)
+                                  user_id=user_id, with_whom=with_whom, why=why, with_dept=with_dept, late_kind=kept_kind)
+        if kept_kind == "incident":
+            self.store.add_incident(program=program, shift_date=on.isoformat(), associate=name, kind="late_login", idx=0,
+                                    minutes=policy["minutes"], note=f"Arrived {hm(hi)}, {policy['minutes']} min late", user_id=user_id,
+                                    at=time.time())
         kind = "late" if status in LATE_EARLY else "aux" if status in AUX else PRIVATE  # sick, leave, present
         self._log(program, on, name, what, user_id, kind, post=post, ref=f"status:{name}", before=was, after=status)
         return record

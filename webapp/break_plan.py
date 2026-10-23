@@ -55,7 +55,7 @@ FIRST_FROM, FIRST_TO = 120, 210      # the first break starts this long after th
 LUNCH_FROM, LUNCH_TO = 120, 180      # the lunch starts this much work after the first break ends
 LAST_CLEAR = 60                      # the last break ends at least this long before the shift ends
 SPREAD_REACH = 120                    # minutes from the even-spaced time within which a break may move to spread the people on break
-AMPLE = 1.0                         # hours of spare cover at which more spare no longer matters when breaks are placed
+AMPLE = 3.0                         # hours of spare cover at which more spare no longer matters when breaks are placed (2.0 still lost 0.25 h of the tightest interval on a measured day)
 SHAPE_TOLERANCE = 0.25               # when no time keeps the buffer at or above the need, the hours it may give up (BREAKS_RULE.md)
 
 

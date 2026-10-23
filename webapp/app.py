@@ -4822,6 +4822,21 @@ def create_app(config: Dict[str, Any]) -> Flask:
         view = request.form.get("view", "")
         return _back_to_day(program, on, view if view in ("cover", "board", "sessions", "timeline") else "cover")
 
+    @app.route("/day/call-in/breaks", methods=["POST"])
+    @login_required
+    def day_call_in_breaks():  # type: ignore[no-untyped-def]
+        """Phase AY: place the breaks of a person called in for typed times, as the program's break rules place them."""
+        program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
+        name = request.form.get("associate", "")
+        try:
+            if on is None:
+                raise ValueError("Pick a day.")
+            made = _days().plan_call_in_breaks(program, on, name, g.user["id"])
+            _say(f"Planned {len(made)} breaks for {name}. Undo takes them back.", program, on)
+        except ValueError as exc:
+            _say(str(exc), program, on)
+        return _back_to_day(program, on, "cover")
+
     @app.route("/day/session/cancel", methods=["POST"])
     @login_required
     def day_session_cancel():  # type: ignore[no-untyped-def]

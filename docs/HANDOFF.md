@@ -100,6 +100,7 @@ Load each with the Skill tool at the step it covers; following it from memory do
   tomorrow. Breaks outside the shift: Plan channels never keeps one, Fix and Replan bring them inside. The upload guard
   finds a card typed as a number. Breaks of one shift are spread over the quarter hours where the spare cover is at least
   `AMPLE` (3 h) within `SPREAD_REACH` (120 min) of the even-spaced time. Documented in `docs/howto/RTA.md`.
+- **AY, call-in breaks**: `DayBook.plan_call_in_breaks` (route `/day/call-in/breaks`, button "Plan their breaks") places a typed-times call-in's breaks with `break_plan.suggest`, others' breaks fixed; tests `test_ay_callin_breaks`.
 - **AY**: open pages ask `/live/stamp` every 30 s (plus up to 5 s) whether what they show changed
   (`webapp/live.py`, `liveWatch` in `static/app.js`): My day, My week and Overview reload; the RTA day and Requests show a
   bar. The stamp is a digest of what the page shows (per person for associates), never the write counter.

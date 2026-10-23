@@ -1547,6 +1547,43 @@ class DayBook:
                   user_id, "called_in", ref=f"callin:{made}", after="on")
         return made
 
+    @journaled
+    def plan_call_in_breaks(self, program: str, on: date, name: str, user_id: int) -> List[int]:
+        """Phase AY (owner, 2026-10-23: "I can have the option to schedule breaks for them, especially for call in"): a person
+        called in for typed times that no one else works has no planned breaks. They are placed here as the program's break
+        rules place a shift of that length (``break_plan.suggest``, with everyone else's breaks where they are) and kept as
+        breaks added on the day. Refused when the person is not called in or already has breaks that day."""
+        from .break_plan import slots_for, suggest
+        called = self.called_in_on(program, on, name)
+        if called is None:
+            raise ValueError(f"{name} is not called in that day: only a called-in shift is given breaks this way.")
+        row, _ = self.version(program, on)
+        week = self._week(row)
+        d = day_index(on)
+        if self.plan_for(program, on, name, week) or any(
+                r["associate"] == name and r["kind"] in EXTRA_BREAKS for r in self.store.list_activities(program, [on.isoformat()])):
+            raise ValueError(f"{name} already has breaks that day.")
+        rules, inputs = self.book.break_rules(row["id"]), read_inputs(self.book.input_path(row["run_id"]))
+        span = (called["start"], called["end_min"])
+        slots = slots_for(rules, span[1] - span[0])
+        if not slots:
+            raise ValueError(f"The break rules give a shift of {(span[1] - span[0]) / 60:g} hours no breaks.")
+        stand = copy.deepcopy(week)
+        for a in stand["associates"]:
+            if a["name"] == name:
+                a["days"][d] = called["note"]
+        plan = {a["name"]: [b["start"] for b in planned(stand, d, a["name"])] for a in stand["associates"]}
+        plan[name] = [None] * len(slots)
+        want = suggest(stand, inputs, rules, d, plan).get(name) or []
+        made = []
+        for (kind, minutes), at in zip(slots, want):
+            if at is None:
+                continue
+            made.append(self.add_activity(program, on, name, "Lunch" if kind.casefold().startswith("lunch") else "Break", plain_hm(at), plain_hm(at + minutes), user_id))
+        if not made:
+            raise ValueError(f"No place was found for {name}'s breaks.")
+        return made
+
     # ------------------------------------------------------------- cover from outside the roster (Phase AJ)
     def covers(self, program: str, on: date) -> List[Dict[str, Any]]:
         """The cover kept for ``on`` (times from that day's midnight; an end past 1440 runs into the next day)."""

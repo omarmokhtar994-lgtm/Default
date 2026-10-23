@@ -154,5 +154,29 @@ class TheCleanRoomCheckerAgrees(unittest.TestCase):
         self.assertTrue(self.contract("WHOLE_SHIFT").window_whole)
 
 
+class TheInputCheckSaysWhichRuleIsSet(unittest.TestCase):
+    """Phase AY (owner, 2026-10-23: used WHOLE_SHIFT, yet the run's check said "A shift is inside a window when it STARTS inside
+    it"): the check's line about what makes a shift inside a window was fixed text, so it could not tell the owner which rule the
+    engine would use. It now names the rule that the workbook's row sets."""
+
+    def lines(self, rule):
+        sys.path.insert(0, str(REPO / "tools"))
+        import check_input_workbook as C
+        parsed, _ = parse(rule=rule)
+        return "\n".join(C.language_hours_report(E, parsed)[0])
+
+    def test_start_and_blank_say_the_start_has_to_be_inside(self):
+        for rule in (None, "START"):
+            text = self.lines(rule)
+            self.assertIn("A shift is inside a window when it STARTS inside it", text, rule)
+            self.assertNotIn("WHOLE_SHIFT", text, rule)
+
+    def test_whole_shift_says_the_whole_shift_has_to_be_inside(self):
+        text = self.lines("WHOLE_SHIFT")
+        self.assertIn("Language Working Window Shift Rule = WHOLE_SHIFT", text)
+        self.assertIn("a shift is inside a window only when it STARTS and ENDS inside it", text)
+        self.assertNotIn("when it STARTS inside it (it may run past", text)
+
+
 if __name__ == "__main__":
     unittest.main()

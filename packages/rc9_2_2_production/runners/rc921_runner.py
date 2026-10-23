@@ -177,6 +177,18 @@ def _run_engine(command: list, logfile: Path, timeout: int) -> int:
             raise
 
 
+# Phase AY (owner, 2026-10-23): the longest a run may take is each round's search budget plus this grace for the stages
+# after the search (repairs, final checks, the portfolio's summary). A real Quick run with 2 seeds side by side was killed at
+# 3600 + 1800 = 5400 s while its slower seed had finished at 5146 s: both seeds had valid schedules, and the run was lost.
+# 3000 s is the owner's "15 to 20 minutes more". Only a ceiling: a run that is done sooner ends sooner.
+GRACE_SECONDS = 3000
+
+
+def engine_timeout(budget: int, rounds: int = 1) -> int:
+    """Seconds a run (rounds of seeds side by side, each with ``budget`` seconds of search) may take before it is stopped."""
+    return (int(budget) + GRACE_SECONDS) * int(rounds)
+
+
 def select(scenarios: list, only: str, shard: int, shards: int) -> list:
     if only:
         wanted = {s.strip().upper() for s in only.split(",") if s.strip()}
@@ -273,7 +285,7 @@ def run_one(root: Path, results_root: Path, row: dict, args) -> dict:
     log(f"START {scenario}  budget={budget}s  workers={command[command.index('--num-workers')+1]}")
     started = time.time()
     logfile = results_root / f"{scenario}.log"
-    returncode = _run_engine(command, logfile, budget + 1800)
+    returncode = _run_engine(command, logfile, engine_timeout(budget))
     if returncode != 0:
         show_failure_logs([logfile])
     elapsed = round(time.time() - started, 1)
@@ -356,7 +368,7 @@ def run_portfolio(root: Path, results_root: Path, row: dict, args, command: list
     started = time.time()
     logfile = results_root / f"{scenario}.log"
     rounds = math.ceil(seeds / parallel)
-    returncode = _run_engine(cmd, logfile, budget * rounds + 1800 * rounds)
+    returncode = _run_engine(cmd, logfile, engine_timeout(budget, rounds))
     if returncode != 0 or not (seeds_root / scenario / "PORTFOLIO_SUMMARY.json").exists():
         show_failure_logs([logfile, *sorted((seeds_root / scenario).glob(f"{scenario}_S*.log"))])
     elapsed = round(time.time() - started, 1)

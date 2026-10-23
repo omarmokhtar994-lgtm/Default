@@ -113,7 +113,8 @@ Load each with the Skill tool at the step it covers; following it from memory do
   **Day off cancelled (call in)**: a call-in that breaks the rest gap is kept with a warning, as overtime is
   (owner, 2026-10-23, from a screenshot: "it should show warnings but still apply it"); `add_activity(..., "Called in",
   dry_run=True)` used to keep the record, and now returns it with `warning`. Swaps still list a rest problem with "Offer
-  with the warning". Open: whether WHOLE_SHIFT is what lengthens the stages after the search (test: the same workbook with the row set to START). The gate runs once after a full package install (15 to 30 min before the first run); patches do not
+  with the warning". **Cover from outside the roster** can be removed with a "Delete cover" button (tab Overtime and VTO) and a "Remove" button on the
+  Interval board entry (`day_cover_cancel` keeps the board when `view=board`). Open: whether WHOLE_SHIFT is what lengthens the stages after the search (test: the same workbook with the row set to START). The gate runs once after a full package install (15 to 30 min before the first run); patches do not
   change `MANIFEST.json`, so they do not trigger it. Evidence: `evidence/phase_ay/CHECKS.md`.
 
 ## Where things stand (end of Phase AU; package AP to AU, not yet built)

@@ -4648,7 +4648,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             flash("Cancelled.")
         except ValueError as exc:
             _say(str(exc), program, on)
-        return _back_to_day(program, on, "cover")
+        view = request.form.get("view", "")  # Phase AY: the board's Remove button brings the person back to the board
+        return _back_to_day(program, on, view if view == "board" else "cover")
 
     @app.route("/day/activity/cancel", methods=["POST"])
     @login_required

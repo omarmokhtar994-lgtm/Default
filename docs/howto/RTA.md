@@ -76,3 +76,7 @@ The page compares a stamp of what it shows, not the database's write counter. An
 ## Calling someone in on a day off (Phase AY)
 
 "Day off cancelled" keeps the call-in even when it leaves less rest than the program's rest gap. The page and the day's log say it, for example "Warning: Kevin Tarek would rest 9 hours after the previous shift; the rule is 12." The other rules still refuse, because they mean the change cannot be made at all: the person works that day (add overtime instead), the person is already called in, typed times not in 15-minute steps, or a length outside 1 hour up to the longest library shift.
+
+## Removing cover from outside the roster (Phase AY)
+
+Two places: the button **Delete cover** beside each cover in the panel "Cover from outside the roster" (tab Overtime and VTO), and a **Remove** button beside the cover's entry in the Interval board's row (the interval where the cover starts). Remove brings you back to the board. A cover that began last night and runs past midnight shows on this day's board but is removed from yesterday's list, so it has no Remove button here.

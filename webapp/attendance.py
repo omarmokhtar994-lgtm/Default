@@ -727,7 +727,8 @@ class DayBook:
         if recorded and cover:  # Phase AJ: today's, and last night's that ran past midnight
             for shift, when in ((0, on), (-1440, on - timedelta(days=1))):
                 covering += [{"start": r["start"] + shift, "end": r["end_min"] + shift, "channel": r["channel"],
-                              "name": r["associate"], "role": r["role"], "language": r.get("language", "")}
+                              "name": r["associate"], "role": r["role"], "language": r.get("language", ""),
+                              "id": r["id"], "today": shift == 0}  # Phase AY: the board can remove today's cover
                              for r in self.store.list_cover(program, [when.isoformat()])]
         view = day_view(week, inputs, day_index(on), attendance, actual, measure, acts, before, channels=channels,
                         cover=covering)

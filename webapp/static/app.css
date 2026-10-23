@@ -581,13 +581,16 @@ svg.defs { position: absolute; width: 0; height: 0; }
 .brk-cancel { margin: 10px 0 0; padding: 12px; border: 1px solid var(--gap); border-radius: 6px; }
 .brk-cancel p { margin: 0 0 8px; }
 [data-day] .tl-ghost { fill: none; stroke: var(--dim); stroke-width: 1.5; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
-[data-day] .tl-num { height: 24px; margin-top: 2px; }
+[data-day] .tl-num { height: 28px; margin-top: 2px; }
 [data-day] .tl-lbl { font-size: 0.75rem; color: var(--dim); text-align: right; padding-right: 10px; }
 [data-day] .tl-cells { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 1px; height: 100%; }  /* a column per cell, whatever their number: a fitted operating day has 16, 32 or 64 */
 [data-day] .cols-24 .tl-cells { grid-template-columns: repeat(24, 1fr); } [data-day] .cols-48 .tl-cells { grid-template-columns: repeat(48, 1fr); }
 [data-day] .cols-72 .tl-cells { grid-template-columns: repeat(72, 1fr); } [data-day] .cols-96 .tl-cells { grid-template-columns: repeat(96, 1fr); }
 [data-day] .cols-144 .tl-cells { grid-template-columns: repeat(144, 1fr); } [data-day] .cols-288 .tl-cells { grid-template-columns: repeat(288, 1fr); }
-[data-day] .tc { font-size: 0.5625rem; display: grid; place-items: center; border-radius: 2px; font-weight: 700; color: var(--paper); }
+[data-day] .tc { font-size: 0.75rem; display: grid; place-items: center; border-radius: 2px; font-weight: 700; color: var(--paper); font-variant-numeric: tabular-nums; }
+/* Phase AY (owner, 2026-10-23: "on the floor now, plus/minus is not very readable"): the figures under the Timeline are 12px; the layouts with narrow
+   cells (15, 10 and 5 minute intervals) keep the small size, which is all that fits */
+[data-day] .cols-72 .tc, [data-day] .cols-96 .tc, [data-day] .cols-144 .tc, [data-day] .cols-288 .tc { font-size: 0.5625rem; }
 [data-day] .tc.ok { background: var(--covered); color: var(--on-covered); } [data-day] .tc.warn { background: var(--short); color: var(--on-short); }
 [data-day] .tc.bad { background: var(--gap); color: var(--on-gap); }
 [data-day] .tc.n, [data-day] .tc.lok { color: var(--paper); font-weight: 400; background: var(--console-2); }

@@ -3512,6 +3512,13 @@ class TheFittedDayInTheBrowser(unittest.TestCase):
             self.assertAlmostEqual(first["y"], last["y"], delta=2, msg=f"{hours} h: the last cell is on another row")
             self.assertLess(page.locator(".tl-cells").first.bounding_box()["height"], 60, hours)
 
+    def test_the_figures_under_the_timeline_are_12_pixels_on_the_usual_layouts(self):
+        # Phase AY (owner: "on the floor now, plus/minus is not very readable"): 9 px before; the narrow 15 minute layouts keep the small size
+        page = self.rows(16)
+        size = page.locator(".tl-num .tl-cells .tc").nth(1).evaluate("e => parseFloat(getComputedStyle(e).fontSize)")
+        self.assertGreaterEqual(size, 12)
+        self.assertGreaterEqual(page.locator(".tl-num").first.bounding_box()["height"], 26)
+
     def test_the_target_strip_runs_across_too(self):
         page = self.rows(16, view="board")
         strip = page.locator(".achv-strip").first

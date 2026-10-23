@@ -138,7 +138,9 @@ class TheBreaks(unittest.TestCase):
     def test_when_no_break_can_move_inside_the_rules_the_breaks_are_kept_and_it_says_so(self):
         people = day_people()
         # one person on a break at a time: 16 people need 64 break slots between 08:00 and 22:00, which has 56
-        one_at_a_time = {**RULES, "max_concurrent": 1}
+        # re-pinned (Phase AY, owner, 2026-10-23: "ignore the cap"): the limit is a hard constraint only when the workbook's Break
+        # Concurrency Gate Mode is Fail; in Warn (the default) and Off the intervals decide (test_ay_cap_mode)
+        one_at_a_time = {**RULES, "max_concurrent": 1, "concurrency_mode": "fail"}
         plan = plan_day(people, setup(), one_at_a_time, WED)
         self.assertEqual(plan["breaks"], {p["name"]: [s for _, s, _ in p["breaks"]] for p in people})
         self.assertTrue(plan["note"].startswith("Breaks were kept as they are. "), plan["note"])

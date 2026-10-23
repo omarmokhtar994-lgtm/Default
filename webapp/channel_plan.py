@@ -185,6 +185,13 @@ def _shape(m: Any, cost: List[Any], p: Dict[str, Any], picks: Dict[Tuple[str, in
         cost.append(SHAPE * off)
 
 
+def _concurrency_cap(rules: Dict[str, Any]) -> int:
+    """People allowed on a break at once, or 0 for no limit. Phase AY (owner, 2026-10-23: "ignore the cap"): a hard limit only when the
+    workbook's Break Concurrency Gate Mode is Fail; in Warn (the engine's default, and what rules kept before this count as) and Off the
+    intervals decide, as in the engine, where an excess is a cost and not a wall."""
+    return int(rules.get("max_concurrent") or 0) if (rules.get("concurrency_mode") or "warn") == "fail" else 0
+
+
 def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=None,
            solver_settings=None, carry_in=None, keep=None, horizon=None) -> Dict[str, Any]:
     started = time.time()
@@ -245,7 +252,7 @@ def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=N
             for c in chans:
                 x[name, t, c] = m.NewBoolVar(f"x{name}{t}{c}")
             m.Add(sum(x[name, t, c] for c in chans) + (off[name, t] if (name, t) in off else 0) == 1)
-    cap = rules.get("max_concurrent") or 0
+    cap = _concurrency_cap(rules)
     every = coverage_slots(people, before, horizon)
     if cap:
         for t in every:
@@ -488,7 +495,7 @@ def score_day(people: List[Dict[str, Any]], plan: Dict[str, Any], setup: Dict[st
         for t in range(lo, hi, QUARTER):
             if (name, t) not in at:
                 problems.append(f"{name}: nothing planned at {hm(t)}.")
-    cap = rules.get("max_concurrent") or 0
+    cap = _concurrency_cap(rules)
     every = coverage_slots(people, before, horizon)
     for t in every:
         resting = sum(1 for p in people if at.get((p["name"], t)) == "B")

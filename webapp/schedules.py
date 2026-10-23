@@ -516,7 +516,9 @@ class ScheduleBook:
         row = self.store.get_schedule(schedule_id)
         cache = self.root / row["run_id"] / "break_rules.json"
         if cache.is_file():
-            return json.loads(cache.read_text(encoding="utf-8"))
+            kept = json.loads(cache.read_text(encoding="utf-8"))
+            if "concurrency_mode" in kept:  # Phase AY: rules kept before the gate mode was read are read again, once
+                return kept
         cmd = [sys.executable, str(Path(__file__).with_name("break_rules_cli.py")), "--input",
                str(self.input_path(row["run_id"])), "--engine",
                str(Path(self.package_root) / "engine" / "_tools" / "l632_universal_scheduler.py")]

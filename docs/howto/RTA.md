@@ -84,3 +84,12 @@ Two places: the button **Delete cover** beside each cover in the panel "Cover fr
 ## Long group posts go as several messages (Phase AY)
 
 A change with more lines than one Slack message holds is no longer cut with "open the RTA to see them". It goes as several messages, titled "(1 of 3)", "(2 of 3)" and so on, every line once and in order, with "Changed on the RTA by ..." on the last. A change that fits is one message as before. If a message fails, the retries (after 1, 5 and 15 minutes) go on from that message and do not repeat the ones already posted. Teams posts are unchanged: one card.
+
+## The limit on breaks at once follows the workbook's gate mode (Phase AY)
+
+The tools that place breaks (Plan breaks, the fill of a new schedule, Fix, Replan and Plan channels) read the workbook's **Break Concurrency Gate Mode**:
+
+- **Fail:** the limit on people on a break at once stays first, as the engine's hard rule.
+- **Warn** (the engine's default, and what a schedule without the setting counts as) **and Off:** the limit does not decide where a break goes. The intervals' buffer comes first, then the usual shape (first break 2 to 3.5 hours after the start), then the engine's gap rules. The validator still lists an excess as a yellow warning in Warn.
+
+So with enough buffer the first breaks go where the usual shape puts them, even when more than 4 people share that time.

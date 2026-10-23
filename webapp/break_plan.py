@@ -321,6 +321,11 @@ def suggest(week: Dict[str, Any], inputs: Dict[str, Any], rules: Dict[str, Any],
                     on_break[q] += 1
     min_gap, preferred, most = rules.get("min_gap") or 0, rules.get("preferred_gap") or 0, rules.get("max_gap")
     absolute, share = rules.get("max_concurrent") or 0, rules.get("max_concurrent_ratio") or 0
+    # Phase AY (owner, 2026-10-23: "follow the shape as long as we have enough buffer in the intervals and ignore the cap"): the limit on
+    # people on a break at once comes first only when the workbook's Break Concurrency Gate Mode is Fail (the engine then forbids an
+    # excess). In Warn, the engine's default, an excess is a cost the engine pays only to keep an interval, and in Off there is no limit:
+    # the website lets the intervals' buffer, then the usual shape, decide. Rules kept before this have no mode and count as Warn.
+    strict_cap = (rules.get("concurrency_mode") or "warn") == "fail"
 
     def allowed(q: int) -> int:
         """The engine's limit on people on break at once (maximum_concurrent_breaks): the smallest of the people
@@ -386,7 +391,8 @@ def suggest(week: Dict[str, Any], inputs: Dict[str, Any], rules: Dict[str, Any],
                 # safe, the nearest time to it, among those that keep them safe, before the best buffer
                 # Phase AX (owner, 2026-10-23: "not perfect even though there is buffer"): where the buffer is ample (``AMPLE`` hours
                 # or more) it no longer tells times apart, so the breaks are spread: the fewest people already on a break then
-                key = (calm, within, safe and shaped, safe, -far, min(tight, AMPLE), -crowd if near >= -SPREAD_REACH else -99, tight, near)
+                key = (calm or not strict_cap, within, safe and shaped, safe, -far, min(tight, AMPLE),
+                       -crowd if near >= -SPREAD_REACH else -99, tight, near)
                 if best_key is None or key > best_key:
                     best, best_key = c, key
             if best is None:

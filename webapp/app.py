@@ -439,13 +439,16 @@ def create_app(config: Dict[str, Any]) -> Flask:
 
     @app.after_request
     def _headers(response):  # type: ignore[no-untyped-def]
-        response.headers.setdefault("X-Frame-Options", "DENY")
+        # Phase AY (owner, 2026-10-23: split view): only the embedded day page may be framed, and only by this site
+        framed = request.endpoint == "day_page" and request.args.get("embed") == "1"
+        ancestors = "'self'" if framed else "'none'"
+        response.headers.setdefault("X-Frame-Options", "SAMEORIGIN" if framed else "DENY")
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("Referrer-Policy", "same-origin")
         response.headers.setdefault(
             "Content-Security-Policy",
             "default-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; "
-            "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'")  # Phase AG: fonts and icons are served by the site itself; Phase AT: no base tag, forms post here only
+            f"frame-ancestors {ancestors}; base-uri 'self'; form-action 'self'; object-src 'none'")  # Phase AG: fonts and icons are served by the site itself; Phase AT: no base tag, forms post here only
         # Phase AT: a signed-in page is never kept by the browser or a proxy (the back button after sign-out shows nothing)
         if request.endpoint != "static":
             response.headers.setdefault("Cache-Control", "no-store")
@@ -562,7 +565,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 "when": _when, "run_options": run_options, "option_labels": OPTION_LABELS,
                 "eta_text": eta_text, "duration": duration, "clock": _clock, "with_text": with_text,
                 "group_changes": group_changes, "zones": ZONES, "home_zone": HOME, "channel_letters": channel_letters,
-                "can": _can}
+                "can": _can, "embed": request.endpoint == "day_page" and request.values.get("embed") == "1"}
 
     NAV_ACTIVE = {"home": "home", "overview_page": "overview", "day_page": "day", "week_page": "week",
                   "run_week": "week", "run_schedules": "schedules", "program": "analysis", "programs": "programs",
@@ -3717,6 +3720,43 @@ def create_app(config: Dict[str, Any]) -> Flask:
             session["rta"] = every
         found = START.match(kept.get("start", "")) or START.match("00:00")
         return zone, int(found.group(1)) * 60 + int(found.group(2))
+
+    @app.url_defaults
+    def _keep_embed(endpoint: str, values: Dict[str, Any]) -> None:
+        """Phase AY: inside a split-view pane every link and redirect to the day stays embedded."""
+        if endpoint == "day_page" and "embed" not in values and request and request.values.get("embed") == "1":
+            values["embed"] = "1"
+
+    SPLIT_MAX = 3  # panes (owner: "a max of 2 or 3")
+
+    @app.route("/day/split")
+    @login_required
+    def day_split():  # type: ignore[no-untyped-def]
+        """Phase AY: two or three RTA days side by side or stacked, each its own program, day, zone and tab (each pane is the ordinary day page
+        embedded, so every check of that page holds in it)."""
+        days = _days()
+        mine = _my_programs(days.programs())
+        today = datetime.now(EGYPT).date()
+        panes, missing = [], []
+        for i in range(1, SPLIT_MAX + 1):
+            asked = request.args.get(f"p{i}", "").strip()
+            if not asked:
+                continue
+            program = clean_program(asked)
+            on = _date(request.args.get(f"d{i}", "")) or today
+            if program not in mine:
+                missing.append(i)
+                continue
+            panes.append({"n": i, "program": program, "date": on,
+                          "src": url_for("day_page", program=program, date=on.isoformat(), embed="1", view=request.args.get(f"v{i}") or None,
+                                         tz=request.args.get(f"z{i}") if request.args.get(f"z{i}") in dict(ZONES) else None)})
+        layout = request.args.get("layout", "")
+        layout = layout if layout in ("rows", "cols") else ("cols" if len(panes) >= 3 else "rows")
+        free = next((i for i in range(1, SPLIT_MAX + 1) if not request.args.get(f"p{i}", "").strip()), None)
+        slots = [{"n": i, "program": request.args.get(f"p{i}", ""), "date": (_date(request.args.get(f"d{i}", "")) or today).isoformat()}
+                 for i in range(1, SPLIT_MAX + 1) if request.args.get(f"p{i}", "").strip() or i == free]
+        return render_template("split.html", panes=panes, missing=missing, layout=layout, programs=mine, slots=slots,
+                               can_add=free is not None and len(panes) + len(missing) < SPLIT_MAX, max=SPLIT_MAX)
 
     @app.route("/day")
     @login_required

@@ -1,0 +1,26 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{% extends "base.html" %}
+{% block title %}Split view on Team Scheduler{% endblock %}
+{% block content %}
+<main id="main" class="split" data-split>
+  <h1>Split view</h1>
+  <p class="dim">Up to {{ max }} RTA days together, each with its own program, day, zone and tab. Every pane is the ordinary RTA page.</p>
+  <form method="get" action="{{ url_for('day_split') }}" class="split-bar">
+    {% for slot in slots %}
+    <fieldset class="split-pick"><legend>Pane {{ loop.index }}</legend>
+      <label>Program <select name="p{{ slot.n }}"><option value="">None</option>{% for p in programs %}<option value="{{ p }}"{% if p == slot.program %} selected{% endif %}>{{ p|unit }}</option>{% endfor %}</select></label>
+      <label>Day <input type="date" name="d{{ slot.n }}" value="{{ slot.date }}"></label>
+    </fieldset>
+    {% endfor %}
+    <label>Layout <select name="layout"><option value="rows"{% if layout == 'rows' %} selected{% endif %}>Stacked</option><option value="cols"{% if layout == 'cols' %} selected{% endif %}>Side by side</option></select></label>
+    <button type="submit" class="primary">Show</button>
+    {% if can_add %}<span class="dim">Pick a program in the new pane to add it, then press Show. Add a pane: use the empty one.</span>{% endif %}
+  </form>
+  {% for n in missing %}<p class="notice">Pane {{ n }} is not one of your programs, so it is not shown.</p>{% endfor %}
+  {% if panes|length == 1 and can_add %}<p class="notice">Add a pane: pick a second program in the empty pane above and press Show.</p>{% endif %}
+  {% if not panes %}<p class="empty">Pick a program for a pane above.</p>{% endif %}
+  <div class="split-panes split-{{ layout }} panes-{{ panes|length }}">
+    {% for pane in panes %}<iframe class="split-pane" title="RTA, {{ pane.program|unit }}, {{ pane.date.strftime('%a %d %b') }}" src="{{ pane.src }}"></iframe>{% endfor %}
+  </div>
+</main>
+{% endblock %}

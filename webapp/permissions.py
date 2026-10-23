@@ -30,7 +30,7 @@ CATALOGUE: Dict[str, tuple] = {
 }
 
 ENDPOINTS: Dict[str, str] = {
-    **{e: "rta_view" for e in ("day_page", "day_handover", "day_daily_views")},
+    **{e: "rta_view" for e in ("day_page", "day_handover", "day_daily_views", "day_split")},
     **{e: "rta_change" for e in ("day_absences", "day_activity", "day_activity_cancel", "day_add", "day_add_preview",
                                  "day_attendance", "day_attendance_check", "day_book", "day_session_move", "day_session_edit", "day_session_cancel", "day_activity_edit", "day_call_in_breaks", "day_break", "day_break_advice", "day_break_cancel",
                                  "day_bulk_apply", "day_channel", "day_channel_fix", "day_channel_preview", "day_cover",

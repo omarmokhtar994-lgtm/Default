@@ -144,7 +144,9 @@ class TheMergedDayPage(_TwoLobs):
 
     def test_the_page_names_a_lob_that_cannot_be_read_together_with_the_others(self):
         # Clocks that change between the LOBs' zones make the sum meaningless: it says so instead of guessing
-        got = self.text(date="2026-10-25", tz="America/New_York")  # 25 Oct: the UK changes clocks, the US does not
+        # re-pinned (Phase AY: only a window the change falls in refuses): the UK changes at 01:00 UTC on 25 Oct, inside the 24 hours that
+        # start at midnight New York time on the 24th (04:00 UTC), not inside those that start on the 25th; the US does not change
+        got = self.text(date="2026-10-24", tz="America/New_York")
         self.assertTrue("Clocks change" in got or "No schedule" in got)
 
     def test_a_change_made_on_the_merged_page_is_saved_on_the_persons_own_lob(self):

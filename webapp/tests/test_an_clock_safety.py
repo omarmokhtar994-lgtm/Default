@@ -97,7 +97,9 @@ class RtaClockHTTP(unittest.TestCase):
 
     def test_transition_fallback_keeps_the_operating_day_start(self):
         self.store.set_day_start(self.program, 960, self.owner)
-        response = self.client.get("/day", query_string={"program": self.program, "date": "2026-10-25",
+        # re-pinned (Phase AY, owner: only the day the clocks change inside the shown window refuses): the operating day starting at 16:00
+        # on 25 Oct is after the UK change (01:00 UTC), so it shows in London time now; 24 Oct's 24 hours from 16:00 contain it
+        response = self.client.get("/day", query_string={"program": self.program, "date": "2026-10-24",
                                                        "tz": "Europe/London", "window": "operating"})
         self.assertEqual(response.status_code, 200)
         self.assertIn('<option value="16:00" selected>', response.get_data(as_text=True))

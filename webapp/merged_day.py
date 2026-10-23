@@ -11,7 +11,7 @@ from datetime import date, timedelta
 from typing import Any, Callable, Dict, List, Optional
 
 from .attendance import DayBook
-from .clock import rta_shift
+from .clock import noon_gap, rta_window_shift
 from .day import at_target, window_view
 from .merge import merge_views, shift_view
 
@@ -24,7 +24,9 @@ def merged_page(days: DayBook, program: str, units: List[str], on: date, measure
     """The page for the 24 hours from minute ``start_frame`` (of ``program``'s own clock) of ``on``, every LOB in
     ``units`` that has a schedule that day together; None when none has. Raises ValueError (said on the page) for
     a workbook that cannot be read, a clock change, intervals of different lengths or a person on two LOBs."""
-    home = rta_shift(on, own_zone_of(program, on), zone)
+    # Phase AY: a clock change refuses only the windows it falls in (the 24 hours shown, an hour either side), not the days around it
+    home_zone = own_zone_of(program, on)
+    home = rta_window_shift(on, home_zone, zone, start_frame)
     if home is None:
         raise ValueError(CLOCK)
     pages: Dict[str, Dict[str, Any]] = {}
@@ -34,7 +36,8 @@ def merged_page(days: DayBook, program: str, units: List[str], on: date, measure
         if days.version(unit, on)[0] is None:
             missing.append(unit)
             continue
-        moved = rta_shift(on, own_zone_of(unit, on), zone)
+        unit_zone = own_zone_of(unit, on)  # where this LOB's own window starts: the page's start, taken back by its gap to the home LOB
+        moved = rta_window_shift(on, unit_zone, zone, start_frame + noon_gap(on, home_zone, zone) - noon_gap(on, unit_zone, zone))
         if moved is None:
             raise ValueError(CLOCK)
         delta[unit] = moved - home  # its minutes + delta = the page's minutes

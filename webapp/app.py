@@ -39,7 +39,7 @@ from .channel_plan import NoPlan, plan_day, score_day
 from .channel_template import channel_workbook
 from .channels import check_lines, has_channel_needs, read_channels, requirement_tab
 from .live import KINDS as LIVE_KINDS, Stamps, digest, lanes_of
-from .clock import minute_now, EGYPT, HOME, SHOWN, ZONES, moved_text, pick_zone, rta_shift, shift as zone_shift, shown, to_schedule, zone_gap_words, zone_label
+from .clock import minute_now, EGYPT, HOME, SHOWN, ZONES, moved_text, noon_gap, pick_zone, rta_window_shift, shift as zone_shift, shown, to_schedule, zone_gap_words, zone_label
 from .permissions import CATALOGUE as PERMISSIONS, ENDPOINTS as PERMISSION_ENDPOINTS, ROLE_NAMES, allowed, matrix
 from .day import ABSENT as ABSENT_STATES, AUX, BIO, EXTRA_BREAKS, MEASURES, OVERTIME_MAX, STATUSES, channel_letters, BreakRefused, at_target, board, glance, hover_tips, my_day, my_items, now_panel, read_inputs, shift_groups, window_view
 from .coach import actual_shrinkage, corrected_tab
@@ -369,7 +369,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             program = clean_program(request.form.get("program", ""))
             on = _date(request.form.get("date", ""))
             zone = request.form.get("tz", "")
-            if program and on and zone in dict(ZONES) and rta_shift(on, _own_zone(program, on), zone) is None:
+            if program and on and zone in dict(ZONES) and _window_moved(program, on, zone) is None:
                 message = "Clocks change in this RTA window. Reopen the day in the schedule's own time zone before editing."
                 if request.accept_mimetypes.best == "application/json":
                     return jsonify(error=message), 400
@@ -3675,6 +3675,15 @@ def create_app(config: Dict[str, Any]) -> Flask:
     WINDOW_TABS = ("timeline", "board", "adherence", "replan", "rescue", "bulk")
     START = re.compile(r"^([01]\d|2[0-3]):(00|15|30|45)$")
 
+    def _window_moved(program: str, on: date, zone: str, start: Optional[int] = None) -> Optional[int]:
+        """The shift of ``zone`` from the schedule's own clock for the 24 hours the RTA shows (from ``start`` minutes of ``zone``'s clock, else
+        the start kept for this program, else midnight); None when the clocks change inside them (Phase AY)."""
+        own = _own_zone(program, on)
+        if start is None:
+            found = START.match(((session.get("rta") or {}).get(program) or {}).get("start", "")) or START.match("00:00")
+            start = int(found.group(1)) * 60 + int(found.group(2))
+        return rta_window_shift(on, own, zone, start - noon_gap(on, own, zone))
+
     def _own_zone(program: str, on: date) -> str:
         """The zone the schedule in use for ``program`` on ``on`` was made in (Egypt when none is kept)."""
         row = _days().version(program, on)[0] if program else None
@@ -3683,7 +3692,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
     def _rta_choice(program: str, moved_for) -> Tuple[str, int]:
         """Phase AI: the zone and the day's start (minutes, in that zone) the RTA shows ``program`` in: as asked for,
         else as last picked for it this session; Egypt from midnight to begin with. ``window=operating`` (the program's
-        operating day, kept in the schedule's time) starts it there; ``moved_for(zone)`` is the zone's shift."""
+        operating day, kept in the schedule's time) starts it there; ``moved_for(zone, begins)`` is the zone's shift for the 24 hours from ``begins``."""
         every = dict(session.get("rta") or {})
         kept = dict(every.get(program) or {})
         if request.args.get("tz") in dict(ZONES):
@@ -3694,7 +3703,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         elif request.args.get("window") == "operating" and program:
             begins = app.extensions["store"].get_day_start(program)
             if begins is not None:
-                kept["start"] = plain_hm(begins + moved_for(zone))
+                kept["start"] = plain_hm(begins + moved_for(zone, begins))
         if program and kept != every.get(program):
             every[program] = kept
             session["rta"] = every
@@ -3714,8 +3723,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if not program and programs:
             program = next((p for p in programs if days.version(p, on)[0]), programs[0])
         own_zone = _own_zone(program, on)
-        g.zone, start_at = _rta_choice(program, lambda zone: rta_shift(on, own_zone, zone) or 0)
-        moved = rta_shift(on, own_zone, g.zone)
+        g.zone, start_at = _rta_choice(program, lambda zone, begins: rta_window_shift(on, own_zone, zone, begins) or 0)  # 0 when the clocks change in that window (Phase AY)
+        moved = _window_moved(program, on, g.zone, start_at)
         g.rta_clock_notice = ""
         if moved is None:
             g.zone, moved = own_zone, 0
@@ -4522,8 +4531,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if not program or on is None:
             abort(400)
         own_zone = _own_zone(program, on)
-        g.zone, start_at = _rta_choice(program, lambda zone: rta_shift(on, own_zone, zone) or 0)
-        moved = rta_shift(on, own_zone, g.zone)
+        g.zone, start_at = _rta_choice(program, lambda zone, begins: rta_window_shift(on, own_zone, zone, begins) or 0)  # 0 when the clocks change in that window (Phase AY)
+        moved = _window_moved(program, on, g.zone, start_at)
         if moved is None:
             g.zone, moved = own_zone, 0
         merge = _merge_choice(program)

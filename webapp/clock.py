@@ -93,6 +93,36 @@ def rta_shift(on: date, from_zone: str, to_zone: str):
     return offsets.pop()
 
 
+def _gap(wall: datetime, source_zone: ZoneInfo, target_zone: ZoneInfo, fold: int) -> int:
+    source = wall.replace(tzinfo=source_zone, fold=fold)
+    target = source.astimezone(timezone.utc).astimezone(target_zone)
+    return int((target.utcoffset() - source.utcoffset()).total_seconds() // 60)
+
+
+def noon_gap(on: date, from_zone: str, to_zone: str) -> int:
+    """Minutes ``to_zone``'s clock is ahead of ``from_zone``'s at noon of ``on`` (always defined)."""
+    if from_zone == to_zone:
+        return 0
+    return _gap(datetime.combine(on, time(12)), ZoneInfo(pick_zone(from_zone)), ZoneInfo(pick_zone(to_zone)), 0)
+
+
+def rta_window_shift(on: date, from_zone: str, to_zone: str, first: int):
+    """Phase AY (owner, 2026-10-23: only the day the clocks change should refuse, the next day should work with the new gap): like
+    ``rta_shift``, but only for the 24 hours shown, from minute ``first`` of ``on`` on the source zone's clock, and an hour either side.
+    The gap between the zones (a constant RTA offset) or None when it changes inside that stretch."""
+    if from_zone == to_zone:
+        return 0
+    source_zone, target_zone = ZoneInfo(pick_zone(from_zone)), ZoneInfo(pick_zone(to_zone))
+    offsets = set()
+    for minute in range(first - 60, first + 1440 + 61, 60):
+        wall = datetime.combine(on, time()) + timedelta(minutes=minute)
+        for fold in (0, 1):
+            offsets.add(_gap(wall, source_zone, target_zone, fold))
+            if len(offsets) > 1:
+                return None
+    return offsets.pop()
+
+
 def minute_now(on: date, zone: str, clock=None) -> int:
     """Now in the schedule's wall-clock minutes from its anchor date."""
     current = (clock or datetime.now(timezone.utc)).astimezone(ZoneInfo(pick_zone(zone)))

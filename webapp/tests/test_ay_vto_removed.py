@@ -66,10 +66,10 @@ class TheVtoIsGone(unittest.TestCase):
         self.assertEqual(len(self.vtos()), 1)  # kept as history
 
     def test_an_earlier_early_leave_is_kept(self):
-        self.days.set_status(AR, WED, WHO, "Left early", self.sara, start="13:00")
-        self.old_vto()
+        self.days.set_status(AR, WED, WHO, "Left early", self.sara, start="19:30")  # within the 2 hours of the allowance (shift ends 21:00)
+        self.old_vto(lo=20 * 60, hi=21 * 60)
         self.days.convert_vto_to_early_leave()
-        self.assertEqual(self.status()["from_min"], 13 * 60)
+        self.assertEqual(self.status()["from_min"], 19 * 60 + 30)
         self.assertEqual(self.vtos(), [])
 
     def test_running_it_again_changes_nothing(self):

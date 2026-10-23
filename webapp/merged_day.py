@@ -44,11 +44,17 @@ def merged_page(days: DayBook, program: str, units: List[str], on: date, measure
     step = next(iter(pages.values()))["view"]["interval"]
     start_frame -= start_frame % step
     views: Dict[str, Dict[str, Any]] = {}
+    lengths = {unit: page["view"]["interval"] for unit, page in pages.items()}
+    if len(set(lengths.values())) > 1:  # Phase AY: said as what it is, not as a clock problem
+        said = ", ".join(f"{unit}: {minutes} minutes" for unit, minutes in lengths.items())
+        raise ValueError(f"These LOBs use different interval lengths ({said}), so they cannot be shown as one: the intervals "
+                         "must be the same length on every LOB. Pick one LOB, or raise the schedules with the same interval length.")
     for unit, page in pages.items():
         start = start_frame - delta[unit]
-        if start % step or page["view"]["interval"] != step:
-            raise ValueError("These LOBs' clocks or intervals do not line up, so they cannot be shown as one. "
-                             "Pick one LOB.")
+        if start % step:
+            gap = delta[unit] % step
+            raise ValueError(f"{unit} is {delta[unit] // 60} h {delta[unit] % 60} min from the clock shown, which is not a whole number of "
+                             f"{step}-minute intervals ({gap} minutes over), so its intervals cannot line up with the others. Pick one LOB.")
         held: Dict[int, Optional[Dict[str, Any]]] = {0: page["view"]}
         for d in range(start // 1440, (start + 1439) // 1440 + 1):
             if d:

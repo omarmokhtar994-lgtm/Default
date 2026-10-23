@@ -47,7 +47,8 @@ def pure_channels():
            "inside": inside, "check_row": check_row, "hm": hm, "copy": copy,
            "CHANNELS": CHANNELS, "FULL": {"Sun": "Sunday"}, "DAYS": ["Sun"]}
     definitions("channel_plan.py", {"need_at", "in_play", "allowed", "coverage_slots", "email_goals",
-                                    "fixed_cover", "score_day", "_weights", "BALANCED"}, env)
+                                    "fixed_cover", "score_day", "_weights", "BALANCED",
+                                    "_concurrency_cap"}, env)  # Phase AY: score_day reads the limit through this helper
     definitions("channel_page.py", {"_runs", "apply_edit", "_at", "coverage"}, env)
     return env
 

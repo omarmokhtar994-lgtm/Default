@@ -163,7 +163,8 @@ class TheChannelTabs(unittest.TestCase):
                                                    "end": 1320})
         self.assertEqual(found["email_hours"][6], {"hours": 0.0, "languages": {}, "start": 0, "end": 1440})
         self.assertEqual(found["rules"], {"min_block": 60, "max_run": {"P": 120, "C": 0, "E": 0},
-                                          "order": ["P", "C", "E"], "strict": True, "fair": True})
+                                          "order": ["P", "C", "E"], "strict": True, "fair": True,
+                                          "consistent": False})  # Phase AY: the new rule, off by default
         self.assertEqual(found["languages"][1], {"channel": "C", "language": "Arabic", "minimum": 1, "start": 720,
                                                  "end": 1200, "days": {0, 1, 2, 3, 4}, "active": True})
         self.assertFalse(found["languages"][2]["active"])

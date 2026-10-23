@@ -29,7 +29,7 @@ from .break_plan import FIRST_FROM, FIRST_TO, LAST_CLEAR, LUNCH_FROM, LUNCH_TO, 
 from .channels import QUARTER, blended_at, in_email_hours, inside
 from .channel_solver import SolverStopped, solve as solve_channels
 
-LANGUAGE, BALANCED, LONG, MOVE, SWITCH, FAIR = 200, (100, 60, 30), 40, 5, 2, 1
+LANGUAGE, BALANCED, LONG, MOVE, SWITCH, FAIR_RANGE = 200, (100, 60, 30), 40, 5, 2, 6
 # Phase AX (owner, 2026-10-22: "prefer more the usual shape, followed by the engine layer"): each part of the usual shape a
 # break misses (first break 2 to 3.5 hours in, lunch 2 to 3 hours of work after it, last break ending an hour before the
 # shift does) costs this per quarter hour it is off: a break a quarter hour off is cheaper than one left where it was
@@ -37,7 +37,7 @@ LANGUAGE, BALANCED, LONG, MOVE, SWITCH, FAIR = 200, (100, 60, 30), 40, 5, 2, 1
 # a long run, so the shape never costs coverage; when it cannot be held the nearest time to it is taken.
 SHAPE, GAP = 3, 2  # GAP: a quarter hour past the workbook's Normal Maximum Gap (a normal, not an absolute)
 # Phase AM: a quarter hour on another channel than the one a person is on now (Fix channels on the RTA): above the
-# fair spread (FAIR * 2 at most), so fairness alone never moves anyone; below any shortfall, so coverage always does
+# single quarter hour of fair range (Phase AY: FAIR_RANGE, below), and below any shortfall, so coverage always comes first
 KEEP = 3
 # Phase AY: with the consistency tick on, a quarter hour on another channel than before costs this, also across a break;
 # below every shortfall (a channel 30 to 100, a language 200), so it only chooses between plans that cover alike
@@ -345,9 +345,27 @@ def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=N
                           - (off[name, prev] if (name, prev) in off else 0)
                           - (1 if blended_at(setup, day, prev) else 0))
                     cost.append(SWITCH * change)
-        if setup["rules"].get("fair") and carry.get(name):
-            ranks = {c: r for r, c in enumerate(sorted("PCE", key=lambda c: (carry[name].get(c, 0), c)))}
-            cost += [FAIR * ranks[c] * x[name, t, c] for t in ts for c in "PCE" if (name, t, c) in x and ranks[c]]
+    if setup["rules"].get("fair"):  # Phase AY: the week-to-date minutes of people alike are kept close together
+        groups: Dict[Tuple[str, str], List[str]] = {}
+        for p in people:
+            groups.setdefault(("".join(sorted(p["skills"])), p.get("language", "")), []).append(p["name"])
+        for (skills, _), names in groups.items():
+            for c in skills:
+                if c not in "PCE":
+                    continue
+                total = {}
+                for name in names:
+                    mine = [x[name, t, c] for t in slots[name] if (name, t, c) in x]
+                    if mine:
+                        total[name] = (carry.get(name, {}).get(c, 0) // QUARTER, sum(mine))
+                if len(total) < 2:
+                    continue
+                top = max(done + len(slots[n]) for n, (done, _) in total.items())
+                hi, lo = m.NewIntVar(0, top, ""), m.NewIntVar(0, top, "")
+                for name, (done, today) in total.items():
+                    m.Add(hi >= done + today)
+                    m.Add(lo <= done + today)
+                cost.append(FAIR_RANGE * (hi - lo))
     _alone(m, people, slots, off, picks, cost)
     # coverage
     def cover(c: str, t: int, who: Optional[Set[str]] = None) -> List[Any]:

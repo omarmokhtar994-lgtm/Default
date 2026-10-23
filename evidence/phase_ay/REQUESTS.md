@@ -64,3 +64,14 @@ A row's count for an interval is its lowest count over the interval's 5-minute s
 3. Measured by `score_day()["moves"]` (channel changes per person over the day, breaks ignored): on must have at least 25% fewer moves than off on the 16-person test day (the timed search moves by 1 or 2 between runs), with hours short per channel and language not worse than off by more than 0.5 h in total.
 Not changed: the engine, the validator, the workbooks.
 4. (owner, same day: "consistent is to stay on the same channel for a couple of hours, not chat for an hour, back to voice for an hour, back to chat") With the tick on, a stretch on one channel (breaks do not end it) that lasts under 2 hours and is followed by another channel costs 15 more. Measured by `score_day()["short_stretches"]`: on must have at most 60% of off's. Measured on the 16-person day: 16 short stretches off, 6 on; channel changes 34 and 20; hours short unchanged.
+
+## Fair spread of channels (owner, 2026-10-23: "I don't see fairness applies that much"; "make sure it's 100% operating well")
+
+Cause (measured on the owner's GDI week export): the fair spread cost 1 per quarter hour (2 at most), the smallest cost in the planner, from the days already planned only. Among people who work all three channels, Phone hours ranged from 7.75 to 22.75 and Email from 0 to 22.5.
+
+**Rule (pre-registered, channel planner, only when "Spread channels fairly over the week" is Yes).**
+1. People with the same channels and the same language form a group (as the Fairness table does). For each channel the group works, the planner takes each person's week-to-date minutes (earlier days plus the day being planned) and charges FAIR_RANGE (6) per quarter hour between the highest and the lowest person.
+2. This also balances people within one day, so Sunday and any single re-plan are fair too.
+3. Below any shortfall (a channel 30 or more, a language 200): coverage and language minimums still come first. Above the tick (20 per change) only for the larger ranges.
+4. Off gives the plan it gave before.
+**Measured** by `/tmp/week_ab.py` (kept as `webapp/tests/test_ay_fair_week.py`): the 16-person day planned Mon to Fri with carry; the sum over groups and channels of (highest minus lowest hours). Accept if the new range is at most 2/3 of the old one, with total hours short not worse by more than 0.5 h, with the tick off and on.

@@ -27,6 +27,7 @@ pressure. Patches (`AX_all_in_one`) did not change `MANIFEST.json` (mtime 22 Oct
 | Rescue on timeout: `RUN_PORTFOLIO.py --collect-only`, `seed_return_code`, `rc921_runner.run_portfolio` keeps the finished seeds; `rescue_note` on the run page | `test_rc9_2_59_portfolio_rescue` (13: 2, 4 and 6 seeds, none finished, unvalidated, in time), `webapp/tests/test_ay_rescue_note.py` (5), all failed first |
 | Day off cancelled (call in) that breaks the rest gap is kept with a warning (`_call_in`, `add_item`, `/day/activity`); `add_activity(..., "Called in", dry_run=True)` no longer keeps the record | `webapp/tests/test_ay_callin_rest.py` (8), failed first; `test_attendance` re-pinned in 4 places with the reason |
 | Cover from outside the roster: "Delete cover" button on the tab list, "Remove" beside the entry on the Interval board (returns to the board) | `webapp/tests/test_ay_cover_remove.py` (5), 3 failed first |
+| Long group posts: a Slack change that does not fit in one message goes as "(1 of N)" messages, every line, retries resume at the failed message (`bodies_for`, `post_from_body`, `parts_done`) | `webapp/tests/test_ay_group_parts.py` (8), failed first; `test_notify_posts` re-pinned (it pinned the cut note) |
 | Open pages ask whether they changed | `webapp/tests/test_ay_live.py` (15), 3 browser tests |
 | Breaks of one shift spread over the quarter hours | `test_ax_break_fit` (4); `AMPLE` 1 h lost 0.25 h of the tightest interval in `test_au_break_shape`, so it is 3 h |
 

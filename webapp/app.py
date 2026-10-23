@@ -56,7 +56,7 @@ from .handover import note as handover_note
 from .exports import _Days as ExportDays, EXPORT_SECONDS, KINDS as EXPORT_KINDS, MAX_DAYS as MAX_EXPORT_DAYS, build as build_export
 from .outcome import cannot_schedule, read as read_outcome, view as outcome_view
 from .access import Access, role
-from .notify import (DEFAULT_HOLD, DEFAULT_KINDS as NOTIFY_DEFAULT_KINDS, HOLDS, KINDS as NOTIFY_KINDS, MODE_WORDS,
+from .notify import (post_from_body, DEFAULT_HOLD, DEFAULT_KINDS as NOTIFY_DEFAULT_KINDS, HOLDS, KINDS as NOTIFY_KINDS, MODE_WORDS,
                      MODES as NOTIFY_MODES, SERVICES, Notifier, Post, check_link, last_line, leave_out, link_end,
                      post_json, post_result, post_what)
 from .programs import ProgramBook
@@ -2378,7 +2378,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                hold=int(saved.get("hold") or DEFAULT_HOLD), end=link_end(saved.get("link", "")),
                                service_name=SERVICES.get(saved.get("service", ""), ""),
                                saved_by=by["display_name"] if by else "",
-                               last_post=Post(**json.loads(shown["body"])) if shown else None,
+                               last_post=post_from_body(shown["body"]) if shown else None,
                                recent=_paged([(p, post_what(p), *post_result(p)) for p in posts], "posts_page",
                                              "nf-rec-h"))
 

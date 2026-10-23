@@ -117,6 +117,13 @@ class Post:
     url: str = ""
 
 
+def post_from_body(text: str) -> "Post":
+    """A kept post's body as a Post (the body may also carry ``parts_done``, how many of its messages are already posted)."""
+    data = json.loads(text)
+    data.pop("parts_done", None)
+    return Post(**data)
+
+
 # Owner, 2026-10-11: "Don't add the link for the website we are not giving access to associates now". Group posts
 # carry no website address while this is False; set it to True once associates may open the website.
 LINK_TO_RTA = False
@@ -194,13 +201,15 @@ def _slack(text: str) -> str:
     return _plain(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def slack_body(post: Post) -> Dict[str, Any]:
-    """An Incoming Webhooks message: the title, the lines in sections of at most 2900 characters, the footer."""
+def slack_bodies(post: Post) -> List[Dict[str, Any]]:
+    """Incoming Webhooks messages: the title, the lines in sections of at most 2900 characters, the footer. More sections than
+    one message holds (50 blocks) go as several messages titled "(1 of 2)", "(2 of 2)" (Phase AY, owner, 2026-10-23: a note
+    "open the RTA to see them" is no use to people who cannot open it); the footer is on the last."""
     lines: List[str] = []
     for heading, rows in post.sections:
         if heading:
             lines.append(f"*{_slack(heading)}*")
-        lines += [f"• *{_slack(n)}*: {_slack(t)}" for n, t in rows]
+        lines += [f"\u2022 *{_slack(n)}*: {_slack(t)}" for n, t in rows]
     chunks: List[str] = []
     for line in lines:
         if chunks and len(chunks[-1]) + 1 + len(line) <= SLACK_CHUNK:
@@ -208,15 +217,22 @@ def slack_body(post: Post) -> Dict[str, Any]:
         else:
             chunks.append(line[:SLACK_CHUNK])
     room = SLACK_BLOCKS - 2  # the title and the footer
-    if len(chunks) > room:
-        left = sum(c.count("\n") + 1 for c in chunks[room - 1:])
-        chunks = chunks[:room - 1] + [f"… and {left} more lines: open the RTA to see them."]
-    blocks: List[Dict[str, Any]] = [{"type": "section", "text": {"type": "mrkdwn", "text": f"*{_slack(post.title)}*"}}]
-    blocks += [{"type": "section", "text": {"type": "mrkdwn", "text": c}} for c in chunks]
+    groups = [chunks[i:i + room] for i in range(0, len(chunks), room)] or [[]]
     foot = _slack(post.footer) + (f" <{post.url}|Open the RTA>" if post.url else "")
-    if foot.strip():
-        blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text": foot.strip()}]})
-    return {"text": _plain(post.title), "blocks": blocks}
+    bodies: List[Dict[str, Any]] = []
+    for n, group in enumerate(groups, 1):
+        title = post.title + (f" ({n} of {len(groups)})" if len(groups) > 1 else "")
+        blocks: List[Dict[str, Any]] = [{"type": "section", "text": {"type": "mrkdwn", "text": f"*{_slack(title)}*"}}]
+        blocks += [{"type": "section", "text": {"type": "mrkdwn", "text": c}} for c in group]
+        if foot.strip() and n == len(groups):
+            blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text": foot.strip()}]})
+        bodies.append({"text": _plain(title), "blocks": blocks})
+    return bodies
+
+
+def slack_body(post: Post) -> Dict[str, Any]:
+    """The first (and, for a change that fits, the only) message of ``slack_bodies``."""
+    return slack_bodies(post)[0]
 
 
 def _clock_text(m: int) -> str:
@@ -256,11 +272,13 @@ def _flow(text: str) -> str:
     return _plain(text).replace("<", "\u2039").replace(">", "\u203a")
 
 
-def slack_flow_body(post: Post) -> Dict[str, str]:
-    """The whole message as plain lines in "text", for a Slack Workflow, laid out as the owner chose (option "A",
-    2026-10-11): an emoji before the title, the lines between two dividers, then who changed it and the RTA's address.
-    No bold marks (a Workflow shows them as stars). Past 3,900 characters the last lines give way to a note."""
-    head = [f"{FLOW_TITLE} {_flow(post.title)}"]
+def slack_flow_bodies(post: Post) -> List[Dict[str, str]]:
+    """The message as plain lines in "text", for a Slack Workflow, laid out as the owner chose (option "A", 2026-10-11): an emoji
+    before the title, the lines between two dividers, then who changed it and the RTA's address. No bold marks (a Workflow shows
+    them as stars). A change with more lines than fit in ``SLACK_FLOW_MAX`` characters goes as several messages, titled "(1 of 3)"
+    and so on, every line once and in order, the footer and address on the last (Phase AY, owner, 2026-10-23: it used to cut the
+    lines and say "open the RTA to see them", and associates cannot open it). A heading never ends a message."""
+    title = f"{FLOW_TITLE} {_flow(post.title)}"
     tail = ([f"{FLOW_FOOTER} {_flow(post.footer)}"] if post.footer.strip() else []) + \
            ([f"{FLOW_LINK} {post.url}"] if post.url else [])
     body: List[str] = []
@@ -269,27 +287,46 @@ def slack_flow_body(post: Post) -> Dict[str, str]:
             body.append(_flow(heading))
         body += [f"\u2022 {_flow(n)}: {_flow(t)}" for n, t in rows]
 
-    def joined(lines: List[str]) -> str:
+    def joined(head: str, lines: List[str], foot: List[str]) -> str:
         middle = [FLOW_DIVIDER] + lines + [FLOW_DIVIDER] if lines else [FLOW_DIVIDER]
-        return "\n".join(head + middle + tail)
+        return "\n".join([head] + middle + foot)
 
-    if len(joined(body)) <= SLACK_FLOW_MAX:
-        return {"text": joined(body)}
-    total = sum(1 for line in body if line.startswith("\u2022 "))
-    while True:  # drop lines from the end until the rest and a note fit
-        if body:
-            body.pop()
-        left = total - sum(1 for line in body if line.startswith("\u2022 "))
-        text = joined(body + [f"\u2026 and {left} more lines: open the RTA to see them."])
-        if len(text) <= SLACK_FLOW_MAX or not body:
-            return {"text": text[:SLACK_FLOW_MAX]}
+    if len(joined(title, body, tail)) <= SLACK_FLOW_MAX:
+        return [{"text": joined(title, body, tail)}]
+    suffix = " (99 of 99)"  # room for the part number in every title
+    budget = SLACK_FLOW_MAX - len(joined(title + suffix, [""], tail))  # what is left for the lines, one newline each
+    parts: List[List[str]] = [[]]
+    used = 0
+    for line in body:
+        line = line[:budget - 2]  # one line is never longer than a message
+        need = len(line) + 1
+        if parts[-1] and used + need > budget:
+            last = parts[-1][-1]
+            carried = [parts[-1].pop()] if not last.startswith("\u2022 ") else []  # a heading goes on with its lines
+            parts.append(carried)
+            used = sum(len(x) + 1 for x in carried)
+        parts[-1].append(line)
+        used += need
+    parts = [p for p in parts if p]
+    return [{"text": joined(f"{title} ({n} of {len(parts)})", lines, tail if n == len(parts) else [])}
+            for n, lines in enumerate(parts, 1)]
+
+
+def slack_flow_body(post: Post) -> Dict[str, str]:
+    """The first (and, for a change that fits, the only) message of ``slack_flow_bodies``."""
+    return slack_flow_bodies(post)[0]
+
+
+def bodies_for(service: str, post: Post, link: str = "") -> List[Dict[str, Any]]:
+    """What the group's link receives, in order: a Teams card, or one or more Slack messages (an app's, or a Workflow's plain text)."""
+    if service == "teams":
+        return [teams_body(post)]
+    return slack_flow_bodies(post) if is_slack_flow(link) else slack_bodies(post)
 
 
 def body_for(service: str, post: Post, link: str = "") -> Dict[str, Any]:
-    """What the group's link receives: a Teams card, a Slack app's message, or a Slack Workflow's plain text."""
-    if service == "teams":
-        return teams_body(post)
-    return slack_flow_body(post) if is_slack_flow(link) else slack_body(post)
+    """The first message of ``bodies_for``: for a post that is one message (a test message). Posts of changes use ``bodies_for``."""
+    return bodies_for(service, post, link)[0]
 
 
 # The RTA's "Post to the group" tick, unticked for one change (Phase AB, sample 03b). Set for the request that makes
@@ -532,12 +569,20 @@ class Notifier:
         except ValueError:
             self._finish(post, "failed", "the saved group link is not a Teams or Slack link")
             return 0
-        body = body_for(service, Post(**json.loads(post["body"])), settings["link"])
-        try:
-            ok, code = self.transport(settings["link"], body)
-        except Exception:  # noqa: BLE001 (an unexpected network failure is a failed try like any other)
-            log.exception("group posts: sending post %s failed", post["id"])
-            ok, code = False, 0
+        data = json.loads(post["body"])
+        done = int(data.get("parts_done") or 0)  # Phase AY: messages of this post that an earlier try already posted
+        bodies = bodies_for(service, post_from_body(post["body"]), settings["link"])
+        ok, code = True, 200
+        for n in range(min(done, len(bodies) - 1), len(bodies)):
+            try:
+                ok, code = self.transport(settings["link"], bodies[n])
+            except Exception:  # noqa: BLE001 (an unexpected network failure is a failed try like any other)
+                log.exception("group posts: sending post %s failed", post["id"])
+                ok, code = False, 0
+            if not ok:
+                break
+            if n + 1 < len(bodies):  # kept at once, so a later try goes on from the next message and repeats none
+                self.store.set_notify_post(post["id"], body=json.dumps({**data, "parts_done": n + 1}))
         if ok:
             self._finish(post, "sent", service=service, sent_at=now)
             return 1

@@ -80,3 +80,7 @@ The page compares a stamp of what it shows, not the database's write counter. An
 ## Removing cover from outside the roster (Phase AY)
 
 Two places: the button **Delete cover** beside each cover in the panel "Cover from outside the roster" (tab Overtime and VTO), and a **Remove** button beside the cover's entry in the Interval board's row (the interval where the cover starts). Remove brings you back to the board. A cover that began last night and runs past midnight shows on this day's board but is removed from yesterday's list, so it has no Remove button here.
+
+## Long group posts go as several messages (Phase AY)
+
+A change with more lines than one Slack message holds is no longer cut with "open the RTA to see them". It goes as several messages, titled "(1 of 3)", "(2 of 3)" and so on, every line once and in order, with "Changed on the RTA by ..." on the last. A change that fits is one message as before. If a message fails, the retries (after 1, 5 and 15 minutes) go on from that message and do not repeat the ones already posted. Teams posts are unchanged: one card.

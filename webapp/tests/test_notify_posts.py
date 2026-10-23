@@ -6,7 +6,7 @@ import unittest
 from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 
-from webapp.notify import (DEFAULT_KINDS, KINDS, Post, body_for, breaks_post, change_post, check_link, link_end,
+from webapp.notify import (DEFAULT_KINDS, KINDS, Post, bodies_for, body_for, breaks_post, change_post, check_link, link_end,
                            slack_body, teams_body)
 
 EGYPT = timezone(timedelta(hours=3))
@@ -258,16 +258,20 @@ class TheSlackWorkflow(unittest.TestCase):
         self.assertNotIn(">", text)
         self.assertIn("Associate \u20391\u203a & 2", text)
 
-    def test_a_long_message_is_cut_with_a_note(self):
+    def test_a_long_message_goes_as_several_messages(self):
+        # re-pinned (Phase AY, owner, 2026-10-23: "those extra 47 lines couldn't be shown on Slack and associates don't have
+        # access to open the tool"): it used to be cut with a note "open the RTA to see them"; now every line is posted, in
+        # messages titled "(1 of 4)" and so on (test_ay_group_parts has the rest)
         many = [item(f"Associate {i:03d}", "Break 1 moved 10:00 to 10:15 and a long reason " * 2) for i in range(120)]
-        text = body_for("slack", self.post(many), SLACK_FLOWS[0])["text"]
-        self.assertLessEqual(len(text), 3900)
-        lines = text.split("\n")
-        self.assertEqual(lines[0], "\U0001f4cb SAKS, NMG Tier 2: changes for Sat 10 Oct")
-        shown = sum(1 for line in lines if line.startswith("\u2022 "))
-        self.assertGreater(shown, 10)
-        self.assertEqual(lines[-3:], [f"\u2026 and {120 - shown} more lines: open the RTA to see them.", DIVIDER,
-                                      "\u270f\ufe0f Changed on the RTA by Omar Mokhtar, 19:19."])
+        bodies = bodies_for("slack", self.post(many), SLACK_FLOWS[0])
+        texts = [b["text"] for b in bodies]
+        self.assertGreater(len(texts), 1)
+        for n, text in enumerate(texts, 1):
+            self.assertLessEqual(len(text), 3900)
+            self.assertEqual(text.split("\n")[0], f"\U0001f4cb SAKS, NMG Tier 2: changes for Sat 10 Oct ({n} of {len(texts)})")
+        self.assertEqual(sum(1 for t in texts for line in t.split("\n") if line.startswith("\u2022 ")), 120)
+        self.assertNotIn("more lines", "".join(texts))
+        self.assertEqual(texts[-1].split("\n")[-2:], [DIVIDER, "\u270f\ufe0f Changed on the RTA by Omar Mokhtar, 19:19."])
 
 
 if __name__ == "__main__":

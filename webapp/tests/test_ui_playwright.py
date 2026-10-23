@@ -519,6 +519,29 @@ class TheDayInTheBrowser(unittest.TestCase):
             if kind == "Late":
                 self.assertTrue(page.locator("[data-incident]").is_visible())
 
+    def test_the_split_view_fills_the_width_and_the_height_of_the_tab(self):
+        # Phase AY (owner, screenshot: "this is not fixed, it should adapt based on tab width and height"): the panes follow the window, not a fixed
+        # width or a fixed height
+        for width, height in ((2200, 1000), (1500, 1300)):
+            page = self.page(width=width, height=height)
+            self.sign_in(page)
+            for layout, count in (("cols", 2), ("rows", 2), ("cols", 3)):
+                query = "".join(f"&p{i}=AE/AR+B2B&d{i}=2026-10-14" for i in range(1, count + 1))
+                page.goto(self.base + f"/day/split?layout={layout}{query}")
+                page.wait_for_load_state("load")
+                boxes = [page.locator("iframe.split-pane").nth(n).bounding_box() for n in range(count)]
+                left, right = min(b["x"] for b in boxes), max(b["x"] + b["width"] for b in boxes)
+                bottom = max(b["y"] + b["height"] for b in boxes)
+                where = f"{width}x{height} {layout} {count}"
+                self.assertGreaterEqual(right, width - 60, where)               # across the whole tab, whatever its width
+                self.assertGreaterEqual(bottom, height - 40, where)             # and down to the bottom of it
+                self.assertLessEqual(bottom, height + 700, where)               # the page itself does not run away
+                if layout == "cols":
+                    self.assertAlmostEqual(boxes[0]["width"], boxes[-1]["width"], delta=4, msg=where)
+                else:
+                    self.assertAlmostEqual(boxes[0]["height"], boxes[-1]["height"], delta=4, msg=where)
+            page.close()
+
     def test_the_split_view_shows_two_embedded_days_without_the_page_header(self):
         # Phase AY (owner: split the RTA between 2 or 3 LOBs or programs)
         page = self.page(width=1500, height=1000)

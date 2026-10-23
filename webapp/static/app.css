@@ -1644,14 +1644,18 @@ body.embed .top, body.embed .skip, body.embed .back, body.embed .leftnav, body.e
 body.embed { padding-top: 0; }
 body.embed .frame { grid-template-columns: minmax(0, 1fr); }
 body.embed .frame > main { max-width: none; padding: 10px 14px 24px; }
-.frame > main:has(.split) { max-width: none; }  /* the split page uses the whole width */
+/* the split page follows the tab: the whole width, and the panes share the height left under the controls (page scrolls only below their minimums) */
+.frame > main:has(.split) { max-width: none; display: flex; flex-direction: column; min-height: calc(100vh - 58px); padding-bottom: 12px; }
+.split { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .split-bar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; margin: 8px 0 12px; }
 .split-pick { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-end; border: 1px solid var(--rail); border-radius: 6px; padding: 6px 10px; }
-.split-panes { display: grid; gap: 10px; }
-.split-rows { grid-template-columns: 1fr; }
-.split-cols.panes-2 { grid-template-columns: 1fr 1fr; }
-.split-cols.panes-3 { grid-template-columns: 1fr 1fr 1fr; }
-.split-pane { width: 100%; border: 1px solid var(--rail); border-radius: 6px; background: var(--paper); height: 82vh; min-height: 520px; }
-.split-rows.panes-2 .split-pane { height: 72vh; }
-.split-rows.panes-3 .split-pane { height: 60vh; min-height: 440px; }
-@media (max-width: 900px) { .split-cols.panes-2, .split-cols.panes-3 { grid-template-columns: 1fr; } }
+.split-panes { flex: 1; min-height: 0; display: grid; gap: 10px; }
+.split-rows.panes-1 { grid-template-rows: minmax(480px, 1fr); }
+.split-rows.panes-2 { grid-template-rows: repeat(2, minmax(360px, 1fr)); }
+.split-rows.panes-3 { grid-template-rows: repeat(3, minmax(300px, 1fr)); }
+.split-cols { grid-template-rows: minmax(480px, 1fr); }
+.split-cols.panes-1 { grid-template-columns: minmax(0, 1fr); }
+.split-cols.panes-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.split-cols.panes-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.split-pane { width: 100%; height: 100%; min-height: 0; border: 1px solid var(--rail); border-radius: 6px; background: var(--paper); }
+@media (max-width: 900px) { .split-cols.panes-2, .split-cols.panes-3 { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-auto-rows: minmax(480px, 1fr); } }

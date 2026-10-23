@@ -2,7 +2,7 @@
 {% extends "base.html" %}
 {% block title %}Split view on Team Scheduler{% endblock %}
 {% block content %}
-<main id="main" class="split" data-split>
+<div class="split" data-split>
   <h1>Split view</h1>
   <p class="dim">Up to {{ max }} RTA days together, each with its own program, day, zone and tab. Every pane is the ordinary RTA page.</p>
   <form method="get" action="{{ url_for('day_split') }}" class="split-bar">
@@ -21,5 +21,5 @@
   <div class="split-panes split-{{ layout }} panes-{{ panes|length }}">
     {% for pane in panes %}<iframe class="split-pane" title="RTA, {{ pane.program|unit }}, {{ pane.date.strftime('%a %d %b') }}" src="{{ pane.src }}"></iframe>{% endfor %}
   </div>
-</main>
+</div>
 {% endblock %}

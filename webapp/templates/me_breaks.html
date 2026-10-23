@@ -88,3 +88,4 @@
 </section>
 {% endif %}
 {% endblock %}
+{% block live %}{% from '_live.html' import watch %}{{ watch('me', 'reload') }}{% endblock %}

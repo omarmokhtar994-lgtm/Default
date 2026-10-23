@@ -1628,3 +1628,61 @@ function homeRefresh(now) {
     });
   });
 })();
+
+// Phase AY (owner, 2026-10-23): an open page asks every 30 s whether what it shows has changed (the stamp the page was built
+// from, against the server's now). A read-only page (data-mode "reload": My day, My week, Overview) reloads; a page where
+// people are in the middle of something (data-mode "bar": the RTA day, Requests) shows a bar with a link instead, and so does
+// a read-only page while a field has the focus or has been typed in. The asks are spread by up to 5 s so that many open pages
+// do not ask in the same second, they stop while the tab is hidden (one ask when it comes back), and after a failed ask the
+// wait doubles up to 5 minutes.
+function liveWatch(box) {
+  "use strict";
+  var url = box.getAttribute("data-url"), stamp = box.getAttribute("data-stamp"), mode = box.getAttribute("data-mode");
+  var BASE = 30000, MOST = 300000, delay = BASE, timer = null, busy = false, touched = false, shown = false;
+  function typing() {
+    var a = document.activeElement;
+    return touched || !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+  }
+  function bar() {
+    if (shown) { return; }
+    shown = true;
+    var note = document.createElement("p"), link = document.createElement("a"), main = document.getElementById("main") || document.body;
+    note.className = "notice live-bar";
+    note.setAttribute("role", "status");
+    note.appendChild(document.createTextNode("The page changed. "));
+    link.href = window.location.href;
+    link.textContent = "Refresh to see it";
+    note.appendChild(link);
+    main.insertBefore(note, main.firstChild);
+  }
+  function changed() {
+    if (mode === "reload" && !typing()) { window.location.reload(); } else { bar(); }
+  }
+  function schedule() {
+    window.clearTimeout(timer);
+    if (shown || document.hidden) { return; }
+    timer = window.setTimeout(ask, delay + Math.random() * 5000);
+  }
+  function ask() {
+    if (busy || document.hidden) { return; }
+    busy = true;
+    fetch(url, { credentials: "same-origin", headers: { "Accept": "application/json" }, cache: "no-store" })
+      .then(function (r) { if (!r.ok || r.redirected) { throw new Error("HTTP " + r.status); } return r.json(); })
+      .then(function (s) {
+        delay = BASE;
+        if (s.stamp !== stamp) { changed(); }
+      })
+      .catch(function () { delay = Math.min(delay * 2, MOST); })
+      .then(function () { busy = false; schedule(); });
+  }
+  document.addEventListener("input", function () { touched = true; });
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) { window.clearTimeout(timer); } else { ask(); }
+  });
+  schedule();
+}
+(function () {
+  "use strict";
+  var live = document.getElementById("live");
+  if (live) { liveWatch(live); }
+})();

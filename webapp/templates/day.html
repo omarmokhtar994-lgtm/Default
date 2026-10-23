@@ -665,3 +665,4 @@
 </div>
 {% endif %}
 {% endblock %}
+{% block live %}{% from '_live.html' import watch %}{% if program %}{{ watch('day', 'bar', program, on.isoformat()) }}{% endif %}{% endblock %}

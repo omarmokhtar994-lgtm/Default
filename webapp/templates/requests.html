@@ -66,3 +66,4 @@
   </form>
 </section>{% endif %}
 {% endblock %}
+{% block live %}{% from '_live.html' import watch %}{{ watch('requests', 'bar', unit) }}{% endblock %}

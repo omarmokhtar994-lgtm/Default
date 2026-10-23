@@ -1954,6 +1954,60 @@ class ThePhaseXYInTheBrowser(unittest.TestCase):
         self.assertEqual(len(loads), 1)
         expect(page.locator("#newrun form p.paused")).to_have_count(0)
 
+    # ---------------------------------------------------------------- Phase AY: open pages ask whether they changed
+    def watching(self, url):
+        self.app.extensions["live"]._kept.clear()  # a stamp is kept for 10 s: one from the test before would still be there
+        page = self.page()
+        self.sign_in(page)
+        page.clock.install()
+        page.goto(self.base + url)
+        page.wait_for_load_state("load")
+        loads = []
+        page.on("load", lambda: loads.append(page.url))
+        return page, loads
+
+    def change_a_break(self):
+        import json
+        row = self.app.extensions["days"].version(self.key, self.sunday)[0]
+        week = json.loads(row["week"])
+        first = next(b for b in week["breaks"] if b["day"] == "Sun")
+        h, m = map(int, first["start"].split(":"))
+        first["start"] = f"{(h * 60 + m + 15) // 60 % 24:02d}:{(h * 60 + m + 15) % 60:02d}"
+        self.store.update_schedule(row["id"], week=json.dumps(week))
+        self.addCleanup(self.store.update_schedule, row["id"], week=row["week"])
+        self.app.extensions["days"]._pages.clear()
+        self.app.extensions["live"]._kept.clear()
+
+    def test_a_read_only_page_reloads_by_itself_after_a_change_and_not_before(self):
+        page, loads = self.watching(f"/overview?program={self.q}&date={self.sunday.isoformat()}")
+        page.clock.run_for(65000)
+        page.wait_for_timeout(800)
+        self.assertEqual(loads, [])  # nothing changed: nothing reloads
+        self.change_a_break()
+        with page.expect_event("load"):
+            page.clock.run_for(36000)
+        self.assertEqual(len(loads), 1)
+
+    def test_the_rta_day_shows_a_bar_after_a_change_and_never_reloads(self):
+        page, loads = self.watching(f"/day?program={self.q}&date={self.sunday.isoformat()}")
+        expect(page.locator(".live-bar")).to_have_count(0)
+        self.change_a_break()
+        page.clock.run_for(36000)
+        expect(page.locator(".live-bar")).to_contain_text("The page changed.", timeout=30000)  # the answer comes in real time: the day is built again
+        expect(page.locator(".live-bar a")).to_have_text("Refresh to see it")
+        page.clock.run_for(90000)
+        page.wait_for_timeout(500)
+        self.assertEqual(loads, [])
+        self.assertEqual(page.locator(".live-bar").count(), 1)
+
+    def test_a_read_only_page_with_a_field_in_use_gets_the_bar_not_a_reload(self):
+        page, loads = self.watching(f"/overview?program={self.q}&date={self.sunday.isoformat()}")
+        page.evaluate("document.dispatchEvent(new Event('input'))")  # somebody typed in a field
+        self.change_a_break()
+        page.clock.run_for(36000)
+        expect(page.locator(".live-bar")).to_have_count(1, timeout=30000)
+        self.assertEqual(loads, [])
+
     def test_a_finished_run_says_so_without_reloading(self):
         page, loads = self.home_with_a_clock()
         self.touch_the_form(page)

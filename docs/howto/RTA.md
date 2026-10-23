@@ -62,3 +62,13 @@ post only the latest, followed by "Breaks now: ...".
 - What people choose by hand never stops them. A single move, Change several breaks and an associate's break request list
   every time the shift and the other breaks allow, and mark a time that is closer than the minimum gap, further than the
   normal maximum or off the default with what it breaks. The RTA sees the same words on the request.
+
+## Open pages notice changes (Phase AY)
+
+An open page asks the server every 30 seconds (plus a random 0 to 5 seconds, so that many open pages do not ask together) whether what it shows has changed.
+
+- **Reloads by itself:** My day and My week (associates), and the Overview. If a field has the focus or has been typed in, the page shows a bar instead, so nothing typed is lost.
+- **Shows a bar, never reloads:** the RTA day (Timeline, Interval board, Adherence) and Requests. The bar says "The page changed" with a link, "Refresh to see it".
+- **No watching:** reports and setup pages (Incidents, Shrinkage, Analysis, Exports, the schedule editors, Plan breaks, Plan channels, People and settings), where a reload would lose the period or the choice made.
+
+The page compares a stamp of what it shows, not the database's write counter. An associate's stamp covers only their own shifts (yesterday, today, tomorrow) and requests, so a colleague's change or someone opening a page does not reload it. A stamp is kept 10 seconds, so a change shows within about 45 seconds. The asks stop while the tab is hidden, and wait longer (up to 5 minutes) after a failure. The server log notes how many stamps were asked and built.

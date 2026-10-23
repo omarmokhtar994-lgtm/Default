@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
+from werkzeug.exceptions import NotFound
 from flask import (Flask, abort, flash, g, has_request_context, jsonify, redirect, render_template, request, send_file,
                    session, url_for)
 from flask.sessions import SecureCookieSessionInterface
@@ -37,6 +38,7 @@ from .channel_people import ChannelPeople, can_work, channel_words
 from .channel_plan import NoPlan, plan_day, score_day
 from .channel_template import channel_workbook
 from .channels import check_lines, has_channel_needs, read_channels, requirement_tab
+from .live import KINDS as LIVE_KINDS, Stamps, digest, lanes_of
 from .clock import minute_now, EGYPT, HOME, SHOWN, ZONES, moved_text, pick_zone, rta_shift, shift as zone_shift, shown, to_schedule, zone_gap_words, zone_label
 from .permissions import CATALOGUE as PERMISSIONS, ENDPOINTS as PERMISSION_ENDPOINTS, ROLE_NAMES, allowed, matrix
 from .day import ABSENT as ABSENT_STATES, AUX, BIO, EXTRA_BREAKS, MEASURES, OVERTIME_MAX, STATUSES, channel_letters, BreakRefused, at_target, board, glance, hover_tips, my_day, my_items, now_panel, read_inputs, shift_groups, window_view
@@ -1447,6 +1449,74 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                                     "swaps_done_page", "done-h"),
                                manager=allowed(app.extensions["store"], g.user, "setup"),
                                year=datetime.now(EGYPT).year)
+
+    # ------------------------------------------------------------- open pages ask whether they changed (Phase AY)
+    app.extensions["live"] = Stamps()
+
+    def _live_stamp(kind: str, program: str = "", on_text: str = "") -> str:
+        """The stamp of what a page of this kind shows to this person (``webapp/live.py``); "" when there is nothing to show."""
+        stamps, user = app.extensions["live"], g.user
+        if (kind == "me") != bool(user["is_associate"]):
+            abort(404)  # an associate's account is stamped for its own pages only, and staff for theirs
+        if kind == "me":
+            key = _my_unit()
+            if not key:
+                return ""
+
+            def mine() -> str:
+                today, name, days = _local_now(key).date(), user["roster_name"], app.extensions["days"]
+                seen = []
+                for d in (today - timedelta(days=1), today, today + timedelta(days=1)):
+                    try:
+                        seen.append([d.isoformat(), lanes_of(days.page(key, d, shared=True), name)])
+                    except ValueError:  # a day whose input workbook is not kept: the page leaves it out too
+                        seen.append([d.isoformat(), []])
+                leave, swaps = app.extensions.get("leave"), app.extensions.get("swaps")
+                return digest([seen, leave.mine(key, name) if leave else [], swaps.mine(key, name) if swaps else [],
+                               app.extensions["changes"].mine(key, user["id"])])
+            return stamps.get(("me", user["id"]), mine)
+        key = (clean_program(program) if program and _access().can_open(clean_program(program)) else
+               _requests_unit()) if kind == "requests" else clean_program(program)
+        if not key or not _access().can_open(key):
+            abort(404)
+        if kind == "requests":
+            def waiting() -> str:
+                leave, swaps = app.extensions.get("leave"), app.extensions.get("swaps")
+                return digest([leave.waiting(key) if leave else [], swaps.waiting(key) if swaps else [],
+                               app.extensions["changes"].waiting(key)])
+            return stamps.get(("requests", key), waiting)
+        on = _date(on_text) or datetime.now(EGYPT).date()
+
+        def day() -> str:
+            try:
+                return digest(lanes_of(app.extensions["days"].page(key, on, shared=True)))
+            except ValueError:
+                return ""
+        return stamps.get(("day", key, on.isoformat(), SHOWN.get()), day)
+
+    @app.route("/live/stamp")
+    @login_required
+    def live_stamp():  # type: ignore[no-untyped-def]
+        """Phase AY: a very small answer, asked every 30 seconds by a page that is open (static/app.js, liveWatch)."""
+        kind = request.args.get("kind", "")
+        if kind not in LIVE_KINDS:
+            abort(404)
+        stamps = app.extensions["live"]
+        answer = _live_stamp(kind, request.args.get("program", ""), request.args.get("date", ""))
+        if stamps.asked % 500 == 0:
+            app.logger.info(stamps.line())
+        response = jsonify(stamp=answer)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @app.template_global()
+    def live_state(kind: str, program: str = "", on: str = "") -> Dict[str, str]:
+        """What a page hands the watcher: where to ask, and the stamp it was built from."""
+        query = {"kind": kind, **({"program": program} if program else {}), **({"date": on} if on else {})}
+        try:
+            return {"url": url_for("live_stamp", **query), "stamp": _live_stamp(kind, program, on)}
+        except NotFound:  # a program the person may not open (a merged view): the page just does not watch
+            return {"url": "", "stamp": ""}
 
     # ------------------------------------------------------------- break changes and coaching (Phase AS)
     def _local_now(key: str) -> datetime:

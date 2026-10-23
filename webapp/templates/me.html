@@ -69,3 +69,4 @@
 </section>
 {% else %}<p class="empty">Your name is not on a schedule yet. Your planner adds it when your week is planned.</p>{% endif %}
 {% endblock %}
+{% block live %}{% from '_live.html' import watch %}{{ watch('me', 'reload') }}{% endblock %}

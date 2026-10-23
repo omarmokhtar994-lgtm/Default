@@ -79,6 +79,7 @@
 {% if user and back %}<p class="crumbs"><a href="{{ back }}" data-back>‹ Back</a><a class="home" href="{{ url_for('home') }}">Home</a></p>{% endif %}
 {% with messages = get_flashed_messages() %}{% for m in messages %}<p class="flash" role="status">{{ m }}</p>{% endfor %}{% endwith %}
 {% block content %}{% endblock %}
+{% block live %}{% endblock %}
 </main>
 {% if user %}</div>{% endif %}
 {% if user and not user.is_associate %}<dialog id="goto" class="goto" aria-label="Go to" data-url="{{ url_for('goto') }}" data-program="{{ nav_unit or '' }}" data-date="{{ nav_date or '' }}">

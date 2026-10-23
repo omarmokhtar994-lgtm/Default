@@ -110,7 +110,10 @@ Load each with the Skill tool at the step it covers; following it from memory do
   runs `RUN_PORTFOLIO.py --collect-only` on the seed folders; a seed counts only if its `UNIVERSAL_RUN_STATUS.json` has
   `top_level_copies` (the engine's last write), and every rule for a winner is unchanged; the record carries
   `rescued_after_timeout` and the run page says so (`webapp/runs.py: rescue_note`); with no finished seed the timeout stands.
-  Open: whether WHOLE_SHIFT is what lengthens the stages after the search (test: the same workbook with the row set to START). The gate runs once after a full package install (15 to 30 min before the first run); patches do not
+  **Day off cancelled (call in)**: a call-in that breaks the rest gap is kept with a warning, as overtime is
+  (owner, 2026-10-23, from a screenshot: "it should show warnings but still apply it"); `add_activity(..., "Called in",
+  dry_run=True)` used to keep the record, and now returns it with `warning`. Swaps still list a rest problem with "Offer
+  with the warning". Open: whether WHOLE_SHIFT is what lengthens the stages after the search (test: the same workbook with the row set to START). The gate runs once after a full package install (15 to 30 min before the first run); patches do not
   change `MANIFEST.json`, so they do not trigger it. Evidence: `evidence/phase_ay/CHECKS.md`.
 
 ## Where things stand (end of Phase AU; package AP to AU, not yet built)

@@ -4607,7 +4607,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             with_dept, with_whom, why = _aux_answers(kind, program)
             warning = _days().add_activity(program, on, name, kind, start, end, g.user["id"], dry_run=True,
                                            with_whom=with_whom, why=why, with_dept=with_dept).get("warning", "") \
-                if kind == "Overtime" else ""
+                if kind in ("Overtime", "Called in") else ""
             _days().add_activity(program, on, name, kind, start, end,
                                  g.user["id"], billable=request.form.get("billable") == "1",
                                  note=request.form.get("note", ""), with_whom=with_whom, why=why, with_dept=with_dept)

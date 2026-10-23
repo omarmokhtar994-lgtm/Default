@@ -1304,7 +1304,7 @@ class DayBook:
         if kind not in ACTIVITY_KINDS:
             raise ValueError(f"Unknown activity: {kind}.")
         if kind == CALLED_IN:
-            return self._call_in(program, on, name, start, end, user_id, note)
+            return self._call_in(program, on, name, start, end, user_id, note, dry_run=dry_run)
         row, week, span = self._shift(program, on, name)
         warning = ""
         lo, hi = _clock(start), _clock(end)
@@ -1371,7 +1371,8 @@ class DayBook:
             rec = self._call_in(program, on, name, start, end, user_id, note, dry_run=True)
             if not dry_run:
                 self._call_in(program, on, name, start, end, user_id, note)
-            return {"text": rec["what"], "lo": rec["start"], "hi": rec["end"], "record": rec}
+            return {"text": rec["what"], "lo": rec["start"], "hi": rec["end"], "record": rec,
+                    "warning": rec.get("warning", "")}
         if what in ABSENT or what in LATE_EARLY:
             arrived = start if what == "Late" else ""
             left = start if what == "Left early" else ""
@@ -1514,16 +1515,17 @@ class DayBook:
                                  "longest shift in the Shift Library.")
             label = f"{hm(lo)} - {hm(hi)}"
         rest = int(float(week.get("settings", {}).get("rest_gap_hours") or 0) * 60)
-        self._rest(program, on, row, name, lo, hi, rest)
+        # owner, 2026-10-23: a manual change shows a warning and is kept, as overtime has been since Phase AJ
+        warning = self._rest(program, on, row, name, lo, hi, rest, refuse=False)
         if self.called_in_on(program, on, name) is not None:
             raise ValueError(f"{name} is already called in that day.")
         if dry_run:
             return {"name": name, "kind": CALLED_IN, "start": lo, "end": hi, "billable": True,
-                    "what": f"Day off cancelled: called in {label}"}
+                    "what": f"Day off cancelled: called in {label}", "warning": warning}
         made = self.store.add_activity(program=program, shift_date=on.isoformat(), associate=name, kind=CALLED_IN,
                                        start=lo, end_min=hi, billable=1, note=label, user_id=user_id)
-        self._log(program, on, name, f"Day off cancelled: called in {label}", user_id, "called_in",
-                  ref=f"callin:{made}", after="on")
+        self._log(program, on, name, f"Day off cancelled: called in {label}" + (f". Warning: {warning}" if warning else ""),
+                  user_id, "called_in", ref=f"callin:{made}", after="on")
         return made
 
     # ------------------------------------------------------------- cover from outside the roster (Phase AJ)

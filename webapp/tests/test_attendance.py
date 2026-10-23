@@ -193,17 +193,22 @@ class TheAttendance(unittest.TestCase):
             self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Called in", "12:00", "21:00", self.sara)
         with self.assertRaises(ValueError):  # not a Shift Library shift, and typed times go in 15-minute steps
             self.days.add_activity("AE/AR B2B", WED, "Associate 002", "Called in", "12:05", "21:05", self.sara)
-        with self.assertRaises(ValueError):  # Tuesday 23:00 - 08:00 leaves 1 hour's rest before 09:00
-            self.days.add_activity("AE/AR B2B", WED, "Associate 004", "Called in", "09:00", "18:00", self.sara)
+        # re-pinned (owner, 2026-10-23: a manual change shows a warning and is kept, never refused; see test_ay_callin_rest):
+        # Tuesday 23:00 - 08:00 leaves 1 hour's rest before 09:00, which is said, not refused
+        warned = self.days.add_activity("AE/AR B2B", WED, "Associate 004", "Called in", "09:00", "18:00", self.sara,
+                                        dry_run=True)["warning"]
+        self.assertIn("would rest 1 hours after the previous shift", warned)
         self.days.add_activity("AE/AR B2B", WED, "Associate 002", "Called in", "12:00", "21:00", self.sara)
         with self.assertRaises(ValueError):  # once a day
             self.days.add_activity("AE/AR B2B", WED, "Associate 002", "Called in", "09:00", "18:00", self.sara)
 
     def test_the_rest_gap_reaches_across_the_week_and_what_was_added(self):
         # Sunday: no schedule is kept for the week before, so the previous Saturday comes from the input
-        with self.assertRaises(ValueError) as refused:  # Associate 001: Saturday 16:00 - 01:00
-            self.days.add_activity("AE/AR B2B", SUN, "Associate 001", "Called in", "09:00", "18:00", self.sara)
-        self.assertIn("would rest 8 hours after the previous shift", str(refused.exception))
+        # Associate 001: Saturday 16:00 - 01:00. Re-pinned (owner, 2026-10-23): a call-in that breaks the rest gap is kept with a
+        # warning, as overtime is (Phase AJ), so the warning is what is checked here
+        warned = self.days.add_activity("AE/AR B2B", SUN, "Associate 001", "Called in", "09:00", "18:00", self.sara,
+                                        dry_run=True)["warning"]
+        self.assertIn("would rest 8 hours after the previous shift", warned)
         self.days.add_activity("AE/AR B2B", SUN, "Associate 001", "Called in", "13:00", "22:00", self.sara)
         # Re-pinned in Phase AJ: the owner asked that overtime breaking the rest gap is kept with a warning
         # Associate 010: Saturday 18:00 - 03:00, Sunday from 16:00
@@ -212,14 +217,14 @@ class TheAttendance(unittest.TestCase):
         self.assertIn("would rest 11 hours after the previous shift", warned)
         # a call-in is a shift for the days either side: Associate 002 is off Wednesday and Thursday
         self.days.add_activity("AE/AR B2B", WED, "Associate 002", "Called in", "15:00", "00:00", self.sara)
-        with self.assertRaises(ValueError) as refused:
-            self.days.add_activity("AE/AR B2B", THU, "Associate 002", "Called in", "09:00", "18:00", self.sara)
-        self.assertIn("would rest 9 hours after the previous shift", str(refused.exception))
+        warned = self.days.add_activity("AE/AR B2B", THU, "Associate 002", "Called in", "09:00", "18:00", self.sara,
+                                        dry_run=True)["warning"]  # re-pinned (owner, 2026-10-23): said, not refused
+        self.assertIn("would rest 9 hours after the previous shift", warned)
         # and overtime lengthens the shift: Associate 003 works Monday 09:00 - 18:00, off on Tuesday
         self.days.add_activity("AE/AR B2B", MON, "Associate 003", "Overtime", "18:00", "20:00", self.sara)
-        with self.assertRaises(ValueError) as refused:
-            self.days.add_activity("AE/AR B2B", TUE, "Associate 003", "Called in", "07:00", "16:00", self.sara)
-        self.assertIn("would rest 11 hours after the previous shift", str(refused.exception))
+        warned = self.days.add_activity("AE/AR B2B", TUE, "Associate 003", "Called in", "07:00", "16:00", self.sara,
+                                        dry_run=True)["warning"]  # re-pinned (owner, 2026-10-23): said, not refused
+        self.assertIn("would rest 11 hours after the previous shift", warned)
         self.days.add_activity("AE/AR B2B", TUE, "Associate 003", "Called in", "08:00", "17:00", self.sara)
         # the other way: Associate 018 (Monday 09:00 - 18:00, off Tuesday) called in at 06:00 has exactly 12 hours
         self.days.add_activity("AE/AR B2B", TUE, "Associate 018", "Called in", "06:00", "15:00", self.sara)

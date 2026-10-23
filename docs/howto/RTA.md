@@ -72,3 +72,7 @@ An open page asks the server every 30 seconds (plus a random 0 to 5 seconds, so 
 - **No watching:** reports and setup pages (Incidents, Shrinkage, Analysis, Exports, the schedule editors, Plan breaks, Plan channels, People and settings), where a reload would lose the period or the choice made.
 
 The page compares a stamp of what it shows, not the database's write counter. An associate's stamp covers only their own shifts (yesterday, today, tomorrow) and requests, so a colleague's change or someone opening a page does not reload it. A stamp is kept 10 seconds, so a change shows within about 45 seconds. The asks stop while the tab is hidden, and wait longer (up to 5 minutes) after a failure. The server log notes how many stamps were asked and built.
+
+## Calling someone in on a day off (Phase AY)
+
+"Day off cancelled" keeps the call-in even when it leaves less rest than the program's rest gap. The page and the day's log say it, for example "Warning: Kevin Tarek would rest 9 hours after the previous shift; the rule is 12." The other rules still refuse, because they mean the change cannot be made at all: the person works that day (add overtime instead), the person is already called in, typed times not in 15-minute steps, or a length outside 1 hour up to the longest library shift.

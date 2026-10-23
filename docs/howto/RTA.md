@@ -93,3 +93,9 @@ The tools that place breaks (Plan breaks, the fill of a new schedule, Fix, Repla
 - **Warn** (the engine's default, and what a schedule without the setting counts as) **and Off:** the limit does not decide where a break goes. The intervals' buffer comes first, then the usual shape (first break 2 to 3.5 hours after the start), then the engine's gap rules. The validator still lists an excess as a yellow warning in Warn.
 
 So with enough buffer the first breaks go where the usual shape puts them, even when more than 4 people share that time.
+
+## Last night's records and editing coaching (Phase AY)
+
+- **Overtime, call-in and cover that began last night** (a shift that runs past midnight) are listed on this day's Overtime and VTO tab, under "Activities on this day" and "Cover from outside the roster", marked "shift of Wed 14 Oct" or "from Wed 14 Oct", each with a Delete that acts on its own date and brings you back to this day. A shift that ended before midnight is not listed here: open that day.
+- **Booked sessions** (meeting, training, coaching for several people): tick the people, set **New start** and **New end**, press **Change the time of the ticked**. A longer or a shorter session, all or none: if anyone is not free for the new time, nobody changes and the message names who. **Move the ticked (same length)** is the old move. Undo takes a change back.
+- **One booked activity** (coaching, meeting, training, an added break): in "Activities on this day" each one has a start, an end and **Save time**. Overtime, VTO and a call-in are not edited this way: delete and add them again.

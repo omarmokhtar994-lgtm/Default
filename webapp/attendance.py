@@ -1113,22 +1113,37 @@ class DayBook:
         self._log(program, on, r["associate"], f"{CHANNELS[r['channel']]} from {hm(r['start'])} to {hm(r['end_min'])} "
                   "taken back", user_id, "channel", ref=f"channel:{move_id}", before="on")
 
-    @journaled
     def move_activity(self, program: str, on: date, activity_id: int, start: str, user_id: int) -> int:
         """Move an aux, or a break or lunch added on the day, to ``start`` (HH:MM), the same length, with the same
         who and why; checked like a new booking (the original stays when the new time is refused)."""
+        return self.edit_activity(program, on, activity_id, start, "", user_id)
+
+    @journaled
+    def edit_activity(self, program: str, on: date, activity_id: int, start: str, end: str, user_id: int) -> int:
+        """Phase AY (owner, 2026-10-23: "we can't just extend or edit the time, we have to delete and do it again"): change an aux
+        (coaching, meeting, training), or a break or lunch added on the day, to ``start`` and ``end`` (HH:MM); with no ``end`` it
+        keeps its length. The same who and why; checked like a new booking (the original stays when the new time is refused)."""
         r = self.store.get_activity(activity_id)
         if r is None or r["program"] != program or r["shift_date"] != on.isoformat():
             raise ValueError("That activity is not on this day.")
         if r["kind"] not in AUX and r["kind"] not in EXTRA_BREAKS:
-            raise ValueError(f"{r['kind']} cannot be moved here.")
+            raise ValueError(f"{r['kind']} cannot be changed here.")
         lo = _clock(start)
         if lo is None:
             raise ValueError("Give the new start like 16:00.")
+        if (end or "").strip():
+            hi = _clock(end)
+            if hi is None:
+                raise ValueError("Give the new end like 16:30.")
+            if hi == lo:
+                raise ValueError("The end time must be after the start time.")
+            new_end = plain_hm(hi)
+        else:
+            new_end = plain_hm(lo + r["end_min"] - r["start"])
         fields = {k: v for k, v in r.items() if k != "id"}
         self.store.delete_activity(activity_id)
         try:
-            rec = self.add_activity(program, on, r["associate"], r["kind"], start, plain_hm(lo + r["end_min"] - r["start"]),
+            rec = self.add_activity(program, on, r["associate"], r["kind"], start, new_end,
                                     user_id, billable=bool(r["billable"]), note=r["note"], dry_run=True,
                                     with_whom=r.get("with_whom", ""), why=r.get("why", ""),
                                     with_dept=r.get("with_dept", ""))
@@ -1137,7 +1152,10 @@ class DayBook:
             raise
         made = self.store.add_activity(**{**fields, "start": rec["start"], "end_min": rec["end"], "user_id": user_id,
                                           "at": time.time()})
-        self._log(program, on, r["associate"], f"{r['kind']} moved {hm(r['start'])} to {hm(rec['start'])}", user_id,
+        changed = "moved" if rec["end"] - rec["start"] == r["end_min"] - r["start"] else "changed"
+        self._log(program, on, r["associate"], f"{r['kind']} {changed} {hm(r['start'])} to {hm(r['end_min'])} -> "
+                  f"{hm(rec['start'])} to {hm(rec['end'])}" if changed == "changed" else
+                  f"{r['kind']} moved {hm(r['start'])} to {hm(rec['start'])}", user_id,
                   _group_kind(r["kind"]), ref=f"activity:{made}", before=hm(r["start"]), after=hm(rec["start"]))
         return made
 
@@ -2292,6 +2310,34 @@ class DayBook:
             self._log(program, on, r["associate"], f"{r['kind']} {hm(r['start'])} to {hm(r['end_min'])} moved to "
                       f"{hm(start)} to {hm(start + span)}", user_id, _group_kind(r["kind"]), ref=f"activity:{r['id']}",
                       before=hm(r["start"]), after=hm(start))
+
+    @journaled
+    def edit_session(self, program: str, on: date, session: str, names: List[str], start: int, end: int, user_id: int) -> None:
+        """Phase AY (owner, 2026-10-23): give the chosen members of a session a new start and a new end (minutes), a longer or a
+        shorter one; all of them or none. Each stays inside their shift and nobody is booked on top of a break, an absence or
+        another activity (their own old time is theirs)."""
+        if end <= start:
+            raise ValueError("The end time must be after the start time.")
+        if start % STEP or end % STEP:
+            raise ValueError("Sessions go in 5-minute steps.")
+        chosen = self._session_rows(program, on, session, names)
+        page = self.page(program, on)
+        if page is None:
+            raise ValueError("There is no schedule for this day.")
+        busy = []
+        for r in chosen:
+            seg = next((s for l in page["view"]["lanes"] if l["name"] == r["associate"] for s in l["segments"]
+                        if s["offset"] == 0), None)
+            if seg is None or start < seg["start"] or end > seg["end"] or \
+                    any(_busy(seg, t) and not r["start"] <= t < r["end_min"] for t in range(start, end, STEP)):
+                busy.append(r["associate"])
+        if busy:
+            raise ValueError(f"Not free then: {', '.join(busy)}. Nobody was changed.")
+        for r in chosen:
+            self.store.update_activity(r["id"], start=start, end_min=end)
+            self._log(program, on, r["associate"], f"{r['kind']} {hm(r['start'])} to {hm(r['end_min'])} changed to "
+                      f"{hm(start)} to {hm(end)}", user_id, _group_kind(r["kind"]), ref=f"activity:{r['id']}",
+                      before=f"{hm(r['start'])}-{hm(r['end_min'])}", after=f"{hm(start)}-{hm(end)}")
 
     @journaled
     def cancel_session(self, program: str, on: date, session: str, names: List[str], user_id: int) -> None:

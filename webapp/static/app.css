@@ -1618,3 +1618,5 @@ table.hours tfoot th, table.hours tfoot td { border-top: 1px solid var(--rail); 
 .ins-counts .ins-tile b { font-size: 1.75rem; }
 @media (max-width: 800px) { .ins-counts .ins-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .ins-heat td small { display: block; font-weight: 400; font-size: 0.6875rem; line-height: 1.1; white-space: nowrap; }
+.edit-act { margin-left: .75rem; }
+.edit-act input[type="time"] { width: 7rem; }

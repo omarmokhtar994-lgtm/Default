@@ -3843,11 +3843,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
             chosen = next((g for g in groups if g["key"] == wanted), None)
             shift_view = {"shift_groups": groups, "shift": wanted,
                           "shift_names": set(chosen["names"]) if chosen else (set() if wanted else None)}
-        outside: Dict[str, Any] = {"rows": [], "roles": COVER_ROLES, "channels": [], "languages": []}
+        outside: Dict[str, Any] = {"rows": [], "prev": [], "roles": COVER_ROLES, "channels": [], "languages": []}
         if page and tab == "cover":
             cover = days.offers(page, from_now)
             ch = page["view"].get("channels")  # Phase AJ: cover from outside the roster, on a channel when there are
-            outside = {"rows": days.covers(program, on), "roles": COVER_ROLES,
+            outside = {"rows": days.covers(program, on),
+                       "prev": [c for c in days.covers(program, on - timedelta(days=1)) if c["end_min"] > 1440],  # last night's, still on
+                       "roles": COVER_ROLES,
                        "channels": [(r["letter"], r["name"]) for r in ch["rows"] if "language" not in r] if ch else [],
                        "languages": days.cover_languages(page)}
         fresh = request.args.get("how") == "fresh"  # Phase AX: "Replan the day's breaks", from scratch
@@ -3989,7 +3991,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                if program and on else {},
                                post_to=SERVICES.get(group["service"], "") if posting else "",
                                post_mode=group["mode"] if posting else "", post_kinds=post_kinds,
-                               people=people, whole=whole, shrink=shrink, finder=finder, sessions=sessions, cover=cover, outside=outside,
+                               people=people, whole=whole, shrink=shrink, finder=finder, sessions=sessions, cover=cover, outside=outside, prev_on=on - timedelta(days=1),
                                ot_page=_paged(cover["overtime"] if cover else [], "ot_page", "ot-h"),
                                vto_page=_paged(cover["vto"] if cover else [], "vto_page", "vto-h"),
                                log_page=_paged(list(reversed(page["log"])) if page else [], "log_page", "daylog-h"),
@@ -4431,7 +4433,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
     def _back_to_day(program: str, on: Optional[date], view: str, cover: str = ""):  # type: ignore[no-untyped-def]
         on = _date(request.form.get("anchor", "")) or on  # Phase AI: the day the page showed, not the shift's own
         args = {"program": program, "date": on.isoformat() if on else None,
-                "view": view if view in ("board", "adherence", "meeting", "cover", "replan", "channels", "bulk", "rescue") else None,
+                "view": view if view in ("board", "adherence", "meeting", "cover", "replan", "channels", "bulk", "rescue", "sessions") else None,
                 "cover": cover if MINUTE.match(cover) and view == "board" else None}
         if args["cover"]:
             args["_anchor"] = f"row-{args['cover']}"
@@ -4784,6 +4786,41 @@ def create_app(config: Dict[str, Any]) -> Flask:
         except ValueError as exc:
             _say(str(exc), program, on)
         return _back_to_day(program, on, "sessions")
+
+    @app.route("/day/session/edit", methods=["POST"])
+    @login_required
+    def day_session_edit():  # type: ignore[no-untyped-def]
+        """Phase AY: give some or all of a booked session a new start and end, all or none."""
+        program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
+        who = request.form.getlist("who")
+        try:
+            if on is None:
+                raise ValueError("Pick a day.")
+            session = request.form.get("session", "")
+            days = _days()
+            start = days.session_start(program, on, who, _typed("at", program, on), session)
+            end = days.session_start(program, on, who, _typed("to", program, on), session)
+            days.edit_session(program, on, session, who, start, end, g.user["id"])
+            _say(f"Changed {', '.join(who)} to {hm(start)} to {hm(end)}.", program, on)
+        except ValueError as exc:
+            _say(str(exc), program, on)
+        return _back_to_day(program, on, "sessions")
+
+    @app.route("/day/activity/edit", methods=["POST"])
+    @login_required
+    def day_activity_edit():  # type: ignore[no-untyped-def]
+        """Phase AY: a booked aux (coaching, meeting, training) or an added break gets a new start and end."""
+        program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
+        try:
+            if on is None:
+                raise ValueError("Pick a day.")
+            _days().edit_activity(program, on, request.form.get("id", -1, type=int), _typed("at", program, on),
+                                  _typed("to", program, on), g.user["id"])
+            _say(f"Changed to {request.form.get('at', '')} to {request.form.get('to', '') or 'the same length'}.", program, on)
+        except ValueError as exc:
+            _say(str(exc), program, on)
+        view = request.form.get("view", "")
+        return _back_to_day(program, on, view if view in ("cover", "board", "sessions", "timeline") else "cover")
 
     @app.route("/day/session/cancel", methods=["POST"])
     @login_required

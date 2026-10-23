@@ -1425,6 +1425,17 @@ function homeRefresh(now) {
   window.addEventListener("resize", fit);
 })();
 
+// Phase AY (owner, 2026-10-23: "the timezone should match their own on the PC"): the browser's own zone is kept in a cookie, so the
+// server counts "today" (the days back a role may still change) where the person is, not only in Egypt.
+(function () {
+  "use strict";
+  var zone = "";
+  try { zone = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) { return; }
+  if (!zone || document.cookie.indexOf("pc_tz=" + zone) !== -1) { return; }
+  document.cookie = "pc_tz=" + zone + "; path=/; max-age=31536000; SameSite=Lax" +
+    (location.protocol === "https:" ? "; Secure" : "");
+})();
+
 // Phase AY (owner, 2026-10-23: "the hours timeline does not match the intervals below"): the Timeline's hour labels and hour lines
 // were laid out for a 24-hour day, so on a shorter window ("Day starts at", the operating day) they drifted from the bars and the
 // interval cells. They are placed here from the window's length in minutes (data-span on the axis row): a label every 2 hours, a

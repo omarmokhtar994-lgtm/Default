@@ -15,7 +15,7 @@ import zipfile
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from werkzeug.exceptions import NotFound
 from flask import (Flask, abort, flash, g, has_request_context, jsonify, redirect, render_template, request, send_file,
@@ -339,6 +339,15 @@ def create_app(config: Dict[str, Any]) -> Flask:
             g.error_hint = "An admin sets what each role may open on Roles."
             abort(403, description="Your role cannot open this page or do this")
         g.zone = pick_zone(request.args.get("tz", ""))  # Phase AF (D5): Egypt unless the page asks for another
+        if g.get("user") and request.method == "POST" and request.endpoint in DAY_WRITES:
+            try:
+                _still_editable(_date(request.form.get("date", "")), _date(request.form.get("first", "")))
+            except ValueError as exc:
+                if "application/json" in request.headers.get("Accept", ""):
+                    return jsonify(error=str(exc)), 400
+                flash(str(exc))
+                return _back_to_day(clean_program(request.form.get("program", "")), _date(request.form.get("date", "")),
+                                    request.form.get("view", ""))
         # Phase Q: a program page opens only for people with that program (New schedule is open to everyone).
         if g.get("user") and request.endpoint not in OPEN_TO_ALL:
             key = (request.view_args or {}).get("name") if request.endpoint == "program" else \
@@ -4654,15 +4663,45 @@ def create_app(config: Dict[str, Any]) -> Flask:
             _say(str(exc), program, on)
         return _back_to_day(program, on, "cover")
 
-    EDIT_DAYS_BACK = 2  # Phase AY (owner, 2026-10-23): overtime, call-ins and cover can be removed for today and 2 days before
+    # Phase AY (owner, 2026-10-23: "make it for everything and limit it 1 day back for everyone, 7 days for supervisor, unlimited for
+    # admin, also the timezone should match their own on the PC"): a change to a day (every POST of the day page) is refused for a day
+    # older than yesterday, 7 days back for a supervisor, no limit for an admin. Today is the viewer's own: the zone their browser
+    # reports in the ``pc_tz`` cookie (app.js), else the zone the page shows, else Egypt.
+    DAY_WRITES = frozenset({
+        "day_absences", "day_activity", "day_activity_cancel", "day_activity_edit", "day_add", "day_attendance", "day_book",
+        "day_break", "day_break_cancel", "day_bulk_apply", "day_call_in_breaks", "day_channel", "day_channel_fix", "day_cover",
+        "day_cover_cancel", "day_replan_apply", "day_rescue_apply", "day_send", "day_session_cancel", "day_session_edit",
+        "day_session_move", "day_undo", "day_undo_last"})
+    ZONE_NAME = re.compile(r"^[A-Za-z0-9_+\-]+(/[A-Za-z0-9_+\-]+){0,2}$")
 
-    def _still_editable(on: date, what: str) -> None:
-        if g.user.get("is_admin") or g.user.get("is_supervisor"):  # owner, 2026-10-23: the 2 days hold for everyone but admin and supervisor
+    def _viewer_today() -> date:
+        pinned = app.config.get("TODAY")  # tests
+        if pinned:
+            return pinned
+        for name in (request.cookies.get("pc_tz", ""), pick_zone(request.values.get("tz", "")), HOME):
+            try:
+                if name and ZONE_NAME.match(name):
+                    return datetime.now(ZoneInfo(name)).date()
+            except (ZoneInfoNotFoundError, ValueError, OSError):
+                continue
+        return datetime.now(EGYPT).date()
+
+    def _back_limit() -> Optional[int]:
+        """Days back this person may change; None for no limit."""
+        if g.user.get("is_admin"):
+            return None
+        return 7 if g.user.get("is_supervisor") else 1
+
+    def _still_editable(*days: Optional[date]) -> None:
+        limit = _back_limit()
+        if limit is None:
             return
-        today = app.config.get("TODAY") or datetime.now(EGYPT).date()
-        if on < today - timedelta(days=EDIT_DAYS_BACK):
-            raise ValueError(f"{what} of {on:%a %d %b} cannot be changed any more: it can be removed for today and the "
-                             f"{EDIT_DAYS_BACK} days before only.")
+        today = _viewer_today()
+        for on in days:
+            if on is not None and on < today - timedelta(days=limit):
+                raise ValueError(f"{on:%a %d %b} is closed to changes for your role: you can change today and {limit} "
+                                 f"{'day' if limit == 1 else 'days'} back ({today:%a %d %b} is today where you are). "
+                                 "Ask a supervisor or an admin for an older day.")
 
     @app.route("/day/cover/cancel", methods=["POST"])
     @login_required
@@ -4671,7 +4710,6 @@ def create_app(config: Dict[str, Any]) -> Flask:
         try:
             if on is None:
                 raise ValueError("Pick a day.")
-            _still_editable(on, "Cover")
             _days().cancel_cover(program, on, request.form.get("id", 0, type=int), g.user["id"])
             flash("Cancelled.")
         except ValueError as exc:
@@ -4686,9 +4724,6 @@ def create_app(config: Dict[str, Any]) -> Flask:
         try:
             if on is None:
                 raise ValueError("Pick a day.")
-            held = app.extensions["store"].get_activity(request.form.get("id", 0, type=int))
-            if held and held["kind"] in ("Overtime", "Called in"):
-                _still_editable(on, "A call-in" if held["kind"] == "Called in" else "Overtime")
             _days().cancel_activity(program, on, request.form.get("id", 0, type=int), g.user["id"])
             flash("Cancelled.")
         except ValueError as exc:

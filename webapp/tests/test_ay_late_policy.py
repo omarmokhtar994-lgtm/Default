@@ -3,8 +3,9 @@
 duration and count while booking them, asking for the account manager's approval as an exception, but still booked if the RTA writes a comment
 and says it was approved"; then "for late login this can first choose if it's from the 2 hours or it's an incident, counted on the associate anyway"): a Late login (minutes from the shift's start to the arrival) or an Early leave (minutes from the leaving time to the shift's
 end) is booked freely up to 2 hours, and while the person has had fewer than 2 this month (Late and Left early together). Past either limit it is
-refused until the booking says the account manager approved it, with a comment; the comment goes to the day's log. A booking is either taken from the allowance (``late_kind="allowance"``, the default) or an incident (``"incident"``): an incident does not use the
-allowance, is not held to its limits, and is kept in the incidents for the analysis. Made-up names, October 2026."""
+refused until the booking says the account manager approved it, with a comment; the comment goes to the day's log. A late login is either taken from the allowance (``late_kind="allowance"``, the default) or an incident (``"incident"``): an incident does not use the
+allowance, is not held to its limits, and is kept in the incidents for the analysis. An early leave is always from the allowance (owner: "incidents
+and allowance apply for late logins only"). The exports say which each booking was. Made-up names, October 2026."""
 import re
 import unittest
 from datetime import date, timedelta
@@ -92,7 +93,7 @@ class TheLatePolicy(_Late):
 
 
 class TheIncident(_Late):
-    """The same fixture: a late login that is an incident, not from the allowance."""
+    """The same fixture: a late login that is an incident, not from the allowance (only a late login can be; an early leave is always from it)."""
 
     def test_an_incident_has_no_limits_and_does_not_use_up_the_allowance(self):
         a, b, c = self.days_worked(WHO, 3)
@@ -110,12 +111,25 @@ class TheIncident(_Late):
         self.days.set_status(AR, on, WHO, "Present", self.sara)  # changing the status takes the incident back with it
         self.assertEqual([r for r in self.store.list_incidents(AR, [on.isoformat()]) if r["associate"] == WHO], [])
 
-    def test_an_early_leave_incident_has_its_own_kind(self):
+    def test_an_early_leave_is_always_from_the_allowance(self):
         on = self.days_worked(WHO, 1)[0]
         shift = next(s for l in self.days.page(AR, on)["view"]["lanes"] if l["name"] == WHO for s in l["segments"] if s["offset"] == 0)
         left = shift["end"] - 60
-        self.days.set_status(AR, on, WHO, "Left early", self.sara, start=f"{left // 60 % 24:02d}:{left % 60:02d}", late_kind="incident")
-        self.assertEqual([r["kind"] for r in self.store.list_incidents(AR, [on.isoformat()]) if r["associate"] == WHO], ["early_leave"])
+        with self.assertRaises(ValueError) as said:
+            self.days.set_status(AR, on, WHO, "Left early", self.sara, start=f"{left // 60 % 24:02d}:{left % 60:02d}", late_kind="incident")
+        self.assertIn("late login", str(said.exception).lower())
+        self.days.set_status(AR, on, WHO, "Left early", self.sara, start=f"{left // 60 % 24:02d}:{left % 60:02d}")
+        self.assertEqual([r for r in self.store.list_incidents(AR, [on.isoformat()]) if r["associate"] == WHO], [])
+        row = next(r for r in self.store.list_attendance(AR, [on.isoformat()]) if r["associate"] == WHO)
+        self.assertEqual(row["late_kind"], "allowance")
+
+    def test_the_kind_is_kept_on_the_attendance_record_for_the_exports(self):
+        a, b = self.days_worked(WHO, 2)
+        self.late(a, 30, late_kind="incident")
+        self.late(b, 30)
+        kinds = {r["shift_date"]: r["late_kind"] for r in self.store.list_attendance(AR, [a.isoformat(), b.isoformat()])
+                 if r["associate"] == WHO}
+        self.assertEqual(kinds, {a.isoformat(): "incident", b.isoformat(): "allowance"})
 
     def test_an_unknown_choice_is_refused(self):
         on = self.days_worked(WHO, 1)[0]

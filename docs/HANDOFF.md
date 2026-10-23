@@ -89,6 +89,28 @@ Load each with the Skill tool at the step it covers; following it from memory do
 6. Package, split into parts, send them, and report in caveman style: what changed, rulings with their cost, what
    is known and left, Egypt times, screens.
 
+## Phases AX and AY (owner feedback, 2026-10-22 and 2026-10-23; sent as patches, then one full package)
+
+- **AX**: Replan the day's breaks (RTA, `how=fresh`, only from now, the chosen day and "Day starts at"); LOB view with tick
+  boxes; Shrinkage by weekday and interval; downloads of charts and tables; adherence follows the RTA schedule (a moved
+  break costs nothing, a missed tick counts); Incidents counts by type with durations. **One break-rule model** for every
+  tool that places breaks (`webapp/break_plan.py`): intervals first, then the usual shape (first break 120 to 210 min after the
+  start, lunch 120 to 180 min after it, the last ends 60 min before the end), then the workbook's break rules (min gap hard,
+  max gap soft), then fewest moves. Manual picks only warn. Associate "My day" after midnight shows the running shift, today,
+  tomorrow. Breaks outside the shift: Plan channels never keeps one, Fix and Replan bring them inside. The upload guard
+  finds a card typed as a number. Breaks of one shift are spread over the quarter hours where the spare cover is at least
+  `AMPLE` (3 h) within `SPREAD_REACH` (120 min) of the even-spaced time. Documented in `docs/howto/RTA.md`.
+- **AY**: open pages ask `/live/stamp` every 30 s (plus up to 5 s) whether what they show changed
+  (`webapp/live.py`, `liveWatch` in `static/app.js`): My day, My week and Overview reload; the RTA day and Requests show a
+  bar. The stamp is a digest of what the page shows (per person for associates), never the write counter.
+  **Runner**: the longest a run may take is `(search budget + GRACE_SECONDS) * rounds`, `GRACE_SECONDS = 3000`
+  (`packages/rc9_2_2_production/runners/rc921_runner.py`; was 1800). A real Quick run (2 seeds side by side, WHOLE_SHIFT) was
+  killed at 5400 s with both seeds valid (slowest seed 5146 s). **Input check**: the line about when a shift is inside a
+  language window names the Shift Rule the workbook sets. Not built, and open: rescue on timeout (keep a finished, validated
+  seed when the cap is hit); whether WHOLE_SHIFT is what lengthens the stages after the search (test: the same workbook with
+  the row set to START). The gate runs once after a full package install (15 to 30 min before the first run); patches do not
+  change `MANIFEST.json`, so they do not trigger it. Evidence: `evidence/phase_ay/CHECKS.md`.
+
 ## Where things stand (end of Phase AU; package AP to AU, not yet built)
 
 - **AP** (merged LOBs): `webapp/merge.py`, `merged_day.py`, `channel_hours.py`, `daily_views.py`. A View pick (this LOB or

@@ -1318,7 +1318,8 @@ class TheDayPage(unittest.TestCase):
                                                   "with_whom": "IT trainer", "why": "New CRM release"})
         self.assertEqual(got.status_code, 303)
         page = self.page()
-        self.assertRegex(page, r'class="tl-act aux billable"')
+        # re-pinned (Phase AY, owner: "coaching ... same as breaks, with different colours based on the reason"): the bar carries its reason
+        self.assertRegex(page, r'class="tl-act aux k-training billable"')
         self.assertIn("Associate 012, Training", page)
         again = self.client.post("/day/book", data={"csrf_token": token(self.client), "program": "AE/AR B2B",
                                                     "date": "2026-10-14", "who": ["Associate 001"], "start": starts[0],

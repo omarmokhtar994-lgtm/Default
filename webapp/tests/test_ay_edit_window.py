@@ -1,6 +1,7 @@
 # © 2026 Omar Mokhtar. All rights reserved.
-"""Phase AY (owner, 2026-10-23: "removing last night's overtime, call-in and cover ... a max of 2 days back from today"): overtime,
-a call-in and cover from outside the roster can be removed for today and the 2 days before, never further back. Today is Egypt's
+"""Phase AY (owner, 2026-10-23: "removing last night's overtime, call-in and cover ... a max of 2 days back from today", then "keep
+2 days role for everyone except Admin and supervisor"): overtime, a call-in and cover from outside the roster can be removed for today and
+the 2 days before, never further back, by everyone except an admin or a supervisor, who can remove them from any day. Today is Egypt's
 (the app's ``TODAY`` setting stands in for it in tests). Other activities are not limited by this."""
 import unittest
 from datetime import timedelta
@@ -51,6 +52,17 @@ class TheEditWindow(_Overtime):
         self.assertIsNotNone(self.store.get_activity(self.ot))
         self.assertIsNotNone(self.store.get_activity(self.call))
         self.assertIsNotNone(self.store.get_cover(self.cover))
+
+    def test_a_supervisor_and_an_admin_are_not_held_by_the_window(self):
+        sara = self.store.get_user_by_name("sara")["id"]
+        for field in ("is_supervisor", "is_admin"):
+            self.store.update_user(sara, **{field: 1})
+            self.addCleanup(self.store.update_user, sara, **{field: 0})
+            self.today(30)
+            self.post("/day/activity/cancel", self.ot)
+            self.assertIsNone(self.store.get_activity(self.ot), field)
+            self.ot = self.days.add_activity(self.key, WED, "Associate 021", "Overtime", "17:00", "18:00", 1)
+            self.store.update_user(sara, **{field: 0})
 
     def test_an_ordinary_activity_is_not_held_by_the_window(self):
         aux = self.days.add_activity(self.key, WED, "Associate 008", "Training", "10:00", "10:30", 1)

@@ -4657,6 +4657,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
     EDIT_DAYS_BACK = 2  # Phase AY (owner, 2026-10-23): overtime, call-ins and cover can be removed for today and 2 days before
 
     def _still_editable(on: date, what: str) -> None:
+        if g.user.get("is_admin") or g.user.get("is_supervisor"):  # owner, 2026-10-23: the 2 days hold for everyone but admin and supervisor
+            return
         today = app.config.get("TODAY") or datetime.now(EGYPT).date()
         if on < today - timedelta(days=EDIT_DAYS_BACK):
             raise ValueError(f"{what} of {on:%a %d %b} cannot be changed any more: it can be removed for today and the "

@@ -681,6 +681,17 @@ svg.defs { position: absolute; width: 0; height: 0; }
 /* activities, the finder and offers */
 [data-day] .tl-act.ot { fill: var(--covered); opacity: .9; }
 [data-day] .tl-act.aux, [data-day] .tl-act.vto { stroke: var(--dim); stroke-width: 1; vector-effect: non-scaling-stroke; }
+/* Phase AY (owner, 2026-10-23: "coaching ... the same as breaks, with different colours based on the reason"): a booked activity is a
+   full-height box on the bar like a break, its colour the reason; an added break or lunch is the break's own colour */
+:root { --k-coaching: #8E44AD; --k-meeting: #D9822B; --k-training: #0E8A8A; --k-system-issue: #C0392B; --k-task: #8A6D3B; --k-bio-break: #6B7280; }
+[data-day] .tl-act.aux { fill: var(--dim); opacity: .95; }
+[data-day] .tl-act.aux.k-coaching, .legend2 .k.aux.k-coaching { fill: var(--k-coaching); background: var(--k-coaching); }
+[data-day] .tl-act.aux.k-meeting, .legend2 .k.aux.k-meeting { fill: var(--k-meeting); background: var(--k-meeting); }
+[data-day] .tl-act.aux.k-training, .legend2 .k.aux.k-training { fill: var(--k-training); background: var(--k-training); }
+[data-day] .tl-act.aux.k-system-issue, .legend2 .k.aux.k-system-issue { fill: var(--k-system-issue); background: var(--k-system-issue); }
+[data-day] .tl-act.aux.k-task, .legend2 .k.aux.k-task { fill: var(--k-task); background: var(--k-task); }
+[data-day] .tl-act.aux.k-bio-break, .legend2 .k.aux.k-bio-break { fill: var(--k-bio-break); background: var(--k-bio-break); }
+[data-day] .tl-act.aux.k-break, [data-day] .tl-act.aux.k-lunch { fill: var(--action); }
 [data-day] .tl-act.aux.billable { stroke: var(--covered); }
 [data-day] .who-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0 12px; max-height: 340px; overflow: auto; }
 [data-day] .fit-list { list-style: none; padding: 0; margin: 0; }

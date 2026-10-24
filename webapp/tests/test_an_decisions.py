@@ -48,7 +48,7 @@ def pure_channels():
            "CHANNELS": CHANNELS, "FULL": {"Sun": "Sunday"}, "DAYS": ["Sun"]}
     definitions("channel_plan.py", {"need_at", "in_play", "allowed", "coverage_slots", "email_goals",
                                     "fixed_cover", "score_day", "_weights", "BALANCED",
-                                    "_concurrency_cap"}, env)  # Phase AY: score_day reads the limit through this helper
+                                    "_concurrency_cap", "SHORT_STRETCH"}, env)  # Phase AY: score_day reads the limit and the stretch length
     definitions("channel_page.py", {"_runs", "apply_edit", "_at", "coverage"}, env)
     return env
 

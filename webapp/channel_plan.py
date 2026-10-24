@@ -45,7 +45,8 @@ CONSISTENT = 20
 FAIR_AWAY = 2  # the middle-pull, beside FAIR_RANGE (the ends): measured best by tools/channel_scenarios.py, Phase AY
 # and a stretch on a channel that lasts under SHORT_STRETCH quarter hours (breaks do not break it) costs this more:
 # the owner wants a couple of hours on a channel, not an hour here and an hour there
-SHORT_STRETCH, STRETCH_COST = 8, 22
+SHORT_STRETCH = 8
+STRETCH_COST = 22
 # Phase AF (B2): a quarter hour of break that leaves nobody else able to take the person's queue, and one that leaves
 # only colleagues of another language; someone who starts alone has the first break within FIRST_BY minutes
 ALONE, ALONE_LANGUAGE, FIRST_BY = 50, 10, 240

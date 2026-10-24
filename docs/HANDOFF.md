@@ -119,6 +119,14 @@ Load each with the Skill tool at the step it covers; following it from memory do
   with the warning". **Cover from outside the roster** can be removed with a "Delete cover" button (tab Overtime and VTO) and a "Remove" button on the
   Interval board entry (`day_cover_cancel` keeps the board when `view=board`). **Group posts** longer than one Slack message go as "(1 of N)" messages instead of being cut with "open the RTA" (owner, 2026-10-23: associates cannot open the tool); `Notifier._attempt` keeps `parts_done` in the post body so a retry resumes. **Limit on breaks at once** (`concurrency_mode` in the break rules, from Break Concurrency Gate Mode): Fail = first in `suggest` and a hard constraint in `channel_plan`; Warn (default, and rules kept without it) and Off = the intervals and the usual shape decide (owner, 2026-10-23: "ignore the cap"); the validator still says an excess as a yellow warning in Warn. Pre-registered rule and result: `evidence/phase_ay/REQUESTS.md`. **RTA edits** (owner, 2026-10-23): last night's overtime, call-in and cover are listed and deletable from the next day's Overtime and VTO tab (`prev_on`, `outside.prev`); a booked session or one booked activity can change start and end (`edit_session`, `edit_activity`). Open: bilingual counting (equal split or real allocation: the owner has not chosen), whether WHOLE_SHIFT is what lengthens the stages after the search (test: the same workbook with the row set to START). The gate runs once after a full package install (15 to 30 min before the first run); patches do not
   change `MANIFEST.json`, so they do not trigger it. Evidence: `evidence/phase_ay/CHECKS.md`.
+  **Channel planner (owner, 2026-10-23, patch AY7)**: a Channel Setup row "Keep each person on the same channel through
+  the day" (Yes/No, off by default) and a tick on the Plan channels page (overrides the row for that Suggest) cost every change
+  of channel, also across a break, and stretches under 2 hours; the fair spread ("Spread channels fairly over the week")
+  now charges the range and the distance from the middle among people with the same channels and language, this day
+  included. The break-moving stage keeps the first stage's spread (ENVELOPE) instead of pricing it again. Measure with
+  `tools/channel_scenarios.py [--move-breaks]`; rules, weights, results and the known limit (a few breaks past the normal
+  maximum gap on a tight team) are in `evidence/phase_ay/REQUESTS.md`. Tick on whenever fairness is on: fairness alone
+  changes channels more often than before. AY7 is cumulative: it holds AY5 and AY6 too.
 
 ## Where things stand (end of Phase AU; package AP to AU, not yet built)
 

@@ -128,8 +128,11 @@ def main() -> None:
     ap.add_argument("--json")
     ap.add_argument("--arms", nargs="*", help="only these arms")
     ap.add_argument("--set", nargs="*", default=[], help="NAME=VALUE overrides of channel_plan constants")
+    ap.add_argument("--seconds", type=float, help="search time of the first stage, to test whether time limits quality")
     args = ap.parse_args()
     import webapp.channel_plan as plan_module
+    if args.seconds:
+        plan_module.KEPT["max_time_in_seconds"] = args.seconds
     for item in args.set:
         key, value = item.split("=")
         setattr(plan_module, key, value if value.isalpha() else float(value) if "." in value else int(value))

@@ -26,6 +26,7 @@ RULES = {"segments": [[15, "Break 1"], [30, "Lunch"], [15, "Break 2"]], "by_leng
          "windows": {"break 1": {"earliest": None, "latest": None}, "lunch": {"earliest": None, "latest": None},
                      "break 2": {"earliest": None, "latest": None}},
          "edge_margin": None, "min_gap": 60, "preferred_gap": 150, "max_gap": 210, "max_concurrent": 4}
+MOVE_BREAKS = False
 ARMS = {"baseline": (False, False), "fair": (True, False), "tick": (False, True), "fair+tick": (True, True)}
 
 
@@ -95,7 +96,7 @@ def run_arm(build, fair: bool, tick: bool) -> Dict[str, Any]:
     out = {"short": 0.0, "moves": 0, "stretches": 0, "slowest": 0.0, "problems": 0}
     for d in DAYS:
         began = time.time()
-        plan = plan_day(people, config, RULES, d, carry=carry, move_breaks=False)
+        plan = plan_day(people, config, RULES, d, carry=carry, move_breaks=MOVE_BREAKS)
         out["slowest"] = max(out["slowest"], time.time() - began)
         got = score_day(people, plan, config, d, RULES)
         out["short"] += sum(got["short"].values()) + got["language_short"]
@@ -128,9 +129,12 @@ def main() -> None:
     ap.add_argument("--json")
     ap.add_argument("--arms", nargs="*", help="only these arms")
     ap.add_argument("--set", nargs="*", default=[], help="NAME=VALUE overrides of channel_plan constants")
+    ap.add_argument("--move-breaks", action="store_true", help="the page's default: a second stage moves breaks")
     ap.add_argument("--seconds", type=float, help="search time of the first stage, to test whether time limits quality")
     args = ap.parse_args()
     import webapp.channel_plan as plan_module
+    global MOVE_BREAKS
+    MOVE_BREAKS = args.move_breaks
     if args.seconds:
         plan_module.KEPT["max_time_in_seconds"] = args.seconds
     for item in args.set:

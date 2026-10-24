@@ -42,6 +42,7 @@ KEEP = 3
 # Phase AY: with the consistency tick on, a quarter hour on another channel than before costs this, also across a break;
 # below every shortfall (a channel 30 to 100, a language 200), so it only chooses between plans that cover alike
 CONSISTENT = 20
+ENVELOPE = 2  # quarter hours of give in the break-moving stage's fair spread
 FAIR_AWAY = 2  # the middle-pull, beside FAIR_RANGE (the ends): measured best by tools/channel_scenarios.py, Phase AY
 # and a stretch on a channel that lasts under SHORT_STRETCH quarter hours (breaks do not break it) costs this more:
 # the owner wants a couple of hours on a channel, not an hour here and an hour there
@@ -363,6 +364,17 @@ def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=N
                 if len(total) < 2:
                     continue
                 top = max(done + len(slots[n]) for n, (done, _) in total.items())
+                if hint is not None:
+                    # the break-moving stage: the fair spread the first stage reached is kept (give or take
+                    # ENVELOPE quarter hours) instead of being priced again; priced again it outweighed the
+                    # breaks that had to move for a long run (found by the Phase AY full run)
+                    was = {n: carry.get(n, {}).get(c, 0) // QUARTER + sum(
+                        (b - a) // QUARTER for a, b, letter in hint["blocks"].get(n, []) if letter == c)
+                        for n in total}
+                    for name, (done, today) in total.items():
+                        m.Add(done + today <= max(was.values()) + ENVELOPE)
+                        m.Add(done + today >= min(was.values()) - ENVELOPE)
+                    continue
                 if FAIR_RANGE:
                     hi, lo = m.NewIntVar(0, top, ""), m.NewIntVar(0, top, "")
                     for name, (done, today) in total.items():

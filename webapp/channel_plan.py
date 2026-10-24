@@ -42,9 +42,10 @@ KEEP = 3
 # Phase AY: with the consistency tick on, a quarter hour on another channel than before costs this, also across a break;
 # below every shortfall (a channel 30 to 100, a language 200), so it only chooses between plans that cover alike
 CONSISTENT = 20
+FAIR_AWAY = 2  # the middle-pull, beside FAIR_RANGE (the ends): measured best by tools/channel_scenarios.py, Phase AY
 # and a stretch on a channel that lasts under SHORT_STRETCH quarter hours (breaks do not break it) costs this more:
 # the owner wants a couple of hours on a channel, not an hour here and an hour there
-SHORT_STRETCH, STRETCH_COST = 8, 15
+SHORT_STRETCH, STRETCH_COST = 8, 22
 # Phase AF (B2): a quarter hour of break that leaves nobody else able to take the person's queue, and one that leaves
 # only colleagues of another language; someone who starts alone has the first break within FIRST_BY minutes
 ALONE, ALONE_LANGUAGE, FIRST_BY = 50, 10, 240
@@ -361,11 +362,19 @@ def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=N
                 if len(total) < 2:
                     continue
                 top = max(done + len(slots[n]) for n, (done, _) in total.items())
-                hi, lo = m.NewIntVar(0, top, ""), m.NewIntVar(0, top, "")
-                for name, (done, today) in total.items():
-                    m.Add(hi >= done + today)
-                    m.Add(lo <= done + today)
-                cost.append(FAIR_RANGE * (hi - lo))
+                if FAIR_RANGE:
+                    hi, lo = m.NewIntVar(0, top, ""), m.NewIntVar(0, top, "")
+                    for name, (done, today) in total.items():
+                        m.Add(hi >= done + today)
+                        m.Add(lo <= done + today)
+                    cost.append(FAIR_RANGE * (hi - lo))
+                if FAIR_AWAY:  # every person's distance from the group's middle, so everyone is pulled, not only the ends
+                    mid = m.NewIntVar(0, top, "")
+                    for name, (done, today) in total.items():
+                        away = m.NewIntVar(0, top, "")
+                        m.Add(away >= done + today - mid)
+                        m.Add(away >= mid - done - today)
+                        cost.append(FAIR_AWAY * away)
     _alone(m, people, slots, off, picks, cost)
     # coverage
     def cover(c: str, t: int, who: Optional[Set[str]] = None) -> List[Any]:

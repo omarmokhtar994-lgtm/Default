@@ -126,12 +126,18 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", nargs="*")
     ap.add_argument("--json")
+    ap.add_argument("--arms", nargs="*", help="only these arms")
+    ap.add_argument("--set", nargs="*", default=[], help="NAME=VALUE overrides of channel_plan constants")
     args = ap.parse_args()
+    import webapp.channel_plan as plan_module
+    for item in args.set:
+        key, value = item.split("=")
+        setattr(plan_module, key, value if value.isalpha() else float(value) if "." in value else int(value))
     results: Dict[str, Dict[str, Any]] = {}
     for name, build in SCENARIOS.items():
         if args.only and name not in args.only:
             continue
-        results[name] = {arm: run_arm(build, *flags) for arm, flags in ARMS.items()}
+        results[name] = {arm: run_arm(build, *flags) for arm, flags in ARMS.items() if not args.arms or arm in args.arms}
         print(name, json.dumps(results[name]), flush=True)
     if args.json:
         Path(args.json).write_text(json.dumps(results, indent=1))

@@ -29,7 +29,9 @@ from webapp.permissions import ENDPOINTS, allowed
 from webapp.tests import test_ar_walls as fx
 from webapp.tests.test_runs import make_app, sign_in, token
 
-APP_SOURCE = (Path(__file__).resolve().parents[1] / "app.py").read_text(encoding="utf-8")
+WEBAPP = Path(__file__).resolve().parents[1]
+# Phase AZ: the routes live in webapp/routes/<area>.py, so the source read is app.py and every area
+APP_SOURCE = "\n".join(p.read_text(encoding="utf-8") for p in [WEBAPP / "app.py", *sorted((WEBAPP / "routes").glob("*.py"))])
 ADMIN_ONLY = set(re.findall(r"@admin_required\n\s+def (\w+)\(", APP_SOURCE))
 PASSWORD = fx.PASSWORD
 
@@ -441,7 +443,7 @@ class TheAnswers(_Secured):
 
     def test_the_sql_never_takes_a_column_or_table_name_from_a_request(self):
         root = Path(__file__).resolve().parents[1]
-        text = (root / "app.py").read_text(encoding="utf-8")
+        text = APP_SOURCE
         self.assertNotRegex(text, r"\*\*request\.(form|values|json)")
         self.assertNotRegex(text, r"\*\*dict\(request")
 

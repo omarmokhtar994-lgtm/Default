@@ -83,7 +83,8 @@ class OwnerDecisions(unittest.TestCase):
 
     def test_routes_have_no_draft_guard(self):
         # Owner D: no new 409 draft lock path on the existing planner routes.
-        self.assertNotIn("_draft_guard", (ROOT / "app.py").read_text())
+        for source in [ROOT / "app.py", *sorted((ROOT / "routes").glob("*.py"))]:  # Phase AZ: the routes are in webapp/routes
+            self.assertNotIn("_draft_guard", source.read_text())
 
     def test_store_has_no_draft_lock_or_epoch(self):
         # Owner D: preserve drafts themselves, remove only the new feature.

@@ -16,9 +16,12 @@ from webapp.store import Store
 
 
 def route(name, env):
-    source = Path(__file__).parents[1] / "app.py"
-    tree = ast.parse(source.read_text())
-    node = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == name)
+    # Phase AZ: the routes moved from app.py into webapp/routes/<area>.py, so the handler is looked for in all of them
+    for source in [Path(__file__).parents[1] / "app.py", *sorted((Path(__file__).parents[1] / "routes").glob("*.py"))]:
+        tree = ast.parse(source.read_text())
+        node = next((n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == name), None)
+        if node is not None:
+            break
     node.decorator_list = []
     future = ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0)
     code = ast.Module(body=[future, node], type_ignores=[])
@@ -46,9 +49,10 @@ class SearchPermissions(unittest.TestCase):
                "app": SimpleNamespace(extensions={"store": self.store}), "allowed": allowed,
                "PERMISSION_ENDPOINTS": ENDPOINTS, "GOTO_PAGES": [("Associate schedules", "week_page", "unit")],
                "GOTO_MAX": 8, "clean_program": lambda x: x, "_date": date.fromisoformat,
-               "datetime": datetime, "EGYPT": EGYPT,
-               "_access": lambda: SimpleNamespace(can_open=lambda _: True), "unit_keys": lambda _: ["Test"],
-               "_unit_name": lambda x: x, "url_for": lambda *args, **kwargs: "/test",
+               "A": SimpleNamespace(datetime=datetime), "EGYPT": EGYPT,  # A: the app module, where the clock is read
+               "ctx": SimpleNamespace(_access=lambda: SimpleNamespace(can_open=lambda _: True),
+                                      _unit_name=lambda x: x),  # ctx: what the route areas share
+               "unit_keys": lambda _: ["Test"], "url_for": lambda *args, **kwargs: "/test",
                "jsonify": lambda **kwargs: kwargs, "_days": lambda: days, "shift_span": shift_span, "hm": hm}
         return route("goto", env)(), days
 

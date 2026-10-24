@@ -168,7 +168,10 @@ class TheDay(_Tagged):
 
         was = gaps(before)
         for key, gap in gaps(after).items():
-            self.assertTrue(min(lo, was[key]) <= gap <= max(hi, was[key]), (key, was[key], gap))
+            # Re-pinned (Phase AX, owner 2026-10-22: the workbook's "Normal Maximum Gap" is a normal, not an absolute, and a rescue
+            # may sacrifice it toward an interval win "to the nearest"): the minimum gap is still absolute; the maximum may be
+            # passed, by as little as it takes (measured on this day: 15 minutes; held to 30 here).
+            self.assertTrue(min(lo, was[key]) <= gap <= max(hi, was[key]) + 30, (key, was[key], gap))
 
     def page(self, extra=""):
         got = self.client.get(f"/day?program={self.key.replace(' ', '+')}&date={WED.isoformat()}{extra}")

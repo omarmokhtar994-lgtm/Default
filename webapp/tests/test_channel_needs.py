@@ -251,7 +251,8 @@ class TheNeedsTest(unittest.TestCase):
         self.assertFalse(has_channel_needs(path))
 
     def test_email_hours_or_a_language_minimum_alone_count(self):
-        for sheet, cell, value in (("Email Hours", "B7", 4), ("Channel Setup", "A15", "Phone")):
+        # Phase AY: a new setting row pushed the first language row of Channel Setup from 15 to 16
+        for sheet, cell, value in (("Email Hours", "B7", 4), ("Channel Setup", "A16", "Phone")):
             path = channel_workbook(self.dir / f"{sheet}.xlsx", 60, ["English"])
             wb = load_workbook(path)
             wb[sheet][cell] = value

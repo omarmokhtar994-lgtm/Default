@@ -1,0 +1,19 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{# Phase AP (sample ap01, C): the hours each channel is staffed, per day and for the week. #}
+{% macro channel_hours(ch, heading='Scheduled hours per channel', hid='chh-h') %}
+<section class="panel" aria-labelledby="{{ hid }}">
+  <h2 id="{{ hid }}">{{ heading }}</h2>
+  {% if ch.rows %}
+  <div class="scroll" role="region" tabindex="0" aria-label="Scheduled hours per channel (scrolls sideways)">
+    <table class="runs small">
+      <thead><tr><th scope="col">Channel</th>{% for l in ch.labels %}<th scope="col">{{ l }}</th>{% endfor %}<th scope="col">Week</th></tr></thead>
+      <tbody>{% for r in ch.rows %}<tr><th scope="row">{{ r.name }}</th>{% for h in r.days %}<td>{{ '%g' % h }}</td>{% endfor %}<td><b>{{ '%g' % r.total }}</b></td></tr>{% endfor %}</tbody>
+      <tfoot><tr><th scope="row">All work</th>{% for h in ch.total.days %}<td>{{ '%g' % h }}</td>{% endfor %}<td><b>{{ '%g' % ch.total.total }}</b></td></tr></tfoot>
+    </table>
+  </div>
+  <p class="note">Hours of work on each channel from the channel plan of the schedule the RTA reads for the week (the one in use, else the newest kept), breaks left out, each day in the schedule's own time. {% if ch.unplanned %}No channel plan on {{ ch.unplanned_labels|join(', ') }}.{% endif %}</p>
+  {% else %}
+  <p class="empty">No channel plan for this week yet, so there are no hours per channel.</p>
+  {% endif %}
+</section>
+{% endmacro %}

@@ -862,6 +862,9 @@ class ParsedInput:
     # with older ParsedInput fixtures.
     language_windows: Dict[str, Any] = field(default_factory=dict)
     language_working_window_mode: str = "OFF"
+    # Phase AQ: START (default) = only a shift's start has to be inside a language window; WHOLE_SHIFT = it must start
+    # and end inside. Only matters where language_working_window_mode applies a window.
+    language_window_shift_rule: str = "START"
     # None = the engine default (SHIFT_CONSISTENCY_POLISH_ENABLED); Yes/No in
     # the workbook's "Shift Consistency Polish" row overrides it.
     shift_consistency_polish: Optional[bool] = None
@@ -3345,6 +3348,23 @@ def normalize_language_window_mode(raw: Any) -> str:
     return "OFF"
 
 
+LANGUAGE_WINDOW_SHIFT_RULES = ("START", "WHOLE_SHIFT")
+_START_RULE_TOKENS = {"start", "starts", "startonly", "startsonly", "shiftstart", "shiftstartonly"}
+_WHOLE_RULE_TOKENS = {"wholeshift", "wholeshifts", "entireshift", "startandend", "wholeshiftstartandend",
+                      "shiftstartandend", "bothends"}
+
+
+def normalize_language_window_shift_rule(raw: Any) -> str:
+    """Phase AQ (owner, 2026-10-21): what a Language Working Window limits. START is the default and what the engine
+    has always done (the shift's start must be inside the window; see ``shift_within_language_window``). WHOLE_SHIFT
+    makes the shift start and end inside it. Blank is START; an unreadable value is refused by the parser
+    (HARD_INVALID_LANGUAGE_WINDOW_SHIFT_RULE), never silently read as START."""
+    text = re.sub(r"[^a-z0-9]", "", norm(raw))
+    if text in _WHOLE_RULE_TOKENS:
+        return "WHOLE_SHIFT"
+    return "START"
+
+
 def _coerce_language_window_entries(value: Any) -> List[Tuple[int, int, bool]]:
     """Normalize legacy single-window and current multi-window values."""
     if value is None:
@@ -3396,8 +3416,8 @@ def associate_language_window(
     return windows[0] if windows else None
 
 
-def shift_within_language_window(shift: Shift, window: Tuple[int, int]) -> bool:
-    """True when the shift's START falls inside the window.
+def shift_within_language_window(shift: Shift, window: Tuple[int, int], whole_shift: bool = False) -> bool:
+    """True when the shift's START falls inside the window (with ``whole_shift`` its END must too: Phase AQ).
 
     This is deliberately the same rule `shift_start_contract_allows` already
     uses for the workbook's "Allowed Shift Start Window": the window says when
@@ -3420,7 +3440,17 @@ def shift_within_language_window(shift: Shift, window: Tuple[int, int]) -> bool:
     start, end = window
     span = (end - start) % 1440 or 1440
     offset = (shift.start_min - start) % 1440
-    return offset < span
+    if offset >= span:
+        return False
+    # WHOLE_SHIFT (opt-in): the shift also has to finish by the window's close, as the first version of this rule did.
+    # On a window shorter than the shift nothing fits; a window of the whole day (start == end) fits every shift.
+    return not whole_shift or span == 1440 or offset + int(shift.duration_min) <= span
+
+
+def language_window_allows(parsed: ParsedInput, shift: Shift, window: Tuple[int, int]) -> bool:
+    """``shift_within_language_window`` under the input's Language Working Window Shift Rule (Phase AQ)."""
+    return shift_within_language_window(
+        shift, window, whole_shift=getattr(parsed, "language_window_shift_rule", "START") == "WHOLE_SHIFT")
 
 
 def shift_overlaps_required_language_for_noneligible(
@@ -3471,7 +3501,7 @@ def language_working_window_violations(
         if not entries:
             continue
         shift = parsed.shifts[si]
-        if any(shift_within_language_window(shift, window) for window in entries):
+        if any(language_window_allows(parsed, shift, window) for window in entries):
             continue
         rows.append({
             "associate": assoc.name, "language": getattr(assoc, "language", ""),
@@ -3511,7 +3541,7 @@ def fixed_requests_outside_language_windows(parsed: ParsedInput) -> List[Dict[st
             windows = associate_language_windows(parsed, assoc, day=d)
             if shift is None or not windows:
                 continue
-            if any(shift_within_language_window(shift, window) for window in windows):
+            if any(language_window_allows(parsed, shift, window) for window in windows):
                 continue
             rows.append({
                 "associate": assoc.name, "language": getattr(assoc, "language", ""),
@@ -3833,6 +3863,10 @@ def parse_input(
     language_window_raw = _instruction_get(
         im, ["Language Working Window", "Language Working Hours",
              "Language Window Enforcement"], None)
+    language_window_shift_rule_raw = _instruction_get(
+        im, ["Language Working Window Shift Rule", "Language Window Shift Rule",
+             "Language Working Window Applies To"], None)
+    language_window_shift_rule = normalize_language_window_shift_rule(language_window_shift_rule_raw)
     run_stage = normalize_run_stage(run_stage_raw)
     run_depth = normalize_run_depth(run_depth_raw)
     language_working_window_mode = normalize_language_window_mode(language_window_raw)
@@ -3846,6 +3880,13 @@ def parse_input(
             f"HARD_INVALID_RUN_DEPTH:value={run_depth_raw!r};"
             "use QUICK, DEEP, or OVERNIGHT"
         )
+    if language_window_shift_rule_raw not in (None, ""):
+        shift_rule_token = re.sub(r"[^a-z0-9]", "", norm(language_window_shift_rule_raw))
+        if shift_rule_token not in _START_RULE_TOKENS | _WHOLE_RULE_TOKENS:
+            parser_warnings.append(
+                f"HARD_INVALID_LANGUAGE_WINDOW_SHIFT_RULE:value={language_window_shift_rule_raw!r};"
+                "use START or WHOLE_SHIFT"
+            )
     if language_window_raw not in (None, ""):
         language_mode_token = re.sub(r"[^a-z0-9]", "", norm(language_window_raw))
         valid_language_tokens = {
@@ -4245,6 +4286,7 @@ def parse_input(
         run_depth=run_depth,
         language_windows=language_windows,
         language_working_window_mode=language_working_window_mode,
+        language_window_shift_rule=language_window_shift_rule,
         shift_consistency_polish=shift_consistency_polish,
         aggregate_guide_mixed_durations=aggregate_guide_mixed_durations,
         exact_coverage_units=exact_coverage_units,
@@ -4340,6 +4382,8 @@ def input_contract_payload(parsed: ParsedInput) -> Dict[str, Any]:
     # fingerprint; turning the switch on is a visible contract change.
     if getattr(parsed, "aggregate_guide_mixed_durations", False):
         payload["aggregate_guide_mixed_durations"] = True
+    if getattr(parsed, "language_window_shift_rule", "START") != "START":
+        payload["language_window_shift_rule"] = parsed.language_window_shift_rule  # Phase AQ: only when on
     if getattr(parsed, "exact_coverage_units", False):
         payload["exact_coverage_units"] = True
     if getattr(parsed, "allow_half_hour_starts", False):
@@ -7788,7 +7832,7 @@ def build_skeleton(
                 windows = associate_language_windows(parsed, assoc, day=d)
                 if windows:
                     for shift in parsed.shifts:
-                        if not any(shift_within_language_window(shift, window) for window in windows):
+                        if not any(language_window_allows(parsed, shift, window) for window in windows):
                             model.Add(x[a, d, shift.index] == 0)
                             language_working_window_blocks += 1
                 for shift in parsed.shifts:
@@ -11557,7 +11601,7 @@ def associate_day_eligible_shifts(parsed: ParsedInput, associate: Associate, day
         if day == 0 and not previous_saturday_compatible(associate.previous_saturday, shift, parsed.rest_gap_hours):
             continue
         windows = associate_language_windows(parsed, associate, day=day)
-        if windows and not any(shift_within_language_window(shift, window) for window in windows):
+        if windows and not any(language_window_allows(parsed, shift, window) for window in windows):
             continue
         if shift_overlaps_required_language_for_noneligible(parsed, associate, shift, day) is not None:
             continue
@@ -12310,7 +12354,7 @@ def validate_schedule(parsed: ParsedInput, skeleton: SkeletonSolution, breaks: B
             si = skeleton.selected_shift_index[a][d]
             if si is not None and getattr(parsed, "language_working_window_mode", "OFF") != "OFF":
                 windows = associate_language_windows(parsed, assoc, day=d)
-                if windows and not any(shift_within_language_window(parsed.shifts[si], w) for w in windows):
+                if windows and not any(language_window_allows(parsed, parsed.shifts[si], w) for w in windows):
                     failures.append({"type": "language_working_window", "associate": assoc.name,
                                      "day": DAY_NAMES[d], "shift": parsed.shifts[si].label})
                 if shift_overlaps_required_language_for_noneligible(parsed, assoc, parsed.shifts[si], d) is not None:
@@ -19736,7 +19780,7 @@ def _consistency_cell_allowed(parsed: ParsedInput, a: int, d: int, shift: Shift)
     if getattr(parsed, "demand_fit_guard_enabled", False) and demand_fit_blocked(parsed, d, shift)[0]:
         return False
     windows = associate_language_windows(parsed, assoc, day=d)
-    if windows and not any(shift_within_language_window(shift, w) for w in windows):
+    if windows and not any(language_window_allows(parsed, shift, w) for w in windows):
         return False
     if shift_overlaps_required_language_for_noneligible(parsed, assoc, shift, d) is not None:
         return False

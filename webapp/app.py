@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import io
 import json
+import logging
 import os
 import re
 import secrets
@@ -15,8 +16,9 @@ import zipfile
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from werkzeug.exceptions import NotFound
 from flask import (Flask, abort, flash, g, has_request_context, jsonify, redirect, render_template, request, send_file,
                    session, url_for)
 from flask.sessions import SecureCookieSessionInterface
@@ -25,9 +27,11 @@ from werkzeug.utils import secure_filename
 
 from .adherence import interval_shrinkage, person_day, team as team_figures
 from .analytics import program_weeks, team
-from .attendance import (ACTIVITY_KINDS, ADD_KINDS, DAY_OFF, DayBook, aux_details, hm, pick_version, plain_hm, tomorrow_unchecked, week_start,
+from .channel_hours import combine, week_hours
+from .attendance import (ACTIVITY_KINDS, operating_span, ADD_KINDS, COVER_ROLES, DAY_OFF, DayBook, aux_details, hm, pick_version, plain_hm, tomorrow_unchecked, week_start,
                          with_text)
 from .break_plan import check_row, floor, slots_for, suggest
+from .channel_fair import fairness
 from .channel_page import (FULL as FULL_DAYS, NAMES as CHANNEL_NAMES, apply_edit, before as channel_before,
                            carry as channel_carry, coverage as channel_coverage, current as channel_current,
                            grid as channel_grid, people_for, planned_anything)
@@ -35,19 +39,25 @@ from .channel_people import ChannelPeople, can_work, channel_words
 from .channel_plan import NoPlan, plan_day, score_day
 from .channel_template import channel_workbook
 from .channels import check_lines, has_channel_needs, read_channels, requirement_tab
-from .clock import EGYPT, HOME, SHOWN, ZONES, moved_text, pick_zone, shift as zone_shift, shown, to_schedule, zone_label
-from .day import ABSENT as ABSENT_STATES, AUX, EXTRA_BREAKS, MEASURES, STATUSES, BreakRefused, at_target, board, glance, hover_tips, my_day, now_panel, read_inputs, shift_groups, window_view
+from .live import KINDS as LIVE_KINDS, Stamps, digest, lanes_of
+from .clock import minute_now, EGYPT, HOME, SHOWN, ZONES, moved_text, noon_gap, pick_zone, rta_window_shift, shift as zone_shift, shown, to_schedule, zone_gap_words, zone_label
+from .permissions import CATALOGUE as PERMISSIONS, ENDPOINTS as PERMISSION_ENDPOINTS, ROLE_NAMES, allowed, matrix
+from .day import ABSENT as ABSENT_STATES, AUX, BIO, EXTRA_BREAKS, MEASURES, OVERTIME_MAX, STATUSES, channel_letters, BreakRefused, at_target, board, glance, hover_tips, my_day, my_items, now_panel, read_inputs, shift_groups, window_view
 from .coach import actual_shrinkage, corrected_tab
-from .leave import KINDS as LEAVE_KINDS, LeaveBook
+from .leave import KINDS as LEAVE_KINDS, LeaveBook, span_text
 from .swaps import SwapBook
+from . import shrink_view as _sv
+from .shrink_page import build as shrink_page
+from .insights import ABSENT_CHOICES, ABSENT_VIEWS, absent_kinds, collect as collect_insights
+from .insights_page import LEVELS as INSIGHT_LEVELS, build as insights_view, dur as insights_dur
 from .shrinkage import ITEMS as SHRINKAGE_ITEMS, day_shrinkage, mapping_from_form, read_mapping
 from .contacts import ContactBook, pick_contact
 from .eta import queue_plan
 from .handover import note as handover_note
-from .exports import EXPORT_SECONDS, KINDS as EXPORT_KINDS, MAX_DAYS as MAX_EXPORT_DAYS, build as build_export
+from .exports import _Days as ExportDays, EXPORT_SECONDS, KINDS as EXPORT_KINDS, MAX_DAYS as MAX_EXPORT_DAYS, build as build_export
 from .outcome import cannot_schedule, read as read_outcome, view as outcome_view
 from .access import Access, role
-from .notify import (DEFAULT_HOLD, DEFAULT_KINDS as NOTIFY_DEFAULT_KINDS, HOLDS, KINDS as NOTIFY_KINDS, MODE_WORDS,
+from .notify import (post_from_body, DEFAULT_HOLD, DEFAULT_KINDS as NOTIFY_DEFAULT_KINDS, HOLDS, KINDS as NOTIFY_KINDS, MODE_WORDS,
                      MODES as NOTIFY_MODES, SERVICES, Notifier, Post, check_link, last_line, leave_out, link_end,
                      post_json, post_result, post_what)
 from .programs import ProgramBook
@@ -57,12 +67,21 @@ from .program_page import build, overview, weeks_to_show
 from .run_admin import PICK_UNIT, apply_rename, apply_run_change, preview_rename, preview_run_change, unit_keys
 from .bulk_breaks import SHIFTS as BULK_SHIFTS, verb as bulk_verb
 from .schedules import ScheduleBook, group_changes
-from .versions import DAYS, shift_span, stale_blocks, with_notes
+from .versions import DAYS, shift_span, stale_blocks, with_notes, zoned_copy, zoned_label
 from . import needed
 from .paging import page_of
 from .results import recolour, version_summary
 from .runs import ACTIVE, MODES, OPTION_LABELS, READY, RESUMABLE, RunQueue, parse_options, run_options
-from .store import Store
+from .store import Store, clean_password
+from .throttle import SignInThrottle
+from .upload_guard import look as upload_look
+from .zipcheck import zip_problem
+from werkzeug.datastructures import ImmutableMultiDict
+from .change_requests import ChangeBook, level_of
+from .bulk_users import people_workbook, new_password, passwords_workbook, read_people, template_bytes
+from .daily_views import people_of, workbook as daily_workbook
+from .merge import merge_intervals
+from .merged_day import lob_of, merged_page
 from .week import in_zone, view as week_view
 
 COPYRIGHT = "© 2026 Omar Mokhtar. All rights reserved."
@@ -134,9 +153,10 @@ def stages(run: Dict[str, Any]) -> list:
 
 def _secret_key(data_dir: Path) -> str:
     path = data_dir / "secret_key"
-    if not path.exists():
-        path.write_text(secrets.token_urlsafe(48), encoding="utf-8")
-        os.chmod(path, 0o600)
+    if not path.exists():  # Phase AT: created private from the start, never world-readable even for a moment
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(secrets.token_urlsafe(48))
     return path.read_text(encoding="utf-8").strip()
 
 
@@ -269,6 +289,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
     )
     app.config.update({k: v for k, v in config.items() if k not in {"SECRET_KEY"}})
     app.extensions["store"] = Store(data_dir / "scheduler.db")
+    app.extensions["throttle"] = SignInThrottle()  # Phase AT: one address, many usernames
     if config.get("PACKAGE_ROOT"):
         queue = RunQueue(app.extensions["store"], Path(config["PACKAGE_ROOT"]),
                          Path(config.get("RUNS_DIR") or data_dir / "runs"),
@@ -282,9 +303,22 @@ def create_app(config: Dict[str, Any]) -> Flask:
         app.extensions["schedules"] = book
         queue.schedules = book
         app.extensions["days"] = queue.days = DayBook(app.extensions["store"], book)
+        try:  # Phase AY (owner, 2026-10-23): VTO is gone; every VTO already recorded becomes an Early leave, back dated
+            found = app.extensions["days"].convert_vto_to_early_leave()
+            if found["converted"] or found["skipped"]:
+                logging.getLogger(__name__).info("VTO converted to Early leave: %s done, %s skipped %s", found["converted"],
+                                                 len(found["skipped"]), found["skipped"])
+        except Exception:  # noqa: BLE001 (a failed conversion never stops the site; the VTO records stay as they are)
+            logging.getLogger(__name__).exception("VTO conversion failed")
         app.extensions["leave"] = LeaveBook(app.extensions["store"], app.extensions["days"])  # Phase AG
         app.extensions["leave"].recover()  # Phase AI: an approval a stopped server left half done goes back to the RTA
+        # Phase AO: leave approved while a week had no schedule is applied once that week's schedule is kept
+        queue.on_kept = lambda run_id: app.extensions["leave"].apply_waiting(app.extensions["store"].get_run(run_id))
         app.extensions["swaps"] = SwapBook(app.extensions["store"], app.extensions["days"])
+        app.extensions["days"].measure_of = lambda unit: ProgramBook(app.extensions["store"]).day_measure(unit)  # Phase AU
+        app.extensions["changes"] = ChangeBook(app.extensions["store"], app.extensions["days"],
+                                               lambda unit: ProgramBook(app.extensions["store"]).day_measure(unit),  # Phase AS
+                                               lambda unit: ProgramBook(app.extensions["store"]).request_settings_for_unit(unit))
         # Phase AB: RTA changes posted to each LOB's Teams or Slack group, on the notifier's own thread.
         notifier = Notifier(app.extensions["store"], transport=config.get("NOTIFY_TRANSPORT") or post_json,
                             label=ProgramBook(app.extensions["store"]).label, days=app.extensions["days"])
@@ -305,17 +339,71 @@ def create_app(config: Dict[str, Any]) -> Flask:
         # form is refused, whatever address they type.
         if g.get("user") and g.user["is_associate"] and not associate_allowed(request.endpoint):
             if request.method in ("GET", "HEAD"):
-                return redirect(url_for("me"))
-            abort(403, description="Your account opens My week only.")
-        g.zone = pick_zone(request.args.get("tz", ""))  # Phase AF (D5): Egypt unless the page asks for another
+                return redirect(url_for("me_breaks"))  # Phase AU: an associate opens on Today
+            abort(403, description="Your account opens My day and My weeks only.")
+        # Phase AK: what this person's role may open or do, as the admin set it on Roles (checked here, not only hidden)
+        if g.get("user") and not g.user["is_associate"] and request.endpoint in PERMISSION_ENDPOINTS and \
+                not _can(PERMISSION_ENDPOINTS[request.endpoint]):
+            g.error_hint = "An admin sets what each role may open on Roles."
+            abort(403, description="Your role cannot open this page or do this")
+        # Phase AF (D5): the page asks for a zone; Phase AY (owner, 2026-10-23: "everything by default should match the pc timezone unless it
+        # has been changed manually"): without one, the zone of the person's computer, else Egypt
+        g.zone = request.args["tz"] if request.args.get("tz") in dict(ZONES) else (_pc_zone() or HOME)
+        if g.get("user") and request.method == "POST" and request.endpoint in DAY_WRITES:
+            try:
+                _still_editable(_date(request.form.get("date", "")), _date(request.form.get("first", "")))
+            except ValueError as exc:
+                if "application/json" in request.headers.get("Accept", ""):
+                    return jsonify(error=str(exc)), 400
+                flash(str(exc))
+                return _back_to_day(clean_program(request.form.get("program", "")), _date(request.form.get("date", "")),
+                                    request.form.get("view", ""))
         # Phase Q: a program page opens only for people with that program (New schedule is open to everyone).
         if g.get("user") and request.endpoint not in OPEN_TO_ALL:
             key = (request.view_args or {}).get("name") if request.endpoint == "program" else \
                 clean_program(request.values.get("program", ""))
             if key and not _access().can_open(key):
                 g.error_hint = "Your account opens only the programs given to you. Ask an admin to add this one to your programs."
-                label = _unit_filter(key)  # a real program or LOB is named; words from a link are never repeated back
-                abort(403, description=f"{label if key in g.unit_labels else 'This program'} is not one of your programs")
+                # Phase AR (owner, 2026-10-21: nothing of another program is visible): the refusal never says whether the
+                # program exists or what it is called; words from a link are never repeated back either.
+                abort(403, description="This program is not one of your programs")
+        # Phase AP: a change posted from a merged RTA page is saved on the LOB the person belongs to.
+        if g.get("user") and request.method == "POST" and request.path.startswith("/day/") \
+                and request.form.get("merge") == "1" and request.form.get("associate"):
+            _route_to_lob()
+        # AN: an old cross-zone RTA form must not save through a clock change.
+        # Authentication, role/program permission and CSRF checks remain first.
+        if g.get("user") and request.method == "POST" and request.path.startswith("/day/"):
+            program = clean_program(request.form.get("program", ""))
+            on = _date(request.form.get("date", ""))
+            zone = request.form.get("tz", "")
+            if program and on and zone in dict(ZONES) and _window_moved(program, on, zone) is None:
+                message = "Clocks change in this RTA window. Reopen the day in the schedule's own time zone before editing."
+                if request.accept_mimetypes.best == "application/json":
+                    return jsonify(error=message), 400
+                flash(message)
+                return redirect(url_for("day_page", program=program, date=on.isoformat(),
+                                        tz=_own_zone(program, on)), code=303)
+
+    def _route_to_lob() -> None:
+        """Phase AP (owner, 2026-10-21: edits go through to each person's own LOB): a form from the merged RTA page
+        names the page's program; swap it for the LOB that lists the person, so every route works as before on that
+        LOB, in that LOB's own time."""
+        program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
+        units = _merge_units(program) if program else []
+        if len(units) < 2 or on is None:
+            return
+        own = lob_of(_days(), units, on, request.form.get("associate", "").strip())
+        if own and own != program:
+            fields = request.form.to_dict(flat=False)
+            fields["program"] = [own]
+            request.__dict__["form"] = ImmutableMultiDict(fields)  # the cached form, as the routes will read it
+
+    def _can(key: str) -> bool:
+        """Phase AK: whether the person signed in may do ``key`` (Roles), read once per request."""
+        if "role_grid" not in g:
+            g.role_grid = matrix(app.extensions["store"])
+        return allowed(app.extensions["store"], g.get("user"), key, g.role_grid)
 
     def _access() -> Access:
         if "access" not in g:
@@ -351,14 +439,26 @@ def create_app(config: Dict[str, Any]) -> Flask:
 
     @app.after_request
     def _headers(response):  # type: ignore[no-untyped-def]
-        response.headers.setdefault("X-Frame-Options", "DENY")
+        # Phase AY (owner, 2026-10-23: split view): only the embedded day page may be framed, and only by this site
+        framed = request.endpoint == "day_page" and request.args.get("embed") == "1"
+        ancestors = "'self'" if framed else "'none'"
+        response.headers.setdefault("X-Frame-Options", "SAMEORIGIN" if framed else "DENY")
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("Referrer-Policy", "same-origin")
         response.headers.setdefault(
             "Content-Security-Policy",
             "default-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; "
-            "frame-ancestors 'none'")  # Phase AG: fonts and icons are served by the site itself
+            f"frame-ancestors {ancestors}; base-uri 'self'; form-action 'self'; object-src 'none'")  # Phase AG: fonts and icons are served by the site itself; Phase AT: no base tag, forms post here only
+        # Phase AT: a signed-in page is never kept by the browser or a proxy (the back button after sign-out shows nothing)
+        if request.endpoint != "static":
+            response.headers.setdefault("Cache-Control", "no-store")
+        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
+        response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+        if app.config.get("SESSION_COOKIE_SECURE"):
+            response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
         return response
+
+    app.add_template_filter(insights_dur, "dur")
 
     @app.template_filter("unit")
     def _unit_filter(key: Any) -> Any:
@@ -415,6 +515,15 @@ def create_app(config: Dict[str, Any]) -> Flask:
         """Phase AI: a text kept in the schedule's time (a shift, a change) with its times as the RTA shows them."""
         return moved_text(text or "", SHOWN.get())
 
+    @app.template_filter("zone_cell")
+    def _zone_cell(value: str, moved: int, on=None, from_zone=None, to_zone=None) -> str:
+        """Phase AK: a schedule cell ("08:00 - 17:00") read ``moved`` minutes later, said when it then starts the day
+        before or the next day; OFF, Leave and the like as they are."""
+        try:
+            return zoned_label(value, moved, on=on, from_zone=from_zone, to_zone=to_zone)
+        except ValueError as exc:
+            return f"{value} (invalid source clock time: {exc})"
+
     @app.template_filter("num")
     def _num(value: float) -> str:
         value = round(float(value), 1)
@@ -441,18 +550,28 @@ def create_app(config: Dict[str, Any]) -> Flask:
         theme = request.cookies.get("theme", "")
         endpoint = request.endpoint or ""
         back = None if endpoint in ("home", "login", "static") else _parent_url(endpoint, request.view_args)
-        return {"csrf_token": csrf_token, "copyright": COPYRIGHT, "user": g.get("user"),
+        who = g.get("user")
+        news_n = app.extensions["changes"].news_count(who["id"]) if who and app.extensions.get("changes") else 0
+        if who and who["is_associate"]:
+            news_n += len(_day_changes(who))
+            found = app.extensions["store"].unseen_leave_swap(who["id"])
+            news_weeks = len(found["leave"]) + len(found["swaps"])
+        else:
+            news_weeks = 0
+        return {"csrf_token": csrf_token, "copyright": COPYRIGHT, "user": g.get("user"), "news_n": news_n,
+                "news_weeks": news_weeks, "zone_words": _zone_words,
                 "theme": theme if theme in THEMES else "", "back": back,
                 "status_words": STATUS_WORDS, "label": label, "modes": MODES, "stages": stages, "in_flight": IN_FLIGHT,
                 "when": _when, "run_options": run_options, "option_labels": OPTION_LABELS,
                 "eta_text": eta_text, "duration": duration, "clock": _clock, "with_text": with_text,
-                "group_changes": group_changes, "zones": ZONES, "home_zone": HOME}
+                "group_changes": group_changes, "zones": ZONES, "home_zone": HOME, "channel_letters": channel_letters,
+                "can": _can, "embed": request.endpoint == "day_page" and request.values.get("embed") == "1"}
 
     NAV_ACTIVE = {"home": "home", "overview_page": "overview", "day_page": "day", "week_page": "week",
                   "run_week": "week", "run_schedules": "schedules", "program": "analysis", "programs": "programs",
-                  "exports_page": "exports", "team_page": "team", "admin_users": "people", "program_setup": "setup",
-                  "with_setup": "with", "channel_setup": "channels", "notifications_page": "notify",
-                  "day_wallboard": "wallboard", "me": "me", "requests_page": "requests"}
+                  "exports_page": "exports", "incidents_page": "incidents", "shrinkage_page": "shrinkage", "team_page": "team", "admin_users": "people", "program_setup": "setup",
+                  "with_setup": "with", "channel_setup": "channels", "notifications_page": "notify", "roles_page": "roles",
+                  "day_wallboard": "wallboard", "me": "me", "me_breaks": "me_day", "requests_page": "requests"}
     PROGRAM_PAGES = {"overview": "/overview?program={key}", "day": "/day?program={key}", "week": "/week?program={key}",
                      "schedules": "/schedules?program={key}", "analysis": "/programs/{key}",
                      "home": "/?program={key}",  # Home shows the program picked (owner, 2026-10-08)
@@ -506,7 +625,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
         book, swaps = app.extensions.get("leave"), app.extensions.get("swaps")
         if not (book and key) or user["is_associate"]:
             return 0
-        return book.count_for(key, user) + swaps.count_for(key, user)
+        found = book.count_for(key, user) + swaps.count_for(key, user)
+        if allowed(app.extensions["store"], user, "rta_change"):  # Phase AS: break changes and coaching for the RTA
+            app.extensions["changes"].expire_overdue(key, _local_now(key))  # Phase AU
+            found += app.extensions["changes"].count(key)
+        return found
 
     # ------------------------------------------------------------- theme
     @app.route("/theme", methods=["POST"])
@@ -527,22 +650,53 @@ def create_app(config: Dict[str, Any]) -> Flask:
     def login():  # type: ignore[no-untyped-def]
         error = ""
         if request.method == "POST":
+            throttle, address = app.extensions["throttle"], request.remote_addr or ""
+            typed = (request.form.get("username", "") or "").strip().lower()
+            account = app.extensions["store"].get_user_by_name(typed) if typed else None
+            # the typed name is kept only when it is an account: a wrong box may hold a password
+            who = {"subject": account["username"] if account else "(no such username)",
+                   "user_id": account["id"] if account else None}
+            if throttle.held(address):  # Phase AT: too many wrong sign-ins from this address; not even a right password
+                app.extensions["store"].add_event(kind="sign_in_held", detail=f"from {address}", **who)
+                return render_template("login.html", error="Too many sign-in attempts from this device. Wait 15 "
+                                                           "minutes and try again."), 429
             user, reason = app.extensions["store"].authenticate(request.form.get("username", ""),
                                                                 request.form.get("password", ""))
+            if user is None and reason not in ("disabled", "expired"):
+                throttle.failed(address)
+            if user is None:
+                app.extensions["store"].add_event(kind="sign_in_failed", detail=f"from {address}: {reason}", **who)
+            else:
+                app.extensions["store"].add_event(kind="signed_in", detail=f"from {address}", **who)
             if user is not None:
                 session.clear()
                 session.permanent = True
                 session["user_id"] = user["id"]
                 session["pw"] = session_stamp(user)
+                session["at"] = time.time()  # Phase AU: when this session began (see end_other_sessions)
                 csrf_token()
                 return redirect(safe_next(request.args.get("next", "")) or url_for("home"))
             error = {"locked": "Too many wrong passwords: this account is locked for 15 minutes.",
-                     "disabled": "This account is switched off. Ask your admin."}.get(
+                     "disabled": "This account is switched off. Ask your admin.",
+                     "expired": "Your temporary password has expired. Ask your admin for a new one."}.get(
                          reason, "Wrong username or password.")
         return render_template("login.html", error=error)
 
+    @app.route("/account/sessions/end", methods=["POST"])
+    @login_required
+    def end_other_sessions():  # type: ignore[no-untyped-def]
+        """Phase AU: every other device is signed out (a lost phone); this one stays."""
+        now = time.time()
+        app.extensions["store"].end_other_sessions(g.user["id"], now)
+        session["at"] = now + 0.001  # after the mark, so this device is the one that stays
+        _record("sessions_ended", subject=g.user["username"])
+        flash("Every other device is signed out.")
+        return redirect(url_for("change_password"))
+
     @app.route("/logout", methods=["POST"])
     def logout():  # type: ignore[no-untyped-def]
+        if session.get("user_id") is not None:  # Phase AV: end this session on the server, not only in the browser
+            app.extensions["store"].revoke_session(session["user_id"], session.get("at", 0))
         session.clear()
         return redirect(url_for("login"))
 
@@ -557,6 +711,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             else:
                 error = password_problem(request.form.get("new", ""), request.form.get("confirm", ""),
                                          g.user["username"])
+            if not error and clean_password(request.form.get("new", "")) == clean_password(request.form.get("current", "")):
+                error = "Choose a password different from your current one."  # a temporary one cannot be kept (Phase AU)
             if not error:
                 store.set_password(g.user["id"], request.form["new"], must_change=False)
                 session["pw"] = session_stamp(store.get_user(g.user["id"]))  # this device stays; others sign in again
@@ -565,36 +721,53 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return render_template("password.html", error=error, forced=bool(g.user["must_change"]))
 
     # ------------------------------------------------------------- admin
-    ROLES = {"planner": "Planner", "associate": "Associate", "supervisor": "Supervisor", "admin": "Admin"}
-    STAFF_ADDS = ("planner", "associate")  # what a supervisor may add for their programs
+    ROLES = {"planner": "Planner", "associate": "Associate", "team_manager": "Team manager", "supervisor": "Supervisor",
+             "admin": "Admin"}
+    STAFF_ADDS = ("planner", "associate", "team_manager")  # what a supervisor may add for their programs
 
-    def _roster_names(program_ids: list, tree: list) -> List[str]:
-        """Names on the newest kept week's schedules of these programs' LOBs (Phase AG: an associate's account is
-        linked to one of them)."""
+    ROSTER_WEEKS = 4  # Phase AO: the names on a program's last kept weeks, not only its newest (a partly filled newer week)
+
+    def _roster_index(program_ids: list, tree: list) -> Dict[str, set]:
+        """Phase AO: each name on the recent kept weeks' schedules of these programs' LOBs, with the ids of the
+        programs holding it (Phase AG: an associate's account is linked to one of them)."""
         book, store = app.extensions.get("schedules"), app.extensions["store"]
-        names: set = set()
+        found: Dict[str, set] = {}
         if book is None:  # no package installed: no schedules kept, so no names
-            return []
+            return found
         for p in tree:
             if p["id"] not in program_ids:
                 continue
             for key in p["units"]:
-                weeks = book.kept_weeks(key)
-                if weeks:
-                    for v in store.list_schedules(program=key, week_start=weeks[-1]["week"]):
-                        names |= {a["name"] for a in json.loads(v["week"] or "{}").get("associates", [])}
-        return sorted(names)
+                for week in book.kept_weeks(key)[-ROSTER_WEEKS:]:
+                    for v in store.list_schedules(program=key, week_start=week["week"]):
+                        for a in json.loads(v["week"] or "{}").get("associates", []):
+                            found.setdefault(a["name"], set()).add(p["id"])
+        return found
+
+    def _roster_names(program_ids: list, tree: list) -> List[str]:
+        return sorted(_roster_index(program_ids, tree))
+
+    def _roster_canonical(name: str, programs: list, tree: list) -> str:
+        """``name`` as the schedule spells it: exactly, or else the one name that matches without regard to case or
+        extra spaces; "" when none (or several) does."""
+        names = _roster_names(programs, tree)
+        if name in names:
+            return name
+        tidy = " ".join(name.split()).casefold()
+        matches = [n for n in names if " ".join(n.split()).casefold() == tidy]
+        return matches[0] if len(matches) == 1 else ""
 
     def _roster_problem(name: str, programs: list, tree: list, user_id: Optional[int] = None) -> str:
         """Why ``name`` cannot be an associate's name on the schedule of ``programs``, or ""."""
         if not name:
             return "Pick their name on the schedule."
-        if name not in _roster_names(programs, tree):
+        found = _roster_canonical(name, programs, tree)
+        if not found:
             return f"{name} is not on a schedule of {_program_names(programs, tree) or 'the programs picked'}."
         for u in app.extensions["store"].list_users():
-            if (u["is_associate"] and u["roster_name"] == name and u["id"] != user_id
+            if (u["is_associate"] and u["roster_name"] == found and u["id"] != user_id
                     and set(app.extensions["store"].user_program_ids(u["id"])) & set(programs)):
-                return f"{name} already has an account ({u['username']})."
+                return f"{found} already has an account ({u['username']})."
         return ""
 
     def _chosen_programs(access: Access, values: list, keep: Optional[list] = None) -> list:
@@ -620,10 +793,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
         store = app.extensions["store"]
         access = Access(store, g.user)
         admin = bool(g.user["is_admin"])
-        error = ""
+        error, made = "", []
         if request.method == "POST":
             username = request.form.get("username", "").strip().lower()
-            password = request.form.get("password", "")
+            password = request.form.get("password", "").strip()  # a pasted password with a space at the end still works
+            generated = not password  # Phase AR: left blank, one is made up and shown once
+            if generated:
+                password = new_password()
             kind = request.form.get("role") or ("admin" if request.form.get("is_admin") == "on" else "planner")
             everything = admin and request.form.get("all_programs") == "1" and kind != "associate"
             roster = request.form.get("roster_name", "").strip()
@@ -641,30 +817,304 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 error = "Give them at least one of your programs."
             elif kind == "associate" and _roster_problem(roster, programs, access.book.tree()):
                 error = _roster_problem(roster, programs, access.book.tree())
+            elif kind == "associate" and not (roster := _roster_canonical(roster, programs, access.book.tree())):
+                error = "Pick their name on the schedule."
             elif username_problem(username):
                 error = USERNAME_RULE
             elif any(u["username"] == username for u in store.list_users()):
                 error = f"{username} already exists."
             elif len(password) < MIN_PASSWORD:
-                error = f"Give a temporary password of at least {MIN_PASSWORD} characters."
+                error = f"Give a temporary password of at least {MIN_PASSWORD} characters, or leave it blank to make one."
             else:
                 uid = store.add_user(username, request.form.get("display_name", ""), password,
                                      is_admin=kind == "admin", must_change=True)
                 store.update_user(uid, is_supervisor=int(kind == "supervisor"), all_programs=int(everything),
-                                  is_associate=int(kind == "associate"), roster_name=roster if kind == "associate" else "")
+                                  is_associate=int(kind == "associate"), roster_name=roster if kind == "associate" else "",
+                                  is_team_manager=int(kind == "team_manager"))
                 store.set_user_programs(uid, programs)
                 _record("user_added", subject=username,  # never the password
                         detail=f"{ROLES[kind]}; " + ("all programs" if everything else
                                                      _program_names(programs, access.book.tree()) or "no programs"))
                 flash(f"Added {username}. They choose their own password at first sign-in.")
-                return redirect(url_for("admin_users"))
+                if generated:  # shown on this answer only, never kept: the page is not a redirect
+                    made = [(username, password)]
+                else:
+                    return redirect(url_for("admin_users"))
         tree = access.book.tree()
+        names = {u["id"]: u["display_name"] for u in store.list_users()}
         people = [dict(u, role=role(u), programs=_program_names(store.user_program_ids(u["id"]), tree),
-                       program_ids=store.user_program_ids(u["id"]), manageable=access.can_manage(u))
+                       program_ids=store.user_program_ids(u["id"]), manageable=access.can_manage(u),
+                       team_manager=names.get(u["team_manager_id"], ""),
+                       team_choices=access.team_managers_for(u) if u["is_associate"] else [])
                   for u in store.list_users() if admin or access.can_manage(u)]
-        return render_template("admin_users.html", users=people, error=error, grantable=access.grantable(),
+        held = app.extensions["throttle"].held_now() if admin else []
+        return render_template("admin_users.html", users=people, error=error, made=made, grantable=access.grantable(),
+                               held=held,
                                roles=ROLES if admin else {k: ROLES[k] for k in STAFF_ADDS}, admin=admin,
-                               roster_names=_roster_names([p["id"] for p in access.grantable()], tree))
+                               roster_names=sorted(_roster_index([p["id"] for p in access.grantable()], tree).items()))
+
+    def _set_team_manager(access: Access, target: Dict[str, Any], value: str) -> str:
+        """Phase AK: ``target``'s team manager from a form value (a user id, or "" for none). Returns what to say."""
+        store = app.extensions["store"]
+        if not target["is_associate"]:
+            raise ValueError("Only an associate has a team manager.")
+        if not access.can_manage(target):
+            raise PermissionError
+        if not value.strip():
+            store.update_user(target["id"], team_manager_id=None)
+            _record("team_manager_set", subject=target["username"], detail="none")
+            return f"{target['roster_name'] or target['display_name']} has no team manager."
+        chosen = store.get_user(int(value)) if value.strip().isdigit() else None
+        if chosen is None or not chosen["is_team_manager"] or not chosen["active"]:
+            raise ValueError("Pick a team manager.")
+        if chosen["id"] not in {u["id"] for u in access.team_managers_for(target)}:
+            raise ValueError(f"{chosen['display_name']} has none of {target['roster_name'] or target['display_name']}'s "
+                             "programs.")
+        store.update_user(target["id"], team_manager_id=chosen["id"])
+        _record("team_manager_set", subject=target["username"], detail=chosen["display_name"])
+        return f"{target['roster_name'] or target['display_name']}'s team manager is {chosen['display_name']}."
+
+    @app.route("/admin/users/team", methods=["POST"])
+    @manager_required
+    def admin_users_team():  # type: ignore[no-untyped-def]
+        """Phase AK: one team manager for several associates at once (each checked as if set alone)."""
+        store = app.extensions["store"]
+        access = Access(store, g.user)
+        value = request.form.get("team_manager", "")
+        done, refused = 0, []
+        for who in request.form.getlist("who"):
+            target = store.get_user(int(who)) if who.isdigit() else None
+            if target is None:
+                continue
+            try:
+                _set_team_manager(access, target, value)
+                done += 1
+            except PermissionError:
+                abort(403)
+            except ValueError as exc:
+                refused.append(str(exc))
+        chosen = store.get_user(int(value)) if value.isdigit() else None
+        if done:
+            flash(f"{done} associate{'s' if done != 1 else ''} now ha{'ve' if done != 1 else 's'} "
+                  + (f"{chosen['display_name']} as their team manager." if chosen else "no team manager."))
+        for said in refused[:3]:
+            flash(said)
+        if not done and not refused:
+            flash("Pick the associates.")
+        return redirect(url_for("admin_users"))
+
+    # ------------------------------------------------------------- people from a file (Phase AR)
+    BULK_MINUTES = 30  # how long a checked file waits to be added, and the passwords to be downloaded
+
+    def _bulk_held() -> Dict[str, Dict[str, Any]]:
+        """Checked files and password sheets waiting for their owner, in memory only (a restart drops them)."""
+        held = app.extensions.setdefault("bulk_users", {})
+        now = time.time()
+        for key in [k for k, v in held.items() if v["expires"] < now]:
+            held.pop(key, None)
+        return held
+
+    def _bulk_plan(rows: List[Dict[str, Any]], access: Access) -> List[Dict[str, Any]]:
+        """Each row of an uploaded people sheet with what would be added and, when it cannot be, the reasons. The same
+        rules as Add a person: a supervisor adds planners, associates and team managers of their own programs only."""
+        store, admin, tree = app.extensions["store"], bool(g.user["is_admin"]), access.book.tree()
+        by_name = {" ".join(p["name"].split()).casefold(): p["id"] for p in access.grantable()}
+        taken = {u["username"] for u in store.list_users()}
+        in_file = {r["username"].strip().lower() for r in rows}
+        planned: List[Dict[str, Any]] = []
+        seen: set = set()
+        for r in rows:
+            username = r["username"].strip().lower()
+            problems: List[str] = []
+            kind = " ".join(r["role"].lower().replace("_", " ").split()).replace(" ", "_") or "planner"
+            everything = False
+            programs: List[int] = []
+            for name in [x for x in re.split(r"[;,]", r["programs"]) if x.strip()]:
+                key = " ".join(name.split()).casefold()
+                if key == "all" and admin:
+                    everything = True
+                elif key in by_name:
+                    programs.append(by_name[key])
+                else:
+                    problems.append(f"{name.strip()} is not one of your programs.")
+            programs = sorted(set(programs))
+            roster = r["roster_name"].strip()
+            if username_problem(username):
+                problems.append(USERNAME_RULE)
+            elif username in taken:
+                problems.append(f"{username} already exists.")
+            elif username in seen:
+                problems.append(f"{username} is in the file twice.")
+            seen.add(username)
+            if kind not in ROLES:
+                problems.append("Pick a role.")
+            elif kind not in STAFF_ADDS and not admin:
+                problems.append("Only an admin adds supervisors and admins.")
+            elif everything and kind == "associate":
+                problems.append("An associate has named programs, not all of them.")
+            elif not everything and not programs and not problems:
+                problems.append("Give them at least one of your programs.")
+            if kind == "associate" and programs and not problems:
+                found = _roster_problem(roster, programs, tree)
+                if found:
+                    problems.append(found)
+                else:
+                    roster = _roster_canonical(roster, programs, tree) or roster
+            elif kind != "associate":
+                roster = ""
+            if r["password"] and len(r["password"]) < MIN_PASSWORD:
+                problems.append(f"A password of at least {MIN_PASSWORD} characters, or leave it blank to make one.")
+            planned.append({**r, "typed": r["username"].strip(), "username": username, "kind": kind, "programs_ids": programs, "everything": everything,
+                            "roster": roster, "problems": problems, "has_password": bool(r["password"])})
+        for p in planned:  # the team manager: someone already here, or a team manager added by this same file
+            wanted = p["team_manager"].strip().lower()
+            if not wanted or p["problems"]:
+                continue
+            found = next((u for u in store.list_users() if u["username"] == wanted and u["is_team_manager"] and u["active"]
+                          and (u["all_programs"] or set(p["programs_ids"]) & set(store.user_program_ids(u["id"])))), None)
+            mate = next((q for q in planned if q["username"] == wanted and q["kind"] == "team_manager" and not q["problems"]
+                         and (q["everything"] or set(p["programs_ids"]) & set(q["programs_ids"]))), None)
+            if p["kind"] != "associate":
+                p["problems"].append("Only an associate has a team manager.")
+            elif found is None and mate is None:
+                p["problems"].append(f"{wanted} is not a team manager of their programs.")
+        return planned
+
+    @app.route("/admin/users/bulk", methods=["GET", "POST"])
+    @manager_required
+    def admin_users_bulk():  # type: ignore[no-untyped-def]
+        """Add many people from one sheet: check it first (every row with its reason), then add the good rows."""
+        access, error, plan, token = Access(app.extensions["store"], g.user), "", None, ""
+        if request.method == "POST":
+            upload = request.files.get("people")
+            try:
+                if upload is None or not upload.filename:
+                    raise ValueError("Pick the people sheet to upload.")
+                plan = _bulk_plan(read_people(upload.read(), upload.filename), access)
+                token = secrets.token_urlsafe(16)
+                _bulk_held()[token] = {"user": g.user["id"], "rows": [{k: p[k] for k in ("n", *[
+                    "username", "display_name", "role", "programs", "roster_name", "team_manager", "password"])}
+                    for p in plan], "expires": time.time() + 60 * BULK_MINUTES}
+            except ValueError as exc:
+                error = str(exc)
+        return render_template("admin_users_bulk.html", error=error, plan=plan, token=token, roles=ROLES,
+                               good=sum(1 for p in plan or [] if not p["problems"]), minutes=BULK_MINUTES)
+
+    @app.route("/admin/users/bulk/template.xlsx")
+    @manager_required
+    def admin_users_bulk_template():  # type: ignore[no-untyped-def]
+        return send_file(io.BytesIO(template_bytes()), as_attachment=True, download_name="People_template.xlsx",
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    @app.route("/admin/users/bulk/add", methods=["POST"])
+    @manager_required
+    def admin_users_bulk_add():  # type: ignore[no-untyped-def]
+        """Add the rows of a checked file that can be added. The checks run again first: nothing is trusted from the
+        earlier answer but the rows the person uploaded."""
+        held = _bulk_held().get(request.form.get("token", ""))
+        if held is None or held["user"] != g.user["id"]:
+            abort(404)
+        _bulk_held().pop(request.form["token"], None)
+        store, access = app.extensions["store"], Access(app.extensions["store"], g.user)
+        plan = _bulk_plan(held["rows"], access)
+        order = sorted((p for p in plan if not p["problems"]), key=lambda p: p["kind"] == "associate")  # team managers first
+        made, shown = {}, []
+        for p in order:
+            password = p["password"] or new_password()
+            uid = store.add_user(p["username"], p["display_name"], password, is_admin=p["kind"] == "admin",
+                                 must_change=True)
+            store.update_user(uid, is_supervisor=int(p["kind"] == "supervisor"), all_programs=int(p["everything"]),
+                              is_associate=int(p["kind"] == "associate"),
+                              roster_name=p["roster"] if p["kind"] == "associate" else "",
+                              is_team_manager=int(p["kind"] == "team_manager"))
+            store.set_user_programs(uid, p["programs_ids"])
+            made[p["username"]] = uid
+            shown.append({"username": p["username"], "display_name": p["display_name"] or p["username"],
+                          "role": ROLES[p["kind"]], "password": "" if p["password"] else password,
+                          "given": bool(p["password"])})
+        for p in order:  # their team managers, now that everyone is here
+            wanted = p["team_manager"].strip().lower()
+            if p["kind"] == "associate" and wanted:
+                chosen = made.get(wanted) or next((u["id"] for u in store.list_users() if u["username"] == wanted), None)
+                if chosen is not None:
+                    store.update_user(made[p["username"]], team_manager_id=chosen)
+        _record("users_bulk_added", detail=f"{len(shown)} added, {len(plan) - len(shown)} left out")  # never the passwords
+        sheet_token = secrets.token_urlsafe(16)
+        _bulk_held()[sheet_token] = {"user": g.user["id"], "expires": time.time() + 60 * BULK_MINUTES,
+                                     "sheet": passwords_workbook([s for s in shown if not s["given"]])}
+        return render_template("admin_users_bulk.html", error="", plan=None, token="", roles=ROLES, good=0,
+                               minutes=BULK_MINUTES, added=shown, skipped=[p for p in plan if p["problems"]],
+                               sheet_token=sheet_token)
+
+    @app.route("/admin/users/bulk/<sheet_token>/passwords.xlsx")
+    @manager_required
+    def admin_users_bulk_passwords(sheet_token: str):  # type: ignore[no-untyped-def]
+        """The temporary passwords made up for a file's people: once, for the person who added them."""
+        held = _bulk_held().get(sheet_token)
+        if held is None or held["user"] != g.user["id"] or "sheet" not in held:
+            abort(404)
+        _bulk_held().pop(sheet_token, None)
+        return send_file(io.BytesIO(held["sheet"]), as_attachment=True, download_name="Temporary_passwords.xlsx",
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    @app.route("/admin/signins/release", methods=["POST"])
+    @admin_required
+    def admin_signins_release():  # type: ignore[no-untyped-def]
+        """Phase AU: an admin lifts the hold on an address (a whole office behind one address, a tester)."""
+        address = (request.form.get("address") or "").strip()
+        app.extensions["throttle"].release(address)
+        _record("sign_in_released", subject=address)
+        flash(f"{address} may sign in again.")
+        return redirect(url_for("admin_users"))
+
+    @app.route("/admin/users/export.xlsx")
+    @manager_required
+    def admin_users_export():  # type: ignore[no-untyped-def]
+        """Phase AU: the people this person manages, as a sheet in the bulk upload's columns."""
+        store, access = app.extensions["store"], Access(app.extensions["store"], g.user)
+        admin = bool(g.user["is_admin"])
+        tree = access.book.tree()
+        names = {u["id"]: u["username"] for u in store.list_users()}
+        rows = []
+        for u in store.list_users():
+            if not (admin or access.can_manage(u)):
+                continue
+            ids = store.user_program_ids(u["id"])
+            rows.append({"username": u["username"], "display_name": u["display_name"],
+                         "role": role(u).lower().replace(" ", "_"),
+                         "programs": "ALL" if u["all_programs"] else "; ".join(
+                             {p["id"]: p["name"] for p in tree}.get(i, "?") for i in ids),
+                         "roster_name": u["roster_name"], "team_manager": names.get(u["team_manager_id"], ""),
+                         "active": u["active"]})
+        _record("users_exported", detail=f"{len(rows)} people")
+        return send_file(io.BytesIO(people_workbook(rows)), as_attachment=True, download_name="People.xlsx",
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    @app.route("/admin/users/switch", methods=["POST"])
+    @manager_required
+    def admin_users_switch():  # type: ignore[no-untyped-def]
+        """Phase AU: switch several people off or on at once; the same walls as one at a time (only people this person
+        manages, never themselves)."""
+        store, access = app.extensions["store"], Access(app.extensions["store"], g.user)
+        ids = [int(x) for x in request.form.getlist("who") if x.isdigit()]
+        on = request.form.get("decision") == "on"
+        if not ids:
+            flash("Tick the people first.")
+            return redirect(url_for("admin_users"))
+        done, skipped = [], []
+        for uid in ids:
+            target = store.get_user(uid)
+            if target is None or target["id"] == g.user["id"] or not access.can_manage(target):
+                skipped.append(uid)
+                continue
+            store.set_active(uid, on)
+            _record("user_enabled" if on else "user_disabled", subject=target["username"])
+            done.append(uid)
+        said = f"{len(done)} {'person' if len(done) == 1 else 'people'} switched {'on' if on else 'off'}."
+        if skipped:
+            said += f" {len(skipped)} left as they were: not yours to change, or your own account."
+        flash(said)
+        return redirect(url_for("admin_users"))
 
     @app.route("/admin/users/<int:user_id>/<action>", methods=["POST"])
     @manager_required
@@ -687,16 +1137,34 @@ def create_app(config: Dict[str, Any]) -> Flask:
             store.set_active(user_id, True)
             _record("user_enabled", subject=target["username"])
             flash(f"{target['username']} is switched on.")
+        elif action == "delete":  # Phase AR: the account goes; the name stays in the history of what they did
+            if request.form.get("confirm") != "1":
+                flash(f"Tick the box to confirm, then press Delete person for {target['username']}.")
+                return redirect(url_for("admin_users"))
+            if target["is_admin"] and sum(1 for u in store.list_users() if u["is_admin"] and u["active"]) <= 1:
+                flash("That is the last admin. Make another admin before deleting this one.")
+                return redirect(url_for("admin_users"))
+            store.delete_user(user_id)
+            _record("user_deleted", subject=target["username"], detail=role(target))
+            flash(f"{target['username']} is deleted: they cannot sign in and the username is free again. "
+                  "Their name stays in the history of what they did.")
         elif action == "reset":
             temporary = secrets.token_urlsafe(9)
             store.set_password(user_id, temporary, must_change=True)
             _record("password_reset", subject=target["username"])  # never the password itself
             flash(f"Temporary password for {target['username']}: {temporary} "
                   "(shown once; they choose their own at next sign-in).")
+        elif action == "team":  # Phase AK
+            try:
+                flash(_set_team_manager(access, target, request.form.get("team_manager", "")))
+            except PermissionError:
+                abort(403)
+            except ValueError as exc:
+                flash(str(exc))
         elif action == "programs":
             admin = bool(g.user["is_admin"])
             kind = request.form.get("role", "")
-            current = role(target).lower()
+            current = role(target).lower().replace(" ", "_")
             if kind and kind != current and not admin:
                 abort(403)
             try:
@@ -715,9 +1183,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 if problem:
                     flash(f"{target['username']}: {problem}")
                     return redirect(url_for("admin_users"))
-                changes = {"is_associate": 1, "roster_name": roster}
+                changes = {"is_associate": 1,
+                           "roster_name": _roster_canonical(roster, programs, access.book.tree()) or roster}
             if admin:
                 changes.update({"is_admin": int(kind == "admin"), "is_supervisor": int(kind == "supervisor"),
+                                "is_team_manager": int(kind == "team_manager"),
                                 "all_programs": int(request.form.get("all_programs") == "1" and kind != "associate"),
                                 "is_associate": int(kind == "associate"),
                                 "roster_name": changes.get("roster_name", "")})
@@ -743,38 +1213,99 @@ def create_app(config: Dict[str, Any]) -> Flask:
         key = _my_unit()
         leave, swaps = app.extensions.get("leave"), app.extensions.get("swaps")
         name = g.user["roster_name"]
+        clock_now = datetime.now(EGYPT)
+        today = clock_now.date()
+        weeks = _my_weeks(key, today) if key else []
+        swap_week = _date(request.args.get("swapweek", ""))
+        week_offers = swaps.week_candidates(key, swap_week, name, today) if swap_week in weeks else []
         swap_day = _date(request.args.get("swap", ""))
         offers, swap_note = [], ""
         if key and swap_day:
-            offers = [c for c in swaps.candidates(key, swap_day, name)
-                      if c["ok"] and swaps.account(key, c["name"]) is not None]
+            offers = swaps.candidates(key, swap_day, name)  # Phase AO: every colleague on another shift, with its warnings
             # Phase AI: when nobody is listed because there is nothing to swap, say why
             if any(r["first_day"] <= swap_day.isoformat() <= r["last_day"] for r in app.extensions["store"].list_leave(
                     program=key, associate=name, statuses=["waiting_tm", "waiting_rta", "applying", "approved"])):
                 swap_note = f"You asked for leave on {swap_day:%a %d %b}, so there is no shift to swap."
+                offers = []  # Phase AO: the list shows every colleague now, so a day you asked leave for shows none
             elif not shift_span(dict(app.extensions["days"].roster(key, swap_day)).get(name, "")):
                 swap_note = f"You do not work on {swap_day:%a %d %b}."
-        clock_now = datetime.now(EGYPT)
-        today, card, week = clock_now.date(), None, []
+        week = []
         mine = leave.mine(key, name) if leave and key else []
         my_swaps = swaps.mine(key, name) if swaps and key else []
+        shown = None
         if key:
             days = app.extensions["days"]
-            page = days.page(key, today)
-            card = my_day(page["view"], name, clock_now.hour * 60 + clock_now.minute) if page else None
+            shown = _date(request.args.get("week", ""))
+            if shown not in weeks:  # Phase AO: this week, else the first later one with a schedule
+                shown = week_start(today) if week_start(today) in weeks else (weeks[0] if weeks else None)
             version = days.version(key, today)[0]
-            first = date.fromisoformat(version["week_start"]) if version and version["week_start"] else week_start(today)
+            first = shown or (date.fromisoformat(version["week_start"]) if version and version["week_start"]
+                              else week_start(today))
             for i in range(7):
                 on = first + timedelta(days=i)
                 notes = [f"{r['kind']}: {MY_STATUS.get(r['status'], r['status'])}" for r in mine
                          if r["status"] != "cancelled" and r["first_day"] <= on.isoformat() <= r["last_day"]]
                 notes += [f"Swap with {w['other'] if w['asker'] == name else w['asker']}: {w['status_words']}"
-                          for w in my_swaps if w["day"] == on.isoformat() and w["status"] != "cancelled"]
-                week.append({"date": on, "cell": dict(days.roster(key, on)).get(name, ""), "notes": notes,
-                             "today": on == today})
-        return render_template("me.html", unit=key, kinds=LEAVE_KINDS, mine=mine, swaps=my_swaps, swap_day=swap_day,
-                               swap_note=swap_note,
-                               offers=offers, today=today, card=card, week=week, hm=hm)
+                          for w in my_swaps if (w["day"] == on.isoformat() or (w.get("scope") == "week" and any(
+                              d["date"] == on.isoformat() for d in json.loads(w.get("detail") or "{}").get("days", []))))
+                          and w["status"] != "cancelled"]
+                cell = dict(days.roster(key, on)).get(name, "")
+                items = []
+                if shift_span(cell):
+                    try:
+                        found = days.page(key, on)
+                        items = [f"{x['what']} {hm(x['lo'])} to {hm(x['hi'])}" for x in my_items(found["view"], name)] if found else []
+                    except ValueError:  # a week whose input workbook is not kept: its shifts show, its breaks do not
+                        items = []
+                week.append({"date": on, "cell": cell, "notes": notes, "items": items, "today": on == today})
+        answers = _leave_swap_answers(g.user["id"])  # Phase AU: the answers since they last looked, shown once
+        return render_template("me.html", unit=key, answers=answers, kinds=LEAVE_KINDS, mine=mine, swaps=my_swaps, swap_day=swap_day,
+                               swap_note=swap_note, weeks=weeks, shown=shown, week_labels={w.isoformat(): f"{w:%d %b} to {(w + timedelta(days=6)):%d %b}" for w in weeks}, swap_week=swap_week, week_offers=week_offers,
+                               offers=offers, today=today, week=week, hm=hm)
+
+    def _zone_words() -> str:
+        """Phase AU: "Times are in Cairo (Egypt) time." for an associate's pages, with the gap when it is another zone."""
+        key = _my_unit()
+        if not key:
+            return ""
+        today = datetime.now(EGYPT).date()
+        zone = _own_zone(key, today)
+        words = f"Times are in {dict(ZONES)[zone]} time, the schedule's own."
+        gap = zone_gap_words(zone, today)
+        return f"{words} {gap}" if gap else words
+
+    def _day_changes(user: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Phase AU: changes to this associate's breaks made by someone else since they last looked (never older than
+        two days)."""
+        key = _my_unit()
+        if not key or not user["roster_name"]:
+            return []
+        since = max(user.get("day_seen_at") or 0, time.time() - 2 * 86400)
+        return app.extensions["store"].break_changes_for(key, user["roster_name"], user["id"], since)
+
+    def _leave_swap_answers(user_id: int) -> List[str]:
+        """Phase AU: the final answers to this person's leave requests and swaps they have not seen, as lines; marks them seen."""
+        store = app.extensions["store"]
+        found = store.unseen_leave_swap(user_id)
+        lines = []
+        for r in found["leave"]:
+            span = span_text(date.fromisoformat(r["first_day"]), date.fromisoformat(r["last_day"]))
+            lines.append(f"{r['kind']}, {span}: {r['status']}" + (f". “{r['reason']}”" if r["status"] == "refused" and r["reason"] else "")
+                         + (f". {r['outcome']}" if r["status"] == "approved" and r["outcome"] else ""))
+        for r in found["swaps"]:
+            lines.append(f"Swap with {r['other']} on {date.fromisoformat(r['day']):%a %d %b}: {r['status']}"
+                         + (f". “{r['reason']}”" if r["reason"] else ""))
+        store.mark_leave_swap_seen([r["id"] for r in found["leave"]], [r["id"] for r in found["swaps"]])
+        return lines
+
+    def _my_weeks(key: str, today: date) -> List[date]:
+        """Phase AO: the Sundays of this week and every later week that has a schedule kept for ``key``."""
+        found = []
+        for w in app.extensions["schedules"].kept_weeks(key):
+            first = _date(w["week"])
+            if first and first + timedelta(days=6) >= today:
+                found.append(first)
+        return found
 
     MY_STATUS = {"waiting_tm": "waiting for your TM", "waiting_rta": "approved by your TM, waiting for the RTA",
                  "applying": "being approved", "approved": "approved", "refused": "refused"}
@@ -831,11 +1362,24 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if not g.user["is_associate"] or not key:
             abort(403, description="Only an associate on a schedule offers swaps here.")
         on, other = _date(request.form.get("day", "")), " ".join(request.form.get("other", "").split())
+        week_first = _date(request.form.get("week", ""))
         try:
+            if week_first is not None:  # Phase AO: the whole week from today on, one request
+                if not other:
+                    raise ValueError("Pick a colleague.")
+                today = datetime.now(EGYPT).date()
+                if week_first not in _my_weeks(key, today):
+                    raise ValueError("Pick this week or a later week that has a schedule.")
+                app.extensions["swaps"].offer_week(key, week_first, g.user["roster_name"], g.user["id"], other,
+                                                   request.form.get("note", ""), today,
+                                                   allow_warnings=request.form.get("anyway") == "1")
+                flash(f"Sent to {other}: the week from {week_first:%a %d %b}. Once they accept, your TM decides.")
+                return redirect(url_for("me"))
             if on is None or not other:
                 raise ValueError("Pick a day and a colleague.")
             app.extensions["swaps"].offer(key, on, g.user["roster_name"], g.user["id"], other,
-                                          request.form.get("note", ""), datetime.now(EGYPT).date())
+                                          request.form.get("note", ""), datetime.now(EGYPT).date(),
+                                          allow_warnings=request.form.get("anyway") == "1")
         except ValueError as exc:
             flash(str(exc))
         else:
@@ -886,6 +1430,23 @@ def create_app(config: Dict[str, Any]) -> Flask:
         remembered = session.get("unit", "")
         return remembered if remembered in units else (units[0] if units else "")
 
+    def _change_rows(key: str) -> List[Dict[str, Any]]:
+        """Phase AS: the waiting break changes and coaching, each with the intervals it touches (before, after, buffer)."""
+        book, rows, now = app.extensions["changes"], [], _local_now(key)
+        book.expire_overdue(key, now)  # Phase AU: a request whose time has come is closed, and its asker told
+        waiting = book.waiting(key)
+        for r in waiting:
+            r["overlaps"], r["stale"] = book.overlaps(r, waiting), book.stale_note(r, now)
+            try:
+                r["impact"], r["impact_note"] = book.impact(r), ""
+                r["alternatives"] = book.alternatives(r, now)  # the nearest times, from what the RTA holds now
+                if r["kind"] == "coaching":  # the other answer to "billable?", so the RTA sees what correcting it does
+                    r["other_impact"] = book.impact(r, billable=not r["d"].get("billable"))
+            except (ValueError, KeyError, StopIteration) as exc:  # a day that cannot be worked out is said, not hidden
+                r["impact"], r["impact_note"], r["alternatives"] = [], f"The impact cannot be worked out: {exc}", []
+            rows.append(r)
+        return rows
+
     @app.route("/requests")
     @login_required
     def requests_page():  # type: ignore[no-untyped-def]
@@ -896,14 +1457,267 @@ def create_app(config: Dict[str, Any]) -> Flask:
         for r in waiting:
             r["mine"] = leave.may_decide(r, g.user)
         swaps = app.extensions.get("swaps")
+        swap_rows = swaps.waiting(key) if swaps and key else []
+        for w in swap_rows:  # Phase AK: their team managers, or a backup
+            w["mine"] = swaps.may_decide(w, g.user)
         return render_template("requests.html", unit=key, label=_unit_filter(key) if key else "", waiting=waiting,
                                decided=_paged(leave.decided(key, limit=None) if leave and key else [], "done_page",
                                               "done-h"),
-                               swaps=swaps.waiting(key) if swaps and key else [],
+                               swaps=swap_rows, changes=_change_rows(key) if key else [],
+                               changes_decided=app.extensions["changes"].decided(key) if key else [],
+                               may_change=allowed(app.extensions["store"], g.user, "rta_change"), hm=hm,
+                               can_ask_coaching=_can_ask_coaching(),
                                swaps_decided=_paged(swaps.decided(key, limit=None) if swaps and key else [],
                                                     "swaps_done_page", "done-h"),
-                               manager=bool(g.user["is_admin"] or g.user["is_supervisor"]),
+                               manager=allowed(app.extensions["store"], g.user, "setup"),
                                year=datetime.now(EGYPT).year)
+
+    # ------------------------------------------------------------- open pages ask whether they changed (Phase AY)
+    app.extensions["live"] = Stamps()
+
+    def _live_stamp(kind: str, program: str = "", on_text: str = "") -> str:
+        """The stamp of what a page of this kind shows to this person (``webapp/live.py``); "" when there is nothing to show."""
+        stamps, user = app.extensions["live"], g.user
+        if (kind == "me") != bool(user["is_associate"]):
+            abort(404)  # an associate's account is stamped for its own pages only, and staff for theirs
+        if kind == "me":
+            key = _my_unit()
+            if not key:
+                return ""
+
+            def mine() -> str:
+                today, name, days = _local_now(key).date(), user["roster_name"], app.extensions["days"]
+                seen = []
+                for d in (today - timedelta(days=1), today, today + timedelta(days=1)):
+                    try:
+                        seen.append([d.isoformat(), lanes_of(days.page(key, d, shared=True), name)])
+                    except ValueError:  # a day whose input workbook is not kept: the page leaves it out too
+                        seen.append([d.isoformat(), []])
+                leave, swaps = app.extensions.get("leave"), app.extensions.get("swaps")
+                return digest([seen, leave.mine(key, name) if leave else [], swaps.mine(key, name) if swaps else [],
+                               app.extensions["changes"].mine(key, user["id"])])
+            return stamps.get(("me", user["id"]), mine)
+        key = (clean_program(program) if program and _access().can_open(clean_program(program)) else
+               _requests_unit()) if kind == "requests" else clean_program(program)
+        if not key or not _access().can_open(key):
+            abort(404)
+        if kind == "requests":
+            def waiting() -> str:
+                leave, swaps = app.extensions.get("leave"), app.extensions.get("swaps")
+                return digest([leave.waiting(key) if leave else [], swaps.waiting(key) if swaps else [],
+                               app.extensions["changes"].waiting(key)])
+            return stamps.get(("requests", key), waiting)
+        on = _date(on_text) or datetime.now(EGYPT).date()
+
+        def day() -> str:
+            try:
+                return digest(lanes_of(app.extensions["days"].page(key, on, shared=True)))
+            except ValueError:
+                return ""
+        return stamps.get(("day", key, on.isoformat(), SHOWN.get()), day)
+
+    @app.route("/live/stamp")
+    @login_required
+    def live_stamp():  # type: ignore[no-untyped-def]
+        """Phase AY: a very small answer, asked every 30 seconds by a page that is open (static/app.js, liveWatch)."""
+        kind = request.args.get("kind", "")
+        if kind not in LIVE_KINDS:
+            abort(404)
+        stamps = app.extensions["live"]
+        answer = _live_stamp(kind, request.args.get("program", ""), request.args.get("date", ""))
+        if stamps.asked % 500 == 0:
+            app.logger.info(stamps.line())
+        response = jsonify(stamp=answer)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @app.template_global()
+    def live_state(kind: str, program: str = "", on: str = "") -> Dict[str, str]:
+        """What a page hands the watcher: where to ask, and the stamp it was built from."""
+        query = {"kind": kind, **({"program": program} if program else {}), **({"date": on} if on else {})}
+        try:
+            return {"url": url_for("live_stamp", **query), "stamp": _live_stamp(kind, program, on)}
+        except NotFound:  # a program the person may not open (a merged view): the page just does not watch
+            return {"url": "", "stamp": ""}
+
+    # ------------------------------------------------------------- break changes and coaching (Phase AS)
+    def _local_now(key: str) -> datetime:
+        """Now on the clock the program's schedule is kept in (a break time is in the schedule's own time)."""
+        return datetime.now(ZoneInfo(_own_zone(key, datetime.now(EGYPT).date())))
+
+    @app.route("/me/breaks")
+    @login_required
+    def me_breaks():  # type: ignore[no-untyped-def]
+        """An associate's breaks on the running day, and the times they may ask each to move to (Phase AS)."""
+        if not g.user["is_associate"]:
+            return redirect(url_for("home"))
+        key, name = _my_unit(), g.user["roster_name"]
+        book = app.extensions["changes"]
+        now, found, options, problem, tomorrow = _local_now(key) if key else None, None, None, "", None
+        if key:
+            try:
+                found = book.running_shift(key, name, now)
+                tomorrow = book.tomorrow_shift(key, name, now)  # Phase AU: today and tomorrow, no later
+                picked = request.args.get("change", type=int)
+                next_day = request.args.get("day") == "tomorrow"
+                if picked is not None and next_day and tomorrow is not None:
+                    options = book.break_options(key, name, picked, now, tomorrow["on"])
+                    options["picked"], options["day"] = picked, "tomorrow"
+                elif found is not None and picked is not None:
+                    options = book.break_options(key, name, picked, now)
+                    options["picked"] = picked
+            except ValueError as exc:
+                problem = str(exc)
+        seg = None
+        if found is not None:
+            seg = next(s for lane in found["view"]["lanes"] if lane["name"] == name for s in lane["segments"]
+                       if s["offset"] == 0)
+        tseg = None
+        if tomorrow is not None:
+            tseg = next(s for lane in tomorrow["view"]["lanes"] if lane["name"] == name for s in lane["segments"]
+                        if s["offset"] == 0)
+        running = None  # Phase AX: a shift that began yesterday and is still running is what "now" is, after midnight
+        if found is not None and now is not None and found["on"] < now.date():
+            running = my_day(found["view"], name, found["now"])
+        card = None  # Phase AU: Today carries the day's card (it was on My week)
+        if key and now is not None:
+            try:
+                page = app.extensions["days"].page(key, now.date())
+                card = my_day(page["view"], name, now.hour * 60 + now.minute) if page else None
+            except ValueError:  # a day whose input workbook is not kept: the breaks say so, the card is left out
+                card = None
+        if key:
+            book.expire_overdue(key, now)  # Phase AU
+        rules = app.extensions["changes"].settings_of(key) if key else {"enabled": True}
+        news = book.news(g.user["id"], read=True)  # Phase AU: the answers since they last looked, shown once
+        changed = _day_changes(g.user)
+        app.extensions["store"].mark_day_seen(g.user["id"], time.time())
+        return render_template("me_breaks.html", unit=key, card=card, running=running, news=news, changed=changed, requests_on=rules.get("enabled", True), tomorrow=tomorrow, tseg=tseg, found=found, seg=seg, options=options, problem=problem,
+                               today=now.date() if now else None,
+                               mine=book.mine(key, g.user["id"]) if key else [], hm=hm,
+                               now_at=found["now"] if found else 0)
+
+    @app.route("/me/breaks", methods=["POST"])
+    @login_required
+    def me_breaks_ask():  # type: ignore[no-untyped-def]
+        """Ask the RTA to move a break; the name comes from the account, never from the form."""
+        key = _my_unit()
+        if not g.user["is_associate"] or not key:
+            abort(403, description="Only an associate on a schedule asks to move a break here.")
+        try:
+            now = _local_now(key)
+            book = app.extensions["changes"]
+            on = (now.date() + timedelta(days=1)) if request.form.get("day") == "tomorrow" else None
+            book.ask_break(key, g.user["roster_name"], g.user, request.form.get("idx", type=int, default=-1),
+                           request.form.get("to", ""), request.form.get("why", ""), now, on)
+            flash("Sent to the RTA. You can cancel it until it is decided.")
+        except ValueError as exc:
+            flash(str(exc))
+        return redirect(url_for("me_breaks"), code=303)
+
+    @app.route("/me/breaks/<int:request_id>/cancel", methods=["POST"])
+    @login_required
+    def me_breaks_cancel(request_id: int):  # type: ignore[no-untyped-def]
+        try:
+            app.extensions["changes"].cancel(request_id, g.user)
+            flash("Cancelled.")
+        except ValueError as exc:
+            flash(str(exc))
+        return redirect(url_for("me_breaks"), code=303)
+
+    @app.route("/requests/coaching/<int:request_id>/cancel", methods=["POST"])
+    @login_required
+    def requests_coaching_cancel(request_id: int):  # type: ignore[no-untyped-def]
+        """Phase AU: the one who asked for coaching takes the request back until the RTA has decided it."""
+        if g.user["is_associate"] or not _can_ask_coaching():
+            abort(403, description="Your role cannot ask for coaching here.")
+        row = app.extensions["store"].get_change_request(request_id)
+        try:
+            app.extensions["changes"].cancel(request_id, g.user)
+            flash("Cancelled.")
+        except ValueError as exc:
+            flash(str(exc))
+        return redirect(url_for("requests_coaching", program=row["program"] if row else None), code=303)
+
+    def _can_ask_coaching() -> bool:
+        store = app.extensions["store"]
+        return allowed(store, g.user, "approve_tm") or allowed(store, g.user, "rta_change")
+
+    @app.route("/requests/coaching")
+    @login_required
+    def requests_coaching():  # type: ignore[no-untyped-def]
+        """A team manager asks for coaching for one or more associates; the times show the buffer for them together."""
+        if g.user["is_associate"] or not _can_ask_coaching():
+            abort(403, description="Your role cannot ask for coaching here.")
+        key = _requests_unit()
+        book, leave = app.extensions["changes"], app.extensions["leave"]
+        now = _local_now(key) if key else None
+        names = [n for n in request.args.getlist("who") if n in (leave.names(key) if key else [])]
+        on = _date(request.args.get("date", "")) or (now.date() if now else datetime.now(EGYPT).date())
+        minutes = request.args.get("minutes", 30, type=int)
+        billable = request.args.get("billable") == "1"
+        options, problem = None, ""
+        if key and names:
+            try:
+                options = book.coaching_options(key, on, names, minutes, now, billable=billable)
+            except ValueError as exc:
+                problem = str(exc)
+        if key:
+            book.expire_overdue(key, now)
+        news = book.news(g.user["id"], read=True)  # Phase AU
+        return render_template("requests_coaching.html", unit=key, news=news, label=_unit_filter(key) if key else "",
+                               roster=sorted(leave.names(key)) if key else [], names=names, on=on, minutes=minutes, billable=billable,
+                               options=options, problem=problem, depts=[d["name"] if isinstance(d, dict) else d
+                                                                        for d in (_with_lists(key) if key else [])],
+                               mine=book.mine(key, g.user["id"]) if key else [], hm=hm, may_decide=allowed(
+                                   app.extensions["store"], g.user, "rta_change"))
+
+    @app.route("/requests/coaching", methods=["POST"])
+    @login_required
+    def requests_coaching_ask():  # type: ignore[no-untyped-def]
+        if g.user["is_associate"] or not _can_ask_coaching():
+            abort(403, description="Your role cannot ask for coaching here.")
+        key = clean_program(request.form.get("program", ""))
+        if not key or not _access().can_open(key):
+            abort(403, description="That is not one of your programs")
+        names = request.form.getlist("who")
+        on = _date(request.form.get("date", ""))
+        try:
+            if on is None:
+                raise ValueError("Pick the day.")
+            app.extensions["changes"].ask_coaching(key, names, g.user, on, request.form.get("start", ""),
+                                                   request.form.get("minutes", 30, type=int), request.form.get("dept", ""),
+                                                   request.form.get("why", ""), _local_now(key),
+                                                   billable=request.form.get("billable") == "1")
+            flash("Sent to the RTA.")
+        except ValueError as exc:
+            flash(str(exc))
+        return redirect(url_for("requests_coaching", program=key), code=303)
+
+    @app.route("/requests/change/<int:request_id>", methods=["POST"])
+    @login_required
+    def request_change_decide(request_id: int):  # type: ignore[no-untyped-def]
+        """The RTA's answer to a break change or a coaching request (changes the day when approved)."""
+        row = app.extensions["store"].get_change_request(request_id)
+        if row is None:
+            abort(404)
+        if g.user["is_associate"] or not allowed(app.extensions["store"], g.user, "rta_change"):
+            abort(403, description="Your role cannot change the RTA's day.")
+        if not _access().can_open(row["program"]):
+            abort(403, description="This request is on a program that is not one of yours.")
+        try:
+            moved = request.form.get("change_at", type=int)  # "Approve at 13:45 instead": a nearest time, in minutes
+            billable = {"1": True, "0": False}.get(request.form.get("billable", ""))
+            said = app.extensions["changes"].decide(request_id, g.user,
+                                                    request.form.get("decision") == "approve" or moved is not None,
+                                                    request.form.get("reason", ""), _local_now(row["program"]),
+                                                    at=moved, billable=billable)
+        except ValueError as exc:
+            said = str(exc)
+        _record("change_decided", subject=f"{row['kind']} for {', '.join(json.loads(row['names']))}", detail=said[:300])
+        flash(said)
+        back = safe_next(request.form.get("back", ""))  # Phase AU: decided on the RTA tab, back to the tab
+        return redirect(back or url_for("requests_page", program=row["program"]), code=303)
 
     @app.route("/requests/leave/<int:request_id>", methods=["POST"])
     @login_required
@@ -966,8 +1780,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         everyone = app.extensions["store"].list_runs()
         plan = _plan(everyone)  # the queue is shared: waiting times count every run
         runs = _visible(everyone)
-        summaries = {r["id"]: _ready_figures(r) if r["mode"] == READY else queue.summary(r["id"])
-                     for r in runs} if queue else {}
+        summaries = {r["id"]: _run_figures(r) for r in runs} if queue else {}
         # Phase AI: the queue is everyone's; another program's runs show only as running or waiting, with the wait
         seen = {r["id"] for r in runs}
         active = sorted((r for r in everyone if r["status"] in ("GATE", "RUNNING", "SCORING")),
@@ -1034,8 +1847,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return cards
 
     def _upload_choices(runs: list) -> Tuple[list, set]:
-        """New schedule is open to everyone for any program: each program with its LOBs, and the defaults
-        it starts from (a program's saved defaults, else the weekday its schedules usually start on)."""
+        """New schedule is open to everyone, for the programs they have (Phase AR; admins have all): each program with
+        its LOBs, and the defaults it starts from (a program's saved defaults, else the weekday its schedules usually start on)."""
         book = ProgramBook(app.extensions["store"])
         book.sync()
         usual = usual_start_days(runs)
@@ -1044,9 +1857,16 @@ def create_app(config: Dict[str, Any]) -> Flask:
             choices = [(l["key"], f"{p['name']}, {l['name']}") for l in p["lobs"]]
             if p["key"] in p["units"]:
                 choices.append((p["key"], p["name"] if not p["lobs"] else f"{p['name']} (whole program)"))
+            choices = [(k, t) for k, t in choices if _access().can_open(k)]  # Phase AR: only the programs a person has
+            if not choices:
+                continue
             keys |= {k for k, _ in choices}
             defaults = ({"start_day": p["start_day"], "run_mode": p["run_mode"], "options": p["options"]}
                         if p["saved"] else ({"start_day": usual[p["key"]]} if p["key"] in usual else {}))
+            if p.get("measure"):  # Phase AU: how the program counts is also how a new run is built, unless it says otherwise
+                options = dict(defaults.get("options") or {})
+                options.setdefault("coverage_measure", "INTERVAL_COUNT" if p["measure"] == "interval" else "VOLUME_WEIGHTED")
+                defaults = {**defaults, "options": options}
             out.append({"name": p["name"], "choices": choices, "defaults": defaults})
         return out, keys
 
@@ -1072,6 +1892,16 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if not _can_see_run(run):
             abort(403)
         return run
+
+    def _upload_refused(path: Path, name: str, structure: bool = True) -> str:
+        """Phase AV: "" when the uploaded workbook may be kept; else the file is deleted at once and the reason (by kind
+        and tab, never the values found) is returned to say and is recorded."""
+        found = upload_look(path, structure=structure)
+        if not found:
+            return ""
+        path.unlink(missing_ok=True)
+        _record("upload_refused", subject=os.path.basename(name)[:120], detail=f"{found[0]}: file deleted")
+        return found[1]
 
     def _channel_upload_check(path: Path) -> Tuple[Optional[str], Optional[int]]:
         """Phase V: (refusal, warnings) for an uploaded workbook; (None, None) when it has no channel tabs. Refused
@@ -1125,6 +1955,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
             flash(problem)
             return redirect(url_for("home"))
         program = clean_program(request.form.get("program", ""))
+        if program and not _access().can_open(program):  # Phase AR: a program is uploaded to only by those who have it
+            g.error_hint = "Your account opens only the programs given to you. Ask an admin to add this one to your programs."
+            abort(403, description="That is not one of your programs")
         week = request.form.get("week_start", "").strip()
         week_start = start_date(week) if week else ""
         if week_start is None:
@@ -1143,6 +1976,15 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if not is_zip:
             path.unlink()
             flash("Upload an Excel workbook (.xlsx): that file is not one.")
+            return redirect(url_for("home"))
+        too_big = zip_problem(path)  # Phase AU: before any workbook library opens it
+        if too_big:
+            path.unlink()
+            flash(too_big)
+            return redirect(url_for("home"))
+        refused = _upload_refused(path, name)  # Phase AV: other tabs, card numbers, addresses, macros: deleted
+        if refused:
+            flash(refused)
             return redirect(url_for("home"))
         refusal, warnings = _channel_upload_check(path)
         if refusal:
@@ -1213,6 +2055,26 @@ def create_app(config: Dict[str, Any]) -> Flask:
             found.update(version_label=row["label"], breaks_planned=bool(json.loads(row["week"] or "{}").get("breaks")))
         return found
 
+    def _run_figures(run: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Phase AM (owner: "it should show the percentage ... after breaks or as per my in use selection"): a run's
+        coverage on Home and its page. A ready schedule as before (Phase S). An engine run: the version in use; else
+        the engine's own figures, as before; else, when the engine has none (a "Before breaks only" run), the version
+        its week shows. A version's figures say which version and whether its breaks are planned."""
+        if run["mode"] == READY:
+            return _ready_figures(run)
+        queue = app.extensions.get("runs")
+        versions = _book().versions(run["id"]) if app.extensions.get("schedules") else []
+        row = next((v for v in versions if v["in_use"]), None)
+        if row is None:
+            found = queue.summary(run["id"]) if queue else None
+            if found or not versions:
+                return found
+            row = max(versions, key=lambda v: (v["kind"] not in ("tool_before", "tool_consistent"), v["created"], v["id"]))
+        found = version_summary(json.loads(row["checks"] or "{}"))
+        if found:
+            found.update(version_label=row["label"], breaks_planned=bool(json.loads(row["week"] or "{}").get("breaks")))
+        return found
+
     def _can_resume(run: Dict[str, Any]) -> bool:
         """A stopped, interrupted or failed engine run that can continue from its checkpoints: never a readiness
         check, never a run the engine said cannot be scheduled from that workbook (Phase AC: one rule for the page
@@ -1246,8 +2108,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                has_shortfall=queue.shortfall_schedule(run_id) is not None,
                                has_week=bool(kept_figures(run).get("intervals")),
                                resumable=_can_resume(run),
-                               summary=_walled(run, _ready_figures(run) if run["mode"] == READY
-                                               else queue.summary(run_id)),
+                               summary=_walled(run, _run_figures(run)),
                                said=said,
                                why=outcome_view(found) if found else None,
                                eta=_plan(store.list_runs()).get(run_id), now=time.time(), people=people,
@@ -1318,6 +2179,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             flash("Pick the date the schedule starts.")
             return redirect(back)
         new: Dict[str, Any] = {"program": clean_program(request.form.get("program", "")), "week_start": week_start}
+        if new["program"] and new["program"] != run["program"] and not _access().can_open(new["program"]):
+            abort(403, description="That is not one of your programs")  # Phase AR
         if new["program"] and new["program"] != run["program"] and new["program"] not in unit_keys(store):
             flash(PICK_UNIT)  # picked from the list; a typed name would start a stray program
             return redirect(back)
@@ -1471,6 +2334,29 @@ def create_app(config: Dict[str, Any]) -> Flask:
             abort(404, description="There is no such LOB. Pick one from the list on the Notifications page.")
         return key, labels[key]
 
+    @app.route("/admin/roles", methods=["GET", "POST"])
+    @admin_required
+    def roles_page():  # type: ignore[no-untyped-def]
+        """Phase AK: what Planner, Team manager and Supervisor may see and do (only the listed roles and keys are
+        read from the form; everything not ticked is off)."""
+        store = app.extensions["store"]
+        if request.method == "POST":
+            if request.form.get("reset") == "1" and request.form.get("confirm") != "1":
+                flash("Tick the box to put every role back to the defaults.")
+            elif request.form.get("reset") == "1":
+                store.set_role_permissions({})
+                _record("roles_changed", subject="Roles", detail="back to the defaults")
+                flash("Roles are back to the defaults.")
+            else:
+                ticked = set(request.form.getlist("allow"))
+                rows = {(r, k): f"{r}|{k}" in ticked for r in ROLE_NAMES for k in PERMISSIONS}
+                store.set_role_permissions(rows)
+                _record("roles_changed", subject="Roles", detail="; ".join(
+                    f"{r}: {sum(1 for k in PERMISSIONS if rows[(r, k)])} of {len(PERMISSIONS)}" for r in ROLE_NAMES))
+                flash("Roles saved.")
+            return redirect(url_for("roles_page"))
+        return render_template("roles.html", catalogue=PERMISSIONS, role_names=ROLE_NAMES, grid=matrix(store))
+
     @app.route("/notifications", methods=["GET", "POST"])
     @admin_required
     def notifications_page():  # type: ignore[no-untyped-def]
@@ -1514,7 +2400,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                hold=int(saved.get("hold") or DEFAULT_HOLD), end=link_end(saved.get("link", "")),
                                service_name=SERVICES.get(saved.get("service", ""), ""),
                                saved_by=by["display_name"] if by else "",
-                               last_post=Post(**json.loads(shown["body"])) if shown else None,
+                               last_post=post_from_body(shown["body"]) if shown else None,
                                recent=_paged([(p, post_what(p), *post_result(p)) for p in posts], "posts_page",
                                              "nf-rec-h"))
 
@@ -1559,12 +2445,53 @@ def create_app(config: Dict[str, Any]) -> Flask:
                     key = request.form.get("key", "")
                     book.adopt(key, pid, name)
                     said = f"{key} is now {book.label(key)}."
+                elif action == "heavy_pages":  # Phase AV: how many weeks the heavy pages allow most people
+                    weeks = request.form.get("weeks", type=int)
+                    if weeks is None or not 1 <= weeks <= 52:
+                        raise ValueError("Give a whole number of weeks from 1 to 52.")
+                    store.set_app_setting("heavy_weeks", str(weeks))
+                    _record("heavy_weeks_set", detail=f"{weeks} weeks")
+                    said = f"People other than admins, supervisors and RTAs can now look at up to {weeks} weeks at a time."
                 elif action == "defaults":
                     options = {k: request.form.get(k) for k, plain in ADVANCED_DEFAULTS.items()
                                if request.form.get(k) and request.form.get(k) != plain}
                     book.set_defaults(pid, request.form.get("start_day", type=int, default=-1),
                                       request.form.get("run_mode", ""), options)
                     said = f"Saved the defaults for {book.program(pid)['name']}."
+                elif action == "measure":  # Phase AS
+                    book.set_measure(pid, request.form.get("coverage_measure", ""))
+                    said = f"{book.program(pid)['name']} now counts billable time as {book.MEASURES[book.measure_setting(pid)].lower()}."
+                elif action == "rta_defaults":  # Phase AU: the program's default target and operating day
+                    target_text, start_text = request.form.get("target", "").strip(), request.form.get("day_start", "").strip()
+                    if target_text and not target_text.isdigit():
+                        raise ValueError("The default target is 1 to 100 percent.")
+                    m = re.match(r"^([01]\d|2[0-3]):([0-5]\d)$", start_text) if start_text else None
+                    if start_text and not m:
+                        raise ValueError("Give the operating day start as a time on the quarter hour, like 16:00.")
+                    kept = book.rta_defaults(pid)
+                    book.set_rta_defaults(pid, int(target_text) if target_text else None,
+                                          int(m.group(1)) * 60 + int(m.group(2)) if m else None, kept["shrinkage"])
+                    said = f"Saved the target and operating day defaults for {book.program(pid)['name']}."
+                elif action == "shrinkage":  # Phase AU: what counts as shrinkage, for the program's LOBs
+                    kept = book.rta_defaults(pid)
+                    book.set_rta_defaults(pid, kept["target"], kept["day_start"], mapping_from_form(request.form))
+                    said = f"Saved what counts as shrinkage for {book.program(pid)['name']}."
+                elif action == "shrinkage_standard":
+                    kept = book.rta_defaults(pid)
+                    book.set_rta_defaults(pid, kept["target"], kept["day_start"], None)
+                    said = f"{book.program(pid)['name']} counts shrinkage the standard way again."
+                elif action == "reset_unit":  # a LOB's own operating day or shrinkage goes back to the program's
+                    unit, field = request.form.get("unit", ""), request.form.get("field", "")
+                    if not _access().can_open(unit) or field not in ("day_start", "shrinkage"):
+                        abort(400)
+                    (app.extensions["store"].clear_day_start if field == "day_start"
+                     else app.extensions["store"].clear_shrinkage_map)(unit)
+                    said = f"{book.label(unit)} uses the program's {'operating day' if field == 'day_start' else 'shrinkage'} again."
+                elif action == "requests":  # Phase AU: associate break change requests for this program
+                    book.set_request_settings(pid, request.form.get("enabled") == "1",
+                                              request.form.get("lead", type=int, default=0),
+                                              request.form.get("limit", type=int, default=0))
+                    said = f"Saved the break change request rules for {book.program(pid)['name']}."
                 elif action == "rename_program":
                     book.rename(pid, None, name)
                     said = f"Renamed to {book.program(pid)['name']}."
@@ -1600,10 +2527,35 @@ def create_app(config: Dict[str, Any]) -> Flask:
         loose = [p for p in tree if not p["lobs"]]  # names that can be put in a program as a LOB
         blockers = {k: book.blocker(n, k) for p in tree for n, k in [(p["name"], p["key"])] +
                     [(l["name"], l["key"]) for l in p["lobs"]]}
-        return render_template("program_setup.html", programs=tree, people=people, loose=loose, modes=MODES,
+        for p in tree:
+            p["measure_value"] = p.get("measure") or "interval"
+        return render_template("program_setup.html", heavy_weeks=int(store.get_app_setting("heavy_weeks", str(HEAVY_WEEKS_DEFAULT))),
+                               heavy_recommended=HEAVY_WEEKS_RECOMMENDED, programs=tree, people=people, loose=loose, modes=MODES,
+                               measures=ProgramBook.MEASURES, request_rules={p["id"]: book.request_settings(p["id"]) for p in tree},
+                               hm=hm, rta_def={p["id"]: book.rta_defaults(p["id"]) for p in tree},
+                               shrink_items=SHRINKAGE_ITEMS,
+                               shrink_now={p["id"]: read_mapping(json.dumps(book.rta_defaults(p["id"])["shrinkage"])
+                                                                 if book.rta_defaults(p["id"])["shrinkage"] else None)
+                                           for p in tree},
+                               own_units=_own_unit_settings(tree),
                                blockers=blockers, unit_groups=_unit_choices(tree),
                                look_alike={p["key"]: book.look_alike(p["id"]) for p in tree if not p["lobs"]},
                                days=["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"])
+
+    def _own_unit_settings(tree: List[Dict[str, Any]]) -> Dict[int, List[Dict[str, Any]]]:
+        """Phase AU: the LOBs (and a program without LOBs) that have their own operating day or shrinkage mapping, which
+        win over the program's defaults until they are reset."""
+        store, found = app.extensions["store"], {}
+        for p in tree:
+            rows = []
+            for key in p["units"]:
+                own_start, own_map = store._day_start_own(key), store.get_shrinkage_map(key)
+                inherited = not (own_map and own_map["at"])
+                if own_start is not None or not inherited:
+                    rows.append({"key": key, "label": ProgramBook(store).label(key),
+                                 "day_start": None if own_start is None else hm(own_start), "shrinkage": not inherited})
+            found[p["id"]] = rows
+        return found
 
     @app.route("/programs/rename", methods=["POST"])
     @admin_required
@@ -1711,6 +2663,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
         kept = app.extensions["store"].get_interval_target(program, week_start) if program and week_start else None
         if kept:
             return kept["target"] / 100
+        default = app.extensions["store"].rta_default(program, "target") if program else None  # Phase AU
+        if default:
+            return int(default) / 100
         book = app.extensions.get("schedules")
         source = book.input_path(run_id) if book is not None and run_id else None
         try:
@@ -1734,6 +2689,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         """The Week page's interval target (Phase W): the choice and each day's intervals at it, as the RTA counts."""
         kept = app.extensions["store"].get_interval_target(program, week_start)
         own = _own_target(row)
+        default = app.extensions["store"].rta_default(program, "target")  # Phase AU: the program's default target
+        base = int(default) if default else own
         days = []
         first = date.fromisoformat(week_start)
         for i in range(7):
@@ -1743,9 +2700,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
             except ValueError:  # the workbook is missing: said on the day page
                 page = None
             days.append({"date": on, "label": f"{on:%a %d}", "t": page["target"] if page else None})
-        return {"current": kept["target"] if kept else own, "own": own, "kept": kept, "days": days,
-                "choices": sorted({100, 95, 90, 85, 80, own}, reverse=True),
-                "may_set": bool(g.user["is_admin"] or g.user["is_supervisor"])}
+        return {"current": kept["target"] if kept else base, "own": own, "base": base, "from_program": bool(default),
+                "kept": kept, "days": days, "choices": sorted({100, 95, 90, 85, 80, own, base}, reverse=True),
+                "may_set": allowed(app.extensions["store"], g.user, "setup")}
 
     @app.route("/day/shrinkage", methods=["POST"])
     @manager_required
@@ -1780,7 +2737,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             target = int(request.form.get("target", ""))
         except ValueError:
             target = -1
-        if target not in {100, 95, 90, 85, 80, _own_target(row)}:
+        base = app.extensions["store"].rta_default(program, "target")
+        if target not in {100, 95, 90, 85, 80, _own_target(row), int(base) if base else -1}:
             abort(400)
         store.set_interval_target(program, week, target, g.user["id"])
         _record("interval_target_changed", program=program, week_start=week, subject=f"{target}%",
@@ -1800,7 +2758,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         except ValueError:  # a workbook that cannot be read: said on the day page
             return None
 
-    def _hours_needed(program: str, week_start: str, basis: str, aim: str, show: str) -> Dict[str, Any]:
+    def _hours_needed(program: str, week_start: str, basis: str, aim: str, show: str,
+                      version_id: Optional[int] = None) -> Dict[str, Any]:
         """The Weeks page's Hours needed table (Phase AH): each day of the week from the DayBook (as recorded on the
         RTA, or as planned), and for today and the days to come what to do (days off to cancel, then overtime)."""
         days, rows = _days(), []
@@ -1810,7 +2769,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             on = first + timedelta(days=i)
             page, why, plan = None, "", None
             try:
-                page = days.page(program, on, recorded=basis == "recorded")
+                page = days.page(program, on, recorded=basis == "recorded",
+                                 version_id=version_id if basis != "recorded" else None)
             except ValueError as exc:  # the workbook cannot be read: said in the column
                 why = str(exc)
             if page is None and not why:
@@ -1820,6 +2780,29 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 plan = days.dayoff_plan(page, after, page["target"]["target"] if aim == "target" else None)
             rows.append({"date": on, "page": page, "plan": plan, "why": why})
         return {"table": needed.week_table(rows, aim, show), "basis": basis}
+
+    def _week_version(program: str, week_start: str) -> Optional[int]:
+        """Phase AM: the version picked on the Weeks page (``v``): one of that program's week, else 404; None when
+        none is picked (the one in use)."""
+        picked = request.args.get("v", type=int)
+        if picked is None:
+            return None
+        if not any(v["id"] == picked for v in app.extensions["store"].list_schedules(program=program,
+                                                                                     week_start=week_start)):
+            abort(404)
+        return picked
+
+    def _version_pick(versions: List[Dict[str, Any]], picked: Optional[int]) -> Dict[str, Any]:
+        """The Weeks page's Version pick: the week's versions, the one in use first, each with its run and whether
+        its breaks are planned."""
+        store = app.extensions["store"]
+        runs = {v["run_id"]: (store.get_run(v["run_id"]) or {}).get("workbook") or v["run_id"] for v in versions}
+        rows = [{"id": v["id"], "in_use": bool(v["in_use"]),
+                 "text": f"{runs[v['run_id']]}: {v['label']}, "
+                         + ("breaks planned" if json.loads(v["week"] or "{}").get("breaks") else "before breaks")
+                         + (" (in use)" if v["in_use"] else "")}
+                for v in sorted(versions, key=lambda v: (not v["in_use"], -(v["created"] or 0), -v["id"]))]
+        return {"rows": rows if len(rows) > 1 else [], "picked": picked}
 
     def _needed_choices() -> Tuple[str, str, str]:
         return (needed.pick(request.args.get("basis"), needed.BASES), needed.pick(request.args.get("aim"), needed.AIMS),
@@ -1836,7 +2819,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if not _access().can_open(program):
             abort(403)
         basis, aim, show = _needed_choices()
-        found = _hours_needed(program, week, basis, aim, show)
+        found = _hours_needed(program, week, basis, aim, show, _week_version(program, week))
         table = found["table"]
         reach = "100%" if aim == "full" else f"the target ({round(100 * table['target'])}%) with 10 minutes over it"
         title = (f"{_unit_filter(program)}, week of {date.fromisoformat(week):%a %d %b %Y}. "
@@ -1861,11 +2844,93 @@ def create_app(config: Dict[str, Any]) -> Flask:
                          tight=found["tight"] + t["tight"], target=t["target"])
         return found if found["intervals"] else None
 
+    def _channel_hours_for(units: List[str], week_start: str) -> Optional[Dict[str, Any]]:
+        """Phase AP: the week's hours per channel of one LOB, or of several added up (a merged page)."""
+        found = [w for w in (_channel_hours_week(u, week_start) for u in units) if w]
+        if len(found) < 2:
+            return found[0] if found else None
+        table = combine(found)
+        return {**table, "labels": found[0]["labels"], "unplanned_labels": [found[0]["labels"][i] for i in table["unplanned"]]}
+
+    def _channel_hours_week(program: str, week_start: str) -> Optional[Dict[str, Any]]:
+        """Phase AP (sample ap01, C): the week's scheduled hours per channel for ``program`` (None when the week has
+        no schedule in use at all), with the day labels and the days that have no channel plan."""
+        days, views = _days(), []
+        first = date.fromisoformat(week_start)
+        for i in range(7):
+            try:
+                page = days.page(program, first + timedelta(days=i))
+            except (ValueError, KeyError, StopIteration, OSError, zipfile.BadZipFile, InvalidFileException):
+                page = None  # a kept input that cannot be read: the page says so elsewhere
+            views.append(page["view"] if page else None)
+        if not any(views):
+            return None
+        table = week_hours(views)
+        labels = [f"{first + timedelta(days=i):%a %d}" for i in range(7)]
+        return {**table, "labels": labels, "unplanned_labels": [labels[i] for i in table["unplanned"]]}
+
+    def _merge_units(program: str) -> List[str]:
+        """Phase AP (sample ap01; owner: only LOBs of one program): the units a merged view of ``program`` holds, its
+        program's LOBs, when there are two or more; else just ``program``. A person is given a whole program, so
+        every unit listed is one they may open."""
+        found = ProgramBook(app.extensions["store"]).unit(program) if program else None
+        if found is None:
+            return [program]
+        units = sorted(u for u in found["program"]["units"] if _access().can_open(u))
+        return units if len(units) > 1 and program in units else [program]
+
+    def _merged_name(program: str, units: List[str]) -> str:
+        """"ZED, One + Two": the program and its LOBs' own names."""
+        book = ProgramBook(app.extensions["store"])
+        found = book.unit(program)
+        names = [(book.unit(u) or {}).get("lob") or {} for u in units]
+        return f"{found['program']['name']}, " + " + ".join(n.get("name") or u for n, u in zip(names, units))
+
+    def _lob_names(units: List[str]) -> Dict[str, str]:
+        """Phase AP: the short name of each unit ("Tier 2"), for the chip on each person of a merged page."""
+        book = ProgramBook(app.extensions["store"])
+        return {u: ((book.unit(u) or {}).get("lob") or {}).get("name") or u for u in units}
+
+    def _merged_week(program: str, units: List[str], week: str, side: str):  # type: ignore[no-untyped-def]
+        """Phase AP: the Week page of every LOB of ``program`` as one grid, in the zone picked, with one target (the
+        LOBs' targets weighted by what each LOB needs). None when none of the LOBs has a schedule for the week."""
+        store = app.extensions["store"]
+        kept = sorted({w for u in units for w in _version_weeks(u)})
+        holding = next((w for w in reversed(kept) if week and 0 <= (date.fromisoformat(week)
+                                                                    - date.fromisoformat(w)).days <= 6), None)
+        if holding is None and not week and kept:
+            holding = kept[-1]
+        if holding is None:
+            return None
+        rows, targets, notes, missing = {}, [], [], []
+        for u in units:
+            chosen, _ = pick_version(store.list_schedules(program=u, week_start=holding))
+            if chosen is None:
+                missing.append(u)
+                continue
+            intervals, note = _week_zone(json.loads(chosen["checks"] or "{}").get("intervals") or [],
+                                         store.get_run(chosen["run_id"]), holding)
+            rows[u] = intervals
+            targets.append((_week_target(u, holding, chosen["run_id"]), sum(r[2] for r in intervals)))
+            if note and note not in notes:
+                notes.append(note)
+        weight = sum(w for _, w in targets)
+        target = sum(t * w for t, w in targets) / weight if weight else 0.9
+        merged = merge_intervals(rows)
+        programs, weeks = _week_choices(program, program_weeks(_all_runs(), store.in_use_runs()))
+        info = {"name": _merged_name(program, units), "units": units, "all": len(units) == len(_merge_units(program)),
+                "missing": [(ProgramBook(store).label(u)) for u in missing],
+                "target": int(round(100 * target)), "differs": len({round(t, 4) for t, _ in targets}) > 1}
+        return render_template("week.html", run=None, view=week_view(merged, side, target) if merged else None,
+                               side=side, program=program, week=holding, programs=programs, weeks=weeks, figures={},
+                               zone_note=" ".join(notes), merged=info)
+
     def _version_week(row: Dict[str, Any], side: str, note: Optional[Dict[str, Any]] = None,
                       target: Optional[Dict[str, Any]] = None,
                       elsewhere: Optional[Dict[str, Any]] = None,
                       outlook: Optional[List[Dict[str, Any]]] = None,
-                      hours: Optional[Dict[str, Any]] = None):  # type: ignore[no-untyped-def]
+                      hours: Optional[Dict[str, Any]] = None,
+                      pick: Optional[Dict[str, Any]] = None):  # type: ignore[no-untyped-def]
         """A version's week view; ``note`` (the Week page): why this version, and what else the week has."""
         run = app.extensions["store"].get_run(row["run_id"])
         intervals, zone_note = _week_zone(json.loads(row["checks"] or "{}").get("intervals") or [], run,
@@ -1887,7 +2952,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                side=side, program=row["program"], week=row["week_start"], programs=programs,
                                weeks=weeks, figures=figures, version=row, week_note=note,
                                may_set_in_use=_may_set_in_use(row), target_panel=target, elsewhere=elsewhere,
-                               switch=switch, outlook=outlook, zone_note=zone_note, needed=hours)
+                               switch=switch, outlook=outlook, zone_note=zone_note, needed=hours,
+                               pick=pick or {"rows": [], "picked": None})
 
     @app.route("/week")
     @login_required
@@ -1902,6 +2968,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if not program and history:
             latest = max((w for rows in history.values() for w in rows), key=lambda w: w["finished"] or 0)
             program, week = latest["program"], latest["week"]
+        units = _merge_units(program)  # Phase AP: a View pick when the program has two or more LOBs
+        merge = _merge_choice(program) if program and _access().can_open(program) else None
+        _merge_pick_for(program, units, merge)
+        if merge:
+            found = _merged_week(program, merge, week, side)
+            if found is not None:
+                return found
         kept = _version_weeks(program)
         holding = next((w for w in reversed(kept) if week and 0 <= (date.fromisoformat(week)
                                                                     - date.fromisoformat(w)).days <= 6), None)
@@ -1910,6 +2983,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if holding:
             versions = store.list_schedules(program=program, week_start=holding)
             chosen, said = pick_version(versions)
+            picked = _week_version(program, holding)
+            if picked is not None:  # Phase AM: the Version pick
+                chosen, said = next(v for v in versions if v["id"] == picked), ""
             if chosen is not None:
                 runs = {v["run_id"]: (store.get_run(v["run_id"]) or {}).get("workbook", "") for v in versions}
                 others = [{"run_id": rid, "workbook": wb} for rid, wb in runs.items() if rid != chosen["run_id"]]
@@ -1924,7 +3000,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                                     "others": others, "set_by": set_by},
                                      _target_panel(program, holding, chosen),
                                      outlook=_outlook(program, holding),
-                                     hours=_hours_needed(program, holding, *_needed_choices()))
+                                     hours=_hours_needed(program, holding, *_needed_choices(), picked),
+                                     pick=_version_pick(versions, picked))
         rows = history.get(program, [])
         if program and not week and rows:
             week = rows[-1]["week"]
@@ -1985,9 +3062,29 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 # Phase AC: a damaged kept input says so here instead of turning the whole page into an error
                 input_problem = ("The input workbook kept with this schedule cannot be read, so its channels cannot "
                                  "be checked here. Upload the schedule again to replace it.")
+        own = pick_zone(run.get("tz") or HOME)  # Phase AK: shown in the zone picked, the schedule's own to begin with
+        g.zone = request.args["tz"] if request.args.get("tz") in dict(ZONES) else (_pc_zone() or own)  # Phase AY: the computer's zone, else the schedule's own
+        first = date.fromisoformat(run["week_start"]) if start_date(run.get("week_start") or "") else datetime.now(EGYPT).date()
+        moved = own != g.zone
+        together = None  # Phase AP: every LOB of the program as one, when it has two or more
+        units = _merge_units(run["program"]) if run.get("program") and start_date(run.get("week_start") or "") else []
+        if len(units) > 1:
+            weeks_of = [w for w in (_channel_hours_week(u, run["week_start"]) for u in units) if w]
+            together = {"name": _merged_name(run["program"], units), "of": len(units),
+                        "have": sum(1 for u in units if app.extensions["store"].list_schedules(
+                            program=u, week_start=run["week_start"])),
+                        "url": url_for("week_page", program=run["program"], week=run["week_start"], merge="1",
+                                       tz=g.zone if moved else None),
+                        "hours": {**combine(weeks_of), "labels": weeks_of[0]["labels"],
+                                  "unplanned_labels": [weeks_of[0]["labels"][i] for i in combine(weeks_of)["unplanned"]]}
+                        if weeks_of else None}
+        zone_dates = {d: first + timedelta(days=((i + 6) % 7 - first.weekday()) % 7) for i, d in enumerate(DAYS)}
         return render_template("schedules.html", run=run, versions=versions, current=current, view=view,
+                               leave_after=app.extensions["leave"].last_applied(run_id), moved=moved, together=together, zone_dates=zone_dates, own_zone=own, own_name=dict(ZONES)[own],
                                counts=counts, may_set_in_use=bool(current) and _may_set_in_use(current),
                                days=DAYS, channel_lines=None if input_problem else _channel_lines(run_id),
+                               chhours=_channel_hours_week(run["program"], run["week_start"])
+                               if current and run.get("program") and start_date(run.get("week_start") or "") else None,
                                channel_added=added, step=step, input_problem=input_problem,
                                week_list=week_list if len(week_list) > 1 else [],
                                may_use={e["shown"]["id"] for e in week_list if _may_set_in_use(e["shown"])},
@@ -2062,6 +3159,15 @@ def create_app(config: Dict[str, Any]) -> Flask:
         incoming.mkdir(exist_ok=True)
         path = incoming / f"{secrets.token_hex(8)}.upload"
         upload.save(path)
+        too_big = zip_problem(path)  # Phase AU
+        if too_big:
+            path.unlink(missing_ok=True)
+            flash(too_big)
+            return back
+        refused = _upload_refused(path, upload.filename or "", structure=False)  # Phase AV
+        if refused:
+            flash(refused)
+            return back
         try:
             lines = _book().attach_channels(run_id, path)
         except ValueError as exc:
@@ -2098,6 +3204,15 @@ def create_app(config: Dict[str, Any]) -> Flask:
             typed[name] = [_clock_of(request.form.get(f"at-{i}-{k}", ""), span)
                            for k in range(len(slots_for(rules, span[1] - span[0])))]
         return typed
+
+
+    def _channel_before(row, week, rules, draft, d, skills, language_rows):
+        previous = None
+        if d == 0 and start_date(row.get("week_start") or ""):
+            prior_on = date.fromisoformat(start_date(row["week_start"])) - timedelta(days=1)
+            prior, _ = _days().version(row["program"], prior_on)
+            previous = json.loads(prior["week"] or "{}") if prior else None
+        return channel_before(week, rules, draft, d, skills, language_rows, previous_week=previous)
 
     @app.route("/schedules/<int:schedule_id>/breaks", methods=["GET", "POST"])
     @login_required
@@ -2240,11 +3355,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
         people = people_for(week, d, rules, plan, skills, inputs["languages"])
         if request.method == "POST":
             action = request.form.get("action", "")
+            if action in ("suggest", "suggest_week"):  # Phase AY: the tick on the page decides, not only the workbook
+                setup = dict(setup, rules=dict(setup["rules"], consistent=request.form.get("consistent") == "1"))
             try:
                 if action == "suggest":
                     found = plan_day(people, setup, rules, d, carry=channel_carry(week, rules, draft, d),
                                      move_breaks=request.form.get("move") == "1",
-                                     before=channel_before(week, rules, draft, d, skills))
+                                     before=_channel_before(row, week, rules, draft, d, skills, inputs["languages"]))
                     store.set_channel_draft(schedule_id, day, {"blocks": found["blocks"], "breaks": found["breaks"],
                                                                "moved": found["moved"], "note": found["note"]},
                                             g.user["id"])
@@ -2265,7 +3382,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                         try:
                             found = plan_day(theirs, setup, rules, o, carry=channel_carry(week, rules, draft, o),
                                              move_breaks=request.form.get("move") == "1",
-                                             before=channel_before(week, rules, draft, o, skills))
+                                             before=_channel_before(row, week, rules, draft, o, skills, inputs["languages"]))
                         except NoPlan as exc:
                             refused.append(f"{FULL_DAYS[other]}: {exc}")
                             continue
@@ -2337,15 +3454,16 @@ def create_app(config: Dict[str, Any]) -> Flask:
             except ValueError as exc:  # NoPlan is a ValueError
                 flash(str(exc))
             return redirect(url_for("plan_channels", schedule_id=schedule_id, day=day), code=303)
-        score = score_day(people, plan, setup, d, rules) if planned_anything(plan) else None
+        score = score_day(people, plan, setup, d, rules, before=_channel_before(row, week, rules, draft, d, skills, inputs["languages"]))
         target = setup["email_hours"][d]["hours"] if setup["email_mode"] == "hours" else None
         run = store.get_run(row["run_id"]) or {}
         return render_template("channels.html", row=row, run=run, day=day, days=DAYS, full=FULL_DAYS, setup=setup,
                                grid=channel_grid(people, plan), people=people, score=score, target=target,
-                               cover=channel_coverage(people, plan, setup, d, inputs["interval"]),
-                               plan=plan, drafted=sorted(draft, key=DAYS.index), names=CHANNEL_NAMES,
+                               cover=channel_coverage(people, plan, setup, d, inputs["interval"], before=_channel_before(row, week, rules, draft, d, skills, inputs["languages"])),
+                               plan=plan, planned=planned_anything(plan), drafted=sorted(draft, key=DAYS.index), names=CHANNEL_NAMES,
                                stale=[] if day in draft else stale_blocks(week, d),
-                               may_set_in_use=_may_set_in_use(row), hm=hm)
+                               may_set_in_use=_may_set_in_use(row), hm=hm,
+                               fair=fairness(week, rules, draft, skills, inputs["languages"], d))
 
     @app.route("/schedules/<int:schedule_id>/check", methods=["POST"])
     @login_required
@@ -2417,8 +3535,27 @@ def create_app(config: Dict[str, Any]) -> Flask:
         row = _version_or_404(schedule_id)
         book = _book()
         stem = secure_filename(f"{row['program'] or row['run_id']}_{row['week_start']}_{row['label']}") or "schedule"
+        # Phase AM: "Times in" another zone downloads a copy in that zone's clock; the kept workbook stays as it is
+        own = pick_zone((_book().store.get_run(row["run_id"]) or {}).get("tz") or HOME)
+        tz = request.args.get("tz", "")
+        first = start_date(row["week_start"] or "")
+        convert = tz in dict(ZONES) and tz != own and bool(first)
+        if convert:
+            stem = secure_filename(f"{stem}_{dict(ZONES)[tz].split(' (')[0]} time") or stem
         _record("downloaded", program=row["program"], week_start=row["week_start"], run_id=row["run_id"],
                 schedule_id=schedule_id, subject=f"{stem}.xlsx")
+        if convert:
+            source = book.path(schedule_id) if row["kind"] != "edited" else with_notes(book.path(schedule_id),
+                                                                                       book.view(schedule_id))
+            try:
+                with tempfile.TemporaryDirectory() as tmp:
+                    out = Path(tmp) / "zoned.xlsx"
+                    zoned_copy(source, out, 0, on=date.fromisoformat(first), from_zone=own, to_zone=tz)
+                    data = out.read_bytes()
+            except ValueError as exc:
+                return render_template("error.html", code=400, message=str(exc)), 400
+            return send_file(io.BytesIO(data), as_attachment=True, download_name=f"{stem}.xlsx",
+                             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         if row["kind"] != "edited":
             return send_file(book.path(schedule_id), as_attachment=True, download_name=f"{stem}.xlsx")
         return send_file(with_notes(book.path(schedule_id), book.view(schedule_id)), as_attachment=True,
@@ -2547,8 +3684,18 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                may_use={e["shown"]["id"] for e in entries if _may_set_in_use(e["shown"])},
                                may_delete={e["run"]["id"] for e in entries if _may_delete(e["run"])})
 
-    WINDOW_TABS = ("timeline", "board", "adherence")  # Phase AI: the 24 hours from the start picked
+    # Phase AI: the 24 hours from the start picked; Phase AK: Fix breaks, Rescue the day and Change several breaks too
+    WINDOW_TABS = ("timeline", "board", "adherence", "replan", "rescue", "bulk")
     START = re.compile(r"^([01]\d|2[0-3]):(00|15|30|45)$")
+
+    def _window_moved(program: str, on: date, zone: str, start: Optional[int] = None) -> Optional[int]:
+        """The shift of ``zone`` from the schedule's own clock for the 24 hours the RTA shows (from ``start`` minutes of ``zone``'s clock, else
+        the start kept for this program, else midnight); None when the clocks change inside them (Phase AY)."""
+        own = _own_zone(program, on)
+        if start is None:
+            found = START.match(((session.get("rta") or {}).get(program) or {}).get("start", "")) or START.match("00:00")
+            start = int(found.group(1)) * 60 + int(found.group(2))
+        return rta_window_shift(on, own, zone, start - noon_gap(on, own, zone))
 
     def _own_zone(program: str, on: date) -> str:
         """The zone the schedule in use for ``program`` on ``on`` was made in (Egypt when none is kept)."""
@@ -2558,23 +3705,60 @@ def create_app(config: Dict[str, Any]) -> Flask:
     def _rta_choice(program: str, moved_for) -> Tuple[str, int]:
         """Phase AI: the zone and the day's start (minutes, in that zone) the RTA shows ``program`` in: as asked for,
         else as last picked for it this session; Egypt from midnight to begin with. ``window=operating`` (the program's
-        operating day, kept in the schedule's time) starts it there; ``moved_for(zone)`` is the zone's shift."""
+        operating day, kept in the schedule's time) starts it there; ``moved_for(zone, begins)`` is the zone's shift for the 24 hours from ``begins``."""
         every = dict(session.get("rta") or {})
         kept = dict(every.get(program) or {})
         if request.args.get("tz") in dict(ZONES):
             kept["tz"] = request.args["tz"]
-        zone = pick_zone(kept.get("tz", ""))
+        zone = kept["tz"] if kept.get("tz") in dict(ZONES) else (_pc_zone() or HOME)  # a zone picked here stays; else the computer's
         if START.match(request.args.get("start", "")):
             kept["start"] = request.args["start"]
         elif request.args.get("window") == "operating" and program:
             begins = app.extensions["store"].get_day_start(program)
             if begins is not None:
-                kept["start"] = plain_hm(begins + moved_for(zone))
+                kept["start"] = plain_hm(begins + moved_for(zone, begins))
         if program and kept != every.get(program):
             every[program] = kept
             session["rta"] = every
         found = START.match(kept.get("start", "")) or START.match("00:00")
         return zone, int(found.group(1)) * 60 + int(found.group(2))
+
+    @app.url_defaults
+    def _keep_embed(endpoint: str, values: Dict[str, Any]) -> None:
+        """Phase AY: inside a split-view pane every link and redirect to the day stays embedded."""
+        if endpoint == "day_page" and "embed" not in values and request and request.values.get("embed") == "1":
+            values["embed"] = "1"
+
+    SPLIT_MAX = 3  # panes (owner: "a max of 2 or 3")
+
+    @app.route("/day/split")
+    @login_required
+    def day_split():  # type: ignore[no-untyped-def]
+        """Phase AY: two or three RTA days side by side or stacked, each its own program, day, zone and tab (each pane is the ordinary day page
+        embedded, so every check of that page holds in it)."""
+        days = _days()
+        mine = _my_programs(days.programs())
+        today = datetime.now(EGYPT).date()
+        panes, missing = [], []
+        for i in range(1, SPLIT_MAX + 1):
+            asked = request.args.get(f"p{i}", "").strip()
+            if not asked:
+                continue
+            program = clean_program(asked)
+            on = _date(request.args.get(f"d{i}", "")) or today
+            if program not in mine:
+                missing.append(i)
+                continue
+            panes.append({"n": i, "program": program, "date": on,
+                          "src": url_for("day_page", program=program, date=on.isoformat(), embed="1", view=request.args.get(f"v{i}") or None,
+                                         tz=request.args.get(f"z{i}") if request.args.get(f"z{i}") in dict(ZONES) else None)})
+        layout = request.args.get("layout", "")
+        layout = layout if layout in ("rows", "cols") else ("cols" if len(panes) >= 3 else "rows")
+        free = next((i for i in range(1, SPLIT_MAX + 1) if not request.args.get(f"p{i}", "").strip()), None)
+        slots = [{"n": i, "program": request.args.get(f"p{i}", ""), "date": (_date(request.args.get(f"d{i}", "")) or today).isoformat()}
+                 for i in range(1, SPLIT_MAX + 1) if request.args.get(f"p{i}", "").strip() or i == free]
+        return render_template("split.html", panes=panes, missing=missing, layout=layout, programs=mine, slots=slots,
+                               can_add=free is not None and len(panes) + len(missing) < SPLIT_MAX, max=SPLIT_MAX)
 
     @app.route("/day")
     @login_required
@@ -2589,24 +3773,84 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if not program and programs:
             program = next((p for p in programs if days.version(p, on)[0]), programs[0])
         own_zone = _own_zone(program, on)
-        g.zone, start_at = _rta_choice(program, lambda zone: zone_shift(on, own_zone, zone))
-        moved = zone_shift(on, own_zone, g.zone)
+        g.zone, start_at = _rta_choice(program, lambda zone, begins: rta_window_shift(on, own_zone, zone, begins) or 0)  # 0 when the clocks change in that window (Phase AY)
+        moved = _window_moved(program, on, g.zone, start_at)
+        g.rta_clock_notice = ""
+        if moved is None:
+            g.zone, moved = own_zone, 0
+            g.rta_clock_notice = ("Clocks change in this window. Times and edits are shown in the schedule's own "
+                                  "time zone. This schedule records wall-clock times and does not distinguish "
+                                  "the two occurrences of a repeated hour.")
+        units = _merge_units(program)  # Phase AP: a View pick when the program has two or more LOBs
+        merge = _merge_choice(program)
+        _merge_pick_for(program, units, merge)
         with shown(moved):
-            return _day_body(days, programs, on, program, own_zone, moved, start_at)
+            return _day_body(days, programs, on, program, own_zone, moved, start_at, merge)
+
+    def _merge_choice(program: str) -> Optional[List[str]]:
+        """Phase AP: the LOBs the RTA page shows as one, else None. Phase AX (owner, 2026-10-22: two out of five): the
+        LOBs ticked in the View pick, the one the page is opened on always among them; "merge=1" alone keeps the
+        choice made, or means all. The pick is kept for the program in the session, like the zone and the start."""
+        units = _merge_units(program)
+        if len(units) < 2:
+            return None
+        kept = dict(session.get("rta_merge") or {})
+        pid = str(ProgramBook(app.extensions["store"]).unit(program)["program"]["id"])
+        if "merge" in request.args:
+            if request.args.get("merge") != "1":
+                kept[pid] = ""
+            elif "pick" in request.args:
+                want = set(request.args.getlist("lobs"))
+                chosen = [u for u in units if u == program or u in want]
+                kept[pid] = "1" if len(chosen) == len(units) else (chosen if len(chosen) > 1 else "")
+            elif not kept.get(pid):
+                kept[pid] = "1"
+            session["rta_merge"] = kept
+        held = kept.get(pid)
+        if isinstance(held, list):
+            chosen = [u for u in units if u == program or u in held]
+            return chosen if len(chosen) > 1 else None
+        return units if held == "1" else None
+
+    def _merge_pick_for(program: str, units: List[str], merge: Optional[List[str]]) -> None:
+        """Phase AX: what the View pick shows: a tick box per LOB, the ones merged ticked, the open one fixed."""
+        names = _lob_names(units) if len(units) > 1 else {}
+        g.merge_pick = f"All LOBs of {ProgramBook(app.extensions['store']).unit(program)['program']['name']}" \
+            if len(units) > 1 else ""
+        g.merge_lobs = [{"unit": u, "name": names[u], "home": u == program, "on": bool(merge) and u in merge}
+                        for u in units] if len(units) > 1 else []
+        g.merge_summary = " + ".join(names[u] for u in merge) if merge else "This LOB"
+
+    MERGE_TABS = ("timeline", "board", "adherence", "requests")  # Phase AP: the tabs that read, and change one person at a time
 
     def _day_body(days, programs: List[str], on: date, program: str, own_zone: str, moved: int,
-                  start_at: int):  # type: ignore[no-untyped-def]
+                  start_at: int, merge: Optional[List[str]] = None):  # type: ignore[no-untyped-def]
         measure = request.args.get("measure", "")
-        measure = measure if measure in MEASURES else "interval"
+        # Phase AS: with none in the address the RTA opens on the program's own (interval compliance until it says otherwise)
+        measure = measure if measure in MEASURES else (ProgramBook(app.extensions["store"]).day_measure(program)
+                                                       if program else "interval")
         tab = request.args.get("view", "")
-        tab = tab if tab in ("board", "adherence", "meeting", "cover", "replan", "channels", "bulk", "rescue") else "timeline"
+        tab = tab if tab in ("board", "adherence", "meeting", "sessions", "cover", "replan", "channels", "bulk", "rescue", "requests") else "timeline"
+        if merge and tab not in MERGE_TABS:
+            flash("Pick one LOB for that tab: it plans or changes one LOB's schedule.")
+            return redirect(url_for("day_page", program=program, date=on.isoformat(), merge="1", tz=g.zone,
+                                    start=request.args.get("start") or None), code=303)
         problem = ""
         try:
-            page = days.page(program, on, measure) if program else None
+            if merge:
+                page = merged_page(days, program, merge, on, measure, start_at - moved, g.zone, _own_zone) \
+                    if program else None
+                if page and len(merge) < len(_merge_units(program)):  # Phase AX: some of the LOBs, said as such
+                    page["note"] = (f"{' + '.join(_lob_names(merge).values())} together. A change made here is saved "
+                                    "on the person's own LOB.")
+            else:
+                page = days.page(program, on, measure) if program else None
         except ValueError as exc:  # said on the page, not a server error
             page, problem = None, str(exc)
         anchor, sources, start = page, {0: page}, 0
-        if page:  # Phase AI: the 24 hours from the start picked, stitched from the schedule's days
+        if page and merge:  # the merged page is already the 24 hours from the start picked
+            start = page["view"]["start"]
+        elif page:  # Phase AI: the 24 hours from the start picked, stitched from the schedule's days
             step = page["view"]["interval"]
             start = start_at - moved
             start -= start % step
@@ -2618,9 +3862,17 @@ def create_app(config: Dict[str, Any]) -> Flask:
                         except ValueError:  # a workbook that cannot be read: its hours stay empty
                             sources[d] = None
                 found = window_view({d: (x or {}).get("view") for d, x in sources.items()}, start, on)
+                begins = app.extensions["store"].get_day_start(program)  # Phase AU: the operating day runs to its last shift
+                if begins is not None and start == begins - begins % step:
+                    try:
+                        length = operating_span(found)
+                    except (ValueError, KeyError, TypeError, StopIteration):
+                        length = 1440  # it cannot be worked out: 24 hours from the start
+                    if length < 1440:
+                        found = window_view({d: (x or {}).get("view") for d, x in sources.items()}, start, on, length)
                 page = dict(page, view=found, target=at_target(found["cells"], page["target"]["target"]))
         window = bool(page and "start" in page["view"])
-        clock_now = datetime.now(EGYPT)
+        clock_now = datetime.now(ZoneInfo(own_zone))
         now_at = (clock_now.date() - on).days * 1440 + clock_now.hour * 60 + clock_now.minute  # from on's midnight
 
         def source(t: int):  # type: ignore[no-untyped-def]
@@ -2637,12 +3889,13 @@ def create_app(config: Dict[str, Any]) -> Flask:
         people = shrink = whole = None
         finder: Dict[str, Any] = {}
         cover = None
+        sessions = days.sessions(program, on) if page and tab == "sessions" else []
         if page and tab == "meeting":
             finder = {"who": request.args.getlist("who"), "minutes": request.args.get("minutes", 30, type=int),
                       "from": request.args.get("from", "09:00"), "to": request.args.get("to", "18:00"),
                       "kind": request.args.get("kind", "Meeting"), "billable": request.args.get("billable") == "1",
                       "with_whom": request.args.get("with_whom", ""), "why": request.args.get("why", ""),
-                      "with_dept": request.args.get("with_dept", "")}
+                      "with_dept": request.args.get("with_dept", ""), "at": request.args.get("at", "")}
             if finder["who"]:
                 try:
                     finder["slots"] = days.meeting_slots(program, on, finder["who"], finder["minutes"],
@@ -2650,7 +3903,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                                          to_schedule(finder["to"], moved), finder["billable"], measure)
                 except ValueError as exc:
                     finder["error"] = str(exc)
-        clock_now = datetime.now(EGYPT)
+        clock_now = datetime.now(ZoneInfo(own_zone))
         from_now = clock_now.hour * 60 + clock_now.minute if clock_now.date() == on else 0
         shift_view: Dict[str, Any] = {"shift_groups": [], "shift": "", "shift_names": None}
         if page and tab == "timeline":  # the Timeline by shift start (Phase W)
@@ -2660,17 +3913,37 @@ def create_app(config: Dict[str, Any]) -> Flask:
             chosen = next((g for g in groups if g["key"] == wanted), None)
             shift_view = {"shift_groups": groups, "shift": wanted,
                           "shift_names": set(chosen["names"]) if chosen else (set() if wanted else None)}
+        outside: Dict[str, Any] = {"rows": [], "prev": [], "roles": COVER_ROLES, "channels": [], "languages": []}
         if page and tab == "cover":
             cover = days.offers(page, from_now)
-        proposal = days.replan(page, from_now) if page and tab == "replan" else None
-        bulk = _bulk_panel(days, page, program, on, moved) if page and tab == "bulk" else None  # Phase AD (sample 04)
+            ch = page["view"].get("channels")  # Phase AJ: cover from outside the roster, on a channel when there are
+            outside = {"rows": days.covers(program, on),
+                       "prev": [c for c in days.covers(program, on - timedelta(days=1)) if c["end_min"] > 1440],  # last night's, still on
+                       "roles": COVER_ROLES,
+                       "channels": [(r["letter"], r["name"]) for r in ch["rows"] if "language" not in r] if ch else [],
+                       "languages": days.cover_languages(page)}
+        fresh = request.args.get("how") == "fresh"  # Phase AX: "Replan the day's breaks", from scratch
+        replan_now = _window_now(on, start) or 0
+        passed = bool(fresh and page and minute_now(on, own_zone, datetime.now(EGYPT)) >= start + 1440)
+        if passed:  # owner, 2026-10-22: only for what is still to come, so a day that has passed has nothing to replan
+            replan_now = start + 1440
+        proposal = (days.fresh_replan_window if fresh else days.replan_window)(program, on, start, replan_now) \
+            if page and tab == "replan" else None
+        bulk = _bulk_panel(days, page, program, on, moved, start) if page and tab == "bulk" else None  # Phase AD (sample 04)
         rescue = None  # Phase AD (sample 02): interval compliance only; the page says so for the other measure
         if page and tab == "rescue" and measure == "interval":
             try:
-                rescue = days.rescue_plan(program, on, _minute_now(on), page=page)
+                rescue = days.rescue_plan(program, on, _window_now(on, start), page=None if start else page, start=start)
             except ValueError as exc:
                 rescue = {"error": str(exc)}
-        dayoff = days.dayoff_plan(page, from_now) if page and tab == "rescue" else None  # Phase AF (F1, F2)
+        dayoff = days.dayoff_plan(anchor, from_now) if anchor and tab == "rescue" else None  # Phase AF (F1, F2)
+        chfix = None  # Phase AM: Fix channels, shown before anything is kept
+        if page and tab == "channels" and request.args.get("fix") == "1" and allowed(app.extensions["store"], g.user,
+                                                                                    "rta_change"):
+            try:
+                chfix = days.channel_fix_plan(program, on, now=minute_now(on, own_zone, datetime.now(EGYPT)))
+            except ValueError as exc:
+                chfix = {"error": str(exc)}
         cover_panel = None
         cover_at = request.args.get("cover", type=int)
         if page and tab == "board" and cover_at is not None:
@@ -2707,7 +3980,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             first = own[0][1] if nobody else None
             side = "after" if first and first["start"] < t + step else "before"  # before, as always, unless it ended
             reach = (first["start"] - t if side == "before" else t + step - first["end"]) if first else 0
-            minutes = min([m for m in ADD_LENGTHS if reach <= m <= 120] or [120]) if first else None
+            minutes = min([m for m in ADD_LENGTHS if reach <= m <= OVERTIME_MAX] or [OVERTIME_MAX]) if first else None
             off = days.off_today(program, held_on)  # for "Day off cancelled" (Phase S)
             shifts = days.shift_library(program, held_on)
             add_panel = {"t": t, "end": t + step, "person": request.args.get("person", ""), "date": held_on,
@@ -2740,11 +4013,25 @@ def create_app(config: Dict[str, Any]) -> Flask:
             # Phase AI: each interval's planned shrinkage from the day that holds it
             planned = {t + 1440 * d: x for d, src in sources.items() if src
                        for t, x in src["inputs"].get("planned_shrinkage", {}).get(src["day"], {}).items()}
+            if merge:  # Phase AP: each LOB's planned figure on the shared clock, the LOBs' mean at each interval
+                found: Dict[int, List[float]] = {}
+                for u, src in page["pages"].items():
+                    for t, x in src["inputs"].get("planned_shrinkage", {}).get(src["day"], {}).items():
+                        found.setdefault(t + page["merged"]["delta"][u], []).append(x)
+                planned = {t: sum(xs) / len(xs) for t, xs in found.items()}
             shrink = interval_shrinkage(v, {"planned_shrinkage": {0: planned}}, 0)
-        bar = {"undo": days.undoable(program, on, g.user["id"]) if program and page else None,  # Phase AD
-               "send": _send_bar(program, on) if program and page else None,
+        outside_breaks = []  # Phase AX: breaks that lie outside their shift (stale data); said, and Fix moves them inside
+        for lane in (page["view"]["lanes"] if page else []):
+            for seg in lane["segments"]:
+                if seg["offset"] == 0:
+                    outside_breaks += [(lane["name"], b["kind"], b["start"]) for b in seg["breaks"]
+                                       if b["start"] < seg["start"] or b["start"] + b["minutes"] > seg["end"]]
+        bar = {"undo": days.undoable(program, on, g.user["id"]) if program and page and not merge else None,  # Phase AD
+               "send": _send_bar(program, on) if program and page and not merge else None,
                "resend": request.args.get("resend", 0, type=int)}
-        group = app.extensions["store"].get_notify(program) if program else None  # Phase AB: group posts
+        # Phase AB: group posts (Phase AP: a merged page changes several LOBs, so it posts to no group and has no
+        # Undo or Send bar: open the LOB for those)
+        group = app.extensions["store"].get_notify(program) if program and not merge else None
         posting = bool(group and group["link"] and group["mode"] in ("on", "preview"))
         post_kinds = [k for k in (group or {}).get("kinds", "").split(",") if k] if posting else []
         now_of_day = now_at if window else (clock_now.hour * 60 + clock_now.minute if clock_now.date() == on
@@ -2756,25 +4043,32 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if page:
             kept = app.extensions["store"].get_shrinkage_map(program)
             mapping = read_mapping(kept["mapping"] if kept else None)
+            leave_of = {n: k for u in (merge or [program]) for n, k in app.extensions["leave"].approved_on(u, on).items()}
             shrinkage = {**day_shrinkage(anchor["view"], anchor["week"], anchor["day"], mapping, anchor["inputs"],
-                                         app.extensions["leave"].approved_on(program, on)),
+                                         leave_of),
                          "mapping": mapping, "items": SHRINKAGE_ITEMS,
-                         "may_set": bool(g.user["is_admin"] or g.user["is_supervisor"])}
-        return render_template("day.html", page=page, problem=problem, program=program, programs=programs, on=on,
+                         "may_set": allowed(app.extensions["store"], g.user, "setup")}
+            if merge:  # Phase AP: the planned figure is the mean of the LOBs' own
+                planned = [day_shrinkage(p["view"], p["week"], p["day"], mapping, p["inputs"])["in_office"]["planned"]
+                           for p in page["pages"].values()]
+                planned = [x for x in planned if x is not None]
+                shrinkage["in_office"] = {**shrinkage["in_office"],
+                                          "planned": sum(planned) / len(planned) if planned else None}
+        return render_template("day.html", outside_breaks=outside_breaks, page=page, problem=problem, program=program, programs=programs, on=on,
                                today=clock_now.date(), tips=tips, at_a_glance=at_a_glance, shrinkage=shrinkage,
                                now_box=now_box, requests_waiting=_requests_waiting(program, g.user) if now_box else 0,
                                posts=app.extensions["notifier"].statuses(program, on.isoformat())
                                if program and on else {},
                                post_to=SERVICES.get(group["service"], "") if posting else "",
                                post_mode=group["mode"] if posting else "", post_kinds=post_kinds,
-                               people=people, whole=whole, shrink=shrink, finder=finder, cover=cover,
+                               people=people, whole=whole, shrink=shrink, finder=finder, sessions=sessions, cover=cover, outside=outside, prev_on=on - timedelta(days=1),
                                ot_page=_paged(cover["overtime"] if cover else [], "ot_page", "ot-h"),
-                               vto_page=_paged(cover["vto"] if cover else [], "vto_page", "vto-h"),
                                log_page=_paged(list(reversed(page["log"])) if page else [], "log_page", "daylog-h"),
-                               proposal=proposal, from_now=from_now, cover_panel=cover_panel,
+                               proposal=proposal, fresh=fresh, passed=passed, from_now=from_now, cover_panel=cover_panel,
                                tile_now=now_at if window else (from_now if clock_now.date() == on else None),
                                add_panel=add_panel, person_panel=person_panel, lengths=ADD_LENGTHS, bar=bar,
-                               bulk=bulk, shifts=BULK_SHIFTS, bulk_verb=bulk_verb, rescue=rescue, dayoff=dayoff,
+                               overtime_hours=OVERTIME_MAX // 60,
+                               bulk=bulk, shifts=BULK_SHIFTS, bulk_verb=bulk_verb, rescue=rescue, dayoff=dayoff, chfix=chfix,
                                team_names=sorted({u["display_name"] for u in app.extensions["store"].list_users()
                                                   if u["active"] and not u["is_associate"] and program
                                                   and Access(app.extensions["store"], u).can_open(program)},
@@ -2782,11 +4076,46 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                with_lists=_with_lists(program) if program else [],  # or from the lists (Phase U)
                                tomorrow_unchecked=tomorrow_unchecked(on) if on else "",
                                activity_kinds=ACTIVITY_KINDS,
+                               chhours=_channel_hours_for(merge or [program], page["week_start"])
+                               if page and tab == "timeline" else None,
+                               merged=bool(merge), lob_names=_lob_names(merge) if merge else {},
+                               lob_by_name={l["name"]: l["lob"] for l in page["view"]["lanes"]} if page and merge else {},
                                measure=measure,
                                measures=MEASURES, tab=tab, statuses=STATUSES, aux=sorted(AUX), hm=hm,
                                rows=board(page["view"], page["target"]["target"]) if page and tab == "board" else None, week_of=week_start(on),
+                               **_requests_tab(program, on, tab, merge),
                                earlier=on - timedelta(days=1), later=on + timedelta(days=1), **shift_view,
                                **_window_context(program, on, own_zone, moved, start_at, page, anchor, start, tab))
+
+    def _measure_arg(raw: str, program: Any) -> str:
+        """Phase AU: the measure asked for, else the program's own (LOBs and defaults), else interval compliance."""
+        if raw in MEASURES:
+            return raw
+        unit = program[0] if isinstance(program, (list, tuple)) and program else program
+        return ProgramBook(app.extensions["store"]).day_measure(unit) if isinstance(unit, str) and unit else "interval"
+
+    def _requests_tab(program: str, on: date, tab: str, merge: Optional[List[str]] = None) -> Dict[str, Any]:
+        """Phase AU: break changes and coaching on the RTA tab itself: the count for the tab, and (on the tab) the rows.
+        In the view with every LOB of a program the rows are all those LOBs', each with its LOB."""
+        if not program:
+            return {"changes_n": 0}
+        book, units = app.extensions["changes"], (merge or [program])
+        for u in units:
+            book.expire_overdue(u, _local_now(u))  # Phase AU
+        found = {"changes_n": sum(book.count(u) for u in units)}
+        if tab == "requests":
+            rows = []
+            for u in units:
+                for r in _change_rows(u):
+                    r["lob"] = ((ProgramBook(app.extensions["store"]).unit(u) or {}).get("lob") or {}).get("name") or u
+                    rows.append(r)
+            decided = sorted((r for u in units for r in book.decided(u)), key=lambda r: -(r["decided_at"] or r["asked"]))[:20]
+            found.update(changes=rows, changes_decided=decided, unit=program,
+                         may_change=allowed(app.extensions["store"], g.user, "rta_change"),
+                         can_ask_coaching=_can_ask_coaching(),
+                         back=url_for("day_page", program=program, date=on.isoformat(), view="requests", tz=g.zone,
+                                      start=request.args.get("start") or None, merge="1" if merge else None))
+        return found
 
     def _window_context(program: str, on: date, own_zone: str, moved: int, start_at: int, page, anchor, start: int,
                         tab: str) -> Dict[str, Any]:
@@ -2802,7 +4131,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return {"starts": starts, "start_at": plain_hm(start_at), "vx": vx, "moved": moved, "own_zone": own_zone,
                 "own_name": dict(ZONES)[own_zone].split(" (")[0], "zone_name": dict(ZONES)[g.zone].split(" (")[0], "anchor_view": anchor["view"] if anchor else None,
                 "on_anchor_day": bool(start) and tab not in WINDOW_TABS,
-                "may_set_start": bool(g.user["is_admin"] or g.user["is_supervisor"])}
+                "may_set_start": allowed(app.extensions["store"], g.user, "setup")}
 
     GOTO_PAGES = (  # (label, endpoint, what it needs: "" anyone, "unit" a program picked, "manager", "admin")
         ("Home", "home", ""), ("RTA", "day_page", "unit"), ("Overview", "overview_page", "unit"),
@@ -2827,8 +4156,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
             return all(w in text.casefold() for w in words)
 
         items: List[Dict[str, str]] = []
-        manager = bool(g.user["is_admin"] or g.user["is_supervisor"])
+        manager = allowed(app.extensions["store"], g.user, "setup")
+        can_rta = allowed(app.extensions["store"], g.user, "rta_view")
         for label, endpoint, needs in GOTO_PAGES:
+            permission = PERMISSION_ENDPOINTS.get(endpoint)
+            if permission and not allowed(app.extensions["store"], g.user, permission):
+                continue
             if (needs == "unit" and not program) or (needs == "manager" and not manager) or \
                     (needs == "admin" and not g.user["is_admin"]) or not hit(label):
                 continue
@@ -2839,8 +4172,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
                           "url": url_for(endpoint, **args)})
         units = sorted(k for k in unit_keys(app.extensions["store"]) if _access().can_open(k))
         items += [{"group": "Programs", "label": _unit_name(k), "note": "RTA", "url": url_for("day_page", program=k)}
-                  for k in units if words and (hit(k) or hit(_unit_name(k)))][:GOTO_MAX]
-        if program and words:
+                  for k in units if can_rta and words and (hit(k) or hit(_unit_name(k)))][:GOTO_MAX]
+        if can_rta and program and words:
             found = []
             for name, cell in _days().roster(program, on):
                 if not hit(name):
@@ -2963,6 +4296,28 @@ def create_app(config: Dict[str, Any]) -> Flask:
             _say(str(exc), program, on)
         return _back_to_day(program, on, "channels")
 
+    def _late_answers() -> Dict[str, str]:
+        """Phase AY: what the form says about a late login or early leave: from the allowance or an incident (the allowance when it says
+        nothing), and the account manager's approval of an exception (counted only when ticked and commented)."""
+        approved = request.form.get("am_ok") == "1"
+        return {"late_kind": request.form.get("late_kind", "") or "allowance",
+                "am_note": request.form.get("am_note", "").strip() if approved else ""}
+
+    @app.route("/day/attendance-check", methods=["POST"])
+    @login_required
+    def day_attendance_check():  # type: ignore[no-untyped-def]
+        """Phase AY: what a late login or early leave would come to against the allowance, before it is kept (JSON)."""
+        try:
+            program, on, name = _day_form()
+            status = request.form.get("status", "")
+            if status not in ("Late", "Left early"):
+                raise ValueError("Only a late login or an early leave is checked against the allowance.")
+            found = _days().set_status(program, on, name, status, g.user["id"], start=_typed("from", program, on),
+                                       end=_typed("to", program, on), dry_run=True, **_late_answers())
+        except ValueError as exc:
+            return _refused(exc, *_posted_day())
+        return jsonify(policy=found["policy"], text=found["what"])
+
     @app.route("/day/attendance", methods=["POST"])
     @login_required
     def day_attendance():  # type: ignore[no-untyped-def]
@@ -2973,7 +4328,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             _days().set_status(program, on, name, status, g.user["id"],
                                start=_typed("from", program, on), end=_typed("to", program, on),
                                billable=request.form.get("billable") == "1", with_whom=with_whom, why=why,
-                               with_dept=with_dept)
+                               with_dept=with_dept, **_late_answers())
         except ValueError as exc:
             return _refused(exc, *_posted_day())
         return jsonify(ok=True)
@@ -3015,7 +4370,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             program, on, name = _day_form()
             at = _typed("at", program, on) or None
             with leave_out(_left_out_asked()):
-                _days().move_break(program, on, name, _break_idx(), at, g.user["id"])
+                _days().move_break(program, on, name, _break_idx(), at, g.user["id"],
+                                   missed=request.form.get("missed") == "1")
         except ValueError as exc:  # BreakRefused is a ValueError
             return _refused(exc, *_posted_day())
         return jsonify(ok=True)
@@ -3025,10 +4381,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return {"names": f.getlist("who"), "which": f.get("which", ""), "action": f.get("act", ""),
                 "amount": f.get("amount", 0, type=int), "at": f.get("at", ""), "why": f.get("why", "")}
 
-    def _bulk_panel(days, page: Dict[str, Any], program: str, on: date, moved: int = 0) -> Dict[str, Any]:
+    def _bulk_panel(days, page: Dict[str, Any], program: str, on: date, moved: int = 0,
+                    start: int = 0) -> Dict[str, Any]:
         """Change several breaks (Phase AD, sample 04): today's people by shift start with their breaks, the form as
         filled, and the effect once asked for (nothing kept)."""
-        now = _minute_now(on)
+        now = _window_now(on, start)
         groups: Dict[int, List[Dict[str, str]]] = {}
         kinds: List[str] = []
         for lane in page["view"]["lanes"]:
@@ -3047,7 +4404,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         if request.args.get("show") and form["names"]:
             try:
                 panel["preview"] = days.bulk_preview(program, on, form["names"], panel["which"], panel["act"],
-                                                     panel["amount"], to_schedule(form["at"], moved), form["why"], now)
+                                                     panel["amount"], to_schedule(form["at"], moved), form["why"], now,
+                                                     start=start)
             except ValueError as exc:
                 panel["error"] = str(exc)
         return panel
@@ -3061,9 +4419,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
         try:
             if on is None:
                 raise ValueError("Pick a day.")
+            start = _form_start()
             done = _days().apply_bulk(program, on, form["names"], form["which"], form["action"], g.user["id"],
                                       amount=form["amount"], at=_typed("at", program, on), why=form["why"],
-                                      now=_minute_now(on))
+                                      now=_window_now(on, start), start=start,
+                                      missed=request.form.get("missed") == "1")
             said = bulk_verb(form["action"], done)
             _say(said[0].upper() + said[1:] + ".", program, on)
         except ValueError as exc:
@@ -3096,7 +4456,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         flash(said)
         if not posted and said.startswith("Already posted"):  # asked on the page (the script asks in a dialog)
             args = {"program": program, "date": on.isoformat(), "resend": action["id"],
-                    "view": view if view in ("board", "adherence", "meeting", "cover", "replan", "channels", "bulk", "rescue") else None}
+                    "view": view if view in ("board", "adherence", "meeting", "sessions", "cover", "replan", "channels", "bulk", "rescue") else None}
             return redirect(url_for("day_page", **{k: v for k, v in args.items() if v}) + "#act-bar", code=303)
         return _back_to_day(program, on, view)
 
@@ -3126,17 +4486,45 @@ def create_app(config: Dict[str, Any]) -> Flask:
             return _refused(exc, *_posted_day())
         return jsonify(ok=True)
 
-    def _minute_now(on: Optional[date]) -> Optional[int]:
-        """Minutes past midnight now, Egypt time, when ``on`` is today; None for any other day."""
-        clock_now = datetime.now(EGYPT)
-        return clock_now.hour * 60 + clock_now.minute if clock_now.date() == on else None
+    def _minute_now(on: Optional[date], program=None) -> Optional[int]:
+        """Now in the schedule timezone when ``on`` is today; None for another date."""
+        if on is None:
+            return None
+        program = program or clean_program(request.values.get("program", ""))
+        at = minute_now(on, _own_zone(program, on), datetime.now(EGYPT))
+        return at if 0 <= at < 1440 else None
 
     MINUTE = re.compile(r"^-?\d{1,4}$")  # a minute of the page's 24 hours (Phase AI: before 0 too)
+
+    def _window_now(on: Optional[date], start: int, program=None) -> Optional[int]:
+        """Phase AK: now as a minute from ``on``'s midnight when it falls in the 24 hours from ``start``, else None
+        (from 0, as ``_minute_now``)."""
+        if on is None:
+            return None
+        program = program or clean_program(request.values.get("program", ""))
+        at = minute_now(on, _own_zone(program, on), datetime.now(EGYPT))
+        return at if start <= at < start + 1440 else None
+
+    def _form_start() -> int:
+        """The minute the page's 24 hours began at, as the form sent it (0 when it did not)."""
+        value = request.form.get("start", "0")
+        return int(value) if MINUTE.match(value) else 0
+
+    def _move_item(item: str) -> Tuple[Any, ...]:
+        """A move from a form: "name|idx|minute" on the page's day, or "name|idx|minute|YYYY-MM-DD" on its shift's own
+        date (Phase AK)."""
+        try:
+            head, last = item.rsplit("|", 1)
+            when = _date(last) if re.match(r"^\d{4}-\d{2}-\d{2}$", last) else None
+            name, idx, minute = (head if when else item).rsplit("|", 2)
+            return (name, int(idx), int(minute)) + ((when,) if when else ())
+        except ValueError:
+            raise ValueError("A move in the form cannot be read: open the tool again.") from None
 
     def _back_to_day(program: str, on: Optional[date], view: str, cover: str = ""):  # type: ignore[no-untyped-def]
         on = _date(request.form.get("anchor", "")) or on  # Phase AI: the day the page showed, not the shift's own
         args = {"program": program, "date": on.isoformat() if on else None,
-                "view": view if view in ("board", "adherence", "meeting", "cover", "replan", "channels", "bulk", "rescue") else None,
+                "view": view if view in ("board", "adherence", "meeting", "cover", "replan", "channels", "bulk", "rescue", "sessions") else None,
                 "cover": cover if MINUTE.match(cover) and view == "board" else None}
         if args["cover"]:
             args["_anchor"] = f"row-{args['cover']}"
@@ -3150,21 +4538,18 @@ def create_app(config: Dict[str, Any]) -> Flask:
         try:
             if on is None:
                 raise ValueError("Pick a day.")
-            moves = []
-            for item in request.form.getlist("move"):
-                name, idx, start = item.rsplit("|", 2)
-                moves.append((name, int(idx), int(start)))
+            moves = [_move_item(item) for item in request.form.getlist("move")]
             days = _days()
             with days.action(program, on, g.user["id"], bulk=True) as act:  # Phase AD: one change, held for Send
                 try:
                     done = days.apply_replan(program, on, moves, g.user["id"])
                 finally:
                     n = len(act.logs)
-                    act.label = f"Fix breaks moved {n} break{'s' if n != 1 else ''}"
+                    act.label = (f"{'Replan' if request.form.get('how') == 'fresh' else 'Fix'} breaks moved "
+                                 f"{n} break{'s' if n != 1 else ''}")
             flash(f"Moved {done} break{'s' if done != 1 else ''}.")
         except ValueError as exc:
-            _say(f"Stopped: {exc} The moves before it were kept; open the autopilot again for a fresh proposal.", program,
-                 on)
+            _say(f"{exc} Undo takes back what was kept; open it again for a fresh proposal.", program, on)
         return _back_to_day(program, on, "")
 
     @app.route("/day/rescue/apply", methods=["POST"])
@@ -3175,20 +4560,74 @@ def create_app(config: Dict[str, Any]) -> Flask:
         try:
             if on is None:
                 raise ValueError("Pick a day.")
-            moves = []
-            for item in request.form.getlist("move"):
-                try:
-                    name, idx, start = item.rsplit("|", 2)
-                    moves.append((name, int(idx), int(start)))
-                except ValueError:
-                    raise ValueError("A move in the form cannot be read: open Rescue the day again.") from None
+            moves = [_move_item(item) for item in request.form.getlist("move")]
             if not moves:
                 raise ValueError("No moves to keep.")
-            done = _days().apply_rescue(program, on, moves, g.user["id"], now=_minute_now(on))
+            start = _form_start()
+            done = _days().apply_rescue(program, on, moves, g.user["id"], now=_window_now(on, start), start=start)
             flash(f"Rescue the day moved {done} break{'s' if done != 1 else ''}.")
         except ValueError as exc:
             _say(f"Stopped: {exc} Anything changed before it was kept, and Undo takes it all back.", program, on)
         return _back_to_day(program, on, "")
+
+    @app.route("/day/channels/fix", methods=["POST"])
+    @login_required
+    def day_channel_fix():  # type: ignore[no-untyped-def]
+        """Phase AM: keep the Fix channels changes shown in the preview as one change (one step for Undo)."""
+        program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
+        try:
+            if on is None:
+                raise ValueError("Pick a day.")
+            changes = []
+            for item in request.form.getlist("change"):
+                name, lo, hi, letter = (item.split("|") + ["", "", "", ""])[:4]
+                if not (lo.isdigit() and hi.isdigit()) or letter not in ("P", "C", "E"):
+                    raise ValueError("A change in the list cannot be read: open Fix channels again.")
+                changes.append((name, int(lo), int(hi), letter))
+            if not changes:
+                raise ValueError("No changes to keep.")
+            done = _days().apply_channel_fix(program, on, changes, g.user["id"], now=minute_now(on, _own_zone(program, on), datetime.now(EGYPT)))
+            flash(f"Fix channels changed {done} stretch{'es' if done != 1 else ''}. Undo takes them all back.")
+        except ValueError as exc:
+            _say(f"No changes were saved: {exc}", program, on)
+        return _back_to_day(program, on, "channels")
+
+    @app.route("/day/daily-views.xlsx")
+    @login_required
+    def day_daily_views():  # type: ignore[no-untyped-def]
+        """Phase AP (sample ap01, D): a workbook with a sheet for each associate on the page the RTA shows (one LOB, or
+        the merged page), after the day's changes, in the zone and from the start picked."""
+        days = _days()
+        program, on = clean_program(request.args.get("program", "")), _date(request.args.get("date", ""))
+        if not program or on is None:
+            abort(400)
+        own_zone = _own_zone(program, on)
+        g.zone, start_at = _rta_choice(program, lambda zone, begins: rta_window_shift(on, own_zone, zone, begins) or 0)  # 0 when the clocks change in that window (Phase AY)
+        moved = _window_moved(program, on, g.zone, start_at)
+        if moved is None:
+            g.zone, moved = own_zone, 0
+        merge = _merge_choice(program)
+        try:
+            if merge:
+                page = merged_page(days, program, merge, on, "interval", start_at - moved, g.zone, _own_zone)
+            else:
+                page = days.page(program, on)
+                if page is not None:
+                    start = start_at - moved
+                    page = days.window_page(program, on, start - start % page["view"]["interval"])
+        except ValueError as exc:
+            flash(str(exc))
+            return redirect(url_for("day_page", program=program, date=on.isoformat()), code=303)
+        if page is None:
+            abort(404)
+        shown_at = start_at
+        people = people_of(page["view"], moved, _lob_names(merge) if merge else None)
+        heading = (f"{on:%A %d %b %Y}, times in {dict(ZONES)[g.zone]}, the 24 hours from {plain_hm(shown_at)}. "
+                   "As recorded on the RTA when this was downloaded.")
+        name = secure_filename(f"Daily_views_{(_merged_name(program, merge) if merge else program)}_{on}") + ".xlsx"
+        _record("downloaded", subject=name, program=program, detail="Daily views")
+        return send_file(io.BytesIO(daily_workbook(people, heading)), as_attachment=True, download_name=name,
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     @app.route("/day/handover")
     @login_required
@@ -3196,7 +4635,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         """The shift handover note: printable, one page."""
         on = _date(request.args.get("date", "")) or datetime.now(EGYPT).date()
         program = clean_program(request.args.get("program", ""))
-        measure = request.args.get("measure", "") if request.args.get("measure", "") in MEASURES else "interval"
+        measure = _measure_arg(request.args.get("measure", ""), program)
         try:
             found = handover_note(_days(), program, on, measure) if program else None
         except ValueError as exc:
@@ -3245,10 +4684,23 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return render_template("wallboard.html", w=board_now, program=program, on=on, now=now, hm=hm,
                                live=not found and on == clock.date())
 
+    def _plan_asked_breaks(program: str, on: date, name: str, kind: str) -> None:
+        """Phase AY: the "Short breaks" and "Lunches" counts on the form that adds overtime or a call-in (0 and 0 by default) are placed
+        at once, in the same journal entry as the record. A refusal is said, and the record stays."""
+        shorts, lunches = request.form.get("shorts", 0, type=int) or 0, request.form.get("lunches", 0, type=int) or 0
+        if kind not in ("Overtime", "Called in", DAY_OFF) or not (shorts or lunches):
+            return
+        try:
+            made = _days().plan_extra_breaks(program, on, name, shorts, lunches, g.user["id"])
+            _say(f"Planned {len(made)} of the {shorts + lunches} breaks asked for {name}." if len(made) < shorts + lunches
+                 else f"Planned {len(made)} breaks for {name}.", program, on)
+        except ValueError as exc:
+            _say(f"Recorded, but the breaks were not planned: {exc}", program, on)
+
     @app.route("/day/activity", methods=["POST"])
     @login_required
     def day_activity():  # type: ignore[no-untyped-def]
-        """Record an activity (aux, overtime, VTO) from a form; back to the day with what happened."""
+        """Record an activity (aux, overtime) from a form; back to the day with what happened."""
         program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
         try:
             if on is None:
@@ -3259,15 +4711,98 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 start, end = request.form.get("from", ""), request.form.get("to", "")
             start, end = (to_schedule(x.strip(), _shift_of(program, on)) for x in (start, end))
             with_dept, with_whom, why = _aux_answers(kind, program)
-            _days().add_activity(program, on, name, kind, start, end,
-                                 g.user["id"], billable=request.form.get("billable") == "1",
-                                 note=request.form.get("note", ""), with_whom=with_whom, why=why, with_dept=with_dept)
+            warning = _days().add_activity(program, on, name, kind, start, end, g.user["id"], dry_run=True,
+                                           with_whom=with_whom, why=why, with_dept=with_dept).get("warning", "") \
+                if kind in ("Overtime", "Called in") else ""
+            with _days().action(program, on, g.user["id"]):
+                _days().add_activity(program, on, name, kind, start, end,
+                                     g.user["id"], billable=request.form.get("billable") == "1",
+                                     note=request.form.get("note", ""), with_whom=with_whom, why=why, with_dept=with_dept)
+                _plan_asked_breaks(program, on, name, kind)
             flash(f"Recorded: {name}, {'day off cancelled (called in)' if kind == 'Called in' else kind.lower()}.")
+            if warning:
+                _say(f"Warning: {warning}", program, on)
             if kind in ("Overtime", "Called in") and _days().next_week_unknown(program, on):
                 flash(tomorrow_unchecked(on))
         except ValueError as exc:
             _say(str(exc), program, on)
         return _back_to_day(program, on, request.form.get("view", ""), request.form.get("cover", ""))
+
+    @app.route("/day/cover", methods=["POST"])
+    @login_required
+    def day_cover():  # type: ignore[no-untyped-def]
+        """Phase AJ: a team manager or support member, not on the roster, logging in to cover intervals."""
+        program, on = _posted_day()
+        try:
+            if on is None:
+                raise ValueError("Pick a day.")
+            with leave_out(_left_out_asked()):
+                _days().add_cover(program, on, request.form.get("name", ""), request.form.get("role", ""),
+                                  _typed("from", program, on), _typed("to", program, on), g.user["id"],
+                                  channel=request.form.get("channel", ""), language=request.form.get("language", ""))
+            flash(f"Recorded: {' '.join(request.form.get('name', '').split())} covering.")
+        except ValueError as exc:
+            _say(str(exc), program, on)
+        return _back_to_day(program, on, "cover")
+
+    # Phase AY (owner, 2026-10-23: "make it for everything and limit it 1 day back for everyone, 7 days for supervisor, unlimited for
+    # admin, also the timezone should match their own on the PC"): a change to a day (every POST of the day page) is refused for a day
+    # older than yesterday, 7 days back for a supervisor, no limit for an admin. Today is the viewer's own: the zone their browser
+    # reports in the ``pc_tz`` cookie (app.js), else the zone the page shows, else Egypt.
+    DAY_WRITES = frozenset({
+        "day_absences", "day_activity", "day_activity_cancel", "day_activity_edit", "day_add", "day_attendance", "day_book",
+        "day_break", "day_break_cancel", "day_bulk_apply", "day_call_in_breaks", "day_channel", "day_channel_fix", "day_cover",
+        "day_cover_cancel", "day_replan_apply", "day_rescue_apply", "day_send", "day_session_cancel", "day_session_edit",
+        "day_session_move", "day_undo", "day_undo_last"})
+    ZONE_NAME = re.compile(r"^[A-Za-z0-9_+\-]+(/[A-Za-z0-9_+\-]+){0,2}$")
+
+    def _viewer_today() -> date:
+        pinned = app.config.get("TODAY")  # tests
+        if pinned:
+            return pinned
+        for name in (request.cookies.get("pc_tz", ""), pick_zone(request.values.get("tz", "")), HOME):
+            try:
+                if name and ZONE_NAME.match(name):
+                    return datetime.now(ZoneInfo(name)).date()
+            except (ZoneInfoNotFoundError, ValueError, OSError):
+                continue
+        return datetime.now(EGYPT).date()
+
+    def _pc_zone() -> Optional[str]:
+        """The zone this person's computer is in (``pc_tz``, kept by app.js), when it is one the pages can show times in."""
+        name = request.cookies.get("pc_tz", "")
+        return name if name in dict(ZONES) else None
+
+    def _back_limit() -> Optional[int]:
+        """Days back this person may change; None for no limit."""
+        if g.user.get("is_admin"):
+            return None
+        return 7 if g.user.get("is_supervisor") else 1
+
+    def _still_editable(*days: Optional[date]) -> None:
+        limit = _back_limit()
+        if limit is None:
+            return
+        today = _viewer_today()
+        for on in days:
+            if on is not None and on < today - timedelta(days=limit):
+                raise ValueError(f"{on:%a %d %b} is closed to changes for your role: you can change today and {limit} "
+                                 f"{'day' if limit == 1 else 'days'} back ({today:%a %d %b} is today where you are). "
+                                 "Ask a supervisor or an admin for an older day.")
+
+    @app.route("/day/cover/cancel", methods=["POST"])
+    @login_required
+    def day_cover_cancel():  # type: ignore[no-untyped-def]
+        program, on = _posted_day()
+        try:
+            if on is None:
+                raise ValueError("Pick a day.")
+            _days().cancel_cover(program, on, request.form.get("id", 0, type=int), g.user["id"])
+            flash("Cancelled.")
+        except ValueError as exc:
+            _say(str(exc), program, on)
+        view = request.form.get("view", "")  # Phase AY: the board's Remove button brings the person back to the board
+        return _back_to_day(program, on, view if view == "board" else "cover")
 
     @app.route("/day/activity/cancel", methods=["POST"])
     @login_required
@@ -3290,7 +4825,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         """(department, with, why) for an aux, from the form: every way of booking one asks who it is with and why
         (Phase T); from the program's lists when it has them, typed when it has none (Phase U)."""
         dept, with_whom = request.form.get("with_dept", ""), request.form.get("with_whom", "")
-        lists = _with_lists(program) if kind in AUX else []
+        lists = _with_lists(program) if kind in AUX and kind != BIO else []
         if lists:
             dept, with_whom = pick_contact(lists, kind, dept, with_whom)
         with_whom, why = aux_details(kind, with_whom, request.form.get("why", ""))
@@ -3313,17 +4848,20 @@ def create_app(config: Dict[str, Any]) -> Flask:
     @app.route("/day/add", methods=["POST"])
     @login_required
     def day_add():  # type: ignore[no-untyped-def]
-        """RTA's "+ Add": anything in an interval (a break, lunch, aux, attendance, overtime or VTO)."""
+        """RTA's "+ Add": anything in an interval (a break, lunch, aux, attendance or overtime)."""
         program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
         try:
             program, on, name, what, start, minutes, billable = _add_fields()
             with_dept, with_whom, why = _aux_answers(what, program)
-            with leave_out(_left_out_asked()):
+            with leave_out(_left_out_asked()), _days().action(program, on, g.user["id"]):
                 found = _days().add_item(program, on, name, what, start, minutes, g.user["id"], billable=billable,
                                          note=request.form.get("note", ""), end=_typed("to", program, on),
                                          with_whom=with_whom, why=why, with_dept=with_dept,
-                                         side=request.form.get("side", ""))
+                                         side=request.form.get("side", ""), **_late_answers())
+                _plan_asked_breaks(program, on, name, what)
             _say(f"Recorded: {name}, {found['text']}.", program, on)
+            if found.get("warning"):
+                _say(f"Warning: {found['warning']}", program, on)
             if what in ("Overtime", DAY_OFF) and _days().next_week_unknown(program, on):
                 flash(tomorrow_unchecked(on))
         except ValueError as exc:
@@ -3337,7 +4875,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         try:
             program, on, name, what, start, minutes, billable = _add_fields()
             found = _days().preview_item(program, on, name, what, start, minutes, billable,
-                                         measure if measure in MEASURES else "interval",
+                                         _measure_arg(measure, request.form.get("program", "")),
                                          end=_typed("to", program, on),  # who and why are asked on Add
                                          side=request.form.get("side", ""))
         except ValueError as exc:
@@ -3372,6 +4910,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             if on is None:
                 raise ValueError("Pick a day.")
             start, minutes = request.form.get("start", -1, type=int), request.form.get("minutes", 0, type=int)
+            if request.form.get("at"):  # Phase AV: a time typed in, not one of the suggestions
+                start = _days().session_start(program, on, who, _typed("at", program, on))
             kind = request.form.get("kind", "Meeting")
             with_dept, with_whom, why = _aux_answers(kind, program)
             _days().book_session(program, on, who, start, minutes, kind, g.user["id"],
@@ -3380,7 +4920,89 @@ def create_app(config: Dict[str, Any]) -> Flask:
             _say(f"Booked: {kind.lower()} {hm(start)} to {hm(start + minutes)} for {', '.join(who)}.", program, on)
         except ValueError as exc:
             _say(str(exc), program, on)
-        return _back_to_day(program, on, "meeting")
+        return _back_to_day(program, on, "sessions" if request.form.get("at") else "meeting")
+
+    @app.route("/day/session/move", methods=["POST"])
+    @login_required
+    def day_session_move():  # type: ignore[no-untyped-def]
+        """Phase AV: move some or all of a booked session to another time, all or none."""
+        program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
+        who = request.form.getlist("who")
+        try:
+            if on is None:
+                raise ValueError("Pick a day.")
+            session = request.form.get("session", "")
+            start = _days().session_start(program, on, who, _typed("at", program, on), session)
+            _days().move_session(program, on, session, who, start, g.user["id"])
+            _say(f"Moved {', '.join(who)} to {hm(start)}.", program, on)
+        except ValueError as exc:
+            _say(str(exc), program, on)
+        return _back_to_day(program, on, "sessions")
+
+    @app.route("/day/session/edit", methods=["POST"])
+    @login_required
+    def day_session_edit():  # type: ignore[no-untyped-def]
+        """Phase AY: give some or all of a booked session a new start and end, all or none."""
+        program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
+        who = request.form.getlist("who")
+        try:
+            if on is None:
+                raise ValueError("Pick a day.")
+            session = request.form.get("session", "")
+            days = _days()
+            start = days.session_start(program, on, who, _typed("at", program, on), session)
+            end = days.session_start(program, on, who, _typed("to", program, on), session)
+            days.edit_session(program, on, session, who, start, end, g.user["id"])
+            _say(f"Changed {', '.join(who)} to {hm(start)} to {hm(end)}.", program, on)
+        except ValueError as exc:
+            _say(str(exc), program, on)
+        return _back_to_day(program, on, "sessions")
+
+    @app.route("/day/activity/edit", methods=["POST"])
+    @login_required
+    def day_activity_edit():  # type: ignore[no-untyped-def]
+        """Phase AY: a booked aux (coaching, meeting, training) or an added break gets a new start and end."""
+        program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
+        try:
+            if on is None:
+                raise ValueError("Pick a day.")
+            _days().edit_activity(program, on, request.form.get("id", -1, type=int), _typed("at", program, on),
+                                  _typed("to", program, on), g.user["id"])
+            _say(f"Changed to {request.form.get('at', '')} to {request.form.get('to', '') or 'the same length'}.", program, on)
+        except ValueError as exc:
+            _say(str(exc), program, on)
+        view = request.form.get("view", "")
+        return _back_to_day(program, on, view if view in ("cover", "board", "sessions", "timeline") else "cover")
+
+    @app.route("/day/call-in/breaks", methods=["POST"])
+    @login_required
+    def day_call_in_breaks():  # type: ignore[no-untyped-def]
+        """Phase AY: place the breaks of a person called in for typed times, as the program's break rules place them."""
+        program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
+        name = request.form.get("associate", "")
+        try:
+            if on is None:
+                raise ValueError("Pick a day.")
+            made = _days().plan_call_in_breaks(program, on, name, g.user["id"])
+            _say(f"Planned {len(made)} breaks for {name}. Undo takes them back.", program, on)
+        except ValueError as exc:
+            _say(str(exc), program, on)
+        return _back_to_day(program, on, "cover")
+
+    @app.route("/day/session/cancel", methods=["POST"])
+    @login_required
+    def day_session_cancel():  # type: ignore[no-untyped-def]
+        """Phase AV: take some or all of a booked session out."""
+        program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
+        who = request.form.getlist("who")
+        try:
+            if on is None:
+                raise ValueError("Pick a day.")
+            _days().cancel_session(program, on, request.form.get("session", ""), who, g.user["id"])
+            _say(f"Took {', '.join(who)} out of the session.", program, on)
+        except ValueError as exc:
+            _say(str(exc), program, on)
+        return _back_to_day(program, on, "sessions")
 
     @app.route("/day/channel-preview", methods=["POST"])
     @login_required
@@ -3401,7 +5023,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         try:
             program, on, name = _day_form()
             found = _days().break_advice(program, on, name, _break_idx(), _typed("at", program, on),
-                                         measure if measure in MEASURES else "interval")
+                                         _measure_arg(measure, request.form.get("program", "")))
         except ValueError as exc:
             return _refused(exc, *_posted_day())
         return jsonify(_shown_data(found, _shift_of(program, on)))
@@ -3416,6 +5038,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
         program = clean_program(value if kind == "key" else request.args.get("program", "")) or None
         if program is not None and not _access().can_open(program):
             abort(403)
+        wanted = request.args.get("user", type=int)
+        if wanted is not None:  # Phase AT: filtering by a person is only for a person this user may see
+            person = app.extensions["store"].get_user(wanted)
+            if person is None or not _access().sees(person):
+                abort(403)
         if kind == "group":  # a whole program: all of its LOBs
             found = next((p for p in _access().programs() if str(p["id"]) == value), None)
             if found is None:
@@ -3429,7 +5056,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             end = min(max(today, latest or today), start + timedelta(days=MAX_EXPORT_DAYS - 1))
         return {"start": start, "end": end, "program": program, "pick": pick,
                 "user_id": request.args.get("user", type=int),
-                "measure": request.args.get("measure", "") if request.args.get("measure", "") in MEASURES else "interval"}
+                "measure": _measure_arg(request.args.get("measure", ""), program)}
 
     def _exports_page(error: str = "", status: int = 200):  # type: ignore[no-untyped-def]
         store = app.extensions["store"]
@@ -3455,7 +5082,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return render_template("exports.html", kinds=EXPORT_KINDS, counts=counts, presets=presets, error=error,
                                programs=_my_programs(_days().programs()) if app.extensions.get("days") else [],
                                pick_tree=_access().programs(), everything=_access().everything(),
-                               users=store.list_users(), measures=MEASURES, **a), status
+                               users=[u for u in store.list_users() if _access().sees(u)],  # Phase AR: this program's people
+                               measures=MEASURES, **a), status
 
     def _coach_args() -> Dict[str, Any]:
         days = _days()
@@ -3492,6 +5120,164 @@ def create_app(config: Dict[str, Any]) -> Flask:
     def exports_page():  # type: ignore[no-untyped-def]
         return _exports_page()
 
+    SHRINK_SHOW, SHRINK_BY, SHRINK_STEPS, SHRINK_DAYS = _sv.SHOW, _sv.BY, _sv.STEPS, ("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
+    SHRINK_OUT, SHRINK_IN, SHRINK_LABEL, SHRINK_PRESETS = _sv.OUT_ITEMS, _sv.IN_ITEMS, _sv.LABEL, _sv.PRESETS
+    shrink_ticks, shrink_mapping, shrink_intervals = _sv.ticks_from, _sv.mapping_of, _sv.collect_intervals
+    HEAVY_WEEKS_DEFAULT, HEAVY_WEEKS_RECOMMENDED = 13, 6
+
+    def _heavy_limit() -> Tuple[int, bool]:
+        """Phase AV: (the most days of a period this person may ask of the Incidents, Shrinkage and Exports pages, whether
+        they are exempt). Admins, supervisors and RTAs (who may change the day) have no limit but the 13 months kept;
+        everyone else gets the weeks an admin set under LOBs and defaults."""
+        user = g.user
+        if user.get("is_admin") or user.get("is_supervisor") or allowed(app.extensions["store"], user, "rta_change"):
+            return MAX_EXPORT_DAYS, True
+        weeks = app.extensions["store"].get_app_setting("heavy_weeks", str(HEAVY_WEEKS_DEFAULT))
+        return 7 * (int(weeks) if weeks.isdigit() and int(weeks) > 0 else HEAVY_WEEKS_DEFAULT), False
+
+    def _too_long(start: date, end: date) -> str:
+        limit, exempt = _heavy_limit()
+        if exempt or (end - start).days + 1 <= limit:
+            return ""
+        return (f"Your account can look at up to {limit // 7} weeks at a time. Pick a shorter period, or ask an admin, "
+                "a supervisor or the RTA for a longer look.")
+
+
+    @app.route("/incidents")
+    @login_required
+    def incidents_page():  # type: ignore[no-untyped-def]
+        """Phase AV: incidents, absenteeism and shrinkage per associate, LOB and program for any period."""
+        a = _export_args()
+        today = datetime.now(EGYPT).date()
+        if not request.args.get("to"):
+            a["end"] = min(a["end"], today) if a["start"] <= today else a["end"]
+        error = ""
+        limit, exempt = _heavy_limit()
+        if (a["end"] - a["start"]).days + 1 > limit:
+            a["start"] = a["end"] - timedelta(days=limit - 1)
+            error = (f"Your account can look at up to {limit // 7} weeks at a time; showing the last {limit // 7} weeks of the period."
+                     if not exempt else f"Records are kept 13 months; showing the last {limit} days of the period.")
+        book = _access().book
+        keys = ([a["program"]] if isinstance(a["program"], str) else list(a["program"] or [])
+                or [k for p in _access().programs() for k in p["units"]])
+        units = {}
+        for k in keys:
+            found = book.unit(k)
+            if found and _access().can_open(k):
+                units[k] = (found["program"]["name"], (found["lob"] or {}).get("name") or found["program"]["name"])
+        level = request.args.get("view", "")
+        if level not in ("overview", "lobs", "associates"):
+            level = "associates" if role(g.user) == "Team manager" else "overview"
+        who = request.args.get("who", "")
+        deadline = time.monotonic() + EXPORT_SECONDS
+        wrapped = ExportDays(_days(), deadline)
+
+        def check() -> None:
+            if time.monotonic() > deadline:
+                raise ValueError("This took too long: pick a shorter period or one program.")
+        try:
+            facts = collect_insights(wrapped, app.extensions["store"], app.extensions.get("leave"), units,
+                                     a["start"], a["end"], a["measure"], check)
+        except ValueError as exc:
+            facts, error = [], str(exc)
+        counts = absent_kinds(request.args.getlist("abs"))
+        before = []
+        if facts and level == "overview" and not who:  # the same number of days just before, for "up or down on"
+            length = (a["end"] - a["start"]).days + 1
+            try:
+                before = collect_insights(wrapped, app.extensions["store"], app.extensions.get("leave"), units,
+                                          a["start"] - timedelta(days=length), a["start"] - timedelta(days=1),
+                                          a["measure"], check)
+            except ValueError:
+                before = []
+        sunday = _sv.week_begin(today, next(iter([(book.unit(k) or {}).get("program", {}).get("start_day", 0) or 0 for k in units]), 0))  # the program's week start
+        first = today.replace(day=1)
+        last_month_end = first - timedelta(days=1)
+        presets = [("This week", sunday, today), ("Last week", sunday - timedelta(days=7), sunday - timedelta(days=1)),
+                   ("This month", first, today), ("Last month", last_month_end.replace(day=1), last_month_end),
+                   ("Last 30 days", today - timedelta(days=29), today)]
+        return render_template("insights.html", view=insights_view(facts, level, who, a["start"], a["end"], counts, before),
+                               presets=presets, error=error, pick_tree=_access().programs(),
+                               everything=_access().everything(), measures=MEASURES, level=level, who=who,
+                               levels=INSIGHT_LEVELS, units=len(units), counts=counts, absent_choices=ABSENT_CHOICES,
+                               absent_views=ABSENT_VIEWS, **a)
+
+    @app.route("/shrinkage")
+    @login_required
+    def shrinkage_page():  # type: ignore[no-untyped-def]
+        """Phase AV: shrinkage out of office, in office or both, day over day, week over week or per interval."""
+        a = _export_args()
+        today = datetime.now(EGYPT).date()
+        if not request.args.get("to") and a["start"] <= today:
+            a["end"] = min(a["end"], today)
+        error = ""
+        limit, exempt = _heavy_limit()
+        if (a["end"] - a["start"]).days + 1 > limit:
+            a["start"] = a["end"] - timedelta(days=limit - 1)
+            error = (f"Your account can look at up to {limit // 7} weeks at a time; showing the last {limit // 7} weeks of the period."
+                     if not exempt else f"Records are kept 13 months; showing the last {limit} days of the period.")
+        book = _access().book
+        keys = ([a["program"]] if isinstance(a["program"], str) else list(a["program"] or [])
+                or [k for p in _access().programs() for k in p["units"]])
+        units = {}
+        for k in keys:
+            found = book.unit(k)
+            if found and _access().can_open(k):
+                units[k] = (found["program"]["name"], (found["lob"] or {}).get("name") or found["program"]["name"])
+        show = request.args.get("show", "both")
+        show = show if show in dict(SHRINK_SHOW) else "both"
+        by = request.args.get("by", "day")
+        by = by if by in dict(SHRINK_BY) else "day"
+        step = request.args.get("step", 30, type=int)
+        step = step if step in SHRINK_STEPS else 30
+        first = request.args.get("first", 0, type=int) or 0
+        last = request.args.get("last", 24, type=int) or 24
+        first, last = (max(0, min(first, 23)) * 60, max(1, min(last, 24)) * 60)
+        if last <= first:
+            first, last = 0, 1440
+        focus = request.args.get("focus", "inn")
+        focus = focus if focus in ("inn", "out") else "inn"
+        dows = {d for d in request.args.getlist("dow") if d in SHRINK_DAYS}
+        first_unit = next(iter(units), "")
+        kept = app.extensions["store"].get_shrinkage_map(first_unit) if first_unit else None
+        out_ticks, in_ticks = shrink_ticks(kept, request.args.getlist("out"), request.args.getlist("inn"))
+        deadline = time.monotonic() + EXPORT_SECONDS
+        wrapped = ExportDays(_days(), deadline)
+
+        def check() -> None:
+            if time.monotonic() > deadline:
+                raise ValueError("This took too long: pick a shorter period or one program.")
+        facts, per_day = [], {}
+        try:
+            facts = collect_insights(wrapped, app.extensions["store"], app.extensions.get("leave"), units, a["start"],
+                                     a["end"], a["measure"], check, mapping_override=shrink_mapping(out_ticks, in_ticks))
+            if dows:
+                facts = [r for r in facts if SHRINK_DAYS[(date.fromisoformat(r["date"]).weekday() + 1) % 7] in dows]
+            if by == "interval":
+                per_day = shrink_intervals(wrapped, units, a["start"], a["end"], a["measure"], out_ticks, in_ticks, step, check)
+                if dows:
+                    per_day = {d: v for d, v in per_day.items()
+                               if SHRINK_DAYS[(date.fromisoformat(d).weekday() + 1) % 7] in dows}
+        except ValueError as exc:
+            error = str(exc)
+        sunday = _sv.week_begin(today, next(iter([(book.unit(k) or {}).get("program", {}).get("start_day", 0) or 0 for k in units]), 0))  # the program's week start
+        first_of = today.replace(day=1)
+        last_month_end = first_of - timedelta(days=1)
+        presets = [("This week", sunday, today), ("Last week", sunday - timedelta(days=7), sunday - timedelta(days=1)),
+                   ("This month", first_of, today), ("Last month", last_month_end.replace(day=1), last_month_end),
+                   ("Last 30 days", today - timedelta(days=29), today)]
+        start_days = {k: (book.unit(k) or {}).get("program", {}).get("start_day", 0) or 0 for k in units}
+        week_days = sorted({start_days[k] for k in units})
+        view = shrink_page(facts, per_day, show, by, out_ticks, in_ticks, step, first, last, focus, start_days,
+                           week_days[0] if week_days else 0)
+        return render_template("shrinkage.html", view=view, presets=presets, error=error, pick_tree=_access().programs(),
+                               everything=_access().everything(), measures=MEASURES, units=len(units), show=show, by=by,
+                               step=step, first_h=first // 60, last_h=last // 60, focus=focus, dows=dows,
+                               out_ticks=out_ticks, in_ticks=in_ticks, show_choices=SHRINK_SHOW, by_choices=SHRINK_BY,
+                               steps=SHRINK_STEPS, out_items=SHRINK_OUT, in_items=SHRINK_IN, item_label=SHRINK_LABEL,
+                               presets_out=SHRINK_PRESETS, day_names=SHRINK_DAYS,
+                               week_starts=[("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")[d] for d in week_days], **a)
+
     @app.route("/exports/download")
     @login_required
     def exports_download():  # type: ignore[no-untyped-def]
@@ -3499,6 +5285,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
         kinds = request.args.getlist("kind")
         fmt = request.args.get("format", "xlsx")
         try:
+            too_long = _too_long(a["start"], a["end"])  # Phase AV: the weeks an admin allows this account
+            if too_long:
+                raise ValueError(too_long)
             data, name, mime = build_export(app.extensions["store"], _days(), a["start"], a["end"], kinds, fmt,
                                             a["program"], a["user_id"], g.user["display_name"], a["measure"],
                                             deadline=time.monotonic() + EXPORT_SECONDS)

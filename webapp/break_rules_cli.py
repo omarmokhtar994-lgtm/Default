@@ -43,7 +43,8 @@ def rules(input_path: Path, engine: Path) -> dict:
             "preferred_gap": _minutes(parsed.break_preferred_gap_q), "max_gap": _minutes(parsed.break_normal_max_gap_q),
             "back_to_back": bool(getattr(parsed, "allow_back_to_back_breaks", False)),
             "max_concurrent": int(getattr(parsed, "break_max_concurrent_absolute", 0) or 0),
-            "max_concurrent_ratio": float(getattr(parsed, "break_max_concurrent_ratio", 0) or 0)}
+            "max_concurrent_ratio": float(getattr(parsed, "break_max_concurrent_ratio", 0) or 0),
+            "concurrency_mode": str(getattr(parsed, "break_concurrency_gate_mode", "warn") or "warn")}
 
 
 def main() -> int:

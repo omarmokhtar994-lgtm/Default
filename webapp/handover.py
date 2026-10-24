@@ -34,8 +34,9 @@ def _activity_text(kind: str, lo: int, hi: int, billable: bool, with_whom: str =
             + with_text(with_whom, why, with_dept))
 
 
-def note(days, program: str, on: date, measure: str = "interval") -> Optional[Dict[str, Any]]:
+def note(days, program: str, on: date, measure: Optional[str] = None) -> Optional[Dict[str, Any]]:
     page = days.page(program, on, measure)
+    measure = (page or {}).get("view", {}).get("measure", measure or "interval")
     if page is None:
         return None
     v = page["view"]

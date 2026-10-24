@@ -122,9 +122,15 @@ def lines(labels: Sequence[str], series: Sequence[Tuple[str, str, Sequence[Optio
         y = xy(0, t)[1]
         out.append(f'<line class="grid" x1="{left}" x2="{W - right}" y1="{y:.1f}" y2="{y:.1f}"/>'
                    f'<text class="ax" x="{left - 6}" y="{y + 4:.1f}" text-anchor="end">{_num(t)}{escape(unit)}</text>')
-    every = _every(len(labels), 10)
+    # Phase AX: as many labels as fit side by side, by how long they are (a day's "Mon 12 Oct" is wider than "09:00")
+    widest = max(len(str(n)) for n in labels) * 6.8
+    room = max(2, min(10, int(plot_w // (widest + 10))))
+    every = _every(len(labels), room)
+    shown = [i for i in range(len(labels)) if i % every == 0]
+    if len(labels) - 1 not in shown and (len(labels) - 1 - shown[-1]) * slot >= widest + 8:
+        shown.append(len(labels) - 1)  # the last one too, when it does not crowd the one before it
     for i, name in enumerate(labels):
-        if i % every == 0 or i == len(labels) - 1:
+        if i in shown:
             out.append(f'<text class="ax" x="{xy(i, y_min)[0]:.1f}" y="{h - 10}" text-anchor="middle">'
                        f'{escape(name)}</text>')
         parts = [f"{s} {_num(vals[i])}{unit}" for s, _, vals in series if i < len(vals) and vals[i] is not None]

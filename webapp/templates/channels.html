@@ -13,8 +13,8 @@
 <section class="panel cp-facts" aria-labelledby="cp-facts-h">
   <h2 id="cp-facts-h">{{ full[day] }}{% if day in drafted %} <small class="dim">unsaved</small>{% endif %}</h2>
   {% if not people %}<p class="empty">Nobody works on {{ full[day] }} in this schedule. Pick another day.</p>
-  {% elif not score %}<p class="empty">Not planned yet: Suggest the day, or set blocks by hand.</p>
-  {% else %}
+  {% elif not planned %}<p class="empty">Not planned yet: Suggest the day, or set blocks by hand.</p>{% endif %}
+  {% if score %}
   <p class="cp-sum">{% for c, h in score.short.items() %}<span><b>{{ '%g'|format(h) }} h</b> short on {{ names[c] }}</span>{% endfor %}{% if target is not none %}<span><b>{{ '%g'|format(score.email) }} h</b> of Email placed, {{ '%g'|format(target) }} h needed</span>{% endif %}<span><b>{{ score.switches }}</b> channel change{{ 's' if score.switches != 1 }} mid-stretch</span></p>
   <p class="note">{% if score.language_short %}{{ '%g'|format(score.language_short) }} h below a language minimum.{% elif setup.languages %}Every language minimum is met.{% endif %}{% for name, n in score.long.items() %} {{ name }} has {{ n }} stretch{{ 'es' if n != 1 }} longer than a channel's maximum (said, not hidden: they cannot always follow it).{% endfor %}</p>
   {% endif %}
@@ -26,7 +26,6 @@
     <ul class="log">{% for p in score.problems[:60] %}<li>{{ p }}</li>{% endfor %}</ul></details>{% endif %}
 </section>
 
-{% if people %}
 {% if cover %}<section class="panel" aria-labelledby="cp-cov-h">
   <h2 id="cp-cov-h">Coverage</h2>
   <p class="note">People on each channel per interval against the channel tab's need; each language row is its lowest point in the interval against its minimum.</p>
@@ -36,6 +35,7 @@
   </table></div>
 </section>{% endif %}
 
+{% if people %}
 <section class="panel" aria-labelledby="cp-grid-h">
   <h2 id="cp-grid-h">Who is on what</h2>
   <p class="note">One box per stretch. The letters after a name are the channels the person works. Click a box to fill in the change below.</p>
@@ -57,11 +57,22 @@
   <div class="legend3"><span><i class="ch-P"></i>Phone</span><span><i class="ch-C"></i>Chat</span><span><i class="ch-E"></i>Email</span><span><i class="ch-A"></i>All channels</span><span><i class="ch-B"></i>Break or lunch</span></div>
 </section>
 
+{% from "_fair.html" import fair_tables with context %}
+<section class="panel" aria-labelledby="cp-fair-h">
+  <h2 id="cp-fair-h">Fairness</h2>
+  <p class="note">Who works which channel, compared only with people who work the same channels and speak the same language. The week comes first; the day shows what one day adds. Breaks are not channel time and do not end a turn. Coverage and the planner are unchanged: this only shows how even the plan is.</p>
+  <h3>This week</h3>
+  {{ fair_tables(fair.week, 'This week') }}
+  <h3>{{ full[day] }}</h3>
+  {{ fair_tables(fair.day, full[day]) }}
+</section>
+
 <section class="panel" aria-labelledby="cp-do-h">
   <h2 id="cp-do-h">Plan {{ full[day] }}</h2>
   <form method="post" class="cp-row">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="day" value="{{ day }}">
     <label class="exp-kind"><input type="checkbox" name="move" value="1" checked><span>Move breaks if it helps (inside the break rules)</span></label>
+    <label class="exp-kind"><input type="checkbox" name="consistent" value="1"{% if r.consistent %} checked{% endif %}><span>Keep each person on the same channel through the day (when coverage allows)</span></label>
     <button type="submit" name="action" value="suggest" class="primary">Suggest the day</button>
     <button type="submit" name="action" value="suggest_week" title="Each working day in turn; up to about 20 seconds a day">Suggest every day</button>
     <a class="button" href="{{ url_for('channel_plan_download', schedule_id=row.id) }}">Download the channel plan (Excel)</a>

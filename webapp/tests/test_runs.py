@@ -4,6 +4,7 @@
 The production runner, input check, gate and scorer are replaced by
 webapp/tests/fakes.py so the website's own logic is tested in seconds; the
 real runner is exercised end to end separately (evidence/phase_i)."""
+from datetime import date
 import html
 import io
 import json
@@ -35,7 +36,7 @@ def make_app(start_worker=True, gate_fails=False, **extra):
     config = {"DATA_DIR": str(data), "SECRET_KEY": "t", "TESTING": True, "HTTPS": False,
               "PACKAGE_ROOT": str(package), "START_WORKER": start_worker,
               "RUNNER_CMD": fake + ["runner"], "CHECK_CMD": fake + ["check"],
-              "SCORE_CMD": fake + ["score"], "GATE_CMD": fake + ["gate", str(gate_marker)]}
+              "SCORE_CMD": fake + ["score"], "GATE_CMD": fake + ["gate", str(gate_marker)], "TODAY": date(2026, 10, 1)}  # Phase AY: Egypt's today, before the weeks the tests use
     config.update(extra)
     app = create_app(config)
     store = Store(data / "scheduler.db")
@@ -84,6 +85,8 @@ class UploadAndCheck(unittest.TestCase):
                       if page.status_code == 302 else page.get_data(as_text=True))
         self.assertEqual(store.list_runs(), [])
         big = upload(client, data=b"x" * (26 * 1024 * 1024))
+        # AN followup: the test client owns the temporary multipart input stream.
+        self.addCleanup(big.request.environ["wsgi.input"].close)
         self.assertEqual(big.status_code, 413)
 
     def test_check_rejection_is_shown_with_its_message(self):
@@ -105,11 +108,12 @@ class RunningAndResults(unittest.TestCase):
         run = wait(store, run_id)
         self.assertEqual((run["status"], run["exit_code"]), ("DONE", 0))
         self.assertIn("RELEASABLE", run["verdict"])
-        download = client.get(f"/runs/{run_id}/download")
+        # AN followup: exhaust downloaded files so their response iterators close.
+        download = client.get(f"/runs/{run_id}/download", buffered=True)
         self.assertEqual(download.status_code, 200)
         names = zipfile.ZipFile(io.BytesIO(download.data)).namelist()
         self.assertTrue(any(n.endswith("_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx") for n in names), names)
-        schedule = client.get(f"/runs/{run_id}/schedule")
+        schedule = client.get(f"/runs/{run_id}/schedule", buffered=True)
         self.assertEqual((schedule.status_code, schedule.data), (200, b"schedule"))
 
     def test_review_required_verdict_is_never_shown_as_approved(self):
@@ -124,7 +128,8 @@ class RunningAndResults(unittest.TestCase):
         self.assertIn("Needs review", page)
         self.assertNotIn(">Approved<", page)
         self.assertIn("REVIEW_REQUIRED", page)
-        self.assertEqual(client.get(f"/runs/{run_id}/schedule").status_code, 200)
+        # AN followup: close the streamed workbook as well as checking its status.
+        self.assertEqual(client.get(f"/runs/{run_id}/schedule", buffered=True).status_code, 200)
         self.assertIn("Needs review", client.get("/").get_data(as_text=True))
 
     def test_readiness_check_says_ready_not_approved(self):
@@ -612,7 +617,8 @@ class TheEngineOutcome(unittest.TestCase):
         self.assertIn("Sun 03:00: Nobody on the floor after breaks, needs 1, short by 1", body)
         self.assertIn("Download the shortfall schedule (for review)", body)
         self.assertNotIn(">Download the schedule<", body)
-        got = client.get(f"/runs/{run_id}/shortfall")
+        # AN followup: consume and close the streamed shortfall workbook.
+        got = client.get(f"/runs/{run_id}/shortfall", buffered=True)
         self.assertEqual(got.data, b"shortfall")
 
     def test_crash_without_outcome_keeps_resume(self):
@@ -758,7 +764,8 @@ class TheCleanWorkbooks(unittest.TestCase):
         home = client.get("/").get_data(as_text=True)
         for name in ("Scheduler_Input_Blank.xlsx", "Scheduler_Input_Example.xlsx"):
             self.assertIn(f'href="/workbooks/{name}"', home)
-            got = client.get(f"/workbooks/{name}")
+            # AN followup: close each workbook response before the next download.
+            got = client.get(f"/workbooks/{name}", buffered=True)
             self.assertEqual((got.status_code, got.data[:2]), (200, b"PK"), name)
             self.assertIn("attachment", got.headers["Content-Disposition"])
         for bad in ("other.xlsx", "..%2Fapp.py", "Scheduler_Input_Blank.xlsx.bak"):
@@ -930,10 +937,11 @@ class TheSchedulesPage(unittest.TestCase):
         self.assertEqual(self.app.extensions["schedules"].in_use("AE/AR B2B", "2026-10-11")["id"], self.tool)
 
     def test_download_a_version(self):
-        tool = self.client.get(f"/schedules/{self.tool}/download")
+        # AN followup: exhaust both streamed workbooks to release their file handles.
+        tool = self.client.get(f"/schedules/{self.tool}/download", buffered=True)
         self.assertEqual((tool.status_code, tool.data[:2]), (200, b"PK"))
         draft = self.app.extensions["schedules"].change(self.tool, 1, "Associate 002", "Sun", "OFF", "leave")
-        got = self.client.get(f"/schedules/{draft}/download")
+        got = self.client.get(f"/schedules/{draft}/download", buffered=True)
         from openpyxl import load_workbook
         book = load_workbook(io.BytesIO(got.data))
         self.assertEqual(book.sheetnames[0], "Version Notes")
@@ -1038,8 +1046,9 @@ class TheDayPage(unittest.TestCase):
         self.assertIn("Add for 10:00 to", dialog)
         self.assertIn('action="/day/add"', dialog)
         for kind in ("Break", "Lunch", "Coaching", "Meeting", "Training", "System issue", "Unplanned leave", "Sick",
-                     "Late", "Left early", "Overtime", "VTO"):
+                     "Late", "Left early", "Overtime"):  # re-pinned (Phase AY): VTO is no longer offered
             self.assertIn(f'name="what" value="{kind}"', dialog)
+        self.assertNotIn('name="what" value="VTO"', dialog)
         self.assertIn('name="from" value="10:00"', dialog)
         self.assertIn('<input type="hidden" name="at" value="600">', dialog)
         self.assertRegex(dialog, r'<option value="Associate \d+"')
@@ -1113,7 +1122,7 @@ class TheDayPage(unittest.TestCase):
         self.assertEqual(len(forms), 1, "Associate 001 (12:00 - 21:00, off on Saturday) can stay on")
         options = re.findall(r'<option value="([0-9:|]+)"( selected)?>', forms[0])
         self.assertEqual(options[0][0], "21:00|21:15")
-        self.assertEqual(options[-1][0], "21:00|23:00")
+        self.assertEqual(options[-1][0], "21:00|01:00")  # re-pinned in Phase AJ: the owner raised the cap to 4 hours
         self.assertIn(("21:00|22:00", " selected"), options)
 
     def test_record_overtime_with_span(self):
@@ -1128,14 +1137,12 @@ class TheDayPage(unittest.TestCase):
             for a in acts:
                 self.app.extensions["days"].cancel_activity("AE/AR B2B", date(2026, 10, 16), a["id"], 1)
 
-    def test_vto_offers_pick_from_and_to(self):
+    def test_the_vto_offers_are_gone(self):
+        # re-pinned (Phase AY, owner: "remove VTO option"): the panel that offered voluntary time off, with its From and To pickers, is removed
         body = html.unescape(self.client.get(self.url + "&view=cover").get_data(as_text=True))
-        vto = body[body.index('id="vto-h"'):]
-        form = re.search(r'(?s)<form[^>]*class="vto-offer"[^>]*>.*?</form>', vto)
-        self.assertIsNotNone(form)
-        self.assertRegex(form.group(0), r'<select name="from"')
-        self.assertRegex(form.group(0), r'<select name="to"')
-        self.assertRegex(form.group(0), r'>Add VTO</button>')
+        self.assertNotIn('id="vto-h"', body)
+        self.assertNotIn('class="vto-offer"', body)
+        self.assertNotIn(">Add VTO</button>", body)
 
     def test_overview_and_rta_are_separate(self):
         body = html.unescape(self.client.get("/overview?program=AE/AR+B2B&date=2026-10-14").get_data(as_text=True))
@@ -1310,7 +1317,8 @@ class TheDayPage(unittest.TestCase):
                                                   "with_whom": "IT trainer", "why": "New CRM release"})
         self.assertEqual(got.status_code, 303)
         page = self.page()
-        self.assertRegex(page, r'class="tl-act aux billable"')
+        # re-pinned (Phase AY, owner: "coaching ... same as breaks, with different colours based on the reason"): the bar carries its reason
+        self.assertRegex(page, r'class="tl-act aux k-training billable"')
         self.assertIn("Associate 012, Training", page)
         again = self.client.post("/day/book", data={"csrf_token": token(self.client), "program": "AE/AR B2B",
                                                     "date": "2026-10-14", "who": ["Associate 001"], "start": starts[0],
@@ -1318,10 +1326,12 @@ class TheDayPage(unittest.TestCase):
                                                     "why": "Process update"}, follow_redirects=True)
         self.assertIn("Not free then: Associate 001. Nobody was booked.", html.unescape(again.get_data(as_text=True)))
 
-    def test_overtime_and_vto_tab(self):
+    def test_overtime_tab(self):
+        # re-pinned (Phase AY, owner: "remove VTO option"): the tab is "Overtime" and the voluntary time off panel is gone
         body = html.unescape(self.client.get(self.url + "&view=cover").get_data(as_text=True))
-        for words in ("Short: offer overtime", "Above demand: offer voluntary time off", "Activities on this day"):
+        for words in ("Short: offer overtime", "Activities on this day"):
             self.assertIn(words, body)
+        self.assertNotIn("Above demand: offer voluntary time off", body)
         got = self.client.post("/day/activity", data={"csrf_token": token(self.client), "program": "AE/AR B2B",
                                                       "date": "2026-10-14", "associate": "Associate 028",
                                                       "kind": "Overtime", "from": "07:00", "to": "09:00", "view": "cover"})
@@ -1410,7 +1420,10 @@ class TheRecord(unittest.TestCase):
     """Phase O task 1: runs, downloads and people admin are recorded with who and when."""
 
     def events(self, store):
-        return [(e["kind"], e["by_name"], e["subject"]) for e in store.list_events(0, time.time() + 60)]
+        # Re-pinned in Phase AU (owner: sign-in history for the admin): a sign-in is an event now; these tests are about
+        # what people did after it, so the sign-in lines are left out here (test_at_throttle.TheHistory covers them)
+        return [(e["kind"], e["by_name"], e["subject"]) for e in store.list_events(0, time.time() + 60)
+                if e["kind"] not in ("signed_in", "sign_in_failed", "sign_in_held")]
 
     def test_upload_stop_resume_recorded(self):
         app, store, *_ = make_app(start_worker=False)
@@ -1420,14 +1433,16 @@ class TheRecord(unittest.TestCase):
         client.post(f"/runs/{run_id}/resume", data={"csrf_token": token(client)})
         self.assertEqual(self.events(store), [("run_uploaded", "Sara", "week42.xlsx"), ("run_stopped", "Sara", "week42.xlsx"),
                                               ("run_resumed", "Sara", "week42.xlsx")])
-        self.assertEqual({e["run_id"] for e in store.list_events(0, time.time() + 60)}, {run_id})
+        self.assertEqual({e["run_id"] for e in store.list_events(0, time.time() + 60) if e["kind"] != "signed_in"},
+                         {run_id})  # Re-pinned in Phase AU: a sign-in is an event, and belongs to no run
 
     def test_downloads_recorded(self):
         app, store, *_ = make_app()
         client = client_for(app)
         run_id = run_id_of(upload(client))
         wait(store, run_id)
-        self.assertEqual(client.get(f"/runs/{run_id}/download").status_code, 200)
+        # AN followup: close the download response after recording the access event.
+        self.assertEqual(client.get(f"/runs/{run_id}/download", buffered=True).status_code, 200)
         kind, by, subject = self.events(store)[-1]
         self.assertEqual((kind, by), ("downloaded", "Sara"))
         self.assertTrue(subject.endswith(".zip"))
@@ -1804,8 +1819,12 @@ class TheProgramAccess(unittest.TestCase):
         self.assertNotIn("AE_week.xlsx", home)
         exports = html.unescape(self.lina.get("/exports").get_data(as_text=True))
         self.assertNotIn('value="AE/AR B2B"', exports)
-        mine = run_id_of(upload(self.lina, name="Lina_AE.xlsx", program="AE/AR B2B", week_start="2026-10-18"))
-        self.assertEqual(self.lina.get(f"/runs/{mine}").status_code, 200)  # New schedule: any program, her run
+        # Re-pinned in Phase AR (owner, 2026-10-21: each program keeps its own uploads): a new schedule is for one of
+        # her own programs only. It used to accept any program.
+        refused = upload(self.lina, name="Lina_AE.xlsx", program="AE/AR B2B", week_start="2026-10-18")
+        self.assertEqual(refused.status_code, 403)
+        mine = run_id_of(upload(self.lina, name="Lina_NMG.xlsx", program="NMG", week_start="2026-10-18"))
+        self.assertEqual(self.lina.get(f"/runs/{mine}").status_code, 200)  # New schedule: her own program, her run
 
     def test_all_programs_means_all_of_yours(self):
         self.store.add_activity(program="AE/AR B2B", shift_date="2026-10-14", associate="Associate 001",

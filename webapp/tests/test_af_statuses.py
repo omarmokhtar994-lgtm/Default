@@ -71,7 +71,8 @@ class OnThePage(unittest.TestCase):
         script = (Path(__file__).resolve().parents[1] / "static" / "app.js").read_text()
         # re-pinned in Phase AI: the owner added exam leave, a whole-shift absence (2026-10-15)
         self.assertIn('whole = ["Unplanned leave", "Sick", "Public holiday", "Exam leave"]', script)
-        self.assertIn('"System issue", "Task"]', script)
+        # re-pinned in Phase AV: Bio break joined the aux kinds (owner, 2026-10-22), so the list ends with it
+        self.assertIn('"System issue", "Task", "Bio break"]', script)
 
 
 if __name__ == "__main__":

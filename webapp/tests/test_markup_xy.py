@@ -97,11 +97,12 @@ CSS = Path(__file__).resolve().parents[1] / "static" / "app.css"
 NIGHT = {"--action": "#E7EBF0", "--action-hover": "#FFFFFF", "--on-action": "#111418", "--edge": "#68727F",
          "--done": "#54749A", "--covered-text": "#2BC4B4", "--over-text": "#9086EE", "--on-covered": "#111418",
          "--on-short": "#111418", "--on-gap": "#111418", "--on-over": "#111418", "--selected": "#20252D",
-         "--ch-email": "#4D7D8D"}
+         "--ch-email": "#2F7D5B"}  # re-pinned in Phase AK (sample ak01 D) and Phase AL (owner: al01 option C)
 DAY = {"--action": "#15191F", "--action-hover": "#2A313B", "--on-action": "#FFFFFF", "--edge": "#7A838F",
-       "--done": "#7692B4", "--covered-text": "#0B776C", "--over-text": "#715ED8", "--covered": "#06A496",
+       "--done": "#7692B4", "--covered-text": "#0B776C", "--over-text": "#5F4CCB", "--covered": "#06A496",
        "--short": "#C98304", "--gap": "#D53D38", "--over": "#7560E3", "--on-covered": "#0E1A2B",
        "--on-short": "#0E1A2B", "--on-gap": "#FFFFFF", "--on-over": "#FFFFFF", "--selected": "#E8EBEF"}
+# Re-pinned in Phase AU: --over-text in the day look was #715ED8, which measured 4.37:1 as the supervisor chip on its tint (4.5:1 is needed); #5F4CCB meets it.
 
 
 def block(text, opener):

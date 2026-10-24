@@ -1,6 +1,6 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
 {% extends "base.html" %}
-{% from "_auto_breaks.html" import auto_breaks with context %}
+{% from "_auto_breaks.html" import auto_breaks with context %}{% from "_channel_hours.html" import channel_hours %}
 {% block title %}Schedules: {{ run.program|unit if run.program else run.workbook }} on Team Scheduler{% endblock %}
 {% block content %}
 <div class="phead"><div>
@@ -9,6 +9,17 @@
   <p class="byline rundetails">Workbook <b>{{ run.workbook }}</b> · {{ run.program|unit if run.program else 'no program set' }} · {% if run.week_start %}starts {{ run.week_start|start_day }}{% else %}no start date set{% endif %}{% if user.is_admin %} · <a href="{{ url_for('run_detail', run_id=run.id, edit=1) }}#edit">Edit the name, program or start date</a>{% elif user.id == run.user_id %} · <a href="{{ url_for('run_detail', run_id=run.id, edit=1) }}#edit">Change the program or start date</a>{% endif %}</p>
 </div></div>
 
+{% if leave_after %}
+<section class="panel" id="leave-after" aria-labelledby="leave-after-h">
+  <h2 id="leave-after-h">Approved leave and this schedule</h2>
+  <p class="note">Leave approved before this week had a schedule was not known to the tool when it built the week. After the schedule was kept, the days below were marked Leave in a new version set in use; coverage on those days can be short, as that version's problems show. Nothing here stopped the schedule.</p>
+  <ul class="req-done">
+    {% for a in leave_after.applied %}<li><b>{{ a.name }}</b>: Leave on {{ a.dates|map('day_month')|join(', ') }}</li>{% endfor %}
+    {% for s in leave_after.skipped %}<li class="swap-warn" role="note"><b>Warning:</b> {{ s.why }} It stays in Exports, under Leave requests.</li>{% endfor %}
+    {% for n in leave_after.notes %}<li><b>{{ n.name }}</b>: {{ n.why }}</li>{% endfor %}
+  </ul>
+</section>
+{% endif %}
 {% if week_list %}
 <section class="panel weeklist" id="week-list" aria-labelledby="weeklist-h">
   <h2 id="weeklist-h">Schedules for the week of {{ run.week_start|day_month }} ({{ week_list|length }})</h2>
@@ -35,7 +46,7 @@
 <nav class="vbar" aria-label="Versions">
   {% for v in versions %}{% set c = counts[v.id] %}{% set reds = c.added|selectattr('severity', 'equalto', 'red')|list|length %}{% set yellows = c.added|selectattr('severity', 'equalto', 'yellow')|list|length %}
   <a href="{{ url_for('run_schedules', run_id=run.id, v=v.id) }}"{% if v.id == current.id %} class="cur" aria-current="true"{% endif %}>{{ v.label }}
-    <small>{% if v.in_use %}<span class="use">In use</span> · {% endif %}{% if v.kind == 'edited' %}{{ c.changes|length }} change{{ 's' if c.changes|length != 1 }} · {% if reds %}<span class="r">{{ reds }} rule{{ 's' if reds != 1 }} broken</span>{% elif yellows %}<span class="y">{{ yellows }} warning{{ 's' if yellows != 1 }}</span>{% else %}all checks pass{% endif %}{% else %}{{ 'from the run' if v.kind == 'tool_after' else 'no breaks yet' }}{% endif %}</small></a>
+    <small>{% if v.in_use %}<span class="use">In use</span> · {% endif %}{% if v.kind == 'edited' %}{{ c.changes|length }} change{{ 's' if c.changes|length != 1 }} · {% if reds %}<span class="r">{{ reds }} rule{{ 's' if reds != 1 }} broken</span>{% elif yellows %}<span class="y">{{ yellows }} warning{{ 's' if yellows != 1 }}</span>{% else %}all checks pass{% endif %}{% elif v.kind == 'tool_consistent' %}{% set st = (v.checks|fromjson).consistency or {} %}{% set b, a = st.before or {}, st.after or {} %}from the run, steadier start times: {{ b.start_movement_hours|round|int }} h to {{ a.start_movement_hours|round|int }} h of start-time changes, {{ b.distinct_start_times }} to {{ a.distinct_start_times }} different starts{% else %}{{ 'from the run' if v.kind == 'tool_after' else 'no breaks yet' }}{% endif %}</small></a>
   {% endfor %}
 </nav>
 
@@ -45,12 +56,18 @@
   <form method="post" action="{{ url_for('schedule_in_use', schedule_id=current.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="primary" type="submit">Set as the schedule in use</button></form>
   {% elif current.in_use %}<p class="inuse">This is the schedule in use for the week.</p>{% endif %}
   {% if recorded %}<p class="inuse-rec">As recorded on the RTA: <b>{{ recorded.now }} of {{ recorded.intervals }}</b> intervals at the target ({{ (100 * recorded.target)|round|int }}%) this week{% if recorded.tight %}, {{ recorded.tight }} tight{% endif %}. Sick days, overtime and other records stay on the RTA; the schedule itself is unchanged. <a href="{{ url_for('week_page', program=run.program, week=run.week_start) }}#needed">Hours needed</a></p>{% endif %}
-  <a class="button" href="{{ url_for('schedule_download', schedule_id=current.id) }}">Download (.xlsx)</a>
+  <a class="button" href="{{ url_for('schedule_download', schedule_id=current.id, tz=g.zone if moved else none) }}">Download (.xlsx){% if moved %} in {{ dict(zones)[g.zone].split(' (')[0] }} time{% endif %}</a>
   <a class="button" href="{{ url_for('schedule_week', schedule_id=current.id) }}">Week view of this version</a>
   {% if channel_lines %}<a class="button" href="{{ url_for('plan_channels', schedule_id=current.id) }}">Plan channels</a>{% endif %}
   <button type="button" class="button" data-swap-open>Swap slots</button>
 </div>
 
+{% if chhours %}{{ channel_hours(chhours) }}{% endif %}
+{% if together %}<section class="panel" aria-labelledby="merged-h">
+  <h2 id="merged-h">{{ together.name }} together</h2>
+  <p>{{ together.have }} of {{ together.of }} LOBs have a schedule for this week. <a href="{{ together.url }}">Week view of all LOBs together</a>: one requirement and one staffed count, on the clock picked.</p>
+</section>
+{% if together.hours %}{{ channel_hours(together.hours, 'Scheduled hours per channel, all LOBs together', 'chm-h') }}{% endif %}{% endif %}
 {% if input_problem %}<section class="panel chpanel" id="channels" aria-labelledby="chan-h">
   <h2 id="chan-h">Channels</h2>
   <p class="error">{{ input_problem }}</p>
@@ -88,6 +105,11 @@
 <div class="side">
   <section class="panel" aria-labelledby="shifts-h">
     <h2 id="shifts-h">Shifts</h2>
+    <form class="sel" method="get" action="{{ url_for('run_schedules', run_id=run.id) }}">{% if current %}<input type="hidden" name="v" value="{{ current.id }}">{% endif %}
+      <label>Times in <select name="tz" data-autosubmit>{% for key, name in zones %}<option value="{{ key }}"{% if key == g.zone %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+      <noscript><button type="submit">Show</button></noscript>
+    </form>
+    {% if moved %}<p class="note warn-note">Times are shown in {{ dict(zones)[g.zone] }} time. Shifts are changed in {{ own_name }} time, the schedule's own: <a href="{{ url_for('run_schedules', run_id=run.id, v=current.id if current else none, tz=own_zone) }}">show {{ own_name }} time</a> to change one.</p>{% endif %}
     <p class="note">Click a shift to change it. Choices come from this program's Shift Library, plus OFF and Leave. Changed shifts are outlined, with the tool's shift under the new one{% if current.kind != 'edited' or current.in_use %}; a change here starts a new version{% endif %}.</p>
     <div class="scroll" role="region" tabindex="0" aria-label="Shifts (scrolls sideways)">
     <table class="edgrid" data-check-url="{{ url_for('schedule_check', schedule_id=current.id) }}" data-change-url="{{ url_for('schedule_change', schedule_id=current.id) }}">
@@ -96,7 +118,7 @@
       {% for a in view.week.associates %}{% set tool_days = view.tool_days.get(a.name, []) %}
       <tr><th scope="row"><b>{{ a.name }}</b><small>{% if a.slot %}Slot {{ a.slot }} · {% endif %}{{ a.language }}{% if a.tl %} · {{ a.tl }}{% endif %}</small></th>
         {% for d in days %}{% set value = a.days[loop.index0] %}{% set was = tool_days[loop.index0] if tool_days|length > loop.index0 else value %}{% set sev = m.cells.get(a.name ~ '|' ~ d) or m.cells.get(a.name ~ '|*') %}
-        <td><button type="button" class="ed{% if value != was %} changed{% endif %}{% if sev %} sev-{{ sev }}{% endif %}{% if value == 'OFF' %} off{% elif value == 'Leave' %} leave{% endif %}" data-name="{{ a.name }}" data-day="{{ d }}" data-value="{{ value }}">{% if sev %}<span class="flag {{ sev }}">{{ 'rule broken' if sev == 'red' else 'warning' }}</span>{% endif %}{{ value or '–' }}{% if value != was %}<s>{{ was }}</s>{% endif %}</button></td>
+        <td><button type="button" class="ed{% if value != was %} changed{% endif %}{% if sev %} sev-{{ sev }}{% endif %}{% if value == 'OFF' %} off{% elif value == 'Leave' %} leave{% endif %}" data-name="{{ a.name }}" data-day="{{ d }}" data-value="{{ value }}"{% if moved %} disabled{% endif %}>{% if sev %}<span class="flag {{ sev }}">{{ 'rule broken' if sev == 'red' else 'warning' }}</span>{% endif %}{{ value|zone_cell(moved, zone_dates[d], own_zone, g.zone) if value else '–' }}{% if value != was %}<s>{{ was|zone_cell(moved, zone_dates[d], own_zone, g.zone) }}</s>{% endif %}</button></td>
         {% endfor %}
       </tr>
       {% endfor %}

@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from .clock import EGYPT
-from .versions import (DAYS, added, apply_change, channel_blocks, marks, problems, read_week, shift_span, swap_shifts,
+from .versions import (DAYS, added, apply_change, channel_blocks, marks, problems, read_week, shift_span, swap_days, swap_shifts,
                        swap_slots,
                        validate, write_breaks, write_channels)
 
@@ -139,6 +139,7 @@ class ScheduleBook:
                     raise ValueError("This workbook asks for nobody on any channel: fill in how many people Chat, "
                                      "Phone or Email need (or Email Hours), then add it again.")
                 os.replace(trial, self.root / run_id / "channels.xlsx")
+                self.store.invalidate_days()  # Phase AV: the channel needs a day is built from are a file, not a row
             finally:
                 trial.unlink(missing_ok=True)
         return check_lines(setup, inputs, source)
@@ -181,6 +182,29 @@ class ScheduleBook:
                 number += 1
             return self.store.list_schedules(run_id=run["id"])
 
+    def ensure_consistent(self, run: Dict[str, Any], source: Path,
+                          consistency: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Phase AL: the steadier week the engine writes beside its schedule (MORE_CONSISTENT_CANDIDATE, passed by the
+        validator with no worse coverage) kept once as "Tool, more consistent", with the engine's before and after
+        figures in its checks. Offered only: it is never set in use here. None while the run has no versions."""
+        with self._lock(run["id"]):
+            existing = self.store.list_schedules(run_id=run["id"])
+            kept = next((v for v in existing if v["kind"] == "tool_consistent"), None)
+            if kept or not existing or not Path(source).is_file():
+                return kept
+            target = self.root / run["id"] / "tool_consistent.xlsx"
+            shutil.copyfile(source, target)
+            week = read_week(target)
+            result = self._check(run["id"], target)
+            result["problems"] = problems(result, settings=week["settings"])
+            result["consistency"] = consistency
+            new_id = self.store.add_schedule(run_id=run["id"], program=run.get("program") or "",
+                                             week_start=run.get("week_start") or "", kind="tool_consistent",
+                                             number=max(v["number"] for v in existing) + 1,
+                                             label="Tool, more consistent", file=f"{run['id']}/tool_consistent.xlsx",
+                                             week=json.dumps(week), checks=json.dumps(result))
+            return self.store.get_schedule(new_id)
+
     def ensure_ready(self, run: Dict[str, Any], input_path: Path) -> List[Dict[str, Any]]:
         """A ready schedule's workbook kept as the run's version 1 (kind "ready"); checked like any other."""
         with self._lock(run["id"]):
@@ -217,7 +241,8 @@ class ScheduleBook:
         out = []
         for run_id, versions in by_run.items():
             in_use = next((v for v in versions if v["in_use"]), None)
-            shown = in_use or max(versions, key=lambda v: (v["kind"] != "tool_before", v["created"], v["id"]))
+            shown = in_use or max(versions, key=lambda v: (v["kind"] not in ("tool_before", "tool_consistent"),
+                                                           v["created"], v["id"]))
             metrics = json.loads(shown["checks"] or "{}").get("metrics") or {}
             out.append({"run": self.store.get_run(run_id) or {"id": run_id, "workbook": run_id, "created": 0},
                         "shown": shown, "count": len(versions), "in_use": in_use is not None,
@@ -237,6 +262,7 @@ class ScheduleBook:
                                  "another schedule in use first.")
             count = self.store.delete_run(run_id)
             shutil.rmtree(self.root / run_id, ignore_errors=True)
+            self.store.invalidate_days()
         return count
 
     def kept_weeks(self, program: str) -> List[Dict[str, Any]]:
@@ -446,6 +472,27 @@ class ScheduleBook:
                                       severity=worst(new), problems=json.dumps([p["text"] for p in new]))
             return int(row["id"])
 
+    def swap_week_days(self, schedule_id: int, user_id: int, first: str, second: str, days: List[str], reason: str,
+                       label: str) -> int:
+        """Two people swap several days (Phase AO: an approved full-week swap) as one new version named ``label``;
+        each person's change is logged per day."""
+        start = self.store.get_schedule(schedule_id)
+        if start is None:
+            raise KeyError(schedule_id)
+        with self._lock(start["run_id"]):
+            row = self.store.get_schedule(schedule_id)
+            olds = {a["name"]: a["days"] for a in json.loads(row["week"] or "{}").get("associates", [])}
+            row, new = self._save(row, user_id, lambda src, dst: swap_days(src, dst, first, second, days),
+                                  {(who, day) for who in (first, second) for day in days}, fresh=True, label=label)
+            for day in days:
+                i = DAYS.index(day)
+                for who, other in ((first, second), (second, first)):
+                    self.store.add_change(schedule_id=row["id"], user_id=user_id, associate=who, day=day,
+                                          old=(olds.get(who) or [""] * 7)[i], new=(olds.get(other) or [""] * 7)[i],
+                                          reason=reason, severity=worst(new),
+                                          problems=json.dumps([p["text"] for p in new]))
+            return int(row["id"])
+
     def swap(self, schedule_id: int, user_id: int, first: str, second: str, reason: str) -> int:
         """Two people swap slots (each keeps the other's shifts and breaks); logged once per person."""
         start = self.store.get_schedule(schedule_id)
@@ -469,7 +516,9 @@ class ScheduleBook:
         row = self.store.get_schedule(schedule_id)
         cache = self.root / row["run_id"] / "break_rules.json"
         if cache.is_file():
-            return json.loads(cache.read_text(encoding="utf-8"))
+            kept = json.loads(cache.read_text(encoding="utf-8"))
+            if "concurrency_mode" in kept:  # Phase AY: rules kept before the gate mode was read are read again, once
+                return kept
         cmd = [sys.executable, str(Path(__file__).with_name("break_rules_cli.py")), "--input",
                str(self.input_path(row["run_id"])), "--engine",
                str(Path(self.package_root) / "engine" / "_tools" / "l632_universal_scheduler.py")]
@@ -718,4 +767,5 @@ class ScheduleBook:
             gone += 1
             if not self.store.list_schedules(run_id=row["run_id"]):
                 shutil.rmtree(self.root / row["run_id"], ignore_errors=True)
+                self.store.invalidate_days()
         return gone

@@ -95,3 +95,4 @@
 .leftnav nav a[href^="/setup/programs"]::before { --i: var(--i-tree-structure); }
 .leftnav nav a[href^="/requests"]::before { --i: var(--i-tray); }
 .leftnav nav a[href^="/me"]::before { --i: var(--i-calendar-check); }
+.leftnav nav a[href^="/admin/roles"]::before { --i: var(--i-gear); }

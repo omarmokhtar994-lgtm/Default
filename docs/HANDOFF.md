@@ -2,7 +2,7 @@
 
 © 2026 Omar Mokhtar. All rights reserved.
 
-Written Thu 15 Oct 2026, 13:11 Egypt time, at the end of Phase AI. A new chat reads `CLAUDE.md` (it loads by itself)
+Written Thu 15 Oct 2026, 13:11 Egypt time, at the end of Phase AI; brought up to date at 18:30, end of Phase AJ, at 23:00, end of Phase AK, on Fri 16 Oct, 00:10, end of Phase AL, at 03:05, end of Phase AM, and on Fri 16 Oct, about 19:50, end of Phase AN. A new chat reads `CLAUDE.md` (it loads by itself)
 and then this file. Together they hold the rules, the owner's ways of working, where the work stands and how to
 check it. What they cannot hold is the chat itself: when something here is not enough, the record is in git
 (`git log`), the plans (`docs/superpowers/plans/`) and each phase's evidence (`evidence/phase_*/`).
@@ -19,6 +19,39 @@ check it. What they cannot hold is the chat itself: when something here is not e
 - Ask only about decisions that are the owner's (samples, behaviour changes, new dependencies, anything visual). Take
   the sensible default for the rest and record it as a ruling with what it costs if wrong.
 - Times in Egypt time (Africa/Cairo). The container's clock is UTC.
+
+## Skills at each step (owner, 2026-10-15)
+
+Load each with the Skill tool at the step it covers; following it from memory does not count.
+
+- Every fix and feature: systematic-debugging for any bug (root cause first); test-driven-development (a failing test
+  first); verification-before-completion (evidence before saying anything is done).
+- Each phase: writing-plans, then executing-plans, inline. subagent-driven-development and requesting-code-review only
+  when the owner asks.
+- Engine (CP-SAT): cpsat-engine-modeling with TDD for any engine change or diagnosis.
+- Tests and Python: python-testing-patterns; property-based-testing (Hypothesis is a new dependency: ask first);
+  python-error-handling and python-anti-patterns on changed code only; python-performance-optimization before long
+  full-CPU runs.
+- Website design: frontend-design, ui-ux-pro-max, and the account's design-taste-frontend, impeccable and design-md.
+  New libraries and visual changes go to the owner as samples first.
+- Website review before shipping: web-interface-guidelines on changed files; better-interface, better-accessibility,
+  better-colors, better-layout, better-typography, better-ui, better-writing; web-quality-audit, accessibility,
+  best-practices, performance, core-web-vitals. interface-review only on /interface-review.
+- Browser checks: webapp-testing (Playwright screens) and playwright-cli.
+- Security: security-and-hardening for sign-in, sessions, uploads, group links, secrets or outbound posts.
+- Server logs: observability-and-instrumentation (a metrics stack is a new dependency: ask).
+- Records: documentation-and-adrs in the repo's own layout (plans, evidence); changelog-generator for release notes.
+- External reviews (for example ChatGPT): receiving-code-review.
+- Motion only if an approved sample needs it: gsap-*, lenis, react-bits (ideas only, ported to plain CSS and JS).
+- Other: graphify only on /graphify; find-skills to look for new skills; img2threejs only if asked.
+- Style: caveman for chat replies; the Karpathy guidelines in CLAUDE.md for code.
+- Plugins (owner, 2026-10-15): Superpowers (the superpowers:* process skills: brainstorming, writing and executing
+  plans, TDD, systematic debugging, verification, finishing a branch); Headroom (headroom:peek and headroom:headroom
+  to read large files and logs, such as app.py or the suite logs, in parts); burn (burn:burn, the session's cost,
+  when asked or at the end of a phase); claude-code-setup (claude-code-setup:claude-automation-recommender, hooks and
+  automation suggestions, which go to the owner before anything is set); security: the claude-security / Security
+  Guidance plugin is not installed in these sessions, so security-review (on the branch's changes) and
+  security-and-hardening stand in for it.
 
 ## Safety rules the owner set (still in force)
 
@@ -41,7 +74,7 @@ check it. What they cannot hold is the chat itself: when something here is not e
 - Pages: Home, RTA (`/day`: Timeline, Interval board, Adherence, Find a time, Overtime and VTO, Channels, Rescue the
   day, Fix breaks, Change several breaks), Overview, Wallboard, Handover, Weeks, Schedules, Runs, Leave and swaps,
   Analysis, Programs, Exports, Team, People, Departments and people, Notifications, Coaching, My week (associates).
-- Branch: `claude/handoff-document-m6egz2` (commit and push only there; no pull request unless asked).
+- Branch: the session's designated branch (Phase AJ: `ccr-90ec94cc-a37tqk`, started from `claude/handoff-document-m6egz2`); no pull request unless asked.
 
 ## How a phase runs
 
@@ -56,7 +89,260 @@ check it. What they cannot hold is the chat itself: when something here is not e
 6. Package, split into parts, send them, and report in caveman style: what changed, rulings with their cost, what
    is known and left, Egypt times, screens.
 
-## Where things stand (end of Phase AI)
+## Phases AX and AY (owner feedback, 2026-10-22 and 2026-10-23; sent as patches, then one full package)
+
+- **AX**: Replan the day's breaks (RTA, `how=fresh`, only from now, the chosen day and "Day starts at"); LOB view with tick
+  boxes; Shrinkage by weekday and interval; downloads of charts and tables; adherence follows the RTA schedule (a moved
+  break costs nothing, a missed tick counts); Incidents counts by type with durations. **One break-rule model** for every
+  tool that places breaks (`webapp/break_plan.py`): intervals first, then the usual shape (first break 120 to 210 min after the
+  start, lunch 120 to 180 min after it, the last ends 60 min before the end), then the workbook's break rules (min gap hard,
+  max gap soft), then fewest moves. Manual picks only warn. Associate "My day" after midnight shows the running shift, today,
+  tomorrow. Breaks outside the shift: Plan channels never keeps one, Fix and Replan bring them inside. The upload guard
+  finds a card typed as a number. Breaks of one shift are spread over the quarter hours where the spare cover is at least
+  `AMPLE` (3 h) within `SPREAD_REACH` (120 min) of the even-spaced time. Documented in `docs/howto/RTA.md`.
+- **AY, split view / late policy / VTO**: `/day/split` (`day_split`; panes are `/day?embed=1`, `body.embed`, `_keep_embed` url default, frame headers only for the embedded day); `DayBook.set_status(late_kind, am_note)` + `_late_policy` (`LATE_MAX_MINUTES`, `LATE_MAX_COUNT`, `attendance.late_kind`, `/day/attendance-check`); VTO removed (`NO_VTO`) and `convert_vto_to_early_leave` run at start-up; bilingual counts by need (`day.spread_languages`).
+- **AY, counts and window**: `DayBook.plan_extra_breaks` (form fields `shorts`, `lunches`; stand-in person via `rules["extra_slots"]`, `break_plan.slots_of`), breaks may sit in overtime; every day-page POST (`DAY_WRITES`, checked in `before_request`) limited by role: 1 day back, supervisor 7, admin none (`_still_editable`, `_back_limit`); today is the viewer's zone from the `pc_tz` cookie set in app.js (`app.config["TODAY"]` stands in for it in tests); pages default to `_pc_zone()` (same cookie) when no `tz` is asked or kept, and the Playwright test files set `TZ=Africa/Cairo` so the browser's zone is Egypt; Timeline hour labels and lines placed by JS from `data-span`.
+- **AY, call-in breaks**: `DayBook.plan_call_in_breaks` (route `/day/call-in/breaks`, button "Plan their breaks") places a typed-times call-in's breaks with `break_plan.suggest`, others' breaks fixed; tests `test_ay_callin_breaks`.
+- **AY**: open pages ask `/live/stamp` every 30 s (plus up to 5 s) whether what they show changed
+  (`webapp/live.py`, `liveWatch` in `static/app.js`): My day, My week and Overview reload; the RTA day and Requests show a
+  bar. The stamp is a digest of what the page shows (per person for associates), never the write counter.
+  **Runner**: the longest a run may take is `(search budget + GRACE_SECONDS) * rounds`, `GRACE_SECONDS = 3000`
+  (`packages/rc9_2_2_production/runners/rc921_runner.py`; was 1800). A real Quick run (2 seeds side by side, WHOLE_SHIFT) was
+  killed at 5400 s with both seeds valid (slowest seed 5146 s). **Input check**: the line about when a shift is inside a
+  language window names the Shift Rule the workbook sets. **Rescue on timeout**: when the cap stops a portfolio, the runner
+  runs `RUN_PORTFOLIO.py --collect-only` on the seed folders; a seed counts only if its `UNIVERSAL_RUN_STATUS.json` has
+  `top_level_copies` (the engine's last write), and every rule for a winner is unchanged; the record carries
+  `rescued_after_timeout` and the run page says so (`webapp/runs.py: rescue_note`); with no finished seed the timeout stands.
+  **Day off cancelled (call in)**: a call-in that breaks the rest gap is kept with a warning, as overtime is
+  (owner, 2026-10-23, from a screenshot: "it should show warnings but still apply it"); `add_activity(..., "Called in",
+  dry_run=True)` used to keep the record, and now returns it with `warning`. Swaps still list a rest problem with "Offer
+  with the warning". **Cover from outside the roster** can be removed with a "Delete cover" button (tab Overtime and VTO) and a "Remove" button on the
+  Interval board entry (`day_cover_cancel` keeps the board when `view=board`). **Group posts** longer than one Slack message go as "(1 of N)" messages instead of being cut with "open the RTA" (owner, 2026-10-23: associates cannot open the tool); `Notifier._attempt` keeps `parts_done` in the post body so a retry resumes. **Limit on breaks at once** (`concurrency_mode` in the break rules, from Break Concurrency Gate Mode): Fail = first in `suggest` and a hard constraint in `channel_plan`; Warn (default, and rules kept without it) and Off = the intervals and the usual shape decide (owner, 2026-10-23: "ignore the cap"); the validator still says an excess as a yellow warning in Warn. Pre-registered rule and result: `evidence/phase_ay/REQUESTS.md`. **RTA edits** (owner, 2026-10-23): last night's overtime, call-in and cover are listed and deletable from the next day's Overtime and VTO tab (`prev_on`, `outside.prev`); a booked session or one booked activity can change start and end (`edit_session`, `edit_activity`). Open: bilingual counting (equal split or real allocation: the owner has not chosen), whether WHOLE_SHIFT is what lengthens the stages after the search (test: the same workbook with the row set to START). The gate runs once after a full package install (15 to 30 min before the first run); patches do not
+  change `MANIFEST.json`, so they do not trigger it. Evidence: `evidence/phase_ay/CHECKS.md`.
+  **Channel planner (owner, 2026-10-23, patch AY7)**: a Channel Setup row "Keep each person on the same channel through
+  the day" (Yes/No, off by default) and a tick on the Plan channels page (overrides the row for that Suggest) cost every change
+  of channel, also across a break, and stretches under 2 hours; the fair spread ("Spread channels fairly over the week")
+  now charges the range and the distance from the middle among people with the same channels and language, this day
+  included. The break-moving stage keeps the first stage's spread (ENVELOPE) instead of pricing it again. Measure with
+  `tools/channel_scenarios.py [--move-breaks]`; rules, weights, results and the known limit (a few breaks past the normal
+  maximum gap on a tight team) are in `evidence/phase_ay/REQUESTS.md`. Tick on whenever fairness is on: fairness alone
+  changes channels more often than before. AY7 is cumulative: it holds AY5 and AY6 too.
+
+## Where things stand (end of Phase AU; package AP to AU, not yet built)
+
+- **AP** (merged LOBs): `webapp/merge.py`, `merged_day.py`, `channel_hours.py`, `daily_views.py`. A View pick (this LOB or
+  all LOBs of the program) on the RTA, Week and Schedules; hours per channel per day and week (RTA, Schedules, Exports);
+  a daily-views workbook per associate from the RTA. Edits on the merged page go to the person's LOB in a
+  before_request hook (`merge=1` plus `associate`).
+- **AQ** (engine, owner-approved): Instructions row `Language Working Window Shift Rule`, `START` (default) or
+  `WHOLE_SHIFT`; engine, independent validator and clean-room checker read it; recorded in the contract hash only when
+  WHOLE_SHIFT; the web workbooks carry the row. Pre-registered A/B in `evidence/phase_aq/REQUESTS.md`; the arms were
+  killed twice by container restarts and rerun with a 1500 s budget (a recorded deviation). Engine identity refreshed
+  with `tools/refresh_engine_identity.py`.
+- **AR** (walls and people): `webapp/tests/test_ar_walls.py` crawls every GET and POST route as people without a
+  program (found and fixed four leaks); delete a person (`Store.delete_user`, soft); bulk users
+  (`webapp/bulk_users.py`, `/admin/users/bulk`); blank password made up and shown once.
+- **AS** (requests): `webapp/change_requests.py` (`ChangeBook`): an associate asks to move a break on the running day
+  (past 00:00 for night shifts), a team manager asks for coaching, the RTA decides on the Requests page with the impact,
+  the nearest times, a comment, billable correction. Buffer words High (one above the need) / Moderate / Low; off-queue
+  warning over 30%; billable follows the program's Coverage measure (Programs setup; `ProgramBook.day_measure`).
+- **AT** (security): `webapp/tests/test_at_security.py` (25 tests): every route per role against the permission matrix,
+  forged and edited cookies, cookies after a password change or delete, form tampering, CSRF on every POST, `next`
+  redirects, security headers, escaping, exports scoped to the program. Fixed: the exports person filter named a person
+  of another program; the key file is created 0600; CSP gains base-uri, form-action, object-src; `no-store`.
+  Owner said yes (2026-10-21) to both open items. Sign-in: an account already locked for 15 minutes after 5 wrong
+  passwords (`Store.authenticate`); `webapp/throttle.py` now also holds an address after 40 wrong sign-ins in 15
+  minutes (in memory, 429). Dependency audit: `pip install pip-audit` into the web venv, then
+  `pip-audit -r deploy/requirements.txt` (2026-10-21: no known vulnerabilities); not added to the requirements.
+- **AU** (owner feedback on AR/AS/AT screens): break changes and coaching are decided on the RTA tab "Requests"
+  (`_change_requests.html`, shared with the Requests page; `back` returns to the tab); an associate has two tabs, Today
+  (`/me/breaks`: the day card, breaks, change for today and tomorrow, `ChangeBook.tomorrow_shift`) and Weeks (`/me`: the
+  week with its breaks, leave, swaps); landing is Today. A team manager cancels own coaching request. Group posts keep only
+  the latest change to one break and add "Breaks now: ..." (`notify.latest_changes`, `Notifier._finals`). Suggest builds
+  the usual shape (first break 2 to 3.5 h, lunch 2 to 3 h after, last before the last hour) and holds it while an interval
+  stays safe in the autopilot's sense (target plus 10 minutes): `evidence/phase_au/BREAKS_RULE.md` has the rule and arms
+  (engine break stage untouched). Pages offer only what the role may use (Home's New schedule, auto-breaks form;
+  `TheOffersMatchTheRole`). Sign-in: `webapp/throttle.py` holds an address after 40 wrong sign-ins in 15 minutes.
+  Leftovers finished: answers to requests reach the asker in the site (menu count and a banner, `change_requests.seen`)
+  and the LOB's group (kind `request`, `ChangeBook._tell_the_group`; on by default, added once to LOBs that post
+  breaks); the Requests tab works in the all-LOBs view; people list download and switch several off or on
+  (`bulk_users.people_workbook`, `/admin/users/switch`); sign-in history events and an admin list of held addresses
+  with release; "Sign out other devices" on Settings (`users.sessions_from`, `session["at"]`); `tools/audit_dependencies.py`
+  runs pip-audit (manual step before a release, needs internet). Still not done: the engine's own break stage does not
+  follow the break shape (needs a pre-registered A/B); the password-on-create symptom needs the owner's exact message.
+- **AU second walk** (owner: "fix the rest"): `ChangeBook.overlaps`, `stale_note`, `expire_overdue`, `_tell_the_group_asked`,
+  urgency order, per-program rules (`ProgramBook.request_settings`, program setup "Break change requests"); leave and
+  swap answers (in-site `seen` columns, group posts, `LeaveBook`/`SwapBook.decide` wrappers); the associate is told when
+  someone else changes their breaks (`users.day_seen_at`, `break_changes_for`); temporary passwords expire in 7 days
+  (`users.temp_until`); `webapp/zipcheck.py` refuses zip bombs on every upload; renamed LOBs keep requests and leavers
+  have none waiting; a new password must differ. Accessibility check tool: `evidence/phase_au/tools/a11y.py` (0 problems).
+  Deliberately not done: the replan and rescue tools do not use the break shape (they only move a break to lift the floor,
+  so they never undo the shape without a floor reason); showing associates a converted zone (the pages name the zone and the
+  gap instead; converting needs the owner's choice of which zone they should see); two-factor sign-in (owner: skip).
+  How-to pages: `docs/howto/`.
+- **Program defaults** (owner, 2026-10-21: "LOBs and defaults should hold all default settings"): `programs.rta` JSON
+  (`ProgramBook.rta_defaults`/`set_rta_defaults`: target, operating day start, shrinkage mapping) with fallbacks in the
+  store (`rta_default`, `get_day_start`, `get_shrinkage_map`) and `DayBook.target_for` (week's own, then the program's, then
+  the workbook's); `DayBook.page(measure=None)` takes the program's measure, so pages that name none (Weeks, Overview,
+  wallboard, coach, exports, handover) follow it; a new run's coverage option starts from it. The RTA still opens on the
+  calendar day (owner, 2026-10-15). Operating hours (owner, 2026-10-21: only the start; the end is the last shift's, else 24 hours):
+  `attendance.operating_span`, `window_view(length=)`, `view["span"]`; used when the start picked is the operating day's. Tests:
+  `test_au_defaults.py`, `test_au_hours.py`.
+- Release gate 2026-10-21: 1551 tests (floor raised from 1537). `evidence/phase_aq/CHECKS.md` has the A/B result.
+- Rules learned: a container restart kills background runs started with nohup; keep the session active while a long
+  run goes. Check `git status` for rewritten old screenshots before every commit.
+
+## Earlier: end of Phase AO
+
+- Phase AO is complete and pushed (branch `ccr-90ec94cc-a37tqk`): overtime after 00:00, name and team manager lists by
+  program, swap offers with warnings, a full-week swap, My week with a week picker and the RTA's aux, leave for weeks
+  with no schedule (applied after the run), the 11-hour break row in the web workbooks
+  (`evidence/phase_ao/`, plan `docs/superpowers/plans/2026-10-20-phase-ao-build.md`).
+- Engine findings (no engine change): a blank Language Working Window means OFF; a Coverage Split row with group `UK`
+  works (`evidence/phase_ao/ENGINE_LANGUAGE_WINDOW.md`).
+- Expected on Phase AO: suite halves 616 (1 skipped) and 677 OK; browser tests 79 OK; GATE PASS with 1537 tests
+  (2 skipped); page review 0 problems; sweep 0 exceptions and 0 server errors.
+- Next: Phase AP (merge LOBs of one program in RTA, Week and Schedules; hours per channel; per-associate daily
+  download). Sample first.
+
+## Earlier: end of Phase AN
+
+
+- Phase AN is complete and pushed (branch `ccr-90ec94cc-a37tqk`). It brings in ChatGPT's reviewed work, checked by
+  Claude over three rounds, with the owner's decisions A yes, B Fix channels as in AM, C short manual blocks warn,
+  D no draft lock (`evidence/phase_an/REQUESTS.md`, plan `docs/superpowers/plans/2026-10-16-phase-an-build.md`):
+  - times in another zone convert on each day's own clock rules; a repeated or missing source hour is refused;
+  - the RTA reads "now" in the schedule's zone and falls back to it on a clock-change night;
+  - Plan channels counts demand with no staff, overnight and outside cover; Sunday uses the week before;
+  - channel solves run in a child process (`webapp/channel_solver.py`);
+  - Fix channels applies all or nothing; Go-to search follows permissions.
+- Not taken from ChatGPT: the rewrite of the gate's `tests_staged/test_rc9_2_19_joint_solve_isolation.py` (its sandbox
+  had a different `/proc`) and its `/proc` helper. Gate tests are not edited to suit a sandbox.
+- The first AN package (sha256 `c656f559...`) gave a 500 on Home on the owner's server: a schedule whose "Next Sunday"
+  finding held only steps between quarter hours (no `interval`) crashed `results._finding`. It was an AM bug (Home
+  reads the schedule's own checks since AM) met first on real data. Fixed in c9671ba (`test_an_next_sunday`).
+- Package `RC9_2_2_PRODUCTION_PACKAGE.zip`, 2745 files, 93.70 MB, sha256
+  `67ccb39fd1671ce1ec67e70e50d583f14b54c1cc2e4ff9a897d3edc223568acb`, sent as AN2_part_0 to AN2_part_3. It contains AK
+  to AM too. Installing it is the owner's step.
+- Expected on Phase AN: suite halves 669 and 589 (1 skipped) OK (1258 in all); browser tests 77 OK; GATE PASS with 1537 tests
+  (2 skipped); page review 0 problems; sweep 0 exceptions and 0 server errors.
+
+## Earlier: end of Phase AM
+
+- Phase AM is complete and pushed (branch `ccr-90ec94cc-a37tqk`):
+  - Fix channels on the RTA's Channels tab (`DayBook.channel_fix_plan` / `apply_channel_fix`; `plan_day` gained
+    `carry_in` and `keep`).
+  - Download in the zone picked (`versions.zoned_copy`).
+  - A Version pick on Weeks (`DayBook.page(version_id=)`).
+  - Home and the run page read the version in use, else the engine's figures, else the version shown
+    (`_run_figures`).
+  - A finished run's outcome is stamped before its status.
+  - Requests and answers: `evidence/phase_am/REQUESTS.md`; checks: `evidence/phase_am/CHECKS.md`; plan and rulings:
+    `docs/superpowers/plans/2026-10-16-phase-am-build.md`.
+- Package `RC9_2_2_PRODUCTION_PACKAGE.zip`, 2729 files, 93.66 MB, sha256
+  `0aabe9d44f8003b92ebed8073bbe08d0e421cc9d17d2fdf7123f68435c4d0a79`, sent as AM_part_0 to AM_part_3.
+  - It contains AK and AL.
+  - Installing it is the owner's step.
+- Check tools: `evidence/phase_am/tools/` (`am_screens.py` and `am_audit.py` stop the clock with
+  `mock.patch("webapp.app.datetime", _Clock)`).
+- Expected on Phase AM:
+  - Suite halves: 624 and 559 tests OK (1 skipped). Browser tests: 77 OK.
+  - GATE PASS with 1537 tests (2 skipped).
+  - Page review: 0 problems. Sweep: 0 exceptions and 0 server errors.
+
+## Earlier: end of Phase AL
+
+- Phase AL is complete and pushed (branch `ccr-90ec94cc-a37tqk`): Email deep green `#2F7D5B` with a white E; the
+  engine's MORE_CONSISTENT_CANDIDATE kept as "Tool, more consistent" (offered, never set in use by itself; finished
+  runs get it once at start); a Fairness section on Plan channels (`webapp/channel_fair.py`). Requests, root cause and
+  answers: `evidence/phase_al/REQUESTS.md`; checks: `evidence/phase_al/CHECKS.md`; release notes:
+  `evidence/phase_al/RELEASE_NOTES.md`; plan and rulings: `docs/superpowers/plans/2026-10-15-phase-al-build.md`.
+- Package `RC9_2_2_PRODUCTION_PACKAGE.zip`, 2693 files, 92.21 MB, sha256
+  `4281a5eeb81a5626adc7c79543cf64733d41c63eb6e7af0801666f6a07cc1a8a`, sent as AL_part_0 to AL_part_3. The AK package
+  was sent before it; installing either is the owner's step (AL contains AK).
+- Next for fairness (owner's answers): the planner may weigh it later, the week first and the day where the week
+  cannot, and coverage always wins. The view came first, as asked.
+- Check tools: `evidence/phase_al/tools/`. Expected on Phase AL: 618 and 539 tests OK (1 skipped), 77 browser tests
+  OK, GATE PASS with 1537 tests (2 skipped), page review 0 problems, sweep 0 exceptions and 0 server errors.
+
+## Phase AV (owner, 2026-10-22): bulk coaching, missed breaks, exports, Incidents page
+- `activities.session` groups people booked together (`DayBook.book_session`, `sessions`, `move_session`, `cancel_session`,
+  `session_start`); routes `/day/book` (typed `at`), `/day/session/move`, `/day/session/cancel`; tab "Booked sessions".
+- `incidents` table (missed break ticked on `move_break(missed=True)` / `apply_bulk`), journaled, undone and purged with
+  the day (`DAY_ROW_KEYS`, `DAY_TABLES`, `delete_day_before`).
+- Exports: Attendance has Minutes (Late, Left early); new kinds `incidents`, `sessions`, `break_requests`, `swaps`,
+  `absence`, `incident_summary`. The `absence` and `incident_summary` exports pass no leave book, so an approved public
+  holiday request is not applied there.
+- `webapp/insights.py` (fact row per person and day from `DayBook.page`; sums per associate, LOB, program, weekday,
+  repeats), `insights_page.py` (tiles, charts), `/incidents`, `templates/insights.html`. Absenteeism counts are chosen on
+  the page (`abs=`): RTA and client = unplanned + sick, Sutherland = unplanned. Planned leave has a count, no duration.
+- Setting `heavy_weeks` (`app_settings` table, LOBs and defaults page): the most weeks Incidents, Shrinkage and Exports allow
+  people who are not admins, supervisors or RTAs (`rta_change`); default 13, recommended 6; the exempt are capped only by the 13 months kept.
+- Bio break is an aux (`day.BIO`); `webapp/upload_guard.py` refuses and deletes uploads with other tabs, card numbers, street
+  addresses, bank numbers, macros or outside links (phone numbers and emails are not looked for); Shrinkage page `/shrinkage`.
+- Screens: `evidence/phase_av/tools/screens.py`. Package (AP to AV): `792da06b92ad38fb5024c4ae217c14f059d2a18050a60662e21f40ead22ef606`, sent as AV_part_0 to AV_part_4; gate passed (1551 tests, 2 skipped).
+- Day cache (`DayBook.page`): see `evidence/phase_av/LOAD.md`; run the website tests with `SCHEDULER_VERIFY_PAGES=1` to rebuild a day on every hit and compare it (it found four real faults: channel needs files, viewing zone, writes inside an open change, write timing). Install note: `pip install -r deploy/requirements.txt` (defusedxml).
+
+## Earlier: end of Phase AK
+
+- Phase AK is complete and pushed (branch `ccr-90ec94cc-a37tqk`): channel colours D with letters on the Timeline,
+  Times in on a schedule, Fix breaks / Rescue / Change several breaks on the 24 hours from "Day starts at", the Team
+  manager role with associates assigned and approvals by team manager, and the Roles page (what each role may see and
+  do). Requests and answers: `evidence/phase_ak/REQUESTS.md`; checks: `evidence/phase_ak/CHECKS.md`; release notes:
+  `evidence/phase_ak/RELEASE_NOTES.md`; rulings at the end of `docs/superpowers/plans/2026-10-15-phase-ak-build.md`
+  and in the ledger.
+- Package `RC9_2_2_PRODUCTION_PACKAGE.zip`, 2663 files, 88.89 MB, sha256
+  `708aa29419e5a543e0694aa066e752804e99ffe8202b47203f31c62d027d1afd`, sent as AK_part_0 to AK_part_3; installing it
+  is the owner's step.
+- Open for the owner: the C letter (white on Chat `#C2549F`) measures 4.15:1, under 4.5:1; `#B04A90` would give
+  4.97:1.
+- Check tools for a fresh container: `evidence/phase_ak/tools/` (replace phase_ai with phase_ak in the commands
+  below; `route_sweep.py` takes the output path). Expected on Phase AK: 614 and 530 tests OK (1 skipped), 77
+  browser tests OK, GATE PASS with 1537 tests (2 skipped), page review 0 problems, sweep 0 exceptions and 0 server
+  errors.
+
+### Phase AK decisions to remember
+
+- `webapp/permissions.py` holds the catalogue (14 keys), the endpoint map and `allowed()`; `before_request` checks
+  every mapped endpoint; admins always pass; a `manager_required` route missing from the map is admin-only. The role
+  grid is read once per request (`g`), stored in `role_permissions`.
+- `webapp/approvals.py`: an associate's team manager approves first; backups are admins and supervisors with
+  `approve_tm`; an associate with no team manager is approved by any team manager of the program. Swaps keep
+  `tm_a_id` and `tm_b_id` per side.
+- `webapp/window_tools.py`: the three RTA tools run on the window view rebased to minute 0; moves carry
+  `name|idx|minute|date`; people whose shift began before the window are not moved.
+- Schedules in another zone are shown only; changes happen in the schedule's own zone.
+
+## Earlier: end of Phase AJ
+
+- Phase AI is installed on the server (owner, 2026-10-15).
+- Phase AJ is complete and pushed (branch `ccr-90ec94cc-a37tqk`, from the handoff branch): overtime up to 4 hours,
+  cover from outside the roster (a TM or support member counted in the intervals), channel colours after midnight.
+  Requests, root causes and answers: `evidence/phase_aj/REQUESTS.md`; checks: `evidence/phase_aj/CHECKS.md`; rulings
+  at the end of `docs/superpowers/plans/2026-10-15-phase-aj-build.md`.
+- The first AJ package (sha256 `d2c474ae...`, items 1 to 3) is installed (owner, 2026-10-15). The second
+  (items 4 and 5: cover language, overtime warns instead of refusing on the rest gap) is
+  `RC9_2_2_PRODUCTION_PACKAGE.zip`, 2604 files, 79.64 MB, sha256
+  `7fdba96a3eca83af0451fc0954211f18fba42ca855287b61eb1210ad4e585a30`, sent as AJ2_part_0 to AJ2_part_3; installing it is
+  the owner's step. In Cloud Shell `$SERVER` is lost when the shell restarts: it is set again from history (`!114`
+  on 2026-10-15), never asked for.
+- Check tools for a fresh container: `evidence/phase_aj/tools/` (replace phase_ai with phase_aj in the commands
+  below). Expected on Phase AJ: 502 and 581 tests OK (1 skipped), 77 browser tests OK, GATE PASS with 1537 tests
+  (2 skipped), page review 0 problems, sweep 0 exceptions and 0 server errors.
+
+### Phase AJ decisions to remember
+
+- `OVERTIME_MAX` is 240 minutes, the longest "+ Add" length (owner, 2026-10-15). Overtime breaking the rest gap is
+  kept with a warning (`_rest(..., refuse=False)`); call-ins still refuse; offers still keep the gap.
+- Cover takes a language (`outside_cover.language`, `DayBook.cover_languages`).
+- Cover from outside the roster: table `outside_cover`, `DayBook.add_cover` / `cancel_cover` / `covers`,
+  `day_view(cover=...)` adds them to every 5 minutes (cell key `outside`), `page(cover=False)` leaves them out (the
+  export's tick). Group posts go under the "overtime" kind.
+- `channel_day._timelines` keeps last night's stretches after midnight in `runs` (the words in `timelines` stay with
+  the day the shift starts).
+
+## Earlier: end of Phase AI
+
 
 - Phase AI is complete and pushed (last code commit 1a8e849, results 71e9b5c). The owner's 12 items are in
   `evidence/phase_ai/REQUESTS.md`; what was built, the checks and the rulings are in `evidence/phase_ai/CHECKS.md`
@@ -147,3 +433,10 @@ read the real clock break when their date passes, so stop the clock with `mock.p
 - AG: v4 redesign, associates' accounts, leave requests and approval, shift swaps, My week.
 - AH: one rule for an interval's standing by the week's target, hours needed table, 10-minute cushion.
 - AI: the 12 items above.
+- AJ: overtime up to 4 hours, cover from outside the roster, channel colours after midnight.
+- AK: channel colours D, Times in on a schedule, RTA tools on the day's 24 hours, team managers, Roles.
+- AL: Email deep green, the engine's more consistent schedule as a version, a channel fairness view.
+- AM: Fix channels on the RTA, download in the zone picked, a Version pick on Weeks, percentages for before-breaks runs.
+- AN: ChatGPT's reviewed fixes: time-zone dates and clock-change safety, channel coverage, solver in a child process, Go-to permissions.
+- AP to AS: merged LOBs and channel hours; WHOLE_SHIFT language window; program walls, delete user, bulk users; break change and coaching requests.
+- AO: My week picker, week swap, swap warnings, leave for later weeks, name lists by program, overtime after 00:00.

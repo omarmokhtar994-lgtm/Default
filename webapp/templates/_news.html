@@ -1,0 +1,11 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{# Phase AU: answers to the requests this person asked, shown once. #}
+{% if changed %}<section class="panel news" aria-labelledby="changed-h" role="status">
+  <h2 id="changed-h">Your breaks changed</h2>
+  <p class="note">The RTA or a planner changed these. The Breaks panel below shows them as they stand now.</p>
+  <ul class="log">{% for c in changed %}<li>{{ c.what }}</li>{% endfor %}</ul>
+</section>{% endif %}
+{% if news %}<section class="panel news" aria-labelledby="news-h" role="status">
+  <h2 id="news-h">New {{ 'answer' if news|length == 1 else 'answers' }}</h2>
+  <ul class="log">{% for r in news %}<li><b>{{ r.names_list|join(', ') }}: {{ r.what }}</b> on {{ r.on.strftime('%a %d %b') }}: {{ r.status_words }}{% if r.decision %}. “{{ r.decision }}”{% endif %}{% if r.outcome %}. {{ r.outcome }}{% endif %}</li>{% endfor %}</ul>
+</section>{% endif %}

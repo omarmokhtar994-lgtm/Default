@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import io
 from datetime import date, datetime, timedelta
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from openpyxl import Workbook
 from openpyxl.comments import Comment
@@ -26,7 +26,7 @@ MIN_DAYS = 3
 
 
 def actual_shrinkage(days, program: str, start: date, end: date, min_days: int = MIN_DAYS,
-                     measure: str = "interval") -> Dict[str, Any]:
+                     measure: Optional[str] = None) -> Dict[str, Any]:
     seen: Dict[int, Dict[int, list]] = {d: {} for d in range(7)}
     planned: Dict[int, Dict[int, float]] = {d: {} for d in range(7)}
     recorded, interval = [], None

@@ -134,6 +134,10 @@ python-performance-optimization.
       google-fonts (sliday @f86afc0, MIT; font search and pairings offline; its CSS links Google's font
       CDN, so self-host the files instead), visual-design-foundations (wshobson/agents @0874a27, MIT; tokens).
       Canva itself needs its own connector (not connected): the skills above make the designs, not edit a Canva account.
+    - Motion (owner, 2026-10-25): emil-design-eng, animate, review-animations, animation-performance (emilkowalski/skills
+      @2d22863, MIT): when to animate at all, curves and durations, a strict motion review, frame-budget fixes. The taste and
+      impeccable skills come from the owner's account; taste is for landing pages (dashboards are out of its scope), impeccable's
+      launcher downloads a program, so only its written method is used here.
   - "Web design guidelines" is web-interface-guidelines above.
 - find-skills: discovering more skills (skills.sh search is blocked by the
   network policy here; browse the source repos on GitHub instead).

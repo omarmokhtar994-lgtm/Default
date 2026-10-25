@@ -19,7 +19,7 @@ NOW = 14.6
 COVER = ["c", "c", "c", "s", "c", "c", "s", "g", "s", "c", "c", "o", "c"]  # one per hour: covered, short, gap, over
 
 THEMES = {
-    "a": ("aurora", "Aurora", "Light, frosted glass over a soft colour wash"),
+    "a": ("aurora", "Tide", "Light, a cool sea-glass wash behind plain panels"),
     "b": ("night", "Night watch", "Dark, deep blue with a faint grid that glows around the now line"),
     "c": ("paper", "Paper", "Light, flat and quick: a dot grid and one ink-blue accent"),
 }
@@ -83,7 +83,7 @@ def day_page(theme):
 <header class="top">
   <a class="brand" href="#"><img src="static/mark.svg" alt="" width="28" height="20"><span>Team Scheduler</span></a>
   <nav aria-label="Main">{nav}</nav>
-  <span class="who-chip"><i class="dot"></i>Sara</span>
+  <span class="who-chip">Sara</span>
 </header>
 <main id="main">
   <section class="hero" aria-labelledby="h1">
@@ -155,7 +155,7 @@ CSS = r'''/* © 2026 Omar Mokhtar. All rights reserved. */
   --covered: #19B7A6; --short: #F0A52A; --gap: #E5534B; --over: #8A7BF0;
   --p: #2358C7; --c: #C2549F; --e: #2F7D5B; --brk: #8C97A8; --lunch: #A9A3C9; }
 html { color-scheme: light; }
-body { margin: 0; font: 1rem/1.5 var(--font); color: var(--ink); background: var(--bg); min-height: 100vh; position: relative; }
+body { margin: 0; font: 1rem/1.5 var(--font); font-variant-numeric: tabular-nums; color: var(--ink); background: var(--bg); min-height: 100vh; position: relative; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .backdrop { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
 .shell, .signin { position: relative; z-index: 1; }
@@ -172,12 +172,11 @@ a { color: var(--accent); }
 .top nav a:hover { color: var(--ink); background: var(--chip); }
 .top nav a.on { color: var(--on-accent); background: var(--accent); }
 .who-chip { display: inline-flex; align-items: center; gap: .5rem; padding: .35rem .8rem; border-radius: 999px; background: var(--chip); font-weight: 600; }
-.who-chip .dot { width: .6rem; height: .6rem; border-radius: 50%; background: var(--covered); }
 
 /* hero */
 .hero { padding: 1.4rem 0 1.1rem; }
 .when { margin: 0; color: var(--dim); }
-.hero h1 { margin: .15rem 0 .8rem; font: 800 clamp(2rem, 5vw, 3.1rem)/1.05 var(--head); font-stretch: 88%; letter-spacing: -.01em; }
+.hero h1 { text-wrap: balance; margin: .15rem 0 .8rem; font: 800 clamp(2rem, 5vw, 3.1rem)/1.05 var(--head); font-stretch: 88%; letter-spacing: -.01em; }
 .pulse { display: flex; flex-wrap: wrap; gap: .6rem; list-style: none; margin: 0; padding: 0; }
 .pulse li { padding: .45rem .9rem; border-radius: 999px; background: var(--chip); }
 .pulse b { font: 800 1.15rem var(--head); margin-right: .25rem; }
@@ -204,7 +203,7 @@ a { color: var(--accent); }
 .seg { display: grid; place-items: center; font: 800 .8rem var(--head); color: #fff; border-radius: 6px; margin: 0 1px; }
 .k-P { background: var(--p); } .k-C { background: var(--c); } .k-E { background: var(--e); }
 .k-B { background: var(--brk); } .k-L { background: var(--lunch); }
-.now-line { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--now); box-shadow: 0 0 14px 2px var(--now-glow); pointer-events: none; }
+.now-line { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--now); pointer-events: none; }
 .now-line em { position: absolute; bottom: -.1rem; left: 50%; translate: -50% 0; padding: .1rem .5rem; border-radius: 999px; font: 700 .72rem var(--head); font-style: normal; background: var(--now); color: var(--on-now); white-space: nowrap; }
 
 /* coverage */
@@ -218,19 +217,21 @@ a { color: var(--accent); }
 .asks li:first-child { border-top: 0; }
 .asks small { display: block; color: var(--dim); }
 button { font: 700 .95rem var(--font); padding: .5rem 1rem; border-radius: 10px; border: 1px solid transparent; background: var(--accent); color: var(--on-accent); cursor: pointer; }
+button { transition: transform .12s cubic-bezier(.23, 1, .32, 1), filter .12s; }
 button:hover { filter: brightness(1.08); }
+button:active, .float-note .refresh:active { transform: scale(.97); }
 button.ghost { background: transparent; color: var(--ink); border-color: var(--edge-strong); }
 .btns { display: inline-flex; gap: .5rem; }
 
 /* the floating note: out of date page */
 .float-note { position: fixed; z-index: 20; left: 0; right: 0; margin-inline: auto; width: max-content; bottom: 1.1rem; display: flex; align-items: center; gap: .8rem; max-width: min(46rem, calc(100vw - 1.5rem)); padding: .65rem .8rem .65rem 1rem; border-radius: 999px; background: var(--note-bg); color: var(--note-ink); border: 1px solid var(--note-edge); box-shadow: var(--note-shadow); backdrop-filter: blur(14px) saturate(1.4); -webkit-backdrop-filter: blur(14px) saturate(1.4); }
 .float-note[hidden] { display: none; }
-.float-note.show { animation: rise .45s cubic-bezier(.2, .9, .3, 1.2) both; }
+.float-note.show { animation: rise .28s cubic-bezier(.23, 1, .32, 1) both; }
 .float-note .pip { flex: none; width: .7rem; height: .7rem; border-radius: 50%; background: var(--short); box-shadow: 0 0 0 0 var(--short); }
-.float-note.show .pip { animation: ping 2.2s ease-out infinite; }
+.float-note.show .pip { animation: ping 1.6s ease-out 3; }
 .float-note .refresh { flex: none; padding: .4rem .9rem; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-weight: 700; text-decoration: none; }
 .float-note .x { flex: none; background: transparent; color: var(--note-ink); border: 0; padding: .4rem .5rem; font-weight: 600; opacity: .75; }
-@keyframes rise { from { opacity: 0; transform: translateY(1.2rem); } to { opacity: 1; transform: none; } }
+@keyframes rise { from { opacity: 0; transform: translateY(.75rem) scale(.97); } to { opacity: 1; transform: none; } }
 @keyframes ping { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--short) 60%, transparent); } 80%, 100% { box-shadow: 0 0 0 .7rem transparent; } }
 
 /* sign in */
@@ -255,39 +256,36 @@ input { display: block; width: 100%; margin-top: .3rem; padding: .65rem .8rem; b
 '''
 
 LOOKS = r'''
-/* ---------- A. Aurora: light, frosted glass over a soft colour wash ---------- */
-.look-a { --bg: #EAF0FB; --ink: #15213B; --dim: #46556F; --accent: #3846C8; --on-accent: #fff; --focus: #3846C8;
-  --chip: #FFFFFFB3; --panel: #FFFFFFAD; --edge: #FFFFFFD9; --edge-soft: #15213B1F; --edge-strong: #5B6B88; --field: #FFFFFFE6;
-  --shadow: 0 10px 40px -18px #2A3D8F66; --shadow-big: 0 30px 80px -30px #2A3D8F80;
-  --warn-bg: #FFE9C2; --warn-ink: #6B4200; --now: #E5484D; --now-glow: #E5484D66; --on-now: #fff;
-  --note-bg: #FFFFFFC7; --note-ink: #15213B; --note-edge: #FFFFFFE6; --note-shadow: 0 18px 50px -12px #2A3D8F8C; }
-.look-a .backdrop { background: radial-gradient(52rem 34rem at 8% -8%, #B9C6FF 0%, transparent 62%), radial-gradient(46rem 32rem at 100% 2%, #9FEBDD 0%, transparent 60%), radial-gradient(40rem 30rem at 55% 105%, #FFD0EC 0%, transparent 62%), #EAF0FB; }
-.look-a .backdrop::after { content: ""; position: absolute; inset: -20%; background: radial-gradient(30rem 22rem at 30% 40%, #8C9BFF40, transparent 65%), radial-gradient(26rem 20rem at 75% 60%, #5FE0CC40, transparent 65%); animation: drift 38s ease-in-out infinite alternate; }
-@keyframes drift { to { transform: translate3d(6%, -4%, 0) scale(1.08); } }
-.look-a .card, .look-a .signin-card, .look-a .top nav a.on { backdrop-filter: blur(16px) saturate(1.5); -webkit-backdrop-filter: blur(16px) saturate(1.5); }
+/* ---------- A. Tide: light, a cool sea-glass wash behind plain panels ---------- */
+.look-a { --bg: #E8EFF6; --ink: #12233A; --dim: #46556F; --accent: #12233A; --on-accent: #FFFFFF; --focus: #12233A;
+  --chip: #FFFFFFB3; --panel: #FFFFFFE6; --edge: #FFFFFF; --edge-soft: #12233A1F; --edge-strong: #5B6B88; --field: #FFFFFF;
+  --shadow: 0 1px 2px #12233A14, 0 12px 28px -16px #12233A40; --shadow-big: 0 2px 4px #12233A14, 0 28px 60px -28px #12233A59;
+  --warn-bg: #FFE9C2; --warn-ink: #6B4200; --now: #12233A; --on-now: #fff;
+  --note-bg: #FFFFFFD9; --note-ink: #12233A; --note-edge: #FFFFFF; --note-shadow: 0 2px 4px #12233A1A, 0 16px 40px -12px #12233A66; }
+.look-a .backdrop { background: radial-gradient(54rem 34rem at 6% -10%, #C4DDF3 0%, transparent 62%), radial-gradient(46rem 32rem at 100% 0%, #C6EEDF 0%, transparent 60%), radial-gradient(40rem 30rem at 55% 108%, #DCE8F4 0%, transparent 62%), #E8EFF6; }
+.look-a .backdrop::after { content: ""; position: absolute; inset: -20%; background: radial-gradient(30rem 22rem at 30% 40%, #9CC6EC33, transparent 65%), radial-gradient(26rem 20rem at 75% 60%, #8FDCC133, transparent 65%); animation: drift 60s ease-in-out infinite alternate; }
+@keyframes drift { to { transform: translate3d(5%, -3%, 0) scale(1.06); } }
 
-/* ---------- B. Night watch: dark, a faint grid that glows around the now line ---------- */
-.look-b { --bg: #080F1E; --ink: #E7EEFB; --dim: #9DB0CF; --accent: #6FD8FF; --on-accent: #04202C; --focus: #6FD8FF;
-  --chip: #FFFFFF14; --panel: #0F1A31CC; --edge: #7FA2E233; --edge-soft: #7FA2E21F; --edge-strong: #6C87B8; --field: #0A1426;
-  --shadow: 0 20px 60px -30px #000; --shadow-big: 0 40px 100px -30px #000;
-  --warn-bg: #4A3510; --warn-ink: #FFD791; --now: #6FD8FF; --now-glow: #6FD8FF99; --on-now: #04202C;
-  --note-bg: #12203DD9; --note-ink: #E7EEFB; --note-edge: #6FD8FF55; --note-shadow: 0 18px 60px -10px #000, 0 0 0 1px #6FD8FF22;
+/* ---------- B. Night watch: dark deep blue, a dot grid that fades out ---------- */
+.look-b { --bg: #080F1E; --ink: #E7EEFB; --dim: #9DB0CF; --accent: #E7EEFB; --on-accent: #0A1426; --focus: #E7EEFB;
+  --chip: #FFFFFF14; --panel: #0F1A31E6; --edge: #7FA2E233; --edge-soft: #7FA2E21F; --edge-strong: #6C87B8; --field: #0A1426;
+  --shadow: 0 1px 2px #0008, 0 18px 40px -24px #000; --shadow-big: 0 2px 4px #0008, 0 36px 80px -30px #000;
+  --warn-bg: #4A3510; --warn-ink: #FFD791; --now: #E7EEFB; --on-now: #0A1426;
+  --note-bg: #12203DE6; --note-ink: #E7EEFB; --note-edge: #7FA2E255; --note-shadow: 0 2px 4px #0009, 0 16px 48px -10px #000;
   --p: #4C86FF; --c: #E070BE; --e: #3FAE81; --brk: #6E7B92; --lunch: #8D86BD; }
 .look-b { color-scheme: dark; }
-.look-b .backdrop { background: radial-gradient(60rem 38rem at 12% -10%, #1B2D6B 0%, transparent 62%), radial-gradient(50rem 36rem at 100% 10%, #0E3B52 0%, transparent 60%), #080F1E; }
+.look-b .backdrop { background: radial-gradient(60rem 38rem at 12% -10%, #17285C 0%, transparent 62%), radial-gradient(50rem 36rem at 100% 10%, #0C3547 0%, transparent 60%), #080F1E; }
 .look-b .backdrop::before { content: ""; position: absolute; inset: 0; background-image: radial-gradient(#9DB7EE2B 1px, transparent 1.2px); background-size: 26px 26px; -webkit-mask-image: radial-gradient(70% 60% at 50% 18%, #000 0%, transparent 78%); mask-image: radial-gradient(70% 60% at 50% 18%, #000 0%, transparent 78%); }
 .look-b .seg { color: #06142B; }
-.look-b .hero h1 { text-shadow: 0 0 40px #6FD8FF40; }
 
-/* ---------- C. Paper: light, flat and quick: a dot grid and one ink-blue accent ---------- */
-.look-c { --bg: #F5F7FA; --ink: #101828; --dim: #475467; --accent: #1D3BDB; --on-accent: #fff; --focus: #1D3BDB;
+/* ---------- C. Paper: light, flat and quick, a dot grid and ink ---------- */
+.look-c { --bg: #F5F7FA; --ink: #101828; --dim: #475467; --accent: #101828; --on-accent: #fff; --focus: #101828;
   --chip: #E8ECF3; --panel: #FFFFFF; --edge: #D6DCE6; --edge-soft: #E3E7EE; --edge-strong: #667085; --field: #fff;
   --shadow: 0 1px 0 #D6DCE6; --shadow-big: 0 24px 60px -34px #10182866;
-  --warn-bg: #FDEBC8; --warn-ink: #6B4200; --now: #1D3BDB; --now-glow: #1D3BDB55; --on-now: #fff;
-  --note-bg: #101828; --note-ink: #fff; --note-edge: #101828; --note-shadow: 0 16px 40px -14px #10182899; }
+  --warn-bg: #FDEBC8; --warn-ink: #6B4200; --now: #101828; --on-now: #fff;
+  --note-bg: #101828; --note-ink: #fff; --note-edge: #101828; --note-shadow: 0 2px 4px #10182833, 0 16px 40px -14px #10182899; }
 .look-c .backdrop { background-color: #F5F7FA; background-image: radial-gradient(#C3CBD9 1px, transparent 1.2px); background-size: 22px 22px; -webkit-mask-image: linear-gradient(#000 60%, #0000 100%); mask-image: linear-gradient(#000 60%, #0000 100%); }
 .look-c .card { border-radius: 10px; }
-.look-c .top nav a.on { background: var(--ink); }
 .look-c .float-note .refresh { background: #fff; color: #101828; }
 .look-c .float-note .pip { background: #FFB53D; }
 '''

@@ -1754,3 +1754,23 @@ button.link { border-radius: 0; }
 body.wall main { max-width: none; padding: 0; }  /* a TV: the whole screen, not a 1240 px column */
 .wall-today .wt b { white-space: nowrap; }
 .wall-today { grid-template-columns: minmax(0, 1.3fr) repeat(6, minmax(0, 1fr)) minmax(0, 2.6fr); }
+
+/* Phase BA (owner, 2026-10-25): "the page is out of date" floats at the bottom of the window while the person scrolls. Occasional, so it eases
+   in and out (opacity and transform only, 220 ms in, 160 ms out); with reduced motion it only fades. */
+.float-note { position: fixed; z-index: 50; left: 0; right: 0; margin-inline: auto; width: max-content; max-width: min(46rem, calc(100vw - 1.5rem)); bottom: 1.1rem;
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 16px; border-radius: 999px; background: var(--console); color: var(--paper);
+  border: 1px solid var(--edge); box-shadow: 0 2px 4px var(--shadow), 0 16px 40px -12px var(--shadow);
+  opacity: 0; transform: translateY(.75rem) scale(.97); visibility: hidden; pointer-events: none;
+  transition: opacity 160ms cubic-bezier(.23, 1, .32, 1), transform 160ms cubic-bezier(.23, 1, .32, 1), visibility 0s linear 160ms; }
+.float-note.on { opacity: 1; transform: none; visibility: visible; pointer-events: auto;
+  transition: opacity 220ms cubic-bezier(.23, 1, .32, 1), transform 220ms cubic-bezier(.23, 1, .32, 1), visibility 0s; }
+.float-note .pip { flex: none; width: .7rem; height: .7rem; border-radius: 50%; background: var(--short); }
+.float-note .act { flex: none; padding: 6px 14px; border-radius: 999px; }
+.float-note .x { flex: none; padding: 6px 8px; border: 0; background: transparent; color: var(--paper); font-weight: 600; opacity: .75; }
+.float-note .x:hover { opacity: 1; background: var(--hover); }
+:root[data-theme="draft"] .float-note { background: #14201C; color: #FFFFFF; border: 1.5px solid #D7F25A; border-radius: 8px; }
+:root[data-theme="draft"] .float-note .act { background: #D7F25A; color: #14201C; border-color: #D7F25A; box-shadow: none; margin: 0; }
+:root[data-theme="draft"] .float-note .x { color: #FFFFFF; }
+@media (max-width: 40rem) { .float-note { left: .6rem; right: .6rem; width: auto; margin-inline: 0; bottom: .6rem; border-radius: 18px; flex-wrap: wrap; } .float-note .msg { flex: 1 1 12rem; } }
+@media (prefers-reduced-motion: reduce) { .float-note, .float-note.on { transform: none; transition: opacity .12s linear, visibility 0s; } }
+@media print { .float-note { display: none; } }

@@ -2104,8 +2104,12 @@ class ThePhaseXYInTheBrowser(unittest.TestCase):
         expect(page.locator(".live-bar")).to_have_count(0)
         self.change_a_break()
         page.clock.run_for(36000)
-        expect(page.locator(".live-bar")).to_contain_text("The page changed.", timeout=30000)  # the answer comes in real time: the day is built again
-        expect(page.locator(".live-bar a")).to_have_text("Refresh to see it")
+        # re-pinned in Phase BA: the message floats at the bottom of the window ("This page is out of date.", Refresh, Hide)
+        expect(page.locator(".live-bar")).to_contain_text("This page is out of date.", timeout=30000)  # the answer comes in real time: the day is built again
+        expect(page.locator(".live-bar button.act")).to_have_text("Refresh")
+        self.assertEqual(page.evaluate("getComputedStyle(document.querySelector('.live-bar')).position"), "fixed")
+        page.locator(".live-bar button.x").click()
+        expect(page.locator(".live-bar")).not_to_have_class(re.compile(r"\bon\b"))  # Hide keeps it out of the way
         page.clock.run_for(90000)
         page.wait_for_timeout(500)
         self.assertEqual(loads, [])

@@ -128,7 +128,10 @@ class TheWatcherScript(unittest.TestCase):
         self.assertRegex(self.js, r"delay\s*=\s*Math\.min\(")
 
     def test_a_page_where_somebody_is_typing_gets_a_bar_not_a_reload(self):
-        self.assertIn("The page changed", self.js)
+        # Re-pinned in Phase BA (owner, 2026-10-25: the "page out of date" message floats while scrolling): the words are now
+        # "This page is out of date." with Refresh and Hide buttons in a fixed note at the bottom of the window
+        self.assertIn("This page is out of date.", self.js)
+        self.assertIn("float-note live-bar", self.js)
         self.assertRegex(self.js, r"activeElement")
 
 

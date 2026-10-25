@@ -1742,14 +1742,29 @@ function liveWatch(box) {
   function bar() {
     if (shown) { return; }
     shown = true;
-    var note = document.createElement("p"), link = document.createElement("a"), main = document.getElementById("main") || document.body;
-    note.className = "notice live-bar";
+    // Phase BA (owner, 2026-10-25): a note that floats at the bottom of the window while the person scrolls, with Refresh and Hide
+    var note = document.createElement("div"), pip = document.createElement("i"), msg = document.createElement("span"),
+        go = document.createElement("button"), hide = document.createElement("button");
+    note.className = "float-note live-bar";
     note.setAttribute("role", "status");
-    note.appendChild(document.createTextNode("The page changed. "));
-    link.href = window.location.href;
-    link.textContent = "Refresh to see it";
-    note.appendChild(link);
-    main.insertBefore(note, main.firstChild);
+    pip.className = "pip";
+    pip.setAttribute("aria-hidden", "true");
+    msg.className = "msg";
+    msg.textContent = "This page is out of date.";
+    go.type = "button";
+    go.className = "act primary";
+    go.textContent = "Refresh";
+    go.addEventListener("click", function () { window.location.reload(); });
+    hide.type = "button";
+    hide.className = "x";
+    hide.textContent = "Hide";
+    hide.setAttribute("aria-label", "Hide this message");
+    function away() { note.classList.remove("on"); }
+    hide.addEventListener("click", away);
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") { away(); } });
+    [pip, msg, go, hide].forEach(function (part) { note.appendChild(part); });
+    document.body.appendChild(note);
+    window.requestAnimationFrame(function () { window.requestAnimationFrame(function () { note.classList.add("on"); }); });  // a frame first, so it can ease in
   }
   function changed() {
     if (mode === "reload" && !typing()) { window.location.reload(); } else { bar(); }

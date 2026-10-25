@@ -487,6 +487,51 @@ class TheSchedulesInTheBrowser(unittest.TestCase):
         expect(page.locator("#edit-dialog")).not_to_be_visible()
 
 
+class TheRtaListInTheBrowser(unittest.TestCase):
+    """Phase BA (owner, 2026-10-25: "for RTA only give the choice to the viewer to see it as scrolling or as a whole thing"): the
+    list of people on the RTA Timeline is a scrolling panel by default and each viewer can switch to the whole list; the choice
+    is kept in this browser only."""
+
+    setUpClass = classmethod(TheSchedulesInTheBrowser.setUpClass.__func__)
+    tearDownClass = classmethod(TheSchedulesInTheBrowser.tearDownClass.__func__)
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+    url = "/day?program=AE/AR+B2B&date=2026-10-14"
+
+    def test_the_viewer_chooses_a_scrolling_panel_or_the_whole_list(self):
+        page = self.page(width=1500, height=700)
+        self.sign_in(page)
+        page.goto(self.base + self.url)
+        page.wait_for_load_state("load")
+        box = page.locator(".tl-scroll")
+        expect(box).to_have_attribute("data-mode", "scroll")
+        expect(page.locator("[data-tl-mode-set=scroll]")).to_have_attribute("aria-pressed", "true")
+        self.assertNotEqual(page.evaluate("getComputedStyle(document.querySelector('.tl-scroll')).maxHeight"), "none")
+        self.assertLessEqual(page.evaluate("document.querySelector('.tl-scroll').clientHeight"), 700)  # the panel fits the window
+        page.locator("[data-tl-mode-set=whole]").click()
+        expect(box).to_have_attribute("data-mode", "whole")
+        expect(page.locator("[data-tl-mode-set=whole]")).to_have_attribute("aria-pressed", "true")
+        self.assertEqual(page.evaluate("getComputedStyle(document.querySelector('.tl-scroll')).maxHeight"), "none")
+        page.reload()
+        page.wait_for_load_state("load")
+        expect(page.locator(".tl-scroll")).to_have_attribute("data-mode", "whole")  # kept in this browser
+        page.locator("[data-tl-mode-set=scroll]").click()
+        expect(page.locator(".tl-scroll")).to_have_attribute("data-mode", "scroll")
+        page.close()
+
+    def test_the_panel_is_a_named_keyboard_region_and_the_axis_stays_in_view(self):
+        page = self.page(width=1500, height=700)
+        self.sign_in(page)
+        page.goto(self.base + self.url)
+        page.wait_for_load_state("load")
+        box = page.locator(".tl-scroll")
+        expect(box).to_have_attribute("role", "region")
+        expect(box).to_have_attribute("tabindex", "0")
+        self.assertIn("Who is on the floor", box.get_attribute("aria-label"))
+        self.assertEqual(page.evaluate("getComputedStyle(document.querySelector('.tl-axis')).position"), "sticky")
+        page.close()
+
+
 if __name__ == "__main__":
     unittest.main()
 

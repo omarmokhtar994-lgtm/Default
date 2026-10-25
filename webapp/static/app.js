@@ -1782,3 +1782,30 @@ function liveWatch(box) {
   var live = document.getElementById("live");
   if (live) { liveWatch(live); }
 })();
+
+
+// The RTA list: a scrolling panel that fits the window, or the whole list, as the viewer chooses (Phase BA). The choice is kept in this
+// browser only; without storage the panel is the default and the switch still works for the visit.
+(function () {
+  "use strict";
+  var bar = document.querySelector("[data-tl-mode]"), box = document.querySelector(".tl-scroll[data-mode]");
+  if (!bar || !box) { return; }
+  var KEY = "ts-tl-mode";
+  function apply(mode) {
+    box.setAttribute("data-mode", mode);
+    Array.prototype.forEach.call(bar.querySelectorAll("[data-tl-mode-set]"), function (b) {
+      b.setAttribute("aria-pressed", b.getAttribute("data-tl-mode-set") === mode ? "true" : "false");
+    });
+  }
+  var saved = "";
+  try { saved = window.localStorage.getItem(KEY) || ""; } catch (e) { saved = ""; }
+  apply(saved === "whole" ? "whole" : "scroll");
+  bar.hidden = false;
+  bar.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-tl-mode-set]");
+    if (!b) { return; }
+    var mode = b.getAttribute("data-tl-mode-set") === "whole" ? "whole" : "scroll";
+    apply(mode);
+    try { window.localStorage.setItem(KEY, mode); } catch (err) { /* private window: the choice lasts for this visit */ }
+  });
+})();

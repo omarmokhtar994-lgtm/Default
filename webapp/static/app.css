@@ -1725,3 +1725,16 @@ button.link { border-radius: 0; }
 .scroll.panel-scroll thead th, .tscroll.panel-scroll thead th { position: sticky; top: 0; z-index: 2; background: var(--console); }
 .scroll.panel-scroll.side { max-height: min(28rem, 60dvh); }
 @media print { .scroll.panel-scroll, .tscroll.panel-scroll { max-height: none; overflow: visible; } }
+
+/* Phase BA (owner, 2026-10-25): the RTA's list of people is a scrolling panel that fits the window, or the whole list, as each viewer chooses */
+[data-day] .tl-scroll { max-height: clamp(16rem, calc(100dvh - 21rem), 48rem); overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--edge) transparent; }
+[data-day] .tl-scroll[data-mode="whole"] { max-height: none; }
+[data-day] .tl-scroll:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
+[data-day] .tl-axis { position: sticky; top: 0; z-index: 3; background: var(--console); }
+.tl-view { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin: 0 0 8px; font-size: 0.8125rem; color: var(--dim); }
+.tl-view[hidden] { display: none; }
+.tl-modes .look { padding: 4px 12px; border: 0; border-radius: 999px; background: transparent; color: var(--paper); font: 600 0.8125rem var(--text); }
+.tl-modes .look:hover { background: var(--hover); border-color: transparent; }
+.tl-modes .look[aria-pressed="true"] { background: var(--hi); color: var(--on-hi); }
+.looks { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; background: var(--hover); border: 1px solid var(--rail); }
+@media print { [data-day] .tl-scroll { max-height: none; } }

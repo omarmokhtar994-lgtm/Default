@@ -134,6 +134,10 @@ python-performance-optimization.
       google-fonts (sliday @f86afc0, MIT; font search and pairings offline; its CSS links Google's font
       CDN, so self-host the files instead), visual-design-foundations (wshobson/agents @0874a27, MIT; tokens).
       Canva itself needs its own connector (not connected): the skills above make the designs, not edit a Canva account.
+    - Structure and tokens (owner, 2026-10-25): web-styling-design-tokens (agents-inc/skills @707467a, MIT; token tiers
+      and naming as CSS custom properties), site-architecture (coreyhaines31/marketingskills @e85f3cb, MIT; page
+      hierarchy and navigation; its SEO advice does not apply to an internal tool). Not installed, and why: shadcn UI and
+      web-artifacts-builder are React and Tailwind (this site has neither), brand-guidelines is Anthropic's own brand.
     - Motion (owner, 2026-10-25): emil-design-eng, animate, review-animations, animation-performance (emilkowalski/skills
       @2d22863, MIT): when to animate at all, curves and durations, a strict motion review, frame-budget fixes. The taste and
       impeccable skills come from the owner's account; taste is for landing pages (dashboards are out of its scope), impeccable's

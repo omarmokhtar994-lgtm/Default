@@ -89,6 +89,25 @@ Load each with the Skill tool at the step it covers; following it from memory do
 6. Package, split into parts, send them, and report in caveman style: what changed, rulings with their cost, what
    is known and left, Egypt times, screens.
 
+## Phase BA (owner, 2026-10-25: the three looks, long lists, icons, wallboard; build on branch `ccr-90ec94cc-a37tqk`)
+
+Read `evidence/phase_ba/REQUESTS.md`, the plan `docs/superpowers/plans/2026-10-25-phase-ba-build.md`, its ledger `evidence/phase_ba/LEDGER.md`
+(each task, rulings and what was re-pinned and why) and `webapp/DESIGN.md` v5. The samples that led to it are `evidence/phase_az/prototype`
+(six looks; the owner kept three), with the suggestions for every page in `evidence/phase_az/SUGGESTIONS.md`.
+
+- **Looks:** Tide (`light`), Night watch (`dark`, the default), Drafting table (`draft`); an old `ocean` cookie is ignored. Tokens per look in
+  `app.css`; a `.sheet` wrapper in `base.html` (a plain pass-through except in Drafting table); channel colours per look.
+- **Long content:** one rule, in DESIGN.md v5. `scroll panel-scroll` for scanned or compared tables; `ctx._paged` pages of 20 for lists that
+  grow. People is paged (`people_page`). The RTA list has the scroll or whole-list switch (`ts-tl-mode` in `localStorage`).
+- **Icons:** Shrinkage, Incidents, Settings, Sign out and the look control draw icons (`tools/build_icons_css.py`, from Phosphor core `main`;
+  only additions to `icons.css`).
+- **Wallboard:** `wall_extra` in `webapp/day.py` and the new sections; it uses the whole screen width.
+- **Floating note:** `liveWatch` builds a `float-note live-bar` at the bottom of the window.
+- **Checks:** `evidence/phase_ba/audit.py` (31 pages x 3 looks x 1440 and 390 px; 0 findings), `contrast.py`, `inventory.py`, `looks_shoot.py`.
+  Review server and screens: `evidence/phase_ai/tools/review_server.py`, then the scripts above with its JSON.
+- **Known and left:** Home's New run form is still long on the page (it is a form, not a list); the People rows are tall because each holds its
+  forms (20 per page); Archivo is not yet subset (about 65 KB could go); a Playwright test for every page's scroll panel is the audit script, not a unit test.
+
 ## Phases AX and AY (owner feedback, 2026-10-22 and 2026-10-23; sent as patches, then one full package)
 
 - **AX**: Replan the day's breaks (RTA, `how=fresh`, only from now, the chosen day and "Day starts at"); LOB view with tick

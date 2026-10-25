@@ -6,6 +6,33 @@ Owner, 2026-10-07: redesign in the "Control room (dark)" direction (chosen from
 four previews), keep the name "Team Scheduler". v1 (light limestone and Nile)
 is replaced.
 
+v5, 2026-10-25 (Phase BA, owner: "I like this one so we have our 3 designs"; samples in `evidence/phase_az/prototype`, the audit in
+`evidence/phase_ba`): the three looks are now **Tide** (light), **Night watch** (dark, the default) and **Drafting table**. They replace
+Graphite night, its day look and Deep ocean. Cookie values: `light`, `dark`, `draft` (an old `ocean` cookie is ignored). The look control in
+the top bar names the three and marks the one in use. Everything else of v3 and v4 stays: colour means state, actions are ink, the status
+colours mean covered, short, gap and over, and the menu is grouped by job.
+
+- **Tide:** page `#E8EFF6` with a soft sky gradient, white panels with 20 px corners, navy ink `#12233A`.
+- **Night watch:** page `#080F1E` with two blue glows, panels `#0F1A31`, 16 px corners, ink `#E7EEFB`.
+- **Drafting table:** a dark field `#1B2321` with one light hatched sheet (`#F1F3EE`, 28 px corners) holding the whole page; panels are 4 px
+  with four corner marks; the only accent is a marker colour `#D7F25A` (`--hi`) for the picked tab, the picked option, counts and the
+  focus halo. It never means a status.
+- **Channels** are set per look: Tide and Drafting table Phone `#1A47A8`, Chat `#B4468F`, Email `#2F7D5B` with white text; Night watch
+  `#4C86FF`, `#E070BE`, `#3FAE81` with dark text `#06142B`. Chat is darker than before (`#C2549F` measured 4.1:1 with white text).
+- **Tokens added:** `--hi`, `--on-hi`, `--r-panel`, `--r-ctl`, `--page-bg`, `--page-field`. Contrast of every pair in the three looks:
+  `evidence/phase_ba/contrast.py` (0 failures; text 4.5:1, controls and fills 3:1).
+- **One rule for long content:** tables and grids people scan or compare (Weeks overtime and extra hours, heat maps, adherence, the
+  Interval board, coach, matrices, the shift editor and its change log, Insights tables) are `scroll panel-scroll` panels (30 rem or 64% of
+  the window, fixed header, labelled, keyboard reachable; they print in full). Lists that grow over time and are read one by one are pages
+  of 20 (`ctx._paged`): People, Home runs, Leave and swaps decided, posts, the RTA log, overtime offers. The RTA's list of people is a
+  scrolling panel that fits the window, with a switch to the whole list kept per viewer in the browser.
+- **Floating note:** "This page is out of date." with Refresh and Hide, fixed at the bottom of the window; eases in (220 ms) and out
+  (160 ms) with opacity and transform only; opacity only with reduced motion.
+- **Wallboard:** the next four intervals, the day so far (on shift, out, late or left early, overtime, VTO, called in, hours short), the
+  day's achievement, breaks now and next, shifts starting or ending in the next hour, what needs attention, who is out, languages,
+  channels, and when it was drawn; the whole screen width.
+- **Speed:** no fixed background attachment and no blur on panels or the bar (both repaint on every scroll); no new font or script.
+
 v4, 2026-10-14 (Phase AG, owner: "u have all my approval for anything"; samples in `evidence/phase_ag/`): the
 look changes through type, layout, the menu and, from 2026-10-15, the surfaces.
 

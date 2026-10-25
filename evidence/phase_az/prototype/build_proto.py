@@ -173,7 +173,7 @@ def page():
   <div class="group" role="group" aria-label="Look">
     <button type="button" data-look-pick="a" aria-pressed="true">A Tide</button>
     <button type="button" data-look-pick="b" aria-pressed="false">B Night watch</button>
-    <button type="button" data-look-pick="c" aria-pressed="false">C Paper</button>
+    <button type="button" data-look-pick="c" aria-pressed="false">C Drafting table</button>
     <button type="button" data-look-pick="d" aria-pressed="false">D Meadow</button>
     <button type="button" data-look-pick="e" aria-pressed="false">E Ink</button>
     <button type="button" data-look-pick="f" aria-pressed="false">F Dusk</button>
@@ -551,6 +551,43 @@ body[data-look="c"] .scale.sticky { background: var(--bg); }
 .seg2 { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; background: var(--chip); border: 1px solid var(--rule); margin-bottom: .45rem; } .seg2 .chipbtn { border: 0; background: transparent; padding: .3rem .8rem; }
 .seg2 .chipbtn[aria-pressed="true"] { background: var(--action); color: var(--on-action); }
 .lanes[data-mode="whole"] { max-height: none; overflow: visible; } .lanes[data-mode="whole"] .scale.sticky { position: static; }
+
+/* ===== look 3, redone: C Drafting table. Dark outer field, one light hatched sheet with bracketed sections, a highlighter accent ===== */
+body[data-look="c"] {
+  --bg: #1B2321; --sheet: #F1F3EE; --text: #14201C; --text-dim: #4A5852; --action: #14201C; --on-action: #FFFFFF; --focus: #14201C; --hi: #D7F25A;
+  --chip: #E4E8E1; --surface: #FBFCFA; --edge: #14201C33; --rule: #14201C26; --edge-strong: #14201C; --field: #FFFFFF; --br: #14201C;
+  --lift: none; --lift-big: 0 30px 60px -30px #000A; --warn-bg: #FBE3A6; --warn-text: #5A3A00; --now: #14201C; --on-now: #FFFFFF; --changed: #D7F25A99;
+  --note-bg: #14201C; --note-text: #FFFFFF; --note-edge: #D7F25A; --note-lift: 0 16px 40px -12px #000A; --pip: #D7F25A;
+  --radius: 10px; --btn-r: 8px; --scheme: light;
+}
+body[data-look="c"] .backdrop { background: radial-gradient(60rem 30rem at 50% -10%, #2B3733 0%, transparent 70%), #1B2321; background-image: radial-gradient(60rem 30rem at 50% -10%, #2B3733 0%, transparent 70%), radial-gradient(#FFFFFF14 1px, transparent 1.2px); background-size: auto, 22px 22px; -webkit-mask-image: none; mask-image: none; }
+body[data-look="c"] .shell { background-color: var(--sheet); background-image: repeating-linear-gradient(135deg, #14201C0A 0 1px, transparent 1px 10px); border-radius: 28px; margin: 14px auto; width: calc(100% - 28px); padding-bottom: 5rem; box-shadow: var(--lift-big); }
+body[data-look="c"] .top { border-bottom: 1px solid var(--rule); margin-bottom: var(--space-2); }
+body[data-look="c"] .top nav a.on, body[data-look="c"] .tabs a.on { background: var(--hi); color: var(--text); border-radius: 6px; }
+body[data-look="c"] .tabs a.on { border-bottom-color: transparent; padding-inline: .5rem; }
+body[data-look="c"] .top nav a { border-radius: 6px; } body[data-look="c"] .who-chip { border-radius: 6px; background: var(--chip); }
+body[data-look="c"] .hero h1 { font-stretch: 78%; letter-spacing: 0; }
+body[data-look="c"] .pulse li { border-radius: 6px; background: var(--surface); border: 1.5px solid var(--edge-strong); } body[data-look="c"] .pulse .warn { background: var(--warn-bg); }
+body[data-look="c"] .card { --b: 1.5px; --l: 16px; background-color: var(--surface); border: 1px solid var(--rule); border-radius: 4px; padding: 1.3rem 1.4rem 1.4rem; margin-top: var(--space-5);
+  background-image: linear-gradient(var(--br), var(--br)), linear-gradient(var(--br), var(--br)), linear-gradient(var(--br), var(--br)), linear-gradient(var(--br), var(--br)), linear-gradient(var(--br), var(--br)), linear-gradient(var(--br), var(--br)), linear-gradient(var(--br), var(--br)), linear-gradient(var(--br), var(--br));
+  background-size: var(--l) var(--b), var(--b) var(--l), var(--l) var(--b), var(--b) var(--l), var(--l) var(--b), var(--b) var(--l), var(--l) var(--b), var(--b) var(--l);
+  background-position: left top, left top, right top, right top, left bottom, left bottom, right bottom, right bottom; background-repeat: no-repeat; }
+body[data-look="c"] .grid3 .card { margin-top: 0; }
+body[data-look="c"] .track { background-image: repeating-linear-gradient(135deg, var(--rule) 0 1px, transparent 1px 7px); border-radius: 3px; }
+body[data-look="c"] .seg { border-radius: 3px; margin: 0; box-shadow: 0 0 0 1px var(--surface); }
+body[data-look="c"] .now-line { background: var(--text); width: 2px; } body[data-look="c"] .now-line em { border-radius: 3px; background: var(--hi); color: var(--text); font-weight: 800; box-shadow: 0 0 0 1.5px var(--text); }
+body[data-look="c"] .view button:not(.ghost):not(.chipbtn):not(.x):not(.act) { box-shadow: 0 0 0 2px var(--sheet), 0 0 0 3.5px var(--action); margin: 3.5px; }
+body[data-look="c"] .btns { gap: .9rem; } body[data-look="c"] .chipbtn[aria-pressed="true"], body[data-look="c"] .seg2 .chipbtn[aria-pressed="true"] { background: var(--hi); color: var(--text); box-shadow: inset 0 0 0 1.5px var(--text); }
+body[data-look="c"] .chip.on { background: var(--hi); color: var(--text); } body[data-look="c"] .count { background: var(--hi); color: var(--text); box-shadow: 0 0 0 1.5px var(--text); }
+body[data-look="c"] .impact { border-radius: 4px; border: 1.5px solid var(--warn-text); } body[data-look="c"] .chip.warn { border-radius: 4px; }
+body[data-look="c"] input, body[data-look="c"] select { border-radius: 6px; border: 1.5px solid var(--edge-strong); } body[data-look="c"] :focus-visible { outline: 3px solid var(--text); outline-offset: 2px; box-shadow: 0 0 0 6px var(--hi); }
+body[data-look="c"] .compare .col:nth-child(2) { background: var(--changed); border-radius: 4px 4px 0 0; }
+body[data-look="c"] .wtile { border-top: 6px solid var(--covered); background: var(--surface); border-radius: 4px; }
+body[data-look="c"] .signin-card { border-radius: 8px; border: 1.5px solid var(--text); box-shadow: 10px 10px 0 var(--hi); background: var(--surface); }
+body[data-look="c"] .float-note { border-radius: 8px; border: 1.5px solid var(--hi); } body[data-look="c"] .float-note .act { background: var(--hi); color: var(--text); }
+body[data-look="c"] .scale.sticky, body[data-look="c"] .grid th { background: var(--surface); }
+body[data-look="c"] .lane.flash { animation-name: flash; }
+body[data-look="c"] .skip { background: var(--hi); color: var(--text); }
 
 /* ===== autofit: the layout follows the window (width, height, tab size) ===== */
 .shell { max-width: min(96vw, 92rem); padding-inline: clamp(.75rem, 2.5vw, 2rem); }

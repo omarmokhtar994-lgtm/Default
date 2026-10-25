@@ -1,6 +1,6 @@
 // © 2026 Omar Mokhtar. All rights reserved.
 const { chromium } = require('playwright'); const path = require('path'); const fs = require('fs');
-const LOOKS = [['a','1','Tide','light, sky gradient, soft cards'],['b','2','Night watch','navy, hairline cards'],['c','3','Paper','cool grey, plain sections'],
+const LOOKS = [['a','1','Tide','light, sky gradient, soft cards'],['b','2','Night watch','navy, hairline cards'],['c','3','Drafting table','dark field, hatched sheet, highlighter'],
                ['d','4','Meadow','friendly, sage and green'],['e','5','Ink','white, black frames, square'],['f','6','Dusk','warm dark, peach action']];
 (async () => {
   const b = await chromium.launch(); const url = 'file://' + path.resolve('index.html');

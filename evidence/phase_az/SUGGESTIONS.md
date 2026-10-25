@@ -30,8 +30,7 @@ channel colours, routes, form field names, test selectors, CSRF and sign-in beha
 
 ## 2. The system (shared by all three looks; prototype in `prototype/`)
 
-- **Looks.** A Tide (light, sky gradient, soft cards), B Night watch (navy, hairline cards, dotted top glow), C Paper (cool grey, no card
-  fill, hairline rules, 8 px radius). One token set; the look is a `data-look` attribute (kept in the existing `theme` cookie). Today's
+- **Looks.** A Tide (light, sky gradient, soft cards), B Night watch (navy, hairline cards, dotted top glow), C Drafting table (see 2d). One token set; the look is a `data-look` attribute (kept in the existing `theme` cookie). Today's
   three looks (Graphite night, Day, Deep ocean) map to B, A and a deeper B; Paper (C) is new.
 - **Colour means state.** Covered teal, short amber, gap red, over violet, always paired with a word or icon (never colour alone). Over-staffed
   becomes a quiet tint (not a solid block), so gaps and shortfalls are the only loud colours. Actions are ink (dark in A and C, light in B).
@@ -88,6 +87,18 @@ Read as: three more looks after A, B and C. If you meant something else by "4, 5
   grids; the RTA scroll panel's height follows the window (`100dvh` minus the header, 15 to 46 rem); paged tables compute rows per page from
   the window height and re-fit on resize (20 rows at 2560x1300, 15 at 1920x1080, 8 at 1366x768, 5 at 360x640); the hour label column and
   headings scale with the width. Tested at 2560x1300, 1920x1080, 1366x768, 1024x700, 820x1180, 600x900, 390x844 and 360x640: no sideways scroll at any size.
+
+
+## 2d. Look 3 redone: C Drafting table (owner, 2026-10-25: "be more creative")
+
+The old Paper look was a grey version of the others. The new one changes the structure, not just the colour:
+- A dark charcoal-green field with one light, finely hatched "sheet" (28 px radius) that holds the whole app.
+- Sections are bracketed like a drawing: four corner marks on every card instead of a box or a shadow.
+- Off-shift time on the timeline is hatched, so empty time reads as "not working" without extra colour.
+- One accent: a highlighter yellow-green (`#D7F25A`, ink on it 14:1) for the active tab, the "Now" flag, counts, the selected option and the focus halo. It never carries a status, so it cannot be mistaken for covered, short, gap or over.
+- Primary buttons are stamped (an offset ring), the sign-in card has a hard offset shadow in the highlighter colour, the floating note is an ink chip with a highlighter edge.
+- Condensed Archivo headings; status colours, channel colours and routes unchanged.
+Found while testing it: large teal numbers (`+1:45` on the wallboard) measure 2.5:1 on light surfaces in every light look, below the 3:1 for large text. The build uses a darker teal for text (`#0B7F73`, 5:1) and keeps the bright teal for fills.
 
 ## 3. Page by page
 

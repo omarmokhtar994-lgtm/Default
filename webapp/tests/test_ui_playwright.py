@@ -82,7 +82,8 @@ class InTheBrowser(unittest.TestCase):
         page.goto(self.base + "/login")
         expect(page.get_by_role("heading", name="Sign in")).to_be_visible()
         expect(page.locator("footer")).to_contain_text("© 2026 Omar Mokhtar. All rights reserved.")
-        expect(page.locator(".week")).to_be_visible()  # the week of shift bars
+        # re-pinned (Phase BA): the flat week of shift bars was replaced by the four-day deck of shift cards
+        expect(page.locator(".deck3d")).to_be_visible()
         page.screenshot(path=str(SCREENS / "01_login.png"), full_page=True)
 
     def test_dashboard_upload_run_flow(self):

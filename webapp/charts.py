@@ -19,6 +19,7 @@ from markupsafe import Markup, escape
 
 BLUE, AQUA, ORANGE, YELLOW = "blue", "aqua", "orange", "yellow"  # series names; app.css colours them
 W, BAR_MAX, RADIUS = 640, 24, 4
+DEPTH, DEPTH_MAX_BARS = 6, 24  # Phase BB: a lit top and a darker side; a chart with more bars than this stays flat
 EMPTY = Markup('<p class="chart-empty">No data yet</p>')
 
 
@@ -40,6 +41,19 @@ def _change(delta: Optional[float]) -> str:
 def _svg(height: int, label: str, body: List[str]) -> Markup:
     return Markup(f'<svg class="chart" viewBox="0 0 {W} {height}" role="img" aria-label="{escape(label)}" '
                   f'preserveAspectRatio="xMidYMid meet">' + "".join(body) + "</svg>")
+
+
+def _depth(count: int, thickness: float) -> float:
+    """How far a bar's top and side reach (0 = flat). Many bars or thin bars stay flat, so depth never crowds a chart."""
+    return 0 if count > DEPTH_MAX_BARS or thickness < 10 else min(DEPTH, thickness * 0.4)
+
+
+def _faces(series: str, top: List[Tuple[float, float]], side: List[Tuple[float, float]]) -> str:
+    """The two faces a bar shows besides its front: decoration only (no tip, no pointer; the front face is the value)."""
+    def poly(kind: str, points: List[Tuple[float, float]]) -> str:
+        return (f'<polygon class="face {kind}" data-series="{series}" '
+                f'points="{" ".join(f"{x:.1f},{y:.1f}" for x, y in points)}"/>')
+    return poly("face-top", top) + poly("face-side", side)
 
 
 def nice(top: float) -> float:
@@ -68,6 +82,7 @@ def columns(labels: Sequence[str], values: Sequence[Optional[float]], unit: str 
     y_max = y_max or nice(max(v for v in values if v is not None) * 1.1)
     slot = plot_w / len(labels)
     bar = min(BAR_MAX, slot * 0.6)
+    depth = _depth(len(labels), bar)
     base = top + plot_h
     out = []
     for t in (0, y_max / 2, y_max):
@@ -84,14 +99,19 @@ def columns(labels: Sequence[str], values: Sequence[Optional[float]], unit: str 
         bh = max(plot_h * value / y_max, 1 if value else 0)
         x = cx - bar / 2
         tip = f"{name}: {_num(value)}{unit}{_change(deltas[i] if deltas else None)}"
-        if bh:
+        if bh and depth:  # square corners: the lit top and the side close the shape
+            y = base - bh
+            out.append(f'<rect class="bar" x="{x:.1f}" y="{y:.1f}" width="{bar:.1f}" height="{bh:.1f}" data-series="{colour}"/>'
+                       + _faces(colour, [(x, y), (x + depth, y - depth), (x + bar + depth, y - depth), (x + bar, y)],
+                                [(x + bar, y), (x + bar + depth, y - depth), (x + bar + depth, base - depth), (x + bar, base)]))
+        elif bh:
             out.append(f'<rect class="bar" x="{x:.1f}" y="{base - bh:.1f}" width="{bar:.1f}" height="{bh:.1f}" '
                        f'rx="{RADIUS}" data-series="{colour}"/>')
             if bh > RADIUS:  # square foot: the bar sits on the baseline, only its data end is rounded
                 out.append(f'<rect x="{x:.1f}" y="{base - RADIUS:.1f}" width="{bar:.1f}" height="{RADIUS}" '
                            f'data-series="{colour}"/>')
         if len(labels) <= 12:
-            out.append(f'<text class="val" x="{cx:.1f}" y="{base - bh - 6:.1f}" text-anchor="middle">'
+            out.append(f'<text class="val" x="{cx:.1f}" y="{base - bh - 6 - depth:.1f}" text-anchor="middle">'
                        f'{_num(value)}</text>')
         out.append(f'<rect class="hit" x="{cx - slot / 2:.1f}" y="{top}" width="{slot:.1f}" height="{plot_h}" '
                    f'data-tip="{escape(tip)}"/>')
@@ -174,15 +194,21 @@ def hbars(rows: Sequence[Tuple[str, float, str]], unit: str = "", label: str = "
     h = row_h * len(rows) + 8
     top_value = max(v for _, v, _ in rows) or 1
     plot_w = W - left - right
+    depth = _depth(len(rows), 16)
     out = []
     for i, (name, value, colour) in enumerate(rows):
         y = 4 + i * row_h
         bw = plot_w * value / top_value
         out.append(f'<text class="ax lbl" x="{left - 10}" y="{y + 19}" text-anchor="end">{escape(name)}</text>')
-        if bw:
+        if bw and depth:
+            right_end, top_y = left + max(bw, 2), y + 6
+            out.append(f'<rect class="bar" x="{left}" y="{top_y}" width="{max(bw, 2):.1f}" height="16" data-series="{colour}"/>'
+                       + _faces(colour, [(left, top_y), (left + depth, top_y - depth), (right_end + depth, top_y - depth), (right_end, top_y)],
+                                [(right_end, top_y), (right_end + depth, top_y - depth), (right_end + depth, top_y + 16 - depth), (right_end, top_y + 16)]))
+        elif bw:
             out.append(f'<rect class="bar" x="{left}" y="{y + 6}" width="{max(bw, 2):.1f}" height="16" '
                        f'rx="{RADIUS}" data-series="{colour}"/>')
-        out.append(f'<text class="val" x="{left + bw + 8:.1f}" y="{y + 19}">{_num(value)}</text>'
+        out.append(f'<text class="val" x="{left + bw + 8 + depth:.1f}" y="{y + 19}">{_num(value)}</text>'
                    f'<rect class="hit" x="0" y="{y}" width="{W}" height="{row_h}" '
                    f'data-tip="{escape(f"{name}: {_num(value)}{unit}")}"/>')
     return _svg(h, label, out)

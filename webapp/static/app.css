@@ -1837,3 +1837,19 @@ input[type=file] { min-height: 24px; }
 @media (max-width: 40rem) { .blocks3d { gap: .4rem; padding: 0; } .blk { width: 1.3rem; margin-right: .5rem; } .blk::before { height: .5rem; } .blk::after { width: .5rem; } .stage3d { margin-top: 2rem; height: 15rem; } .deck3d { height: 10rem; } }
 @media (prefers-reduced-motion: reduce) { .deck3d, .mark3d, .flip { animation: none; } .pcard[data-tilt] { transition: none; transform: none; } }
 @media print { .stage3d { display: none; } }
+
+/* Phase BB: depth on the figures (owner, 2026-10-25: "build it ... with 0 risk"). Columns and horizontal bars show a lit top and a darker side
+   (charts.py draws the two faces; the front face is the value and keeps its exact size). The tile strips and boxes get a raised edge.
+   Nothing here moves or animates, and nothing here is a filter, so it costs the page nothing. A browser without color-mix keeps the plain series colour. */
+.chart .face { pointer-events: none; }
+.chart polygon.face-top[data-series=blue] { fill: var(--c-blue); fill: color-mix(in srgb, var(--c-blue) 68%, #fff); }
+.chart polygon.face-side[data-series=blue] { fill: var(--c-blue); fill: color-mix(in srgb, var(--c-blue) 62%, #000); }
+.chart polygon.face-top[data-series=aqua] { fill: var(--c-aqua); fill: color-mix(in srgb, var(--c-aqua) 68%, #fff); }
+.chart polygon.face-side[data-series=aqua] { fill: var(--c-aqua); fill: color-mix(in srgb, var(--c-aqua) 62%, #000); }
+.chart polygon.face-top[data-series=orange] { fill: var(--c-orange); fill: color-mix(in srgb, var(--c-orange) 68%, #fff); }
+.chart polygon.face-side[data-series=orange] { fill: var(--c-orange); fill: color-mix(in srgb, var(--c-orange) 62%, #000); }
+.chart polygon.face-top[data-series=yellow] { fill: var(--c-yellow); fill: color-mix(in srgb, var(--c-yellow) 68%, #fff); }
+.chart polygon.face-side[data-series=yellow] { fill: var(--c-yellow); fill: color-mix(in srgb, var(--c-yellow) 62%, #000); }
+.tiles, .ins-tiles { box-shadow: 0 1px 0 var(--edge), 0 5px 0 -1px var(--rail), 0 14px 18px -10px var(--shadow); }
+.shr-tile { box-shadow: 0 1px 0 var(--edge), 0 4px 0 -1px var(--rail), 0 10px 14px -9px var(--shadow); }
+@media print { .tiles, .ins-tiles, .shr-tile { box-shadow: none; } }

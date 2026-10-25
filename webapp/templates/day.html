@@ -290,8 +290,10 @@
   <form method="get" action="{{ url_for('day_page') }}" class="bk-form">
     <input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="measure" value="{{ measure }}"><input type="hidden" name="view" value="bulk"><input type="hidden" name="show" value="1">
     <fieldset class="bk-fs"><legend>Who <small class="dim">({{ bk.who|length }} picked)</small></legend>
+      <div class="scroll panel-scroll side" role="region" tabindex="0" aria-label="Who to pick (scrolls)">
       {% for grp in bk.groups %}<div class="bk-grp" data-pick-group><p class="bk-head">{{ grp.label }} <button type="button" class="link" data-pick-all>Pick all {{ grp.people|length }}</button></p>
       <div class="bk-who">{% for p in grp.people %}<label><input type="checkbox" name="who" value="{{ p.name }}"{% if p.name in bk.who %} checked{% endif %}> {{ p.name }}<small>{{ p.breaks or 'No breaks' }}</small></label>{% endfor %}</div></div>{% endfor %}
+      </div>
     </fieldset>
     <fieldset class="bk-fs"><legend>Which break</legend><div class="bk-chips">{% for k in bk.kinds + ['all'] %}<label><input type="radio" name="which" value="{{ k }}"{% if k == bk.which %} checked{% endif %}> {{ 'Every break not started' if k == 'all' else k }}</label>{% endfor %}</div></fieldset>
     <fieldset class="bk-fs"><legend>What to do</legend><div class="bk-acts">
@@ -511,7 +513,7 @@
   <p class="note">Each row is one {{ unit.get(v.interval, 'interval')[:-1] }}: who goes on a break in it, who is late, leaves early or is in aux, and whether the floor still holds. Drag a break to another row, or click it to set the time in 5-minute steps; you see the warnings and the best times before anything is kept.</p>
   {% set gone = [] %}{% for lane in v.lanes %}{% for s in lane.segments if s.offset == 0 and s.status in absent_states %}{% set _ = gone.append(lane.name ~ ' (' ~ s.status|lower ~ ')') %}{% endfor %}{% endfor %}
   {% if gone %}<p class="board-gone">Not on the floor today: <b>{{ gone|join(', ') }}</b>.</p>{% endif %}
-  <div class="rb-scroll"><div class="rb" role="table" aria-label="Interval board">
+  <div class="rb-scroll panel-scroll" role="region" tabindex="0" aria-label="Interval board (scrolls)"><div class="rb" role="table" aria-label="Interval board">
     <div class="rb-row rb-head" role="row"><span role="columnheader">Interval</span><span role="columnheader">Needed</span><span role="columnheader">On the floor</span><span role="columnheader">Buffer (h:mm)</span><span role="columnheader">Cover <small>(target {{ (100 * page.target.target)|round|int }}%)</small></span><span role="columnheader">Status</span><span role="columnheader">Unplanned leave</span><span role="columnheader">On break</span><span role="columnheader">Lunch</span><span role="columnheader">Short breaks</span><span role="columnheader">Late, early, aux</span><span role="columnheader">Languages</span></div>
     {% set at_target = {} %}{% for c in page.target.cells %}{% set _ = at_target.update({c.t: c.ok}) %}{% endfor %}
     {% for r in rows %}

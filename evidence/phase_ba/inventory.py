@@ -18,9 +18,10 @@ PAGES = {"home": "/", "day": f"/day?program={Q}&date={D}", "day_board": f"/day?p
 JS = """() => {
   const out = [];
   const label = e => (e.id ? '#' + e.id : '') + (e.className && typeof e.className === 'string' ? '.' + e.className.trim().split(/\\s+/).join('.') : '');
-  document.querySelectorAll('main table').forEach(t => { const rows = t.querySelectorAll('tbody tr').length || t.querySelectorAll('tr').length; const h = Math.round(t.getBoundingClientRect().height);
+  const boxed = e => !!e.closest('.panel-scroll, .tl-scroll, .tscroll.panel-scroll, [data-pager], nav.pager, .pick-list, .who-list, .bp-scroll, .wall-scroll');
+  document.querySelectorAll('main table').forEach(t => { if (boxed(t)) return; const rows = t.querySelectorAll('tbody tr').length || t.querySelectorAll('tr').length; const h = Math.round(t.getBoundingClientRect().height);
     if (rows >= 8 || h > 600) out.push({kind: 'table', sel: label(t), rows, h, cols: t.querySelectorAll('tr:first-child > *').length, within: label(t.closest('section,div.card,form,details')||t.parentElement)}); });
-  document.querySelectorAll('main ul, main ol').forEach(u => { const rows = u.querySelectorAll(':scope > li').length; const h = Math.round(u.getBoundingClientRect().height);
+  document.querySelectorAll('main ul, main ol').forEach(u => { if (boxed(u)) return; const rows = u.querySelectorAll(':scope > li').length; const h = Math.round(u.getBoundingClientRect().height);
     if (rows >= 8 || h > 600) out.push({kind: 'list', sel: label(u), rows, h, within: label(u.closest('section,div.card,form,details')||u.parentElement)}); });
   const nav = [...document.querySelectorAll('.leftnav nav a')].filter(a => getComputedStyle(a, '::before').maskImage === 'none' && getComputedStyle(a, '::before').webkitMaskImage === 'none').map(a => a.getAttribute('href'));
   return {page_h: document.documentElement.scrollHeight, long: out, noicon: nav};

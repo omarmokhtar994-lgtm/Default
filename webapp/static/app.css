@@ -1774,3 +1774,17 @@ body.wall main { max-width: none; padding: 0; }  /* a TV: the whole screen, not 
 @media (max-width: 40rem) { .float-note { left: .6rem; right: .6rem; width: auto; margin-inline: 0; bottom: .6rem; border-radius: 18px; flex-wrap: wrap; } .float-note .msg { flex: 1 1 12rem; } }
 @media (prefers-reduced-motion: reduce) { .float-note, .float-note.on { transform: none; transition: opacity .12s linear, visibility 0s; } }
 @media print { .float-note { display: none; } }
+
+/* Phase BA: spacing found on the audit (evidence/phase_ba/shots): stacked panels touched; a form's Show button stretched to the height of its row */
+main > .panel + .panel, main > section.panel + section.panel { margin-top: 18px; }
+.exp-row > button { align-self: end; }
+.rb-scroll.panel-scroll { max-height: min(34rem, 70dvh); overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--edge) transparent; }
+.rb-scroll.panel-scroll:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
+[data-day] .rb-scroll.panel-scroll .rb-head { top: 0; z-index: 2; background: var(--console); }
+@media print { .rb-scroll.panel-scroll { max-height: none; overflow: visible; } }
+/* Phase BA: controls are at least 24 px high (WCAG 2.2, target size) */
+[data-day] select.att { min-height: 24px; }
+button.link { min-height: 24px; }
+input[type=file] { min-height: 24px; }
+/* the visually hidden labels inside a scroll panel stay inside it (an absolutely placed label of a clipped box otherwise lengthens the page) */
+.rb-scroll.panel-scroll, .tscroll.panel-scroll, [data-day] .tl-scroll { position: relative; }

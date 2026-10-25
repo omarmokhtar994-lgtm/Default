@@ -11,7 +11,7 @@ TEMPLATES = Path(__file__).resolve().parents[1] / "templates"
 # the tables and grids that are scanned or compared, with the label each panel carries
 SCROLL_PANELS = {
     "week.html": ["Achieved every", "Where overtime is needed", "Extra hours available"],
-    "day.html": ["By person, lowest first", "Actual shrinkage against your input", "Who is on which channel", "Channels by interval"],
+    "day.html": ["By person, lowest first", "Actual shrinkage against your input", "Who is on which channel", "Channels by interval", "Who to pick"],
     "coach.html": ["Actual against planned, per weekday"],
     "roles.html": ["What each role may do"],
     "channel_setup.html": ["Who can work which channel"],
@@ -32,6 +32,12 @@ class LongTablesScrollInsideAPanel(unittest.TestCase):
                 if not box:
                     problems.append(f"{name}: {label}")
         self.assertEqual(problems, [])
+
+    def test_the_interval_board_is_a_panel_with_its_header_fixed(self):
+        text = (TEMPLATES / "day.html").read_text()
+        self.assertIn('<div class="rb-scroll panel-scroll" role="region" tabindex="0" aria-label="Interval board (scrolls)">', text)
+        css = (Path(__file__).resolve().parents[1] / "static" / "app.css").read_text()
+        self.assertRegex(css, r"\.rb-scroll\.panel-scroll \{ max-height: min\(34rem, 70dvh\)")
 
     def test_the_panel_has_a_height_a_fixed_header_and_prints_in_full(self):
         css = (Path(__file__).resolve().parents[1] / "static" / "app.css").read_text()

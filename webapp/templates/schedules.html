@@ -111,7 +111,7 @@
     </form>
     {% if moved %}<p class="note warn-note">Times are shown in {{ dict(zones)[g.zone] }} time. Shifts are changed in {{ own_name }} time, the schedule's own: <a href="{{ url_for('run_schedules', run_id=run.id, v=current.id if current else none, tz=own_zone) }}">show {{ own_name }} time</a> to change one.</p>{% endif %}
     <p class="note">Click a shift to change it. Choices come from this program's Shift Library, plus OFF and Leave. Changed shifts are outlined, with the tool's shift under the new one{% if current.kind != 'edited' or current.in_use %}; a change here starts a new version{% endif %}.</p>
-    <div class="scroll" role="region" tabindex="0" aria-label="Shifts (scrolls sideways)">
+    <div class="scroll panel-scroll" role="region" tabindex="0" aria-label="Shifts (scrolls)">
     <table class="edgrid" data-check-url="{{ url_for('schedule_check', schedule_id=current.id) }}" data-change-url="{{ url_for('schedule_change', schedule_id=current.id) }}">
       <thead><tr><th scope="col"><span class="sr-only">Associate</span></th>{% for d in days %}<th scope="col">{{ d }}{% if m.days.get(d) %} <i class="dot {{ m.days[d] }}" title="{{ 'A rule is broken' if m.days[d] == 'red' else 'A warning' }} on this day"></i>{% endif %}</th>{% endfor %}</tr></thead>
       <tbody>
@@ -142,9 +142,10 @@
     <section class="panel" aria-labelledby="log-h">
       <h2 id="log-h">Changes in this version</h2>
       {% if view.changes %}
+      <div class="scroll panel-scroll side" role="region" tabindex="0" aria-label="Changes in this version (scrolls)">
       <ul class="log">{% for gr in group_changes(view.changes)|reverse %}{% if gr["items"]|length >= 3 %}<li><b>{{ gr.by_name }}</b>, {{ when(gr.at) }}: {{ gr["items"]|length }} changes for {{ gr.people }} {{ 'person' if gr.people == 1 else 'people' }}{% if gr.reason %}. "{{ gr.reason }}"{% endif %}{% if gr.severity in ('red', 'yellow') %} <span class="tagsev {{ gr.severity }}">{{ 'rule broken' if gr.severity == 'red' else 'warning' }}</span>{% if gr.problems %} {{ gr.problems|join('; ') }}{% endif %}{% endif %}
         <details class="log-each"><summary>Each change</summary><ul>{% for c in gr["items"] %}<li>{% if c.day == 'Week' %}{{ c.associate }} moved from {{ c.old }} to {{ c.new }} (slot swap){% else %}{{ c.associate }}, {{ c.day }} {{ c.old }} → {{ c.new }}{% endif %}</li>{% endfor %}</ul></details></li>
-      {% else %}{% for c in gr["items"]|reverse %}<li><b>{{ c.by_name }}</b>, {{ when(c.at) }}: {% if c.day == 'Week' %}{{ c.associate }} moved from {{ c.old }} to {{ c.new }} (slot swap){% else %}{{ c.associate }}, {{ c.day }} {{ c.old }} → {{ c.new }}{% endif %}{% if c.reason %}. "{{ c.reason }}"{% endif %}{% if c.severity in ('red', 'yellow') %} <span class="tagsev {{ c.severity }}">{{ 'rule broken' if c.severity == 'red' else 'warning' }}</span>{% endif %}</li>{% endfor %}{% endif %}{% endfor %}</ul>
+      {% else %}{% for c in gr["items"]|reverse %}<li><b>{{ c.by_name }}</b>, {{ when(c.at) }}: {% if c.day == 'Week' %}{{ c.associate }} moved from {{ c.old }} to {{ c.new }} (slot swap){% else %}{{ c.associate }}, {{ c.day }} {{ c.old }} → {{ c.new }}{% endif %}{% if c.reason %}. "{{ c.reason }}"{% endif %}{% if c.severity in ('red', 'yellow') %} <span class="tagsev {{ c.severity }}">{{ 'rule broken' if c.severity == 'red' else 'warning' }}</span>{% endif %}</li>{% endfor %}{% endif %}{% endfor %}</ul></div>
       {% else %}<p class="empty">No changes: this is {{ 'the schedule as uploaded' if view.uploaded else "the tool's schedule" }}.</p>{% endif %}
     </section>
   </aside>

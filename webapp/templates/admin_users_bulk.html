@@ -12,7 +12,7 @@
   <h2 id="done-h">Added {{ added|length }} {{ 'person' if added|length == 1 else 'people' }}</h2>
   {% if added %}
   <p class="note">The temporary passwords below are shown once, here and in the download. Each person chooses their own password at first sign-in.</p>
-  <div class="scroll" role="region" tabindex="0" aria-label="People added (scrolls sideways)">
+  <div class="scroll panel-scroll" role="region" tabindex="0" aria-label="People added (scrolls)">
     <table class="runs small">
       <thead><tr><th scope="col">Username</th><th scope="col">Name</th><th scope="col">Role</th><th scope="col">Temporary password</th></tr></thead>
       <tbody>{% for a in added %}<tr><td>{{ a.username }}</td><td>{{ a.display_name }}</td><td>{{ a.role }}</td>
@@ -30,7 +30,7 @@
 {% if plan is not none and plan %}
 <section class="panel" aria-labelledby="check-h">
   <h2 id="check-h">Checked: {{ good }} of {{ plan|length }} rows can be added</h2>
-  <div class="scroll" role="region" tabindex="0" aria-label="The rows of your file (scrolls sideways)">
+  <div class="scroll panel-scroll" role="region" tabindex="0" aria-label="The rows of your file (scrolls)">
     <table class="runs small">
       <thead><tr><th scope="col">Row</th><th scope="col">Username</th><th scope="col">Name</th><th scope="col">Role</th><th scope="col">Programs</th><th scope="col">Result</th></tr></thead>
       <tbody>{% for p in plan %}<tr><td>{{ p.n }}</td><td>{{ p.typed }}</td><td>{{ p.display_name }}</td><td>{{ roles.get(p.kind, p.role) }}</td>

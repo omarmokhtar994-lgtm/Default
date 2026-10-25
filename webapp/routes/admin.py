@@ -143,7 +143,7 @@ def register(app, ctx) -> None:
                        team_choices=access.team_managers_for(u) if u["is_associate"] else [])
                   for u in store.list_users() if admin or access.can_manage(u)]
         held = app.extensions["throttle"].held_now() if admin else []
-        return render_template("admin_users.html", users=people, error=error, made=made, grantable=access.grantable(),
+        return render_template("admin_users.html", users=people, users_page=ctx._paged(people, "people_page", "people-h"), error=error, made=made, grantable=access.grantable(),
                                held=held,
                                roles=ROLES if admin else {k: ROLES[k] for k in STAFF_ADDS}, admin=admin,
                                roster_names=sorted(_roster_index([p["id"] for p in access.grantable()], tree).items()))

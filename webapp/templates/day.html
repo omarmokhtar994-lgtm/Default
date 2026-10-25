@@ -171,7 +171,7 @@
 {% if chv.runs %}<section class="panel" aria-labelledby="chr-h">
   <h2 id="chr-h">Who is on which channel</h2>
   <p class="note">Each person's day as it stands, one box per stretch: channels, breaks and anything else that takes them off the queue.</p>
-  <div class="scroll" role="region" tabindex="0" aria-label="Who is on which channel (scrolls sideways)"><div class="chr" role="group" aria-label="Who is on which channel">
+  <div class="scroll panel-scroll" role="region" tabindex="0" aria-label="Who is on which channel (scrolls)"><div class="chr" role="group" aria-label="Who is on which channel">
     <div class="chr-row" aria-hidden="true"><span></span><svg class="chr-svg" viewBox="0 0 1440 26">{% for h in range(0, 24, 2) %}<text class="chr-h" x="{{ h * 60 + 2 }}" y="20">{{ hm(h * 60)[:2] }}</text>{% endfor %}</svg></div>
     {% for name, runs in chv.runs.items() %}<div class="chr-row"><span class="chr-lbl">{{ name }}</span><svg class="chr-svg" viewBox="0 0 1440 40" role="img" aria-label="{{ name }}: {{ chv.timelines.get(name, [])|join(', ') }}">{% for a, b, c in runs %}{% set word = c|channel_name if c in ('P', 'C', 'E', 'A') else c %}{% if c in ('P', 'C', 'E', 'A') %}<a href="#chg-form" data-ch-run data-who="{{ name }}" data-from="{{ hm(a) }}" data-to="{{ hm(b) }}" data-letter="{{ c }}">{% endif %}<rect class="{{ 'ch-' ~ c if c in ('P', 'C', 'E', 'A') else ('ch-B' if c.startswith('Break') or c == 'Lunch' else 'ch-X') }}" x="{{ a }}" y="4" width="{{ b - a }}" height="32" rx="3"><title>{{ name }}: {{ word }} {{ hm(a) }} to {{ hm(b) }}</title></rect>{% if b - a >= 75 %}<text class="chr-t" x="{{ (a + b) / 2 }}" y="26">{{ word if word|length * 11 < b - a else c[:1] }}</text>{% elif b - a >= 15 %}<text class="chr-t" x="{{ (a + b) / 2 }}" y="26">{{ c[:1] }}</text>{% endif %}{% if c in ('P', 'C', 'E', 'A') %}</a>{% endif %}{% endfor %}</svg></div>{% endfor %}
   </div></div>
@@ -192,7 +192,7 @@
 <section class="panel" aria-labelledby="chi-h">
   <h2 id="chi-h">Channels by interval</h2>
   <p class="note">People on each channel (average in the interval) against the channel tab's need; each language row is its lowest point against its minimum.</p>
-  <div class="scroll" role="region" tabindex="0" aria-label="Channels by interval (scrolls sideways)"><table class="cp-cov">
+  <div class="scroll panel-scroll" role="region" tabindex="0" aria-label="Channels by interval (scrolls)"><table class="cp-cov">
     <thead><tr><th scope="col"><span class="sr-only">Channel</span></th>{% for c in chv.rows[0].cells if c.need or c.have or (c.plan or 0) > 0 %}<th scope="col">{{ hm(c.t) }}</th>{% endfor %}</tr></thead>
     <tbody>{% set keep = [] %}{% for c in chv.rows[0].cells if c.need or c.have or (c.plan or 0) > 0 %}{% set _ = keep.append(c.t) %}{% endfor %}
     {% for r in chv.rows %}<tr><th scope="row">{{ r.name }}</th>{% for c in r.cells if c.t in keep %}<td class="{{ c.cls }}">{% if c.have is not none and (c.need or c.have) %}{{ c.have|num }}/{{ c.need|num }}{% endif %}</td>{% endfor %}</tr>{% endfor %}</tbody>
@@ -310,7 +310,7 @@
     <p class="tile"><span class="tile-label">Left as they are</span><b>{{ pv.skipped|length }}</b><small class="dim">{{ 'listed below with why' if pv.skipped else 'none' }}</small></p>
     <p class="tile"><span class="tile-label">Short of demand</span><b>{{ pv.after.short_hours|num }} h</b><small class="dim">now {{ pv.before.short_hours|num }} h</small></p>
   </section>
-  <div class="scroll" role="region" tabindex="0" aria-label="The changes (scrolls sideways)"><table class="adh-t"><thead><tr><th scope="col">Associate</th><th scope="col">Break</th><th scope="col">Now</th><th scope="col">After</th></tr></thead>
+  <div class="scroll panel-scroll" role="region" tabindex="0" aria-label="The changes (scrolls)"><table class="adh-t"><thead><tr><th scope="col">Associate</th><th scope="col">Break</th><th scope="col">Now</th><th scope="col">After</th></tr></thead>
     <tbody>{% for c in pv.changes %}<tr><td><b>{{ c.name }}</b></td><td>{{ c.kind }}, {{ c.minutes }} min</td><td>{{ 'Cancelled' if c.cancelled else hm(c.start) }}</td><td>{{ 'Cancelled' if c.new == 'cancelled' else ('Plan' if c.new is none else hm(c.new)) }}{% if c.words %}<small class="dim"> {{ c.words|join(' ') }}</small>{% endif %}</td></tr>{% endfor %}
     {% for x in pv.skipped %}<tr class="bk-skip"><td><b>{{ x.name }}</b></td><td>{{ x.kind }}</td><td></td><td><b class="why">Left as it is:</b> {{ x.why }}</td></tr>{% endfor %}</tbody></table></div>
   {% if n %}<form method="post" action="{{ url_for('day_bulk_apply') }}" class="bk-foot"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="start" value="{{ vx }}">{{ zone_fields() }}<input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}">{% for w in bk.who %}<input type="hidden" name="who" value="{{ w }}">{% endfor %}<input type="hidden" name="which" value="{{ bk.which }}"><input type="hidden" name="act" value="{{ bk.act }}"><input type="hidden" name="amount" value="{{ bk.amount }}"><input type="hidden" name="at" value="{{ bk.at }}"><input type="hidden" name="why" value="{{ bk.why }}">
@@ -353,7 +353,7 @@
   {% if rs.moves %}
   <form method="post" action="{{ url_for('day_rescue_apply') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="start" value="{{ vx }}">{{ zone_fields() }}<input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}">
-    <div class="scroll" role="region" tabindex="0" aria-label="The moves (scrolls sideways)"><table class="adh-t rs-t"><thead><tr><th scope="col">Associate</th><th scope="col">Break</th><th scope="col">From</th><th scope="col">To</th><th scope="col">Why</th></tr></thead>
+    <div class="scroll panel-scroll" role="region" tabindex="0" aria-label="The moves (scrolls)"><table class="adh-t rs-t"><thead><tr><th scope="col">Associate</th><th scope="col">Break</th><th scope="col">From</th><th scope="col">To</th><th scope="col">Why</th></tr></thead>
       <tbody>{% for m in rs.moves|sort(attribute='to') %}<tr><td><b>{{ m.name }}</b><input type="hidden" name="move" value="{{ m.name }}|{{ m.idx }}|{{ m.day_to }}|{{ m.date.isoformat() }}"></td><td>{{ m.kind }}, {{ m.minutes }} min</td><td>{{ hm(m['from']) }}</td><td><b>{{ hm(m.to) }}</b></td><td class="dim">{{ m.why }}</td></tr>{% endfor %}</tbody></table></div>
     <p class="bk-foot"><button class="primary" type="submit">Apply all {{ rs.moves|length }}</button> <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure) }}">Close</a>
       <small>Not posted to the group until you press Send at the top of the page. You can undo it.</small></p>
@@ -366,7 +366,7 @@
   <p class="note">What the tool proposes for the {{ unit.get(v.interval, 'intervals') }} still short{% if from_now %} from {{ hm(from_now) }}{% endif %}: people off today called in on a Shift Library shift, each covering at least {{ dayoff.minimum }} short {{ unit.get(v.interval, 'intervals') }} (fewer is a waste of a day off), then overtime for what is left. Rules are kept first (rest between shifts, the week's days off, days in a row); anything that bends a rule says so, the smallest bend first. Nothing changes until you pick someone.</p>
   {% if not dayoff.next_known %}<p class="note">The next week has no schedule here, so the rest before tomorrow is not checked.</p>{% endif %}
   {% if dayoff.proposals or dayoff.overtime %}
-  <div class="scroll" role="region" tabindex="0" aria-label="Proposals (scrolls sideways)"><table class="adh-t do-t">
+  <div class="scroll panel-scroll" role="region" tabindex="0" aria-label="Proposals (scrolls)"><table class="adh-t do-t">
     <thead><tr><th scope="col">Proposal</th><th scope="col">Covers</th><th scope="col">Possible people</th><th scope="col">Rules</th></tr></thead>
     <tbody>{% for p in dayoff.proposals %}<tr><th scope="row">{{ p.text }}</th><td>{{ p.covers }}: {{ p.intervals }} short</td><td>{% for c in p.candidates %}{{ accept(c.name, 'Called in', p.start, p.end, 'call in' ~ (' · ' ~ c.language if c.language) ~ (' · ' ~ c.note if c.note), 'rescue') }}{% if c.bends %}<small class="dim do-bend">{{ c.name }}: {{ c.bends|join('; ') }}</small>{% endif %}{% endfor %}</td><td>{{ p.rules }}</td></tr>{% endfor %}
     {% for o in dayoff.overtime %}<tr><th scope="row">Overtime still needed</th><td>{{ o.text }}</td><td>{% for x in o.offers %}{{ accept(x.name, 'Overtime', x.start, x.end, x.text, 'rescue') }}{% else %}Nobody can stay on or come in early here within the rules.{% endfor %}</td><td>{{ 'All kept' if o.offers else '' }}</td></tr>{% endfor %}</tbody>
@@ -488,7 +488,7 @@
 <section class="panel" aria-labelledby="adh-h">
   <h2 id="adh-h">By person (lowest first)</h2>
   <p class="note">Adherence: time doing what the schedule says (working when planned to work, on a break when the break was planned). Conformance: time worked against time scheduled to work, whenever it happened. {{ 'Billable aux counts as work here.' if measure == 'interval' else 'Under service level, aux is time off the queue.' }}</p>
-  <div class="scroll" role="region" tabindex="0" aria-label="By person, lowest first (scrolls sideways)"><table class="adh-t">
+  <div class="scroll panel-scroll" role="region" tabindex="0" aria-label="By person, lowest first (scrolls)"><table class="adh-t">
     <thead><tr><th scope="col">Associate</th><th scope="col">Shift</th><th scope="col">Status</th><th scope="col" class="n">Scheduled</th><th scope="col" class="n">Worked</th><th scope="col" class="n">Late min</th><th scope="col" class="n">Early min</th><th scope="col" class="n">Aux billable</th><th scope="col" class="n">Aux non-billable</th><th scope="col" class="n">Out of schedule</th><th scope="col" class="n">Adherence</th><th scope="col" class="n">Conformance</th></tr></thead>
     <tbody>{% for r in people %}<tr><td><b>{{ r.name }}</b>{% if lob_by_name.get(r.name) %}<span class="tl-tag lob">{{ lob_names.get(lob_by_name[r.name], lob_by_name[r.name]) }}</span>{% endif %}</td><td>{{ r.shift|in_zone }}</td><td>{{ r.status }}{% if r.billable %} (billable){% endif %}</td><td class="n">{{ '%d:%02d'|format(r.scheduled // 60, r.scheduled % 60) }}</td><td class="n">{{ '%d:%02d'|format(r.worked // 60, r.worked % 60) }}</td><td class="n">{{ r.late or '' }}</td><td class="n">{{ r.early or '' }}</td><td class="n">{{ r.aux_billable or '' }}</td><td class="n">{{ r.aux_unbillable or '' }}</td><td class="n">{{ r.out_of_schedule or '' }}</td>
       {% for key in ('adherence', 'conformance') %}{% set p = r[key] %}<td class="n {{ 'none' if p is none else ('ok' if p >= 90 else ('warn' if p >= 80 else 'bad')) }}">{{ '–' if p is none else p ~ '%' }}</td>{% endfor %}</tr>{% endfor %}</tbody>
@@ -497,7 +497,7 @@
 <section class="panel" aria-labelledby="shr-h">
   <h2 id="shr-h">Actual shrinkage against your input</h2>
   <p class="note">Each {{ unit.get(v.interval, 'interval')[:-1] }}: people paid on shift, people on the floor, and the share not on the floor, against the input's Shrinkage tab. Red: more than 5 points above plan. Over weeks, the <a href="{{ url_for('coach_page', program=program) }}">shrinkage coach</a> turns this into a corrected tab.</p>
-  <div class="scroll" role="region" tabindex="0" aria-label="Actual shrinkage against your input (scrolls sideways)"><table class="adh-t">
+  <div class="scroll panel-scroll" role="region" tabindex="0" aria-label="Actual shrinkage against your input (scrolls)"><table class="adh-t">
     <thead><tr><th scope="col">Interval</th><th scope="col" class="n">Paid on shift</th><th scope="col" class="n">On the floor</th><th scope="col" class="n">Actual</th><th scope="col" class="n">Input</th></tr></thead>
     <tbody>{% for r in shrink %}<tr><td>{{ hm(r.t) }}</td><td class="n">{{ r.paid|num }}</td><td class="n">{{ r.on_floor|num }}</td><td class="n{% if r.actual > r.input + 0.05 %} bad{% endif %}">{{ (100 * r.actual)|round|int }}%</td><td class="n">{{ (100 * r.input)|round|int }}%</td></tr>{% endfor %}</tbody>
   </table></div>

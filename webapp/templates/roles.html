@@ -10,7 +10,7 @@
   <h2 id="roles-h">What each role may do</h2>
   <form method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="scroll" role="region" tabindex="0" aria-label="What each role may do (scrolls sideways)"><table class="actable">
+    <div class="scroll panel-scroll" role="region" tabindex="0" aria-label="What each role may do (scrolls)"><table class="actable">
       <thead><tr><th scope="col">Allows</th>{% for r in role_names %}<th scope="col" class="c">{{ r }}</th>{% endfor %}</tr></thead>
       <tbody>
       {% for key, (words, _) in catalogue.items() %}<tr><th scope="row">{{ words }}</th>

@@ -1717,3 +1717,11 @@ button.link { border-radius: 0; }
 :root[data-theme="draft"] button.primary, :root[data-theme="draft"] .button.primary { box-shadow: 0 0 0 2px var(--night), 0 0 0 3.5px var(--action); margin: 3.5px; }
 :root[data-theme="draft"] :focus-visible { outline: 3px solid var(--paper); outline-offset: 2px; box-shadow: 0 0 0 6px var(--hi); }
 :root[data-theme="draft"] .skip:focus { background: var(--hi); color: var(--on-hi); }
+
+/* Phase BA (owner, 2026-10-25): one rule for long content. Tables and grids people scan or compare scroll inside their own panel,
+   with the header fixed at the top; lists that grow over time and are read one by one are pages (ctx._paged). */
+.scroll.panel-scroll, .tscroll.panel-scroll { max-height: min(30rem, 64dvh); overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--edge) transparent; border-radius: var(--r-ctl); }
+.scroll.panel-scroll:focus-visible, .tscroll.panel-scroll:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
+.scroll.panel-scroll thead th, .tscroll.panel-scroll thead th { position: sticky; top: 0; z-index: 2; background: var(--console); }
+.scroll.panel-scroll.side { max-height: min(28rem, 60dvh); }
+@media print { .scroll.panel-scroll, .tscroll.panel-scroll { max-height: none; overflow: visible; } }

@@ -1,5 +1,5 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
-{% extends "base.html" %}{% block title %}People on Team Scheduler{% endblock %}
+{% extends "base.html" %}{% from "_macros.html" import pager with context %}{% block title %}People on Team Scheduler{% endblock %}
 {% block content %}
 <div class="phead"><div>
   <h1>People</h1>
@@ -61,8 +61,8 @@
     <form method="post" action="{{ url_for('admin_signins_release') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="address" value="{{ address }}"><button class="quiet">Let this address sign in again</button></form></li>{% endfor %}</ul>
 </section>{% endif %}
 <datalist id="roster-names">{% for n, ids in roster_names %}<option value="{{ n }}" data-programs="{{ ids|sort|join(' ') }}">{% endfor %}</datalist>
-<table class="people"><thead><tr><th>Person</th><th>Role</th><th>Programs</th><th>State</th><th></th></tr></thead><tbody>
-{% for u in users %}<tr>
+<table class="people" id="people-h"><thead><tr><th>Person</th><th>Role</th><th>Programs</th><th>State</th><th></th></tr></thead><tbody>
+{% for u in users_page[0] %}<tr>
   <td><b>{{ u.display_name }}</b><br><small>{{ u.username }}</small></td>
   <td><span class="role role-{{ u.role|lower|replace(' ', '-') }}">{{ u.role }}</span>{% if u.is_associate %}<br><small>{{ u.roster_name }}</small><br><small>Team manager: {{ u.team_manager or 'none' }}</small>{% endif %}</td>
   <td>{% if u.is_admin or u.all_programs %}All programs{% else %}{{ u.programs or 'None yet' }}{% endif %}</td>
@@ -90,4 +90,5 @@
     </details>
   {% endif %}</td></tr>{% endfor %}
 </tbody></table>
+{{ pager(users_page[1], "People") }}
 {% endblock %}

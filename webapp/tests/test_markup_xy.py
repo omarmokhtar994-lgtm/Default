@@ -69,18 +69,19 @@ class TheMarkup(unittest.TestCase):
 
     def test_scroll_boxes_are_named_regions(self):
         pages = [self.page(f"/week?program={self.q}&week={self.sunday.isoformat()}"), self.day("adherence")]
-        boxes = [box for page in pages for box in re.findall(r'<div class="scroll"[^>]*>', page)]
+        # Phase BA: the long tables are panels (class "scroll panel-scroll") that scroll both ways, so their label ends "(scrolls)"
+        boxes = [box for page in pages for box in re.findall(r'<div class="scroll[ "][^>]*>', page)]
         self.assertGreaterEqual(len(boxes), 3)
         for box in boxes:
             self.assertIn('role="region"', box)
             self.assertIn('tabindex="0"', box)
-            self.assertRegex(html.unescape(box), r'aria-label="[^"]+ \(scrolls sideways\)"')
+            self.assertRegex(html.unescape(box), r'aria-label="[^"]+ \(scrolls( sideways)?\)"')
 
     def test_every_scroll_box_in_the_templates_is_a_named_region(self):
         """The same box on every page: a keyboard reaches it and a screen reader names it."""
         templates = Path(__file__).resolve().parents[1] / "templates"
         unnamed = [f"{f.name}: {box}" for f in sorted(templates.glob("*.html"))
-                   for box in re.findall(r'<div class="scroll"[^>]*>', f.read_text())
+                   for box in re.findall(r'<div class="(?:scroll|tscroll)[ "][^>]*>', f.read_text())
                    if not ('role="region"' in box and 'tabindex="0"' in box and "aria-label=" in box)]
         self.assertEqual(unnamed, [])
 

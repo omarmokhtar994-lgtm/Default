@@ -89,4 +89,6 @@ proof run differs.
 
 ## 7. Gate result in the copy
 
-(see the bottom of this file once the run ends)
+GATE PASS in the completed copy: 79 suites, 1,574 tests (2 skipped), both selfchecks, cross-module call signatures, undefined-name
+sweep. The first, thinner copy failed 9 suites (see section 1). The copy is therefore a valid baseline: the same gate that
+runs on `engine/` passes on `testing/engine/`.

@@ -144,7 +144,7 @@ class InTheBrowser(unittest.TestCase):
         """Phase L: the light look, chosen with the switch in the header."""
         page = self.page(height=1100)
         self.sign_in(page)
-        page.get_by_role("button", name="Light look").click()
+        page.get_by_role("button", name="Tide").click()  # Phase BA: the look control names the three looks
         expect(page.locator("html")).to_have_attribute("data-theme", "light")
         real = self.workbook.with_name("REAL_light.xlsx")
         real.write_bytes(b"PK\x03\x04 real")
@@ -153,8 +153,8 @@ class InTheBrowser(unittest.TestCase):
         expect(page.locator(".status-word")).to_have_text("Approved", timeout=20000)
         expect(page.locator(".grid.after .cell")).to_have_count(126)
         background = page.evaluate("getComputedStyle(document.body).backgroundColor")
-        # re-pinned in Phase AG: the owner picked the Graphite day page on 2026-10-15 (#F1F2F4, was #EAEFF5)
-        self.assertEqual(background, "rgb(241, 242, 244)")
+        # re-pinned in Phase BA: the day look is Tide (owner, 2026-10-25), page #E8EFF6 (was #F1F2F4)
+        self.assertEqual(background, "rgb(232, 239, 246)")
         page.wait_for_timeout(800)
         L_SCREENS.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(L_SCREENS / "light_run_page.png"), full_page=True)
@@ -162,7 +162,7 @@ class InTheBrowser(unittest.TestCase):
         page.mouse.move(0, 0)
         page.wait_for_timeout(800)
         page.screenshot(path=str(L_SCREENS / "light_home.png"), full_page=True)
-        page.get_by_role("button", name="Dark look").click()
+        page.get_by_role("button", name="Night watch").click()
         expect(page.locator("html")).to_have_attribute("data-theme", "dark")
 
     def drop(self, page, name, data=b"PK\x03\x04 dropped"):

@@ -69,9 +69,10 @@ class TheLook(unittest.TestCase):
 
 
 class TheThreeLooks(unittest.TestCase):
-    """Owner's pick, 2026-10-15 (samples in evidence/phase_ag/colours): "I recommend A as well but keep deep ocean as
-    well as a third option so to have 3 views". Graphite is the night look and the default, its light version is the
-    day look, and Deep ocean is a third look to switch to. The status and channel colours do not change."""
+    """Re-written in Phase BA (owner, 2026-10-25, samples in evidence/phase_az/prototype): the three looks are Tide (light),
+    Night watch (dark, the default) and Drafting table (draft). It replaces the Phase AG trio (Graphite night, its day
+    version and Deep ocean). The cookie values are light, dark and draft; an old "ocean" cookie is ignored. The status colours
+    do not change."""
 
     @classmethod
     def setUpClass(cls):
@@ -84,30 +85,37 @@ class TheThreeLooks(unittest.TestCase):
         return css[start:css.index("}", start)]
 
     def test_the_tokens(self):
-        self.assertIn("--night: #111418;", self.block(":root"))
-        self.assertIn("--console: #181C22;", self.block(":root"))
-        self.assertIn("--night: #F1F2F4;", self.block(':root[data-theme="light"]'))
-        ocean = self.block(':root[data-theme="ocean"]')
-        self.assertIn("--night: #0A1220;", ocean)
-        self.assertIn("--console: #111C2E;", ocean)
-        self.assertIn("color-scheme: dark;", ocean)
-        self.assertNotIn("--covered:", ocean)  # colour still means state: the status colours stay
+        night = self.block(":root")
+        self.assertIn("--night: #080F1E;", night)
+        self.assertIn("--console: #0F1A31;", night)
+        self.assertIn("color-scheme: dark;", night)
+        self.assertIn("--night: #E8EFF6;", self.block(':root[data-theme="light"]'))
+        draft = self.block(':root[data-theme="draft"]')
+        self.assertIn("--night: #F1F3EE;", draft)  # the sheet; the field around it is --page-field
+        self.assertIn("--hi: #D7F25A;", draft)  # the marker colour, which never means a status
+        self.assertIn("color-scheme: light;", draft)
+        for look in (':root[data-theme="light"]', ':root[data-theme="draft"]'):
+            self.assertIn("--covered: #06A496;", self.block(look))  # the light looks share the measured status set
 
-    def test_switching_to_deep_ocean(self):
+    def test_three_looks_are_offered_and_the_one_in_use_is_pressed(self):
         from webapp.tests.test_runs import token
         client = sign_in(self.app, "omar", "Owner-pass-123")
         page = client.get("/").get_data(as_text=True)
-        self.assertIn('<button class="link" name="theme" value="ocean"', page)
-        self.assertIn(">Ocean look</button>", page)
-        got = client.post("/theme", data={"csrf_token": token(client), "theme": "ocean", "next": "/"})
-        self.assertIn("theme=ocean", got.headers["Set-Cookie"])
+        for value, name in (("light", "Tide"), ("dark", "Night watch"), ("draft", "Drafting table")):
+            self.assertIn(f'name="theme" value="{value}" data-look="{value}" aria-pressed="false">{name}</button>', page)
+        got = client.post("/theme", data={"csrf_token": token(client), "theme": "draft", "next": "/"})
+        self.assertIn("theme=draft", got.headers["Set-Cookie"])
         page = client.get("/").get_data(as_text=True)
-        self.assertIn('<html lang="en" data-theme="ocean">', page)
-        self.assertIn('<meta name="theme-color" content="#0A1220">', page)
-        self.assertIn('<meta name="color-scheme" content="dark">', page)
-        self.assertIn(">Light look</button>", page)  # the other two looks are offered
-        self.assertIn('value="dark"', page)
-        self.assertIn(">Dark look</button>", page)
+        self.assertIn('<html lang="en" data-theme="draft">', page)
+        self.assertIn('<meta name="theme-color" content="#1B2321">', page)
+        self.assertIn('<meta name="color-scheme" content="light">', page)
+        self.assertIn('value="draft" data-look="draft" aria-pressed="true">Drafting table</button>', page)
+        self.assertIn('value="light" data-look="light" aria-pressed="false">Tide</button>', page)
+
+    def test_an_old_ocean_cookie_is_ignored(self):
+        client = sign_in(self.app, "omar", "Owner-pass-123")
+        client.set_cookie("theme", "ocean")
+        self.assertNotIn("data-theme=", client.get("/").get_data(as_text=True).split("<body", 1)[0].split("<html", 1)[1].split(">", 1)[0])
 
 
 if __name__ == "__main__":

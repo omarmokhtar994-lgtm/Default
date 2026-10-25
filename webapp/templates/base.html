@@ -4,10 +4,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="{{ {'light': 'light', 'dark': 'dark', 'ocean': 'dark'}.get(theme, 'dark light') }}">
-{% if theme %}<meta name="theme-color" content="{{ {'light': '#F1F2F4', 'ocean': '#0A1220'}.get(theme, '#111418') }}">
-{% else %}<meta name="theme-color" content="#111418" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#F1F2F4" media="(prefers-color-scheme: light)">
+<meta name="color-scheme" content="{{ {'light': 'light', 'dark': 'dark', 'draft': 'light'}.get(theme, 'dark light') }}">
+{% if theme %}<meta name="theme-color" content="{{ {'light': '#E8EFF6', 'draft': '#1B2321'}.get(theme, '#080F1E') }}">
+{% else %}<meta name="theme-color" content="#080F1E" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#E8EFF6" media="(prefers-color-scheme: light)">
 {% endif %}<title>{% block title %}Team Scheduler{% endblock %}</title>
 <link rel="preload" href="{{ url_for('static', filename='fonts/atkinson-hyperlegible-next.woff2') }}" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
@@ -16,6 +16,7 @@
 </head>
 <body{% if embed %} class="embed"{% endif %}>
 <a class="skip" href="#main">Skip to the page</a>
+<div class="sheet">
 <header class="top">
   <a class="brand" href="{{ url_for('home') }}"><svg class="brand-mark" viewBox="0 0 28 20" aria-hidden="true"><rect x="0" y="1" width="16" height="5" rx="1.5" class="m1"/><rect x="6" y="8" width="16" height="5" rx="1.5" class="m2"/><rect x="12" y="15" width="16" height="5" rx="1.5" class="m3"/></svg>Team Scheduler</a>
   {% if user %}
@@ -26,10 +27,9 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}">
       <span class="ico i-palette" aria-hidden="true"></span>
-      <button class="link" name="theme" value="{{ 'dark' if theme == 'light' else 'light' }}" data-theme-toggle
-              title="Switch between the light and the dark look">{{ 'Dark look' if theme == 'light' else 'Light look' }}</button>
-      {% if theme == 'ocean' %}<button class="link" name="theme" value="dark" title="Back to the graphite night look">Dark look</button>
-      {% else %}<button class="link" name="theme" value="ocean" title="The deep ocean night look">Ocean look</button>{% endif %}
+      <span class="looks" role="group" aria-label="Look">
+        {% for value, name in (('light', 'Tide'), ('dark', 'Night watch'), ('draft', 'Drafting table')) %}<button class="look" name="theme" value="{{ value }}" data-look="{{ value }}" aria-pressed="{{ 'true' if theme == value else 'false' }}">{{ name }}</button>{% endfor %}
+      </span>
     </form>
     <a href="{{ url_for('change_password') }}" title="Your account: change your password"><span class="ico i-gear" aria-hidden="true"></span>Settings</a>
     <form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="link"><span class="ico i-sign-out" aria-hidden="true"></span>Sign out</button></form>
@@ -89,6 +89,7 @@
   <p class="goto-hint">Up and down to pick, Enter to open, Esc to close.</p>
 </dialog>{% endif %}
 <footer class="foot">{{ copyright }}</footer>
+</div>
 <script src="{{ url_for('static', filename='app.js') }}" defer></script>
 </body>
 </html>

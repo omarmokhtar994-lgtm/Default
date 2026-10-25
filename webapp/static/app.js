@@ -88,16 +88,14 @@ function homeRefresh(now) {
   setTimeout(tick, 30000);
 }
 
-// The look: with no choice saved the page follows the device, so the switch
-// offers the other one.
+// The look: with no choice saved the page follows the device (Night watch, or Tide when the device is light), so the
+// button for that look is shown as the one in use.
 (function () {
   "use strict";
-  var button = document.querySelector("[data-theme-toggle]");
-  if (!button || document.documentElement.getAttribute("data-theme")) { return; }
-  if (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) {
-    button.value = "dark";
-    button.textContent = "Dark look";
-  }
+  var looks = document.querySelectorAll("button.look");
+  if (!looks.length || document.documentElement.getAttribute("data-theme")) { return; }
+  var light = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;
+  Array.prototype.forEach.call(looks, function (b) { b.setAttribute("aria-pressed", b.value === (light ? "light" : "dark") ? "true" : "false"); });
 })();
 
 // A focused or linked item stops below the sticky top bar (Phase XY, review finding 3). app.css gives a padding per

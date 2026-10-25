@@ -18,10 +18,14 @@ CSS = (Path(__file__).resolve().parents[1] / "static" / "app.css").read_text(enc
 
 class TheTokens(unittest.TestCase):
     def test_option_d(self):
-        line = re.search(r":root \{ --ch-phone:[^}]*\}", CSS).group(0)
-        for token, value in (("--ch-phone", "#1A47A8"), ("--ch-chat", "#C2549F"), ("--ch-email", "#2F7D5B"),
-                             ("--ch-ink", "#FFFFFF"), ("--ch-bar", "#9AA1AA")):
-            self.assertIn(f"{token}: {value}", line)
+        # Re-pinned in Phase BA (owner, 2026-10-25, the three looks): the channel colours are set per look. The light looks
+        # (Tide, Drafting table) keep option D's Phone and Email with white text; Chat is #B4468F (was #C2549F, 4.1:1 with white
+        # text, 4.5:1 needed). Night watch uses brighter fills with dark text, because the deep set measured under 3:1 on navy.
+        for token, value in (("--ch-phone", "#1A47A8"), ("--ch-chat", "#B4468F"), ("--ch-email", "#2F7D5B"), ("--ch-ink", "#FFFFFF")):
+            self.assertEqual(CSS.count(f"{token}: {value}"), 3, token)  # Tide's two blocks and Drafting table
+        for token, value in (("--ch-phone", "#4C86FF"), ("--ch-chat", "#E070BE"), ("--ch-email", "#3FAE81"), ("--ch-ink", "#06142B")):
+            self.assertIn(f"{token}: {value}", CSS)
+        self.assertIn("--ch-bar: #9AA1AA", CSS)
         self.assertNotIn("--ch-email-ink", CSS)
 
     def test_email_text_is_white_like_the_others(self):

@@ -62,6 +62,9 @@ def tiny_repo() -> Path:
     book.write_bytes(b"workbook")
     for name in ("run_tests.sh", "CODE_AUDIT.md"):
         (root / name).write_text("x", encoding="utf-8")
+    # fixture updated (Phase BA): the builder now ships docs/ENGINE_MAP.md, which the staged engine-map test reads
+    (root / "docs").mkdir()
+    (root / "docs" / "ENGINE_MAP.md").write_text("x", encoding="utf-8")
     pkg = root / "packages" / "rc9_2_2_production"
     for name in ("README.md", "PRODUCTION_RUN_GUIDE.md", "LIVE_SCENARIOS.md"):
         (pkg / name).write_text("x", encoding="utf-8")

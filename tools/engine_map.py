@@ -254,6 +254,8 @@ def build(engine: Path = ENGINE, root: Path = ROOT) -> str:
             rel = path.relative_to(root).as_posix()
             if rel.startswith(("webapp/", "evidence/", "dist/", "candidates/", "experiments/", "docs/")):
                 continue
+            if rel == "SCENARIOS.json":  # the package's copy of packages/rc9_2_2_production/SCENARIOS.json: the map must read the same there
+                continue
             for number, line in enumerate(path.read_text(encoding="utf-8", errors="ignore").split("\n"), start=1):
                 if any(p in line for p in PINS) and "sha256" in line.lower():
                     rows[rel] += 1

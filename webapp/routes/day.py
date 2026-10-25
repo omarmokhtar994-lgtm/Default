@@ -21,7 +21,7 @@ from ..channel_page import NAMES as CHANNEL_NAMES
 from ..clock import EGYPT, HOME, ZONES, minute_now, moved_text, noon_gap, pick_zone, rta_window_shift, shift as zone_shift, shown, to_schedule
 from ..contacts import ContactBook, pick_contact
 from ..daily_views import people_of, workbook as daily_workbook
-from ..day import ABSENT as ABSENT_STATES, AUX, BIO, EXTRA_BREAKS, MEASURES, OVERTIME_MAX, STATUSES, at_target, board, glance, hover_tips, now_panel, shift_groups, window_view
+from ..day import ABSENT as ABSENT_STATES, AUX, BIO, EXTRA_BREAKS, MEASURES, OVERTIME_MAX, STATUSES, at_target, board, glance, hover_tips, now_panel, shift_groups, wall_extra, window_view
 from ..handover import note as handover_note
 from ..merged_day import merged_page
 from ..notify import SERVICES, leave_out
@@ -1098,9 +1098,9 @@ def register(app, ctx) -> None:
                       "cls": next((c["cls"] for c in lang["cells"] if c["t"] == first), "none")} for lang in v["languages"]]
             board_now = {"rows": rows, "on_break": sorted(on_break, key=lambda x: x["until"]),
                          "soon": sorted(soon, key=lambda x: x["at"]), "langs": [x for x in langs if x["count"] is not None],
-                         "tiles": v["tiles"]}
+                         "tiles": v["tiles"], "x": wall_extra(v, now), "target": at_target(v["cells"], page["target"]["target"])}
         return render_template("wallboard.html", w=board_now, program=program, on=on, now=now, hm=hm,
-                               live=not found and on == clock.date())
+                               live=not found and on == clock.date(), drawn=clock.strftime("%H:%M:%S"))
 
     def _plan_asked_breaks(program: str, on: date, name: str, kind: str) -> None:
         """Phase AY: the "Short breaks" and "Lunches" counts on the form that adds overtime or a call-in (0 and 0 by default) are placed

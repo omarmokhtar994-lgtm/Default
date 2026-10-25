@@ -1702,7 +1702,6 @@ button.link { border-radius: 0; }
 :root:not([data-theme="draft"]) .panel { box-shadow: 0 1px 2px var(--shadow), 0 14px 30px -20px var(--shadow); }
 :root:not([data-theme="draft"]) .leftnav { border-right: 1px solid var(--rail); }
 /* Drafting table: the dark field, the sheet, bracketed sections, the marker */
-:root[data-theme="draft"] body { padding: 0; }
 :root[data-theme="draft"] .sheet { display: flex; flex-direction: column; flex: 1; margin: 14px; border-radius: 28px; overflow: clip; box-shadow: 0 30px 60px -30px #000A;
   background-color: var(--night); background-image: repeating-linear-gradient(135deg, rgba(20, 32, 28, .045) 0 1px, transparent 1px 10px); }
 :root[data-theme="draft"] .top { border-radius: 0; }
@@ -1738,3 +1737,20 @@ button.link { border-radius: 0; }
 .tl-modes .look[aria-pressed="true"] { background: var(--hi); color: var(--on-hi); }
 .looks { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; background: var(--hover); border: 1px solid var(--rail); }
 @media print { [data-day] .tl-scroll { max-height: none; } }
+
+/* Phase BA: the floor's screen carries the day so far, the target, the next hour's changes, what needs attention, who is out and the channels */
+.wall-today { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)) minmax(0, 2.6fr); gap: 1vw; margin-top: 1.8vh; }
+.wall-today .wt { margin: 0; padding: 1.2vh 1vw; border-radius: var(--r-panel); background: var(--console); display: flex; flex-direction: column; gap: .2vh; }
+.wall-today .wt b { font: 700 semi-condensed 3.6vh/1 var(--display); } .wall-today .wt span { color: var(--dim); font-size: 1.8vh; }
+.wall-today .wt.warn b { color: var(--short-ink); } .wall-today .wt.wide { gap: .8vh; }
+.wall-strip { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; height: 1.8vh; }
+.wall-strip i { border-radius: 2px; background: var(--empty-cell); } .wall-strip i.ok { background: var(--covered); } .wall-strip i.warn { background: var(--short); } .wall-strip i.bad { background: var(--gap); }
+.wall-lists { grid-template-columns: repeat(auto-fit, minmax(min(24vw, 100%), 1fr)); margin-top: 1.8vh; }
+.wall-lists > div { padding: 1.4vh 1.2vw; } .wall-lists h2 { font-size: 2.3vh; } .wall-lists ul { font-size: 2.1vh; } .wall-lists li.lok { color: var(--covered-text); }
+.wall-more { margin: .6vh 0 0; color: var(--dim); font-size: 1.9vh; }
+.wall-drawn { margin: 1.6vh 0 0; max-width: none; color: var(--dim); font-size: 1.8vh; text-align: right; }
+.wall-buf { font-size: 7vh; } .wall-row { padding: 1.6vh 1.2vw; }
+@media (max-width: 900px) { .wall-today { grid-template-columns: repeat(2, minmax(0, 1fr)); } .wall-today .wt.wide { grid-column: 1 / -1; } }
+body.wall main { max-width: none; padding: 0; }  /* a TV: the whole screen, not a 1240 px column */
+.wall-today .wt b { white-space: nowrap; }
+.wall-today { grid-template-columns: minmax(0, 1.3fr) repeat(6, minmax(0, 1fr)) minmax(0, 2.6fr); }

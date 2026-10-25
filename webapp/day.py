@@ -682,6 +682,37 @@ def now_panel(view: Dict[str, Any], now: int, horizon: int = NOW_HORIZON,
     return {"next": found, "attention": attention}
 
 
+def _wall_hours(minutes: Any) -> str:
+    """Minutes as hours for the floor's screen: 90 is "1.5", 60 is "1", nothing is "0"."""
+    return "%g" % round((minutes or 0) / 60, 1)
+
+
+def wall_extra(view: Dict[str, Any], now: int) -> Dict[str, Any]:
+    """Phase BA (owner, 2026-10-25: "make sure wallboard contains all needed info"): what the floor's screen shows besides the next intervals
+    and the breaks. ``day``: on shift now, out, late or left early, overtime, VTO, called in and the hours short (hours as text);
+    ``changes``: shifts starting or ending in the next hour; ``attention``: what needs attention in the next three hours (as the RTA's Now
+    panel); ``out``: who is out today and why, those off for the whole shift first; ``channels``: each channel's need and people now."""
+    step = view["interval"]
+    first = now - now % step
+    tiles = view.get("tiles") or {}
+    here = [s for lane in view["lanes"] for s in lane["segments"] if s["start"] <= now < s["end"]]
+    present = sum(1 for s in here if s["status"] not in ABSENT)
+    panel = now_panel(view, now) or {"next": [], "attention": []}
+    out = sorted(({"name": lane["name"], "status": s["status"]} for lane in view["lanes"] for s in lane["segments"]
+                  if s["offset"] == 0 and (s["status"] in ABSENT or s["status"] in LATE_EARLY)),
+                 key=lambda o: (o["status"] in LATE_EARLY, o["name"]))
+    channels = []
+    for row in (view.get("channels") or {}).get("rows", []):
+        cell = next((c for c in row["cells"] if c["t"] == first), None) if row.get("letter") else None
+        if cell and (cell.get("need") or cell.get("have")):
+            channels.append({"name": row["name"], "have": cell["have"], "need": cell["need"], "cls": cell["cls"]})
+    return {"day": {"on_shift": f"{present} of {len(here)}", "out": tiles.get("absent", 0), "late_early": tiles.get("late_early", 0),
+                    "overtime": _wall_hours(tiles.get("overtime")), "vto": _wall_hours(tiles.get("vto")), "called_in": _wall_hours(tiles.get("called_in")),
+                    "short": "%g" % round(tiles.get("short_hours", 0) or 0, 1)},
+            "changes": [n for n in panel["next"] if n["what"] in ("Starts", "Ends")], "attention": panel["attention"],
+            "out": out, "channels": channels}
+
+
 def _across_cancel(seg: Dict[str, Any], first: int, second: int) -> bool:
     """Whether a cancelled break sits between breaks ``first`` and ``second`` (plan order) of ``seg``: the long gap
     a cancel leaves is wanted, so the program's maximum gap is not held against it (Phase AD)."""

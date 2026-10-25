@@ -1,6 +1,6 @@
 {# © 2026 Omar Mokhtar. All rights reserved. For the floor's screen: big type, no controls. #}
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="{{ theme or 'dark' }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -20,11 +20,28 @@
     <p class="wall-fig">{{ r.now|num }} <small>on the floor · need {{ r.need }}</small></p>
   </article>{% endfor %}
 </section>
-<section class="wall-lists">
-  <div><h2>On break now</h2>{% if w.on_break %}<ul>{% for b in w.on_break %}<li><b>{{ b.name }}</b> {{ b.kind }} until {{ hm(b.until) }}</li>{% endfor %}</ul>{% else %}<p class="wall-none">Nobody</p>{% endif %}</div>
-  <div><h2>Next 30 minutes</h2>{% if w.soon %}<ul>{% for b in w.soon %}<li><b>{{ hm(b.at) }}</b> {{ b.name }} · {{ b.kind }}</li>{% endfor %}</ul>{% else %}<p class="wall-none">No breaks due</p>{% endif %}</div>
-  <div><h2>Languages now</h2>{% if w.langs %}<ul>{% for l in w.langs %}<li class="{{ l.cls }}"><b>{{ l.name }}</b> {{ l.count }}</li>{% endfor %}</ul>{% else %}<p class="wall-none">No language hours now</p>{% endif %}</div>
+{% set x = w.x %}{% set d = x.day %}{% set tg = w.target %}
+<section class="wall-today" aria-label="The day so far">
+  <p class="wt"><b>{{ d.on_shift }}</b><span>on shift now</span></p>
+  <p class="wt{{ ' warn' if d.out }}"><b>{{ d.out }}</b><span>out today</span></p>
+  <p class="wt{{ ' warn' if d.late_early }}"><b>{{ d.late_early }}</b><span>late or left early</span></p>
+  <p class="wt"><b>{{ d.overtime }} h</b><span>overtime</span></p>
+  <p class="wt"><b>{{ d.vto }} h</b><span>VTO</span></p>
+  <p class="wt"><b>{{ d.called_in }} h</b><span>called in</span></p>
+  <p class="wt{{ ' warn' if d.short != '0' }}"><b>{{ d.short }} h</b><span>short of demand</span></p>
+  {% if tg.intervals %}<p class="wt wide"><b>{{ tg.now }} of {{ tg.intervals }}</b><span>intervals at {{ (100 * tg.target)|round|int }}% or more</span>
+    <span class="wall-strip" role="img" aria-label="{{ tg.now }} of {{ tg.intervals }} intervals at the target">{% for c in tg.cells %}<i class="{{ c.cls }}"></i>{% endfor %}</span></p>{% endif %}
 </section>
+<section class="wall-lists">
+  <div><h2>On break now</h2>{% if w.on_break %}<ul>{% for b in w.on_break[:6] %}<li><b>{{ b.name }}</b> {{ b.kind }} until {{ hm(b.until) }}</li>{% endfor %}</ul>{% if w.on_break|length > 6 %}<p class="wall-more">and {{ w.on_break|length - 6 }} more</p>{% endif %}{% else %}<p class="wall-none">Nobody</p>{% endif %}</div>
+  <div><h2>Next 30 minutes</h2>{% if w.soon %}<ul>{% for b in w.soon[:6] %}<li><b>{{ hm(b.at) }}</b> {{ b.name }} · {{ b.kind }}</li>{% endfor %}</ul>{% if w.soon|length > 6 %}<p class="wall-more">and {{ w.soon|length - 6 }} more</p>{% endif %}{% else %}<p class="wall-none">No breaks due</p>{% endif %}</div>
+  <div><h2>Shifts starting or ending in the next hour</h2>{% if x.changes %}<ul>{% for c in x.changes[:6] %}<li><b>{{ hm(c.t) }}</b> {{ c.name }} · {{ c.what|lower }}</li>{% endfor %}</ul>{% if x.changes|length > 6 %}<p class="wall-more">and {{ x.changes|length - 6 }} more</p>{% endif %}{% else %}<p class="wall-none">None</p>{% endif %}</div>
+  <div><h2>Needs attention in the next three hours</h2>{% if x.attention %}<ul>{% for a in x.attention[:5] %}<li class="{{ 'bad' if a.level == 'gap' else 'warn' }}">{{ a.text }}</li>{% endfor %}</ul>{% if x.attention|length > 5 %}<p class="wall-more">and {{ x.attention|length - 5 }} more</p>{% endif %}{% else %}<p class="wall-none">Nothing</p>{% endif %}</div>
+  <div><h2>Out today</h2>{% if x.out %}<ul>{% for o in x.out[:6] %}<li><b>{{ o.name }}</b> {{ o.status }}</li>{% endfor %}</ul>{% if x.out|length > 6 %}<p class="wall-more">and {{ x.out|length - 6 }} more</p>{% endif %}{% else %}<p class="wall-none">Nobody</p>{% endif %}</div>
+  <div><h2>Languages now</h2>{% if w.langs %}<ul>{% for l in w.langs %}<li class="{{ l.cls }}"><b>{{ l.name }}</b> {{ l.count }}</li>{% endfor %}</ul>{% else %}<p class="wall-none">No language hours now</p>{% endif %}</div>
+  {% if x.channels %}<div><h2>Channels now</h2><ul>{% for c in x.channels %}<li class="{{ c.cls }}"><b>{{ c.name }}</b> {{ c.have|num }} on{% if c.need %} · need {{ c.need|num }}{% endif %}</li>{% endfor %}</ul></div>{% endif %}
+</section>
+<p class="wall-drawn">Drawn {{ drawn }}{% if live %} · refreshes every minute{% endif %}</p>
 {% endif %}
 </main>
 <script src="{{ url_for('static', filename='app.js') }}"></script>

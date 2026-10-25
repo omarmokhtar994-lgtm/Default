@@ -153,6 +153,10 @@ python-performance-optimization.
       beautiful-shadows (layered shadow recipes), workflow-score-to-target (score out of 10 to a target). Not installed:
       the landing-page, WebGL, 3D, game and illustration skills, number-details, container-lines and optimize-web-animations
       (marketing or React/Codex specific). Suggestions only.
+    - 3D (owner, 2026-10-25): css-animation-patterns (oakoss/agent-skills @85e3a39, MIT; CSS transforms, 3D, transitions, scroll-driven and
+      view transitions, performance) is the reference for the site's CSS-only 3D (`webapp/DESIGN.md` v5 budget). threejs (MengTo/Skills
+      @398cd41, MIT) is reference only: the site uses no WebGL or three.js unless the owner decides to add it. img2threejs (owner's account)
+      stays unused for the same reason. Suggestions only.
   - "Web design guidelines" is web-interface-guidelines above.
 - find-skills: discovering more skills (skills.sh search is blocked by the
   network policy here; browse the source repos on GitHub instead).

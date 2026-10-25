@@ -8,3 +8,7 @@ Depth on the dashboards, with the value always on the front face. Sample: `dash3
 | Saved chart (`test_ax_downloads`) | new browser test failed first (mixed colours saved as `color(srgb ...)`), fixed in `app.js` `plain()`; passes with PNG and SVG tests |
 | Pages | Home, Incidents, Shrinkage, Programs in three looks, no sideways scroll |
 | Left flat on purpose | line charts, heat tables, sparklines |
+| Website suite, half 0 | 1033 tests OK (3 skipped) |
+| Website suite, half 1 | 1192 tests OK |
+| Browser suite | 103 tests OK |
+| Release gate | run inside the package build (see the package record) |

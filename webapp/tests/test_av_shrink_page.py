@@ -40,7 +40,8 @@ class TheShrinkagePage(_cb.ThePage):
     def test_the_heat_table_scrolls_inside_its_panel_not_the_page(self):
         # found by the accessibility check: 24 hourly columns made the whole page scroll sideways at 1280 px
         page = self.get("&by=interval&step=60").get_data(as_text=True)
-        self.assertIn('<div class="tscroll"><table class="ins-heat">', page)
+        # re-pinned (Phase BA): the scroll box is now the shared labelled panel-scroll region, same table inside
+        self.assertIn('<div class="tscroll panel-scroll" role="region" tabindex="0" aria-label="Table (scrolls)"><table class="ins-heat">', page)
 
     def test_the_ticks_are_kept_and_changed_by_the_url(self):
         page = self.get("&out=unplanned&inn=breaks").get_data(as_text=True)

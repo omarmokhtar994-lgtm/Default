@@ -1867,7 +1867,9 @@ class TheNewLayout(unittest.TestCase):
     def test_top_bar_has_only_account_things(self):
         top = self.part(self.sara.get("/").get_data(as_text=True), "header", "top")
         self.assertIn("Sara", top)
-        self.assertRegex(top, r"(Light|Dark) look")
+        # re-pinned (Phase BA): the look control is three buttons (Tide, Night watch, Drafting table), not a Light/Dark toggle
+        for look in ("Tide", "Night watch", "Drafting table"):
+            self.assertIn(f">{look}<", top)
         for words in (">Settings<", "Sign out"):
             self.assertIn(words, top)
         for word in ("Programs", "Weeks", "Exports", "Team", "People", "Today"):

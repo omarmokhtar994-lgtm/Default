@@ -2139,10 +2139,13 @@ class ThePhaseXYInTheBrowser(unittest.TestCase):
         """A signed-in page in one look: night, day (the device's) or day picked with the switch on a dark device."""
         page = self.page(width=width, scheme="light" if name == "day" else "dark")
         self.sign_in(page)
-        if name == "picked":
-            with page.expect_navigation():
-                page.locator("[data-theme-toggle]").click()
-            self.assertEqual(page.evaluate("document.documentElement.dataset.theme"), "light")
+        # re-pinned in Phase BA: the look control names the three looks (the old single toggle is gone); "picked" is Tide chosen on a
+        # dark device, "draft" is Drafting table
+        for wanted, value in (("picked", "light"), ("draft", "draft")):
+            if name == wanted:
+                with page.expect_navigation():
+                    page.locator(f'button.look[data-look="{value}"]').click()
+                self.assertEqual(page.evaluate("document.documentElement.dataset.theme"), value)
         return page
 
     def test_rendered_pairs_pass_in_both_looks(self):
@@ -2162,7 +2165,7 @@ class ThePhaseXYInTheBrowser(unittest.TestCase):
             (f"/week?program={q}&week={s}", ".wk.covered", "fill", 3.0),
             (f"/week?program={q}&week={s}", ".wk.short", "fill", 3.0),
         ]
-        for name in ("night", "day", "picked"):
+        for name in ("night", "day", "picked", "draft"):
             page = self.look(name)
             for url, selector, what, least in checks:
                 page.goto(self.base + url)

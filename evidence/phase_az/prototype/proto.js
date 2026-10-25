@@ -17,8 +17,8 @@
     store("look", look);
   }
   function setView(view) {
-    document.getElementById("view-day").hidden = view !== "day";
-    document.getElementById("view-signin").hidden = view !== "signin";
+    Array.prototype.forEach.call(document.querySelectorAll(".view"), function (v) { v.hidden = v.id !== "view-" + view; });
+    window.scrollTo(0, 0);
     body.setAttribute("data-view", view);
     pressed("data-view-pick", view);
     var s = document.getElementById("signin-main");
@@ -88,6 +88,6 @@
   body.setAttribute("data-look", start); pressed("data-look-pick", start);
   var q = /[?&]look=([abc])/.exec(window.location.search);
   if (q) { body.setAttribute("data-look", q[1]); pressed("data-look-pick", q[1]); }
-  var v = /[?&]view=(day|signin)/.exec(window.location.search);
+  var v = /[?&]view=(day|home|requests|schedules|wallboard|signin)/.exec(window.location.search);
   if (v) { setView(v[1]); }
 }());

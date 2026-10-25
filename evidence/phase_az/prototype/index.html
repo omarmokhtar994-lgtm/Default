@@ -20,6 +20,10 @@
   </div>
   <div class="group" role="group" aria-label="Page">
     <button type="button" data-view-pick="day" aria-pressed="true">Real-time view</button>
+    <button type="button" data-view-pick="home" aria-pressed="false">Home</button>
+    <button type="button" data-view-pick="requests" aria-pressed="false">Requests</button>
+    <button type="button" data-view-pick="schedules" aria-pressed="false">Schedules</button>
+    <button type="button" data-view-pick="wallboard" aria-pressed="false">Wallboard</button>
     <button type="button" data-view-pick="signin" aria-pressed="false">Sign in</button>
   </div>
   <button type="button" class="try" data-try="stale">Someone changes a break</button>
@@ -27,13 +31,7 @@
 
 <div id="view-day" class="view">
   <div class="shell">
-    <header class="top">
-      <a class="brand" href="#main"><img src="static/mark.svg" alt="" width="28" height="20"><span>Team Scheduler</span></a>
-      <nav aria-label="Main">
-        <a href="#main" aria-current="page" class="on">Today</a><a href="#main">This week</a><a href="#main">Requests</a><a href="#main">Insights</a><a href="#main">Setup</a>
-      </nav>
-      <span class="who-chip">Sara</span>
-    </header>
+    <header class="top"><a class="brand" href="#main"><img src="static/mark.svg" alt="" width="28" height="20"><span>Team Scheduler</span></a><nav aria-label="Main"><a href="#main" data-view-pick="day" aria-current="page" class="on">Today</a><a href="#main" data-view-pick="home">Home</a><a href="#main" data-view-pick="requests">Requests</a><a href="#main" data-view-pick="schedules">Schedules</a><a href="#main" data-view-pick="wallboard">Wallboard</a><a href="#main">Insights</a><a href="#main">Setup</a></nav><button type="button" class="ghost cmdk" aria-label="Go to, Control K">Go to <kbd>Ctrl K</kbd></button><span class="who-chip">Sara</span></header>
     <main id="main" tabindex="-1">
       <section class="hero" aria-labelledby="h1">
         <p class="when">Wednesday 14 October, 14:36 Egypt time</p>
@@ -64,6 +62,40 @@
   </div>
 </div>
 
+<div id="view-home" class="view" hidden><div class="shell"><header class="top"><a class="brand" href="#main"><img src="static/mark.svg" alt="" width="28" height="20"><span>Team Scheduler</span></a><nav aria-label="Main"><a href="#main" data-view-pick="day">Today</a><a href="#main" data-view-pick="home" aria-current="page" class="on">Home</a><a href="#main" data-view-pick="requests">Requests</a><a href="#main" data-view-pick="schedules">Schedules</a><a href="#main" data-view-pick="wallboard">Wallboard</a><a href="#main">Insights</a><a href="#main">Setup</a></nav><button type="button" class="ghost cmdk" aria-label="Go to, Control K">Go to <kbd>Ctrl K</kbd></button><span class="who-chip">Sara</span></header><main tabindex="-1">
+<section class="hero"><p class="when">Wednesday 14 October</p><h1>Good afternoon, Sara</h1>
+<p class="lede">SAKS, NMG Tier 2 · next schedule starts Sunday 1 November</p></section>
+<div class="grid3">
+ <article class="card stat"><h2>Right now</h2><p class="big">38 <span>on the floor</span></p><p class="hint">2 short on Phone until 16:00</p><a class="more" href="#main" data-view-pick="day">Open the real-time view</a></article>
+ <article class="card stat"><h2>Waiting for you</h2><p class="big">3 <span>requests</span></p><p class="hint">1 leave, 1 holiday, 1 swap</p><a class="more" href="#main" data-view-pick="requests">Review requests</a></article>
+ <article class="card stat"><h2>Latest schedule</h2><p class="big">100% <span>covered</span></p><p class="hint">0 below the floor, 5 to review</p><a class="more" href="#main" data-view-pick="schedules">Compare schedules</a></article>
+</div>
+<section class="card"><div class="card-head"><h2>Coverage this week</h2><p class="hint">Only gaps and shortfalls are coloured; calm hours stay quiet</p></div><div class="mini"><i class="h-c"></i><i class="h-c"></i><i class="h-c"></i><i class="h-c"></i><i class="h-s"></i><i class="h-c"></i><i class="h-c"></i><i class="h-g"></i><i class="h-s"></i><i class="h-c"></i><i class="h-c"></i><i class="h-c"></i><i class="h-o"></i><i class="h-c"></i><i class="h-c"></i><i class="h-s"></i><i class="h-c"></i><i class="h-c"></i><i class="h-c"></i><i class="h-c"></i><i class="h-c"></i><i class="h-c"></i><i class="h-c"></i><i class="h-o"></i></div></section>
+<section class="card"><div class="card-head"><h2>Runs</h2><button type="button">New schedule</button></div><ul class="runs"><li class="run"><div><b>week_next.xlsx</b><small>Sun 25 Oct, 03:29 · Approved</small></div><span class="bar5" aria-hidden="true"><i></i><i></i><i></i><i></i><i class="go"></i></span><b class="pct">100%</b></li><li class="run"><div><b>week_last.xlsx</b><small>Sun 25 Oct, 03:29 · Approved</small></div><span class="bar5" aria-hidden="true"><i></i><i></i><i></i><i></i><i class="go"></i></span><b class="pct">100%</b></li><li class="run"><div><b>week_v2.xlsx</b><span class=chip>Not in use</span><small>Sun 25 Oct, 03:29 · Approved</small></div><span class="bar5" aria-hidden="true"><i></i><i></i><i></i><i></i><i class="go"></i></span><b class="pct">100%</b></li><li class="run"><div><b>week.xlsx</b><span class=chip>In use</span><small>Sun 25 Oct, 03:29 · Approved</small></div><span class="bar5" aria-hidden="true"><i></i><i></i><i></i><i></i><i class="go"></i></span><b class="pct">100%</b></li></ul><p class="hint">Results are kept for 30 days, then their files are deleted. Times are Egypt time.</p></section>
+</main></div></div><div id="view-requests" class="view" hidden><div class="shell"><header class="top"><a class="brand" href="#main"><img src="static/mark.svg" alt="" width="28" height="20"><span>Team Scheduler</span></a><nav aria-label="Main"><a href="#main" data-view-pick="day">Today</a><a href="#main" data-view-pick="home">Home</a><a href="#main" data-view-pick="requests" aria-current="page" class="on">Requests</a><a href="#main" data-view-pick="schedules">Schedules</a><a href="#main" data-view-pick="wallboard">Wallboard</a><a href="#main">Insights</a><a href="#main">Setup</a></nav><button type="button" class="ghost cmdk" aria-label="Go to, Control K">Go to <kbd>Ctrl K</kbd></button><span class="who-chip">Sara</span></header><main tabindex="-1">
+<section class="hero"><h1>Leave and swaps</h1><p class="lede">SAKS, NMG Tier 2. A team manager approves first, then the RTA; the RTA’s approval changes the schedule in use.</p>
+<nav class="tabs" aria-label="Requests"><a href="#main" class="on" aria-current="page">Waiting <span class="count">3</span></a><a href="#main">Decided</a><a href="#main">Break changes</a><a href="#main">Coaching</a></nav></section>
+<section class="card"><div class="card-head"><h2>Leave</h2><p class="hint">Each card shows what the day looks like if you approve</p></div><ul class="reqs"><li class="req"><div class="req-main"><div class="req-top"><b>Associate 03</b><span class="chip warn">Waiting for a team manager</span></div>
+<p class="req-what"><strong>Planned leave</strong>, Mon 26 Oct to Tue 27 Oct</p><p class="quote">“Family visit”</p><p class="impact"><i class="pip"></i>Short by 0.8 from 12:00 to 14:00 and 0.5 from 15:00 to 16:00</p></div>
+<div class="req-act"><label>Reason, if you decline<input type="text" placeholder="Optional"></label><span class="btns"><button type="button" class="ghost">Decline</button><button type="button">Approve</button></span></div></li><li class="req"><div class="req-main"><div class="req-top"><b>Associate 04</b><span class="chip warn">Approved by Team Manager, waiting for the RTA</span></div>
+<p class="req-what"><strong>Public holiday</strong>, Mon 26 Oct</p><p class="impact"><i class="pip"></i>Short by 0.2 from 21:00 to 22:00</p></div>
+<div class="req-act"><label>Reason, if you decline<input type="text" placeholder="Optional"></label><span class="btns"><button type="button" class="ghost">Decline</button><button type="button">Approve</button></span></div></li></ul></section>
+<section class="card"><div class="card-head"><h2>Swaps</h2></div><p class="empty">No swap is waiting. Offers from associates show here.</p></section>
+</main></div></div><div id="view-schedules" class="view" hidden><div class="shell"><header class="top"><a class="brand" href="#main"><img src="static/mark.svg" alt="" width="28" height="20"><span>Team Scheduler</span></a><nav aria-label="Main"><a href="#main" data-view-pick="day">Today</a><a href="#main" data-view-pick="home">Home</a><a href="#main" data-view-pick="requests">Requests</a><a href="#main" data-view-pick="schedules" aria-current="page" class="on">Schedules</a><a href="#main" data-view-pick="wallboard">Wallboard</a><a href="#main">Insights</a><a href="#main">Setup</a></nav><button type="button" class="ghost cmdk" aria-label="Go to, Control K">Go to <kbd>Ctrl K</kbd></button><span class="who-chip">Sara</span></header><main tabindex="-1">
+<section class="hero"><h1>Schedules</h1><p class="lede">SAKS, NMG Tier 2. Pick a week to see every schedule for it, side by side.</p>
+<nav class="tabs weekpick" aria-label="Weeks"><a href="#main">Week of 18 Oct <small>1 schedule</small></a><a href="#main" class="on" aria-current="page">Week of 25 Oct <small>2 schedules, this week</small></a><a href="#main">Week of 1 Nov <small>1 schedule</small></a></nav></section>
+<section class="card"><div class="card-head"><h2>Week of 25 Oct</h2><label class="inline">Times in<select><option>Cairo (Egypt)</option><option>UTC</option></select></label></div>
+<div class="compare"><div class="col head"></div>
+<div class="col"><h3>week.xlsx</h3><p class="hint">Breaks planned automatically (version 2)</p><span class="chip on">In use</span></div>
+<div class="col"><h3>week_v2.xlsx</h3><p class="hint">Ready schedule, uploaded</p><span class="chip">Not in use</span></div>
+<div class="row-l">Hours at 100%</div><div>168 of 168</div><div>168 of 168 <small>before breaks</small></div>
+<div class="row-l">Overtime needed</div><div>0 h</div><div>0 h</div>
+<div class="row-l">Extra hours available</div><div>253 h</div><div>433 h <small>before breaks</small></div>
+<div class="row-l">Breaks planned</div><div>Yes</div><div>Not yet</div>
+<div class="row-l"></div><div class="btns"><button type="button" class="ghost">Open</button><button type="button" class="ghost">Week view</button></div><div class="btns"><button type="button" class="ghost">Open</button><button type="button">Set in use</button><button type="button" class="ghost danger">Delete…</button></div></div>
+<p class="hint">Figures are compared only when every schedule has its breaks planned: a schedule without breaks always looks better than it will be.</p></section>
+</main></div></div><div id="view-wallboard" class="view wall" hidden><div class="shell wide"><header class="wtop"><a href="#main" data-view-pick="day">Back to the RTA</a><h1>SAKS, NMG Tier 2</h1><p class="clock"><span>Sun 25 Oct</span> 06:31</p></header>
+<main tabindex="-1"><div class="wtiles"><article class="wtile now"><p>Now <span>06:00 to 07:00</span></p><p class="wbig">+1:45</p><span class="chip ok">Good buffer</span><p class="hint">6.8 on the floor, need 5</p></article><article class="wtile"><p>&nbsp; <span>07:00 to 08:00</span></p><p class="wbig">+1:15</p><span class="chip ok">Covered</span><p class="hint">6.2 on the floor, need 5</p></article><article class="wtile"><p>&nbsp; <span>08:00 to 09:00</span></p><p class="wbig">+2:15</p><span class="chip ok">Good buffer</span><p class="hint">7.2 on the floor, need 5</p></article><article class="wtile"><p>&nbsp; <span>09:00 to 10:00</span></p><p class="wbig">+2:30</p><span class="chip ok">Good buffer</span><p class="hint">8.5 on the floor, need 6</p></article></div><div class="grid3"><section class="card"><h2>On break now</h2><p>Associate 34 · Break 1 until 06:45</p></section><section class="card"><h2>Next 30 minutes</h2><p>07:00 Associate 22 · Break 2</p><p>07:00 Associate 39 · Break 1</p></section><section class="card"><h2>Languages now</h2><p>English 6</p></section></div></main></div></div>
 <div id="view-signin" class="view" hidden>
   <main class="signin" id="signin-main">
     <div class="signin-card">

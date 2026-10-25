@@ -38,6 +38,76 @@ def asks():
     return "".join(out)
 
 
+NAV = [("day", "Today"), ("home", "Home"), ("requests", "Requests"), ("schedules", "Schedules"), ("wallboard", "Wallboard")]
+
+
+def top(active):
+    links = "".join(f'<a href="#main" data-view-pick="{k}"{" aria-current=\"page\" class=\"on\"" if k == active else ""}>{t}</a>' for k, t in NAV)
+    return (f'<header class="top"><a class="brand" href="#main"><img src="static/mark.svg" alt="" width="28" height="20"><span>Team Scheduler</span></a>'
+            f'<nav aria-label="Main">{links}<a href="#main">Insights</a><a href="#main">Setup</a></nav>'
+            f'<button type="button" class="ghost cmdk" aria-label="Go to, Control K">Go to <kbd>Ctrl K</kbd></button><span class="who-chip">Sara</span></header>')
+
+
+def view_home():
+    mini = "".join(f'<i class="h-{c}"></i>' for c in "ccccsccgscccoccsccccccco")
+    runs = [("week_next.xlsx", "Sun 25 Oct, 03:29", "Approved", "100%", ""), ("week_last.xlsx", "Sun 25 Oct, 03:29", "Approved", "100%", ""),
+            ("week_v2.xlsx", "Sun 25 Oct, 03:29", "Approved", "100%", "Not in use"), ("week.xlsx", "Sun 25 Oct, 03:29", "Approved", "100%", "In use")]
+    rows = "".join(f'<li class="run"><div><b>{n}</b>{f"<span class=chip>{t}</span>" if t else ""}<small>{d} · {st}</small></div>'
+                   f'<span class="bar5" aria-hidden="true"><i></i><i></i><i></i><i></i><i class="go"></i></span><b class="pct">{p}</b></li>'
+                   for n, d, st, p, t in runs)
+    return f'''<div id="view-home" class="view" hidden><div class="shell">{top("home")}<main tabindex="-1">
+<section class="hero"><p class="when">Wednesday 14 October</p><h1>Good afternoon, Sara</h1>
+<p class="lede">SAKS, NMG Tier 2 · next schedule starts Sunday 1 November</p></section>
+<div class="grid3">
+ <article class="card stat"><h2>Right now</h2><p class="big">38 <span>on the floor</span></p><p class="hint">2 short on Phone until 16:00</p><a class="more" href="#main" data-view-pick="day">Open the real-time view</a></article>
+ <article class="card stat"><h2>Waiting for you</h2><p class="big">3 <span>requests</span></p><p class="hint">1 leave, 1 holiday, 1 swap</p><a class="more" href="#main" data-view-pick="requests">Review requests</a></article>
+ <article class="card stat"><h2>Latest schedule</h2><p class="big">100% <span>covered</span></p><p class="hint">0 below the floor, 5 to review</p><a class="more" href="#main" data-view-pick="schedules">Compare schedules</a></article>
+</div>
+<section class="card"><div class="card-head"><h2>Coverage this week</h2><p class="hint">Only gaps and shortfalls are coloured; calm hours stay quiet</p></div><div class="mini">{mini}</div></section>
+<section class="card"><div class="card-head"><h2>Runs</h2><button type="button">New schedule</button></div><ul class="runs">{rows}</ul><p class="hint">Results are kept for 30 days, then their files are deleted. Times are Egypt time.</p></section>
+</main></div></div>'''
+
+
+def view_requests():
+    items = [("Associate 03", "Planned leave", "Mon 26 Oct to Tue 27 Oct", "Waiting for a team manager", "Short by 0.8 from 12:00 to 14:00 and 0.5 from 15:00 to 16:00", "“Family visit”"),
+             ("Associate 04", "Public holiday", "Mon 26 Oct", "Approved by Team Manager, waiting for the RTA", "Short by 0.2 from 21:00 to 22:00", "")]
+    cards = "".join(f'''<li class="req"><div class="req-main"><div class="req-top"><b>{w}</b><span class="chip warn">{st}</span></div>
+<p class="req-what"><strong>{k}</strong>, {d}</p>{f'<p class="quote">{q}</p>' if q else ''}<p class="impact"><i class="pip"></i>{im}</p></div>
+<div class="req-act"><label>Reason, if you decline<input type="text" placeholder="Optional"></label><span class="btns"><button type="button" class="ghost">Decline</button><button type="button">Approve</button></span></div></li>'''
+                    for w, k, d, st, im, q in items)
+    return f'''<div id="view-requests" class="view" hidden><div class="shell">{top("requests")}<main tabindex="-1">
+<section class="hero"><h1>Leave and swaps</h1><p class="lede">SAKS, NMG Tier 2. A team manager approves first, then the RTA; the RTA’s approval changes the schedule in use.</p>
+<nav class="tabs" aria-label="Requests"><a href="#main" class="on" aria-current="page">Waiting <span class="count">3</span></a><a href="#main">Decided</a><a href="#main">Break changes</a><a href="#main">Coaching</a></nav></section>
+<section class="card"><div class="card-head"><h2>Leave</h2><p class="hint">Each card shows what the day looks like if you approve</p></div><ul class="reqs">{cards}</ul></section>
+<section class="card"><div class="card-head"><h2>Swaps</h2></div><p class="empty">No swap is waiting. Offers from associates show here.</p></section>
+</main></div></div>'''
+
+
+def view_schedules():
+    return f'''<div id="view-schedules" class="view" hidden><div class="shell">{top("schedules")}<main tabindex="-1">
+<section class="hero"><h1>Schedules</h1><p class="lede">SAKS, NMG Tier 2. Pick a week to see every schedule for it, side by side.</p>
+<nav class="tabs weekpick" aria-label="Weeks"><a href="#main">Week of 18 Oct <small>1 schedule</small></a><a href="#main" class="on" aria-current="page">Week of 25 Oct <small>2 schedules, this week</small></a><a href="#main">Week of 1 Nov <small>1 schedule</small></a></nav></section>
+<section class="card"><div class="card-head"><h2>Week of 25 Oct</h2><label class="inline">Times in<select><option>Cairo (Egypt)</option><option>UTC</option></select></label></div>
+<div class="compare"><div class="col head"></div>
+<div class="col"><h3>week.xlsx</h3><p class="hint">Breaks planned automatically (version 2)</p><span class="chip on">In use</span></div>
+<div class="col"><h3>week_v2.xlsx</h3><p class="hint">Ready schedule, uploaded</p><span class="chip">Not in use</span></div>
+<div class="row-l">Hours at 100%</div><div>168 of 168</div><div>168 of 168 <small>before breaks</small></div>
+<div class="row-l">Overtime needed</div><div>0 h</div><div>0 h</div>
+<div class="row-l">Extra hours available</div><div>253 h</div><div>433 h <small>before breaks</small></div>
+<div class="row-l">Breaks planned</div><div>Yes</div><div>Not yet</div>
+<div class="row-l"></div><div class="btns"><button type="button" class="ghost">Open</button><button type="button" class="ghost">Week view</button></div><div class="btns"><button type="button" class="ghost">Open</button><button type="button">Set in use</button><button type="button" class="ghost danger">Delete…</button></div></div>
+<p class="hint">Figures are compared only when every schedule has its breaks planned: a schedule without breaks always looks better than it will be.</p></section>
+</main></div></div>'''
+
+
+def view_wallboard():
+    tiles = [("Now", "06:00 to 07:00", "+1:45", "Good buffer", "6.8 on the floor, need 5"), ("", "07:00 to 08:00", "+1:15", "Covered", "6.2 on the floor, need 5"),
+             ("", "08:00 to 09:00", "+2:15", "Good buffer", "7.2 on the floor, need 5"), ("", "09:00 to 10:00", "+2:30", "Good buffer", "8.5 on the floor, need 6")]
+    t = "".join(f'<article class="wtile{" now" if a else ""}"><p>{a or "&nbsp;"} <span>{b}</span></p><p class="wbig">{c}</p><span class="chip ok">{d}</span><p class="hint">{e}</p></article>' for a, b, c, d, e in tiles)
+    return f'''<div id="view-wallboard" class="view wall" hidden><div class="shell wide"><header class="wtop"><a href="#main" data-view-pick="day">Back to the RTA</a><h1>SAKS, NMG Tier 2</h1><p class="clock"><span>Sun 25 Oct</span> 06:31</p></header>
+<main tabindex="-1"><div class="wtiles">{t}</div><div class="grid3"><section class="card"><h2>On break now</h2><p>Associate 34 · Break 1 until 06:45</p></section><section class="card"><h2>Next 30 minutes</h2><p>07:00 Associate 22 · Break 2</p><p>07:00 Associate 39 · Break 1</p></section><section class="card"><h2>Languages now</h2><p>English 6</p></section></div></main></div></div>'''
+
+
 def page():
     hours = "".join(f"<span>{h:02d}</span>" for h in HOURS)
     lanes = "".join(lane(*r) for r in ROWS)
@@ -65,6 +135,10 @@ def page():
   </div>
   <div class="group" role="group" aria-label="Page">
     <button type="button" data-view-pick="day" aria-pressed="true">Real-time view</button>
+    <button type="button" data-view-pick="home" aria-pressed="false">Home</button>
+    <button type="button" data-view-pick="requests" aria-pressed="false">Requests</button>
+    <button type="button" data-view-pick="schedules" aria-pressed="false">Schedules</button>
+    <button type="button" data-view-pick="wallboard" aria-pressed="false">Wallboard</button>
     <button type="button" data-view-pick="signin" aria-pressed="false">Sign in</button>
   </div>
   <button type="button" class="try" data-try="stale">Someone changes a break</button>
@@ -72,13 +146,7 @@ def page():
 
 <div id="view-day" class="view">
   <div class="shell">
-    <header class="top">
-      <a class="brand" href="#main"><img src="static/mark.svg" alt="" width="28" height="20"><span>Team Scheduler</span></a>
-      <nav aria-label="Main">
-        <a href="#main" aria-current="page" class="on">Today</a><a href="#main">This week</a><a href="#main">Requests</a><a href="#main">Insights</a><a href="#main">Setup</a>
-      </nav>
-      <span class="who-chip">Sara</span>
-    </header>
+    {top("day")}
     <main id="main" tabindex="-1">
       <section class="hero" aria-labelledby="h1">
         <p class="when">Wednesday 14 October, 14:36 Egypt time</p>
@@ -109,6 +177,7 @@ def page():
   </div>
 </div>
 
+{view_home()}{view_requests()}{view_schedules()}{view_wallboard()}
 <div id="view-signin" class="view" hidden>
   <main class="signin" id="signin-main">
     <div class="signin-card">
@@ -331,6 +400,35 @@ input[aria-invalid="true"] { border-color: var(--gap); box-shadow: 0 0 0 1px var
   .float-note .x { display: none; }
 }
 
+
+/* ===== round 3b: more pages ===== */
+.cmdk { padding: .35rem .7rem; font-weight: 600; } .cmdk kbd { font: 600 .72rem var(--font-head); margin-left: .4rem; padding: .05rem .35rem; border-radius: 5px; border: 1px solid var(--edge-strong); color: var(--text-dim); }
+.top nav { flex: 1; } .lede { color: var(--text-dim); margin: .2rem 0 0; max-width: 62ch; }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4); margin-top: var(--space-4); } .grid3 .card { margin-top: 0; }
+.stat .big { margin: .2rem 0 .1rem; font: 800 2.4rem/1 var(--font-head); } .stat .big span { font: 500 1rem var(--font-body); color: var(--text-dim); }
+.more { display: inline-block; margin-top: var(--space-2); font-weight: 600; text-underline-offset: .2em; }
+.mini { display: grid; grid-template-columns: repeat(24, 1fr); gap: 3px; } .mini i { height: 1.6rem; border-radius: 4px; }
+.mini .h-c { background: var(--rule); } .mini .h-s { background: var(--short); } .mini .h-g { background: var(--gap); } .mini .h-o { background: color-mix(in srgb, var(--over) 38%, transparent); }
+.runs { list-style: none; margin: 0; padding: 0; } .run { display: grid; grid-template-columns: 1fr 9rem 4.5rem; gap: var(--space-4); align-items: center; padding: var(--space-3) 0; border-top: 1px solid var(--rule); }
+.run small { display: block; color: var(--text-dim); } .pct { text-align: right; font-family: var(--font-head); }
+.bar5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; } .bar5 i { height: .4rem; border-radius: 3px; background: var(--edge-strong); opacity: .5; } .bar5 i.go { background: var(--covered); opacity: 1; }
+.chip { display: inline-block; margin-left: .5rem; padding: .1rem .55rem; border-radius: 999px; background: var(--chip); border: 1px solid var(--rule); font: 600 .78rem var(--font-body); color: var(--text-dim); }
+.chip.on { background: var(--action); color: var(--on-action); border-color: transparent; } .chip.warn { background: var(--warn-bg); color: var(--warn-text); border-color: transparent; } .chip.ok { margin: 0; background: color-mix(in srgb, var(--covered) 18%, transparent); color: var(--covered); border-color: transparent; }
+.count { display: inline-block; min-width: 1.35rem; padding: 0 .35rem; margin-left: .3rem; border-radius: 999px; background: var(--short); color: #2A1A00; font: 800 .75rem/1.35rem var(--font-head); text-align: center; }
+.reqs { list-style: none; margin: 0; padding: 0; } .req { display: grid; grid-template-columns: 1fr 17rem; gap: var(--space-5); padding: var(--space-4) 0; border-top: 1px solid var(--rule); } .req:first-child { border-top: 0; }
+.req-top { display: flex; gap: var(--space-3); align-items: center; } .req-top .chip { margin: 0; } .req-what { margin: .3rem 0; } .quote { margin: 0 0 .3rem; color: var(--text-dim); }
+.impact { margin: .3rem 0 0; padding: .45rem .7rem; border-radius: 10px; background: var(--warn-bg); color: var(--warn-text); font-weight: 600; } .pip { display: inline-block; width: .55rem; height: .55rem; border-radius: 50%; background: currentColor; margin-right: .5rem; }
+.req-act label { font-size: .9rem; margin-bottom: .6rem; } .req-act .btns { justify-content: flex-end; width: 100%; display: flex; }
+.weekpick a { padding: .6rem .9rem; margin: 0 0 -1px; } .weekpick small { display: block; font-weight: 400; color: var(--text-dim); }
+.inline { display: inline-flex; gap: .5rem; align-items: center; margin: 0; } .inline select { padding: .4rem .6rem; border-radius: 8px; border: 1px solid var(--edge-strong); background: var(--field); color: var(--text); font: inherit; }
+.compare { display: grid; grid-template-columns: 11rem 1fr 1fr; } .compare > * { padding: .7rem .8rem; border-top: 1px solid var(--rule); } .compare .head, .compare .col { border-top: 0; }
+.compare h3 { margin: 0; font: 700 1.1rem var(--font-head); } .compare .col .chip { margin: .4rem 0 0; } .compare small { color: var(--text-dim); } .row-l { color: var(--text-dim); font-weight: 600; }
+.compare .col:nth-child(2) { background: var(--changed); border-radius: 10px 10px 0 0; } button.danger { color: var(--gap); border-color: var(--gap); }
+.wall .shell.wide { max-width: 90rem; } .wtop { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 1.5rem 0; } .wtop h1 { margin: 0; font: 800 2.4rem var(--font-head); } .clock { text-align: right; margin: 0; font: 800 2.6rem var(--font-head); } .clock span { font: 500 1.2rem var(--font-body); color: var(--text-dim); }
+.wtiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-4); } .wtile { padding: 1.2rem; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--edge); box-shadow: var(--lift); border-top: 6px solid var(--covered); } .wtile p { margin: 0; color: var(--text-dim); } .wtile.now p:first-child { color: var(--text); font-weight: 700; } .wbig { font: 800 3.6rem/1.1 var(--font-head); color: var(--covered) !important; margin: .3rem 0 !important; }
+@media (max-width: 52rem) { .grid3, .wtiles { grid-template-columns: 1fr 1fr; } .req { grid-template-columns: 1fr; } .compare { grid-template-columns: 7rem 1fr 1fr; } }
+@media (max-width: 40rem) { .grid3, .wtiles { grid-template-columns: 1fr; } .run { grid-template-columns: 1fr 4rem; } .bar5 { display: none; } .wtop { grid-template-columns: 1fr; gap: .5rem; } .clock { text-align: left; } .cmdk { display: none; } }
+
 /* ===== reduced motion: keep what explains a change, drop the movement ===== */
 @media (prefers-reduced-motion: reduce) {
   .float-note, .float-note.on { transform: none; transition: opacity .12s linear, visibility 0s; }
@@ -363,8 +461,8 @@ JS = '''// © 2026 Omar Mokhtar. All rights reserved.
     store("look", look);
   }
   function setView(view) {
-    document.getElementById("view-day").hidden = view !== "day";
-    document.getElementById("view-signin").hidden = view !== "signin";
+    Array.prototype.forEach.call(document.querySelectorAll(".view"), function (v) { v.hidden = v.id !== "view-" + view; });
+    window.scrollTo(0, 0);
     body.setAttribute("data-view", view);
     pressed("data-view-pick", view);
     var s = document.getElementById("signin-main");
@@ -434,7 +532,7 @@ JS = '''// © 2026 Omar Mokhtar. All rights reserved.
   body.setAttribute("data-look", start); pressed("data-look-pick", start);
   var q = /[?&]look=([abc])/.exec(window.location.search);
   if (q) { body.setAttribute("data-look", q[1]); pressed("data-look-pick", q[1]); }
-  var v = /[?&]view=(day|signin)/.exec(window.location.search);
+  var v = /[?&]view=(day|home|requests|schedules|wallboard|signin)/.exec(window.location.search);
   if (v) { setView(v[1]); }
 }());
 '''

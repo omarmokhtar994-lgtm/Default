@@ -128,6 +128,12 @@ python-performance-optimization.
     - react-bits (React Bits' own AI index @496968c; MIT + Commons Clause; ideas to port, no React).
     - graphify (safishamsi/graphify @041771b): only on /graphify; code-only by default;
       `graphify-out/` is git-ignored.
+    - Web design, fonts, colours and Canva-style pieces (owner, 2026-10-25), each a suggestion only:
+      canvas-design and theme-factory (anthropics/skills @dbd4588, Apache-2.0; posters and one-page designs;
+      ten colour and font themes), color-expert (meodai @5bf7c77, CC BY 4.0; colour science, OKLCH, APCA),
+      google-fonts (sliday @f86afc0, MIT; font search and pairings offline; its CSS links Google's font
+      CDN, so self-host the files instead), visual-design-foundations (wshobson/agents @0874a27, MIT; tokens).
+      Canva itself needs its own connector (not connected): the skills above make the designs, not edit a Canva account.
   - "Web design guidelines" is web-interface-guidelines above.
 - find-skills: discovering more skills (skills.sh search is blocked by the
   network policy here; browse the source repos on GitHub instead).

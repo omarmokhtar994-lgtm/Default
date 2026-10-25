@@ -66,6 +66,14 @@ def _ignore(_dir: str, names: list[str]) -> set[str]:
             or (name_is_legacy_notebook(n))}
 
 
+PICTURES = (".png", ".jpg", ".jpeg", ".gif", ".webp")
+
+
+def _ignore_evidence(_dir: str, names: list[str]) -> set[str]:
+    """Phase BB: screenshots under evidence/ stay in the repository (they were 147 MB of a 162 MB package); the server needs none of them."""
+    return _ignore(_dir, names) | {n for n in names if n.lower().endswith(PICTURES)}
+
+
 def name_is_legacy_notebook(name: str) -> bool:
     return name.startswith("RC921_") and name.endswith(".ipynb")
 
@@ -97,7 +105,7 @@ def build(output_dir: Path) -> Path:
         src = ROOT / src_rel
         if not src.is_dir():
             raise SystemExit(f"missing required tree: {src_rel}")
-        shutil.copytree(src, staging / dst_rel, ignore=_ignore)
+        shutil.copytree(src, staging / dst_rel, ignore=_ignore_evidence if src_rel == "evidence" else _ignore)
     for src_rel, dst_rel in FILES:
         src = ROOT / src_rel
         if not src.is_file():

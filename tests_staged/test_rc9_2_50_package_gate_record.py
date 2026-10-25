@@ -112,5 +112,34 @@ class TheBuilderShipsTheRecord(unittest.TestCase):
         self.assertFalse((out / f"{mod.NAME}.zip").exists())
 
 
+class ThePackageLeavesOutEvidencePictures(unittest.TestCase):
+    """Phase BB (owner, 2026-10-25: the package had grown to 162 MB, 147 MB of it screenshots): pictures under evidence/ stay in the repository
+    and out of the package; every other file, and pictures the website serves, ship."""
+
+    def test_screenshots_under_evidence_are_left_out_and_nothing_else(self):
+        mod = load()
+        root = tiny_repo()
+        (root / "evidence" / "phase_x" / "screens").mkdir(parents=True)
+        for name in ("evidence/phase_x/screens/a.png", "evidence/phase_x/b.PNG", "evidence/phase_x/c.jpg"):
+            (root / name).write_bytes(b"picture")
+        for name in ("evidence/phase_x/CHECKS.md", "evidence/phase_x/screens/data.json"):
+            (root / name).write_text("kept", encoding="utf-8")
+        (root / "webapp" / "static").mkdir(parents=True, exist_ok=True)
+        (root / "webapp" / "static" / "mark.png").write_bytes(b"served by the site")
+
+        def fake_run(cmd, cwd=None, **kw):
+            return subprocess.CompletedProcess(cmd, 0, stdout=PASS_OUT, stderr="")
+        out = Path(tempfile.mkdtemp())
+        with mock.patch.object(mod.subprocess, "run", fake_run), mock.patch.object(mod, "ROOT", root):
+            zip_path = mod.build(out)
+        with zipfile.ZipFile(zip_path) as zf:
+            names = zf.namelist()
+        prefix = f"{mod.NAME}/"
+        for gone in ("evidence/phase_x/screens/a.png", "evidence/phase_x/b.PNG", "evidence/phase_x/c.jpg"):
+            self.assertNotIn(prefix + gone, names)
+        for kept in ("evidence/phase_x/CHECKS.md", "evidence/phase_x/screens/data.json", "webapp/static/mark.png"):
+            self.assertIn(prefix + kept, names)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -610,9 +610,7 @@ The two data files that hold it are `engine/RELEASE_IDENTITY_RC9_2_2.json` (`eng
 | `engine/production/production_output_polisher.py` | 5 |
 | `engine/regression_assets/regression_lab/verify_phase_a_closure.py` | 1 |
 | `engine/tools/independent_validator.py` | 2 |
-| `packages/colab_2700s_runners/rc921_runner.py` | 2 |
 | `packages/rc9_2_2_production/runners/rc921_runner.py` | 4 |
-| `packages/release_gate_report.py` | 1 |
 | `tools/build_production_package.py` | 3 |
 | `tools/refresh_engine_identity.py` | 4 |
 | `tools/release_gate_report.py` | 1 |

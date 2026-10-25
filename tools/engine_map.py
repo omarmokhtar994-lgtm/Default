@@ -23,7 +23,16 @@ from typing import Dict, List, Set, Tuple
 ROOT = Path(__file__).resolve().parents[1]
 ENGINE = ROOT / "engine" / "_tools" / "l632_universal_scheduler.py"
 OUT = ROOT / "docs" / "ENGINE_MAP.md"
-SCAN = ("engine", "tools", "tests", "tests_staged", "packages", "webapp", "deploy")
+SCAN = ("engine", "tools", "tests", "tests_staged", "webapp", "deploy")
+RUNNERS = "packages/rc9_2_2_production/runners"  # the package ships it as runners/; the map names it the repository way
+
+
+def scan_dirs(root: Path) -> List[Tuple[Path, str]]:
+    """The folders the map reads, as (directory, name shown), the same in the repository and in the shipped package
+    (which holds neither packages/colab_2700s_runners nor packages/release_gate_report.py)."""
+    found = [(root / f, f) for f in SCAN]
+    found.append((root / RUNNERS if (root / RUNNERS).is_dir() else root / "runners", RUNNERS))
+    return found
 SWITCHES = ("FINAL_RECOVERY_ENDGAME_ENABLED", "STAGE1_PROFILE_ROTATION", "BREAK_LOAD_FEEDBACK_ENABLED",
             "DAY_NEIGHBOURHOOD_BREAK_SEARCH_ENABLED", "SHIFT_CONSISTENCY_CLI_OVERRIDE", "SOLVER_DETERMINISTIC_TIME")
 PINS = ("engine_file_sha256", "engine_sha256", "sha256_file(ENGINE)", "verify_engine")
@@ -101,8 +110,8 @@ def build(engine: Path = ENGINE, root: Path = ROOT) -> str:
 
     users: Dict[str, Set[str]] = collections.defaultdict(set)  # engine name -> files outside the engine file
     own = engine.resolve()
-    for folder in SCAN:
-        for path in sorted((root / folder).rglob("*.py")):
+    for base, shown in scan_dirs(root):
+        for path in sorted(base.rglob("*.py")):
             if path.resolve() == own or "__pycache__" in path.parts:
                 continue
             body = path.read_text(encoding="utf-8", errors="ignore")
@@ -114,7 +123,7 @@ def build(engine: Path = ENGINE, root: Path = ROOT) -> str:
             used = {x.strip("() ") for chunk in names for x in re.split(r"[,\s]+", chunk)}
             for alias in aliases:
                 used |= set(re.findall(r"\b" + re.escape(alias) + r"\.(\w+)", body))
-            rel = path.relative_to(root).as_posix()
+            rel = (Path(shown) / path.relative_to(base)).as_posix()
             if rel.startswith(("tests/", "tests_staged/")) or "/tests/" in rel:
                 continue  # tests change often and use the engine freely; the map lists the code that depends on it
             for name in used:
@@ -245,13 +254,12 @@ def build(engine: Path = ENGINE, root: Path = ROOT) -> str:
     add("| File | Lines that name the hash |")
     add("|---|---|")
     rows = collections.Counter()
-    for folder in SCAN + ("",):
-        base = root / folder if folder else root
-        pattern = "*.py" if folder else "*.json"
-        for path in sorted(base.glob("**/" + pattern) if folder else base.glob(pattern)):
+    for base, shown in scan_dirs(root) + [(root, "")]:
+        pattern = "*.py" if shown else "*.json"
+        for path in sorted(base.glob("**/" + pattern) if shown else base.glob(pattern)):
             if "__pycache__" in path.parts or path.name.startswith("test_") or path.name == "engine_map.py":
                 continue
-            rel = path.relative_to(root).as_posix()
+            rel = (Path(shown) / path.relative_to(base)).as_posix()
             if rel.startswith(("webapp/", "evidence/", "dist/", "candidates/", "experiments/", "docs/")):
                 continue
             if rel == "SCENARIOS.json":  # the package's copy of packages/rc9_2_2_production/SCENARIOS.json: the map must read the same there

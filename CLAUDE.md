@@ -144,6 +144,10 @@ python-performance-optimization.
       @2d22863, MIT): when to animate at all, curves and durations, a strict motion review, frame-budget fixes. The taste and
       impeccable skills come from the owner's account; taste is for landing pages (dashboards are out of its scope), impeccable's
       launcher downloads a program, so only its written method is used here.
+    - web-design-engineer (conardli/garden-skills @ce64df6, MIT; owner, 2026-10-25, "Garden skill" and "AI design skill"):
+      Design Read and five dials, Extension / Preserve / Overhaul classification, anti-cliché failure patterns, checkpoints
+      before building. Its React, CDN, Google Fonts and Tweaks parts do not apply (strict CSP, self-hosted fonts); three
+      reference files copied, the rest not installed; a suggestion only.
   - "Web design guidelines" is web-interface-guidelines above.
 - find-skills: discovering more skills (skills.sh search is blocked by the
   network policy here; browse the source repos on GitHub instead).

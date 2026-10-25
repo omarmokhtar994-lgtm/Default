@@ -7,7 +7,7 @@
     {% if can('runs') %}<a class="button primary" href="#newrun">New schedule</a>{% endif %}</div>
   {% if other_programs %}<p class="home-scope"><span>Your other programs:</span>{% for o in other_programs %} <a class="lob" href="{{ url_for('home', program=o.key) }}">{{ o.name }}</a>{% endfor %} <a href="{{ url_for('home', all=1) }}">Show all my programs</a></p>{% endif %}
   <div class="pcards">{% for c in program_cards %}
-    <article class="pcard"><h2>{{ c.name }}</h2>
+    <article class="pcard" data-tilt><h2>{{ c.name }}</h2>
       <p class="lobs">{% for u in c.units %}<a class="lob" href="{{ url_for('overview_page', program=u.key) }}">{{ u.text }}</a>{% endfor %}</p>
       <dl>{% for u in c.units %}<dt>{{ u.text }}</dt><dd>{% if u.latest %}latest schedule starts {{ u.latest|start_day }}{% else %}no schedule yet{% endif %}</dd>{% endfor %}
         <dt>Starts on</dt><dd>{{ c.starts }}</dd></dl>

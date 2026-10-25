@@ -532,6 +532,65 @@ class TheRtaListInTheBrowser(unittest.TestCase):
         page.close()
 
 
+class TheDepthInTheBrowser(unittest.TestCase):
+    """Phase BA (owner, 2026-10-25: "go for what you suggested"): the little 3D moves only where it is meant to, and not for a person who asks for
+    calm."""
+
+    setUpClass = classmethod(TheSchedulesInTheBrowser.setUpClass.__func__)
+    tearDownClass = classmethod(TheSchedulesInTheBrowser.tearDownClass.__func__)
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+
+    def names(self, page):
+        return page.evaluate("[getComputedStyle(document.querySelector('.deck3d')).animationName, getComputedStyle(document.querySelector('.mark3d')).animationName]")
+
+    def test_the_sign_in_stack_and_mark_move_and_stop_for_reduced_motion(self):
+        page = self.page(width=1280, height=900)
+        page.goto(self.base + "/login")
+        self.assertEqual(self.names(page), ["ts-drift", "ts-spin"])
+        calm = self.browser.new_page(viewport={"width": 1280, "height": 900}, reduced_motion="reduce")
+        self.addCleanup(calm.close)
+        calm.goto(self.base + "/login")
+        self.assertEqual(self.names(calm), ["none", "none"])
+        expect(calm.get_by_label("Username")).to_be_visible()  # the form is still there beside the stack
+
+    def test_the_still_class_pauses_the_stack_and_the_mark(self):
+        # the observer and the visibility listener in app.js add "paused" or "still" to the page; the stylesheet then holds both animations
+        page = self.page(width=1280, height=900)
+        page.goto(self.base + "/login")
+        for cls in ("paused", "still"):
+            page.evaluate("(c) => document.documentElement.classList.add(c)", cls)
+            self.assertEqual(page.evaluate("[getComputedStyle(document.querySelector('.deck3d')).animationPlayState, getComputedStyle(document.querySelector('.mark3d')).animationPlayState]"), ["paused", "paused"])
+            page.evaluate("(c) => document.documentElement.classList.remove(c)", cls)
+
+    def test_a_home_card_leans_toward_the_pointer_and_back(self):
+        page = self.page(width=1400, height=900)
+        self.sign_in(page)
+        card = page.locator(".pcard[data-tilt]").first
+        box = card.bounding_box()
+        page.mouse.move(box["x"] + box["width"] * 0.9, box["y"] + box["height"] * 0.2)
+        page.wait_for_timeout(250)
+        self.assertNotEqual(card.evaluate("el => el.style.getPropertyValue('--ry')"), "")
+        page.mouse.move(2, 2)
+        page.wait_for_timeout(250)
+        self.assertEqual(card.evaluate("el => el.style.getPropertyValue('--ry')"), "")
+
+    def test_the_approved_word_turns_over_once(self):
+        page = self.page(width=1280, height=900)
+        self.sign_in(page)
+        page.evaluate("sessionStorage.setItem('ts-flip', 'yes')")  # what the run page leaves when the person watched the run finish
+        page.goto(self.base + f"/runs/{self.run_id}")
+        expect(page.locator(".status-word.flip")).to_have_count(1)
+        page.reload()
+        expect(page.locator(".status-word.flip")).to_have_count(0)  # once, not on every visit
+
+    def test_no_flip_for_a_run_nobody_watched(self):
+        page = self.page(width=1280, height=900)
+        self.sign_in(page)
+        page.goto(self.base + f"/runs/{self.run_id}")
+        expect(page.locator(".status-word.flip")).to_have_count(0)
+
+
 if __name__ == "__main__":
     unittest.main()
 

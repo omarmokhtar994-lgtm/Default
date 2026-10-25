@@ -865,7 +865,10 @@ function homeRefresh(now) {
         live.hidden = true;
         draw(s);
         ago();
-        if (s.final) { window.location.reload(); } else { setTimeout(poll, 3000); }
+        if (s.final) {
+          try { window.sessionStorage.setItem("ts-flip", "yes"); } catch (e) { /* private window: no flip */ }  // the next page turns the word over once
+          window.location.reload();
+        } else { setTimeout(poll, 3000); }
       })
       .catch(function () { live.hidden = false; setTimeout(poll, 8000); });
   }
@@ -1823,4 +1826,47 @@ function liveWatch(box) {
     apply(mode);
     try { window.localStorage.setItem(KEY, mode); } catch (err) { /* private window: the choice lasts for this visit */ }
   });
+})();
+
+
+// A little 3D (Phase BA): the program cards lean toward a mouse pointer; the sign-in stack and mark stop when the tab is hidden or the stack is
+// off screen; a run's word turns over once when the person watched the run finish. Nothing here for a touch screen or reduced motion.
+(function () {
+  "use strict";
+  var root = document.documentElement;
+  var calm = window.matchMedia("(prefers-reduced-motion: reduce)"), fine = window.matchMedia("(hover: hover) and (pointer: fine)");
+  var deck = document.querySelector(".deck3d");
+  if (deck) {
+    document.addEventListener("visibilitychange", function () { root.classList.toggle("paused", document.hidden); });
+    if ("IntersectionObserver" in window) {
+      new IntersectionObserver(function (e) { root.classList.toggle("still", !e[0].isIntersecting); }).observe(deck);
+    }
+    if (fine.matches && !calm.matches) {
+      var queued = false, last = null;  // the stack leans a little toward the pointer: one write per frame
+      document.addEventListener("pointermove", function (e) {
+        last = e;
+        if (queued) { return; }
+        queued = true;
+        window.requestAnimationFrame(function () {
+          queued = false;
+          deck.style.setProperty("--tz", (-32 + (last.clientX / window.innerWidth - .5) * 8).toFixed(1) + "deg");
+          deck.style.setProperty("--tx", (58 - (last.clientY / window.innerHeight - .5) * 6).toFixed(1) + "deg");
+        });
+      }, { passive: true });
+    }
+  }
+  if (fine.matches && !calm.matches) {
+    Array.prototype.forEach.call(document.querySelectorAll("[data-tilt]"), function (t) {
+      t.addEventListener("pointermove", function (e) {
+        var r = t.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;
+        t.style.setProperty("--ry", (x * 5).toFixed(2) + "deg");
+        t.style.setProperty("--rx", (-y * 5).toFixed(2) + "deg");
+      });
+      t.addEventListener("pointerleave", function () { t.style.removeProperty("--rx"); t.style.removeProperty("--ry"); });
+    });
+  }
+  var word = document.querySelector("article.run .status-word[data-status=DONE]");
+  try {
+    if (word && window.sessionStorage.getItem("ts-flip") === "yes") { window.sessionStorage.removeItem("ts-flip"); if (!calm.matches) { word.classList.add("flip"); } }
+  } catch (e) { /* private window: no flip */ }
 })();

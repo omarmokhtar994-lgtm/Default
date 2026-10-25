@@ -31,5 +31,5 @@
       </form>{% else %}<p class="hint">The RTA decides.</p>{% endif %}
     </div>
   </article>
-  {% else %}<p class="empty">No break change or coaching request is waiting.</p>{% endfor %}
+  {% else %}<p class="empty deco">No break change or coaching request is waiting.</p>{% endfor %}
   {% if changes_decided %}<h3>Decided lately</h3><ul class="log">{% for r in changes_decided %}<li>{{ r.names_list|join(', ') }}: {{ r.what }}, {{ r.on.strftime('%a %d %b') }}: {{ r.status_words }}{% if r.decision %}. “{{ r.decision }}”{% endif %}{% if r.outcome %}. {{ r.outcome }}{% endif %}</li>{% endfor %}</ul>{% endif %}

@@ -30,7 +30,7 @@
       </form>{% else %}<p class="hint">{{ r.waiting_on ~ '.' if r.step == 'tm' else 'Another staff member gives the RTA approval.' }}</p>{% endif %}
     </div>
   </article>
-  {% else %}<p class="empty">Nothing is waiting. Requests appear here when associates send them from My week.</p>{% endfor %}
+  {% else %}<p class="empty deco">Nothing is waiting. Requests appear here when associates send them from My week.</p>{% endfor %}
 </section>
 <section class="panel req-list" aria-labelledby="swap-h">
   <h2 id="swap-h">Swaps</h2>
@@ -48,7 +48,7 @@
       <p class="hint">Approving swaps the two shifts in the schedule in use, with their breaks and channels, after checking the rules again.</p>
     {% else %}<p class="hint">{{ w.waiting_on }}.</p>{% endif %}</div>
   </article>
-  {% else %}<p class="empty">No swaps waiting. Associates offer them from My week, to colleagues on another shift; a swap that breaks a rule carries its warning.</p>{% endfor %}
+  {% else %}<p class="empty deco">No swaps waiting. Associates offer them from My week, to colleagues on another shift; a swap that breaks a rule carries its warning.</p>{% endfor %}
 </section>
 {% if decided[0] or swaps_decided[0] %}<section class="panel" aria-labelledby="done-h">
   <h2 id="done-h">Decided</h2>

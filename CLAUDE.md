@@ -148,6 +148,11 @@ python-performance-optimization.
       Design Read and five dials, Extension / Preserve / Overhaul classification, anti-cliché failure patterns, checkpoints
       before building. Its React, CDN, Google Fonts and Tweaks parts do not apply (strict CSP, self-hosted fonts); three
       reference files copied, the rest not installed; a suggestion only.
+    - MengTo/Skills @398cd41 (MIT, Meng To; owner, 2026-10-25), five of its 176 skills: blue-cloudy-clean-modern,
+      dark-blue-contrasting-clean and light-mode-paper-technical (style references for looks A, B and C),
+      beautiful-shadows (layered shadow recipes), workflow-score-to-target (score out of 10 to a target). Not installed:
+      the landing-page, WebGL, 3D, game and illustration skills, number-details, container-lines and optimize-web-animations
+      (marketing or React/Codex specific). Suggestions only.
   - "Web design guidelines" is web-interface-guidelines above.
 - find-skills: discovering more skills (skills.sh search is blocked by the
   network policy here; browse the source repos on GitHub instead).

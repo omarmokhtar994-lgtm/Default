@@ -67,7 +67,7 @@ channel colours, routes, form field names, test selectors, CSRF and sign-in beha
 1. *Tables and lists that people read through* (spare hours, people, runs, incidents, exports preview, team, schedule history):
    10 rows per page with Previous, Next, "11 to 20 of 24", a filter chips row (for example by day) and a search box. Prototype: `r4-week-a`, `r4-people-c`.
 2. *Things that must stay together to compare* (the RTA lane list, the heat map, the interval table): a scroll panel with its own
-   height (about 26 rem), a sticky hour scale and header, a name search, a count ("24 people") and "Jump to now". The page itself stays short. Prototype: `r4-day-a`.
+   height (about 26 rem), a sticky hour scale and header, a name search, a count ("24 people") and "Jump to now". The page itself stays short. Prototype: `r4-day-a`. **RTA only (owner, 2026-10-25): the viewer chooses "Scrolling panel" or "Whole list"** with a two-option control above the list; the choice is kept per viewer in the browser (`localStorage`, the page works without it) and defaults to the scrolling panel; the whole list drops the inner scroll and the sticky scale. Prototype: `r5-scroll-b`, `r5-whole-a`.
 3. *Long forms and text* (New run, Notifications, Exports "Include"): collapsed sections ("Advanced options", "What counts") and steps, one open at a time.
 4. *Phone*: the same panels, with the filter row above them; the nav is a one-line strip that scrolls sideways.
 5. Keyboard and screen reader: the scroll panel is focusable with a label ("Who is on what, scrolls"); pagers are real buttons with disabled

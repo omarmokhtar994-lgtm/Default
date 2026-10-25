@@ -250,6 +250,11 @@ body[data-look="c"] .scale.sticky { background: var(--bg); }
   .card-head .btns { flex-wrap: wrap; } .protobar .group { flex-wrap: wrap; } .protobar button { white-space: nowrap; }
 }
 
+
+.seg2 { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; background: var(--chip); border: 1px solid var(--rule); margin-bottom: .45rem; } .seg2 .chipbtn { border: 0; background: transparent; padding: .3rem .8rem; }
+.seg2 .chipbtn[aria-pressed="true"] { background: var(--action); color: var(--on-action); }
+.lanes[data-mode="whole"] { max-height: none; overflow: visible; } .lanes[data-mode="whole"] .scale.sticky { position: static; }
+
 /* ===== reduced motion: keep what explains a change, drop the movement ===== */
 @media (prefers-reduced-motion: reduce) {
   .float-note, .float-note.on { transform: none; transition: opacity .12s linear, visibility 0s; }

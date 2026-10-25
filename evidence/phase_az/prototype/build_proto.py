@@ -205,7 +205,9 @@ def page():
         <div class="card-head"><h2 id="t1">Who is on what</h2>
           <ul class="legend"><li><i class="k-P"></i>Phone</li><li><i class="k-C"></i>Chat</li><li><i class="k-E"></i>Email</li><li><i class="k-B"></i>Break</li><li><i class="k-L"></i>Lunch</li></ul></div>
         <div class="toolrow"><label class="search">Find a person<input type="search" id="lane-find" placeholder="Type a name"></label>
-          <p class="hint" id="lane-count">24 people</p><button type="button" class="ghost" id="jump-now">Jump to now</button></div>
+          <p class="hint" id="lane-count">24 people</p>
+          <div class="seg2" role="group" aria-label="List view"><button type="button" class="chipbtn" data-lane-mode="scroll" aria-pressed="true">Scrolling panel</button><button type="button" class="chipbtn" data-lane-mode="whole" aria-pressed="false">Whole list</button></div>
+          <button type="button" class="ghost" id="jump-now">Jump to now</button></div>
         <div class="lanes scroll" id="lane-scroll" tabindex="0" role="region" aria-label="Who is on what, scrolls"><div class="scale sticky" aria-hidden="true">{hours}</div>{lanes}<span class="now-line" aria-hidden="true"><em>Now 14:36</em></span></div>
       </section>
       <section class="card" aria-labelledby="t2">
@@ -503,6 +505,11 @@ body[data-look="c"] .scale.sticky { background: var(--bg); }
   .card-head .btns { flex-wrap: wrap; } .protobar .group { flex-wrap: wrap; } .protobar button { white-space: nowrap; }
 }
 
+
+.seg2 { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; background: var(--chip); border: 1px solid var(--rule); margin-bottom: .45rem; } .seg2 .chipbtn { border: 0; background: transparent; padding: .3rem .8rem; }
+.seg2 .chipbtn[aria-pressed="true"] { background: var(--action); color: var(--on-action); }
+.lanes[data-mode="whole"] { max-height: none; overflow: visible; } .lanes[data-mode="whole"] .scale.sticky { position: static; }
+
 /* ===== reduced motion: keep what explains a change, drop the movement ===== */
 @media (prefers-reduced-motion: reduce) {
   .float-note, .float-note.on { transform: none; transition: opacity .12s linear, visibility 0s; }
@@ -632,6 +639,18 @@ JS = '''// © 2026 Omar Mokhtar. All rights reserved.
   }
   laneFind.addEventListener("input", laneFilter);
   document.getElementById("jump-now").addEventListener("click", function () { laneBox.scrollTop = 0; laneBox.focus(); });
+
+
+  /* ---- RTA list: the viewer chooses a scrolling panel or the whole list (kept in this browser only) ---- */
+  function laneMode(mode) {
+    laneBox.setAttribute("data-mode", mode);
+    if (mode === "whole") { laneBox.removeAttribute("tabindex"); laneBox.removeAttribute("role"); laneBox.removeAttribute("aria-label"); }
+    else { laneBox.setAttribute("tabindex", "0"); laneBox.setAttribute("role", "region"); laneBox.setAttribute("aria-label", "Who is on what, scrolls"); }
+    Array.prototype.forEach.call(document.querySelectorAll("[data-lane-mode]"), function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-lane-mode") === mode ? "true" : "false"); });
+    store("lanes", mode);
+  }
+  Array.prototype.forEach.call(document.querySelectorAll("[data-lane-mode]"), function (b) { b.addEventListener("click", function () { laneMode(b.getAttribute("data-lane-mode")); }); });
+  laneMode(store("lanes") === "whole" ? "whole" : "scroll");
 
   /* ---- controls ---- */
   Array.prototype.forEach.call(document.querySelectorAll("[data-look-pick]"), function (b) { b.addEventListener("click", function () { setLook(b.getAttribute("data-look-pick")); }); });

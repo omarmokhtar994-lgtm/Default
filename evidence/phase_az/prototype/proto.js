@@ -115,6 +115,18 @@
   laneFind.addEventListener("input", laneFilter);
   document.getElementById("jump-now").addEventListener("click", function () { laneBox.scrollTop = 0; laneBox.focus(); });
 
+
+  /* ---- RTA list: the viewer chooses a scrolling panel or the whole list (kept in this browser only) ---- */
+  function laneMode(mode) {
+    laneBox.setAttribute("data-mode", mode);
+    if (mode === "whole") { laneBox.removeAttribute("tabindex"); laneBox.removeAttribute("role"); laneBox.removeAttribute("aria-label"); }
+    else { laneBox.setAttribute("tabindex", "0"); laneBox.setAttribute("role", "region"); laneBox.setAttribute("aria-label", "Who is on what, scrolls"); }
+    Array.prototype.forEach.call(document.querySelectorAll("[data-lane-mode]"), function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-lane-mode") === mode ? "true" : "false"); });
+    store("lanes", mode);
+  }
+  Array.prototype.forEach.call(document.querySelectorAll("[data-lane-mode]"), function (b) { b.addEventListener("click", function () { laneMode(b.getAttribute("data-lane-mode")); }); });
+  laneMode(store("lanes") === "whole" ? "whole" : "scroll");
+
   /* ---- controls ---- */
   Array.prototype.forEach.call(document.querySelectorAll("[data-look-pick]"), function (b) { b.addEventListener("click", function () { setLook(b.getAttribute("data-look-pick")); }); });
   Array.prototype.forEach.call(document.querySelectorAll("[data-view-pick]"), function (b) { b.addEventListener("click", function () { setView(b.getAttribute("data-view-pick")); }); });

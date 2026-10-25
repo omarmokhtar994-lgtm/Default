@@ -46,6 +46,8 @@ TREES = [
 ]
 FILES = [
     ("run_tests.sh", "run_tests.sh"),
+    # tests_staged/test_rc9_2_58_engine_map.py compares this map with the engine inside the package.
+    ("docs/ENGINE_MAP.md", "docs/ENGINE_MAP.md"),
     ("CODE_AUDIT.md", "CODE_AUDIT.md"),
     ("packages/rc9_2_2_production/README.md", "README.md"),
     ("packages/rc9_2_2_production/PRODUCTION_RUN_GUIDE.md", "PRODUCTION_RUN_GUIDE.md"),
@@ -100,6 +102,7 @@ def build(output_dir: Path) -> Path:
         src = ROOT / src_rel
         if not src.is_file():
             raise SystemExit(f"missing required file: {src_rel}")
+        (staging / dst_rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, staging / dst_rel)
     (staging / "run_tests.sh").chmod(0o755)
 

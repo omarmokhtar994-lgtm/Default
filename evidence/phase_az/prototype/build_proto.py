@@ -38,13 +38,13 @@ def asks():
     return "".join(out)
 
 
-NAV = [("day", "Today"), ("home", "Home"), ("requests", "Requests"), ("schedules", "Schedules"), ("wallboard", "Wallboard")]
+NAV = [("day", "Today"), ("home", "Home"), ("week", "Weeks"), ("requests", "Requests"), ("schedules", "Schedules"), ("wallboard", "Wallboard"), ("people", "People")]
 
 
 def top(active):
     links = "".join(f'<a href="#main" data-view-pick="{k}"{" aria-current=\"page\" class=\"on\"" if k == active else ""}>{t}</a>' for k, t in NAV)
     return (f'<header class="top"><a class="brand" href="#main"><img src="static/mark.svg" alt="" width="28" height="20"><span>Team Scheduler</span></a>'
-            f'<nav aria-label="Main">{links}<a href="#main">Insights</a><a href="#main">Setup</a></nav>'
+            f'<nav aria-label="Main">{links}<a href="#main">Insights</a></nav>'
             f'<button type="button" class="ghost cmdk" aria-label="Go to, Control K">Go to <kbd>Ctrl K</kbd></button><span class="who-chip">Sara</span></header>')
 
 
@@ -108,9 +108,51 @@ def view_wallboard():
 <main tabindex="-1"><div class="wtiles">{t}</div><div class="grid3"><section class="card"><h2>On break now</h2><p>Associate 34 · Break 1 until 06:45</p></section><section class="card"><h2>Next 30 minutes</h2><p>07:00 Associate 22 · Break 2</p><p>07:00 Associate 39 · Break 1</p></section><section class="card"><h2>Languages now</h2><p>English 6</p></section></div></main></div></div>'''
 
 
+def extra_rows():
+    days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    rows = []
+    for d in range(7):
+        for h in range(24):
+            need = 3 + (h * 7 + d * 3) % 9
+            have = need + (h + d) % 4
+            rows.append((days[d], f"{h:02d}:00", need, have, 100 + (have - need) * 100 // need, (have - need)))
+    return rows
+
+
+def view_week():
+    body = "".join(f'<tr class="prow" data-day="{d}"><td>{d}</td><td>{t}</td><td>{n}</td><td>{h}</td><td>{p}%</td><td>{x}</td></tr>' for d, t, n, h, p, x in extra_rows())
+    chips = "".join(f'<button type="button" class="chipbtn{" on" if i == 0 else ""}" data-day-pick="{d}" aria-pressed="{"true" if i == 0 else "false"}">{d}</button>'
+                    for i, d in enumerate(["All days", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]))
+    return f'''<div id="view-week" class="view" hidden><div class="shell">{top("week")}<main tabindex="-1">
+<section class="hero"><p class="when">Week of 25 October</p><h1>This week looks well covered</h1><p class="lede">Every hour reaches the 100% target, and no overtime is needed. A few spare hours are listed below if you need to move people.</p>
+<nav class="tabs" aria-label="Week"><a href="#main" class="on" aria-current="page">Summary</a><a href="#main">Heat map</a><a href="#main">Overtime</a><a href="#main">Extra hours</a></nav></section>
+<div class="grid3"><article class="card stat"><h2>Hours at 100%</h2><p class="big">165 <span>of 165</span></p></article><article class="card stat"><h2>Overtime needed</h2><p class="big">0 <span>hours</span></p></article><article class="card stat"><h2>Spare hours</h2><p class="big">252 <span>hours</span></p></article></div>
+<section class="card" id="extra" data-pager data-size="10"><div class="card-head"><h2>Spare hours, by hour</h2><p class="hint" data-pager-label>1 to 10 of 168</p></div>
+<div class="chips" role="group" aria-label="Day">{chips}</div>
+<div class="tablewrap"><table class="grid"><thead><tr><th>Day</th><th>Hour</th><th>Needed</th><th>On shift</th><th>Covered</th><th>Spare</th></tr></thead><tbody>{body}</tbody></table></div>
+<p class="empty" data-pager-empty hidden>No hours match. Pick another day.</p>
+<div class="pager"><button type="button" class="ghost" data-pager-prev>Previous</button><span class="hint" data-pager-page>Page 1 of 17</span><button type="button" class="ghost" data-pager-next>Next</button></div></section>
+</main></div></div>'''
+
+
+def view_people():
+    roles = ["Associate", "Planner", "Team manager", "Associate", "Associate"]
+    rows = "".join(f'<li class="person prow" data-text="associate {n:02d} {roles[n % 5].lower()}"><div class="avatar" aria-hidden="true">{n:02d}</div><div><b>Associate {n:02d}</b><small>{roles[n % 5]}, SAKS NMG Tier 2</small></div>'
+                   f'<label class="switch"><input type="checkbox" {"checked" if n % 7 else ""}><span>{"On" if n % 7 else "Off"}</span></label><button type="button" class="ghost">Edit</button></li>' for n in range(1, 41))
+    return f'''<div id="view-people" class="view" hidden><div class="shell">{top("people")}<main tabindex="-1">
+<section class="hero"><h1>People</h1><p class="lede">Add people, switch accounts on or off, and change roles. A person switched off cannot sign in; their history stays.</p></section>
+<section class="card" data-pager data-size="8"><div class="card-head"><h2>Everyone</h2><span class="btns"><button type="button" class="ghost">Add from a file</button><button type="button">Add a person</button></span></div>
+<div class="toolrow"><label class="search">Find a person<input type="search" data-pager-search placeholder="Type a name or a role"></label><p class="hint" data-pager-label>1 to 8 of 40</p></div>
+<ul class="people">{rows}</ul>
+<p class="empty" data-pager-empty hidden>Nobody matches that. Check the spelling or clear the search.</p>
+<div class="pager"><button type="button" class="ghost" data-pager-prev>Previous</button><span class="hint" data-pager-page>Page 1 of 5</span><button type="button" class="ghost" data-pager-next>Next</button></div></section>
+</main></div></div>'''
+
+
 def page():
     hours = "".join(f"<span>{h:02d}</span>" for h in HOURS)
-    lanes = "".join(lane(*r) for r in ROWS)
+    many = [(f"Associate {n + 1:02d}", ROWS[n % len(ROWS)][1], ROWS[(n * 5 + 1) % len(ROWS)][2]) for n in range(24)]
+    lanes = "".join(lane(*r) for r in many)
     heat = "".join(f'<button type="button" class="cell h-{c}" aria-label="{h:02d}:00, {WORD[c]}" title="{h:02d}:00, {WORD[c]}"></button>'
                    for h, c in zip(HOURS, COVER))
     return f'''<!doctype html>
@@ -136,9 +178,11 @@ def page():
   <div class="group" role="group" aria-label="Page">
     <button type="button" data-view-pick="day" aria-pressed="true">Real-time view</button>
     <button type="button" data-view-pick="home" aria-pressed="false">Home</button>
+    <button type="button" data-view-pick="week" aria-pressed="false">Weeks</button>
     <button type="button" data-view-pick="requests" aria-pressed="false">Requests</button>
     <button type="button" data-view-pick="schedules" aria-pressed="false">Schedules</button>
     <button type="button" data-view-pick="wallboard" aria-pressed="false">Wallboard</button>
+    <button type="button" data-view-pick="people" aria-pressed="false">People</button>
     <button type="button" data-view-pick="signin" aria-pressed="false">Sign in</button>
   </div>
   <button type="button" class="try" data-try="stale">Someone changes a break</button>
@@ -160,8 +204,9 @@ def page():
       <section class="card timeline" aria-labelledby="t1">
         <div class="card-head"><h2 id="t1">Who is on what</h2>
           <ul class="legend"><li><i class="k-P"></i>Phone</li><li><i class="k-C"></i>Chat</li><li><i class="k-E"></i>Email</li><li><i class="k-B"></i>Break</li><li><i class="k-L"></i>Lunch</li></ul></div>
-        <div class="scale" aria-hidden="true">{hours}</div>
-        <div class="lanes">{lanes}<span class="now-line" aria-hidden="true"><em>Now 14:36</em></span></div>
+        <div class="toolrow"><label class="search">Find a person<input type="search" id="lane-find" placeholder="Type a name"></label>
+          <p class="hint" id="lane-count">24 people</p><button type="button" class="ghost" id="jump-now">Jump to now</button></div>
+        <div class="lanes scroll" id="lane-scroll" tabindex="0" role="region" aria-label="Who is on what, scrolls"><div class="scale sticky" aria-hidden="true">{hours}</div>{lanes}<span class="now-line" aria-hidden="true"><em>Now 14:36</em></span></div>
       </section>
       <section class="card" aria-labelledby="t2">
         <div class="card-head"><h2 id="t2">Coverage by hour</h2><p class="hint">Against the need for the day</p></div>
@@ -171,13 +216,13 @@ def page():
       <section class="card" aria-labelledby="t3">
         <div class="card-head"><h2 id="t3">Waiting for you</h2><p class="hint" id="askcount">3 requests</p></div>
         <ul class="asks" id="asks">{asks()}</ul>
-        <p class="empty" id="empty" hidden>Nothing is waiting. New requests show here.</p>
+        <p class="empty" id="empty" hidden>All caught up. New requests will show up here.</p>
       </section>
     </main>
   </div>
 </div>
 
-{view_home()}{view_requests()}{view_schedules()}{view_wallboard()}
+{view_home()}{view_week()}{view_people()}{view_requests()}{view_schedules()}{view_wallboard()}
 <div id="view-signin" class="view" hidden>
   <main class="signin" id="signin-main">
     <div class="signin-card">
@@ -429,6 +474,35 @@ input[aria-invalid="true"] { border-color: var(--gap); box-shadow: 0 0 0 1px var
 @media (max-width: 52rem) { .grid3, .wtiles { grid-template-columns: 1fr 1fr; } .req { grid-template-columns: 1fr; } .compare { grid-template-columns: 7rem 1fr 1fr; } }
 @media (max-width: 40rem) { .grid3, .wtiles { grid-template-columns: 1fr; } .run { grid-template-columns: 1fr 4rem; } .bar5 { display: none; } .wtop { grid-template-columns: 1fr; gap: .5rem; } .clock { text-align: left; } .cmdk { display: none; } }
 
+
+/* ===== round 4: friendlier, and no very long lists (scroll panels and pages) ===== */
+.scroll { max-height: 26rem; overflow: auto; overscroll-behavior: contain; border-radius: calc(var(--radius) - 4px); scrollbar-width: thin; scrollbar-color: var(--edge-strong) transparent; }
+.scroll.short { max-height: 21rem; } .scroll:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.lanes.scroll { padding-bottom: 2.2rem; position: relative; } .lane[hidden] { display: none !important; }
+.lanes.scroll .now-line { top: 0; bottom: 0; }
+.toolrow { display: flex; align-items: end; gap: var(--space-4); flex-wrap: wrap; margin: 0 0 var(--space-3); } .toolrow .hint { margin: 0 0 .6rem; flex: 1; }
+.search { margin: 0; min-width: 15rem; font-size: .9rem; } .search input { margin-top: .25rem; padding: .5rem .8rem; border-radius: 999px; }
+.chips { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 var(--space-3); } .chipbtn { background: var(--chip); color: var(--text); border: 1px solid var(--rule); padding: .3rem .8rem; border-radius: 999px; font-weight: 600; }
+.chipbtn[aria-pressed="true"] { background: var(--action); color: var(--on-action); border-color: transparent; }
+table.grid { width: 100%; border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums; } .grid th { position: sticky; top: 0; z-index: 1; text-align: left; padding: .55rem .8rem; background: var(--surface); color: var(--text-dim); font-weight: 600; border-bottom: 1px solid var(--edge-strong); }
+body[data-look="c"] .grid th { background: var(--bg); } .grid td { padding: .5rem .8rem; border-bottom: 1px solid var(--rule); }
+.pager { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-3); } .pager button[disabled] { opacity: .4; cursor: default; filter: none; }
+.prow[hidden] { display: none !important; }
+.people { list-style: none; margin: 0; padding: 0; } .person { display: grid; grid-template-columns: 2.6rem 1fr auto auto; gap: var(--space-4); align-items: center; padding: .65rem 0; border-top: 1px solid var(--rule); } .person small { display: block; color: var(--text-dim); }
+.avatar { width: 2.6rem; height: 2.6rem; border-radius: 50%; display: grid; place-items: center; background: var(--chip); border: 1px solid var(--rule); font: 800 .85rem var(--font-head); }
+.switch { margin: 0; display: inline-flex; align-items: center; gap: .5rem; font-weight: 600; } .switch input { width: 2.4rem; height: 1.4rem; margin: 0; accent-color: var(--covered); } 
+body[data-look="a"] { --radius: 20px; } body[data-look="b"] { --radius: 16px; }
+@media (max-width: 40rem) { .person { grid-template-columns: 2.6rem 1fr auto; } .person .ghost { display: none; } .search { min-width: 0; flex: 1; } }
+
+
+.scale.sticky { position: sticky; top: 0; z-index: 3; background: var(--surface); padding-top: .2rem; }
+body[data-look="c"] .scale.sticky { background: var(--bg); }
+.lanes.scroll .now-line { z-index: 2; }
+@media (max-width: 40rem) {
+  .top { gap: .5rem var(--space-3); } .brand { flex: 1; } .top nav { order: 3; flex: 1 1 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: .2rem; } .top nav a { white-space: nowrap; }
+  .card-head .btns { flex-wrap: wrap; } .protobar .group { flex-wrap: wrap; } .protobar button { white-space: nowrap; }
+}
+
 /* ===== reduced motion: keep what explains a change, drop the movement ===== */
 @media (prefers-reduced-motion: reduce) {
   .float-note, .float-note.on { transform: none; transition: opacity .12s linear, visibility 0s; }
@@ -522,6 +596,43 @@ JS = '''// © 2026 Omar Mokhtar. All rights reserved.
   });
   pw.addEventListener("input", function () { if (pw.value) { perr.hidden = true; pw.removeAttribute("aria-invalid"); } });
 
+
+  /* ---- long lists: pages with a filter, and the lane list scrolls inside its own box ---- */
+  Array.prototype.forEach.call(document.querySelectorAll("[data-pager]"), function (box) {
+    var rows = Array.prototype.slice.call(box.querySelectorAll(".prow")), size = parseInt(box.getAttribute("data-size"), 10) || 10, page = 0, day = "", text = "";
+    var label = box.querySelector("[data-pager-label]"), pg = box.querySelector("[data-pager-page]"), prev = box.querySelector("[data-pager-prev]"),
+        next = box.querySelector("[data-pager-next]"), none = box.querySelector("[data-pager-empty]"), wrap = box.querySelector(".scroll");
+    function draw() {
+      var hit = rows.filter(function (r) { return (!day || r.getAttribute("data-day") === day) && (!text || (r.getAttribute("data-text") || r.textContent).toLowerCase().indexOf(text) !== -1); });
+      var pages = Math.max(1, Math.ceil(hit.length / size)); page = Math.min(page, pages - 1);
+      rows.forEach(function (r) { r.hidden = true; });
+      hit.slice(page * size, page * size + size).forEach(function (r) { r.hidden = false; });
+      var from = hit.length ? page * size + 1 : 0, to = Math.min(hit.length, page * size + size);
+      label.textContent = hit.length ? from + " to " + to + " of " + hit.length : "0 results";
+      pg.textContent = "Page " + (page + 1) + " of " + pages; prev.disabled = page === 0; next.disabled = page >= pages - 1; none.hidden = hit.length !== 0;
+      if (wrap) { wrap.scrollTop = 0; }
+    }
+    prev.addEventListener("click", function () { page -= 1; draw(); }); next.addEventListener("click", function () { page += 1; draw(); });
+    Array.prototype.forEach.call(box.querySelectorAll("[data-day-pick]"), function (b) {
+      b.addEventListener("click", function () {
+        day = b.getAttribute("data-day-pick") === "All days" ? "" : b.getAttribute("data-day-pick"); page = 0;
+        Array.prototype.forEach.call(box.querySelectorAll("[data-day-pick]"), function (o) { o.setAttribute("aria-pressed", o === b ? "true" : "false"); });
+        draw();
+      });
+    });
+    var find = box.querySelector("[data-pager-search]");
+    if (find) { find.addEventListener("input", function () { text = find.value.trim().toLowerCase(); page = 0; draw(); }); }
+    draw();
+  });
+  var laneFind = document.getElementById("lane-find"), laneBox = document.getElementById("lane-scroll"), laneCount = document.getElementById("lane-count");
+  function laneFilter() {
+    var t = laneFind.value.trim().toLowerCase(), n = 0;
+    Array.prototype.forEach.call(laneBox.querySelectorAll(".lane"), function (l) { var ok = !t || l.getAttribute("data-who").toLowerCase().indexOf(t) !== -1; l.hidden = !ok; if (ok) { n += 1; } });
+    laneCount.textContent = n === 1 ? "1 person" : n + " people";
+  }
+  laneFind.addEventListener("input", laneFilter);
+  document.getElementById("jump-now").addEventListener("click", function () { laneBox.scrollTop = 0; laneBox.focus(); });
+
   /* ---- controls ---- */
   Array.prototype.forEach.call(document.querySelectorAll("[data-look-pick]"), function (b) { b.addEventListener("click", function () { setLook(b.getAttribute("data-look-pick")); }); });
   Array.prototype.forEach.call(document.querySelectorAll("[data-view-pick]"), function (b) { b.addEventListener("click", function () { setView(b.getAttribute("data-view-pick")); }); });
@@ -532,7 +643,7 @@ JS = '''// © 2026 Omar Mokhtar. All rights reserved.
   body.setAttribute("data-look", start); pressed("data-look-pick", start);
   var q = /[?&]look=([abc])/.exec(window.location.search);
   if (q) { body.setAttribute("data-look", q[1]); pressed("data-look-pick", q[1]); }
-  var v = /[?&]view=(day|home|requests|schedules|wallboard|signin)/.exec(window.location.search);
+  var v = /[?&]view=(day|home|week|people|requests|schedules|wallboard|signin)/.exec(window.location.search);
   if (v) { setView(v[1]); }
 }());
 '''

@@ -78,6 +78,43 @@
   });
   pw.addEventListener("input", function () { if (pw.value) { perr.hidden = true; pw.removeAttribute("aria-invalid"); } });
 
+
+  /* ---- long lists: pages with a filter, and the lane list scrolls inside its own box ---- */
+  Array.prototype.forEach.call(document.querySelectorAll("[data-pager]"), function (box) {
+    var rows = Array.prototype.slice.call(box.querySelectorAll(".prow")), size = parseInt(box.getAttribute("data-size"), 10) || 10, page = 0, day = "", text = "";
+    var label = box.querySelector("[data-pager-label]"), pg = box.querySelector("[data-pager-page]"), prev = box.querySelector("[data-pager-prev]"),
+        next = box.querySelector("[data-pager-next]"), none = box.querySelector("[data-pager-empty]"), wrap = box.querySelector(".scroll");
+    function draw() {
+      var hit = rows.filter(function (r) { return (!day || r.getAttribute("data-day") === day) && (!text || (r.getAttribute("data-text") || r.textContent).toLowerCase().indexOf(text) !== -1); });
+      var pages = Math.max(1, Math.ceil(hit.length / size)); page = Math.min(page, pages - 1);
+      rows.forEach(function (r) { r.hidden = true; });
+      hit.slice(page * size, page * size + size).forEach(function (r) { r.hidden = false; });
+      var from = hit.length ? page * size + 1 : 0, to = Math.min(hit.length, page * size + size);
+      label.textContent = hit.length ? from + " to " + to + " of " + hit.length : "0 results";
+      pg.textContent = "Page " + (page + 1) + " of " + pages; prev.disabled = page === 0; next.disabled = page >= pages - 1; none.hidden = hit.length !== 0;
+      if (wrap) { wrap.scrollTop = 0; }
+    }
+    prev.addEventListener("click", function () { page -= 1; draw(); }); next.addEventListener("click", function () { page += 1; draw(); });
+    Array.prototype.forEach.call(box.querySelectorAll("[data-day-pick]"), function (b) {
+      b.addEventListener("click", function () {
+        day = b.getAttribute("data-day-pick") === "All days" ? "" : b.getAttribute("data-day-pick"); page = 0;
+        Array.prototype.forEach.call(box.querySelectorAll("[data-day-pick]"), function (o) { o.setAttribute("aria-pressed", o === b ? "true" : "false"); });
+        draw();
+      });
+    });
+    var find = box.querySelector("[data-pager-search]");
+    if (find) { find.addEventListener("input", function () { text = find.value.trim().toLowerCase(); page = 0; draw(); }); }
+    draw();
+  });
+  var laneFind = document.getElementById("lane-find"), laneBox = document.getElementById("lane-scroll"), laneCount = document.getElementById("lane-count");
+  function laneFilter() {
+    var t = laneFind.value.trim().toLowerCase(), n = 0;
+    Array.prototype.forEach.call(laneBox.querySelectorAll(".lane"), function (l) { var ok = !t || l.getAttribute("data-who").toLowerCase().indexOf(t) !== -1; l.hidden = !ok; if (ok) { n += 1; } });
+    laneCount.textContent = n === 1 ? "1 person" : n + " people";
+  }
+  laneFind.addEventListener("input", laneFilter);
+  document.getElementById("jump-now").addEventListener("click", function () { laneBox.scrollTop = 0; laneBox.focus(); });
+
   /* ---- controls ---- */
   Array.prototype.forEach.call(document.querySelectorAll("[data-look-pick]"), function (b) { b.addEventListener("click", function () { setLook(b.getAttribute("data-look-pick")); }); });
   Array.prototype.forEach.call(document.querySelectorAll("[data-view-pick]"), function (b) { b.addEventListener("click", function () { setView(b.getAttribute("data-view-pick")); }); });
@@ -88,6 +125,6 @@
   body.setAttribute("data-look", start); pressed("data-look-pick", start);
   var q = /[?&]look=([abc])/.exec(window.location.search);
   if (q) { body.setAttribute("data-look", q[1]); pressed("data-look-pick", q[1]); }
-  var v = /[?&]view=(day|home|requests|schedules|wallboard|signin)/.exec(window.location.search);
+  var v = /[?&]view=(day|home|week|people|requests|schedules|wallboard|signin)/.exec(window.location.search);
   if (v) { setView(v[1]); }
 }());

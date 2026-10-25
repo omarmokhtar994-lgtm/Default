@@ -52,6 +52,30 @@ channel colours, routes, form field names, test selectors, CSRF and sign-in beha
 - **Copy.** Sentence case; titles name the thing ("Leave and swaps"); help text becomes one short line under the title, longer rules go
   into an "About this page" disclosure.
 
+
+## 2b. Owner's two additions (2026-10-25): friendly, and no very long lists
+
+**Friendly.** Same calm layout, warmer voice and shapes:
+- Greeting and plain verbs ("Good afternoon, Sara", "This week looks well covered", "All caught up"), sentence case, no jargon in titles.
+- Softer shapes: radius 20 px in Tide, 16 px in Night watch, 8 px in Paper; pill buttons for filters; round avatar chips with the person's number.
+- Friendly empty states that say what to do next ("Nobody matches that. Check the spelling or clear the search."), friendly errors that say how
+  to fix ("Type your password to sign in.") and confirmations with Undo ("Approved Associate 03's swap. Undo").
+- Status always in words and colour together; warnings are amber notes, not alarms; red only for a real gap.
+- Never an emoji as an icon; the warmth comes from copy, spacing, radius and colour.
+
+**No very long lists.** Rule for every page: nothing longer than about one screen and a half without a container.
+1. *Tables and lists that people read through* (spare hours, people, runs, incidents, exports preview, team, schedule history):
+   10 rows per page with Previous, Next, "11 to 20 of 24", a filter chips row (for example by day) and a search box. Prototype: `r4-week-a`, `r4-people-c`.
+2. *Things that must stay together to compare* (the RTA lane list, the heat map, the interval table): a scroll panel with its own
+   height (about 26 rem), a sticky hour scale and header, a name search, a count ("24 people") and "Jump to now". The page itself stays short. Prototype: `r4-day-a`.
+3. *Long forms and text* (New run, Notifications, Exports "Include"): collapsed sections ("Advanced options", "What counts") and steps, one open at a time.
+4. *Phone*: the same panels, with the filter row above them; the nav is a one-line strip that scrolls sideways.
+5. Keyboard and screen reader: the scroll panel is focusable with a label ("Who is on what, scrolls"); pagers are real buttons with disabled
+   states; the count text updates after every filter (live region in the build).
+Pages this changes: Week (Extra hours 168 rows becomes 17 pages of 10 with a day filter; the heat map keeps one scroll panel), RTA (lane list),
+Home (runs list shows the latest 5 with "See all runs"), People (40 and more rows), Incidents (associates tab), Exports (rows preview),
+Team, Schedules history, Programs, Departments and people, Leave and swaps (Decided tab), and the associate "My requests" list.
+
 ## 3. Page by page
 
 Scores: today / after (judgement from the screens; honest, not a promise).

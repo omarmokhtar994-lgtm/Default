@@ -221,6 +221,35 @@ input[aria-invalid="true"] { border-color: var(--gap); box-shadow: 0 0 0 1px var
 @media (max-width: 52rem) { .grid3, .wtiles { grid-template-columns: 1fr 1fr; } .req { grid-template-columns: 1fr; } .compare { grid-template-columns: 7rem 1fr 1fr; } }
 @media (max-width: 40rem) { .grid3, .wtiles { grid-template-columns: 1fr; } .run { grid-template-columns: 1fr 4rem; } .bar5 { display: none; } .wtop { grid-template-columns: 1fr; gap: .5rem; } .clock { text-align: left; } .cmdk { display: none; } }
 
+
+/* ===== round 4: friendlier, and no very long lists (scroll panels and pages) ===== */
+.scroll { max-height: 26rem; overflow: auto; overscroll-behavior: contain; border-radius: calc(var(--radius) - 4px); scrollbar-width: thin; scrollbar-color: var(--edge-strong) transparent; }
+.scroll.short { max-height: 21rem; } .scroll:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.lanes.scroll { padding-bottom: 2.2rem; position: relative; } .lane[hidden] { display: none !important; }
+.lanes.scroll .now-line { top: 0; bottom: 0; }
+.toolrow { display: flex; align-items: end; gap: var(--space-4); flex-wrap: wrap; margin: 0 0 var(--space-3); } .toolrow .hint { margin: 0 0 .6rem; flex: 1; }
+.search { margin: 0; min-width: 15rem; font-size: .9rem; } .search input { margin-top: .25rem; padding: .5rem .8rem; border-radius: 999px; }
+.chips { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 var(--space-3); } .chipbtn { background: var(--chip); color: var(--text); border: 1px solid var(--rule); padding: .3rem .8rem; border-radius: 999px; font-weight: 600; }
+.chipbtn[aria-pressed="true"] { background: var(--action); color: var(--on-action); border-color: transparent; }
+table.grid { width: 100%; border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums; } .grid th { position: sticky; top: 0; z-index: 1; text-align: left; padding: .55rem .8rem; background: var(--surface); color: var(--text-dim); font-weight: 600; border-bottom: 1px solid var(--edge-strong); }
+body[data-look="c"] .grid th { background: var(--bg); } .grid td { padding: .5rem .8rem; border-bottom: 1px solid var(--rule); }
+.pager { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-3); } .pager button[disabled] { opacity: .4; cursor: default; filter: none; }
+.prow[hidden] { display: none !important; }
+.people { list-style: none; margin: 0; padding: 0; } .person { display: grid; grid-template-columns: 2.6rem 1fr auto auto; gap: var(--space-4); align-items: center; padding: .65rem 0; border-top: 1px solid var(--rule); } .person small { display: block; color: var(--text-dim); }
+.avatar { width: 2.6rem; height: 2.6rem; border-radius: 50%; display: grid; place-items: center; background: var(--chip); border: 1px solid var(--rule); font: 800 .85rem var(--font-head); }
+.switch { margin: 0; display: inline-flex; align-items: center; gap: .5rem; font-weight: 600; } .switch input { width: 2.4rem; height: 1.4rem; margin: 0; accent-color: var(--covered); } 
+body[data-look="a"] { --radius: 20px; } body[data-look="b"] { --radius: 16px; }
+@media (max-width: 40rem) { .person { grid-template-columns: 2.6rem 1fr auto; } .person .ghost { display: none; } .search { min-width: 0; flex: 1; } }
+
+
+.scale.sticky { position: sticky; top: 0; z-index: 3; background: var(--surface); padding-top: .2rem; }
+body[data-look="c"] .scale.sticky { background: var(--bg); }
+.lanes.scroll .now-line { z-index: 2; }
+@media (max-width: 40rem) {
+  .top { gap: .5rem var(--space-3); } .brand { flex: 1; } .top nav { order: 3; flex: 1 1 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: .2rem; } .top nav a { white-space: nowrap; }
+  .card-head .btns { flex-wrap: wrap; } .protobar .group { flex-wrap: wrap; } .protobar button { white-space: nowrap; }
+}
+
 /* ===== reduced motion: keep what explains a change, drop the movement ===== */
 @media (prefers-reduced-motion: reduce) {
   .float-note, .float-note.on { transform: none; transition: opacity .12s linear, visibility 0s; }

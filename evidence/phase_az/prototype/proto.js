@@ -81,10 +81,16 @@
 
   /* ---- long lists: pages with a filter, and the lane list scrolls inside its own box ---- */
   Array.prototype.forEach.call(document.querySelectorAll("[data-pager]"), function (box) {
-    var rows = Array.prototype.slice.call(box.querySelectorAll(".prow")), size = parseInt(box.getAttribute("data-size"), 10) || 10, page = 0, day = "", text = "";
+    var rows = Array.prototype.slice.call(box.querySelectorAll(".prow")), auto = box.getAttribute("data-size") === "auto", size = parseInt(box.getAttribute("data-size"), 10) || 10, page = 0, day = "", text = "";
     var label = box.querySelector("[data-pager-label]"), pg = box.querySelector("[data-pager-page]"), prev = box.querySelector("[data-pager-prev]"),
         next = box.querySelector("[data-pager-next]"), none = box.querySelector("[data-pager-empty]"), wrap = box.querySelector(".scroll");
+    function fit() {
+      if (!auto) { return; }
+      var rh = (rows.filter(function (r) { return !r.hidden; })[0] || rows[0]).offsetHeight || 44;
+      size = Math.max(5, Math.min(30, Math.floor((window.innerHeight - 380) / rh)));
+    }
     function draw() {
+      fit();
       var hit = rows.filter(function (r) { return (!day || r.getAttribute("data-day") === day) && (!text || (r.getAttribute("data-text") || r.textContent).toLowerCase().indexOf(text) !== -1); });
       var pages = Math.max(1, Math.ceil(hit.length / size)); page = Math.min(page, pages - 1);
       rows.forEach(function (r) { r.hidden = true; });
@@ -105,6 +111,7 @@
     var find = box.querySelector("[data-pager-search]");
     if (find) { find.addEventListener("input", function () { text = find.value.trim().toLowerCase(); page = 0; draw(); }); }
     draw();
+    var tick = 0; window.addEventListener("resize", function () { window.cancelAnimationFrame(tick); tick = window.requestAnimationFrame(draw); });
   });
   var laneFind = document.getElementById("lane-find"), laneBox = document.getElementById("lane-scroll"), laneCount = document.getElementById("lane-count");
   function laneFilter() {
@@ -133,9 +140,9 @@
   document.querySelector("[data-try]").addEventListener("click", function () { setView("day"); window.setTimeout(stale, 350); });
 
   var saved = store("look"), dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  var start = /^[abc]$/.test(saved || "") ? saved : (dark ? "b" : "a");
+  var start = /^[a-f]$/.test(saved || "") ? saved : (dark ? "b" : "a");
   body.setAttribute("data-look", start); pressed("data-look-pick", start);
-  var q = /[?&]look=([abc])/.exec(window.location.search);
+  var q = /[?&]look=([a-f])/.exec(window.location.search);
   if (q) { body.setAttribute("data-look", q[1]); pressed("data-look-pick", q[1]); }
   var v = /[?&]view=(day|home|week|people|requests|schedules|wallboard|signin)/.exec(window.location.search);
   if (v) { setView(v[1]); }

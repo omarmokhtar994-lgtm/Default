@@ -76,6 +76,19 @@ Pages this changes: Week (Extra hours 168 rows becomes 17 pages of 10 with a day
 Home (runs list shows the latest 5 with "See all runs"), People (40 and more rows), Incidents (associates tab), Exports (rows preview),
 Team, Schedules history, Programs, Departments and people, Leave and swaps (Decided tab), and the associate "My requests" list.
 
+
+## 2c. Three more looks, and autofit (owner, 2026-10-25: "autofit with tab size, height, width" and "create 4, 5, 6")
+
+Read as: three more looks after A, B and C. If you meant something else by "4, 5, 6", tell me.
+- **D Meadow** (friendly, light): sage and green, white cards with 24 px radius, pill buttons, forest-green actions (6.4:1). School: warm humanist.
+- **E Ink** (high contrast, information-first): white page, black 1.5 px frames, 4 px radius, no shadows, yellow highlight for warnings; text 19.8:1. School: information architecture (Bloomberg, Tufte).
+- **F Dusk** (warm dark): aubergine-charcoal with a peach action colour (10.1:1) and bright channel colours with dark bar letters. School: modern tool, warm dark (not navy, so it differs from B).
+- Contrast measured for all three (text, dim text, buttons, warnings, bar letters); every pair is 4.5:1 or better. Chat bars now use #B4468F (5.0:1 with white) in all light looks, because the old #C2549F measured 4.1:1.
+- **Autofit.** Container widths follow the window (`min(96vw, 92rem)` with fluid side padding); stat tiles and wallboard tiles use `auto-fit`
+  grids; the RTA scroll panel's height follows the window (`100dvh` minus the header, 15 to 46 rem); paged tables compute rows per page from
+  the window height and re-fit on resize (20 rows at 2560x1300, 15 at 1920x1080, 8 at 1366x768, 5 at 360x640); the hour label column and
+  headings scale with the width. Tested at 2560x1300, 1920x1080, 1366x768, 1024x700, 820x1180, 600x900, 390x844 and 360x640: no sideways scroll at any size.
+
 ## 3. Page by page
 
 Scores: today / after (judgement from the screens; honest, not a promise).

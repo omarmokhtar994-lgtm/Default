@@ -3,6 +3,7 @@
 be saved as a picture (PNG) or as a drawing (SVG), each table as a CSV file Excel opens. Made-up "Associate NN" data."""
 import csv
 import io
+import re
 import threading
 import unittest
 from pathlib import Path
@@ -93,6 +94,20 @@ class TheDownloadsInTheBrowser(_cb._Cancel):
         self.assertTrue(text.startswith("<svg") or text.startswith("<?xml"))
         self.assertIn("xmlns=", text)
         self.assertRegex(text, r'stroke="rgb')  # the colours are written into the file, not left to the page's stylesheet
+
+    def test_a_chart_with_depth_keeps_its_top_and_side_in_the_saved_drawing(self):
+        # Phase BB: the lit top and darker side are separate shapes coloured by the stylesheet; the file must carry their colours too
+        page = self.open(f"/incidents?program={self.key.replace(' ', '+')}&from=2026-10-11&to=2026-10-17")
+        page.locator("svg.chart polygon.face-top").first.wait_for(state="attached")
+        with page.expect_download() as taken:
+            page.locator(".chart-panel:has(polygon.face-top)").first.get_by_role("button", name="Chart as SVG").click()
+        got = taken.value
+        text = open(got.path(), encoding="utf-8").read()
+        # found by this test: the browser reports a mixed colour as color(srgb ...), which many viewers cannot read: it is saved as plain hex
+        for fill in re.findall(r'<polygon[^>]*fill="([^"]*)"', text):
+            self.assertRegex(fill, r"^(#[0-9a-f]{6}|rgb\(\d+, \d+, \d+\))$")
+        self.assertNotIn("color(srgb", text)
+        self.assertGreaterEqual(text.count("<polygon"), 2)
 
     def test_a_cell_with_a_comma_or_a_quote_stays_one_cell(self):
         page = self.open(self.shrinkage())

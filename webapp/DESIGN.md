@@ -6,6 +6,7 @@ Owner, 2026-10-07: redesign in the "Control room (dark)" direction (chosen from
 four previews), keep the name "Team Scheduler". v1 (light limestone and Nile)
 is replaced.
 
+v5.1, 2026-10-25 (Phase BB, owner: "build it ... with 0 risk"): depth on columns, horizontal bars, tile strips, program cards and run progress bars, as paint only (see `docs/HANDOFF.md` Phase BB); the front face is always the value, line charts and heat tables stay flat.
 v5, 2026-10-25 (Phase BA, owner: "I like this one so we have our 3 designs"; samples in `evidence/phase_az/prototype`, the audit in
 `evidence/phase_ba`): the three looks are now **Tide** (light), **Night watch** (dark, the default) and **Drafting table**. They replace
 Graphite night, its day look and Deep ocean. Cookie values: `light`, `dark`, `draft` (an old `ocean` cookie is ignored). The look control in

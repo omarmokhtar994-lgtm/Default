@@ -1643,6 +1643,16 @@ function homeRefresh(now) {
     }
     return "#ffffff";
   };
+  // A mixed colour (the lit top and darker side of a bar) is reported as color(srgb ...), which many viewers cannot read: write it as plain hex.
+  var plain = function (value) {
+    if (value.indexOf("color(") !== 0) { return value; }
+    var paint = document.createElement("canvas").getContext("2d");
+    paint.fillStyle = value;
+    paint.fillRect(0, 0, 1, 1);
+    var px = paint.getImageData(0, 0, 1, 1).data;  // read the pixel: the canvas would hand the same color(...) text back
+    return px[3] === 255 ? "rgb(" + px[0] + ", " + px[1] + ", " + px[2] + ")"
+      : "rgba(" + px[0] + ", " + px[1] + ", " + px[2] + ", " + (px[3] / 255).toFixed(3) + ")";
+  };
   // The chart's colours come from the page's stylesheet, which a saved file does not have: write them into the file.
   // (Attributes, not a style attribute: the page's content security policy allows no inline style.)
   var drawing = function (svg) {
@@ -1653,7 +1663,7 @@ function homeRefresh(now) {
       var seen = window.getComputedStyle(node);
       SVG_STYLE.forEach(function (prop) {
         var value = seen.getPropertyValue(prop);
-        if (value) { to[i].setAttribute(prop, value); }
+        if (value) { to[i].setAttribute(prop, plain(value)); }
       });
       to[i].removeAttribute("class");
     });

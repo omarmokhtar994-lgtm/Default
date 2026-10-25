@@ -89,6 +89,17 @@ Load each with the Skill tool at the step it covers; following it from memory do
 6. Package, split into parts, send them, and report in caveman style: what changed, rulings with their cost, what
    is known and left, Egypt times, screens.
 
+## Phase BB (owner, 2026-10-25: "build it ... with 0 risk"; depth on the dashboards)
+
+Sample: `evidence/phase_bb/dash3d`. Built: `webapp/charts.py` draws a lit top and a darker side (`polygon.face-top`, `polygon.face-side`, same `data-series`)
+beside each column and horizontal bar; the front `rect.bar` keeps its exact size (the value), faces have no tip and no pointer, charts of more than 24
+bars or bars thinner than 10 stay flat, and the number moves above the top face. Line charts, heat tables and sparklines stay flat (depth would make
+exact values harder to read). CSS (block "Phase BB" at the end of `app.css`, paint only: fills and shadows): `.tiles`, `.ins-tiles`, `.shr-tile` and
+`.pcard` get a raised edge, `.stagebar li` a lit top and a darker underside. The saved chart (PNG, SVG) turns the mixed colours (`color(srgb ...)`) into
+plain rgb in `plain()` of `app.js`, found by `test_ax_downloads`. Tests: `test_bb_chart_depth.py` (18), one browser test in `test_ax_downloads.py`.
+Screens: `evidence/phase_bb/shots`. Lesson: `pkill -f` or `pgrep -f` with a pattern that is also in your own command line kills your shell (exit 144);
+use `fuser -k PORT/tcp`. The solver-timed tests (`test_channel_plan`, `test_ay_channel_scenarios`) can fail when three suites run at once and pass alone.
+
 ## Phase BA (owner, 2026-10-25: the three looks, long lists, icons, wallboard; build on branch `ccr-90ec94cc-a37tqk`)
 
 Read `evidence/phase_ba/REQUESTS.md`, the plan `docs/superpowers/plans/2026-10-25-phase-ba-build.md`, its ledger `evidence/phase_ba/LEDGER.md`

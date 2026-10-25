@@ -1840,7 +1840,7 @@ input[type=file] { min-height: 24px; }
 
 /* Phase BB: depth on the figures (owner, 2026-10-25: "build it ... with 0 risk"). Columns and horizontal bars show a lit top and a darker side
    (charts.py draws the two faces; the front face is the value and keeps its exact size). The tile strips and boxes get a raised edge.
-   Nothing here moves or animates, and nothing here is a filter, so it costs the page nothing. A browser without color-mix keeps the plain series colour. */
+   Everything here is still paint (fills and shadows), so it costs the page nothing. A browser without color-mix keeps the plain series colour. */
 .chart .face { pointer-events: none; }
 .chart polygon.face-top[data-series=blue] { fill: var(--c-blue); fill: color-mix(in srgb, var(--c-blue) 68%, #fff); }
 .chart polygon.face-side[data-series=blue] { fill: var(--c-blue); fill: color-mix(in srgb, var(--c-blue) 62%, #000); }
@@ -1853,3 +1853,6 @@ input[type=file] { min-height: 24px; }
 .tiles, .ins-tiles { box-shadow: 0 1px 0 var(--edge), 0 5px 0 -1px var(--rail), 0 14px 18px -10px var(--shadow); }
 .shr-tile { box-shadow: 0 1px 0 var(--edge), 0 4px 0 -1px var(--rail), 0 10px 14px -9px var(--shadow); }
 @media print { .tiles, .ins-tiles, .shr-tile { box-shadow: none; } }
+.pcard { box-shadow: 0 1px 0 var(--edge), 0 5px 0 -1px var(--rail), 0 14px 18px -10px var(--shadow); }
+.stagebar li { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 -2px 0 rgba(0, 0, 0, .28); }
+@media print { .pcard, .stagebar li { box-shadow: none; } }

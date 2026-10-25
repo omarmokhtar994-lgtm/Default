@@ -122,5 +122,20 @@ class TheFigureStrips(unittest.TestCase):
         self.assertNotIn("transform", edge)
 
 
+class TheHomePage(unittest.TestCase):
+    def test_the_program_cards_are_raised_slabs(self):
+        self.assertRegex(CSS[CSS.index("Phase BB"):], r"\.pcard \{[^}]*box-shadow: [^;]*var\(--edge\)")
+
+    def test_the_progress_bars_have_a_lit_top_and_a_darker_underside_and_keep_their_size(self):
+        block = CSS[CSS.index("Phase BB"):]
+        self.assertRegex(block, r"\.stagebar li \{[^}]*box-shadow: inset 0 1px 0 rgba\([^)]*\), inset 0 -2px 0")
+        self.assertNotRegex(block, r"\.stagebar[^{]*\{[^}]*(height|width|margin|padding)")  # the bar's size is the data
+
+    def test_nothing_in_the_depth_block_moves_or_animates(self):
+        block = CSS[CSS.index("Phase BB"):]
+        for word in ("transition", "transform", "animation", "filter", "will-change"):
+            self.assertNotIn(word, block)
+
+
 if __name__ == "__main__":
     unittest.main()

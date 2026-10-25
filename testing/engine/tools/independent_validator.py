@@ -1,0 +1,1677 @@
+#!/usr/bin/env python3
+"""Independent schedule validator for RC9.2 artifacts.
+
+This script does not trust optimizer audit metrics.  It reads the input contract,
+re-reads the exported schedule/break tables, and independently recomputes key
+hard rules, interval coverage, language minima, break structure, rest, OFF shape,
+and cyclic next-Sunday coverage.
+"""
+from __future__ import annotations
+import argparse, csv, hashlib, importlib.util, json, math, re, sys, traceback
+from collections import defaultdict
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+from openpyxl import load_workbook
+
+DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+
+class ParsedAssignments(dict):
+    """Schedule mapping with duplicate-row evidence preserved for validation."""
+    def __init__(self):
+        super().__init__()
+        self.duplicate_rows: List[Dict[str, Any]] = []
+
+def sha256_file(path: Path) -> str:
+    digest=hashlib.sha256()
+    with path.open('rb') as handle:
+        for chunk in iter(lambda:handle.read(1024*1024),b''): digest.update(chunk)
+    return digest.hexdigest()
+
+def norm(v: Any) -> str:
+    return re.sub(r"\s+", " ", str(v or "").strip()).casefold()
+
+def hhmm_to_min(v: Any) -> Optional[int]:
+    if v is None or str(v).strip() == "": return None
+    if hasattr(v, "hour") and hasattr(v, "minute"): return int(v.hour) * 60 + int(v.minute)
+    text=str(v).strip()
+    m=re.search(r"(?<!\d)(\d{1,2}):(\d{2})(?:\s*([AP]M))?", text, flags=re.I)
+    if not m: return None
+    h=int(m.group(1)); minute=int(m.group(2)); ap=(m.group(3) or "").upper()
+    if ap:
+        h%=12
+        if ap=="PM": h+=12
+    if h==24 and minute==0: h=0
+    if not (0<=h<24 and 0<=minute<60): return None
+    return h*60+minute
+
+def load_engine(engine_path: Path):
+    sys.path.insert(0, str(engine_path.parent))
+    spec=importlib.util.spec_from_file_location("validator_contract_parser", engine_path)
+    mod=importlib.util.module_from_spec(spec); sys.modules[spec.name]=mod; spec.loader.exec_module(mod)
+    return mod
+
+def find_header(ws, required=("sf name",)) -> int:
+    for r in range(1, min(ws.max_row, 20)+1):
+        vals={norm(ws.cell(r,c).value) for c in range(1,ws.max_column+1)}
+        if any(req in vals for req in required): return r
+    raise ValueError(f"Could not find header in {ws.title}")
+
+def _is_day_header(header_text, short, full):
+    """True when a normalized header names this weekday and nothing else.
+
+    Mirrors `_is_day_header` in the engine so input parsing and output
+    validation cannot drift apart. A suffixed day header is a DATE
+    ("Sunday 12 Jul"); accepting any suffix would re-admit "Sunday Totals" and
+    the "sunday shift" header that really appears in one delivered workbook.
+    """
+    if header_text == short or header_text == full:
+        return True
+    prefix = full + " "
+    return header_text.startswith(prefix) and any(ch.isdigit() for ch in header_text[len(prefix):])
+
+
+def parse_output_schedule(path: Path, expected_names: List[str]) -> Tuple[Dict[str,List[str]], Dict[str,str]]:
+    wb=load_workbook(path,data_only=False,read_only=False)
+    ws=wb["Schedule"] if "Schedule" in wb.sheetnames else wb["Final Schedule"]
+    header=find_header(ws)
+    headers={norm(ws.cell(header,c).value):c for c in range(1,ws.max_column+1)}
+    name_col=next((c for h,c in headers.items() if h in {"sf name","associate","associate name","name"}),None)
+    lang_col=next((c for h,c in headers.items() if h=="language"),None)
+    # Day columns are not always labelled on the same row as the name column.
+    # Exported schedules carry the day NAMES on the banner row and the calendar
+    # DATES on the row holding "SF Name", so locking to the name row found no
+    # day columns and the validator raised, aborting before it evaluated a
+    # single rule.  Search the name row first, then its neighbours, accepting
+    # short or full day names - the same convention the engine's own
+    # _day_columns uses.
+    day_cols=None
+    for probe in (header, header-1, header+1, header-2):
+        if probe<1 or probe>ws.max_row: continue
+        probe_headers={norm(ws.cell(probe,c).value):c for c in range(1,ws.max_column+1)}
+        candidate={}
+        for d,full in zip(DAYS,("sunday","monday","tuesday","wednesday","thursday","friday","saturday")):
+            # Exact short name, or a label that begins with the FULL day name
+            # ("Sunday 12 Jul").  Deliberately NOT startswith(short name): that
+            # binds "Monthly Total" to Mon, "Saturation"/"Satisfaction Score" to
+            # Sat and "Month" to Mon, silently reading a non-day column as a
+            # day's assignments.
+            match=next((c for h,c in probe_headers.items()
+                        if _is_day_header(h,norm(d),full)),None)
+            candidate[d]=match
+        if all(c is not None for c in candidate.values()):
+            day_cols=candidate; break
+    if name_col is None or day_cols is None:
+        raise ValueError(
+            "Output schedule is missing name/day columns "
+            f"(name_col={name_col}, searched rows {max(1,header-2)}-{header+1} of sheet {ws.title!r})")
+    assignments=ParsedAssignments(); languages={}
+    for r in range(header+1,ws.max_row+1):
+        name=str(ws.cell(r,name_col).value or "").strip()
+        if not name: continue
+        key=norm(name)
+        if key in assignments:
+            assignments.duplicate_rows.append({"associate":name,"row":r})
+            continue
+        assignments[key]=[str(ws.cell(r,day_cols[d]).value or "").strip() for d in DAYS]
+        languages[key]=str(ws.cell(r,lang_col).value or "").strip() if lang_col else ""
+    wb.close()
+    return assignments,languages
+
+def declared_artifact_type(path: Path) -> Optional[str]:
+    """Read the workbook's own statement of what it is, or None if it makes none.
+
+    The break sheet's "NOT ASSIGNED IN BEFORE-BREAK ARTIFACT" marker is one
+    signal for the stage.  It is a single cell in a sheet a downstream tool
+    could rewrite, so this reads a second, independently written signal from
+    the Production Summary.  Two signals let the validator report a
+    contradiction instead of quietly trusting whichever it happened to read.
+    """
+    wb=load_workbook(path,data_only=True,read_only=True)
+    try:
+        sheet=next((wb[s] for s in ["Production Summary"] if s in wb.sheetnames),None)
+        if sheet is None: return None
+        for row in sheet.iter_rows(min_row=1,max_row=40,max_col=2,values_only=True):
+            if not row: continue
+            label=norm(row[0] if len(row)>0 else None)
+            if label!=norm("Artifact Type"): continue
+            value=norm(row[1] if len(row)>1 else None)
+            if not value: return None
+            if "before break" in value: return "BEST_BEFORE_BREAKS"
+            if "after break" in value or "final" in value: return "FINAL_AFTER_BREAKS"
+            # The engine's alternative exports (audit F-16) are complete
+            # after-break schedules from the same candidate pool. Read as
+            # UNRECOGNIZED, none of them could ever be validated.
+            if value.replace(" ","_") in {"max_target_candidate","max_floor_candidate",
+                                          "balanced_candidate","safer_balanced_candidate",
+                                          # the selected schedule, polished (F-35)
+                                          "more_consistent_candidate",
+                                          # audit F-06: a full after-break schedule
+                                          # that names its own shortfalls
+                                          "hard_rule_shortfall_schedule"}:
+                return "FINAL_AFTER_BREAKS"
+            return "UNRECOGNIZED:"+value
+        return None
+    finally:
+        wb.close()
+
+def parse_breaks(path: Path) -> Tuple[List[Dict[str,Any]], bool]:
+    wb=load_workbook(path,data_only=True,read_only=True)
+    sheet=next((wb[s] for s in ["Break Schedule Active","Break Schedule"] if s in wb.sheetnames),None)
+    out=[]; before_only=False; exception_keys=set()
+
+    def locate_header(rows, required):
+        """Find a table header without assuming that it is row one."""
+        for row_index, row in enumerate(rows[:20]):
+            headers={norm(v):i for i,v in enumerate(row)}
+            if all(key in headers for key in required):
+                return row_index, headers
+        return None, {}
+
+    if sheet is not None:
+        rows=list(sheet.iter_rows(values_only=True))
+        header_index, headers=locate_header(rows, ("associate","day","duration minutes"))
+        # Column positions must come from the header row, never from a
+        # positional guess.  A release validator must not silently read a
+        # reordered or decorated sheet from the wrong columns.
+        if header_index is None:
+            wb.close()
+            raise ValueError(
+                f"Break sheet {sheet.title!r} is missing required column(s) "
+                f"['associate', 'day', 'duration minutes']; found no compatible header")
+
+        def cell(rr, key):
+            idx=headers.get(key)
+            return rr[idx] if idx is not None and idx < len(rr) else None
+
+        for rr in rows[header_index+1:]:
+            if not rr: continue
+            status=str(cell(rr,"status") or "")
+            if "not assigned in before-break" in status.casefold(): before_only=True
+            name=str(cell(rr,"associate") or "").strip()
+            day=str(cell(rr,"day") or "").strip()
+            if not name or norm(day) not in {norm(d) for d in DAYS}: continue
+            raw_duration=cell(rr,"duration minutes")
+            try:
+                duration=int(float(raw_duration or 0))
+            except (TypeError, ValueError):
+                # Record it as a bad row rather than aborting the whole
+                # validation.  A duration of 0 is rejected downstream.
+                duration=0
+            exception = "no breaks scheduled" in status.casefold() or "no break exception" in status.casefold()
+            if exception:
+                exception_keys.add((norm(name), norm(day)))
+            out.append({
+                "associate":name,"day":day,"shift":str(cell(rr,"shift") or ""),
+                "type":str(cell(rr,"break type") or ""),"start":cell(rr,"start"),
+                "duration":duration,"status":status,"is_exception":exception,
+            })
+
+    # A no-break exception is an explicit, auditable business decision and is
+    # exported on its own sheet.  The old validator read only the active-break
+    # table, so an approved no-break Sunday was incorrectly reported as a
+    # missing [15, 15, 30] break set.  Represent each exception as a synthetic
+    # zero-break record; the existing exception policy path then exempts that
+    # associate/day while still enforcing the configured exception limits.
+    exception_sheet=wb["No-Break Exceptions"] if "No-Break Exceptions" in wb.sheetnames else None
+    if exception_sheet is not None:
+        exception_rows=list(exception_sheet.iter_rows(values_only=True))
+        exception_header, exception_headers=locate_header(exception_rows, ("associate","day"))
+        if exception_header is not None:
+            def exception_cell(rr, key):
+                idx=exception_headers.get(key)
+                return rr[idx] if idx is not None and idx < len(rr) else None
+
+            for rr in exception_rows[exception_header+1:]:
+                if not rr: continue
+                name=str(exception_cell(rr,"associate") or "").strip()
+                day=str(exception_cell(rr,"day") or "").strip()
+                if (not name or norm(name) in {"no exceptions", "none", "n/a"}
+                        or norm(day) not in {norm(d) for d in DAYS}):
+                    continue
+                key=(norm(name), norm(day))
+                if key in exception_keys: continue
+                evidence=[]
+                for column in ("review status", "mandatory comment", "exception proof", "permission source"):
+                    value=exception_cell(rr, column)
+                    if value is not None and str(value).strip():
+                        evidence.append(str(value).strip())
+                out.append({
+                    "associate":name,
+                    "day":day,
+                    "shift":str(exception_cell(rr,"shift") or ""),
+                    "type":"",
+                    "start":None,
+                    "duration":0,
+                    "status":" | ".join(evidence) or "NO BREAK EXCEPTION",
+                    "is_exception":True,
+                })
+                exception_keys.add(key)
+
+    wb.close(); return out,before_only
+
+def independent_employee_quality(parsed, assignments, shift_map):
+    """Recompute the employee_quality gate from the OUTPUT schedule.
+
+    Independent by construction: it reads the published assignment grid, not
+    the engine's skeleton object, so an engine that mis-scores its own gate
+    cannot hide it here.
+
+    Mirrors employee_operational_quality(): late shifts start at or after 18:00
+    or before 04:00; overnight shifts end past midnight; weekend is the Sunday
+    and Saturday columns; an isolated OFF is an OFF with a shift either side,
+    evaluated circularly across the week boundary.
+    """
+    late, overnight, weekend = [], [], []
+    isolated_off = 0
+    for assoc in parsed.associates:
+        row = assignments.get(norm(assoc.name)) or [""] * 7
+        kinds, shifts = [], []
+        for value in row[:7]:
+            key = norm(value)
+            if key == "off":
+                kinds.append("off"); shifts.append(None)
+            elif key in {"leave", "pto", "vacation"}:
+                kinds.append("leave"); shifts.append(None)
+            elif key in shift_map:
+                kinds.append("shift"); shifts.append(shift_map[key])
+            else:
+                kinds.append("blank"); shifts.append(None)
+        while len(kinds) < 7:
+            kinds.append("blank"); shifts.append(None)
+
+        late.append(sum(1 for s in shifts
+                        if s is not None and (s.start_min >= 18 * 60 or s.start_min < 4 * 60)))
+        overnight.append(sum(1 for s in shifts if s is not None and s.end_abs_min > 1440))
+        weekend.append(sum(1 for d in (0, 6) if shifts[d] is not None))
+        isolated_off += sum(
+            1 for d in range(7)
+            if kinds[d] == "off" and kinds[(d - 1) % 7] == "shift" and kinds[(d + 1) % 7] == "shift"
+        )
+
+    def spread(values):
+        return (max(values) - min(values)) if values else 0
+
+    return {
+        "late_shift_load_delta": spread(late),
+        "overnight_load_delta": spread(overnight),
+        "weekend_load_delta": spread(weekend),
+        "isolated_offday_violation_count": isolated_off,
+        "roster_size": len(parsed.associates),
+    }
+
+def max_gap_run(flags: List[Optional[bool]], intervals_per_day: int) -> int:
+    best=0
+    for d in range(7):
+        run=0
+        for flag in flags[d*intervals_per_day:(d+1)*intervals_per_day]:
+            if flag is None: run=0
+            elif flag: run+=1; best=max(best,run)
+            else: run=0
+    return best
+
+# --- Independent input cross-check (audit F-13) ------------------------------
+# The validator re-derives schedule metrics itself but takes the input contract
+# from the engine's own parse_input, so a parser defect (a dropped associate, a
+# misread demand column, a leave cell that silently vanishes -- B-11) would be
+# invisible to it. These checks re-read the raw workbook with openpyxl and no
+# engine code, and compare the few facts every metric depends on. Where the
+# layout cannot be recognised the check is reported NOT_CHECKED, never passed.
+_XC_DAYS = ("sun", "mon", "tue", "wed", "thu", "fri", "sat")
+_XC_FULL = ("sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday")
+_XC_NAME_HEADERS = ("sf name", "associate name", "associate", "name", "employee name")
+_XC_LEAVE_OR_OFF = re.compile(r"\b(off|leave|holiday|vacation|annual|sick|pto|loa)\b", re.I)
+
+
+def _xc_day(value: Any) -> Optional[int]:
+    if hasattr(value, "weekday") and callable(value.weekday):
+        return (value.weekday() + 1) % 7
+    h = norm(value)
+    for i, (short, full) in enumerate(zip(_XC_DAYS, _XC_FULL)):
+        if h in (short, full) or (h.startswith(full + " ") and any(ch.isdigit() for ch in h)):
+            return i
+    return None
+
+
+def _xc_minute(value: Any) -> Optional[int]:
+    if value is None or isinstance(value, bool):
+        return None
+    if hasattr(value, "hour") and hasattr(value, "minute") and not hasattr(value, "weekday"):
+        return int(value.hour) * 60 + int(value.minute)
+    m = re.fullmatch(r"\s*(\d{1,2}):(\d{2})(?::\d{2})?\s*", str(value))
+    return int(m.group(1)) * 60 + int(m.group(2)) if m and int(m.group(1)) < 24 else None
+
+
+def _xc_name_header(ws) -> Optional[Tuple[int, int]]:
+    for r in range(1, min(ws.max_row, 20) + 1):
+        headers = {norm(ws.cell(r, c).value): c for c in range(1, ws.max_column + 1)}
+        col = next((headers[h] for h in _XC_NAME_HEADERS if h in headers), None)
+        if col:
+            return r, col
+    return None
+
+
+def _xc_demand_grids(wb) -> Dict[str, Tuple[int, Dict[Tuple[int, int], float]]]:
+    grids = {}
+    for ws in wb.worksheets:
+        for r in range(1, min(ws.max_row, 15) + 1):
+            cols: Dict[int, int] = {}
+            for c in range(1, ws.max_column + 1):
+                d = _xc_day(ws.cell(r, c).value)
+                if d is not None and d not in cols:
+                    cols[d] = c
+            if len(cols) != 7:
+                continue
+            rows = []
+            for rr in range(r + 1, ws.max_row + 1):
+                t = next((m for m in (_xc_minute(ws.cell(rr, c).value) for c in range(1, min(4, ws.max_column) + 1))
+                          if m is not None), None)
+                if t is not None:
+                    rows.append((rr, t))
+            if len(rows) >= 12:
+                times = sorted({t for _, t in rows})
+                steps = [b - a for a, b in zip(times, times[1:]) if b > a]
+                grid: Dict[Tuple[int, int], float] = {}
+                for rr, t in rows:
+                    for d, c in cols.items():
+                        v = ws.cell(rr, c).value
+                        if isinstance(v, (int, float)) and not isinstance(v, bool):
+                            grid[(d, t)] = grid.get((d, t), 0.0) + float(v)
+                grids[ws.title] = (min(steps) if steps else 60, grid)
+            break
+    return grids
+
+
+def _xc_hours(grid: Dict[Tuple[int, int], float], step: int, bucket: int) -> Dict[Tuple[int, int], float]:
+    out: Dict[Tuple[int, int], float] = {}
+    for (d, t), v in grid.items():
+        key = (d, t // bucket)
+        out[key] = out.get(key, 0.0) + v * step / 60.0
+    return out
+
+
+def _xc_day_cells(wb, sheet_names, roster_norm, duplicates: Optional[List[Dict[str, Any]]] = None
+                  ) -> Optional[Dict[Tuple[str, int], str]]:
+    ws = next((wb[n] for n in wb.sheetnames if norm(n) in sheet_names), None)
+    if ws is None:
+        return None
+    found = _xc_name_header(ws)
+    if not found:
+        return None
+    r, name_col = found
+    day_cols: Dict[int, int] = {}
+    for c in range(1, ws.max_column + 1):
+        d = _xc_day(ws.cell(r, c).value)
+        if d is not None and d not in day_cols:
+            day_cols[d] = c
+    if len(day_cols) != 7:
+        return None
+    cells = {}
+    populated: Dict[str, int] = {}
+    for rr in range(r + 1, ws.max_row + 1):
+        name = norm(ws.cell(rr, name_col).value)
+        if name in roster_norm:
+            values = {d: str(ws.cell(rr, c).value or "").strip() for d, c in day_cols.items()}
+            if not any(values.values()):
+                continue  # an empty row asserts nothing
+            if name in populated:
+                # Two rows that both say something for one person: the engine
+                # refuses this (audit F-01), and the check must not pick one.
+                if duplicates is not None:
+                    duplicates.append({"sheet": ws.title, "associate": name, "rows": [populated[name], rr]})
+                continue
+            populated[name] = rr
+            for d, value in values.items():
+                cells[(name, d)] = value
+    return cells
+
+
+# Language hours, read without engine code: the Schedule sheet's Language column,
+# Language Setup's Coverage Start/End/Days/Active/Minimum rows, and the
+# Instructions row "Language Working Window". The engine enforces these as hard
+# rules, so a parser defect here would be invisible to the validator's window
+# checks, which use the engine's own reading (audit F-13).
+_XC_YES = {"yes", "y", "true", "1", "enabled", "on", "hard", "required"}
+_XC_NO = {"no", "n", "false", "0", "disabled", "off"}
+_XC_WINDOW_KEYS = {"languageworkingwindow", "languageworkinghours", "languagewindowenforcement"}
+
+
+def _xc_squash(value: Any) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(value or "").lower())
+
+
+def _xc_window_mode(raw: Any) -> str:
+    s = _xc_squash(raw)
+    if s in {"allrows", "all", "alllanguages", "everyrow", "allactiverows", "everyactiverow", "allactivelanguagerows"}:
+        return "ALL_ROWS"
+    if s in {"requiredlanguageonly", "requiredlanguagesonly", "qualifiedonly", "requiredonly",
+             "languageexclusive", "exclusive"}:
+        return "REQUIRED_LANGUAGE_ONLY"
+    if s in {"rowswithaminimum", "minimumrows", "withminimum", "yes", "on", "enabled", "rowswithminimum"}:
+        return "MINIMUM_ROWS"
+    return "OFF"
+
+
+def _xc_days(raw: Any) -> Optional[set]:
+    """Coverage Days -> day indices (Sun=0); None when the text is not understood."""
+    text = str(raw or "").strip().lower().replace("\u2013", "-").replace("\u2014", "-")
+    if not text or _xc_squash(text) in {"all", "alldays", "daily", "everyday", "7days"}:
+        return set(range(7))
+    if _xc_squash(text) in {"weekday", "weekdays"}:
+        return {1, 2, 3, 4, 5}
+    if _xc_squash(text) in {"weekend", "weekends"}:
+        return {0, 6}
+    def one(token: str) -> Optional[int]:
+        token = token.strip()
+        for i, (short, full) in enumerate(zip(_XC_DAYS, _XC_FULL)):
+            if token in (short, full) or (len(token) >= 3 and full.startswith(token)):
+                return i
+        return {"m": 1, "w": 3, "f": 5}.get(token)
+    days: set = set()
+    for part in re.split(r"[,;/|&]+", text):
+        part = part.strip()
+        if not part:
+            continue
+        ends = re.split(r"\s*-\s*|\s+to\s+", part, maxsplit=1)
+        if len(ends) == 2:
+            a, b = one(ends[0]), one(ends[1])
+            if a is None or b is None:
+                return None
+            d = a
+            while True:
+                days.add(d)
+                if d == b:
+                    break
+                d = (d + 1) % 7
+        else:
+            d = one(part)
+            if d is None:
+                return None
+            days.add(d)
+    return days
+
+
+def _xc_language_crosscheck(wb, parsed, run_override: Optional[str]) -> Tuple[Dict[str, str], List[Dict[str, Any]], List[Dict[str, Any]]]:
+    checks: Dict[str, str] = {}
+    mismatches: List[Dict[str, Any]] = []
+    not_checked: List[Dict[str, Any]] = []
+
+    # 1. Each associate's Language on the Schedule sheet.
+    roster_ws = next((wb[n] for n in wb.sheetnames if norm(n) == "schedule"), None)
+    found = _xc_name_header(roster_ws) if roster_ws is not None else None
+    lang_col = None
+    if found:
+        r, name_col = found
+        lang_col = next((c for c in range(1, roster_ws.max_column + 1)
+                         if norm(roster_ws.cell(r, c).value) == "language"), None)
+    if not found or lang_col is None:
+        checks["roster_language"] = "NOT_CHECKED"
+        not_checked.append({"check": "roster_language", "reason": "no Schedule sheet with name and Language headers"})
+    else:
+        raw = {norm(roster_ws.cell(rr, name_col).value): norm(roster_ws.cell(rr, lang_col).value)
+               for rr in range(r + 1, roster_ws.max_row + 1) if norm(roster_ws.cell(rr, name_col).value)}
+        bad = [{"associate": a.name, "parsed": a.language, "workbook": raw.get(norm(a.name))}
+               for a in parsed.associates
+               if norm(a.name) in raw and raw[norm(a.name)] != norm(getattr(a, "language", ""))]
+        checks["roster_language"] = "FAIL" if bad else "PASS"
+        if bad:
+            mismatches.append({"check": "roster_language", "count": len(bad), "examples": bad[:20]})
+
+    # 2. Language Setup hours per language and day.
+    ws = next((wb[n] for n in wb.sheetnames if norm(n) in {"language setup", "skill setup", "skills setup"}), None)
+    header = None
+    if ws is not None:
+        for rr in range(1, min(ws.max_row, 15) + 1):
+            heads = {norm(ws.cell(rr, c).value): c for c in range(1, ws.max_column + 1) if norm(ws.cell(rr, c).value)}
+            if any("language" in h or "skill" in h for h in heads) and any("start" in h for h in heads):
+                header = (rr, heads)
+                break
+    if header is None:
+        checks["language_hours"] = "NOT_CHECKED" if ws is not None else "NO_LANGUAGE_SETUP"
+        if ws is not None:
+            not_checked.append({"check": "language_hours", "reason": "Language Setup has no Language/Start header"})
+    else:
+        rr0, heads = header
+        def col(*needles):
+            return next((c for h, c in heads.items() if any(n in h for n in needles)), None)
+        c_lang, c_start, c_end = col("language", "skill"), col("coverage start", "start time"), col("coverage end", "end time")
+        c_active, c_min, c_days = col("active", "enabled"), col("minimum per interval", "minimum", "min hc", "min fte"), \
+            col("coverage days", "active days", "days active", "operating days")
+        expected: Dict[Tuple[str, int], set] = {}
+        unreadable = []
+        for rr in range(rr0 + 1, ws.max_row + 1):
+            lang = norm(ws.cell(rr, c_lang).value) if c_lang else ""
+            if not lang:
+                continue
+            active_raw = norm(ws.cell(rr, c_active).value) if c_active else ""
+            if active_raw in _XC_NO:
+                continue
+            if active_raw and active_raw not in _XC_YES:
+                unreadable.append(rr)
+                continue
+            start = _xc_minute(ws.cell(rr, c_start).value) if c_start else None
+            end = _xc_minute(ws.cell(rr, c_end).value) if c_end else None
+            if start is None or end is None or start == end:
+                continue
+            days = _xc_days(ws.cell(rr, c_days).value if c_days else "")
+            if days is None:
+                unreadable.append(rr)
+                continue
+            raw_min = ws.cell(rr, c_min).value if c_min else None
+            try:
+                has_min = int(round(float(raw_min))) > 0 if raw_min not in (None, "") else False
+            except (TypeError, ValueError):
+                unreadable.append(rr)
+                continue
+            for d in days:
+                expected.setdefault((lang, d), set()).add((start, end, has_min))
+        if unreadable:
+            checks["language_hours"] = "NOT_CHECKED"
+            not_checked.append({"check": "language_hours", "reason": f"rows not understood: {unreadable[:10]}"})
+        else:
+            windows = getattr(parsed, "language_windows", {}) or {}
+            def entries(value):
+                if value is None:
+                    return set()
+                if isinstance(value, (tuple, list)) and len(value) == 3 and not isinstance(value[0], (tuple, list)):
+                    value = [value]
+                return {(int(a), int(b), bool(c)) for a, b, c in value}
+            got: Dict[Tuple[str, int], set] = {}
+            for key, value in windows.items():
+                lang, _, day = key.partition("@@")
+                for d in ([int(day)] if day else range(7)):
+                    got.setdefault((lang, d), set()).update(entries(value))
+            bad = [{"language": lang, "day": DAYS[d],
+                    "workbook": sorted(expected.get((lang, d), set())), "parsed": sorted(got.get((lang, d), set()))}
+                   for lang, d in sorted(set(expected) | set(got)) if expected.get((lang, d), set()) != got.get((lang, d), set())]
+            checks["language_hours"] = "FAIL" if bad else "PASS"
+            if bad:
+                mismatches.append({"check": "language_hours", "count": len(bad), "examples": bad[:20]})
+
+    # 3. The Language Working Window setting (a run override replaces it).
+    if run_override is not None:
+        checks["language_window_mode"] = "RUN_OVERRIDE"
+    else:
+        values = []
+        for sheet in wb.worksheets:
+            for row in sheet.iter_rows():
+                for cell in row:
+                    if _xc_squash(cell.value) in _XC_WINDOW_KEYS:
+                        values.append(sheet.cell(cell.row, cell.column + 1).value)
+        raw_modes = {_xc_window_mode(v) for v in values} or {"OFF"}
+        if len(raw_modes) > 1:
+            checks["language_window_mode"] = "NOT_CHECKED"
+            not_checked.append({"check": "language_window_mode", "reason": f"several differing rows: {sorted(raw_modes)}"})
+        else:
+            raw_mode = raw_modes.pop()
+            ok = raw_mode == parsed.language_working_window_mode
+            checks["language_window_mode"] = "PASS" if ok else "FAIL"
+            if not ok:
+                mismatches.append({"check": "language_window_mode", "workbook": raw_mode,
+                                   "parsed": parsed.language_working_window_mode})
+    return checks, mismatches, not_checked
+
+
+# Switch rows whose misreading would silently drop or invent hard rules
+# (preferences, fixed requests, leave, hard OFF, strict OFF), with the default
+# the engine applies when the row is absent. Only the key names are shared.
+_XC_SWITCHES = (
+    ("use_preferences", ("Use Preferences", "Preferences"), True),
+    ("fixed_enabled", ("Fixed Request Use", "Use Fixed Requests", "Fixed/Nesting Enabled", "Use Fixed/Nesting"), False),
+    ("leave_enabled", ("Leave", "Leave Days", "Leave Enabled"), True),
+    ("hard_off", ("Hard OFF Preferences", "Hard OFF", "OFF Preferences Hard"), True),
+    ("strict_off", ("Strict 2 OFF", "Strict Two OFF", "Strict OFF Count"), True),
+    ("allow_half_hour_starts", ("Allow Half-Hour Starts", "Allow Half Hour Starts"), False),
+)
+
+
+def _xc_instruction_cells(wb) -> Dict[str, Any]:
+    """Effective 'key | value' pairs (columns A|B and B|C) under the workbook
+    contract: Instructions overrides Engine Defaults, and on one sheet the last
+    row stating a key is the one that counts."""
+    effective: Dict[str, Any] = {}
+    for titles in ({"engine defaults", "engine default", "scheduler defaults"}, {"instructions"}):
+        ws = next((s for s in wb.worksheets if norm(s.title) in titles), None)
+        if ws is None:
+            continue
+        for r in range(1, ws.max_row + 1):
+            for kc in (1, 2):
+                key, value = ws.cell(r, kc).value, ws.cell(r, kc + 1).value
+                if key not in (None, "") and value not in (None, ""):
+                    effective[norm(key)] = value
+    return effective
+
+
+def _xc_contract_crosscheck(wb, parsed) -> Tuple[Dict[str, str], List[Dict[str, Any]], List[Dict[str, Any]]]:
+    checks: Dict[str, str] = {}
+    mismatches: List[Dict[str, Any]] = []
+    not_checked: List[Dict[str, Any]] = []
+
+    # Request switches.
+    cells = _xc_instruction_cells(wb)
+    bad, unclear = [], []
+    for attr, keys, default in _XC_SWITCHES:
+        key = next((norm(k) for k in keys if norm(k) in cells), None)
+        if key is None:
+            expected = default
+        else:
+            token = _xc_squash(cells[key])
+            if token not in _XC_YES | _XC_NO:
+                unclear.append(attr)
+                continue
+            expected = token in _XC_YES
+        if bool(getattr(parsed, attr)) != expected:
+            bad.append({"switch": attr, "workbook": expected, "parsed": bool(getattr(parsed, attr))})
+    if unclear:
+        not_checked.append({"check": "request_switches", "reason": f"values not understood: {unclear}"})
+    checks["request_switches"] = "FAIL" if bad else ("NOT_CHECKED" if unclear else "PASS")
+    if bad:
+        mismatches.append({"check": "request_switches", "examples": bad})
+
+    # The numbers every metric is measured against.
+    def number(value: Any) -> Optional[float]:
+        text = str(value).strip()
+        percent = text.endswith("%")
+        try:
+            return float(text.rstrip("%").strip()) / (100.0 if percent else 1.0)
+        except ValueError:
+            return None
+    wrong, unread = [], []
+    for attr, keys, default, is_ratio in (
+        ("target_ratio", ("Target", "Coverage Target", "Interval Target"), 0.90, True),
+        ("floor_ratio", ("Minimum Per Interval", "Coverage Floor", "Minimum Coverage Percentage"), 0.80, True),
+        ("rest_gap_hours", ("Difference Between Shifts", "Rest Gap Hours", "Minimum Rest Gap"), 12.0, False),
+    ):
+        key = next((norm(k) for k in keys if norm(k) in cells), None)
+        value = default if key is None else number(cells[key])
+        if value is None:
+            unread.append(attr)
+            continue
+        if is_ratio:
+            value = min(1.0, max(0.0, value / 100.0 if value > 1.5 else value))
+        if abs(float(getattr(parsed, attr)) - value) > 1e-9:
+            wrong.append({"setting": attr, "workbook": value, "parsed": float(getattr(parsed, attr))})
+    if unread:
+        not_checked.append({"check": "contract_numbers", "reason": f"values not understood: {unread}"})
+    checks["contract_numbers"] = "FAIL" if wrong else ("NOT_CHECKED" if unread else "PASS")
+    if wrong:
+        mismatches.append({"check": "contract_numbers", "examples": wrong})
+
+    # Phase H: the 11H/3OFF associate limit, read from the raw cell.
+    raw_limit=next((cells[norm(k)] for k in ("Max 11H/3OFF Associates","Maximum 11H/3OFF Associates",
+                                            "Max 11H 3OFF Associates") if norm(k) in cells), None)
+    expected_limit=None
+    if raw_limit not in (None,""):
+        try:
+            value=float(str(raw_limit).strip())
+            expected_limit=int(value) if value==int(value) and value>=1 else "INVALID"
+        except ValueError:
+            expected_limit="INVALID"
+    parsed_limit=getattr(parsed,"max_11h_associates",None)
+    if expected_limit!="INVALID" and expected_limit!=parsed_limit:
+        checks["max_11h_associates"]="FAIL"
+        mismatches.append({"check":"max_11h_associates","workbook":expected_limit,"parsed":parsed_limit})
+    else:
+        checks["max_11h_associates"]="PASS"
+
+    # Every shift the engine may assign exists in the workbook with that start and length.
+    catalog = set()
+    for ws in wb.worksheets:
+        if "shift" not in norm(ws.title):
+            continue
+        for r in range(1, ws.max_row + 1):
+            for c in range(1, ws.max_column):
+                start, end = _xc_minute(ws.cell(r, c).value), _xc_minute(ws.cell(r, c + 1).value)
+                if start is not None and end is not None:
+                    catalog.add((start, (end - start) % 1440 or 1440))
+            for c in range(1, ws.max_column + 1):
+                m = re.fullmatch(r"\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*", str(ws.cell(r, c).value or ""))
+                if m and int(m.group(1)) < 24 and int(m.group(3)) < 24:
+                    start, end = int(m.group(1)) * 60 + int(m.group(2)), int(m.group(3)) * 60 + int(m.group(4))
+                    catalog.add((start, (end - start) % 1440 or 1440))
+    # Phase F: "Allow Half-Hour Starts" = Yes in the workbook itself adds, per
+    # on-the-hour shift, the same length starting 30 minutes later. Derived
+    # here from the raw cells, never from the parse's own flag.
+    half_key = next((norm(k) for k in ("Allow Half-Hour Starts", "Allow Half Hour Starts") if norm(k) in cells), None)
+    if half_key is not None and _xc_squash(cells[half_key]) in _XC_YES:
+        catalog |= {((start + 30) % 1440, length) for start, length in catalog if start % 60 == 0}
+    if not catalog:
+        checks["shifts"] = "NOT_CHECKED"
+        not_checked.append({"check": "shifts", "reason": "no shift sheet with start/end times"})
+    else:
+        invented = [s.label for s in parsed.shifts if (int(s.start_min), int(s.duration_q) * 15) not in catalog]
+        checks["shifts"] = "FAIL" if invented else "PASS"
+        if invented:
+            mismatches.append({"check": "shifts", "not_in_workbook": invented[:20]})
+
+    # Shrinkage equals one shrinkage sheet at the run's interval.
+    minutes = int(parsed.interval_minutes)
+    parsed_grid = {(d, i * minutes): float(x or 0.0) for d, day in enumerate(parsed.shrinkage) for i, x in enumerate(day)}
+    candidates = {title: (step, grid) for title, (step, grid) in _xc_demand_grids(wb).items() if "shrink" in norm(title)}
+    same_step = {title: grid for title, (step, grid) in candidates.items() if step == minutes}
+    if not same_step:
+        checks["shrinkage"] = "NOT_CHECKED"
+        not_checked.append({"check": "shrinkage", "reason": f"no shrinkage sheet at {minutes}-minute intervals"})
+    else:
+        def as_ratio(v: float) -> float:
+            return v / 100.0 if v > 1.0 else v
+        if any(not 0.0 <= as_ratio(v) < 1.0 for grid in same_step.values() for v in grid.values()):
+            checks["shrinkage"] = "NOT_CHECKED"
+            not_checked.append({"check": "shrinkage", "reason": "a shrinkage value outside 0 to <1; the input "
+                                "contract refuses this workbook (HARD_INVALID_SHRINKAGE_VALUE)"})
+            return checks, mismatches, not_checked
+        matching_shrink = [title for title, grid in same_step.items()
+                           if all(abs(as_ratio(grid.get(k, 0.0)) - v) <= 1e-6 for k, v in parsed_grid.items())]
+        checks["shrinkage"] = "PASS" if matching_shrink else "FAIL"
+        if not matching_shrink:
+            mismatches.append({"check": "shrinkage", "sheets_compared": sorted(same_step)})
+    return checks, mismatches, not_checked
+
+
+def independent_input_crosscheck(input_path: Path, parsed, run_override: Optional[str] = None) -> Dict[str, Any]:
+    """Compare parse_input's roster, demand and leave/OFF cells with the raw workbook."""
+    wb = load_workbook(input_path, data_only=True)
+    checks: Dict[str, str] = {}
+    mismatches: List[Dict[str, Any]] = []
+    not_checked: List[Dict[str, Any]] = []
+
+    parsed_names = {norm(a.name) for a in parsed.associates}
+    roster_ws = next((wb[n] for n in wb.sheetnames if norm(n) == "schedule"), None)
+    found = _xc_name_header(roster_ws) if roster_ws is not None else None
+    if not found:
+        checks["roster"] = "NOT_CHECKED"
+        not_checked.append({"check": "roster", "reason": "no Schedule sheet with a name header"})
+    else:
+        r, col = found
+        raw_names = {norm(roster_ws.cell(rr, col).value) for rr in range(r + 1, roster_ws.max_row + 1)
+                     if norm(roster_ws.cell(rr, col).value)}
+        checks["roster"] = "PASS" if raw_names == parsed_names else "FAIL"
+        if raw_names != parsed_names:
+            mismatches.append({"check": "roster", "raw_count": len(raw_names), "parsed_count": len(parsed_names),
+                               "only_in_workbook": sorted(raw_names - parsed_names)[:20],
+                               "only_in_parse": sorted(parsed_names - raw_names)[:20]})
+
+    minutes = int(parsed.interval_minutes)
+    parsed_grid = {(d, i * minutes): float(x or 0) for d, day in enumerate(parsed.requirements) for i, x in enumerate(day)}
+    grids = _xc_demand_grids(wb)
+    matching = []
+    for title, (step, grid) in grids.items():
+        bucket = max(step, minutes)
+        raw_h, parsed_h = _xc_hours(grid, step, bucket), _xc_hours(parsed_grid, minutes, bucket)
+        if all(abs(raw_h.get(k, 0.0) - parsed_h.get(k, 0.0)) <= 1e-6 for k in set(raw_h) | set(parsed_h)):
+            matching.append(title)
+    if not grids:
+        checks["demand"] = "NOT_CHECKED"
+        not_checked.append({"check": "demand", "reason": "no sheet with Sun-Sat columns and a time column"})
+    else:
+        checks["demand"] = "PASS" if matching else "FAIL"
+        if not matching:
+            parsed_days = [round(sum(float(x or 0) for x in day) * minutes / 60.0, 4) for day in parsed.requirements]
+            mismatches.append({"check": "demand", "parsed_hours_by_day": parsed_days,
+                               "sheet_hours_by_day": {t: [round(sum(v for (d, _), v in _xc_hours(g, s, 1440).items() if d == day), 4)
+                                                          for day in range(7)] for t, (s, g) in grids.items()}})
+
+    for label, enabled, names, attr in (
+        ("preference", parsed.use_preferences, {"preference", "prefrence", "preferences"}, "preferences"),
+        ("fixed", parsed.fixed_enabled, {"fixed request", "fixed requests", "fixed shift requests"}, "fixed_schedule"),
+    ):
+        if not enabled:
+            checks[label] = "DISABLED_IN_WORKBOOK"
+            continue
+        duplicate_rows: List[Dict[str, Any]] = []
+        raw = _xc_day_cells(wb, names, parsed_names, duplicate_rows)
+        if duplicate_rows:
+            mismatches.append({"check": f"{label}_duplicate_rows", "count": len(duplicate_rows),
+                               "examples": duplicate_rows[:20]})
+        if raw is None:
+            checks[label] = "NOT_CHECKED"
+            not_checked.append({"check": label, "reason": "no sheet with a name header and seven day columns"})
+            continue
+        bad = []
+        for assoc in parsed.associates:
+            values = list(getattr(assoc, attr) or [])
+            for d in range(7):
+                got = str(values[d] if d < len(values) else "").strip()
+                cell = raw.get((norm(assoc.name), d), "")
+                if got and not cell:
+                    bad.append({"associate": assoc.name, "day": DAYS[d], "parsed": got, "workbook": ""})
+                elif cell and not got and _XC_LEAVE_OR_OFF.search(cell):
+                    bad.append({"associate": assoc.name, "day": DAYS[d], "parsed": "", "workbook": cell})
+        checks[label] = "PASS" if not bad else "FAIL"
+        if bad:
+            mismatches.append({"check": label, "count": len(bad), "examples": bad[:20]})
+
+    for part in (_xc_language_crosscheck(wb, parsed, run_override), _xc_contract_crosscheck(wb, parsed)):
+        checks.update(part[0])
+        mismatches.extend(part[1])
+        not_checked.extend(part[2])
+
+    return {"checks": checks, "demand_sheets_matching": matching, "mismatches": mismatches,
+            "not_checked": not_checked,
+            "shared_engine_surface": "parse_input and the rule helpers listed in engine/tools/VALIDATOR_INDEPENDENCE.md"}
+
+
+def coverage_split_gaps(eng, parsed, after) -> List[Dict[str, Any]]:
+    """Coverage Split windows left short on the schedule as published.
+
+    `after[slot]` lists the associates on the floor after breaks in each
+    quarter of the week (previous-Saturday carry included), exactly as the
+    coverage figures above count them. The rule lookup and the grossed-up
+    headcount are the contract, read through the engine; the count of who is
+    present is this validator's own. (Audit F-12: no check outside the engine
+    used to look at Coverage Split at all.)
+    """
+    gaps: List[Dict[str, Any]] = []
+    if not getattr(parsed, "coverage_split_rules", None):
+        return gaps
+    qpi = parsed.qslots_per_interval
+    for d in range(7):
+        for i in range(parsed.intervals_per_day):
+            if not parsed.active[d][i]:
+                continue
+            for q in range(qpi):
+                slot = d*96 + i*qpi + q
+                minute = i*parsed.interval_minutes + q*15
+                rule = eng.merge_coverage_split_rules(eng.coverage_split_rules_at(parsed, minute))
+                if rule is None:
+                    continue
+                need = eng.coverage_split_required_headcount(parsed, d, i, rule.coverage_ratio)
+                if need <= 0:
+                    continue
+                present = sum(1 for a in after[slot]
+                              if norm(parsed.associates[a].language) in rule.eligible_languages)
+                if present < need:
+                    gaps.append({"day": DAYS[d], "time": eng.hhmm(minute), "group": rule.group,
+                                 "required": int(need), "actual": int(present)})
+    return gaps
+
+
+def validate(input_path: Path, output_path: Path, engine_path: Path,
+             language_working_window: Optional[str] = None) -> Dict[str,Any]:
+    eng=load_engine(engine_path)
+    from canonical_metrics import canonicalize_metrics
+    parsed=eng.parse_input(input_path)
+    # The run's --language-working-window overrides the workbook in the engine
+    # (the notebook's LANGUAGE_WORKING_WINDOW setting uses it). Without the same
+    # override here the validator checked an enforced run as OFF and verified
+    # none of its language hours.
+    language_window_source="workbook"
+    if language_working_window is not None:
+        parsed.language_working_window_mode=eng.normalize_language_window_mode(language_working_window)
+        language_window_source="run override"
+    assignments,output_languages=parse_output_schedule(output_path,[a.name for a in parsed.associates])
+    breaks,before_only=parse_breaks(output_path)
+    # Two independent statements of the stage, so a disagreement is visible.
+    declared_type=declared_artifact_type(output_path)
+    break_sheet_role="BEST_BEFORE_BREAKS" if before_only else "FINAL_AFTER_BREAKS"
+    artifact_role=break_sheet_role
+    stage_declaration_conflict=None
+    if declared_type is not None and declared_type!=break_sheet_role:
+        stage_declaration_conflict={
+            "type":"ARTIFACT_STAGE_DECLARATION_CONFLICT",
+            "break_sheet_role":break_sheet_role,
+            "production_summary_artifact_type":declared_type,
+        }
+        # A workbook that cannot say what stage it is cannot be released. The
+        # stricter of the two readings is used for the metric labelling so the
+        # conflict never lets after-break figures be presented as break
+        # results, and the conflict itself is a hard failure below.
+        artifact_role="BEST_BEFORE_BREAKS"
+    shift_map={norm(s.label):s for s in parsed.shifts}
+    failures=[]; warnings=[]
+    input_crosscheck=independent_input_crosscheck(input_path, parsed, language_working_window)
+    for mismatch in input_crosscheck["mismatches"]:
+        failures.append({"type":"INPUT_CROSSCHECK_MISMATCH", **mismatch})
+    for skipped in input_crosscheck["not_checked"]:
+        warnings.append({"type":"INPUT_CROSSCHECK_NOT_CHECKED", **skipped})
+    # #38a: independently recompute the employee_quality gate. It is one of
+    # three release gates the engine previously self-reported with no check,
+    # and the only one observed returning a verdict other than PASS.
+    employee_quality_independent = independent_employee_quality(parsed, assignments, shift_map)
+    for _key, _cap_attr, _label in (
+        ("late_shift_load_delta", "employee_max_late_shift_load_delta", "LATE_SHIFT"),
+        ("overnight_load_delta", "employee_max_overnight_load_delta", "OVERNIGHT"),
+        ("weekend_load_delta", "employee_max_weekend_load_delta", "WEEKEND"),
+    ):
+        _cap = getattr(parsed, _cap_attr, None)
+        _observed = employee_quality_independent[_key]
+        if isinstance(_cap, int) and _cap >= 0 and _observed > _cap:
+            warnings.append({
+                "type": f"EMPLOYEE_QUALITY_{_label}_LOAD_SPREAD",
+                "observed_spread": _observed,
+                "declared_cap": _cap,
+                "note": "recomputed from the output schedule, independently of the engine gate",
+            })
+
+    if stage_declaration_conflict is not None:
+        failures.append(stage_declaration_conflict)
+    matrix=[]
+    for a,assoc in enumerate(parsed.associates):
+        row=assignments.get(norm(assoc.name))
+        if row is None:
+            failures.append({"type":"MISSING_ASSOCIATE","associate":assoc.name}); row=[""]*7
+        matrix.append(row)
+    extra=sorted(set(assignments)-{norm(a.name) for a in parsed.associates})
+    if extra: failures.append({"type":"EXTRA_OUTPUT_ASSOCIATES","count":len(extra),"examples":extra[:10]})
+    duplicate_rows=list(getattr(assignments,"duplicate_rows",[]))
+    if duplicate_rows:
+        failures.append({"type":"DUPLICATE_OUTPUT_ASSOCIATE","count":len(duplicate_rows),"examples":duplicate_rows[:20]})
+    output_language_mismatches=[]
+    for assoc in parsed.associates:
+        actual=output_languages.get(norm(assoc.name),"")
+        if actual and norm(actual)!=norm(assoc.language):
+            output_language_mismatches.append({"associate":assoc.name,"expected":assoc.language,"actual":actual})
+    if output_language_mismatches:
+        failures.append({"type":"OUTPUT_LANGUAGE_MISMATCH","count":len(output_language_mismatches),"examples":output_language_mismatches[:20]})
+
+    # Assignment legality, fixed/leave/OFF, OFF shape, shift variety and rest.
+    for a,assoc in enumerate(parsed.associates):
+        row=matrix[a]; off_days=[]; shift_days=[]
+        for d,value in enumerate(row):
+            kind="off" if norm(value)=="off" else "leave" if norm(value) in {"leave","pto","vacation"} else "shift" if norm(value) in shift_map else "blank"
+            if kind=="blank": failures.append({"type":"UNKNOWN_OR_BLANK_ASSIGNMENT","associate":assoc.name,"day":DAYS[d],"value":value})
+            if kind=="off": off_days.append(d)
+            if kind=="shift": shift_days.append((d,shift_map[norm(value)]))
+            pref_kind=eng.preference_kind(assoc.preferences[d] if d<len(assoc.preferences) else "")
+            fixed_kind=eng.preference_kind(assoc.fixed_schedule[d] if d<len(assoc.fixed_schedule) else "")
+            if (
+                ((parsed.fixed_enabled and fixed_kind=="leave") or (parsed.leave_enabled and pref_kind=="leave"))
+                and kind!="leave"
+            ):
+                failures.append({"type":"LEAVE_VIOLATION","associate":assoc.name,"day":DAYS[d],"actual":value})
+            if (
+                ((parsed.fixed_enabled and fixed_kind=="off") or (parsed.hard_off and pref_kind=="off"))
+                and kind!="off"
+            ):
+                failures.append({"type":"HARD_OFF_VIOLATION","associate":assoc.name,"day":DAYS[d],"actual":value})
+            if parsed.fixed_enabled and fixed_kind=="shift" and norm(value)!=norm(assoc.fixed_schedule[d]):
+                failures.append({"type":"FIXED_SHIFT_VIOLATION","associate":assoc.name,"day":DAYS[d],"expected":assoc.fixed_schedule[d],"actual":value})
+            # Every enforced mode bounds working hours: the engine's Stage-1 model
+            # blocks a start outside the window under ALL_ROWS, MINIMUM_ROWS and
+            # REQUIRED_LANGUAGE_ONLY alike (associate_language_windows is empty
+            # only for OFF). The REQUIRED_LANGUAGE_ONLY exclusivity check used to
+            # sit inside an ALL_ROWS/MINIMUM_ROWS branch and could never run, so
+            # that mode's rules were not validated at all.
+            if kind=="shift" and parsed.language_working_window_mode in {"ALL_ROWS", "MINIMUM_ROWS", "REQUIRED_LANGUAGE_ONLY"}:
+                entries = eng.associate_language_windows(parsed, assoc, day=d)
+                if entries and not any(
+                    eng.language_window_allows(parsed, shift_map[norm(value)], window)
+                    for window in entries
+                ):
+                    failures.append({
+                        "type":"LANGUAGE_WORKING_WINDOW",
+                        "associate":assoc.name,
+                        "language":assoc.language,
+                        "day":DAYS[d],
+                        "shift":value,
+                        "window":", ".join(f"{eng.hhmm(start)}-{eng.hhmm(end)}" for start, end in entries),
+                        "mode":parsed.language_working_window_mode,
+                    })
+            if kind=="shift" and parsed.language_working_window_mode=="REQUIRED_LANGUAGE_ONLY":
+                blocked = eng.shift_overlaps_required_language_for_noneligible(
+                    parsed, assoc, shift_map[norm(value)], d
+                )
+                if blocked is not None:
+                    failures.append({
+                        "type":"REQUIRED_LANGUAGE_ONLY_VIOLATION",
+                        "associate":assoc.name,
+                        "language":assoc.language,
+                        "required_language":sorted(blocked.required_languages),
+                        "day":DAYS[d],
+                        "shift":value,
+                        "window":f"{eng.hhmm(blocked.start_min)}-{eng.hhmm(blocked.end_min)}",
+                        "mode":parsed.language_working_window_mode,
+                    })
+        # Contract constant shared with the engine, not an independent judgement.
+        # Independence means recomputing coverage from the exported workbook - it
+        # does not mean re-guessing what the contract says a long shift is.  This
+        # was a local 660 while the engine used 630, so a shift in [630, 660) was
+        # long to the engine and short to the validator, producing a false
+        # OFF_COUNT_VIOLATION that would block an otherwise valid release.
+        long_mode=any(s.duration_min>=eng.LONG_SHIFT_MIN_DURATION_MIN for _,s in shift_days)
+        # Same rule the engine's models enforce (audit F-02): leave days come out
+        # of the week, so a full week of leave owes no OFF day.
+        expected_off=eng.required_off_days(parsed,assoc,long_mode)
+        if parsed.strict_off and len(off_days)!=expected_off:
+            failures.append({"type":"OFF_COUNT_VIOLATION","associate":assoc.name,"expected":expected_off,"actual":len(off_days),"off_days":[DAYS[d] for d in off_days]})
+        if parsed.strict_off and not parsed.separate_off_days and expected_off>=2:
+            consecutive=any(d in off_days and (d+1)%7 in off_days for d in range(7))
+            if not consecutive: failures.append({"type":"CONSECUTIVE_OFF_VIOLATION","associate":assoc.name,"off_days":[DAYS[d] for d in off_days]})
+        distinct=len({norm(s.label) for _,s in shift_days})
+        if distinct>parsed.max_different_shifts:
+            failures.append({"type":"MAX_SHIFT_VARIETY_VIOLATION","associate":assoc.name,"actual":distinct,"maximum":parsed.max_different_shifts})
+        for d in range(6):
+            left=shift_map.get(norm(row[d])); right=shift_map.get(norm(row[d+1]))
+            if left and right and not eng.rest_compatible(left,right,parsed.rest_gap_hours):
+                failures.append({"type":"REST_VIOLATION","associate":assoc.name,"from_day":DAYS[d],"to_day":DAYS[d+1],"from":left.label,"to":right.label})
+        sat=shift_map.get(norm(row[6])); sun=shift_map.get(norm(row[0]))
+        if sat and sun and not eng.rest_compatible(sat,sun,parsed.rest_gap_hours):
+            failures.append({"type":"CYCLIC_REST_VIOLATION","associate":assoc.name,"from":"Sat","to":"Sun","from_shift":sat.label,"to_shift":sun.label})
+        if sun and not eng.previous_saturday_compatible(assoc.previous_saturday,sun,parsed.rest_gap_hours):
+            failures.append({"type":"PREVIOUS_SATURDAY_REST_VIOLATION","associate":assoc.name,"previous_saturday":assoc.previous_saturday,"sunday":sun.label})
+
+    # Phase H: "Max 11H/3OFF Associates" -- counted from the exported week.
+    limit_11h=getattr(parsed,"max_11h_associates",None)
+    if limit_11h is not None:
+        long_names=[assoc.name for a,assoc in enumerate(parsed.associates)
+                    if any((shift_map.get(norm(value)) is not None
+                            and shift_map[norm(value)].duration_min>=eng.LONG_SHIFT_MIN_DURATION_MIN)
+                           for value in matrix[a])]
+        if len(long_names)>limit_11h:
+            failures.append({"type":"11H_ASSOCIATE_LIMIT_EXCEEDED","maximum":limit_11h,
+                             "actual":len(long_names),"associates":long_names[:20]})
+
+    # Flexible nesting groups are equal-schedule constraints.  Exact fixed rows
+    # deliberately have their nesting tag cleared by the parser because their
+    # day values are already authoritative and may differ by design.
+    nesting_groups=defaultdict(list)
+    for a,assoc in enumerate(parsed.associates):
+        if assoc.nesting_group:
+            nesting_groups[norm(assoc.nesting_group)].append((assoc.name,[norm(value) for value in matrix[a]]))
+    for group,members in nesting_groups.items():
+        distinct={tuple(row) for _,row in members}
+        if len(distinct)>1:
+            failures.append({
+                "type":"NESTING_GROUP_SCHEDULE_MISMATCH","group":group,
+                "members":[{"associate":name,"schedule":row} for name,row in members[:20]],
+            })
+
+    # Build shift occurrences at quarter level.
+    horizon=7*96
+    before=[[] for _ in range(horizon)]
+    # Keep current-week assignments separate from historical Saturday carry-in.
+    # The blank-interval contract is specifically "no NEW staffing in the
+    # current week"; counting prior-week spillover as current-week staffing
+    # created false hard failures on valid nesting/rest-safe schedules.
+    current_week_before=[[] for _ in range(horizon)]
+    for a,assoc in enumerate(parsed.associates):
+        for d,value in enumerate(matrix[a]):
+            shift=shift_map.get(norm(value))
+            if not shift: continue
+            start=d*96+shift.start_min//15
+            for q in range(start,start+shift.duration_q):
+                if 0<=q<horizon:
+                    before[q].append(a)
+                    current_week_before[q].append(a)
+        # Previous Saturday spill into current Sunday.
+        #
+        # Parse the label directly rather than requiring it to appear in THIS
+        # week's shift library.  Carry-in is historical fact: the associate
+        # worked that shift last week.  The library constrains what may be
+        # ASSIGNED this week - it is filtered by the allowed durations and start
+        # window - so demanding membership silently discarded real coverage.
+        #
+        # On NMG SP the library holds a single label while two associates carry
+        # in "16:00 - 01:00" and "21:00 - 06:00"; both were dropped, and the
+        # validator under-counted Sunday coverage against the engine by exactly
+        # the observed margin.  The validator was also inconsistent with itself,
+        # since it already parses this same label directly for the rest check
+        # via eng.previous_saturday_compatible.
+        pparts=eng.shift_parts(assoc.previous_saturday)
+        if pparts:
+            pstart,_,pdur=pparts
+            start=-96+pstart//15
+            for q in range(start,start+pdur//15):
+                if 0<=q<96: before[q].append(a)
+
+    break_qslots=defaultdict(set); break_qslots_all=defaultdict(set); break_fail=[]; break_spacing_rows=[]
+    by_cell=defaultdict(list); exception_cells=set()
+    for br in breaks:
+        aidx=next((i for i,a in enumerate(parsed.associates) if norm(a.name)==norm(br['associate'])),None)
+        didx=next((i for i,d in enumerate(DAYS) if norm(d)==norm(br['day'])),None)
+        if aidx is None or didx is None: break_fail.append({"type":"UNKNOWN_BREAK_ASSOCIATE_OR_DAY","row":br}); continue
+        if br.get('is_exception'):
+            exception_cells.add((aidx,didx)); continue
+        shift=shift_map.get(norm(matrix[aidx][didx])); start_clock=hhmm_to_min(br['start'])
+        if shift is None or start_clock is None or br['duration']<=0:
+            break_fail.append({"type":"INVALID_BREAK_ROW","row":br}); continue
+        if start_clock % 15 or int(br['duration']) % 15:
+            break_fail.append({"type":"BREAK_NOT_QUARTER_HOUR_ALIGNED","associate":parsed.associates[aidx].name,"day":DAYS[didx],"break":br})
+        rel=start_clock-shift.start_min
+        if rel<0: rel+=1440
+        if rel<0 or rel+br['duration']>shift.duration_min:
+            break_fail.append({"type":"BREAK_OUTSIDE_SHIFT","associate":parsed.associates[aidx].name,"day":DAYS[didx],"break":br})
+        abs_start=didx*96+(shift.start_min+rel)//15
+        duration_q=math.ceil(br['duration']/15)
+        br['_rel_q']=rel//15; br['_duration_q']=duration_q; br['_normalized_type']=norm(br.get('type'))
+        for q in range(abs_start,abs_start+duration_q):
+            if q in break_qslots_all[aidx]: break_fail.append({"type":"OVERLAPPING_BREAK","associate":parsed.associates[aidx].name,"day":DAYS[didx],"qslot":q})
+            break_qslots_all[aidx].add(q)
+            if 0<=q<horizon:
+                break_qslots[aidx].add(q)
+        by_cell[aidx,didx].append(br)
+    failures.extend(break_fail)
+    if not before_only:
+        for a,assoc in enumerate(parsed.associates):
+            for d,value in enumerate(matrix[a]):
+                if norm(value) not in shift_map: continue
+                # Audit F-20: each shift's own break set (the global set unless
+                # the workbook states one for this shift length).
+                expected_segments=[(q*15,label) for q,label in eng.break_segments_for(parsed,shift_map[norm(value)].duration_min)]
+                cell=by_cell.get((a,d),[])
+                if (a,d) in exception_cells:
+                    if cell:
+                        failures.append({"type":"BREAKS_PRESENT_ON_EXCEPTION_CELL","associate":assoc.name,"day":DAYS[d]})
+                    continue
+                durations=sorted(int(r['duration']) for r in cell)
+                expected=sorted(m for m,_ in expected_segments)
+                if durations!=expected:
+                    failures.append({"type":"BREAK_SEGMENT_COUNT_OR_DURATION","associate":assoc.name,"day":DAYS[d],"expected":expected,"actual":durations})
+                    continue
+                ordered=sorted(cell,key=lambda row:int(row['_rel_q']))
+                actual_labels=[row['_normalized_type'] for row in ordered]
+                expected_labels=[norm(label) for _,label in expected_segments]
+                if actual_labels!=expected_labels:
+                    failures.append({"type":"BREAK_ORDER_OR_TYPE","associate":assoc.name,"day":DAYS[d],"expected":expected_labels,"actual":actual_labels})
+                shift=shift_map[norm(value)]
+                for row in ordered:
+                    rel_q=int(row['_rel_q']); length_q=int(row['_duration_q'])
+                    margin=parsed.break_edge_margin_q
+                    if margin is not None and (rel_q < int(margin) or rel_q+length_q > shift.duration_q-int(margin)):
+                        failures.append({"type":"BREAK_EDGE_MARGIN","associate":assoc.name,"day":DAYS[d],"break_type":row.get('type'),"relative_start_q":rel_q,"edge_margin_q":margin})
+                    rule=(parsed.break_window_rules_q or {}).get(norm(row.get('type')),{})
+                    earliest=rule.get('earliest_q'); latest=rule.get('latest_q')
+                    if earliest is not None and rel_q<int(earliest) or latest is not None and rel_q>int(latest):
+                        failures.append({"type":"BREAK_WINDOW","associate":assoc.name,"day":DAYS[d],"break_type":row.get('type'),"relative_start_q":rel_q,"earliest_q":earliest,"latest_q":latest})
+                for previous,current in zip(ordered,ordered[1:]):
+                    gap=int(current['_rel_q'])-(int(previous['_rel_q'])+int(previous['_duration_q']))
+                    if gap<int(parsed.break_min_gap_q):
+                        failures.append({"type":"BREAK_MINIMUM_GAP","associate":assoc.name,"day":DAYS[d],"actual_gap_q":gap,"minimum_gap_q":parsed.break_min_gap_q})
+                    if gap==int(parsed.break_preferred_gap_q): classification="PREFERRED"
+                    elif gap<int(parsed.break_preferred_gap_q): classification="FLEXIBLE_COMPRESSION"
+                    elif gap<=int(parsed.break_normal_max_gap_q): classification="FLEXIBLE_EXTENSION"
+                    else: classification="EXTENDED_BEYOND_NORMAL_RANGE"
+                    break_spacing_rows.append({
+                        "associate":assoc.name,"day":DAYS[d],"from_segment":previous.get('type'),
+                        "to_segment":current.get('type'),"actual_gap_minutes":gap*15,
+                        "preferred_gap_minutes":int(parsed.break_preferred_gap_q)*15,
+                        "normal_maximum_gap_minutes":int(parsed.break_normal_max_gap_q)*15,
+                        "classification":classification,
+                    })
+
+        if exception_cells and (not parsed.allow_no_break_exceptions or len(exception_cells)>int(parsed.max_no_break_exceptions)):
+            failures.append({"type":"NO_BREAK_EXCEPTION_POLICY","actual":len(exception_cells),"allowed":bool(parsed.allow_no_break_exceptions),"maximum":int(parsed.max_no_break_exceptions)})
+
+    quality_gate_failures=[]; quality_gate_warnings=[]; quality_gate_suppressed=[]
+    # Two definitions, each published under its own name (audit F-03). The
+    # check below - and the BREAK_CONCURRENCY gate issue - counts every staffed
+    # quarter ("*_all_staffed_quarters"). The canonical names count only the
+    # quarters of active-demand intervals plus the next-Sunday horizon, which
+    # is what the engine optimises and publishes. One name used to carry the
+    # broader count here and the narrower one in the engine, so the parity
+    # gate blocked valid schedules whose breaks fell in blank-demand hours.
+    concurrency_violations=[]; max_concurrent=0; max_concurrent_ratio=0.0
+    active_concurrency={"max_breaks":0,"max_ratio":0.0,"violations":0}
+    for qslot in range(horizon):
+        staffed=len(before[qslot]); on_break=sum(qslot in slots for slots in break_qslots.values())
+        max_concurrent=max(max_concurrent,on_break)
+        max_concurrent_ratio=max(max_concurrent_ratio,on_break/max(1,staffed))
+        allowed=eng.maximum_concurrent_breaks(parsed,staffed)
+        if parsed.active[qslot//96][(qslot%96)//parsed.qslots_per_interval]:
+            active_concurrency["max_breaks"]=max(active_concurrency["max_breaks"],on_break)
+            active_concurrency["max_ratio"]=max(active_concurrency["max_ratio"],on_break/max(1,staffed))
+            active_concurrency["violations"]+=int(on_break>allowed)
+        if on_break>allowed:
+            concurrency_violations.append({"day":DAYS[qslot//96],"time":eng.hhmm((qslot%96)*15),"staffed":staffed,"on_break":on_break,"maximum":allowed})
+    if concurrency_violations:
+        issue={"type":"BREAK_CONCURRENCY","count":len(concurrency_violations),"examples":concurrency_violations[:20]}
+        break_mode=norm(parsed.break_concurrency_gate_mode)
+        if break_mode=="fail": quality_gate_failures.append(issue)
+        elif break_mode=="warn": quality_gate_warnings.append(issue); warnings.append(issue)
+        else: quality_gate_suppressed.append({**issue,"gate":"break_concurrency","gate_mode":break_mode})
+    extended_spacing=[row for row in break_spacing_rows if row['classification']=="EXTENDED_BEYOND_NORMAL_RANGE"]
+    if extended_spacing:
+        warnings.append({"type":"BREAK_SPACING_BEYOND_NORMAL_RANGE","count":len(extended_spacing),"examples":extended_spacing[:20]})
+
+    after=[]
+    for q,covers in enumerate(before):
+        after.append([a for a in covers if q not in break_qslots[a]])
+
+    # Coverage and language.
+    interval_rows=[]; zero=[]; language_gaps=[]; opening_gaps=[]; floor_flags=[]; blank_staffed=[]
+    # Independent recomputation of the language_reserve gate. The hard minimum
+    # is already checked below; the gate the engine scores is the operational
+    # RESERVE on top of it (minimum + language_reserve_extra), which nothing
+    # here re-derived. Mirrors eng.language_operational_reserve_target and eng.language_reserve_status, and reads
+    # after[slot] so break placement is accounted for.
+    language_reserve_rows=[]; language_reserve_counts={"GAP":0,"MINIMUM_ONLY":0,"RESERVE_PROTECTED":0}
+    before100=before90=before80=after100=after90=after80=before_target=after_target=before_floor=after_floor=0
+    for d in range(7):
+        openings=set(eng.opening_intervals_for_day(parsed,d))
+        for i in range(parsed.intervals_per_day):
+            if not parsed.active[d][i]:
+                for q in range(parsed.qslots_per_interval):
+                    slot=d*96+i*parsed.qslots_per_interval+q
+                    if current_week_before[slot]:
+                        blank_staffed.append({
+                            "day":DAYS[d],
+                            "time":eng.hhmm(i*parsed.interval_minutes+q*15),
+                            "current_week_before_raw":len(current_week_before[slot]),
+                            "before_raw":len(before[slot]),
+                            "after_raw":len(after[slot]),
+                            "prior_carry_in_raw":max(
+                                0, len(before[slot])-len(current_week_before[slot])
+                            ),
+                        })
+                floor_flags.append(None); continue
+            req=float(parsed.requirements[d][i] or 0.0); eff=1-float(parsed.shrinkage[d][i]); qpi=parsed.qslots_per_interval
+            bvals=[]; avals=[]
+            for q in range(qpi):
+                slot=d*96+i*qpi+q
+                b=len(before[slot]); a=len(after[slot]); bvals.append(b); avals.append(a)
+                minute=i*parsed.interval_minutes+q*15
+                if a<=0: zero.append({"day":DAYS[d],"time":eng.hhmm(minute)})
+                if parsed.opening_guard_enabled and i in openings and a<parsed.opening_minimum:
+                    opening_gaps.append({"day":DAYS[d],"time":eng.hhmm(minute),"actual":a,"minimum":parsed.opening_minimum})
+                for rule in eng.language_rules_at(parsed, minute, day=d):
+                    if not rule.active or not rule.overlaps(minute,15): continue
+                    eligible=sum(1 for ai in after[slot] if norm(parsed.associates[ai].language) in rule.eligible_languages)
+                    if eligible<rule.minimum:
+                        language_gaps.append({"day":DAYS[d],"time":eng.hhmm(minute),"group":rule.group,"minimum":rule.minimum,"actual":eligible})
+                    reserve_target=eng.language_operational_reserve_target(parsed, rule)
+                    reserve_status=eng.language_reserve_status(eligible, int(rule.minimum), int(reserve_target))
+                    language_reserve_counts[reserve_status]=language_reserve_counts.get(reserve_status,0)+1
+                    if reserve_status!="RESERVE_PROTECTED" and len(language_reserve_rows)<500:
+                        language_reserve_rows.append({
+                            "day":DAYS[d],"time":eng.hhmm(minute),"group":rule.group,
+                            "minimum":int(rule.minimum),"reserve_target":int(reserve_target),
+                            "actual":eligible,"status":reserve_status})
+            be=sum(bvals)*eff/qpi; ae=sum(avals)*eff/qpi
+            bp=be/req if req>0 else 1.0; ap=ae/req if req>0 else 1.0
+            before100+=bp>=1-1e-9; before90+=bp>=.9-1e-9; before80+=bp>=.8-1e-9
+            after100+=ap>=1-1e-9; after90+=ap>=.9-1e-9; after80+=ap>=.8-1e-9
+            before_target+=bp+1e-9>=parsed.target_ratio; after_target+=ap+1e-9>=parsed.target_ratio
+            before_floor+=bp+1e-9>=parsed.floor_ratio; after_floor+=ap+1e-9>=parsed.floor_ratio
+            floor_flags.append(ap+1e-9<parsed.floor_ratio)
+            # Same ceil tolerance the engine applies.  Without it a requirement
+            # that is integral in exact arithmetic but marginally above integral
+            # in floating point rounds up by a whole associate, overstating
+            # unavoidable staffing and understating avoidable overage - a silent
+            # disagreement with the engine on the exact metric under review.
+            unavoidable=math.ceil(req*parsed.target_ratio/max(eff,1e-9)-eng.OVERAGE_CEIL_TOLERANCE)*eff
+            avoid=max(0.0,ae-unavoidable)
+            soft_threshold=max(unavoidable,req*float(parsed.overage_soft_cap_ratio))
+            severe_threshold=max(unavoidable,req*float(parsed.overage_severe_cap_ratio))
+            extreme_threshold=max(unavoidable,req*float(parsed.overage_extreme_cap_ratio))
+            interval_rows.append({
+                "day":DAYS[d],"day_index":d,"interval_index":i,
+                "interval":eng.hhmm(i*parsed.interval_minutes),"required":req,
+                "before_effective":be,"after_effective":ae,"before_pct":bp,"after_pct":ap,
+                "before_raw_min":min(bvals,default=0),"before_raw_max":max(bvals,default=0),
+                "after_raw_min":min(avals,default=0),"after_raw_max":max(avals,default=0),
+                "avoidable_overage_fte":avoid,
+                "soft_overage":bool(ae>soft_threshold+1e-9),
+                "severe_overage":bool(ae>severe_threshold+1e-9),
+                "extreme_overage":bool(ae>extreme_threshold+1e-9),
+            })
+    active=len(interval_rows); severe_threshold=max(0,parsed.floor_ratio-.10)
+    severe=sum(1 for r in interval_rows if r['after_pct']+1e-9<severe_threshold)
+    maxrun=max_gap_run(floor_flags,parsed.intervals_per_day)
+    overages=[r['avoidable_overage_fte'] for r in interval_rows]
+    mean=sum(overages)/max(1,len(overages)); variance=sum((x-mean)**2 for x in overages)/max(1,len(overages))
+    positive_overages=[value for value in overages if value>1e-9]
+    top10_concentration=(sum(sorted(positive_overages,reverse=True)[:10])/sum(positive_overages)) if positive_overages else 0.0
+    requirements_sorted=sorted(float(row['required']) for row in interval_rows)
+    median_requirement=requirements_sorted[len(requirements_sorted)//2] if requirements_sorted else 0.0
+    low_demand_overage=sum(float(row['avoidable_overage_fte']) for row in interval_rows if float(row['required'])<=median_requirement)
+    maximum_overage_run=0
+    for d in range(7):
+        run=0
+        for row in (r for r in interval_rows if int(r['day_index'])==d):
+            if float(row['avoidable_overage_fte'])>1e-9:
+                run+=1; maximum_overage_run=max(maximum_overage_run,run)
+            else:
+                run=0
+
+    # Independent whole-week distribution gate.  Total overage alone is not
+    # sufficient: avoidable excess concentrated in a few intervals, or abrupt
+    # raw-HC jumps unsupported by demand, is also release debt.
+    whole_week_cap_violations=[]; whole_week_imbalance=[]
+    if parsed.whole_week_balance_enabled:
+        for row in interval_rows:
+            cap=eng.whole_week_raw_cap(parsed,int(row['day_index']),int(row['interval_index']))
+            if int(row['after_raw_max'])>cap and float(row['avoidable_overage_fte'])>1e-9:
+                whole_week_cap_violations.append({
+                    "day":row['day'],"interval":row['interval'],"actual":row['after_raw_max'],
+                    "cap":cap,"avoidable_overage_fte":row['avoidable_overage_fte'],
+                })
+        for d in range(7):
+            for qslot in range(d*96,(d+1)*96-1):
+                previous_interval=(qslot-d*96)//parsed.qslots_per_interval
+                current_interval=(qslot+1-d*96)//parsed.qslots_per_interval
+                if not (0<=previous_interval<parsed.intervals_per_day and 0<=current_interval<parsed.intervals_per_day): continue
+                if not (parsed.active[d][previous_interval] and parsed.active[d][current_interval]): continue
+                delta=abs(len(after[qslot+1])-len(after[qslot]))
+                allowed=eng.whole_week_adjacent_raw_limit(parsed,d,previous_interval,current_interval)
+                if delta>allowed:
+                    whole_week_imbalance.append({
+                        "day":DAYS[d],"from":eng.hhmm((qslot-d*96)*15),
+                        "to":eng.hhmm((qslot+1-d*96)*15),"change":delta,"maximum":allowed,
+                    })
+    whole_week_issues=[]
+    if len(whole_week_cap_violations)>int(parsed.whole_week_max_overage_cap_violations):
+        whole_week_issues.append({"code":"WHOLE_WEEK_OVERAGE_CAP_EXCEEDED","actual":len(whole_week_cap_violations),"maximum":int(parsed.whole_week_max_overage_cap_violations),"examples":whole_week_cap_violations[:20]})
+    if len(whole_week_imbalance)>int(parsed.whole_week_max_imbalance_violations):
+        whole_week_issues.append({"code":"WHOLE_WEEK_ADJACENT_IMBALANCE_EXCEEDED","actual":len(whole_week_imbalance),"maximum":int(parsed.whole_week_max_imbalance_violations),"examples":whole_week_imbalance[:20]})
+    if whole_week_issues:
+        issue={"type":"WHOLE_WEEK_BALANCE","issues":whole_week_issues}
+        whole_week_mode=norm(parsed.whole_week_gate_mode)
+        if whole_week_mode=="fail": quality_gate_failures.append(issue)
+        elif whole_week_mode=="warn": quality_gate_warnings.append(issue); warnings.append(issue)
+        else: quality_gate_suppressed.append({**issue,"gate":"whole_week_balance","gate_mode":whole_week_mode})
+
+    # Next-Sunday is reconstructed from Saturday spill plus the recurring
+    # Sunday assignment, including the matching Saturday/Sunday break cells.
+    # The engine deliberately protects only the Saturday-spill horizon. Once
+    # a legal next-Sunday shift can start on its own, later Sunday coverage
+    # belongs to the ordinary Sunday contract, not to the carry-out gate.
+    # Iterating over all 24 Sunday intervals here duplicated current-week
+    # floor gaps as false NEXT_SUNDAY_CARRY_OUT failures.
+    protected_next_sunday_intervals = set(eng.next_sunday_interval_indices(parsed))
+    # The solver constrains next-Sunday adjacency between neighbouring QUARTER
+    # slots, and the engine metric measures it the same way. Comparing whole
+    # intervals here (the interval maximum against the next interval's maximum)
+    # checked a weaker rule under the same name: on a 60-minute workbook it saw
+    # a quarter of the adjacent pairs, and an interval maximum hides a cliff
+    # inside the hour. That made this a check of something the engine does not
+    # enforce rather than an independent check of what it does.
+    protected_next_sunday_qslots = {
+        qslot for _interval, _quarter, qslot in eng.next_sunday_interval_quarters(parsed)
+    }
+    next_quarter_raw = []
+    next_rows=[]; next_zero=[]; next_language=[]; next_opening=[]; next_blank=[]
+    next_openings=set(eng.opening_intervals_for_day(parsed,0))
+    for i in range(parsed.intervals_per_day):
+        if i not in protected_next_sunday_intervals:
+            continue
+        active_row=bool(parsed.active[0][i])
+        req=float(parsed.requirements[0][i] or 0); eff=1-float(parsed.shrinkage[0][i]); before_vals=[]; after_vals=[]
+        for q in range(parsed.qslots_per_interval):
+            minute=i*parsed.interval_minutes+q*15; pseudo=7*96+i*parsed.qslots_per_interval+q
+            occurrences=[]
+            for a,_assoc in enumerate(parsed.associates):
+                sat=shift_map.get(norm(matrix[a][6])); sun=shift_map.get(norm(matrix[a][0]))
+                if sat:
+                    st=6*96+sat.start_min//15
+                    if st<=pseudo<st+sat.duration_q: occurrences.append((a,pseudo))
+                if sun:
+                    st=7*96+sun.start_min//15
+                    if st<=pseudo<st+sun.duration_q: occurrences.append((a,pseudo-7*96))
+            remaining=[(a,source_q) for a,source_q in occurrences if source_q not in break_qslots_all[a]]
+            before_raw=len(occurrences); after_raw=len(remaining)
+            before_vals.append(before_raw); after_vals.append(after_raw)
+            if pseudo in protected_next_sunday_qslots:
+                next_quarter_raw.append((pseudo, i, after_raw))
+            boundary_on_break = sum(
+                source_q in break_qslots_all[a] for a, source_q in occurrences
+            )
+            max_concurrent = max(max_concurrent, boundary_on_break)
+            boundary_ratio = boundary_on_break / before_raw if before_raw else 0.0
+            max_concurrent_ratio = max(max_concurrent_ratio, boundary_ratio)
+            boundary_allowed = eng.maximum_concurrent_breaks(parsed, before_raw)
+            active_concurrency["max_breaks"] = max(active_concurrency["max_breaks"], boundary_on_break)
+            active_concurrency["max_ratio"] = max(active_concurrency["max_ratio"], boundary_ratio)
+            active_concurrency["violations"] += int(boundary_on_break > boundary_allowed)
+            if boundary_on_break > boundary_allowed:
+                concurrency_violations.append({
+                    "day": "Next Sun", "time": eng.hhmm(minute),
+                    "staffed": before_raw, "on_break": boundary_on_break,
+                    "maximum": boundary_allowed, "scope": "NEXT_SUNDAY_CYCLIC",
+                })
+            if not active_row:
+                if before_raw: next_blank.append({"time":eng.hhmm(minute),"before_raw":before_raw,"after_raw":after_raw})
+                continue
+            if after_raw<=0: next_zero.append({"time":eng.hhmm(minute)})
+            if parsed.opening_guard_enabled and i in next_openings and after_raw<parsed.opening_minimum:
+                next_opening.append({"time":eng.hhmm(minute),"actual":after_raw,"minimum":parsed.opening_minimum})
+            for rule in eng.language_rules_at(parsed, minute, day=0):
+                if not rule.active or not rule.overlaps(minute,15): continue
+                eligible=sum(1 for a,_source in remaining if norm(parsed.associates[a].language) in rule.eligible_languages)
+                if eligible<rule.minimum:
+                    next_language.append({"time":eng.hhmm(minute),"group":rule.group,"minimum":rule.minimum,"actual":eligible})
+        if active_row:
+            be=sum(before_vals)*eff/max(1,len(before_vals)); ae=sum(after_vals)*eff/max(1,len(after_vals)); pct=ae/req if req>0 else 1
+            next_rows.append({"interval_index":i,"interval":eng.hhmm(i*parsed.interval_minutes),"before_effective":be,"after_effective":ae,"pct":pct,"after_raw_max":max(after_vals,default=0)})
+
+    failures.extend({"type":"ZERO_STAFF_ACTIVE","detail":row} for row in zero)
+    failures.extend({"type":"LANGUAGE_MINIMUM","detail":row} for row in language_gaps)
+    failures.extend({"type":"OPENING_MINIMUM","detail":row} for row in opening_gaps)
+    split_gaps=coverage_split_gaps(eng, parsed, after)
+    if split_gaps:
+        # Same release rule as the engine's coverage_split gate: FAIL mode
+        # blocks, WARN mode is reported.
+        entry={"type":"COVERAGE_SPLIT","count":len(split_gaps),"examples":split_gaps[:20]}
+        if str(getattr(parsed,"coverage_split_gate_mode","fail")).lower()=="warn":
+            warnings.append(entry)
+        else:
+            failures.append(entry)
+    if parsed.blank_requirement_mode=="hard_no_current_week_staffing" and blank_staffed:
+        failures.append({"type":"BLANK_INTERVAL_STAFFING","count":len(blank_staffed),"examples":blank_staffed[:20]})
+    if parsed.floor_mode=="hard":
+        hard_ratio=float(parsed.hard_floor_ratio or parsed.floor_ratio)
+        hard_gaps=[r for r in interval_rows if float(r['after_pct'])+1e-9<hard_ratio]
+        if hard_gaps: failures.append({"type":"HARD_FLOOR","count":len(hard_gaps),"ratio":hard_ratio,"examples":hard_gaps[:20]})
+    next_floor_gaps=[row for row in next_rows if float(row['pct'])+1e-9<float(parsed.floor_ratio)]
+    # Audit F-07: the next-Sunday floor is coverage quality (below), as the
+    # current week's floor is; zero staffing, language, opening and banned
+    # blank staffing stay hard.
+    if next_zero or next_language or next_opening or (parsed.blank_requirement_mode=="hard_no_current_week_staffing" and next_blank):
+        failures.append({"type":"NEXT_SUNDAY_CARRY_OUT","floor_gap_count":len(next_floor_gaps),"zero_count":len(next_zero),"language_gap_count":len(next_language),"opening_gap_count":len(next_opening),"blank_staffed_count":len(next_blank) if parsed.blank_requirement_mode=="hard_no_current_week_staffing" else 0})
+
+    next_overage_cap_violations=[]; next_imbalance=[]; next_adjacent_deltas=[]
+    for row in next_rows:
+        i=int(row['interval_index'])
+        cap=eng.next_sunday_raw_cap(parsed,i)
+        if int(row.get('after_raw_max',0))>cap: next_overage_cap_violations.append({"interval":row['interval'],"actual":row.get('after_raw_max'),"cap":cap})
+    ordered_quarter_raw=sorted(next_quarter_raw)
+    for (previous_q,previous_i,previous_raw),(current_q,current_i,current_raw) in zip(
+            ordered_quarter_raw, ordered_quarter_raw[1:]):
+        # Only genuinely neighbouring quarters: a gap in the protected horizon
+        # is not an adjacency, exactly as the solver treats it.
+        if current_q != previous_q + 1: continue
+        delta=abs(int(current_raw)-int(previous_raw))
+        allowed=eng.next_sunday_adjacent_raw_limit(parsed,int(previous_i),int(current_i))
+        # Every adjacency contributes to the observed maximum step, including
+        # the ones that stay inside their limit.
+        next_adjacent_deltas.append(delta)
+        if delta>allowed:
+            next_imbalance.append({
+                "from":eng.hhmm(previous_i*parsed.interval_minutes
+                                +(previous_q-eng.TOTAL_QSLOTS-previous_i*parsed.qslots_per_interval)*15),
+                "to":eng.hhmm(current_i*parsed.interval_minutes
+                              +(current_q-eng.TOTAL_QSLOTS-current_i*parsed.qslots_per_interval)*15),
+                "change":delta,"maximum":allowed,
+                "previous_raw":int(previous_raw),"current_raw":int(current_raw)})
+    boundary_issue={"type":"NEXT_SUNDAY_BALANCE","overage_cap_violations":len(next_overage_cap_violations),"imbalance_violations":len(next_imbalance),"examples":(next_overage_cap_violations+next_imbalance)[:20]}
+    if next_overage_cap_violations or next_imbalance:
+        boundary_mode=norm(parsed.next_sunday_balance_gate_mode)
+        if boundary_mode=="fail": quality_gate_failures.append(boundary_issue)
+        elif boundary_mode=="warn": quality_gate_warnings.append(boundary_issue); warnings.append(boundary_issue)
+        else: quality_gate_suppressed.append({**boundary_issue,"gate":"next_sunday_balance","gate_mode":boundary_mode})
+
+    quality_limits=eng.coverage_quality_limits(parsed,active)
+    quality_issues=[]
+    if active-int(after_floor)>quality_limits['maximum_floor_gaps']: quality_issues.append({"code":"FLOOR_GAP_LIMIT","actual":active-int(after_floor),"maximum":quality_limits['maximum_floor_gaps']})
+    if severe>quality_limits['maximum_severe_gaps']: quality_issues.append({"code":"SEVERE_GAP_LIMIT","actual":severe,"maximum":quality_limits['maximum_severe_gaps']})
+    if maxrun>quality_limits['maximum_consecutive_floor_gaps']: quality_issues.append({"code":"FLOOR_RUN_LIMIT","actual":maxrun,"maximum":quality_limits['maximum_consecutive_floor_gaps']})
+    if parsed.protected_after80_minimum is not None and int(after80)<int(parsed.protected_after80_minimum): quality_issues.append({"code":"PROTECTED_AFTER80_MINIMUM","actual":int(after80),"minimum":int(parsed.protected_after80_minimum)})
+    if parsed.minimum_after_break_target_ratio is not None and active and int(after_target)/active+1e-12<float(parsed.minimum_after_break_target_ratio): quality_issues.append({"code":"AFTER_TARGET_RATIO_MINIMUM","actual":int(after_target)/active,"minimum":float(parsed.minimum_after_break_target_ratio)})
+    if next_floor_gaps: quality_issues.append({"code":"NEXT_SUNDAY_FLOOR_GAPS","count":len(next_floor_gaps),"floor_ratio":parsed.floor_ratio})
+    quality_gate_mode=norm(parsed.quality_gate_mode)
+    if quality_issues:
+        coverage_quality_gate_status=("FAIL" if quality_gate_mode=="fail" else
+                                      "WARN" if quality_gate_mode=="warn" else
+                                      "NOT_ENFORCED")
+    else:
+        coverage_quality_gate_status="PASS"
+    if quality_issues:
+        issue={"type":"PRODUCTION_QUALITY_GATE","issues":quality_issues}
+        if quality_gate_mode=="fail":
+            # Quality debt is release-blocking, but it is not a hard-rule
+            # defect in the workbook artifact. Keep it separate so a hard-valid
+            # schedule can still be retained, independently checked, and
+            # reported as review-only by the runner.
+            quality_gate_failures.append(issue)
+            quality_gate_status="FAIL"
+        elif quality_gate_mode=="warn":
+            quality_gate_warnings.append(issue); warnings.append(issue)
+        else:
+            quality_gate_suppressed.append({**issue,"gate":"coverage","gate_mode":quality_gate_mode})
+    if quality_gate_failures:
+        quality_gate_status="FAIL"
+    elif quality_gate_warnings:
+        quality_gate_status="WARN"
+    elif quality_gate_suppressed:
+        quality_gate_status="NOT_ENFORCED"
+    else:
+        quality_gate_status="PASS"
+    metrics={
+        "active_intervals":active,"before100":int(before100),"before90":int(before90),"before80":int(before80),
+        "after100":int(after100),"after90":int(after90),"after80":int(after80),
+        "before_target":int(before_target),"after_target":int(after_target),"before_floor":int(before_floor),"after_floor":int(after_floor),
+        "floor_gaps":active-int(after_floor),"severe_floor_gaps":severe,"max_consecutive_floor_gaps":maxrun,
+        "zero_staffed_active_quarters":len(zero),"language_gap_count":len(language_gaps),"opening_gap_count":len(opening_gaps),
+        "coverage_split_gap_count":len(split_gaps),
+        "avoidable_overage_fte_sum":sum(overages),"avoidable_overage_peak_fte":max(overages,default=0),
+        "avoidable_overage_variance_fte":variance,"avoidable_overage_stddev_fte":math.sqrt(max(0,variance)),
+        "avoidable_overage_positive_interval_count":len(positive_overages),
+        "avoidable_overage_top10_concentration":top10_concentration,
+        "avoidable_overage_max_consecutive_intervals":maximum_overage_run,
+        "avoidable_overage_low_demand_fte_sum":low_demand_overage,
+        "overage_distribution_median_requirement":median_requirement,
+        "soft_overage_interval_count":sum(bool(r['soft_overage']) for r in interval_rows),
+        "severe_overage_interval_count":sum(bool(r['severe_overage']) for r in interval_rows),
+        "extreme_overage_interval_count":sum(bool(r['extreme_overage']) for r in interval_rows),
+        "whole_week_overage_cap_violation_count":len(whole_week_cap_violations),
+        "whole_week_imbalance_violation_count":len(whole_week_imbalance),
+        "blank_staffed_quarters":len(blank_staffed),"no_break_exception_count":len(exception_cells),
+        "break_spacing_observation_count":len(break_spacing_rows),
+        "break_spacing_compressed_count":sum(row['classification']=="FLEXIBLE_COMPRESSION" for row in break_spacing_rows),
+        "break_spacing_extended_count":sum(row['classification']=="FLEXIBLE_EXTENSION" for row in break_spacing_rows),
+        "break_spacing_beyond_normal_count":len(extended_spacing),
+        "max_concurrent_breaks_observed":active_concurrency["max_breaks"],
+        "max_concurrent_break_ratio_observed":active_concurrency["max_ratio"],
+        "break_concurrency_violation_count":active_concurrency["violations"],
+        "max_concurrent_breaks_all_staffed_quarters":max_concurrent,
+        "max_concurrent_break_ratio_all_staffed_quarters":max_concurrent_ratio,
+        "break_concurrency_violation_count_all_staffed_quarters":len(concurrency_violations),
+        "next_sunday_target_hits":sum(r['pct']+1e-9>=parsed.target_ratio for r in next_rows),
+        "next_sunday_floor_hits":sum(r['pct']+1e-9>=parsed.floor_ratio for r in next_rows),
+        "next_sunday_floor_gap_count":len(next_floor_gaps),"next_sunday_zero_staffed_quarters":len(next_zero),
+        "next_sunday_language_gap_count":len(next_language),"next_sunday_opening_gap_count":len(next_opening),
+        "next_sunday_blank_staffed_quarters":(
+            len(next_blank)
+            if parsed.blank_requirement_mode=="hard_no_current_week_staffing" else 0
+        ),
+        "next_sunday_overage_cap_violation_count":len(next_overage_cap_violations),
+        "next_sunday_imbalance_violation_count":len(next_imbalance),
+        # B-9: independently derived counterparts for six metrics that decide
+        # hard validity or candidate selection.  Each is recomputed from the
+        # parsed workbook rows above, never read from the optimizer audit.
+        "target_losses_from_breaks":sum(
+            1 for r in interval_rows
+            if float(r['before_pct'])+1e-9>=parsed.target_ratio
+            and float(r['after_pct'])+1e-9<parsed.target_ratio),
+        "floor_losses_from_breaks":sum(
+            1 for r in interval_rows
+            if float(r['before_pct'])+1e-9>=parsed.floor_ratio
+            and float(r['after_pct'])+1e-9<parsed.floor_ratio),
+        "before_severe_floor_gap_count":sum(
+            1 for r in interval_rows if float(r['before_pct'])+1e-9<severe_threshold),
+        # Mirrors the engine exactly: no hard floor configured means the count
+        # is 0, NOT a fall back to the soft floor.  The HARD_FLOOR failure
+        # above deliberately falls back; this metric deliberately does not.
+        "hard_floor_gap_count":(
+            0 if parsed.hard_floor_ratio is None
+            else sum(1 for r in interval_rows
+                     if float(r['after_pct'])+1e-9<float(parsed.hard_floor_ratio))),
+        "next_sunday_hard_failure_count":(
+            len(next_zero)+len(next_language)+len(next_opening)
+            +(len(next_blank)
+              if parsed.blank_requirement_mode=="hard_no_current_week_staffing" else 0)),
+        "next_sunday_max_adjacent_raw_change":max(next_adjacent_deltas,default=0),
+        "next_sunday_max_coverage_ratio":round(
+            max((float(r['pct']) for r in next_rows),default=0.0),8),
+        "quality_gate_issue_count":len(quality_issues),
+        "quality_gate_status":quality_gate_status,
+        "coverage_quality_gate_status":coverage_quality_gate_status,
+    }
+    return {
+        "schema_version":2,"validator":"RC9.2.2_INDEPENDENT_VALIDATOR_HARDENED","input":str(input_path),"output":str(output_path),
+        "input_sha256":sha256_file(input_path),"output_sha256":sha256_file(output_path),"engine_sha256":sha256_file(engine_path),
+        "artifact_role":artifact_role,
+        "artifact_role_signals":{
+            "break_sheet":break_sheet_role,
+            "production_summary":declared_type,
+            "agree":declared_type is None or declared_type==break_sheet_role,
+        },
+        # Stage 2 never ran on a before-break artifact, so its after_* metrics
+        # are the same schedule measured a second time, not a break outcome.
+        # Both facts are published rather than the numbers being dropped: a
+        # consumer needs the values AND needs to know what produced them.
+        "break_stage_executed":artifact_role!="BEST_BEFORE_BREAKS",
+        "after_metrics_basis":(
+            "NO_BREAKS_PLACED_AFTER_EQUALS_BEFORE" if artifact_role=="BEST_BEFORE_BREAKS"
+            else "BREAKS_PLACED_BY_STAGE_2"),
+        "status":"PASS" if not failures else "FAIL","hard_fail_count":len(failures),"warning_count":len(warnings),
+        "quality_gate_status":quality_gate_status,
+        "language_working_window":{"mode":parsed.language_working_window_mode,"source":language_window_source},
+        "metrics":metrics,
+        "employee_quality_independent":employee_quality_independent,
+        "input_crosscheck":input_crosscheck,
+        "language_reserve_independent":{
+            "enabled":bool(parsed.language_reserve_enabled),
+            "extra_qualified_fte":int(parsed.language_reserve_extra),
+            "gate_mode":str(parsed.language_reserve_gate_mode),
+            "reserve_gap_count":int(language_reserve_counts.get("GAP",0)),
+            "reserve_minimum_only_count":int(language_reserve_counts.get("MINIMUM_ONLY",0)),
+            "reserve_protected_count":int(language_reserve_counts.get("RESERVE_PROTECTED",0)),
+            "examples":language_reserve_rows[:20],
+        },
+        "canonical_metrics":canonicalize_metrics(
+            metrics, "independent_validator",
+            stage="BEFORE_BREAKS_ONLY" if artifact_role=="BEST_BEFORE_BREAKS" else "FULL_SCHEDULE"),
+        "failures":failures[:500],"quality_gate_failures":quality_gate_failures[:500],
+        "quality_gate_suppressed":quality_gate_suppressed[:500],
+        "warnings":warnings[:500],"interval_rows":interval_rows,"next_sunday_rows":next_rows,
+        "evidence_note":"Metrics were recomputed from workbook schedule/break cells and input contract; optimizer audit values were not used."
+    }
+
+def main():
+    p=argparse.ArgumentParser()
+    p.add_argument('--input',type=Path,required=True)
+    p.add_argument('--output',type=Path,required=True)
+    p.add_argument('--engine',type=Path,default=Path(__file__).resolve().parents[1]/'_tools/l632_universal_scheduler.py')
+    p.add_argument('--json-out',type=Path)
+    p.add_argument('--csv-out',type=Path)
+    p.add_argument('--language-working-window',default=None,
+                   help="the run's override of the workbook's Language Working Window, if any")
+    args=p.parse_args()
+    jout=args.json_out or args.output.with_name(args.output.stem+'_INDEPENDENT_VALIDATION.json')
+    cout=args.csv_out or args.output.with_name(args.output.stem+'_INDEPENDENT_VALIDATION.csv')
+    try:
+        result=validate(args.input,args.output,args.engine,args.language_working_window)
+        return_code=0 if result['status']=='PASS' else 2
+    except Exception as exc:
+        result={
+            'schema_version':2,'validator':'RC9.2.2_INDEPENDENT_VALIDATOR_HARDENED',
+            'input':str(args.input),'output':str(args.output),'status':'ERROR',
+            'hard_fail_count':1,'warning_count':0,'metrics':{},
+            'failures':[{'type':'VALIDATOR_EXCEPTION','exception':type(exc).__name__,'message':str(exc)}],
+            'traceback':traceback.format_exc(limit=20),
+            'input_sha256':sha256_file(args.input) if args.input.is_file() else None,
+            'output_sha256':sha256_file(args.output) if args.output.is_file() else None,
+            'engine_sha256':sha256_file(args.engine) if args.engine.is_file() else None,
+        }
+        return_code=3
+    jout.parent.mkdir(parents=True,exist_ok=True); jout.write_text(json.dumps(result,indent=2,default=str),encoding='utf-8')
+    cout.parent.mkdir(parents=True,exist_ok=True)
+    with cout.open('w',newline='',encoding='utf-8') as f:
+        w=csv.writer(f); w.writerow(['Metric','Value']);
+        for k,v in result['metrics'].items(): w.writerow([k,v])
+        w.writerow(['status',result['status']]); w.writerow(['hard_fail_count',result['hard_fail_count']]); w.writerow(['warning_count',result['warning_count']])
+        for row in result.get('failures',[]): w.writerow(['failure',json.dumps(row,sort_keys=True,default=str)])
+        for row in result.get('quality_gate_failures',[]): w.writerow(['quality_gate_failure',json.dumps(row,sort_keys=True,default=str)])
+        for row in result.get('quality_gate_suppressed',[]): w.writerow(['quality_gate_suppressed',json.dumps(row,sort_keys=True,default=str)])
+    print(json.dumps({k:result.get(k) for k in ['status','hard_fail_count','warning_count','artifact_role','metrics','failures']},indent=2))
+    return return_code
+if __name__=='__main__': raise SystemExit(main())

@@ -64,3 +64,23 @@ Both are measured configurations from the sweep above, so nothing new is tuned:
 - **Balanced** (`balanced`, Channel Setup row "Balance each person's channels through the day", Plan channels tick "Balance channels: a couple of hours on one, then another"): the same costs plus DAY_MIX = 8 (changes 2.36, under 2 h 0.85, longest 3.87 h on base_16).
 - Both ticked (page or tab): Balanced is used (it contains Fixed's calm). Both off: the plan is exactly what it was. An old workbook without the new row reads as Balanced off.
 - `tools/channel_scenarios.py --arms balanced fair+balanced` measures the new arms next to `tick` and `fair+tick`.
+
+## Breaks as separators (owner, 2026-10-26: "one issue, I think it considers a break as a separator, that's why it kept associates the whole day on the same channel")
+
+**Measured first (`evidence/phase_bc/where_changes.py base_16`, fair off, Mon to Fri; changes per person-day, in the middle of a stretch / at a break or lunch):**
+both ticks off 0.59 / 2.09; Fixed 0.79 / 0.64; Balanced 1.09 / 1.26. So with the tick off, three quarters of the changes happen at a break, which is the natural
+place to move; the tick prices a change at a break exactly like one in the middle of a stretch (CONSISTENT 20 per quarter hour, "also across a break"),
+which stops people moving at breaks and pushes the few changes that remain into the middle of stretches. The owner's reading is right.
+
+**Rule (pre-registered before any arm is run; only the Balanced tick; Fixed keeps pricing breaks like the middle of a stretch, because "as fixed as possible" is its job).**
+1. With Balanced on, a change of channel with a break or lunch between the two blocks costs BREAK_CHANGE per quarter hour instead of CONSISTENT. Arms: BREAK_CHANGE 20 (as now), 5, 0.
+2. A change in the middle of a stretch keeps CONSISTENT (20) and the short-stretch charge.
+3. The share-of-the-day charge (DAY_MIX 8) stays.
+**Acceptance (base_16 and tight_16, Mon to Fri, `--arms balanced`, compared with the BREAK_CHANGE 20 arm):**
+- changes in the middle of a stretch per person-day: lower than the 20 arm's (the owner's "avoid changes in and out");
+- the longest stretch (breaks do not end it) not above the 20 arm's;
+- stretches under 2 hours per person-day not above the 20 arm's by more than 0.1;
+- total changes per person-day not above the both-off baseline's;
+- hours short not above the 20 arm's by more than 0.5 h a day; no planner problems; no day over 25 s.
+The middle arm that meets all of it is kept; if only the 0 arm does, that one.
+Not changed: Fixed, both off, the engine, the validator, the workbooks.

@@ -320,7 +320,7 @@ def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=N
         was = (carry_in or {}).get(name)
         if was in ("P", "C", "E") and ts:
             cost += [SWITCH * x[name, ts[0], c] for c in "PCE" if c != was and (name, ts[0], c) in x]
-        if setup["rules"].get("consistent"):
+        if setup["rules"].get("consistent") or setup["rules"].get("balanced"):
             for k, t in enumerate(ts):  # a change of channel counts across up to 3 quarters of break between
                 for lag in (1, 2, 3, 4):
                     if k < lag:
@@ -344,7 +344,7 @@ def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=N
                                 short = m.NewBoolVar("")
                                 m.Add(short >= move - x[name, u, c] - (off[name, u] if (name, u) in off else 0))
                                 cost.append(STRETCH_COST * short)
-        if setup["rules"].get("consistent") and DAY_MIX:
+        if setup["rules"].get("balanced") and DAY_MIX:  # Phase BC: only the balanced tick rotates; fixed keeps what it always did
             mine = {c: [x[name, t, c] for t in ts if (name, t, c) in x] for c in "PCE"}
             mine = {c: v for c, v in mine.items() if v}
             if len(mine) >= 2:

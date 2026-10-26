@@ -56,3 +56,11 @@ calm shrinks. Against the tick-only arm, changes per person-day go from 1.8 to 2
 (baseline 1.2). The tick still changes channel less often than off, but only by about 9 % instead of 30 %. The owner chose rotation over calm:
 "keep it for 2-3 hours" beside "avoid a lot of changes". If more calm is wanted, lower DAY_MIX (4 or 0); the tick alone already existed.
 Fair spread is not part of this change: it stays its own setting, and "Fair + tick" is the one that also changes the main channel from day to day.
+
+## Two ticks (owner, 2026-10-26: "make the 2 modules for channel if we need fixed as much as possible or the balanced one, with 2 different ticks")
+
+Both are measured configurations from the sweep above, so nothing new is tuned:
+- **Fixed** (`consistent`, Channel Setup row "Keep each person on the same channel through the day", Plan channels tick "Keep each person on one channel as much as possible"): the Phase AY tick as it was, the DAY_MIX = 0 arm of the sweep (changes per person-day 1.80, stretches under 2 h 0.65, longest stretch 4.81 h on base_16).
+- **Balanced** (`balanced`, Channel Setup row "Balance each person's channels through the day", Plan channels tick "Balance channels: a couple of hours on one, then another"): the same costs plus DAY_MIX = 8 (changes 2.36, under 2 h 0.85, longest 3.87 h on base_16).
+- Both ticked (page or tab): Balanced is used (it contains Fixed's calm). Both off: the plan is exactly what it was. An old workbook without the new row reads as Balanced off.
+- `tools/channel_scenarios.py --arms balanced fair+balanced` measures the new arms next to `tick` and `fair+tick`.

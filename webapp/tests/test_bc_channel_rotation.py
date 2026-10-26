@@ -3,7 +3,6 @@
 for 2-3 hours and avoid a lot of changes in and out from channels"). With the tick on, a person who can work several channels spends a couple
 of hours on one, then another, instead of one channel for most of the day. Rule and acceptance: evidence/phase_bc/REQUESTS.md."""
 import unittest
-from unittest import mock
 
 from webapp.channel_plan import plan_day, score_day
 from webapp.tests.test_channel_plan import RULES, WED, day_people, setup
@@ -29,12 +28,12 @@ class TheRotation(unittest.TestCase):
     def setUpClass(cls):
         cls.people = day_people()
         cls.config = setup()
-        cls.config["rules"] = dict(cls.config["rules"], fair=False, consistent=True)
+        cls.config["rules"] = dict(cls.config["rules"], fair=False, balanced=True)
         cls.plan = plan_day(cls.people, cls.config, RULES, WED, move_breaks=False)
         cls.score = score_day(cls.people, cls.plan, cls.config, WED, RULES)
-        with mock.patch("webapp.channel_plan.DAY_MIX", 0):
-            cls.plan_without = plan_day(cls.people, cls.config, RULES, WED, move_breaks=False)
-            cls.score_without = score_day(cls.people, cls.plan_without, cls.config, WED, RULES)
+        cls.fixed = dict(cls.config, rules=dict(cls.config["rules"], balanced=False, consistent=True))  # the other tick: as fixed as possible
+        cls.plan_without = plan_day(cls.people, cls.fixed, RULES, WED, move_breaks=False)
+        cls.score_without = score_day(cls.people, cls.plan_without, cls.fixed, WED, RULES)
 
     def test_the_longest_stretch_of_a_person_is_shorter_than_without_the_term(self):
         longest = sum(self.score["longest_minutes"]) / len(self.score["longest_minutes"])
@@ -45,16 +44,21 @@ class TheRotation(unittest.TestCase):
         stretches = self.score["stretch_minutes"]
         self.assertTrue(2.0 <= sum(stretches) / len(stretches) / 60 <= 3.0)
 
-    def test_the_term_is_not_charged_with_the_tick_off(self):
-        off = dict(self.config, rules=dict(self.config["rules"], consistent=False))
-        with mock.patch("webapp.channel_plan.DAY_MIX", 0):
-            was = score_day(self.people, plan_day(self.people, off, RULES, WED, move_breaks=False), off, WED, RULES)
-        now = score_day(self.people, plan_day(self.people, off, RULES, WED, move_breaks=False), off, WED, RULES)
-        self.assertEqual(sum(now["stretch_minutes"]), sum(was["stretch_minutes"]))  # the same hours worked, same coverage
-        self.assertEqual((now["short"], now["language_short"]), (was["short"], was["language_short"]))
+    def test_the_fixed_tick_does_not_rotate(self):
+        # the "same channel as much as possible" tick keeps what it always did: the share-of-the-day charge belongs to the balanced tick only
+        fixed = sum(self.score_without["longest_minutes"]) / len(self.score_without["longest_minutes"])
+        balanced = sum(self.score["longest_minutes"]) / len(self.score["longest_minutes"])
+        self.assertGreater(fixed, balanced * 1.05)
+        self.assertGreater(fixed / 60, 4.5)
+
+    def test_both_ticks_off_charges_nothing(self):
+        off = dict(self.config, rules=dict(self.config["rules"], balanced=False, consistent=False))
+        self.assertFalse(off["rules"].get("consistent") or off["rules"].get("balanced"))
+        got = score_day(self.people, plan_day(self.people, off, RULES, WED, move_breaks=False), off, WED, RULES)
+        self.assertGreater(got["moves"], self.score["moves"])  # off moves more than either tick
 
     def test_the_tick_still_calms_changes_and_short_stretches_against_off(self):
-        off = dict(self.config, rules=dict(self.config["rules"], consistent=False))
+        off = dict(self.config, rules=dict(self.config["rules"], balanced=False, consistent=False))
         base = score_day(self.people, plan_day(self.people, off, RULES, WED, move_breaks=False), off, WED, RULES)
         self.assertLess(self.score["moves"], base["moves"])
         self.assertLess(self.score["short_stretches"], base["short_stretches"])

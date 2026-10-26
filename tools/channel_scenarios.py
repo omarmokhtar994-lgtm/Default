@@ -27,7 +27,8 @@ RULES = {"segments": [[15, "Break 1"], [30, "Lunch"], [15, "Break 2"]], "by_leng
                      "break 2": {"earliest": None, "latest": None}},
          "edge_margin": None, "min_gap": 60, "preferred_gap": 150, "max_gap": 210, "max_concurrent": 4}
 MOVE_BREAKS = False
-ARMS = {"baseline": (False, False), "fair": (True, False), "tick": (False, True), "fair+tick": (True, True)}
+ARMS = {"baseline": (False, False, False), "fair": (True, False, False), "tick": (False, True, False), "fair+tick": (True, True, False),
+        "balanced": (False, False, True), "fair+balanced": (True, False, True)}  # Phase BC: the second tick
 
 
 def need(scale: float, phone: Callable[[float], int], t: int) -> float:
@@ -89,9 +90,9 @@ SCENARIOS = {
 }
 
 
-def run_arm(build, fair: bool, tick: bool) -> Dict[str, Any]:
+def run_arm(build, fair: bool, tick: bool, balanced: bool = False) -> Dict[str, Any]:
     people, config = build()
-    config["rules"] = dict(config["rules"], fair=fair, consistent=tick)
+    config["rules"] = dict(config["rules"], fair=fair, consistent=tick, balanced=balanced)
     carry: Dict[str, Dict[str, int]] = {}
     out = {"short": 0.0, "moves": 0, "stretches": 0, "slowest": 0.0, "problems": 0, "minutes": [], "longest": []}
     for d in DAYS:

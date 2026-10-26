@@ -38,7 +38,8 @@ SETTINGS = {"minimum block minutes": "min_block", "phone maximum continuous minu
             "chat maximum continuous minutes": "max_C", "email maximum continuous minutes": "max_E",
             "priority when short": "order", "how strict is the order": "strict",
             "spread channels fairly over the week": "fair",
-            "keep each person on the same channel through the day": "consistent"}
+            "keep each person on the same channel through the day": "consistent",
+            "balance each person's channels through the day": "balanced"}
 YES, NO = ("yes", "y", "true"), ("no", "n", "false")
 EPS = 1e-6
 KEEP = 8
@@ -365,7 +366,7 @@ def _setup(ws, step: int, problems: List[str], notes: List[str],
                 if _norm(value) not in ("strict", "balanced"):
                     raise ValueError(f"{where}: {label} must be Strict or Balanced; it reads {value}.")
                 rules["strict"] = _norm(value) == "strict"
-            elif key in ("fair", "consistent"):
+            elif key in ("fair", "consistent", "balanced"):
                 if _norm(value) not in YES + NO:
                     raise ValueError(f"{where}: {label} must be Yes or No; it reads {value}.")
                 rules[key] = _norm(value) in YES

@@ -66,7 +66,10 @@ def register(app, ctx) -> None:
         if request.method == "POST":
             action = request.form.get("action", "")
             if action in ("suggest", "suggest_week"):  # Phase AY: the tick on the page decides, not only the workbook
-                setup = dict(setup, rules=dict(setup["rules"], consistent=request.form.get("consistent") == "1"))
+                # Phase BC: two ticks, "as fixed as possible" and "balanced"; both ticked means balanced, which keeps fixed's calm
+                balanced = request.form.get("balanced") == "1"
+                setup = dict(setup, rules=dict(setup["rules"], balanced=balanced,
+                                               consistent=request.form.get("consistent") == "1" and not balanced))
             try:
                 if action == "suggest":
                     found = A.plan_day(people, setup, rules, d, carry=channel_carry(week, rules, draft, d),

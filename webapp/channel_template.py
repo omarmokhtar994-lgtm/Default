@@ -28,6 +28,8 @@ SETTINGS = [
     ("Spread channels fairly over the week", "Yes", "Each person gets a fair share of each channel they can work."),
     ("Keep each person on the same channel through the day", "No", "Yes: avoid changing a person's channel "
      "during the day, also across breaks, when coverage allows."),
+    ("Balance each person's channels through the day", "No", "Yes: a couple of hours on one channel, then another, "
+     "and few changes in between. If both this and the row above are Yes, this one is used."),
 ]
 ORDERS = ["Phone > Chat > Email", "Phone > Email > Chat", "Chat > Phone > Email", "Chat > Email > Phone",
           "Email > Phone > Chat", "Email > Chat > Phone"]

@@ -3790,3 +3790,16 @@ class TheScrollingInTheBrowser(unittest.TestCase):
         }""")
         self.assertLess(widths[1], 200)
         self.assertLessEqual(widths[1], widths[0] + 30)
+
+    def test_the_two_channel_ticks_are_alternatives(self):
+        page = self.page(width=1280, height=800)
+        self.sign_in(page)
+        page.goto(self.base + self.pages()[2])
+        fixed, balanced = page.locator("input[name=consistent]"), page.locator("input[name=balanced]")
+        fixed.check()
+        self.assertTrue(fixed.is_checked())
+        balanced.check()
+        self.assertTrue(balanced.is_checked())
+        self.assertFalse(fixed.is_checked())  # ticking one clears the other
+        fixed.check()
+        self.assertFalse(balanced.is_checked())

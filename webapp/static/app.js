@@ -1866,6 +1866,15 @@ function liveWatch(box) {
 })();
 
 
+// Two channel ticks (Phase BC): "as fixed as possible" and "balanced" are alternatives, so ticking one clears the other.
+document.addEventListener("change", function (e) {
+  var box = e.target;
+  if (!box || !box.matches || !box.matches("input[type=checkbox][data-tick-only]") || !box.checked) { return; }
+  var other = box.form && box.form.querySelector('input[name="' + box.getAttribute("data-tick-only") + '"]');
+  if (other) { other.checked = false; }
+});
+
+
 // A little 3D (Phase BA): the program cards lean toward a mouse pointer; the sign-in stack and mark stop when the tab is hidden or the stack is
 // off screen; a run's word turns over once when the person watched the run finish. Nothing here for a touch screen or reduced motion.
 (function () {

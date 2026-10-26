@@ -52,6 +52,9 @@ STRETCH_COST = 22
 # DAY_SLACK quarter hours; a quarter hour past that share costs DAY_MIX, so "keep one channel" means a couple of hours on one,
 # then another, not one channel all day (evidence/phase_bc/REQUESTS.md)
 DAY_MIX, DAY_SLACK = 8, 4
+# Phase BC: with the balanced tick, a change of channel with a break or lunch between the two blocks costs this per quarter hour instead of
+# CONSISTENT: a break is where a person naturally moves (evidence/phase_bc/REQUESTS.md); fixed keeps pricing it like the middle of a stretch
+BREAK_CHANGE = 20
 # Phase AF (B2): a quarter hour of break that leaves nobody else able to take the person's queue, and one that leaves
 # only colleagues of another language; someone who starts alone has the first break within FIRST_BY minutes
 ALONE, ALONE_LANGUAGE, FIRST_BY = 50, 10, 240
@@ -335,7 +338,7 @@ def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=N
                         move = m.NewBoolVar("")
                         m.Add(move >= x[name, t, c] - x[name, back, c] - sum(1 - off[name, u] for u in between)
                               - (off[name, back] if (name, back) in off else 0))
-                        cost.append(CONSISTENT * move)
+                        cost.append((BREAK_CHANGE if setup["rules"].get("balanced") and lag > 1 else CONSISTENT) * move)
                         for j in range(1, SHORT_STRETCH):  # the stretch that starts here should last
                             if k + j >= len(ts):
                                 break
@@ -587,10 +590,20 @@ def score_day(people: List[Dict[str, Any]], plan: Dict[str, Any], setup: Dict[st
         if cap and resting > cap:
             problems.append(f"{resting} people on a break at {hm(t)}; at most {cap}.")
     switches, moves, short_stretches, long_runs, stretch_minutes, longest_minutes = 0, 0, 0, {}, [], []
+    moves_at_breaks, moves_mid = 0, 0
     for p in people:
         name, ts = p["name"], list(range(p["start"], p["end"], QUARTER))
         worked = [at.get((name, t)) for t in ts if at.get((name, t)) in ("P", "C", "E")]
         moves += sum(a != b for a, b in zip(worked, worked[1:]))  # Phase AY: changes of channel, breaks ignored
+        last, rested = None, False  # Phase BC: a change with a break between the two blocks, or in the middle of a stretch
+        for t in ts:
+            here = at.get((name, t))
+            if here == "B":
+                rested = True
+            elif here in ("P", "C", "E"):
+                if last and here != last:
+                    moves_at_breaks, moves_mid = (moves_at_breaks + 1, moves_mid) if rested else (moves_at_breaks, moves_mid + 1)
+                last, rested = here, False
         stretches = [[w, 1] for w in worked[:1]]  # Phase AY: stretches on one channel, breaks ignored
         for a, b in zip(worked, worked[1:]):
             if a == b:
@@ -653,4 +666,5 @@ def score_day(people: List[Dict[str, Any]], plan: Dict[str, Any], setup: Dict[st
                     for t in every if lo <= t < hi)
                 email_short += max(0, want - have) * QUARTER / 60
     return {"short": short, "language_short": language_short, "email": email, "email_short": email_short, "switches": switches, "moves": moves, "short_stretches": short_stretches, "stretch_minutes": stretch_minutes, "longest_minutes": longest_minutes,
+            "moves_at_breaks": moves_at_breaks, "moves_mid": moves_mid,
             "long": long_runs, "problems": problems}

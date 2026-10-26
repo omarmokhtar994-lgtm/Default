@@ -94,7 +94,7 @@ def run_arm(build, fair: bool, tick: bool, balanced: bool = False) -> Dict[str, 
     people, config = build()
     config["rules"] = dict(config["rules"], fair=fair, consistent=tick, balanced=balanced)
     carry: Dict[str, Dict[str, int]] = {}
-    out = {"short": 0.0, "moves": 0, "stretches": 0, "slowest": 0.0, "problems": 0, "minutes": [], "longest": []}
+    out = {"short": 0.0, "moves": 0, "stretches": 0, "slowest": 0.0, "problems": 0, "minutes": [], "longest": [], "mid": 0, "at_breaks": 0}
     for d in DAYS:
         began = time.time()
         plan = plan_day(people, config, RULES, d, carry=carry, move_breaks=MOVE_BREAKS)
@@ -105,6 +105,8 @@ def run_arm(build, fair: bool, tick: bool, balanced: bool = False) -> Dict[str, 
         out["stretches"] += got["short_stretches"]
         out["minutes"] += got["stretch_minutes"]
         out["longest"] += got["longest_minutes"]
+        out["mid"] += got["moves_mid"]
+        out["at_breaks"] += got["moves_at_breaks"]
         out["problems"] += len(got["problems"])
         for name, blocks in plan["blocks"].items():
             for a, b, c in blocks:
@@ -124,6 +126,7 @@ def run_arm(build, fair: bool, tick: bool, balanced: bool = False) -> Dict[str, 
     return {"spread": round(spread, 2), "worst": round(worst, 2), "short": round(out["short"], 2),
             "moves_pp": round(out["moves"] / days, 2), "stretches_pp": round(out["stretches"] / days, 2),
             "slowest": round(out["slowest"], 1), "problems": out["problems"],
+            "mid_pp": round(out["mid"] / days, 2), "at_breaks_pp": round(out["at_breaks"] / days, 2),
             "avg_stretch_h": round(sum(out["minutes"]) / len(out["minutes"]) / 60, 2),
             "longest_h": round(sum(out["longest"]) / len(out["longest"]) / 60, 2)}
 

@@ -33,3 +33,26 @@ setting, off by default, and the tick does not turn it on). The rule meant "a co
 - hours short not above the tick-only arm's by more than 0.5 h a day; no planner problems; no day over 25 s.
 Reported, not gated: same main channel as the day before; the fair spread.
 Not changed: the engine, the validator, the workbooks, tick off.
+
+## Sweep result (tick on, fair off, Mon to Fri, `tools/channel_scenarios.py --arms baseline tick --set DAY_MIX=N`; made-up teams; 2026-10-26)
+
+| DAY_MIX | team | changes per person-day (baseline 2.56 / 2.92) | stretches under 2 h per person-day | average stretch h | longest stretch h | hours short | slowest day s |
+|---|---|---|---|---|---|---|---|
+| 0 (no term) | base_16 | 1.80 | 0.65 | 2.86 | 4.81 | 2.5 | 14.2 |
+| 4 | base_16 | 2.39 | 0.79 | 2.36 | 3.95 | 2.5 | 14.5 |
+| 8 | base_16 | 2.36 | 0.85 | 2.38 | 3.87 | 2.5 | 14.6 |
+| 12 | base_16 | 2.45 | 0.76 | 2.32 | 3.84 | 2.5 | 16.4 |
+| 0 (no term) | tight_16 | 2.17 | 0.96 | 2.52 | 4.71 | 69.75 | 14.2 |
+| 4 | tight_16 | 2.29 | 1.00 | 2.43 | 4.44 | 68.75 | 14.5 |
+| 8 | tight_16 | 2.29 | 0.99 | 2.43 | 4.40 | 68.75 | 14.5 |
+| 12 | tight_16 | 2.46 | 1.18 | 2.31 | 4.24 | 68.75 | 14.4 |
+
+**Against the acceptance (stated plainly).** Met at every weight: average stretch between 2.0 and 3.0 h; changes not above the baseline's; hours short not
+above the tick-only arm's; no planner problems; no day over 25 s. **Missed at every weight:** the longest stretch is at most 4.0 h only on base_16
+(3.95, 3.87, 3.84), not on tight_16 (4.44, 4.40, 4.24: a tight team has no one free to rotate to); stretches under 2 h per person-day are above 1.15 times
+the tick-only arm's (0.65 x 1.15 = 0.75) on base_16 at every weight (0.79, 0.85, 0.76) and on tight_16 at 12 (1.18 against 1.10).
+**Ruling: DAY_MIX = 8** (the middle one; 12 costs most on the tight team, 4 keeps the longest stretch longer). The cost, plainly: the tick's
+calm shrinks. Against the tick-only arm, changes per person-day go from 1.8 to 2.4 on base_16 (the baseline, tick off, is 2.6) and stretches under 2 h from 0.65 to 0.85
+(baseline 1.2). The tick still changes channel less often than off, but only by about 9 % instead of 30 %. The owner chose rotation over calm:
+"keep it for 2-3 hours" beside "avoid a lot of changes". If more calm is wanted, lower DAY_MIX (4 or 0); the tick alone already existed.
+Fair spread is not part of this change: it stays its own setting, and "Fair + tick" is the one that also changes the main channel from day to day.

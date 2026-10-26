@@ -89,6 +89,19 @@ Load each with the Skill tool at the step it covers; following it from memory do
 6. Package, split into parts, send them, and report in caveman style: what changed, rulings with their cost, what
    is known and left, Egypt times, screens.
 
+## Phase BC (owner, 2026-10-26: channel rotation, wheel, whole lists, clock-change words)
+
+Read `evidence/phase_bc/REQUESTS.md` (the measured cause, the pre-registered rule, the sweep and its misses stated plainly). **Channel planner:** with the
+consistency tick on, `DAY_MIX` (8) and `DAY_SLACK` (4) in `webapp/channel_plan.py` charge a person with two or more channels for every quarter hour on one
+channel past an equal share of the day plus an hour, so "keep one channel" means a couple of hours on one, then another, not one channel all day. Cost,
+measured: changes per person-day 1.8 to 2.4 (tick off 2.6). `score_day()` also returns `stretch_minutes` and `longest_minutes`; `tools/channel_scenarios.py`
+reports `avg_stretch_h` and `longest_h`; `evidence/phase_bc/stretches.py` shows the day-to-day picture. **Page:** the scrolling panels no longer set
+`overscroll-behavior: contain` (the wheel carries on to the page at a panel's end); the Schedules, Channels (both pages) and Week pages have a
+"Scrolling panels / Whole lists" switch (`list_mode()` in `_macros.html`, key `ts-list-mode`, the RTA keeps its own `ts-tl-mode`); a clock-change
+warning in a shift cell is the label "Clocks change" (full words in its tip and once under the table, `shift_text()`). Tests: `test_bc_channel_rotation.py`,
+`test_bc_schedule_notes.py`, `TheScrollingInTheBrowser` in `test_ui_playwright.py`. Package builder now leaves screenshots under `evidence/` out
+(17.9 MB instead of 162 MB).
+
 ## Phase BB (owner, 2026-10-25: "build it ... with 0 risk"; depth on the dashboards)
 
 Sample: `evidence/phase_bb/dash3d`. Built: `webapp/charts.py` draws a lit top and a darker side (`polygon.face-top`, `polygon.face-side`, same `data-series`)

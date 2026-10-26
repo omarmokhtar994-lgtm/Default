@@ -93,7 +93,7 @@ def run_arm(build, fair: bool, tick: bool) -> Dict[str, Any]:
     people, config = build()
     config["rules"] = dict(config["rules"], fair=fair, consistent=tick)
     carry: Dict[str, Dict[str, int]] = {}
-    out = {"short": 0.0, "moves": 0, "stretches": 0, "slowest": 0.0, "problems": 0}
+    out = {"short": 0.0, "moves": 0, "stretches": 0, "slowest": 0.0, "problems": 0, "minutes": [], "longest": []}
     for d in DAYS:
         began = time.time()
         plan = plan_day(people, config, RULES, d, carry=carry, move_breaks=MOVE_BREAKS)
@@ -102,6 +102,8 @@ def run_arm(build, fair: bool, tick: bool) -> Dict[str, Any]:
         out["short"] += sum(got["short"].values()) + got["language_short"]
         out["moves"] += got["moves"]
         out["stretches"] += got["short_stretches"]
+        out["minutes"] += got["stretch_minutes"]
+        out["longest"] += got["longest_minutes"]
         out["problems"] += len(got["problems"])
         for name, blocks in plan["blocks"].items():
             for a, b, c in blocks:
@@ -120,7 +122,9 @@ def run_arm(build, fair: bool, tick: bool) -> Dict[str, Any]:
     days = len(DAYS) * len(people)
     return {"spread": round(spread, 2), "worst": round(worst, 2), "short": round(out["short"], 2),
             "moves_pp": round(out["moves"] / days, 2), "stretches_pp": round(out["stretches"] / days, 2),
-            "slowest": round(out["slowest"], 1), "problems": out["problems"]}
+            "slowest": round(out["slowest"], 1), "problems": out["problems"],
+            "avg_stretch_h": round(sum(out["minutes"]) / len(out["minutes"]) / 60, 2),
+            "longest_h": round(sum(out["longest"]) / len(out["longest"]) / 60, 2)}
 
 
 def main() -> None:

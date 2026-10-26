@@ -48,6 +48,10 @@ FAIR_AWAY = 2  # the middle-pull, beside FAIR_RANGE (the ends): measured best by
 # the owner wants a couple of hours on a channel, not an hour here and an hour there
 SHORT_STRETCH = 8
 STRETCH_COST = 22
+# Phase BC: with the tick on, a person who can work several channels today spends about an equal share of the day on each, plus
+# DAY_SLACK quarter hours; a quarter hour past that share costs DAY_MIX, so "keep one channel" means a couple of hours on one,
+# then another, not one channel all day (evidence/phase_bc/REQUESTS.md)
+DAY_MIX, DAY_SLACK = 8, 4
 # Phase AF (B2): a quarter hour of break that leaves nobody else able to take the person's queue, and one that leaves
 # only colleagues of another language; someone who starts alone has the first break within FIRST_BY minutes
 ALONE, ALONE_LANGUAGE, FIRST_BY = 50, 10, 240
@@ -340,6 +344,17 @@ def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=N
                                 short = m.NewBoolVar("")
                                 m.Add(short >= move - x[name, u, c] - (off[name, u] if (name, u) in off else 0))
                                 cost.append(STRETCH_COST * short)
+        if setup["rules"].get("consistent") and DAY_MIX:
+            mine = {c: [x[name, t, c] for t in ts if (name, t, c) in x] for c in "PCE"}
+            mine = {c: v for c, v in mine.items() if v}
+            if len(mine) >= 2:
+                working = max((max(len(v) for v in mine.values())), len({t for t in ts if any((name, t, c) in x for c in mine)})
+                              - sum(minutes for _, _, minutes in p["breaks"]) // QUARTER)
+                share = working // len(mine) + DAY_SLACK
+                for v in mine.values():
+                    past = m.NewIntVar(0, len(v), "")
+                    m.Add(past >= sum(v) - share)
+                    cost.append(DAY_MIX * past)
         for prev, t in zip(ts, ts[1:]):
             for c in "PCE":
                 if (name, t, c) in x:
@@ -571,7 +586,7 @@ def score_day(people: List[Dict[str, Any]], plan: Dict[str, Any], setup: Dict[st
         resting = sum(1 for p in people if at.get((p["name"], t)) == "B")
         if cap and resting > cap:
             problems.append(f"{resting} people on a break at {hm(t)}; at most {cap}.")
-    switches, moves, short_stretches, long_runs = 0, 0, 0, {}
+    switches, moves, short_stretches, long_runs, stretch_minutes, longest_minutes = 0, 0, 0, {}, [], []
     for p in people:
         name, ts = p["name"], list(range(p["start"], p["end"], QUARTER))
         worked = [at.get((name, t)) for t in ts if at.get((name, t)) in ("P", "C", "E")]
@@ -583,6 +598,9 @@ def score_day(people: List[Dict[str, Any]], plan: Dict[str, Any], setup: Dict[st
             else:
                 stretches.append([b, 1])
         short_stretches += sum(1 for _, n in stretches[:-1] if n < SHORT_STRETCH)
+        stretch_minutes += [n * QUARTER for _, n in stretches]  # Phase BC: every stretch on one channel, in minutes
+        if worked:
+            longest_minutes.append(max(n for _, n in stretches) * QUARTER)  # and each person's longest
         runs: List[Tuple[str, int, int]] = []
         for i, t in enumerate(ts):
             letter = at.get((name, t))
@@ -634,5 +652,5 @@ def score_day(people: List[Dict[str, Any]], plan: Dict[str, Any], setup: Dict[st
                     and (at.get((p["name"], t)) == "E" or (at.get((p["name"], t)) == "A" and "E" in p["skills"])))
                     for t in every if lo <= t < hi)
                 email_short += max(0, want - have) * QUARTER / 60
-    return {"short": short, "language_short": language_short, "email": email, "email_short": email_short, "switches": switches, "moves": moves, "short_stretches": short_stretches,
+    return {"short": short, "language_short": language_short, "email": email, "email_short": email_short, "switches": switches, "moves": moves, "short_stretches": short_stretches, "stretch_minutes": stretch_minutes, "longest_minutes": longest_minutes,
             "long": long_runs, "problems": problems}

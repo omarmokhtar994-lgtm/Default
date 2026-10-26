@@ -55,6 +55,9 @@ DAY_MIX, DAY_SLACK = 8, 4
 # Phase BC: with the balanced tick, a change of channel with a break or lunch between the two blocks costs this per quarter hour instead of
 # CONSISTENT: a break is where a person naturally moves (evidence/phase_bc/REQUESTS.md); fixed keeps pricing it like the middle of a stretch
 BREAK_CHANGE = 0
+# Phase BC: with the balanced tick, a stretch on one channel (breaks do not end it) still running after STRETCH_LIMIT quarter hours costs STRETCH_OVER
+# per quarter hour past it, for a person who can work exactly two channels (with three, the share charge keeps a stretch near 3.7 hours): a couple of hours on a channel, not five (evidence/phase_bc/REQUESTS.md)
+STRETCH_LIMIT, STRETCH_OVER = 12, 20
 # Phase AF (B2): a quarter hour of break that leaves nobody else able to take the person's queue, and one that leaves
 # only colleagues of another language; someone who starts alone has the first break within FIRST_BY minutes
 ALONE, ALONE_LANGUAGE, FIRST_BY = 50, 10, 240
@@ -358,6 +361,15 @@ def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=N
                     past = m.NewIntVar(0, len(v), "")
                     m.Add(past >= sum(v) - share)
                     cost.append(DAY_MIX * past)
+                if STRETCH_OVER and len(mine) == 2:  # a window of STRETCH_LIMIT + 1 quarters that is all this channel (or a break) is a stretch past the limit
+                    for c in mine:
+                        for i in range(len(ts) - STRETCH_LIMIT):
+                            window = ts[i:i + STRETCH_LIMIT + 1]
+                            if any((name, t, c) not in x for t in window):
+                                continue
+                            over = m.NewBoolVar("")
+                            m.Add(sum(x[name, t, c] + (off[name, t] if (name, t) in off else 0) for t in window) <= STRETCH_LIMIT + over)
+                            cost.append(STRETCH_OVER * over)
         for prev, t in zip(ts, ts[1:]):
             for c in "PCE":
                 if (name, t, c) in x:

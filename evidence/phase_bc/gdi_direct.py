@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from openpyxl import load_workbook
 from webapp import channel_plan
 from webapp.channels import read_channels
-from webapp.channel_plan import plan_day
+from webapp.channel_plan import plan_day, score_day
 
 DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 RULES = {"segments": [[15, "Break 1"], [30, "Lunch"], [15, "Break 2"]], "by_length": [],
@@ -91,9 +91,10 @@ def main():
     setup = read_channels(book, 60)
     print("rules:", setup["rules"], "email_mode:", setup["email_mode"], flush=True)
     print("THE FILE      ", json.dumps(stats(owner, names)), flush=True)
-    for label, flags in (("no tick", {}), ("fixed", {"consistent": True}), ("balanced", {"balanced": True})):
+    import os
+    for label, flags in [a for a in (("no tick", {}), ("fixed", {"consistent": True}), ("balanced", {"balanced": True})) if a[0] in os.environ.get("ARMS", "no tick,fixed,balanced").split(",")]:
         conf = dict(setup, rules={**setup["rules"], "balanced": False, "consistent": False, **flags})
-        carry, by_day, began = {}, {}, time.time()
+        carry, by_day, began, short, moves, shorts2, pdays = {}, {}, time.time(), 0.0, 0, 0, 0
         for d, day in enumerate(DAYS):
             people = week[day]
             if not people:
@@ -102,11 +103,14 @@ def main():
                 p["skills"] = "CE" if p["name"] in names else skills_h.get(p["name"], "PCE")
             plan = plan_day(people, conf, RULES, d, carry=carry, move_breaks=False)
             by_day[day] = plan["blocks"]
+            sc = score_day(people, plan, conf, d, RULES)
+            short += sum(sc["short"].values()) + sc["language_short"] + sc["email_short"]
+            moves += sc["moves"]; shorts2 += sc["short_stretches"]; pdays += len(people)
             for who, blocks in plan["blocks"].items():
                 for a, b, c in blocks:
                     if c in "PCE":
                         carry.setdefault(who, {})[c] = carry.get(who, {}).get(c, 0) + b - a
-        print(f"{label:14}", json.dumps(stats(by_day, names)), f"({time.time() - began:.0f}s)", flush=True)
+        print(f"{label:14}", json.dumps(stats(by_day, names)), f"all {pdays} person-days: hours short {short:.1f}, changes {moves / pdays:.2f}, stretches under 2 h {shorts2 / pdays:.2f} ({time.time() - began:.0f}s)", flush=True)
 
 if __name__ == "__main__":
     main()

@@ -129,3 +129,32 @@ share between 35 % and 65 %; Email hours short (the planner's own count) not abo
 **Acceptance (base_16 and tight_16, `--arms balanced`):** the longest stretch lower than the 0 arm's; total changes not above the both-off baseline's; hours short not above the 0 arm's by more than 0.5 hours a day; no day over 25 seconds.
 The smallest STRETCH_OVER that meets all of it is kept; if none does, the misses are stated and the one closest is proposed to the owner.
 Not changed: Fixed, both off, the engine, the validator, the workbooks.
+
+### Result of the stretch sweep (2026-10-26; the machine was quiet for the GDI runs; Balanced arm; the two Chat-and-Email associates with 5 days each; "all" = all 126 person-days of the replication)
+
+**First form of the rule (two or more channels), `gdi_direct.py ... STRETCH_OVER=N`:**
+
+| STRETCH_OVER | longest stretch h (Mennatullah Abdo / Youssef Ali) | Chat / Email h | stretches a day | all: changes | all: stretches under 2 h | all: hours short |
+|---|---|---|---|---|---|---|
+| 0 (today) | 5.55 / 5.10 | 17.5 / 22.5 | 2.2 / 2.4 | 2.00 | 0.84 | 912.2 |
+| 10 | 4.30 / 3.70 | 18.8 / 21.2 | 3.2 / 3.4 | 2.41 | 1.15 | 916.8 |
+| 20 | 3.10 / 3.75 | 21.2 / 20.5 | 4.0 / 3.8 | 2.48 | 1.18 | 917.8 |
+| 28 | 2.75 / 2.95 | 21.0 / 21.0 | 4.2 / 4.2 | 2.73 | 1.37 | 918.0 |
+
+On base_16 and tight_16 (`--arms baseline balanced`, STRETCH_OVER 0 / 10 / 14 / 20): changes per person-day 2.41 / 2.81 / 3.06 / 3.31 and 2.25 / 3.08 / 3.25 / 3.12 (baseline 2.49 to 2.64 and 2.86 to 2.95), average stretch 2.34 / 2.10 / 1.97 / 1.86 h
+(under the 2 hours the owner asked for). **Deviation, stated plainly:** people with three channels were pushed to change more than with the tick off, so the rule is narrowed to **exactly two channels** (with three, the share charge already keeps
+a stretch near 3.7 hours: 3.5 to 3.7 h longest on base_16 with no stretch charge).
+
+**Rule as shipped (exactly two channels), GDI replication:**
+
+| STRETCH_OVER | longest stretch h | Chat / Email h | stretches a day | all: changes | all: under 2 h | all: hours short |
+|---|---|---|---|---|---|---|
+| 10 | 3.65 / 4.15 | 18.8 / 21.2 | 3.4 / 3.0 | 2.14 | 0.94 | 918.5 |
+| 20 | 2.80 / 3.55 | 18.2 / 21.8 and 19.0 / 21.0 | 4.2 / 3.8 | 2.28 | 1.00 | 918.2 |
+
+(specialists_20, six two-channel people among 20: changes per person-day 1.45 / 1.62 / 1.70 for 0 / 10 / 20 against 1.27 with the tick off; hours short 12.5 at every weight; no day over 14 s.)
+
+**Against the acceptance.** Met at 20: both associates' longest stretch under 4.0 h (2.80 and 3.55; 10 misses it for Youssef Ali, 4.15), Chat share 46 % to 49 % (limit 35 to 65 %), no planner problems, no day over 25 s.
+**Missed, plainly:** hours short rise by 5.7 h over the week against the 0 arm (0.8 h a day, limit 0.5; the same at 10); the week's total changes rise from 2.00 to 2.28 per person-day (still below the tick-off 2.65) and stretches under 2 hours from 0.84 to 1.00;
+on specialists_20 total changes stay above the tick-off arm's (1.70 against 1.27), as they already were with no stretch charge (1.45). **Ruling: STRETCH_LIMIT 12, STRETCH_OVER 20**, the smallest that meets the owner's stretch limit.
+The file the owner sent shows 5.7 hours and 29 % Chat for the same two people; the planner now gives 3.2 hours and 48 %. Single replications of the timed search vary by about half an hour in the longest stretch.

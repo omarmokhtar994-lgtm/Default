@@ -1839,6 +1839,33 @@ function liveWatch(box) {
 })();
 
 
+// Whole lists (Phase BC): on the Schedules, Channels and Week pages the viewer chooses between scrolling panels and whole lists, for every
+// scrolling panel on the page at once. The choice is kept in this browser only; without storage the panels are the default for the visit.
+(function () {
+  "use strict";
+  var bar = document.querySelector("[data-list-mode]");
+  if (!bar) { return; }
+  var KEY = "ts-list-mode";
+  function apply(mode) {
+    Array.prototype.forEach.call(document.querySelectorAll(".panel-scroll"), function (box) { box.setAttribute("data-mode", mode); });
+    Array.prototype.forEach.call(bar.querySelectorAll("[data-list-mode-set]"), function (b) {
+      b.setAttribute("aria-pressed", b.getAttribute("data-list-mode-set") === mode ? "true" : "false");
+    });
+  }
+  var saved = "";
+  try { saved = window.localStorage.getItem(KEY) || ""; } catch (e) { saved = ""; }
+  apply(saved === "whole" ? "whole" : "scroll");
+  bar.hidden = false;
+  bar.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-list-mode-set]");
+    if (!b) { return; }
+    var mode = b.getAttribute("data-list-mode-set") === "whole" ? "whole" : "scroll";
+    apply(mode);
+    try { window.localStorage.setItem(KEY, mode); } catch (err) { /* private window: the choice lasts for this visit */ }
+  });
+})();
+
+
 // A little 3D (Phase BA): the program cards lean toward a mouse pointer; the sign-in stack and mark stop when the tab is hidden or the stack is
 // off screen; a run's word turns over once when the person watched the run finish. Nothing here for a touch screen or reduced motion.
 (function () {

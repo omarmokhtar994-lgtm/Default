@@ -1,12 +1,14 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
 {% extends "base.html" %}
 {% block title %}Plan channels: {{ row.program|unit if row.program else run.workbook }} on Team Scheduler{% endblock %}
+{% from "_macros.html" import list_mode %}
 {% block content %}
 {% set r = setup.rules %}
 <div class="phead"><div>
   <h1>{{ row.program|unit if row.program else run.workbook }}: plan channels</h1>
   <p class="byline">{{ row.label }}{% if row.week_start %}, starts {{ row.week_start|start_day }}{% endif %}. A block lasts at least {{ r.min_block }} minutes unless a break, the end of the shift or an all-channels time cuts it{% for c, most in r.max_run.items() if most %}; {{ names[c] }} at most {{ most }} minutes in a row{% endfor %}. When people are short: {{ r.order|map('channel_name')|join(', then ') }} ({{ 'strict order' if r.strict else 'balanced' }}). Breaks stay inside the break rules. Nothing is kept until you save; saving makes a new version, checked like every other.</p>
 </div><a class="button" href="{{ url_for('run_schedules', run_id=row.run_id, v=row.id) }}">Back to the schedule</a></div>
+{{ list_mode() }}
 
 <nav class="bp-days" aria-label="Days of the week">{% for dd in days %}<a href="{{ url_for('plan_channels', schedule_id=row.id, day=dd) }}"{% if dd == day %} class="on" aria-current="page"{% endif %}>{{ dd }}{% if dd in drafted and dd != day %} <small>unsaved</small>{% endif %}</a>{% endfor %}</nav>
 

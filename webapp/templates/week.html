@@ -1,6 +1,6 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
 {% extends "base.html" %}
-{% from "_auto_breaks.html" import auto_breaks with context %}
+{% from "_auto_breaks.html" import auto_breaks with context %}{% from "_macros.html" import list_mode %}
 {% block title %}{% if merged %}{{ merged.name }}, week of {{ week|day_month }}{% elif program %}{{ program|unit }}, week of {{ week|day_month }}{% elif run %}{{ run.workbook }}: the week{% else %}Week view{% endif %} on Team Scheduler{% endblock %}
 {% block content %}
 {% set unit = 'hour' if view and view.step == 60 else (view.step ~ ' minutes' if view else '30 minutes') %}
@@ -34,6 +34,7 @@
   {% endif %}
 </div>
 
+{{ list_mode() }}
 {% if zone_note %}<p class="note panel">{{ zone_note }}</p>{% endif %}
 {% if target_panel %}{% set tp = target_panel %}
 <section class="panel" id="target" aria-labelledby="tgt-h">

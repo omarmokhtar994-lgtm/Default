@@ -3703,3 +3703,90 @@ class TheFittedDayInTheBrowser(unittest.TestCase):
         n = items.count()
         self.assertGreater(n, 6)
         self.assertAlmostEqual(items.nth(0).bounding_box()["y"], items.nth(n - 1).bounding_box()["y"], delta=2)
+
+
+class TheScrollingInTheBrowser(unittest.TestCase):
+    """Phase BC (owner, 2026-10-26: "in the scrolling parts I'm not able to scroll the page itself if the scroll ended in that part", "make sure the
+    full list option is available in channel as well and schedule", "if something is written very big such as the warning for the 29th should be
+    wrapped"): the page takes over when a panel has reached its end; every scrolling panel on the Schedules, Channels and Week pages can be shown as
+    a whole list; a clock-change warning in a shift cell wraps."""
+
+    setUpClass = classmethod(ThePhaseVInTheBrowser.setUpClass.__func__)
+    tearDownClass = classmethod(ThePhaseVInTheBrowser.tearDownClass.__func__)
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+
+    def pages(self):
+        q = self.key.replace(" ", "+")
+        v = self.version["id"]
+        return (f"/runs/{self.run_id}/schedules", f"/setup/channels?program={q}", f"/schedules/{v}/channels?day=Thu", f"/schedules/{v}/week")
+
+    def test_the_page_scrolls_on_when_a_panel_has_reached_its_end(self):
+        page = self.page(width=1280, height=800)
+        self.sign_in(page)
+        page.goto(self.base + self.pages()[0])
+        page.wait_for_load_state("load")
+        # a real scrolling panel of this site, filled to be taller than its box, with the page made tall below it
+        page.evaluate("""() => {
+            const box = document.querySelector('.panel-scroll');
+            const filler = document.createElement('div'); filler.style.height = '3000px'; box.appendChild(filler);
+            const tail = document.createElement('div'); tail.style.height = '4000px'; document.querySelector('main').appendChild(tail);
+            box.scrollIntoView({block: 'center'}); box.scrollTop = box.scrollHeight;
+        }""")
+        before = page.evaluate("window.scrollY")
+        spot = page.locator(".panel-scroll").first.bounding_box()
+        page.mouse.move(spot["x"] + spot["width"] / 2, spot["y"] + spot["height"] / 2)
+        page.mouse.wheel(0, 600)
+        page.wait_for_timeout(400)
+        self.assertGreater(page.evaluate("window.scrollY"), before)  # the wheel carried on to the page
+
+    def test_no_scrolling_panel_traps_the_wheel(self):
+        page = self.page(width=1280, height=800)
+        self.sign_in(page)
+        page.goto(self.base + self.pages()[0])
+        got = page.evaluate("""() => Array.from(document.querySelectorAll('.panel-scroll')).map(e => getComputedStyle(e).overscrollBehaviorY)""")
+        self.assertTrue(got)
+        self.assertEqual(set(got), {"auto"})
+
+    def test_the_rta_list_does_not_trap_the_wheel_either(self):
+        page = self.page(width=1280, height=800)
+        self.sign_in(page)
+        page.goto(f"{self.base}/day?program={self.key.replace(' ', '+')}&date=2026-10-14")
+        got = page.evaluate("""() => Array.from(document.querySelectorAll('.tl-scroll, .rb-scroll')).map(e => getComputedStyle(e).overscrollBehaviorY)""")
+        self.assertTrue(got)
+        self.assertEqual(set(got), {"auto"})
+
+    def test_every_scrolling_panel_can_be_shown_as_a_whole_list(self):
+        for path in self.pages():
+            page = self.page(width=1280, height=800)
+            self.sign_in(page)
+            page.goto(self.base + path)
+            page.wait_for_load_state("load")
+            bar = page.locator("[data-list-mode]")
+            expect(bar).to_be_visible()
+            expect(bar.get_by_role("button", name="Scrolling panels")).to_have_attribute("aria-pressed", "true")
+            bar.get_by_role("button", name="Whole lists").click()
+            modes = page.evaluate("Array.from(document.querySelectorAll('.panel-scroll')).map(e => [e.getAttribute('data-mode'), getComputedStyle(e).maxHeight])")
+            self.assertTrue(modes, path)
+            for mode, height in modes:
+                self.assertEqual((mode, height), ("whole", "none"), path)
+            page.reload()
+            expect(page.locator("[data-list-mode]").get_by_role("button", name="Whole lists")).to_have_attribute("aria-pressed", "true")
+            page.close()
+
+    def test_a_clock_change_warning_in_a_shift_cell_stays_short(self):
+        # re-pinned (same phase): the cell holds a two-word label (the full words are in its tip and once under the table, see
+        # test_bc_schedule_notes), so the day's column stays as narrow as its neighbours
+        page = self.page(width=1280, height=800)
+        self.sign_in(page)
+        page.goto(self.base + self.pages()[0])
+        widths = page.evaluate("""() => {
+            const cells = document.querySelectorAll('.edgrid tbody tr:first-child td');
+            const before = cells[1].getBoundingClientRect().width;
+            const note = document.createElement('span'); note.className = 'ed-warn'; note.textContent = 'Clocks change';
+            note.title = '29 Oct 2026 23:00 occurs twice in Africa/Cairo because the clocks change. The workbook does not identify the occurrence.';
+            cells[1].querySelector('button').appendChild(note);
+            return [before, cells[1].getBoundingClientRect().width];
+        }""")
+        self.assertLess(widths[1], 200)
+        self.assertLessEqual(widths[1], widths[0] + 30)

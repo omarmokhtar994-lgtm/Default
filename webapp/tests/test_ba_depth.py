@@ -15,7 +15,11 @@ START = "/* Phase BA: a little 3D"
 
 
 def depth_block():
-    return CSS[CSS.index(START):]
+    # re-pinned (Phase BB/BC): the Phase BA block ends where the later blocks begin (they are paint-only depth on charts and tiles, and the scroll
+    # panel rules of the list switch; each has its own tests), so this block is still the one that must stay off the RTA, tables and forms
+    start = CSS.index(START)
+    later = CSS.find("/* Phase BB:", start)
+    return CSS[start:later if later != -1 else len(CSS)]
 
 
 class TheBudget(unittest.TestCase):

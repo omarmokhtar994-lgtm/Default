@@ -54,7 +54,7 @@ STRETCH_COST = 22
 DAY_MIX, DAY_SLACK = 8, 4
 # Phase BC: with the balanced tick, a change of channel with a break or lunch between the two blocks costs this per quarter hour instead of
 # CONSISTENT: a break is where a person naturally moves (evidence/phase_bc/REQUESTS.md); fixed keeps pricing it like the middle of a stretch
-BREAK_CHANGE = 20
+BREAK_CHANGE = 0
 # Phase AF (B2): a quarter hour of break that leaves nobody else able to take the person's queue, and one that leaves
 # only colleagues of another language; someone who starts alone has the first break within FIRST_BY minutes
 ALONE, ALONE_LANGUAGE, FIRST_BY = 50, 10, 240

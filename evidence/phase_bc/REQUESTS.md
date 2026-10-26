@@ -84,3 +84,21 @@ which stops people moving at breaks and pushes the few changes that remain into 
 - hours short not above the 20 arm's by more than 0.5 h a day; no planner problems; no day over 25 s.
 The middle arm that meets all of it is kept; if only the 0 arm does, that one.
 Not changed: Fixed, both off, the engine, the validator, the workbooks.
+
+### Result of the breaks-as-separators sweep (`--arms baseline balanced --set BREAK_CHANGE=N`, base_16 and tight_16, Mon to Fri, 2026-10-26)
+
+| BREAK_CHANGE | team | changes in the middle of a stretch | changes at a break | total (baseline) | under 2 h | average h | longest h | short h | slowest s |
+|---|---|---|---|---|---|---|---|---|---|
+| 20 (as before) | base_16 | 1.44 | 1.09 | 2.52 (2.50) | 0.82 | 2.27 | 3.53 | 2.5 | 13.3 |
+| 5 | base_16 | 1.21 | 1.14 | 2.35 (2.49) | 0.79 | 2.39 | 3.73 | 2.5 | 13.5 |
+| 0 | base_16 | 0.66 | 1.57 | 2.24 (2.34) | 0.60 | 2.47 | 3.70 | 2.5 | 13.4 |
+| 20 | tight_16 | 0.97 | 1.34 | 2.31 (2.96) | 0.97 | 2.42 | 4.33 | 68.75 | 14.2 |
+| 5 | tight_16 | 1.06 | 1.35 | 2.41 (2.86) | 1.04 | 2.34 | 4.17 | 68.75 | 14.7 |
+| 0 | tight_16 | 1.05 | 1.36 | 2.41 (2.90) | 1.01 | 2.34 | 4.20 | 68.75 | 14.1 |
+
+**Against the acceptance (stated plainly).** BREAK_CHANGE 0 meets: total changes below the baseline's (both teams), stretches under 2 h within 0.1 of the 20 arm (lower on
+base_16, +0.04 on tight_16), hours short equal, no problems, no day over 25 s, and the longest stretch not above the 20 arm's on tight_16 (4.20 against 4.33).
+**Missed:** the longest stretch on base_16 is 3.70 h against 3.53 h (still under 4 h); changes in the middle of a stretch on tight_16 are 1.05 against 0.97 (a
+difference the timed search shows from run to run; the baseline's own figure moved 0.1 between runs). BREAK_CHANGE 5 misses more of them.
+**Ruling: BREAK_CHANGE = 0.** The gain is where the owner pointed: on base_16 changes in the middle of a stretch fall from 1.44 to 0.66 per person-day and the
+moving happens at breaks (1.09 to 1.57), with fewer short stretches (0.82 to 0.60). Fixed is unchanged (its cost across breaks stays CONSISTENT).

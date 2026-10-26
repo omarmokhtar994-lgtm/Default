@@ -102,3 +102,30 @@ base_16, +0.04 on tight_16), hours short equal, no problems, no day over 25 s, a
 difference the timed search shows from run to run; the baseline's own figure moved 0.1 between runs). BREAK_CHANGE 5 misses more of them.
 **Ruling: BREAK_CHANGE = 0.** The gain is where the owner pointed: on base_16 changes in the middle of a stretch fall from 1.44 to 0.66 per person-day and the
 moving happens at breaks (1.09 to 1.57), with fewer short stretches (0.82 to 0.60). Fixed is unchanged (its cost across breaks stays CONSISTENT).
+
+## Chat and Email people did not rotate (owner, 2026-10-26: "for associates who work only emails and chats I think they weren't very balanced; I used the balanced tick there": Mazen, Menna, Youssef Ali; GDI)
+
+**Measured first** (`evidence/phase_bc/gdi_direct.py`: the people, shifts, languages and breaks read back from `channel_plan_GDI_170.xlsx`, the needs and rules from the GDI workbook's
+channel tabs, planned Sun to Sat with the earlier days carried, breaks kept; the two Chat-and-Email associates' skills are exact, the others' are the channels the file shows them working):
+
+| | Chat h / Email h (Mennatullah Abdo, Youssef Ali; 5 days) | longest stretch h | stretches a day |
+|---|---|---|---|
+| the owner's file | 11.5 / 28.5 | 5.7 | 1.8 |
+| no tick | 19.0 / 21.0 | 5.9 to 6.0 | 2.2 to 2.4 |
+| Fixed | 16.0 / 24.0 | 5.1 to 5.5 | 2.4 to 2.6 |
+| Balanced (current) | 17.5 / 22.5 | 5.1 to 5.2 | 2.2 to 2.4 |
+
+So Balanced moves their Chat share from 29 % (the file) to 44 %, but the stretches stay above 5 hours. Cause: the share-of-the-day charge (DAY_MIX) lets a person with two
+channels have up to half the day plus an hour on one channel, which is 5 hours of an 8-hour day, so one 5-hour stretch and one 3-hour stretch pass without a charge. The tick
+promises a couple of hours on a channel and the charge only limits a channel's total, not the length of a stretch. (The file itself was probably planned before the tick; it
+shows Email blocks of 4.5 to 5.5 hours and 29 % Chat, as the no-tick arm above would.)
+
+**Rule (pre-registered before any arm is run; Balanced tick only).**
+1. With Balanced on, a stretch on one channel (breaks do not end it) that is still running after STRETCH_LIMIT quarter hours costs STRETCH_OVER per quarter hour past it, for a person who can work two or more channels today.
+   Arms: STRETCH_LIMIT 12 (3 hours), STRETCH_OVER 0 (current), 6, 10.
+2. Below every shortfall cost as before (an Email quarter hour short costs 30), so coverage and language minimums still come first.
+**Acceptance (the GDI replication, Balanced, against STRETCH_OVER 0):** the two Chat-and-Email associates' longest stretch (average of each day's longest) at most 4.0 hours and lower than the 0 arm's; their Chat
+share between 35 % and 65 %; Email hours short (the planner's own count) not above the 0 arm's by more than 0.5 hours a day; no planner problems; no day over 25 seconds.
+**Acceptance (base_16 and tight_16, `--arms balanced`):** the longest stretch lower than the 0 arm's; total changes not above the both-off baseline's; hours short not above the 0 arm's by more than 0.5 hours a day; no day over 25 seconds.
+The smallest STRETCH_OVER that meets all of it is kept; if none does, the misses are stated and the one closest is proposed to the owner.
+Not changed: Fixed, both off, the engine, the validator, the workbooks.

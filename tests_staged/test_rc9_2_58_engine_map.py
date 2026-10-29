@@ -3,8 +3,10 @@
 ``tools/engine_map.py``. It holds line numbers and the engine's sha256, so an engine edit that leaves the map as it was fails
 here, with the command that writes it again. The map only reads the engine."""
 import hashlib
+import shutil
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -43,6 +45,27 @@ class TheEngineMap(unittest.TestCase):
     def test_the_command_line_check_agrees(self):
         done = subprocess.run([sys.executable, str(ROOT / "tools" / "engine_map.py"), "--check"], capture_output=True, text=True)
         self.assertEqual(done.returncode, 0, done.stderr)
+
+
+class TheMapReadsTheSameInTheInstalledPackage(unittest.TestCase):
+    """Phase BC (owner, 2026-10-29: the server's safety gate failed on ENGINE_MAP.md): the package builder writes MANIFEST.json (and ships
+    SCENARIOS.json) into the package root after the gate inside the build has run, and the map used to list any root-level JSON that names the
+    hash, so the installed package's map no longer matched. The map reads the code folders only; a file in the package root changes nothing."""
+
+    def map_with(self, root_files):
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root, True)
+        (root / "engine" / "_tools").mkdir(parents=True)
+        shutil.copy2(ENGINE, root / "engine" / "_tools" / ENGINE.name)
+        for name, body in root_files.items():
+            (root / name).write_text(body, encoding="utf-8")
+        return engine_map.build(root / "engine" / "_tools" / ENGINE.name, root)
+
+    def test_a_manifest_in_the_package_root_does_not_change_the_map(self):
+        bare = self.map_with({})
+        shipped = self.map_with({"MANIFEST.json": '{"engine_sha256": "abc", "engine_file_sha256": "abc"}\n',
+                                 "SCENARIOS.json": '{"engine_sha256": "abc"}\n', "other.json": '{"engine_sha256": "abc"}\n'})
+        self.assertEqual(bare, shipped)
 
 
 if __name__ == "__main__":

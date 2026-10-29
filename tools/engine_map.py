@@ -254,15 +254,12 @@ def build(engine: Path = ENGINE, root: Path = ROOT) -> str:
     add("| File | Lines that name the hash |")
     add("|---|---|")
     rows = collections.Counter()
-    for base, shown in scan_dirs(root) + [(root, "")]:
-        pattern = "*.py" if shown else "*.json"
-        for path in sorted(base.glob("**/" + pattern) if shown else base.glob(pattern)):
+    for base, shown in scan_dirs(root):  # the code folders only: a file in the package root (MANIFEST.json, SCENARIOS.json) is written after the build's gate
+        for path in sorted(base.glob("**/*.py")):
             if "__pycache__" in path.parts or path.name.startswith("test_") or path.name == "engine_map.py":
                 continue
             rel = (Path(shown) / path.relative_to(base)).as_posix()
             if rel.startswith(("webapp/", "evidence/", "dist/", "candidates/", "experiments/", "docs/")):
-                continue
-            if rel == "SCENARIOS.json":  # the package's copy of packages/rc9_2_2_production/SCENARIOS.json: the map must read the same there
                 continue
             for number, line in enumerate(path.read_text(encoding="utf-8", errors="ignore").split("\n"), start=1):
                 if any(p in line for p in PINS) and "sha256" in line.lower():

@@ -3803,3 +3803,19 @@ class TheScrollingInTheBrowser(unittest.TestCase):
         self.assertFalse(fixed.is_checked())  # ticking one clears the other
         fixed.check()
         self.assertFalse(balanced.is_checked())
+
+    def test_the_interval_board_can_be_shown_as_a_whole_list_too(self):
+        # owner, 2026-10-29: "intervals doesn't have the full view, it has only the scrolling one"
+        page = self.page(width=1280, height=800)
+        self.sign_in(page)
+        page.goto(f"{self.base}/day?program={self.key.replace(' ', '+')}&date=2026-10-14&view=board")
+        page.wait_for_load_state("load")
+        board = page.locator(".rb-scroll.panel-scroll")
+        expect(board).to_have_count(1)
+        bar = page.locator("[data-list-mode]")
+        expect(bar).to_be_visible()
+        expect(board).to_have_attribute("data-mode", "scroll")
+        bar.get_by_role("button", name="Whole lists").click()
+        self.assertEqual(page.evaluate("getComputedStyle(document.querySelector('.rb-scroll.panel-scroll')).maxHeight"), "none")
+        self.assertEqual(page.evaluate("getComputedStyle(document.querySelector('.rb-scroll.panel-scroll')).overflowY"), "visible")
+

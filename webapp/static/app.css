@@ -1862,3 +1862,5 @@ input[type=file] { min-height: 24px; }
    shift cell wraps instead of making its day a screen wide. */
 .scroll.panel-scroll[data-mode="whole"], .tscroll.panel-scroll[data-mode="whole"], .rb-scroll.panel-scroll[data-mode="whole"] { max-height: none; overflow: visible; }
 .ed .ed-warn { display: block; margin-top: 2px; font-size: 0.6875rem; line-height: 1.3; white-space: nowrap; color: var(--short-ink); }
+/* Phase BC (owner, 2026-10-29): a note that explains rather than warns (the day's window on the tabs that use the schedule's own day) */
+.notice.calm { border-left-color: var(--edge); background: var(--well); }

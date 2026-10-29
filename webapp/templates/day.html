@@ -1,6 +1,6 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
 {% extends "base.html" %}
-{% from "_target_tile.html" import target_tile with context %}{% from "_macros.html" import pager with context %}{% from "_channel_hours.html" import channel_hours %}
+{% from "_target_tile.html" import target_tile with context %}{% from "_macros.html" import pager, list_mode with context %}{% from "_channel_hours.html" import channel_hours %}
 {% block title %}The day: {{ program|unit if program else 'no program' }} on Team Scheduler{% endblock %}
 {% block content %}
 {% if g.rta_clock_notice %}<p class="notice" role="status">{{ g.rta_clock_notice }}</p>{% endif %}
@@ -131,7 +131,7 @@
   </form>
   <p class="dim measure-note">{% if measure == 'interval' %}Billable aux (for example billable coaching) stays on the floor; breaks, absences and non-billable aux do not.{% else %}Anyone in aux, on a break or away is off the queue.{% endif %}</p>
 </div>
-{% if on_anchor_day %}<p class="notice">Find a time, Overtime and Channels work on the schedule's day, {{ on.strftime('%a %d %b') }} {{ hm(0) }} to {{ hm(0) }}{{ ' the next day' }}, with every time in {{ zone_name }} time. The Timeline, the Interval board, Adherence, Fix breaks, Rescue the day and Change several breaks work on the 24 hours from {{ start_at }}.</p>{% endif %}
+{% if on_anchor_day %}<p class="notice calm">Find a time, Overtime and Channels work on the schedule's day, {{ on.strftime('%a %d %b') }}, from midnight to midnight, with every time in {{ zone_name }} time. The Timeline, the Interval board, Adherence, Fix breaks, Rescue the day and Change several breaks show the 24 hours from {{ start_at }} instead.</p>{% endif %}
 {% if page.channel_problem %}<p class="notice">{{ page.channel_problem }}</p>{% endif %}
 {% if page.unlisted %}{% set n = page.unlisted|length %}<p class="notice">{{ n }} {{ 'person has' if n == 1 else 'people have' }} records today but {{ 'is' if n == 1 else 'are' }} not in the schedule in use ({{ page.version.label }}): {% for u in page.unlisted %}{% if not loop.first %}{{ ' and ' if loop.last else ', ' }}{% endif %}{{ u.name }} ({{ u.what }}){% endfor %}. Their records are kept and are in Exports; they show here again if a schedule with them is put in use. <a href="{{ url_for('run_schedules', run_id=page.version.run_id, v=page.version.id) }}">Open the schedules</a></p>{% endif %}
 {% if page.stale %}<p class="notice">{{ page.stale }} break move{{ 's' if page.stale != 1 }} recorded earlier no longer match{{ 'es' if page.stale == 1 }} the schedule in use (it changed since), so {{ 'it is' if page.stale == 1 else 'they are' }} not counted.</p>{% endif %}
@@ -513,6 +513,7 @@
   <p class="note">Each row is one {{ unit.get(v.interval, 'interval')[:-1] }}: who goes on a break in it, who is late, leaves early or is in aux, and whether the floor still holds. Drag a break to another row, or click it to set the time in 5-minute steps; you see the warnings and the best times before anything is kept.</p>
   {% set gone = [] %}{% for lane in v.lanes %}{% for s in lane.segments if s.offset == 0 and s.status in absent_states %}{% set _ = gone.append(lane.name ~ ' (' ~ s.status|lower ~ ')') %}{% endfor %}{% endfor %}
   {% if gone %}<p class="board-gone">Not on the floor today: <b>{{ gone|join(', ') }}</b>.</p>{% endif %}
+  {{ list_mode() }}
   <div class="rb-scroll panel-scroll" role="region" tabindex="0" aria-label="Interval board (scrolls)"><div class="rb" role="table" aria-label="Interval board">
     <div class="rb-row rb-head" role="row"><span role="columnheader">Interval</span><span role="columnheader">Needed</span><span role="columnheader">On the floor</span><span role="columnheader">Buffer (h:mm)</span><span role="columnheader">Cover <small>(target {{ (100 * page.target.target)|round|int }}%)</small></span><span role="columnheader">Status</span><span role="columnheader">Unplanned leave</span><span role="columnheader">On break</span><span role="columnheader">Lunch</span><span role="columnheader">Short breaks</span><span role="columnheader">Late, early, aux</span><span role="columnheader">Languages</span></div>
     {% set at_target = {} %}{% for c in page.target.cells %}{% set _ = at_target.update({c.t: c.ok}) %}{% endfor %}

@@ -2,74 +2,75 @@
 
 Written by `tools/engine_map.py` from `engine/_tools/l632_universal_scheduler.py`; do not edit by hand. `python3 tools/engine_map.py --check` fails when the engine has changed since this was written.
 
-- File: `engine/_tools/l632_universal_scheduler.py`, sha256 `1199bcedfba9e9fa56ad822d2d7c6bbe9549339687d318a502dfd7a5884b1f27`
-- 26,493 lines; 361 functions, 12 classes
+- File: `engine/_tools/l632_universal_scheduler.py`, sha256 `1162ab8773985a0746b718803e6e89520742cbb4095f3e44c198ed527c05462a`
+- 26,634 lines; 363 functions, 12 classes
 
 ## 1. The stages of `run_case`
 
-`run_case` is lines 21168 to 25096 (3,929 lines, 72 parameters). Its body is one `with` block (lines 21244 to 25096) of 466 statements in sequence. The outline below is read from what it calls, in order of first call; a function of 100 lines or more is a stage of its own.
+`run_case` is lines 21294 to 25237 (3,944 lines, 72 parameters). Its body is one `with` block (lines 21370 to 25237) of 470 statements in sequence. The outline below is read from what it calls, in order of first call; a function of 100 lines or more is a stage of its own.
 
 | Order | First call at line | Function | Lines | Job |
 |---|---|---|---|---|
-| 1 | 21245 | `parse_input` | 805 | Input reading and contract |
-| 2 | 21346 | `capacity_diagnostics` | 280 | Coverage, demand and capacity |
-| 3 | 21347 | `coverage_split_capacity_report` | 160 | Coverage, demand and capacity |
-| 4 | 21357 | `validate_input_contract` | 454 | Input reading and contract |
-| 5 | 21425 | `calculate_metrics` | 916 | Metrics |
-| 6 | 21434 | `validate_schedule` | 114 | Audit and self-check |
-| 7 | 21462 | `load_validated_fallback_candidate` | 184 | Candidate selection |
-| 8 | 21532 | `skeleton_profiles` | 192 | Skeleton search (stage 1) |
-| 9 | 21970 | `run_shortfall_pass` | 133 | Search phases (`run_*`) |
-| 10 | 21995 | `aggregate_pattern_mix_guidance` | 365 | Skeleton search (stage 1) |
-| 11 | 22031 | `build_skeleton` | 926 | Skeleton search (stage 1) |
-| 12 | 22496 | `break_capacity_headcount_requirement` | 116 | Breaks |
-| 13 | 22682 | `run_qualified_language_break_certificate_repairs` | 134 | Search phases (`run_*`) |
-| 14 | 22703 | `run_logic_based_break_cut_feedback` | 180 | Search phases (`run_*`) |
-| 15 | 22822 | `language_break_overlap_repair_plan` | 190 | Languages |
-| 16 | 23162 | `run_protected_target_champion_break_proof` | 100 | Search phases (`run_*`) |
-| 17 | 23228 | `run_zero_exception_recovery_phase` | 182 | Search phases (`run_*`) |
-| 18 | 23325 | `solve_breaks` | 671 | Breaks |
-| 19 | 23630 | `run_rc8_best_before_break_recovery` | 115 | Search phases (`run_*`) |
-| 20 | 23663 | `run_day_neighbourhood_break_search` | 197 | Search phases (`run_*`) |
-| 21 | 23725 | `bootstrap_exception_anchors_for_joint` | 139 | Joint, repair and neighbourhood search |
-| 22 | 23778 | `run_adaptive_decomposed_joint_optimizer` | 643 | Search phases (`run_*`) |
-| 23 | 23833 | `run_break_load_feedback` | 111 | Search phases (`run_*`) |
-| 24 | 23854 | `run_coordinated_shift_off_break_loop` | 267 | Search phases (`run_*`) |
-| 25 | 23910 | `run_post_break_repair_phase` | 191 | Search phases (`run_*`) |
-| 26 | 23934 | `run_target_lock_recovery_phase` | 110 | Search phases (`run_*`) |
-| 27 | 24468 | `write_output_workbook` | 638 | Output and publishing |
-| 28 | 24559 | `select_export_candidates` | 300 | Candidate selection |
-| 29 | 24596 | `shift_consistency_polish` | 138 | Shifts and rest |
+| 1 | 21371 | `parse_input` | 805 | Input reading and contract |
+| 2 | 21472 | `capacity_diagnostics` | 280 | Coverage, demand and capacity |
+| 3 | 21473 | `coverage_split_capacity_report` | 160 | Coverage, demand and capacity |
+| 4 | 21483 | `validate_input_contract` | 454 | Input reading and contract |
+| 5 | 21551 | `calculate_metrics` | 916 | Metrics |
+| 6 | 21560 | `validate_schedule` | 114 | Audit and self-check |
+| 7 | 21588 | `load_validated_fallback_candidate` | 184 | Candidate selection |
+| 8 | 21658 | `skeleton_profiles` | 192 | Skeleton search (stage 1) |
+| 9 | 22096 | `run_shortfall_pass` | 133 | Search phases (`run_*`) |
+| 10 | 22121 | `aggregate_pattern_mix_guidance` | 365 | Skeleton search (stage 1) |
+| 11 | 22157 | `build_skeleton` | 926 | Skeleton search (stage 1) |
+| 12 | 22622 | `break_capacity_headcount_requirement` | 116 | Breaks |
+| 13 | 22808 | `run_qualified_language_break_certificate_repairs` | 134 | Search phases (`run_*`) |
+| 14 | 22829 | `run_logic_based_break_cut_feedback` | 180 | Search phases (`run_*`) |
+| 15 | 22948 | `language_break_overlap_repair_plan` | 190 | Languages |
+| 16 | 23288 | `run_protected_target_champion_break_proof` | 100 | Search phases (`run_*`) |
+| 17 | 23354 | `run_zero_exception_recovery_phase` | 182 | Search phases (`run_*`) |
+| 18 | 23451 | `solve_breaks` | 671 | Breaks |
+| 19 | 23756 | `run_rc8_best_before_break_recovery` | 115 | Search phases (`run_*`) |
+| 20 | 23789 | `run_day_neighbourhood_break_search` | 197 | Search phases (`run_*`) |
+| 21 | 23851 | `bootstrap_exception_anchors_for_joint` | 139 | Joint, repair and neighbourhood search |
+| 22 | 23904 | `run_adaptive_decomposed_joint_optimizer` | 643 | Search phases (`run_*`) |
+| 23 | 23959 | `run_break_load_feedback` | 111 | Search phases (`run_*`) |
+| 24 | 23980 | `run_coordinated_shift_off_break_loop` | 267 | Search phases (`run_*`) |
+| 25 | 24036 | `run_post_break_repair_phase` | 191 | Search phases (`run_*`) |
+| 26 | 24060 | `run_target_lock_recovery_phase` | 110 | Search phases (`run_*`) |
+| 27 | 24594 | `write_output_workbook` | 638 | Output and publishing |
+| 28 | 24685 | `select_export_candidates` | 300 | Candidate selection |
+| 29 | 24707 | `preference_swap_polish` | 111 | Preferences, OFF days and fixed requests |
+| 30 | 24737 | `shift_consistency_polish` | 138 | Shifts and rest |
 
 Blocks inside `run_case` of 70 lines or more, in order:
 
 | Lines | Size | Starts with |
 |---|---|---|
-| 21660 to 21749 | 90 | `run_parameters = {` |
-| 21813 to 21934 | 122 | `audit: Dict[str, Any] = {` |
-| 22272 to 22366 | 95 | `for profile_index, profile in enumerate(profiles_to_run):` |
-| 22374 to 22452 | 79 | `if skeleton_only and successful_skeletons and polish_deadline - time.time() >= 45:` |
-| 22475 to 22599 | 125 | `if skeleton_only:` |
-| 22727 to 22800 | 74 | `if blanket_global_reserve_enabled and operational_no_break_exception_cap(parsed) == 0:` |
-| 22821 to 22907 | 87 | `for anchor_index, anchor in enumerate(skill_overlap_anchors):` |
-| 22930 to 23003 | 74 | `for anchor_index, anchor in enumerate(repair_anchors[:3]):` |
-| 23428 to 23594 | 167 | `for task_index, task in enumerate(tasks):` |
-| 23746 to 23825 | 80 | `if joint_refinement and joint_search_pool and not completed_phases.get("joint_refinement_c` |
-| 23953 to 24077 | 125 | `if not compliant and parsed.allow_no_break_exceptions and not completed_phases.get("except` |
-| 24304 to 24557 | 254 | `if not candidates:` |
-| 24920 to 25088 | 169 | `row = {` |
+| 21786 to 21875 | 90 | `run_parameters = {` |
+| 21939 to 22060 | 122 | `audit: Dict[str, Any] = {` |
+| 22398 to 22492 | 95 | `for profile_index, profile in enumerate(profiles_to_run):` |
+| 22500 to 22578 | 79 | `if skeleton_only and successful_skeletons and polish_deadline - time.time() >= 45:` |
+| 22601 to 22725 | 125 | `if skeleton_only:` |
+| 22853 to 22926 | 74 | `if blanket_global_reserve_enabled and operational_no_break_exception_cap(parsed) == 0:` |
+| 22947 to 23033 | 87 | `for anchor_index, anchor in enumerate(skill_overlap_anchors):` |
+| 23056 to 23129 | 74 | `for anchor_index, anchor in enumerate(repair_anchors[:3]):` |
+| 23554 to 23720 | 167 | `for task_index, task in enumerate(tasks):` |
+| 23872 to 23951 | 80 | `if joint_refinement and joint_search_pool and not completed_phases.get("joint_refinement_c` |
+| 24079 to 24203 | 125 | `if not compliant and parsed.allow_no_break_exceptions and not completed_phases.get("except` |
+| 24430 to 24683 | 254 | `if not candidates:` |
+| 25061 to 25229 | 169 | `row = {` |
 
 ## 2. Functions by job
 
 | Job | Functions | Lines |
 |---|---|---|
-| Run control and command line | 6 | 4,242 |
+| Run control and command line | 6 | 4,257 |
 | Search phases (`run_*`) | 16 | 2,609 |
 | Files, hashing and small utilities | 24 | 293 |
 | Input reading and contract | 53 | 3,159 |
 | Languages | 15 | 1,489 |
 | Breaks | 35 | 2,135 |
-| Preferences, OFF days and fixed requests | 9 | 351 |
+| Preferences, OFF days and fixed requests | 11 | 470 |
 | Shifts and rest | 20 | 350 |
 | Metrics | 6 | 1,001 |
 | Coverage, demand and capacity | 31 | 1,016 |
@@ -88,12 +89,12 @@ Blocks inside `run_case` of 70 lines or more, in order:
 
 | Function | Lines | Size | Called by (engine) | Used outside (not tests) | What it does |
 |---|---|---|---|---|---|
-| `infeasibility_diagnosis_budget` | 21146 to 21155 | 10 | `run_case` |  | Seconds a no-schedule run may spend naming its cause. |
-| `stage1_minimum_budget_seconds` | 21158 to 21165 | 8 | `run_case` |  | What a Stage-1 portfolio of ``portfolio_size`` profiles needs at the configured |
-| `run_case` | 21168 to 25096 | 3929 | `main` |  |  |
-| `build_arg_parser` | 25413 to 25524 | 112 | `main` |  |  |
-| `cli_search_controls` | 26304 to 26322 | 19 | `main`, `run_case` |  | Translate the options the caller typed into engine parameter values. |
-| `main` | 26325 to 26488 | 164 | `_build_business_outcome_core` |  |  |
+| `infeasibility_diagnosis_budget` | 21272 to 21281 | 10 | `run_case` |  | Seconds a no-schedule run may spend naming its cause. |
+| `stage1_minimum_budget_seconds` | 21284 to 21291 | 8 | `run_case` |  | What a Stage-1 portfolio of ``portfolio_size`` profiles needs at the configured |
+| `run_case` | 21294 to 25237 | 3944 | `main` |  |  |
+| `build_arg_parser` | 25554 to 25665 | 112 | `main` |  |  |
+| `cli_search_controls` | 26445 to 26463 | 19 | `main`, `run_case` |  | Translate the options the caller typed into engine parameter values. |
+| `main` | 26466 to 26629 | 164 | `_build_business_outcome_core` |  |  |
 
 ### Search phases (`run_*`)
 
@@ -111,16 +112,16 @@ Blocks inside `run_case` of 70 lines or more, in order:
 | `run_logic_based_break_cut_feedback` | 18795 to 18974 | 180 | `run_case` |  | Feed break evidence back through progressive, isolatable master cuts. |
 | `run_zero_exception_recovery_phase` | 19164 to 19345 | 182 | `run_case` |  | Search beyond positive diagnostic minima and recover within the workbook exception cap. |
 | `run_day_neighbourhood_break_search` | 19531 to 19727 | 197 | `run_break_load_feedback`, `run_case` |  | Improve the best compliant candidates' breaks one day at a time. |
-| `run_post_break_repair_phase` | 20271 to 20461 | 191 | `run_case` |  | Late repair for compliant, near-feasible, and exception candidates. |
-| `run_cap_feasible_target_recovery_phase` | 20554 to 20641 | 88 | `run_case` |  | Recover target KPIs around a proven within-cap language-break anchor. |
-| `run_rc8_best_before_break_recovery` | 20673 to 20787 | 115 | `run_case` |  | Give the current-run BEST BEFORE skeleton a dedicated full-width break lane. |
-| `run_target_lock_recovery_phase` | 20790 to 20899 | 110 | `run_case` |  | Maximize target, lock it, then recover floor quality for the active pool. |
+| `run_post_break_repair_phase` | 20397 to 20587 | 191 | `run_case` |  | Late repair for compliant, near-feasible, and exception candidates. |
+| `run_cap_feasible_target_recovery_phase` | 20680 to 20767 | 88 | `run_case` |  | Recover target KPIs around a proven within-cap language-break anchor. |
+| `run_rc8_best_before_break_recovery` | 20799 to 20913 | 115 | `run_case` |  | Give the current-run BEST BEFORE skeleton a dedicated full-width break lane. |
+| `run_target_lock_recovery_phase` | 20916 to 21025 | 110 | `run_case` |  | Maximize target, lock it, then recover floor quality for the active pool. |
 
 ### Files, hashing and small utilities
 
 | Function | Lines | Size | Called by (engine) | Used outside (not tests) | What it does |
 |---|---|---|---|---|---|
-| `norm` | 260 to 263 | 4 | `_alias_key`, `_apply_preference_mapping`, `_authored_language_windows`, `_consistency_greedy_swaps` +65 | 1 file |  |
+| `norm` | 260 to 263 | 4 | `_alias_key`, `_apply_preference_mapping`, `_authored_language_windows`, `_consistency_greedy_swaps` +66 | 1 file |  |
 | `safe_name` | 266 to 267 | 2 | `discover_validated_fallback_candidates`, `run_case`, `solve_joint_shift_off_language_break_refinement` |  |  |
 | `normalized_output_prefix` | 270 to 280 | 11 | `case_identity_warnings`, `cleanup_stale_run_outputs`, `run_case` |  |  |
 | `to_float` | 322 to 330 | 9 | `_optional_instruction_minutes`, `load_validated_fallback_candidate`, `parse_input` |  |  |
@@ -201,7 +202,7 @@ Blocks inside `run_case` of 70 lines or more, in order:
 | `discover_validated_fallback_candidates` | 7610 to 7655 | 46 | `run_case` |  | Revalidate explicit and bundled schedule workbooks as safe incumbents. |
 | `split_candidate_pool` | 12824 to 12852 | 29 | `merge_candidate_pools_with_safe_incumbent`, `run_case` |  |  |
 | `synchronize_contract_metadata` | 14489 to 14544 | 56 | `write_output_workbook` |  | Replace stale workbook labels with the canonical parsed contract. |
-| `read_production_summary_metadata` | 21046 to 21080 | 35 | `benchmark_provenance` |  | Read provenance fields from a previously exported production workbook. |
+| `read_production_summary_metadata` | 21172 to 21206 | 35 | `benchmark_provenance` |  | Read provenance fields from a previously exported production workbook. |
 
 ### Languages
 
@@ -261,7 +262,7 @@ Blocks inside `run_case` of 70 lines or more, in order:
 | `logic_based_break_feasibility_cut_plan` | 18713 to 18762 | 50 | `run_logic_based_break_cut_feedback` |  | Build sparse master-model feedback from a fixed-skeleton break subproblem. |
 | `global_zero_exception_break_reserve_requirements` | 18976 to 19015 | 40 | `run_case` |  | Return unanchored break-reserve raw staffing requirements. |
 | `zero_exception_break_reserve_plan` | 19018 to 19161 | 144 | `logic_based_break_feasibility_cut_plan`, `run_zero_exception_recovery_phase` |  | Translate certified exception bottlenecks into universal staffing reserve constraints. |
-| `_business_break_blockers` | 25592 to 25640 | 49 | `_build_business_outcome_core` |  |  |
+| `_business_break_blockers` | 25733 to 25781 | 49 | `_build_business_outcome_core` |  |  |
 
 ### Preferences, OFF days and fixed requests
 
@@ -270,12 +271,14 @@ Blocks inside `run_case` of 70 lines or more, in order:
 | `_apply_preference_mapping` | 1944 to 1989 | 46 | `parse_input` |  | Translate site-specific Preference/Fixed codes via an optional mapping sheet. |
 | `_preference_tokens` | 5650 to 5652 | 3 | `_extended_preference_kind` |  |  |
 | `_extended_preference_kind` | 5655 to 5672 | 18 | `preference_kind` |  |  |
-| `preference_kind` | 5675 to 5685 | 11 | `_consistency_swap_model`, `_parse_preferences`, `aggregate_pattern_mix_guidance`, `associate_day_eligible_shifts` +13 |  |  |
+| `preference_kind` | 5675 to 5685 | 11 | `_consistency_swap_model`, `_parse_preferences`, `aggregate_pattern_mix_guidance`, `associate_day_eligible_shifts` +15 |  |  |
 | `required_off_days` | 5706 to 5718 | 13 | `validate_schedule` |  | How many OFF days the weekly rule asks of this associate. |
 | `separate_off_in_preference` | 5722 to 5736 | 15 | `aggregate_pattern_mix_guidance`, `build_skeleton`, `solve_joint_shift_off_language_break_refinement`, `validate_schedule` |  | Whether this associate's own request rows name hard OFF days that are not next to each other (Phase  |
 | `add_weekly_off_rule` | 5738 to 5759 | 22 | `build_skeleton`, `solve_joint_shift_off_language_break_refinement` |  | The weekly OFF rule, shared by every model that decides OFF days. |
 | `_prefixed_metric` | 13085 to 13097 | 13 | `_candidate_quality_tuple`, `before_break_leaderboard_rows`, `candidate_selection_breakdown` | 1 file | Read ``{prefix}_{key}`` when present, else fall back to the bare key. |
 | `target_priority_tradeoff_select` | 13363 to 13572 | 210 | `select_export_candidates` |  | Choose the final schedule from the workbook target, not a fixed 80% anchor. |
+| `preference_distance` | 20274 to 20281 | 8 | `preference_swap_polish` |  | Minutes between associate a's Preference shift on day d and the shift worked (0 when there is no shi |
+| `preference_swap_polish` | 20284 to 20394 | 111 | `run_case` |  | Phase BE: same-day swaps between interchangeable associates that bring both closer to their Preferen |
 
 ### Shifts and rest
 
@@ -283,7 +286,7 @@ Blocks inside `run_case` of 70 lines or more, in order:
 |---|---|---|---|---|---|
 | `shift_start_contract_allows` | 402 to 409 | 8 | `_parse_shifts`, `structural_schedule_audit`, `validate_input_contract` |  |  |
 | `hhmm` | 445 to 447 | 3 | `_contract_display_rows`, `_parse_requirement_table`, `_parse_shifts`, `add_half_hour_twins` +17 | 1 file |  |
-| `shift_parts` | 496 to 507 | 12 | `_consistency_swap_model`, `_parse_preferences`, `_parse_shifts`, `build_skeleton` +4 |  |  |
+| `shift_parts` | 496 to 507 | 12 | `_consistency_swap_model`, `_parse_preferences`, `_parse_shifts`, `build_skeleton` +5 |  |  |
 | `_time_column` | 2320 to 2329 | 10 | `_parse_requirement_table` |  |  |
 | `rest_compatible` | 5762 to 5764 | 3 | `_consistency_row_allowed`, `_consistency_swap_model`, `build_skeleton`, `solve_joint_shift_off_language_break_refinement` +2 |  |  |
 | `previous_saturday_compatible` | 5767 to 5774 | 8 | `_consistency_row_allowed`, `_consistency_swap_model`, `associate_day_eligible_shifts`, `build_skeleton` +4 |  |  |
@@ -308,10 +311,10 @@ Blocks inside `run_case` of 70 lines or more, in order:
 |---|---|---|---|---|---|
 | `require_metric` | 59 to 78 | 20 | `protected_floor_anchor_key`, `run_case`, `run_protected_target_champion_break_proof`, `select_export_candidates` +4 |  | Read a decision metric, failing loudly when it is absent. |
 | `fractional_safe_overage_metrics` | 10544 to 10586 | 43 | `calculate_metrics` |  | Classify overage without penalizing indivisible whole-associate staffing. |
-| `calculate_metrics` | 10673 to 11588 | 916 | `ensure_before_break_metrics`, `load_validated_fallback_candidate`, `run_break_load_feedback`, `run_case` +10 | 3 files | Rebuild canonical before/after coverage truth from the final schedule. |
+| `calculate_metrics` | 10673 to 11588 | 916 | `ensure_before_break_metrics`, `load_validated_fallback_candidate`, `preference_swap_polish`, `run_break_load_feedback` +11 | 3 files | Rebuild canonical before/after coverage truth from the final schedule. |
 | `compact_metric_surface` | 11592 to 11597 | 6 | `acquire_early_safe_incumbent`, `bootstrap_exception_anchors_for_joint`, `discover_validated_fallback_candidates`, `publish_recovery_checkpoint` +8 |  | Keep scalar metrics while excluding only bulky row/detail collections. |
 | `dnbs_metrics_no_worse` | 19399 to 19405 | 7 | `run_break_load_feedback`, `run_day_neighbourhood_break_search` |  | True when after_target strictly rose and no guarded metric got worse. |
-| `_consistency_metrics_no_worse` | 19835 to 19843 | 9 | `shift_consistency_polish` |  |  |
+| `_consistency_metrics_no_worse` | 19835 to 19843 | 9 | `preference_swap_polish`, `shift_consistency_polish` |  |  |
 
 ### Coverage, demand and capacity
 
@@ -377,7 +380,7 @@ Blocks inside `run_case` of 70 lines or more, in order:
 | `skeleton_quality_key` | 15442 to 15450 | 9 | `acquire_early_safe_incumbent`, `bootstrap_exception_anchors_for_joint`, `run_case`, `run_zero_exception_recovery_phase` +1 |  |  |
 | `skeleton_hard_clean` | 15499 to 15506 | 8 | `acquire_early_safe_incumbent`, `load_validated_fallback_candidate`, `retain_zero_exception_diagnostic_candidate`, `run_break_load_feedback` +11 | 1 file |  |
 | `dedupe_skeletons` | 15734 to 15745 | 12 | `bootstrap_exception_anchors_for_joint`, `run_case`, `run_logic_based_break_cut_feedback`, `run_qualified_language_break_certificate_repairs` +3 |  |  |
-| `_consistency_skeleton` | 19851 to 19861 | 11 | `_consistency_greedy_swaps`, `shift_consistency_polish` |  |  |
+| `_consistency_skeleton` | 19851 to 19861 | 11 | `_consistency_greedy_swaps`, `preference_swap_polish`, `shift_consistency_polish` |  |  |
 
 ### Joint, repair and neighbourhood search
 
@@ -415,7 +418,7 @@ Blocks inside `run_case` of 70 lines or more, in order:
 | `bundled_schedule_candidate_inventory` | 7525 to 7608 | 84 | `discover_validated_fallback_candidates`, `run_case` |  | Return data-driven current-contract champions and seed-only workbooks. |
 | `prove_selected_exceptions` | 10374 to 10404 | 31 | `run_case` |  |  |
 | `candidate_validation_snapshot` | 12735 to 12747 | 13 | `candidate_pool_class`, `promote_zero_exception_diagnostic_candidate`, `retain_search_only_diagnostic_joint_anchor`, `run_case` +1 |  | Return and persist the full release validation for a candidate. |
-| `candidate_pool_class` | 12750 to 12781 | 32 | `adaptive_nondominated_anchor_pool`, `bootstrap_exception_anchors_for_joint`, `candidate_satisfies_explicit_kpi_locks`, `choose_repair_anchors` +19 | 1 file | Classify a feasible candidate without weakening any release gate. |
+| `candidate_pool_class` | 12750 to 12781 | 32 | `adaptive_nondominated_anchor_pool`, `bootstrap_exception_anchors_for_joint`, `candidate_satisfies_explicit_kpi_locks`, `choose_repair_anchors` +20 | 1 file | Classify a feasible candidate without weakening any release gate. |
 | `candidate_damage_present` | 12878 to 12892 | 15 | `run_case` |  | Return whether a candidate still deserves bounded recovery effort. |
 | `_deficit_bucket` | 13073 to 13082 | 10 | `_candidate_quality_tuple`, `before_break_leaderboard_rows`, `candidate_selection_breakdown`, `target_priority_tradeoff_select` | 1 file | Quantize a coverage-deficit sum to an operationally meaningful bucket. |
 | `_candidate_quality_tuple` | 13100 to 13170 | 71 | `break_solution_key`, `run_case`, `select_best_before_skeleton`, `select_export_candidates` +3 | 1 file | Positive-is-better universal target-protected ordering. |
@@ -431,7 +434,7 @@ Blocks inside `run_case` of 70 lines or more, in order:
 | `_candidate_identity` | 16091 to 16097 | 7 | `adaptive_nondominated_anchor_pool` |  |  |
 | `candidate_lineage_id` | 16100 to 16121 | 22 | `run_adaptive_decomposed_joint_optimizer`, `solve_joint_shift_off_language_break_refinement`, `validate_replay_candidate_mapping` |  | Stable identity for one coherent shift/OFF/break candidate. |
 | `validate_replay_candidate_mapping` | 16124 to 16184 | 61 | `run_adaptive_decomposed_joint_optimizer`, `solve_joint_shift_off_language_break_refinement` |  | Prove a replay anchor is internally coherent before building CP-SAT. |
-| `candidate_satisfies_explicit_kpi_locks` | 20466 to 20493 | 28 | `cap_feasible_target_recovery_decision` |  | Return True only for a release-class candidate satisfying every explicit lock. |
+| `candidate_satisfies_explicit_kpi_locks` | 20592 to 20619 | 28 | `cap_feasible_target_recovery_decision` |  | Return True only for a release-class candidate satisfying every explicit lock. |
 
 ### Output and publishing
 
@@ -441,15 +444,15 @@ Blocks inside `run_case` of 70 lines or more, in order:
 | `_write_records` | 14370 to 14375 | 6 | `run_shortfall_pass`, `synchronize_contract_metadata`, `write_output_workbook` |  |  |
 | `production_quality_gate` | 14640 to 14800 | 161 | `load_validated_fallback_candidate`, `write_output_workbook` |  | Classify hard coverage quality separately from declared operational quality debt. |
 | `write_output_workbook` | 14802 to 15439 | 638 | `publish_recovery_checkpoint`, `run_case`, `run_shortfall_pass`, `write_before_break_workbook` |  |  |
-| `publish_recovery_checkpoint` | 20976 to 21044 | 69 | `run_case` |  | Atomically persist the best validated pre-late-phase candidate. |
-| `_business_int` | 25528 to 25534 | 7 | `_build_business_outcome_core`, `_business_contract_message`, `_business_exception_rows` |  |  |
-| `_business_failure_rows` | 25537 to 25543 | 7 | `_build_business_outcome_core` |  |  |
-| `_business_exception_rows` | 25546 to 25577 | 32 | `_business_break_blockers` |  |  |
-| `_business_reason_window` | 25580 to 25589 | 10 | `_business_break_blockers` |  |  |
-| `_business_contract_message` | 25643 to 25711 | 69 | `_build_business_outcome_core` |  |  |
-| `_business_hard_conflict` | 25730 to 25772 | 43 | `_build_business_outcome_core` |  | Plain-language findings for a hard-rule contradiction. |
-| `_business_finding_text` | 25775 to 25789 | 15 | `format_business_outcome` |  | One readable line per finding: named fields, never nested solver dumps. |
-| `publish_business_outcome` | 26168 to 26187 | 20 | `main` |  |  |
+| `publish_recovery_checkpoint` | 21102 to 21170 | 69 | `run_case` |  | Atomically persist the best validated pre-late-phase candidate. |
+| `_business_int` | 25669 to 25675 | 7 | `_build_business_outcome_core`, `_business_contract_message`, `_business_exception_rows` |  |  |
+| `_business_failure_rows` | 25678 to 25684 | 7 | `_build_business_outcome_core` |  |  |
+| `_business_exception_rows` | 25687 to 25718 | 32 | `_business_break_blockers` |  |  |
+| `_business_reason_window` | 25721 to 25730 | 10 | `_business_break_blockers` |  |  |
+| `_business_contract_message` | 25784 to 25852 | 69 | `_build_business_outcome_core` |  |  |
+| `_business_hard_conflict` | 25871 to 25913 | 43 | `_build_business_outcome_core` |  | Plain-language findings for a hard-rule contradiction. |
+| `_business_finding_text` | 25916 to 25930 | 15 | `format_business_outcome` |  | One readable line per finding: named fields, never nested solver dumps. |
+| `publish_business_outcome` | 26309 to 26328 | 20 | `main` |  |  |
 
 ### Audit and self-check
 
@@ -459,16 +462,16 @@ Blocks inside `run_case` of 70 lines or more, in order:
 | `_validate_boolean_instructions` | 1530 to 1545 | 16 | `parse_input` |  | A switch row holding something that is neither yes nor no fails the contract. |
 | `distinct_skill_allocation_audit` | 10426 to 10541 | 116 | `calculate_metrics` |  | Audit simultaneous skill minima using distinct available associates. |
 | `structural_schedule_audit` | 12134 to 12329 | 196 | `validate_schedule` |  | Audit blank bridges, day tails, overnight shifts and cyclic Sunday truth. |
-| `validate_schedule` | 12332 to 12445 | 114 | `acquire_early_safe_incumbent`, `candidate_damage_present`, `candidate_validation_snapshot`, `load_validated_fallback_candidate` +8 |  |  |
-| `selfcheck` | 25098 to 25410 | 313 | `main` |  |  |
+| `validate_schedule` | 12332 to 12445 | 114 | `acquire_early_safe_incumbent`, `candidate_damage_present`, `candidate_validation_snapshot`, `load_validated_fallback_candidate` +9 |  |  |
+| `selfcheck` | 25239 to 25551 | 313 | `main` |  |  |
 
 ### Shift consistency polish
 
 | Function | Lines | Size | Called by (engine) | Used outside (not tests) | What it does |
 |---|---|---|---|---|---|
-| `_consistency_cell_allowed` | 19802 to 19817 | 16 | `_consistency_greedy_swaps`, `_consistency_swap_model`, `shift_consistency_polish` |  |  |
-| `_consistency_row_allowed` | 19820 to 19832 | 13 | `_consistency_greedy_swaps`, `shift_consistency_polish` |  |  |
-| `_consistency_employee_no_worse` | 19846 to 19848 | 3 | `_consistency_greedy_swaps` |  |  |
+| `_consistency_cell_allowed` | 19802 to 19817 | 16 | `_consistency_greedy_swaps`, `_consistency_swap_model`, `preference_swap_polish`, `shift_consistency_polish` |  |  |
+| `_consistency_row_allowed` | 19820 to 19832 | 13 | `_consistency_greedy_swaps`, `preference_swap_polish`, `shift_consistency_polish` |  |  |
+| `_consistency_employee_no_worse` | 19846 to 19848 | 3 | `_consistency_greedy_swaps`, `preference_swap_polish` |  |  |
 | `_consistency_greedy_swaps` | 19864 to 19911 | 48 | `shift_consistency_polish` |  | Pairwise same-day swaps that lower the two associates' cost; the model |
 | `_consistency_swap_model` | 19914 to 20088 | 175 | `shift_consistency_polish` |  | Re-deal each day's shifts within (language, shift length) groups. |
 
@@ -480,7 +483,7 @@ Blocks inside `run_case` of 70 lines or more, in order:
 | `enrich_exception_rows` | 9077 to 9116 | 40 | `build_break_constraint_isolation_report`, `solve_breaks` |  | Attach exact blocking evidence to minimum-exception cells. |
 | `critical_exception_cells` | 9179 to 9261 | 83 | `solve_breaks` |  |  |
 | `minimum_exception_diagnostic` | 10357 to 10371 | 15 | `run_case`, `run_logic_based_break_cut_feedback`, `run_qualified_language_break_certificate_repairs` |  | Bound the minimum no-break associate-days required by this skeleton. |
-| `employee_operational_quality` | 10589 to 10670 | 82 | `_consistency_greedy_swaps`, `calculate_metrics`, `shift_consistency_polish` |  |  |
+| `employee_operational_quality` | 10589 to 10670 | 82 | `_consistency_greedy_swaps`, `calculate_metrics`, `preference_swap_polish`, `shift_consistency_polish` |  |  |
 | `near_feasible_failure_status` | 12895 to 12912 | 18 | `run_case` |  | Describe the candidate-level reason a retained diagnostic was not released. |
 | `hard_floor_failure_rows` | 12915 to 12929 | 15 | `run_case` |  | Return exact intervals below the configured hard floor for evidence output. |
 | `_protected_tier_counts` | 13007 to 13025 | 19 | `_candidate_quality_tuple`, `candidate_selection_breakdown`, `target_priority_tradeoff_select` | 1 file | Return safety tiers strictly between the workbook target and configured floor. |
@@ -491,7 +494,7 @@ Blocks inside `run_case` of 70 lines or more, in order:
 | `exception_reason_map` | 14378 to 14386 | 9 | `write_output_workbook` |  |  |
 | `exception_cap_descent_targets` | 15614 to 15628 | 15 | `run_adaptive_decomposed_joint_optimizer` |  | Return a monotone one-exception-at-a-time path to the release cap. |
 | `_quality_delta` | 16071 to 16086 | 16 | `run_coordinated_shift_off_break_loop`, `run_post_break_repair_phase` |  |  |
-| `benchmark_provenance` | 21083 to 21143 | 61 | `run_case` |  | Classify a benchmark as authoritative only when its contract provenance matches. |
+| `benchmark_provenance` | 21209 to 21269 | 61 | `run_case` |  | Classify a benchmark as authoritative only when its contract provenance matches. |
 
 ### Workbook styling
 
@@ -517,7 +520,7 @@ Blocks inside `run_case` of 70 lines or more, in order:
 
 | Function | Lines | Size | Called by (engine) | Used outside (not tests) | What it does |
 |---|---|---|---|---|---|
-| `circular_minute_distance` | 5688 to 5690 | 3 | `_consistency_swap_model`, `_joint_candidate_shift_indices`, `build_skeleton`, `employee_operational_quality` +1 |  |  |
+| `circular_minute_distance` | 5688 to 5690 | 3 | `_consistency_swap_model`, `_joint_candidate_shift_indices`, `build_skeleton`, `employee_operational_quality` +2 |  |  |
 | `pinned_leave_days` | 5693 to 5703 | 11 | `build_skeleton`, `required_off_days`, `solve_joint_shift_off_language_break_refinement` |  | Days this associate is pinned to Leave by the contract (fixed or approved leave). |
 | `cyclic_requirement_context` | 5940 to 5954 | 15 | `_shift_day_demand_fit_uncached`, `structural_schedule_audit` |  | Map a current-week or pseudo-next-Sunday qslot to weekday/interval/minute. |
 | `prior_constant_cover` | 6176 to 6186 | 11 | `build_skeleton` |  |  |
@@ -525,7 +528,7 @@ Blocks inside `run_case` of 70 lines or more, in order:
 | `eligible_shift_day_pairs` | 6751 to 6758 | 8 | `aggregate_pattern_mix_guidance`, `run_case` |  |  |
 | `elastic_slack_rows` | 8585 to 8605 | 21 | `build_skeleton`, `solve_breaks` |  | One row per minimum the solution actually misses, with the measured deficit. |
 | `shortfall_pass_allowed` | 8640 to 8643 | 4 | `run_case` |  | True when every contract failure is a capacity proof (F-06). |
-| `scheduled_cells` | 8875 to 8881 | 7 | `adaptive_operator_focus_cells`, `break_qslots`, `calculate_metrics`, `dnbs_day_neighbourhood_model` +22 | 3 files |  |
+| `scheduled_cells` | 8875 to 8881 | 7 | `adaptive_operator_focus_cells`, `break_qslots`, `calculate_metrics`, `dnbs_day_neighbourhood_model` +23 | 3 files |  |
 | `prior_covering_associates` | 8909 to 8915 | 7 | `_max_possible_raw_at_qslot`, `aggregate_pattern_mix_guidance`, `break_capacity_headcount_requirement`, `break_resilience_diagnostics` +9 |  |  |
 | `associate_day_eligible_shifts` | 11600 to 11635 | 36 | `_joint_candidate_shift_indices`, `_max_possible_raw_at_qslot`, `break_resilience_diagnostics`, `capacity_diagnostics` +1 |  | Return shifts that can possibly be used by one associate-day before weekly coupling. |
 | `_target_secondary_counts` | 13028 to 13036 | 9 | `_candidate_quality_tuple`, `candidate_selection_breakdown`, `target_priority_tradeoff_select` |  | Return only tiers ABOVE the workbook target as late upside tie-breaks. |
@@ -534,16 +537,16 @@ Blocks inside `run_case` of 70 lines or more, in order:
 | `feedback_cut_variants` | 18765 to 18792 | 28 | `run_logic_based_break_cut_feedback` |  | Split a break-feasibility cut into progressively stronger master repairs. |
 | `recommended_export_pair` | 20095 to 20111 | 17 | `run_case` |  | The recommended pair, checked to be the RECOMMENDED_FINAL pair the writer publishes. |
 | `add_more_consistent_export` | 20114 to 20128 | 15 | `run_case` |  | Publish an applied polish as MORE_CONSISTENT_CANDIDATE, beside the selected schedule. |
-| `cap_feasible_target_recovery_decision` | 20496 to 20552 | 57 | `run_case` |  | Decide whether RC6 recovery should run without disturbing healthy schedules. |
-| `derive_dynamic_before_search_locks` | 20643 to 20670 | 28 | `run_case` |  | Derive search-only Stage-1 retention locks from current-contract truth. |
-| `classify_late_phase_execution_gate` | 20902 to 20972 | 71 | `run_case` |  | Classify late-phase execution without confusing candidate and engine failure. |
-| `build_business_outcome` | 25792 to 25836 | 45 | `publish_business_outcome` |  | The run's business outcome, plus the shortfall schedule when one was made (F-06). |
-| `_build_business_outcome_core` | 25839 to 26096 | 258 | `build_business_outcome` |  |  |
-| `shortfall_text_line` | 26099 to 26103 | 5 | `format_business_outcome` |  |  |
-| `format_business_outcome` | 26109 to 26146 | 38 | `publish_business_outcome` |  |  |
-| `_augment_summary_with_business_outcome` | 26149 to 26165 | 17 | `publish_business_outcome` |  |  |
-| `record_unexpected_run_failure` | 26190 to 26223 | 34 | `main` |  | Persist a truthful terminal status for an unexpected engine exception. |
-| `explicitly_supplied_options` | 26281 to 26301 | 21 | `main` | 1 file | Return the argparse destinations the caller actually typed. |
+| `cap_feasible_target_recovery_decision` | 20622 to 20678 | 57 | `run_case` |  | Decide whether RC6 recovery should run without disturbing healthy schedules. |
+| `derive_dynamic_before_search_locks` | 20769 to 20796 | 28 | `run_case` |  | Derive search-only Stage-1 retention locks from current-contract truth. |
+| `classify_late_phase_execution_gate` | 21028 to 21098 | 71 | `run_case` |  | Classify late-phase execution without confusing candidate and engine failure. |
+| `build_business_outcome` | 25933 to 25977 | 45 | `publish_business_outcome` |  | The run's business outcome, plus the shortfall schedule when one was made (F-06). |
+| `_build_business_outcome_core` | 25980 to 26237 | 258 | `build_business_outcome` |  |  |
+| `shortfall_text_line` | 26240 to 26244 | 5 | `format_business_outcome` |  |  |
+| `format_business_outcome` | 26250 to 26287 | 38 | `publish_business_outcome` |  |  |
+| `_augment_summary_with_business_outcome` | 26290 to 26306 | 17 | `publish_business_outcome` |  |  |
+| `record_unexpected_run_failure` | 26331 to 26364 | 34 | `main` |  | Persist a truthful terminal status for an unexpected engine exception. |
+| `explicitly_supplied_options` | 26422 to 26442 | 21 | `main` | 1 file | Return the argparse destinations the caller actually typed. |
 
 ## 3. What is used from outside the engine file
 
@@ -626,7 +629,7 @@ The two data files that hold it are `engine/RELEASE_IDENTITY_RC9_2_2.json` (`eng
 | A coverage figure on the output is wrong | `calculate_metrics` (10673), `coverage_vars` (6206), `coverage_quality_limits` (6732) |
 | An OFF or shift request is not honoured | `preference_kind` (5675), `required_off_days` (5706), `add_weekly_off_rule` (5738) |
 | A different candidate is published than expected | `select_export_candidates` (13679), `target_priority_tradeoff_select` (13363), `_candidate_quality_tuple` (13100) |
-| The output workbook and the validator disagree | `write_output_workbook` (14802), `structural_schedule_audit` (12134), `publish_business_outcome` (26168) |
-| A run takes longer or shorter than asked | `run_case` (21168), `main` (26325), `stage1_minimum_budget_seconds` (21158) |
+| The output workbook and the validator disagree | `write_output_workbook` (14802), `structural_schedule_audit` (12134), `publish_business_outcome` (26309) |
+| A run takes longer or shorter than asked | `run_case` (21294), `main` (26466), `stage1_minimum_budget_seconds` (21284) |
 | The first (skeleton) search is weak | `build_skeleton` (7657), `skeleton_profiles` (6314), `aggregate_pattern_mix_guidance` (6761) |
 | A fixed or nested shift is broken | `rest_compatible` (5762), `previous_saturday_compatible` (5767), `shift_parts` (496) |

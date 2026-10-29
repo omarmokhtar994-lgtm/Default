@@ -20268,6 +20268,132 @@ def shift_consistency_polish(
     return final_skeleton, polished, record
 
 
+PREFERENCE_SWAP_TIME_LIMIT_SEC = 20.0
+
+
+def preference_distance(parsed: ParsedInput, a: int, d: int, shift_index: Optional[int]) -> int:
+    """Minutes between associate a's Preference shift on day d and the shift worked (0 when there is no shift Preference)."""
+    assoc = parsed.associates[a]
+    pref = assoc.preferences[d] if d < len(assoc.preferences) else ""
+    if shift_index is None or preference_kind(pref) != "shift":
+        return 0
+    parts = shift_parts(pref)
+    return circular_minute_distance(parts[0], parsed.shifts[shift_index].start_min) if parts else 0
+
+
+def preference_swap_polish(
+    parsed: ParsedInput,
+    skeleton: SkeletonSolution,
+    solution: BreakSolution,
+    time_limit_sec: float = PREFERENCE_SWAP_TIME_LIMIT_SEC,
+) -> Tuple[SkeletonSolution, BreakSolution, Dict[str, Any]]:
+    """Phase BE: same-day swaps between interchangeable associates that bring both closer to their Preference shift.
+
+    Rule: evidence/phase_be/REQUESTS.md. Returns the original objects with the reason when nothing is kept.
+    """
+    started = time.time()
+    deadline = started + float(time_limit_sec)
+    record: Dict[str, Any] = {"enabled": bool(parsed.use_preferences), "swaps": 0, "trials": 0}
+
+    def unchanged(status: str) -> Tuple[SkeletonSolution, BreakSolution, Dict[str, Any]]:
+        record["status"] = status
+        record["elapsed_sec"] = round(time.time() - started, 3)
+        return skeleton, solution, record
+
+    if not parsed.use_preferences:
+        return unchanged("NO_CHANGE")
+    A = len(parsed.associates)
+    rows = [list(r) for r in skeleton.selected_shift_index]
+    pattern = dict(solution.selected_pattern)
+    no_break = set(solution.no_break_cells)
+    nested = {a for a, assoc in enumerate(parsed.associates) if norm(getattr(assoc, "nesting_group", ""))}
+    locked = {
+        (a, d) for a, assoc in enumerate(parsed.associates) for d in range(7)
+        if parsed.fixed_enabled and preference_kind(assoc.fixed_schedule[d] if d < len(assoc.fixed_schedule) else "") == "shift"
+    }
+    base_metrics = calculate_metrics(parsed, skeleton, solution.selected_pattern, solution.patterns)
+    current_metrics = base_metrics
+    employee_now = employee_operational_quality(parsed, skeleton)
+    record["matched_before"] = int(employee_now.get("preference_match_count", 0))
+    current_skeleton = skeleton
+    shifts = parsed.shifts
+
+    def movable(a: int, d: int) -> bool:
+        return rows[a][d] is not None and a not in nested and (a, d) not in locked
+
+    improved = True
+    while improved and time.time() < deadline:
+        improved = False
+        for d in range(7):
+            groups: Dict[Tuple[str, int], List[int]] = {}
+            for a in range(A):
+                if movable(a, d):
+                    groups.setdefault((norm(parsed.associates[a].language), shifts[rows[a][d]].duration_min), []).append(a)
+            for members in groups.values():
+                for i, a in enumerate(members):
+                    for b in members[i + 1:]:
+                        if rows[a][d] == rows[b][d] or time.time() > deadline:
+                            continue
+                        before_a = preference_distance(parsed, a, d, rows[a][d])
+                        before_b = preference_distance(parsed, b, d, rows[b][d])
+                        after_a = preference_distance(parsed, a, d, rows[b][d])
+                        after_b = preference_distance(parsed, b, d, rows[a][d])
+                        if after_a > before_a or after_b > before_b or after_a + after_b >= before_a + before_b:
+                            continue
+                        ra, rb = list(rows[a]), list(rows[b])
+                        ra[d], rb[d] = rb[d], ra[d]
+                        if not (_consistency_row_allowed(parsed, a, ra) and _consistency_row_allowed(parsed, b, rb)
+                                and _consistency_cell_allowed(parsed, a, d, shifts[ra[d]])
+                                and _consistency_cell_allowed(parsed, b, d, shifts[rb[d]])):
+                            continue
+                        record["trials"] += 1
+                        trial = [list(r) for r in rows]
+                        trial[a], trial[b] = ra, rb
+                        trial_pattern = dict(pattern)
+                        trial_pattern[(a, d)], trial_pattern[(b, d)] = pattern.get((b, d)), pattern.get((a, d))
+                        trial_skeleton = _consistency_skeleton(parsed, skeleton, trial)
+                        employee = employee_operational_quality(parsed, trial_skeleton)
+                        if not _consistency_employee_no_worse(employee, employee_now):
+                            continue
+                        metrics = calculate_metrics(parsed, trial_skeleton, trial_pattern, solution.patterns)
+                        if _consistency_metrics_no_worse(metrics, base_metrics):
+                            continue
+                        flags = {(a, d): (b, d) in no_break, (b, d): (a, d) in no_break}
+                        for cell, flag in flags.items():
+                            no_break.discard(cell)
+                            if flag:
+                                no_break.add(cell)
+                        rows, pattern, employee_now = trial, trial_pattern, employee
+                        current_skeleton, current_metrics = trial_skeleton, metrics
+                        record["swaps"] += 1
+                        improved = True
+    if not record["swaps"]:
+        return unchanged("NO_CHANGE")
+    final_skeleton = current_skeleton
+    final_skeleton.diagnostics["no_break_metrics"] = calculate_metrics(
+        parsed, final_skeleton, {(a, d): None for a, d, _ in scheduled_cells(final_skeleton)}, [])
+    final_skeleton.diagnostics["preference_swap_polish"] = True
+    diagnostics = {k: v for k, v in solution.diagnostics.items()
+                   if k not in {"release_validation", "hard_failure_types", "hard_fail_count", "early_release_validation"}}
+    diagnostics["preference_swap_polish"] = {"swaps": record["swaps"]}
+    swapped = BreakSolution(
+        profile=solution.profile, skeleton_profile=solution.skeleton_profile, cp_status=solution.cp_status,
+        elapsed_sec=solution.elapsed_sec, objective=solution.objective, pattern_width=solution.pattern_width,
+        exception_mode=solution.exception_mode, selected_pattern=pattern, no_break_cells=no_break,
+        patterns=list(solution.patterns), diagnostics=diagnostics, metrics=current_metrics,
+    )
+    validation = validate_schedule(parsed, final_skeleton, swapped)
+    original_validation = solution.diagnostics.get("release_validation") or validate_schedule(parsed, skeleton, solution)
+    if (candidate_pool_class(parsed, final_skeleton, swapped) != candidate_pool_class(parsed, skeleton, solution)
+            or int(validation.get("hard_fail_count", 1) or 0) > int(original_validation.get("hard_fail_count", 0) or 0)):
+        record["reason"] = "VALIDATION_OR_CLASS_CHANGED"
+        return unchanged("KEPT_ORIGINAL")
+    record["matched_after"] = int(employee_now.get("preference_match_count", 0))
+    record["status"] = "APPLIED"
+    record["elapsed_sec"] = round(time.time() - started, 3)
+    return final_skeleton, swapped, record
+
+
 def run_post_break_repair_phase(
     parsed: ParsedInput,
     candidates: Sequence[Tuple[SkeletonSolution, BreakSolution]],
@@ -24574,6 +24700,21 @@ def run_case(
                 best_before_skeleton.diagnostics.get("no_break_metrics", {}).get("before_target", 0)
             ),
         )
+        # Phase BE: same-day swaps toward each associate's Preference shift. The
+        # recommended pair and its RECOMMENDED_FINAL export are replaced together
+        # (F-35), only by a pair with identical coverage metrics (see
+        # evidence/phase_be/REQUESTS.md); nothing else in the selection changes.
+        swapped_sk, swapped_br, swap_record = preference_swap_polish(parsed, *selection["recommended"])
+        audit["preference_swap_polish"] = swap_record
+        if swap_record.get("status") == "APPLIED":
+            selection["exports"] = [
+                (role, (swapped_sk, swapped_br) if role == "RECOMMENDED_FINAL" else pair)
+                for role, pair in selection["exports"]
+            ]
+            selection["recommended"] = (swapped_sk, swapped_br)
+        print(f"PREFERENCE_SWAP_POLISH {swap_record.get('status')}: {swap_record.get('swaps', 0)} swaps"
+              + (f", preference matches {swap_record['matched_before']} -> {swap_record['matched_after']}"
+                 if swap_record.get("status") == "APPLIED" else ""), file=log, flush=True)
         polish_on = (SHIFT_CONSISTENCY_CLI_OVERRIDE if SHIFT_CONSISTENCY_CLI_OVERRIDE is not None
                      else SHIFT_CONSISTENCY_POLISH_ENABLED if parsed.shift_consistency_polish is None
                      else bool(parsed.shift_consistency_polish))

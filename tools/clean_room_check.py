@@ -535,7 +535,10 @@ def check(k: Contract, sched: Dict[str, List[str]], breaks, exceptions) -> Dict[
             v.append({"rule": "off_count", "who": nm, "offs": len(offs), "owed": owed})
         if not k.strict_off and len(offs) < min(2, room):
             v.append({"rule": "off_minimum", "who": nm, "offs": len(offs)})
-        if k.strict_off and not k.separate_off and owed >= 2 and not any((d + 1) % 7 in offs for d in offs):
+        # Phase BD (owner, 2026-10-29): hard OFF days the associate's own Preference row names, not next to each other, are accepted
+        wanted_off = {d for d in range(7) if (k.hard_off and n(pref[d]) in ("off", "day off", "rest day")) or (k.fixed_on and n(fix[d]) == "off")}
+        wanted_apart = len(wanted_off) >= 2 and any((d + 1) % 7 not in wanted_off and (d - 1) % 7 not in wanted_off for d in wanted_off)
+        if k.strict_off and not k.separate_off and owed >= 2 and not wanted_apart and not any((d + 1) % 7 in offs for d in offs):
             v.append({"rule": "off_not_consecutive", "who": nm})
         labels = {n(row[d]) for d in range(7) if ks[d] == "shift"}
         if len(labels) > k.max_diff:

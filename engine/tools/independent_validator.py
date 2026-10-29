@@ -1033,7 +1033,8 @@ def validate(input_path: Path, output_path: Path, engine_path: Path,
         expected_off=eng.required_off_days(parsed,assoc,long_mode)
         if parsed.strict_off and len(off_days)!=expected_off:
             failures.append({"type":"OFF_COUNT_VIOLATION","associate":assoc.name,"expected":expected_off,"actual":len(off_days),"off_days":[DAYS[d] for d in off_days]})
-        if parsed.strict_off and not parsed.separate_off_days and expected_off>=2:
+        # Phase BD (owner, 2026-10-29): an associate whose own Preference row names hard OFF days that are not next to each other keeps them
+        if parsed.strict_off and not parsed.separate_off_days and expected_off>=2 and not eng.separate_off_in_preference(parsed,assoc):
             consecutive=any(d in off_days and (d+1)%7 in off_days for d in range(7))
             if not consecutive: failures.append({"type":"CONSECUTIVE_OFF_VIOLATION","associate":assoc.name,"off_days":[DAYS[d] for d in off_days]})
         distinct=len({norm(s.label) for _,s in shift_days})

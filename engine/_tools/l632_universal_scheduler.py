@@ -5718,6 +5718,23 @@ def required_off_days(parsed: ParsedInput, associate: Associate, long_mode: bool
     return max(0, min(3 if long_mode else 2, 7 - leave_days))
 
 
+
+def separate_off_in_preference(parsed: ParsedInput, associate: Associate) -> bool:
+    """Whether this associate's own request rows name hard OFF days that are not next to each other (Phase BD, owner, 2026-10-29: "if I
+    added in Preference a separate OFF, accept it even if the instructions say no separate OFF; stick to the instructions except for what is
+    mentioned in Preference", and "make Fixed like Preference"). The Preference row counts when Hard OFF Preferences is Yes, the Fixed Request
+    row when Fixed Request Use is Yes, and the two together. Only then is the consecutive-OFF rule lifted for that person; everyone else keeps
+    it. The week wraps (Saturday is next to Sunday), as in the rule itself. Nothing changes when Separate OFF Days is already Yes."""
+    if parsed.separate_off_days:
+        return False
+    days = set()
+    for d in range(7):
+        pref = associate.preferences[d] if d < len(associate.preferences) else ""
+        fixed = associate.fixed_schedule[d] if d < len(associate.fixed_schedule) else ""
+        if (parsed.hard_off and preference_kind(pref) == "off") or (parsed.fixed_enabled and preference_kind(fixed) == "off"):
+            days.add(d)
+    return len(days) >= 2 and any((d + 1) % 7 not in days and (d - 1) % 7 not in days for d in days)
+
 def add_weekly_off_rule(model: Any, off_vars: Sequence[Any], long_mode_var: Any, leave_days: int,
                         strict: bool, consecutive_required: bool, name: str) -> None:
     """The weekly OFF rule, shared by every model that decides OFF days."""
@@ -6814,6 +6831,7 @@ def aggregate_pattern_mix_guidance(parsed: ParsedInput, time_limit_sec: float = 
     fixed_shift_counts: Dict[Tuple[int, int], int] = {}
     hard_off_day_counts: List[int] = [0] * 7
     forced_off_pair_counts: List[int] = [0] * 7
+    separate_asked, separate_asked_days = 0, [0] * 7  # Phase BD: associates whose Preference asks for separate OFF days, and per day
     fixed_aware_associates: Set[int] = set()
     missing_fixed_shift_pairs: List[Dict[str, Any]] = []
     for a, associate in enumerate(parsed.associates):
@@ -6847,6 +6865,11 @@ def aggregate_pattern_mix_guidance(parsed: ParsedInput, time_limit_sec: float = 
                 if hard_off_flags[d] and hard_off_flags[(d + 1) % 7]:
                     forced_off_pair_counts[d] += 1
                     break
+        if separate_off_in_preference(parsed, associate):  # Phase BD: their OFF days are the ones asked for, not a pair
+            separate_asked += 1
+            for d in range(7):
+                if hard_off_flags[d]:
+                    separate_asked_days[d] += 1
 
     off_pair_index: Dict[int, int] = {}
     off_day_index: Dict[int, int] = {}
@@ -6881,21 +6904,21 @@ def aggregate_pattern_mix_guidance(parsed: ParsedInput, time_limit_sec: float = 
         fixed_aware_constraint_count += 1
 
     if off_pair_index:
-        add_constraint({index: 1.0 for index in off_pair_index.values()}, associates, associates)
+        add_constraint({index: 1.0 for index in off_pair_index.values()}, associates - separate_asked, associates - separate_asked)
         for d, forced_count in enumerate(forced_off_pair_counts):
             if forced_count:
                 add_constraint({off_pair_index[d]: 1.0}, forced_count, float("inf"))
                 fixed_aware_constraint_count += 1
         for d in range(7):
-            if hard_off_day_counts[d]:
-                add_constraint({off_pair_index[d]: 1.0, off_pair_index[(d - 1) % 7]: 1.0}, hard_off_day_counts[d], float("inf"))
+            if hard_off_day_counts[d] - separate_asked_days[d] > 0:
+                add_constraint({off_pair_index[d]: 1.0, off_pair_index[(d - 1) % 7]: 1.0}, hard_off_day_counts[d] - separate_asked_days[d], float("inf"))
                 fixed_aware_constraint_count += 1
             coefficients: Dict[int, float] = {
                 index: 1.0 for (day, _), index in x_index.items() if day == d
             }
             coefficients[off_pair_index[d]] = coefficients.get(off_pair_index[d], 0.0) + 1.0
             coefficients[off_pair_index[(d - 1) % 7]] = coefficients.get(off_pair_index[(d - 1) % 7], 0.0) + 1.0
-            rhs = associates - leave_counts[d]
+            rhs = associates - leave_counts[d] - separate_asked_days[d]
             add_constraint(coefficients, rhs, rhs)
     else:
         add_constraint({index: 1.0 for index in off_day_index.values()}, 2 * associates, 2 * associates)
@@ -7878,7 +7901,7 @@ def build_skeleton(
             model, [off[a, d] for d in range(D)], long_mode[a],
             pinned_leave_days(parsed, assoc, honour_fixed=hard.fixed, honour_leave=hard.leave),
             strict=bool(hard.strict_off and parsed.strict_off),
-            consecutive_required=not parsed.separate_off_days, name=f"stage1_{a}")
+            consecutive_required=not (parsed.separate_off_days or separate_off_in_preference(parsed, assoc)), name=f"stage1_{a}")
         if hard.max_shift_variety:
             model.Add(sum(y[a, s] for s in range(S)) <= parsed.max_different_shifts)
         if profile["shift_variety"]:
@@ -12361,7 +12384,7 @@ def validate_schedule(parsed: ParsedInput, skeleton: SkeletonSolution, breaks: B
                     failures.append({"type": "required_language_only", "associate": assoc.name,
                                      "day": DAY_NAMES[d], "shift": parsed.shifts[si].label})
         off_days = [d for d in range(7) if skeleton.assignment[a][d] == "OFF"]
-        if parsed.strict_off and not parsed.separate_off_days and expected_off >= 2 and not any(
+        if parsed.strict_off and not parsed.separate_off_days and expected_off >= 2 and not separate_off_in_preference(parsed, assoc) and not any(
                 (d + 1) % 7 in off_days for d in off_days):
             failures.append({"type": "consecutive_off", "associate": assoc.name,
                              "off_days": [DAY_NAMES[d] for d in off_days]})
@@ -16803,7 +16826,8 @@ def solve_joint_shift_off_language_break_refinement(
         add_weekly_off_rule(
             model, [off[a, d] for d in range(D)], long_mode[a],
             pinned_leave_days(parsed, parsed.associates[a]),
-            strict=bool(parsed.strict_off), consecutive_required=not parsed.separate_off_days,
+            strict=bool(parsed.strict_off),
+            consecutive_required=not (parsed.separate_off_days or separate_off_in_preference(parsed, parsed.associates[a])),
             name=f"joint_{a}")
         model.Add(sum(y[a, s_index] for s_index in range(S)) <= parsed.max_different_shifts)
         objective_terms.append(25 * sum(y[a, s_index] for s_index in range(S)))

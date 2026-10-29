@@ -46,6 +46,8 @@ TREES = [
 ]
 FILES = [
     ("run_tests.sh", "run_tests.sh"),
+    # tests_staged/test_rc9_2_58_engine_map.py compares this map with the engine inside the package.
+    ("docs/ENGINE_MAP.md", "docs/ENGINE_MAP.md"),
     ("CODE_AUDIT.md", "CODE_AUDIT.md"),
     ("packages/rc9_2_2_production/README.md", "README.md"),
     ("packages/rc9_2_2_production/PRODUCTION_RUN_GUIDE.md", "PRODUCTION_RUN_GUIDE.md"),
@@ -62,6 +64,14 @@ def _ignore(_dir: str, names: list[str]) -> set[str]:
     # safeguards; RC922_* replace them and must be the only ones shipped.
     return {n for n in names if n in EXCLUDE or n.endswith(".pyc")
             or (name_is_legacy_notebook(n))}
+
+
+PICTURES = (".png", ".jpg", ".jpeg", ".gif", ".webp")
+
+
+def _ignore_evidence(_dir: str, names: list[str]) -> set[str]:
+    """Phase BB: screenshots under evidence/ stay in the repository (they were 147 MB of a 162 MB package); the server needs none of them."""
+    return _ignore(_dir, names) | {n for n in names if n.lower().endswith(PICTURES)}
 
 
 def name_is_legacy_notebook(name: str) -> bool:
@@ -95,11 +105,12 @@ def build(output_dir: Path) -> Path:
         src = ROOT / src_rel
         if not src.is_dir():
             raise SystemExit(f"missing required tree: {src_rel}")
-        shutil.copytree(src, staging / dst_rel, ignore=_ignore)
+        shutil.copytree(src, staging / dst_rel, ignore=_ignore_evidence if src_rel == "evidence" else _ignore)
     for src_rel, dst_rel in FILES:
         src = ROOT / src_rel
         if not src.is_file():
             raise SystemExit(f"missing required file: {src_rel}")
+        (staging / dst_rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, staging / dst_rel)
     (staging / "run_tests.sh").chmod(0o755)
 

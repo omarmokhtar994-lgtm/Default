@@ -88,16 +88,14 @@ function homeRefresh(now) {
   setTimeout(tick, 30000);
 }
 
-// The look: with no choice saved the page follows the device, so the switch
-// offers the other one.
+// The look: with no choice saved the page follows the device (Night watch, or Tide when the device is light), so the
+// button for that look is shown as the one in use.
 (function () {
   "use strict";
-  var button = document.querySelector("[data-theme-toggle]");
-  if (!button || document.documentElement.getAttribute("data-theme")) { return; }
-  if (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) {
-    button.value = "dark";
-    button.textContent = "Dark look";
-  }
+  var looks = document.querySelectorAll("button.look");
+  if (!looks.length || document.documentElement.getAttribute("data-theme")) { return; }
+  var light = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;
+  Array.prototype.forEach.call(looks, function (b) { b.setAttribute("aria-pressed", b.value === (light ? "light" : "dark") ? "true" : "false"); });
 })();
 
 // A focused or linked item stops below the sticky top bar (Phase XY, review finding 3). app.css gives a padding per
@@ -395,6 +393,7 @@ function homeRefresh(now) {
     body.append("csrf_token", token ? token.value : "");
     body.append("program", root.dataset.program);
     body.append("tz", root.dataset.tz || "");  // the server reads the times as shown in this zone
+    if (root.dataset.merge) { body.append("merge", "1"); }  // Phase AP: the page shows every LOB of the program; the server finds the person's LOB
     return fetch(url, { method: "POST", credentials: "same-origin", body: body, headers: { "Accept": "application/json" } })
       .then(function (r) { return r.json().then(function (d) { d._ok = r.ok; return d; }); });
   }
@@ -404,6 +403,45 @@ function homeRefresh(now) {
 
   // ---- attendance
   var att = document.getElementById("att-dialog");
+  // Phase AY (owner, 2026-10-23): a late login is from the allowance (2 hours, 2 times a month) or an incident; an early leave is always
+  // from the allowance. The dialog says the duration and count as the time is typed, and past a limit asks for the account manager's
+  // approval and a comment.
+  var lateState = "", lateTimer = 0;
+  function lateField(name) { return att ? att.querySelector("[name=" + name + "]") : null; }
+  function lateKind() {
+    if (lateState === "Left early") { return "allowance"; }
+    var on = att.querySelector("input[name=late_kind]:checked");
+    return on ? on.value : "";
+  }
+  function lateSetup(state) {
+    lateState = state === "Late" || state === "Left early" ? state : "";
+    if (!att) { return; }
+    var box = att.querySelector("[data-late-kind]"), pol = att.querySelector("[data-policy]"), ok = att.querySelector("[data-approval]");
+    box.hidden = lateState !== "Late";
+    pol.hidden = !lateState; ok.hidden = true;
+    Array.prototype.forEach.call(att.querySelectorAll("input[name=late_kind]"), function (r) { r.checked = false; });
+    lateField("am_ok").checked = false; lateField("am_note").value = "";
+    att.querySelector("[data-policy-text]").textContent = lateState === "Late" ? "Choose how this late login counts, then the time." : "";
+  }
+  function lateCheck() {
+    if (!lateState) { return; }
+    var kind = lateKind(), text = att.querySelector("[data-policy-text]"), ok = att.querySelector("[data-approval]");
+    var when = (lateState === "Late" ? att.querySelector("input[name=to]") : att.querySelector("input[name=from]")).value;
+    if (!kind) { text.textContent = "Choose how this late login counts, then the time."; ok.hidden = true; return; }
+    if (!when) { text.textContent = ""; ok.hidden = true; return; }
+    var pending = JSON.parse(att.dataset.pending || "{}");
+    post(root.dataset.attCheckUrl, { date: pending.date, associate: pending.associate, status: lateState, from: att.querySelector("input[name=from]").value,
+                                      to: att.querySelector("input[name=to]").value, late_kind: kind }).then(function (r) {
+      if (!r._ok) { text.textContent = r.error || ""; ok.hidden = true; return; }
+      text.textContent = r.policy.text + (r.policy.over.length ? " Over the allowance: " + r.policy.over.join("; ") +
+        ". Needs the account manager's approval as an exception: tick it and write a comment to book it anyway." : "");
+      ok.hidden = !r.policy.over.length;
+      att.classList.toggle("yellow", r.policy.over.length > 0);
+    });
+  }
+  if (att) {
+    att.addEventListener("input", function () { window.clearTimeout(lateTimer); lateTimer = window.setTimeout(lateCheck, 250); });
+  }
   Array.prototype.forEach.call(root.querySelectorAll("select.att"), function (sel) {
     var was = sel.value;
     keyedPick(sel, function () {
@@ -420,7 +458,7 @@ function homeRefresh(now) {
       var from = att.querySelector("[data-from]"), to = att.querySelector("[data-to]");
       var hint = att.querySelector("[data-hint]"), result = att.querySelector(".dlg-result");
       att.querySelector("#att-h").textContent = state === "Late" ? "Late login" : state === "Left early" ? "Early leave" :
-        state + (parts[1] === "1" ? " (billable)" : " (non-billable)");
+        state + (state === "Bio break" ? "" : parts[1] === "1" ? " (billable)" : " (non-billable)");
       att.querySelector("[data-who]").textContent = sel.dataset.name + ", shift " + sel.dataset.shift;
       from.hidden = state === "Late";
       to.hidden = state === "Left early";
@@ -430,12 +468,13 @@ function homeRefresh(now) {
       from.querySelector("input").value = ""; to.querySelector("input").value = ""; result.textContent = "";
       var auxBox = att.querySelector("[data-aux]");  // an aux says who it is with and why (Phase T)
       if (auxBox) {
-        auxBox.hidden = parts.length < 2;
+        auxBox.hidden = parts.length < 2 || state === "Bio break";
         Array.prototype.forEach.call(auxBox.querySelectorAll("input, select"), function (i) {
           i.value = ""; i.dispatchEvent(new Event("change"));
         });
       }
       att.dataset.pending = JSON.stringify(fields);
+      lateSetup(state);
       att.showModal();
       (state === "Late" ? to : from).querySelector("input").focus();
       att.onclose = function () { if (att.returnValue !== "saved") { sel.value = was; } att.returnValue = ""; };
@@ -448,6 +487,18 @@ function homeRefresh(now) {
       var fields = JSON.parse(att.dataset.pending || "{}");
       fields.from = att.querySelector("input[name=from]").value;
       fields.to = att.querySelector("input[name=to]").value;
+      if (lateState) {
+        var kind = lateKind(), result0 = att.querySelector(".dlg-result");
+        if (!kind) { result0.textContent = "Choose whether this late login is from the allowance or an incident."; return; }
+        fields.late_kind = kind;
+        var approval = att.querySelector("[data-approval]");
+        if (!approval.hidden) {
+          if (!lateField("am_ok").checked || !lateField("am_note").value.trim()) {
+            result0.textContent = "Tick that the account manager approved it and write a comment to book it."; return;
+          }
+          fields.am_ok = "1"; fields.am_note = lateField("am_note").value.trim();
+        }
+      }
       var withWhom = att.querySelector("[name=with_whom]"), why = att.querySelector("input[name=why]");
       var dept = att.querySelector("select[name=with_dept]");
       if (withWhom && !withWhom.closest("[hidden]")) {
@@ -539,6 +590,7 @@ function homeRefresh(now) {
       (el.dataset.shift ? " · shift " + el.dataset.shift : "") + " · planned " + el.dataset.planned +
       (el.dataset.start !== el.dataset.planned ? " · now " + el.dataset.start : "");
     input.value = at || el.dataset.start;
+    var missedBox = dlg.querySelector("input[name=missed]"); if (missedBox) { missedBox.checked = false; }
     keep.disabled = false;
     dlg.showModal();
     input.focus();
@@ -554,6 +606,8 @@ function homeRefresh(now) {
     var fields = { date: current.date, associate: current.name, idx: current.idx, at: at };
     var tick = dlg.querySelector("input[name=post]");  // Phase AB: "Post to the group", unticked for one change
     if (tick) { fields.post_asked = "1"; if (tick.checked) { fields.post = "1"; } }
+    var missed = dlg.querySelector("input[name=missed]");  // Phase AV: the break was missed, kept as an incident
+    if (missed && missed.checked && at) { fields.missed = "1"; }
     post(root.dataset.breakUrl, fields)
       .then(function (r) {
         if (r._ok) { window.location.reload(); return; }
@@ -600,7 +654,7 @@ function homeRefresh(now) {
       var startX = e.clientX, moved = 0;
       rect.setPointerCapture(e.pointerId);
       function move(ev) {
-        moved = Math.round((ev.clientX - startX) / box.width * 1440 / 5) * 5;
+        moved = Math.round((ev.clientX - startX) / box.width * svg.viewBox.baseVal.width / 5) * 5;
         rect.setAttribute("x", x0 + moved);
       }
       function up() {
@@ -811,7 +865,10 @@ function homeRefresh(now) {
         live.hidden = true;
         draw(s);
         ago();
-        if (s.final) { window.location.reload(); } else { setTimeout(poll, 3000); }
+        if (s.final) {
+          try { window.sessionStorage.setItem("ts-flip", "yes"); } catch (e) { /* private window: no flip */ }  // the next page turns the word over once
+          window.location.reload();
+        } else { setTimeout(poll, 3000); }
       })
       .catch(function () { live.hidden = false; setTimeout(poll, 8000); });
   }
@@ -890,9 +947,9 @@ function homeRefresh(now) {
   var effect = form.querySelector("[data-effect]"), length = form.querySelector("[data-length]");
   var billable = form.querySelector("[data-billable]"), from = form.querySelector("[data-from-label]");
   var submit = form.querySelector("button[type=submit]"), minutes = form.querySelector("select[name=minutes]");
-  var whole = ["Unplanned leave", "Sick", "Public holiday", "Exam leave"], aux = ["Coaching", "Meeting", "Training", "System issue", "Task"];
-  var usual = { "Break": "15", "Lunch": "30", "Overtime": "60", "VTO": "60", "Coaching": "30", "Meeting": "30",
-                "Training": "60", "System issue": "15", "Task": "30" };
+  var whole = ["Unplanned leave", "Sick", "Public holiday", "Exam leave"], aux = ["Coaching", "Meeting", "Training", "System issue", "Task", "Bio break"];  // Phase AV: Bio break needs no who or why
+  var usual = { "Break": "15", "Lunch": "30", "Overtime": "60", "Coaching": "30", "Meeting": "30",
+                "Training": "60", "System issue": "15", "Task": "30", "Bio break": "10" };
   var seq = 0;
   // Day off cancelled (Phase S): the people off today, a Shift Library shift or typed start and end
   var working = form.querySelector("[data-who-working]"), off = form.querySelector("[data-who-off]");
@@ -931,16 +988,34 @@ function homeRefresh(now) {
   function shape(changedKind) {
     var k = kind(), calling = k === "Day off cancelled", isAux = aux.indexOf(k) >= 0;
     var auxFields = form.querySelector("[data-aux-fields]");
+    var asks = isAux && k !== "Bio break";  // a bio break is never billable and says no who or why
     if (auxFields) {
-      auxFields.hidden = !isAux;
-      Array.prototype.forEach.call(auxFields.querySelectorAll("input, select"), function (i) { i.disabled = !isAux; i.required = isAux; });
+      auxFields.hidden = !asks;
+      Array.prototype.forEach.call(auxFields.querySelectorAll("input, select"), function (i) { i.disabled = !asks; i.required = asks; });
     }
     length.hidden = whole.indexOf(k) >= 0 || k === "Late" || k === "Left early" || calling;
-    billable.hidden = aux.indexOf(k) < 0;
+    billable.hidden = !asks;
     from.hidden = whole.indexOf(k) >= 0 || k === "Overtime";
     from.querySelector("span").textContent = k === "Late" ? "Arrived at" : k === "Left early" ? "Left at" : "From";
     if (changedKind && usual[k]) { minutes.value = usual[k]; }
     overtimeSides(k === "Overtime");
+    // Phase AY: the counts of breaks belong to overtime and a call-in only; the allowance or incident choice to a late login or early leave only
+    var extra = form.querySelector("[data-extra-breaks]"), lateBox = form.querySelector("[data-add-late]");
+    var lateKind = k === "Late" || k === "Left early";
+    if (extra) {
+      extra.hidden = !(k === "Overtime" || calling);
+      Array.prototype.forEach.call(extra.querySelectorAll("input"), function (i) { i.disabled = extra.hidden; });
+    }
+    if (lateBox) {
+      lateBox.hidden = !lateKind;
+      Array.prototype.forEach.call(lateBox.querySelectorAll("input"), function (i) { i.disabled = !lateKind; });
+      var incident = lateBox.querySelector("[data-incident]");  // an early leave is always from the allowance
+      if (incident) {
+        incident.hidden = k !== "Late";
+        incident.querySelector("input").disabled = k !== "Late";
+        if (k !== "Late") { lateBox.querySelector("input[value=allowance]").checked = true; }
+      }
+    }
     if (off) {
       off.hidden = !calling; off.querySelector("select").disabled = !calling;
       working.hidden = calling; working.querySelector("select").disabled = calling;
@@ -1300,7 +1375,8 @@ function homeRefresh(now) {
     var mark = strip.querySelector(".achv-now");
     var minutes = parseInt(strip.getAttribute("data-now"), 10);
     if (!mark || isNaN(minutes)) return;
-    mark.style.left = (Math.min(Math.max(minutes, 0), 1440) / 1440 * 100) + "%";
+    var span = parseInt(strip.getAttribute("data-span"), 10) || 1440;  // Phase AU: an operating day can be shorter than 24 hours
+    mark.style.left = (Math.min(Math.max(minutes, 0), span) / span * 100) + "%";
     mark.classList.add("placed");
   });
 })();
@@ -1395,4 +1471,448 @@ function homeRefresh(now) {
     if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K") && !dialog.open) { e.preventDefault(); open(); }
   });
   Array.prototype.forEach.call(document.querySelectorAll("[data-goto-open]"), function (b) { b.addEventListener("click", open); });
+})();
+
+// Phase AK (sample ak01 D): the Timeline's tracks stretch sideways (1440 minutes across the page), so the channel
+// letters on them are drawn back to their true shape: each is narrowed or widened around its own middle by the
+// track's height scale over its width scale.
+(function () {
+  "use strict";
+  var tracks = document.querySelectorAll("svg.tl-track");
+  if (!tracks.length) { return; }
+  function fit() {
+    Array.prototype.forEach.call(tracks, function (svg) {
+      var box = svg.viewBox.baseVal, w = svg.clientWidth, h = svg.clientHeight;
+      if (!box || !w || !h) { return; }
+      var k = (h / box.height) / (w / box.width);
+      Array.prototype.forEach.call(svg.querySelectorAll("text.tl-ch-t"), function (t) {
+        var cx = t.getAttribute("data-cx");
+        t.setAttribute("transform", "translate(" + cx + " 0) scale(" + k.toFixed(4) + " 1) translate(" + (-cx) + " 0)");
+      });
+    });
+  }
+  fit();
+  window.addEventListener("resize", fit);
+})();
+
+// Phase AY (owner, 2026-10-23: "the timezone should match their own on the PC"): the browser's own zone is kept in a cookie, so the
+// server counts "today" (the days back a role may still change) where the person is, not only in Egypt.
+(function () {
+  "use strict";
+  var zone = "";
+  try { zone = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) { return; }
+  if (!zone || document.cookie.indexOf("pc_tz=" + zone) !== -1) { return; }
+  document.cookie = "pc_tz=" + zone + "; path=/; max-age=31536000; SameSite=Lax" +
+    (location.protocol === "https:" ? "; Secure" : "");
+})();
+
+// Phase AY (owner, 2026-10-23: "the hours timeline does not match the intervals below"): the Timeline's hour labels and hour lines
+// were laid out for a 24-hour day, so on a shorter window ("Day starts at", the operating day) they drifted from the bars and the
+// interval cells. They are placed here from the window's length in minutes (data-span on the axis row): a label every 2 hours, a
+// line every hour.
+(function () {
+  "use strict";
+  var axis = document.querySelector(".tl-axis[data-span]");
+  if (!axis) { return; }
+  var span = parseInt(axis.getAttribute("data-span"), 10);
+  if (!span || span <= 0) { return; }
+  var ticks = axis.querySelector(".tl-ticks");
+  Array.prototype.forEach.call(ticks.children, function (t, i) { t.style.left = (100 * i * 120 / span).toFixed(3) + "%"; });
+  ticks.classList.add("placed");
+  Array.prototype.forEach.call(document.querySelectorAll("svg.tl-track"), function (svg) {
+    svg.style.backgroundSize = (100 * 60 / span).toFixed(4) + "% 100%";
+  });
+})();
+
+// Phase AO (owner, 2026-10-20): on People, "Name on the schedule" lists only the names on the schedules of the programs
+// ticked in the same form, and the bulk team manager list only team managers who share a program with every ticked
+// associate. Each name and team manager carries the program ids it belongs to (data-programs); the server still checks.
+(function () {
+  "use strict";
+  var master = document.getElementById("roster-names");
+  function ids(text) { return (text || "").split(" ").filter(Boolean); }
+  function meets(have, want) { return have.some(function (id) { return want.indexOf(id) !== -1; }); }
+  if (master) {
+    var options = Array.prototype.slice.call(master.querySelectorAll("option"));
+    Array.prototype.forEach.call(document.querySelectorAll("input[list='roster-names']"), function (field, n) {
+      var form = field.form;
+      if (!form) { return; }
+      var own = document.createElement("datalist");
+      own.id = "roster-names-" + n;
+      master.parentNode.insertBefore(own, master.nextSibling);
+      field.setAttribute("list", own.id);
+      function fill() {
+        var boxes = Array.prototype.slice.call(form.querySelectorAll("input[name='programs']"));
+        var all = form.querySelector("input[name='all_programs']");
+        var want = boxes.filter(function (b) { return b.checked || (all && all.checked); }).map(function (b) { return b.value; });
+        own.textContent = "";
+        options.forEach(function (o) {
+          if (meets(ids(o.getAttribute("data-programs")), want)) { own.appendChild(o.cloneNode(true)); }
+        });
+      }
+      form.addEventListener("change", fill);
+      fill();
+    });
+  }
+  var bulk = document.querySelector("form[action$='/admin/users/team']");
+  if (bulk) {
+    var select = bulk.querySelector("select[name='team_manager']");
+    var narrow = function () {
+      var asked = Array.prototype.slice.call(bulk.querySelectorAll("input[name='who']:checked"))
+        .map(function (b) { return ids(b.getAttribute("data-programs")); });
+      Array.prototype.forEach.call(select.options, function (o) {
+        if (!o.value) { return; }
+        var theirs = ids(o.getAttribute("data-programs"));
+        var fits = theirs[0] === "all" || asked.every(function (have) { return meets(have, theirs); });
+        o.hidden = o.disabled = !fits;
+        if (!fits && o.selected) { select.value = ""; }
+      });
+    };
+    bulk.addEventListener("change", narrow);
+    narrow();
+  }
+  // Phase AU: a long list of people with a search box (data-filter names the list) and a count of those ticked
+  Array.prototype.forEach.call(document.querySelectorAll("input[data-filter]"), function (box) {
+    var list = document.getElementById(box.getAttribute("data-filter"));
+    if (!list) { return; }
+    var count = document.querySelector("[data-count-for='" + list.id + "']");
+    var tally = function () {
+      if (count) {
+        var n = list.querySelectorAll("input[type='checkbox']:checked").length;
+        count.textContent = n ? n + " picked" : "";
+      }
+    };
+    box.addEventListener("input", function () {
+      var text = box.value.trim().toLowerCase();
+      Array.prototype.forEach.call(list.querySelectorAll(".exp-kind, [data-filter-row]"), function (row) {
+        row.hidden = text !== "" && row.textContent.toLowerCase().indexOf(text) === -1;
+      });
+    });
+    list.addEventListener("change", tally);
+    tally();
+  });
+})();
+
+
+// Downloads (Phase AX): on a page marked data-downloads, each chart is saved as a picture (PNG) or a drawing (SVG), each
+// table as a CSV file that Excel opens. Built in the browser from what the page shows, so it is always what you see.
+(function () {
+  "use strict";
+  var root = document.querySelector("[data-downloads]");
+  if (!root) { return; }
+  var page = root.getAttribute("data-downloads");
+  var SVG_STYLE = ["fill", "stroke", "stroke-width", "stroke-dasharray", "stroke-linecap", "stroke-linejoin", "opacity",
+    "fill-opacity", "stroke-opacity", "font-family", "font-size", "font-weight", "text-anchor", "dominant-baseline"];
+
+  var slug = function (text) {
+    return (text || "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 60);
+  };
+  var period = function () {
+    var from = document.querySelector("input[name=from]"), to = document.querySelector("input[name=to]");
+    return from && to && from.value && to.value ? from.value + "_to_" + to.value : "";
+  };
+  var nameFor = function (panel, ext) {
+    var heading = panel.querySelector("h1, h2, h3");
+    return [page, slug(heading ? heading.textContent : panel.getAttribute("aria-label")), period()]
+      .filter(Boolean).join("_") + "." + ext;
+  };
+  var save = function (blob, name) {
+    var link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.setTimeout(function () { URL.revokeObjectURL(link.href); }, 4000);
+  };
+
+  var csvOf = function (table) {
+    var cell = function (text) {
+      text = text.replace(/\s+/g, " ").trim();
+      return /[",\r\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
+    };
+    return Array.prototype.map.call(table.querySelectorAll("tr"), function (row) {
+      return Array.prototype.map.call(row.children, function (c) { return cell(c.textContent); }).join(",");
+    }).join("\r\n") + "\r\n";
+  };
+
+  var background = function (node) {
+    for (; node; node = node.parentElement) {
+      var colour = window.getComputedStyle(node).backgroundColor;
+      if (colour && colour !== "transparent" && !/rgba\(.*,\s*0\)$/.test(colour)) { return colour; }
+    }
+    return "#ffffff";
+  };
+  // A mixed colour (the lit top and darker side of a bar) is reported as color(srgb ...), which many viewers cannot read: write it as plain hex.
+  var plain = function (value) {
+    if (value.indexOf("color(") !== 0) { return value; }
+    var paint = document.createElement("canvas").getContext("2d");
+    paint.fillStyle = value;
+    paint.fillRect(0, 0, 1, 1);
+    var px = paint.getImageData(0, 0, 1, 1).data;  // read the pixel: the canvas would hand the same color(...) text back
+    return px[3] === 255 ? "rgb(" + px[0] + ", " + px[1] + ", " + px[2] + ")"
+      : "rgba(" + px[0] + ", " + px[1] + ", " + px[2] + ", " + (px[3] / 255).toFixed(3) + ")";
+  };
+  // The chart's colours come from the page's stylesheet, which a saved file does not have: write them into the file.
+  // (Attributes, not a style attribute: the page's content security policy allows no inline style.)
+  var drawing = function (svg) {
+    var copy = svg.cloneNode(true);
+    var from = [svg].concat(Array.prototype.slice.call(svg.querySelectorAll("*")));
+    var to = [copy].concat(Array.prototype.slice.call(copy.querySelectorAll("*")));
+    from.forEach(function (node, i) {
+      var seen = window.getComputedStyle(node);
+      SVG_STYLE.forEach(function (prop) {
+        var value = seen.getPropertyValue(prop);
+        if (value) { to[i].setAttribute(prop, plain(value)); }
+      });
+      to[i].removeAttribute("class");
+    });
+    var box = svg.viewBox.baseVal;
+    var width = box && box.width ? box.width : svg.getBoundingClientRect().width;
+    var height = box && box.height ? box.height : svg.getBoundingClientRect().height;
+    copy.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    copy.setAttribute("width", String(width));
+    copy.setAttribute("height", String(height));
+    var back = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    back.setAttribute("x", box ? String(box.x) : "0");
+    back.setAttribute("y", box ? String(box.y) : "0");
+    back.setAttribute("width", String(width));
+    back.setAttribute("height", String(height));
+    back.setAttribute("fill", background(svg));
+    copy.insertBefore(back, copy.firstChild);
+    return { text: new XMLSerializer().serializeToString(copy), width: width, height: height };
+  };
+  var picture = function (svg, name) {
+    var made = drawing(svg);
+    var scale = 2, image = new Image();
+    image.onload = function () {
+      var canvas = document.createElement("canvas");
+      canvas.width = Math.round(made.width * scale);
+      canvas.height = Math.round(made.height * scale);
+      var ctx = canvas.getContext("2d");
+      ctx.scale(scale, scale);
+      ctx.drawImage(image, 0, 0, made.width, made.height);
+      canvas.toBlob(function (blob) { if (blob) { save(blob, name); } }, "image/png");
+    };
+    image.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(made.text);
+  };
+
+  var rows = new Map();
+  var rowFor = function (panel) {
+    if (!rows.has(panel)) {
+      var row = document.createElement("p");
+      row.className = "dl-row";
+      panel.appendChild(row);
+      rows.set(panel, row);
+    }
+    return rows.get(panel);
+  };
+  var button = function (panel, label, act) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "quiet";
+    b.textContent = label;
+    b.addEventListener("click", act);
+    rowFor(panel).appendChild(b);
+  };
+  var tally = function (n, total) { return total > 1 ? " (" + n + ")" : ""; };
+  var panels = Array.prototype.slice.call(root.querySelectorAll(".panel"));
+  panels.forEach(function (panel) {
+    var own = function (sel) {
+      return Array.prototype.filter.call(panel.querySelectorAll(sel), function (n) {
+        return n.closest(".panel") === panel;
+      });
+    };
+    var charts = own("svg.chart"), tables = own("table");
+    charts.forEach(function (svg, i) {
+      button(panel, "Chart as PNG" + tally(i + 1, charts.length), function () { picture(svg, nameFor(panel, "png")); });
+      button(panel, "Chart as SVG" + tally(i + 1, charts.length), function () {
+        save(new Blob([drawing(svg).text], { type: "image/svg+xml" }), nameFor(panel, "svg"));
+      });
+    });
+    tables.forEach(function (table, i) {
+      button(panel, "Table as CSV" + tally(i + 1, tables.length), function () {
+        save(new Blob(["﻿" + csvOf(table)], { type: "text/csv;charset=utf-8" }), nameFor(panel, "csv"));
+      });
+    });
+  });
+})();
+
+// Phase AY (owner, 2026-10-23): an open page asks every 30 s whether what it shows has changed (the stamp the page was built
+// from, against the server's now). A read-only page (data-mode "reload": My day, My week, Overview) reloads; a page where
+// people are in the middle of something (data-mode "bar": the RTA day, Requests) shows a bar with a link instead, and so does
+// a read-only page while a field has the focus or has been typed in. The asks are spread by up to 5 s so that many open pages
+// do not ask in the same second, they stop while the tab is hidden (one ask when it comes back), and after a failed ask the
+// wait doubles up to 5 minutes.
+function liveWatch(box) {
+  "use strict";
+  var url = box.getAttribute("data-url"), stamp = box.getAttribute("data-stamp"), mode = box.getAttribute("data-mode");
+  var BASE = 30000, MOST = 300000, delay = BASE, timer = null, busy = false, touched = false, shown = false;
+  function typing() {
+    var a = document.activeElement;
+    return touched || !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+  }
+  function bar() {
+    if (shown) { return; }
+    shown = true;
+    // Phase BA (owner, 2026-10-25): a note that floats at the bottom of the window while the person scrolls, with Refresh and Hide
+    var note = document.createElement("div"), pip = document.createElement("i"), msg = document.createElement("span"),
+        go = document.createElement("button"), hide = document.createElement("button");
+    note.className = "float-note live-bar";
+    note.setAttribute("role", "status");
+    pip.className = "pip";
+    pip.setAttribute("aria-hidden", "true");
+    msg.className = "msg";
+    msg.textContent = "This page is out of date.";
+    go.type = "button";
+    go.className = "act primary";
+    go.textContent = "Refresh";
+    go.addEventListener("click", function () { window.location.reload(); });
+    hide.type = "button";
+    hide.className = "x";
+    hide.textContent = "Hide";
+    hide.setAttribute("aria-label", "Hide this message");
+    function away() { note.classList.remove("on"); }
+    hide.addEventListener("click", away);
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") { away(); } });
+    [pip, msg, go, hide].forEach(function (part) { note.appendChild(part); });
+    document.body.appendChild(note);
+    window.requestAnimationFrame(function () { window.requestAnimationFrame(function () { note.classList.add("on"); }); });  // a frame first, so it can ease in
+  }
+  function changed() {
+    if (mode === "reload" && !typing()) { window.location.reload(); } else { bar(); }
+  }
+  function schedule() {
+    window.clearTimeout(timer);
+    if (shown || document.hidden) { return; }
+    timer = window.setTimeout(ask, delay + Math.random() * 5000);
+  }
+  function ask() {
+    if (busy || document.hidden) { return; }
+    busy = true;
+    fetch(url, { credentials: "same-origin", headers: { "Accept": "application/json" }, cache: "no-store" })
+      .then(function (r) { if (!r.ok || r.redirected) { throw new Error("HTTP " + r.status); } return r.json(); })
+      .then(function (s) {
+        delay = BASE;
+        if (s.stamp !== stamp) { changed(); }
+      })
+      .catch(function () { delay = Math.min(delay * 2, MOST); })
+      .then(function () { busy = false; schedule(); });
+  }
+  document.addEventListener("input", function () { touched = true; });
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) { window.clearTimeout(timer); } else { ask(); }
+  });
+  schedule();
+}
+(function () {
+  "use strict";
+  var live = document.getElementById("live");
+  if (live) { liveWatch(live); }
+})();
+
+
+// The RTA list: a scrolling panel that fits the window, or the whole list, as the viewer chooses (Phase BA). The choice is kept in this
+// browser only; without storage the panel is the default and the switch still works for the visit.
+(function () {
+  "use strict";
+  var bar = document.querySelector("[data-tl-mode]"), box = document.querySelector(".tl-scroll[data-mode]");
+  if (!bar || !box) { return; }
+  var KEY = "ts-tl-mode";
+  function apply(mode) {
+    box.setAttribute("data-mode", mode);
+    Array.prototype.forEach.call(bar.querySelectorAll("[data-tl-mode-set]"), function (b) {
+      b.setAttribute("aria-pressed", b.getAttribute("data-tl-mode-set") === mode ? "true" : "false");
+    });
+  }
+  var saved = "";
+  try { saved = window.localStorage.getItem(KEY) || ""; } catch (e) { saved = ""; }
+  apply(saved === "whole" ? "whole" : "scroll");
+  bar.hidden = false;
+  bar.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-tl-mode-set]");
+    if (!b) { return; }
+    var mode = b.getAttribute("data-tl-mode-set") === "whole" ? "whole" : "scroll";
+    apply(mode);
+    try { window.localStorage.setItem(KEY, mode); } catch (err) { /* private window: the choice lasts for this visit */ }
+  });
+})();
+
+
+// Whole lists (Phase BC): on the Schedules, Channels and Week pages the viewer chooses between scrolling panels and whole lists, for every
+// scrolling panel on the page at once. The choice is kept in this browser only; without storage the panels are the default for the visit.
+(function () {
+  "use strict";
+  var bar = document.querySelector("[data-list-mode]");
+  if (!bar) { return; }
+  var KEY = "ts-list-mode";
+  function apply(mode) {
+    Array.prototype.forEach.call(document.querySelectorAll(".panel-scroll"), function (box) { box.setAttribute("data-mode", mode); });
+    Array.prototype.forEach.call(bar.querySelectorAll("[data-list-mode-set]"), function (b) {
+      b.setAttribute("aria-pressed", b.getAttribute("data-list-mode-set") === mode ? "true" : "false");
+    });
+  }
+  var saved = "";
+  try { saved = window.localStorage.getItem(KEY) || ""; } catch (e) { saved = ""; }
+  apply(saved === "whole" ? "whole" : "scroll");
+  bar.hidden = false;
+  bar.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-list-mode-set]");
+    if (!b) { return; }
+    var mode = b.getAttribute("data-list-mode-set") === "whole" ? "whole" : "scroll";
+    apply(mode);
+    try { window.localStorage.setItem(KEY, mode); } catch (err) { /* private window: the choice lasts for this visit */ }
+  });
+})();
+
+
+// Two channel ticks (Phase BC): "as fixed as possible" and "balanced" are alternatives, so ticking one clears the other.
+document.addEventListener("change", function (e) {
+  var box = e.target;
+  if (!box || !box.matches || !box.matches("input[type=checkbox][data-tick-only]") || !box.checked) { return; }
+  var other = box.form && box.form.querySelector('input[name="' + box.getAttribute("data-tick-only") + '"]');
+  if (other) { other.checked = false; }
+});
+
+
+// A little 3D (Phase BA): the program cards lean toward a mouse pointer; the sign-in stack and mark stop when the tab is hidden or the stack is
+// off screen; a run's word turns over once when the person watched the run finish. Nothing here for a touch screen or reduced motion.
+(function () {
+  "use strict";
+  var root = document.documentElement;
+  var calm = window.matchMedia("(prefers-reduced-motion: reduce)"), fine = window.matchMedia("(hover: hover) and (pointer: fine)");
+  var deck = document.querySelector(".deck3d");
+  if (deck) {
+    document.addEventListener("visibilitychange", function () { root.classList.toggle("paused", document.hidden); });
+    if ("IntersectionObserver" in window) {
+      new IntersectionObserver(function (e) { root.classList.toggle("still", !e[0].isIntersecting); }).observe(deck);
+    }
+    if (fine.matches && !calm.matches) {
+      var queued = false, last = null;  // the stack leans a little toward the pointer: one write per frame
+      document.addEventListener("pointermove", function (e) {
+        last = e;
+        if (queued) { return; }
+        queued = true;
+        window.requestAnimationFrame(function () {
+          queued = false;
+          deck.style.setProperty("--tz", (-32 + (last.clientX / window.innerWidth - .5) * 8).toFixed(1) + "deg");
+          deck.style.setProperty("--tx", (58 - (last.clientY / window.innerHeight - .5) * 6).toFixed(1) + "deg");
+        });
+      }, { passive: true });
+    }
+  }
+  if (fine.matches && !calm.matches) {
+    Array.prototype.forEach.call(document.querySelectorAll("[data-tilt]"), function (t) {
+      t.addEventListener("pointermove", function (e) {
+        var r = t.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;
+        t.style.setProperty("--ry", (x * 5).toFixed(2) + "deg");
+        t.style.setProperty("--rx", (-y * 5).toFixed(2) + "deg");
+      });
+      t.addEventListener("pointerleave", function () { t.style.removeProperty("--rx"); t.style.removeProperty("--ry"); });
+    });
+  }
+  var word = document.querySelector("article.run .status-word[data-status=DONE]");
+  try {
+    if (word && window.sessionStorage.getItem("ts-flip") === "yes") { window.sessionStorage.removeItem("ts-flip"); if (!calm.matches) { word.classList.add("flip"); } }
+  } catch (e) { /* private window: no flip */ }
 })();

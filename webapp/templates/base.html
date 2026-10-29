@@ -4,18 +4,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="{{ {'light': 'light', 'dark': 'dark', 'ocean': 'dark'}.get(theme, 'dark light') }}">
-{% if theme %}<meta name="theme-color" content="{{ {'light': '#F1F2F4', 'ocean': '#0A1220'}.get(theme, '#111418') }}">
-{% else %}<meta name="theme-color" content="#111418" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#F1F2F4" media="(prefers-color-scheme: light)">
+<meta name="color-scheme" content="{{ {'light': 'light', 'dark': 'dark', 'draft': 'light'}.get(theme, 'dark light') }}">
+{% if theme %}<meta name="theme-color" content="{{ {'light': '#E8EFF6', 'draft': '#1B2321'}.get(theme, '#080F1E') }}">
+{% else %}<meta name="theme-color" content="#080F1E" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#E8EFF6" media="(prefers-color-scheme: light)">
 {% endif %}<title>{% block title %}Team Scheduler{% endblock %}</title>
 <link rel="preload" href="{{ url_for('static', filename='fonts/atkinson-hyperlegible-next.woff2') }}" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='icons.css') }}">
 <link rel="icon" href="{{ url_for('static', filename='mark.svg') }}" type="image/svg+xml">
 </head>
-<body>
+<body{% if embed %} class="embed"{% endif %}>
 <a class="skip" href="#main">Skip to the page</a>
+<div class="sheet">
 <header class="top">
   <a class="brand" href="{{ url_for('home') }}"><svg class="brand-mark" viewBox="0 0 28 20" aria-hidden="true"><rect x="0" y="1" width="16" height="5" rx="1.5" class="m1"/><rect x="6" y="8" width="16" height="5" rx="1.5" class="m2"/><rect x="12" y="15" width="16" height="5" rx="1.5" class="m3"/></svg>Team Scheduler</a>
   {% if user %}
@@ -25,13 +26,13 @@
     <form class="theme" method="post" action="{{ url_for('set_theme') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}">
-      <button class="link" name="theme" value="{{ 'dark' if theme == 'light' else 'light' }}" data-theme-toggle
-              title="Switch between the light and the dark look">{{ 'Dark look' if theme == 'light' else 'Light look' }}</button>
-      {% if theme == 'ocean' %}<button class="link" name="theme" value="dark" title="Back to the graphite night look">Dark look</button>
-      {% else %}<button class="link" name="theme" value="ocean" title="The deep ocean night look">Ocean look</button>{% endif %}
+      <span class="ico i-palette" aria-hidden="true"></span>
+      <span class="looks" role="group" aria-label="Look">
+        {% for value, name in (('light', 'Tide'), ('dark', 'Night watch'), ('draft', 'Drafting table')) %}<button class="look" name="theme" value="{{ value }}" data-look="{{ value }}" aria-pressed="{{ 'true' if theme == value else 'false' }}">{{ name }}</button>{% endfor %}
+      </span>
     </form>
-    <a href="{{ url_for('change_password') }}" title="Your account: change your password">Settings</a>
-    <form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="link">Sign out</button></form>
+    <a href="{{ url_for('change_password') }}" title="Your account: change your password"><span class="ico i-gear" aria-hidden="true"></span>Settings</a>
+    <form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="link"><span class="ico i-sign-out" aria-hidden="true"></span>Sign out</button></form>
   </div>
   {% endif %}
 </header>
@@ -40,31 +41,35 @@
 <aside class="leftnav" aria-label="Pages">
   <details class="menu" open data-menu><summary>Menu</summary>
   {% if user.is_associate %}<nav aria-label="Main">
-    {{ navlink('me', url_for('me'), 'My week') }}
+    <a href="{{ url_for('me_breaks') }}"{% if nav_active == 'me_day' %} class="on" aria-current="page"{% endif %}>My day{% if news_n %} <span class="count" title="New answers">{{ news_n }}</span>{% endif %}</a>
+    <a href="{{ url_for('me') }}"{% if nav_active == 'me' %} class="on" aria-current="page"{% endif %}>My weeks{% if news_weeks %} <span class="count" title="New answers">{{ news_weeks }}</span>{% endif %}</a>
   </nav>{% else %}
-  <a class="button primary newrun" href="{{ url_for('home', program=nav_unit or none) }}#newrun">New schedule</a>
+  {% if can('runs') %}<a class="button primary newrun" href="{{ url_for('home', program=nav_unit or none) }}#newrun">New schedule</a>{% endif %}
   {% if nav_units %}<label class="unitpick">Program and LOB
     <select data-unit-pick data-target="{{ nav_target }}">{% for p in nav_units %}<optgroup label="{{ p.name }}">{% for key, text in p.choices %}<option value="{{ key }}"{% if key == nav_unit %} selected{% endif %}>{{ text }}</option>{% endfor %}</optgroup>{% endfor %}</select></label>{% endif %}
   <nav aria-label="Main">
     {{ navlink('home', url_for('home'), 'Home') }}
     {% if nav_unit %}<p class="navhead">Today</p>
-    {{ navlink('day', url_for('day_page', program=nav_unit, date=nav_date), 'RTA') }}
-    {{ navlink('overview', url_for('overview_page', program=nav_unit, date=nav_date), 'Overview') }}
-    {{ navlink('wallboard', url_for('day_wallboard', program=nav_unit), 'Wallboard') }}
-    <p class="navhead">This week</p>
+    {% if can('rta_view') %}{{ navlink('day', url_for('day_page', program=nav_unit, date=nav_date), 'RTA') }}{% endif %}
+    {% if can('overview') %}{{ navlink('overview', url_for('overview_page', program=nav_unit, date=nav_date), 'Overview') }}
+    {{ navlink('wallboard', url_for('day_wallboard', program=nav_unit), 'Wallboard') }}{% endif %}
+    {% if can('schedules_view') %}<p class="navhead">This week</p>
     {{ navlink('week', url_for('week_page', program=nav_unit), 'Weeks') }}
-    {{ navlink('schedules', url_for('schedules_for', program=nav_unit), 'Schedules') }}
+    {{ navlink('schedules', url_for('schedules_for', program=nav_unit), 'Schedules') }}{% endif %}
     <p class="navhead">Requests</p>
-    <a href="{{ url_for('requests_page', program=nav_unit) }}"{% if nav_active == 'requests' %} class="on" aria-current="page"{% endif %}>Leave and swaps{% if nav_requests %} <span class="count" title="Waiting for you">{{ nav_requests }}</span>{% endif %}</a>{% endif %}
+    <a href="{{ url_for('requests_page', program=nav_unit) }}"{% if nav_active == 'requests' %} class="on" aria-current="page"{% endif %}>Leave and swaps{% if (nav_requests or 0) + (news_n or 0) %} <span class="count" title="Waiting for you, or answered">{{ (nav_requests or 0) + (news_n or 0) }}</span>{% endif %}</a>{% endif %}
     <p class="navhead">Insights</p>
-    {% if nav_unit %}{{ navlink('analysis', url_for('program', name=nav_unit), 'Analysis') }}{% endif %}
-    {{ navlink('programs', url_for('programs'), 'Programs') }}
-    {{ navlink('exports', url_for('exports_page'), 'Exports') }}
-    {{ navlink('team', url_for('team_page'), 'Team') }}
-    {% if user.is_admin or user.is_supervisor %}<p class="navhead">Setup</p>
-    {{ navlink('people', url_for('admin_users'), 'People') }}
-    {{ navlink('with', url_for('with_setup', program=nav_unit or none), 'Departments and people') }}
-    {{ navlink('channels', url_for('channel_setup', program=nav_unit or none), 'Associate channels') }}
+    {% if nav_unit and can('analysis') %}{{ navlink('analysis', url_for('program', name=nav_unit), 'Analysis') }}{% endif %}
+    {% if can('analysis') %}{{ navlink('programs', url_for('programs'), 'Programs') }}{% endif %}
+    {% if can('analysis') %}{{ navlink('shrinkage', url_for('shrinkage_page', program=nav_unit or none), 'Shrinkage') }}{% endif %}
+    {% if can('analysis') %}{{ navlink('incidents', url_for('incidents_page', program=nav_unit or none), 'Incidents') }}{% endif %}
+    {% if can('exports') %}{{ navlink('exports', url_for('exports_page'), 'Exports') }}{% endif %}
+    {% if can('team') %}{{ navlink('team', url_for('team_page'), 'Team') }}{% endif %}
+    {% if can('people') or can('setup') %}<p class="navhead">Setup</p>
+    {% if can('people') %}{{ navlink('people', url_for('admin_users'), 'People') }}{% endif %}
+    {% if can('setup') %}{{ navlink('with', url_for('with_setup', program=nav_unit or none), 'Departments and people') }}
+    {{ navlink('channels', url_for('channel_setup', program=nav_unit or none), 'Associate channels') }}{% endif %}
+    {% if user.is_admin %}{{ navlink('roles', url_for('roles_page'), 'Roles') }}{% endif %}
     {% if user.is_admin %}{{ navlink('notify', url_for('notifications_page'), 'Notifications') }}{% endif %}
     {% if user.is_admin %}{{ navlink('setup', url_for('program_setup'), 'LOBs and defaults') }}{% endif %}{% endif %}
   </nav>{% endif %}
@@ -75,6 +80,7 @@
 {% if user and back %}<p class="crumbs"><a href="{{ back }}" data-back>‹ Back</a><a class="home" href="{{ url_for('home') }}">Home</a></p>{% endif %}
 {% with messages = get_flashed_messages() %}{% for m in messages %}<p class="flash" role="status">{{ m }}</p>{% endfor %}{% endwith %}
 {% block content %}{% endblock %}
+{% block live %}{% endblock %}
 </main>
 {% if user %}</div>{% endif %}
 {% if user and not user.is_associate %}<dialog id="goto" class="goto" aria-label="Go to" data-url="{{ url_for('goto') }}" data-program="{{ nav_unit or '' }}" data-date="{{ nav_date or '' }}">
@@ -83,6 +89,7 @@
   <p class="goto-hint">Up and down to pick, Enter to open, Esc to close.</p>
 </dialog>{% endif %}
 <footer class="foot">{{ copyright }}</footer>
+</div>
 <script src="{{ url_for('static', filename='app.js') }}" defer></script>
 </body>
 </html>

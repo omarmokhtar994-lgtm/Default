@@ -13,7 +13,8 @@ from flask import abort, current_app, g, redirect, request, session, url_for
 
 # Phase AG: the only pages an associate's account opens; anything else sends them to My week (or is refused).
 ASSOCIATE_PAGES = frozenset({"static", "login", "logout", "set_theme", "change_password", "me", "me_leave",
-                             "me_leave_cancel", "me_swap", "me_swap_answer"})
+                             "me_leave_cancel", "me_swap", "me_swap_answer", "me_breaks", "me_breaks_ask",
+                             "me_breaks_cancel", "end_other_sessions", "live_stamp"})
 SAFE_NEXT = re.compile(r"/(?![/\\])[^\x00-\x20\x7f\\]*")  # a path here: no second slash, no backslash or control character
 
 
@@ -64,6 +65,12 @@ def load_user() -> None:
     elif session["pw"] != stamp:
         session.clear()  # the password changed since this session signed in (a reset, or changed elsewhere)
         return
+    if current_app.extensions["store"].session_revoked(user_id, session.get("at", 0)):
+        session.clear()  # this session was signed out: a copy of its cookie is no use (Phase AV)
+        return
+    if session.get("at", 0) < user.get("sessions_from", 0):
+        session.clear()  # "sign out other devices" was pressed after this session signed in (Phase AU)
+        return
     g.user = user
 
 
@@ -80,12 +87,15 @@ def login_required(view: Callable[..., Any]) -> Callable[..., Any]:
 
 
 def manager_required(view: Callable[..., Any]) -> Callable[..., Any]:
-    """Admins and supervisors (who manage the planners of their own programs)."""
+    """Admins, and (Phase AK) the roles an admin allows this page on Roles (supervisors by default)."""
+    from .permissions import ENDPOINTS, allowed
+
     @functools.wraps(view)
     @login_required
     def wrapped(*args: Any, **kwargs: Any) -> Any:
-        if not (g.user["is_admin"] or g.user["is_supervisor"]):
-            abort(403, description="Only admins and supervisors can open this page.")
+        key = ENDPOINTS.get(request.endpoint or "")
+        if not (g.user["is_admin"] or (key and allowed(current_app.extensions["store"], g.user, key))):
+            abort(403, description="Your role cannot open this page.")
         return view(*args, **kwargs)
     return wrapped
 

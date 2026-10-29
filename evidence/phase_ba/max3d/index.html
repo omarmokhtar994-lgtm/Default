@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!-- © 2026 Omar Mokhtar. All rights reserved. -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The most 3D within the budget</title>
+<link rel="stylesheet" href="max3d.css">
+</head>
+<body>
+<header class="bar"><b>The most 3D within the budget</b><span>CSS only. Two slow animations (the mark and the stack). Adds about 23 layers. No WebGL, no image, no blur. Add ?flat to the address to see the same page without any 3D.</span></header>
+<main>
+  <section class="hero">
+    <div class="copy">
+      <img class="mark3d" src="mark.svg" alt="" width="56" height="40">
+      <h1>Schedules, built and checked for your team</h1>
+      <p>Sign-in page. The stack drifts; the pointer adds a little parallax. Everything stops when the tab is hidden, off screen, or reduced motion is on.</p>
+    </div>
+    <div class="stage" aria-hidden="true">
+      <div class="deck" id="deck">
+        <div class="day d1"><i class="b b1"></i><i class="b b2"></i><i class="b b3"></i></div>
+        <div class="day d2"><i class="b b2"></i><i class="b b4"></i><i class="b b1"></i></div>
+        <div class="day d3"><i class="b b3"></i><i class="b b1"></i><i class="b b4"></i></div>
+        <div class="day d4"><i class="b b4"></i><i class="b b2"></i><i class="b b3"></i></div>
+      </div>
+    </div>
+  </section>
+  <section class="tiles">
+    <article class="tile"><h2>Right now</h2><p class="big">38 <small>on the floor</small></p><p>2 short on Phone until 16:00</p></article>
+    <article class="tile"><h2>Waiting for you</h2><p class="big">3 <small>requests</small></p><p>1 leave, 1 holiday, 1 swap</p></article>
+    <article class="tile"><h2>Latest schedule</h2><p class="big">100% <small>covered</small></p><p>0 below the floor</p></article>
+  </section>
+  <section class="wall3d" aria-label="Coverage this week, drawn as blocks">
+    <h2>Coverage this week</h2>
+    <div class="blocks" id="blocks"></div>
+    <p class="fine">Seven days of extruded blocks, still, not animated: height is how many people are on the floor against the need (made-up figures).</p>
+  </section>
+</main>
+<script src="max3d.js"></script>
+</body>
+</html>

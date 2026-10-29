@@ -11,46 +11,56 @@ logged with who and when. Kept 13 months, like the schedules.
 from __future__ import annotations
 
 import contextvars
+from collections import OrderedDict
 import copy
 import functools
 import inspect
 import json
+import os
 import logging
 import re
 import threading
 import time
+import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
-from .clock import SHOWN
-from .day import (ABSENT, AUX, CALLED_IN, CANCELLED, EXTRA_BREAKS, LATE_EARLY, MEASURES, OVERTIME_MAX, STATUSES, STEP, TIMED,
+from .clock import HOME, SHOWN, minute_now, pick_zone
+from .day import (ABSENT, AUX, BIO, CALLED_IN, CANCELLED, EXTRA_BREAKS, LATE_EARLY, MEASURES, OVERTIME_MAX, STATUSES, STEP, TIMED,
                   BreakRefused, _busy, advice, at_target,
                   check_break, day_view, dayoff_offers, dayoff_proposals, meeting_slots, overtime_offers, pattern_breaks, planned,
-                  read_inputs, replan, vto_offers)
+                  read_inputs, replan, window_view)
 from .notify import PRIVATE, left_out_now
 from .schedules import EGYPT, KEEP_DAYS, ScheduleBook
+from .window_tools import by_date, dates_of, in_own_day, rebase
 from .versions import DAYS, channel_blocks, shift_span
 
 HHMM = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
 FALLBACK = "No version is marked in use for this week, so this is the tool's own schedule."
 FALLBACK_READY = "No version is marked in use for this week, so this is the uploaded ready schedule."
-ACTIVITY_KINDS = sorted(AUX) + list(EXTRA_BREAKS) + ["Overtime", "VTO", CALLED_IN]
+ACTIVITY_KINDS = sorted(AUX) + list(EXTRA_BREAKS) + ["Overtime", CALLED_IN]  # Phase AY: VTO is no longer offered (convert_vto_to_early_leave)
+LATE_MAX_MINUTES, LATE_MAX_COUNT = 120, 2  # Phase AY (owner, 2026-10-23): a late login or early leave from the allowance: 2 hours, 2 times a month
+LATE_KINDS = ("allowance", "incident")
+NO_VTO = "VTO is no longer offered: record an Early leave instead."  # Phase AY (owner, 2026-10-23)
 WITH_MAX, WHY_MAX = 80, 200  # characters: who an aux is with, and why (Phase T)
+# Phase AJ: someone not on the roster logging in to cover intervals (owner, 2026-10-15: "TM or support")
+COVER_ROLES = ("Team manager", "Support")
+COVER_NAME_MAX, COVER_MAX = 60, 12 * 60  # characters of a typed name; minutes one cover may last
 DAY_OFF = "Day off cancelled"  # "+ Add" calls in someone off that day (owner, 2026-10-09)
 QUARTER = 15  # typed call-in times go in 15-minute steps
 # What RTA's "+ Add" offers in an interval (owner, 2026-10-08), grouped as the dialog shows them.
-ADD_KINDS = {"Off the floor": ["Break", "Lunch", "Coaching", "Meeting", "Training", "System issue", "Task"],
+ADD_KINDS = {"Off the floor": ["Break", "Lunch", "Coaching", "Meeting", "Training", "System issue", "Task", "Bio break"],
              "Attendance": ["Unplanned leave", "Sick", "Public holiday", "Exam leave", "Late", "Left early"],
-             "Hours": ["Overtime", "VTO"],
+             "Hours": ["Overtime"],
              "Day off": [DAY_OFF]}
 
 
 def aux_details(kind: str, with_whom: str, why: str) -> Tuple[str, str]:
     """Who an aux (Coaching, Meeting, Training, System issue) is with and why, tidied: both are required, and a
     long answer is refused, never cut (owner, 2026-10-09). Anything else asks for neither: ("", "")."""
-    if kind not in AUX:
+    if kind not in AUX or kind == BIO:
         return "", ""
     with_whom, why = " ".join((with_whom or "").split()), " ".join((why or "").split())
     if not with_whom:
@@ -155,6 +165,47 @@ def _group_kind(kind: str) -> str:
     return "called_in" if kind == CALLED_IN else "aux"
 
 
+PAGE_KEEP = 30  # Phase AV: seconds a built day is kept at most, as a safety net behind the write counter
+PAGE_MAX = 256  # and how many days are kept
+VERIFY_PAGES = os.environ.get("SCHEDULER_VERIFY_PAGES") == "1"  # tests: on every hit, build the day again and compare
+
+
+def fingerprint(x: Any) -> Any:
+    """A day as plain comparable values (functions by name, the replan counters by their numbers), for ``VERIFY_PAGES``."""
+    t = type(x)
+    if t is dict:
+        return {k: fingerprint(v) for k, v in x.items()}
+    if t in (list, tuple):
+        return [fingerprint(v) for v in x]
+    if t in (str, int, float, bool, type(None), date):
+        return x
+    if callable(x):
+        return "<function>"
+    if hasattr(x, "channel") and hasattr(x, "language"):  # ChannelHold
+        return ["hold", x.day, x.step, fingerprint(x.channel), fingerprint(x.language)]
+    return repr(x)
+
+
+def first_difference(a: Any, b: Any, path: str = "") -> str:
+    if type(a) != type(b):
+        return f"{path}: {type(a).__name__} != {type(b).__name__}"
+    if isinstance(a, dict):
+        for k in sorted(set(a) | set(b), key=str):
+            if k not in a or k not in b:
+                return f"{path}/{k}: only in one"
+            found = first_difference(a[k], b[k], f"{path}/{k}")
+            if found:
+                return found
+        return ""
+    if isinstance(a, list):
+        if len(a) != len(b):
+            return f"{path}: length {len(a)} != {len(b)}"
+        for i, (x, y) in enumerate(zip(a, b)):
+            found = first_difference(x, y, f"{path}[{i}]")
+            if found:
+                return found
+        return ""
+    return "" if a == b else f"{path}: {a!r} != {b!r}"
 UNDO_DEPTH = 2  # owner, 2026-10-11: "undo last move or 2 ... max 2 moves back"; your own only (answer 2)
 NOTHING_TO_UNDO = "Nothing of yours to undo on this day: Undo goes back 2 changes at most."
 _ACTION: contextvars.ContextVar = contextvars.ContextVar("day_action", default=None)
@@ -205,13 +256,29 @@ def _either(names: List[str]) -> str:
     return " or ".join([", ".join(names[:-1]), names[-1]]) if len(names) > 1 else "".join(names)
 
 
+def operating_span(view: Dict[str, Any]) -> int:
+    """Phase AU: minutes from the start of a 24-hour window to the end of the last shift that starts in it, rounded up to
+    a whole interval; ValueError when no shift starts in it (the window then stays 24 hours)."""
+    ends = [s["end"] for ln in view["lanes"] for s in ln["segments"] if s["offset"] == 0]
+    if not ends:
+        raise ValueError("No shift starts in the operating day.")
+    step = view["interval"]
+    length = -(-(max(ends) - view["start"]) // step) * step
+    if length <= 0:
+        raise ValueError("The last shift ends before the operating day starts.")
+    return min(length, 1440)
+
+
 class DayBook:
     def __init__(self, store, book: ScheduleBook):
         self.store = store
         self.book = book
+        self.measure_of = lambda program: "interval"  # the program's own measure; the site sets it (Phase AU)
         self.notifier = None  # Phase AB: hands each change to its LOB's group rule (webapp/notify.py)
         self._locks: Dict[Tuple[str, str], threading.RLock] = {}  # Phase AD: one change at a time per LOB and day
         self._locks_lock = threading.Lock()
+        self._pages: "OrderedDict[Tuple[str, date, str, int], Tuple[int, float, Dict[str, Any]]]" = OrderedDict()  # Phase AV
+        self._build_lock = threading.Lock()
 
     def _log(self, program: str, on: date, name: str, what: str, user_id: int, kind: str, post: str = "",
              ref: str = "", before: str = "", after: str = "") -> None:
@@ -253,7 +320,8 @@ class DayBook:
             yield outer
             return
         act = DayAction(program, on, user_id, label, kind or ("bulk" if bulk else "single"))
-        dates = [on.isoformat(), (on - timedelta(days=1)).isoformat()]
+        # Phase AK: the day after too, so a change on the 24 hours from a later start is one entry for Undo
+        dates = [on.isoformat(), (on - timedelta(days=1)).isoformat(), (on + timedelta(days=1)).isoformat()]
         with self._lock(program, on):
             before = self.store.day_rows(program, dates)
             act.id = self.store.add_day_action(program=program, shift_date=on.isoformat(), user_id=user_id,
@@ -321,6 +389,10 @@ class DayBook:
             return f"{row['associate']}'s {row['kind']}"
         if c["table"] == "attendance":
             return f"{row['associate']}'s attendance"
+        if c["table"] == "outside_cover":
+            return f"{row['associate']}'s cover {hm(row['start'])} to {hm(row['end_min'])}"
+        if c["table"] == "incidents":
+            return f"{row['associate']}'s " + ("late-login incident" if row.get("kind") == "late_login" else "missed-break note")
         if c["table"] == "channel_moves":
             return f"{row['associate']}'s channel change {hm(row['start'])} to {hm(row['end_min'])}"
         return f"{row['associate']}'s {row['kind']} {hm(row['start'])} to {hm(row['end_min'])}"
@@ -360,6 +432,17 @@ class DayBook:
             status = old["status"] if old else "Present"
             self._log(program, on, name, f"Attendance back to {status} (undone)", user_id, PRIVATE,
                       ref=f"status:{name}", before=new["status"] if new else "Present", after=status)
+        elif c["table"] == "incidents":
+            self._log(program, on, name, ("Late-login incident " if row.get("kind") == "late_login" else "Missed-break note ")
+                      + ("removed" if new else "back") + " (undone)", user_id,
+                      PRIVATE, ref=f"incident:{row['id']}", before="on" if new else "", after="" if new else "on")
+        elif c["table"] == "outside_cover":
+            ref = f"cover:{row['id']}"
+            if old is None:
+                what, before, after = f"Cover {hm(new['start'])} to {hm(new['end_min'])} removed (undone)", "on", ""
+            else:
+                what, before, after = f"Cover {hm(old['start'])} to {hm(old['end_min'])} back (undone)", "", "on"
+            self._log(program, on, name, what, user_id, "overtime", ref=ref, before=before, after=after)
         else:
             channel = c["table"] == "channel_moves"
             ref = f"channel:{row['id']}" if channel else (f"callin:{row['id']}" if row["kind"] == CALLED_IN
@@ -435,18 +518,24 @@ class DayBook:
         prev, nxt = self._spans(program, before, saturday), self._spans(program, on + timedelta(days=1))
         return {"prev": prev or {}, "next": nxt or {}, "next_known": nxt is not None}
 
-    def _rest(self, program: str, on: date, row: Dict[str, Any], name: str, lo: int, hi: int, rest: int) -> None:
-        """Refuse work from ``lo`` to ``hi`` on ``on`` that leaves less than ``rest`` minutes off either side."""
+    def _rest(self, program: str, on: date, row: Dict[str, Any], name: str, lo: int, hi: int, rest: int,
+              refuse: bool = True) -> str:
+        """Refuse work from ``lo`` to ``hi`` on ``on`` that leaves less than ``rest`` minutes off either side; with
+        ``refuse`` False, say why instead (Phase AJ: overtime is kept with a warning). "" when the rest is kept."""
         if not rest:
-            return
+            return ""
         near = self.neighbours(program, on, row)
         prv, nxt = near["prev"].get(name), near["next"].get(name)
+        said = ""
         if prv and lo + 1440 - prv[1] < rest:
-            raise ValueError(f"{name} would rest {(lo + 1440 - prv[1]) / 60:g} hours after the previous shift; "
-                             f"the rule is {rest / 60:g}.")
-        if nxt and nxt[0] + 1440 - hi < rest:
-            raise ValueError(f"{name} would rest {(nxt[0] + 1440 - hi) / 60:g} hours before the next shift; "
-                             f"the rule is {rest / 60:g}.")
+            said = (f"{name} would rest {(lo + 1440 - prv[1]) / 60:g} hours after the previous shift; "
+                    f"the rule is {rest / 60:g}.")
+        elif nxt and nxt[0] + 1440 - hi < rest:
+            said = (f"{name} would rest {(nxt[0] + 1440 - hi) / 60:g} hours before the next shift; "
+                    f"the rule is {rest / 60:g}.")
+        if said and refuse:
+            raise ValueError(said)
+        return said
 
     def _shift(self, program: str, on: date, name: str) -> Tuple[Dict[str, Any], Dict[str, Any], Tuple[int, int]]:
         """The version, its week and the person's shift that day: the planned one, or the shift they were
@@ -501,14 +590,108 @@ class DayBook:
                 actual[(offset, r["associate"], r["idx"])] = CANCELLED if r.get("cancelled") else r["start"]
         return attendance, actual, stale, acts
 
-    def page(self, program: str, on: date, measure: str = "interval",
-             extra: Optional[Dict[str, Any]] = None, recorded: bool = True) -> Optional[Dict[str, Any]]:
+    def page(self, program: str, on: date, measure: Optional[str] = None,
+             extra: Optional[Dict[str, Any]] = None, recorded: bool = True,
+             cover: bool = True, version_id: Optional[int] = None, shared: bool = False) -> Optional[Dict[str, Any]]:
+        """The day, kept (Phase AV): the plain day of a program, date and measure is built once and handed out as a
+        copy until anything is written to the database (``Store.generation``) or ``PAGE_KEEP`` seconds pass. A day
+        asked for with ``extra``, as planned, without cover or as another version, or from inside an open change (whose own
+        writes are not committed yet), is built every time. See
+        ``_build_page`` for what a day is. With ``shared`` the kept day itself is returned, not a copy: only for a caller
+        that reads it and never changes it."""
+        if measure is None:
+            measure = self.measure_of(program)
+        if extra or not recorded or not cover or version_id is not None or self.store.in_transaction:
+            return self._build_page(program, on, measure, extra, recorded, cover, version_id)
+        key = (program, on, measure, SHOWN.get())  # the wording is in the zone the viewer has chosen
+        found = self._kept(key, shared)
+        if found is not None:
+            if VERIFY_PAGES:
+                self._verify(key, found, program, on, measure)
+            return found
+        with self._build_lock:  # one thread builds a day, the others wait for it rather than build it too
+            found = self._kept(key, shared)
+            if found is not None:
+                return found
+            generation, built_at = self.store.generation, time.monotonic()  # read before building: a write during it
+            page = self._build_page(program, on, measure, None, True, True, None)  # leaves the copy out of date
+            if page is not None:
+                self._pages[key] = (generation, built_at, page)
+                self._pages.move_to_end(key)
+                while len(self._pages) > PAGE_MAX:
+                    self._pages.popitem(last=False)
+            return page if shared else self._copy(page)
+
+    def _verify(self, key, found, program, on, measure) -> None:
+        """Checking mode: the day kept must equal a fresh build of it. Another thread may be writing, so a comparison
+        counts only when the kept day is still the one kept and no write happened while the fresh day was built; a
+        difference that stands under those two conditions is a day kept out of date."""
+        for _ in range(8):
+            entry = self._pages.get(key)
+            if entry is None or entry[0] != self.store.generation:
+                return  # no longer kept: a write got there first
+            before = self.store.generation
+            fresh = self._build_page(program, on, measure, None, True, True, None)  # under the same zone as the hit
+            if self.store.generation != before:
+                time.sleep(0.02)
+                continue  # a write happened while it was built: try again
+            same = first_difference(fingerprint({k: v for k, v in entry[2].items() if k != "inputs"}),
+                                    fingerprint({k: v for k, v in (fresh or {}).items() if k != "inputs"}))
+            if not same:
+                return
+            raise AssertionError(f"A kept day differs from a fresh build of it ({key}): {same}")
+
+    def _kept(self, key, shared: bool = False):
+        entry = self._pages.get(key)
+        if entry is None:
+            return None
+        generation, built_at, page = entry
+        if generation != self.store.generation or time.monotonic() - built_at > PAGE_KEEP:
+            self._pages.pop(key, None)
+            return None
+        return page if shared else self._copy(page)
+
+    @staticmethod
+    def _copy(page):
+        """A copy a caller may change; the workbook's inputs (read once, never changed) are shared, not copied."""
+        if page is None:
+            return None
+        shared = page["inputs"]
+
+        def clone(x):
+            t = type(x)
+            if t is dict:
+                return {k: clone(v) for k, v in x.items()}
+            if t is list:
+                return [clone(v) for v in x]
+            if t is tuple:
+                return tuple(clone(v) for v in x)
+            if t in (str, int, float, bool, type(None), date):
+                return x
+            return copy.deepcopy(x)  # anything else a day holds: copied the slow, sure way
+
+        return {k: (v if v is shared else clone(v)) for k, v in page.items()}
+
+    def _build_page(self, program: str, on: date, measure: Optional[str] = None,
+                    extra: Optional[Dict[str, Any]] = None, recorded: bool = True,
+                    cover: bool = True, version_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
         """The day; ``extra`` (from ``add_item(..., dry_run=True)``) is counted as if it were recorded. With
         ``recorded`` False, the day as planned: the RTA's records (attendance, break moves, activities) left out
-        (Phase AH, the Weeks page's "As planned")."""
+        (Phase AH, the Weeks page's "As planned"). With ``cover`` False, people covering from outside the roster
+        (Phase AJ) are left out of the figures. ``version_id`` (Phase AM, the Weeks page's Version pick): that version
+        of the program's week holding ``on`` in place of the one in use; any other is refused (ValueError). With no
+        ``measure`` the program's own is used (Phase AU: LOBs and defaults)."""
+        if measure is None:
+            measure = self.measure_of(program)
         if measure not in MEASURES:
             raise ValueError(f"Unknown measure: {measure}.")
         row, note = self.version(program, on)
+        if version_id is not None:
+            row = next((v for v in self.store.list_schedules(program=program, covering=on.isoformat())
+                        if v["id"] == version_id), None)
+            if row is None:
+                raise ValueError("That version is not one of this week's schedules.")
+            note = ""
         if row is None:
             return None
         week = self._week(row)
@@ -544,7 +727,26 @@ class DayBook:
         if channels and extra and extra.get("channel"):  # Phase AF (C3): a channel change counted as if kept
             who, lo, hi, letter = extra["channel"]
             channels["moves"].setdefault((0, who), []).append({"id": 0, "start": lo, "end": hi, "channel": letter})
-        view = day_view(week, inputs, day_index(on), attendance, actual, measure, acts, before, channels=channels)
+        covering = []
+        if recorded and cover:  # Phase AJ: today's, and last night's that ran past midnight
+            for shift, when in ((0, on), (-1440, on - timedelta(days=1))):
+                covering += [{"start": r["start"] + shift, "end": r["end_min"] + shift, "channel": r["channel"],
+                              "name": r["associate"], "role": r["role"], "language": r.get("language", ""),
+                              "id": r["id"], "today": shift == 0,  # Phase AY: the board can remove today's cover
+                              "date": when.isoformat()}  # ... on its own date, which in a window after midnight is not the page's
+                             for r in self.store.list_cover(program, [when.isoformat()])]
+        view = day_view(week, inputs, day_index(on), attendance, actual, measure, acts, before, channels=channels,
+                        cover=covering)
+        if recorded:  # Phase AX: breaks ticked as missed are out of adherence (once each, however often they were moved)
+            missed: Dict[str, Dict[int, int]] = {}
+            for r in self.store.list_incidents(program, [on.isoformat()]):
+                if r["kind"] == "missed_break":
+                    missed.setdefault(r["associate"], {})[r["idx"]] = int(r["minutes"] or 0)
+            for lane in view["lanes"]:
+                if lane["name"] in missed:
+                    for seg in lane["segments"]:
+                        if seg["offset"] == 0:
+                            seg["missed_min"] = sum(missed[lane["name"]].values())
         ratio, source_of_target = self.target_for(program, on, row, inputs)
         standing = at_target(view["cells"], ratio)
         for c, s in zip(view["cells"], standing["cells"]):  # Phase AH: every page colours by the week's target
@@ -556,10 +758,42 @@ class DayBook:
                 "week_start": row["week_start"], "day": day_index(on), "inputs": inputs, "week": week,
                 "log": self.store.list_day_log(program, on.isoformat())}
 
+    def window_page(self, program: str, on: date, start: int, measure: Optional[str] = None,
+                    extras: Optional[Dict[date, Dict[str, Any]]] = None, fit: bool = False) -> Optional[Dict[str, Any]]:
+        """Phase AK: the page for the 24 hours from minute ``start`` of ``on`` (Phase AI's window, as the Timeline shows
+        it), with ``extras`` counted as if kept, per shift date (``page(extra=...)``). ``views`` holds each day's own
+        view by its distance from ``on``. From minute 0 it is the day's own page. With ``fit`` (Phase AU, the operating
+        day) the window ends with the last shift that starts in it, or runs the 24 hours when that cannot be worked out."""
+        extras = extras or {}
+        measure = measure or self.measure_of(program)
+        page = self.page(program, on, measure, extras.get(on))
+        if page is None:
+            return None
+        views: Dict[int, Optional[Dict[str, Any]]] = {0: page["view"]}
+        if not start:
+            return dict(page, views=views, start=0)
+        for d in range(start // 1440, (start + 1439) // 1440 + 1):
+            if d:
+                try:
+                    found = self.page(program, on + timedelta(days=d), measure, extras.get(on + timedelta(days=d)))
+                except ValueError:  # a workbook that cannot be read: its hours stay empty
+                    found = None
+                views[d] = (found or {}).get("view")
+        view = window_view(views, start, on)
+        if fit:
+            try:
+                length = operating_span(view)
+            except (ValueError, KeyError, TypeError, StopIteration):
+                length = 1440
+            if length < 1440:
+                view = window_view(views, start, on, length)
+        return dict(page, view=view, target=at_target(view["cells"], page["target"]["target"]), views=views,
+                    start=start)
+
     def target_for(self, program: str, on: date, row: Optional[Dict[str, Any]] = None,
                    inputs: Optional[Dict[str, Any]] = None) -> Tuple[float, Dict[str, Any]]:
         """The interval target of the week holding ``on`` (Phase W): the one set for this program and week (with who
-        set it), else the workbook's own "Target"; (0.9, workbook) when there is no schedule."""
+        set it), else the program's default, else the workbook's own "Target"; (0.9, workbook) when there is no schedule."""
         if row is None:
             row, _ = self.version(program, on)
         if row is None:
@@ -567,6 +801,9 @@ class DayBook:
         kept = self.store.get_interval_target(program, row["week_start"])
         if kept:
             return kept["target"] / 100, {"kind": "set", "by": kept.get("by_name") or "someone", "at": kept["at"]}
+        default = self.store.rta_default(program, "target")  # Phase AU: LOBs and defaults
+        if default:
+            return int(default) / 100, {"kind": "program"}
         if inputs is None:
             source = self.book.input_path(row["run_id"])
             inputs = read_inputs(source) if source.is_file() else {}
@@ -628,11 +865,14 @@ class DayBook:
                 moves.setdefault((offset, r["associate"]), []).append(
                     {"id": r["id"], "start": r["start"] + 1440 * offset, "end": r["end_min"] + 1440 * offset,
                      "channel": r["channel"]})
-        clock = datetime.now(EGYPT)
-        after = clock.hour * 60 + clock.minute if on == clock.date() else (0 if on > clock.date() else 1440)
+        row, _ = self.version(program, on)
+        run = self.store.get_run(row["run_id"]) if row else None
+        zone = pick_zone((run or {}).get("tz") or HOME)
+        at = minute_now(on, zone, datetime.now(EGYPT))
+        after = max(0, min(at, 1440))
         return {"setup": setup, "skills": ChannelPeople(self.store).skills_for_unit(program),
                 "language_rows": inputs["languages"], "blocks": blocks, "moves": moves, "after": after,
-                "gaps": (inputs.get("gap_min"), inputs.get("gap_max")), "today": on == clock.date()}, ""
+                "gaps": (inputs.get("gap_min"), inputs.get("gap_max")), "today": 0 <= at < 1440}, ""
 
     @journaled
     def channel_move(self, program: str, on: date, name: str, start: Any, end: Any, channel: str,
@@ -697,6 +937,177 @@ class DayBook:
                  for r in self.store.list_channel_moves(program, [on.isoformat()]) if r["associate"] == name]
         return lo, hi, letter_at(blocks, moved, lo, False)
 
+    def channel_fix_plan(self, program: str, on: date, now: Optional[int] = None) -> Dict[str, Any]:
+        """Phase AM (owner, 2026-10-16: one click to fix the channels on the RTA; answers: the channel planner
+        re-plans channels from now on, channels only, coverage first then fairness): what re-planning today's shifts
+        from the next quarter hour would change, before anything is kept.
+
+        People: today's shifts that are on the floor (whole-shift absences left out), from the next quarter hour
+        after ``now`` (the clock's minute when None) to the end of the shift or its overtime. Their breaks, away
+        time and activities other than overtime stay where they are (the planner may not move them). Last night's
+        people count on the channels they are on. Carrying on with the channel someone is on is free; each
+        change of channel costs, and fairness over the week decides between plans that cover the same.
+
+        Returns ``changes`` [(name, start, end, channel, was)], the shortfall in person-hours per channel from then
+        on before and after (``short_before``, ``short_after``), ``from`` and ``seconds``."""
+        from .channel_people import can_work
+        from .channel_plan import NoPlan, counts_for, need_at, plan_day
+        from .channels import QUARTER, blended_at, inside as channel_inside
+        page = self.page(program, on)
+        if page is None:
+            raise ValueError(f"No schedule for {program} on {on:%d %b}.")
+        view = page["view"]
+        ch_view = view.get("channels")
+        if not ch_view:
+            raise ValueError(page.get("channel_problem") or "This day has no channel needs, so there are no channels "
+                             "to fix.")
+        hold = ch_view["hold"]
+        setup = dict(hold.setup, rules=dict(hold.setup["rules"], fair=True))  # fairness between equal plans
+        skills, rows, d = hold.ch["skills"], hold.ch["language_rows"], day_index(on)
+        if now is None:
+            run = self.store.get_run(page["version"]["run_id"]) or {}
+            now = minute_now(on, pick_zone(run.get("tz") or HOME), datetime.now(EGYPT))
+        if now >= 1440 and not any(s["end"] > now for l in view["lanes"] for s in l["segments"] if s["offset"] == 0):
+            raise ValueError("This day is over: nothing is left to fix.")
+        first = -(-max(now + 1, 0) // QUARTER) * QUARTER
+        runs = ch_view["runs"]
+
+        def letter(name: str, t: int) -> str:
+            return next((c for a, b, c in runs.get(name, []) if a <= t < b), "")
+
+        people, carry_in, before = [], {}, {}
+        for lane in view["lanes"]:
+            for seg in lane["segments"]:
+                if seg["status"] in ABSENT:
+                    continue
+                if seg["offset"] == -1:  # last night's people: held, and counted on the channels they are on
+                    for t in range(first, seg["end"], QUARTER):
+                        c = letter(lane["name"], t)
+                        channels = can_work(skills, lane["name"]) if c == "A" else c if c in "PCE" else ""
+                        languages = counts_for(lane.get("language", ""), rows)
+                        for channel in channels:
+                            for key in [channel] + [f"{channel}:{lang}" for lang in languages]:
+                                before.setdefault(key, {}).setdefault(t, 0)
+                                before[key][t] += 1
+                    continue
+                if seg["offset"] != 0 or seg["status"] in ABSENT:
+                    continue
+                extra = [a for a in seg.get("activities", []) if a["kind"] in ("Overtime", CALLED_IN)]
+                lo = max(first, min([seg["start"]] + [a["start"] for a in extra]))
+                hi = max([seg["end"]] + [a["end"] for a in extra]) // QUARTER * QUARTER
+                lo = -(-lo // QUARTER) * QUARTER
+                if hi - lo < QUARTER:
+                    continue
+                busy = [(b["start"], b["minutes"]) for b in seg["breaks"]]
+                busy += [(a["start"], a["end"] - a["start"]) for a in seg.get("activities", [])
+                         if a["kind"] not in ("Overtime", CALLED_IN)]
+                if seg["away"][1] > seg["away"][0]:
+                    busy.append((seg["away"][0], seg["away"][1] - seg["away"][0]))
+                busy = [(s, m) for s, m in busy if s < hi and s + m > lo and m > 0]
+                people.append({"name": lane["name"], "language": lane.get("language", ""), "start": lo, "end": hi,
+                               "breaks": [("Busy", s, m) for s, m in sorted(busy)],
+                               "skills": can_work(skills, lane["name"]),
+                               "counts_for": counts_for(lane.get("language", ""), rows)})
+                was = letter(lane["name"], lo - STEP)
+                if was in ("P", "C", "E"):
+                    carry_in[lane["name"]] = was
+        if not people:
+            return {"changes": [], "short_before": {}, "short_after": {}, "from": first, "seconds": 0.0}
+        # Outside cover stays fixed, just like the prior night's shifts.
+        for cover in view.get("outside", []):
+            channel = cover.get("channel")
+            if channel not in ("P", "C", "E"):
+                continue
+            languages = counts_for(cover.get("language", ""), rows) if cover.get("language") else set()
+            lo = -(-max(first, cover["start"]) // QUARTER) * QUARTER
+            for t in range(lo, cover["end"] - QUARTER + 1, QUARTER):
+                for key in [channel] + [f"{channel}:{lang}" for lang in languages]:
+                    before.setdefault(key, {}).setdefault(t, 0)
+                    before[key][t] += 1
+        week = page["week"]
+        carry: Dict[str, Dict[str, int]] = {}
+        for e in range(d):  # the week so far, from the schedule (fair spread)
+            for a in week.get("associates", []):
+                for b in channel_blocks(week, e, a["name"]):
+                    carry.setdefault(a["name"], {}).setdefault(b["channel"], 0)
+                    carry[a["name"]][b["channel"]] += b["end"] - b["start"]
+        for p in people:  # and today before the plan starts
+            for t in range(0, p["start"], STEP):
+                c = letter(p["name"], t)
+                if c in ("P", "C", "E"):
+                    carry.setdefault(p["name"], {}).setdefault(c, 0)
+                    carry[p["name"]][c] += STEP
+        try:
+            found = plan_day(people, setup, {}, d, carry=carry, move_breaks=False, before=before, carry_in=carry_in,
+                             keep={(p["name"], t): letter(p["name"], t) for p in people
+                                   for t in range(p["start"], p["end"], QUARTER)},
+                             horizon=(first, max(p["end"] for p in people)))
+        except NoPlan as exc:
+            raise ValueError(f"The channels cannot be re-planned now: {exc}") from exc
+        new = {(p["name"], t): c for p in people for a, b, c in found["blocks"].get(p["name"], [])
+               for t in range(a, b, QUARTER)}
+
+        def shortfall(read) -> Dict[str, float]:
+            out = {}
+            for c in setup["need"]:
+                missing = 0.0
+                for t in range(first, max(p["end"] for p in people), QUARTER):
+                    need = need_at(setup, c, d, t)
+                    if need <= 0:
+                        continue
+                    have = before.get(c, {}).get(t, 0) + sum(
+                        1 for p in people if p["start"] <= t < p["end"]
+                        and (read(p, t) == c or (read(p, t) == "A" and c in p["skills"])))
+                    missing += max(need - have, 0)
+                out[c] = round(missing * QUARTER / 60, 2)
+            missing = 0.0  # the Language Setup minimums per channel ("Phone, Arabic: at least 1")
+            for rule in setup["languages"]:
+                if not rule["active"] or rule["minimum"] <= 0:
+                    continue
+                lang = rule["language"].casefold()
+                for t in range(first, max(p["end"] for p in people), QUARTER):
+                    if channel_inside(rule["days"], rule["start"], rule["end"], (d + t // 1440) % 7, t % 1440):
+                        have = before.get(f"{rule['channel']}:{lang}", {}).get(t, 0) + sum(
+                            1 for p in people if p["start"] <= t < p["end"] and lang in p["counts_for"]
+                                   and (read(p, t) == rule["channel"]
+                                        or (read(p, t) == "A" and rule["channel"] in p["skills"])))
+                        missing += max(rule["minimum"] - have, 0)
+            out["languages"] = round(missing * QUARTER / 60, 2)
+            return out
+
+        changes: List[Tuple[str, int, int, str, str]] = []
+        for p in people:
+            for t in range(p["start"], p["end"], QUARTER):
+                c, old = new.get((p["name"], t)), letter(p["name"], t)
+                if c not in ("P", "C", "E") or c == old or blended_at(setup, d, t):
+                    continue
+                if changes and changes[-1][0] == p["name"] and changes[-1][2] == t and changes[-1][3] == c:
+                    changes[-1] = (p["name"], changes[-1][1], t + QUARTER, c, changes[-1][4])
+                else:
+                    changes.append((p["name"], t, t + QUARTER, c, old))
+        return {"changes": changes, "from": first, "seconds": found.get("seconds", 0.0),
+                "short_before": shortfall(lambda p, t: letter(p["name"], t)),
+                "short_after": shortfall(lambda p, t: new.get((p["name"], t), ""))}
+
+    def apply_channel_fix(self, program: str, on: date, changes: List[Tuple[str, int, int, str]], user_id: int,
+                          now: Optional[int] = None) -> int:
+        """Validate today's complete batch and commit it atomically as one Undo step."""
+        prepared = []
+        # Match other day edits' lock order: day lock first, then SQLite. The
+        # action below re-enters this same RLock while using the shared transaction.
+        with self._lock(program, on), self.store.transaction():
+            for name, lo, hi, channel in changes:
+                if now is not None and lo <= now:
+                    raise ValueError(f"{hm(lo)} has passed: open Fix channels again.")
+                self._channel_change(program, on, name, lo, hi, channel)
+                prepared.append((name, lo, hi, channel))
+            with self.action(program, on, user_id, bulk=True) as act:
+                for name, lo, hi, channel in prepared:
+                    self.channel_move(program, on, name, lo, hi, channel, user_id)
+                done = len(prepared)
+                act.label = f"Fix channels changed {done} stretch{'es' if done != 1 else ''}"
+        return len(prepared)
+
     @journaled
     def cancel_channel_move(self, program: str, on: date, move_id: int, user_id: int) -> None:
         from .channels import CHANNELS
@@ -707,22 +1118,37 @@ class DayBook:
         self._log(program, on, r["associate"], f"{CHANNELS[r['channel']]} from {hm(r['start'])} to {hm(r['end_min'])} "
                   "taken back", user_id, "channel", ref=f"channel:{move_id}", before="on")
 
-    @journaled
     def move_activity(self, program: str, on: date, activity_id: int, start: str, user_id: int) -> int:
         """Move an aux, or a break or lunch added on the day, to ``start`` (HH:MM), the same length, with the same
         who and why; checked like a new booking (the original stays when the new time is refused)."""
+        return self.edit_activity(program, on, activity_id, start, "", user_id)
+
+    @journaled
+    def edit_activity(self, program: str, on: date, activity_id: int, start: str, end: str, user_id: int) -> int:
+        """Phase AY (owner, 2026-10-23: "we can't just extend or edit the time, we have to delete and do it again"): change an aux
+        (coaching, meeting, training), or a break or lunch added on the day, to ``start`` and ``end`` (HH:MM); with no ``end`` it
+        keeps its length. The same who and why; checked like a new booking (the original stays when the new time is refused)."""
         r = self.store.get_activity(activity_id)
         if r is None or r["program"] != program or r["shift_date"] != on.isoformat():
             raise ValueError("That activity is not on this day.")
         if r["kind"] not in AUX and r["kind"] not in EXTRA_BREAKS:
-            raise ValueError(f"{r['kind']} cannot be moved here.")
+            raise ValueError(f"{r['kind']} cannot be changed here.")
         lo = _clock(start)
         if lo is None:
             raise ValueError("Give the new start like 16:00.")
+        if (end or "").strip():
+            hi = _clock(end)
+            if hi is None:
+                raise ValueError("Give the new end like 16:30.")
+            if hi == lo:
+                raise ValueError("The end time must be after the start time.")
+            new_end = plain_hm(hi)
+        else:
+            new_end = plain_hm(lo + r["end_min"] - r["start"])
         fields = {k: v for k, v in r.items() if k != "id"}
         self.store.delete_activity(activity_id)
         try:
-            rec = self.add_activity(program, on, r["associate"], r["kind"], start, plain_hm(lo + r["end_min"] - r["start"]),
+            rec = self.add_activity(program, on, r["associate"], r["kind"], start, new_end,
                                     user_id, billable=bool(r["billable"]), note=r["note"], dry_run=True,
                                     with_whom=r.get("with_whom", ""), why=r.get("why", ""),
                                     with_dept=r.get("with_dept", ""))
@@ -731,15 +1157,39 @@ class DayBook:
             raise
         made = self.store.add_activity(**{**fields, "start": rec["start"], "end_min": rec["end"], "user_id": user_id,
                                           "at": time.time()})
-        self._log(program, on, r["associate"], f"{r['kind']} moved {hm(r['start'])} to {hm(rec['start'])}", user_id,
+        changed = "moved" if rec["end"] - rec["start"] == r["end_min"] - r["start"] else "changed"
+        self._log(program, on, r["associate"], f"{r['kind']} {changed} {hm(r['start'])} to {hm(r['end_min'])} -> "
+                  f"{hm(rec['start'])} to {hm(rec['end'])}" if changed == "changed" else
+                  f"{r['kind']} moved {hm(r['start'])} to {hm(rec['start'])}", user_id,
                   _group_kind(r["kind"]), ref=f"activity:{made}", before=hm(r["start"]), after=hm(rec["start"]))
         return made
 
     # ------------------------------------------------------------- what people record
+    def _late_policy(self, program: str, on: date, name: str, status: str, minutes: int, late_kind: str) -> Dict[str, Any]:
+        """Phase AY: how a late login or early leave stands against the allowance (2 hours, 2 times a month, Late and Left early together, the
+        records booked as incidents and every one from before the policy not counted): what it comes to and what it is over."""
+        word = "Late login" if status == "Late" else "Early leave"
+        if late_kind == "incident":
+            return {"minutes": minutes, "count": 0, "kind": late_kind, "limit_minutes": LATE_MAX_MINUTES, "limit_count": LATE_MAX_COUNT,
+                    "over": [], "text": f"{word} {minutes} min: kept as an incident on {name}, not from the allowance."}
+        month = [d.isoformat() for d in (on.replace(day=1) + timedelta(days=i) for i in range(31)) if d.month == on.month]
+        before = sum(1 for r in self.store.list_attendance(program, month)
+                     if r["associate"] == name and r["status"] in LATE_EARLY and r.get("late_kind") == "allowance" and r["shift_date"] != on.isoformat())
+        count = before + 1
+        over = []
+        if minutes > LATE_MAX_MINUTES:
+            over.append(f"longer than {LATE_MAX_MINUTES // 60} hours")
+        if count > LATE_MAX_COUNT:
+            over.append(f"the {count}{'th' if 10 <= count % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(count % 10, 'th')} this month (the limit is {LATE_MAX_COUNT})")
+        ordinal = f"{count}{'th' if 10 <= count % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(count % 10, 'th')}"
+        return {"minutes": minutes, "count": count, "kind": late_kind, "limit_minutes": LATE_MAX_MINUTES, "limit_count": LATE_MAX_COUNT,
+                "over": over, "text": f"{word} {minutes} min, the {ordinal} this month (allowance: {LATE_MAX_MINUTES // 60} hours, {LATE_MAX_COUNT} times a month)."}
+
     @journaled
     def set_status(self, program: str, on: date, name: str, status: str, user_id: int,
                    start: str = "", end: str = "", billable: bool = False, dry_run: bool = False,
-                   with_whom: str = "", why: str = "", with_dept: str = "") -> Dict[str, Any]:
+                   with_whom: str = "", why: str = "", with_dept: str = "", late_kind: str = "allowance",
+                   am_note: str = "") -> Dict[str, Any]:
         """Record a status for the shift that starts on ``on``. Late needs the arrival (``end``),
         Left early the leaving time (``start``); an aux (Training, Coaching, Meeting, System issue)
         takes an optional from/to and is billable or not."""
@@ -772,7 +1222,7 @@ class DayBook:
                 raise ValueError("Give both times, or neither for the whole shift.")
             if lo is not None and lo >= hi:
                 raise ValueError("The end time must be after the start time.")
-            kind = f"{status} ({'billable' if billable else 'non-billable'})"
+            kind = status if status == BIO else f"{status} ({'billable' if billable else 'non-billable'})"
             what = f"{kind} {hm(lo)} to {hm(hi)}" if lo is not None else f"{kind}, whole shift"
         else:
             lo = hi = None
@@ -780,22 +1230,43 @@ class DayBook:
         with_whom, why, with_dept = (_tidy(with_whom), _tidy(why), _tidy(with_dept)) if status in AUX else ("", "", "")
         post = what + with_text(with_whom, "", with_dept)  # Phase AB: what a group may see, never the why
         what += with_text(with_whom, why, with_dept)
-        record = {"name": name, "status": status, "from": lo, "to": hi, "billable": bool(billable) and status in AUX,
-                  "what": what, "span": span, "with_whom": with_whom, "why": why, "with_dept": with_dept}
+        policy, kept_kind = None, ""
+        if status in LATE_EARLY:  # Phase AY: the allowance (2 hours, 2 times a month) or, for a late login only, an incident
+            if late_kind not in LATE_KINDS:
+                raise ValueError("Say whether this is from the allowance or an incident.")
+            if status == "Left early" and late_kind == "incident":
+                raise ValueError("Only a late login can be an incident: an early leave is always from the allowance.")
+            policy = self._late_policy(program, on, name, status, (hi - span[0]) if status == "Late" else (span[1] - lo), late_kind)
+            kept_kind = late_kind
+            if policy["over"] and am_note.strip():
+                why = f"Exception approved by the account manager: {_tidy(am_note)}"
+                what += f". {why}"
+            if late_kind == "incident":
+                what += " (incident)"
+        record = {"name": name, "status": status, "from": lo, "to": hi, "billable": bool(billable) and status in AUX and status != BIO,
+                  "what": what, "span": span, "with_whom": with_whom, "why": why, "with_dept": with_dept, "policy": policy}
         if dry_run:
             return record
+        if policy and policy["over"] and not am_note.strip():
+            raise ValueError(f"{name}: {policy['text']} That is over the allowance ({'; '.join(policy['over'])}), so it needs the account manager's "
+                             "approval as an exception. Tick that the account manager approved it and write a comment to book it anyway.")
         was = next((r["status"] for r in self.store.list_attendance(program, [on.isoformat()])
                     if r["associate"] == name), "Present")
+        self.store.delete_late_incidents(program, on.isoformat(), name)
         self.store.set_attendance(program=program, shift_date=on.isoformat(), associate=name, status=status,
-                                  from_min=lo, to_min=hi, billable=int(bool(billable) and status in AUX),
-                                  user_id=user_id, with_whom=with_whom, why=why, with_dept=with_dept)
+                                  from_min=lo, to_min=hi, billable=int(bool(billable) and status in AUX and status != BIO),
+                                  user_id=user_id, with_whom=with_whom, why=why, with_dept=with_dept, late_kind=kept_kind)
+        if kept_kind == "incident":
+            self.store.add_incident(program=program, shift_date=on.isoformat(), associate=name, kind="late_login", idx=0,
+                                    minutes=policy["minutes"], note=f"Arrived {hm(hi)}, {policy['minutes']} min late", user_id=user_id,
+                                    at=time.time())
         kind = "late" if status in LATE_EARLY else "aux" if status in AUX else PRIVATE  # sick, leave, present
         self._log(program, on, name, what, user_id, kind, post=post, ref=f"status:{name}", before=was, after=status)
         return record
 
     @journaled
     def move_break(self, program: str, on: date, name: str, idx: int, at: Optional[str], user_id: int,
-                   suffix: str = "") -> None:
+                   suffix: str = "", missed: bool = False) -> None:
         """Move a break of the shift that starts on ``on`` to ``at`` (HH:MM), or back to the plan (None)."""
         row, week, span = self._shift(program, on, name)
         plan = {b["idx"]: b for b in self.plan_for(program, on, name, week)}
@@ -821,6 +1292,10 @@ class DayBook:
                                         kind=plan[idx]["kind"], start=m, user_id=user_id, cancelled=0, why="")
             what = (f"{plan[idx]['kind']} brought back at {hm(m)}{suffix}" if was_cancelled else
                     f"{plan[idx]['kind']} moved {hm(was)} to {hm(m)}{suffix}")
+        if missed:  # Phase AV: the associate missed this break; kept as an incident for the analysis
+            self.store.add_incident(program=program, shift_date=on.isoformat(), associate=name, kind="missed_break",
+                                    idx=idx, minutes=int(plan[idx].get("minutes") or 0), note=plan[idx]["kind"],
+                                    user_id=user_id, at=time.time())
         self._log(program, on, name, what, user_id, "break", ref=f"break:{name}:{idx}",
                   before="cancelled" if was_cancelled else hm(was), after=hm(plan[idx]["start"] if at is None else m))
 
@@ -863,6 +1338,7 @@ class DayBook:
         page = self.page(program, on, measure)
         m += 1440 if m < span[0] else 0
         found = advice(page["view"], page["inputs"], name, idx, m)
+        found["warnings"] += self._default_words(program, on, page["view"], name, idx, m)
         if page["view"].get("channels") is not None:  # Phase V: what the move does to the channels
             old = {w["text"] for w in page["view"]["channels"]["warnings"]}
             moved = self.page(program, on, measure, extra={"break": (name, idx, m)})["view"]["channels"]
@@ -879,7 +1355,7 @@ class DayBook:
             return f"Overtime {hm(lo)} to {hm(hi)}"
         if kind == "VTO":
             return f"VTO {hm(lo)} to {hm(hi)}"  # any stretch of the shift (owner, 2026-10-08)
-        if kind in EXTRA_BREAKS:
+        if kind in EXTRA_BREAKS or kind == BIO:
             return f"{kind} {hm(lo)} to {hm(hi)}"
         return (f"{kind} {hm(lo)} to {hm(hi)} ({'billable' if billable else 'non-billable'})"
                 + with_text(with_whom, why, with_dept))
@@ -887,15 +1363,18 @@ class DayBook:
     @journaled
     def add_activity(self, program: str, on: date, name: str, kind: str, start: str, end: str, user_id: int,
                      billable: bool = False, note: str = "", dry_run: bool = False, with_whom: str = "",
-                     why: str = "", with_dept: str = "") -> Any:
+                     why: str = "", with_dept: str = "", session: str = "") -> Any:
         """Record an activity for the shift that starts on ``on``: an aux, a break or lunch added on the day,
-        or VTO (each inside the shift), or overtime (touching the shift, at most 2 hours, keeping the rest
+        or VTO (each inside the shift), or overtime (touching the shift, at most OVERTIME_MAX, keeping the rest
         gap). Returns its id; with ``dry_run`` every check runs, nothing is kept, and the record is returned."""
+        if kind == "VTO":
+            raise ValueError(NO_VTO)
         if kind not in ACTIVITY_KINDS:
             raise ValueError(f"Unknown activity: {kind}.")
         if kind == CALLED_IN:
-            return self._call_in(program, on, name, start, end, user_id, note)
+            return self._call_in(program, on, name, start, end, user_id, note, dry_run=dry_run)
         row, week, span = self._shift(program, on, name)
+        warning = ""
         lo, hi = _clock(start), _clock(end)
         if lo is None or hi is None:
             raise ValueError("Give the start and end like 13:05.")
@@ -914,10 +1393,16 @@ class DayBook:
             if hi - lo > OVERTIME_MAX:
                 raise ValueError(f"Overtime is offered up to {OVERTIME_MAX // 60} hours.")
             rest = int(float(week.get("settings", {}).get("rest_gap_hours") or 0) * 60)
-            self._rest(program, on, row, name, lo, hi, rest)
+            # owner, 2026-10-15: overtime that breaks the rest gap is kept, with a warning
+            warning = self._rest(program, on, row, name, lo, hi, rest, refuse=False)
         else:
-            if lo < span[0] or hi > span[1]:
-                raise ValueError(f"{kind} has to fall inside {name}'s shift ({hm(span[0])} to {hm(span[1])}).")
+            room = span
+            if kind in EXTRA_BREAKS:  # Phase AY: a break may sit in the overtime the person has that day too
+                for r in self.store.list_activities(program, [on.isoformat()]):
+                    if r["associate"] == name and r["kind"] == "Overtime":
+                        room = (min(room[0], r["start"]), max(room[1], r["end_min"]))
+            if lo < room[0] or hi > room[1]:
+                raise ValueError(f"{kind} has to fall inside {name}'s shift ({hm(room[0])} to {hm(room[1])}).")
             if hi <= lo:
                 raise ValueError("The end time must be after the start time.")
         if kind in EXTRA_BREAKS:  # not on top of a break the person already has (as planned or as moved)
@@ -929,18 +1414,20 @@ class DayBook:
                     raise ValueError(f"{name} is already on {b['kind'].lower()} from {hm(b['start'])} to "
                                      f"{hm(b['start'] + b['minutes'])} then.")
         for r in self.store.list_activities(program, [on.isoformat()]):  # a call-in is the shift itself
-            if r["associate"] == name and r["kind"] != CALLED_IN and r["start"] < hi and lo < r["end_min"]:
+            if r["associate"] == name and r["kind"] != CALLED_IN and r["start"] < hi and lo < r["end_min"] \
+                    and not (kind in EXTRA_BREAKS and r["kind"] == "Overtime"):  # a break may sit in overtime (Phase AY)
                 raise ValueError(f"{name} already has {r['kind'].lower()} from {hm(r['start'])} to {hm(r['end_min'])}.")
-        billable = bool(billable) and kind in AUX or kind == "Overtime"
+        billable = bool(billable) and kind in AUX and kind != BIO or kind == "Overtime"
         with_whom, why, with_dept = (_tidy(with_whom), _tidy(why), _tidy(with_dept)) if kind in AUX else ("", "", "")
         what = self._describe(kind, lo, hi, billable, with_whom, why, with_dept)
         if dry_run:
             return {"name": name, "kind": kind, "start": lo, "end": hi, "billable": billable, "what": what,
-                    "with_whom": with_whom, "why": why, "with_dept": with_dept}
+                    "with_whom": with_whom, "why": why, "with_dept": with_dept, "warning": warning}
         made = self.store.add_activity(program=program, shift_date=on.isoformat(), associate=name, kind=kind, start=lo,
                                        end_min=hi, billable=int(billable), note=" ".join(note.split())[:200],
-                                       user_id=user_id, with_whom=with_whom, why=why, with_dept=with_dept)
-        self._log(program, on, name, what, user_id, _group_kind(kind),
+                                       user_id=user_id, with_whom=with_whom, why=why, with_dept=with_dept,
+                                       session=session)
+        self._log(program, on, name, what + (f". Warning: {warning}" if warning else ""), user_id, _group_kind(kind),
                   post=self._describe(kind, lo, hi, billable, with_whom, "", with_dept), ref=f"activity:{made}",
                   after="on")
         return made
@@ -948,7 +1435,8 @@ class DayBook:
     @journaled
     def add_item(self, program: str, on: date, name: str, what: str, start: str, minutes: int, user_id: int,
                  billable: bool = False, note: str = "", dry_run: bool = False, end: str = "", with_whom: str = "",
-                 why: str = "", with_dept: str = "", side: str = "") -> Dict[str, Any]:
+                 why: str = "", with_dept: str = "", side: str = "", late_kind: str = "allowance",
+                 am_note: str = "") -> Dict[str, Any]:
         """Anything RTA's "+ Add" offers: Unplanned leave or Sick (the whole shift); Late (``start`` is when
         they arrived); Left early (``start`` is when they left); a break, lunch, aux, overtime or VTO from
         ``start`` for ``minutes``; a day off cancelled from ``start`` to ``end``. Overtime with ``side``
@@ -958,17 +1446,21 @@ class DayBook:
             rec = self._call_in(program, on, name, start, end, user_id, note, dry_run=True)
             if not dry_run:
                 self._call_in(program, on, name, start, end, user_id, note)
-            return {"text": rec["what"], "lo": rec["start"], "hi": rec["end"], "record": rec}
+            return {"text": rec["what"], "lo": rec["start"], "hi": rec["end"], "record": rec,
+                    "warning": rec.get("warning", "")}
         if what in ABSENT or what in LATE_EARLY:
             arrived = start if what == "Late" else ""
             left = start if what == "Left early" else ""
-            rec = self.set_status(program, on, name, what, user_id, start=left, end=arrived, dry_run=True)
+            rec = self.set_status(program, on, name, what, user_id, start=left, end=arrived, dry_run=True, late_kind=late_kind,
+                                  am_note=am_note)
             span = rec["span"]
             lo = span[0] if rec["from"] is None else rec["from"]
             hi = span[1] if rec["to"] is None else rec["to"]
             if not dry_run:
-                self.set_status(program, on, name, what, user_id, start=left, end=arrived)
+                self.set_status(program, on, name, what, user_id, start=left, end=arrived, late_kind=late_kind, am_note=am_note)
             return {"text": rec["what"], "lo": lo, "hi": hi, "record": rec}
+        if what == "VTO":
+            raise ValueError(NO_VTO)
         if what not in ACTIVITY_KINDS or what == CALLED_IN:
             raise ValueError(f"Unknown: {what}.")
         if what == "Overtime" and side in ("before", "after"):
@@ -992,7 +1484,8 @@ class DayBook:
         if not dry_run:
             self.add_activity(program, on, name, what, start, end, user_id, billable=billable, note=note,
                               with_whom=with_whom, why=why, with_dept=with_dept)
-        return {"text": rec["what"], "lo": rec["start"], "hi": rec["end"], "record": rec}
+        return {"text": rec["what"], "lo": rec["start"], "hi": rec["end"], "record": rec,
+                "warning": rec.get("warning", "")}
 
     def preview_item(self, program: str, on: date, name: str, what: str, start: str, minutes: int,
                      billable: bool = False, measure: str = "interval", end: str = "",
@@ -1026,6 +1519,9 @@ class DayBook:
                 result["level"] = "bad"
                 result["better"] = self._better_times(program, on, name, what, lo, minutes, billable, measure, end,
                                                       before, old)
+        if found.get("warning"):  # Phase AJ: kept, but the rest gap is broken
+            result["text"] += f" Warning: {found['warning']}"
+            result["level"] = "bad" if result["level"] == "bad" else "warn"
         return result
 
     def _better_times(self, program: str, on: date, name: str, what: str, lo: int, minutes: int, billable: bool,
@@ -1097,17 +1593,217 @@ class DayBook:
                                  "longest shift in the Shift Library.")
             label = f"{hm(lo)} - {hm(hi)}"
         rest = int(float(week.get("settings", {}).get("rest_gap_hours") or 0) * 60)
-        self._rest(program, on, row, name, lo, hi, rest)
+        # owner, 2026-10-23: a manual change shows a warning and is kept, as overtime has been since Phase AJ
+        warning = self._rest(program, on, row, name, lo, hi, rest, refuse=False)
         if self.called_in_on(program, on, name) is not None:
             raise ValueError(f"{name} is already called in that day.")
         if dry_run:
             return {"name": name, "kind": CALLED_IN, "start": lo, "end": hi, "billable": True,
-                    "what": f"Day off cancelled: called in {label}"}
+                    "what": f"Day off cancelled: called in {label}", "warning": warning}
         made = self.store.add_activity(program=program, shift_date=on.isoformat(), associate=name, kind=CALLED_IN,
                                        start=lo, end_min=hi, billable=1, note=label, user_id=user_id)
-        self._log(program, on, name, f"Day off cancelled: called in {label}", user_id, "called_in",
-                  ref=f"callin:{made}", after="on")
+        self._log(program, on, name, f"Day off cancelled: called in {label}" + (f". Warning: {warning}" if warning else ""),
+                  user_id, "called_in", ref=f"callin:{made}", after="on")
         return made
+
+    @journaled
+    def plan_call_in_breaks(self, program: str, on: date, name: str, user_id: int) -> List[int]:
+        """Phase AY (owner, 2026-10-23: "I can have the option to schedule breaks for them, especially for call in"): a person
+        called in for typed times that no one else works has no planned breaks. They are placed here as the program's break
+        rules place a shift of that length (``break_plan.suggest``, with everyone else's breaks where they are) and kept as
+        breaks added on the day. Refused when the person is not called in or already has breaks that day."""
+        from .break_plan import slots_for, suggest
+        called = self.called_in_on(program, on, name)
+        if called is None:
+            raise ValueError(f"{name} is not called in that day: only a called-in shift is given breaks this way.")
+        row, _ = self.version(program, on)
+        week = self._week(row)
+        d = day_index(on)
+        if self.plan_for(program, on, name, week) or any(
+                r["associate"] == name and r["kind"] in EXTRA_BREAKS for r in self.store.list_activities(program, [on.isoformat()])):
+            raise ValueError(f"{name} already has breaks that day.")
+        rules, inputs = self.book.break_rules(row["id"]), read_inputs(self.book.input_path(row["run_id"]))
+        span = (called["start"], called["end_min"])
+        slots = slots_for(rules, span[1] - span[0])
+        if not slots:
+            raise ValueError(f"The break rules give a shift of {(span[1] - span[0]) / 60:g} hours no breaks.")
+        stand = copy.deepcopy(week)
+        for a in stand["associates"]:
+            if a["name"] == name:
+                a["days"][d] = called["note"]
+        plan = {a["name"]: [b["start"] for b in planned(stand, d, a["name"])] for a in stand["associates"]}
+        plan[name] = [None] * len(slots)
+        want = suggest(stand, inputs, rules, d, plan).get(name) or []
+        made = []
+        for (kind, minutes), at in zip(slots, want):
+            if at is None:
+                continue
+            made.append(self.add_activity(program, on, name, "Lunch" if kind.casefold().startswith("lunch") else "Break", plain_hm(at), plain_hm(at + minutes), user_id))
+        if not made:
+            raise ValueError(f"No place was found for {name}'s breaks.")
+        return made
+
+    def convert_vto_to_early_leave(self) -> Dict[str, Any]:
+        """Phase AY (owner, 2026-10-23: "anything that was marked as VTO to be changed to Early leave, back dated automatically"): every VTO already
+        recorded, on any date, becomes a Left early at the VTO's start (the earliest, when a shift had several) on its own date, with a note of the
+        VTO it came from; the VTO record is dropped so nothing counts twice. A person whose shift already carries another status is skipped (their
+        VTO stays as history) and returned. An Early leave already earlier than the VTO is kept. Run once at start-up; a second run finds no VTO left to
+        convert. No group post is made. Returns {"converted": n, "skipped": [{program, date, associate, status}]}."""
+        groups: Dict[Tuple[str, str, str], List[Dict[str, Any]]] = {}
+        for r in self.store.vto_activities():
+            groups.setdefault((r["program"], r["shift_date"], r["associate"]), []).append(r)
+        converted, skipped = 0, []
+        for (program, day, name), rows in sorted(groups.items()):
+            rows.sort(key=lambda r: r["start"])
+            first = rows[0]
+            now = next((a for a in self.store.list_attendance(program, [day]) if a["associate"] == name), None)
+            if now is not None and now["status"] not in ("Present", "Left early"):
+                skipped.append({"program": program, "date": day, "associate": name, "status": now["status"]})
+                continue
+            was = [f"{plain_hm(r['start'] % 1440)} to {plain_hm(r['end_min'] % 1440)}" for r in rows]
+            leave = first["start"]
+            if now is not None and now["status"] == "Left early" and now["from_min"] is not None:
+                leave = min(leave, now["from_min"])
+            self.store.set_attendance(program=program, shift_date=day, associate=name, status="Left early", from_min=leave,
+                                      to_min=None, billable=0, user_id=first["user_id"], with_whom="", why="Converted from VTO " + ", ".join(was),
+                                      with_dept="", late_kind="")
+            for r in rows:
+                self.store.delete_activity(r["id"])
+            self.store.add_day_log(program=program, shift_date=day, associate=name, user_id=first["user_id"],
+                                   what=f"VTO {', '.join(was)} changed to Early leave at {plain_hm(leave % 1440)}")
+            converted += 1
+        return {"converted": converted, "skipped": skipped}
+
+    @journaled
+    def plan_extra_breaks(self, program: str, on: date, name: str, shorts: int, lunches: int, user_id: int) -> List[int]:
+        """Phase AY (owner, 2026-10-23: "state the count of breaks, how many shorts and how many lunches; if not, keep 0; if there,
+        plan it automatically"): ``shorts`` short breaks and ``lunches`` lunches inside the person's call-in, or inside their latest
+        overtime that day, placed by ``break_plan.suggest`` as a stand-in person working just that stretch (everyone else's breaks
+        stay where they are), and kept as breaks added on the day. The lengths are the workbook's. [] for 0 and 0."""
+        from .break_plan import break_minutes, suggest
+        if not (0 <= shorts <= 4 and 0 <= lunches <= 2):
+            raise ValueError("Ask for 0 to 4 short breaks and 0 to 2 lunches.")
+        if not shorts and not lunches:
+            return []
+        rows = [r for r in self.store.list_activities(program, [on.isoformat()]) if r["associate"] == name]
+        row = next((r for r in rows if r["kind"] == CALLED_IN), None) or max(
+            (r for r in rows if r["kind"] == "Overtime"), key=lambda r: r["id"], default=None)
+        if row is None:
+            raise ValueError(f"{name} has no overtime or call-in that day to put breaks in.")
+        version, _ = self.version(program, on)
+        week, d = self._week(version), day_index(on)
+        rules, inputs = self.book.break_rules(version["id"]), read_inputs(self.book.input_path(version["run_id"]))
+        short, lunch = break_minutes(rules)
+        if (shorts and not short) or (lunches and not lunch):
+            raise ValueError("The program's break rules do not say how long that break is.")
+        kinds = ["Extra break"] * shorts
+        kinds[shorts // 2:shorts // 2] = ["Extra lunch"] * lunches  # the lunches in the middle of the shorts
+        slots = [(k, lunch if k == "Extra lunch" else short) for k in kinds]
+        stand, virtual = copy.deepcopy(week), f"{name} (extra)"
+        person = next((a for a in stand["associates"] if a["name"] == name), {})
+        stand["associates"].append({**person, "name": virtual, "days": ["Off"] * 7})
+        stand["associates"][-1]["days"][d] = f"{plain_hm(row['start'] % 1440)} - {plain_hm(row['end_min'] % 1440)}"
+        plan = {a["name"]: [b["start"] for b in planned(stand, d, a["name"])] for a in stand["associates"]}
+        plan[virtual] = [None] * len(slots)
+        want = suggest(stand, inputs, {**rules, "extra_slots": {virtual: slots}}, d, plan).get(virtual) or []
+        made = []
+        for (kind, minutes), at in zip(slots, want):
+            if at is not None:
+                made.append(self.add_activity(program, on, name, "Lunch" if kind == "Extra lunch" else "Break",
+                                              plain_hm(at % 1440), plain_hm((at + minutes) % 1440), user_id))
+        if not made:
+            raise ValueError(f"No place was found for {name}'s breaks in that stretch.")
+        return made
+
+    # ------------------------------------------------------------- cover from outside the roster (Phase AJ)
+    def covers(self, program: str, on: date) -> List[Dict[str, Any]]:
+        """The cover kept for ``on`` (times from that day's midnight; an end past 1440 runs into the next day)."""
+        return self.store.list_cover(program, [on.isoformat()])
+
+    @staticmethod
+    def _cover_text(name: str, role: str, lo: int, hi: int, channel: str = "", language: str = "") -> str:
+        from .channels import CHANNELS
+        return (f"Cover from outside the roster ({role}) {hm(lo)} to {hm(hi)}"  # the log line and post name them
+                + (f", {CHANNELS.get(channel, channel)}" if channel else "") + (f", {language}" if language else ""))
+
+    @staticmethod
+    def cover_languages(page: Optional[Dict[str, Any]]) -> List[str]:
+        """The languages a cover can take (Phase AJ): the day's language rules and the channels' language rules."""
+        if not page:
+            return []
+        view = page["view"]
+        names = [l["name"] for l in view["languages"]]
+        names += [r["language"] for r in (view.get("channels") or {}).get("rows", []) if r.get("language")]
+        found: Dict[str, str] = {}
+        for n in names:
+            found.setdefault(n.strip().casefold(), n.strip())
+        return sorted(found.values(), key=str.casefold)
+
+    @journaled
+    def add_cover(self, program: str, on: date, name: str, role: str, start: str, end: str, user_id: int,
+                  channel: str = "", dry_run: bool = False, language: str = "") -> Any:
+        """Keep a team manager or support member, not on the roster, logging in from ``start`` to ``end`` on ``on``
+        (an end at or before the start runs past midnight). They count as one person on the floor for those minutes,
+        on ``channel`` when the program has channels (then it must be one of them). Returns the id; with ``dry_run``
+        every check runs, nothing is kept, and the record is returned."""
+        from .channels import CHANNELS
+        name = _tidy(name)
+        if not name:
+            raise ValueError("Type the name of the person covering.")
+        if len(name) > COVER_NAME_MAX:
+            raise ValueError(f"Keep the name to {COVER_NAME_MAX} characters.")
+        if role not in COVER_ROLES:
+            raise ValueError(f"Pick {_either(list(COVER_ROLES))}.")
+        lo, hi = _clock(start), _clock(end)
+        if lo is None or hi is None:
+            raise ValueError("Give the start and end like 13:05.")
+        if lo % STEP or hi % STEP:
+            raise ValueError("Pick times in 5-minute steps, like 10:05.")
+        if hi == lo:
+            raise ValueError("The end time must be after the start time.")
+        hi += 1440 if hi < lo else 0
+        if hi - lo > COVER_MAX:
+            raise ValueError(f"Keep a cover to {COVER_MAX // 60} hours or less, and add a second one for the rest.")
+        page = self.page(program, on)
+        if page is None:
+            raise ValueError(f"There is no schedule for {program} in the week of {week_start(on):%d %b}.")
+        ch = page["view"].get("channels")
+        letters = [r["letter"] for r in ch["rows"] if "language" not in r] if ch else []
+        channel = (channel or "").strip()
+        if not letters and channel:
+            raise ValueError("This program has no channels set up, so there is no channel to pick.")
+        if letters and channel not in letters:
+            raise ValueError(f"Pick the channel {name} takes: {_either([CHANNELS[c] for c in letters])}.")
+        offered = self.cover_languages(page)  # Phase AJ: counts for that language too (owner, 2026-10-15)
+        language = _tidy(language)
+        if language:
+            language = next((n for n in offered if n.casefold() == language.casefold()), "")
+            if not language:
+                raise ValueError(f"Pick the language {name} takes: {', '.join(offered) or 'none'}, or none."
+                                 if offered else "This program has no languages set up, so there is none to pick.")
+        for r in self.covers(program, on):
+            if r["associate"].casefold() == name.casefold() and r["start"] < hi and lo < r["end_min"]:
+                raise ValueError(f"{r['associate']} already covers {hm(r['start'])} to {hm(r['end_min'])}. Pick another "
+                                 "time, or delete that cover first.")
+        what = self._cover_text(name, role, lo, hi, channel, language)  # logged under the name
+        if dry_run:
+            return {"name": name, "role": role, "start": lo, "end": hi, "channel": channel, "language": language,
+                    "what": what}
+        made = self.store.add_cover(program=program, shift_date=on.isoformat(), associate=name, role=role, start=lo,
+                                    end_min=hi, channel=channel, language=language, user_id=user_id)
+        self._log(program, on, name, what, user_id, "overtime", ref=f"cover:{made}", after="on")
+        return made
+
+    @journaled
+    def cancel_cover(self, program: str, on: date, cover_id: int, user_id: int) -> None:
+        row = self.store.get_cover(cover_id)
+        if row is None or row["program"] != program or row["shift_date"] != on.isoformat():
+            raise ValueError("That cover is not on this day.")
+        self.store.delete_cover(cover_id)
+        text = self._cover_text(row["associate"], row["role"], row["start"], row["end_min"], row["channel"],
+                                row.get("language", ""))
+        self._log(program, on, row["associate"], "Cancelled: c" + text[1:], user_id, "overtime",
+                  ref=f"cover:{cover_id}", before="on")
 
     @journaled
     def cancel_activity(self, program: str, on: date, activity_id: int, user_id: int) -> None:
@@ -1153,12 +1849,12 @@ class DayBook:
         return meeting_slots(page["view"], names, minutes, lo, hi, billable)
 
     def offers(self, page: Dict[str, Any], after: int = 0) -> Dict[str, List[Dict[str, Any]]]:
-        """Overtime next to short intervals and VTO where the floor stays covered (from ``after``)."""
+        """Overtime next to short intervals (from ``after``)."""
         week = self._week(page["version"])
         rest = float(week.get("settings", {}).get("rest_gap_hours") or 0)
         near = self.neighbours(page["version"]["program"], page["date"], page["version"])
         return {"overtime": overtime_offers(page["view"], week, page["day"], rest, after, near=near),
-                "vto": vto_offers(page["view"], after), "next_known": near["next_known"]}
+                "next_known": near["next_known"]}
 
     def dayoff_plan(self, page: Dict[str, Any], after: int = 0, aim: Optional[float] = None) -> Dict[str, Any]:
         """Rescue the day's days off to cancel, then overtime for what is left (Phase AF, F1 and F2), from ``after``;
@@ -1246,16 +1942,224 @@ class DayBook:
     def replan(self, page: Dict[str, Any], now: int = 0) -> Dict[str, Any]:
         """The autopilot's proposal for the breaks not yet started (nothing is kept); with the week's target, it keeps
         the most intervals 10 minutes over it (Phase AH)."""
-        return replan(page["view"], page["inputs"], now, target=page["target"]["target"])
+        return replan(page["view"], page["inputs"], now, target=page["target"]["target"],
+                      fit=self.fit_for(page["version"]["program"], page["date"], 0, page["view"]))
+
+    def _window(self, program: str, on: date, start: int, measure: str = "interval",
+                extras: Optional[Dict[date, Dict[str, Any]]] = None) -> Dict[str, Any]:
+        page = self.window_page(program, on, start, measure, extras)
+        if page is None:
+            raise ValueError(f"No schedule for {program} on {on:%d %b}.")
+        return page
+
+    @staticmethod
+    def _dated(moves: List[Dict[str, Any]], view: Dict[str, Any], on: date, start: int,
+               keys: Tuple[str, ...] = ("from", "to")) -> List[Dict[str, Any]]:
+        """Moves a tool made on the rebased window, back in the window's minutes, each with its shift's ``date`` and
+        ``day_to`` (the new minute in that date's own day; ``day_new`` for Change several breaks)."""
+        when = dates_of(view, on)
+        out = []
+        for m in moves:
+            d = when[(m["name"], m["idx"])]
+            moved = {**m, **{k: m[k] + start for k in keys if isinstance(m.get(k), int)}, "date": d}
+            last = keys[-1]
+            moved["day_to" if last == "to" else "day_new"] = (in_own_day(moved[last], d, on)
+                                                              if isinstance(moved.get(last), int) else moved.get(last))
+            out.append(moved)
+        return out
+
+    def replan_window(self, program: str, on: date, start: int, now: int = 0,
+                      measure: str = "interval") -> Dict[str, Any]:
+        """Phase AK: Fix the day's breaks on the 24 hours from ``start`` (``now`` a minute of that window, 0 for none
+        started): the moves in the window's minutes, each with its shift's date."""
+        page = self._window(program, on, start, measure)
+        view = rebase(page["view"], start, page["views"])
+        found = replan(view, page["inputs"], max(now - start, 0) if now else 0, target=page["target"]["target"],
+                       fit=self.fit_for(program, on, start, view))
+        return {**found, "moves": self._dated(found["moves"], view, on, start)}
+
+    def _default_words(self, program: str, on: date, view: Dict[str, Any], name: str, idx: int, at: int,
+                       gaps: bool = False) -> List[str]:
+        """Phase AX (owner: "prioritize the default, followed by the engine"): what moving break ``idx`` of ``name`` to ``at``
+        takes the person's breaks out of (the usual shape, then the engine's rules); nothing when the rules cannot be read.
+        A warning, not a refusal: the move can be kept anyway."""
+        from .break_plan import fit_words, slots_for
+        people = self._rule_people(program, on, view)
+        found = (people or {}).get(name)
+        seg = next((s for l in view["lanes"] if l["name"] == name for s in l["segments"] if s["offset"] == 0), None)
+        if found is None or seg is None or any(b["idx"] >= found[2] for b in seg["breaks"]):
+            return []
+        rules, label, count, _ = found
+        before: List[Optional[int]] = [None] * count
+        for b in seg["breaks"]:
+            before[b["idx"]] = b["start"]
+        after = list(before)
+        after[idx] = at
+        return fit_words(rules, label, before, after, gaps)
+
+    def _rule_people(self, program: str, on: date, view: Dict[str, Any]):  # type: ignore[no-untyped-def]
+        """name -> (the break rules, the shift's label, the breaks the rules give it, the shift's date offset in minutes) for
+        the people of a window's ``view`` who have breaks; None when the rules cannot be read."""
+        from .break_plan import slots_for
+        people: Dict[str, Tuple[Dict[str, Any], str, int, int]] = {}
+        try:
+            weeks: Dict[date, Tuple[Dict[str, Any], Dict[str, Any]]] = {}
+            for lane in view["lanes"]:
+                seg = next((s for s in lane["segments"] if s["offset"] == 0), None)
+                if seg is None or not seg["breaks"]:
+                    continue
+                day = seg.get("date") or on
+                if day not in weeks:
+                    row, _ = self.version(program, day)
+                    weeks[day] = (self._week(row), self.book.break_rules(row["id"])) if row else ({}, {})
+                week, rules = weeks[day]
+                a = next((x for x in week.get("associates", []) if x["name"] == lane["name"]), None)
+                span = shift_span(a["days"][day_index(day)]) if a else None
+                if span:
+                    people[lane["name"]] = (rules, a["days"][day_index(day)], len(slots_for(rules, span[1] - span[0])),
+                                            1440 * (day - on).days)
+        except ValueError:
+            return None
+        return people
+
+    def fit_for(self, program: str, on: date, start: int, view: Dict[str, Any]):  # type: ignore[no-untyped-def]
+        """Phase AX (owner: "prioritize the default, followed by the engine"; "to the nearest"): for the tools that move breaks
+        on a window (``rebase``d ``view``), ``(name, break index -> start in the window) -> (minutes off the usual shape,
+        minutes off the engine's rules)``, from the program's break rules; None when they cannot be read (the tools then work
+        as before)."""
+        from .break_plan import fit as break_fit
+        people = self._rule_people(program, on, view)
+        if people is None:
+            return None
+
+        def fit(name: str, starts: Dict[int, int]) -> Tuple[int, int]:
+            found = people.get(name)
+            if found is None or any(i >= found[2] for i in starts):
+                return (0, 0)
+            rules, label, count, shift = found
+            own: List[Optional[int]] = [None] * count
+            for i, at in starts.items():
+                own[i] = at + start - shift
+            return break_fit(rules, label, own)
+        return fit
+
+    def defaults_for(self, program: str, on: date, start: int, view: Dict[str, Any]):  # type: ignore[no-untyped-def]
+        """What Rescue weighs: ``(name, break index, start in the window) -> (minutes off the usual shape, minutes off the
+        engine's margin and window for that break)``; None when the rules cannot be read."""
+        from .break_plan import break_default
+        people = self._rule_people(program, on, view)
+        if people is None:
+            return None
+
+        def defaults(name: str, idx: int, at: int) -> Tuple[int, int]:
+            found = people.get(name)
+            if found is None or idx >= found[2]:
+                return (0, 0)
+            rules, label, count, shift = found
+            return break_default(rules, label, idx, count, at + start - shift)
+        return defaults
+
+    def fresh_replan_window(self, program: str, on: date, start: int, now: int = 0,
+                            measure: str = "interval") -> Dict[str, Any]:
+        """Phase AX, "Replan the day's breaks" (owner, 2026-10-22: "it is not rescheduling based on the default"): every
+        break not yet started on the 24 hours from ``start`` (``now``: a minute from ``on``'s midnight, 0 for none
+        started) is placed as the program's default break rules place it (``break_plan.suggest``, the planner behind
+        Plan breaks), the breaks that have started kept where they are. A time the day itself refuses (away time, an
+        activity, a gap, a language below its minimum) gives way to the nearest allowed one. The moves, dated as the
+        other tools' are; ``note`` says when the rules could not be read and the day's own score was used instead."""
+        from .break_plan import slots_for, suggest
+        page = self._window(program, on, start, measure)
+        view = rebase(page["view"], start, page["views"])
+        by_day: Dict[date, List[Tuple[str, Dict[str, Any]]]] = {}
+        for lane in view["lanes"]:
+            for seg in lane["segments"]:
+                if seg["offset"] == 0 and seg["status"] not in ABSENT and seg["breaks"]:
+                    by_day.setdefault(seg.get("date") or on, []).append((lane["name"], seg))
+        desired: Dict[Tuple[str, int], int] = {}
+        note = ""
+        try:
+            for day, people in sorted(by_day.items()):
+                row, _ = self.version(program, day)
+                if row is None:
+                    continue
+                week, rules = self._week(row), self.book.break_rules(row["id"])
+                inputs = read_inputs(self.book.input_path(row["run_id"]))
+                d, shift = day_index(day), 1440 * (day - on).days
+                spans = {a["name"]: shift_span(a["days"][d]) for a in week.get("associates", [])}
+                plan: Dict[str, List[Optional[int]]] = {
+                    n: [None] * len(slots_for(rules, sp[1] - sp[0])) for n, sp in spans.items() if sp}
+                movable = []
+                for name, seg in people:
+                    sp = spans.get(name)
+                    slots = slots_for(rules, sp[1] - sp[0]) if sp else []
+                    live = sorted(list(seg["breaks"]) + list(seg.get("cancelled", [])), key=lambda b: b["idx"])
+                    if [b["idx"] for b in live] != list(range(len(slots))) or any(
+                            str(b["kind"]).casefold() != k.casefold() for b, (k, _) in zip(live, slots)):
+                        for b in seg["breaks"]:  # not the rules' shape of breaks: kept as it is, for the others' sake
+                            if b["idx"] < len(plan.get(name, [])):
+                                plan[name][b["idx"]] = b["start"] + start - shift
+                        continue
+                    for b in seg["breaks"]:
+                        at = b["start"] + start - shift  # in the shift's own day
+                        if now and at < now - shift:  # started: where it is
+                            plan[name][b["idx"]] = at
+                    movable.append((name, seg))
+                want = suggest(week, inputs, rules, d, plan)
+                for name, seg in movable:
+                    for b in seg["breaks"]:
+                        got = want.get(name, [None] * (b["idx"] + 1))[b["idx"]]
+                        if got is not None and not (now and b["start"] + start < now):
+                            desired[(name, b["idx"])] = got + shift - start
+        except ValueError:
+            desired, note = {}, ("The program's break rules could not be read from the schedule's workbook, so the "
+                                 "breaks were placed by the day page's own rules and score instead.")
+        found = replan(view, page["inputs"], max(now - start, 0) if now else 0, target=page["target"]["target"],
+                       fresh=True, desired=desired or None)
+        return {**found, "note": note, "moves": self._dated(found["moves"], view, on, start)}
 
     @journaled
-    def apply_replan(self, program: str, on: date, moves: List[Tuple[str, int, int]], user_id: int) -> int:
-        """Keep the approved moves (each checked again: the day may have changed since the preview)."""
+    def apply_replan(self, program: str, on: date, moves: List[Tuple[Any, ...]], user_id: int) -> int:
+        """Keep the approved moves (each checked again: the day may have changed since the preview). A move is
+        (name, idx, minute) on ``on``, or (name, idx, minute, date) on its shift's own date (Phase AK).
+
+        Phase AX (owner: "it showed 68 changes, I pressed apply, only a few were applied"): each move is checked as it is
+        kept, so a break moving into the place another break of the same person has not yet left looks like an overlap. The
+        set is kept in passes: what cannot be kept yet waits for what moves away first, and what is still refused when
+        nothing more can be kept is said (ValueError, after everything else was kept), never silently left."""
+        pending = list(moves)
         done = 0
-        for name, idx, start in moves:
-            self.move_break(program, on, name, idx, plain_hm(start), user_id, suffix=" (autopilot)")
-            done += 1
+        refused: List[Tuple[Tuple[Any, ...], Exception]] = []
+        while pending:
+            later: List[Tuple[Tuple[Any, ...], Exception]] = []
+            kept = 0
+            for move in pending:
+                name, idx, start, *when = move
+                try:
+                    self.move_break(program, when[0] if when else on, name, idx, plain_hm(start), user_id,
+                                    suffix=" (autopilot)")
+                    kept += 1
+                except BreakRefused as exc:
+                    later.append((move, exc))
+            done += kept
+            if not later or not kept:
+                refused = later
+                break
+            pending = [move for move, _ in later]
+        if refused:
+            said = "; ".join(f"{m[0]}, {self._kind_of(program, m[3] if len(m) > 3 else on, m[0], m[1])}: {exc}"
+                             for m, exc in refused[:4])
+            more = f" (and {len(refused) - 4} more)" if len(refused) > 4 else ""
+            raise ValueError(f"{len(refused)} of {len(moves)} moves could not be kept ({said}{more}). The other "
+                             f"{done} were kept.")
         return done
+
+    def _kind_of(self, program: str, on: date, name: str, idx: int) -> str:
+        """The name of break ``idx`` of ``name``'s shift on ``on`` ("Lunch"), for what is said about it."""
+        try:
+            week = self._shift(program, on, name)[1]
+            return next((b["kind"] for b in self.plan_for(program, on, name, week) if b["idx"] == idx), f"break {idx + 1}")
+        except ValueError:
+            return f"break {idx + 1}"
 
     # ------------------------------------------------------------- Change several breaks (Phase AD, sample 04)
     @staticmethod
@@ -1264,29 +2168,62 @@ class DayBook:
                 "target": page["target"]["target"], "short_hours": page["view"]["tiles"]["short_hours"],
                 "safe": page["target"]["safe"], "tight": page["target"]["tight"]}
 
-    def bulk_preview(self, program: str, on: date, names: List[str], which: str, action: str, amount: int = 0,
-                     at: str = "", why: str = "", now: Optional[int] = None) -> Dict[str, Any]:
-        """What Change several breaks would do (``bulk_breaks.plan``) and the day before and after it (intervals at
-        the target, hours short), counted by the page itself. Nothing is kept."""
+    def _bulk_found(self, program: str, on: date, names: List[str], which: str, action: str, amount: int, at: str,
+                    now: Optional[int], start: int) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        """(the page, ``bulk_breaks.plan`` on it): on the day, or (Phase AK) on the 24 hours from ``start``, where
+        ``at`` (a time of ``on``) and ``now`` (a minute of the window) are read in the window and each change gets
+        its shift's ``date`` and ``day_new``."""
         from .bulk_breaks import plan as bulk_plan
-        page = self.page(program, on)
-        if page is None:
-            raise ValueError(f"No schedule for {program} on {on:%d %b}.")
-        found = bulk_plan(page["view"], names, which, action, amount, at, now)
-        after = self.page(program, on, extra={"breaks": {(c["name"], c["idx"]): c["new"] for c in found["changes"]}})
+        if not start:
+            page = self.page(program, on)
+            if page is None:
+                raise ValueError(f"No schedule for {program} on {on:%d %b}.")
+            found = bulk_plan(page["view"], names, which, action, amount, at, now)
+            found["changes"] = [dict(c, date=on, day_new=c["new"]) for c in found["changes"]]
+            return page, found
+        page = self._window(program, on, start)
+        view = rebase(page["view"], start, page["views"])
+        minute = _clock(at)
+        if minute is not None:
+            at = plain_hm(minute + (1440 if minute < start % 1440 else 0) - start % 1440)
+        found = bulk_plan(view, names, which, action, amount, at, None if now is None else max(now - start, -1))
+        found["changes"] = self._dated(found["changes"], view, on, start, keys=("start", "new"))
+        return page, found
+
+    def _recount(self, program: str, on: date, start: int, breaks: List[Tuple[str, int, Any, date]]) -> Dict[str, Any]:
+        """The page (or the window from ``start``) with breaks at other times, as if kept: (name, idx, minute of the
+        shift's own day, ``CANCELLED`` or None for the plan, date)."""
+        if not start:
+            return self.page(program, on, extra={"breaks": {(n, i): v for n, i, v, _ in breaks}})
+        return self._window(program, on, start, extras={d: {"breaks": v} for d, v in by_date(breaks).items()})
+
+    def bulk_preview(self, program: str, on: date, names: List[str], which: str, action: str, amount: int = 0,
+                     at: str = "", why: str = "", now: Optional[int] = None, start: int = 0) -> Dict[str, Any]:
+        """What Change several breaks would do (``bulk_breaks.plan``) and the day before and after it (intervals at
+        the target, hours short), counted by the page itself. Nothing is kept. Phase AK: ``start`` works on the 24
+        hours from there."""
+        page, found = self._bulk_found(program, on, names, which, action, amount, at, now, start)
+        after = self._recount(program, on, start, [(c["name"], c["idx"], c["day_new"], c["date"])
+                                                    for c in found["changes"]])
+        views: Dict[date, Dict[str, Any]] = {}
+        for c in found["changes"]:  # Phase AX: what a change takes the person's breaks out of (said, not refused)
+            if isinstance(c.get("day_new"), int):
+                if c["date"] not in views:
+                    views[c["date"]] = (self.page(program, c["date"]) or {}).get("view") or {"lanes": []}
+                c["words"] = self._default_words(program, c["date"], views[c["date"]], c["name"], c["idx"], c["day_new"],
+                                                 gaps=True)
         return {**found, "before": self._figures(page), "after": self._figures(after)}
 
     def apply_bulk(self, program: str, on: date, names: List[str], which: str, action: str, user_id: int,
-                   amount: int = 0, at: str = "", why: str = "", now: Optional[int] = None) -> int:
+                   amount: int = 0, at: str = "", why: str = "", now: Optional[int] = None, start: int = 0,
+                   missed: bool = False) -> int:
         """Keep a Change several breaks as one bulk change (one step for Undo, held from the group until Send): each
-        change checked again as it is kept. Returns how many breaks changed."""
-        from .bulk_breaks import plan as bulk_plan, verb
+        change checked again as it is kept. Returns how many breaks changed. Phase AK: ``start`` as in
+        ``bulk_preview``, each change kept on its shift's own date."""
+        from .bulk_breaks import verb
         if action == "cancel" and not _tidy(why):
             raise ValueError("Say why the breaks are cancelled.")
-        page = self.page(program, on)
-        if page is None:
-            raise ValueError(f"No schedule for {program} on {on:%d %b}.")
-        found = bulk_plan(page["view"], names, which, action, amount, at, now)
+        _, found = self._bulk_found(program, on, names, which, action, amount, at, now, start)
         if not found["changes"]:
             left = "; ".join(f"{x['name']}: {x['why']}" for x in found["skipped"][:3])
             raise ValueError("Nothing to change" + (f" ({left})." if left else ": pick people and a break."))
@@ -1294,11 +2231,14 @@ class DayBook:
         with self.action(program, on, user_id, bulk=True) as act:
             try:
                 for c in found["changes"]:
+                    when = c["date"]
                     if c["new"] == CANCELLED:
-                        self.cancel_break(program, on, c["name"], c["idx"], why, user_id, now=now)
+                        self.cancel_break(program, when, c["name"], c["idx"], why, user_id,
+                                          now=in_own_day(now, when, on))
                     else:
-                        self.move_break(program, on, c["name"], c["idx"], None if c["new"] is None else plain_hm(c["new"]),
-                                        user_id)
+                        self.move_break(program, when, c["name"], c["idx"],
+                                        None if c["day_new"] is None else plain_hm(c["day_new"]), user_id,
+                                        missed=missed)
                     done += 1
             finally:
                 act.label = f"Change several breaks: {verb(action, done)}"
@@ -1306,13 +2246,15 @@ class DayBook:
 
     # ------------------------------------------------------------- Rescue the day (Phase AD, sample 02)
     def rescue_plan(self, program: str, on: date, now: Optional[int] = None,
-                    page: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                    page: Optional[Dict[str, Any]] = None, start: int = 0) -> Dict[str, Any]:
         """What Rescue the day proposes (``rescue.solve``), counted again by the page itself: the figures, the
         intervals given up and rescued and the strips come from ``page(extra=...)``, never from the model. ``now``
         is minutes past midnight today (None for another day): intervals over by then that missed the target count
         toward the day's 3. A proposal the page's own count does not confirm (no gain, more given up than allowed,
         an interval below 50%) is not offered, and that is said. Nothing is kept."""
         from .rescue import FLOOR, LIMIT, allowance, lost_so_far, solve
+        if start:  # Phase AK: the 24 hours from ``start``; ``now`` is a minute of that window
+            page = self._window(program, on, start)
         page = page or self.page(program, on)
         if page is None:
             raise ValueError(f"No schedule for {program} on {on:%d %b}.")
@@ -1322,14 +2264,23 @@ class DayBook:
         step = view["interval"]
         lost = [(c["t"], c["pct"]) for c in lost_so_far(target["cells"], now, step)] if now is not None else []
         may = allowance(lost)
-        found = solve(view, page["inputs"], target["target"], now, may)
+        if start:
+            solving = rebase(view, start, page["views"])
+            found = solve(solving, page["inputs"], target["target"], None if now is None else now - start, may,
+                          defaults=self.defaults_for(program, on, start, solving))
+            found["moves"] = self._dated(found["moves"], solving, on, start)
+        else:
+            found = solve(view, page["inputs"], target["target"], now, may,
+                          defaults=self.defaults_for(program, on, 0, view))
+            found["moves"] = [dict(m, date=on, day_to=m["to"]) for m in found["moves"]]
         out: Dict[str, Any] = {"before": self._figures(page), "after": self._figures(page), "lost": lost, "may": may,
                                "limit": LIMIT, "moves": [], "given_up": [], "rescued": [], "cushioned": [],
                                "said": [], "now": now,
                                "status": found["status"], "solver": found["solver"], "seconds": found["seconds"]}
         after = page
         if found["moves"]:
-            after = self.page(program, on, extra={"breaks": {(m["name"], m["idx"]): m["to"] for m in found["moves"]}})
+            after = self._recount(program, on, start, [(m["name"], m["idx"], m["day_to"], m["date"])
+                                                       for m in found["moves"]])
             given, rescued, low, cushioned = [], [], [], []
             for vb, va, tb, ta in zip(view["cells"], after["view"]["cells"], target["cells"], after["target"]["cells"]):
                 if tb["ok"] is None:
@@ -1404,35 +2355,41 @@ class DayBook:
             return f"spread inside {hm(came)} to {hm(came + step)}"
         return f"from {hm(came)} to {hm(goes)}"
 
-    def apply_rescue(self, program: str, on: date, moves: List[Tuple[str, int, int]], user_id: int,
-                     now: Optional[int] = None) -> int:
+    def apply_rescue(self, program: str, on: date, moves: List[Tuple[Any, ...]], user_id: int,
+                     now: Optional[int] = None, start: int = 0) -> int:
         """Keep the approved Rescue the day moves as one bulk change (one step for Undo, held from the group until
         Send), each checked again as it is kept. A person's breaks are moved in an order that never has one land on
         another on the way (earlier moves first from the earliest, then later moves from the latest). ``now``
-        (today) refuses a break that has started since the preview. Returns how many breaks moved."""
-        page = self.page(program, on)
+        (today) refuses a break that has started since the preview. Returns how many breaks moved. Phase AK: a move
+        is (name, idx, minute) on ``on`` or (name, idx, minute of its own day, date); with ``start``, ``now`` is a
+        minute of the 24 hours from there."""
+        page = self._window(program, on, start) if start else self.page(program, on)
         if page is None:
             raise ValueError(f"No schedule for {program} on {on:%d %b}.")
         where = {(l["name"], b["idx"]): b["start"] for l in page["view"]["lanes"] for s in l["segments"]
                  if s["offset"] == 0 for b in s["breaks"]}
-        first = {name: i for i, (name, _, _) in reversed(list(enumerate(moves)))}
+        dated = []  # (name, idx, minute from on's midnight, date, minute of that date)
+        for name, idx, minute, *when in moves:
+            d = when[0] if when else on
+            dated.append((name, idx, minute + 1440 * (d - on).days, d, minute))
+        first = {move[0]: i for i, move in reversed(list(enumerate(dated)))}
 
         def order(move):
-            name, idx, start = move
-            later = start > where.get((name, idx), start)
+            name, idx, at = move[:3]
+            later = at > where.get((name, idx), at)
             return first[name], later, -idx if later else idx
 
         done = 0
         with self.action(program, on, user_id, bulk=True) as act:
             try:
-                for name, idx, start in sorted(moves, key=order):
+                for name, idx, at, d, minute in sorted(dated, key=order):
                     was = where.get((name, idx))
                     if now is not None and was is not None and was <= now:
                         raise ValueError(f"{name}'s break at {hm(was)} has started since the preview: open Rescue "
                                          "the day again.")
-                    if now is not None and start <= now:
-                        raise ValueError(f"{hm(start)} has passed: open Rescue the day again.")
-                    self.move_break(program, on, name, idx, plain_hm(start), user_id, suffix=" (rescue)")
+                    if now is not None and at <= now:
+                        raise ValueError(f"{hm(at)} has passed: open Rescue the day again.")
+                    self.move_break(program, d, name, idx, plain_hm(minute), user_id, suffix=" (rescue)")
                     done += 1
             finally:
                 act.label = f"Rescue the day moved {done} break{'s' if done != 1 else ''}"
@@ -1455,9 +2412,106 @@ class DayBook:
                 busy.append(name)
         if busy:
             raise ValueError(f"Not free then: {', '.join(busy)}. Nobody was booked.")
+        session = uuid.uuid4().hex[:8]  # Phase AV: these people stay a group, to move or remove together later
         for name in names:
             self.add_activity(program, on, name, kind, plain_hm(start), plain_hm(start + minutes), user_id, billable=billable,
-                              with_whom=with_whom, why=why, with_dept=with_dept)
+                              with_whom=with_whom, why=why, with_dept=with_dept, session=session)
+
+    def sessions(self, program: str, on: date) -> List[Dict[str, Any]]:
+        """Phase AV: the day's booked sessions, earliest first, each with its members (activity id and name)."""
+        found: Dict[str, Dict[str, Any]] = {}
+        for r in self.store.list_activities(program, [on.isoformat()]):
+            if not r.get("session"):
+                continue
+            s = found.setdefault(r["session"], {"session": r["session"], "kind": r["kind"], "start": r["start"],
+                                                "end": r["end_min"], "with_whom": r.get("with_whom", ""),
+                                                "why": r.get("why", ""), "billable": bool(r["billable"]), "members": []})
+            s["members"].append({"id": r["id"], "name": r["associate"], "start": r["start"], "end": r["end_min"]})
+        return sorted(found.values(), key=lambda s: (s["start"], s["session"]))
+
+    def session_start(self, program: str, on: date, names: List[str], at: str, session: str = "") -> int:
+        """Phase AV: a typed time (HH:MM) as minutes in the day those people work: the day's own, or the next day when it
+        falls before their shift starts (an overnight shift)."""
+        m = _clock(at)
+        if m is None:
+            raise ValueError("Give the time like 13:05.")
+        page = self.page(program, on)
+        if page is None:
+            raise ValueError("There is no schedule for this day.")
+        if session:
+            names = names or [r["associate"] for r in self.store.list_activities(program, [on.isoformat()])
+                              if r.get("session") == session]
+        starts = [s["start"] for l in page["view"]["lanes"] if l["name"] in names for s in l["segments"]
+                  if s["offset"] == 0]
+        return m + (1440 if starts and m < min(starts) else 0)
+
+    def _session_rows(self, program: str, on: date, session: str, names: List[str]) -> List[Dict[str, Any]]:
+        rows = [r for r in self.store.list_activities(program, [on.isoformat()]) if r.get("session") == session]
+        if not rows:
+            raise ValueError("That session is not on this day.")
+        chosen = [r for r in rows if r["associate"] in names] if names else []
+        if not chosen:
+            raise ValueError("Pick who in the session to change.")
+        return chosen
+
+    @journaled
+    def move_session(self, program: str, on: date, session: str, names: List[str], start: int, user_id: int) -> None:
+        """Phase AV: move the chosen members of a session to ``start`` (minutes), each keeping its length; all of them or
+        none, and nobody is booked on top of a break, an absence or another activity (their own old time is theirs)."""
+        chosen = self._session_rows(program, on, session, names)
+        page = self.page(program, on)
+        if page is None:
+            raise ValueError("There is no schedule for this day.")
+        busy = []
+        for r in chosen:
+            seg = next((s for l in page["view"]["lanes"] if l["name"] == r["associate"] for s in l["segments"]
+                        if s["offset"] == 0), None)
+            span = r["end_min"] - r["start"]
+            if seg is None or any(_busy(seg, t) and not r["start"] <= t < r["end_min"]
+                                  for t in range(start, start + span, STEP)):
+                busy.append(r["associate"])
+        if busy:
+            raise ValueError(f"Not free then: {', '.join(busy)}. Nobody was moved.")
+        for r in chosen:
+            span = r["end_min"] - r["start"]
+            self.store.update_activity(r["id"], start=start, end_min=start + span)
+            self._log(program, on, r["associate"], f"{r['kind']} {hm(r['start'])} to {hm(r['end_min'])} moved to "
+                      f"{hm(start)} to {hm(start + span)}", user_id, _group_kind(r["kind"]), ref=f"activity:{r['id']}",
+                      before=hm(r["start"]), after=hm(start))
+
+    @journaled
+    def edit_session(self, program: str, on: date, session: str, names: List[str], start: int, end: int, user_id: int) -> None:
+        """Phase AY (owner, 2026-10-23): give the chosen members of a session a new start and a new end (minutes), a longer or a
+        shorter one; all of them or none. Each stays inside their shift and nobody is booked on top of a break, an absence or
+        another activity (their own old time is theirs)."""
+        if end <= start:
+            raise ValueError("The end time must be after the start time.")
+        if start % STEP or end % STEP:
+            raise ValueError("Sessions go in 5-minute steps.")
+        chosen = self._session_rows(program, on, session, names)
+        page = self.page(program, on)
+        if page is None:
+            raise ValueError("There is no schedule for this day.")
+        busy = []
+        for r in chosen:
+            seg = next((s for l in page["view"]["lanes"] if l["name"] == r["associate"] for s in l["segments"]
+                        if s["offset"] == 0), None)
+            if seg is None or start < seg["start"] or end > seg["end"] or \
+                    any(_busy(seg, t) and not r["start"] <= t < r["end_min"] for t in range(start, end, STEP)):
+                busy.append(r["associate"])
+        if busy:
+            raise ValueError(f"Not free then: {', '.join(busy)}. Nobody was changed.")
+        for r in chosen:
+            self.store.update_activity(r["id"], start=start, end_min=end)
+            self._log(program, on, r["associate"], f"{r['kind']} {hm(r['start'])} to {hm(r['end_min'])} changed to "
+                      f"{hm(start)} to {hm(end)}", user_id, _group_kind(r["kind"]), ref=f"activity:{r['id']}",
+                      before=f"{hm(r['start'])}-{hm(r['end_min'])}", after=f"{hm(start)}-{hm(end)}")
+
+    @journaled
+    def cancel_session(self, program: str, on: date, session: str, names: List[str], user_id: int) -> None:
+        """Phase AV: take the chosen members out of a session (the others stay)."""
+        for r in self._session_rows(program, on, session, names):
+            self.cancel_activity(program, on, r["id"], user_id)
 
     # ------------------------------------------------------------- retention
     def cleanup(self, now: Optional[float] = None) -> int:

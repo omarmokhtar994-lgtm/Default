@@ -7,8 +7,13 @@ passwords lock the account for 15 minutes; a successful login clears it.
 from __future__ import annotations
 
 import json
+import re
+import secrets
 import sqlite3
+import threading
 import time
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -16,6 +21,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from werkzeug.security import check_password_hash, generate_password_hash
 
 LOCK_AFTER_FAILURES = 5
+TEMP_PASSWORD_DAYS = 7
 LOCK_SECONDS = 15 * 60
 
 SCHEMA = """
@@ -113,6 +119,23 @@ create table if not exists leave_requests (
     rta_id integer,
     rta_at real,
     reason text not null default '',
+    outcome text not null default ''
+);
+create table if not exists change_requests (
+    id integer primary key autoincrement,
+    kind text not null,
+    program text not null,
+    shift_date text not null,
+    names text not null default '[]',
+    requester_id integer not null,
+    requester_name text not null default '',
+    detail text not null default '{}',
+    why text not null default '',
+    status text not null default 'waiting',
+    asked real not null,
+    decided_by integer,
+    decided_at real,
+    decision text not null default '',
     outcome text not null default ''
 );
 create table if not exists swap_requests (
@@ -267,6 +290,47 @@ create table if not exists activities (
     user_id integer not null,
     at real not null
 );
+create table if not exists role_permissions (
+    role text not null,
+    key text not null,
+    allowed integer not null,
+    primary key (role, key)
+);
+create table if not exists outside_cover (
+    id integer primary key autoincrement,
+    program text not null,
+    shift_date text not null,
+    associate text not null,
+    role text not null,
+    start integer not null,
+    end_min integer not null,
+    channel text not null default '',
+    language text not null default '',
+    user_id integer not null,
+    at real not null
+);
+create table if not exists revoked_sessions (
+    user_id integer not null,
+    at real not null,
+    revoked real not null,
+    primary key (user_id, at)
+);
+create table if not exists app_settings (
+    key text primary key,
+    value text not null
+);
+create table if not exists incidents (
+    id integer primary key autoincrement,
+    program text not null,
+    shift_date text not null,
+    associate text not null,
+    kind text not null,
+    idx integer not null default 0,
+    minutes integer not null default 0,
+    note text not null default '',
+    user_id integer not null,
+    at real not null
+);
 create table if not exists day_log (
     id integer primary key autoincrement,
     program text not null,
@@ -342,13 +406,37 @@ create table if not exists notify_posts (
 """
 
 
+_PASTE_JUNK = " \t\r\n\x0b\x0c\u00a0\u200b\u200c\u200d\u2060\ufeff"
+
+
+def clean_password(password: str) -> str:
+    """Phase AU: a password without what a paste or a chat app adds around it: spaces, line breaks, a non-breaking space,
+    zero-width characters at either end. What is inside is untouched."""
+    return (password or "").strip(_PASTE_JUNK)
+
+
 def hash_password(password: str) -> str:
-    return generate_password_hash(password, method="scrypt")
+    return generate_password_hash(clean_password(password), method="scrypt")
+
+
+_DUMMY_HASH = generate_password_hash("Dummy-never-matches-1!", method="scrypt")
+
+
+_GENERATIONS: Dict[str, int] = {}  # Phase AV
+_WRITE = re.compile(r"\s*(?:insert\s+(?:or\s+\w+\s+)?into|update(?:\s+or\s+\w+)?|delete\s+from)\s+\"?(\w+)", re.I)
+# Tables no kept day is built from: sign-ins and sessions, the event record, group posts, requests and their answers, the
+# journal, run status, incidents and site settings. Every other table (and any new one) clears the kept days when written.
+QUIET_TABLES = frozenset({"users", "events", "notify_items", "notify_posts", "notify_settings", "change_requests",
+                          "swap_requests", "leave_requests", "day_actions", "runs", "incidents", "app_settings",
+                          "role_permissions", "leave_balances", "revoked_sessions"})
+_GENERATION_LOCK = threading.Lock()
 
 
 class Store:
     def __init__(self, path: Path):
         self.path = Path(path)
+        self._connection = ContextVar(f"store-{id(self)}", default=None)
+        self._gen_key = str(self.path.resolve())  # Phase AV: one count per database file, whichever Store wrote
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._db() as db:
             db.executescript(SCHEMA)
@@ -372,6 +460,46 @@ class Store:
                 db.execute("alter table users add column is_associate integer not null default 0")
             if "roster_name" not in people:
                 db.execute("alter table users add column roster_name text not null default ''")
+            # Phase AS: how the program counts billable time against the intervals: '' or 'interval' (billable aux stays on
+            # the floor, the default), 'sl' (service level) or 'volume' (volume weighted): billable time counts there
+            have = {row["name"] for row in db.execute("pragma table_info(programs)")}
+            if "measure" not in have:
+                db.execute("alter table programs add column measure text not null default ''")
+            # Phase AU: the program's defaults for its RTA pages as JSON: target, operating day start, shrinkage mapping
+            if "rta" not in have:
+                db.execute("alter table programs add column rta text not null default ''")
+            # Phase AU: the program's rules for associate break change requests, as JSON ('' = the defaults)
+            if "requests" not in have:
+                db.execute("alter table programs add column requests text not null default ''")
+            # Phase AU: whether the person who asked has looked at the answer to a break change or coaching request
+            have_cr = {row["name"] for row in db.execute("pragma table_info(change_requests)")}
+            if "seen" not in have_cr:
+                db.execute("alter table change_requests add column seen integer not null default 0")
+                # the answers to requests join the group posts of every LOB that already posts break changes (once;
+                # an admin may untick them on Notifications)
+                db.execute("update notify_settings set kinds = kinds || ',request' where (',' || kinds || ',') like"
+                           " '%,break,%' and (',' || kinds || ',') not like '%,request,%'")
+            # Phase AR: a deleted person's account is closed and hidden; the row stays so the history still names them
+            # Phase AU: whether the asker has looked at the answer to a leave request or a swap
+            for table in ("leave_requests", "swap_requests"):
+                if "seen" not in {row["name"] for row in db.execute(f"pragma table_info({table})")}:
+                    db.execute(f"alter table {table} add column seen integer not null default 0")
+            # Phase AU: when the person last looked at the changes made to their breaks
+            if "day_seen_at" not in people:
+                db.execute("alter table users add column day_seen_at real not null default 0")
+            # Phase AU: a temporary password is good for TEMP_PASSWORD_DAYS (0 = no end: one the person chose themselves)
+            if "temp_until" not in people:
+                db.execute("alter table users add column temp_until real not null default 0")
+            # Phase AU: "sign out other devices": a session started before this time is no longer good
+            if "sessions_from" not in people:
+                db.execute("alter table users add column sessions_from real not null default 0")
+            if "deleted" not in people:
+                db.execute("alter table users add column deleted integer not null default 0")
+            # Phase AK: team managers, and the team manager an associate belongs to (none for everyone from before)
+            if "is_team_manager" not in people:
+                db.execute("alter table users add column is_team_manager integer not null default 0")
+            if "team_manager_id" not in people:
+                db.execute("alter table users add column team_manager_id integer")
             # Phase AD: a group-post item knows the journal entry it came from (bulk changes wait for Send).
             have = {row["name"] for row in db.execute("pragma table_info(notify_items)")}
             if "action_id" not in have:
@@ -382,17 +510,92 @@ class Store:
                 db.execute("alter table actual_breaks add column cancelled integer not null default 0")
             if "why" not in have:
                 db.execute("alter table actual_breaks add column why text not null default ''")
+            # Phase AK: each side of a swap is approved by its own team manager (who approved, per side)
+            have = {row["name"] for row in db.execute("pragma table_info(swap_requests)")}
+            for name in ("tm_a_id", "tm_b_id"):
+                if name not in have:
+                    db.execute(f"alter table swap_requests add column {name} integer")
+            # Phase AO: a swap sent with its rule warnings keeps them for the approvers; a full-week swap says so and
+            # keeps each day's cells (scope 'week', detail as JSON); rows from before are one-day swaps with none.
+            for name, ddl in (("warnings", "text not null default ''"), ("scope", "text not null default 'day'"),
+                              ("detail", "text not null default ''")):
+                if name not in have:
+                    db.execute(f"alter table swap_requests add column {name} {ddl}")
+            # Phase AJ: a cover from outside the roster says its language; covers kept before have none.
+            have = {row["name"] for row in db.execute("pragma table_info(outside_cover)")}
+            if "language" not in have:
+                db.execute("alter table outside_cover add column language text not null default ''")
+            # Phase AV: people booked together share a session, so some of them can be moved or removed together later.
+            have = {row["name"] for row in db.execute("pragma table_info(activities)")}
+            if "session" not in have:
+                db.execute("alter table activities add column session text not null default ''")
             # Phase T: an aux says who it is with and why; rows from before keep both empty.
             for table in ("attendance", "activities"):
                 have = {row["name"] for row in db.execute(f"pragma table_info({table})")}
                 for name in ("with_whom", "why", "with_dept"):  # with_dept: Phase U
                     if name not in have:
                         db.execute(f"alter table {table} add column {name} text not null default ''")
+            # Phase AY: how a late login was booked: 'allowance' (taken from the 2 hours, 2 times a month), 'incident' (kept as an incident,
+            # not from the allowance); '' for every record from before, which the allowance never counts
+            have = {row["name"] for row in db.execute("pragma table_info(attendance)")}
+            if "late_kind" not in have:
+                db.execute("alter table attendance add column late_kind text not null default ''")
 
-    def _db(self) -> sqlite3.Connection:
+    @property
+    def generation(self) -> int:
+        """Phase AV: how many committed writes this database file has seen in this process, so a kept copy of a day knows
+        when it is out of date (another process's writes are caught by the copy's own expiry)."""
+        return _GENERATIONS.get(self._gen_key, 0)
+
+    @contextmanager
+    def _db(self):
+        current = self._connection.get()
+        if current is not None:
+            yield current
+            return
         db = sqlite3.connect(self.path, timeout=30)
         db.row_factory = sqlite3.Row
-        return db
+        touched = []
+
+        def bump() -> None:
+            with _GENERATION_LOCK:
+                _GENERATIONS[self._gen_key] = _GENERATIONS.get(self._gen_key, 0) + 1
+
+        def watch(statement: str) -> None:  # a write to a table a kept day may be built from
+            found = _WRITE.match(statement)
+            if found and found.group(1).lower() not in QUIET_TABLES:
+                if not touched:
+                    bump()  # at once: a day kept before this write is out of date before it is even committed ...
+                touched.append(1)
+        db.set_trace_callback(watch)
+        try:
+            try:
+                yield db
+            except BaseException:
+                db.rollback()
+                if touched:
+                    bump()
+                raise
+            else:
+                db.commit()
+                if touched:
+                    bump()  # ... and again the moment it is committed, for a day built in between
+        finally:
+            db.close()
+
+    @contextmanager
+    def transaction(self):
+        """All nested Store operations commit together, or all roll back."""
+        if self._connection.get() is not None:
+            yield
+            return
+        with self._db() as db:
+            db.execute("begin immediate")
+            token = self._connection.set(db)
+            try:
+                yield
+            finally:
+                self._connection.reset(token)
 
     # ------------------------------------------------------------------ users
     def add_user(self, username: str, display_name: str, password: str, is_admin: bool = False,
@@ -402,13 +605,14 @@ class Store:
             raise ValueError("username and password are required")
         with self._db() as db:
             cur = db.execute(
-                "insert into users (username, display_name, password_hash, is_admin, must_change, created)"
-                " values (?, ?, ?, ?, ?, ?)",
+                "insert into users (username, display_name, password_hash, is_admin, must_change, created, temp_until)"
+                " values (?, ?, ?, ?, ?, ?, ?)",
                 (username, display_name.strip() or username, hash_password(password), int(is_admin),
-                 int(must_change), time.time()))
+                 int(must_change), time.time(), time.time() + TEMP_PASSWORD_DAYS * 86400 if must_change else 0))
             return int(cur.lastrowid)
 
-    PERSON_FIELDS = ("display_name", "is_admin", "is_supervisor", "all_programs", "is_associate", "roster_name")
+    PERSON_FIELDS = ("display_name", "is_admin", "is_supervisor", "all_programs", "is_associate", "roster_name",
+                     "is_team_manager", "team_manager_id")
 
     def update_user(self, user_id: int, **fields: Any) -> None:
         unknown = set(fields) - set(self.PERSON_FIELDS)
@@ -441,7 +645,7 @@ class Store:
             return [dict(r) for r in db.execute("select * from programs order by name collate nocase")]
 
     def update_program(self, program_id: int, **fields: Any) -> None:
-        unknown = set(fields) - {"name", "start_day", "run_mode", "options"}
+        unknown = set(fields) - {"name", "start_day", "run_mode", "options", "measure", "requests", "rta"}
         if unknown:
             raise ValueError(f"Not a program detail: {', '.join(sorted(unknown))}.")
         if fields:
@@ -663,8 +867,30 @@ class Store:
         return dict(row) if row else None
 
     def list_users(self) -> List[Dict[str, Any]]:
+        """Everyone with an account (a deleted person is not listed; ``get_user`` still finds them for the history)."""
         with self._db() as db:
-            return [dict(r) for r in db.execute("select * from users order by username")]
+            return [dict(r) for r in db.execute("select * from users where deleted = 0 order by username")]
+
+    def delete_user(self, user_id: int) -> None:
+        """Phase AR: close a person's account. Sign-in, role, programs, roster link and team link go and the username is
+        free again; the row and the display name stay, because the history of what they did names them."""
+        with self._db() as db:
+            db.execute("update users set deleted = 1, active = 0, username = ?, password_hash = ?, must_change = 0,"
+                       " is_admin = 0, is_supervisor = 0, is_team_manager = 0, is_associate = 0, all_programs = 0,"
+                       " roster_name = '', team_manager_id = null, failed = 0, locked_until = 0 where id = ?",
+                       (f"deleted-{user_id}", hash_password(secrets.token_urlsafe(24)), user_id))
+            db.execute("delete from user_programs where user_id = ?", (user_id,))
+            db.execute("update users set team_manager_id = null where team_manager_id = ?", (user_id,))
+        self.cancel_open_requests(user_id)
+
+    def end_other_sessions(self, user_id: int, at: float) -> None:
+        with self._db() as db:
+            db.execute("update users set sessions_from = ? where id = ?", (at, user_id))
+
+    def get_user_by_name(self, username: str) -> Optional[Dict[str, Any]]:
+        with self._db() as db:
+            row = db.execute("select * from users where username = ?", ((username or "").strip().lower(),)).fetchone()
+        return dict(row) if row else None
 
     def authenticate(self, username: str, password: str) -> Tuple[Optional[Dict[str, Any]], str]:
         """(user, "ok") or (None, "bad" | "locked" | "disabled")."""
@@ -673,18 +899,22 @@ class Store:
         with self._db() as db:
             row = db.execute("select * from users where username = ?", (username,)).fetchone()
             if row is None:
-                check_password_hash(hash_password("x"), password or "")  # same cost either way
+                check_password_hash(_DUMMY_HASH, password or "")  # one check, as for a real name with a wrong password
                 return None, "bad"
             if not row["active"]:
                 return None, "disabled"
             if row["locked_until"] > now:
                 return None, "locked"
-            if not check_password_hash(row["password_hash"], password or ""):
+            typed = password or ""  # as typed first (a password set before Phase AU may carry a space), then cleaned
+            if not (check_password_hash(row["password_hash"], typed) or (
+                    clean_password(typed) != typed and check_password_hash(row["password_hash"], clean_password(typed)))):
                 failed = row["failed"] + 1
                 locked = now + LOCK_SECONDS if failed >= LOCK_AFTER_FAILURES else 0
                 db.execute("update users set failed = ?, locked_until = ? where id = ?",
                            (0 if locked else failed, locked, row["id"]))
                 return None, "locked" if locked else "bad"
+            if row["must_change"] and row["temp_until"] and row["temp_until"] < now:
+                return None, "expired"  # the right temporary password, too late: not a wrong try
             db.execute("update users set failed = 0, locked_until = 0 where id = ?", (row["id"],))
             return dict(row), "ok"
 
@@ -693,12 +923,29 @@ class Store:
 
     def set_password(self, user_id: int, password: str, must_change: bool = False) -> None:
         with self._db() as db:
-            db.execute("update users set password_hash = ?, must_change = ?, failed = 0, locked_until = 0"
-                       " where id = ?", (hash_password(password), int(must_change), user_id))
+            db.execute("update users set password_hash = ?, must_change = ?, failed = 0, locked_until = 0, temp_until = ?"
+                       " where id = ?", (hash_password(password), int(must_change),
+                                         time.time() + TEMP_PASSWORD_DAYS * 86400 if must_change else 0, user_id))
 
     def set_active(self, user_id: int, active: bool) -> None:
         with self._db() as db:
             db.execute("update users set active = ? where id = ?", (int(active), user_id))
+        if not active:
+            self.cancel_open_requests(user_id)
+
+    def cancel_open_requests(self, user_id: int) -> None:
+        """Phase AU: a person switched off or deleted has nothing left waiting for the RTA or their team manager: their
+        open break, coaching, leave and swap requests are cancelled. An answer already given stays; switching them on
+        again does not revive anything."""
+        now = time.time()
+        said = "Cancelled: the account was switched off or closed."
+        with self._db() as db:
+            db.execute("update change_requests set status = 'cancelled', decided_at = ?, outcome = ?"
+                       " where requester_id = ? and status = 'waiting'", (now, said, user_id))
+            db.execute("update leave_requests set status = 'cancelled', outcome = ?"
+                       " where user_id = ? and status in ('waiting_tm', 'waiting_rta')", (said, user_id))
+            db.execute("update swap_requests set status = 'cancelled', outcome = ?"
+                       " where asker_user = ? and status in ('waiting_other', 'waiting_tm')", (said, user_id))
 
     # ------------------------------------------------------------------- runs
     def add_run(self, run_id: str, user_id: int, workbook: str, mode: str, status: str, message: str = "",
@@ -741,12 +988,114 @@ class Store:
             db.execute("insert or replace into operating_days (program, start, user_id, at) values (?, ?, ?, ?)",
                        (program, int(start), user_id, time.time()))
 
-    def get_day_start(self, program: str) -> Optional[int]:
+    def _day_start_own(self, program: str) -> Optional[int]:
         with self._db() as db:
             row = db.execute("select start from operating_days where program = ?", (program,)).fetchone()
         return int(row["start"]) if row else None
 
+    def get_day_start(self, program: str) -> Optional[int]:
+        """The LOB's own operating day start, else its program's default (Phase AU), else None (the calendar day)."""
+        own = self._day_start_own(program)
+        return own if own is not None else self.rta_default(program, "day_start")
+
+    def clear_day_start(self, program: str) -> None:
+        with self._db() as db:
+            db.execute("delete from operating_days where program = ?", (program,))
+
+    def clear_shrinkage_map(self, program: str) -> None:
+        with self._db() as db:
+            db.execute("delete from shrinkage_maps where program = ?", (program,))
+
+    def rta_default(self, unit: str, field: str) -> Any:
+        """Phase AU: a program's default (``target``, ``day_start`` or ``shrinkage``) for the program or LOB ``unit``;
+        None when it has none."""
+        with self._db() as db:
+            row = db.execute("select programs.rta from lobs join programs on programs.id = lobs.program_id"
+                             " where lobs.key = ?", (unit,)).fetchone() or db.execute(
+                "select rta from programs where key = ?", (unit,)).fetchone()
+        try:
+            return json.loads((row["rta"] if row else "") or "{}").get(field)
+        except ValueError:
+            return None
+
     # ------------------------------------------------------------------ leave (Phase AG)
+    # ------------------------------------------------------------- break changes and coaching requests (Phase AS)
+    def add_change_request(self, **fields: Any) -> int:
+        fields.setdefault("asked", time.time())
+        with self._db() as db:
+            cur = db.execute(f"insert into change_requests ({', '.join(fields)}) values ({', '.join('?' for _ in fields)})",
+                             tuple(fields.values()))
+            return int(cur.lastrowid)
+
+    def get_change_request(self, request_id: int) -> Optional[Dict[str, Any]]:
+        with self._db() as db:
+            row = db.execute("select * from change_requests where id = ?", (request_id,)).fetchone()
+        return dict(row) if row else None
+
+    def list_change_requests(self, program: Optional[str] = None, statuses: Optional[List[str]] = None,
+                     requester_id: Optional[int] = None, kind: Optional[str] = None) -> List[Dict[str, Any]]:
+        where, args = [], []
+        for column, value in (("program", program), ("requester_id", requester_id), ("kind", kind)):
+            if value is not None:
+                where.append(f"{column} = ?")
+                args.append(value)
+        if statuses:
+            where.append(f"status in ({', '.join('?' for _ in statuses)})")
+            args += statuses
+        with self._db() as db:
+            return [dict(r) for r in db.execute("select * from change_requests"
+                                                + (" where " + " and ".join(where) if where else "")
+                                                + " order by asked, id", args)]
+
+    def unseen_answers(self, user_id: int) -> List[Dict[str, Any]]:
+        """Phase AU: requests this person asked that someone else has answered and they have not looked at yet."""
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                "select * from change_requests where requester_id = ? and seen = 0"
+                " and ((decided_by is not null and decided_by != requester_id and status in"
+                " ('approved', 'rejected', 'refused')) or status = 'expired') order by decided_at", (user_id,))]
+
+    def break_changes_for(self, program: str, name: str, user_id: int, since: float) -> List[Dict[str, Any]]:
+        """Phase AU: moves, cancellations and returns to plan of ``name``'s breaks that someone else made after ``since``
+        (not the ones made for their own request, which they hear about as an answer)."""
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                "select * from day_log where program = ? and associate = ? and at > ? and user_id != ?"
+                " and (what like 'Break%' or what like 'Lunch%') and what not like '%(asked by%' order by at",
+                (program, name, since, user_id))]
+
+    def mark_day_seen(self, user_id: int, at: float) -> None:
+        with self._db() as db:
+            db.execute("update users set day_seen_at = ? where id = ?", (at, user_id))
+
+    def unseen_leave_swap(self, user_id: int) -> Dict[str, List[Dict[str, Any]]]:
+        """Phase AU: final answers to this person's leave requests and swaps that they have not looked at yet."""
+        with self._db() as db:
+            leave = [dict(r) for r in db.execute(
+                "select * from leave_requests where user_id = ? and seen = 0 and status in ('approved', 'refused')"
+                " order by asked", (user_id,))]
+            swaps = [dict(r) for r in db.execute(
+                "select * from swap_requests where asker_user = ? and seen = 0 and status in ('approved', 'refused',"
+                " 'declined') order by asked", (user_id,))]
+        return {"leave": leave, "swaps": swaps}
+
+    def mark_leave_swap_seen(self, leave_ids: List[int], swap_ids: List[int]) -> None:
+        with self._db() as db:
+            for table, ids in (("leave_requests", leave_ids), ("swap_requests", swap_ids)):
+                if ids:
+                    db.execute(f"update {table} set seen = 1 where id in ({', '.join('?' for _ in ids)})", ids)
+
+    def mark_answers_seen(self, ids: List[int]) -> None:
+        if ids:
+            with self._db() as db:
+                db.execute(f"update change_requests set seen = 1 where id in ({', '.join('?' for _ in ids)})", ids)
+
+    def update_change_request(self, request_id: int, **fields: Any) -> None:
+        if fields:
+            with self._db() as db:
+                db.execute(f"update change_requests set {', '.join(f'{k} = ?' for k in fields)} where id = ?",
+                           (*fields.values(), request_id))
+
     def add_leave(self, **fields: Any) -> int:
         fields.setdefault("asked", time.time())
         names = ", ".join(fields)
@@ -774,6 +1123,17 @@ class Store:
             return [dict(r) for r in db.execute(
                 "select * from leave_requests" + (" where " + " and ".join(where) if where else "")
                 + " order by first_day, id", args)]
+
+    def leave_between(self, start: str, end: str, program: Any = None) -> List[Dict[str, Any]]:
+        """Phase AO (Exports): leave requests touching ``start`` to ``end`` (ISO dates), with who decided."""
+        extra, more = self._program_filter("leave_requests.program", program)
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                "select leave_requests.*, coalesce(tm.display_name, '') as tm_name,"
+                " coalesce(rta.display_name, '') as rta_name from leave_requests"
+                " left join users tm on tm.id = leave_requests.tm_id left join users rta on rta.id = leave_requests.rta_id"
+                " where first_day <= ? and last_day >= ?" + extra + " order by first_day, program, associate, id",
+                [end, start] + more)]
 
     LEAVE_FIELDS = ("status", "tm_id", "tm_at", "rta_id", "rta_at", "reason", "outcome")
 
@@ -813,7 +1173,7 @@ class Store:
                 "select * from swap_requests" + (" where " + " and ".join(where) if where else "") + " order by day, id",
                 args)]
 
-    SWAP_FIELDS = ("status", "answered_at", "decided_by", "decided_at", "reason", "outcome")
+    SWAP_FIELDS = ("status", "answered_at", "decided_by", "decided_at", "reason", "outcome", "tm_a_id", "tm_b_id")
 
     def move_swap(self, swap_id: int, was: str, **fields: Any) -> bool:
         """Change a swap only while its status is still ``was``."""
@@ -836,9 +1196,14 @@ class Store:
         return row[0] if row else None
 
     def get_shrinkage_map(self, program: str) -> Optional[Dict[str, Any]]:
+        """The LOB's own mapping, else its program's default (Phase AU), else None (the standard)."""
         with self._db() as db:
             row = db.execute("select * from shrinkage_maps where program = ?", (program,)).fetchone()
-        return dict(row) if row else None
+        if row:
+            return dict(row)
+        inherited = self.rta_default(program, "shrinkage")
+        return {"program": program, "mapping": json.dumps(inherited, sort_keys=True), "user_id": None, "at": 0} \
+            if inherited else None
 
     def get_interval_target(self, program: str, week_start: str) -> Optional[Dict[str, Any]]:
         with self._db() as db:
@@ -962,6 +1327,22 @@ class Store:
             row = db.execute("select * from activities where id = ?", (activity_id,)).fetchone()
         return dict(row) if row else None
 
+    def update_activity(self, activity_id: int, **fields: Any) -> None:
+        sets = ", ".join(f"{name} = ?" for name in fields)
+        with self._db() as db:
+            db.execute(f"update activities set {sets} where id = ?", (*fields.values(), activity_id))
+
+    def delete_late_incidents(self, program: str, shift_date: str, associate: str) -> None:
+        """Phase AY: a late login kept as an incident goes when that shift's status is booked again."""
+        with self._db() as db:
+            db.execute("delete from incidents where program = ? and shift_date = ? and associate = ? and kind = 'late_login'",
+                       (program, shift_date, associate))
+
+    def vto_activities(self) -> List[Dict[str, Any]]:
+        """Phase AY: every VTO still recorded, any program and date (they are converted to Early leaves at start-up)."""
+        with self._db() as db:
+            return [dict(r) for r in db.execute("select * from activities where kind = 'VTO' order by program, shift_date, id")]
+
     def delete_activity(self, activity_id: int) -> None:
         with self._db() as db:
             db.execute("delete from activities where id = ?", (activity_id,))
@@ -979,12 +1360,128 @@ class Store:
                              " left join users on users.id = activities.user_id where shift_date between ? and ?",
                              [start, end], program, user_id, "activities", "shift_date, program, associate, start")
 
+    # ------------------------------------------------------------- what each role may do (Phase AK)
+    def role_permissions(self) -> Dict[Tuple[str, str], bool]:
+        with self._db() as db:
+            return {(r["role"], r["key"]): bool(r["allowed"]) for r in db.execute("select * from role_permissions")}
+
+    def set_role_permissions(self, rows: Dict[Tuple[str, str], bool]) -> None:
+        """Replace every kept setting with ``rows`` in one transaction."""
+        with self._db() as db:
+            db.execute("delete from role_permissions")
+            db.executemany("insert into role_permissions (role, key, allowed) values (?, ?, ?)",
+                           [(role, key, int(value)) for (role, key), value in rows.items()])
+
+    # ------------------------------------------------------------- cover from outside the roster (Phase AJ)
+    def add_cover(self, **fields: Any) -> int:
+        fields.setdefault("at", time.time())
+        names = ", ".join(fields)
+        marks = ", ".join("?" for _ in fields)
+        with self._db() as db:
+            return int(db.execute(f"insert into outside_cover ({names}) values ({marks})",
+                                  tuple(fields.values())).lastrowid)
+
+    def get_cover(self, cover_id: int) -> Optional[Dict[str, Any]]:
+        with self._db() as db:
+            row = db.execute("select * from outside_cover where id = ?", (cover_id,)).fetchone()
+        return dict(row) if row else None
+
+    def delete_cover(self, cover_id: int) -> None:
+        with self._db() as db:
+            db.execute("delete from outside_cover where id = ?", (cover_id,))
+
+    def list_cover(self, program: str, dates: List[str]) -> List[Dict[str, Any]]:
+        marks = ", ".join("?" for _ in dates)
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                f"select * from outside_cover where program = ? and shift_date in ({marks}) order by start, id",
+                (program, *dates))]
+
+    def cover_between(self, start: str, end: str, program: Optional[str] = None,
+                      user_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        return self._between("select outside_cover.*, coalesce(users.display_name, '') as by_name from outside_cover"
+                             " left join users on users.id = outside_cover.user_id where shift_date between ? and ?",
+                             [start, end], program, user_id, "outside_cover", "shift_date, program, start, associate")
+
     def add_day_log(self, **fields: Any) -> int:
         fields.setdefault("at", time.time())
         names = ", ".join(fields)
         marks = ", ".join("?" for _ in fields)
         with self._db() as db:
             return int(db.execute(f"insert into day_log ({names}) values ({marks})", tuple(fields.values())).lastrowid)
+
+    @property
+    def in_transaction(self) -> bool:
+        """Phase AV: inside a ``transaction()``: its writes are visible to this thread before they are committed, so a kept
+        day (built from what is committed) would be out of date for it."""
+        return self._connection.get() is not None
+
+    def invalidate_days(self) -> None:
+        """Phase AV: something a day is built from changed outside the database (a workbook file added, replaced or
+        deleted): every kept copy of a day is out of date."""
+        with _GENERATION_LOCK:
+            _GENERATIONS[self._gen_key] = _GENERATIONS.get(self._gen_key, 0) + 1
+
+    SESSION_KEEP_SECONDS = 30 * 86400  # an ended session is remembered this long (cookies last 12 hours)
+
+    def revoke_session(self, user_id: int, at: float, now: Optional[float] = None) -> None:
+        """Phase AV: the session that began at ``at`` was signed out; its cookie works no more."""
+        now = time.time() if now is None else now
+        with self._db() as db:
+            db.execute("delete from revoked_sessions where revoked < ?", (now - self.SESSION_KEEP_SECONDS,))
+            db.execute("insert or replace into revoked_sessions (user_id, at, revoked) values (?, ?, ?)", (user_id, at, now))
+
+    def session_revoked(self, user_id: int, at: float) -> bool:
+        with self._db() as db:
+            return db.execute("select 1 from revoked_sessions where user_id = ? and at = ?", (user_id, at)).fetchone() is not None
+
+    def get_app_setting(self, key: str, default: str = "") -> str:
+        """Phase AV: a site-wide setting an admin keeps (text)."""
+        with self._db() as db:
+            row = db.execute("select value from app_settings where key = ?", (key,)).fetchone()
+        return row["value"] if row else default
+
+    def set_app_setting(self, key: str, value: str) -> None:
+        with self._db() as db:
+            db.execute("insert into app_settings (key, value) values (?, ?) on conflict(key) do update set value = excluded.value",
+                       (key, value))
+
+    def add_incident(self, **fields: Any) -> int:
+        """Phase AV: keep one incident (a missed break so far) for the analysis."""
+        names, marks = ", ".join(fields), ", ".join("?" for _ in fields)
+        with self._db() as db:
+            return int(db.execute(f"insert into incidents ({names}) values ({marks})",
+                                  tuple(fields.values())).lastrowid)
+
+    def incidents_between(self, start: str, end: str, program: Any = None,
+                          user_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        return self._between("select incidents.*, coalesce(users.display_name, '') as by_name from incidents"
+                             " left join users on users.id = incidents.user_id where shift_date between ? and ?",
+                             [start, end], program, user_id, "incidents", "shift_date, program, associate, id")
+
+    def requests_between(self, start: str, end: str, program: Any = None) -> List[Dict[str, Any]]:
+        """Phase AV: break and coaching change requests for shifts on ``start`` to ``end``, with who decided."""
+        extra, more = self._program_filter("change_requests.program", program)
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                "select change_requests.*, coalesce(users.display_name, '') as decided_name from change_requests"
+                " left join users on users.id = change_requests.decided_by where shift_date between ? and ?" + extra
+                + " order by shift_date, program, id", [start, end] + more)]
+
+    def swaps_between(self, start: str, end: str, program: Any = None) -> List[Dict[str, Any]]:
+        extra, more = self._program_filter("swap_requests.program", program)
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                "select swap_requests.*, coalesce(users.display_name, '') as decided_name from swap_requests"
+                " left join users on users.id = swap_requests.decided_by where day between ? and ?" + extra
+                + " order by day, program, id", [start, end] + more)]
+
+    def list_incidents(self, program: str, dates: List[str]) -> List[Dict[str, Any]]:
+        marks = ", ".join("?" for _ in dates)
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                f"select * from incidents where program = ? and shift_date in ({marks}) order by id",
+                (program, *dates))]
 
     def list_day_log(self, program: str, shift_date: str) -> List[Dict[str, Any]]:
         with self._db() as db:
@@ -995,7 +1492,8 @@ class Store:
     # ------------------------------------------------------------- the day's change journal (Phase AD)
     DAY_ROW_KEYS = {"attendance": ("program", "shift_date", "associate"),
                     "actual_breaks": ("program", "shift_date", "associate", "idx"),
-                    "activities": ("id",), "channel_moves": ("id",)}
+                    "activities": ("id",), "channel_moves": ("id",), "outside_cover": ("id",),
+                    "incidents": ("id",)}  # Phase AV
 
     def day_rows(self, program: str, dates: List[str]) -> Dict[str, Dict[Tuple[Any, ...], Dict[str, Any]]]:
         """Every record of ``program`` on ``dates`` in the tables an RTA change writes, keyed by each table's key."""
@@ -1067,7 +1565,7 @@ class Store:
             db.execute("delete from day_actions where shift_date < ?", (shift_date,))  # Phase AD: the journal goes too
             return sum(db.execute(f"delete from {table} where shift_date < ?", (shift_date,)).rowcount
                        for table in ("attendance", "actual_breaks", "activities", "day_log", "notify_items",
-                                     "notify_posts"))
+                                     "notify_posts", "outside_cover", "incidents"))
 
     # ------------------------------------------------------------- group posts (Phase AB)
     def get_notify(self, unit: str) -> Optional[Dict[str, Any]]:
@@ -1281,7 +1779,9 @@ class Store:
         return counts
 
     DAY_TABLES = (("attendance", "attendance"), ("breaks", "actual_breaks"), ("activities", "activities"),
-                  ("log", "day_log"), ("channels", "channel_moves"))  # channels: Phase V
+                  ("log", "day_log"), ("channels", "channel_moves"),  # channels: Phase V
+                  ("cover", "outside_cover"),  # Phase AJ
+                  ("incidents", "incidents"))  # Phase AV
 
     def rename_program(self, old: str, new: str, stop_in_use: List[int]) -> Dict[str, int]:
         """Move everything kept under program ``old`` to ``new`` in one transaction (runs, versions and day
@@ -1301,6 +1801,7 @@ class Store:
             db.execute("update or ignore operating_days set program = ? where program = ?", (new, old))
             db.execute("delete from operating_days where program = ?", (old,))
             # Phase AG: leave requests and balances go with the name
+            db.execute("update change_requests set program = ? where program = ?", (new, old))  # Phase AU
             db.execute("update leave_requests set program = ? where program = ?", (new, old))
             db.execute("update swap_requests set program = ? where program = ?", (new, old))
             db.execute("update or ignore leave_balances set program = ? where program = ?", (new, old))

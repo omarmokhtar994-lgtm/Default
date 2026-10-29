@@ -9,12 +9,18 @@ import sys
 import tempfile
 import threading
 import unittest
+import urllib.parse
 from unittest import mock
 from pathlib import Path
 
 from werkzeug.serving import make_server
 
+from webapp.tests import test_au_tomorrow as _au_tomorrow
+
 from webapp.tests.test_runs import REPO, make_app, seed_week, versioned_run
+
+# Phase AY: pages default to the zone of the computer (the pc_tz cookie); the browser here is in Egypt, as the expected times are
+os.environ["TZ"] = "Africa/Cairo"
 
 # Phase J (owner-approved control-room redesign): screenshots of the new look.
 SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_j" / "screens"
@@ -76,7 +82,8 @@ class InTheBrowser(unittest.TestCase):
         page.goto(self.base + "/login")
         expect(page.get_by_role("heading", name="Sign in")).to_be_visible()
         expect(page.locator("footer")).to_contain_text("© 2026 Omar Mokhtar. All rights reserved.")
-        expect(page.locator(".week")).to_be_visible()  # the week of shift bars
+        # re-pinned (Phase BA): the flat week of shift bars was replaced by the four-day deck of shift cards
+        expect(page.locator(".deck3d")).to_be_visible()
         page.screenshot(path=str(SCREENS / "01_login.png"), full_page=True)
 
     def test_dashboard_upload_run_flow(self):
@@ -138,7 +145,7 @@ class InTheBrowser(unittest.TestCase):
         """Phase L: the light look, chosen with the switch in the header."""
         page = self.page(height=1100)
         self.sign_in(page)
-        page.get_by_role("button", name="Light look").click()
+        page.get_by_role("button", name="Tide").click()  # Phase BA: the look control names the three looks
         expect(page.locator("html")).to_have_attribute("data-theme", "light")
         real = self.workbook.with_name("REAL_light.xlsx")
         real.write_bytes(b"PK\x03\x04 real")
@@ -147,8 +154,8 @@ class InTheBrowser(unittest.TestCase):
         expect(page.locator(".status-word")).to_have_text("Approved", timeout=20000)
         expect(page.locator(".grid.after .cell")).to_have_count(126)
         background = page.evaluate("getComputedStyle(document.body).backgroundColor")
-        # re-pinned in Phase AG: the owner picked the Graphite day page on 2026-10-15 (#F1F2F4, was #EAEFF5)
-        self.assertEqual(background, "rgb(241, 242, 244)")
+        # re-pinned in Phase BA: the day look is Tide (owner, 2026-10-25), page #E8EFF6 (was #F1F2F4)
+        self.assertEqual(background, "rgb(232, 239, 246)")
         page.wait_for_timeout(800)
         L_SCREENS.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(L_SCREENS / "light_run_page.png"), full_page=True)
@@ -156,7 +163,7 @@ class InTheBrowser(unittest.TestCase):
         page.mouse.move(0, 0)
         page.wait_for_timeout(800)
         page.screenshot(path=str(L_SCREENS / "light_home.png"), full_page=True)
-        page.get_by_role("button", name="Dark look").click()
+        page.get_by_role("button", name="Night watch").click()
         expect(page.locator("html")).to_have_attribute("data-theme", "dark")
 
     def drop(self, page, name, data=b"PK\x03\x04 dropped"):
@@ -263,8 +270,9 @@ class InTheBrowser(unittest.TestCase):
         page = self.page()
         self.sign_in(page)
         # re-pinned (Phase U): the menu also has "Departments and people", so the People link is matched exactly
+        # re-pinned (Phase AU): other headings on the page now contain "people" too, so the heading is matched exactly
         page.get_by_role("link", name="People", exact=True).click()
-        expect(page.get_by_role("heading", name="People")).to_be_visible()
+        expect(page.get_by_role("heading", name="People", exact=True)).to_be_visible()
         page.screenshot(path=str(SCREENS / "08_people.png"), full_page=True)
 
 
@@ -480,6 +488,110 @@ class TheSchedulesInTheBrowser(unittest.TestCase):
         expect(page.locator("#edit-dialog")).not_to_be_visible()
 
 
+class TheRtaListInTheBrowser(unittest.TestCase):
+    """Phase BA (owner, 2026-10-25: "for RTA only give the choice to the viewer to see it as scrolling or as a whole thing"): the
+    list of people on the RTA Timeline is a scrolling panel by default and each viewer can switch to the whole list; the choice
+    is kept in this browser only."""
+
+    setUpClass = classmethod(TheSchedulesInTheBrowser.setUpClass.__func__)
+    tearDownClass = classmethod(TheSchedulesInTheBrowser.tearDownClass.__func__)
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+    url = "/day?program=AE/AR+B2B&date=2026-10-14"
+
+    def test_the_viewer_chooses_a_scrolling_panel_or_the_whole_list(self):
+        page = self.page(width=1500, height=700)
+        self.sign_in(page)
+        page.goto(self.base + self.url)
+        page.wait_for_load_state("load")
+        box = page.locator(".tl-scroll")
+        expect(box).to_have_attribute("data-mode", "scroll")
+        expect(page.locator("[data-tl-mode-set=scroll]")).to_have_attribute("aria-pressed", "true")
+        self.assertNotEqual(page.evaluate("getComputedStyle(document.querySelector('.tl-scroll')).maxHeight"), "none")
+        self.assertLessEqual(page.evaluate("document.querySelector('.tl-scroll').clientHeight"), 700)  # the panel fits the window
+        page.locator("[data-tl-mode-set=whole]").click()
+        expect(box).to_have_attribute("data-mode", "whole")
+        expect(page.locator("[data-tl-mode-set=whole]")).to_have_attribute("aria-pressed", "true")
+        self.assertEqual(page.evaluate("getComputedStyle(document.querySelector('.tl-scroll')).maxHeight"), "none")
+        page.reload()
+        page.wait_for_load_state("load")
+        expect(page.locator(".tl-scroll")).to_have_attribute("data-mode", "whole")  # kept in this browser
+        page.locator("[data-tl-mode-set=scroll]").click()
+        expect(page.locator(".tl-scroll")).to_have_attribute("data-mode", "scroll")
+        page.close()
+
+    def test_the_panel_is_a_named_keyboard_region_and_the_axis_stays_in_view(self):
+        page = self.page(width=1500, height=700)
+        self.sign_in(page)
+        page.goto(self.base + self.url)
+        page.wait_for_load_state("load")
+        box = page.locator(".tl-scroll")
+        expect(box).to_have_attribute("role", "region")
+        expect(box).to_have_attribute("tabindex", "0")
+        self.assertIn("Who is on the floor", box.get_attribute("aria-label"))
+        self.assertEqual(page.evaluate("getComputedStyle(document.querySelector('.tl-axis')).position"), "sticky")
+        page.close()
+
+
+class TheDepthInTheBrowser(unittest.TestCase):
+    """Phase BA (owner, 2026-10-25: "go for what you suggested"): the little 3D moves only where it is meant to, and not for a person who asks for
+    calm."""
+
+    setUpClass = classmethod(TheSchedulesInTheBrowser.setUpClass.__func__)
+    tearDownClass = classmethod(TheSchedulesInTheBrowser.tearDownClass.__func__)
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+
+    def names(self, page):
+        return page.evaluate("[getComputedStyle(document.querySelector('.deck3d')).animationName, getComputedStyle(document.querySelector('.mark3d')).animationName]")
+
+    def test_the_sign_in_stack_and_mark_move_and_stop_for_reduced_motion(self):
+        page = self.page(width=1280, height=900)
+        page.goto(self.base + "/login")
+        self.assertEqual(self.names(page), ["ts-drift", "ts-spin"])
+        calm = self.browser.new_page(viewport={"width": 1280, "height": 900}, reduced_motion="reduce")
+        self.addCleanup(calm.close)
+        calm.goto(self.base + "/login")
+        self.assertEqual(self.names(calm), ["none", "none"])
+        expect(calm.get_by_label("Username")).to_be_visible()  # the form is still there beside the stack
+
+    def test_the_still_class_pauses_the_stack_and_the_mark(self):
+        # the observer and the visibility listener in app.js add "paused" or "still" to the page; the stylesheet then holds both animations
+        page = self.page(width=1280, height=900)
+        page.goto(self.base + "/login")
+        for cls in ("paused", "still"):
+            page.evaluate("(c) => document.documentElement.classList.add(c)", cls)
+            self.assertEqual(page.evaluate("[getComputedStyle(document.querySelector('.deck3d')).animationPlayState, getComputedStyle(document.querySelector('.mark3d')).animationPlayState]"), ["paused", "paused"])
+            page.evaluate("(c) => document.documentElement.classList.remove(c)", cls)
+
+    def test_a_home_card_leans_toward_the_pointer_and_back(self):
+        page = self.page(width=1400, height=900)
+        self.sign_in(page)
+        card = page.locator(".pcard[data-tilt]").first
+        box = card.bounding_box()
+        page.mouse.move(box["x"] + box["width"] * 0.9, box["y"] + box["height"] * 0.2)
+        page.wait_for_timeout(250)
+        self.assertNotEqual(card.evaluate("el => el.style.getPropertyValue('--ry')"), "")
+        page.mouse.move(2, 2)
+        page.wait_for_timeout(250)
+        self.assertEqual(card.evaluate("el => el.style.getPropertyValue('--ry')"), "")
+
+    def test_the_approved_word_turns_over_once(self):
+        page = self.page(width=1280, height=900)
+        self.sign_in(page)
+        page.evaluate("sessionStorage.setItem('ts-flip', 'yes')")  # what the run page leaves when the person watched the run finish
+        page.goto(self.base + f"/runs/{self.run_id}")
+        expect(page.locator(".status-word.flip")).to_have_count(1)
+        page.reload()
+        expect(page.locator(".status-word.flip")).to_have_count(0)  # once, not on every visit
+
+    def test_no_flip_for_a_run_nobody_watched(self):
+        page = self.page(width=1280, height=900)
+        self.sign_in(page)
+        page.goto(self.base + f"/runs/{self.run_id}")
+        expect(page.locator(".status-word.flip")).to_have_count(0)
+
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -493,6 +605,64 @@ class TheDayInTheBrowser(unittest.TestCase):
     page = InTheBrowser.page
     sign_in = InTheBrowser.sign_in
     url = "/day?program=AE/AR+B2B&date=2026-10-14"
+
+    def test_the_add_dialog_shows_the_break_counts_and_the_late_choice_only_where_they_belong(self):
+        # Phase AY (owner: the counts of breaks showed for every kind): counts for overtime and a call-in only, the allowance or incident choice for a
+        # late login or early leave only, and an early leave cannot be an incident
+        page = self.page(width=1500, height=1000)
+        self.sign_in(page)
+        page.goto(self.base + self.url + "&view=board&add=600")
+        page.wait_for_load_state("load")
+        counts, late = page.locator("[data-extra-breaks]"), page.locator("[data-add-late]")
+        for kind, want_counts, want_late in (("Break", False, False), ("Coaching", False, False), ("Overtime", True, False),
+                                             ("Late", False, True), ("Left early", False, True), ("Sick", False, False)):
+            page.locator(f'#add-dialog input[name=what][value="{kind}"]').check(force=True)
+            self.assertEqual(counts.is_visible(), want_counts, kind)
+            self.assertEqual(late.is_visible(), want_late, kind)
+            if kind == "Left early":
+                self.assertFalse(page.locator("[data-incident]").is_visible())
+            if kind == "Late":
+                self.assertTrue(page.locator("[data-incident]").is_visible())
+
+    def test_the_split_view_fills_the_width_and_the_height_of_the_tab(self):
+        # Phase AY (owner, screenshot: "this is not fixed, it should adapt based on tab width and height"): the panes follow the window, not a fixed
+        # width or a fixed height
+        for width, height in ((2200, 1000), (1500, 1300)):
+            page = self.page(width=width, height=height)
+            self.sign_in(page)
+            for layout, count in (("cols", 2), ("rows", 2), ("cols", 3)):
+                query = "".join(f"&p{i}=AE/AR+B2B&d{i}=2026-10-14" for i in range(1, count + 1))
+                page.goto(self.base + f"/day/split?layout={layout}{query}")
+                page.wait_for_load_state("load")
+                boxes = [page.locator("iframe.split-pane").nth(n).bounding_box() for n in range(count)]
+                left, right = min(b["x"] for b in boxes), max(b["x"] + b["width"] for b in boxes)
+                bottom = max(b["y"] + b["height"] for b in boxes)
+                where = f"{width}x{height} {layout} {count}"
+                self.assertGreaterEqual(right, width - 60, where)               # across the whole tab, whatever its width
+                self.assertGreaterEqual(bottom, height - 40, where)             # and down to the bottom of it
+                self.assertLessEqual(bottom, height + 700, where)               # the page itself does not run away
+                if layout == "cols":
+                    self.assertAlmostEqual(boxes[0]["width"], boxes[-1]["width"], delta=4, msg=where)
+                else:
+                    self.assertAlmostEqual(boxes[0]["height"], boxes[-1]["height"], delta=4, msg=where)
+            page.close()
+
+    def test_the_split_view_shows_two_embedded_days_without_the_page_header(self):
+        # Phase AY (owner: split the RTA between 2 or 3 LOBs or programs)
+        page = self.page(width=1500, height=1000)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        page.goto(self.base + "/day/split?p1=AE/AR+B2B&d1=2026-10-14&p2=AE/AR+B2B&d2=2026-10-15&layout=cols")
+        page.wait_for_load_state("load")
+        expect(page.locator("iframe.split-pane")).to_have_count(2)
+        for n in (0, 1):
+            frame = page.frame_locator("iframe.split-pane").nth(n)
+            expect(frame.locator("h1")).to_contain_text("the day", timeout=20000)
+            expect(frame.locator("header.top")).to_be_hidden()
+        left, right = [page.locator("iframe.split-pane").nth(n).bounding_box() for n in (0, 1)]
+        self.assertGreater(right["x"], left["x"] + left["width"] - 2)  # side by side
+        self.assertEqual(errors, [])
 
     def test_day_page(self):
         page = self.page(width=1500, height=1000)
@@ -509,6 +679,11 @@ class TheDayInTheBrowser(unittest.TestCase):
         page.select_option('select.att[data-name="Associate 001"]', "Late")
         expect(page.locator("#att-dialog")).to_be_visible()
         page.fill("#att-dialog input[name=to]", "13:00")
+        # re-pinned (Phase AY, owner: a late login is first said to be from the allowance or an incident): the dialog asks before it saves
+        page.locator("#att-dialog [data-keep]").click()
+        expect(page.locator("#att-dialog .dlg-result")).to_contain_text("Choose whether this late login is from the allowance or an incident")
+        page.locator("#att-dialog input[name=late_kind][value=allowance]").check()
+        expect(page.locator("#att-dialog [data-policy-text]")).to_contain_text("this month (allowance: 2 hours, 2 times a month)", timeout=15000)
         page.locator("#att-dialog [data-keep]").click()
         expect(page.locator(".log")).to_contain_text("Associate 001, Late, arrived 13:00", timeout=15000)
         page.wait_for_load_state("load")  # the reloaded page's script is attached
@@ -602,7 +777,8 @@ class TheFloorToolsInTheBrowser(unittest.TestCase):
         afternoon, cls.free = everyone[:9], everyone[9:11]  # nine with records, two left free for a meeting
         for name in afternoon[:7]:
             days.set_status("AE/AR B2B", wed, name, "Unplanned leave", omar)
-        days.set_status("AE/AR B2B", wed, afternoon[7], "Late", omar, end="14:20")
+        # re-pinned (Phase AY: a late login over 2 hours needs the account manager's approval as an exception): the scenario stays the same
+        days.set_status("AE/AR B2B", wed, afternoon[7], "Late", omar, end="14:20", am_note="Approved by the account manager (test fixture)")
         days.add_activity("AE/AR B2B", wed, afternoon[8], "Coaching", "15:00", "15:30", omar, billable=True)
 
     def go(self, page, url, errors):
@@ -964,8 +1140,14 @@ class TheRtaActionsInTheBrowser(unittest.TestCase):
         expect(page.locator("dialog[open] #brk-h")).to_have_text(re.compile(rf" to {want}\?$"))
         with page.expect_navigation():
             page.locator("dialog[open] [data-keep]").click()
-            if page.locator("dialog[open] .dlg-ask:not([hidden])").count():
+            # A move that takes the break out of the default (Phase AX) asks "Keep this time anyway?" once the advice has come
+            # back, which can be after the click: wait for the question a moment rather than look once.
+            from playwright.sync_api import TimeoutError as PwTimeout
+            try:
+                page.locator("dialog[open] .dlg-ask:not([hidden])").wait_for(timeout=1500)
                 page.locator("dialog[open] [data-keep]").click()
+            except PwTimeout:
+                pass
         moved = next(b for lane in self.app.extensions["days"].page("AE/AR B2B", date.fromisoformat(day))["view"]["lanes"]
                      if lane["name"] == name for s in lane["segments"] if s["offset"] == 0 for b in s["breaks"]
                      if b["idx"] == idx)
@@ -1044,9 +1226,8 @@ class ThePhaseRInTheBrowser(unittest.TestCase):
         panel.scroll_into_view_if_needed()
         panel.screenshot(path=str(R_SCREENS / "ot_lengths.png"))
         self.go(page, "/day?program=AE/AR+B2B&date=2026-10-14&view=cover", errors)
-        vto = page.locator("section[aria-labelledby=vto-h]")
-        expect(vto.locator("form.vto-offer").first).to_be_visible()
-        vto.screenshot(path=str(R_SCREENS / "vto_stretch.png"))
+        # re-pinned (Phase AY, owner: "remove VTO option"): the panel that offered a VTO stretch is gone
+        expect(page.locator("section[aria-labelledby=vto-h]")).to_have_count(0)
         self.go(page, "/setup/programs", errors)
         stray = page.locator("section.setup-program", has=page.locator("h2", has_text="SAKS, NMG Tier 2"))
         expect(stray).to_contain_text("Move all of it into")
@@ -1944,6 +2125,64 @@ class ThePhaseXYInTheBrowser(unittest.TestCase):
         self.assertEqual(len(loads), 1)
         expect(page.locator("#newrun form p.paused")).to_have_count(0)
 
+    # ---------------------------------------------------------------- Phase AY: open pages ask whether they changed
+    def watching(self, url):
+        self.app.extensions["live"]._kept.clear()  # a stamp is kept for 10 s: one from the test before would still be there
+        page = self.page()
+        self.sign_in(page)
+        page.clock.install()
+        page.goto(self.base + url)
+        page.wait_for_load_state("load")
+        loads = []
+        page.on("load", lambda: loads.append(page.url))
+        return page, loads
+
+    def change_a_break(self):
+        import json
+        row = self.app.extensions["days"].version(self.key, self.sunday)[0]
+        week = json.loads(row["week"])
+        first = next(b for b in week["breaks"] if b["day"] == "Sun")
+        h, m = map(int, first["start"].split(":"))
+        first["start"] = f"{(h * 60 + m + 15) // 60 % 24:02d}:{(h * 60 + m + 15) % 60:02d}"
+        self.store.update_schedule(row["id"], week=json.dumps(week))
+        self.addCleanup(self.store.update_schedule, row["id"], week=row["week"])
+        self.app.extensions["days"]._pages.clear()
+        self.app.extensions["live"]._kept.clear()
+
+    def test_a_read_only_page_reloads_by_itself_after_a_change_and_not_before(self):
+        page, loads = self.watching(f"/overview?program={self.q}&date={self.sunday.isoformat()}")
+        page.clock.run_for(65000)
+        page.wait_for_timeout(800)
+        self.assertEqual(loads, [])  # nothing changed: nothing reloads
+        self.change_a_break()
+        with page.expect_event("load"):
+            page.clock.run_for(36000)
+        self.assertEqual(len(loads), 1)
+
+    def test_the_rta_day_shows_a_bar_after_a_change_and_never_reloads(self):
+        page, loads = self.watching(f"/day?program={self.q}&date={self.sunday.isoformat()}")
+        expect(page.locator(".live-bar")).to_have_count(0)
+        self.change_a_break()
+        page.clock.run_for(36000)
+        # re-pinned in Phase BA: the message floats at the bottom of the window ("This page is out of date.", Refresh, Hide)
+        expect(page.locator(".live-bar")).to_contain_text("This page is out of date.", timeout=30000)  # the answer comes in real time: the day is built again
+        expect(page.locator(".live-bar button.act")).to_have_text("Refresh")
+        self.assertEqual(page.evaluate("getComputedStyle(document.querySelector('.live-bar')).position"), "fixed")
+        page.locator(".live-bar button.x").click()
+        expect(page.locator(".live-bar")).not_to_have_class(re.compile(r"\bon\b"))  # Hide keeps it out of the way
+        page.clock.run_for(90000)
+        page.wait_for_timeout(500)
+        self.assertEqual(loads, [])
+        self.assertEqual(page.locator(".live-bar").count(), 1)
+
+    def test_a_read_only_page_with_a_field_in_use_gets_the_bar_not_a_reload(self):
+        page, loads = self.watching(f"/overview?program={self.q}&date={self.sunday.isoformat()}")
+        page.evaluate("document.dispatchEvent(new Event('input'))")  # somebody typed in a field
+        self.change_a_break()
+        page.clock.run_for(36000)
+        expect(page.locator(".live-bar")).to_have_count(1, timeout=30000)
+        self.assertEqual(loads, [])
+
     def test_a_finished_run_says_so_without_reloading(self):
         page, loads = self.home_with_a_clock()
         self.touch_the_form(page)
@@ -1960,10 +2199,13 @@ class ThePhaseXYInTheBrowser(unittest.TestCase):
         """A signed-in page in one look: night, day (the device's) or day picked with the switch on a dark device."""
         page = self.page(width=width, scheme="light" if name == "day" else "dark")
         self.sign_in(page)
-        if name == "picked":
-            with page.expect_navigation():
-                page.locator("[data-theme-toggle]").click()
-            self.assertEqual(page.evaluate("document.documentElement.dataset.theme"), "light")
+        # re-pinned in Phase BA: the look control names the three looks (the old single toggle is gone); "picked" is Tide chosen on a
+        # dark device, "draft" is Drafting table
+        for wanted, value in (("picked", "light"), ("draft", "draft")):
+            if name == wanted:
+                with page.expect_navigation():
+                    page.locator(f'button.look[data-look="{value}"]').click()
+                self.assertEqual(page.evaluate("document.documentElement.dataset.theme"), value)
         return page
 
     def test_rendered_pairs_pass_in_both_looks(self):
@@ -1983,11 +2225,17 @@ class ThePhaseXYInTheBrowser(unittest.TestCase):
             (f"/week?program={q}&week={s}", ".wk.covered", "fill", 3.0),
             (f"/week?program={q}&week={s}", ".wk.short", "fill", 3.0),
         ]
-        for name in ("night", "day", "picked"):
+        for name in ("night", "day", "picked", "draft"):
             page = self.look(name)
             for url, selector, what, least in checks:
                 page.goto(self.base + url)
                 page.wait_for_load_state("load")
+                if selector == ".wk.short":
+                    # Phase AX re-pin: with the breaks spread over the quarter hours this fixture week has no interval between the
+                    # target and 100% any more (measured: 134 cells over, 34 covered, none short at any target), so the
+                    # stylesheet's amber fill is measured on a cell of that class laid in the grid beside the real ones
+                    page.evaluate("""() => { const c = document.querySelector('td.wk.covered');
+                        if (c && !document.querySelector('td.wk.short')) { const k = c.cloneNode(true); k.className = 'wk short'; c.parentNode.appendChild(k); } }""")
                 pairs = page.evaluate(PAIRS_JS, [selector, what])
                 self.assertTrue(pairs, f"{name}: nothing matched {selector} on {url}")
                 low = sorted({round(contrast(fg, bg), 2) for fg, bg in pairs if contrast(fg, bg) < least})
@@ -2805,7 +3053,10 @@ class ThePhaseADInTheBrowser(unittest.TestCase):
         cls.dir = Path(tempfile.mkdtemp())
         cls.addClassCleanup(shutil.rmtree, cls.dir, True)
         cls.today = datetime.now(EGYPT).date()
-        cls.sunday = cls.today - timedelta(days=(cls.today.weekday() + 1) % 7)
+        # re-pinned (Phase AO, 2026-10-21): the week was the current one, so on a real Wednesday "wed" was today and a
+        # break that had passed was refused (400): the tests were not independent of the clock as this class says.
+        # The week is now next week, so no day in it is ever today.
+        cls.sunday = cls.today - timedelta(days=(cls.today.weekday() + 1) % 7) + timedelta(days=7)
         cls.day_of = {name: cls.sunday + timedelta(days=i) for i, name in
                       enumerate(("sun", "mon", "tue", "wed", "thu", "fri", "sat"))}
         ready = make_ready(cls.dir / "ready.xlsx")
@@ -3070,3 +3321,501 @@ class ThePhaseADInTheBrowser(unittest.TestCase):
                 self.go(phone, self.url(on), errors)
                 phone.locator("#act-bar").screenshot(path=str(AD_SCREENS / "phone_bar.png"))
         self.assertEqual(errors, [])
+
+
+@unittest.skipIf(sync_playwright is None, "Playwright is not installed here; UI tests skipped")
+class ThePeoplePickersInTheBrowser(unittest.TestCase):
+    """Phase AO (owner, 2026-10-20): on People the name list shows only the ticked programs' names, and the bulk team
+    manager list only team managers who share a program with every ticked associate."""
+
+    @classmethod
+    def setUpClass(cls):
+        from webapp.programs import ProgramBook
+        from webapp.tests.test_channel_people import add_version
+        cls.app, cls.store, _, _ = make_app(start_worker=False)
+        cls.store.add_user("omar", "Omar Mokhtar", "Owner-pass-123", is_admin=True, must_change=False)
+        programs = ProgramBook(cls.store)
+        saks, gdi = programs.add_program("SAKS"), programs.add_program("GDI")
+        add_version(cls.store, programs.add_lob(saks, "NMG Tier 2"), "2026-10-11", [("Associate 101", "English")])
+        add_version(cls.store, programs.add_lob(gdi, "GDI English"), "2026-10-11", [("Associate 201", "French")])
+        for name, program in (("tm_saks", saks), ("tm_gdi", gdi)):
+            uid = cls.store.add_user(name, name, "Manager-pass-1", must_change=False)
+            cls.store.update_user(uid, is_team_manager=1)
+            cls.store.set_user_programs(uid, [program])
+        for name, who, program in (("a_saks", "Associate 101", saks), ("a_gdi", "Associate 201", gdi)):
+            uid = cls.store.add_user(name, who, "Associate-pass-1", must_change=False)
+            cls.store.update_user(uid, is_associate=1, roster_name=who)
+            cls.store.set_user_programs(uid, [program])
+        cls.server = make_server("127.0.0.1", 0, cls.app, threaded=True)
+        cls.base = f"http://127.0.0.1:{cls.server.server_port}"
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.pw = sync_playwright().start()
+        launch = {"headless": True}
+        if os.path.exists(CHROMIUM):
+            launch["executable_path"] = CHROMIUM
+        try:
+            cls.browser = cls.pw.chromium.launch(**launch)
+        except Exception as exc:  # pragma: no cover
+            cls.pw.stop()
+            cls.server.shutdown()
+            raise unittest.SkipTest(f"Chromium could not start: {exc}")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.pw.stop()
+        cls.server.shutdown()
+
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+
+    def test_the_name_list_follows_the_ticked_program(self):
+        page = self.page()
+        self.sign_in(page)
+        page.goto(self.base + "/admin/users")
+        form = page.locator("form.people-form").first
+        listing = form.locator("input[name=roster_name]").get_attribute("list")
+        names = lambda: page.eval_on_selector_all(f"#{listing} option", "o => o.map(x => x.value)")
+        self.assertEqual(names(), [])  # nothing ticked yet
+        form.get_by_label("GDI").check()
+        self.assertEqual(names(), ["Associate 201"])
+        form.get_by_label("GDI").uncheck()
+        form.get_by_label("SAKS").check()
+        self.assertEqual(names(), ["Associate 101"])
+
+    def test_the_bulk_team_manager_list_follows_the_ticked_associates(self):
+        page = self.page()
+        self.sign_in(page)
+        page.goto(self.base + "/admin/users")
+        bulk = page.locator("form[action$='/admin/users/team']")
+        usable = lambda: bulk.locator("select[name=team_manager] option:not([disabled])").all_inner_texts()
+        self.assertEqual(sorted(usable()), ["None", "tm_gdi", "tm_saks"])
+        bulk.get_by_label("Associate 201").check()
+        self.assertEqual(sorted(usable()), ["None", "tm_gdi"])
+
+
+@unittest.skipIf(sync_playwright is None, "Playwright is not installed here; UI tests skipped")
+class TheMergedViewsInTheBrowser(unittest.TestCase):
+    """Phase AP (sample ap01): the RTA and the Week page with every LOB of a program together, in a real browser: the
+    View pick, the LOB chips, the strict CSP (no console errors) and the daily views download."""
+
+    @classmethod
+    def setUpClass(cls):
+        from webapp.tests import test_ap_merge_day as fx
+        cls.fx = fx
+        fx._TwoLobs.setUpClass.__func__(cls)
+        cls.server = make_server("127.0.0.1", 0, cls.app, threaded=True)
+        cls.base = f"http://127.0.0.1:{cls.server.server_port}"
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.pw = sync_playwright().start()
+        launch = {"headless": True}
+        if os.path.exists(CHROMIUM):
+            launch["executable_path"] = CHROMIUM
+        try:
+            cls.browser = cls.pw.chromium.launch(**launch)
+        except Exception as exc:  # pragma: no cover
+            cls.pw.stop()
+            cls.server.shutdown()
+            raise unittest.SkipTest(f"Chromium could not start: {exc}")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.pw.stop()
+        cls.server.shutdown()
+        cls.fx._TwoLobs.tearDownClass.__func__(cls)
+
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+
+    def day_url(self, **more):
+        query = {"program": self.one, "date": self.fx.WED.isoformat(), "tz": self.fx.CAIRO, **more}
+        return self.base + "/day?" + urllib.parse.urlencode(query)
+
+    def test_the_merged_day_shows_both_lobs_and_the_pick_goes_back(self):
+        page = self.page()
+        problems = []
+        page.on("console", lambda m: problems.append(m.text) if m.type == "error" else None)
+        page.on("pageerror", lambda e: problems.append(str(e)))
+        self.sign_in(page)
+        page.goto(self.day_url(merge="1"))
+        chips = page.locator(".tl-who .tl-tag.lob")
+        texts = set(chips.all_inner_texts())
+        self.assertEqual(texts, {"Tier 1", "Tier 2"})
+        # Re-pinned (Phase AX, owner 2026-10-22: tick the LOBs to show together): the View pick is a set of tick
+        # boxes now, not a select with "This LOB" / "All LOBs"; going back is unticking the others.
+        expect(page.locator(".lob-pick summary")).to_have_text("View: Tier 1 + Tier 2")
+        page.locator(".lob-pick summary").click()
+        page.get_by_role("checkbox", name="Tier 2").uncheck()
+        page.get_by_role("button", name="Show together").click()
+        page.wait_for_load_state()
+        expect(page.locator(".tl-tag.lob")).to_have_count(0)
+        self.assertEqual(problems, [])
+
+    def test_the_daily_views_download_is_an_excel_file_with_a_sheet_each(self):
+        page = self.page()
+        self.sign_in(page)
+        page.goto(self.day_url(merge="1"))
+        with page.expect_download() as taken:
+            page.get_by_role("link", name="Download daily views").click()
+        saved = Path(tempfile.mkdtemp()) / "daily.xlsx"  # the browser's own copy has no extension
+        taken.value.save_as(str(saved))
+        from openpyxl import load_workbook
+        names = load_workbook(saved).sheetnames
+        self.assertEqual(names[0], "Everyone")
+        self.assertIn("Associate 027", names)
+        self.assertIn("Associate B027", names)
+
+    def test_the_merged_week_draws_one_grid(self):
+        page = self.page()
+        self.sign_in(page)
+        page.goto(self.base + "/week?" + urllib.parse.urlencode(
+            {"program": self.one, "week": "2026-10-11", "merge": "1", "tz": self.fx.CAIRO}))
+        expect(page.get_by_role("heading", name="SAKS, Tier 1 + Tier 2, week of")).to_be_visible()
+        expect(page.locator("table.wkgrid")).to_be_visible()
+
+
+@unittest.skipIf(sync_playwright is None, "Playwright is not installed here; UI tests skipped")
+class TheRequestsInTheBrowser(_au_tomorrow.TheNextDay):
+    """Phase AU: an associate's Today and Weeks tabs, a break change for tomorrow, the RTA deciding on its own tab, and
+    the coaching list's search box, in a real browser with the strict CSP (no console errors). The clock is stopped on
+    Wednesday 14 October 2026 at 12:00 Cairo time."""
+
+    @classmethod
+    def setUpClass(cls):
+        from unittest import mock
+        from webapp.tests.test_as_pages import _Noon
+        super().setUpClass()
+        cls.clock = mock.patch("webapp.app.datetime", _Noon)
+        cls.clock.start()
+        cls.server = make_server("127.0.0.1", 0, cls.app, threaded=True)
+        cls.base = f"http://127.0.0.1:{cls.server.server_port}"
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.pw = sync_playwright().start()
+        launch = {"headless": True}
+        if os.path.exists(CHROMIUM):
+            launch["executable_path"] = CHROMIUM
+        try:
+            cls.browser = cls.pw.chromium.launch(**launch)
+        except Exception as exc:  # pragma: no cover
+            cls.clock.stop()
+            cls.pw.stop()
+            cls.server.shutdown()
+            raise unittest.SkipTest(f"Chromium could not start: {exc}")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.clock.stop()
+        cls.pw.stop()
+        cls.server.shutdown()
+        super().tearDownClass()
+
+    def setUp(self):
+        self.clear()
+
+    page = InTheBrowser.page
+
+    for _name in [n for n in dir(_au_tomorrow.TheNextDay) if n.startswith("test_")]:
+        locals()[_name] = None  # the fixture's own tests run in their own module, not again here
+    del _name
+
+    def sign_in(self, page, username, password):
+        page.goto(self.base + "/login")
+        page.get_by_label("Username").fill(username)
+        page.get_by_label("Password").fill(password)
+        page.get_by_role("button", name="Sign in").click()
+        page.wait_for_load_state()
+
+    def watched(self):
+        page = self.page()
+        problems = []
+        page.on("console", lambda m: problems.append(m.text) if m.type == "error" else None)
+        page.on("pageerror", lambda e: problems.append(str(e)))
+        page.on("response", lambda r: problems.append(f"{r.status} {r.url}") if r.status in (403, 404, 500) else None)
+        return page, problems
+
+    def test_an_associate_moves_between_today_and_weeks_and_asks_for_tomorrow(self):
+        with self.store._db() as db:
+            db.execute("delete from change_requests")
+        page, problems = self.watched()
+        self.sign_in(page, "a027", "Associate-pass-1")
+        expect(page.get_by_role("heading", name="My day")).to_be_visible()
+        expect(page.locator("nav.tabs a[aria-current=page]")).to_have_text("Today")
+        page.locator("nav.tabs").get_by_role("link", name="Weeks").click()
+        expect(page.get_by_role("heading", name="My weeks")).to_be_visible()
+        page.locator("nav.tabs").get_by_role("link", name="Today").click()
+        page.get_by_role("link", name="Change").nth(2).click()  # tomorrow's first break
+        expect(page.get_by_role("heading", name="Move Break 1 tomorrow")).to_be_visible()
+        page.locator("input[name=to]:not([disabled])").first.check()
+        page.get_by_role("button", name="Send to the RTA").click()
+        expect(page.get_by_text("waiting for the RTA")).to_be_visible()
+        self.assertEqual(problems, [])
+
+    def test_the_rta_decides_on_its_own_tab_and_stays_there(self):
+        with self.store._db() as db:
+            db.execute("delete from change_requests")
+        page, problems = self.watched()
+        self.sign_in(page, "a027", "Associate-pass-1")
+        page.goto(self.base + "/me/breaks?change=0")
+        page.locator("input[name=to]:not([disabled])").first.check()
+        page.get_by_role("button", name="Send to the RTA").click()
+        other = self.page()
+        self.sign_in(other, "rta1", "Staff-pass-123")
+        other.goto(self.base + "/day?" + urllib.parse.urlencode({"program": self.key, "date": "2026-10-14", "view": "requests"}))
+        expect(other.locator("nav.tabs a[aria-current=page]")).to_contain_text("Requests")
+        other.get_by_role("button", name="Approve as asked").click()
+        other.wait_for_load_state()
+        self.assertIn("view=requests", other.url)
+        expect(other.get_by_text("Approved:")).to_be_visible()
+        self.assertEqual(problems, [])
+
+    def test_the_coaching_list_filters_by_name(self):
+        page, problems = self.watched()
+        self.sign_in(page, "tm_only", "Manager-pass-123")
+        page.goto(self.base + "/requests/coaching?" + urllib.parse.urlencode({"program": self.key}))
+        rows = page.locator("#coach-list .exp-kind")
+        total = rows.count()
+        page.get_by_label("Find an associate").fill("027")
+        self.assertEqual(page.locator("#coach-list .exp-kind:visible").count(), 1)
+        page.get_by_label("Find an associate").fill("")
+        self.assertEqual(page.locator("#coach-list .exp-kind:visible").count(), total)
+        self.assertEqual(problems, [])
+
+    def test_the_operating_day_window_fits_its_hours(self):
+        from webapp.programs import ProgramBook
+        pid = self.pid
+        ProgramBook(self.store).set_rta_defaults(pid, None, 9 * 60, None)
+        self.addCleanup(ProgramBook(self.store).set_rta_defaults, pid, None, None, None)
+        page, problems = self.watched()
+        self.sign_in(page, "rta1", "Staff-pass-123")
+        with mock.patch("webapp.app.operating_span", return_value=15 * 60):
+            page.goto(self.base + "/day?" + urllib.parse.urlencode(
+                {"program": self.key, "date": "2026-10-14", "tz": "Africa/Cairo", "start": "09:00"}))
+            self.assertEqual(page.locator("svg.tl-track").first.get_attribute("viewBox"), "540 0 900 30")
+            self.assertEqual(page.locator(".tl-ticks span").count(), 8)          # every 2 hours across 15 hours
+            cols = page.locator(".tl").first.get_attribute("class")
+            self.assertIn("cols-15", cols)                                    # 15 hours of hourly intervals (this program's)
+            expect(page.locator(".achv-strip").first).to_have_attribute("data-span", "900")
+            self.assertGreater(page.locator("svg.tl-track rect.brk").count(), 0)
+        self.assertEqual(problems, [])
+
+    def test_the_hour_labels_sit_where_their_hours_are_on_a_short_window(self):
+        # Phase AY (owner: "the hours timeline does not match the intervals below"): the labels were laid out for 24 hours
+        from webapp.programs import ProgramBook
+        pid = self.pid
+        ProgramBook(self.store).set_rta_defaults(pid, None, 9 * 60, None)
+        self.addCleanup(ProgramBook(self.store).set_rta_defaults, pid, None, None, None)
+        page, problems = self.watched()
+        self.sign_in(page, "rta1", "Staff-pass-123")
+        with mock.patch("webapp.app.operating_span", return_value=15 * 60):
+            page.goto(self.base + "/day?" + urllib.parse.urlencode(
+                {"program": self.key, "date": "2026-10-14", "tz": "Africa/Cairo", "start": "09:00"}))
+            box = page.locator(".tl-ticks").first.bounding_box()
+            labels = page.locator(".tl-ticks span")
+            for i in (1, 4, 7):  # 11:00, 17:00, 23:00: 2, 8 and 14 hours into a 15-hour window
+                at = labels.nth(i).bounding_box()["x"] - box["x"]
+                self.assertAlmostEqual(at / box["width"], i * 120 / 900, delta=0.01, msg=f"label {i}")
+            track = page.locator("svg.tl-track").first
+            self.assertEqual(track.evaluate("e => e.style.backgroundSize.split(' ')[0]"), "6.6667%")  # an hour line each 60 of 900 minutes
+        self.assertEqual(problems, [])
+
+
+class TheFittedDayInTheBrowser(unittest.TestCase):
+    """Phase AV (found by the owner on the live site): with "Day starts at" 13:00 the RTA fits the window to the last
+    shift (16 hours), and the interval rows were drawn stacked in one column because the style rules only knew 24, 48,
+    72, 96, 144 and 288 cells. Every cell count lays out as a row of columns. Made-up data, Wednesday 14 Oct 2026."""
+
+    @classmethod
+    def setUpClass(cls):
+        from webapp.tests.test_as_pages import _Noon
+        from webapp.tests.test_as_requests import _Fixture
+        from webapp.programs import ProgramBook
+        _Fixture.setUpClass.__func__(cls)
+        cls._fixture = _Fixture
+        ProgramBook(cls.store).set_rta_defaults(cls.pid, None, 13 * 60, None)  # "Day starts at" 13:00, as on the live site
+        cls.clock = mock.patch("webapp.app.datetime", _Noon)
+        cls.clock.start()
+        cls.server = make_server("127.0.0.1", 0, cls.app, threaded=True)
+        cls.base = f"http://127.0.0.1:{cls.server.server_port}"
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.pw = sync_playwright().start()
+        launch = {"headless": True}
+        if os.path.exists(CHROMIUM):
+            launch["executable_path"] = CHROMIUM
+        try:
+            cls.browser = cls.pw.chromium.launch(**launch)
+        except Exception as exc:  # pragma: no cover
+            cls.clock.stop()
+            cls.pw.stop()
+            cls.server.shutdown()
+            raise unittest.SkipTest(f"Chromium could not start: {exc}")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.clock.stop()
+        cls.pw.stop()
+        cls.server.shutdown()
+        cls._fixture.tearDownClass.__func__(cls)
+
+    def rows(self, hours, start="13:00", view=None):
+        page = self.browser.new_page(viewport={"width": 1280, "height": 900})
+        self.addCleanup(page.close)
+        page.goto(self.base + "/login")
+        page.get_by_label("Username").fill("rta1")
+        page.get_by_label("Password").fill("Staff-pass-123")
+        page.get_by_role("button", name="Sign in").click()
+        page.wait_for_load_state()
+        query = {"program": self.key, "date": "2026-10-14", "start": start, "tz": "Africa/Cairo"}
+        if view:
+            query["view"] = view
+        with mock.patch("webapp.app.operating_span", return_value=hours * 60), \
+                mock.patch("webapp.attendance.operating_span", return_value=hours * 60):
+            page.goto(self.base + "/day?" + urllib.parse.urlencode(query))
+        return page
+
+    def test_the_interval_rows_run_across_for_any_window_length(self):
+        for hours in (16, 15, 10, 7):
+            page = self.rows(hours)
+            cells = page.locator(".tl-cells").first.locator(".tc")
+            n = cells.count()
+            self.assertGreater(n, 6, hours)
+            first, second, last = cells.nth(0).bounding_box(), cells.nth(1).bounding_box(), cells.nth(n - 1).bounding_box()
+            self.assertAlmostEqual(first["y"], second["y"], delta=2, msg=f"{hours} h: the second cell is below the first")
+            self.assertGreater(second["x"], first["x"], hours)
+            self.assertAlmostEqual(first["y"], last["y"], delta=2, msg=f"{hours} h: the last cell is on another row")
+            self.assertLess(page.locator(".tl-cells").first.bounding_box()["height"], 60, hours)
+
+    def test_the_figures_under_the_timeline_are_12_pixels_on_the_usual_layouts(self):
+        # Phase AY (owner: "on the floor now, plus/minus is not very readable"): 9 px before; the narrow 15 minute layouts keep the small size
+        page = self.rows(16)
+        size = page.locator(".tl-num .tl-cells .tc").nth(1).evaluate("e => parseFloat(getComputedStyle(e).fontSize)")
+        self.assertGreaterEqual(size, 12)
+        self.assertGreaterEqual(page.locator(".tl-num").first.bounding_box()["height"], 26)
+
+    def test_the_target_strip_runs_across_too(self):
+        page = self.rows(16, view="board")
+        strip = page.locator(".achv-strip").first
+        if strip.count() == 0:
+            self.skipTest("this day has no target strip")
+        items = strip.locator("i")
+        n = items.count()
+        self.assertGreater(n, 6)
+        self.assertAlmostEqual(items.nth(0).bounding_box()["y"], items.nth(n - 1).bounding_box()["y"], delta=2)
+
+
+class TheScrollingInTheBrowser(unittest.TestCase):
+    """Phase BC (owner, 2026-10-26: "in the scrolling parts I'm not able to scroll the page itself if the scroll ended in that part", "make sure the
+    full list option is available in channel as well and schedule", "if something is written very big such as the warning for the 29th should be
+    wrapped"): the page takes over when a panel has reached its end; every scrolling panel on the Schedules, Channels and Week pages can be shown as
+    a whole list; a clock-change warning in a shift cell wraps."""
+
+    setUpClass = classmethod(ThePhaseVInTheBrowser.setUpClass.__func__)
+    tearDownClass = classmethod(ThePhaseVInTheBrowser.tearDownClass.__func__)
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+
+    def pages(self):
+        q = self.key.replace(" ", "+")
+        v = self.version["id"]
+        return (f"/runs/{self.run_id}/schedules", f"/setup/channels?program={q}", f"/schedules/{v}/channels?day=Thu", f"/schedules/{v}/week")
+
+    def test_the_page_scrolls_on_when_a_panel_has_reached_its_end(self):
+        page = self.page(width=1280, height=800)
+        self.sign_in(page)
+        page.goto(self.base + self.pages()[0])
+        page.wait_for_load_state("load")
+        # a real scrolling panel of this site, filled to be taller than its box, with the page made tall below it
+        page.evaluate("""() => {
+            const box = document.querySelector('.panel-scroll');
+            const filler = document.createElement('div'); filler.style.height = '3000px'; box.appendChild(filler);
+            const tail = document.createElement('div'); tail.style.height = '4000px'; document.querySelector('main').appendChild(tail);
+            box.scrollIntoView({block: 'center'}); box.scrollTop = box.scrollHeight;
+        }""")
+        before = page.evaluate("window.scrollY")
+        spot = page.locator(".panel-scroll").first.bounding_box()
+        page.mouse.move(spot["x"] + spot["width"] / 2, spot["y"] + spot["height"] / 2)
+        page.mouse.wheel(0, 600)
+        page.wait_for_timeout(400)
+        self.assertGreater(page.evaluate("window.scrollY"), before)  # the wheel carried on to the page
+
+    def test_no_scrolling_panel_traps_the_wheel(self):
+        page = self.page(width=1280, height=800)
+        self.sign_in(page)
+        page.goto(self.base + self.pages()[0])
+        got = page.evaluate("""() => Array.from(document.querySelectorAll('.panel-scroll')).map(e => getComputedStyle(e).overscrollBehaviorY)""")
+        self.assertTrue(got)
+        self.assertEqual(set(got), {"auto"})
+
+    def test_the_rta_list_does_not_trap_the_wheel_either(self):
+        page = self.page(width=1280, height=800)
+        self.sign_in(page)
+        page.goto(f"{self.base}/day?program={self.key.replace(' ', '+')}&date=2026-10-14")
+        got = page.evaluate("""() => Array.from(document.querySelectorAll('.tl-scroll, .rb-scroll')).map(e => getComputedStyle(e).overscrollBehaviorY)""")
+        self.assertTrue(got)
+        self.assertEqual(set(got), {"auto"})
+
+    def test_every_scrolling_panel_can_be_shown_as_a_whole_list(self):
+        for path in self.pages():
+            page = self.page(width=1280, height=800)
+            self.sign_in(page)
+            page.goto(self.base + path)
+            page.wait_for_load_state("load")
+            bar = page.locator("[data-list-mode]")
+            expect(bar).to_be_visible()
+            expect(bar.get_by_role("button", name="Scrolling panels")).to_have_attribute("aria-pressed", "true")
+            bar.get_by_role("button", name="Whole lists").click()
+            modes = page.evaluate("Array.from(document.querySelectorAll('.panel-scroll')).map(e => [e.getAttribute('data-mode'), getComputedStyle(e).maxHeight])")
+            self.assertTrue(modes, path)
+            for mode, height in modes:
+                self.assertEqual((mode, height), ("whole", "none"), path)
+            page.reload()
+            expect(page.locator("[data-list-mode]").get_by_role("button", name="Whole lists")).to_have_attribute("aria-pressed", "true")
+            page.close()
+
+    def test_a_clock_change_warning_in_a_shift_cell_stays_short(self):
+        # re-pinned (same phase): the cell holds a two-word label (the full words are in its tip and once under the table, see
+        # test_bc_schedule_notes), so the day's column stays as narrow as its neighbours
+        page = self.page(width=1280, height=800)
+        self.sign_in(page)
+        page.goto(self.base + self.pages()[0])
+        widths = page.evaluate("""() => {
+            const cells = document.querySelectorAll('.edgrid tbody tr:first-child td');
+            const before = cells[1].getBoundingClientRect().width;
+            const note = document.createElement('span'); note.className = 'ed-warn'; note.textContent = 'Clocks change';
+            note.title = '29 Oct 2026 23:00 occurs twice in Africa/Cairo because the clocks change. The workbook does not identify the occurrence.';
+            cells[1].querySelector('button').appendChild(note);
+            return [before, cells[1].getBoundingClientRect().width];
+        }""")
+        self.assertLess(widths[1], 200)
+        self.assertLessEqual(widths[1], widths[0] + 30)
+
+    def test_the_two_channel_ticks_are_alternatives(self):
+        page = self.page(width=1280, height=800)
+        self.sign_in(page)
+        page.goto(self.base + self.pages()[2])
+        fixed, balanced = page.locator("input[name=consistent]"), page.locator("input[name=balanced]")
+        fixed.check()
+        self.assertTrue(fixed.is_checked())
+        balanced.check()
+        self.assertTrue(balanced.is_checked())
+        self.assertFalse(fixed.is_checked())  # ticking one clears the other
+        fixed.check()
+        self.assertFalse(balanced.is_checked())
+
+    def test_the_interval_board_can_be_shown_as_a_whole_list_too(self):
+        # owner, 2026-10-29: "intervals doesn't have the full view, it has only the scrolling one"
+        page = self.page(width=1280, height=800)
+        self.sign_in(page)
+        page.goto(f"{self.base}/day?program={self.key.replace(' ', '+')}&date=2026-10-14&view=board")
+        page.wait_for_load_state("load")
+        board = page.locator(".rb-scroll.panel-scroll")
+        expect(board).to_have_count(1)
+        bar = page.locator("[data-list-mode]")
+        expect(bar).to_be_visible()
+        expect(board).to_have_attribute("data-mode", "scroll")
+        bar.get_by_role("button", name="Whole lists").click()
+        self.assertEqual(page.evaluate("getComputedStyle(document.querySelector('.rb-scroll.panel-scroll')).maxHeight"), "none")
+        self.assertEqual(page.evaluate("getComputedStyle(document.querySelector('.rb-scroll.panel-scroll')).overflowY"), "visible")
+

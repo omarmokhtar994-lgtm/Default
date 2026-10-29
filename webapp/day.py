@@ -23,7 +23,7 @@ import re
 import threading
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from openpyxl import load_workbook
 
@@ -34,10 +34,11 @@ from .versions import DAYS, shift_span
 STEP = 5  # minutes: breaks move in 5-minute steps (owner, 2026-10-08)
 PRESENT = "Present"
 STATUSES = ["Present", "Unplanned leave", "Late", "Sick", "Public holiday", "Exam leave", "Left early", "Training", "Coaching",
-            "Meeting", "System issue", "Task"]  # Phase AF: Public holiday (E3) and Task (E2); Phase AI: Exam leave
+            "Meeting", "System issue", "Task", "Bio break"]  # Phase AV: Bio break; Phase AF: Public holiday (E3) and Task (E2); Phase AI: Exam leave
 ABSENT = {"Unplanned leave", "Sick", "Public holiday", "Exam leave"}  # the whole shift
 LATE_EARLY = {"Late", "Left early"}
-AUX = {"Training", "Coaching", "Meeting", "System issue", "Task"}  # billable or not, chosen when it is recorded
+BIO = "Bio break"  # Phase AV: an aux that is never billable and needs no who or why
+AUX = {"Training", "Coaching", "Meeting", "System issue", "Task", BIO}  # billable or not, chosen when it is recorded
 EXTRA_BREAKS = ("Break", "Lunch")  # added on the day in RTA (owner, 2026-10-08): always off the floor
 TIMED = LATE_EARLY | AUX  # may carry a from/to time
 CANCELLED = "cancelled"  # Phase AD: an ``actual`` break value meaning the RTA cancelled that break (a reason is kept)
@@ -105,6 +106,30 @@ def _grid(wb, name: str) -> Dict[int, Dict[int, float]]:
             except (TypeError, ValueError):
                 out[d][t] = 0.0
     return out
+
+
+def spread_languages(people: Dict[str, int], serves: Dict[str, List[str]], minimum: Dict[str, int]) -> Dict[str, float]:
+    """Phase AY (owner, 2026-10-23: a bilingual is counted where they are needed, split only when both languages need them; the rule is in
+    evidence/phase_ay/REQUESTS.md): the people on the floor in one slot, by language label, spread over the open language rows (``minimum``).
+    ``serves[label]`` lists the rows a label can cover. A label that serves one row counts there; one that serves several is given, a
+    person at a time, to the row furthest below its minimum (rows tied share the person equally), or split equally when none is below.
+    Labels with fewer rows go first, then by name, so the order of ``people`` never matters. Everyone counts once in total."""
+    got = {row: 0.0 for row in minimum}
+    several = []
+    for label in sorted(people):
+        rows = [r for r in serves.get(label, []) if r in minimum]
+        if len(rows) == 1:
+            got[rows[0]] += people[label]
+        elif len(rows) > 1:
+            several.append((len(rows), label, rows))
+    for _, label, rows in sorted(several):
+        for _ in range(people[label]):
+            short = {r: minimum[r] - got[r] for r in rows}
+            worst = max(short.values())
+            tied = [r for r in rows if abs(short[r] - worst) < 1e-9] if worst > 1e-9 else rows
+            for r in tied:
+                got[r] += 1 / len(tied)
+    return got
 
 
 def _languages(wb) -> List[Dict[str, Any]]:
@@ -201,9 +226,11 @@ def _yesterday(week: Dict[str, Any], day: int, before: Any) -> Optional[Tuple[Di
     return before
 
 
-def _segments(week: Dict[str, Any], inputs: Dict[str, Any], day: int, before: Any = SAME_WEEK) -> List[Dict[str, Any]]:
+def _segments(week: Dict[str, Any], inputs: Dict[str, Any], day: int, before: Any = SAME_WEEK,
+              carried: frozenset = frozenset()) -> List[Dict[str, Any]]:
     """Shift pieces touching this day: the day's own shifts and the previous day's overnight ones (from
-    ``before``: the (week, column) holding the day before, or None for the input's carry-in tab)."""
+    ``before``: the (week, column) holding the day before, or None for the input's carry-in tab). ``carried``
+    (Phase AO): names whose shift yesterday ended at 24:00 but has overtime past it, so it reaches today."""
     out = []
     for offset in (-1, 0):
         source, d = (week, day) if offset == 0 else (_yesterday(week, day, before) or (None, None))
@@ -220,7 +247,7 @@ def _segments(week: Dict[str, Any], inputs: Dict[str, Any], day: int, before: An
             if not span:
                 continue
             start, end = span[0] + 1440 * offset, span[1] + 1440 * offset
-            if end <= 0 or start >= 1440:
+            if (end <= 0 and not (offset == -1 and a["name"] in carried)) or start >= 1440:
                 continue
             out.append({"name": a["name"], "slot": a.get("slot", ""), "language": a["language"], "offset": offset,
                         "called_in": False, "label": a["days"][d],
@@ -328,7 +355,8 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
              attendance: Dict[Tuple[int, str], Dict[str, Any]],
              actual: Dict[Tuple[int, str, int], int], measure: str = "interval",
              activities: Optional[Dict[Tuple[int, str], List[Dict[str, Any]]]] = None,
-             before: Any = SAME_WEEK, channels: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+             before: Any = SAME_WEEK, channels: Optional[Dict[str, Any]] = None,
+             cover: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """The day's lanes, interval cells, language rows and tiles (and, with ``channels``, the channel view of
     ``channel_day``: setup, skills, language_rows, blocks and moves per (offset, name), after, gaps). ``before`` is where the day before is
     read from: (week, column), None for the input's carry-in tab, or this week's previous column. ``attendance``,
@@ -337,7 +365,9 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
     shift's own midnight. ``measure`` is "interval" (billable aux stays on the
     floor) or "sl". Activities: aux kinds (off the floor unless billable under
     interval compliance), "VTO" (off the floor) and "Overtime" (on the floor
-    outside the shift; not in the plan)."""
+    outside the shift; not in the plan). ``cover`` (Phase AJ): people not on the roster logging in, each
+    {"start", "end", "channel"} in minutes from this day's midnight; each counts as one person on the floor for
+    those minutes (never in the plan, a language or a lane)."""
     if measure not in MEASURES:
         raise ValueError(f"unknown measure {measure!r}")
     step = inputs["interval"]
@@ -346,7 +376,9 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
     plan = [[] for _ in range(slots)]
     lanes: Dict[str, Dict[str, Any]] = {}
     pieces = []
-    segments = _segments(week, inputs, day, before)
+    carried = frozenset(name for (offset, name), found in (activities or {}).items() if offset == -1
+                        and any(a["kind"] == "Overtime" and a["end"] > 1440 for a in found))
+    segments = _segments(week, inputs, day, before, carried)
     segments += _called_in(week, day, activities, {(x["offset"], x["name"]) for x in segments}, before)
     for seg in segments:
         mark = attendance.get((seg["offset"], seg["name"])) or {}
@@ -395,12 +427,14 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
     def overlapping(lo: int, hi: int, t: int) -> bool:
         return lo < t + step and t < hi
 
+    cover = [c for c in (cover or []) if c["start"] < 1440 and c["end"] > 0]
+    extra_ticks = [sum(1 for c in cover if c["start"] <= i * STEP < c["end"]) for i in range(slots)]
     cells = []
     req = inputs["required"].get(day, {})
     for t in range(0, 1440, step):
         r = req.get(t, 0.0)
         idx = range(t // STEP, (t + step) // STEP)
-        ticks = [len(now[i]) for i in idx]
+        ticks = [len(now[i]) + extra_ticks[i] for i in idx]
         here = sum(ticks) / len(ticks)
         planned_here = sum(len(plan[i]) for i in idx) / len(idx)
         counts = {"absent": sum(1 for seg, st, away, br, ac in pieces if st in ABSENT
@@ -417,7 +451,8 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
                   "overtime": sum(1 for seg, st, away, br, ac in pieces
                                   if any(a["kind"] == "Overtime" and overlapping(a["start"], a["end"], t) for a in ac)),
                   "vto": sum(1 for seg, st, away, br, ac in pieces
-                             if any(a["kind"] == "VTO" and overlapping(a["start"], a["end"], t) for a in ac))}
+                             if any(a["kind"] == "VTO" and overlapping(a["start"], a["end"], t) for a in ac)),
+                  "outside": sum(1 for c in cover if overlapping(c["start"], c["end"], t))}
         cell = {"t": t, "required": r, "plan": round(planned_here, 1), "now": round(here, 1), "slots": ticks,
                 "low": min(ticks), **counts}
         if r <= 0:
@@ -431,24 +466,45 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
     groups: Dict[str, List[Dict[str, Any]]] = {}  # Phase AF (X2): a language's rows show as one row
     for rule in inputs["languages"]:
         groups.setdefault(_norm(rule["name"]), []).append(rule)
+    eligible_of = {key: {_norm(r["name"]) for r in inputs["languages"] if key in r["covers"]} for key in groups}
+    # Phase AY: per interval, the rows open (with their minimum) and the count each gets once the people are spread over them by need
+    held: Dict[int, Tuple[Dict[str, int], Dict[str, float]]] = {}
+    memo: Dict[Any, Dict[str, float]] = {}
+    for t in range(0, 1440, step):
+        # Phase AF (X1): an overnight window belongs to the day it starts, as the engine reads it
+        wanted = {key: max(r["minimum"] for r in rules if window_inside(r["days"], r["start"], r["end"], day, t))
+                  for key, rules in groups.items() if any(window_inside(r["days"], r["start"], r["end"], day, t) for r in rules)}
+        lows: Dict[str, float] = {}
+        if wanted:
+            for i in range(t // STEP, (t + step) // STEP):
+                people: Dict[str, int] = {}
+                for seg in now[i]:
+                    people[_norm(seg["language"])] = people.get(_norm(seg["language"]), 0) + 1
+                for c in cover:  # Phase AJ: cover in a language
+                    if c["start"] <= i * STEP < c["end"] and c.get("language"):
+                        people[_norm(c["language"])] = people.get(_norm(c["language"]), 0) + 1
+                serves = {label: [key for key in sorted(wanted) if label in eligible_of[key]] for label in people}
+                signature = (tuple(sorted(people.items())), tuple(sorted(wanted.items())))
+                if signature not in memo:
+                    memo[signature] = spread_languages(people, serves, wanted)
+                got = memo[signature]
+                lows = dict(got) if not lows else {k: min(lows[k], got[k]) for k in got}
+        held[t] = (wanted, lows)
     for key, rules in groups.items():
         rule = rules[0]
-        eligible = {_norm(r["name"]) for r in inputs["languages"] if key in r["covers"]}
         row = []
         for t in range(0, 1440, step):
-            # Phase AF (X1): an overnight window belongs to the day it starts, as the engine reads it
-            minimums = [r["minimum"] for r in rules if window_inside(r["days"], r["start"], r["end"], day, t)]
-            if not minimums:
+            wanted, lows = held[t]
+            if key not in wanted:
                 row.append({"t": t, "count": None, "cls": "none"})
                 continue
-            count = min(sum(1 for seg in now[i] if _norm(seg["language"]) in eligible)
-                        for i in range(t // STEP, (t + step) // STEP))
-            minimum = max(minimums)
+            count, minimum = lows[key], wanted[key]
+            count = int(round(count)) if abs(count - round(count)) < 1e-9 else round(count, 2)
             cls = "bad" if count < minimum else ("warn" if count == 0 else "lok")
             row.append({"t": t, "count": count, "cls": cls, "minimum": minimum})
         languages.append({"name": rule["name"], "start": rule["start"], "end": rule["end"],
                           "minimum": max(r["minimum"] for r in rules),
-                          "eligible": sorted(eligible), "cells": row,
+                          "eligible": sorted(eligible_of[key]), "cells": row,
                           "gaps": sum(1 for c in row if c["cls"] in ("bad", "warn"))})
     mine = [(seg, st) for seg, st, away, br, ac in pieces if seg["offset"] == 0]
     with_aux = sum(1 for seg, st, away, br, ac in pieces if seg["offset"] == 0
@@ -465,6 +521,7 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
              "vto": sum(a["end"] - a["start"] for seg, st, away, br, ac in pieces for a in ac if a["kind"] == "VTO"),
              "called_in": sum(seg["end"] - seg["start"] for seg, st, away, br, ac in pieces
                               if seg["called_in"] and seg["offset"] == 0 and st not in ABSENT),
+             "cover": sum(min(c["end"], 1440) - max(c["start"], 0) for c in cover),
              "short_hours": round(short, 1), "plan_short_hours": round(plan_short, 1),
              "short_intervals": sum(1 for c in cells if c["pm"] is not None and c["pm"] < 0),
              "over_hours": round(over, 1), "language_gaps": sum(l["gaps"] for l in languages)}
@@ -477,9 +534,9 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
     found = None
     if channels:  # Phase V
         from .channel_day import channel_view
-        found = channel_view(day, step, now, plan, pieces, lanes, channels)
+        found = channel_view(day, step, now, plan, pieces, lanes, {**channels, "cover": cover})
     return {"interval": step, "measure": measure, "lanes": order, "cells": cells, "languages": languages,
-            "tiles": tiles, "channels": found}
+            "tiles": tiles, "channels": found, "outside": cover}
 
 
 def _hm(minute: int) -> str:
@@ -623,6 +680,37 @@ def now_panel(view: Dict[str, Any], now: int, horizon: int = NOW_HORIZON,
                       for a, b in _runs_of([c["t"] for c in view["cells"] if c["cls"] == "warn" and soon(c["t"])
                                             and bool(c.get("tight")) == tight], step)]
     return {"next": found, "attention": attention}
+
+
+def _wall_hours(minutes: Any) -> str:
+    """Minutes as hours for the floor's screen: 90 is "1.5", 60 is "1", nothing is "0"."""
+    return "%g" % round((minutes or 0) / 60, 1)
+
+
+def wall_extra(view: Dict[str, Any], now: int) -> Dict[str, Any]:
+    """Phase BA (owner, 2026-10-25: "make sure wallboard contains all needed info"): what the floor's screen shows besides the next intervals
+    and the breaks. ``day``: on shift now, out, late or left early, overtime, VTO, called in and the hours short (hours as text);
+    ``changes``: shifts starting or ending in the next hour; ``attention``: what needs attention in the next three hours (as the RTA's Now
+    panel); ``out``: who is out today and why, those off for the whole shift first; ``channels``: each channel's need and people now."""
+    step = view["interval"]
+    first = now - now % step
+    tiles = view.get("tiles") or {}
+    here = [s for lane in view["lanes"] for s in lane["segments"] if s["start"] <= now < s["end"]]
+    present = sum(1 for s in here if s["status"] not in ABSENT)
+    panel = now_panel(view, now) or {"next": [], "attention": []}
+    out = sorted(({"name": lane["name"], "status": s["status"]} for lane in view["lanes"] for s in lane["segments"]
+                  if s["offset"] == 0 and (s["status"] in ABSENT or s["status"] in LATE_EARLY)),
+                 key=lambda o: (o["status"] in LATE_EARLY, o["name"]))
+    channels = []
+    for row in (view.get("channels") or {}).get("rows", []):
+        cell = next((c for c in row["cells"] if c["t"] == first), None) if row.get("letter") else None
+        if cell and (cell.get("need") or cell.get("have")):
+            channels.append({"name": row["name"], "have": cell["have"], "need": cell["need"], "cls": cell["cls"]})
+    return {"day": {"on_shift": f"{present} of {len(here)}", "out": tiles.get("absent", 0), "late_early": tiles.get("late_early", 0),
+                    "overtime": _wall_hours(tiles.get("overtime")), "vto": _wall_hours(tiles.get("vto")), "called_in": _wall_hours(tiles.get("called_in")),
+                    "short": "%g" % round(tiles.get("short_hours", 0) or 0, 1)},
+            "changes": [n for n in panel["next"] if n["what"] in ("Starts", "Ends")], "attention": panel["attention"],
+            "out": out, "channels": channels}
 
 
 def _across_cancel(seg: Dict[str, Any], first: int, second: int) -> bool:
@@ -778,6 +866,12 @@ def board(view: Dict[str, Any], target: float) -> List[Dict[str, Any]]:
                                 f"{a['kind'].lower()} {_hm(a['start'])} to {_hm(a['end'])}, "
                                 f"{'billable' if a.get('billable') else 'non-billable'}")
                         events.append({"name": lane["name"], "text": text})
+        for o in view.get("outside") or []:  # Phase AJ: someone not on the roster logging in
+            if t <= o["start"] < t + step:
+                events.append({"name": o["name"], "text": f"{o['role'].lower()} from outside the roster, covering "
+                                                          f"{_hm(o['start'])} to {_hm(o['end'])}",
+                               "cover_id": o.get("id") if o.get("today") else None,  # Phase AY: last night's is not removed here
+                               "cover_date": o.get("date") if o.get("today") else None})
         cls = band(c["now"], c["required"], target)
         over = int(round(minutes_over(c, target))) if c["required"] > 0 else None
         tight = cls == "warn" and over < CUSHION
@@ -806,7 +900,7 @@ def board(view: Dict[str, Any], target: float) -> List[Dict[str, Any]]:
 
 # ---------------------------------------------------------------- meetings, overtime and VTO (Phase O)
 MEETING_MARGIN = 10  # minutes kept clear before and after a break
-OVERTIME_MAX = 120  # minutes of overtime offered next to a shift
+OVERTIME_MAX = 240  # minutes of overtime offered next to a shift (owner, 2026-10-15: up to the longest "+ Add" length)
 
 
 def _own(view: Dict[str, Any], name: str) -> Optional[Dict[str, Any]]:
@@ -881,7 +975,7 @@ def overtime_offers(view: Dict[str, Any], week: Dict[str, Any], day: int, rest_h
                     ) -> List[Dict[str, Any]]:
     """For each short interval (from ``after``), or only the interval at ``only``: people present that day
     whose shift ends just before it or starts just after it, offered to stay on or come in early (at most
-    2 hours), keeping the rest gap to the previous and next day's work; the shortest offers first."""
+    OVERTIME_MAX), keeping the rest gap to the previous and next day's work; the shortest offers first."""
     step = view["interval"]
     rest = int(rest_hours * 60)
     out = []
@@ -908,7 +1002,7 @@ def overtime_offers(view: Dict[str, Any], week: Dict[str, Any], day: int, rest_h
             if any(x["start"] < hi and lo < x["end"] for x in seg.get("activities", [])):
                 continue
             side = "after" if lo == seg["end"] else "before"
-            if side == "after":  # the longest the rules allow: 2 hours, the rest gap to tomorrow
+            if side == "after":  # the longest the rules allow: OVERTIME_MAX, the rest gap to tomorrow
                 most = OVERTIME_MAX if not nxt else min(OVERTIME_MAX, nxt[0] + 1440 - rest - seg["end"])
             else:
                 most = OVERTIME_MAX if not prv else min(OVERTIME_MAX, seg["start"] - (prv[1] - 1440 + rest))
@@ -962,7 +1056,9 @@ def vto_offers(view: Dict[str, Any], after: int = 0, top: int = 6) -> List[Dict[
 
 # ---------------------------------------------------------------- the autopilot for the rest of the day's breaks
 def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: int = 400,
-           target: Optional[float] = None) -> Dict[str, Any]:
+           target: Optional[float] = None, fresh: bool = False,
+           desired: Optional[Dict[Tuple[str, int], int]] = None,
+           fit: Optional[Callable[[str, Dict[int, int]], Tuple[int, int]]] = None) -> Dict[str, Any]:
     """Re-plot the breaks not yet started (people on shift and present, this day's shifts) to lift the
     tightest interval, then (with the week's ``target``, Phase AH: the owner's 10 minutes) to keep the most
     intervals at the target with ``CUSHION`` minutes over it, then to cut the hours short; each break stays inside
@@ -970,7 +1066,18 @@ def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: i
     on a 5-minute step, clear of the person's other breaks, away time and activities, with the gaps to
     its neighbours within the program's rules, and no language drops below its minimum (or loses its
     last person). Greedy: the best single move each round, until nothing improves. Returns the moves
-    and the day before and after (tightest buffer and hours short, as the day page shows them)."""
+    and the day before and after (tightest buffer and hours short, as the day page shows them).
+
+    ``fresh`` (Phase AX, "Replan the day's breaks"): every break not yet started is lifted and placed again from
+    scratch, person by person in the order of their shifts, each at the time that leaves the day best (the same score),
+    nearest to where it was when the score is no different, inside the same rules. When the result is worse than the
+    day as it stands, nothing is proposed. With ``desired`` ((name, break index) -> the time the default break rules
+    give it, in this view's minutes) each break goes to the allowed time nearest its desired one, and the result is
+    shown whether or not it beats the day as it stands: the rules are what was asked for.
+
+    ``fit`` (Phase AX, owner: "prioritize the default, followed by the engine", the intervals first) is ``(name, break
+    index -> start) -> (parts of the usual shape missed, engine rules broken)``, lower better. Among moves that score the
+    same it takes the better fit, and when the loop is done it moves a break to a better fit wherever no interval pays."""
     step = view["interval"]
     per = step // STEP
     cells = view["cells"]
@@ -978,6 +1085,8 @@ def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: i
     slots = [x for c in cells for x in c["slots"]]
     sums = [sum(slots[k * per:(k + 1) * per]) for k in range(len(cells))]
     lo_gap, hi_gap = inputs.get("gap_min"), inputs.get("gap_max")
+    if fit is not None or desired:  # Phase AX (owner, 2026-10-22: the engine deviates from its own rules, "to the nearest"): the
+        hi_gap = None  # workbook's "Normal Maximum Gap" is a normal, not an absolute: the fit measures it, the minimum stays hard
     interval_mode = view["measure"] == "interval"
 
     def pm(k: int, total: float) -> float:
@@ -1068,8 +1177,109 @@ def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: i
         return True
 
     hold = (view.get("channels") or {}).get("hold")
+    kept_by = {lane["name"]: seg["breaks"] for lane, seg in people}
+
+    def fit_with(name: str, idx: int, new: int) -> Tuple[int, int]:
+        if fit is None:
+            return (0, 0)
+        mine = {o["idx"]: starts[(name, o["idx"])] for o in kept_by[name]}
+        mine[idx] = new
+        return fit(name, mine)
+
     before_score = score(sums)
     current = before_score
+    if not fresh:  # Phase AX: a break outside its shift takes nothing off the floor, so no interval ever asks for it to move
+        for lane, seg in people:
+            for b in seg["breaks"]:
+                key = (lane["name"], b["idx"])
+                if starts[key] < now or (seg["start"] <= starts[key] and starts[key] + b["minutes"] <= seg["end"]):
+                    continue
+                best = None
+                for new in positions(lane, seg, b):
+                    change = delta(lane, seg, b, new)
+                    if not languages_hold(lane, change) or (hold is not None and not hold.holds(lane["name"], change)):
+                        continue
+                    totals = list(sums)
+                    for i, d in change.items():
+                        totals[i // per] += d
+                    rank = (score(totals), tuple(-x for x in fit_with(lane["name"], b["idx"], new)), -abs(new - original[key]))
+                    if best is None or rank > best[0]:
+                        best = (rank, new, change, totals)
+                if best is None:
+                    continue
+                _, new, change, totals = best
+                if hold is not None:
+                    hold.apply(lane["name"], change)
+                for i, d in change.items():
+                    for L in langs:
+                        if lang_of[lane["name"]] in L["eligible"]:
+                            L["counts"][i] += d
+                starts[key] = new
+                sums = totals
+        current = score(sums)
+    if fresh:
+        rounds = 0
+
+        def settle(lane: Dict[str, Any], change: Dict[int, int]) -> None:  # floor changes into the day's figures
+            for i, d in change.items():
+                sums[i // per] += d
+                for L in langs:
+                    if lang_of[lane["name"]] in L["eligible"]:
+                        L["counts"][i] += d
+            if hold is not None:
+                hold.apply(lane["name"], change)
+
+        def taken(seg: Dict[str, Any], at: int, minutes: int) -> Dict[int, int]:  # the floor a break at ``at`` takes
+            out: Dict[int, int] = {}
+            for t in window(at, minutes):
+                if free(seg, t):
+                    out[t // STEP] = out.get(t // STEP, 0) + 1
+            return out
+
+        for lane, seg in sorted(people, key=lambda p: (p[1]["start"], p[0]["name"])):
+            name = lane["name"]
+            mine = sorted((b for b in seg["breaks"] if starts[(name, b["idx"])] >= now), key=lambda b: b["idx"])
+            if not mine:
+                continue
+            for b in mine:
+                settle(lane, taken(seg, starts[(name, b["idx"])], b["minutes"]))  # lifted back onto the floor
+            placed = {b["idx"]: starts[(name, b["idx"])] for b in seg["breaks"] if b not in mine}
+            new: Dict[int, Tuple[int, Dict[int, int]]] = {}
+            for n, b in enumerate(mine):
+                shadow = {**seg, "breaks": [o for o in seg["breaks"] if o["idx"] in placed or o is b]}
+                lo, hi = break_window(shadow, b, placed, now, lo_gap, hi_gap)
+                hi = min(hi, seg["end"] - b["minutes"] - sum(x["minutes"] + (lo_gap or 0) for x in mine[n + 1:]))
+                best = None
+                for s in range(lo + (-lo) % STEP, hi + 1, STEP):
+                    if not all(free(seg, t) for t in range(s, s + b["minutes"], STEP)):
+                        continue
+                    change = {i: -c for i, c in taken(seg, s, b["minutes"]).items()}
+                    if not languages_hold(lane, change) or (hold is not None and not hold.holds(name, change)):
+                        continue
+                    totals = list(sums)
+                    for i, d in change.items():
+                        totals[i // per] += d
+                    want = (desired or {}).get((name, b["idx"]))
+                    rank = ((-abs(s - want) if want is not None else 0), score(totals), -abs(s - original[(name, b["idx"])]))
+                    if best is None or rank > best[0]:
+                        best = (rank, s, change)
+                if best is None:
+                    break
+                settle(lane, best[2])
+                placed[b["idx"]] = best[1]
+                new[b["idx"]] = (best[1], best[2])
+            if len(new) < len(mine):  # no time fits the rules for one of them: this person is left as they were
+                for s, change in new.values():
+                    settle(lane, {i: -d for i, d in change.items()})
+                for b in mine:
+                    settle(lane, {i: -d for i, d in taken(seg, starts[(name, b["idx"])], b["minutes"]).items()})
+                continue
+            for b in mine:
+                starts[(name, b["idx"])] = new[b["idx"]][0]
+        current = score(sums)
+        if current < before_score and not desired:  # worse than the day as it stands: nothing is proposed
+            starts.update(original)
+            current = before_score
     for _ in range(rounds):
         tight = {k for k in range(len(cells)) if req[k] > 0 and pm(k, sums[k]) < step / 60}  # under one person spare
         best = None
@@ -1090,7 +1300,7 @@ def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: i
                     for i, d in change.items():
                         totals[i // per] += d
                     candidate = score(totals)
-                    rank = (candidate, -abs(new - original[key]))
+                    rank = (candidate, tuple(-x for x in fit_with(lane["name"], b["idx"], new)), -abs(new - original[key]))
                     if candidate > current and (best is None or rank > best[0]):
                         best = (rank, lane, seg, b, new, change, totals)
         if best is None:
@@ -1105,6 +1315,45 @@ def replan(view: Dict[str, Any], inputs: Dict[str, Any], now: int = 0, rounds: i
         starts[(lane["name"], b["idx"])] = new
         sums = totals
         current = score(sums)
+    if fit is not None and not fresh:  # the intervals are settled: a better fit wherever no interval pays for it
+        for _ in range(rounds):
+            best = None
+            for lane, seg in people:
+                for b in seg["breaks"]:
+                    key = (lane["name"], b["idx"])
+                    if starts[key] < now:
+                        continue
+                    here = fit_with(lane["name"], b["idx"], starts[key])
+                    if here == (0, 0):
+                        continue
+                    for new in positions(lane, seg, b):
+                        there = fit_with(lane["name"], b["idx"], new)
+                        if there >= here:
+                            continue
+                        change = delta(lane, seg, b, new)
+                        if not languages_hold(lane, change) or (hold is not None and not hold.holds(lane["name"], change)):
+                            continue
+                        totals = list(sums)
+                        for i, d in change.items():
+                            totals[i // per] += d
+                        candidate = score(totals)
+                        if candidate < current:
+                            continue
+                        rank = (tuple(-x for x in there), candidate, -abs(new - original[key]))
+                        if best is None or rank > best[0]:
+                            best = (rank, lane, seg, b, new, change, totals)
+            if best is None:
+                break
+            _, lane, seg, b, new, change, totals = best
+            if hold is not None:
+                hold.apply(lane["name"], change)
+            for i, d in change.items():
+                for L in langs:
+                    if lang_of[lane["name"]] in L["eligible"]:
+                        L["counts"][i] += d
+            starts[(lane["name"], b["idx"])] = new
+            sums = totals
+            current = score(sums)
     moves = []
     for lane, seg in people:
         for b in seg["breaks"]:
@@ -1311,15 +1560,39 @@ def _moved(seg: Dict[str, Any], by: int) -> Dict[str, Any]:
             "activities": later(seg.get("activities", []), "start", "end")}
 
 
-def window_view(views: Dict[int, Optional[Dict[str, Any]]], start: int, on: date) -> Dict[str, Any]:
+LETTER_MIN = 30  # minutes a channel stretch needs, clear of breaks, to carry its letter (Phase AK, sample ak01 D)
+
+
+def channel_letters(stretches: List[Tuple[int, int, str]], breaks: List[Tuple[int, int]]) -> List[Tuple[int, str]]:
+    """Where to write P, C, E or A on a person's bar: the middle of the longest piece of each channel stretch that no
+    break (start, minutes) covers, when that piece is at least ``LETTER_MIN`` minutes."""
+    out = []
+    for a, b, c in stretches:
+        if c not in ("P", "C", "E", "A"):
+            continue
+        pieces, lo = [], a
+        for s, m in sorted(breaks):
+            if s < b and lo < s + m:
+                pieces.append((lo, max(lo, s)))
+                lo = max(lo, s + m)
+        pieces.append((lo, b))
+        x0, x1 = max(pieces, key=lambda p: (p[1] - p[0], -p[0]))
+        if x1 - x0 >= LETTER_MIN:
+            out.append(((x0 + x1) // 2, c))
+    return out
+
+
+def window_view(views: Dict[int, Optional[Dict[str, Any]]], start: int, on: date, length: int = 1440) -> Dict[str, Any]:
     """Phase AI (owner, 2026-10-15: one calendar day "with everything"): the RTA's 24 hours from minute ``start`` of
     the schedule's day ``on``, with the day view's shape, so the Timeline, the Interval board and Adherence work on it
     as on a day. Times are minutes from ``on``'s midnight (below 0 or past 1440 where the window reaches the day
     before or after); ``views`` holds those days' views by their distance from ``on`` (None: no schedule kept).
     Each cell and row comes from the day that holds it; each shift once, as its own day has it, with its ``date``,
-    and ``offset`` 0 when it starts in the window (-1 when it began before). A day with no schedule shows no figures."""
+    and ``offset`` 0 when it starts in the window (-1 when it began before). A day with no schedule shows no figures.
+    ``length`` (Phase AU, operating hours) is how many minutes it covers: 1440, or less when the window ends with the last
+    shift of the operating day."""
     first = next(v for v in views.values() if v)
-    step, end = first["interval"], start + 1440
+    step, end = first["interval"], start + length
 
     def held(k: int) -> Tuple[Optional[Dict[str, Any]], int]:
         d, t = divmod(k, 1440)
@@ -1332,7 +1605,7 @@ def window_view(views: Dict[int, Optional[Dict[str, Any]]], start: int, on: date
         if c is None:
             c = {"required": 0, "plan": 0, "now": 0, "slots": [0] * (step // STEP), "low": 0, "need": 0, "pm": None,
                  "plan_pm": None, "cls": "none", **{x: 0 for x in ("absent", "aux", "late_early", "breaks", "overtime",
-                                                                  "vto")}}
+                                                                  "vto", "outside")}}
         cells.append({**c, "t": k, "date": on + timedelta(days=k // 1440)})
     found: Dict[Tuple[str, int], Tuple[Dict[str, Any], Dict[str, Any], int]] = {}
     for d in sorted(views):
@@ -1408,9 +1681,19 @@ def window_view(views: Dict[int, Optional[Dict[str, Any]]], start: int, on: date
                                            if c.get("plan_pm") is not None and c["plan_pm"] < 0), 1),
              "short_intervals": sum(1 for c in with_demand if c["pm"] < 0),
              "over_hours": round(sum(c["pm"] for c in with_demand if c["pm"] > 0), 1),
-             "language_gaps": sum(r["gaps"] for r in languages)}
+             "language_gaps": sum(r["gaps"] for r in languages),
+             "cover": ((views.get(0) or {}).get("tiles") or {}).get("cover", 0)}
+    outside = []  # Phase AJ: each day's cover from outside the roster, in the window's minutes
+    for d, v in sorted(views.items()):
+        for o in (v or {}).get("outside") or []:
+            a, b = max(o["start"] + 1440 * d, start, 1440 * d), min(o["end"] + 1440 * d, end, 1440 * (d + 1))
+            if a < b and not any(x["name"] == o["name"] and x["end"] == a for x in outside):
+                outside.append({**o, "start": a, "end": b})
+            elif a < b:  # the same cover read again from the next day's view: one stretch
+                x = next(x for x in outside if x["name"] == o["name"] and x["end"] == a)
+                x["end"] = b
     return {"interval": step, "measure": first["measure"], "lanes": order, "cells": cells, "languages": languages,
-            "tiles": tiles, "channels": channels, "start": start}
+            "tiles": tiles, "channels": channels, "start": start, "outside": outside, "span": length}
 
 
 def shift_groups(view: Dict[str, Any], from_now: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -1492,6 +1775,22 @@ def at_target(cells: List[Dict[str, Any]], target: float) -> Dict[str, Any]:
 
 
 CHANNEL_WORD = {"P": "Phone", "C": "Chat", "E": "Email", "A": "all channels"}
+
+
+def my_items(view: Dict[str, Any], name: str) -> List[Dict[str, Any]]:
+    """Phase AO (My week): what one person's shift starting that day holds besides the work, in time order: its
+    breaks (as planned or moved) and the aux, meetings, coaching, overtime and the like the RTA recorded. Each is
+    {"lo", "hi", "what"} in minutes from that day's midnight."""
+    lane = next((l for l in view["lanes"] if l["name"] == name), None)
+    seg = next((s for s in lane["segments"] if s["offset"] == 0), None) if lane else None
+    if seg is None:
+        return []
+    found = [{"lo": b["start"], "hi": b["start"] + b["minutes"], "what": b["kind"]} for b in seg["breaks"]]
+    for a in seg.get("activities", []):
+        if a["kind"] == CALLED_IN:
+            continue
+        found.append({"lo": a["start"], "hi": a["end"], "what": a["kind"]})
+    return sorted(found, key=lambda x: (x["lo"], x["hi"]))
 
 
 def my_day(view: Dict[str, Any], name: str, now: Optional[int] = None) -> Optional[Dict[str, Any]]:

@@ -1,0 +1,38 @@
+/* © 2026 Omar Mokhtar. All rights reserved. */
+:root { --bg: #E8EFF6; --ink: #12233A; --dim: #46556F; --ease: cubic-bezier(.23, 1, .32, 1); --phone: #1A47A8; --chat: #B4468F; --email: #2F7D5B; --brk: #8C97A8; --ok: #06A496; --short: #C98304; --gap: #D53D38; }
+* { box-sizing: border-box; }
+body { margin: 0; background: radial-gradient(54rem 34rem at 6% -10%, #C4DDF3, transparent 62%), radial-gradient(46rem 32rem at 100% 0, #C6EEDF, transparent 60%), var(--bg); background-repeat: no-repeat; color: var(--ink); font: 1rem/1.5 system-ui, sans-serif; min-height: 100vh; }
+.bar { padding: .7rem 1.2rem; background: #0B1220; color: #fff; display: flex; gap: 1rem; flex-wrap: wrap; } .bar span { color: #B8C4D8; }
+main { max-width: 74rem; margin: 0 auto; padding: 2rem 1.25rem 4rem; overflow-x: clip; }
+.hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 2rem; align-items: center; min-height: 24rem; }
+h1 { font-size: clamp(1.9rem, 1rem + 3vw, 3.2rem); line-height: 1.05; margin: .6rem 0 1rem; } h2 { margin: 0 0 .6rem; font-size: 1.1rem; } .fine { color: var(--dim); font-size: .9rem; }
+/* 1. the mark: three bars that turn slowly (3 layers) */
+.mark3d { display: block; transform-origin: 50% 50%; animation: spin 9s linear infinite; }
+@keyframes spin { from { transform: perspective(300px) rotateY(0deg); } to { transform: perspective(300px) rotateY(360deg); } }
+/* 2. the stack of days: one container, four layers, one animation */
+.stage { perspective: 1200px; perspective-origin: 50% 40%; height: 22rem; display: grid; place-items: center; }
+.deck { position: relative; width: min(30rem, 100%); height: 16rem; transform-style: preserve-3d; transform: rotateX(var(--tx, 58deg)) rotateZ(var(--tz, -32deg)); animation: drift 14s ease-in-out infinite alternate; }
+.day { position: absolute; inset: 0; border-radius: 14px; background: #FFFFFFE6; border: 1px solid #fff; box-shadow: 0 30px 40px -24px #12233A66; display: grid; align-content: center; gap: .7rem; padding: 1.3rem 1.5rem; }
+.d1 { transform: translateZ(0); } .d2 { transform: translateZ(2.6rem); } .d3 { transform: translateZ(5.2rem); } .d4 { transform: translateZ(7.8rem); }
+.b { display: block; height: .9rem; border-radius: 4px; } .b1 { width: 62%; background: var(--phone); } .b2 { width: 44%; margin-left: 20%; background: var(--chat); } .b3 { width: 52%; margin-left: 8%; background: var(--email); } .b4 { width: 36%; margin-left: 34%; background: var(--brk); }
+@keyframes drift { from { transform: rotateX(var(--tx, 58deg)) rotateZ(calc(var(--tz, -32deg) - 2deg)); } to { transform: rotateX(calc(var(--tx, 58deg) - 4deg)) rotateZ(calc(var(--tz, -32deg) + 4deg)); } }
+/* 3. the tiles: tilt toward the pointer, content floats a little above the card (3 cards, 3 layers) */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr)); gap: 1rem; margin-top: 1.5rem; perspective: 900px; }
+.tile { padding: 1.2rem 1.4rem; border-radius: 20px; background: #FFFFFFE6; border: 1px solid #fff; box-shadow: 0 1px 2px #12233A22, 0 14px 30px -20px #12233A66; transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transform-style: preserve-3d; transition: transform 140ms var(--ease), box-shadow 140ms var(--ease); }
+.tile h2, .tile .big { transform: translateZ(14px); } .tile .big { margin: .2rem 0 0; font-size: 2.4rem; font-weight: 800; line-height: 1; } .tile small { font-size: 1rem; font-weight: 400; color: var(--dim); }
+/* 4. the week as blocks: still, 7 columns of 3 stacked faces, drawn once (about 14 layers) */
+.wall3d { margin-top: 2rem; }
+.blocks { perspective: 1100px; height: 17rem; display: grid; place-items: center; margin-bottom: 1rem; }
+.row { display: flex; gap: 1.6rem; transform: rotateX(58deg) rotateZ(-38deg); transform-style: preserve-3d; }
+.col { position: relative; width: 3rem; height: 3rem; transform-style: preserve-3d; }
+.col i { position: absolute; display: block; }
+.col .top { left: 0; top: 0; width: 3rem; height: 3rem; background: var(--c); transform: translateZ(var(--h)); }
+.col .front { left: 0; top: 3rem; width: 3rem; height: var(--h); background: color-mix(in srgb, var(--c) 72%, #000); transform-origin: top; transform: rotateX(90deg); }
+.col .right { left: 3rem; top: 0; width: var(--h); height: 3rem; background: color-mix(in srgb, var(--c) 52%, #000); transform-origin: left; transform: rotateY(-90deg); }
+@media (max-width: 52rem) { .col, .col .top, .col .front { width: 2rem; } .col { height: 2rem; } .col .top, .col .right { height: 2rem; } .col .front { top: 2rem; } .col .right { left: 2rem; } .hero { grid-template-columns: 1fr; } .stage { height: 17rem; } .deck { height: 12rem; } .row { gap: .9rem; } }
+/* the budget: still when hidden, off screen or asked to be calm; flat on request */
+.paused .deck, .paused .mark3d, .still .deck, .still .mark3d { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) { .deck, .mark3d { animation: none; } .tile { transition: none; } }
+.flat .deck, .flat .mark3d, .flat .tile, .flat .row, .flat .stage, .flat .tiles, .flat .blocks { transform: none; perspective: none; animation: none; transform-style: flat; }
+.flat .day { position: static; transform: none; margin-bottom: .5rem; } .flat .deck { height: auto; } .flat .col { position: static; display: inline-block; } .flat .col i { position: static; height: 1rem; width: 2rem; transform: none; }
+@media print { .stage, .blocks { display: none; } }

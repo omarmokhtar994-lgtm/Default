@@ -22,7 +22,7 @@ rounded figure is), but the figures the page shows come from the page itself (``
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ortools.sat.python import cp_model
 
@@ -62,11 +62,17 @@ def allowance(lost: List[Dict[str, Any]]) -> int:
 
 
 def solve(view: Dict[str, Any], inputs: Dict[str, Any], target: float, now: Optional[int], may_give_up: int,
-          seconds: float = SECONDS) -> Dict[str, Any]:
+          seconds: float = SECONDS,
+          defaults: Optional[Callable[[str, int, int], Tuple[int, int]]] = None) -> Dict[str, Any]:
     """Moves {name, idx, kind, minutes, from, to}, the intervals given up (their minutes), and a status: "rescued",
     "no gain" (nothing more reaches the target within the rules) or "not solved" (no answer in the time); with the
     solver's status in ``solver`` (OPTIMAL proves it the best; FEASIBLE is the best found in the time). ``now`` is
-    minutes past midnight today, or None for another day (nothing started, nothing over)."""
+    minutes past midnight today, or None for another day (nothing started, nothing over).
+
+    ``defaults`` (Phase AX, owner: "prioritize the default, followed by the engine", the intervals first, a sacrifice "to the
+    nearest") is ``(name, break index, start) -> (minutes the start is off the usual shape, minutes it is off the engine's
+    margin and window for that break)``. After the intervals and the fewest given up come the fewest minutes off the shape,
+    then the fewest off the engine's rules, then the fewest breaks moved."""
     started = time.time()
     step = view["interval"]
     per = step // STEP
@@ -233,6 +239,8 @@ def solve(view: Dict[str, Any], inputs: Dict[str, Any], target: float, now: Opti
                 m.Add(int(round((now_count + c["back"]) * 100)) - 100 * sum(c["terms"]) >= int(round(keep * 100)))
 
     # gaps between a person's breaks, in the order they are in now (so none can come to overlap another)
+    soft_gaps: List[Tuple[int, Any]] = []  # Phase AX: the workbook's "Normal Maximum Gap" is a normal, not an absolute
+    soft_most = 0
     index = {id(item[2]): j for j, item in enumerate(moving)}
 
     def start_of(seg, b):
@@ -249,7 +257,14 @@ def solve(view: Dict[str, Any], inputs: Dict[str, Any], target: float, now: Opti
             gap_now = q["start"] - p["start"] - p["minutes"]
             m.Add(sq - sp - p["minutes"] >= min(lo_gap or 0, gap_now))
             if hi_gap is not None and not _across_cancel(seg, p["idx"], q["idx"]):
-                m.Add(sq - sp - p["minutes"] <= max(hi_gap, gap_now))
+                if defaults is None:
+                    m.Add(sq - sp - p["minutes"] <= max(hi_gap, gap_now))
+                else:  # past it is allowed, by as little as it takes: steps over, weighed with the engine's other rules
+                    room = max(1, (seg["end"] - seg["start"]) // STEP)
+                    over_by = m.NewIntVar(0, room, "")
+                    m.Add(STEP * over_by >= sq - sp - p["minutes"] - hi_gap)
+                    soft_gaps.append((1, over_by))
+                    soft_most += room
 
     def hint(solver=None):
         m.ClearHints()
@@ -283,8 +298,29 @@ def solve(view: Dict[str, Any], inputs: Dict[str, Any], target: float, now: Opti
     # so one objective keeps the order
     steps = [{s: abs(s - item[2]["start"]) // STEP for s in x[j]} for j, item in enumerate(moving)]
     per_move = 1 + sum(max(d.values()) for d in steps)
-    per_given = 1 + per_move * (len(moving) + 1)
-    rest = (per_given * sum(g for g, _ in given)
+    shape_terms: List[Tuple[int, Any]] = []  # (5-minute steps off the usual shape, the start's variable)
+    rule_terms: List[Tuple[int, Any]] = []
+    shape_most = rule_most = 0
+    if defaults is not None:
+        for j, (lane, seg, b, places) in enumerate(moving):
+            worst_shape = worst_rule = 0
+            for s, v in x[j].items():
+                far, outside = defaults(lane["name"], b["idx"], s)
+                if far:
+                    shape_terms.append((-(-far // STEP), v))
+                    worst_shape = max(worst_shape, -(-far // STEP))
+                if outside:
+                    rule_terms.append((-(-outside // STEP), v))
+                    worst_rule = max(worst_rule, -(-outside // STEP))
+            shape_most, rule_most = shape_most + worst_shape, rule_most + worst_rule
+    rule_terms += soft_gaps
+    rule_most += soft_most
+    unit = per_move * (len(moving) + 1)  # more than every break moved and every step moved can add up to
+    per_rule = unit
+    per_shape = per_rule * rule_most + unit
+    per_given = (per_shape * shape_most + per_rule * rule_most + unit) if (shape_most or rule_most) else 1 + unit
+    rest = (per_given * sum(g for g, _ in given) + per_shape * sum(n * v for n, v in shape_terms)
+            + per_rule * sum(n * v for n, v in rule_terms)
             + sum(per_move * (1 - x[j][item[2]["start"]]) + sum(d * x[j][s] for s, d in steps[j].items() if d)
                   for j, item in enumerate(moving)))
     per_safe = 1 + per_given * (len(given) + 1)

@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "release": "L6.3.2.5-RC9.2.1-PROTECTED-TIER-RESIDUAL-BALANCE-RC1",
+  "release_short": "RC9.2.1-PROTECTED-TIER-RESIDUAL-BALANCE-RC1",
+  "generated_utc": "2026-09-01T03:40:00+00:00",
+  "architecture": "RC9.2-compatible universal platform with protected lower-tier champion ordering plus target-locked residual OFF/day-balance polish",
+  "base_release": "L6.3.2.3-RC9.1-UNIVERSAL-SEARCH-RECOVERY-PLATFORM",
+  "status": "PATCH_CANDIDATE_REQUIRES_FRESH_REGRESSION",
+  "backward_compatibility": "Workbook-driven contract preserved; new controls are optional CLI switches.",
+  "key_changes": [
+    "For 90%-target schedules, 80% protected coverage now ranks before configured lower floor, balance, overage, and 100% upside.",
+    "For 100%-target schedules, 90% is protected before the configured 80% floor; 80% remains protected by the configured floor when applicable.",
+    "Skeleton-only runs reserve a bounded tail for two-phase target-locked residual polish instead of spending the entire budget on repeated profile basins.",
+    "Residual polish Phase P1 hard-locks the best target count and searches protected tiers; Phase P2 hard-locks target plus protected tiers and optimizes floor/gap shape/balance/overage.",
+    "Existing RC9.2 candidates are retained, so the residual polish cannot erase a stronger incumbent.",
+    "Fixed/nesting constraints remain authoritative and are not weakened."
+  ],
+  "dependencies": [
+    "ortools==9.15.6755",
+    "openpyxl",
+    "pandas",
+    "numpy",
+    "scipy"
+  ]
+}

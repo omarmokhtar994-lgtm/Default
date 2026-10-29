@@ -1,0 +1,6 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{% if g.merge_pick %}<details class="lob-pick"><summary>View: {{ g.merge_summary }}</summary>
+      <div class="lob-pick-body" role="group" aria-labelledby="lob-pick-h"><b id="lob-pick-h">{{ g.merge_pick }}</b><small>Tick the ones to show together</small>
+        {% for l in g.merge_lobs %}<label class="check"><input type="checkbox" name="lobs" value="{{ l.unit }}"{% if l.on or l.home %} checked{% endif %}{% if l.home %} disabled{% endif %}> {{ l.name }}</label>{% endfor %}
+        <input type="hidden" name="merge" value="1"><input type="hidden" name="pick" value="1">
+        <button class="quiet" type="submit">Show together</button></div></details>{% endif %}

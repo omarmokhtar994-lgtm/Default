@@ -74,6 +74,13 @@ STOP_GRACE_SECONDS = 30
 FINAL_SCHEDULE_SUFFIX = "_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"
 SHORTFALL_SCHEDULE_SUFFIX = "_HARD_RULE_SHORTFALL_SCHEDULE.xlsx"
 BEFORE_SCHEDULE_SUFFIX = "_BEST_BEFORE_BREAKS_SCHEDULE.xlsx"
+CONSISTENT_SCHEDULE_SUFFIX = "_MORE_CONSISTENT_CANDIDATE.xlsx"
+
+
+def _short_name(name: str, longest: int = 100) -> str:
+    """Phase AV: a file name the server's disk can keep (a very long one was a server error): the end is cut, the extension kept."""
+    stem, dot, ext = name.rpartition(".")
+    return name if len(name) <= longest else (stem[: longest - len(ext) - 1] + dot + ext if dot else name[:longest])
 
 
 class RunQueue:
@@ -98,6 +105,7 @@ class RunQueue:
         self._stopping: set = set()
         self._threads: List[threading.Thread] = []
         self.schedules = None  # the ScheduleBook (Phase N), set by the website
+        self.on_kept = None  # Phase AO: called with the run id once its schedules are kept (approved leave is applied)
         self.days = None  # the DayBook (attendance and actual breaks), set by the website
         self.recover()
 
@@ -132,8 +140,34 @@ class RunQueue:
         found = [p for p in results.rglob(f"*{BEFORE_SCHEDULE_SUFFIX}") if "debug" not in p.parts]
         return min(found, key=lambda p: (len(p.parts), str(p))) if found else None
 
+    def consistent_schedule(self, run_id: str) -> Optional[Tuple[Path, Dict[str, Any]]]:
+        """Phase AL: the steadier week the engine wrote beside its schedule, with the engine's before and after
+        figures, when the validator passed it with no worse coverage (BUSINESS_OUTCOME.json's alternative exports);
+        None otherwise."""
+        results = self.results_dir(run_id)
+        if not results.is_dir():
+            return None
+        for record in sorted(p for p in results.rglob("BUSINESS_OUTCOME.json") if "debug" not in p.parts):
+            try:
+                data = json.loads(record.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            exports = ((data.get("independent_validation") or {}).get("alternative_exports") or []) \
+                if isinstance(data, dict) else []
+            for entry in exports:
+                if not (isinstance(entry, dict) and entry.get("role") == "MORE_CONSISTENT_CANDIDATE"
+                        and entry.get("status") == "PASS" and entry.get("coverage_no_worse") is True):
+                    continue
+                name = Path(str(entry.get("workbook") or "")).name
+                found = [p for p in record.parent.glob(f"*{CONSISTENT_SCHEDULE_SUFFIX}") if p.name == name] or \
+                    sorted(record.parent.glob(f"*{CONSISTENT_SCHEDULE_SUFFIX}"))
+                if found:
+                    return found[0], entry.get("consistency") or {}
+        return None
+
     def keep_schedules(self, run_id: str) -> None:
-        """Copy the run's schedules in as versions (Phase N); a failure here never fails the run."""
+        """Copy the run's schedules in as versions (Phase N; Phase AL: and the steadier week the engine passed); a
+        failure here never fails the run."""
         if self.schedules is None:
             return
         try:
@@ -142,6 +176,28 @@ class RunQueue:
         except Exception as exc:  # the run's own files stay authoritative; say why the copy failed
             with self.log_path(run_id).open("a", encoding="utf-8") as log:
                 log.write(f"\n(website) could not keep this run's schedules as versions: {exc!r}\n")
+        self._keep_consistent(run_id)
+        self._kept(run_id)
+
+    def _kept(self, run_id: str) -> None:
+        """Whatever the website does once a week's schedule is kept; a failure here never fails the run."""
+        if self.on_kept is None:
+            return
+        try:
+            self.on_kept(run_id)
+        except Exception as exc:
+            with self.log_path(run_id).open("a", encoding="utf-8") as log:
+                log.write(f"\n(website) could not apply the approved leave to this week: {exc!r}\n")
+
+    def _keep_consistent(self, run_id: str) -> None:
+        """The steadier week as a version, on its own: a bad file elsewhere in the run never keeps it out."""
+        try:
+            steadier = self.consistent_schedule(run_id)
+            if steadier is not None:
+                self.schedules.ensure_consistent(self.store.get_run(run_id), *steadier)
+        except Exception as exc:  # the run's own files stay authoritative; say why the copy failed
+            with self.log_path(run_id).open("a", encoding="utf-8") as log:
+                log.write(f"\n(website) could not keep this run's more consistent schedule: {exc!r}\n")
 
     def shortfall_schedule(self, run_id: str) -> Optional[Path]:
         """The schedule the engine attaches when no schedule meets every hard rule."""
@@ -186,7 +242,7 @@ class RunQueue:
         if mode not in MODES:
             raise ValueError(f"unknown mode {mode!r}")
         run_id = secrets.token_hex(6)
-        safe = secure_filename(workbook_name) or "workbook.xlsx"
+        safe = _short_name(secure_filename(workbook_name) or "workbook.xlsx")
         if not safe.lower().endswith(".xlsx"):
             safe += ".xlsx"
         target = self.run_dir(run_id) / "input" / safe
@@ -218,7 +274,7 @@ class RunQueue:
         seconds and kept as the run's version 1; the engine does not run, so nothing is queued."""
         from .ready import check_ready
         run_id = secrets.token_hex(6)
-        safe = secure_filename(workbook_name) or "workbook.xlsx"
+        safe = _short_name(secure_filename(workbook_name) or "workbook.xlsx")
         if not safe.lower().endswith(".xlsx"):
             safe += ".xlsx"
         target = self.run_dir(run_id) / "input" / safe
@@ -234,6 +290,7 @@ class RunQueue:
             except Exception as exc:  # said on the run page, with the file kept for a look
                 problems = [f"The ready schedule could not be kept: {exc}"]
             else:
+                self._kept(run_id)
                 people = len(json.loads(versions[0]["week"] or "{}").get("associates", []))
         if problems:
             shown = problems[:25] + ([f"…and {len(problems) - 25} more."] if len(problems) > 25 else [])
@@ -376,6 +433,7 @@ class RunQueue:
             status, message = readiness(found)
         elif code == 0:
             status, message = outcome(run["mode"], verdict)
+            message += rescue_note(results)
         else:
             status = "FAILED"
             message = (str(found.get("headline") or "") if found else "") or (
@@ -385,9 +443,9 @@ class RunQueue:
             # before the status says finished: a finished run's work is over (clean-up may follow at once)
             self.store.update_run(run_id, message="Keeping the schedules as versions.")
             self.keep_schedules(run_id)
+        self._stamp_outcome(run_id, status)  # Phase AM: first, so a finished run is never seen without it
         self.store.update_run(run_id, status=status, exit_code=code, verdict=verdict,
                               finished=time.time(), message=message)
-        self._stamp_outcome(run_id, status)
 
     def _stopped(self, run_id: str, code: Optional[int] = None) -> bool:
         with self._lock:
@@ -478,6 +536,7 @@ class RunQueue:
             if run["status"] in ("EXPIRED", "QUEUED", "CHECKING") + ACTIVE or run["created"] >= cutoff:
                 continue
             shutil.rmtree(self.run_dir(run["id"]), ignore_errors=True)
+            self.store.invalidate_days()  # Phase AV: the files a kept day is built from are gone
             self.store.update_run(run["id"], status="EXPIRED",
                                   message=f"Files deleted after {self.keep_days} days.")
             expired += 1
@@ -522,15 +581,20 @@ class RunQueue:
         return filled
 
     def backfill_schedules(self) -> int:
-        """Finished runs from before Phase N keep their schedules as versions, while their files exist."""
+        """Finished runs from before Phase N keep their schedules as versions, while their files exist (Phase AL: and
+        those from before Phase AL their steadier week, once)."""
         kept = 0
         if self.schedules is None:
             return kept
         for run in self.store.list_runs(limit=1_000_000):
-            if run["status"] in ("DONE", "REVIEW") and run["mode"] != "SMOKE" and not self.schedules.versions(run["id"]) \
-                    and self.final_schedule(run["id"]) is not None:
+            if run["status"] not in ("DONE", "REVIEW") or run["mode"] == "SMOKE":
+                continue
+            versions = self.schedules.versions(run["id"])
+            if not versions and self.final_schedule(run["id"]) is not None:
                 self.keep_schedules(run["id"])
                 kept += bool(self.schedules.versions(run["id"]))
+            elif versions and not any(v["kind"] == "tool_consistent" for v in versions):
+                self._keep_consistent(run["id"])
         return kept
 
     def _cleaner(self) -> None:
@@ -594,6 +658,20 @@ def outcome(mode: str, verdict: str) -> tuple:
     return "REVIEW", ("The independent validator passed this schedule, but its release verdict is "
                       f"{level or 'missing'}: a person must review it before it is published. "
                       "The verdict lines below and the schedule's Read Me First tab say what to check.")
+
+
+def rescue_note(results: Path) -> str:
+    """Phase AY: words for a run whose portfolio reached the runner's time cap and kept the best seed that had finished
+    (``rescued_after_timeout`` in RUN_LEDGER.json); "" for every other run, or when the ledger cannot be read."""
+    try:
+        runs = json.loads((Path(results) / "RUN_LEDGER.json").read_text(encoding="utf-8")).get("runs") or []
+    except (OSError, ValueError, AttributeError):
+        return ""
+    for record in runs:
+        if isinstance(record, dict) and record.get("rescued_after_timeout"):
+            return (f" The time limit was reached: this is the best of the {record.get('seeds_finished', '?')} of "
+                    f"{record.get('seeds', '?')} seeds that had finished, the rest were stopped.")
+    return ""
 
 
 def passed(stamp: Optional[dict]) -> bool:

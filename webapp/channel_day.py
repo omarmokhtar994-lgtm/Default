@@ -15,6 +15,7 @@ speaks the language when one is short) without leaving their own channel short, 
 moving the break."""
 from __future__ import annotations
 
+import copy
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from .attendance import with_text
@@ -88,6 +89,14 @@ def channel_view(day: int, step: int, now, plan, pieces, lanes: Dict[str, Any], 
     ch = {**ch, "speaks": speaks, "skills_of": lambda name: can_work(ch["skills"], name),
           "language_of": {seg["name"]: seg.get("language", "") for tick in now for seg in tick}}
     today = _Counts(day, now, ch, rules, moves=True)
+    for c in ch.get("cover") or []:  # Phase AJ: someone not on the roster, on the channel and language they picked
+        speaks = counts_for(c["language"], ch["language_rows"]) if c.get("language") else set()
+        for i in range(max(c["start"], 0) // STEP, min(c["end"], 1440) // STEP):
+            if c.get("channel") in today.channel:
+                today.channel[c["channel"]][i] += 1
+            for j, rule in enumerate(rules):
+                if rule["channel"] == c.get("channel") and rule["language"].casefold() in speaks:
+                    today.language[j][i] += 1
     planned = _Counts(day, plan, ch, rules, moves=False)
     letters = [c for c in "PCE" if c in setup["need"]]
     rows, issues = [], {}
@@ -148,9 +157,9 @@ def _timelines(pieces, today: "_Counts") -> Tuple[Dict[str, List[str]], Dict[str
     out: Dict[str, List[str]] = {}
     runs: Dict[str, List[Tuple[int, int, str]]] = {}
     for seg, status, away, breaks, acts in pieces:
-        if seg["offset"] != 0:
+        if seg["offset"] not in (0, -1):
             continue
-        key, line, last = (0, seg["name"]), [], None
+        key, line, last = (seg["offset"], seg["name"]), [], None
         mine: List[Tuple[int, int, str]] = []
         for t in range(max(seg["start"], 0), min(seg["end"], 1440), STEP):
             letter = today.who[t // STEP].get(key)
@@ -174,8 +183,10 @@ def _timelines(pieces, today: "_Counts") -> Tuple[Dict[str, List[str]], Dict[str
                 mine.append((t, t + STEP, code or label))
             else:
                 mine[-1] = (mine[-1][0], t + STEP, mine[-1][2])
-        out[seg["name"]] = line
-        runs[seg["name"]] = mine
+        if seg["offset"] == 0:  # the words: this day's shifts
+            out[seg["name"]] = line
+        # the stretches: last night's shift after midnight too (Phase AJ: the Timeline showed no channel after 00:00)
+        runs[seg["name"]] = sorted(runs.get(seg["name"], []) + mine)
     return out, runs
 
 
@@ -191,9 +202,19 @@ class ChannelHold:
         self.language = [list(v) for v in counts.language]
         self.who = counts.who
 
+    def __deepcopy__(self, memo):
+        """Phase AV: a kept day hands out copies; only the counters ``apply`` changes are copied, the rest (the setup,
+        the rules and who covers what, never changed) is shared."""
+        twin = copy.copy(self)
+        twin.channel = {c: list(v) for c, v in self.channel.items()}
+        twin.language = [list(v) for v in self.language]
+        return twin
+
     def _covered(self, name: str, i: int) -> str:
         t = i * STEP
         key = (0, name)
+        if key not in self.who[i] and (-1, name) in self.who[i]:  # Phase AK: last night's shift, after midnight
+            key = (-1, name)
         letter = self.who[i].get(key) or letter_at(self.ch["blocks"].get(key, []), self.ch["moves"].get(key, []), t,
                                                    blended_at(self.setup, self.day, t))
         return self.ch["skills_of"](name) if letter == "A" else (letter or "")

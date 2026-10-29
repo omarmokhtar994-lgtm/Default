@@ -20,6 +20,13 @@ def runner(argv):
     print("[run] fake runner started", flush=True)
     delay = 3.0 if "SLOW" in stem else 0.2
     time.sleep(delay)
+    if "BEFOREONLY" in stem:  # Phase AM: a "Before breaks only" run: the real B1 week before breaks, nothing after
+        import shutil
+        real = Path(__file__).resolve().parents[2] / "fixtures" / "real_runs" / "before_break" / "B1_BEFORE"
+        shutil.copy(real / "B1_BEFORE_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx",
+                    case / f"{stem}_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx")
+        print("[run] fake runner done", flush=True)
+        return 0
     if "VERSIONED" in stem:  # a real schedule workbook (Phase N): the B3 AE/AR week, names "Associate 001"...
         import shutil
         real = Path(__file__).resolve().parents[2] / "fixtures" / "real_runs" / "week_boundary" / "B3_ARB2B_S30"
@@ -35,6 +42,8 @@ def runner(argv):
         for f in real.iterdir():
             shutil.copy(f, case / f.name)
     (case / f"{stem}_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx").write_bytes(b"before")
+    if "CONSISTENT" in stem:  # Phase AL: the steadier week the engine writes beside its schedule, and its record
+        consistent_candidate(case, stem, passed="CONSISTENTFAIL" not in stem)
     # Phase L: the engine's own outcome, copied from real runs (names replaced).
     # The real runner exits 2 for a readiness check too: it scores release
     # gates, which a run that builds no schedule always fails.
@@ -43,8 +52,30 @@ def runner(argv):
     if kind:
         source = {"NOTREADY": "conflict", "READY": "ready", "CONFLICT": "conflict", "SHORTFALL": "shortfall"}[kind]
         (case / "BUSINESS_OUTCOME.json").write_bytes((outcomes / f"{source}.json").read_bytes())
+    if "RESCUED" in stem:  # Phase AY: the real runner's ledger for a portfolio that reached its time cap and kept 3 of 4 seeds
+        (results / "RUN_LEDGER.json").write_text(json.dumps({"runs": [{
+            "scenario_id": stem, "exit_code": 0, "seeds": 4, "seeds_finished": 3, "rescued_after_timeout": True}]}),
+            encoding="utf-8")
     print("[run] fake runner done", flush=True)
     return 2 if "FAILS" in stem or kind else 0
+
+
+def consistent_candidate(case, stem, passed=True):
+    """The engine's MORE_CONSISTENT_CANDIDATE: a copy of the real B3 week (the polish itself is the engine's, tested
+    there) and the validator's verdict on it in BUSINESS_OUTCOME.json, as a real run writes it (figures from the
+    Phase C end-to-end Voice run)."""
+    import shutil
+    real = Path(__file__).resolve().parents[2] / "fixtures" / "real_runs" / "week_boundary" / "B3_ARB2B_S30"
+    shutil.copy(real / "production" / "B3_ARB2B_S30_L6_3_2_3_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx",
+                case / f"{stem}_L6_3_2_3_MORE_CONSISTENT_CANDIDATE.xlsx")
+    entry = {"role": "MORE_CONSISTENT_CANDIDATE", "workbook": f"/elsewhere/{stem}_L6_3_2_3_MORE_CONSISTENT_CANDIDATE.xlsx",
+             "status": "PASS" if passed else "FAIL", "hard_fail_count": 0 if passed else 2,
+             "coverage_no_worse": passed, "coverage_losses": [] if passed else ["after_target"],
+             "consistency": {"before": {"distinct_start_times": 60, "start_movement_hours": 66.0},
+                             "after": {"distinct_start_times": 59, "start_movement_hours": 53.0}}}
+    (case / "BUSINESS_OUTCOME.json").write_text(json.dumps({"independent_validation": {
+        "status": "PASS", "alternative_exports": [{"role": "MAX_TARGET_CANDIDATE", "status": "PASS"}, entry]}}),
+        encoding="utf-8")
 
 
 def check(argv):

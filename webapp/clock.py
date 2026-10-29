@@ -10,7 +10,8 @@ stops at start-up with ZoneInfoNotFoundError rather than show times an hour out.
 import re
 from contextlib import contextmanager
 from contextvars import ContextVar
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta, timezone
+from functools import lru_cache
 from typing import Iterator
 from zoneinfo import ZoneInfo
 
@@ -40,6 +41,92 @@ def offset(zone: str, on: date) -> int:
 def shift(on: date, from_zone: str, to_zone: str) -> int:
     """Minutes to add to a time of day in ``from_zone`` to read it in ``to_zone``, on the date ``on``."""
     return offset(to_zone, on) - offset(from_zone, on)
+
+
+def converted(on: date, minute: int, from_zone: str, to_zone: str) -> datetime:
+    """Convert an actual dated wall time, including overnight and DST transitions.
+
+    Workbooks have no occurrence field. Repeated and nonexistent source times
+    are refused rather than guessing which instant the author intended.
+    """
+    wall = datetime.combine(on, time()) + timedelta(minutes=minute)
+    source = wall.replace(tzinfo=ZoneInfo(pick_zone(from_zone)), fold=0)
+    back = source.astimezone(timezone.utc).astimezone(source.tzinfo)
+    if back.replace(tzinfo=None) != wall:
+        raise ValueError(f"{wall:%d %b %Y %H:%M} does not exist in {from_zone} because the clocks change.")
+    if source.utcoffset() != source.replace(fold=1).utcoffset():
+        raise ValueError(f"{wall:%d %b %Y %H:%M} occurs twice in {from_zone} because the clocks change. "
+                         "The workbook does not identify the occurrence; use the original-zone workbook.")
+    return source.astimezone(ZoneInfo(pick_zone(to_zone)))
+
+
+def dated_label(value: datetime) -> str:
+    """A converted clock label, including its offset when the hour repeats."""
+    text = value.strftime("%H:%M")
+    if value.replace(fold=0).utcoffset() != value.replace(fold=1).utcoffset():
+        offset_text = value.strftime("%z")
+        text += f" (UTC{offset_text[:3]}:{offset_text[3:]})"
+    return text
+
+
+@lru_cache(maxsize=512)
+def rta_shift(on: date, from_zone: str, to_zone: str):
+    """A constant RTA offset, or None when the wall-clock view cannot convert it.
+
+    RTA can include yesterday's shift and tomorrow's hours. Check that entire
+    source range, including both occurrences of a repeated hour. Its fixed
+    1,440-minute layout cannot represent a changing offset within that range.
+    """
+    if from_zone == to_zone:
+        return 0
+    source_zone = ZoneInfo(pick_zone(from_zone))
+    target_zone = ZoneInfo(pick_zone(to_zone))
+    offsets = set()
+    for minute in range(-1440, 2881, 60):
+        wall = datetime.combine(on, time()) + timedelta(minutes=minute)
+        for fold in (0, 1):
+            source = wall.replace(tzinfo=source_zone, fold=fold)
+            target = source.astimezone(timezone.utc).astimezone(target_zone)
+            offsets.add(int((target.utcoffset() - source.utcoffset()).total_seconds() // 60))
+            if len(offsets) > 1:
+                return None
+    return offsets.pop()
+
+
+def _gap(wall: datetime, source_zone: ZoneInfo, target_zone: ZoneInfo, fold: int) -> int:
+    source = wall.replace(tzinfo=source_zone, fold=fold)
+    target = source.astimezone(timezone.utc).astimezone(target_zone)
+    return int((target.utcoffset() - source.utcoffset()).total_seconds() // 60)
+
+
+def noon_gap(on: date, from_zone: str, to_zone: str) -> int:
+    """Minutes ``to_zone``'s clock is ahead of ``from_zone``'s at noon of ``on`` (always defined)."""
+    if from_zone == to_zone:
+        return 0
+    return _gap(datetime.combine(on, time(12)), ZoneInfo(pick_zone(from_zone)), ZoneInfo(pick_zone(to_zone)), 0)
+
+
+def rta_window_shift(on: date, from_zone: str, to_zone: str, first: int):
+    """Phase AY (owner, 2026-10-23: only the day the clocks change should refuse, the next day should work with the new gap): like
+    ``rta_shift``, but only for the 24 hours shown, from minute ``first`` of ``on`` on the source zone's clock, and an hour either side.
+    The gap between the zones (a constant RTA offset) or None when it changes inside that stretch."""
+    if from_zone == to_zone:
+        return 0
+    source_zone, target_zone = ZoneInfo(pick_zone(from_zone)), ZoneInfo(pick_zone(to_zone))
+    offsets = set()
+    for minute in range(first - 60, first + 1440 + 61, 60):
+        wall = datetime.combine(on, time()) + timedelta(minutes=minute)
+        for fold in (0, 1):
+            offsets.add(_gap(wall, source_zone, target_zone, fold))
+            if len(offsets) > 1:
+                return None
+    return offsets.pop()
+
+
+def minute_now(on: date, zone: str, clock=None) -> int:
+    """Now in the schedule's wall-clock minutes from its anchor date."""
+    current = (clock or datetime.now(timezone.utc)).astimezone(ZoneInfo(pick_zone(zone)))
+    return (current.date() - on).days * 1440 + current.hour * 60 + current.minute
 
 
 def zone_label(zone: str, on: date) -> str:
@@ -83,3 +170,18 @@ def to_schedule(value: str, minutes: int) -> str:
     caller to refuse, as before."""
     m = TIME.fullmatch((value or "").strip())
     return _clock(int(m.group(1)) * 60 + int(m.group(2)) - minutes) if m and minutes else value
+
+
+def zone_gap_words(zone: str, on) -> str:
+    """Phase AU: how far Egypt's clock is from ``zone``'s on ``on``, in words ("" when it is Egypt's own)."""
+    from datetime import datetime, time as _time
+    from zoneinfo import ZoneInfo
+    if zone == HOME:
+        return ""
+    noon = datetime.combine(on, _time(12, 0))
+    gap = (noon.replace(tzinfo=ZoneInfo(HOME)).utcoffset() - noon.replace(tzinfo=ZoneInfo(zone)).utcoffset())
+    hours = gap.total_seconds() / 3600
+    if hours == 0:
+        return "Egypt's clock is the same as it."
+    word = f"{abs(hours):g} hour{'' if abs(hours) == 1 else 's'}"
+    return f"Egypt's clock is {word} {'ahead of' if hours > 0 else 'behind'} it."

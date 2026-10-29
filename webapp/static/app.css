@@ -2,99 +2,113 @@
 @font-face { font-family: "Archivo"; src: url("fonts/archivo.woff2") format("woff2"); font-weight: 400 800; font-stretch: 62% 125%; font-display: swap; }
 @font-face { font-family: "Atkinson Hyperlegible Next"; src: url("fonts/atkinson-hyperlegible-next.woff2") format("woff2"); font-weight: 200 800; font-display: swap; }
 :root {
-  /* night: Graphite, the default (owner's pick 2026-10-15, evidence/phase_ag/colours) */
-  --night: #111418;        /* page */
-  --rail-bg: #0B0D10;      /* Phase AG: the menu, a step below the page */
-  --console: #181C22;      /* panels, chart surface */
-  --console-2: #20252D;
-  --rail: #2C333D;         /* borders, grid lines */
-  --paper: #E7EBF0;        /* ink */
-  --dim: #98A2AF;          /* secondary ink */
+  /* Night watch, the default dark look (Phase BA, owner's pick 2026-10-25, evidence/phase_az/prototype look 2): deep navy,
+     hairline panels. Colour still means state; the status and channel colours are the measured set. */
+  --night: #080F1E;        /* page */
+  --rail-bg: #050A14;      /* the menu, a step below the page */
+  --console: #0F1A31;      /* panels, chart surface */
+  --console-2: #152340;
+  --rail: #243556;         /* borders, grid lines */
+  --paper: #E7EEFB;        /* ink */
+  --dim: #9DB0CF;         /* secondary ink */
   --covered: #2BC4B4;      /* status fills: fully covered */
   --short: #F2A93B;        /*  short of the target */
   --gap: #E5534B;          /*  below the floor */
   --over: #8A7BF0;         /*  over-staffed */
-  --covered-text: #2BC4B4; /* "covered" written as text: 7.86:1 on panels */
-  --over-text: #9086EE;    /* "over-staffed" written as text: 5.08:1 */
+  --covered-text: #2BC4B4; /* "covered" written as text */
+  --over-text: #9086EE;    /* "over-staffed" written as text */
   --short-ink: #F2A93B;
   --gap-ink: #FF8A82;
-  --on-covered: #111418; --on-short: #111418; --on-gap: #111418; --on-over: #111418;  /* text on the status fills */
+  --on-covered: #080F1E; --on-short: #080F1E; --on-gap: #080F1E; --on-over: #080F1E;  /* text on the status fills */
   /* everything you can press or move is ink, never a status colour (Phase Y, evidence/phase_y/PALETTE.md) */
-  --action: #E7EBF0;       /* links, buttons, the focus ring, picked items, breaks you can move */
+  --action: #E7EEFB;       /* links, buttons, the focus ring, picked items, breaks you can move */
   --action-hover: #FFFFFF;
-  --on-action: #111418;    /* the label on a filled button: 14.28:1 */
-  --edge: #68727F;         /* field and button edges: 3.50:1 on panels */
-  --selected: #20252D;     /* the background of a picked tab, chip or option */
-  --done: #54749A;         /* a finished stage: 3.54:1 on panels */
-  --panel: rgba(24, 28, 34, .9);
-  --header: rgba(17, 20, 24, .88);
-  --well: rgba(17, 20, 24, .6);
-  --bg-line: rgba(152, 162, 175, .045);
-  --empty-cell: rgba(44, 51, 61, .5);
-  --empty-key: rgba(44, 51, 61, .9);
+  --on-action: #0A1426;    /* the label on a filled button */
+  --edge: #6C87B8;         /* field and button edges */
+  --selected: #152340;     /* the background of a picked tab, chip or option */
+  --done: #54749A;         /* a finished stage */
+  --hi: #E7EEFB;          /* the highlight a picked item gets (the Drafting table look uses a marker colour) */
+  --on-hi: #0A1426;
+  --panel: rgba(15, 26, 49, .9);
+  --header: rgba(8, 15, 30, .96);
+  --well: rgba(8, 15, 30, .6);
+  --bg-line: rgba(127, 162, 226, .04);
+  --empty-cell: rgba(36, 53, 86, .5);
+  --empty-key: rgba(36, 53, 86, .9);
   --covered-soft: rgba(43, 196, 180, .12);  /* a wash behind "covered" or "ready" */
   --gap-soft: rgba(229, 83, 75, .18);
   --short-soft: rgba(242, 169, 59, .16);
-  --hover: rgba(231, 235, 240, .05);
+  --hover: rgba(231, 238, 251, .06);
   --glow: rgba(43, 196, 180, .45);
   --glow-strong: rgba(43, 196, 180, .7);
   --pulse: rgba(242, 169, 59, .9);
-  --shadow: rgba(0, 0, 0, .35);
-  --code-bg: #0B0D10;
+  --shadow: rgba(0, 0, 0, .4);
+  --code-bg: #050A14;
   --code-ink: #CDD3DB;
-  /* chart series and heat levels, validated on #15243A (evidence/phase_l/PALETTE_CHECKS.txt) */
+  --ch-phone: #4C86FF; --ch-chat: #E070BE; --ch-email: #3FAE81; --ch-ink: #06142B;  /* white text is 4.5:1 or better only on the deeper light-look set */
+  /* shapes (Phase BA): each look sets its own */
+  --r-panel: 16px; --r-ctl: 10px;
+  /* chart series and heat levels */
   --c-blue: #3987e5; --c-aqua: #199e70; --c-orange: #d95926; --c-yellow: #c98500;
-  --h0: #20252D; --h1: #4a3a2c; --h2: #7a4224; --h3: #a94b22; --h4: #d95926;
+  --h0: #152340; --h1: #4a3a2c; --h2: #7a4224; --h3: #a94b22; --h4: #d95926;
   --display: "Archivo", "Arial Narrow", system-ui, sans-serif;  /* Phase AG: one variable family, width set where used */
   --text: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
   color-scheme: dark;
 }
-/* light (daylight): the person's choice, or the device's when they have not chosen */
+/* Tide, the light look (Phase BA, owner's pick 2026-10-25): the person's choice, or the device's when they have not chosen */
 @media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]):not([data-theme="ocean"]) {
-    --rail-bg: #FFFFFF; --night: #F1F2F4; --console: #FFFFFF; --console-2: #F6F7F9; --rail: #D8DCE2; --paper: #15191F; --dim: #525C68;
+  :root:not([data-theme="dark"]):not([data-theme="draft"]) {
+    --rail-bg: #F4F8FC; --night: #E8EFF6; --console: #FFFFFF; --console-2: #F3F7FB; --rail: #D3DEEA; --paper: #12233A; --dim: #46556F;
     /* status fills 3:1 or more on white; teal and amber light with dark text, red and violet darker with white
        text, so the four stay apart for colour-blind readers too (palette validator: worst pair ΔE 8.6) */
     --covered: #06A496; --short: #C98304; --gap: #D53D38; --over: #7560E3;
     --on-covered: #0E1A2B; --on-short: #0E1A2B; --on-gap: #FFFFFF; --on-over: #FFFFFF;
-    --covered-text: #0B776C; --over-text: #715ED8; --short-ink: #8C5300; --gap-ink: #B3261E;
-    --action: #15191F; --action-hover: #2A313B; --on-action: #FFFFFF; --edge: #7A838F; --selected: #E8EBEF;
-    --done: #7692B4; --panel: rgba(255, 255, 255, .92); --header: rgba(241, 242, 244, .9); --well: #F6F7F9;
-    --bg-line: rgba(21, 25, 31, .045); --empty-cell: #E8EBEF; --empty-key: #D8DCE2;
+    --covered-text: #0B776C; --over-text: #5F4CCB; --short-ink: #8C5300; --gap-ink: #B3261E;
+    --action: #12233A; --action-hover: #263B5A; --on-action: #FFFFFF; --edge: #6B7C96; --selected: #E1EAF4; --hi: #12233A; --on-hi: #FFFFFF;
+    --done: #7692B4; --panel: rgba(255, 255, 255, .92); --header: rgba(232, 239, 246, .96); --well: #F3F7FB;
+    --bg-line: transparent; --empty-cell: #E1EAF4; --empty-key: #D3DEEA;
     --covered-soft: rgba(11, 119, 108, .1);
-    --gap-soft: rgba(179, 38, 30, .1); --short-soft: rgba(140, 83, 0, .1); --hover: rgba(21, 25, 31, .05);
-    --glow: transparent; --glow-strong: transparent; --pulse: rgba(233, 162, 59, .6); --shadow: rgba(21, 25, 31, .18);
-    --code-bg: #F6F7F9; --code-ink: #15191F;
+    --gap-soft: rgba(179, 38, 30, .1); --short-soft: rgba(140, 83, 0, .1); --hover: rgba(18, 35, 58, .05);
+    --glow: transparent; --glow-strong: transparent; --pulse: rgba(233, 162, 59, .6); --shadow: rgba(18, 35, 58, .22);
+    --code-bg: #F3F7FB; --code-ink: #12233A; --ch-phone: #1A47A8; --ch-chat: #B4468F; --ch-email: #2F7D5B; --ch-ink: #FFFFFF; --r-panel: 20px; --r-ctl: 12px;
     --c-blue: #2a78d6; --c-aqua: #1baf7a; --c-orange: #eb6834; --c-yellow: #eda100;
-    --h0: #EDEFF2; --h1: #F8D6C5; --h2: #F2B08F; --h3: #EB8A5E; --h4: #D95926;
+    --h0: #E1EAF4; --h1: #F8D6C5; --h2: #F2B08F; --h3: #EB8A5E; --h4: #D95926;
     color-scheme: light;
   }
 }
 :root[data-theme="light"] {
-  --rail-bg: #FFFFFF; --night: #F1F2F4; --console: #FFFFFF; --console-2: #F6F7F9; --rail: #D8DCE2; --paper: #15191F; --dim: #525C68;
+  --rail-bg: #F4F8FC; --night: #E8EFF6; --console: #FFFFFF; --console-2: #F3F7FB; --rail: #D3DEEA; --paper: #12233A; --dim: #46556F;
   --covered: #06A496; --short: #C98304; --gap: #D53D38; --over: #7560E3;
   --on-covered: #0E1A2B; --on-short: #0E1A2B; --on-gap: #FFFFFF; --on-over: #FFFFFF;
-  --covered-text: #0B776C; --over-text: #715ED8; --short-ink: #8C5300; --gap-ink: #B3261E;
-  --action: #15191F; --action-hover: #2A313B; --on-action: #FFFFFF; --edge: #7A838F; --selected: #E8EBEF;
-  --done: #7692B4; --panel: rgba(255, 255, 255, .92); --header: rgba(241, 242, 244, .9); --well: #F6F7F9;
-  --bg-line: rgba(21, 25, 31, .045); --empty-cell: #E8EBEF; --empty-key: #D8DCE2;
+  --covered-text: #0B776C; --over-text: #5F4CCB; --short-ink: #8C5300; --gap-ink: #B3261E;
+  --action: #12233A; --action-hover: #263B5A; --on-action: #FFFFFF; --edge: #6B7C96; --selected: #E1EAF4; --hi: #12233A; --on-hi: #FFFFFF;
+  --done: #7692B4; --panel: rgba(255, 255, 255, .92); --header: rgba(232, 239, 246, .96); --well: #F3F7FB;
+  --bg-line: transparent; --empty-cell: #E1EAF4; --empty-key: #D3DEEA;
   --covered-soft: rgba(11, 119, 108, .1);
-  --gap-soft: rgba(179, 38, 30, .1); --short-soft: rgba(140, 83, 0, .1); --hover: rgba(21, 25, 31, .05);
-  --glow: transparent; --glow-strong: transparent; --pulse: rgba(233, 162, 59, .6); --shadow: rgba(21, 25, 31, .18);
-  --code-bg: #F6F7F9; --code-ink: #15191F;
+  --gap-soft: rgba(179, 38, 30, .1); --short-soft: rgba(140, 83, 0, .1); --hover: rgba(18, 35, 58, .05);
+  --glow: transparent; --glow-strong: transparent; --pulse: rgba(233, 162, 59, .6); --shadow: rgba(18, 35, 58, .22);
+  --code-bg: #F3F7FB; --code-ink: #12233A; --ch-phone: #1A47A8; --ch-chat: #B4468F; --ch-email: #2F7D5B; --ch-ink: #FFFFFF; --r-panel: 20px; --r-ctl: 12px;
   --c-blue: #2a78d6; --c-aqua: #1baf7a; --c-orange: #eb6834; --c-yellow: #eda100;
-  --h0: #EDEFF2; --h1: #F8D6C5; --h2: #F2B08F; --h3: #EB8A5E; --h4: #D95926;
+  --h0: #E1EAF4; --h1: #F8D6C5; --h2: #F2B08F; --h3: #EB8A5E; --h4: #D95926;
   color-scheme: light;
 }
-/* Deep ocean: a third look to switch to, night only (owner's pick 2026-10-15); the status and channel colours stay */
-:root[data-theme="ocean"] {
-  --night: #0A1220; --rail-bg: #060B14; --console: #111C2E; --console-2: #18263D; --rail: #23344F;
-  --paper: #EAF0F8; --dim: #93A6C0; --on-covered: #0A1220; --on-short: #0A1220; --on-gap: #0A1220; --on-over: #0A1220;
-  --action: #EAF0F8; --action-hover: #FFFFFF; --on-action: #0A1220; --edge: #61748E; --selected: #18263D;
-  --panel: rgba(17, 28, 46, .9); --header: rgba(10, 18, 32, .88); --well: rgba(10, 18, 32, .6);
-  --bg-line: rgba(147, 166, 192, .045); --empty-cell: rgba(35, 52, 79, .5); --empty-key: rgba(35, 52, 79, .9);
-  --hover: rgba(234, 240, 248, .05); --code-bg: #060B14; --code-ink: #C9D6E3; --h0: #18263D;
-  color-scheme: dark;
+/* Drafting table (Phase BA, owner's pick 2026-10-25, look 3): a dark field with one light, hatched sheet that holds the page;
+   sections are bracketed; the only accent is a marker colour (--hi) that never means a status */
+:root[data-theme="draft"] {
+  --night: #F1F3EE; --rail-bg: #E7EAE3; --console: #FBFCFA; --console-2: #F1F3EE; --rail: #CBD1CA; --paper: #14201C; --dim: #4A5852;
+  --covered: #06A496; --short: #C98304; --gap: #D53D38; --over: #7560E3;
+  --on-covered: #0E1A2B; --on-short: #0E1A2B; --on-gap: #FFFFFF; --on-over: #FFFFFF;
+  --covered-text: #0B776C; --over-text: #5F4CCB; --short-ink: #8C5300; --gap-ink: #B3261E;
+  --action: #14201C; --action-hover: #2B3A34; --on-action: #FFFFFF; --edge: #53605A; --selected: #E6F4A6; --hi: #D7F25A; --on-hi: #14201C;
+  --done: #7B8F86; --panel: #FBFCFA; --header: rgba(241, 243, 238, .94); --well: #F1F3EE;
+  --bg-line: transparent; --empty-cell: #E1E5DE; --empty-key: #CBD1CA;
+  --covered-soft: rgba(11, 119, 108, .1);
+  --gap-soft: rgba(179, 38, 30, .1); --short-soft: rgba(140, 83, 0, .1); --hover: rgba(20, 32, 28, .06);
+  --glow: transparent; --glow-strong: transparent; --pulse: rgba(233, 162, 59, .6); --shadow: rgba(0, 0, 0, .35);
+  --code-bg: #F1F3EE; --code-ink: #14201C; --ch-phone: #1A47A8; --ch-chat: #B4468F; --ch-email: #2F7D5B; --ch-ink: #FFFFFF; --r-panel: 4px; --r-ctl: 6px;
+  --c-blue: #2a78d6; --c-aqua: #1baf7a; --c-orange: #eb6834; --c-yellow: #eda100;
+  --h0: #E1E5DE; --h1: #F8D6C5; --h2: #F2B08F; --h3: #EB8A5E; --h4: #D95926;
+  color-scheme: light;
 }
 @view-transition { navigation: auto; }
 
@@ -146,7 +160,7 @@ input:focus, select:focus { outline: 2px solid var(--action); outline-offset: 2p
 
 /* ------------------------------------------------------------ forms */
 label { display: block; font-weight: 600; margin: 0 0 14px; }
-input[type=text], input[type=password], input[type=date], input:not([type]), select {
+input[type=text], input[type=password], input[type=date], input[type=number], input[type=search], input:not([type]), select {
   display: block; width: 100%; margin-top: 6px; padding: 10px 12px; font: inherit; color: var(--paper);
   background: var(--night); border: 1px solid var(--edge); border-radius: 4px; }
 input[type=time] { display: block; margin-top: 6px; padding: 10px 12px; font: inherit; color: var(--paper);
@@ -168,13 +182,6 @@ button.quiet { padding: 6px 10px; font-size: 0.8125rem; }
 .login-wrap { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(280px, 1fr); gap: 48px; align-items: center; min-height: 70vh; }
 .login-art h1 { font-size: 3.25rem; max-width: 13ch; }
 .login-art p { color: var(--dim); }
-.week { width: 100%; height: auto; display: block; margin-top: 24px; }
-.week .day { font: 600 0.8125rem var(--text); fill: var(--dim); }
-.week .hour { font: 400 0.6875rem var(--text); fill: var(--dim); }
-.week .grid { stroke: var(--rail); stroke-width: 1; }
-.week .s0 { fill: var(--covered); }
-.week .s1 { fill: var(--short); }
-.week .s2 { fill: var(--over); }
 .login { padding: 28px; }
 .login button { width: 100%; }
 
@@ -259,6 +266,7 @@ details.advanced { margin: 0 0 16px; border: 1px solid var(--rail); border-radiu
 details.advanced summary { cursor: pointer; font-weight: 600; }
 details.advanced[open] summary { margin-bottom: 10px; }
 .hint { color: var(--dim); font-size: 0.8125rem; margin: 0 0 12px; }
+.swap-warn { display: block; margin: 4px 0; padding-left: 8px; border-left: 3px solid var(--short); font-size: 0.8125rem; }
 .newrun button[type=submit] { width: 100%; }
 .numbers { display: flex; flex-wrap: wrap; gap: 8px 28px; margin: 0 0 16px; }
 .numbers p { margin: 0; color: var(--dim); font-size: 0.875rem; max-width: 26ch; }
@@ -537,8 +545,9 @@ input[aria-invalid=true] { border-color: var(--gap); }
 }
 
 /* ---- The day (Phase N): timeline lanes, number rows, interval board, break dialog ---- */
-main:has([data-day]) { max-width: 1560px; }  /* the board and the lanes need the width */
-.daynav { display: flex; gap: 14px; margin: 0 0 2px; font-size: 0.8125rem; }
+/* Phase AU (owner: the width did not fit a wide screen): the day and the week use the whole width beside the menu */
+.frame > main:has([data-day]), .frame > main:has(.wkgrid) { max-width: none; }
+.daynav { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 2px; font-size: 0.8125rem; }  /* wraps: the links no longer fit one line at 320px (Phase AY: Split view) */
 .daybar { display: flex; gap: 18px; align-items: flex-end; flex-wrap: wrap; margin: 0 0 14px; }
 .daybar .sel { margin: 0; }
 .daybar .measure-note { margin: 0 0 6px; font-size: 0.8125rem; max-width: 46ch; }
@@ -563,7 +572,10 @@ svg.defs { position: absolute; width: 0; height: 0; }
 [data-day] select.att.gone { border-color: var(--gap); color: var(--gap-ink); }
 [data-day] select.att.away { border-color: var(--short); color: var(--short-ink); }
 [data-day] .tl-track { display: block; width: 100%; height: 30px;
-  background: repeating-linear-gradient(90deg, transparent 0 calc(100% / 24 - 1px), var(--rail) calc(100% / 24 - 1px) calc(100% / 24)); }
+  background: linear-gradient(90deg, transparent calc(100% - 1px), var(--rail) 0) left top / calc(100% / 24) 100% repeat-x; }
+/* Phase AY: the hour lines and the hour labels are placed by app.js from the window's length (data-span), not from a 24-hour day */
+[data-day] .tl-axis .tl-ticks.placed { display: block; position: relative; }
+[data-day] .tl-axis .tl-ticks.placed span { position: absolute; top: 0; white-space: nowrap; }
 [data-day] .tl-bar { fill: var(--c-blue); opacity: .85; }
 [data-day] .tl-bar.gone { opacity: .25; }
 [data-day] .tl-away { stroke: var(--gap); stroke-width: 1; vector-effect: non-scaling-stroke; }
@@ -576,13 +588,16 @@ svg.defs { position: absolute; width: 0; height: 0; }
 .brk-cancel { margin: 10px 0 0; padding: 12px; border: 1px solid var(--gap); border-radius: 6px; }
 .brk-cancel p { margin: 0 0 8px; }
 [data-day] .tl-ghost { fill: none; stroke: var(--dim); stroke-width: 1.5; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
-[data-day] .tl-num { height: 24px; margin-top: 2px; }
+[data-day] .tl-num { height: 28px; margin-top: 2px; }
 [data-day] .tl-lbl { font-size: 0.75rem; color: var(--dim); text-align: right; padding-right: 10px; }
-[data-day] .tl-cells { display: grid; gap: 1px; height: 100%; }
+[data-day] .tl-cells { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 1px; height: 100%; }  /* a column per cell, whatever their number: a fitted operating day has 16, 32 or 64 */
 [data-day] .cols-24 .tl-cells { grid-template-columns: repeat(24, 1fr); } [data-day] .cols-48 .tl-cells { grid-template-columns: repeat(48, 1fr); }
 [data-day] .cols-72 .tl-cells { grid-template-columns: repeat(72, 1fr); } [data-day] .cols-96 .tl-cells { grid-template-columns: repeat(96, 1fr); }
 [data-day] .cols-144 .tl-cells { grid-template-columns: repeat(144, 1fr); } [data-day] .cols-288 .tl-cells { grid-template-columns: repeat(288, 1fr); }
-[data-day] .tc { font-size: 0.5625rem; display: grid; place-items: center; border-radius: 2px; font-weight: 700; color: var(--paper); }
+[data-day] .tc { font-size: 0.75rem; display: grid; place-items: center; border-radius: 2px; font-weight: 700; color: var(--paper); font-variant-numeric: tabular-nums; }
+/* Phase AY (owner, 2026-10-23: "on the floor now, plus/minus is not very readable"): the figures under the Timeline are 12px; the layouts with narrow
+   cells (15, 10 and 5 minute intervals) keep the small size, which is all that fits */
+[data-day] .cols-72 .tc, [data-day] .cols-96 .tc, [data-day] .cols-144 .tc, [data-day] .cols-288 .tc { font-size: 0.5625rem; }
 [data-day] .tc.ok { background: var(--covered); color: var(--on-covered); } [data-day] .tc.warn { background: var(--short); color: var(--on-short); }
 [data-day] .tc.bad { background: var(--gap); color: var(--on-gap); }
 [data-day] .tc.n, [data-day] .tc.lok { color: var(--paper); font-weight: 400; background: var(--console-2); }
@@ -676,6 +691,17 @@ svg.defs { position: absolute; width: 0; height: 0; }
 /* activities, the finder and offers */
 [data-day] .tl-act.ot { fill: var(--covered); opacity: .9; }
 [data-day] .tl-act.aux, [data-day] .tl-act.vto { stroke: var(--dim); stroke-width: 1; vector-effect: non-scaling-stroke; }
+/* Phase AY (owner, 2026-10-23: "coaching ... the same as breaks, with different colours based on the reason"): a booked activity is a
+   full-height box on the bar like a break, its colour the reason; an added break or lunch is the break's own colour */
+:root { --k-coaching: #8E44AD; --k-meeting: #D9822B; --k-training: #0E8A8A; --k-system-issue: #C0392B; --k-task: #8A6D3B; --k-bio-break: #6B7280; }
+[data-day] .tl-act.aux { fill: var(--dim); opacity: .95; }
+[data-day] .tl-act.aux.k-coaching, .legend2 .k.aux.k-coaching { fill: var(--k-coaching); background: var(--k-coaching); }
+[data-day] .tl-act.aux.k-meeting, .legend2 .k.aux.k-meeting { fill: var(--k-meeting); background: var(--k-meeting); }
+[data-day] .tl-act.aux.k-training, .legend2 .k.aux.k-training { fill: var(--k-training); background: var(--k-training); }
+[data-day] .tl-act.aux.k-system-issue, .legend2 .k.aux.k-system-issue { fill: var(--k-system-issue); background: var(--k-system-issue); }
+[data-day] .tl-act.aux.k-task, .legend2 .k.aux.k-task { fill: var(--k-task); background: var(--k-task); }
+[data-day] .tl-act.aux.k-bio-break, .legend2 .k.aux.k-bio-break { fill: var(--k-bio-break); background: var(--k-bio-break); }
+[data-day] .tl-act.aux.k-break, [data-day] .tl-act.aux.k-lunch { fill: var(--action); }
 [data-day] .tl-act.aux.billable { stroke: var(--covered); }
 [data-day] .who-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0 12px; max-height: 340px; overflow: auto; }
 [data-day] .fit-list { list-style: none; padding: 0; margin: 0; }
@@ -770,6 +796,7 @@ body.wall { background: var(--night); color: var(--paper); padding: 2vh 2.5vw; m
 .role { display: inline-block; border: 1px solid var(--rail); border-radius: 4px; padding: 1px 8px; font-size: 0.8125rem; }
 .role-supervisor { border-color: var(--over); color: var(--over-text); }
 .role-admin { border-color: var(--short); color: var(--short-ink); }
+.team-pick { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; margin: 6px 0; }
 
 /* programs and LOBs */
 .setup-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }
@@ -842,6 +869,10 @@ button.danger:disabled { opacity: .55; cursor: not-allowed; }
 /* Phase R: RTA's "+ Add" and one person's day */
 .rb-add { display: inline-block; margin-top: 6px; padding: 1px 8px; font: 600 0.75rem/1.5 var(--text); color: var(--action);
   border: 1px dashed var(--edge); border-radius: 4px; text-decoration: none; }
+.rb-book { display: inline-block; margin: 6px 0 0 6px; font: 600 0.75rem/1.5 var(--text); color: var(--action); }
+.set-time { align-items: flex-end; border-top: 1px solid var(--edge); padding-top: 12px; margin-top: 12px; }
+.session { border-top: 1px solid var(--edge); padding: 12px 0; }
+.session:first-of-type { border-top: 0; }
 .rb-add:hover, .rb-add:focus-visible { background: var(--hover); border-style: solid; border-color: var(--action); }
 a.chip { text-decoration: none; color: inherit; }
 .chip.added { border-style: dashed; }
@@ -943,11 +974,13 @@ dialog.dlg.add-dlg { width: 620px; }
 .actable { border-collapse: collapse; width: 100%; }
 .actable th, .actable td { border-bottom: 1px solid var(--rail); padding: 7px 8px; text-align: left; }
 .actable .c { text-align: center; }
+.fair td { white-space: nowrap; font-variant-numeric: tabular-nums; }  /* Phase AL: a time and its share stay on one line */
 .actable input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--action); }
 .btnrow { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
 
 /* Phase V: the channels, one colour each wherever they appear */
-:root { --ch-phone: #3E6FD8; --ch-chat: #B4479A; --ch-email: #4D7D8D; --ch-ink: #FFFFFF; }
+/* Phase AK (owner's pick, sample ak01 D): clear of the status hues; Phase AL (owner, al01 C): Email deep green */
+:root { --ch-bar: #9AA1AA; }  /* Phase BA: the channel colours are set per look (Night watch brighter, with dark text; the light looks deeper, with white text) */
 .ch-P { background: var(--ch-phone); color: var(--ch-ink); }
 .ch-C { background: var(--ch-chat); color: var(--ch-ink); }
 .ch-E { background: var(--ch-email); color: var(--ch-ink); }
@@ -1118,7 +1151,7 @@ select.pending, input.pending, [data-day] select.att.pending { border-style: das
 .achv-num b { font: 700 semi-condensed 2rem/1.1 var(--display); color: var(--paper); margin-right: 6px; font-variant-numeric: tabular-nums; }
 .achv-share { margin: 4px 0 12px; font-size: 0.875rem; max-width: 76ch; }
 .achv-share > b { color: var(--paper); }
-.achv-strip { position: relative; display: grid; gap: 3px; height: 22px; margin-top: 14px; }
+.achv-strip { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 3px; height: 22px; margin-top: 14px; }
 .achv-strip.cols-24 { grid-template-columns: repeat(24, 1fr); } .achv-strip.cols-48 { grid-template-columns: repeat(48, 1fr); gap: 2px; }
 .achv-strip.cols-72 { grid-template-columns: repeat(72, 1fr); gap: 1px; } .achv-strip.cols-96 { grid-template-columns: repeat(96, 1fr); gap: 1px; }
 .achv-strip.cols-144 { grid-template-columns: repeat(144, 1fr); gap: 0; } .achv-strip.cols-288 { grid-template-columns: repeat(288, 1fr); gap: 0; }
@@ -1509,6 +1542,8 @@ table.hours tfoot th, table.hours tfoot td { border-top: 1px solid var(--rail); 
 /* Phase AI: channels on the Timeline's bars (owner: "chsnnels not coloredd here"), under the breaks */
 .tl-track rect.tl-ch.ch-P { fill: var(--ch-phone); } .tl-track rect.tl-ch.ch-C { fill: var(--ch-chat); }
 .tl-track rect.tl-ch.ch-E { fill: var(--ch-email); } .tl-track rect.tl-ch.ch-A { fill: url(#ch-all); }
+[data-day] .tl-bar.has-ch { fill: var(--ch-bar); opacity: 1; }
+.tl-ch-t { font: 700 0.6875rem var(--text); fill: var(--ch-ink); text-anchor: middle; pointer-events: none; }
 .tl-chnote, .tl-chkey { margin: 0 0 8px; }
 /* Phase AI: the wallboard's way back to the RTA */
 .wall-back { font-size: 2vh; color: var(--dim); text-decoration: underline; }
@@ -1530,3 +1565,302 @@ table.hours tfoot th, table.hours tfoot td { border-top: 1px solid var(--rail); 
 .pager a:hover { background: var(--hover); color: var(--action-hover); }
 .pager a[aria-current="page"] { background: var(--selected); border-color: var(--action); font-weight: 600; }
 .pager-gap { color: var(--dim); padding: 0 2px; }
+
+/* Phase AS: the buffer words on break changes and coaching requests */
+.lv { display: inline-block; border: 1px solid; border-radius: 10px; padding: 0 .55rem; font-size: .8rem; }
+.lv-high { color: var(--covered-text); background: var(--covered-soft); border-color: var(--covered); }
+.lv-moderate { color: var(--short-ink); background: var(--short-soft); border-color: var(--short); }
+.lv-low { color: var(--gap-ink); background: var(--gap-soft); border-color: var(--gap); }
+.slots { border: 0; padding: 0; margin: .5rem 0; display: flex; flex-direction: column; gap: .35rem; }
+.slots .slot { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.slot-warn { color: var(--gap-ink); }
+
+/* Phase AU: a break or coaching request keeps its buttons and the nearest times under the impact, not beside it */
+.req-list .req.req-change { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(0, 4fr); gap: 12px 24px; padding: 14px 0; border-top: 1px solid var(--rail); }
+.req-change .req-act { grid-column: 1 / -1; }
+.req-change .req-act form { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: end; }
+.req-change .req-act form label { flex: 1 1 18rem; order: 0; font-size: 0.8125rem; color: var(--dim); }
+.req-change .alts { flex: 1 1 100%; order: 4; border: 0; padding: 0; margin: 4px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-width: 0; }
+.req-change .alts legend { padding: 0; margin-bottom: 4px; color: var(--dim); font-size: 0.8125rem; }
+@media (max-width: 720px) { .req-change { grid-template-columns: minmax(0, 1fr); } }
+.tabs a .count { margin-left: 4px; min-width: 1.4rem; padding: 0 6px; border-radius: 999px; background: var(--short); color: #10141B; font-size: 0.75rem; font-weight: 700; text-align: center; display: inline-block; line-height: 1.4rem; }
+.pick-list { max-height: 16rem; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); column-gap: 16px; }
+.pick-list legend { grid-column: 1 / -1; }
+.pick-list .exp-kind[hidden] { display: none; }
+/* Phase AU: a note under a table or a form keeps its distance */
+.scroll + .note, .scroll + p, .people-form + .note, .setup-defaults .note { margin-top: 12px; }
+.setup-defaults button + .note { display: block; }
+/* Phase AU: the program defaults on LOBs and defaults: full-width fields, and room between the groups */
+.setup-defaults input[type="number"], .setup-defaults input:not([type]) { width: 100%; max-width: 360px; }
+.setup-cols h3 { margin-top: 28px; }
+.setup-cols .shr-t { width: 100%; }
+
+/* Incidents and shrinkage (Phase AV) */
+.ins-filter { margin-bottom: 16px; }
+.ins-tabs { margin: 0 0 16px; }
+.ins-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; margin: 4px 0 10px;
+  border: 1px solid var(--rail); border-radius: 10px; overflow: hidden; background: var(--rail); }
+.ins-tile { padding: 14px 16px; background: var(--console); display: grid; gap: 2px; align-content: start; }
+.ins-tile b { font: 700 2.25rem/1.05 var(--display); }
+.ins-tile small { max-width: 28ch; }
+.ins-spark .spark { width: 100%; max-width: 140px; height: 30px; display: block; }
+.ins-note { margin: 0 0 18px; max-width: 90ch; }
+.ins-t td small { display: block; color: var(--dim); font-weight: 400; }
+.ins-t td b { font-weight: 700; }
+.ins-t .none { color: var(--dim); }
+.ins-top { max-width: 90ch; }
+.tscroll { overflow-x: auto; }
+.ins-person > h2 { margin-top: 0; }
+@media (max-width: 560px) { .ins-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ins-heat { border-collapse: separate; border-spacing: 2px; width: 100%; }
+.ins-heat th { font-weight: 600; font-size: 0.8125rem; text-align: left; color: var(--dim); padding: 2px 6px; white-space: nowrap; }
+.ins-heat thead th { text-align: center; }
+.ins-heat td { text-align: center; min-width: 38px; min-height: 30px; height: 30px; border-radius: 4px; font-weight: 700; font-size: 0.8125rem; background: var(--console-2); color: var(--paper); }
+.ins-heat td.lv1 { background: var(--h1); } .ins-heat td.lv2 { background: var(--h2); } .ins-heat td.lv3, .ins-heat td.lv4 { background: var(--h3); }
+.ins-t th[scope=row] { white-space: nowrap; }
+.ins-t th[scope=row] small { display: block; font-weight: 400; }
+.ins-t th, .ins-t td { padding: 6px 8px; }
+.ins-t td small { white-space: nowrap; }
+.ins-change { font-weight: 600; color: var(--paper); }
+.ins-export { margin: 0 0 12px; }
+.rb-chips .none, .rb-c .none { color: var(--dim); }  /* the dash for "nothing" on the Interval board stays readable */
+
+/* Phase AX: the View pick of the merged RTA day, a tick box per LOB */
+.lob-pick { position: relative; align-self: end; }
+.lob-pick summary { cursor: pointer; padding: 0.35rem 0.6rem; border: 1px solid var(--edge); border-radius: 6px; }
+.lob-pick-body { position: absolute; white-space: nowrap; z-index: 5; margin-top: 0.25rem; min-width: 14rem; padding: 0.6rem 0.8rem;
+  background: var(--selected); border: 1px solid var(--edge); border-radius: 8px; }
+.lob-pick-body small { display: block; margin-bottom: 0.3rem; }
+.lob-pick label.check { display: flex; gap: 0.5rem; align-items: center; padding: 0.2rem 0; }
+.lob-pick button { margin-top: 0.4rem; }
+
+/* Phase AX: the download buttons under a chart or table */
+.dl-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.6rem 0 0; }
+
+/* Phase AX: a count and the time for each kind of incident */
+.ins-counts .ins-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.ins-counts .ins-tile b { font-size: 1.75rem; }
+@media (max-width: 800px) { .ins-counts .ins-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ins-heat td small { display: block; font-weight: 400; font-size: 0.6875rem; line-height: 1.1; white-space: nowrap; }
+.edit-act { margin-left: .75rem; }
+.edit-act input[type="time"] { width: 7rem; }
+.ot-offer .count { width: 4em; }
+
+/* Phase AY (owner, 2026-10-23: split view): panes are the ordinary RTA page embedded, without the page header */
+body.embed .top, body.embed .skip, body.embed .back, body.embed .leftnav, body.embed .crumbs { display: none; }
+body.embed { padding-top: 0; }
+body.embed .frame { grid-template-columns: minmax(0, 1fr); }
+body.embed .frame > main { max-width: none; padding: 10px 14px 24px; }
+/* the split page follows the tab: the whole width, and the panes share the height left under the controls (page scrolls only below their minimums) */
+.frame > main:has(.split) { max-width: none; display: flex; flex-direction: column; min-height: calc(100vh - 58px); padding-bottom: 12px; }
+.split { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.split-bar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; margin: 8px 0 12px; }
+.split-pick { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-end; border: 1px solid var(--rail); border-radius: 6px; padding: 6px 10px; }
+.split-panes { flex: 1; min-height: 0; display: grid; gap: 10px; }
+.split-rows.panes-1 { grid-template-rows: minmax(480px, 1fr); }
+.split-rows.panes-2 { grid-template-rows: repeat(2, minmax(360px, 1fr)); }
+.split-rows.panes-3 { grid-template-rows: repeat(3, minmax(300px, 1fr)); }
+.split-cols { grid-template-rows: minmax(480px, 1fr); }
+.split-cols.panes-1 { grid-template-columns: minmax(0, 1fr); }
+.split-cols.panes-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.split-cols.panes-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.split-pane { width: 100%; height: 100%; min-height: 0; border: 1px solid var(--rail); border-radius: 6px; background: var(--paper); }
+@media (max-width: 900px) { .split-cols.panes-2, .split-cols.panes-3 { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-auto-rows: minmax(480px, 1fr); } }
+
+/* ------------------------------------------------------------ Phase BA: the three looks (owner's pick 2026-10-25) */
+/* The page behind everything, one per look. Night watch is the default; Tide for a light device or when picked; Drafting table when picked. */
+:root { --page-bg: radial-gradient(60rem 38rem at 12% -10%, #17285C 0%, transparent 62%), radial-gradient(50rem 36rem at 100% 10%, #0C3547 0%, transparent 60%); --page-field: var(--night); }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]):not([data-theme="draft"]) { --page-bg: radial-gradient(54rem 34rem at 6% -10%, #C4DDF3 0%, transparent 62%), radial-gradient(46rem 32rem at 100% 0%, #C6EEDF 0%, transparent 60%), radial-gradient(40rem 30rem at 55% 108%, #DCE8F4 0%, transparent 62%); }
+}
+:root[data-theme="light"] { --page-bg: radial-gradient(54rem 34rem at 6% -10%, #C4DDF3 0%, transparent 62%), radial-gradient(46rem 32rem at 100% 0%, #C6EEDF 0%, transparent 60%), radial-gradient(40rem 30rem at 55% 108%, #DCE8F4 0%, transparent 62%); }
+:root[data-theme="draft"] { --page-bg: radial-gradient(60rem 30rem at 50% -10%, #2B3733 0%, transparent 70%), radial-gradient(#FFFFFF14 1px, transparent 1.2px); --page-size: auto, 22px 22px; --page-field: #1B2321; }
+body { background-color: var(--page-field); background-image: var(--page-bg); background-size: var(--page-size, auto); background-repeat: no-repeat, repeat; }  /* no fixed attachment and no blur: both repaint on every scroll */
+.panel, .top { backdrop-filter: none; }
+/* shapes follow the look */
+.panel, .now { border-radius: var(--r-panel); }
+button, .button, input[type=text], input[type=password], input[type=date], input[type=number], input[type=search], input:not([type]), input[type=time], select, textarea, .crumbs a { border-radius: var(--r-ctl); }
+button.link { border-radius: 0; }
+.sheet { display: contents; }
+/* the look control in the top bar: three names, the one in use pressed */
+.top .account .theme { display: inline-flex; align-items: center; gap: 8px; margin: 0; }
+.top .account .looks { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; background: var(--hover); border: 1px solid var(--rail); }
+.top .account .look { padding: 4px 12px; border: 0; border-radius: 999px; background: transparent; color: var(--paper); font: 600 0.8125rem var(--text); }
+.top .account .look:hover { background: var(--hover); border-color: transparent; }
+.top .account .look[aria-pressed="true"] { background: var(--hi); color: var(--on-hi); }
+.top .account .ico { opacity: .75; }
+.top .account .link .ico, .top .account a .ico { margin-right: 6px; }
+.top .account .link, .top .account a { display: inline-flex; align-items: center; }
+/* Tide and Night watch: softer panels */
+:root:not([data-theme="draft"]) .panel { box-shadow: 0 1px 2px var(--shadow), 0 14px 30px -20px var(--shadow); }
+:root:not([data-theme="draft"]) .leftnav { border-right: 1px solid var(--rail); }
+/* Drafting table: the dark field, the sheet, bracketed sections, the marker */
+:root[data-theme="draft"] .sheet { display: flex; flex-direction: column; flex: 1; margin: 14px; border-radius: 28px; overflow: clip; box-shadow: 0 30px 60px -30px #000A;
+  background-color: var(--night); background-image: repeating-linear-gradient(135deg, rgba(20, 32, 28, .045) 0 1px, transparent 1px 10px); }
+:root[data-theme="draft"] .top { border-radius: 0; }
+:root[data-theme="draft"] .leftnav { background: transparent; border-right: 1px solid var(--rail); }
+:root[data-theme="draft"] .foot { border-top: 1px solid var(--rail); }
+:root[data-theme="draft"] .leftnav nav a.on { background: var(--hi); color: var(--on-hi); box-shadow: none; }
+:root[data-theme="draft"] .leftnav nav a:hover { background: var(--hover); }
+:root[data-theme="draft"] .panel, :root[data-theme="draft"] .now { --b: 1.5px; --l: 16px; background-color: var(--panel); border: 1px solid var(--rail); border-radius: 4px; backdrop-filter: none; box-shadow: none;
+  background-image: linear-gradient(var(--paper), var(--paper)), linear-gradient(var(--paper), var(--paper)), linear-gradient(var(--paper), var(--paper)), linear-gradient(var(--paper), var(--paper)), linear-gradient(var(--paper), var(--paper)), linear-gradient(var(--paper), var(--paper)), linear-gradient(var(--paper), var(--paper)), linear-gradient(var(--paper), var(--paper));
+  background-size: var(--l) var(--b), var(--b) var(--l), var(--l) var(--b), var(--b) var(--l), var(--l) var(--b), var(--b) var(--l), var(--l) var(--b), var(--b) var(--l);
+  background-position: left top, left top, right top, right top, left bottom, left bottom, right bottom, right bottom; background-repeat: no-repeat; }
+:root[data-theme="draft"] button.primary, :root[data-theme="draft"] .button.primary { box-shadow: 0 0 0 2px var(--night), 0 0 0 3.5px var(--action); margin: 3.5px; }
+:root[data-theme="draft"] :focus-visible { outline: 3px solid var(--paper); outline-offset: 2px; box-shadow: 0 0 0 6px var(--hi); }
+:root[data-theme="draft"] .skip:focus { background: var(--hi); color: var(--on-hi); }
+
+/* Phase BA (owner, 2026-10-25): one rule for long content. Tables and grids people scan or compare scroll inside their own panel,
+   with the header fixed at the top; lists that grow over time and are read one by one are pages (ctx._paged). */
+.scroll.panel-scroll, .tscroll.panel-scroll { max-height: min(30rem, 64dvh); overflow: auto; scrollbar-width: thin; scrollbar-color: var(--edge) transparent; border-radius: var(--r-ctl); }
+.scroll.panel-scroll:focus-visible, .tscroll.panel-scroll:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
+.scroll.panel-scroll thead th, .tscroll.panel-scroll thead th { position: sticky; top: 0; z-index: 2; background: var(--console); }
+.scroll.panel-scroll.side { max-height: min(28rem, 60dvh); }
+@media print { .scroll.panel-scroll, .tscroll.panel-scroll { max-height: none; overflow: visible; } }
+
+/* Phase BA (owner, 2026-10-25): the RTA's list of people is a scrolling panel that fits the window, or the whole list, as each viewer chooses */
+[data-day] .tl-scroll { max-height: clamp(16rem, calc(100dvh - 21rem), 48rem); scrollbar-width: thin; scrollbar-color: var(--edge) transparent; }
+[data-day] .tl-scroll[data-mode="whole"] { max-height: none; }
+[data-day] .tl-scroll:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
+[data-day] .tl-axis { position: sticky; top: 0; z-index: 3; background: var(--console); }
+.tl-view { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin: 0 0 8px; font-size: 0.8125rem; color: var(--dim); }
+.tl-view[hidden] { display: none; }
+.tl-modes .look { padding: 4px 12px; border: 0; border-radius: 999px; background: transparent; color: var(--paper); font: 600 0.8125rem var(--text); }
+.tl-modes .look:hover { background: var(--hover); border-color: transparent; }
+.tl-modes .look[aria-pressed="true"] { background: var(--hi); color: var(--on-hi); }
+.looks { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; background: var(--hover); border: 1px solid var(--rail); }
+@media print { [data-day] .tl-scroll { max-height: none; } }
+
+/* Phase BA: the floor's screen carries the day so far, the target, the next hour's changes, what needs attention, who is out and the channels */
+.wall-today { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)) minmax(0, 2.6fr); gap: 1vw; margin-top: 1.8vh; }
+.wall-today .wt { margin: 0; padding: 1.2vh 1vw; border-radius: var(--r-panel); background: var(--console); display: flex; flex-direction: column; gap: .2vh; }
+.wall-today .wt b { font: 700 semi-condensed 3.6vh/1 var(--display); } .wall-today .wt span { color: var(--dim); font-size: 1.8vh; }
+.wall-today .wt.warn b { color: var(--short-ink); } .wall-today .wt.wide { gap: .8vh; }
+.wall-strip { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; height: 1.8vh; }
+.wall-strip i { border-radius: 2px; background: var(--empty-cell); } .wall-strip i.ok { background: var(--covered); } .wall-strip i.warn { background: var(--short); } .wall-strip i.bad { background: var(--gap); }
+.wall-lists { grid-template-columns: repeat(auto-fit, minmax(min(24vw, 100%), 1fr)); margin-top: 1.8vh; }
+.wall-lists > div { padding: 1.4vh 1.2vw; } .wall-lists h2 { font-size: 2.3vh; } .wall-lists ul { font-size: 2.1vh; } .wall-lists li.lok { color: var(--covered-text); }
+.wall-more { margin: .6vh 0 0; color: var(--dim); font-size: 1.9vh; }
+.wall-drawn { margin: 1.6vh 0 0; max-width: none; color: var(--dim); font-size: 1.8vh; text-align: right; }
+.wall-buf { font-size: 7vh; } .wall-row { padding: 1.6vh 1.2vw; }
+@media (max-width: 900px) { .wall-today { grid-template-columns: repeat(2, minmax(0, 1fr)); } .wall-today .wt.wide { grid-column: 1 / -1; } }
+body.wall main { max-width: none; padding: 0; }  /* a TV: the whole screen, not a 1240 px column */
+.wall-today .wt b { white-space: nowrap; }
+.wall-today { grid-template-columns: minmax(0, 1.3fr) repeat(6, minmax(0, 1fr)) minmax(0, 2.6fr); }
+
+/* Phase BA (owner, 2026-10-25): "the page is out of date" floats at the bottom of the window while the person scrolls. Occasional, so it eases
+   in and out (opacity and transform only, 220 ms in, 160 ms out); with reduced motion it only fades. */
+.float-note { position: fixed; z-index: 50; left: 0; right: 0; margin-inline: auto; width: max-content; max-width: min(46rem, calc(100vw - 1.5rem)); bottom: 1.1rem;
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 16px; border-radius: 999px; background: var(--console); color: var(--paper);
+  border: 1px solid var(--edge); box-shadow: 0 2px 4px var(--shadow), 0 16px 40px -12px var(--shadow);
+  opacity: 0; transform: translateY(.75rem) scale(.97); visibility: hidden; pointer-events: none;
+  transition: opacity 160ms cubic-bezier(.23, 1, .32, 1), transform 160ms cubic-bezier(.23, 1, .32, 1), visibility 0s linear 160ms; }
+.float-note.on { opacity: 1; transform: none; visibility: visible; pointer-events: auto;
+  transition: opacity 220ms cubic-bezier(.23, 1, .32, 1), transform 220ms cubic-bezier(.23, 1, .32, 1), visibility 0s; }
+.float-note .pip { flex: none; width: .7rem; height: .7rem; border-radius: 50%; background: var(--short); }
+.float-note .act { flex: none; padding: 6px 14px; border-radius: 999px; }
+.float-note .x { flex: none; padding: 6px 8px; border: 0; background: transparent; color: var(--paper); font-weight: 600; opacity: .75; }
+.float-note .x:hover { opacity: 1; background: var(--hover); }
+:root[data-theme="draft"] .float-note { background: #14201C; color: #FFFFFF; border: 1.5px solid #D7F25A; border-radius: 8px; }
+:root[data-theme="draft"] .float-note .act { background: #D7F25A; color: #14201C; border-color: #D7F25A; box-shadow: none; margin: 0; }
+:root[data-theme="draft"] .float-note .x { color: #FFFFFF; }
+@media (max-width: 40rem) { .float-note { left: .6rem; right: .6rem; width: auto; margin-inline: 0; bottom: .6rem; border-radius: 18px; flex-wrap: wrap; } .float-note .msg { flex: 1 1 12rem; } }
+@media (prefers-reduced-motion: reduce) { .float-note, .float-note.on { transform: none; transition: opacity .12s linear, visibility 0s; } }
+@media print { .float-note { display: none; } }
+
+/* Phase BA: spacing found on the audit (evidence/phase_ba/shots): stacked panels touched; a form's Show button stretched to the height of its row */
+main > .panel + .panel, main > section.panel + section.panel { margin-top: 18px; }
+.exp-row > button { align-self: end; }
+.rb-scroll.panel-scroll { max-height: min(34rem, 70dvh); overflow: auto; scrollbar-width: thin; scrollbar-color: var(--edge) transparent; }
+.rb-scroll.panel-scroll:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
+[data-day] .rb-scroll.panel-scroll .rb-head { top: 0; z-index: 2; background: var(--console); }
+@media print { .rb-scroll.panel-scroll { max-height: none; overflow: visible; } }
+/* Phase BA: controls are at least 24 px high (WCAG 2.2, target size) */
+[data-day] select.att { min-height: 24px; }
+button.link { min-height: 24px; }
+input[type=file] { min-height: 24px; }
+/* the visually hidden labels inside a scroll panel stay inside it (an absolutely placed label of a clipped box otherwise lengthens the page) */
+.rb-scroll.panel-scroll, .tscroll.panel-scroll, [data-day] .tl-scroll { position: relative; }
+
+/* Phase BA: a little 3D (owner, 2026-10-25: "go for what you suggested"). CSS only, inside a speed budget: no filter or blur, three
+   animations at most, all off for reduced motion, still when the tab is hidden or the stack is off screen. Never on the RTA, tables, forms
+   or the wallboard. Measured: evidence/phase_ba/max3d (about 23 extra layers, 5 ms of CPU in 6 s). */
+/* the sign-in page: the week as a stack of days that drifts, and the mark that turns */
+.stage3d { perspective: 1200px; perspective-origin: 50% 40%; height: 19rem; display: grid; place-items: center; margin-top: 4rem; }
+.deck3d { position: relative; width: min(26rem, 100%); height: 13rem; transform-style: preserve-3d; transform: rotateX(var(--tx, 58deg)) rotateZ(var(--tz, -32deg)); animation: ts-drift 14s ease-in-out infinite alternate; }
+.day3 { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(18, 1fr); grid-template-rows: auto repeat(3, .8rem); align-content: center; gap: .5rem 0; padding: 1rem 1.2rem; border-radius: 12px; background: var(--console); border: 1px solid var(--rail); box-shadow: 0 26px 36px -24px var(--shadow); }
+.day3 b { grid-column: 1 / -1; font-size: 0.75rem; color: var(--dim); }
+.day3:nth-child(1) { transform: translateZ(0); } .day3:nth-child(2) { transform: translateZ(2.2rem); } .day3:nth-child(3) { transform: translateZ(4.4rem); } .day3:nth-child(4) { transform: translateZ(6.6rem); }
+.bar3 { display: block; border-radius: 3px; } .bar3.s0 { background: var(--ch-phone); grid-row: 2; } .bar3.s1 { background: var(--ch-chat); grid-row: 3; } .bar3.s2 { background: var(--ch-email); grid-row: 4; }
+.l6 { grid-column-start: 1; }
+.l7 { grid-column-start: 2; }
+.l8 { grid-column-start: 3; }
+.l9 { grid-column-start: 4; }
+.l10 { grid-column-start: 5; }
+.l11 { grid-column-start: 6; }
+.l12 { grid-column-start: 7; }
+.l13 { grid-column-start: 8; }
+.l14 { grid-column-start: 9; }
+.l15 { grid-column-start: 10; }
+.l16 { grid-column-start: 11; }
+.w8 { grid-column-end: span 8; }
+.w9 { grid-column-end: span 9; }
+.w11 { grid-column-end: span 11; }
+.mark3d { display: block; margin: 0 0 14px; animation: ts-spin 9s linear infinite; }
+@keyframes ts-drift { from { transform: rotateX(var(--tx, 58deg)) rotateZ(calc(var(--tz, -32deg) - 2deg)); } to { transform: rotateX(calc(var(--tx, 58deg) - 4deg)) rotateZ(calc(var(--tz, -32deg) + 4deg)); } }
+@keyframes ts-spin { from { transform: perspective(300px) rotateY(0deg); } to { transform: perspective(300px) rotateY(360deg); } }
+.paused .deck3d, .paused .mark3d, .still .deck3d, .still .mark3d { animation-play-state: paused; }
+/* Home: the program cards lean toward the mouse pointer (a mouse only) */
+@media (hover: hover) and (pointer: fine) {
+  .pcards { perspective: 900px; }
+  .pcard[data-tilt] { transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition: transform 140ms cubic-bezier(.23, 1, .32, 1); }
+}
+/* Weeks: the week's intervals at the target as blocks (drawn flat with skewed faces, so no extra layers) */
+.blocks3d { max-width: 100%; overflow-x: clip; display: flex; align-items: flex-end; gap: 1.6rem; height: 7.6rem; padding: 0 1rem .2rem; margin: 0 0 14px; }
+.blkcol { display: grid; justify-items: center; gap: 6px; } .blkcol small { color: var(--dim); font-size: 0.75rem; }
+.blk { position: relative; display: block; width: 2.2rem; height: var(--h, .3rem); background: var(--c, var(--empty-key)); margin-right: .8rem; }
+.blk::before { content: ""; position: absolute; left: 0; bottom: 100%; width: 100%; height: .8rem; background: color-mix(in srgb, var(--c, var(--empty-key)) 78%, #fff); transform: skewX(-45deg); transform-origin: bottom left; }
+.blk::after { content: ""; position: absolute; left: 100%; top: 0; width: .8rem; height: 100%; background: color-mix(in srgb, var(--c, var(--empty-key)) 66%, #000); transform: skewY(-45deg); transform-origin: top left; }
+.blk.ok { --c: var(--covered); } .blk.miss { --c: var(--short); } .blk.none { --c: var(--empty-key); }
+.hb0 { --h: .3rem; } .hb1 { --h: .8rem; } .hb2 { --h: 1.3rem; } .hb3 { --h: 1.8rem; } .hb4 { --h: 2.3rem; } .hb5 { --h: 2.8rem; } .hb6 { --h: 3.3rem; } .hb7 { --h: 3.8rem; } .hb8 { --h: 4.3rem; } .hb9 { --h: 4.8rem; } .hb10 { --h: 5.3rem; }
+/* a run approved: the word turns over once, only when the person watched it finish */
+.flip { animation: ts-flip 700ms cubic-bezier(.23, 1, .32, 1) 1 both; transform-origin: 50% 60%; }
+@keyframes ts-flip { from { transform: perspective(400px) rotateX(-90deg); opacity: 0; } to { transform: perspective(400px) rotateX(0deg); opacity: 1; } }
+/* an empty state wears a tiny stack of cards */
+.empty.deco::before { content: ""; display: block; width: 2.4rem; height: 1.5rem; margin: 0 0 .9rem .7rem; border-radius: 5px; background: var(--console-2); border: 1px solid var(--edge); transform: skewX(-10deg);
+  box-shadow: -.35rem .35rem 0 -.05rem var(--console), -.35rem .35rem 0 0 var(--rail), -.7rem .7rem 0 -.05rem var(--console), -.7rem .7rem 0 0 var(--rail); }
+/* each look's button shows a tilted swatch of that look */
+.looks .look::before { content: ""; display: inline-block; width: .8rem; height: .6rem; margin-right: 6px; border-radius: 2px; vertical-align: -1px; border: 1px solid rgba(0, 0, 0, .25); transform: perspective(60px) rotateY(-32deg); }
+.look[data-look="light"]::before { background: linear-gradient(135deg, #E8EFF6, #FFFFFF); }
+.look[data-look="dark"]::before { background: linear-gradient(135deg, #080F1E, #1A2C57); }
+.look[data-look="draft"]::before { background: linear-gradient(135deg, #1B2321, #D7F25A); }
+@media (max-width: 40rem) { .blocks3d { gap: .4rem; padding: 0; } .blk { width: 1.3rem; margin-right: .5rem; } .blk::before { height: .5rem; } .blk::after { width: .5rem; } .stage3d { margin-top: 2rem; height: 15rem; } .deck3d { height: 10rem; } }
+@media (prefers-reduced-motion: reduce) { .deck3d, .mark3d, .flip { animation: none; } .pcard[data-tilt] { transition: none; transform: none; } }
+@media print { .stage3d { display: none; } }
+
+/* Phase BB: depth on the figures (owner, 2026-10-25: "build it ... with 0 risk"). Columns and horizontal bars show a lit top and a darker side
+   (charts.py draws the two faces; the front face is the value and keeps its exact size). The tile strips and boxes get a raised edge.
+   Everything here is still paint (fills and shadows), so it costs the page nothing. A browser without color-mix keeps the plain series colour. */
+.chart .face { pointer-events: none; }
+.chart polygon.face-top[data-series=blue] { fill: var(--c-blue); fill: color-mix(in srgb, var(--c-blue) 68%, #fff); }
+.chart polygon.face-side[data-series=blue] { fill: var(--c-blue); fill: color-mix(in srgb, var(--c-blue) 62%, #000); }
+.chart polygon.face-top[data-series=aqua] { fill: var(--c-aqua); fill: color-mix(in srgb, var(--c-aqua) 68%, #fff); }
+.chart polygon.face-side[data-series=aqua] { fill: var(--c-aqua); fill: color-mix(in srgb, var(--c-aqua) 62%, #000); }
+.chart polygon.face-top[data-series=orange] { fill: var(--c-orange); fill: color-mix(in srgb, var(--c-orange) 68%, #fff); }
+.chart polygon.face-side[data-series=orange] { fill: var(--c-orange); fill: color-mix(in srgb, var(--c-orange) 62%, #000); }
+.chart polygon.face-top[data-series=yellow] { fill: var(--c-yellow); fill: color-mix(in srgb, var(--c-yellow) 68%, #fff); }
+.chart polygon.face-side[data-series=yellow] { fill: var(--c-yellow); fill: color-mix(in srgb, var(--c-yellow) 62%, #000); }
+.tiles, .ins-tiles { box-shadow: 0 1px 0 var(--edge), 0 5px 0 -1px var(--rail), 0 14px 18px -10px var(--shadow); }
+.shr-tile { box-shadow: 0 1px 0 var(--edge), 0 4px 0 -1px var(--rail), 0 10px 14px -9px var(--shadow); }
+@media print { .tiles, .ins-tiles, .shr-tile { box-shadow: none; } }
+.pcard { box-shadow: 0 1px 0 var(--edge), 0 5px 0 -1px var(--rail), 0 14px 18px -10px var(--shadow); }
+.stagebar li { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 -2px 0 rgba(0, 0, 0, .28); }
+@media print { .pcard, .stagebar li { box-shadow: none; } }
+
+/* Phase BC (owner, 2026-10-26): the wheel carries on to the page when a scrolling panel has reached its end (the panels no longer trap it);
+   every scrolling panel can be shown as a whole list (the switch on the Schedules, Channels and Week pages); a clock-change warning inside a
+   shift cell wraps instead of making its day a screen wide. */
+.scroll.panel-scroll[data-mode="whole"], .tscroll.panel-scroll[data-mode="whole"], .rb-scroll.panel-scroll[data-mode="whole"] { max-height: none; overflow: visible; }
+.ed .ed-warn { display: block; margin-top: 2px; font-size: 0.6875rem; line-height: 1.3; white-space: nowrap; color: var(--short-ink); }
+/* Phase BC (owner, 2026-10-29): a note that explains rather than warns (the day's window on the tabs that use the schedule's own day) */
+.notice.calm { border-left-color: var(--edge); background: var(--well); }

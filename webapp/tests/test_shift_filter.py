@@ -90,7 +90,9 @@ class TheShiftGroups(_Day):
 class TheTimelineFilter(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.app, cls.store, cls.base, _ = make_app(VALIDATOR_ROOT=str(REPO))
+        # AN followup: this fixture reads an already finished schedule. Background
+        # workers otherwise outlive tearDownClass and read its deleted database.
+        cls.app, cls.store, cls.base, _ = make_app(start_worker=False, VALIDATOR_ROOT=str(REPO))
         uid = cls.store.add_user("omar", "Omar", "Owner-pass-123", is_admin=True, must_change=False)
         cls.store.add_run("aaaaaaaaaaaa", uid, "AR_week.xlsx", "QUICK", "DONE", program=PROGRAM, week_start="2026-10-11")
         cls.app.extensions["schedules"].ensure(cls.store.get_run("aaaaaaaaaaaa"), INPUT, AFTER, None)

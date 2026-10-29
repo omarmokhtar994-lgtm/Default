@@ -1,0 +1,49 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{% extends "base.html" %}{% block title %}Ask for coaching on Team Scheduler{% endblock %}
+{% block content %}
+<div class="phead"><div>
+  <h1>Ask for coaching</h1>
+  <p class="byline">{{ label or 'Pick a program' }}. The RTA approves each request and sees what it does to the intervals.{% if may_decide %} You have RTA rights: approve your own request on the <a href="{{ url_for('requests_page', program=unit) }}">Requests page</a>.{% endif %} <a href="{{ url_for('requests_page', program=unit) }}">Back to Requests</a></p>
+</div></div>
+<section class="panel" aria-labelledby="who-h">
+  <h2 id="who-h">Who and when</h2>
+  <form method="get" action="{{ url_for('requests_coaching') }}" class="people-form">
+    <input type="hidden" name="program" value="{{ unit }}">
+    <label>Find an associate <input type="search" data-filter="coach-list" autocomplete="off" placeholder="Type a name…"></label>
+    <fieldset class="exp-kinds pick-list" id="coach-list"><legend>Associates <span class="hint" data-count-for="coach-list" aria-live="polite"></span></legend>
+      {% for n in roster %}<label class="exp-kind"><input type="checkbox" name="who" value="{{ n }}"{% if n in names %} checked{% endif %}> {{ n }}</label>{% endfor %}
+    </fieldset>
+    <label>Day <input type="date" name="date" value="{{ on.isoformat() }}"></label>
+    <fieldset class="exp-kinds"><legend>Is it billable?</legend>
+      <label class="exp-kind"><input type="radio" name="billable" value="0"{% if not billable %} checked{% endif %}> Not billable</label>
+      <label class="exp-kind"><input type="radio" name="billable" value="1"{% if billable %} checked{% endif %}> Billable</label>
+    </fieldset>
+    <label>Length <select name="minutes">{% for m in (15, 30, 45, 60, 90) %}<option value="{{ m }}"{% if m == minutes %} selected{% endif %}>{{ m }} minutes</option>{% endfor %}</select></label>
+    <button class="quiet">Show times</button>
+  </form>
+</section>
+{% include "_news.html" %}
+{% if problem %}<p class="error" role="alert">{{ problem }}</p>{% endif %}
+{% if options is not none %}
+<section class="panel" aria-labelledby="times-h">
+  <h2 id="times-h">Times for {{ names|join(', ') }}, {{ 'billable' if billable else 'not billable' }}</h2>
+  <p class="note">The buffer is what each interval has once all of them are off the queue (billable coaching under interval compliance keeps them on it). The RTA can correct billable or not. <span class="lv lv-high">High</span> and <span class="lv lv-moderate">Moderate</span> are most likely approved; <span class="lv lv-low">Low</span> is most likely rejected.</p>
+  <form method="post" action="{{ url_for('requests_coaching_ask') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ unit }}">
+    <input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="minutes" value="{{ minutes }}"><input type="hidden" name="billable" value="{{ '1' if billable else '0' }}">
+    {% for n in names %}<input type="hidden" name="who" value="{{ n }}">{% endfor %}
+    <fieldset class="slots"><legend>Pick a time</legend>
+      {% for c in options %}<label class="slot"><input type="radio" name="start" value="{{ hm(c.start) }}" required> {{ hm(c.start) }} to {{ hm(c.end) }}
+        <span class="lv lv-{{ c.level }}">{{ c.level|capitalize }} buffer</span>{% if c.level == 'low' %} <small class="slot-warn">Likely to be rejected: not enough cover.</small>{% endif %}
+        {% if c.off_warn %} <small class="slot-warn">{{ c.off_pct|round|int }}% of the associates on shift would be off the queue{% if billable %}, even though it is billable{% endif %}.</small>{% endif %}</label>
+      {% else %}<p class="empty">Nobody can be coached together for {{ minutes }} minutes that day: they are never free at the same time.</p>{% endfor %}
+    </fieldset>
+    <label>Department <select name="dept"><option value="">None</option>{% for d in depts %}<option>{{ d }}</option>{% endfor %}</select></label>
+    <label>Why <input name="why" maxlength="200" autocomplete="off" placeholder="What the coaching is for"></label>
+    <button class="primary">Send to the RTA</button>
+  </form>
+</section>
+{% endif %}
+{% if mine %}<section class="panel" aria-labelledby="mine-h"><h2 id="mine-h">My requests</h2>
+  <ul class="log">{% for r in mine %}<li>{{ r.names_list|join(', ') }}: {{ r.what }} on {{ r.on.strftime('%a %d %b') }}: {{ r.status_words }}{% if r.decision %}. “{{ r.decision }}”{% endif %}{% if r.outcome %}. {{ r.outcome }}{% endif %}{% if r.status == 'waiting' %} <form method="post" action="{{ url_for('requests_coaching_cancel', request_id=r.id) }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="quiet">Cancel</button></form>{% endif %}</li>{% endfor %}</ul></section>{% endif %}
+{% endblock %}

@@ -1,0 +1,34 @@
+{"page_h": 2860, "long": [], "noicon": [], "page": "home", "status": 200}
+{"page_h": 3106, "long": [{"kind": "table", "sel": ".shr-t", "rows": 8, "h": 290, "cols": 8, "within": ""}], "noicon": [], "page": "day", "status": 200}
+{"page_h": 5678, "long": [{"kind": "table", "sel": ".shr-t", "rows": 8, "h": 290, "cols": 8, "within": ""}], "noicon": [], "page": "day_board", "status": 200}
+{"page_h": 2693, "long": [{"kind": "table", "sel": ".shr-t", "rows": 8, "h": 290, "cols": 8, "within": ""}], "noicon": [], "page": "day_adherence", "status": 200}
+{"page_h": 2607, "long": [{"kind": "table", "sel": ".shr-t", "rows": 8, "h": 290, "cols": 8, "within": ""}], "noicon": [], "page": "day_cover", "status": 200}
+{"page_h": 1916, "long": [{"kind": "table", "sel": ".shr-t", "rows": 8, "h": 290, "cols": 8, "within": ""}], "noicon": [], "page": "day_channels", "status": 200}
+{"page_h": 2268, "long": [{"kind": "table", "sel": ".shr-t", "rows": 8, "h": 290, "cols": 8, "within": ""}], "noicon": [], "page": "day_replan", "status": 200}
+{"page_h": 4820, "long": [{"kind": "table", "sel": ".shr-t", "rows": 8, "h": 290, "cols": 8, "within": ""}], "noicon": [], "page": "day_bulk", "status": 200}
+{"page_h": 2858, "long": [{"kind": "table", "sel": ".shr-t", "rows": 8, "h": 290, "cols": 8, "within": ""}], "noicon": [], "page": "day_rescue", "status": 200}
+{"page_h": 2983, "long": [{"kind": "table", "sel": ".shr-t", "rows": 8, "h": 290, "cols": 8, "within": ""}], "noicon": [], "page": "day_meeting", "status": 200}
+{"page_h": 1383, "long": [], "noicon": [], "page": "overview", "status": 200}
+{"page_h": 900, "long": [], "noicon": [], "page": "wallboard", "status": 200}
+{"page_h": 991, "long": [], "noicon": [], "page": "handover", "status": 200}
+{"page_h": 955, "long": [], "noicon": [], "page": "split", "status": 200}
+{"page_h": 3702, "long": [], "noicon": [], "page": "week", "status": 200}
+{"page_h": 1030, "long": [], "noicon": [], "page": "schedules", "status": 200}
+{"page_h": 1788, "long": [], "noicon": [], "page": "run", "status": 200}
+{"page_h": 2796, "long": [], "noicon": [], "page": "run_schedules", "status": 200}
+{"page_h": 1651, "long": [], "noicon": [], "page": "requests", "status": 200}
+{"page_h": 2729, "long": [], "noicon": [], "page": "incidents", "status": 200}
+{"page_h": 2665, "long": [], "noicon": [], "page": "shrinkage", "status": 200}
+{"page_h": 1482, "long": [], "noicon": [], "page": "notifications", "status": 200}
+{"page_h": 955, "long": [], "noicon": [], "page": "programs", "status": 200}
+{"page_h": 955, "long": [], "noicon": [], "page": "program", "status": 404}
+{"page_h": 1949, "long": [], "noicon": [], "page": "exports", "status": 200}
+{"page_h": 955, "long": [], "noicon": [], "page": "team", "status": 200}
+{"page_h": 2407, "long": [{"kind": "table", "sel": "#people-h.people", "rows": 7, "h": 1006, "cols": 10, "within": "#main"}], "noicon": [], "page": "admin_users", "status": 200}
+{"page_h": 955, "long": [], "noicon": [], "page": "admin_bulk", "status": 200}
+{"page_h": 1205, "long": [], "noicon": [], "page": "roles", "status": 200}
+{"page_h": 1235, "long": [], "noicon": [], "page": "setup_with", "status": 200}
+{"page_h": 1112, "long": [], "noicon": [], "page": "setup_channels", "status": 200}
+{"page_h": 3201, "long": [{"kind": "table", "sel": ".shr-t", "rows": 8, "h": 410, "cols": 8, "within": ".setup-defaults"}], "noicon": [], "page": "setup_programs", "status": 200}
+{"page_h": 1261, "long": [], "noicon": [], "page": "coach", "status": 200}
+{"page_h": 955, "long": [], "noicon": [], "page": "password", "status": 200}

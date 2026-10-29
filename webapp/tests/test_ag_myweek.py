@@ -73,10 +73,15 @@ class ThePage(unittest.TestCase):
             return self.me.get("/me").get_data(as_text=True)
 
     def test_today_and_the_week(self):
+        # Re-pinned in Phase AU (owner, 2026-10-21: two tabs, Today and Weeks): the day's card moved from My weeks to
+        # My day (/me/breaks); the week table stays on /me.
+        with mock.patch("webapp.app.datetime", _Tuesday):
+            today = self.me.get("/me/breaks").get_data(as_text=True)
+        self.assertIn("Today, Tuesday", today)
+        self.assertIn('<b class="me-shift">09:00 - 18:00</b>', today)
+        self.assertIn('class="me-band"', today)
         page = self.page()
-        self.assertIn("Today, Tuesday", page)
-        self.assertIn('<b class="me-shift">09:00 - 18:00</b>', page)
-        self.assertIn('class="me-band"', page)
+        self.assertNotIn("Today, Tuesday", page)
         week = page[page.index('aria-labelledby="week-h"'):]
         days = [("Sun 11 Oct", "OFF"), ("Mon 12 Oct", "OFF"), ("Tue 13 Oct", "09:00 - 18:00"),
                 ("Wed 14 Oct", "09:00 - 18:00"), ("Thu 15 Oct", "09:00 - 18:00"), ("Fri 16 Oct", "16:00 - 01:00"),

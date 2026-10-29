@@ -132,6 +132,35 @@ python-performance-optimization.
     - react-bits (React Bits' own AI index @496968c; MIT + Commons Clause; ideas to port, no React).
     - graphify (safishamsi/graphify @041771b): only on /graphify; code-only by default;
       `graphify-out/` is git-ignored.
+    - Web design, fonts, colours and Canva-style pieces (owner, 2026-10-25), each a suggestion only:
+      canvas-design and theme-factory (anthropics/skills @dbd4588, Apache-2.0; posters and one-page designs;
+      ten colour and font themes), color-expert (meodai @5bf7c77, CC BY 4.0; colour science, OKLCH, APCA),
+      google-fonts (sliday @f86afc0, MIT; font search and pairings offline; its CSS links Google's font
+      CDN, so self-host the files instead), visual-design-foundations (wshobson/agents @0874a27, MIT; tokens).
+      Canva itself needs its own connector (not connected): the skills above make the designs, not edit a Canva account.
+    - Structure and tokens (owner, 2026-10-25): web-styling-design-tokens (agents-inc/skills @707467a, MIT; token tiers
+      and naming as CSS custom properties), site-architecture (coreyhaines31/marketingskills @e85f3cb, MIT; page
+      hierarchy and navigation; its SEO advice does not apply to an internal tool). Also added on request, as vocabulary only
+      (this site has neither React nor Tailwind; their scripts and CLI are never run in the repository): shadcn
+      (shadcn-ui/ui @617134d, MIT) and web-artifacts-builder (anthropics/skills @dbd4588, Apache-2.0). Not installed:
+      brand-guidelines (Anthropic's own brand).
+    - Motion (owner, 2026-10-25): emil-design-eng, animate, review-animations, animation-performance (emilkowalski/skills
+      @2d22863, MIT): when to animate at all, curves and durations, a strict motion review, frame-budget fixes. The taste and
+      impeccable skills come from the owner's account; taste is for landing pages (dashboards are out of its scope), impeccable's
+      launcher downloads a program, so only its written method is used here.
+    - web-design-engineer (conardli/garden-skills @ce64df6, MIT; owner, 2026-10-25, "Garden skill" and "AI design skill"):
+      Design Read and five dials, Extension / Preserve / Overhaul classification, anti-cliché failure patterns, checkpoints
+      before building. Its React, CDN, Google Fonts and Tweaks parts do not apply (strict CSP, self-hosted fonts); three
+      reference files copied, the rest not installed; a suggestion only.
+    - MengTo/Skills @398cd41 (MIT, Meng To; owner, 2026-10-25), five of its 176 skills: blue-cloudy-clean-modern,
+      dark-blue-contrasting-clean and light-mode-paper-technical (style references for looks A, B and C),
+      beautiful-shadows (layered shadow recipes), workflow-score-to-target (score out of 10 to a target). Not installed:
+      the landing-page, WebGL, 3D, game and illustration skills, number-details, container-lines and optimize-web-animations
+      (marketing or React/Codex specific). Suggestions only.
+    - 3D (owner, 2026-10-25): css-animation-patterns (oakoss/agent-skills @85e3a39, MIT; CSS transforms, 3D, transitions, scroll-driven and
+      view transitions, performance) is the reference for the site's CSS-only 3D (`webapp/DESIGN.md` v5 budget). threejs (MengTo/Skills
+      @398cd41, MIT) is reference only: the site uses no WebGL or three.js unless the owner decides to add it. img2threejs (owner's account)
+      stays unused for the same reason. Suggestions only.
   - "Web design guidelines" is web-interface-guidelines above.
 - find-skills: discovering more skills (skills.sh search is blocked by the
   network policy here; browse the source repos on GitHub instead).

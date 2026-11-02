@@ -639,6 +639,16 @@ def _outcome_detail_text(outcome: dict, findings_label: "str | None" = None) -> 
                       f"{after.get('start_movement_hours')} h; distinct start times "
                       f"{before.get('distinct_start_times')} -> {after.get('distinct_start_times')}",
                       '- The schedule above is unchanged; use either.']
+    for alt in (outcome.get('independent_validation') or {}).get('alternative_exports') or []:
+        if alt.get('role') != 'PREFERENCE_CANDIDATE':
+            continue
+        if alt.get('status') == 'PASS' and alt.get('coverage_no_worse'):
+            pref = alt.get('preference') or {}
+            lines += ['', 'A version of this schedule closer to the Preference shifts (same coverage, checked independently):',
+                      f"- {Path(str(alt.get('workbook'))).name}",
+                      f"- Preference shifts matched {pref.get('matched_before')} -> {pref.get('matched_after')} "
+                      f"({pref.get('swaps')} same-day swaps)",
+                      '- The schedule above is unchanged; use either.']
     actions = outcome.get('recommended_actions') or []
     if actions:
         lines += ['', 'Required action:'] + [f'- {a}' for a in actions]
@@ -1737,7 +1747,7 @@ def validate_shortfall_schedule(input_path: Path, workbook: Path, language_worki
 
 
 ALTERNATIVE_EXPORT_ROLES = ('MAX_TARGET_CANDIDATE', 'MAX_FLOOR_CANDIDATE', 'BALANCED_CANDIDATE',
-                            'SAFER_BALANCED_CANDIDATE', 'MORE_CONSISTENT_CANDIDATE')
+                            'SAFER_BALANCED_CANDIDATE', 'MORE_CONSISTENT_CANDIDATE', 'PREFERENCE_CANDIDATE')
 
 # What "no worse" means for MORE_CONSISTENT_CANDIDATE, on the validator's own
 # metrics: the first group may not fall, the second may not rise.
@@ -1766,6 +1776,8 @@ ALTERNATIVE_USE = {
     'SAFER_BALANCED_CANDIDATE': 'ALTERNATIVE - safer balanced trade-off; validated on its own',
     'MORE_CONSISTENT_CANDIDATE': 'ALTERNATIVE - the same week with steadier start times; '
                                  'offered only if its coverage is no worse',
+    'PREFERENCE_CANDIDATE': 'ALTERNATIVE - the same coverage with shifts swapped toward Preferences; '
+                            'offered only if its coverage is no worse',
     'HARD_RULE_SHORTFALL_SCHEDULE': 'NOT RELEASABLE - meets every person rule; every missed coverage '
                                     'minimum is listed on its Shortfalls sheet',
 }
@@ -1818,15 +1830,15 @@ def validate_alternative_exports(case_root: Path, input_path: Path,
             row['status'] = 'PASS' if proc.returncode == 0 else str(report.get('status') or 'FAIL')
             row['hard_fail_count'] = report.get('hard_fail_count')
             row['failure_types'] = sorted({str(f.get('type')) for f in report.get('failures') or []})
-            if role == 'MORE_CONSISTENT_CANDIDATE':
-                _more_consistent_review(case_root, report, row)
+            if role in ('MORE_CONSISTENT_CANDIDATE', 'PREFERENCE_CANDIDATE'):
+                _more_consistent_review(case_root, report, row, role)
         except (OSError, json.JSONDecodeError):
             row['status'] = 'ERROR_VALIDATOR_DID_NOT_COMPLETE'
         results.append(row)
     return results
 
 
-def _more_consistent_review(case_root: Path, report: dict, row: dict) -> None:
+def _more_consistent_review(case_root: Path, report: dict, row: dict, role: str = 'MORE_CONSISTENT_CANDIDATE') -> None:
     """Approve the polished week only if its coverage is no worse than the selected schedule's."""
     selected_json = case_root / 'INDEPENDENT_VALIDATION.json'
     try:
@@ -1840,10 +1852,15 @@ def _more_consistent_review(case_root: Path, report: dict, row: dict) -> None:
         row['coverage_losses'] = losses
     for audit_path in sorted(case_root.glob('*solver_audit.json')):
         try:
-            polish = json.loads(audit_path.read_text(encoding='utf-8')).get('shift_consistency_polish') or {}
+            audit = json.loads(audit_path.read_text(encoding='utf-8'))
         except (OSError, json.JSONDecodeError):
             continue
-        row['consistency'] = {'before': polish.get('before'), 'after': polish.get('after')}
+        if role == 'PREFERENCE_CANDIDATE':
+            swap = audit.get('preference_swap_polish') or {}
+            row['preference'] = {k: swap.get(k) for k in ('swaps', 'matched_before', 'matched_after')}
+        else:
+            polish = audit.get('shift_consistency_polish') or {}
+            row['consistency'] = {'before': polish.get('before'), 'after': polish.get('after')}
     if row.get('status') == 'PASS' and not row.get('coverage_no_worse'):
         row['status'] = 'NOT_APPROVED_COVERAGE_WORSE'
 

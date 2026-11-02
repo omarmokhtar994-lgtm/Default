@@ -294,6 +294,7 @@ def cleanup_stale_run_outputs(
         output_path.with_name(prefix + "_MAX_FLOOR_CANDIDATE" + output_path.suffix),
         output_path.with_name(prefix + "_BALANCED_CANDIDATE" + output_path.suffix),
         output_path.with_name(prefix + "_MORE_CONSISTENT_CANDIDATE" + output_path.suffix),
+        output_path.with_name(prefix + "_PREFERENCE_CANDIDATE" + output_path.suffix),
         output_path.with_name(prefix + "_SAFER_BALANCED_CANDIDATE" + output_path.suffix),
         output_path.with_name(prefix + "_HARD_RULE_SHORTFALL_SCHEDULE" + output_path.suffix),
         output_path.with_name(prefix + "_PARETO_EXPORT_MANIFEST.json"),
@@ -14107,6 +14108,9 @@ EXPORT_ROLE_ORDER: Tuple[str, ...] = (
     # The selected schedule with a more uniform week per associate (the
     # shift-consistency polish), published beside it, never in its place (F-35).
     "MORE_CONSISTENT_CANDIDATE",
+    # The selected schedule with same-day swaps toward each associate's Preference
+    # shift (Phase BE), published beside it, never in its place (F-35).
+    "PREFERENCE_CANDIDATE",
     "BALANCED_CANDIDATE",
 )
 
@@ -20129,6 +20133,16 @@ def add_more_consistent_export(selection: Dict[str, Any], polished_pair: Tuple[A
     return True
 
 
+def add_preference_export(selection: Dict[str, Any], swapped_pair: Tuple[Any, Any], record: Mapping[str, Any]) -> bool:
+    """Publish an applied preference swap as PREFERENCE_CANDIDATE, beside the selected schedule (F-35: never in its place)."""
+    if record.get("status") != "APPLIED":
+        return False
+    if any(role == "PREFERENCE_CANDIDATE" for role, _ in selection["exports"]):
+        return False
+    selection["exports"].append(("PREFERENCE_CANDIDATE", swapped_pair))
+    return True
+
+
 def shift_consistency_polish(
     parsed: ParsedInput,
     skeleton: SkeletonSolution,
@@ -24708,23 +24722,21 @@ def run_case(
                 best_before_skeleton.diagnostics.get("no_break_metrics", {}).get("before_target", 0)
             ),
         )
-        # Phase BE: same-day swaps toward each associate's Preference shift. The
-        # recommended pair and its RECOMMENDED_FINAL export are replaced together
-        # (F-35), only by a pair whose guarded measures are no worse (see
-        # evidence/phase_be/REQUESTS.md); nothing else in the selection changes.
+        # Phase BE: same-day swaps toward each associate's Preference shift, published
+        # as PREFERENCE_CANDIDATE beside the selected schedule, which is not rewritten
+        # (F-35; owner, 2026-11-02). Only a pair whose guarded measures are no worse
+        # is kept (see evidence/phase_be/REQUESTS.md); the runner re-checks coverage
+        # with the independent validator before offering it.
         swapped_sk, swapped_br, swap_record = preference_swap_polish(
             parsed, *selection["recommended"],
             time_limit_sec=max(1.0, min(PREFERENCE_SWAP_TIME_LIMIT_SEC,
                                         budget_manager.remaining_total() - SHIFT_CONSISTENCY_TAIL_RESERVE_SEC - SHIFT_CONSISTENCY_MIN_SEC)))
+        swap_record["published_as"] = (
+            "PREFERENCE_CANDIDATE" if add_preference_export(selection, (swapped_sk, swapped_br), swap_record) else None)
         audit["preference_swap_polish"] = swap_record
-        if swap_record.get("status") == "APPLIED":
-            selection["exports"] = [
-                (role, (swapped_sk, swapped_br) if role == "RECOMMENDED_FINAL" else pair)
-                for role, pair in selection["exports"]
-            ]
-            selection["recommended"] = (swapped_sk, swapped_br)
         print(f"PREFERENCE_SWAP_POLISH {swap_record.get('status')}: {swap_record.get('swaps', 0)} swaps"
               + (f", preference matches {swap_record['matched_before']} -> {swap_record['matched_after']}"
+                 f" (published as PREFERENCE_CANDIDATE; the selected schedule is unchanged)"
                  if swap_record.get("status") == "APPLIED" else ""), file=log, flush=True)
         polish_on = (SHIFT_CONSISTENCY_CLI_OVERRIDE if SHIFT_CONSISTENCY_CLI_OVERRIDE is not None
                      else SHIFT_CONSISTENCY_POLISH_ENABLED if parsed.shift_consistency_polish is None
@@ -24918,6 +24930,8 @@ def run_case(
             "BALANCED_CANDIDATE": output_path.with_name(prefix + "_BALANCED_CANDIDATE" + output_path.suffix),
             "MORE_CONSISTENT_CANDIDATE": output_path.with_name(
                 prefix + "_MORE_CONSISTENT_CANDIDATE" + output_path.suffix),
+            "PREFERENCE_CANDIDATE": output_path.with_name(
+                prefix + "_PREFERENCE_CANDIDATE" + output_path.suffix),
         }
         selection_basis = {
             "RECOMMENDED_FINAL": (
@@ -24931,6 +24945,11 @@ def run_case(
                 "The recommended schedule with a more uniform week per associate (same-day swaps between "
                 "interchangeable associates and one-hour moves kept only when no measured coverage, compliance "
                 "or fairness value gets worse); offered beside the recommended schedule, never in its place"
+            ),
+            "PREFERENCE_CANDIDATE": (
+                "The recommended schedule with same-day swaps between interchangeable associates that bring them "
+                "closer to their Preference shifts, kept only when no guarded coverage or fairness value gets worse; "
+                "offered beside the recommended schedule, never in its place"
             ),
         }
         export_records: List[Dict[str, Any]] = [{
@@ -24946,6 +24965,7 @@ def run_case(
                 "MAX_FLOOR_CANDIDATE": "MAX_FLOOR_CANDIDATE",
                 "BALANCED_CANDIDATE": "BALANCED_CANDIDATE",
                 "MORE_CONSISTENT_CANDIDATE": "MORE_CONSISTENT_CANDIDATE",
+                "PREFERENCE_CANDIDATE": "PREFERENCE_CANDIDATE",
             }[role]
             role_path = role_paths[role]
             info = write_output_workbook(
@@ -25084,6 +25104,8 @@ def run_case(
             "max_floor_candidate_output": str(role_paths["MAX_FLOOR_CANDIDATE"]) if "MAX_FLOOR_CANDIDATE" in output_info_by_role else "",
             "more_consistent_candidate_output": (
                 str(role_paths["MORE_CONSISTENT_CANDIDATE"]) if "MORE_CONSISTENT_CANDIDATE" in output_info_by_role else ""),
+            "preference_candidate_output": (
+                str(role_paths["PREFERENCE_CANDIDATE"]) if "PREFERENCE_CANDIDATE" in output_info_by_role else ""),
             "candidate_leaderboard_csv": str(leaderboard_csv), "pareto_manifest": str(pareto_manifest), "audit": str(audit_path),
             "interval_minutes": parsed.interval_minutes, "target_ratio": parsed.target_ratio,
             "minimum_after_break_target_ratio": (

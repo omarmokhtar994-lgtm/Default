@@ -4,6 +4,7 @@ two associates of one language and shift length may swap a day when both stay at
 with coverage and every guarded measure unchanged. Rule and acceptance: evidence/phase_be/REQUESTS.md."""
 from __future__ import annotations
 
+import importlib.util
 import os
 import sys
 import tempfile
@@ -16,6 +17,12 @@ sys.path.insert(0, str(ROOT / "engine" / "_tools"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import l632_universal_scheduler as E  # noqa: E402
 import phase_a_workbooks as W  # noqa: E402
+
+_spec = importlib.util.spec_from_file_location("runner_be", ROOT / "engine" / "RUN_UNIVERSAL_PRODUCTION.py")
+RUNNER = importlib.util.module_from_spec(_spec)
+sys.modules["runner_be"] = RUNNER
+_spec.loader.exec_module(RUNNER)
+ROLE = "PREFERENCE_CANDIDATE"
 
 EARLY, LATE = "06:00 - 15:00", "10:00 - 19:00"
 SHIFTS = [f"{h:02d}:00 - {(h + 9) % 24:02d}:00" for h in range(6, 12)]
@@ -135,6 +142,50 @@ class TheReviewFindings(unittest.TestCase):
         parsed, sk, br = build(ENGLISH, pref(**{"Agent A": LATE, "Agent B": EARLY}), {"Agent A": EARLY, "Agent B": LATE})
         _, _, record = E.preference_swap_polish(parsed, sk, br, time_limit_sec=-1.0)
         self.assertTrue(record["stopped_by_time_limit"])
+
+
+class TheSwapIsASeparateCandidate(unittest.TestCase):
+    """Owner, 2026-11-02: publish the swapped week beside the recommended schedule, never in its place (F-35)."""
+
+    def pair(self, name):
+        return (type("S", (), {"profile": name})(), type("B", (), {"profile": name})())
+
+    def test_the_engine_runner_and_cleanup_know_the_role(self):
+        order = list(E.EXPORT_ROLE_ORDER)
+        self.assertIn(ROLE, order)
+        self.assertLess(order.index("MORE_CONSISTENT_CANDIDATE"), order.index(ROLE))
+        self.assertLess(order.index(ROLE), order.index("BALANCED_CANDIDATE"))
+        self.assertIn(ROLE, RUNNER.ALTERNATIVE_EXPORT_ROLES)
+        self.assertIn(ROLE, RUNNER.ALTERNATIVE_USE)
+        source = (ROOT / "engine" / "_tools" / "l632_universal_scheduler.py").read_text()
+        self.assertIn('output_path.with_name(prefix + "_PREFERENCE_CANDIDATE" + output_path.suffix)', source)
+
+    def test_an_applied_swap_adds_an_export_and_leaves_the_selection(self):
+        selected, swapped = self.pair("selected"), self.pair("swapped")
+        selection = {"recommended": selected, "exports": [("RECOMMENDED_FINAL", selected)]}
+        self.assertTrue(E.add_preference_export(selection, swapped, {"status": "APPLIED"}))
+        self.assertIs(selection["recommended"], selected)
+        self.assertIs(E.recommended_export_pair(selection), selected)
+        self.assertEqual([r for r, _ in selection["exports"]], ["RECOMMENDED_FINAL", ROLE])
+        self.assertIs(dict(selection["exports"])[ROLE], swapped)
+        self.assertFalse(E.add_preference_export(selection, swapped, {"status": "APPLIED"}))
+
+    def test_nothing_is_added_when_no_swap_was_kept(self):
+        for status in ("NO_CHANGE", "KEPT_ORIGINAL"):
+            selected = self.pair("selected")
+            selection = {"recommended": selected, "exports": [("RECOMMENDED_FINAL", selected)]}
+            self.assertFalse(E.add_preference_export(selection, self.pair("p"), {"status": status}), status)
+            self.assertEqual(len(selection["exports"]), 1)
+
+    def test_the_outcome_text_offers_it_only_when_the_validator_approved_it(self):
+        row = {"role": ROLE, "status": "PASS", "coverage_no_worse": True,
+               "workbook": "/x/case_L6_3_2_3_PREFERENCE_CANDIDATE.xlsx",
+               "preference": {"swaps": 13, "matched_before": 21, "matched_after": 34}}
+        text = RUNNER._outcome_detail_text({"independent_validation": {"alternative_exports": [row]}})
+        self.assertIn("case_L6_3_2_3_PREFERENCE_CANDIDATE.xlsx", text)
+        self.assertIn("21 -> 34", text)
+        refused = {"independent_validation": {"alternative_exports": [dict(row, coverage_no_worse=False)]}}
+        self.assertNotIn("PREFERENCE_CANDIDATE.xlsx", RUNNER._outcome_detail_text(refused))
 
 
 if __name__ == "__main__":

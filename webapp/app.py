@@ -424,6 +424,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
             response.headers.setdefault("Cache-Control", "no-store")
         response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
         response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+        response.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")  # Phase BF: no other site may embed these answers
+        response.headers.setdefault("X-Permitted-Cross-Domain-Policies", "none")
         if app.config.get("SESSION_COOKIE_SECURE"):
             response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
         return response

@@ -901,9 +901,8 @@ class Store:
             if row is None:
                 check_password_hash(_DUMMY_HASH, password or "")  # one check, as for a real name with a wrong password
                 return None, "bad"
-            if not row["active"]:
-                return None, "disabled"
             if row["locked_until"] > now:
+                check_password_hash(_DUMMY_HASH, password or "")  # a locked account takes as long to refuse as an unknown one
                 return None, "locked"
             typed = password or ""  # as typed first (a password set before Phase AU may carry a space), then cleaned
             if not (check_password_hash(row["password_hash"], typed) or (
@@ -913,6 +912,8 @@ class Store:
                 db.execute("update users set failed = ?, locked_until = ? where id = ?",
                            (0 if locked else failed, locked, row["id"]))
                 return None, "locked" if locked else "bad"
+            if not row["active"]:
+                return None, "disabled"  # said only to someone who knows the password (BF: it named closed accounts to anyone)
             if row["must_change"] and row["temp_until"] and row["temp_until"] < now:
                 return None, "expired"  # the right temporary password, too late: not a wrong try
             db.execute("update users set failed = 0, locked_until = 0 where id = ?", (row["id"],))

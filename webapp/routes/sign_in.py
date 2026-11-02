@@ -44,10 +44,10 @@ def register(app, ctx) -> None:
                 session["at"] = time.time()  # Phase AU: when this session began (see end_other_sessions)
                 csrf_token()
                 return redirect(safe_next(request.args.get("next", "")) or url_for("home"))
-            error = {"locked": "Too many wrong passwords: this account is locked for 15 minutes.",
-                     "disabled": "This account is switched off. Ask your admin.",
+            # Phase BF: a locked account reads like any wrong password, so the page never says which usernames exist
+            error = {"disabled": "This account is switched off. Ask your admin.",
                      "expired": "Your temporary password has expired. Ask your admin for a new one."}.get(
-                         reason, "Wrong username or password.")
+                         reason, "Wrong username or password. After five wrong passwords an account is locked for 15 minutes.")
         return render_template("login.html", error=error)
 
     @app.route("/account/sessions/end", methods=["POST"])

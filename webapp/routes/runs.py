@@ -6,6 +6,7 @@ import json
 import os
 import secrets
 import shutil
+import zipfile
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -147,7 +148,10 @@ def register(app, ctx) -> None:
         if refused:
             flash(refused)
             return redirect(url_for("home"))
-        refusal, warnings = _channel_upload_check(path)
+        try:
+            refusal, warnings = _channel_upload_check(path)
+        except (ValueError, KeyError, OSError, zipfile.BadZipFile):  # Phase BF: a workbook with unreadable or forbidden XML
+            refusal, warnings = "That file could not be read as an Excel workbook. Open it in Excel, save it again and retry.", None
         if refusal:
             path.unlink()
             flash(refusal)

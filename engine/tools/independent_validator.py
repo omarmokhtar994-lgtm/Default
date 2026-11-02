@@ -145,6 +145,8 @@ def declared_artifact_type(path: Path) -> Optional[str]:
                                           "balanced_candidate","safer_balanced_candidate",
                                           # the selected schedule, polished (F-35)
                                           "more_consistent_candidate",
+                                          # Phase BE: the selected schedule with preference swaps
+                                          "preference_candidate",
                                           # audit F-06: a full after-break schedule
                                           # that names its own shortfalls
                                           "hard_rule_shortfall_schedule"}:

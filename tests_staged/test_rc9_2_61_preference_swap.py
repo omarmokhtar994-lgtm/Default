@@ -23,6 +23,10 @@ RUNNER = importlib.util.module_from_spec(_spec)
 sys.modules["runner_be"] = RUNNER
 _spec.loader.exec_module(RUNNER)
 ROLE = "PREFERENCE_CANDIDATE"
+_vspec = importlib.util.spec_from_file_location("validator_be", ROOT / "engine" / "tools" / "independent_validator.py")
+IV = importlib.util.module_from_spec(_vspec)
+sys.modules["validator_be"] = IV
+_vspec.loader.exec_module(IV)
 
 EARLY, LATE = "06:00 - 15:00", "10:00 - 19:00"
 SHIFTS = [f"{h:02d}:00 - {(h + 9) % 24:02d}:00" for h in range(6, 12)]
@@ -186,6 +190,17 @@ class TheSwapIsASeparateCandidate(unittest.TestCase):
         self.assertIn("21 -> 34", text)
         refused = {"independent_validation": {"alternative_exports": [dict(row, coverage_no_worse=False)]}}
         self.assertNotIn("PREFERENCE_CANDIDATE.xlsx", RUNNER._outcome_detail_text(refused))
+
+    def test_the_independent_validator_reads_the_workbooks_own_role_as_a_final_schedule(self):
+        # Found by running the candidate through the validator: it was refused as UNRECOGNIZED:preference_candidate.
+        import openpyxl
+        parsed, sk, br = build(ENGLISH, pref(), {"Agent A": EARLY, "Agent B": LATE})
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "in.xlsx"
+            W.build({"roster": ENGLISH, "shifts": SHIFTS, "demand": lambda d, m: 1 if 8 * 60 <= m < 20 * 60 else None}, src)
+            out = Path(tmp) / "case_PREFERENCE_CANDIDATE.xlsx"
+            E.write_output_workbook(src, out, parsed, sk, br, E.capacity_diagnostics(parsed), [], {}, [], artifact_type=ROLE)
+            self.assertEqual(IV.declared_artifact_type(out), "FINAL_AFTER_BREAKS")
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ Four things are checked from outside, the way a person with a text editor would:
  2. the session: an edited, forged, replayed or old cookie signs nobody in;
  3. the forms: fields that name a role, a program, a person or a request never reach beyond the account's own rights;
  4. the answers: every response carries the security headers, escapes what people typed, and never leaves the site."""
+import datetime
 import base64
 import html
 import io
@@ -470,7 +471,10 @@ class TheExportsStayInTheirProgram(_Secured):
     def test_sign_in_history_is_for_people_who_see_everything_only(self):
         self.store.add_event(kind="sign_in_failed", subject="plan_b", detail="from 198.51.100.9: bad",
                              user_id=self.users["plan_b"])
-        query = {"from": "2026-10-01", "to": "2026-10-31", "format": "xlsx", "kind": list(KINDS)}
+        # The event is stamped now, so the period is this month (it was a fixed October, which failed once November began).
+        today = datetime.date.today()
+        last = (today.replace(day=28) + datetime.timedelta(days=4)).replace(day=1) - datetime.timedelta(days=1)
+        query = {"from": today.replace(day=1).isoformat(), "to": last.isoformat(), "format": "xlsx", "kind": list(KINDS)}
         for who in ("plan_a", "sup_a"):
             got = sign_in(self.app, who, PASSWORD).get("/exports/download", query_string=query)
             self.assertNotIn("198.51.100.9", self.cells(got.data), who)

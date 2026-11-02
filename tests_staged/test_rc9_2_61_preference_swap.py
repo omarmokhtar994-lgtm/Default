@@ -103,5 +103,39 @@ class TheSwap(unittest.TestCase):
         self.assertEqual(new_sk.assignment[0][MON], LATE)
 
 
+class TheReviewFindings(unittest.TestCase):
+    """Review of 2026-11-02: each of these failed before the fix."""
+
+    def test_the_separate_off_exception_follows_the_stage_one_relaxation(self):
+        # A relaxed Stage 1 profile does not enforce hard OFF, so it must not lift the consecutive-OFF rule for it either.
+        found = {"roster": [("Agent A", "English")], "shifts": SHIFTS, "demand": lambda d, m: 1 if 8 * 60 <= m < 20 * 60 else None,
+                 "instructions": {"Separate OFF Days": "No"}, "preferences": {"Agent A": ["OFF", None, None, "OFF", None, None, None]}}
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "case.xlsx"
+            W.build(found, path)
+            parsed = E.parse_input(path)
+        assoc = parsed.associates[0]
+        self.assertTrue(E.separate_off_in_preference(parsed, assoc))
+        self.assertTrue(E.separate_off_in_preference(parsed, assoc, E.HardConfig()))
+        self.assertFalse(E.separate_off_in_preference(parsed, assoc, E.HardConfig(hard_off=False)))
+
+    def test_a_swap_that_is_thrown_away_is_not_counted(self):
+        parsed, sk, br = build(ENGLISH, pref(**{"Agent A": LATE, "Agent B": EARLY}), {"Agent A": EARLY, "Agent B": LATE})
+        original = E.validate_schedule
+        E.validate_schedule = lambda p, skeleton, b: {"hard_fail_count": 0 if skeleton is sk else 99}  # only the swapped pair fails
+        try:
+            new_sk, _, record = E.preference_swap_polish(parsed, sk, br)
+        finally:
+            E.validate_schedule = original
+        self.assertEqual(record["status"], "KEPT_ORIGINAL")
+        self.assertEqual(record["swaps"], 0)
+        self.assertEqual(record["swaps_discarded"], 1)
+
+    def test_running_out_of_time_is_said_in_the_record(self):
+        parsed, sk, br = build(ENGLISH, pref(**{"Agent A": LATE, "Agent B": EARLY}), {"Agent A": EARLY, "Agent B": LATE})
+        _, _, record = E.preference_swap_polish(parsed, sk, br, time_limit_sec=-1.0)
+        self.assertTrue(record["stopped_by_time_limit"])
+
+
 if __name__ == "__main__":
     unittest.main()

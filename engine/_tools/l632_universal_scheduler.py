@@ -5719,7 +5719,7 @@ def required_off_days(parsed: ParsedInput, associate: Associate, long_mode: bool
 
 
 
-def separate_off_in_preference(parsed: ParsedInput, associate: Associate) -> bool:
+def separate_off_in_preference(parsed: ParsedInput, associate: Associate, hard: Optional[HardConfig] = None) -> bool:
     """Whether this associate's own request rows name hard OFF days that are not next to each other (Phase BD, owner, 2026-10-29: "if I
     added in Preference a separate OFF, accept it even if the instructions say no separate OFF; stick to the instructions except for what is
     mentioned in Preference", and "make Fixed like Preference"). The Preference row counts when Hard OFF Preferences is Yes, the Fixed Request
@@ -5731,7 +5731,8 @@ def separate_off_in_preference(parsed: ParsedInput, associate: Associate) -> boo
     for d in range(7):
         pref = associate.preferences[d] if d < len(associate.preferences) else ""
         fixed = associate.fixed_schedule[d] if d < len(associate.fixed_schedule) else ""
-        if (parsed.hard_off and preference_kind(pref) == "off") or (parsed.fixed_enabled and preference_kind(fixed) == "off"):
+        if ((parsed.hard_off and (hard is None or hard.hard_off)) and preference_kind(pref) == "off") or (
+                (parsed.fixed_enabled and (hard is None or hard.fixed)) and preference_kind(fixed) == "off"):
             days.add(d)
     return len(days) >= 2 and any((d + 1) % 7 not in days and (d - 1) % 7 not in days for d in days)
 
@@ -7901,7 +7902,7 @@ def build_skeleton(
             model, [off[a, d] for d in range(D)], long_mode[a],
             pinned_leave_days(parsed, assoc, honour_fixed=hard.fixed, honour_leave=hard.leave),
             strict=bool(hard.strict_off and parsed.strict_off),
-            consecutive_required=not (parsed.separate_off_days or separate_off_in_preference(parsed, assoc)), name=f"stage1_{a}")
+            consecutive_required=not (parsed.separate_off_days or separate_off_in_preference(parsed, assoc, hard)), name=f"stage1_{a}")
         if hard.max_shift_variety:
             model.Add(sum(y[a, s] for s in range(S)) <= parsed.max_different_shifts)
         if profile["shift_variety"]:
@@ -20293,7 +20294,7 @@ def preference_swap_polish(
     """
     started = time.time()
     deadline = started + float(time_limit_sec)
-    record: Dict[str, Any] = {"enabled": bool(parsed.use_preferences), "swaps": 0, "trials": 0}
+    record: Dict[str, Any] = {"enabled": bool(parsed.use_preferences), "swaps": 0, "trials": 0, "stopped_by_time_limit": False}
 
     def unchanged(status: str) -> Tuple[SkeletonSolution, BreakSolution, Dict[str, Any]]:
         record["status"] = status
@@ -20322,7 +20323,10 @@ def preference_swap_polish(
         return rows[a][d] is not None and a not in nested and (a, d) not in locked
 
     improved = True
-    while improved and time.time() < deadline:
+    while improved:
+        if time.time() >= deadline:
+            record["stopped_by_time_limit"] = True
+            break
         improved = False
         for d in range(7):
             groups: Dict[Tuple[str, int], List[int]] = {}
@@ -20332,7 +20336,10 @@ def preference_swap_polish(
             for members in groups.values():
                 for i, a in enumerate(members):
                     for b in members[i + 1:]:
-                        if rows[a][d] == rows[b][d] or time.time() > deadline:
+                        if rows[a][d] == rows[b][d]:
+                            continue
+                        if time.time() > deadline:
+                            record["stopped_by_time_limit"] = True
                             continue
                         before_a = preference_distance(parsed, a, d, rows[a][d])
                         before_b = preference_distance(parsed, b, d, rows[b][d])
@@ -20387,6 +20394,7 @@ def preference_swap_polish(
     if (candidate_pool_class(parsed, final_skeleton, swapped) != candidate_pool_class(parsed, skeleton, solution)
             or int(validation.get("hard_fail_count", 1) or 0) > int(original_validation.get("hard_fail_count", 0) or 0)):
         record["reason"] = "VALIDATION_OR_CLASS_CHANGED"
+        record["swaps_discarded"], record["swaps"] = record["swaps"], 0
         return unchanged("KEPT_ORIGINAL")
     record["matched_after"] = int(employee_now.get("preference_match_count", 0))
     record["status"] = "APPLIED"
@@ -24702,9 +24710,12 @@ def run_case(
         )
         # Phase BE: same-day swaps toward each associate's Preference shift. The
         # recommended pair and its RECOMMENDED_FINAL export are replaced together
-        # (F-35), only by a pair with identical coverage metrics (see
+        # (F-35), only by a pair whose guarded measures are no worse (see
         # evidence/phase_be/REQUESTS.md); nothing else in the selection changes.
-        swapped_sk, swapped_br, swap_record = preference_swap_polish(parsed, *selection["recommended"])
+        swapped_sk, swapped_br, swap_record = preference_swap_polish(
+            parsed, *selection["recommended"],
+            time_limit_sec=max(1.0, min(PREFERENCE_SWAP_TIME_LIMIT_SEC,
+                                        budget_manager.remaining_total() - SHIFT_CONSISTENCY_TAIL_RESERVE_SEC - SHIFT_CONSISTENCY_MIN_SEC)))
         audit["preference_swap_polish"] = swap_record
         if swap_record.get("status") == "APPLIED":
             selection["exports"] = [

@@ -8,7 +8,7 @@ After the recommended schedule is chosen, one polish step, `preference_swap_poli
 2. Neither is nested, and neither cell is a Fixed request. Leave, hard OFF and OFF cells are never touched (only worked cells swap).
 3. The sum of start-time distance to the Preference shift gets smaller, and neither associate's own distance gets bigger.
 4. The same row rules the consistency polish uses hold for both rows (rest gap, last Saturday, maximum different shifts) and the cell is allowed (language window, demand fit, split rules).
-5. Employee quality is no worse on the guarded measures, and `calculate_metrics` is no worse on every guarded coverage measure.
+5. Employee quality is no worse on the guarded measures, and `calculate_metrics` is no worse on every guarded coverage measure (equal in practice, since only who works a shift changes).
 6. At the end the pair is still in the same candidate class, with no more hard failures from `validate_schedule` than before.
 If no swap passes, the schedule is returned unchanged (same objects). The break pattern of each shift travels with the shift.
 

@@ -1964,3 +1964,25 @@ document.addEventListener("change", function (e) {
     }
   });
 })();
+
+// Phase BI: a volumes grid opens at its first hour with volume (the input sheet's grids start at midnight and most hours are empty).
+(function () {
+  "use strict";
+  function openAtFirstHour() {
+    var grids = document.querySelectorAll(".vol-grid");
+    for (var g = 0; g < grids.length; g += 1) {
+      var box = grids[g].parentNode;
+      if (!box || box.scrollHeight <= box.clientHeight) { continue; }
+      var rows = grids[g].querySelectorAll("tbody tr");
+      for (var i = 0; i < rows.length; i += 1) {
+        var cells = rows[i].querySelectorAll("td"), live = false;
+        for (var j = 0; j < cells.length; j += 1) {
+          var t = (cells[j].textContent || "").trim();
+          if (t !== "" && t !== "0") { live = true; break; }
+        }
+        if (live) { box.scrollTop = Math.max(0, rows[i].offsetTop - 34); break; }
+      }
+    }
+  }
+  if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", openAtFirstHour); } else { openAtFirstHour(); }
+})();

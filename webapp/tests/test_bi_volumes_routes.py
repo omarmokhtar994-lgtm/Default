@@ -294,5 +294,61 @@ class TheSettings(_Volumes):
         self.store.set_volume_settings(self.alpha, {}, 1)
 
 
+class TheHostileInput(_Volumes):
+    """What a person with a text editor sends to the volumes pages: nothing breaks, nothing typed comes back as markup, nothing leaves the program."""
+    EVIL = ("<script>alert(1)</script>", "\"><img src=x onerror=alert(1)>", "' or 1=1 --", "../../etc/passwd", "%00", "{{7*7}}", "9" * 400, "-1", "1e9", "\u202e")
+
+    def test_every_query_value_is_refused_or_escaped(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        for evil in self.EVIL:
+            for tab in ("actuals", "forecast", "how", "settings"):
+                got = client.get("/volumes", query_string={"program": self.alpha, "tab": tab, "channel": evil, "week": evil, "on": evil, "day": evil,
+                                                           "total": evil, "d0": evil, "d3": evil})
+                body = got.get_data(as_text=True)
+                self.assertLess(got.status_code, 500, (evil, tab))
+                self.assertNotIn("<script>alert(1)</script>", body, (evil, tab))
+                self.assertNotIn("<img src=x", body, (evil, tab))
+
+    def test_every_form_value_is_refused_or_escaped(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        tok = token(client)
+        for evil in self.EVIL:
+            for path, form in (("/volumes/forecast", {"action": "preview", "total": evil, "d1": evil, "channel": evil, "week": evil}),
+                               ("/volumes/forecast", {"action": "save", "total": evil, "channel": evil, "week": evil}),
+                               ("/volumes/actuals/check", {"paste": evil, "aht_paste": evil, "channel": evil, "week": evil}),
+                               ("/volumes/actuals/delete", {"first": evil, "last": evil, "confirm": "1", "channel": evil}),
+                               ("/volumes/settings", {"Phone.sl_target": evil, "Phone.aht": evil, "Chat.concurrency": evil})):
+                got = client.post(path, data={"program": self.alpha, "csrf_token": tok, **form})
+                self.assertLess(got.status_code, 500, (path, evil))
+                self.assertNotIn("<script>alert(1)</script>", got.get_data(as_text=True), (path, evil))
+        self.assertEqual(self.store.volume_days(self.alpha, "Phone"), [])
+
+    def test_a_pasted_table_is_never_echoed_back(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        evil = "Date\tInterval\tChannel\tOffered\n2026-10-26\t09:00\t<script>alert(1)</script>\t5\n"
+        got = client.post("/volumes/actuals/check", data={"program": self.alpha, "csrf_token": token(client), "channel": "Phone", "paste": evil})
+        self.assertNotIn("alert(1)", got.get_data(as_text=True))
+
+    def test_too_much_to_paste_is_refused(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        got = client.post("/volumes/actuals/check", data={"program": self.alpha, "csrf_token": token(client), "channel": "Phone", "paste": "x" * 450_000})
+        self.assertLess(got.status_code, 500)
+        self.assertIn(got.status_code, (200, 400, 413))
+        self.assertEqual(self.store.volume_days(self.alpha, "Phone"), [])
+
+    def test_the_downloads_hold_numbers_never_typed_text(self):
+        self.store.replace_volume_rows(self.alpha, "Phone", [("2026-10-26", 540, 5.0, 300.0)], 1)
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        got = client.get("/volumes/table.xlsx", query_string={"program": self.alpha, "what": "actual", "week": "2026-10-25", "channel": "=cmd|' /C calc'!A0"})
+        self.assertIn(got.status_code, (200, 404))
+        if got.status_code == 200:
+            ws = load_workbook(io.BytesIO(got.data)).active
+            for row in ws.iter_rows(min_row=2):
+                for cell in row[1:]:
+                    self.assertIn(type(cell.value), (int, float, type(None)))
+            self.assertNotIn("cmd", got.headers.get("Content-Disposition", ""))
+        self.store.delete_volume_days(self.alpha, "Phone", "2000-01-01", "2100-01-01")
+
+
 if __name__ == "__main__":
     unittest.main()

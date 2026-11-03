@@ -3,14 +3,14 @@
 {% from "_macros.html" import list_mode %}
 {% block title %}Volumes on Team Scheduler{% endblock %}
 {% macro grid_table(id, title, rows, what, bands=none, unit='') %}
-<div class="vol-copy"><button type="button" class="quiet" data-copy-table="#{{ id }}">Copy for Excel</button>
-  <a class="button quiet" href="{{ url_for('volumes_table', program=key, channel=channel, week=week.isoformat(), what=what, total=f.total if f is defined and what in ('calls', 'needs') else none) }}">Download (Excel)</a>
+<div class="vol-copy"><button type="button" class="button" data-copy-table="#{{ id }}">Copy for Excel</button>
+  <a class="button" href="{{ url_for('volumes_table', program=key, channel=channel, week=week.isoformat(), what=what, total=f.total if f is defined and what in ('calls', 'needs') else none) }}">Download (Excel)</a>
   <span class="dim" data-copy-note role="status" aria-live="polite"></span></div>
 <div class="scroll panel-scroll" role="region" tabindex="0" aria-label="{{ title }} (scrolls)"><table class="vol-grid" id="{{ id }}">
   <caption class="sr-only">{{ title }}: intervals down the side, Sunday to Saturday across, as on the input sheet.</caption>
   <thead><tr>{% for h in rows[0] %}<th scope="col">{{ h }}</th>{% endfor %}</tr></thead>
   <tbody>{% for row in rows[1:] %}{% set i = loop.index0 %}<tr><th scope="row">{{ row[0] }}</th>{% for v in row[1:] %}{% set d = loop.index0 %}
-    <td{% if bands and bands[d][i] != 'none' and v != '' %} class="ot-{{ bands[d][i] }}"{% endif %}>{% if v == '' %}{% elif v is number and unit == '%' %}{{ '%.0f' % v }}%{% else %}{{ v }}{% endif %}</td>{% endfor %}</tr>{% endfor %}</tbody>
+    <td{% if bands and bands[d][i] != 'none' and v != '' %} class="ot-{{ bands[d][i] }}"{% elif v == 0 %} class="zero"{% endif %}>{% if v == '' %}{% elif v is number and unit == '%' %}{{ '%.0f' % v }}%{% else %}{{ v }}{% endif %}</td>{% endfor %}</tr>{% endfor %}</tbody>
 </table></div>
 {% endmacro %}
 {% block content %}
@@ -103,7 +103,7 @@
 {% endif %}
 <section class="panel" aria-labelledby="g3"><h2 id="g3">{{ day_names[day] }}, interval by interval</h2>
   <p class="dim">{% for n in day_names %}<a href="{{ url_for('volumes_page', tab='forecast', program=key, channel=channel, week=week.isoformat(), day=n, total=total_text or none) }}"{% if loop.index0 == day %} aria-current="true"{% endif %}>{{ n }}</a>{{ ' · ' if not loop.last }}{% endfor %}</p>
-  {{ chart_calls }}{{ chart_people }}
+  <h3>Contacts</h3>{{ chart_calls }}{% if chart_people %}<h3>People needed on the floor</h3>{{ chart_people }}{% endif %}
 </section>
 {% endif %}
 {% endif %}

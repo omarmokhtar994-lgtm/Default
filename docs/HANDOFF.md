@@ -102,6 +102,9 @@ Load each with the Skill tool at the step it covers; following it from memory do
   Findings and what is left for the owner: `evidence/phase_bf/FINDINGS.md`, `evidence/phase_bg/FINDINGS.md`.
 - **BH:** a finished run (DONE or REVIEW) no longer keeps the engine's `debug/` and `packages/` folders; the download zip is made without them; older runs are slimmed once at start
   (`RunQueue.slim_results`, `slim_finished_runs`). Failed and stopped runs keep everything. About 60 % less on a five-minute run. Rule and measurement: `evidence/phase_bh/REQUESTS.md`.
+- **BI:** volumes (Insights, Volumes): actuals per channel (paste or upload, input-sheet layout or one row per interval), forecast of a week from a typed total, people needed with Erlang for
+  service-level and volume-weighted programs, OTF (offered over forecast) and trends, every grid in the input sheet's layout with Copy for Excel. Engine untouched; the requirement workbook feeds the
+  existing FT Wise and channel tabs. Plan, samples, checks: `docs/superpowers/plans/2026-11-03-phase-bi-volumes-forecast-erlang.md`, `evidence/phase_bi/`.
 - **Lesson:** timed solver checks (QUICK, 300 s) fail when the machine is busy. `NMG_EN_AND_SP` failed twice while a browser crawl ran and passed twice alone, on the old and the new engine alike. Run engine checks alone.
 - **Lesson:** a worker restart kills background jobs; keep a foreground wait loop going and use the resumable `/tmp/chain3.sh`-style scripts (markers per unit).
 

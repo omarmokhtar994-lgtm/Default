@@ -1895,3 +1895,4 @@ td > input[type="checkbox"]:only-child, td > input[type="radio"]:only-child { wi
 .vol-grid td.ot-over, td.ot-over { background: var(--short-soft); }
 .vol-grid td.ot-under, td.ot-under { background: rgba(57, 135, 229, .18); }
 .edgrid td.ot-on, .edgrid td.ot-over, .edgrid td.ot-under { font-weight: 600; }
+.vol-grid td.zero { color: var(--dim); opacity: .55; }

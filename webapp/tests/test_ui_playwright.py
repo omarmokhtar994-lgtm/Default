@@ -3880,3 +3880,110 @@ class TheEveryScreenSizeInTheBrowser(unittest.TestCase):
                 return t.height < 24 - 0.5 || t.width < 24 - 0.5; }).length""")
             self.assertEqual(small, 0, path)
         page.close()
+
+
+class TheVolumesInTheBrowser(unittest.TestCase):
+    """Phase BI (owner, 2026-11-03: "add a view the same as the input sheet, days and intervals, so it is easy to copy and paste"): the volumes pages in a
+    real browser: the grid is the input sheet's layout, the Copy button puts exactly that on the clipboard (tab separated, header first), and no tab
+    scrolls the page sideways on a tablet or a phone."""
+
+    setUpClass = classmethod(ThePhaseVInTheBrowser.setUpClass.__func__)
+    tearDownClass = classmethod(ThePhaseVInTheBrowser.tearDownClass.__func__)
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+
+    def seed(self):
+        from datetime import date, timedelta
+        from webapp.programs import ProgramBook
+        vb = self.app.extensions["volumes"]
+        step = vb.step(self.key)
+        today = date.today()
+        sunday = today - timedelta(days=(today.weekday() + 1) % 7)
+        rows = []
+        for w in range(1, 9):
+            for k in range(7):
+                day = sunday - timedelta(weeks=w) + timedelta(days=k)
+                for h in range(8, 20):
+                    for sub in range(60 // step):
+                        rows.append((day.isoformat(), h * 60 + sub * step, 10 + (h % 5) * 3, 300.0))
+        self.store.replace_volume_rows(self.key, "Phone", rows, 1)
+        program_id = ProgramBook(self.store).unit(self.key)["program"]["id"]
+        ProgramBook(self.store).set_measure(program_id, "sl")
+        self.addCleanup(lambda: (self.store.delete_volume_days(self.key, "Phone", "2000-01-01", "2100-01-01"),
+                                 ProgramBook(self.store).set_measure(program_id, "interval")))
+        return vb
+
+    def url(self, tab="forecast", **extra):
+        from urllib.parse import urlencode
+        return f"{self.base}/volumes?" + urlencode({"program": self.key, "tab": tab, **extra})
+
+    def test_the_copy_button_puts_the_input_sheet_layout_on_the_clipboard(self):
+        self.seed()
+        ctx = self.browser.new_context(viewport={"width": 1280, "height": 900}, permissions=["clipboard-read", "clipboard-write"])
+        self.addCleanup(ctx.close)
+        page = ctx.new_page()
+        self.sign_in(page)
+        page.goto(self.url())
+        page.fill("#total", "12,600")
+        page.get_by_role("button", name="Work it out").click()
+        page.wait_for_load_state("load")
+        expect(page.locator("#tbl-calls")).to_be_visible()
+        page.locator("[data-copy-table='#tbl-calls']").click()
+        expect(page.locator("[data-copy-note]").first).to_contain_text("Copied")
+        text = page.evaluate("navigator.clipboard.readText()")
+        lines = text.split("\n")
+        self.assertEqual(lines[0], "\t".join(["Interval", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]))
+        slots = 1440 // self.app.extensions["volumes"].step(self.key)
+        self.assertEqual(len(lines), 1 + slots)
+        self.assertTrue(all(len(line.split("\t")) == 8 for line in lines))
+        self.assertEqual(lines[1].split("\t")[0], "00:00")
+        total = sum(int(v) for line in lines[1:] for v in line.split("\t")[1:] if v)
+        self.assertEqual(total, 12600)
+
+    def test_a_grid_opens_at_its_first_hour_with_volume_and_zeros_are_dimmed(self):
+        self.seed()
+        page = self.page(width=1280, height=900)
+        self.sign_in(page)
+        page.goto(self.url())
+        page.fill("#total", "12,600")
+        page.get_by_role("button", name="Work it out").click()
+        page.wait_for_load_state("load")
+        top = page.evaluate("document.querySelector('#tbl-calls').parentNode.scrollTop")
+        self.assertGreater(top, 0)
+        first_live = page.evaluate("""() => { const t = document.querySelector('#tbl-calls'); const box = t.parentNode;
+            const rows = [...t.querySelectorAll('tbody tr')]; const live = rows.find(r => [...r.querySelectorAll('td')].some(c => c.textContent.trim() !== '0'));
+            return [live.getBoundingClientRect().top - box.getBoundingClientRect().top, live.querySelector('th').textContent]; }""")
+        self.assertLess(first_live[0], 120)          # the first open hour is at the top of the panel, not out of sight
+        self.assertEqual(first_live[1], "08:00")
+        self.assertGreater(page.locator("#tbl-calls td.zero").count(), 10)
+
+    def test_the_suggestion_button_fills_the_box(self):
+        self.seed()
+        page = self.page(width=1280, height=900)
+        self.sign_in(page)
+        page.goto(self.url())
+        page.locator("[data-fill='#total']").click()
+        self.assertRegex(page.input_value("#total"), r"^\d[\d,]*$")
+
+    def test_no_tab_scrolls_the_page_sideways_on_a_tablet_or_a_phone(self):
+        self.seed()
+        for width in (768, 360):
+            page = self.page(width=width, height=900)
+            self.sign_in(page)
+            for tab in ("actuals", "forecast", "how", "settings"):
+                page.goto(self.url(tab))
+                page.wait_for_load_state("load")
+                self.assertLessEqual(page.evaluate("document.scrollingElement.scrollWidth - window.innerWidth"), 1, (width, tab))
+            page.close()
+
+    def test_every_control_has_a_focus_ring_and_a_24_px_target_on_a_phone(self):
+        self.seed()
+        page = self.page(width=360, height=900)
+        self.sign_in(page)
+        page.goto(self.url())
+        small = page.evaluate("""() => [...document.querySelectorAll('main a[href], main button, main select, main input:not([type=hidden])')].filter(e => {
+            const r = e.getBoundingClientRect(); if (!(r.width > 0 && r.height > 0)) return false; const l = e.closest('label');
+            const t = (l && e.tagName === 'INPUT' && (e.type === 'checkbox' || e.type === 'radio') ? l : e).getBoundingClientRect();
+            return (t.height < 24 - 0.5) && !(e.tagName === 'A' && getComputedStyle(e).display === 'inline'); }).length""")
+        self.assertEqual(small, 0)
+        page.close()

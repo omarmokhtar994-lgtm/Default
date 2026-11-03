@@ -96,7 +96,7 @@
 
 ---
 
-## Phase 2: actuals in (after Phase 1; table and upload, no page yet beyond the sample)
+## Phase 2: actuals in (BUILT 2026-11-03: `volumes_io.py`, tables, check-then-save page)
 
 ### Task 3: Store and upload
 **Files:** `webapp/store.py`, `webapp/volumes.py`, `webapp/tests/test_bi_volumes_store.py`.
@@ -106,17 +106,17 @@
 ### Task 4: Settings
 `programs.volumes` JSON: per channel `{aht, sl_target, sl_seconds, shrinkage, max_occupancy, concurrency, sla_hours, forecast_weeks}` with ranges validated (SL 50 to 100 percent, seconds 5 to 600, shrinkage 0 to 60 percent, occupancy 50 to 100 percent, concurrency 1 to 5); `Programs.volume_settings(program_id)`, `set_volume_settings(...)`. Defaults: voice 80 percent in 20 s, AHT from the actuals when present; chat 80 percent in 30 s with concurrency 2; email workload, occupancy 85 percent.
 
-## Phase 3: forecast and requirements (starts when sample 1 is approved)
+## Phase 3: forecast and requirements (BUILT; the owner asked for the input-sheet grid view with copy and paste on every grid)
 
 ### Task 5: The forecast page and the requirement workbook
 `volumes.forecast_grid(program, week, total_by_channel, day_overrides)` returns per channel the per-weekday, per-interval volumes plus the Erlang requirement for SL and volume-weighted programs; `volumes.requirement_workbook(...)` writes `FT Wise {n} Min` (the sum of the channels: people needed on the floor, NOT divided by shrinkage, because the engine divides by (1 - shrinkage) itself from the Shrinkage tab) and `Chat/Phone/Email {n} Min` tabs in the exact layout `webapp/channels.py` reads, so the download can be pasted into an input workbook; tests: the written workbook is read back by `channels.read_channels` and `check_lines` finds the channel tabs equal to the FT Wise tab; every cell is a number, never text from a user; typed totals are saved in `volume_forecasts(program, channel, week_start, total, days, user_id, at)`; an interval-compliance program shows the volume forecast and no Erlang numbers.
 
-## Phase 4: how did we do (starts when sample 2 is approved)
+## Phase 4: how did we do (BUILT)
 
 ### Task 6: OTF and trends
 `volume_report.week_report(program, week)`: per channel and interval forecast, actual, OTF, band; day and week roll-ups as ratio of sums; last 8 weeks' OTF, bias and weighted absolute error as a trend; for SL programs the Erlang requirement at actual volume and AHT, the system's requirement (the `required` of the version in use, `webapp/day.py` workbook read), scheduled and on the floor (the day book), and the modelled service level at the staffing that was on the floor (`erlang.service_level`), labelled as modelled. Tests: a made-up week with known numbers gives known OTF per interval, day and week; a week with no forecast says so; an interval-compliance program gets no Erlang or SL rows; the figures equal a hand calculation for one day.
 
-## Phase 5: the pages, the menu entry, permissions
+## Phase 5: the pages, the menu entry, permissions (BUILT; checks in evidence/phase_bi/CHECKS.md)
 Pages `/volumes` (Actuals, Forecast, Requirements, Trends tabs), a Roles entry (`volumes_view`, `volumes_edit`), the home menu link under Insights, DESIGN.md note, browser test at 1440, 768 and 360 px in both looks (Tab ring, no sideways scroll, 24 px targets), attack tests (walls, CSRF, uploads), the website suites, the package.
 
 ## Rulings taken from the code

@@ -29,7 +29,8 @@
    "schedules",
    "store",
    "swaps",
-   "throttle"
+   "throttle",
+   "volumes"
   ],
   "filters": [
    "abs",
@@ -1054,6 +1055,78 @@
    "set_theme",
    [
     "POST"
+   ],
+   []
+  ],
+  [
+   "/volumes",
+   "volumes_page",
+   [
+    "GET"
+   ],
+   []
+  ],
+  [
+   "/volumes/actuals/check",
+   "volumes_actuals_check",
+   [
+    "POST"
+   ],
+   []
+  ],
+  [
+   "/volumes/actuals/delete",
+   "volumes_actuals_delete",
+   [
+    "POST"
+   ],
+   []
+  ],
+  [
+   "/volumes/actuals/save",
+   "volumes_actuals_save",
+   [
+    "POST"
+   ],
+   []
+  ],
+  [
+   "/volumes/forecast",
+   "volumes_forecast",
+   [
+    "POST"
+   ],
+   []
+  ],
+  [
+   "/volumes/requirements.xlsx",
+   "volumes_requirements",
+   [
+    "GET"
+   ],
+   []
+  ],
+  [
+   "/volumes/settings",
+   "volumes_settings",
+   [
+    "POST"
+   ],
+   []
+  ],
+  [
+   "/volumes/table.xlsx",
+   "volumes_table",
+   [
+    "GET"
+   ],
+   []
+  ],
+  [
+   "/volumes/template.xlsx",
+   "volumes_template",
+   [
+    "GET"
    ],
    []
   ],

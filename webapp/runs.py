@@ -23,6 +23,7 @@ import subprocess
 import sys
 import threading
 import time
+from datetime import datetime, timedelta
 import zipfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -36,6 +37,7 @@ from .store import Store
 
 # Phase BH: what a finished run no longer needs: the engine's working files (checkpoints, raw outputs) and its own split packages
 WORKING_FOLDERS = ("debug", "packages")
+VOLUME_DAYS = 730  # Phase BI: actual volumes are kept two years
 KEEP_DAYS = 30  # run files, by default (SCHEDULER_RUN_FILES_DAYS: 30 to 60)
 RECORD_DAYS = 395  # the record of actions: 13 months, like schedules and attendance
 ACTIVE = ("GATE", "RUNNING", "SCORING")
@@ -688,6 +690,7 @@ class RunQueue:
                 if self.days is not None:
                     self.days.cleanup()
                 self.store.delete_events_before(time.time() - RECORD_DAYS * 86400)
+                self.store.purge_volumes_before((datetime.now().date() - timedelta(days=VOLUME_DAYS)).isoformat())  # Phase BI: two years of actuals
             except Exception as exc:  # keep cleaning tomorrow; say why today failed
                 print(f"run cleanup failed: {exc!r}", file=sys.stderr, flush=True)
             time.sleep(3600)

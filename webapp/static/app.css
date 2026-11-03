@@ -1880,3 +1880,18 @@ input[type=file] { min-height: 24px; }
    the same cells under "Show quarter hours".) */
 label:has(> input[type="checkbox"]), label:has(> input[type="radio"]) { min-height: 24px; }
 td > input[type="checkbox"]:only-child, td > input[type="radio"]:only-child { width: 24px; height: 24px; margin: 0; vertical-align: middle; }
+
+/* Phase BI (owner, 2026-11-03): the volumes pages. The grids use the input sheet's layout (intervals down, Sunday to Saturday across) so they copy and
+   paste as they are; a band colours offered over forecast: under, on target, over. */
+.chan { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+.vol-copy { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 6px 0; }
+.vol-grid { border-collapse: separate; border-spacing: 1px; width: 100%; font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
+.vol-grid thead th { position: sticky; top: 0; background: var(--console); color: var(--dim); font-weight: 600; padding: 4px 8px; text-align: right; z-index: 1; }
+.vol-grid thead th:first-child, .vol-grid tbody th { text-align: left; }
+.vol-grid tbody th { font-weight: 400; padding: 3px 8px; white-space: nowrap; background: var(--console); position: sticky; left: 0; }
+.vol-grid td { text-align: right; padding: 3px 8px; background: var(--well); }
+.ot-on { background: var(--covered-soft); }
+.vol-grid td.ot-on { background: var(--covered-soft); }
+.vol-grid td.ot-over, td.ot-over { background: var(--short-soft); }
+.vol-grid td.ot-under, td.ot-under { background: rgba(57, 135, 229, .18); }
+.edgrid td.ot-on, .edgrid td.ot-over, .edgrid td.ot-under { font-weight: 600; }

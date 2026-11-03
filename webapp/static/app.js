@@ -1916,3 +1916,51 @@ document.addEventListener("change", function (e) {
     if (word && window.sessionStorage.getItem("ts-flip") === "yes") { window.sessionStorage.removeItem("ts-flip"); if (!calm.matches) { word.classList.add("flip"); } }
   } catch (e) { /* private window: no flip */ }
 })();
+
+// Phase BI (owner, 2026-11-03): copy a volumes grid for Excel, and fill a field from the suggestion beside it. No HTML is written from strings.
+(function () {
+  "use strict";
+  function tsv(table) {
+    var lines = [];
+    var rows = table.querySelectorAll("tr");
+    for (var i = 0; i < rows.length; i += 1) {
+      var cells = rows[i].children, line = [];
+      for (var j = 0; j < cells.length; j += 1) {
+        line.push((cells[j].textContent || "").replace(/\s+/g, " ").trim().replace(/%$/, ""));
+      }
+      lines.push(line.join("\t"));
+    }
+    return lines.join("\n");
+  }
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) { return navigator.clipboard.writeText(text); }
+    return new Promise(function (resolve, reject) {
+      var box = document.createElement("textarea");
+      box.value = text; box.setAttribute("readonly", ""); box.style.position = "fixed"; box.style.opacity = "0";
+      document.body.appendChild(box); box.select();
+      var done = false;
+      try { done = document.execCommand("copy"); } catch (e) { done = false; }
+      document.body.removeChild(box);
+      if (done) { resolve(); } else { reject(new Error("copy refused")); }
+    });
+  }
+  document.addEventListener("click", function (e) {
+    var copyBtn = e.target.closest ? e.target.closest("[data-copy-table]") : null;
+    if (copyBtn) {
+      var table = document.querySelector(copyBtn.getAttribute("data-copy-table"));
+      var note = copyBtn.parentNode.querySelector("[data-copy-note]");
+      if (!table) { return; }
+      copyText(tsv(table)).then(function () {
+        if (note) { note.textContent = "Copied: paste it into Excel."; window.setTimeout(function () { note.textContent = ""; }, 4000); }
+      }, function () {
+        if (note) { note.textContent = "Your browser would not copy. Select the table and press Ctrl+C."; }
+      });
+      return;
+    }
+    var fill = e.target.closest ? e.target.closest("[data-fill]") : null;
+    if (fill) {
+      var field = document.querySelector(fill.getAttribute("data-fill"));
+      if (field) { field.value = fill.getAttribute("data-value") || ""; field.focus(); }
+    }
+  });
+})();

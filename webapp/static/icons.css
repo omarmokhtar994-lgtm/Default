@@ -104,3 +104,4 @@
 .leftnav nav a[href^="/admin/roles"]::before { --i: var(--i-gear); }
 .leftnav nav a[href^="/shrinkage"]::before { --i: var(--i-chart-pie-slice); }
 .leftnav nav a[href^="/incidents"]::before { --i: var(--i-warning-circle); }
+.leftnav nav a[href^="/volumes"]::before { --i: var(--i-chart-line-up); }

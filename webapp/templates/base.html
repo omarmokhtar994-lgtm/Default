@@ -63,6 +63,7 @@
     {% if can('analysis') %}{{ navlink('programs', url_for('programs'), 'Programs') }}{% endif %}
     {% if can('analysis') %}{{ navlink('shrinkage', url_for('shrinkage_page', program=nav_unit or none), 'Shrinkage') }}{% endif %}
     {% if can('analysis') %}{{ navlink('incidents', url_for('incidents_page', program=nav_unit or none), 'Incidents') }}{% endif %}
+    {% if can('volumes_view') %}{{ navlink('volumes', url_for('volumes_page', program=nav_unit or none), 'Volumes') }}{% endif %}
     {% if can('exports') %}{{ navlink('exports', url_for('exports_page'), 'Exports') }}{% endif %}
     {% if can('team') %}{{ navlink('team', url_for('team_page'), 'Team') }}{% endif %}
     {% if can('people') or can('setup') %}<p class="navhead">Setup</p>

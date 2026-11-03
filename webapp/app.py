@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import secrets
+import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -312,6 +313,35 @@ def create_app(config: Dict[str, Any]) -> Flask:
         queue.on_kept = lambda run_id: app.extensions["leave"].apply_waiting(app.extensions["store"].get_run(run_id))
         app.extensions["swaps"] = SwapBook(app.extensions["store"], app.extensions["days"])
         app.extensions["days"].measure_of = lambda unit: ProgramBook(app.extensions["store"]).day_measure(unit)  # Phase AU
+        from .volumes import VolumeBook  # Phase BI (owner, 2026-11-03): volumes, forecast, Erlang and OTF
+        _volume_steps: Dict[str, Tuple[float, int]] = {}
+
+        def _volume_step(unit: str) -> int:
+            """The interval the program's schedule in use works in (30 minutes when it has none); kept for five minutes."""
+            kept = _volume_steps.get(unit)
+            if kept and kept[0] > time.time():
+                return kept[1]
+            step = 30
+            try:
+                page = app.extensions["days"].page(unit, datetime.now(ZoneInfo("Africa/Cairo")).date(), shared=True)
+                step = int(page["view"]["interval"]) if page else 30
+            except Exception:  # noqa: BLE001 (no schedule, or one that cannot be read: the usual 30 minutes)
+                step = 30
+            _volume_steps[unit] = (time.time() + 300, step)
+            return step
+
+        def _volume_staffing(unit: str, on: date):
+            """What the schedule and the RTA say for a day, by interval start: (required, planned on the floor, on the floor now)."""
+            try:
+                page = app.extensions["days"].page(unit, on, shared=True)
+            except ValueError:
+                return None
+            if not page:
+                return None
+            return {c["t"] % 1440: (c["required"], c["plan"], c["now"]) for c in page["view"]["cells"]}
+
+        app.extensions["volumes"] = VolumeBook(app.extensions["store"], measure_of=lambda unit: ProgramBook(app.extensions["store"]).day_measure(unit),
+                                               staffing=_volume_staffing, step_of=_volume_step)
         app.extensions["changes"] = ChangeBook(app.extensions["store"], app.extensions["days"],
                                                lambda unit: ProgramBook(app.extensions["store"]).day_measure(unit),  # Phase AS
                                                lambda unit: ProgramBook(app.extensions["store"]).request_settings_for_unit(unit))
@@ -571,11 +601,12 @@ def create_app(config: Dict[str, Any]) -> Flask:
                   "run_week": "week", "run_schedules": "schedules", "program": "analysis", "programs": "programs",
                   "exports_page": "exports", "incidents_page": "incidents", "shrinkage_page": "shrinkage", "team_page": "team", "admin_users": "people", "program_setup": "setup",
                   "with_setup": "with", "channel_setup": "channels", "notifications_page": "notify", "roles_page": "roles",
-                  "day_wallboard": "wallboard", "me": "me", "me_breaks": "me_day", "requests_page": "requests"}
+                  "day_wallboard": "wallboard", "me": "me", "me_breaks": "me_day", "requests_page": "requests", "volumes_page": "volumes"}
     PROGRAM_PAGES = {"overview": "/overview?program={key}", "day": "/day?program={key}", "week": "/week?program={key}",
                      "schedules": "/schedules?program={key}", "analysis": "/programs/{key}",
                      "home": "/?program={key}",  # Home shows the program picked (owner, 2026-10-08)
-                     "with": "/setup/with?program={key}", "channels": "/setup/channels?program={key}"}
+                     "with": "/setup/with?program={key}", "channels": "/setup/channels?program={key}",
+                     "volumes": "/volumes?program={key}"}
 
     def _unit_choices(programs: list) -> list:
         """Each program with its LOBs as (key, name) pairs, for the left menu's picker."""

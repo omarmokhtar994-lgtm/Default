@@ -171,6 +171,31 @@ create table if not exists shrinkage_maps (
     user_id integer,
     at real not null
 );
+create table if not exists volume_actuals (
+    program text not null,
+    channel text not null,
+    day text not null,
+    minute integer not null,
+    offered real not null,
+    aht real,
+    primary key (program, channel, day, minute)
+);
+create table if not exists volume_forecasts (
+    program text not null,
+    channel text not null,
+    week_start text not null,
+    total integer not null,
+    days text not null default '{}',
+    user_id integer,
+    at real not null,
+    primary key (program, channel, week_start)
+);
+create table if not exists volume_settings (
+    program text primary key,
+    settings text not null,
+    user_id integer,
+    at real not null
+);
 create table if not exists channel_drafts (
     schedule_id integer not null,
     day text not null,
@@ -428,7 +453,8 @@ _WRITE = re.compile(r"\s*(?:insert\s+(?:or\s+\w+\s+)?into|update(?:\s+or\s+\w+)?
 # journal, run status, incidents and site settings. Every other table (and any new one) clears the kept days when written.
 QUIET_TABLES = frozenset({"users", "events", "notify_items", "notify_posts", "notify_settings", "change_requests",
                           "swap_requests", "leave_requests", "day_actions", "runs", "incidents", "app_settings",
-                          "role_permissions", "leave_balances", "revoked_sessions"})
+                          "role_permissions", "leave_balances", "revoked_sessions",
+                          "volume_actuals", "volume_forecasts", "volume_settings"})  # Phase BI: no day is built from volumes
 _GENERATION_LOCK = threading.Lock()
 
 
@@ -982,6 +1008,86 @@ class Store:
         with self._db() as db:
             db.execute("insert or replace into shrinkage_maps (program, mapping, user_id, at) values (?, ?, ?, ?)",
                        (program, json.dumps(mapping, sort_keys=True), user_id, time.time()))
+
+    # ------------------------------------------------------------------ volumes (Phase BI)
+    def replace_volume_rows(self, program: str, channel: str, rows: List[tuple], user_id: Optional[int]) -> Dict[str, int]:
+        """Actual volume rows ``(day, minute of the day, offered, aht or None)`` for a program and channel. Every day that appears replaces that
+        day as a whole; all of it in one transaction, so a bad row changes nothing."""
+        days = sorted({r[0] for r in rows})
+        with self._db() as db:
+            replaced = 0
+            for day in days:
+                replaced += 1 if db.execute("select 1 from volume_actuals where program = ? and channel = ? and day = ? limit 1",
+                                            (program, channel, day)).fetchone() else 0
+                db.execute("delete from volume_actuals where program = ? and channel = ? and day = ?", (program, channel, day))
+            for day, minute, offered, aht in rows:
+                db.execute("insert into volume_actuals (program, channel, day, minute, offered, aht) values (?, ?, ?, ?, ?, ?)",
+                           (program, channel, str(day), int(minute), float(offered), None if aht is None else float(aht)))
+        return {"rows": len(rows), "days": len(days), "replaced_days": replaced}
+
+    def volume_rows(self, program: str, channel: str, first: str, last: str) -> List[Dict[str, Any]]:
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                "select day, minute, offered, aht from volume_actuals where program = ? and channel = ? and day between ? and ?"
+                " order by day, minute", (program, channel, first, last))]
+
+    def volume_days(self, program: str, channel: str) -> List[str]:
+        with self._db() as db:
+            return [r[0] for r in db.execute("select distinct day from volume_actuals where program = ? and channel = ? order by day",
+                                             (program, channel))]
+
+    def delete_volume_days(self, program: str, channel: str, first: str, last: str) -> int:
+        with self._db() as db:
+            return db.execute("delete from volume_actuals where program = ? and channel = ? and day between ? and ?",
+                              (program, channel, first, last)).rowcount
+
+    def purge_volumes_before(self, day: str) -> int:
+        with self._db() as db:
+            return db.execute("delete from volume_actuals where day < ?", (day,)).rowcount
+
+    def volume_settings(self, program: str) -> Optional[Dict[str, Any]]:
+        with self._db() as db:
+            row = db.execute("select settings from volume_settings where program = ?", (program,)).fetchone()
+        try:
+            return json.loads(row[0]) if row else None
+        except ValueError:
+            return None
+
+    def set_volume_settings(self, program: str, settings: Dict[str, Any], user_id: Optional[int]) -> None:
+        with self._db() as db:
+            db.execute("insert or replace into volume_settings (program, settings, user_id, at) values (?, ?, ?, ?)",
+                       (program, json.dumps(settings, sort_keys=True), user_id, time.time()))
+
+    def set_volume_forecast(self, program: str, channel: str, week_start: str, total: int, days: Dict[str, int],
+                            user_id: Optional[int]) -> None:
+        with self._db() as db:
+            db.execute("insert or replace into volume_forecasts (program, channel, week_start, total, days, user_id, at)"
+                       " values (?, ?, ?, ?, ?, ?, ?)", (program, channel, week_start, int(total), json.dumps(days, sort_keys=True),
+                                                         user_id, time.time()))
+
+    def _forecast_row(self, row: Any) -> Dict[str, Any]:
+        found = dict(row)
+        try:
+            found["days"] = json.loads(found["days"] or "{}")
+        except ValueError:
+            found["days"] = {}
+        return found
+
+    def volume_forecast(self, program: str, channel: str, week_start: str) -> Optional[Dict[str, Any]]:
+        with self._db() as db:
+            row = db.execute("select * from volume_forecasts where program = ? and channel = ? and week_start = ?",
+                             (program, channel, week_start)).fetchone()
+        return self._forecast_row(row) if row else None
+
+    def volume_forecasts(self, program: str, week_start: str) -> List[Dict[str, Any]]:
+        with self._db() as db:
+            return [self._forecast_row(r) for r in db.execute(
+                "select * from volume_forecasts where program = ? and week_start = ? order by channel", (program, week_start))]
+
+    def delete_volume_forecast(self, program: str, channel: str, week_start: str) -> None:
+        with self._db() as db:
+            db.execute("delete from volume_forecasts where program = ? and channel = ? and week_start = ?",
+                       (program, channel, week_start))
 
     def set_day_start(self, program: str, start: int, user_id: Optional[int]) -> None:
         """When a program's operating day starts, in minutes of its schedule's time (Phase AF, A4)."""
@@ -1799,6 +1905,9 @@ class Store:
             # what counts as shrinkage (Phase AF) goes with the name; a name with its own mapping keeps it
             db.execute("update or ignore shrinkage_maps set program = ? where program = ?", (new, old))
             db.execute("delete from shrinkage_maps where program = ?", (old,))
+            for table in ("volume_actuals", "volume_forecasts", "volume_settings"):  # Phase BI: volumes go with the name too
+                db.execute(f"update or ignore {table} set program = ? where program = ?", (new, old))
+                db.execute(f"delete from {table} where program = ?", (old,))
             db.execute("update or ignore operating_days set program = ? where program = ?", (new, old))
             db.execute("delete from operating_days where program = ?", (old,))
             # Phase AG: leave requests and balances go with the name

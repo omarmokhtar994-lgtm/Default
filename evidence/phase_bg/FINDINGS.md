@@ -26,3 +26,7 @@ Phase BD and BE change nothing on these (no Preferences in them). One scare wort
 
 ## Left for the owner (each needs a decision)
 Two-step sign-in; an idle timeout (the site keeps a person in for 12 hours of use; clients often ask for 15 to 30 minutes, which would sign out an RTA mid-shift); a stronger password hash cost (OWASP asks for scrypt N=2^17, 128 MB per sign-in; Werkzeug's default is 2^15 and the server may be small); HSTS `includeSubDomains`; re-asking for the password before deleting people or changing roles; pip-audit before each release; encrypted off-box backups with a restore test; SSH key-only, fail2ban and a patch routine on the server; a third-party penetration test.
+
+## Second pass (owner: "why didn't you fix what you found")
+Fixed after the first report: tick boxes and radio buttons now have a 24 px target (the label around them is at least 24 px tall; a tick alone in a table cell is 24 px); file names on the home page break after an underscore or dot, not inside the ending; the swapped week is listed on the Schedules page as "Tool, closer to preferences" (offered, never in use by itself).
+Left as drawn, on purpose: the coloured channel bars in the channel plan are 17 px tall on a desk and 10 px on a phone. They are a pointer tool for a planner, the same cells are in a table under "Show quarter hours", and taller bars would change the approved drawing (text scales with it).

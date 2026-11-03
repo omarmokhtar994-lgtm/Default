@@ -3865,3 +3865,23 @@ class TheEveryScreenSizeInTheBrowser(unittest.TestCase):
         small = page.evaluate("""() => [...document.querySelectorAll('a.brand, .daynav a')].map(e => e.getBoundingClientRect()).filter(r => r.height < 24 - 0.5).length""")
         self.assertEqual(small, 0)
         page.close()
+
+    def test_ticks_and_their_words_are_a_24_px_target(self):
+        # the label around a tick box or radio button is what a thumb hits; a tick alone in a table cell is made 24 px
+        page = self.page(width=360, height=900)
+        self.sign_in(page)
+        q = self.key.replace(" ", "+")
+        for path in ("/admin/users", f"/incidents?program={q}", f"/shrinkage?program={q}", "/exports", f"/day?program={q}&date=2026-10-14"):
+            page.goto(self.base + path)
+            page.wait_for_load_state("load")
+            small = page.evaluate("""() => [...document.querySelectorAll('input[type=checkbox], input[type=radio]')].filter(e => {
+                const r = e.getBoundingClientRect(); if (!(r.width > 0 && r.height > 0)) return false;
+                const l = e.closest('label'); const t = (l || e).getBoundingClientRect();
+                return t.height < 24 - 0.5 || t.width < 24 - 0.5; }).length""")
+            self.assertEqual(small, 0, path)
+        page.close()
+
+    def test_a_file_name_breaks_after_an_underscore_not_in_the_middle_of_its_ending(self):
+        from webapp.app import soft_wrap
+        self.assertEqual(str(soft_wrap("week_next.xlsx")), "week_<wbr>next.<wbr>xlsx")
+        self.assertEqual(str(soft_wrap("a<b>&c")), "a&lt;b&gt;&amp;c")

@@ -1874,3 +1874,9 @@ input[type=file] { min-height: 24px; }
 @media (hover: none) { .goto-open kbd { display: none; } }  /* no keyboard shortcut hint on a touch screen */
 .brand { min-height: 24px; }
 .daynav a { display: inline-flex; align-items: center; min-height: 24px; }
+
+/* Phase BG, second pass (owner, 2026-11-03: "why didn't you fix what you found"): a tick box or radio button is hit through its label, so the
+   label is at least 24 px tall; a tick alone in a table cell is made 24 px itself. (The channel plan's coloured bars stay as drawn: they are a pointer tool with a table of
+   the same cells under "Show quarter hours".) */
+label:has(> input[type="checkbox"]), label:has(> input[type="radio"]) { min-height: 24px; }
+td > input[type="checkbox"]:only-child, td > input[type="radio"]:only-child { width: 24px; height: 24px; margin: 0; vertical-align: middle; }

@@ -187,21 +187,30 @@ class ScheduleBook:
         """Phase AL: the steadier week the engine writes beside its schedule (MORE_CONSISTENT_CANDIDATE, passed by the
         validator with no worse coverage) kept once as "Tool, more consistent", with the engine's before and after
         figures in its checks. Offered only: it is never set in use here. None while the run has no versions."""
+        return self._ensure_alternative(run, source, "tool_consistent", "Tool, more consistent", "consistency", consistency)
+
+    def ensure_preference(self, run: Dict[str, Any], source: Path, preference: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Phase BG: the week swapped toward Preference shifts (PREFERENCE_CANDIDATE), kept once as "Tool, closer to
+        preferences" under the same rule: offered only, with the engine's swap figures in its checks."""
+        return self._ensure_alternative(run, source, "tool_preference", "Tool, closer to preferences", "preference", preference)
+
+    def _ensure_alternative(self, run: Dict[str, Any], source: Path, kind: str, label: str, key: str,
+                            figures: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         with self._lock(run["id"]):
             existing = self.store.list_schedules(run_id=run["id"])
-            kept = next((v for v in existing if v["kind"] == "tool_consistent"), None)
+            kept = next((v for v in existing if v["kind"] == kind), None)
             if kept or not existing or not Path(source).is_file():
                 return kept
-            target = self.root / run["id"] / "tool_consistent.xlsx"
+            target = self.root / run["id"] / f"{kind}.xlsx"
             shutil.copyfile(source, target)
             week = read_week(target)
             result = self._check(run["id"], target)
             result["problems"] = problems(result, settings=week["settings"])
-            result["consistency"] = consistency
+            result[key] = figures
             new_id = self.store.add_schedule(run_id=run["id"], program=run.get("program") or "",
-                                             week_start=run.get("week_start") or "", kind="tool_consistent",
+                                             week_start=run.get("week_start") or "", kind=kind,
                                              number=max(v["number"] for v in existing) + 1,
-                                             label="Tool, more consistent", file=f"{run['id']}/tool_consistent.xlsx",
+                                             label=label, file=f"{run['id']}/{kind}.xlsx",
                                              week=json.dumps(week), checks=json.dumps(result))
             return self.store.get_schedule(new_id)
 
@@ -241,7 +250,7 @@ class ScheduleBook:
         out = []
         for run_id, versions in by_run.items():
             in_use = next((v for v in versions if v["in_use"]), None)
-            shown = in_use or max(versions, key=lambda v: (v["kind"] not in ("tool_before", "tool_consistent"),
+            shown = in_use or max(versions, key=lambda v: (v["kind"] not in ("tool_before", "tool_consistent", "tool_preference"),
                                                            v["created"], v["id"]))
             metrics = json.loads(shown["checks"] or "{}").get("metrics") or {}
             out.append({"run": self.store.get_run(run_id) or {"id": run_id, "workbook": run_id, "created": 0},

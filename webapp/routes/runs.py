@@ -234,7 +234,7 @@ def register(app, ctx) -> None:
             found = queue.summary(run["id"]) if queue else None
             if found or not versions:
                 return found
-            row = max(versions, key=lambda v: (v["kind"] not in ("tool_before", "tool_consistent"), v["created"], v["id"]))
+            row = max(versions, key=lambda v: (v["kind"] not in ("tool_before", "tool_consistent", "tool_preference"), v["created"], v["id"]))
         found = version_summary(json.loads(row["checks"] or "{}"))
         if found:
             found.update(version_label=row["label"], breaks_planned=bool(json.loads(row["week"] or "{}").get("breaks")))

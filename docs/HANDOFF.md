@@ -95,7 +95,7 @@ Load each with the Skill tool at the step it covers; following it from memory do
 - **BE:** shift Preferences were only a Stage 1 cost. `preference_swap_polish` swaps same-day shifts between associates of one language and shift length when both get closer
   to their Preference, with every guarded measure no worse. It is published as `<id>_PREFERENCE_CANDIDATE.xlsx` beside the recommended schedule (F-35: never in its place); the
   runner validates it independently and offers it only when coverage is no worse. Shipped workbooks and the GDI week have no shift Preferences, so it does nothing there.
-  The website does not list it as a version yet (owner to decide). Rule: `evidence/phase_be/REQUESTS.md`.
+  The website keeps it as the version "Tool, closer to preferences" (offered, never in use by itself; Phase BG). Rule: `evidence/phase_be/REQUESTS.md`.
 - **BF/BG:** `webapp/tests/test_bf_attacks.py`, `test_bg_security.py` and `evidence/phase_bg/` (crawl of every page at 1440, 768, 360 px in both looks; Tab walk; raw HTTP attacks).
   Fixed: unreadable-XML upload crash, username hints at sign-in, locked-account timing, Cross-Origin-Resource-Policy, `__Host-` session cookie, Clear-Site-Data at sign-out,
   upgrade-insecure-requests, Trusted Types, common-password refusal, `no-store` on every non-static answer, top bar overflow at 768 px, sticky top bar below 900 px, 24 px targets.

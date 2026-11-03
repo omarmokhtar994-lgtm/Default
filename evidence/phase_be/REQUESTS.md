@@ -22,4 +22,4 @@ Stage 1, the joint model, the repair operators, break planning and the candidate
 - Gate: `run_tests.sh` green with the raised minimum.
 
 ## Decision 2026-11-02 (owner): a separate candidate
-The recommended schedule is never rewritten (F-35). An applied swap is published as `<id>_PREFERENCE_CANDIDATE.xlsx` beside it. The runner validates that workbook with the independent validator and offers it only when its coverage is no worse than the selected schedule's (the same verdict as MORE_CONSISTENT_CANDIDATE); the outcome text then names the file and the preference matches before and after. The website does not list it as a version yet (owner to decide).
+The recommended schedule is never rewritten (F-35). An applied swap is published as `<id>_PREFERENCE_CANDIDATE.xlsx` beside it. The runner validates that workbook with the independent validator and offers it only when its coverage is no worse than the selected schedule's (the same verdict as MORE_CONSISTENT_CANDIDATE); the outcome text then names the file and the preference matches before and after. The website keeps it as the version "Tool, closer to preferences" (Phase BG, same rule as the steadier week).

@@ -75,6 +75,7 @@ FINAL_SCHEDULE_SUFFIX = "_BEST_FINAL_AFTER_BREAKS_SCHEDULE.xlsx"
 SHORTFALL_SCHEDULE_SUFFIX = "_HARD_RULE_SHORTFALL_SCHEDULE.xlsx"
 BEFORE_SCHEDULE_SUFFIX = "_BEST_BEFORE_BREAKS_SCHEDULE.xlsx"
 CONSISTENT_SCHEDULE_SUFFIX = "_MORE_CONSISTENT_CANDIDATE.xlsx"
+PREFERENCE_SCHEDULE_SUFFIX = "_PREFERENCE_CANDIDATE.xlsx"
 
 
 def _short_name(name: str, longest: int = 100) -> str:
@@ -144,6 +145,13 @@ class RunQueue:
         """Phase AL: the steadier week the engine wrote beside its schedule, with the engine's before and after
         figures, when the validator passed it with no worse coverage (BUSINESS_OUTCOME.json's alternative exports);
         None otherwise."""
+        return self._alternative(run_id, "MORE_CONSISTENT_CANDIDATE", CONSISTENT_SCHEDULE_SUFFIX, "consistency")
+
+    def preference_schedule(self, run_id: str) -> Optional[Tuple[Path, Dict[str, Any]]]:
+        """Phase BG: the week swapped toward Preference shifts (PREFERENCE_CANDIDATE), under the same rule."""
+        return self._alternative(run_id, "PREFERENCE_CANDIDATE", PREFERENCE_SCHEDULE_SUFFIX, "preference")
+
+    def _alternative(self, run_id: str, role: str, suffix: str, figures: str) -> Optional[Tuple[Path, Dict[str, Any]]]:
         results = self.results_dir(run_id)
         if not results.is_dir():
             return None
@@ -155,14 +163,14 @@ class RunQueue:
             exports = ((data.get("independent_validation") or {}).get("alternative_exports") or []) \
                 if isinstance(data, dict) else []
             for entry in exports:
-                if not (isinstance(entry, dict) and entry.get("role") == "MORE_CONSISTENT_CANDIDATE"
+                if not (isinstance(entry, dict) and entry.get("role") == role
                         and entry.get("status") == "PASS" and entry.get("coverage_no_worse") is True):
                     continue
                 name = Path(str(entry.get("workbook") or "")).name
-                found = [p for p in record.parent.glob(f"*{CONSISTENT_SCHEDULE_SUFFIX}") if p.name == name] or \
-                    sorted(record.parent.glob(f"*{CONSISTENT_SCHEDULE_SUFFIX}"))
+                found = [p for p in record.parent.glob(f"*{suffix}") if p.name == name] or \
+                    sorted(record.parent.glob(f"*{suffix}"))
                 if found:
-                    return found[0], entry.get("consistency") or {}
+                    return found[0], entry.get(figures) or {}
         return None
 
     def keep_schedules(self, run_id: str) -> None:
@@ -177,6 +185,7 @@ class RunQueue:
             with self.log_path(run_id).open("a", encoding="utf-8") as log:
                 log.write(f"\n(website) could not keep this run's schedules as versions: {exc!r}\n")
         self._keep_consistent(run_id)
+        self._keep_preference(run_id)
         self._kept(run_id)
 
     def _kept(self, run_id: str) -> None:
@@ -198,6 +207,16 @@ class RunQueue:
         except Exception as exc:  # the run's own files stay authoritative; say why the copy failed
             with self.log_path(run_id).open("a", encoding="utf-8") as log:
                 log.write(f"\n(website) could not keep this run's more consistent schedule: {exc!r}\n")
+
+    def _keep_preference(self, run_id: str) -> None:
+        """The week swapped toward Preference shifts as a version, on its own (as the steadier week)."""
+        try:
+            swapped = self.preference_schedule(run_id)
+            if swapped is not None:
+                self.schedules.ensure_preference(self.store.get_run(run_id), *swapped)
+        except Exception as exc:  # the run's own files stay authoritative; say why the copy failed
+            with self.log_path(run_id).open("a", encoding="utf-8") as log:
+                log.write(f"\n(website) could not keep this run's preference schedule: {exc!r}\n")
 
     def shortfall_schedule(self, run_id: str) -> Optional[Path]:
         """The schedule the engine attaches when no schedule meets every hard rule."""
@@ -593,8 +612,11 @@ class RunQueue:
             if not versions and self.final_schedule(run["id"]) is not None:
                 self.keep_schedules(run["id"])
                 kept += bool(self.schedules.versions(run["id"]))
-            elif versions and not any(v["kind"] == "tool_consistent" for v in versions):
-                self._keep_consistent(run["id"])
+            elif versions:
+                if not any(v["kind"] == "tool_consistent" for v in versions):
+                    self._keep_consistent(run["id"])
+                if not any(v["kind"] == "tool_preference" for v in versions):
+                    self._keep_preference(run["id"])
         return kept
 
     def _cleaner(self) -> None:

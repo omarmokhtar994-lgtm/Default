@@ -28,6 +28,7 @@ from flask import (
     url_for,
 )
 from flask.sessions import SecureCookieSessionInterface
+from markupsafe import Markup, escape
 
 from .attendance import DayBook, operating_span, with_text  # noqa: F401  operating_span: read by webapp/routes through this module (tests replace it)
 from .channel_page import NAMES as CHANNEL_NAMES
@@ -227,6 +228,12 @@ class QuietSessions(SecureCookieSessionInterface):
         if not session.modified and request.headers.get("Sec-Fetch-Mode", "navigate") != "navigate":
             return False
         return super().should_set_cookie(app, session)
+
+
+def soft_wrap(text: Any) -> Markup:
+    """A name with a place to break after each underscore, dot or dash, so a narrow column breaks "week_next.xlsx" between its words, not inside
+    its ending (Phase BG). Escaped first, so nothing typed becomes markup."""
+    return Markup("".join(str(escape(ch)) + ("<wbr>" if ch in "_.-" else "") for ch in str(text or "")))
 
 
 def clean_program(text: str) -> str:
@@ -459,6 +466,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return response
 
     app.add_template_filter(insights_dur, "dur")
+    app.add_template_filter(soft_wrap, "soft_wrap")
 
     @app.template_filter("unit")
     def _unit_filter(key: Any) -> Any:

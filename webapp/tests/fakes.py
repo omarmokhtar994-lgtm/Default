@@ -42,6 +42,13 @@ def runner(argv):
         for f in real.iterdir():
             shutil.copy(f, case / f.name)
     (case / f"{stem}_L6_3_2_3_BEST_BEFORE_BREAKS_SCHEDULE.xlsx").write_bytes(b"before")
+    if "LEAN" in stem:  # Phase BH: the engine's working files (a candidate pool checkpoint) and its split packages, as a real run leaves them
+        (case / "debug").mkdir(exist_ok=True)
+        (case / "debug" / "CANDIDATE_POOL_CHECKPOINT.json").write_bytes(b"x" * 300_000)
+        (case / "debug" / "scheduler.log").write_text("engine log\n", encoding="utf-8")
+        (case / "packages").mkdir(exist_ok=True)
+        (case / "packages" / f"{stem}_03_FULL_DEBUG.zip").write_bytes(b"z" * 50_000)
+        (case / f"{stem}.l6_3_2_3_solver_audit.json").write_text('{"kept": true}', encoding="utf-8")
     if "PREFERENCE" in stem:  # Phase BG: the week swapped toward Preference shifts, and its record
         preference_candidate(case, stem, passed="PREFERENCEFAIL" not in stem)
     elif "CONSISTENT" in stem:  # Phase AL: the steadier week the engine writes beside its schedule, and its record

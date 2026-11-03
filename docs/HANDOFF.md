@@ -100,6 +100,8 @@ Load each with the Skill tool at the step it covers; following it from memory do
   Fixed: unreadable-XML upload crash, username hints at sign-in, locked-account timing, Cross-Origin-Resource-Policy, `__Host-` session cookie, Clear-Site-Data at sign-out,
   upgrade-insecure-requests, Trusted Types, common-password refusal, `no-store` on every non-static answer, top bar overflow at 768 px, sticky top bar below 900 px, 24 px targets.
   Findings and what is left for the owner: `evidence/phase_bf/FINDINGS.md`, `evidence/phase_bg/FINDINGS.md`.
+- **BH:** a finished run (DONE or REVIEW) no longer keeps the engine's `debug/` and `packages/` folders; the download zip is made without them; older runs are slimmed once at start
+  (`RunQueue.slim_results`, `slim_finished_runs`). Failed and stopped runs keep everything. About 60 % less on a five-minute run. Rule and measurement: `evidence/phase_bh/REQUESTS.md`.
 - **Lesson:** timed solver checks (QUICK, 300 s) fail when the machine is busy. `NMG_EN_AND_SP` failed twice while a browser crawl ran and passed twice alone, on the old and the new engine alike. Run engine checks alone.
 - **Lesson:** a worker restart kills background jobs; keep a foreground wait loop going and use the resumable `/tmp/chain3.sh`-style scripts (markers per unit).
 

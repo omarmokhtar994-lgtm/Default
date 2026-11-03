@@ -34,6 +34,8 @@ from . import outcome as engine_outcome
 from .results import metrics, summarize
 from .store import Store
 
+# Phase BH: what a finished run no longer needs: the engine's working files (checkpoints, raw outputs) and its own split packages
+WORKING_FOLDERS = ("debug", "packages")
 KEEP_DAYS = 30  # run files, by default (SCHEDULER_RUN_FILES_DAYS: 30 to 60)
 RECORD_DAYS = 395  # the record of actions: 13 months, like schedules and attendance
 ACTIVE = ("GATE", "RUNNING", "SCORING")
@@ -462,6 +464,12 @@ class RunQueue:
             # before the status says finished: a finished run's work is over (clean-up may follow at once)
             self.store.update_run(run_id, message="Keeping the schedules as versions.")
             self.keep_schedules(run_id)
+        if status in ("DONE", "REVIEW"):
+            try:
+                self._slim_and_zip(run_id)  # after the schedules are kept: nothing below needs the working files
+            except OSError as exc:  # a failed clean-up never fails the run; the files simply stay
+                with self.log_path(run_id).open("a", encoding="utf-8") as log:
+                    log.write(f"\n(website) could not remove the working files: {exc!r}\n")
         self._stamp_outcome(run_id, status)  # Phase AM: first, so a finished run is never seen without it
         self.store.update_run(run_id, status=status, exit_code=code, verdict=verdict,
                               finished=time.time(), message=message)
@@ -525,6 +533,42 @@ class RunQueue:
             return json.loads(self.summary_path(run_id).read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return None
+
+    def slim_results(self, run_id: str) -> int:
+        """Phase BH: remove the engine's working files and split packages from a finished run's case folders; the schedules, the
+        outcome, the validator's verdict, the audit and the log stay. Returns the bytes freed (0 when there was nothing)."""
+        results = self.results_dir(run_id)
+        if not results.is_dir():
+            return 0
+        freed = 0
+        for case in sorted(p for p in results.iterdir() if p.is_dir() and not p.name.startswith("_")):
+            for name in WORKING_FOLDERS:
+                folder = case / name
+                if folder.is_dir():
+                    freed += sum(f.stat().st_size for f in folder.rglob("*") if f.is_file())
+                    shutil.rmtree(folder)
+        return freed
+
+    def _slim_and_zip(self, run_id: str) -> None:
+        """A finished run: drop the working files, make the download again without them, and say so in the run's log."""
+        freed = self.slim_results(run_id)
+        if freed:
+            self._zip(run_id)
+            with self.log_path(run_id).open("a", encoding="utf-8") as log:
+                log.write(f"\n(website) removed {freed / 1048576:.1f} MB of the engine's working files; the schedules, the outcome and "
+                          "the checks are kept.\n")
+
+    def slim_finished_runs(self) -> int:
+        """Phase BH: the same for runs that finished before this existed (once, at start). Returns the bytes freed."""
+        total = 0
+        for run in self.store.list_runs(limit=1_000_000):
+            if run["status"] not in ("DONE", "REVIEW"):
+                continue
+            freed = self.slim_results(run["id"])
+            if freed:
+                self._zip(run["id"])
+                total += freed
+        return total
 
     def _zip(self, run_id: str) -> None:
         target = self.zip_path(run_id)
@@ -632,6 +676,10 @@ class RunQueue:
             self.backfill()
         except Exception as exc:  # history for older runs is a convenience; say why it failed
             print(f"history backfill failed: {exc!r}", file=sys.stderr, flush=True)
+        try:
+            self.slim_finished_runs()
+        except Exception as exc:  # a space saving for older runs; say why it failed
+            print(f"slimming older runs failed: {exc!r}", file=sys.stderr, flush=True)
         while True:
             try:
                 self.cleanup()

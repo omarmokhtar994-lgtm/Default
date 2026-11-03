@@ -444,7 +444,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         response.headers.setdefault(
             "Content-Security-Policy",
             "default-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; "
-            f"frame-ancestors {ancestors}; base-uri 'self'; form-action 'self'; object-src 'none'"
+            f"frame-ancestors {ancestors}; base-uri 'self'; form-action 'self'; object-src 'none'; "
+            "require-trusted-types-for 'script'; trusted-types 'none'"  # Phase BG: the site's script writes no HTML from strings, so none may
             + ("; upgrade-insecure-requests" if app.config.get("SESSION_COOKIE_SECURE") else ""))  # Phase AG: fonts and icons are served by the site itself; Phase AT: no base tag, forms post here only
         # Phase AT: a signed-in page is never kept by the browser or a proxy (the back button after sign-out shows nothing)
         if request.endpoint != "static":

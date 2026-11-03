@@ -1869,7 +1869,8 @@ input[type=file] { min-height: 24px; }
    the account part of the top bar wrapped only below 720 px, so at 768 px (a tablet) it ran 91 px past the edge and the page scrolled
    sideways; on a phone the sticky top bar was 194 px tall (a fifth of the screen, half of it turned sideways), so it now scrolls away
    there; the brand and the day's link row met the 24 px minimum target size (WCAG 2.2, 2.5.8). */
-@media (max-width: 960px) { .top .account { flex-wrap: wrap; white-space: normal; } }
-@media (max-width: 720px) { .top { position: static; } }
+@media (max-width: 900px) { .top .account { flex-wrap: wrap; white-space: normal; } }  /* where the menu folds; it needed 884 px */
+@media (max-width: 900px) { .top { position: static; } }  /* the same width where the menu folds into a "Menu" list */
+@media (hover: none) { .goto-open kbd { display: none; } }  /* no keyboard shortcut hint on a touch screen */
 .brand { min-height: 24px; }
 .daynav a { display: inline-flex; align-items: center; min-height: 24px; }

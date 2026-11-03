@@ -233,6 +233,27 @@ def clean_program(text: str) -> str:
     return " ".join((text or "").split())[:80]
 
 
+# Phase BG: words that lead every list of leaked passwords. A password is refused when, with its digits and symbols taken away,
+# nothing else is left but one of these (so "Password1234" and "Scheduler2026!" are refused, a phrase of several words is not).
+COMMON_PASSWORD_WORDS = frozenset((
+    "password passw0rd pass passcode qwerty qwertyuiop qwertyuiopasdfghjkl azerty asdf asdfgh asdfghjkl zxcvbn zxcvbnm welcome "
+    "letmein admin administrator root user guest login master monkey dragon sunshine princess football baseball soccer iloveyou "
+    "trustno abc abcdef abcdefgh abcdefghijkl abcdefghijklmnopqrstuvwxyz secret changeme default test testing temp temporary "
+    "scheduler schedule scheduling team teamscheduler rta shift shifts agent support company summer winter spring autumn "
+    "egypt cairo marhaba ahlan allah mohamed ahmed omar omarmokhtar").split())
+_RUNS = ("abcdefghijklmnopqrstuvwxyz" * 2, "01234567890123456789", "qwertyuiopasdfghjklzxcvbnm", "9876543210987654321")
+
+
+def password_is_weak(password: str) -> bool:
+    lower = password.lower()
+    letters = "".join(ch for ch in lower if "a" <= ch <= "z")
+    if len(set(lower)) < 5:
+        return True  # "aaaaaaaaaaaa", "0000000000"
+    if any(len(lower) >= 8 and lower in run for run in _RUNS):
+        return True  # "abcdefghijkl", "1234567890", a walk along the keyboard
+    return letters in COMMON_PASSWORD_WORDS
+
+
 def password_problem(new: str, confirm: str, username: str) -> str:
     if len(new) < MIN_PASSWORD:
         return f"Use at least {MIN_PASSWORD} characters."
@@ -240,6 +261,8 @@ def password_problem(new: str, confirm: str, username: str) -> str:
         return "The two new passwords are different."
     if username.lower() in new.lower():
         return "Do not put your username in your password."
+    if password_is_weak(new):
+        return "That password is too easy to guess. Use a few unrelated words, or a longer phrase."
     return ""
 
 
@@ -421,7 +444,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
             f"frame-ancestors {ancestors}; base-uri 'self'; form-action 'self'; object-src 'none'")  # Phase AG: fonts and icons are served by the site itself; Phase AT: no base tag, forms post here only
         # Phase AT: a signed-in page is never kept by the browser or a proxy (the back button after sign-out shows nothing)
         if request.endpoint != "static":
-            response.headers.setdefault("Cache-Control", "no-store")
+            response.headers["Cache-Control"] = "no-store"  # Phase BG: also over a file's own "no-cache" (downloads hold names)
         response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
         response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
         response.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")  # Phase BF: no other site may embed these answers

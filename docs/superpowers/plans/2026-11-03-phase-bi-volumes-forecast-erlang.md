@@ -70,7 +70,7 @@
 - [ ] **Step 2: Run** `PYTHONPATH=. python -m unittest webapp.tests.test_bi_erlang`. Expected: ImportError (module missing).
 - [ ] **Step 3: Implement `webapp/erlang.py`.** Erlang B by the recursion `B(n) = A*B(n-1) / (n + A*B(n-1))`; `C = B / (1 - (A/N) * (1 - B))`; `SL = 1 - C * exp(-(N - A) * T / AHT)`; `agents_needed` starts at `floor(A) + 1` and steps up, also requiring `A / N <= max_occupancy`.
 - [ ] **Step 4: Run the tests.** Expected: all pass.
-- [ ] **Step 5: Commit** (`Phase BI: Erlang core`).
+- [x] **Step 5: Commit** (`Phase BI: Erlang core`). Done: 19 tests.
 
 ### Task 2: Forecast shape, totals, distribution, OTF
 
@@ -92,7 +92,7 @@
 - [ ] **Step 2: Run** the test file. Expected: ImportError.
 - [ ] **Step 3: Implement `webapp/forecast.py`** (median and MAD by hand with `statistics`; no numpy).
 - [ ] **Step 4: Run the tests.** Expected: all pass.
-- [ ] **Step 5: Commit** (`Phase BI: forecast core`).
+- [x] **Step 5: Commit** (`Phase BI: forecast core`). Done: 27 tests.
 
 ---
 
@@ -109,7 +109,7 @@
 ## Phase 3: forecast and requirements (starts when sample 1 is approved)
 
 ### Task 5: The forecast page and the requirement workbook
-`volumes.forecast_grid(program, week, total_by_channel, day_overrides)` returns per channel the per-weekday, per-interval volumes plus the Erlang requirement for SL and volume-weighted programs; `volumes.requirement_workbook(...)` writes `FT Wise {n} Min` (sum of channels, after shrinkage) and `Chat/Phone/Email {n} Min` tabs in the exact layout `webapp/channels.py` reads, so the download can be pasted into an input workbook; tests: the written workbook is read back by `channels.read_channels` and `check_lines` finds the channel tabs equal to the FT Wise tab; every cell is a number, never text from a user; typed totals are saved in `volume_forecasts(program, channel, week_start, total, days, user_id, at)`; an interval-compliance program shows the volume forecast and no Erlang numbers.
+`volumes.forecast_grid(program, week, total_by_channel, day_overrides)` returns per channel the per-weekday, per-interval volumes plus the Erlang requirement for SL and volume-weighted programs; `volumes.requirement_workbook(...)` writes `FT Wise {n} Min` (the sum of the channels: people needed on the floor, NOT divided by shrinkage, because the engine divides by (1 - shrinkage) itself from the Shrinkage tab) and `Chat/Phone/Email {n} Min` tabs in the exact layout `webapp/channels.py` reads, so the download can be pasted into an input workbook; tests: the written workbook is read back by `channels.read_channels` and `check_lines` finds the channel tabs equal to the FT Wise tab; every cell is a number, never text from a user; typed totals are saved in `volume_forecasts(program, channel, week_start, total, days, user_id, at)`; an interval-compliance program shows the volume forecast and no Erlang numbers.
 
 ## Phase 4: how did we do (starts when sample 2 is approved)
 
@@ -118,6 +118,10 @@
 
 ## Phase 5: the pages, the menu entry, permissions
 Pages `/volumes` (Actuals, Forecast, Requirements, Trends tabs), a Roles entry (`volumes_view`, `volumes_edit`), the home menu link under Insights, DESIGN.md note, browser test at 1440, 768 and 360 px in both looks (Tab ring, no sideways scroll, 24 px targets), attack tests (walls, CSRF, uploads), the website suites, the package.
+
+## Rulings taken from the code
+- The engine reads FT Wise as effective FTE on the floor and applies the Shrinkage tab itself (`webapp/day.py` header, engine `effective_factor = 1 - shrinkage`). So the requirement the site writes is the Erlang agents, not agents divided by shrinkage; the page shows the with-shrinkage figure only as information.
+- Sample pages (made-up numbers, the site's own shell and charts) are in `evidence/phase_bi/samples/`; nothing is built into the site until the owner approves them.
 
 ## Risks and rulings taken
 - Erlang C assumes no abandonment and a single queue; it over-staffs where customers abandon. Stated on the page; an abandon-aware (Erlang A) option is a later, owner-approved step.

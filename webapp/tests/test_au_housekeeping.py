@@ -67,18 +67,20 @@ class ThePersonWhoLeaves(unittest.TestCase):
 
 class TheNewPassword(unittest.TestCase):
     def test_it_has_to_differ_from_the_current_one(self):
+        # re-pinned in Phase BG: the sample password was "Password1!", which the new common-password rule refuses before this rule is reached;
+        # the rule under test (a new password must differ from the current one) is unchanged, so the sample is an ordinary good password
         app, store, *_ = make_app(start_worker=False)
-        store.add_user("pat", "Pat", "Password1!", must_change=True)
+        store.add_user("pat", "Pat", "Maple-River-2741", must_change=True)
         client = app.test_client()
         tok = re.search(r'name="csrf_token" value="([^"]+)"', client.get("/login").get_data(as_text=True)).group(1)
-        client.post("/login", data={"username": "pat", "password": "Password1!", "csrf_token": tok})
+        client.post("/login", data={"username": "pat", "password": "Maple-River-2741", "csrf_token": tok})
         page = client.get("/account/password").get_data(as_text=True)
         tok = re.search(r'name="csrf_token" value="([^"]+)"', page).group(1)
-        got = client.post("/account/password", data={"csrf_token": tok, "current": "Password1!", "new": "Password1!",
-                                                     "confirm": "Password1!"}, follow_redirects=True)
+        got = client.post("/account/password", data={"csrf_token": tok, "current": "Maple-River-2741", "new": "Maple-River-2741",
+                                                     "confirm": "Maple-River-2741"}, follow_redirects=True)
         self.assertIn("different from your current", got.get_data(as_text=True).replace("&nbsp;", " "))
         self.assertEqual(store.get_user_by_name("pat")["must_change"], 1)           # still has to choose one
-        ok = client.post("/account/password", data={"csrf_token": tok, "current": "Password1!", "new": "Another-1234x",
+        ok = client.post("/account/password", data={"csrf_token": tok, "current": "Maple-River-2741", "new": "Another-1234x",
                                                     "confirm": "Another-1234x"}, follow_redirects=True)
         self.assertIn("Password changed", ok.get_data(as_text=True))
         self.assertEqual(store.get_user_by_name("pat")["must_change"], 0)

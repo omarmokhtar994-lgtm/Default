@@ -89,6 +89,20 @@ Load each with the Skill tool at the step it covers; following it from memory do
 6. Package, split into parts, send them, and report in caveman style: what changed, rulings with their cost, what
    is known and left, Egypt times, screens.
 
+## Phases BD to BG (owner, 2026-10-29 to 2026-11-03): preferences in the engine, attacks on the website, every screen size
+
+- **BD:** a separate OFF named in an associate's Preference (or Fixed Request) is accepted for that person even when Separate OFF Days is No (`separate_off_in_preference`).
+- **BE:** shift Preferences were only a Stage 1 cost. `preference_swap_polish` swaps same-day shifts between associates of one language and shift length when both get closer
+  to their Preference, with every guarded measure no worse. It is published as `<id>_PREFERENCE_CANDIDATE.xlsx` beside the recommended schedule (F-35: never in its place); the
+  runner validates it independently and offers it only when coverage is no worse. Shipped workbooks and the GDI week have no shift Preferences, so it does nothing there.
+  The website does not list it as a version yet (owner to decide). Rule: `evidence/phase_be/REQUESTS.md`.
+- **BF/BG:** `webapp/tests/test_bf_attacks.py`, `test_bg_security.py` and `evidence/phase_bg/` (crawl of every page at 1440, 768, 360 px in both looks; Tab walk; raw HTTP attacks).
+  Fixed: unreadable-XML upload crash, username hints at sign-in, locked-account timing, Cross-Origin-Resource-Policy, `__Host-` session cookie, Clear-Site-Data at sign-out,
+  upgrade-insecure-requests, Trusted Types, common-password refusal, `no-store` on every non-static answer, top bar overflow at 768 px, sticky top bar below 900 px, 24 px targets.
+  Findings and what is left for the owner: `evidence/phase_bf/FINDINGS.md`, `evidence/phase_bg/FINDINGS.md`.
+- **Lesson:** timed solver checks (QUICK, 300 s) fail when the machine is busy. `NMG_EN_AND_SP` failed twice while a browser crawl ran and passed twice alone, on the old and the new engine alike. Run engine checks alone.
+- **Lesson:** a worker restart kills background jobs; keep a foreground wait loop going and use the resumable `/tmp/chain3.sh`-style scripts (markers per unit).
+
 ## Phase BC (owner, 2026-10-26: channel rotation, wheel, whole lists, clock-change words)
 
 Read `evidence/phase_bc/REQUESTS.md` (the measured cause, the pre-registered rule, the sweep and its misses stated plainly). **Channel planner:** with the

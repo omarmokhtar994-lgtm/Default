@@ -17,7 +17,8 @@ OUT = sys.argv[2]
 ROLES = {"admin": ("omar", "Owner-pass-123"), "team_manager": ("tm", "Owner-pass-123"),
          "associate": (cfg["associate"], "Owner-pass-123")}
 chosen = sys.argv[3:] or list(ROLES)
-WIDTHS = (1440, 768, 360)
+import os
+WIDTHS = tuple(int(w) for w in os.environ.get("WIDTHS", "1440,768,360").split(","))
 BASE = cfg["base"]
 SEEDS = ["/", "/?all=1", "/me", "/account/password", "/programs", "/team", "/admin/users", "/exports", "/notifications", "/coach",
          "/roles", "/setup/programs", "/channels", "/news"]
@@ -35,7 +36,7 @@ AUDIT_JS = r"""
       const s = getComputedStyle(p); if (/(auto|scroll|hidden|clip)/.test(s.overflowX) && p.scrollWidth > p.clientWidth + 1) return true; }
     return false; };
   const name = e => (e.innerText || '').trim().slice(0, 40) || e.getAttribute('aria-label') || e.getAttribute('title') || e.id || e.className.toString().slice(0, 30);
-  const sel = e => e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') + (e.className && e.className.toString ? '.' + e.className.toString().trim().split(/\s+/).slice(0, 2).join('.') : '');
+  const sel = e => e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') + (e.className && e.className.toString && typeof e.className === 'string' ? '.' + e.className.toString().trim().split(/\s+/).slice(0, 2).join('.') : '');
   const all = [...document.querySelectorAll('body *')].filter(vis);
   out.past_edge = all.filter(e => { const r = e.getBoundingClientRect(); return r.right > vw + 2 && !inScroller(e) && getComputedStyle(e).position !== 'fixed'; })
     .slice(0, 6).map(e => sel(e) + ' ' + Math.round(e.getBoundingClientRect().right));
@@ -47,7 +48,7 @@ AUDIT_JS = r"""
   out.no_label = [...document.querySelectorAll('input, select, textarea')].filter(i => vis(i) && !labelled(i))
     .slice(0, 8).map(i => sel(i) + '[name=' + (i.name || '') + ']');
   out.no_name = [...document.querySelectorAll('a[href], button, [role=button]')].filter(e => vis(e) &&
-    !(e.innerText || '').trim() && !e.getAttribute('aria-label') && !e.getAttribute('title') && !e.getAttribute('aria-labelledby') &&
+    !(e.textContent || '').trim() && !e.getAttribute('aria-label') && !e.getAttribute('title') && !e.getAttribute('aria-labelledby') &&
     !e.querySelector('img[alt]:not([alt=""])')).slice(0, 8).map(sel);
   const ids = {}; document.querySelectorAll('[id]').forEach(e => { ids[e.id] = (ids[e.id] || 0) + 1; });
   out.dup_ids = Object.keys(ids).filter(k => ids[k] > 1).slice(0, 8);
@@ -184,18 +185,18 @@ with sync_playwright() as p:
                     r = pg.goto(BASE + u, wait_until="load")
                     pg.wait_for_load_state("networkidle")
                     row = {"role": role, "scheme": scheme, "width": width, "url": u, "status": r.status if r else None}
+                    pat = pattern(u)
+                    if pat not in shots and r is not None and r.status < 400:
+                        shots.add(pat)
+                        safe = re.sub(r"[^a-z0-9]+", "_", pat.lower()).strip("_")[:60]
+                        pg.screenshot(path=f"{OUT}/screens/{role}_{scheme}_{width}_{safe}.png", full_page=True)
                     if r is not None and r.status < 400 and urlsplit(pg.url).path != "/login":
                         row.update(pg.evaluate(AUDIT_JS))
-                        row["focus_hidden"] = pg.evaluate(FOCUS_JS) if width == 1440 and scheme == "dark" else []
+                        row["focus_hidden"] = []  # a programmatic focus() is not what a keyboard shows: Tab is walked in probe_focus.py instead
                         row["csp"] = pg.evaluate("window.__csp")
                     row["console"] = list(logs)[:4]
                     row["failed"] = list(failed)[:4]
                     results.append(row)
-                    pat = pattern(u)
-                    if pat not in shots and scheme in ("dark", "light") and r is not None and r.status < 400:
-                        shots.add(pat)
-                        safe = re.sub(r"[^a-z0-9]+", "_", pat.lower()).strip("_")[:60]
-                        pg.screenshot(path=f"{OUT}/screens/{role}_{scheme}_{width}_{safe}.png", full_page=True)
                 ctx.close()
                 print(role, scheme, width, "done", flush=True)
     browser.close()

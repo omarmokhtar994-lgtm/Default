@@ -131,5 +131,42 @@ class TheCookies(_Secured):
             self.assertIn("attachment", got.headers.get("Content-Disposition", ""))
 
 
+class TheHttpsSite(unittest.TestCase):
+    """On the real server (HTTPS) the cookie is bound to this exact host and the browser is told to forget on sign-out."""
+
+    @classmethod
+    def setUpClass(cls):
+        from webapp.tests.test_runs import make_app
+        cls.app, cls.store, *_ = make_app(start_worker=False, HTTPS=True, SESSION_COOKIE_SECURE=True)
+        cls.store.add_user("omar", "Omar", "Owner-pass-123", is_admin=True, must_change=False)
+
+    def login(self):
+        client = self.app.test_client()
+        tok = TOKEN.search(client.get("/login", base_url="https://site.test").get_data(as_text=True)).group(1)
+        got = client.post("/login", data={"username": "omar", "password": "Owner-pass-123", "csrf_token": tok},
+                          base_url="https://site.test")
+        return client, got
+
+    def test_the_session_cookie_uses_the_host_prefix(self):
+        _client, got = self.login()
+        header = "; ".join(got.headers.getlist("Set-Cookie"))
+        self.assertIn("__Host-session=", header)
+        for part in ("Secure", "HttpOnly", "SameSite=Lax", "Path=/"):
+            self.assertIn(part, header)
+        self.assertNotIn("Domain=", header)
+
+    def test_the_policy_upgrades_any_stray_plain_request(self):
+        csp = self.app.test_client().get("/login", base_url="https://site.test").headers["Content-Security-Policy"]
+        self.assertIn("upgrade-insecure-requests", csp)
+
+    def test_sign_out_tells_the_browser_to_clear_what_it_kept(self):
+        client, _ = self.login()
+        tok = TOKEN.search(client.get("/", base_url="https://site.test").get_data(as_text=True) or "")
+        tok = tok.group(1) if tok else ""
+        got = client.post("/logout", data={"csrf_token": tok}, base_url="https://site.test")
+        self.assertIn("cache", got.headers.get("Clear-Site-Data", ""))
+        self.assertIn("storage", got.headers.get("Clear-Site-Data", ""))
+
+
 if __name__ == "__main__":
     unittest.main()

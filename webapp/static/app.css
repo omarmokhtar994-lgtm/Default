@@ -1864,3 +1864,12 @@ input[type=file] { min-height: 24px; }
 .ed .ed-warn { display: block; margin-top: 2px; font-size: 0.6875rem; line-height: 1.3; white-space: nowrap; color: var(--short-ink); }
 /* Phase BC (owner, 2026-10-29): a note that explains rather than warns (the day's window on the tabs that use the schedule's own day) */
 .notice.calm { border-left-color: var(--edge); background: var(--well); }
+
+/* Phase BG (owner, 2026-11-03: "all visuals perfect"; found by a crawl of every page in a real browser at 1440, 768 and 360 px):
+   the account part of the top bar wrapped only below 720 px, so at 768 px (a tablet) it ran 91 px past the edge and the page scrolled
+   sideways; on a phone the sticky top bar was 194 px tall (a fifth of the screen, half of it turned sideways), so it now scrolls away
+   there; the brand and the day's link row met the 24 px minimum target size (WCAG 2.2, 2.5.8). */
+@media (max-width: 960px) { .top .account { flex-wrap: wrap; white-space: normal; } }
+@media (max-width: 720px) { .top { position: static; } }
+.brand { min-height: 24px; }
+.daynav a { display: inline-flex; align-items: center; min-height: 24px; }

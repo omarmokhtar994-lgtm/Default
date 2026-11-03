@@ -278,6 +278,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_SECURE=bool(config.get("HTTPS", True)),
+        # Phase BG: on the HTTPS site the cookie is bound to this exact host (no Domain, Path=/, Secure) so a sibling
+        # host or an http page cannot set or shadow it; off HTTPS (tests, a local check) the plain name stays
+        SESSION_COOKIE_NAME="__Host-session" if config.get("HTTPS", True) else "session",
         PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
     )
     app.config.update({k: v for k, v in config.items() if k not in {"SECRET_KEY"}})
@@ -441,7 +444,8 @@ def create_app(config: Dict[str, Any]) -> Flask:
         response.headers.setdefault(
             "Content-Security-Policy",
             "default-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; "
-            f"frame-ancestors {ancestors}; base-uri 'self'; form-action 'self'; object-src 'none'")  # Phase AG: fonts and icons are served by the site itself; Phase AT: no base tag, forms post here only
+            f"frame-ancestors {ancestors}; base-uri 'self'; form-action 'self'; object-src 'none'"
+            + ("; upgrade-insecure-requests" if app.config.get("SESSION_COOKIE_SECURE") else ""))  # Phase AG: fonts and icons are served by the site itself; Phase AT: no base tag, forms post here only
         # Phase AT: a signed-in page is never kept by the browser or a proxy (the back button after sign-out shows nothing)
         if request.endpoint != "static":
             response.headers["Cache-Control"] = "no-store"  # Phase BG: also over a file's own "no-cache" (downloads hold names)

@@ -66,7 +66,9 @@ def register(app, ctx) -> None:
         if session.get("user_id") is not None:  # Phase AV: end this session on the server, not only in the browser
             app.extensions["store"].revoke_session(session["user_id"], session.get("at", 0))
         session.clear()
-        return redirect(url_for("login"))
+        response = redirect(url_for("login"))
+        response.headers["Clear-Site-Data"] = '"cache", "storage"'  # Phase BG: nothing of the page stays in the browser
+        return response
 
     @app.route("/account/password", methods=["GET", "POST"])
     @login_required

@@ -3819,3 +3819,49 @@ class TheScrollingInTheBrowser(unittest.TestCase):
         self.assertEqual(page.evaluate("getComputedStyle(document.querySelector('.rb-scroll.panel-scroll')).maxHeight"), "none")
         self.assertEqual(page.evaluate("getComputedStyle(document.querySelector('.rb-scroll.panel-scroll')).overflowY"), "visible")
 
+
+
+class TheEveryScreenSizeInTheBrowser(unittest.TestCase):
+    """Phase BG (owner, 2026-11-03: "all visuals are perfect"): a crawl of every page at 1440, 768 and 360 px found the account part of the top bar
+    running 91 px past the edge at 768 px, a 194 px sticky top bar on a phone, and links under the 24 px target size."""
+
+    setUpClass = classmethod(ThePhaseVInTheBrowser.setUpClass.__func__)
+    tearDownClass = classmethod(ThePhaseVInTheBrowser.tearDownClass.__func__)
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+
+    def pages(self):
+        q = self.key.replace(" ", "+")
+        return ("/", f"/day?program={q}&date=2026-10-14", f"/runs/{self.run_id}/schedules", "/me", "/admin/users", "/programs")
+
+    def test_no_page_scrolls_sideways_at_a_tablet_or_a_phone_width(self):
+        for width in (768, 360):
+            page = self.page(width=width, height=900)
+            self.sign_in(page)
+            for path in self.pages():
+                page.goto(self.base + path)
+                page.wait_for_load_state("load")
+                over = page.evaluate("document.scrollingElement.scrollWidth - window.innerWidth")
+                self.assertLessEqual(over, 1, (width, path, over))
+            page.close()
+
+    def test_the_top_bar_scrolls_away_on_a_phone_and_stays_on_a_desk(self):
+        page = self.page(width=360, height=800)
+        self.sign_in(page)
+        page.goto(self.base + "/")
+        self.assertEqual(page.evaluate("getComputedStyle(document.querySelector('header.top')).position"), "static")
+        page.close()
+        page = self.page(width=1280, height=800)
+        self.sign_in(page)
+        page.goto(self.base + "/")
+        self.assertEqual(page.evaluate("getComputedStyle(document.querySelector('header.top')).position"), "sticky")
+        page.close()
+
+    def test_the_brand_and_the_day_links_meet_the_minimum_target_size(self):
+        page = self.page(width=360, height=900)
+        self.sign_in(page)
+        page.goto(self.base + self.pages()[1])
+        page.wait_for_load_state("load")
+        small = page.evaluate("""() => [...document.querySelectorAll('a.brand, .daynav a')].map(e => e.getBoundingClientRect()).filter(r => r.height < 24 - 0.5).length""")
+        self.assertEqual(small, 0)
+        page.close()

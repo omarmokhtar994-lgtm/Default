@@ -3880,8 +3880,3 @@ class TheEveryScreenSizeInTheBrowser(unittest.TestCase):
                 return t.height < 24 - 0.5 || t.width < 24 - 0.5; }).length""")
             self.assertEqual(small, 0, path)
         page.close()
-
-    def test_a_file_name_breaks_after_an_underscore_not_in_the_middle_of_its_ending(self):
-        from webapp.app import soft_wrap
-        self.assertEqual(str(soft_wrap("week_next.xlsx")), "week_<wbr>next.<wbr>xlsx")
-        self.assertEqual(str(soft_wrap("a<b>&c")), "a&lt;b&gt;&amp;c")

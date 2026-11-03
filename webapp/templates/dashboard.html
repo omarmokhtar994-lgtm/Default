@@ -20,7 +20,7 @@
   <h2 id="unfiled-h">Not filed under a program</h2>
   <p class="note">Uploaded without a program, so no program's pages show {{ 'it' if unfiled|length == 1 else 'them' }}. Pick the program and LOB and the start date to file each one; its schedule versions move with it.</p>
   <ul class="unfiled-list">{% for r in unfiled %}
-    <li><p><a href="{{ url_for('run_detail', run_id=r.id) }}">{{ r.workbook|soft_wrap }}</a><small>{{ 'Ready schedule' if r.mode == 'READY' else r.mode|capitalize ~ ' run' }} by {{ r.by_name }}, {{ when(r.created) }}</small></p>
+    <li><p><a href="{{ url_for('run_detail', run_id=r.id) }}">{{ r.workbook }}</a><small>{{ 'Ready schedule' if r.mode == 'READY' else r.mode|capitalize ~ ' run' }} by {{ r.by_name }}, {{ when(r.created) }}</small></p>
     {% if user.is_admin or r.user_id == user.id %}<form class="tagrow" method="post" action="{{ url_for('run_tag', run_id=r.id) }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="back" value="home">
       <label>Program and LOB <select name="program" required>
@@ -150,7 +150,7 @@
     <tbody>
     {% for run in runs_page[0] %}{% set s = summaries.get(run.id) %}
     <tr>
-      <td><a href="{{ url_for('run_detail', run_id=run.id) }}">{{ run.workbook|soft_wrap }}</a>{% if run.id in in_use_ids %} <span class="wl-tag use">In use</span>{% elif run.id in not_in_use_ids %} <span class="wl-tag off">Not in use</span>{% endif %}<br><small>{{ label(run) }}, {{ run.mode|lower }}</small></td>
+      <td><a href="{{ url_for('run_detail', run_id=run.id) }}">{{ run.workbook }}</a>{% if run.id in in_use_ids %} <span class="wl-tag use">In use</span>{% elif run.id in not_in_use_ids %} <span class="wl-tag off">Not in use</span>{% endif %}<br><small>{{ label(run) }}, {{ run.mode|lower }}</small></td>
       <td class="by">{{ run.by_name }}</td>
       <td class="when">{{ when(run.created) }}</td>
       <td class="bar">{{ stagebar(run, small=True) }}</td>

@@ -1907,4 +1907,4 @@ td > input[type="checkbox"]:only-child, td > input[type="radio"]:only-child { wi
 .skip-in { position: absolute; left: -9999px; }
 .skip-in:focus { position: static; display: inline-block; margin: 4px 0 8px; }
 .exp-row label { min-width: 0; }  /* a label may be narrower than its control's own width, so a native "Choose file" box cannot push a 320 px screen sideways */
-.ins-filter input[type="file"] { max-width: 100%; min-width: 0; }
+.exp-row input[type="file"] { max-width: 100%; min-width: 0; }

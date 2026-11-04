@@ -1,7 +1,13 @@
 # © 2026 Omar Mokhtar. All rights reserved.
 """Phase BI task 2 (owner, 2026-11-03: "I can give the count of calls for next week and it automatically calculates calls per interval", "see
 trends", "calculate the OTF"): the shape of a program's week from its own history, a suggested week total, a total spread over days and
-intervals in whole numbers, and offered versus forecast. Made-up numbers only."""
+intervals in whole numbers, and offered versus forecast. Made-up numbers only.
+
+Re-pinned in Phase BJ (owner, 2026-11-04: "must be same count of days, so no if 6 Sundays must be 6 Saturdays"): the measured contract changed. A day that was
+odd (a holiday, an outage, part of a day) used to be left out of its own weekday's shape while the other weekdays kept the week, so one weekday could rest on
+fewer weeks than another. Now the week is left out as a whole and the next older clean week steps in, so every open weekday is read from the same N weeks. The
+tests that pinned the per-day exclusion were replaced by the tests of whole-week choice (TheChoiceOfWeeks) and of the equal count (TheProfile); every
+situation the old tests covered (holiday day, outage, partial day, missing weekday, closed weekday, growth not biasing the day mix) is still tested."""
 import random
 import unittest
 from datetime import date, timedelta

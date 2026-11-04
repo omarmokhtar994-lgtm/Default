@@ -105,6 +105,10 @@ Load each with the Skill tool at the step it covers; following it from memory do
 - **BI:** volumes (Insights, Volumes): actuals per channel (paste or upload, input-sheet layout or one row per interval), forecast of a week from a typed total, people needed with Erlang for
   service-level and volume-weighted programs, OTF (offered over forecast) and trends, every grid in the input sheet's layout with Copy for Excel. Engine untouched; the requirement workbook feeds the
   existing FT Wise and channel tabs. Plan, samples, checks: `docs/superpowers/plans/2026-11-03-phase-bi-volumes-forecast-erlang.md`, `evidence/phase_bi/`.
+- **BJ (2026-11-04):** volumes read the same N whole weeks for every weekday (six by default, 3 to 26; a week with a hole is left out as a whole and an older clean week steps in), a saved forecast keeps its own grid, the planner
+  is asked what the history cannot know (promotions and events, AI and automation with periods and moves between channels, year-over-year growth, last year) and sees each answer as a step of the suggestion, actuals can be typed per
+  interval or filled in a downloaded draft, and the Erlang staffing is one Excel formula (`=AGENTS`) with a workbook of live formulas. Engine untouched. Plan with rulings and checks:
+  `docs/superpowers/plans/2026-11-04-phase-bj-volumes-drivers-excel.md`, `evidence/phase_bj/CHECKS.md`.
 - **Lesson:** timed solver checks (QUICK, 300 s) fail when the machine is busy. `NMG_EN_AND_SP` failed twice while a browser crawl ran and passed twice alone, on the old and the new engine alike. Run engine checks alone.
 - **Lesson:** a worker restart kills background jobs; keep a foreground wait loop going and use the resumable `/tmp/chain3.sh`-style scripts (markers per unit).
 

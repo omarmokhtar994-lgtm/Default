@@ -1091,10 +1091,34 @@
    []
   ],
   [
+   "/volumes/draft.xlsx",
+   "volumes_draft",
+   [
+    "GET"
+   ],
+   []
+  ],
+  [
+   "/volumes/drivers",
+   "volumes_drivers",
+   [
+    "POST"
+   ],
+   []
+  ],
+  [
    "/volumes/forecast",
    "volumes_forecast",
    [
     "POST"
+   ],
+   []
+  ],
+  [
+   "/volumes/formulas.xlsx",
+   "volumes_formulas",
+   [
+    "GET"
    ],
    []
   ],

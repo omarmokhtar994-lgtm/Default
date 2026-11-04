@@ -1,7 +1,10 @@
 # © 2026 Omar Mokhtar. All rights reserved.
 """Phase BI tasks 4 to 6 (owner, 2026-11-03): settings per channel, the forecast of a week from a typed total, the people needed with Erlang for
 service-level programs, the grids in the input sheet's layout (intervals down, Sun to Sat across), how the week went (OTF and trends), and the
-requirement workbook. Made-up numbers; weeks start on Sunday here."""
+requirement workbook. Made-up numbers; weeks start on Sunday here.
+
+Phase BJ (2026-11-04): the forecast no longer takes a ``today`` argument (the weeks are counted back from the week planned, not from the day it is looked
+at) and reads the same N whole weeks for every weekday; the calls that passed ``today=`` were changed to match, and nothing else in these tests was loosened."""
 import io
 import tempfile
 import unittest

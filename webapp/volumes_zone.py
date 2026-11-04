@@ -2,9 +2,9 @@
 """Phase BJ (owner, 2026-11-04: "I may add actuals in EST and request required associates in Egypt time"): volumes across time zones.
 
 Two jobs, both by the site's own clock (``webapp/clock.py``: named zones, so each region's clock changes land on their own dates):
-  * ``convert_rows``: actuals typed, pasted or uploaded in one zone become rows in the program's zone. A time that does not exist or happens twice because a
-    region's clocks changed cannot be placed and is refused, naming the day, rather than guessed. Rows that land on the same interval (the hour a region repeats
-    in the target zone) are added up, the handle time weighted by volume.
+  * ``convert_rows``: actuals typed, pasted or uploaded in one zone become rows in the program's zone. The hour a region's clocks repeat is read as its first
+    occurrence (an export by local day has that hour once), and the note says so. The hour they skip does not exist: its empty rows are left out (said in a note) and a row
+    with volume in it is refused, naming the day. Rows that land on the same interval (the hour the target repeats) are added up, the handle time weighted by volume.
   * ``rotate_grid``: a week's grid (days Sun to Sat, intervals down) shown in another zone. The same seven dates, each cell moved to the date and interval it has there;
     what spills over the edge of the week goes to the other end of the same week (this week's pattern stands in for the neighbouring week), so a total is never lost or
     made up. A forecast has no source clock to refuse, so the hour a region skips is placed by the clock without complaint.
@@ -16,8 +16,10 @@ from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 from zoneinfo import ZoneInfo
 
-from .clock import HOME, ZONES, converted
+from .clock import HOME, ZONES as SITE_ZONES
 
+# The site's zones, and US Eastern all year for exports that never change with the seasons (no repeated or skipped hour).
+ZONES = SITE_ZONES + (("Etc/GMT+5", "EST (US Eastern, no daylight saving)"),)
 NAMES = dict(ZONES)
 Row = Tuple[str, int, float, Optional[float]]
 
@@ -44,35 +46,43 @@ def _constant_shift(day: date, src: ZoneInfo, dst: ZoneInfo) -> Optional[int]:
     return int((a.replace(tzinfo=None) - start.replace(tzinfo=None)).total_seconds() // 60)
 
 
-def convert_rows(rows: Sequence[Row], from_zone: Any, to_zone: Any, step: int) -> Tuple[List[Row], List[str]]:
-    """``rows`` ``(day, minute, offered, aht)`` read in ``from_zone`` as rows in ``to_zone``, and the problems (one per day) for times that cannot be placed.
-    The same zone returns the rows as they are."""
+def convert_rows(rows: Sequence[Row], from_zone: Any, to_zone: Any, step: int, notes: Optional[List[str]] = None) -> Tuple[List[Row], List[str]]:
+    """``rows`` ``(day, minute, offered, aht)`` read in ``from_zone`` as rows in ``to_zone``, and the problems (one per day) for volume in an hour that does not exist.
+    What was read as the first of a repeated hour, or left out as an empty skipped hour, is added to ``notes`` (one line per day). The same zone returns the rows as they are."""
     src_key, dst_key = check_zone(from_zone, "The zone the file is in"), check_zone(to_zone, "The program's zone")
     if src_key == dst_key:
         return list(rows), []
     src, dst = ZoneInfo(src_key), ZoneInfo(dst_key)
     merged: Dict[Tuple[str, int], List[float]] = {}
     problems: List[str] = []
-    refused: set = set()
+    said: set = set()
     shifts: Dict[str, Optional[int]] = {}
+    refused: set = set()
     for day, minute, offered, aht in rows:
         if day in refused:
             continue
         shift = shifts.setdefault(day, _constant_shift(date.fromisoformat(day), src, dst))
-        try:
-            if shift is not None:
-                moved = datetime.combine(date.fromisoformat(day), time()) + timedelta(minutes=int(minute) + shift)
-            else:
-                moved = converted(date.fromisoformat(day), int(minute), src_key, dst_key).replace(tzinfo=None)
-        except ValueError as exc:
-            refused.add(day)
-            said = str(exc)
+        if shift is not None:
+            moved = datetime.combine(date.fromisoformat(day), time()) + timedelta(minutes=int(minute) + shift)
+        else:
+            wall = datetime.combine(date.fromisoformat(day), time()) + timedelta(minutes=int(minute))
+            there = wall.replace(tzinfo=src, fold=0)
             at = f"{int(minute) // 60:02d}:{int(minute) % 60:02d}"
-            if "does not exist" in said:
-                problems.append(f"{day} {at} does not exist in {_name(src_key)} time because the clocks change that day. Take that time out of the file or send the day in the program's own zone.")
-            else:
-                problems.append(f"{day} {at} happens twice in {_name(src_key)} time because the clocks change that day, and the file does not say which. Send that day in the program's own zone.")
-            continue
+            if there.astimezone(timezone.utc).astimezone(src).replace(tzinfo=None) != wall:       # the clocks jump over this time
+                if float(offered) == 0:
+                    if (day, "skip") not in said:
+                        said.add((day, "skip"))
+                        if notes is not None:
+                            notes.append(f"{day}: the clocks in {_name(src_key)} skip {at}, so its empty rows were left out.")
+                    continue
+                refused.add(day)
+                problems.append(f"{day} {at} does not exist in {_name(src_key)} time because the clocks change that day, yet it holds contacts. Check the file's times for that day.")
+                continue
+            if there.utcoffset() != there.replace(fold=1).utcoffset() and (day, "twice") not in said:
+                said.add((day, "twice"))
+                if notes is not None:
+                    notes.append(f"{day}: {at} happens twice in {_name(src_key)} time because the clocks change that day; it was read as the first one.")
+            moved = there.astimezone(dst).replace(tzinfo=None)
         key = (moved.date().isoformat(), moved.hour * 60 + moved.minute)
         got = merged.setdefault(key, [0.0, 0.0, 0.0])
         got[0] += float(offered)

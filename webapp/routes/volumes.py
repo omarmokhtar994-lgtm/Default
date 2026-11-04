@@ -17,12 +17,12 @@ from openpyxl.styles import Font
 from .. import charts
 from ..app import clean_program
 from ..auth import login_required
-from ..clock import ZONES
 from ..programs import ProgramBook
 from ..shrink_view import week_begin
 from .. import drivers as drivers_mod
 from ..volumes import DEFAULTS, LABELS, LAST_WEEK, VolumeBook, _today
 from ..excel_agents import lambda_definitions
+from ..volumes_zone import ZONES
 from ..volumes_draft import draft_workbook, is_draft, parse_draft
 from ..volumes_formulas import formulas_workbook
 from ..volumes_io import CHANNELS, DAY_NAMES, FIRST_DAY, ParsedVolumes, parse_grid, parse_long, parse_pasted, read_table

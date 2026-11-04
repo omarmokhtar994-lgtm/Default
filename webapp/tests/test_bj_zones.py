@@ -11,6 +11,14 @@ from webapp import volumes_zone as Z
 NY, CAIRO, LONDON = "America/New_York", "Africa/Cairo", "Europe/London"
 
 
+def converted_first(day, minute, src, dst):
+    """The reading a person expects of an hour that happens twice: the first one."""
+    from datetime import datetime, time, timezone
+    wall = datetime.combine(day, time()) + timedelta(minutes=minute)
+    there = wall.replace(tzinfo=ZoneInfo(src), fold=0).astimezone(timezone.utc).astimezone(ZoneInfo(dst))
+    return there.hour * 60 + there.minute
+
+
 class TheUploadedRows(unittest.TestCase):
     def test_a_winter_day_in_new_york_in_cairo_time(self):
         rows = [("2026-12-06", 9 * 60, 10.0, 300.0), ("2026-12-06", 22 * 60, 4.0, None)]
@@ -31,19 +39,49 @@ class TheUploadedRows(unittest.TestCase):
         rows = [("2026-12-06", 540, 3.0, 100.0)]
         self.assertEqual(Z.convert_rows(rows, CAIRO, CAIRO, 30), (rows, []))
 
-    def test_a_time_that_does_not_exist_or_happens_twice_is_refused_naming_the_day(self):
-        _, gap = Z.convert_rows([("2027-03-14", 2 * 60 + 30, 5.0, None)], NY, CAIRO, 30)          # clocks go from 02:00 to 03:00
+    def test_the_hour_a_region_repeats_is_read_as_its_first_and_said(self):
+        # Owner, 2026-11-04: an export by local day has one 01:00 row on 1 Nov in New York; it is read as the first 01:00 (summer time), not refused.
+        notes: list = []
+        out, problems = Z.convert_rows([("2026-11-01", 60 + 30, 5.0, None), ("2026-11-01", 9 * 60, 7.0, None)], NY, CAIRO, 30, notes)
+        self.assertEqual(problems, [])
+        self.assertEqual(len(out), 2)
+        first = converted_first(date(2026, 11, 1), 90, NY, CAIRO)
+        self.assertIn(("2026-11-01", first), [(d, m) for d, m, _o, _a in out])
+        self.assertEqual(len(notes), 1)
+        self.assertIn("2026-11-01", notes[0])
+        self.assertIn("twice", notes[0])
+
+    def test_the_hour_a_region_skips_is_dropped_when_empty_and_refused_when_it_has_volume(self):
+        notes: list = []
+        out, problems = Z.convert_rows([("2027-03-14", 2 * 60 + 30, 0.0, None), ("2027-03-14", 9 * 60, 7.0, None)], NY, CAIRO, 30, notes)
+        self.assertEqual((problems, len(out)), ([], 1))
+        self.assertEqual(len(notes), 1)
+        self.assertIn("2027-03-14", notes[0])
+        _, gap = Z.convert_rows([("2027-03-14", 2 * 60 + 30, 5.0, None)], NY, CAIRO, 30)
         self.assertEqual(len(gap), 1)
         self.assertIn("2027-03-14", gap[0])
-        _, twice = Z.convert_rows([("2026-11-01", 60 + 30, 5.0, None)], NY, CAIRO, 30)            # 01:30 happens twice
-        self.assertEqual(len(twice), 1)
-        self.assertIn("2026-11-01", twice[0])
-        ok, fine = Z.convert_rows([("2026-11-03", 60 + 30, 5.0, None)], NY, CAIRO, 30)
-        self.assertEqual(fine, [])
+        self.assertIn("does not exist", gap[0])
 
-    def test_one_problem_per_day_not_one_per_row(self):
+    def test_an_ordinary_day_near_a_change_is_fine_and_says_nothing(self):
+        notes: list = []
+        out, problems = Z.convert_rows([("2026-11-03", 90, 5.0, None)], NY, CAIRO, 30, notes)
+        self.assertEqual((problems, notes, len(out)), ([], [], 1))
+
+    def test_one_problem_and_one_note_per_day_not_one_per_row(self):
         _, problems = Z.convert_rows([("2027-03-14", m, 1.0, None) for m in (150, 180 - 30, 120)], NY, CAIRO, 30)
         self.assertEqual(len(problems), 1)
+        notes: list = []
+        Z.convert_rows([("2026-11-01", m, 1.0, None) for m in (60, 90)], NY, CAIRO, 30, notes)
+        self.assertEqual(len(notes), 1)
+
+    def test_fixed_eastern_time_has_no_repeated_or_skipped_hour(self):
+        self.assertIn("Etc/GMT+5", Z.NAMES)
+        for day in ("2026-11-01", "2027-03-14"):
+            notes: list = []
+            out, problems = Z.convert_rows([(day, 90, 5.0, None), (day, 150, 5.0, None)], "Etc/GMT+5", CAIRO, 30, notes)
+            self.assertEqual((problems, notes, len(out)), ([], [], 2), day)
+        out, _ = Z.convert_rows([("2026-12-06", 9 * 60, 1.0, None)], "Etc/GMT+5", CAIRO, 30)
+        self.assertEqual(out[0][1], 16 * 60)                                                  # UTC-5 to Cairo (UTC+2 in winter) is 7 h
 
     def test_totals_are_kept_and_collisions_add_up_with_the_handle_time_weighted(self):
         # London goes back at 02:00 on Sun 25 Oct 2026, so two instants of source UTC read 01:00 there.
@@ -134,7 +172,8 @@ class TheGridInAnotherZone(unittest.TestCase):
 class TheFastPathEqualsTheStrictClock(unittest.TestCase):
     def test_every_pair_of_zones_on_every_day_of_a_year(self):
         import random
-        from webapp.clock import ZONES, converted
+        from datetime import datetime, time, timezone
+        from webapp.clock import ZONES
         rng = random.Random(4)
         keys = [k for k, _ in ZONES]
         checked = 0
@@ -143,11 +182,12 @@ class TheFastPathEqualsTheStrictClock(unittest.TestCase):
             day = date(2026, 1, 1) + timedelta(days=rng.randint(0, 364))
             minute = rng.choice(range(0, 1440, 30))
             out, problems = Z.convert_rows([(day.isoformat(), minute, 1.0, None)], a, b, 30)
-            try:
-                want = converted(day, minute, a, b)
-            except ValueError:
-                self.assertEqual(len(problems), 1, (a, b, day, minute))                       # the strict clock refuses it, so do we
+            wall = datetime.combine(day, time()) + timedelta(minutes=minute)
+            aware = wall.replace(tzinfo=ZoneInfo(a), fold=0)
+            if aware.astimezone(timezone.utc).astimezone(ZoneInfo(a)).replace(tzinfo=None) != wall:
+                self.assertEqual(len(problems), 1, (a, b, day, minute))                       # an hour that does not exist, with volume: refused
                 continue
+            want = aware.astimezone(ZoneInfo(b))                                              # an hour that happens twice is read as its first
             self.assertEqual(problems, [], (a, b, day, minute))
             self.assertEqual((out[0][0], out[0][1]), (want.date().isoformat(), want.hour * 60 + want.minute), (a, b, day, minute))
             checked += 1

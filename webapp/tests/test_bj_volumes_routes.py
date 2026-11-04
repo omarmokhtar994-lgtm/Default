@@ -494,11 +494,12 @@ class TheTimeZones(_Volumes):
     def text(self, got):
         return html.unescape(got.get_data(as_text=True))
 
-    def paste(self, monday_at_nine=77, only_monday=False):
+    def paste(self, monday_at_nine=77, only_monday=False, sunday_at_two=0, days=None):
         """A whole week of the program's own intervals: zero everywhere, and 77 on Monday at 09:00 (or just Monday's column, the others left empty)."""
         rows = []
         for t in range(0, 1440, self.step):
-            row = [f"{t // 60:02d}:{t % 60:02d}"] + [monday_at_nine if (t == 9 * 60 and d == 1) else (0 if d == 1 or not only_monday else "") for d in range(7)]
+            row = [f"{t // 60:02d}:{t % 60:02d}"] + [monday_at_nine if (t == 9 * 60 and d == 1) else (sunday_at_two if (t == 2 * 60 and d == 0) else (0 if d == 1 or not only_monday else ""))
+                                                    if days is None or d in days else "" for d in range(7)]
             rows.append("\t".join(str(x) for x in row))
         return "Interval\tSun\tMon\tTue\tWed\tThu\tFri\tSat\n" + "\n".join(rows)
 
@@ -570,10 +571,39 @@ class TheTimeZones(_Volumes):
         client = sign_in(self.app, "plan_a", PASSWORD)
         spring = date(2026, 3, 8)                                                           # 02:00 does not exist in New York that day (a past week, so it is not "future")
         got = client.post("/volumes/actuals/check", data={"program": self.alpha, "csrf_token": token(client), "channel": "Phone", "week": spring.isoformat(),
-                                                          "source_tz": self.NY, "paste": self.paste()})
+                                                          "source_tz": self.NY, "paste": self.paste(sunday_at_two=5)})
         body = self.text(got)
         self.assertIn("Nothing was saved", body)
         self.assertIn("does not exist in New York time", body)
+
+    def test_the_first_of_november_in_new_york_time_is_accepted_with_a_note(self):
+        # Owner, 2026-11-04: "what if I add data for 1st November in EST": the 01:00 hour happens twice that day; it is read as the first.
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        got = client.post("/volumes/actuals/check", data={"program": self.alpha, "csrf_token": token(client), "channel": "Phone", "week": "2026-11-01",
+                                                          "source_tz": self.NY, "paste": self.paste(days=(0,))})
+        body = self.text(got)
+        self.assertIn("The table is good", body)
+        self.assertIn("2026-11-01", body)
+        self.assertIn("happens twice in New York time", body)
+        self.assertIn('name="token"', body)
+
+    def test_an_empty_skipped_hour_is_left_out_with_a_note(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        got = client.post("/volumes/actuals/check", data={"program": self.alpha, "csrf_token": token(client), "channel": "Phone", "week": "2026-03-08",
+                                                          "source_tz": self.NY, "paste": self.paste()})
+        body = self.text(got)
+        self.assertIn("The table is good", body)
+        self.assertIn("skip 02:00", body)
+
+    def test_fixed_eastern_time_is_offered_and_never_has_a_repeated_hour(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        body = self.text(client.get("/volumes", query_string={"program": self.alpha, "tab": "actuals"}))
+        self.assertIn('<option value="Etc/GMT+5">EST (US Eastern, no daylight saving)</option>', body)
+        got = client.post("/volumes/actuals/check", data={"program": self.alpha, "csrf_token": token(client), "channel": "Phone", "week": "2026-11-01",
+                                                          "source_tz": "Etc/GMT+5", "paste": self.paste(days=(0,))})
+        out = self.text(got)
+        self.assertIn("The table is good", out)
+        self.assertNotIn("happens twice", out)
 
     def test_a_draft_is_read_in_the_zone_picked(self):
         import io

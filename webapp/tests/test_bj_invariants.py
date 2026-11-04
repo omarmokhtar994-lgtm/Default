@@ -282,7 +282,8 @@ class TheZonesNeverLoseOrInventContacts(unittest.TestCase):
             a, b = rng.sample(keys, 2)
             step = rng.choice((10, 15, 30, 60))
             start = date(2026, 1, 1) + timedelta(days=rng.randint(0, 330))
-            rows = [((start + timedelta(days=k)).isoformat(), m, float(rng.randint(0, 40)), rng.choice((None, 120.0, 300.0)))
+            aht = rng.choice((None, 120.0, 300.0))                                        # one kind per case: a merged cell averages the handle time over contacts that have one
+            rows = [((start + timedelta(days=k)).isoformat(), m, float(rng.randint(0, 40)), aht)
                     for k in range(rng.randint(1, 9)) for m in range(0, 1440, step)]
             out, problems = Z.convert_rows(rows, a, b, step)
             if problems:

@@ -166,7 +166,9 @@ class VolumeBook:
             return parsed
         out = ParsedVolumes(notes=list(parsed.notes))
         for channel, rows in parsed.rows.items():
-            moved, problems = Z.convert_rows(rows, from_zone, to_zone, self.step(key))
+            said: List[str] = []
+            moved, problems = Z.convert_rows(rows, from_zone, to_zone, self.step(key), said)
+            out.notes += [f"{channel}: {n}" for n in said]
             out.problems += [f"{channel}: {p}" for p in problems]
             if not problems:
                 out.rows[channel] = moved

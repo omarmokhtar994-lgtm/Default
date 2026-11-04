@@ -384,6 +384,11 @@ def register(app, ctx) -> None:
             row_at = add_at - add_at % step
             t -= t % step
             own = [(l, x) for l in held["view"]["lanes"] for x in l["segments"] if x["offset"] == 0]
+            # Phase BK: after midnight, last night's shift that is still running here is the person's shift for this
+            # interval (taking the same name's shift that starts later today), so a record lands on its own day
+            last_night = {l["name"]: (l, x) for l in held["view"]["lanes"] for x in l["segments"]
+                          if x["offset"] == -1 and x["start"] < t + step and t < x["end"]}
+            own = [p for p in own if p[0]["name"] not in last_night] + list(last_night.values())
             # Phase AC: someone marked sick or on leave goes last, so + Add never opens on a person it would refuse
             own.sort(key=lambda p: (p[1]["status"] in ABSENT_STATES,
                                     not (p[1]["start"] < t + step and t < p[1]["end"]), p[1]["start"], p[0]["name"]))
@@ -1249,10 +1254,27 @@ def register(app, ctx) -> None:
         with_whom, why = aux_details(kind, with_whom, request.form.get("why", ""))
         return (dept if lists else ""), with_whom, why
 
+    def _running_day(program: str, on: date, name: str, what: str, start: str) -> date:
+        """Phase BK: the schedule day a "+ Add" at ``start`` belongs to. Last night's shift that is still running at
+        that time (a 6 PM to 3 AM shift at 1:10 AM) is the person's shift for it, not one that starts later on ``on``."""
+        found = re.fullmatch(r"(\d{1,2}):(\d{2})", start)
+        if what == DAY_OFF or not found:
+            return on
+        m = int(found.group(1)) * 60 + int(found.group(2))
+        try:
+            page = _days().page(program, on)
+        except ValueError:
+            return on
+        segs = [x for l in (page or {"view": {"lanes": []}})["view"]["lanes"] if l["name"] == name for x in l["segments"]]
+        if any(x["offset"] == 0 and x["start"] <= m < x["end"] for x in segs):
+            return on
+        return on - timedelta(days=1) if any(x["offset"] == -1 and x["start"] <= m < x["end"] for x in segs) else on
+
     def _add_fields():  # type: ignore[no-untyped-def]
         program, on, name = _day_form()
         minutes = request.form.get("minutes", "0")
-        return program, on, name, request.form.get("what", ""), _typed("from", program, on), \
+        what, start = request.form.get("what", ""), _typed("from", program, on)
+        return program, _running_day(program, on, name, what, start), name, what, start, \
             int(minutes) if minutes.isdigit() else -1, request.form.get("billable") == "1"
 
     def _to_row(program: str, on: Optional[date], view: str, at: str):  # type: ignore[no-untyped-def]

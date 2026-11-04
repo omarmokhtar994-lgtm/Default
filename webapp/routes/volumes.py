@@ -146,9 +146,9 @@ def register(app, ctx) -> None:
             typed_days = _typed_days()
             error = ""
             try:
-                f = vb.forecast(key, channel, week, total=typed_total or None, day_totals=typed_days, today=today)
+                f = vb.forecast(key, channel, week, total=typed_total or None, day_totals=typed_days)
             except ValueError as exc:
-                error, f = str(exc), vb.forecast(key, channel, week, today=today)
+                error, f = str(exc), vb.forecast(key, channel, week)
             if f["error"]:
                 error = error or f["error"]
             day = DAY_NAMES.index(request.values.get("day", "Mon")) if request.values.get("day", "Mon") in DAY_NAMES else 1
@@ -167,11 +167,11 @@ def register(app, ctx) -> None:
         elif tab == "how":
             week = _week(key, request.values.get("week", ""), today - timedelta(weeks=1))
             on = _date(request.values.get("on", ""))
-            r0 = vb.report(key, channel, week, today=today)
+            r0 = vb.report(key, channel, week)
             if on is None or not week <= on <= week + timedelta(days=6):
                 idx = next((i for i, d in enumerate(r0["actual"]) if sum(d)), 0)
                 on = date.fromisoformat(r0["dates"][idx])
-            r = vb.report(key, channel, week, on=on, today=today)
+            r = vb.report(key, channel, week, on=on)
             day = r["dates"].index(on.isoformat()) if on.isoformat() in r["dates"] else 0
             ctxt.update(week=week, weeks=_week_choices(key, today - timedelta(weeks=1), 11, 0), r=r, on=on, day=day,
                         actual_grid=vb.grid(r["actual"], step), otf_grid=vb.grid(r["otf"], step) if r["otf"] else None,
@@ -328,10 +328,10 @@ def register(app, ctx) -> None:
         week = _week(key, request.args.get("week", ""), _today())
         what = request.args.get("what", "calls")
         if what in ("calls", "needs"):
-            f = vb.forecast(key, channel, week, total=request.args.get("total") or None, day_totals=_typed_days(), today=_today())
+            f = vb.forecast(key, channel, week, total=request.args.get("total") or None, day_totals=_typed_days())
             values = f.get("calls") if what == "calls" else f.get("needs")
         elif what in ("actual", "otf"):
-            r = vb.report(key, channel, week, today=_today())
+            r = vb.report(key, channel, week)
             values = r["actual"] if what == "actual" else (r["otf"] and [[None if v is None else round(v, 1) for v in row] for row in r["otf"]])
         else:
             abort(404)
@@ -348,7 +348,7 @@ def register(app, ctx) -> None:
         week = _week(key, request.args.get("week", ""), _today() + timedelta(weeks=1))
         found = {}
         for ch in CHANNELS:
-            f = vb.forecast(key, ch, week, today=_today())
+            f = vb.forecast(key, ch, week)
             if not f["error"] and f.get("needs"):
                 found[ch] = f
         try:

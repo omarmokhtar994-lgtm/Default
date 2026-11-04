@@ -118,5 +118,52 @@ class TheNameAndTheCache(unittest.TestCase):
             self.assertIn(table, QUIET_TABLES)
 
 
+class TheSavedGrid(unittest.TestCase):
+    """What the forecast was when it was saved is kept, so how-did-we-do never moves when history is corrected later."""
+
+    def test_the_grid_and_its_basis_are_kept_with_the_forecast(self):
+        store = fresh()
+        grid = [[0, 5, 7], [1, 2, 3]] + [[0, 0, 0]] * 5
+        store.set_volume_forecast("SAKS", "Phone", "2026-11-08", 18, {}, 1, grid=grid, basis={"weeks": 6, "skip": ["2026-10-04"]})
+        got = store.volume_forecast("SAKS", "Phone", "2026-11-08")
+        self.assertEqual(got["grid"], grid)
+        self.assertEqual(got["basis"], {"weeks": 6, "skip": ["2026-10-04"]})
+
+    def test_an_older_row_without_a_grid_reads_as_none(self):
+        store = fresh()
+        store.set_volume_forecast("SAKS", "Phone", "2026-11-08", 18, {}, 1)
+        got = store.volume_forecast("SAKS", "Phone", "2026-11-08")
+        self.assertIsNone(got["grid"])
+        self.assertEqual(got["basis"], {})
+
+    def test_a_database_made_before_the_grid_column_is_upgraded(self):
+        import sqlite3
+        path = Path(tempfile.mkdtemp()) / "old.db"
+        db = sqlite3.connect(path)
+        db.execute("create table volume_forecasts (program text not null, channel text not null, week_start text not null, total integer not null,"
+                   " days text not null default '{}', user_id integer, at real not null, primary key (program, channel, week_start))")
+        db.execute("insert into volume_forecasts values ('SAKS', 'Phone', '2026-11-01', 5, '{}', 1, 1.0)")
+        db.commit()
+        db.close()
+        store = Store(path)
+        self.assertEqual(store.volume_forecast("SAKS", "Phone", "2026-11-01")["total"], 5)
+        store.set_volume_forecast("SAKS", "Phone", "2026-11-08", 9, {}, 1, grid=[[1]] * 7)
+        self.assertEqual(store.volume_forecast("SAKS", "Phone", "2026-11-08")["grid"], [[1]] * 7)
+
+
+class TheDrivers(unittest.TestCase):
+    def test_drivers_round_trip_and_follow_a_rename(self):
+        store = fresh()
+        self.assertIsNone(store.volume_drivers("OLD"))
+        store.set_volume_drivers("OLD", {"events": [{"id": "e1"}]}, 1)
+        self.assertEqual(store.volume_drivers("OLD"), {"events": [{"id": "e1"}]})
+        store.rename_program("OLD", "NEW", [])
+        self.assertEqual(store.volume_drivers("NEW"), {"events": [{"id": "e1"}]})
+        self.assertIsNone(store.volume_drivers("OLD"))
+
+    def test_the_table_is_quiet(self):
+        self.assertIn("volume_drivers", QUIET_TABLES)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -31,17 +31,17 @@ FALLBACK_AHT = {"Phone": 300.0, "Chat": 420.0, "Email": 600.0}
 
 DEFAULTS: Dict[str, Dict[str, Any]] = {
     "Phone": {"aht": None, "sl_target": 80, "sl_seconds": 20, "occupancy": 88, "shrinkage": 30, "concurrency": 1.0,
-              "forecast_weeks": 8, "band_low": 90, "band_high": 110},
+              "forecast_weeks": 6, "band_low": 90, "band_high": 110},
     "Chat": {"aht": None, "sl_target": 80, "sl_seconds": 30, "occupancy": 85, "shrinkage": 30, "concurrency": 2.0,
-             "forecast_weeks": 8, "band_low": 90, "band_high": 110},
+             "forecast_weeks": 6, "band_low": 90, "band_high": 110},
     "Email": {"aht": None, "sl_target": 80, "sl_seconds": 3600, "occupancy": 85, "shrinkage": 30, "concurrency": 1.0,
-              "forecast_weeks": 8, "band_low": 90, "band_high": 110},
+              "forecast_weeks": 6, "band_low": 90, "band_high": 110},
 }
 RANGES = {"aht": (10, 7200), "sl_target": (50, 100), "sl_seconds": (5, 86400), "occupancy": (50, 100), "shrinkage": (0, 60),
-          "concurrency": (1, 5), "forecast_weeks": (4, 26), "band_low": (50, 100), "band_high": (100, 200)}
+          "concurrency": (1, 5), "forecast_weeks": (3, 26), "band_low": (50, 100), "band_high": (100, 200)}
 LABELS = {"aht": "Handle time (seconds)", "sl_target": "Service level target (%)", "sl_seconds": "Answer within (seconds)",
           "occupancy": "Highest occupancy (%)", "shrinkage": "Shrinkage (%)", "concurrency": "Chats at once per agent",
-          "forecast_weeks": "Weeks of history for the shape", "band_low": "OTF on target from (%)", "band_high": "OTF on target up to (%)"}
+          "forecast_weeks": "Weeks of history (the same weeks for every weekday)", "band_low": "OTF on target from (%)", "band_high": "OTF on target up to (%)"}
 EGYPT = ZoneInfo("Africa/Cairo")
 
 
@@ -137,30 +137,25 @@ class VolumeBook:
         return 1440 // self.step(key)
 
     def history(self, key: str, channel: str, before: date, weeks: int) -> Dict[date, List[float]]:
-        """Volume per interval for each day in the ``weeks`` weeks before ``before`` that has any."""
+        """Volume per interval for each day with any in the ``weeks`` weeks before ``before``, and the older weeks that may step in for one left out."""
         step, slots = self.step(key), self._slots(key)
-        rows = self.store.volume_rows(key, channel, (before - timedelta(weeks=weeks)).isoformat(), (before - timedelta(days=1)).isoformat())
+        rows = self.store.volume_rows(key, channel, (before - timedelta(weeks=weeks + F.EXTRA_LOOKBACK)).isoformat(),
+                                      (before - timedelta(days=1)).isoformat())
         days: Dict[date, List[float]] = {}
         for r in rows:
             grid = days.setdefault(date.fromisoformat(r["day"]), [0.0] * slots)
             grid[min(slots - 1, r["minute"] // step)] += r["offered"]
         return days
 
-    def _aht(self, key: str, channel: str, before: date, weeks: int) -> float:
-        rows = self.store.volume_rows(key, channel, (before - timedelta(weeks=weeks)).isoformat(), (before - timedelta(days=1)).isoformat())
-        weighted = sum(r["aht"] * r["offered"] for r in rows if r["aht"] and r["offered"] > 0)
-        volume = sum(r["offered"] for r in rows if r["aht"] and r["offered"] > 0)
+    def _aht(self, key: str, channel: str, used: Sequence[date]) -> float:
+        """The handle time of the weeks used, weighted by volume; the channel's usual when those weeks carry none."""
+        weighted = volume = 0.0
+        for start in used:
+            for r in self.store.volume_rows(key, channel, start.isoformat(), (start + timedelta(days=6)).isoformat()):
+                if r["aht"] and r["offered"] > 0:
+                    weighted += r["aht"] * r["offered"]
+                    volume += r["offered"]
         return round(weighted / volume, 1) if volume else FALLBACK_AHT[channel]
-
-    def weekly_totals(self, key: str, channel: str, anchor: date, weeks: int) -> List[Tuple[str, int]]:
-        """(week start, calls) for each of the ``weeks`` weeks before the week starting ``anchor`` that has at least five days of data; oldest first."""
-        out = []
-        for k in range(weeks, 0, -1):
-            first = anchor - timedelta(weeks=k)
-            rows = self.store.volume_rows(key, channel, first.isoformat(), (first + timedelta(days=6)).isoformat())
-            if len({r["day"] for r in rows}) >= MIN_DAYS_IN_A_WEEK:
-                out.append((first.isoformat(), int(round(sum(r["offered"] for r in rows)))))
-        return out
 
     # ---------------------------------------------------------------- the forecast
     def _needs(self, key: str, channel: str, calls: List[List[int]], aht: float, s: Dict[str, Any]):
@@ -187,31 +182,42 @@ class VolumeBook:
         return needs, (None if channel == "Email" else service)
 
     def forecast(self, key: str, channel: str, week_start: date, total: Any = None, day_totals: Optional[Dict[int, Any]] = None,
-                 today: Optional[date] = None) -> Dict[str, Any]:
+                 weeks: Optional[int] = None, skip_weeks: Optional[Sequence[str]] = None) -> Dict[str, Any]:
         """The week starting ``week_start`` for one channel: calls per day (Sun to Sat) and interval, from the typed total (else the saved one, else the
-        suggestion), and for service-level programs the people needed and the service level they give."""
+        suggestion), and for service-level programs the people needed and the service level they give. ``weeks`` is how many clean whole weeks the shape
+        is read from (the channel's setting, six unless changed); ``skip_weeks`` are week starts the planner leaves out."""
         if channel not in CHANNELS:
             raise ValueError("The channel is Phone, Chat or Email.")
         s = self.settings(key)[channel]
+        wanted = int(weeks or s["forecast_weeks"])
+        if not 3 <= wanted <= 26:
+            raise ValueError("Weeks of history is 3 to 26.")
         typed = None if total in (None, "") else _whole(total, "The week's calls")
         typed_days = {int(d): _whole(v, "A day's calls") for d, v in (day_totals or {}).items() if v not in (None, "")}
-        step, slots = self.step(key), self._slots(key)
+        step = self.step(key)
         out: Dict[str, Any] = {"channel": channel, "week_start": week_start.isoformat(), "step": step, "days": list(DAY_NAMES), "calls": [],
                                "needs": None, "service": None, "total": None, "source": None, "suggestion": None, "aht": None,
-                               "profile": None, "error": ""}
-        hist = self.history(key, channel, week_start, s["forecast_weeks"])
+                               "profile": None, "weeks": None, "error": ""}
+        hist = self.history(key, channel, week_start, wanted)
         if not hist:
-            out["error"] = f"There is no {channel} history in the {s['forecast_weeks']} weeks before this week. Add actual volumes first."
+            out["error"] = f"There is no {channel} history in the weeks before this week. Add actual volumes first."
             return out
         try:
-            profile = F.build_profile(hist, step, weeks=s["forecast_weeks"], today=week_start)
+            choice = F.choose_weeks(hist, step, week_start, weeks=wanted, exclude_weeks=skip_weeks or ())
         except ValueError as exc:
             out["error"] = str(exc)
             return out
-        weekly = self.weekly_totals(key, channel, week_start, s["forecast_weeks"])
-        found = F.suggest_total([t for _, t in weekly])
+        out["weeks"] = {"wanted": wanted, "used": [d.isoformat() for d in choice.used], "skipped": [list(x) for x in choice.skipped], "short": choice.short}
+        try:
+            profile = F.build_profile(hist, step, choice)
+        except ValueError as exc:
+            out["error"] = str(exc)
+            return out
+        points = [(-((week_start - start).days // 7), int(round(sum(sum(hist[start + timedelta(days=o)]) for o in range(7)
+                                                                    if start + timedelta(days=o) in hist)))) for start in choice.used]
+        found = F.suggest_total(points)
         if found:
-            out["suggestion"] = {"value": found[0], "low": found[1], "high": found[2], "weeks": weekly}
+            out["suggestion"] = {"value": found[0], "low": found[1], "high": found[2], "weeks": [(d.isoformat(), t) for d, (_, t) in zip(choice.used, points)]}
         saved = self.store.volume_forecast(key, channel, week_start.isoformat())
         if typed is not None:
             total_used, source = typed, "typed"
@@ -221,12 +227,12 @@ class VolumeBook:
         elif found:
             total_used, source = found[0], "suggestion"
         else:
-            out["error"] = "There are not enough weeks of history for a suggestion; type the week's calls."
+            out["error"] = "There are not enough clean weeks for a suggestion; type the week's calls."
             out["profile"] = self._profile_note(profile)
             return out
         week = F.forecast_week(total_used, profile, {py_day(d): v for d, v in typed_days.items()})
         calls = [list(week[py_day(d)]) for d in range(7)]
-        aht = float(s["aht"]) if s["aht"] else self._aht(key, channel, week_start, s["forecast_weeks"])
+        aht = float(s["aht"]) if s["aht"] else self._aht(key, channel, choice.used)
         out.update(calls=calls, total=total_used, source=source, aht=aht, profile=self._profile_note(profile),
                    day_totals={d: sum(calls[d]) for d in range(7)})
         if self.uses_erlang(key):
@@ -234,9 +240,8 @@ class VolumeBook:
         return out
 
     def _profile_note(self, p: F.Profile) -> Dict[str, Any]:
-        return {"weeks_used": {DAY_NAMES[site_day(w)]: n for w, n in p.weeks_used.items()},
-                "thin": [DAY_NAMES[site_day(w)] for w in p.thin], "closed": [DAY_NAMES[site_day(w)] for w in p.closed],
-                "excluded": [list(x) for x in p.excluded]}
+        return {"weeks_used": {DAY_NAMES[site_day(w)]: n for w, n in p.weeks_used.items()}, "used": list(p.used),
+                "skipped": [list(x) for x in p.skipped], "closed": [DAY_NAMES[site_day(w)] for w in p.closed], "short": p.short}
 
     def save_forecast(self, key: str, channel: str, week_start: date, total: Any, day_totals: Dict[int, Any], user_id: Optional[int]) -> None:
         if channel not in CHANNELS:
@@ -315,18 +320,17 @@ class VolumeBook:
         aht = [[(aht_sum[d][i] / aht_vol[d][i]) if aht_vol[d][i] > 0 else None for i in range(slots)] for d in range(7)]
         return [[int(round(v)) for v in day] for day in offered], aht, dates  # type: ignore[return-value]
 
-    def _otf_week(self, key: str, channel: str, week_start: date, today: date) -> Optional[Dict[str, Any]]:
+    def _otf_week(self, key: str, channel: str, week_start: date) -> Optional[Dict[str, Any]]:
         saved = self.store.volume_forecast(key, channel, week_start.isoformat())
         if not saved:
             return None
-        f = self.forecast(key, channel, week_start, total=saved["total"], day_totals={int(d): v for d, v in saved["days"].items()}, today=today)
+        f = self.forecast(key, channel, week_start, total=saved["total"], day_totals={int(d): v for d, v in saved["days"].items()})
         return None if f["error"] else f
 
-    def report(self, key: str, channel: str, week_start: date, on: Optional[date] = None, today: Optional[date] = None) -> Dict[str, Any]:
+    def report(self, key: str, channel: str, week_start: date, on: Optional[date] = None) -> Dict[str, Any]:
         """How the week starting ``week_start`` went for one channel: offered over forecast, the trend, and for the day ``on`` the staffing lines."""
         if channel not in CHANNELS:
             raise ValueError("The channel is Phone, Chat or Email.")
-        today = today or _today()
         s = self.settings(key)[channel]
         step = self.step(key)
         actual, actual_aht, dates = self._actual(key, channel, week_start)
@@ -337,7 +341,7 @@ class VolumeBook:
                                "trend": [], "staffing": None, "uses_erlang": self.uses_erlang(key), "settings": s}
         if not actual_total:
             out["note"] = "No actual volume has been uploaded for this week."
-        fc = self._otf_week(key, channel, week_start, today)
+        fc = self._otf_week(key, channel, week_start)
         if fc is None and not out["note"]:
             out["note"] = "No forecast was saved for this week, so there is no offered-over-forecast figure. Save one on the Forecast tab."
         if fc is not None and actual_total:
@@ -349,7 +353,7 @@ class VolumeBook:
             out["week_otf"] = F.otf_total([v for d in actual for v in d], [v for d in calls for v in d])
         for k in range(TREND_WEEKS - 1, -1, -1):
             wk = week_start - timedelta(weeks=k)
-            ff = fc if k == 0 else self._otf_week(key, channel, wk, today)
+            ff = fc if k == 0 else self._otf_week(key, channel, wk)
             if ff is None:
                 continue
             act = actual if k == 0 else self._actual(key, channel, wk)[0]
@@ -376,7 +380,7 @@ class VolumeBook:
         base.update(required=required, planned=planned, floor=floor)
         if self.uses_erlang(key) and d is not None:
             step_s = step * 60
-            fallback = float(s["aht"]) if s["aht"] else self._aht(key, channel, on - timedelta(days=1), s["forecast_weeks"])
+            fallback = float(s["aht"]) if s["aht"] else FALLBACK_AHT[channel]
             at, sl = [], []
             for i in range(slots):
                 calls = actual[d][i]

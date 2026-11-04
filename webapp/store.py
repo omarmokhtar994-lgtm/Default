@@ -186,9 +186,17 @@ create table if not exists volume_forecasts (
     week_start text not null,
     total integer not null,
     days text not null default '{}',
+    grid text not null default '',
+    basis text not null default '',
     user_id integer,
     at real not null,
     primary key (program, channel, week_start)
+);
+create table if not exists volume_drivers (
+    program text primary key,
+    drivers text not null,
+    user_id integer,
+    at real not null
 );
 create table if not exists volume_settings (
     program text primary key,
@@ -454,7 +462,7 @@ _WRITE = re.compile(r"\s*(?:insert\s+(?:or\s+\w+\s+)?into|update(?:\s+or\s+\w+)?
 QUIET_TABLES = frozenset({"users", "events", "notify_items", "notify_posts", "notify_settings", "change_requests",
                           "swap_requests", "leave_requests", "day_actions", "runs", "incidents", "app_settings",
                           "role_permissions", "leave_balances", "revoked_sessions",
-                          "volume_actuals", "volume_forecasts", "volume_settings"})  # Phase BI: no day is built from volumes
+                          "volume_actuals", "volume_forecasts", "volume_settings", "volume_drivers"})  # Phase BI: no day is built from volumes
 _GENERATION_LOCK = threading.Lock()
 
 
@@ -488,6 +496,11 @@ class Store:
                 db.execute("alter table users add column roster_name text not null default ''")
             # Phase AS: how the program counts billable time against the intervals: '' or 'interval' (billable aux stays on
             # the floor, the default), 'sl' (service level) or 'volume' (volume weighted): billable time counts there
+            # Phase BJ: a saved forecast keeps its grid and the basis it was made on (databases made by Phase BI have neither)
+            have_vf = {row["name"] for row in db.execute("pragma table_info(volume_forecasts)")}
+            for name in ("grid", "basis"):
+                if name not in have_vf:
+                    db.execute(f"alter table volume_forecasts add column {name} text not null default ''")
             have = {row["name"] for row in db.execute("pragma table_info(programs)")}
             if "measure" not in have:
                 db.execute("alter table programs add column measure text not null default ''")
@@ -1058,19 +1071,34 @@ class Store:
             db.execute("insert or replace into volume_settings (program, settings, user_id, at) values (?, ?, ?, ?)",
                        (program, json.dumps(settings, sort_keys=True), user_id, time.time()))
 
-    def set_volume_forecast(self, program: str, channel: str, week_start: str, total: int, days: Dict[str, int],
-                            user_id: Optional[int]) -> None:
+    def volume_drivers(self, program: str) -> Optional[Dict[str, Any]]:
         with self._db() as db:
-            db.execute("insert or replace into volume_forecasts (program, channel, week_start, total, days, user_id, at)"
-                       " values (?, ?, ?, ?, ?, ?, ?)", (program, channel, week_start, int(total), json.dumps(days, sort_keys=True),
-                                                         user_id, time.time()))
+            row = db.execute("select drivers from volume_drivers where program = ?", (program,)).fetchone()
+        try:
+            return json.loads(row[0]) if row else None
+        except ValueError:
+            return None
+
+    def set_volume_drivers(self, program: str, drivers: Dict[str, Any], user_id: Optional[int]) -> None:
+        with self._db() as db:
+            db.execute("insert or replace into volume_drivers (program, drivers, user_id, at) values (?, ?, ?, ?)",
+                       (program, json.dumps(drivers, sort_keys=True), user_id, time.time()))
+
+    def set_volume_forecast(self, program: str, channel: str, week_start: str, total: int, days: Dict[str, int], user_id: Optional[int],
+                            grid: Optional[List[List[int]]] = None, basis: Optional[Dict[str, Any]] = None) -> None:
+        with self._db() as db:
+            db.execute("insert or replace into volume_forecasts (program, channel, week_start, total, days, grid, basis, user_id, at)"
+                       " values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                       (program, channel, week_start, int(total), json.dumps(days, sort_keys=True), json.dumps(grid) if grid else "",
+                        json.dumps(basis, sort_keys=True) if basis else "", user_id, time.time()))
 
     def _forecast_row(self, row: Any) -> Dict[str, Any]:
         found = dict(row)
-        try:
-            found["days"] = json.loads(found["days"] or "{}")
-        except ValueError:
-            found["days"] = {}
+        for name, empty in (("days", {}), ("grid", None), ("basis", {})):
+            try:
+                found[name] = json.loads(found[name]) if found.get(name) else empty
+            except ValueError:
+                found[name] = empty
         return found
 
     def volume_forecast(self, program: str, channel: str, week_start: str) -> Optional[Dict[str, Any]]:
@@ -1905,7 +1933,7 @@ class Store:
             # what counts as shrinkage (Phase AF) goes with the name; a name with its own mapping keeps it
             db.execute("update or ignore shrinkage_maps set program = ? where program = ?", (new, old))
             db.execute("delete from shrinkage_maps where program = ?", (old,))
-            for table in ("volume_actuals", "volume_forecasts", "volume_settings"):  # Phase BI: volumes go with the name too
+            for table in ("volume_actuals", "volume_forecasts", "volume_settings", "volume_drivers"):  # Phase BI: volumes go with the name too
                 db.execute(f"update or ignore {table} set program = ? where program = ?", (new, old))
                 db.execute(f"delete from {table} where program = ?", (old,))
             db.execute("update or ignore operating_days set program = ? where program = ?", (new, old))

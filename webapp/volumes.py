@@ -6,21 +6,25 @@ into calls per day and interval from the program's own last weeks (``webapp/fore
 for programs counted by service level or volume weighted (``webapp/erlang.py``), and reports how a week went: offered over forecast, the trend of
 that over the weeks, and for one day the calls, the people the system asked for, the people Erlang says the calls needed, and who was there.
 
-Everything is computed when a page is opened from the stored actuals and the typed week totals; no forecast grid is stored. Days run in the input
-sheet's order (Sun to Sat); intervals are the program's interval (30 minutes unless its schedule says otherwise). The people needed are the people
-on the floor: the engine adds the program's shrinkage itself when it builds the schedule, so the requirement workbook is not divided by it.
+A suggestion is computed when a page is opened from the stored actuals (the same N whole weeks for every weekday), the planner's events, AI periods,
+growth rates and last year's totals (``webapp/drivers.py``). A forecast the planner saves keeps its own grid and the weeks and handle time behind it
+(Phase BJ), so later changes to the history, events or settings do not move it; the people needed are always worked out from the grid and the
+current settings. Days run in the input sheet's order (Sun to Sat); intervals are the program's interval (30 minutes unless its schedule says
+otherwise). The people needed are the people on the floor: the engine adds the program's shrinkage itself when it builds the schedule, so the
+requirement workbook is not divided by it.
 """
 from __future__ import annotations
 
 import io
 import math
+from dataclasses import replace
 from datetime import date, datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 from zoneinfo import ZoneInfo
 
 from openpyxl import Workbook
 
-from . import erlang, forecast as F
+from . import drivers as D, erlang, forecast as F
 from .channel_template import _head, _title
 from .volumes_io import CHANNELS, DAY_NAMES, ParsedVolumes
 
@@ -157,6 +161,31 @@ class VolumeBook:
                     volume += r["offered"]
         return round(weighted / volume, 1) if volume else FALLBACK_AHT[channel]
 
+    # ---------------------------------------------------------------- what is known about the weeks ahead
+    def drivers(self, key: str) -> Dict[str, Any]:
+        """Events, AI periods, growth rates, last year's totals and the weeks left out, for a program (empty until something is entered)."""
+        return D.clean_document(self.store.volume_drivers(key))
+
+    def _keep(self, key: str, doc: Dict[str, Any], user_id: Optional[int]) -> Dict[str, Any]:
+        self.store.set_volume_drivers(key, doc, user_id)
+        return doc
+
+    def add_driver(self, key: str, which: str, row: Dict[str, Any], user_id: Optional[int]) -> Dict[str, Any]:
+        return self._keep(key, D.add_row(self.drivers(key), which, row), user_id)
+
+    def remove_driver(self, key: str, which: str, ident: str, user_id: Optional[int]) -> Dict[str, Any]:
+        return self._keep(key, D.remove_row(self.drivers(key), which, ident), user_id)
+
+    def set_growth(self, key: str, yoy: Any, method: Any, user_id: Optional[int]) -> Dict[str, Any]:
+        return self._keep(key, D.with_growth(self.drivers(key), yoy, method), user_id)
+
+    def set_last_year(self, key: str, week_start: date, values: Any, user_id: Optional[int]) -> Dict[str, Any]:
+        """Last year's totals for the same week as ``week_start`` (52 weeks earlier, so the same weekdays)."""
+        return self._keep(key, D.with_last_year(self.drivers(key), (week_start - timedelta(days=364)).isoformat(), values), user_id)
+
+    def set_skip_weeks(self, key: str, weeks: Any, user_id: Optional[int]) -> Dict[str, Any]:
+        return self._keep(key, D.with_skip_weeks(self.drivers(key), weeks), user_id)
+
     # ---------------------------------------------------------------- the forecast
     def _needs(self, key: str, channel: str, calls: List[List[int]], aht: float, s: Dict[str, Any]):
         step_s = self.step(key) * 60
@@ -181,60 +210,194 @@ class VolumeBook:
             service.append(s_row)
         return needs, (None if channel == "Email" else service)
 
-    def forecast(self, key: str, channel: str, week_start: date, total: Any = None, day_totals: Optional[Dict[int, Any]] = None,
-                 weeks: Optional[int] = None, skip_weeks: Optional[Sequence[str]] = None) -> Dict[str, Any]:
-        """The week starting ``week_start`` for one channel: calls per day (Sun to Sat) and interval, from the typed total (else the saved one, else the
-        suggestion), and for service-level programs the people needed and the service level they give. ``weeks`` is how many clean whole weeks the shape
-        is read from (the channel's setting, six unless changed); ``skip_weeks`` are week starts the planner leaves out."""
-        if channel not in CHANNELS:
-            raise ValueError("The channel is Phone, Chat or Email.")
-        s = self.settings(key)[channel]
-        wanted = int(weeks or s["forecast_weeks"])
+    @staticmethod
+    def _weeks_wanted(s: Dict[str, Any], weeks: Any) -> int:
+        try:
+            wanted = int(s["forecast_weeks"] if weeks is None else weeks)
+        except (TypeError, ValueError):
+            raise ValueError("Weeks of history is 3 to 26.") from None
         if not 3 <= wanted <= 26:
             raise ValueError("Weeks of history is 3 to 26.")
-        typed = None if total in (None, "") else _whole(total, "The week's calls")
-        typed_days = {int(d): _whole(v, "A day's calls") for d, v in (day_totals or {}).items() if v not in (None, "")}
+        return wanted
+
+    @staticmethod
+    def _dates(week_start: date) -> List[date]:
+        """The seven dates of the week in the input sheet's order (Sunday first)."""
+        out: List[Optional[date]] = [None] * 7
+        for k in range(7):
+            d = week_start + timedelta(days=k)
+            out[site_day(d.weekday())] = d
+        return out  # type: ignore[return-value]
+
+    def _read(self, key: str, channel: str, week_start: date, wanted: int, skip: Sequence[str], out: Optional[Dict[str, Any]] = None):
+        """The history, the weeks chosen from it, their shape and their weekly totals. ValueError in words when the history cannot carry a shape; the
+        weeks chosen are put into ``out`` first, so they are shown even then."""
         step = self.step(key)
-        out: Dict[str, Any] = {"channel": channel, "week_start": week_start.isoformat(), "step": step, "days": list(DAY_NAMES), "calls": [],
-                               "needs": None, "service": None, "total": None, "source": None, "suggestion": None, "aht": None,
-                               "profile": None, "weeks": None, "error": ""}
         hist = self.history(key, channel, week_start, wanted)
         if not hist:
-            out["error"] = f"There is no {channel} history in the weeks before this week. Add actual volumes first."
-            return out
-        try:
-            choice = F.choose_weeks(hist, step, week_start, weeks=wanted, exclude_weeks=skip_weeks or ())
-        except ValueError as exc:
-            out["error"] = str(exc)
-            return out
-        out["weeks"] = {"wanted": wanted, "used": [d.isoformat() for d in choice.used], "skipped": [list(x) for x in choice.skipped], "short": choice.short}
-        try:
-            profile = F.build_profile(hist, step, choice)
-        except ValueError as exc:
-            out["error"] = str(exc)
-            return out
+            raise ValueError(f"There is no {channel} history in the weeks before this week. Add actual volumes first.")
+        choice = F.choose_weeks(hist, step, week_start, weeks=wanted, exclude_weeks=skip)
+        if out is not None:
+            out["weeks"] = {"wanted": wanted, "used": [d.isoformat() for d in choice.used], "skipped": [list(x) for x in choice.skipped], "short": choice.short}
+        profile = F.build_profile(hist, step, choice)
         points = [(-((week_start - start).days // 7), int(round(sum(sum(hist[start + timedelta(days=o)]) for o in range(7)
-                                                                    if start + timedelta(days=o) in hist)))) for start in choice.used]
+                                                                  if start + timedelta(days=o) in hist)))) for start in choice.used]
+        return hist, choice, profile, points
+
+    @staticmethod
+    def _history_base(channel: str, points: Sequence[Tuple[int, int]], doc: Dict[str, Any], notes: List[str]):
+        """(method, value, low, high) for the week from the history alone: the measured trend, or the typed year-over-year rate when the planner chose it."""
         found = F.suggest_total(points)
-        if found:
-            out["suggestion"] = {"value": found[0], "low": found[1], "high": found[2], "weeks": [(d.isoformat(), t) for d, (_, t) in zip(choice.used, points)]}
-        saved = self.store.volume_forecast(key, channel, week_start.isoformat())
-        if typed is not None:
-            total_used, source = typed, "typed"
-        elif saved:
-            total_used, source = saved["total"], "saved"
-            typed_days = typed_days or {int(d): v for d, v in saved["days"].items()}
-        elif found:
-            total_used, source = found[0], "suggestion"
-        else:
-            out["error"] = "There are not enough clean weeks for a suggestion; type the week's calls."
-            out["profile"] = self._profile_note(profile)
+        method, value, low, high = "trend", (found[0] if found else None), (found[1] if found else None), (found[2] if found else None)
+        if doc["growth"]["method"] == "growth":
+            yoy = doc["growth"]["yoy"].get(channel)
+            if yoy is None:
+                notes.append(f"The year-over-year rate is chosen but none is typed for {channel}, so its measured trend is used.")
+            else:
+                method, value = "growth", int(round(D.growth_level(points, yoy)))
+                if found and found[0] > 0:                               # the history's own spread, carried to the grown level
+                    low, high = int(round(value * found[1] / found[0])), int(round(value * found[2] / found[0]))
+        return method, value, low, high
+
+    def _moved_in(self, key: str, channel: str, week_start: date, dates: Sequence[date], doc: Dict[str, Any], skip: Sequence[str],
+                  shapes: Sequence[float], notes: List[str]) -> List[float]:
+        """Contacts per day that AI takes off other channels and that arrive on ``channel``: the share of what each source loses, from the source's own
+        history-based forecast. A destination day with no hours of its own takes none."""
+        moved = [0.0] * 7
+        for src in CHANNELS:
+            rows = [r for r in doc["ai"] if r["channel"] == src and r["move_to"] == channel and src != channel]
+            if not rows:
+                continue
+            ss = self.settings(key)[src]
+            try:
+                _, _, prof, pts = self._read(key, src, week_start, int(ss["forecast_weeks"]), skip)
+            except ValueError:
+                notes.append(f"{src} has no usable history, so nothing is counted as moving from {src} to {channel}.")
+                continue
+            _, base, _, _ = self._history_base(src, pts, doc, notes)
+            if not base:
+                continue
+            events = D.day_factors(doc["events"], [], src, dates)
+            before_ai = [base * prof.day_shares[py_day(d)] * events[d] for d in range(7)]
+            got = D.ai_moves(rows, src, dates, before_ai).get(channel)
+            if got:
+                moved = [a + b for a, b in zip(moved, got)]
+        for d in range(7):
+            if moved[d] > 0 and shapes[d] <= 0:
+                notes.append(f"{channel} has no hours on {DAY_NAMES[d]}, so contacts moved from another channel for that day are not counted.")
+                moved[d] = 0.0
+        return moved
+
+    def _suggest(self, key: str, channel: str, week_start: date, profile: F.Profile, points: Sequence[Tuple[int, int]], doc: Dict[str, Any],
+                 skip: Sequence[str], kind: str, dates: Sequence[date], notes: List[str]):
+        """(suggestion, last_year, why not): the week's calls from the history (or last year), then every event and AI period in turn, then what AI moves
+        in from other channels."""
+        yoy = doc["growth"]["yoy"].get(channel)
+        ly_week = (week_start - timedelta(days=364)).isoformat()
+        raw = doc["last_year"].get(ly_week, {}).get(channel)
+        last_year = None if raw is None else {"week": ly_week, "total": raw, "grown": D.last_year_total(raw, yoy), "yoy": yoy}
+        method, value, low, high = self._history_base(channel, points, doc, notes)
+        if kind == "last_year":
+            if last_year is None:
+                return None, last_year, (f"There is no last-year figure for {channel}: type last year's total for the week starting {ly_week}, "
+                                         f"or start from the history.")
+            method, value, low, high = "last_year", last_year["grown"], None, None
+        if value is None:
+            return None, last_year, "There are not enough clean weeks for a suggestion; type the week's calls."
+        shares = [profile.day_shares[py_day(d)] for d in range(7)]
+        wf = D.waterfall(value, shares, dates, channel, doc["events"], doc["ai"])
+        moved = self._moved_in(key, channel, week_start, dates, doc, skip, [sum(profile.shares[py_day(d)]) for d in range(7)], notes)
+        move_total = int(round(sum(moved)))
+        steps = list(wf["steps"])
+        if move_total:
+            steps.append({"kind": "move", "id": None, "name": "Moved in from other channels", "change": None, "days": [d for d in range(7) if moved[d] > 0],
+                          "delta": move_total, "total": wf["total"] + move_total})
+        ratio = wf["total"] / value if value else 1.0
+        sug = {"base": value, "method": method, "final": wf["total"] + move_total, "value": wf["total"] + move_total, "steps": steps,
+               "low": None if low is None else int(round(low * ratio)) + move_total, "high": None if high is None else int(round(high * ratio)) + move_total,
+               "weights": [value * shares[d] * wf["factors"][d] + moved[d] for d in range(7)]}
+        return sug, last_year, ""
+
+    def forecast(self, key: str, channel: str, week_start: date, total: Any = None, day_totals: Optional[Dict[int, Any]] = None,
+                 weeks: Any = None, skip_weeks: Optional[Sequence[str]] = None, base: str = "history") -> Dict[str, Any]:
+        """The week starting ``week_start`` for one channel: calls per day (Sun to Sat) and interval, from the typed total (else the saved forecast, else the
+        suggestion), and for service-level programs the people needed and the service level they give.
+
+        ``weeks`` is how many clean whole weeks every weekday is read from (the channel's setting, six unless changed); ``skip_weeks`` are week starts the
+        planner leaves out (the stored ones unless given). ``base`` is where the suggestion starts: the "history" (its trend, or the year-over-year rate when
+        chosen) or "last_year". Events and AI periods change the suggestion step by step; with a typed total they only shape its days. A saved forecast
+        is returned as it was saved."""
+        if channel not in CHANNELS:
+            raise ValueError("The channel is Phone, Chat or Email.")
+        if base not in ("history", "last_year"):
+            raise ValueError("Start from the history or from last year.")
+        s = self.settings(key)[channel]
+        wanted = self._weeks_wanted(s, weeks)
+        typed = None if total in (None, "") else _whole(total, "The week's calls")
+        typed_days = {int(d): _whole(v, "A day's calls") for d, v in (day_totals or {}).items() if v not in (None, "")}
+        step, slots = self.step(key), self._slots(key)
+        out: Dict[str, Any] = {"channel": channel, "week_start": week_start.isoformat(), "step": step, "days": list(DAY_NAMES), "calls": [],
+                               "needs": None, "service": None, "total": None, "source": None, "suggestion": None, "aht": None, "profile": None,
+                               "weeks": None, "last_year": None, "last_year_week": (week_start - timedelta(days=364)).isoformat(), "notes": [],
+                               "day_factors": [1.0] * 7, "base": base, "error": ""}
+        try:
+            doc = self.drivers(key)
+        except ValueError:
+            out["error"] = "The events and AI periods saved for this program could not be read. Ask for them to be cleared and enter them again."
             return out
-        week = F.forecast_week(total_used, profile, {py_day(d): v for d, v in typed_days.items()})
-        calls = [list(week[py_day(d)]) for d in range(7)]
-        aht = float(s["aht"]) if s["aht"] else self._aht(key, channel, choice.used)
-        out.update(calls=calls, total=total_used, source=source, aht=aht, profile=self._profile_note(profile),
-                   day_totals={d: sum(calls[d]) for d in range(7)})
+        skip = [str(x) for x in (doc["skip_weeks"] if skip_weeks is None else skip_weeks)]
+        out["skip_weeks"] = sorted(skip)
+        dates = self._dates(week_start)
+        saved = self.store.volume_forecast(key, channel, week_start.isoformat())
+        grid = saved.get("grid") if saved else None
+        grid_ok = bool(grid) and len(grid) == 7 and all(len(r) == slots for r in grid)
+        if saved and grid and not grid_ok:
+            out["notes"].append("The forecast saved for this week was made at a different interval, so it is rebuilt from its saved week total.")
+        use_saved = typed is None and not typed_days and grid_ok
+        problem, profile, choice, points = "", None, None, []
+        try:
+            _, choice, profile, points = self._read(key, channel, week_start, wanted, skip, out)
+        except ValueError as exc:
+            problem = str(exc)
+        sug, why_not = None, problem
+        if profile is not None:
+            sug, out["last_year"], why_not = self._suggest(key, channel, week_start, profile, points, doc, skip, base, dates, out["notes"])
+            if sug:
+                out["suggestion"] = {**{k: v for k, v in sug.items() if k != "weights"}, "weeks": [(d.isoformat(), t) for d, (_, t) in zip(choice.used, points)]}
+        if use_saved:
+            basis = saved.get("basis") or {}
+            calls, total_used, source = [list(map(int, r)) for r in grid], int(saved["total"]), "saved"
+            out["weeks"] = basis.get("weeks") or out["weeks"]
+            out["profile"] = basis.get("profile")
+            out["day_factors"] = basis.get("day_factors") or out["day_factors"]
+            aht = float(s["aht"]) if s["aht"] else float(basis.get("aht") or FALLBACK_AHT[channel])
+        else:
+            if profile is None:
+                out["error"] = problem
+                return out
+            factors = D.day_factors(doc["events"], doc["ai"], channel, dates)
+            shape = [profile.day_shares[py_day(d)] * factors[d] for d in range(7)]
+            if typed is not None:
+                total_used, source, weights = typed, "typed", shape
+                out["day_factors"] = factors
+            elif saved:
+                total_used, source, weights = int(saved["total"]), "saved", [profile.day_shares[py_day(d)] for d in range(7)]
+                typed_days = typed_days or {int(d): v for d, v in saved["days"].items()}
+            elif sug:
+                total_used, source, weights = sug["final"], "suggestion", sug["weights"]
+                out["day_factors"] = factors
+            else:
+                out["error"] = why_not
+                out["profile"] = self._profile_note(profile)
+                return out
+            if sum(weights) <= 0:
+                weights = [profile.day_shares[py_day(d)] for d in range(7)]
+            shaped = replace(profile, day_shares={py_day(d): weights[d] for d in range(7)})
+            week = F.forecast_week(total_used, shaped, {py_day(d): v for d, v in typed_days.items()})
+            calls = [list(week[py_day(d)]) for d in range(7)]
+            aht = float(s["aht"]) if s["aht"] else self._aht(key, channel, choice.used)
+            out["profile"] = self._profile_note(profile)
+        out.update(calls=calls, total=total_used, source=source, aht=aht, day_totals={d: sum(calls[d]) for d in range(7)})
         if self.uses_erlang(key):
             out["needs"], out["service"] = self._needs(key, channel, calls, aht, s)
         return out
@@ -243,14 +406,22 @@ class VolumeBook:
         return {"weeks_used": {DAY_NAMES[site_day(w)]: n for w, n in p.weeks_used.items()}, "used": list(p.used),
                 "skipped": [list(x) for x in p.skipped], "closed": [DAY_NAMES[site_day(w)] for w in p.closed], "short": p.short}
 
-    def save_forecast(self, key: str, channel: str, week_start: date, total: Any, day_totals: Dict[int, Any], user_id: Optional[int]) -> None:
+    def save_forecast(self, key: str, channel: str, week_start: date, total: Any, day_totals: Dict[int, Any], user_id: Optional[int],
+                      weeks: Any = None, skip_weeks: Optional[Sequence[str]] = None) -> None:
+        """Keep the forecast as it is now: the week's total, the typed days, and the calls per day and interval with the weeks, handle time and drivers
+        behind them, so later changes to the history, events or settings do not move it. Refused without history to spread the total over."""
         if channel not in CHANNELS:
             raise ValueError("The channel is Phone, Chat or Email.")
         n = _whole(total, "The week's calls")
         days = {str(int(d)): _whole(v, "A day's calls") for d, v in (day_totals or {}).items() if v not in (None, "")}
         if sum(days.values()) > n:
             raise ValueError("The days add up to more than the week's calls.")
-        self.store.set_volume_forecast(key, channel, week_start.isoformat(), n, days, user_id)
+        f = self.forecast(key, channel, week_start, total=n, day_totals={int(d): v for d, v in days.items()}, weeks=weeks, skip_weeks=skip_weeks)
+        if f["error"]:
+            raise ValueError(f["error"])
+        basis = {"weeks": f["weeks"], "profile": f["profile"], "aht": f["aht"], "day_factors": f["day_factors"], "step": f["step"],
+                 "from": f["suggestion"]["method"] if f["suggestion"] else ""}
+        self.store.set_volume_forecast(key, channel, week_start.isoformat(), n, days, user_id, grid=f["calls"], basis=basis)
 
     # ---------------------------------------------------------------- grids to copy
     def grid(self, values: Sequence[Sequence[Any]], step: int, empty: str = "") -> List[List[Any]]:
@@ -321,10 +492,14 @@ class VolumeBook:
         return [[int(round(v)) for v in day] for day in offered], aht, dates  # type: ignore[return-value]
 
     def _otf_week(self, key: str, channel: str, week_start: date) -> Optional[Dict[str, Any]]:
+        """The forecast saved for the week, as it was saved (its own grid); one saved before grids were kept is rebuilt from today's history."""
         saved = self.store.volume_forecast(key, channel, week_start.isoformat())
         if not saved:
             return None
-        f = self.forecast(key, channel, week_start, total=saved["total"], day_totals={int(d): v for d, v in saved["days"].items()})
+        grid = saved.get("grid")
+        if grid and len(grid) == 7 and all(len(r) == self._slots(key) for r in grid):
+            return {"calls": [list(map(int, r)) for r in grid], "total": int(saved["total"])}
+        f = self.forecast(key, channel, week_start)
         return None if f["error"] else f
 
     def report(self, key: str, channel: str, week_start: date, on: Optional[date] = None) -> Dict[str, Any]:

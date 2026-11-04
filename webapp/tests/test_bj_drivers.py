@@ -198,5 +198,37 @@ class TheOverlapAndTheParts(unittest.TestCase):
             D.clean_document({"events": [{"kind": "Promotion"}]})
 
 
+class TheWaterfall(unittest.TestCase):
+    EVEN = [1 / 7] * 7
+
+    def test_one_driver_at_a_time_and_each_step_says_what_it_added(self):
+        w = D.waterfall(7000, self.EVEN, WEEK, "Phone", [{**event(), "id": "1"}], [])
+        self.assertEqual(w["total"], 7750)                                          # 3 of 7 days at +25 %
+        self.assertEqual([(s["kind"], s["id"], s["name"], s["days"], s["delta"], s["total"]) for s in w["steps"]],
+                         [("event", "1", "Black Friday", [2, 3, 4], 750, 7750)])
+        self.assertEqual([round(f, 6) for f in w["factors"]], [1, 1, 1.25, 1.25, 1.25, 1, 1])
+
+    def test_the_steps_add_up_to_the_total_exactly(self):
+        rows = [{**event(channels=["Chat"], change=10, start="2026-11-08", end="2026-11-14"), "id": "1"}]
+        ai_rows = [{**ai(start="2026-11-08", end="2026-11-14", change=-10), "id": "2"}]
+        w = D.waterfall(7001, self.EVEN, WEEK, "Chat", rows, ai_rows)
+        self.assertEqual([s["kind"] for s in w["steps"]], ["event", "ai"])
+        self.assertEqual(7001 + sum(s["delta"] for s in w["steps"]), w["total"])
+        self.assertEqual(w["total"], round(7001 * 1.1 * 0.9))
+
+    def test_a_driver_that_misses_the_week_or_the_channel_is_not_a_step(self):
+        w = D.waterfall(7000, self.EVEN, WEEK, "Email", [{**event(), "id": "1"}], [{**ai(start="2027-01-01", end="2027-01-31"), "id": "2"}])
+        self.assertEqual((w["steps"], w["total"], w["factors"]), ([], 7000, [1.0] * 7))
+
+    def test_a_closed_day_adds_nothing(self):
+        shares = [0, 1 / 6, 1 / 6, 1 / 6, 1 / 6, 1 / 6, 1 / 6]
+        w = D.waterfall(6000, shares, WEEK, "Phone", [{**event(start="2026-11-08", end="2026-11-08", change=50), "id": "1"}], [])
+        self.assertEqual((w["total"], w["steps"][0]["delta"]), (6000, 0))
+
+    def test_shares_and_days_must_match(self):
+        with self.assertRaises(ValueError):
+            D.waterfall(100, [1.0], WEEK, "Phone", [], [])
+
+
 if __name__ == "__main__":
     unittest.main()

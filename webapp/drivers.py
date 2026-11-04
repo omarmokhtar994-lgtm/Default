@@ -397,3 +397,29 @@ def with_skip_weeks(doc: Dict[str, Any], weeks: Any) -> Dict[str, Any]:
     out = copy.deepcopy(clean_document(doc))
     out["skip_weeks"] = _weeks(weeks, strict=True)
     return out
+
+
+# --- a week, one driver at a time ----------------------------------------------------------------------------------------------------
+
+def waterfall(base: int, shares: Sequence[float], days: Sequence[date], channel: str, events: Sequence[Dict[str, Any]],
+              ai_rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    """The week's contacts after each driver in turn: events first, then AI periods, each in the order stored. ``shares`` is each day's share of the week
+    (adds to 1 over the open days). A step is the total after that driver less the total before it, both whole numbers, so ``base`` plus the steps is the
+    total exactly. Drivers that touch no day of this week on this channel are not steps. Returns the steps, the combined factor of each day, and the total."""
+    if len(shares) != len(days):
+        raise ValueError("One share for each day.")
+    factors = [1.0] * len(days)
+    steps: List[Dict[str, Any]] = []
+    before = int(base)
+    for kind, rows in (("event", events), ("ai", ai_rows)):
+        for row in rows:
+            one = day_factors([row] if kind == "event" else [], [row] if kind == "ai" else [], channel, days)
+            hit = [i for i, f in enumerate(one) if f != 1.0]
+            if not hit:
+                continue
+            factors = [a * b for a, b in zip(factors, one)]
+            total = int(round(base * sum(s * f for s, f in zip(shares, factors))))
+            steps.append({"kind": kind, "id": row.get("id"), "name": row["name"] if kind == "event" else f"AI on {channel}", "change": row["change"],
+                          "days": hit, "delta": total - before, "total": total})
+            before = total
+    return {"steps": steps, "factors": factors, "total": before}

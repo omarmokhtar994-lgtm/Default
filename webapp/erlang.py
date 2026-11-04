@@ -15,6 +15,8 @@ from __future__ import annotations
 import math
 from typing import Optional
 
+TOLERANCE = 1e-12   # where a comparison is exact on paper, a float may be a hair off
+
 
 def _check_volume(calls: float, aht_s: float, interval_s: float) -> None:
     if calls < 0:
@@ -76,7 +78,8 @@ def agents_needed(calls: float, aht_s: float, interval_s: int, target: float, th
     if traffic <= 0:
         return 0
     n = int(math.floor(traffic)) + 1
-    while traffic / n > max_occupancy or service_level(n, calls, aht_s, interval_s, threshold_s) < target:
+    # Compared to 12 places, as a spreadsheet does: 23.8 / 34 is exactly 0.7 on paper and 0.7000000000000001 in a float, and 34 agents are not too many
+    while traffic / n - max_occupancy > TOLERANCE or service_level(n, calls, aht_s, interval_s, threshold_s) < target - TOLERANCE:
         n += 1
     return n
 

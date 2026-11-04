@@ -216,6 +216,12 @@
   <p class="dim">{{ channel }}: {% if channel == 'Phone' %}Erlang C to a service level{% elif channel == 'Chat' %}Erlang C with chats at once{% else %}the workload method{% endif %}, handle time {{ f.aht|round|int }} s, highest occupancy and the rest from the Settings tab. Erlang C assumes nobody abandons, so it over-staffs where callers do. These are people on the floor; the engine adds the program's shrinkage when it builds the schedule.</p>
   {{ grid_table('tbl-needs', 'People needed on the floor', needs_grid, 'needs') }}
   <p><a class="button" href="{{ url_for('volumes_requirements', program=key, week=week.isoformat()) }}">Download the requirement tabs (Excel)</a> <span class="dim">FT Wise and a tab per channel, from each channel's saved forecast (else its suggestion), laid out for the input workbook.</span></p>
+  {% set fx = {'program': key, 'channel': channel, 'week': week.isoformat()} %}{% if f.source != 'saved' %}{% set _ = fx.update({'total': f.total}) %}{% endif %}{% set _ = fx.update({'hist_weeks': hist_weeks, 'base': base, 'skip_sent': 1, 'skip': skip}) %}
+  <p><a class="button" href="{{ url_for('volumes_formulas', **fx) }}">Download with live =AGENTS formulas (Excel)</a> <span class="dim">This channel's contacts and the people needed worked out by Excel formulas you can change, with the site's figures beside them.</span></p>
+  <details><summary>Use =AGENTS() in your own Excel</summary>
+    <p class="dim">In Excel 365, add the function once: Formulas, Name Manager, New. Type the name (AGENTS), paste its definition into Refers to, press OK. Then =AGENTS(calls, handle time, interval seconds, target as a fraction, answer seconds, highest occupancy as a fraction). The workbook above has the same calculation as an ordinary formula that needs no setup and works in every Excel.</p>
+    <div class="vol-copy"><button type="button" class="button" data-copy-text="#agents-lambda">Copy the definitions</button><span class="dim" data-copy-note role="status" aria-live="polite"></span></div>
+    <pre id="agents-lambda" class="vol-pre" tabindex="0">{{ lambda_text }}</pre></details>
 </section>
 {% endif %}
 <section class="panel" aria-labelledby="g3"><h2 id="g3">{{ day_names[day] }}, interval by interval</h2>

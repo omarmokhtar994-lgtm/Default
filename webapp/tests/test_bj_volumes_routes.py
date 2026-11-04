@@ -286,6 +286,39 @@ class TheForecastPage(_Volumes):
             self.assertLess(self.post(client, action, **extra).status_code, 400, (action, extra))
         self.assertEqual(self.vb.drivers(self.alpha)["events"], [])
 
+
+    # -- the workbook with live formulas
+    def test_the_formulas_workbook_is_this_channel_as_the_page_shows_it(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        got = client.get("/volumes/formulas.xlsx", query_string={"program": self.alpha, "channel": "Phone", "week": self.week, "total": "8000", "hist_weeks": "4"})
+        self.assertEqual(got.status_code, 200)
+        self.assertIn("Volumes_Phone_formulas_", got.headers["Content-Disposition"])
+        wb = load_workbook(io.BytesIO(got.data))
+        self.assertEqual(wb.sheetnames, ["Read me", "Phone"])
+        ws = wb["Phone"]
+        self.assertEqual(sum(ws.cell(r, c).value for r in range(14, 14 + 1440 // self.step) for c in range(2, 9)), 8000)
+        self.assertTrue(str(ws.cell(14, 10).value).startswith("=IF("))
+
+    def test_an_interval_program_or_a_bad_request_has_no_formulas_workbook(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        for bad in ({"hist_weeks": "2", "total": "8000"}, {"total": "abc"}):
+            self.assertEqual(client.get("/volumes/formulas.xlsx", query_string={"program": self.alpha, "week": self.week, **bad}).status_code, 400, bad)
+        ProgramBook(self.store).set_measure(self.alpha_id, "interval")
+        self.assertEqual(client.get("/volumes/formulas.xlsx", query_string={"program": self.alpha, "week": self.week, "total": "8000"}).status_code, 404)
+
+    def test_the_formulas_workbook_is_walled_like_the_rest(self):
+        self.assertEqual(sign_in(self.app, "plan_a", PASSWORD).get("/volumes/formulas.xlsx", query_string={"program": self.bravo}).status_code, 403)
+        self.assertEqual(self.app.test_client().get("/volumes/formulas.xlsx").status_code, 302)
+        self.assertEqual(sign_in(self.app, "tm_a", PASSWORD).get("/volumes/formulas.xlsx", query_string={"program": self.alpha, "week": self.week,
+                                                                                                          "total": "8000"}).status_code, 200)
+
+    def test_the_page_offers_the_workbook_and_the_function_to_copy(self):
+        body = self.text(self.view(total="8000"))
+        self.assertIn("Download with live =AGENTS formulas (Excel)", body)
+        self.assertIn('data-copy-text="#agents-lambda"', body)
+        self.assertIn("=LAMBDA(calls, aht, interval, target, secs, maxocc", body)
+        self.assertRegex(body, r'href="[^"]*formulas\.xlsx[^"]*hist_weeks=6')
+
     # -- walls
     def test_only_those_who_may_change_volumes_can_change_drivers(self):
         client = sign_in(self.app, "tm_a", PASSWORD)

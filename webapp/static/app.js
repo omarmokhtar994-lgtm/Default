@@ -1957,6 +1957,18 @@ document.addEventListener("change", function (e) {
       });
       return;
     }
+    var copyText_ = e.target.closest ? e.target.closest("[data-copy-text]") : null;
+    if (copyText_) {
+      var source = document.querySelector(copyText_.getAttribute("data-copy-text"));
+      var said = copyText_.parentNode.querySelector("[data-copy-note]");
+      if (!source) { return; }
+      copyText(source.textContent || "").then(function () {
+        if (said) { said.textContent = "Copied: paste it into Refers to."; window.setTimeout(function () { said.textContent = ""; }, 4000); }
+      }, function () {
+        if (said) { said.textContent = "Your browser would not copy. Select the text and press Ctrl+C."; }
+      });
+      return;
+    }
     var fill = e.target.closest ? e.target.closest("[data-fill]") : null;
     if (fill) {
       var field = document.querySelector(fill.getAttribute("data-fill"));

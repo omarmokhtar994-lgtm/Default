@@ -4140,6 +4140,26 @@ class TheVolumesInTheBrowser(unittest.TestCase):
         expect(page.get_by_text("is a change in percent")).to_be_visible()
         self.assertEqual(page.locator("form[aria-label='Add a promotion or event'] input[name=name]").input_value(), "Spring sale")
 
+    def test_the_agents_definitions_copy_to_the_clipboard_and_the_workbook_downloads(self):
+        self.seed()
+        ctx = self.browser.new_context(viewport={"width": 1280, "height": 900}, permissions=["clipboard-read", "clipboard-write"])
+        self.addCleanup(ctx.close)
+        page = ctx.new_page()
+        self.sign_in(page)
+        page.goto(self.url("forecast"))
+        page.fill("#total", "8000")
+        page.get_by_role("button", name="Work it out").click()
+        page.wait_for_load_state("load")
+        page.get_by_text("Use =AGENTS() in your own Excel").click()
+        page.get_by_role("button", name="Copy the definitions").click()
+        expect(page.get_by_text("Copied: paste it into Refers to.")).to_be_visible()
+        text = page.evaluate("navigator.clipboard.readText()")
+        self.assertIn("AGENTS\n=LAMBDA(calls, aht, interval, target, secs, maxocc", text)
+        self.assertIn("SERVICELEVEL\n=LAMBDA(", text)
+        with page.expect_download() as got:
+            page.get_by_role("link", name="Download with live =AGENTS formulas (Excel)").click()
+        self.assertTrue(got.value.suggested_filename.startswith("Volumes_Phone_formulas_"))
+
     def test_weeks_of_history_can_be_changed_and_a_week_left_out(self):
         page = self._forecast_page(1280)
         page.fill("input[name=hist_weeks]", "4")

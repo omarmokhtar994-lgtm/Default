@@ -21,7 +21,9 @@ from ..programs import ProgramBook
 from ..shrink_view import week_begin
 from .. import drivers as drivers_mod
 from ..volumes import DEFAULTS, LABELS, VolumeBook, _today
+from ..excel_agents import lambda_definitions
 from ..volumes_draft import draft_workbook, is_draft, parse_draft
+from ..volumes_formulas import formulas_workbook
 from ..volumes_io import CHANNELS, DAY_NAMES, parse_grid, parse_long, parse_pasted, read_table
 
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -188,7 +190,7 @@ def register(app, ctx) -> None:
         step = vb.step(key)
         ctxt: Dict[str, Any] = {"tab": tab, "tabs": TABS, "key": key, "label": ProgramBook(store).label(key), "channel": channel,
                                 "channels": CHANNELS, "coverage": coverage, "step": step, "erlang": vb.uses_erlang(key),
-                                "measure": vb.measure_of(key), "day_names": DAY_NAMES, "today": today.isoformat(), "grid_error": "", "draft": {}, "kinds": drivers_mod.KINDS, **extra}
+                                "measure": vb.measure_of(key), "day_names": DAY_NAMES, "today": today.isoformat(), "grid_error": "", "draft": {}, "kinds": drivers_mod.KINDS, "lambda_text": lambda_definitions(), **extra}
         if tab == "actuals":
             ctxt["weeks"] = _week_choices(key, today - timedelta(weeks=1), 10, 1)
         elif tab == "forecast":
@@ -469,6 +471,20 @@ def register(app, ctx) -> None:
             return redirect(url_for("volumes_page", tab="forecast", program=key, week=week.isoformat()), code=303)
         ctx._record("downloaded", program=key, week_start=week.isoformat(), subject="Volumes requirement", detail=", ".join(sorted(found)))
         return send_file(io.BytesIO(data), as_attachment=True, download_name=f"Requirement_from_forecast_{week.isoformat()}.xlsx", mimetype=XLSX)
+
+    @app.route("/volumes/formulas.xlsx")
+    @login_required
+    def volumes_formulas():  # type: ignore[no-untyped-def]
+        """The channel as the page shows it, with the people needed as live Excel formulas beside the site's own figures."""
+        vb, key = _book(), _unit()
+        channel = _channel(request.args.get("channel", ""))
+        week = _week(key, request.args.get("week", ""), _today() + timedelta(weeks=1))
+        f = _plan(vb, key, channel, week, total=request.args.get("total") or None, day_totals=_typed_days())
+        if f["error"] or not f.get("needs"):
+            abort(404)
+        ctx._record("downloaded", program=key, week_start=week.isoformat(), subject="Volumes formulas", detail=channel)
+        data = formulas_workbook(week, vb.step(key), {channel: f}, vb.settings(key))
+        return send_file(io.BytesIO(data), as_attachment=True, download_name=f"Volumes_{channel}_formulas_{week.isoformat()}.xlsx", mimetype=XLSX)
 
     @app.route("/volumes/draft.xlsx")
     @login_required

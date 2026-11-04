@@ -4,7 +4,7 @@ workbook a planner downloads, fills in Excel and uploads. One sheet per channel 
 start date in a cell, an optional handle-time grid beside the contacts. Made-up numbers."""
 import io
 import unittest
-from datetime import date, timedelta
+from datetime import date
 
 from openpyxl import Workbook, load_workbook
 

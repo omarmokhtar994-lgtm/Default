@@ -2,7 +2,6 @@
 """Phase BJ (owner, 2026-11-04: "I want the one equals =agents() in Excel"): the Erlang staffing as Excel formulas that use only functions every Excel and
 LibreOffice have (POISSON, SUMPRODUCT, ROW, INDIRECT, EXP). The formulas are recalculated by LibreOffice on thousands of random cases and compared with the Python
 Erlang the site uses; they must agree on every case."""
-import math
 import random
 import shutil
 import subprocess

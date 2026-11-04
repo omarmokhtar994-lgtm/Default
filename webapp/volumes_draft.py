@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import io
 import zipfile
-from datetime import date, datetime
+from datetime import date
 from typing import Any, List
 
 from openpyxl import Workbook, load_workbook

@@ -257,6 +257,8 @@ class VolumeBook:
                 method, value = "growth", int(round(D.growth_level(points, yoy)))
                 if found and found[0] > 0:                               # the history's own spread, carried to the grown level
                     low, high = int(round(value * found[1] / found[0])), int(round(value * found[2] / found[0]))
+                else:                                                    # a flat-zero trend has no spread to carry
+                    low = high = None
         return method, value, low, high
 
     def _moved_in(self, key: str, channel: str, week_start: date, dates: Sequence[date], doc: Dict[str, Any], skip: Sequence[str],

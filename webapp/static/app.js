@@ -2086,7 +2086,12 @@ document.addEventListener("change", function (e) {
   function start() {
     var forms = document.querySelectorAll("form[data-entry-form]");
     forms.forEach(function (form) {
-      form.querySelectorAll("table[data-entry-grid]").forEach(build);
+      form.querySelectorAll("table[data-entry-grid]").forEach(function (table) {
+        build(table);
+        // open at 06:00: the hours before it are empty for most programs (the box scrolls, so nothing is out of reach)
+        var row = table.querySelector('input[data-i="' + Math.floor(360 / (parseInt(table.getAttribute("data-entry-step"), 10) || 30)) + '"]');
+        if (row && table.parentNode && table.offsetParent !== null) { table.parentNode.scrollTop = Math.max(0, row.closest("tr").offsetTop - 34); }
+      });
       form.addEventListener("paste", onPaste);
       form.addEventListener("keydown", onKey);
       form.addEventListener("submit", function () {

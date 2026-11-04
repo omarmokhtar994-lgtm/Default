@@ -4088,3 +4088,67 @@ class TheVolumesInTheBrowser(unittest.TestCase):
         self.assertLessEqual(page.evaluate("document.scrollingElement.scrollWidth - window.innerWidth"), 1)
         small = page.evaluate("""() => [...document.querySelectorAll('input[data-d]')].filter(e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.height < 23.5; }).length""")
         self.assertEqual(small, 0)
+
+    # Phase BJ: the questions about the week.
+    def _forecast_page(self, width, height=900):
+        self.seed()
+        self.addCleanup(lambda: self.store.set_volume_drivers(self.key, {}, 1))
+        page = self.page(width=width, height=height)
+        self.sign_in(page)
+        page.goto(self.url("forecast"))
+        page.wait_for_load_state("load")
+        return page
+
+    def test_the_questions_open_without_widening_the_page_and_every_control_is_big_enough(self):
+        for width in (1280, 768, 360):
+            page = self._forecast_page(width)
+            page.evaluate("document.querySelectorAll('main details').forEach(d => { d.open = true; })")
+            self.assertLessEqual(page.evaluate("document.scrollingElement.scrollWidth - window.innerWidth"), 1, width)
+            small = page.evaluate("""() => [...document.querySelectorAll('main a[href], main button, main select, main input:not([type=hidden])')].filter(e => {
+                const r = e.getBoundingClientRect(); if (!(r.width > 0 && r.height > 0)) return false; const l = e.closest('label');
+                const t = (l && e.tagName === 'INPUT' && (e.type === 'checkbox' || e.type === 'radio') ? l : e).getBoundingClientRect();
+                return (t.height < 24 - 0.5) && !(e.tagName === 'A' && getComputedStyle(e).display === 'inline'); }).map(e => e.outerHTML.slice(0, 80))""")
+            self.assertEqual(small, [], width)
+            page.close()
+
+    def test_an_event_added_in_the_browser_shows_up_as_a_step_of_the_suggestion(self):
+        page = self._forecast_page(1280)
+        page.get_by_text("Promotions, launches, outages and holidays").click()
+        form = page.locator("form[aria-label='Add a promotion or event']")
+        week = page.locator("form[aria-label='Choose the week and type the calls'] select[name=week]").input_value()
+        from datetime import date, timedelta
+        start = date.fromisoformat(week) + timedelta(days=2)
+        form.locator("input[name=name]").fill("Spring sale")
+        form.locator("input[name=start]").fill(start.isoformat())
+        form.locator("input[name=end]").fill((start + timedelta(days=2)).isoformat())
+        form.locator("input[name=change]").fill("30")
+        form.get_by_role("button", name="Add the event").click()
+        page.wait_for_load_state("load")
+        expect(page.get_by_text("Added the promotion Spring sale.")).to_be_visible()
+        expect(page.locator("#wf-h")).to_be_visible()
+        expect(page.locator("section[aria-labelledby=wf-h]")).to_contain_text("Spring sale (+30%)")
+        expect(page.locator("section[aria-labelledby=wf-h]")).to_contain_text("Tue, Wed, Thu")
+
+    def test_a_wrong_answer_is_refused_in_words_and_keeps_what_was_typed(self):
+        page = self._forecast_page(1280)
+        page.get_by_text("Promotions, launches, outages and holidays").click()
+        form = page.locator("form[aria-label='Add a promotion or event']")
+        form.locator("input[name=name]").fill("Spring sale")
+        form.locator("input[name=change]").fill("900")
+        form.get_by_role("button", name="Add the event").click()
+        page.wait_for_load_state("load")
+        expect(page.get_by_text("is a change in percent")).to_be_visible()
+        self.assertEqual(page.locator("form[aria-label='Add a promotion or event'] input[name=name]").input_value(), "Spring sale")
+
+    def test_weeks_of_history_can_be_changed_and_a_week_left_out(self):
+        page = self._forecast_page(1280)
+        page.fill("input[name=hist_weeks]", "4")
+        page.fill("#total", "8000")
+        page.get_by_role("button", name="Work it out").click()
+        page.wait_for_load_state("load")
+        expect(page.get_by_text("Weeks behind this forecast (4 used")).to_be_visible()
+        page.get_by_text("Weeks behind this forecast").click()
+        page.locator("input[name=skip]").first.check()
+        page.get_by_role("button", name="Work it out").click()
+        page.wait_for_load_state("load")
+        expect(page.get_by_text("left out by you")).to_be_visible()

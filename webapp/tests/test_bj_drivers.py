@@ -208,6 +208,11 @@ class TheWaterfall(unittest.TestCase):
                          [("event", "1", "Black Friday", [2, 3, 4], 750, 7750)])
         self.assertEqual([round(f, 6) for f in w["factors"]], [1, 1, 1.25, 1.25, 1.25, 1, 1])
 
+    def test_an_event_with_a_dip_after_it_says_so_in_its_step(self):
+        w = D.waterfall(7000, self.EVEN, WEEK, "Phone", [{**event(after_days=2, after_change=-20), "id": "1"}], [])
+        self.assertEqual((w["steps"][0]["after_days"], w["steps"][0]["after_change"]), (2, -20.0))
+        self.assertEqual(w["steps"][0]["days"], [2, 3, 4, 5, 6])                      # Tue to Thu, then Fri and Sat at -20 %
+
     def test_the_steps_add_up_to_the_total_exactly(self):
         rows = [{**event(channels=["Chat"], change=10, start="2026-11-08", end="2026-11-14"), "id": "1"}]
         ai_rows = [{**ai(start="2026-11-08", end="2026-11-14", change=-10), "id": "2"}]

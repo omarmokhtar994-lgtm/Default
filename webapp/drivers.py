@@ -420,6 +420,7 @@ def waterfall(base: int, shares: Sequence[float], days: Sequence[date], channel:
             factors = [a * b for a, b in zip(factors, one)]
             total = int(round(base * sum(s * f for s, f in zip(shares, factors))))
             steps.append({"kind": kind, "id": row.get("id"), "name": row["name"] if kind == "event" else f"AI on {channel}", "change": row["change"],
+                          "after_days": row.get("after_days", 0), "after_change": row.get("after_change", 0.0),
                           "days": hit, "delta": total - before, "total": total})
             before = total
     return {"steps": steps, "factors": factors, "total": before}

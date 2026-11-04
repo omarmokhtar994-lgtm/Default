@@ -9,6 +9,7 @@ from datetime import date, timedelta
 
 from openpyxl import load_workbook
 
+from webapp.programs import ProgramBook
 from webapp.tests.test_bi_volumes_routes import PASSWORD, TODAY, _Volumes
 from webapp.tests.test_runs import sign_in, token
 
@@ -128,6 +129,228 @@ class TheDraft(_Volumes):
         self.assertIn(f'data-entry-grid="offered" data-entry-step="{self.step}"', body)
         self.assertIn('data-entry-grid="aht"', body)
         self.assertIn("Upload or paste", body)
+
+
+class TheForecastPage(_Volumes):
+    def setUp(self):
+        self.history(self.alpha)
+        self.history(self.alpha, channel="Chat", per_week=3000)
+        ProgramBook(self.store).set_measure(self.alpha_id, "sl")
+        nxt = TODAY + timedelta(weeks=1)
+        self.sunday = nxt - timedelta(days=(nxt.weekday() + 1) % 7)
+        self.week = self.sunday.isoformat()
+
+    def tearDown(self):
+        for ch in ("Phone", "Chat"):
+            self.store.delete_volume_days(self.alpha, ch, "2000-01-01", "2100-01-01")
+            self.store.delete_volume_forecast(self.alpha, ch, self.week)
+        self.store.set_volume_drivers(self.alpha, {}, 1)
+        ProgramBook(self.store).set_measure(self.alpha_id, "interval")
+
+    def view(self, client=None, channel="Phone", **query):
+        client = client or sign_in(self.app, "plan_a", PASSWORD)
+        return client.get("/volumes", query_string={"program": self.alpha, "tab": "forecast", "channel": channel, "week": self.week, **query})
+
+    def post(self, client, action, **form):
+        return client.post("/volumes/drivers", data={"program": self.alpha, "csrf_token": token(client), "channel": "Phone", "week": self.week,
+                                                     "action": action, **form})
+
+    def event(self, **kw):
+        return {"kind": "Promotion", "name": "Black Friday", "channels": ["Phone"], "start": (self.sunday + timedelta(days=2)).isoformat(),
+                "end": (self.sunday + timedelta(days=4)).isoformat(), "change": "25", **kw}
+
+    def text(self, got):
+        return html.unescape(got.get_data(as_text=True))
+
+    # -- the weeks behind a forecast
+    def test_the_weeks_of_history_are_asked_for_and_shown(self):
+        body = self.text(self.view(hist_weeks="4", total="8000"))
+        self.assertIn("4 used", body)
+        self.assertEqual(len(re.findall(r'name="skip" value="', body)), 4)
+        self.assertIn("6 used", self.text(self.view(total="8000")))
+
+    def test_a_bad_number_of_weeks_is_said_in_words(self):
+        for bad in ("2", "27", "abc", "-4", "1e3"):
+            got = self.view(hist_weeks=bad, total="8000")
+            self.assertEqual(got.status_code, 200, bad)
+            self.assertIn("3 to 26", self.text(got), bad)
+
+    def test_a_week_left_out_is_named_and_replaced(self):
+        oldest = (self.sunday - timedelta(weeks=2)).isoformat()
+        body = self.text(self.view(total="8000", skip_sent="1", skip=oldest))
+        self.assertIn("left out by you", body)
+        self.assertRegex(body, r'<input type="checkbox" name="skip" value="%s" checked>' % oldest)
+        self.assertIn("6 used", body)
+
+    def test_remembered_weeks_apply_until_the_form_says_otherwise(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        out = (self.sunday - timedelta(weeks=1)).isoformat()
+        got = client.post("/volumes/forecast", data={"program": self.alpha, "csrf_token": token(client), "channel": "Phone", "week": self.week,
+                                                     "action": "remember_weeks", "skip_sent": "1", "skip": out})
+        self.assertEqual(got.status_code, 303)
+        self.assertEqual(self.vb.drivers(self.alpha)["skip_weeks"], [out])
+        self.assertIn("left out by you", self.text(self.view(client, total="8000")))
+        self.assertNotIn("left out by you", self.text(self.view(client, total="8000", skip_sent="1")))
+
+    def test_a_forecast_saved_with_other_weeks_keeps_them(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        client.post("/volumes/forecast", data={"program": self.alpha, "csrf_token": token(client), "channel": "Phone", "week": self.week,
+                                               "action": "save", "total": "9,000", "hist_weeks": "4"})
+        basis = self.store.volume_forecast(self.alpha, "Phone", self.week)["basis"]
+        self.assertEqual(len(basis["weeks"]["used"]), 4)
+        self.assertIn("kept with its own grid", self.text(self.view(client)))
+
+    # -- events
+    def test_an_event_is_added_listed_built_into_the_suggestion_and_removed(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        plain = self.vb.forecast(self.alpha, "Phone", self.sunday)["suggestion"]["final"]
+        got = self.post(client, "add_event", **self.event())
+        self.assertEqual(got.status_code, 303)
+        body = self.text(self.view(client))
+        self.assertIn("Black Friday", body)
+        self.assertIn("How the suggestion is built", body)
+        final = self.vb.forecast(self.alpha, "Phone", self.sunday)["suggestion"]["final"]
+        self.assertGreater(final, plain)
+        self.assertIn(f"{final:,}", body)
+        ident = self.vb.drivers(self.alpha)["events"][0]["id"]
+        self.post(client, "remove", list="events", id=ident)
+        self.assertEqual(self.vb.drivers(self.alpha)["events"], [])
+        self.assertEqual(self.vb.forecast(self.alpha, "Phone", self.sunday)["suggestion"]["final"], plain)
+
+    def test_a_bad_event_is_refused_in_words_and_the_form_keeps_what_was_typed(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        got = self.post(client, "add_event", **self.event(change="900", name="Spring sale"))
+        body = self.text(got)
+        self.assertEqual(got.status_code, 200)
+        self.assertIn("percent", body)
+        self.assertIn('value="Spring sale"', body)
+        self.assertEqual(self.vb.drivers(self.alpha)["events"], [])
+        for bad in (self.event(end=(self.sunday - timedelta(days=3)).isoformat()), self.event(channels=[]), self.event(name="=cmd|' /C calc'!A0"),
+                    self.event(kind="Party"), self.event(start="tomorrow"), self.event(after_days="40")):
+            self.assertEqual(self.post(client, "add_event", **bad).status_code, 200)
+        self.assertEqual(self.vb.drivers(self.alpha)["events"], [])
+
+    def test_a_name_with_markup_is_shown_as_text(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        self.post(client, "add_event", **self.event(name="<script>alert(1)</script>"))
+        raw = self.view(client).get_data(as_text=True)
+        self.assertNotIn("<script>alert(1)</script>", raw)
+        self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", raw)
+
+    # -- AI
+    def test_ai_periods_are_added_checked_for_overlap_and_move_contacts(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        chat = self.vb.forecast(self.alpha, "Chat", self.sunday)["suggestion"]["final"]
+        a, b = self.sunday.isoformat(), (self.sunday + timedelta(days=6)).isoformat()
+        self.assertEqual(self.post(client, "add_ai", ai_channel="Phone", start=a, end=b, change="-20", move_to="Chat", move_share="50").status_code, 303)
+        again = self.post(client, "add_ai", ai_channel="Phone", start=b, end=b, change="-30")
+        self.assertIn("overlaps", self.text(again))
+        self.assertEqual(len(self.vb.drivers(self.alpha)["ai"]), 1)
+        body = self.text(self.view(client, channel="Chat"))
+        self.assertIn("Moved in from other channels", body)
+        self.assertGreater(self.vb.forecast(self.alpha, "Chat", self.sunday)["suggestion"]["final"], chat)
+
+    def test_ai_that_moves_to_its_own_channel_or_grows_is_refused(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        a = self.sunday.isoformat()
+        for bad in ({"move_to": "Phone", "move_share": "50", "change": "-10"}, {"move_to": "Chat", "move_share": "50", "change": "10"},
+                    {"move_to": "Chat", "move_share": "150", "change": "-10"}, {"change": "abc"}, {"ai_channel": "Fax"}):
+            got = self.post(client, "add_ai", **{"ai_channel": "Phone", "start": a, "end": a, "change": "-10", **bad})
+            self.assertEqual(got.status_code, 200, bad)
+        self.assertEqual(self.vb.drivers(self.alpha)["ai"], [])
+
+    # -- growth and last year
+    def test_growth_and_last_year_are_saved_and_shown(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        self.assertEqual(self.post(client, "growth", **{"yoy.Phone": "8", "yoy.Chat": "", "method": "measured"}).status_code, 303)
+        self.assertEqual(self.vb.drivers(self.alpha)["growth"], {"yoy": {"Phone": 8.0}, "method": "measured"})
+        self.post(client, "last_year", **{"ly.Phone": "12,000", "ly.Chat": ""})
+        body = self.text(self.view(client))
+        self.assertIn("grown by 8% = 12,960", body)
+        grown = self.text(self.view(client, base="last_year"))
+        self.assertIn("12,960", grown)
+        self.assertIn("Last year's same week, grown by 8%", grown)
+
+    def test_a_bad_rate_or_total_is_refused_and_nothing_is_kept(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        for form in ({"yoy.Phone": "-80", "method": "growth"}, {"yoy.Phone": "abc", "method": "growth"}, {"yoy.Phone": "5", "method": "magic"}):
+            self.assertEqual(self.post(client, "growth", **form).status_code, 200, form)
+        for form in ({"ly.Phone": "-4"}, {"ly.Phone": "1.5"}, {"ly.Phone": "abc"}):
+            self.assertEqual(self.post(client, "last_year", **form).status_code, 200, form)
+        doc = self.vb.drivers(self.alpha)
+        self.assertEqual((doc["growth"]["yoy"], doc["last_year"]), ({}, {}))
+
+    def test_an_unknown_action_or_list_changes_nothing(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        for action, extra in (("", {}), ("drop_everything", {}), ("remove", {"list": "notes", "id": "1"}), ("remove", {"list": "events", "id": "nope"})):
+            self.assertLess(self.post(client, action, **extra).status_code, 400, (action, extra))
+        self.assertEqual(self.vb.drivers(self.alpha)["events"], [])
+
+    # -- walls
+    def test_only_those_who_may_change_volumes_can_change_drivers(self):
+        client = sign_in(self.app, "tm_a", PASSWORD)
+        self.assertEqual(self.post(client, "add_event", **self.event()).status_code, 403)
+        self.assertEqual(self.vb.drivers(self.alpha)["events"], [])
+        self.assertIn(sign_in(self.app, "assoc_a", PASSWORD).post("/volumes/drivers", data={"program": self.alpha, "action": "add_event"}).status_code,
+                      (302, 400, 403))
+
+    def test_a_team_manager_can_read_the_questions_but_not_answer_them(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        self.post(client, "add_event", **self.event())
+        body = self.text(self.view(sign_in(self.app, "tm_a", PASSWORD)))
+        self.assertIn("Black Friday", body)
+        self.assertNotIn('value="add_event"', body)
+        self.assertNotIn('value="remove"', body)
+
+    def test_another_program_is_walled_off(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        got = client.post("/volumes/drivers", data={"program": self.bravo, "csrf_token": token(client), "action": "add_event", **self.event()})
+        self.assertEqual(got.status_code, 403)
+        self.assertEqual(self.vb.drivers(self.bravo)["events"], [])
+
+    def test_the_token_is_needed(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        self.assertEqual(client.post("/volumes/drivers", data={"program": self.alpha, "action": "add_event", **self.event()}).status_code, 400)
+
+    def test_what_was_done_is_recorded(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        self.post(client, "add_event", **self.event())
+        self.assertIn("volumes_drivers_saved", [e["kind"] for e in self.store.list_events(0, 4e9, self.alpha)])
+
+    # -- hostile input
+    def test_every_new_query_value_is_refused_or_escaped(self):
+        hostile = ["<script>alert(1)</script>", "' or 1=1 --", "../../etc/passwd", "%00", "9" * 400, "{{7*7}}"]
+        for value in hostile:
+            for key in ("hist_weeks", "base", "skip", "total", "week"):
+                got = self.view(**{key: value}, **({"skip_sent": "1"} if key == "skip" else {}))
+                self.assertLess(got.status_code, 500, (key, value))
+                self.assertNotIn("<script>alert(1)</script>", got.get_data(as_text=True), (key, value))
+
+    def test_a_thousand_left_out_weeks_are_bounded(self):
+        got = self.view(total="8000", skip_sent="1", skip=[f"2026-01-{d:02d}" for d in range(1, 29)] * 60)
+        self.assertLess(got.status_code, 500)
+
+    def test_the_downloads_follow_the_page_and_a_bad_request_is_a_400(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        got = client.get("/volumes/table.xlsx", query_string={"program": self.alpha, "week": self.week, "what": "calls", "total": "8000", "hist_weeks": "4"})
+        self.assertEqual(got.status_code, 200)
+        ws = load_workbook(io.BytesIO(got.data)).active
+        self.assertEqual(sum(c.value or 0 for row in ws.iter_rows(min_row=2, min_col=2) for c in row), 8000)
+        for bad in ({"hist_weeks": "2"}, {"total": "abc"}):
+            self.assertEqual(client.get("/volumes/table.xlsx", query_string={"program": self.alpha, "week": self.week, "what": "calls", **bad}).status_code,
+                             400, bad)
+        self.assertEqual(client.get("/volumes/table.xlsx", query_string={"program": self.alpha, "week": self.week, "what": "calls",
+                                                                         "base": "last_year"}).status_code, 404)     # nothing to start from: no grid
+
+    def test_a_saved_forecast_downloads_as_saved(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        client.post("/volumes/forecast", data={"program": self.alpha, "csrf_token": token(client), "channel": "Phone", "week": self.week,
+                                               "action": "save", "total": "9,000"})
+        self.history(self.alpha, per_week=20000)
+        ws = load_workbook(io.BytesIO(client.get("/volumes/table.xlsx", query_string={"program": self.alpha, "week": self.week, "what": "calls"}).data)).active
+        self.assertEqual(sum(c.value or 0 for row in ws.iter_rows(min_row=2, min_col=2) for c in row), 9000)
+        link = re.search(r'href="([^"]*table\.xlsx[^"]*what=calls[^"]*)"', self.text(self.view(client))).group(1)
+        self.assertNotIn("total=", link)                                    # a saved forecast is downloaded as saved, not worked out again
 
 
 if __name__ == "__main__":

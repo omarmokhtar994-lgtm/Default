@@ -50,7 +50,7 @@ ENDPOINTS: Dict[str, str] = {
     **{e: "analysis" for e in ("program", "programs", "incidents_page", "shrinkage_page")},
     **{e: "volumes_view" for e in ("volumes_page", "volumes_table", "volumes_requirements", "volumes_template", "volumes_draft")},
     **{e: "volumes_edit" for e in ("volumes_forecast", "volumes_actuals_check", "volumes_actuals_save", "volumes_actuals_delete",
-                                    "volumes_settings")},
+                                    "volumes_settings", "volumes_drivers")},
     **{e: "exports" for e in ("exports_page", "exports_download")},
     **{e: "coaching" for e in ("coach_page", "coach_download")},
     "team_page": "team",

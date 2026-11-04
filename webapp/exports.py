@@ -51,7 +51,7 @@ OTHER_EVENTS = {"run_uploaded": "Run uploaded", "run_started": "Run started", "r
                 "notify_tested": "Test message sent", "shrinkage_mapped": "What counts as shrinkage",
                 "operating_day_set": "Operating day start",
                 "volumes_uploaded": "Volumes added", "volumes_deleted": "Volumes deleted", "volumes_forecast_saved": "Volume forecast saved",
-                "volumes_settings_saved": "Volume settings changed", "upload_refused": "Upload refused and deleted", "heavy_weeks_set": "Longest look changed"}
+                "volumes_drivers_saved": "Volume events and AI changed", "volumes_settings_saved": "Volume settings changed", "upload_refused": "Upload refused and deleted", "heavy_weeks_set": "Longest look changed"}
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 RISKY = ("=", "+", "-", "@", "\t", "\r")
 

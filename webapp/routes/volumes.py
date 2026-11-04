@@ -19,6 +19,7 @@ from ..app import clean_program
 from ..auth import login_required
 from ..programs import ProgramBook
 from ..shrink_view import week_begin
+from .. import drivers as drivers_mod
 from ..volumes import DEFAULTS, LABELS, VolumeBook, _today
 from ..volumes_draft import draft_workbook, is_draft, parse_draft
 from ..volumes_io import CHANNELS, DAY_NAMES, parse_grid, parse_long, parse_pasted, read_table
@@ -86,6 +87,40 @@ def register(app, ctx) -> None:
     def _typed_days() -> Dict[int, str]:
         return {d: request.values.get(f"d{d}", "").strip() for d in range(7) if request.values.get(f"d{d}", "").strip()}
 
+    def _hist_weeks() -> Optional[str]:
+        """The weeks of history the person asked for on this request, as typed (None: the channel's setting)."""
+        return request.values.get("hist_weeks", "").strip() or None
+
+    def _skips() -> Optional[List[str]]:
+        """The weeks the person left out on this request, or None when the form was not sent (then the stored ones apply)."""
+        return request.values.getlist("skip")[:80] if "skip_sent" in request.values else None
+
+    def _base() -> str:
+        return "last_year" if request.values.get("base") == "last_year" else "history"
+
+    def _carry() -> Dict[str, Any]:
+        """What a page asks for, kept when a form on it sends the person back to it."""
+        out: Dict[str, Any] = {k: request.form[k] for k in ("total", "hist_weeks", "base", "day") if request.form.get(k)}
+        if "skip_sent" in request.form:
+            out["skip_sent"] = "1"
+            out["skip"] = request.form.getlist("skip")[:80]
+        return out
+
+    def _plan(vb: VolumeBook, key: str, channel: str, week: date, **more: Any) -> Dict[str, Any]:
+        """A forecast as the page asked for it; a bad request is a 400 in words, never a crash."""
+        try:
+            return vb.forecast(key, channel, week, weeks=_hist_weeks(), skip_weeks=_skips(), base=_base(), **more)
+        except ValueError as exc:
+            abort(400, description=str(exc))
+
+    def _week_rows(f: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """The weeks behind a forecast, newest first: used with their totals, or left out with the reason."""
+        totals = dict((f.get("suggestion") or {}).get("weeks", []))
+        rows = [{"iso": d, "used": True, "total": totals.get(d), "reason": "", "can_leave": True} for d in (f.get("weeks") or {}).get("used", [])]
+        rows += [{"iso": d, "used": False, "total": None, "reason": why, "can_leave": why == "left out by you"}
+                 for d, why in (f.get("weeks") or {}).get("skipped", [])]
+        return sorted(rows, key=lambda r: r["iso"], reverse=True)
+
     # ------------------------------------------------------------------ the page
     def _chart_day(f: Dict[str, Any], d: int):
         labels = [f"{i * f['step'] // 60:02d}:{i * f['step'] % 60:02d}" for i in range(len(f["calls"][d]))]
@@ -127,6 +162,21 @@ def register(app, ctx) -> None:
                                   y_max=100, unit="%", label=f"Modelled service level, {DAY_NAMES[d]}")
         return calls, people, sl
 
+    def _drivers_view(vb: VolumeBook, key: str, week: date) -> Dict[str, Any]:
+        """The events, AI periods, growth and last-year figures for the page; rows that touch this week come first in the person's eye."""
+        try:
+            doc = vb.drivers(key)
+        except ValueError:
+            return {"events": [], "ai": [], "growth": {"yoy": {}, "method": "measured"}, "last_year": {}, "skip_weeks": [], "damaged": True}
+        end = week + timedelta(days=6)
+        for e in doc["events"]:
+            last = date.fromisoformat(e["end"]) + timedelta(days=e["after_days"])
+            e["this_week"] = date.fromisoformat(e["start"]) <= end and week <= last
+        for r in doc["ai"]:
+            r["this_week"] = date.fromisoformat(r["start"]) <= end and week <= date.fromisoformat(r["end"])
+        doc["damaged"] = False
+        return doc
+
     def _render(tab: str, **extra: Any):
         vb, key = _book(), _unit()
         store = app.extensions["store"]
@@ -138,16 +188,17 @@ def register(app, ctx) -> None:
         step = vb.step(key)
         ctxt: Dict[str, Any] = {"tab": tab, "tabs": TABS, "key": key, "label": ProgramBook(store).label(key), "channel": channel,
                                 "channels": CHANNELS, "coverage": coverage, "step": step, "erlang": vb.uses_erlang(key),
-                                "measure": vb.measure_of(key), "day_names": DAY_NAMES, "today": today.isoformat(), "grid_error": "", **extra}
+                                "measure": vb.measure_of(key), "day_names": DAY_NAMES, "today": today.isoformat(), "grid_error": "", "draft": {}, "kinds": drivers_mod.KINDS, **extra}
         if tab == "actuals":
             ctxt["weeks"] = _week_choices(key, today - timedelta(weeks=1), 10, 1)
         elif tab == "forecast":
             week = _week(key, request.values.get("week", ""), today + timedelta(weeks=1))
             typed_total = request.values.get("total", "").strip()
             typed_days = _typed_days()
+            hist, skips, base = _hist_weeks(), _skips(), _base()
             error = ""
             try:
-                f = vb.forecast(key, channel, week, total=typed_total or None, day_totals=typed_days)
+                f = vb.forecast(key, channel, week, total=typed_total or None, day_totals=typed_days, weeks=hist, skip_weeks=skips, base=base)
             except ValueError as exc:
                 error, f = str(exc), vb.forecast(key, channel, week)
             if f["error"]:
@@ -157,7 +208,8 @@ def register(app, ctx) -> None:
                         total_text=typed_total or (f"{f['total']:,}" if f.get("total") is not None else ""), typed_days=typed_days,
                         calls_grid=vb.grid(f["calls"], step) if f["calls"] else None,
                         needs_grid=vb.grid(f["needs"], step) if f.get("needs") else None,
-                        saved=store.volume_forecast(key, channel, week.isoformat()))
+                        saved=store.volume_forecast(key, channel, week.isoformat()), hist_weeks=hist if hist is not None else (f.get("weeks") or {}).get("wanted") or
+                        vb.settings(key)[channel]["forecast_weeks"], base=base, skip=f.get("skip_weeks", []), week_rows=_week_rows(f), drivers=_drivers_view(vb, key, week))
             if f["calls"]:
                 ctxt["chart_calls"], ctxt["chart_people"] = _chart_day(f, day)
                 busiest = max(((i, d) for d in range(7) for i in range(len(f["calls"][d]))), key=lambda t: f["calls"][t[1]][t[0]])
@@ -203,7 +255,7 @@ def register(app, ctx) -> None:
         action = request.form.get("action", "preview")
         if action == "save":
             try:
-                vb.save_forecast(key, channel, week, request.form.get("total", ""), _typed_days(), g.user["id"])
+                vb.save_forecast(key, channel, week, request.form.get("total", ""), _typed_days(), g.user["id"], weeks=_hist_weeks(), skip_weeks=_skips())
             except ValueError as exc:
                 flash(str(exc))
                 return _render("forecast")
@@ -211,12 +263,65 @@ def register(app, ctx) -> None:
                         detail=f"{request.form.get('total', '').strip()} contacts")
             flash(f"Saved the {channel} forecast for the week of {week:%a %d %b}.")
             return redirect(url_for("volumes_page", tab="forecast", program=key, channel=channel, week=week.isoformat()), code=303)
+        if action == "remember_weeks":
+            try:
+                vb.set_skip_weeks(key, _skips() or [], g.user["id"])
+            except ValueError as exc:
+                flash(str(exc))
+                return _render("forecast")
+            ctx._record("volumes_drivers_saved", program=key, week_start=week.isoformat(), subject="Weeks left out", detail=f"{len(_skips() or [])} weeks")
+            flash("Remembered the weeks you left out. They stay out of every forecast until you change them.")
+            return redirect(url_for("volumes_page", tab="forecast", program=key, channel=channel, week=week.isoformat(), **_carry()), code=303)
         if action == "remove":
             vb.store.delete_volume_forecast(key, channel, week.isoformat())
             ctx._record("volumes_forecast_saved", program=key, week_start=week.isoformat(), subject=channel, detail="removed")
             flash("Removed that forecast.")
             return redirect(url_for("volumes_page", tab="forecast", program=key, channel=channel, week=week.isoformat()), code=303)
         return _render("forecast")
+
+    # ------------------------------------------------------------------ what else is known about the week
+    @app.route("/volumes/drivers", methods=["POST"])
+    @login_required
+    def volumes_drivers():  # type: ignore[no-untyped-def]
+        """Events and promotions, AI periods, year-over-year growth, last year's totals: each one checked whole, and refused in words with nothing kept."""
+        vb, key = _book(), _unit()
+        channel = _channel(request.form.get("channel", ""))
+        week = _week(key, request.form.get("week", ""), _today() + timedelta(weeks=1))
+        action = request.form.get("action", "")
+        form = request.form
+        uid = g.user["id"]
+        try:
+            if action == "add_event":
+                row = {"kind": form.get("kind", ""), "name": form.get("name", ""), "channels": form.getlist("channels"), "start": form.get("start", ""),
+                       "end": form.get("end", ""), "change": form.get("change", ""), "after_days": form.get("after_days", ""),
+                       "after_change": form.get("after_change", "")}
+                vb.add_driver(key, "events", row, uid)
+                said = f"Added the {row['kind'].lower()} {' '.join(row['name'].split())[:60]}."
+            elif action == "add_ai":
+                row = {"channel": form.get("ai_channel", ""), "start": form.get("start", ""), "end": form.get("end", ""), "change": form.get("change", ""),
+                       "move_to": form.get("move_to", ""), "move_share": form.get("move_share", "")}
+                vb.add_driver(key, "ai", row, uid)
+                said = f"Added the AI period for {row['channel']}."
+            elif action == "remove":
+                which = form.get("list", "")
+                if which not in ("events", "ai"):
+                    raise ValueError("Events and AI periods are the two lists.")
+                vb.remove_driver(key, which, form.get("id", ""), uid)
+                said = "Removed it."
+            elif action == "growth":
+                vb.set_growth(key, {ch: form.get(f"yoy.{ch}", "") for ch in CHANNELS}, form.get("method", "measured"), uid)
+                said = "Saved the year-over-year rates."
+            elif action == "last_year":
+                vb.set_last_year(key, week, {ch: form.get(f"ly.{ch}", "") for ch in CHANNELS}, uid)
+                said = "Saved last year's totals."
+            else:
+                raise ValueError("Choose what to change.")
+        except ValueError as exc:
+            flash(str(exc))
+            return _render("forecast", draft=form)
+        ctx._record("volumes_drivers_saved", program=key, week_start=week.isoformat(), subject=action.replace("_", " "), detail=said)
+        flash(said)
+        return redirect(url_for("volumes_page", tab="forecast", program=key, channel=channel, week=week.isoformat(), **_carry()), code=303)
 
     # ------------------------------------------------------------------ actuals: check, then save
     @app.route("/volumes/actuals/check", methods=["POST"])
@@ -334,7 +439,7 @@ def register(app, ctx) -> None:
         week = _week(key, request.args.get("week", ""), _today())
         what = request.args.get("what", "calls")
         if what in ("calls", "needs"):
-            f = vb.forecast(key, channel, week, total=request.args.get("total") or None, day_totals=_typed_days())
+            f = _plan(vb, key, channel, week, total=request.args.get("total") or None, day_totals=_typed_days())
             values = f.get("calls") if what == "calls" else f.get("needs")
         elif what in ("actual", "otf"):
             r = vb.report(key, channel, week)

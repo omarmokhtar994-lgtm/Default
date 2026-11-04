@@ -217,12 +217,29 @@ class TheForecastPage(_Volumes):
         self.assertEqual(self.vb.drivers(self.alpha)["events"], [])
         self.assertEqual(self.vb.forecast(self.alpha, "Phone", self.sunday)["suggestion"]["final"], plain)
 
+    def test_what_was_removed_is_named_and_a_second_removal_is_said(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        self.post(client, "add_event", **self.event(name="Spring sale"))
+        ident = self.vb.drivers(self.alpha)["events"][0]["id"]
+        said = self.text(client.post("/volumes/drivers", data={"program": self.alpha, "csrf_token": token(client), "channel": "Phone", "week": self.week,
+                                                               "action": "remove", "list": "events", "id": ident}, follow_redirects=True))
+        self.assertIn("Removed Spring sale.", said)
+        again = self.text(client.post("/volumes/drivers", data={"program": self.alpha, "csrf_token": token(client), "channel": "Phone", "week": self.week,
+                                                                "action": "remove", "list": "events", "id": ident}, follow_redirects=True))
+        self.assertIn("That one was already removed.", again)
+
+    def test_the_weeks_table_says_the_status_of_every_week(self):
+        body = self.text(self.view(total="8000", skip_sent="1", skip=(self.sunday - timedelta(weeks=2)).isoformat()))
+        self.assertIn('<th scope="col">Status</th>', body)
+        self.assertIn("Not used: left out by you", body)
+        self.assertRegex(body, r'<td class="vol-why">Used</td>')
+
     def test_a_bad_event_is_refused_in_words_and_the_form_keeps_what_was_typed(self):
         client = sign_in(self.app, "plan_a", PASSWORD)
         got = self.post(client, "add_event", **self.event(change="900", name="Spring sale"))
         body = self.text(got)
         self.assertEqual(got.status_code, 200)
-        self.assertIn("percent", body)
+        self.assertIn("is in percent, more than -100 and at most 500", body)
         self.assertIn('value="Spring sale"', body)
         self.assertEqual(self.vb.drivers(self.alpha)["events"], [])
         for bad in (self.event(end=(self.sunday - timedelta(days=3)).isoformat()), self.event(channels=[]), self.event(name="=cmd|' /C calc'!A0"),
@@ -318,6 +335,45 @@ class TheForecastPage(_Volumes):
         self.assertIn('data-copy-text="#agents-lambda"', body)
         self.assertIn("=LAMBDA(calls, aht, interval, target, secs, maxocc", body)
         self.assertRegex(body, r'href="[^"]*formulas\.xlsx[^"]*hist_weeks=6')
+
+
+    def test_weeks_at_the_edge_of_the_calendar_never_crash_a_page_or_a_download(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        tok = token(client)
+        for week in ("0001-01-05", "0001-06-01", "2014-12-28", "2101-01-03", "9999-12-25", "9999-12-31"):
+            for tab in ("actuals", "forecast", "how", "settings"):
+                self.assertLess(client.get("/volumes", query_string={"program": self.alpha, "tab": tab, "week": week}).status_code, 500, (tab, week))
+            for path, extra in (("/volumes/table.xlsx", {"what": "calls", "total": "100"}), ("/volumes/table.xlsx", {"what": "actual"}),
+                                ("/volumes/formulas.xlsx", {"total": "100"}), ("/volumes/draft.xlsx", {}), ("/volumes/requirements.xlsx", {})):
+                self.assertLess(client.get(path, query_string={"program": self.alpha, "week": week, **extra}).status_code, 500, (path, week))
+            for path, form in (("/volumes/forecast", {"action": "preview", "total": "100"}), ("/volumes/forecast", {"action": "save", "total": "100"}),
+                               ("/volumes/drivers", {"action": "last_year", "ly.Phone": "5"}), ("/volumes/drivers", {"action": "growth", "method": "measured"})):
+                self.assertLess(client.post(path, data={"program": self.alpha, "csrf_token": tok, "channel": "Phone", "week": week, **form}).status_code, 500, (path, week))
+        self.assertEqual(self.vb.drivers(self.alpha)["last_year"], {})                  # a write to a week that is not one is refused, not moved to another week
+        self.assertEqual(self.vb.drivers(self.alpha)["growth"]["yoy"], {})
+        self.assertIsNone(self.store.volume_forecast(self.alpha, "Phone", self.week))
+        for week in ("0001-01-05", "9999-12-31"):
+            got = client.post("/volumes/actuals/check", data={"program": self.alpha, "csrf_token": tok, "channel": "Phone", "week": week,
+                                                              "paste": "Interval\tMon\n09:00\t5"})
+            self.assertIn("Nothing was saved", html.unescape(got.get_data(as_text=True)), week)
+
+    # -- panels stay open where the person is working
+    def test_a_panel_with_entries_is_open_and_so_is_the_one_that_refused_an_answer(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        self.assertNotIn("<details open><summary>Promotions", self.view(client).get_data(as_text=True))
+        bad = self.post(client, "add_event", **self.event(change="900")).get_data(as_text=True)
+        self.assertIn("<details open><summary>Promotions", bad)
+        self.assertNotIn("<details open><summary>AI and automation", bad)
+        self.post(client, "add_event", **self.event())
+        self.assertIn("<details open><summary>Promotions", self.view(client).get_data(as_text=True))
+        wrong = self.post(client, "add_ai", ai_channel="Phone", start=self.week, end=self.week, change="abc").get_data(as_text=True)
+        self.assertIn("<details open><summary>AI and automation", wrong)
+        self.post(client, "growth", **{"yoy.Phone": "8", "method": "measured"})
+        self.assertIn("<details open><summary>Customer growth", self.view(client).get_data(as_text=True))
+
+    def test_the_definitions_box_has_a_name_for_a_screen_reader(self):
+        body = self.view(total="8000").get_data(as_text=True)
+        self.assertRegex(body, r'<pre id="agents-lambda"[^>]*role="region"[^>]*aria-label="[^"]+"')
 
     # -- walls
     def test_only_those_who_may_change_volumes_can_change_drivers(self):

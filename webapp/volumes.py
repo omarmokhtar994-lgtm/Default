@@ -26,9 +26,10 @@ from openpyxl import Workbook
 
 from . import drivers as D, erlang, forecast as F
 from .channel_template import _head, _title
-from .volumes_io import CHANNELS, DAY_NAMES, ParsedVolumes
+from .volumes_io import CHANNELS, DAY_NAMES, FIRST_DAY, ParsedVolumes
 
 MAX_TOTAL = 5_000_000
+LAST_WEEK = date(2100, 1, 1)
 MIN_DAYS_IN_A_WEEK = 5          # a week counts in the weekly totals when it holds at least this many days of data
 TREND_WEEKS = 8
 FALLBACK_AHT = {"Phone": 300.0, "Chat": 420.0, "Email": 600.0}
@@ -63,12 +64,18 @@ def _whole(value: Any, what: str) -> int:
         value = int(value)
     if isinstance(value, str):
         text = value.strip().replace(",", "").replace(" ", "")
-        if not text.isdigit():
+        if not text.isdecimal():                                   # not isdigit: "²" is a digit that int() cannot read
             raise ValueError(f"{what} is a whole number of zero or more.")
         value = int(text)
     if not isinstance(value, int) or value < 0 or value > MAX_TOTAL:
         raise ValueError(f"{what} is a whole number from 0 to {MAX_TOTAL:,}.")
     return value
+
+
+def _check_week(week_start: date) -> None:
+    """A week between 2015 and 2100; outside that the calendar arithmetic runs off the end of Python's dates, so it is refused in words instead."""
+    if not FIRST_DAY <= week_start < LAST_WEEK:
+        raise ValueError(f"Pick a week between {FIRST_DAY.year} and {LAST_WEEK.year}.")
 
 
 def site_day(weekday: int) -> int:
@@ -181,6 +188,7 @@ class VolumeBook:
 
     def set_last_year(self, key: str, week_start: date, values: Any, user_id: Optional[int]) -> Dict[str, Any]:
         """Last year's totals for the same week as ``week_start`` (52 weeks earlier, so the same weekdays)."""
+        _check_week(week_start)
         return self._keep(key, D.with_last_year(self.drivers(key), (week_start - timedelta(days=364)).isoformat(), values), user_id)
 
     def set_skip_weeks(self, key: str, weeks: Any, user_id: Optional[int]) -> Dict[str, Any]:
@@ -331,6 +339,7 @@ class VolumeBook:
         is returned as it was saved."""
         if channel not in CHANNELS:
             raise ValueError("The channel is Phone, Chat or Email.")
+        _check_week(week_start)
         if base not in ("history", "last_year"):
             raise ValueError("Start from the history or from last year.")
         s = self.settings(key)[channel]
@@ -414,6 +423,7 @@ class VolumeBook:
         behind them, so later changes to the history, events or settings do not move it. Refused without history to spread the total over."""
         if channel not in CHANNELS:
             raise ValueError("The channel is Phone, Chat or Email.")
+        _check_week(week_start)
         n = _whole(total, "The week's calls")
         days = {str(int(d)): _whole(v, "A day's calls") for d, v in (day_totals or {}).items() if v not in (None, "")}
         if sum(days.values()) > n:
@@ -508,6 +518,7 @@ class VolumeBook:
         """How the week starting ``week_start`` went for one channel: offered over forecast, the trend, and for the day ``on`` the staffing lines."""
         if channel not in CHANNELS:
             raise ValueError("The channel is Phone, Chat or Email.")
+        _check_week(week_start)
         s = self.settings(key)[channel]
         step = self.step(key)
         actual, actual_aht, dates = self._actual(key, channel, week_start)

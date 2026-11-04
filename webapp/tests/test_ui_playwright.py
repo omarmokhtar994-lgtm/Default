@@ -4074,6 +4074,41 @@ class TheVolumesInTheBrowser(unittest.TestCase):
         expect(page.get_by_text("Nothing was saved")).to_be_visible()
         self.assertEqual(len(self.store.volume_days(self.key, "Phone")), before)
 
+    def test_leaving_a_grid_with_typed_numbers_asks_first_and_an_empty_or_sent_one_does_not(self):
+        asks = "() => { const e = new Event('beforeunload', {cancelable: true}); window.dispatchEvent(e); return e.defaultPrevented; }"
+        page, form = self._entry_page()
+        self.assertFalse(page.evaluate(asks))                                        # nothing typed: no question
+        form.locator('table[data-entry-grid="offered"] input[data-i="18"][data-d="2"]').click()
+        page.keyboard.type("12")
+        self.assertTrue(page.evaluate(asks))                                         # typed, not sent: the browser is asked to confirm
+        form.get_by_role("button", name="Clear the grid").click()
+        self.assertFalse(page.evaluate(asks))                                        # cleared: nothing to lose
+        form.locator('table[data-entry-grid="offered"] input[data-i="18"][data-d="3"]').focus()
+        self._paste(page, "5\t6")
+        self.assertTrue(page.evaluate(asks))                                         # a paste counts as typing
+        form.get_by_role("button", name="Check").click()
+        page.wait_for_load_state("load")
+        expect(page.get_by_text("The table is good")).to_be_visible()                # sending it for the check is not leaving: the answer came
+        self.assertFalse(page.evaluate(asks))
+        page.close()
+
+    def test_the_arrow_keys_cross_a_cell_only_from_its_edge_and_a_skip_link_leaves_the_grid(self):
+        page, form = self._entry_page()
+        box = form.locator('table[data-entry-grid="offered"] input[data-i="18"][data-d="2"]')
+        box.focus()
+        page.keyboard.type("123")
+        page.keyboard.press("ArrowLeft")                                              # inside the number: the caret moves, the cell stays
+        self.assertEqual(page.evaluate("[document.activeElement.dataset.i, document.activeElement.dataset.d]"), ["18", "2"])
+        page.keyboard.press("ArrowRight")
+        page.keyboard.press("ArrowRight")                                             # at the end of the text: on to the next day
+        self.assertEqual(page.evaluate("[document.activeElement.dataset.i, document.activeElement.dataset.d]"), ["18", "3"])
+        page.keyboard.press("ArrowLeft")                                              # that cell is empty, so its edge is here
+        self.assertEqual(page.evaluate("[document.activeElement.dataset.i, document.activeElement.dataset.d]"), ["18", "2"])
+        form.locator("a.skip-in").focus()
+        page.keyboard.press("Enter")
+        page.keyboard.press("Tab")
+        self.assertEqual(page.evaluate("document.activeElement.textContent.trim()"), "Check")
+
     def test_clear_empties_the_grid_and_an_empty_grid_says_so(self):
         page, form = self._entry_page()
         form.locator('table[data-entry-grid="offered"] input[data-i="3"][data-d="2"]').fill("7")
@@ -4084,10 +4119,12 @@ class TheVolumesInTheBrowser(unittest.TestCase):
         expect(page.get_by_text("no numbers")).to_be_visible()
 
     def test_the_typed_grid_works_on_a_phone_without_widening_the_page(self):
-        page, form = self._entry_page(width=360)
-        self.assertLessEqual(page.evaluate("document.scrollingElement.scrollWidth - window.innerWidth"), 1)
-        small = page.evaluate("""() => [...document.querySelectorAll('input[data-d]')].filter(e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.height < 23.5; }).length""")
-        self.assertEqual(small, 0)
+        for width in (360, 320):
+            page, form = self._entry_page(width=width)
+            self.assertLessEqual(page.evaluate("document.scrollingElement.scrollWidth - window.innerWidth"), 1, width)
+            small = page.evaluate("""() => [...document.querySelectorAll('input[data-d]')].filter(e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.height < 23.5; }).length""")
+            self.assertEqual(small, 0, width)
+            page.close()
 
     # Phase BJ: the questions about the week.
     def _forecast_page(self, width, height=900):
@@ -4100,7 +4137,7 @@ class TheVolumesInTheBrowser(unittest.TestCase):
         return page
 
     def test_the_questions_open_without_widening_the_page_and_every_control_is_big_enough(self):
-        for width in (1280, 768, 360):
+        for width in (1280, 768, 360, 320):
             page = self._forecast_page(width)
             page.evaluate("document.querySelectorAll('main details').forEach(d => { d.open = true; })")
             self.assertLessEqual(page.evaluate("document.scrollingElement.scrollWidth - window.innerWidth"), 1, width)
@@ -4137,7 +4174,7 @@ class TheVolumesInTheBrowser(unittest.TestCase):
         form.locator("input[name=change]").fill("900")
         form.get_by_role("button", name="Add the event").click()
         page.wait_for_load_state("load")
-        expect(page.get_by_text("is a change in percent")).to_be_visible()
+        expect(page.get_by_text("is in percent, more than -100")).to_be_visible()
         self.assertEqual(page.locator("form[aria-label='Add a promotion or event'] input[name=name]").input_value(), "Spring sale")
 
     def test_the_agents_definitions_copy_to_the_clipboard_and_the_workbook_downloads(self):

@@ -330,5 +330,34 @@ class TheDriversInTheSuggestion(unittest.TestCase):
         self.assertLessEqual(b["final"], b["high"])
 
 
+class TheDatesAtTheEdge(unittest.TestCase):
+    """A week at the edge of the calendar must be refused in words, never crash (OverflowError once reached year 1 and year 9999)."""
+
+    def setUp(self):
+        self.store, self.vb = book()
+        scaled(self.store, {})
+
+    def test_a_week_outside_2015_to_2100_is_refused_by_every_entry_point(self):
+        for week in (date(1, 1, 5), date(1, 6, 1), date(2014, 12, 28), date(2101, 1, 3), date(9999, 12, 25), date(9999, 12, 31)):
+            for call in (lambda w: self.vb.forecast(KEY, "Phone", w, total=100), lambda w: self.vb.forecast(KEY, "Phone", w),
+                         lambda w: self.vb.report(KEY, "Phone", w), lambda w: self.vb.save_forecast(KEY, "Phone", w, 100, {}, 1),
+                         lambda w: self.vb.set_last_year(KEY, w, {"Phone": 5}, 1)):
+                with self.assertRaises(ValueError, msg=week):
+                    call(week)
+        self.assertEqual(self.vb.drivers(KEY)["last_year"], {})
+
+    def test_the_first_and_last_weeks_that_are_allowed_work(self):
+        for week in (date(2015, 1, 4), date(2099, 12, 27)):
+            self.assertEqual(self.vb.forecast(KEY, "Phone", week, total=100)["week_start"], week.isoformat())
+
+    def test_a_number_with_exotic_digits_is_refused_without_echoing_it(self):
+        for text in ("²", "①", "٣٤²"):
+            for call in (lambda t: self.vb.forecast(KEY, "Phone", SUN, total=t), lambda t: self.vb.set_last_year(KEY, SUN, {"Phone": t}, 1)):
+                with self.assertRaises(ValueError) as why:
+                    call(text)
+                self.assertNotIn("literal", str(why.exception))
+                self.assertNotIn(text, str(why.exception))
+
+
 if __name__ == "__main__":
     unittest.main()

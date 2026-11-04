@@ -2078,9 +2078,12 @@ document.addEventListener("change", function (e) {
   function onKey(e) {
     var box = e.target;
     if (!box.matches || !box.matches("input[data-d]") || e.altKey || e.ctrlKey || e.metaKey) { return; }
-    var down = e.key === "Enter" || e.key === "ArrowDown", up = e.key === "ArrowUp";
-    if (!down && !up) { return; }
-    var next = cell(box.closest("table"), parseInt(box.getAttribute("data-i"), 10) + (down ? 1 : -1), parseInt(box.getAttribute("data-d"), 10));
+    var i = parseInt(box.getAttribute("data-i"), 10), d = parseInt(box.getAttribute("data-d"), 10), table = box.closest("table"), next = null;
+    if (e.key === "Enter" || e.key === "ArrowDown") { next = cell(table, i + 1, d); }
+    else if (e.key === "ArrowUp") { next = cell(table, i - 1, d); }
+    // sideways only from the edge of the text, so the arrows still move the caret inside a number
+    else if (e.key === "ArrowLeft" && box.selectionStart === 0 && box.selectionEnd === 0) { next = cell(table, i, d - 1); }
+    else if (e.key === "ArrowRight" && box.selectionStart === box.value.length && box.selectionEnd === box.value.length) { next = cell(table, i, d + 1); }
     if (next) { e.preventDefault(); next.focus(); next.select(); }
   }
   function text(table) {
@@ -2095,6 +2098,10 @@ document.addEventListener("change", function (e) {
   function hasValue(table) {
     return Array.prototype.some.call(table.querySelectorAll("input[data-d]"), function (box) { return clean(box.value) !== ""; });
   }
+  var dirty = false;      // numbers typed or pasted that nobody has sent to be checked yet
+  window.addEventListener("beforeunload", function (e) {
+    if (dirty) { e.preventDefault(); e.returnValue = ""; }
+  });
   function start() {
     var forms = document.querySelectorAll("form[data-entry-form]");
     forms.forEach(function (form) {
@@ -2104,9 +2111,11 @@ document.addEventListener("change", function (e) {
         var row = table.querySelector('input[data-i="' + Math.floor(360 / (parseInt(table.getAttribute("data-entry-step"), 10) || 30)) + '"]');
         if (row && table.parentNode && table.offsetParent !== null) { table.parentNode.scrollTop = Math.max(0, row.closest("tr").offsetTop - 34); }
       });
-      form.addEventListener("paste", onPaste);
+      form.addEventListener("paste", function (e) { dirty = true; onPaste(e); });
+      form.addEventListener("input", function (e) { if (e.target.matches && e.target.matches("input[data-d]")) { dirty = true; } });
       form.addEventListener("keydown", onKey);
       form.addEventListener("submit", function () {
+        dirty = false;
         var offered = form.querySelector('table[data-entry-grid="offered"]'), aht = form.querySelector('table[data-entry-grid="aht"]');
         form.querySelector('[name="paste"]').value = offered ? text(offered) : "";
         form.querySelector('[name="aht_paste"]').value = aht && hasValue(aht) ? text(aht) : "";
@@ -2115,6 +2124,7 @@ document.addEventListener("change", function (e) {
       if (clear) {
         clear.addEventListener("click", function () {
           form.querySelectorAll("input[data-d]").forEach(function (box) { box.value = ""; });
+          dirty = false;
         });
       }
     });

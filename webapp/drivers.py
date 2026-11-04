@@ -61,7 +61,7 @@ def _number(value: Any, what: str) -> float:
 def _change(value: Any, what: str) -> float:
     out = _number(value, what)
     if not CHANGE_LOW < out <= CHANGE_HIGH:
-        raise ValueError(f"{what} is a change in percent: more than -100 and at most {CHANGE_HIGH:.0f}.")
+        raise ValueError(f"{what} is in percent, more than -100 and at most {CHANGE_HIGH:.0f}. For example 25 means 25% more and -10 means 10% fewer.")
     return out
 
 
@@ -91,19 +91,19 @@ def _channel(value: Any, what: str) -> str:
 def _name(value: Any) -> str:
     text = " ".join(str(value if value is not None else "").split())
     if not text:
-        raise ValueError("Give it a name.")
+        raise ValueError("Type a name, up to 80 characters.")
     if len(text) > MAX_NAME:
         raise ValueError(f"A name is at most {MAX_NAME} characters.")
     if text[0] in "=+-@" or any(ord(ch) < 32 for ch in text):
-        raise ValueError("A name cannot start with = + - or @.")
+        raise ValueError("Start the name with a letter or a number (not = + - or @).")
     return text
 
 
 def _span(start: date, end: date, longest: int) -> None:
     if end < start:
-        raise ValueError("The end date is before the start date.")
+        raise ValueError("Pick an end date on or after the start date.")
     if (end - start).days + 1 > longest:
-        raise ValueError(f"A period is at most {longest} days.")
+        raise ValueError(f"A period is at most {longest} days: split a longer one into two.")
 
 
 # --- one event, one AI period ----------------------------------------------------------------------------------------------------
@@ -125,7 +125,7 @@ def clean_event(raw: Any) -> Dict[str, Any]:
     _span(start, end, MAX_EVENT_DAYS)
     change = _change(raw.get("change"), "The change")
     if change == 0:
-        raise ValueError("The change cannot be zero.")
+        raise ValueError("The change is not zero: type a percent such as 25 or -10.")
     after_days_raw = raw.get("after_days", 0)
     after_days = 0 if after_days_raw in (None, "") else _number(after_days_raw, "The days after")
     if after_days != int(after_days) or not 0 <= after_days <= MAX_AFTER_DAYS:
@@ -149,7 +149,7 @@ def clean_ai(raw: Any) -> Dict[str, Any]:
     _span(start, end, MAX_AI_DAYS)
     change = _change(raw.get("change"), "The change")
     if change == 0:
-        raise ValueError("The change cannot be zero.")
+        raise ValueError("The change is not zero: type a percent such as 25 or -10.")
     move_to = raw.get("move_to") or ""
     share_raw = raw.get("move_share", 0)
     share = 0.0 if share_raw in (None, "") else _number(share_raw, "The share that moves")
@@ -161,7 +161,7 @@ def clean_ai(raw: Any) -> Dict[str, Any]:
     if move_to == channel:
         raise ValueError("It cannot move to the channel it leaves.")
     if change >= 0:
-        raise ValueError("Only a fall can move to another channel.")
+        raise ValueError("Only a reduction can move to another channel: type a negative change, or choose Nowhere.")
     if not 0 < share <= 100:
         raise ValueError("The share that moves is more than 0 and at most 100 percent.")
     return {"channel": channel, "start": start.isoformat(), "end": end.isoformat(), "change": change, "move_to": move_to, "move_share": share}
@@ -260,7 +260,7 @@ def _whole_total(value: Any, what: str) -> int:
     if isinstance(value, bool) or value is None:
         raise ValueError(f"{what} is a whole number.")
     text = str(value).strip().replace(",", "").replace(" ", "")
-    if not text.isdigit() or int(text) > MAX_TOTAL:
+    if not text.isdecimal() or int(text) > MAX_TOTAL:           # not isdigit: "²" is a digit that int() cannot read
         raise ValueError(f"{what} is a whole number from 0 to {MAX_TOTAL:,}.")
     return int(text)
 

@@ -20,11 +20,11 @@ from ..auth import login_required
 from ..programs import ProgramBook
 from ..shrink_view import week_begin
 from .. import drivers as drivers_mod
-from ..volumes import DEFAULTS, LABELS, VolumeBook, _today
+from ..volumes import DEFAULTS, LABELS, LAST_WEEK, VolumeBook, _today
 from ..excel_agents import lambda_definitions
 from ..volumes_draft import draft_workbook, is_draft, parse_draft
 from ..volumes_formulas import formulas_workbook
-from ..volumes_io import CHANNELS, DAY_NAMES, parse_grid, parse_long, parse_pasted, read_table
+from ..volumes_io import CHANNELS, DAY_NAMES, FIRST_DAY, parse_grid, parse_long, parse_pasted, read_table
 
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 TABS = (("actuals", "Actuals"), ("forecast", "Forecast and needs"), ("how", "How we did"), ("settings", "Settings"))
@@ -70,13 +70,20 @@ def register(app, ctx) -> None:
         return value if value in CHANNELS else "Phone"
 
     def _date(text: str) -> Optional[date]:
+        """A date typed or sent, or None when it is not one or lies outside 2015 to 2100 (so calendar arithmetic on it cannot run off Python's dates)."""
         try:
-            return date.fromisoformat((text or "").strip())
+            found = date.fromisoformat((text or "").strip())
         except ValueError:
             return None
+        return found if FIRST_DAY <= found < LAST_WEEK else None
 
     def _week(key: str, text: str, default: date) -> date:
         return week_begin(_date(text) or default, _start_day(key))
+
+    def _bad_week() -> bool:
+        """Whether a form named a week that is not a date between 2015 and 2100. Pages fall back to the default week; anything that writes refuses instead."""
+        raw = request.form.get("week", "").strip()
+        return bool(raw) and _date(raw) is None
 
     def _week_choices(key: str, centre: date, back: int, ahead: int) -> List[Dict[str, str]]:
         first = week_begin(centre, _start_day(key))
@@ -253,6 +260,9 @@ def register(app, ctx) -> None:
     def volumes_forecast():  # type: ignore[no-untyped-def]
         vb, key = _book(), _unit()
         channel = _channel(request.form.get("channel", ""))
+        if _bad_week():
+            flash("That week is not a date between 2015 and 2100. Pick a week from the list.")
+            return _render("forecast")
         week = _week(key, request.form.get("week", ""), _today() + timedelta(weeks=1))
         action = request.form.get("action", "preview")
         if action == "save":
@@ -288,6 +298,9 @@ def register(app, ctx) -> None:
         """Events and promotions, AI periods, year-over-year growth, last year's totals: each one checked whole, and refused in words with nothing kept."""
         vb, key = _book(), _unit()
         channel = _channel(request.form.get("channel", ""))
+        if _bad_week():
+            flash("That week is not a date between 2015 and 2100. Pick a week from the list.")
+            return _render("forecast")
         week = _week(key, request.form.get("week", ""), _today() + timedelta(weeks=1))
         action = request.form.get("action", "")
         form = request.form
@@ -308,8 +321,9 @@ def register(app, ctx) -> None:
                 which = form.get("list", "")
                 if which not in ("events", "ai"):
                     raise ValueError("Events and AI periods are the two lists.")
+                gone = next((r for r in vb.drivers(key)[which] if r["id"] == form.get("id", "")), None)
                 vb.remove_driver(key, which, form.get("id", ""), uid)
-                said = "Removed it."
+                said = (f"Removed {gone['name']}." if which == "events" else f"Removed the {gone['channel']} AI period from {gone['start']}.") if gone else "That one was already removed."
             elif action == "growth":
                 vb.set_growth(key, {ch: form.get(f"yoy.{ch}", "") for ch in CHANNELS}, form.get("method", "measured"), uid)
                 said = "Saved the year-over-year rates."
@@ -354,6 +368,8 @@ def register(app, ctx) -> None:
                 grid = any(str(row[0]).strip().lower() == "interval" and any(str(c).strip().title()[:3] in DAY_NAMES for c in row[1:])
                            for row in table[:30] if row)
                 if grid:
+                    if _bad_week():
+                        raise ValueError("The week is not a date between 2015 and 2100. Pick a week from the list.")
                     week = _week(key, request.form.get("week", ""), today - timedelta(weeks=1))
                     parsed = parse_grid(table, week, channel, parse_pasted(aht_text) if aht_text.strip() else None, step, today)
                     result["mode"] = f"the input sheet's layout for the week of {week:%a %d %b %Y}, {channel}"

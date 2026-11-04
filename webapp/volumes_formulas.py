@@ -47,6 +47,8 @@ LINES = (
     "Excel 365 can have a function of its own, =AGENTS(calls, aht, interval_seconds, target, answer_seconds, max_occupancy). Add it once: Formulas, Name Manager, New; "
     "type the name (AGENTS); paste the definition below into Refers to; press OK. Then, for example: =AGENTS(B14, $B$4, $B$5, $B$6/100, $B$7, $B$8/100). The target and the "
     "occupancy are fractions (0.8 is 80%). SERVICELEVEL is the same for the share answered in time with a given number of agents.",
+    "POISSON is the name Microsoft keeps for compatibility; it works in every version today. If a future Excel no longer has it, replace POISSON( with POISSON.DIST( in the formula "
+    "(same arguments). The cell beside \"Intervals that differ\" shows at once if a different Excel calculates anything differently.",
     "Method: traffic in Erlangs is contacts x handle time / interval. The agents needed are the fewest above the traffic with the Erlang C service level at least the "
     "target and the occupancy (traffic / agents) at most the highest occupancy; comparisons are made to 12 places, as a spreadsheet does. Erlang C assumes nobody abandons, so it "
     "over-staffs where callers do. Chat divides the handle time by the chats at once. Email is the workload method. These are people on the floor; the schedule engine "

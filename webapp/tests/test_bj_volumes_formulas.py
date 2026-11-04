@@ -83,6 +83,10 @@ class TheWorkbook(unittest.TestCase):
         self.assertTrue(all(c.data_type == "s" for c in found))
         self.assertTrue(any("AGENTS" in str(c.value) for row in info.iter_rows() for c in row))
 
+    def test_the_read_me_says_what_to_do_if_a_future_excel_drops_the_old_poisson_name(self):
+        text = " ".join(str(c.value) for row in self.wb["Read me"].iter_rows() for c in row if isinstance(c.value, str) and not c.value.startswith("=LAMBDA"))
+        self.assertIn("POISSON.DIST", text)
+
     def test_nothing_reaches_outside_the_file(self):
         with __import__("zipfile").ZipFile(io.BytesIO(self.data)) as z:
             names = " ".join(z.namelist()).lower()

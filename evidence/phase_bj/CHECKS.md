@@ -27,7 +27,7 @@ which period and if will increase in next period then to how much etc". Plan and
 - Excel against Python: 8,000 random cases recalculated by LibreOffice (`test_bj_excel_agents`), 0 differences after the 12-place comparison (an exact 70 % occupancy had been refused by a float hair; fixed in Python and formula). The workbook:
   every cell of Phone, Chat and Email equals the site's figure after LibreOffice recalculates it; changed inputs (target, answer time, occupancy, handle time, chats at once, a changed contacts cell) equal the site's Erlang; six random input
   sets equal it too (`test_bj_volumes_formulas`, `test_bj_invariants`).
-- Tests added in Phase BJ: drivers 33, volume book 39, draft 24, Excel formula 6, formulas workbook 15, pages 36, seeded invariants and fuzz 12, browser 14. Earlier volumes modules still pass (forecast 36, store 18, reading 30, book 33, pages 28); the forecast and
+- Tests added in Phase BJ: drivers 33, volume book 42, draft 24, Excel formula 6, formulas workbook 16, pages 41, seeded invariants and fuzz 12, browser 17. Earlier volumes modules still pass (forecast 36, store 18, reading 30, book 33, pages 28); the forecast and
   book tests were re-pinned because the contract changed (reasons in their docstrings) and no case they covered was dropped.
 - Invariants on many seeded random cases: every open weekday has the same count of weeks; a forecast grid adds up exactly to its total and is whole numbers, zero where the weekday is closed; people only where there are contacts; the people needed
   meet the target or the occupancy cap binds; a saved forecast never moves when history, drivers or settings change later; the waterfall adds up exactly; moved contacts equal what the source lost times the share; hostile values (NaN, infinity, huge,
@@ -36,6 +36,20 @@ which period and if will increase in next period then to how much etc". Plan and
 - Browser (real Chromium): the typed grid is built in the program's interval; paste by header and times, bare paste, numbers that do not fit are left out and said; keys; typed week checked then saved; a mistake keeps nothing; no sideways scroll and 24 px
   targets at 1280, 768 and 360 px with every question open; an event added in the page becomes a step; the definitions copy to the clipboard; the workbook downloads.
 - Route map re-pinned for exactly three new routes (`/volumes/draft.xlsx`, `/volumes/drivers`, `/volumes/formulas.xlsx`); the Roles matrix and the audit-event labels know them.
+
+## Review pass after the first full build (2026-11-04, owner asked "are you sure 100 %?")
+Skills used: verification-before-completion, security-and-hardening, web-interface-guidelines, better-accessibility, better-writing; outside checks: Microsoft Support pages for the LAMBDA steps (Name Manager, Refers to: matches the Read me),
+for SUMPRODUCT (an array function without Ctrl+Shift+Enter) and for POISSON (a compatibility function that still works; the modern name POISSON.DIST takes the same arguments: the Read me says what to change if a future Excel drops it).
+Found and fixed, each with a test that failed first:
+- **A week at the edge of the calendar crashed a page** (OverflowError at year 1 and 9999; the BI history code had it too). Now refused in words by every entry point and the pages accept dates from 2015 to 2100 only.
+- **A write to a week that was not a date was moved to the default week** (last year's totals could be saved into next week). Every writing route now refuses a bad week.
+- **"²" and "①" passed the digit test and then crashed int()**: the message echoed the typed text. Now refused with the generic message.
+- **Typed numbers were lost if the person left the page**: the grid now asks before leaving (and not after Check, Clear or an empty grid).
+- **A refused answer or an added entry closed its panel**: the panel with entries, or the one just refused, stays open.
+- **336 cells to tab through**: a "Skip the grid to Check" link and Left and Right arrows at the edges of a cell.
+- **The page scrolled sideways at 320 px** (the day-totals table from Phase BI sat outside a scroll region): wrapped; 320 px added to the checks.
+- The weeks table says "Status" with "Used" or "Not used: the reason"; errors say how to fix; removing names what was removed; the definitions box has a name for a screen reader.
+Not checked: Microsoft Excel itself (only LibreOffice recalculates the formulas here; the workbook's own "intervals that differ" cell shows any difference at once), a screen reader, and an independent reviewer.
 
 ## Not done, on purpose
 - Erlang A (abandonment), a service-level method for email, the ACD's own service level, holiday calendars by country, per-interval hand-typed forecasts.

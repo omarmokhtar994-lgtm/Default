@@ -47,6 +47,7 @@ class ParsedVolumes:
     rows: Dict[str, List[Tuple[str, int, float, Optional[float]]]] = field(default_factory=dict)
     problems: List[str] = field(default_factory=list)
     summary: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    notes: List[str] = field(default_factory=list)         # what was read or skipped and why, when it is not a problem
 
 
 def _norm(value: Any) -> str:

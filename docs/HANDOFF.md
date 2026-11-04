@@ -110,6 +110,7 @@ Load each with the Skill tool at the step it covers; following it from memory do
   interval or filled in a downloaded draft, and the Erlang staffing is one Excel formula (`=AGENTS`) with a workbook of live formulas. Engine untouched. Plan with rulings and checks:
   `docs/superpowers/plans/2026-11-04-phase-bj-volumes-drivers-excel.md`, `evidence/phase_bj/CHECKS.md`.
   Owner ruling after delivery: the last N weeks set only the pattern; the week's total is always typed by the planner (the suggestion is shown, never used unless they press Use).
+  Time zones (owner, 2026-11-04): volumes are kept in the program's zone (Settings); actuals say which zone they are in and are moved on checking; the forecast and its Excel downloads can be shown in another zone. `webapp/volumes_zone.py`; limits in the plan.
 - **Lesson:** timed solver checks (QUICK, 300 s) fail when the machine is busy. `NMG_EN_AND_SP` failed twice while a browser crawl ran and passed twice alone, on the old and the new engine alike. Run engine checks alone.
 - **Lesson:** a worker restart kills background jobs; keep a foreground wait loop going and use the resumable `/tmp/chain3.sh`-style scripts (markers per unit).
 

@@ -17,6 +17,7 @@ from openpyxl.styles import Font
 from .. import charts
 from ..app import clean_program
 from ..auth import login_required
+from ..clock import ZONES
 from ..programs import ProgramBook
 from ..shrink_view import week_begin
 from .. import drivers as drivers_mod
@@ -24,7 +25,7 @@ from ..volumes import DEFAULTS, LABELS, LAST_WEEK, VolumeBook, _today
 from ..excel_agents import lambda_definitions
 from ..volumes_draft import draft_workbook, is_draft, parse_draft
 from ..volumes_formulas import formulas_workbook
-from ..volumes_io import CHANNELS, DAY_NAMES, FIRST_DAY, parse_grid, parse_long, parse_pasted, read_table
+from ..volumes_io import CHANNELS, DAY_NAMES, FIRST_DAY, ParsedVolumes, parse_grid, parse_long, parse_pasted, read_table
 
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 TABS = (("actuals", "Actuals"), ("forecast", "Forecast and needs"), ("how", "How we did"), ("settings", "Settings"))
@@ -104,12 +105,17 @@ def register(app, ctx) -> None:
         """The weeks the person left out on this request, or None when the form was not sent (then the stored ones apply)."""
         return request.values.getlist("skip")[:80] if "skip_sent" in request.values else None
 
+    def _show_zone(vb: VolumeBook, key: str) -> str:
+        """The zone the person asked to see times in; the program's own when none, or one that is not in the list."""
+        asked = request.values.get("show_tz", "")
+        return asked if asked in dict(ZONES) else vb.zone(key)
+
     def _base() -> str:
         return "last_year" if request.values.get("base") == "last_year" else "history"
 
     def _carry() -> Dict[str, Any]:
         """What a page asks for, kept when a form on it sends the person back to it."""
-        out: Dict[str, Any] = {k: request.form[k] for k in ("total", "hist_weeks", "base", "day") if request.form.get(k)}
+        out: Dict[str, Any] = {k: request.form[k] for k in ("total", "hist_weeks", "base", "day", "show_tz") if request.form.get(k)}
         if "skip_sent" in request.form:
             out["skip_sent"] = "1"
             out["skip"] = request.form.getlist("skip")[:80]
@@ -197,7 +203,8 @@ def register(app, ctx) -> None:
         step = vb.step(key)
         ctxt: Dict[str, Any] = {"tab": tab, "tabs": TABS, "key": key, "label": ProgramBook(store).label(key), "channel": channel,
                                 "channels": CHANNELS, "coverage": coverage, "step": step, "erlang": vb.uses_erlang(key),
-                                "measure": vb.measure_of(key), "day_names": DAY_NAMES, "today": today.isoformat(), "grid_error": "", "draft": {}, "kinds": drivers_mod.KINDS, "lambda_text": lambda_definitions(), **extra}
+                                "measure": vb.measure_of(key), "day_names": DAY_NAMES, "today": today.isoformat(), "grid_error": "", "draft": {}, "kinds": drivers_mod.KINDS, "lambda_text": lambda_definitions(), "zones": ZONES,
+                                "zone": vb.zone(key), "zone_name": dict(ZONES)[vb.zone(key)].split(" (")[0], **extra}
         if tab == "actuals":
             ctxt["weeks"] = _week_choices(key, today - timedelta(weeks=1), 10, 1)
         elif tab == "forecast":
@@ -212,12 +219,14 @@ def register(app, ctx) -> None:
                 error, f = str(exc), vb.forecast(key, channel, week)
             if f["error"]:
                 error = error or f["error"]
+            show_zone = _show_zone(vb, key)
+            f = vb.view_in(key, f, week, show_zone)                    # the grids read in the zone asked for (the program's own unless the person picked another)
             day = DAY_NAMES.index(request.values.get("day", "Mon")) if request.values.get("day", "Mon") in DAY_NAMES else 1
             ctxt.update(week=week, week_end=week + timedelta(days=6), weeks=_week_choices(key, today + timedelta(weeks=1), 2, 6), f=f, error=error, day=day,
                         total_text=typed_total or (f"{f['total']:,}" if f.get("total") is not None else ""), typed_days=typed_days,
                         calls_grid=vb.grid(f["calls"], step) if f["calls"] else None,
                         needs_grid=vb.grid(f["needs"], step) if f.get("needs") else None,
-                        saved=store.volume_forecast(key, channel, week.isoformat()), hist_weeks=hist if hist is not None else (f.get("weeks") or {}).get("wanted") or
+                        saved=store.volume_forecast(key, channel, week.isoformat()), show_zone=show_zone, show_name=dict(ZONES)[show_zone].split(" (")[0], hist_weeks=hist if hist is not None else (f.get("weeks") or {}).get("wanted") or
                         vb.settings(key)[channel]["forecast_weeks"], base=base, skip=f.get("skip_weeks", []), week_rows=_week_rows(f), drivers=_drivers_view(vb, key, week))
             if f["calls"]:
                 ctxt["chart_calls"], ctxt["chart_people"] = _chart_day(f, day)
@@ -376,10 +385,15 @@ def register(app, ctx) -> None:
                 else:
                     parsed = parse_long(table, channel, step, today)
                     result["mode"] = "one row per date and interval"
-            result.update(problems=parsed.problems, summary=parsed.summary, notes=parsed.notes)
+            source = request.form.get("source_tz", "").strip() or vb.zone(key)
+            if source not in dict(ZONES):
+                raise ValueError("The time zone the file is in is one of the zones in the list.")
+            cells = source != vb.zone(key)                             # rows moved from another zone replace only their own intervals
+            parsed = vb.convert_actuals(key, parsed, source)
+            result.update(problems=parsed.problems, summary=parsed.summary, notes=parsed.notes, cells=cells)
             if not parsed.problems:
                 token = secrets.token_urlsafe(16)
-                _held()[token] = {"user": g.user["id"], "key": key, "rows": parsed.rows, "expires": time.time() + 60 * HELD_MINUTES}
+                _held()[token] = {"user": g.user["id"], "key": key, "rows": parsed.rows, "cells": cells, "expires": time.time() + 60 * HELD_MINUTES}
                 result["token"] = token
                 existing = {ch: set(vb.store.volume_days(key, ch)) for ch in parsed.rows}
                 result["replaces"] = {ch: sum(1 for d in {r[0] for r in rows} if d in existing[ch]) for ch, rows in parsed.rows.items()}
@@ -397,9 +411,11 @@ def register(app, ctx) -> None:
             flash("That check has expired. Upload or paste the table again.")
             return redirect(url_for("volumes_page", tab="actuals", program=key), code=303)
         _held().pop(token, None)
-        done = {ch: vb.store.replace_volume_rows(key, ch, rows, g.user["id"]) for ch, rows in held["rows"].items()}
+        cells = bool(held.get("cells"))
+        done = vb.save_actuals(key, ParsedVolumes(rows=held["rows"]), g.user["id"], cells=cells)
+        verb = "updating" if cells else "replacing"
         said = "; ".join(f"{ch}: {n['rows']:,} rows over {n['days']} day{'s' if n['days'] != 1 else ''}"
-                         f"{', replacing ' + str(n['replaced_days']) if n['replaced_days'] else ''}" for ch, n in done.items())
+                         f"{', ' + verb + ' ' + str(n['replaced_days']) if n['replaced_days'] else ''}" for ch, n in done.items())
         ctx._record("volumes_uploaded", program=key, subject=", ".join(done), detail=said)
         flash("Saved. " + said + ".")
         return redirect(url_for("volumes_page", tab="actuals", program=key, channel=next(iter(done), "Phone")), code=303)
@@ -425,6 +441,8 @@ def register(app, ctx) -> None:
         vb, key = _book(), _unit()
         data = {ch: {name: request.form.get(f"{ch}.{name}", "") for name in DEFAULTS[ch] if f"{ch}.{name}" in request.form} for ch in CHANNELS}
         try:
+            if "zone" in request.form and request.form["zone"] != vb.zone(key):
+                vb.set_zone(key, request.form["zone"], g.user["id"])
             vb.set_settings(key, data, g.user["id"])
         except ValueError as exc:
             flash(str(exc))
@@ -457,7 +475,7 @@ def register(app, ctx) -> None:
         week = _week(key, request.args.get("week", ""), _today())
         what = request.args.get("what", "calls")
         if what in ("calls", "needs"):
-            f = _plan(vb, key, channel, week, total=request.args.get("total") or None, day_totals=_typed_days())
+            f = vb.view_in(key, _plan(vb, key, channel, week, total=request.args.get("total") or None, day_totals=_typed_days()), week, _show_zone(vb, key))
             values = f.get("calls") if what == "calls" else f.get("needs")
         elif what in ("actual", "otf"):
             r = vb.report(key, channel, week)
@@ -495,7 +513,7 @@ def register(app, ctx) -> None:
         vb, key = _book(), _unit()
         channel = _channel(request.args.get("channel", ""))
         week = _week(key, request.args.get("week", ""), _today() + timedelta(weeks=1))
-        f = _plan(vb, key, channel, week, total=request.args.get("total") or None, day_totals=_typed_days())
+        f = vb.view_in(key, _plan(vb, key, channel, week, total=request.args.get("total") or None, day_totals=_typed_days()), week, _show_zone(vb, key))
         if f["error"] or not f.get("needs"):
             abort(404)
         ctx._record("downloaded", program=key, week_start=week.isoformat(), subject="Volumes formulas", detail=channel)

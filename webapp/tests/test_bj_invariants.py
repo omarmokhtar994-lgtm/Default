@@ -272,6 +272,53 @@ class TheDriversStayInRange(unittest.TestCase):
         self.assertIn("error", vb.forecast(KEY, "Phone", SUN, total=100))
 
 
+class TheZonesNeverLoseOrInventContacts(unittest.TestCase):
+    def test_converted_rows_keep_their_total_and_land_on_real_intervals(self):
+        from webapp import volumes_zone as Z
+        from webapp.clock import ZONES
+        keys = [k for k, _ in ZONES]
+        for seed in range(150):
+            rng = random.Random(seed)
+            a, b = rng.sample(keys, 2)
+            step = rng.choice((10, 15, 30, 60))
+            start = date(2026, 1, 1) + timedelta(days=rng.randint(0, 330))
+            rows = [((start + timedelta(days=k)).isoformat(), m, float(rng.randint(0, 40)), rng.choice((None, 120.0, 300.0)))
+                    for k in range(rng.randint(1, 9)) for m in range(0, 1440, step)]
+            out, problems = Z.convert_rows(rows, a, b, step)
+            if problems:
+                self.assertEqual(out, [], seed)                                           # a refusal keeps nothing
+                continue
+            self.assertAlmostEqual(sum(r[2] for r in out), sum(r[2] for r in rows), places=6, msg=seed)
+            self.assertTrue(all(m % step == 0 and 0 <= m < 1440 for _d, m, _o, _a in out), seed)
+            self.assertEqual(len({(d, m) for d, m, _o, _a in out}), len(out), seed)       # one row per interval
+            weighted_in = sum(r[2] * r[3] for r in rows if r[3] is not None)
+            weighted_out = sum(r[2] * r[3] for r in out if r[3] is not None)
+            self.assertAlmostEqual(weighted_in, weighted_out, places=4, msg=seed)         # handle time stays weighted by volume
+
+    def test_a_grid_in_another_zone_keeps_its_total_and_goes_there_and_back(self):
+        from webapp import volumes_zone as Z
+        from webapp.clock import ZONES
+        keys = [k for k, _ in ZONES]
+        for seed in range(150):
+            rng = random.Random(900 + seed)
+            a, b = rng.sample(keys, 2)
+            step = rng.choice((15, 30, 60))
+            week = date(2026, 1, 4) + timedelta(weeks=rng.randint(0, 50))
+            g = [[rng.randint(0, 50) for _ in range(1440 // step)] for _ in range(7)]
+            there = Z.rotate_grid(g, week, a, b, step)
+            self.assertEqual(sum(map(sum, there)), sum(map(sum, g)), (seed, a, b, week))
+            back = Z.rotate_grid(there, week, b, a, step)
+            self.assertEqual(sum(map(sum, back)), sum(map(sum, g)), seed)
+
+    def test_there_and_back_is_exact_in_a_week_with_no_clock_change_in_either_zone(self):
+        from webapp import volumes_zone as Z
+        for seed in range(40):
+            rng = random.Random(3000 + seed)
+            g = [[rng.randint(0, 50) for _ in range(24)] for _ in range(7)]
+            for a, b in (("Africa/Cairo", "America/New_York"), ("America/New_York", "Africa/Cairo"), ("Europe/London", "Asia/Dubai")):
+                self.assertEqual(Z.rotate_grid(Z.rotate_grid(g, date(2026, 1, 11), a, b, 60), date(2026, 1, 11), b, a, 60), g, (seed, a, b))
+
+
 def _in(start, row, day):
     return date.fromisoformat(row["start"]) <= day <= date.fromisoformat(row["end"])
 

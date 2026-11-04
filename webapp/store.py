@@ -1038,6 +1038,21 @@ class Store:
                            (program, channel, str(day), int(minute), float(offered), None if aht is None else float(aht)))
         return {"rows": len(rows), "days": len(days), "replaced_days": replaced}
 
+    def upsert_volume_cells(self, program: str, channel: str, rows: List[tuple], user_id: Optional[int]) -> Dict[str, int]:
+        """Like ``replace_volume_rows``, but each ``(day, minute, offered, aht)`` replaces only its own interval: the rest of its day stays. For rows that were moved
+        from another time zone, whose first and last days hold only part of a day. ``replaced_days`` counts the days that already had any of the cells."""
+        days = sorted({r[0] for r in rows})
+        with self._db() as db:
+            replaced = set()
+            for day, minute, offered, aht in rows:
+                if db.execute("select 1 from volume_actuals where program = ? and channel = ? and day = ? and minute = ?",
+                              (program, channel, str(day), int(minute))).fetchone():
+                    replaced.add(day)
+                db.execute("delete from volume_actuals where program = ? and channel = ? and day = ? and minute = ?", (program, channel, str(day), int(minute)))
+                db.execute("insert into volume_actuals (program, channel, day, minute, offered, aht) values (?, ?, ?, ?, ?, ?)",
+                           (program, channel, str(day), int(minute), float(offered), None if aht is None else float(aht)))
+        return {"rows": len(rows), "days": len(days), "replaced_days": len(replaced)}
+
     def volume_rows(self, program: str, channel: str, first: str, last: str) -> List[Dict[str, Any]]:
         with self._db() as db:
             return [dict(r) for r in db.execute(

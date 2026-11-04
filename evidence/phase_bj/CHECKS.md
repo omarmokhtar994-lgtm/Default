@@ -42,6 +42,12 @@ which period and if will increase in next period then to how much etc". Plan and
 no grid until one is typed or saved; the weeks are labelled "Weeks for the pattern"; the suggestion, events, AI, growth and last year are one optional "Help with the number" block; the requirement workbook is written from saved forecasts only. Tests that pinned the old behaviour
 (`test_bi_volumes`, `test_bi_volumes_routes`, `test_bj_volumes_book`, `test_bj_invariants`) were re-pinned with the reason in them; new page tests: no number gives a prompt and no grid, 1000 gives the grids, the people needed, the tiles and the charts, and a grid that adds up to 1000.
 
+## Time zones (owner, 2026-11-04, after delivery)
+Built: `webapp/volumes_zone.py` (rows from one zone into another by the site's clock, one problem per refused day, collisions added with the handle time weighted; a week's grid shown in another zone, nothing lost or made up), the program's zone (Settings), a "Times in" choice on the typed grid, paste, upload and draft,
+cell-by-cell saving for moved rows, "Show times in" on the forecast and its Excel downloads, the zone named on every tab. No new route (the route map is unchanged). Tests: zone module 18, book and store 18, pages 12, seeded invariants 3 (150 random zone pairs, steps and days: totals and weighted handle time kept, every row on a real interval; grids keep their total
+and go there and back exactly in a week with no clock change), a 4,000-case cross-check of the fast per-day shift against the strict clock converter, browser 1 (type in New York time, see it moved, show the forecast in New York time) and the 320 px reflow checks with the new selects.
+Not done: half-hour zones; moving volumes already saved when the program's zone changes; aligning "How we did" when the schedule's zone differs from the volumes' zone.
+
 ## Review pass after the first full build (2026-11-04, owner asked "are you sure 100 %?")
 Skills used: verification-before-completion, security-and-hardening, web-interface-guidelines, better-accessibility, better-writing; outside checks: Microsoft Support pages for the LAMBDA steps (Name Manager, Refers to: matches the Read me),
 for SUMPRODUCT (an array function without Ctrl+Shift+Enter) and for POISSON (a compatibility function that still works; the modern name POISSON.DIST takes the same arguments: the Read me says what to change if a future Excel drops it).

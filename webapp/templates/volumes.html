@@ -4,7 +4,7 @@
 {% block title %}Volumes on Team Scheduler{% endblock %}
 {% macro grid_table(id, title, rows, what, bands=none, unit='') %}
 <div class="vol-copy"><button type="button" class="button" data-copy-table="#{{ id }}">Copy for Excel</button>
-  {% set dl = {'program': key, 'channel': channel, 'week': week.isoformat(), 'what': what} %}{% if what in ('calls', 'needs') and f is defined %}{% if f.source != 'saved' %}{% set _ = dl.update({'total': f.total}) %}{% endif %}{% set _ = dl.update({'hist_weeks': hist_weeks, 'base': base, 'skip_sent': 1, 'skip': skip}) %}{% endif %}
+  {% set dl = {'program': key, 'channel': channel, 'week': week.isoformat(), 'what': what} %}{% if what in ('calls', 'needs') and f is defined %}{% if f.source != 'saved' %}{% set _ = dl.update({'total': f.total}) %}{% endif %}{% set _ = dl.update({'hist_weeks': hist_weeks, 'base': base, 'skip_sent': 1, 'skip': skip}) %}{% if show_zone != zone %}{% set _ = dl.update({'show_tz': show_zone}) %}{% endif %}{% endif %}
   <a class="button" href="{{ url_for('volumes_table', **dl) }}">Download (Excel)</a>
   <span class="dim" data-copy-note role="status" aria-live="polite"></span></div>
 <div class="scroll panel-scroll" role="region" tabindex="0" aria-label="{{ title }} (scrolls)"><table class="vol-grid" id="{{ id }}">
@@ -19,6 +19,7 @@
   <h1>Volumes: {{ {'actuals': 'actuals', 'forecast': 'forecast and people needed', 'how': 'how did we do', 'settings': 'settings'}[tab] }}</h1>
   <p class="byline">{{ label }}. Actual contacts per interval, a forecast of next week from a number you type, the people needed with Erlang for programs counted by service level, and how each week went.</p>
 </div></div>
+<p class="dim" id="zone-note">Volumes are kept in {{ zone_name }} time{% if tab != 'settings' and can('volumes_edit') %}; change the zone on the Settings tab{% endif %}.</p>
 <nav class="bp-days" aria-label="Volumes">{% for t, name in tabs %}<a href="{{ url_for('volumes_page', tab=t, program=key, channel=channel) }}"{% if t == tab %} class="on" aria-current="page"{% endif %}>{{ name }}</a>{% endfor %}</nav>
 {% if tab != 'actuals' and tab != 'settings' %}<p class="chan" role="group" aria-label="Channel">{% for ch in channels %}<a class="button{% if ch == channel %} primary{% endif %}" href="{{ url_for('volumes_page', tab=tab, program=key, channel=ch, week=week.isoformat() if week is defined else none) }}"{% if ch == channel %} aria-current="true"{% endif %}>{{ ch }}</a> {% endfor %}</p>{% endif %}
 
@@ -33,7 +34,7 @@
   <div class="notice{% if not check.problems %} calm{% endif %}" role="{{ 'alert' if check.problems else 'status' }}">
     {% if check.problems %}<b>Nothing was saved.</b> Fix these and check again:<ul>{% for p in check.problems %}<li>{{ p }}</li>{% endfor %}</ul>
     {% else %}<b>The table is good</b> ({{ check.mode }}).
-      <ul>{% for ch, s in check.summary.items() %}<li>{{ ch }}: {{ '{:,}'.format(s.rows) }} rows over {{ s.days }} day{{ 's' if s.days != 1 }}, {{ s.first }} to {{ s.last }}{% if check.replaces and check.replaces[ch] %}; <b>replaces {{ check.replaces[ch] }} day{{ 's' if check.replaces[ch] != 1 }} already held</b>{% endif %}</li>{% endfor %}</ul>
+      <ul>{% for ch, s in check.summary.items() %}<li>{{ ch }}: {{ '{:,}'.format(s.rows) }} rows over {{ s.days }} day{{ 's' if s.days != 1 }}, {{ s.first }} to {{ s.last }}{% if check.replaces and check.replaces[ch] %}; <b>{% if check.cells %}updates{% else %}replaces{% endif %} {{ check.replaces[ch] }} day{{ 's' if check.replaces[ch] != 1 }} already held</b>{% if check.cells %} (only the intervals in the file change; the rest of each day stays){% endif %}{% endif %}</li>{% endfor %}</ul>
       <form method="post" action="{{ url_for('volumes_actuals_save') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="token" value="{{ check.token }}"><button class="primary" type="submit">Save</button></form>
     {% endif %}
     {% if check.notes %}<ul class="dim">{% for n in check.notes %}<li>{{ n }}</li>{% endfor %}</ul>{% endif %}</div>
@@ -44,16 +45,17 @@
   <h3>1. Fill a draft in Excel</h3>
   <form method="get" action="{{ url_for('volumes_draft') }}" class="ins-filter"><input type="hidden" name="program" value="{{ key }}">
     <div class="exp-row"><label>Week starting <select name="week">{% for w in weeks %}<option value="{{ w.iso }}"{% if loop.last %} selected{% endif %}>{{ w.text }}</option>{% endfor %}</select></label></div>
-    <p class="dim">A sheet for each channel in the input sheet's layout, in the program's {{ step }}-minute intervals, with a place for the handle time. Fill it, then upload the file below.</p>
+    <p class="dim">A sheet for each channel in the input sheet's layout, in the program's {{ step }}-minute intervals, with a place for the handle time. Fill it, then upload the file below. If the numbers are in another time zone than {{ zone_name }}, pick that zone under "Times in" when you upload: the site moves them into {{ zone_name }} time.</p>
     <p><button class="button" type="submit">Download the draft (Excel)</button></p></form>
   <h3>2. Type it here</h3>
-  <p class="dim">One week and one channel. Paste a block copied from Excel into any cell and it fills down and across from there. Leave a day with no data empty; inside a day an empty cell counts as zero.</p>
+  <p class="dim">One week and one channel, in the zone under "Times in" (it is moved into {{ zone_name }} time when saved: an evening in New York can be the next morning in Cairo, so the first and last days hold only part of a day until the next upload fills them). Paste a block copied from Excel into any cell and it fills down and across from there. Leave a day with no data empty; inside a day an empty cell counts as zero.</p>
   <form method="post" action="{{ url_for('volumes_actuals_check') }}" class="ins-filter" data-entry-form>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}">
     <textarea name="paste" hidden></textarea><textarea name="aht_paste" hidden></textarea>
     <div class="exp-row">
       <label>Channel <select name="channel">{% for ch in channels %}<option{% if ch == channel %} selected{% endif %}>{{ ch }}</option>{% endfor %}</select></label>
       <label>Week starting <select name="week">{% for w in weeks %}<option value="{{ w.iso }}"{% if loop.last %} selected{% endif %}>{{ w.text }}</option>{% endfor %}</select></label>
+      <label>Times in <select name="source_tz">{% for k, n in zones %}<option value="{{ k }}"{% if k == zone %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
     </div>
     <noscript><p class="notice" role="alert">Typing into the grid needs JavaScript. Fill the draft in Excel or paste the table instead.</p></noscript>
     <a class="skip-in" href="#entry-check">Skip the grid to Check</a>
@@ -69,6 +71,7 @@
     <div class="exp-row">
       <label>Channel (not needed for a draft) <select name="channel">{% for ch in channels %}<option{% if ch == channel %} selected{% endif %}>{{ ch }}</option>{% endfor %}</select></label>
       <label>Week starting (input sheet layout only) <select name="week">{% for w in weeks %}<option value="{{ w.iso }}"{% if loop.last %} selected{% endif %}>{{ w.text }}</option>{% endfor %}</select></label>
+      <label>Times in <select name="source_tz">{% for k, n in zones %}<option value="{{ k }}"{% if k == zone %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
       <label>A file (.xlsx or .csv) <input type="file" name="file" accept=".xlsx,.csv"></label>
     </div>
     <label>Or paste the table from Excel (up to about 400 KB; use a file for more)<textarea name="paste" rows="8" spellcheck="false" placeholder="Interval&#9;Sun&#9;Mon&#9;Tue&#9;Wed&#9;Thu&#9;Fri&#9;Sat"></textarea></label>
@@ -89,7 +92,7 @@
 {# ------------------------------------------------------------------ forecast #}
 {% if tab == 'forecast' %}
 {% if error %}<p class="notice" role="alert">{{ error }}</p>{% endif %}
-{% macro carry() %}<input type="hidden" name="hist_weeks" value="{{ hist_weeks }}"><input type="hidden" name="base" value="{{ base }}"><input type="hidden" name="skip_sent" value="1">{% for w in skip %}<input type="hidden" name="skip" value="{{ w }}">{% endfor %}{% if total_text %}<input type="hidden" name="total" value="{{ total_text }}">{% endif %}{% endmacro %}
+{% macro carry() %}{% if show_zone != zone %}<input type="hidden" name="show_tz" value="{{ show_zone }}">{% endif %}<input type="hidden" name="hist_weeks" value="{{ hist_weeks }}"><input type="hidden" name="base" value="{{ base }}"><input type="hidden" name="skip_sent" value="1">{% for w in skip %}<input type="hidden" name="skip" value="{{ w }}">{% endfor %}{% if total_text %}<input type="hidden" name="total" value="{{ total_text }}">{% endif %}{% endmacro %}
 <form method="post" action="{{ url_for('volumes_forecast') }}" class="panel ins-filter" aria-label="Choose the week and type the calls">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="channel" value="{{ channel }}"><input type="hidden" name="day" value="{{ day_names[day] }}"><input type="hidden" name="skip_sent" value="1">
   <div class="exp-row">
@@ -97,6 +100,7 @@
     <label>Contacts expected this week <input type="text" inputmode="numeric" id="total" name="total" value="{{ total_text }}" autocomplete="off"{% if f.suggestion %} aria-describedby="sug"{% endif %}></label>
     <label>Weeks for the pattern <input type="number" name="hist_weeks" min="3" max="26" step="1" value="{{ hist_weeks }}" aria-describedby="hw"></label>
     <input type="hidden" name="base" value="{{ base }}">
+    <label>Show times in <select name="show_tz">{% for k, n in zones %}<option value="{{ k }}"{% if k == show_zone %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
   </div>
   <p id="hw" class="dim">The number is yours. The last weeks only set the pattern: what share of the week each day gets and what share of each day each interval gets. Every weekday is read from the same whole weeks, so six weeks means six Sundays and six Saturdays. A week with a holiday, an outage, a missing day or an odd total is left out as a whole and the next older clean week takes its place.</p>
   {% if f.weeks %}<details{% if skip %} open{% endif %}><summary>Weeks behind the pattern ({{ f.weeks.used|length }} used{% if f.weeks.skipped %}, {{ f.weeks.skipped|length }} left out{% endif %})</summary>
@@ -106,7 +110,7 @@
       <td class="vol-why">{% if r.used %}Used{% else %}Not used: {{ r.reason }}{% endif %}</td></tr>{% endfor %}</tbody></table></div>
     {% if can('volumes_edit') %}<p><button type="submit" class="quiet" name="action" value="remember_weeks">Remember these left-out weeks for every forecast</button></p>{% endif %}</details>{% endif %}
   {% if f.suggestion %}<p id="sug" class="dim">The history suggests {{ '{:,}'.format(f.suggestion.final) }}{% if f.suggestion.low is not none %} ({{ '{:,}'.format(f.suggestion.low) }} to {{ '{:,}'.format(f.suggestion.high) }}){% endif %}, worked out from the history in the optional help below. It is never used unless you press Use the suggestion. <button type="button" class="quiet" data-fill="#total" data-value="{{ '{:,}'.format(f.suggestion.final) }}">Use the suggestion</button></p>{% endif %}
-  {% if f.calls %}
+  {% if f.calls and show_zone == zone %}
   <details{% if typed_days %} open{% endif %}><summary>Type a day's contacts to fix it (the rest share what is left)</summary>
     <div class="scroll" role="region" tabindex="0" aria-label="Type a day's contacts (scrolls sideways)"><table class="edgrid"><thead><tr><th scope="col">Day</th><th scope="col">Share of the week</th><th scope="col">Contacts</th><th scope="col">Your number</th></tr></thead><tbody>
     {% for d in range(7) %}<tr><th scope="row">{{ day_names[d] }}</th><td>{{ '%.1f' % (100 * f.day_totals[d] / f.total) if f.total else '-' }}%</td><td>{{ '{:,}'.format(f.day_totals[d]) }}</td>
@@ -116,6 +120,7 @@
     {% if can('volumes_edit') %}<button type="submit" name="action" value="save">Save this forecast</button>{% if saved %} <button type="submit" class="quiet" name="action" value="remove">Remove the saved one</button>{% endif %}{% endif %}</p>
   {% if saved %}<p class="dim">Saved: {{ '{:,}'.format(saved.total) }} contacts{% if saved.grid %}, kept with its own grid, so later changes to the history, events or settings do not move it{% endif %}. It is what the How we did tab measures this week against.</p>{% endif %}
 </form>
+{% if show_zone != zone and f.calls %}<p class="notice calm" role="status">Shown in {{ show_name }} time. Your number and the pattern are in {{ zone_name }} time; the week is turned into {{ show_name }} time as a whole, so the hours that spill over the edge of the week go to the other end of the same week and the total stays yours. To fix a day's contacts by hand, switch back to {{ zone_name }} time.</p>{% endif %}
 {% if f.needs_total %}<p class="notice calm" role="status">Type the contacts you expect for this week and press Work it out. The days, the intervals, the people needed and the charts follow from your number and the pattern of the last {{ f.weeks.used|length }} weeks.</p>{% endif %}
 {% if f.notes %}<ul class="notice calm" role="status">{% for n in f.notes %}<li>{{ n }}</li>{% endfor %}</ul>{% endif %}
 
@@ -223,8 +228,8 @@
 <section class="panel" aria-labelledby="g2"><h2 id="g2">People needed on the floor, like FT Wise</h2>
   <p class="dim">{{ channel }}: {% if channel == 'Phone' %}Erlang C to a service level{% elif channel == 'Chat' %}Erlang C with chats at once{% else %}the workload method{% endif %}, handle time {{ f.aht|round|int }} s, highest occupancy and the rest from the Settings tab. Erlang C assumes nobody abandons, so it over-staffs where callers do. These are people on the floor; the engine adds the program's shrinkage when it builds the schedule.</p>
   {{ grid_table('tbl-needs', 'People needed on the floor', needs_grid, 'needs') }}
-  <p><a class="button" href="{{ url_for('volumes_requirements', program=key, week=week.isoformat()) }}">Download the requirement tabs (Excel)</a> <span class="dim">FT Wise and a tab per channel, from each channel's saved forecast, laid out for the input workbook. Save a forecast for a channel first.</span></p>
-  {% set fx = {'program': key, 'channel': channel, 'week': week.isoformat()} %}{% if f.source != 'saved' %}{% set _ = fx.update({'total': f.total}) %}{% endif %}{% set _ = fx.update({'hist_weeks': hist_weeks, 'base': base, 'skip_sent': 1, 'skip': skip}) %}
+  <p><a class="button" href="{{ url_for('volumes_requirements', program=key, week=week.isoformat()) }}">Download the requirement tabs (Excel)</a> <span class="dim">FT Wise and a tab per channel, from each channel's saved forecast, in {{ zone_name }} time, laid out for the input workbook. Save a forecast for a channel first.</span></p>
+  {% set fx = {'program': key, 'channel': channel, 'week': week.isoformat()} %}{% if f.source != 'saved' %}{% set _ = fx.update({'total': f.total}) %}{% endif %}{% set _ = fx.update({'hist_weeks': hist_weeks, 'base': base, 'skip_sent': 1, 'skip': skip}) %}{% if show_zone != zone %}{% set _ = fx.update({'show_tz': show_zone}) %}{% endif %}
   <p><a class="button" href="{{ url_for('volumes_formulas', **fx) }}">Download with live =AGENTS formulas (Excel)</a> <span class="dim">This channel's contacts and the people needed worked out by Excel formulas you can change, with the site's figures beside them.</span></p>
   <details><summary>Use =AGENTS() in your own Excel</summary>
     <p class="dim">In Excel 365, add the function once: Formulas, Name Manager, New. Type the name (AGENTS), paste its definition into Refers to, press OK. Then =AGENTS(calls, handle time, interval seconds, target as a fraction, answer seconds, highest occupancy as a fraction). The workbook above has the same calculation as an ordinary formula that needs no setup and works in every Excel.</p>
@@ -281,6 +286,9 @@
 {% if tab == 'settings' %}
 <form method="post" action="{{ url_for('volumes_settings') }}" class="panel ins-filter" aria-label="Volume settings"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}">
   <p class="dim">Per channel. Handle time left empty comes from the actuals (volume-weighted); with no actuals 300 s for phone, 420 s for chat and 600 s for email are used. Erlang and the people needed apply when the program's measure is service level or volume weighted (it is {{ {'sl': 'service level', 'volume': 'volume weighted', 'interval': 'interval compliance'}[measure] }} here).</p>
+  <fieldset class="exp-kinds"><legend>Time zone</legend><div class="exp-row">
+    <label>The volumes are kept in <select name="zone"{% if not can('volumes_edit') %} disabled{% endif %}>{% for k, n in zones %}<option value="{{ k }}"{% if k == zone %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label></div>
+    <p class="dim">Use the zone your schedules are made in, so the people needed line up with the schedule. Volumes you add in another zone are moved into this one when you save them. Changing this does not move volumes already held: they stay as they were saved, so set it before adding any.</p></fieldset>
   {% for ch in channels %}<fieldset class="exp-kinds"><legend>{{ ch }}</legend><div class="exp-row">
     {% for name, label_ in labels.items() %}{% if ch != 'Phone' or name != 'concurrency' %}{% if ch == 'Chat' or name != 'concurrency' %}
     <label>{{ label_ }} <input type="text" inputmode="decimal" name="{{ ch }}.{{ name }}" value="{{ '' if settings[ch][name] is none else settings[ch][name] }}"{% if not can('volumes_edit') %} readonly{% endif %} autocomplete="off"></label>{% endif %}{% endif %}{% endfor %}

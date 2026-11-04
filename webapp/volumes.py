@@ -24,7 +24,7 @@ from zoneinfo import ZoneInfo
 
 from openpyxl import Workbook
 
-from . import drivers as D, erlang, forecast as F
+from . import drivers as D, erlang, forecast as F, volumes_zone as Z
 from .channel_template import _head, _title
 from .volumes_io import CHANNELS, DAY_NAMES, FIRST_DAY, ParsedVolumes
 
@@ -101,6 +101,18 @@ class VolumeBook:
         saved = self.store.volume_settings(key) or {}
         return {ch: {**DEFAULTS[ch], **{k: v for k, v in (saved.get(ch) or {}).items() if k in DEFAULTS[ch]}} for ch in CHANNELS}
 
+    def zone(self, key: str) -> str:
+        """The time zone the program's volumes are kept in (Cairo, the site's own, unless set): every interval of every day is in it."""
+        saved = self.store.volume_settings(key) or {}
+        return saved["zone"] if saved.get("zone") in Z.NAMES else Z.HOME
+
+    def set_zone(self, key: str, zone: Any, user_id: Optional[int]) -> None:
+        """Change the zone the volumes are read in. Volumes already held are not moved: they were kept in the zone they were saved in, so change it before adding
+        any, or delete and add them again."""
+        Z.check_zone(zone)
+        saved = {**(self.store.volume_settings(key) or {}), "zone": zone}
+        self.store.set_volume_settings(key, saved, user_id)
+
     def set_settings(self, key: str, data: Dict[str, Dict[str, Any]], user_id: Optional[int]) -> None:
         """Save settings for some channels (merged with what is kept). Everything is checked first: nothing is saved when anything is wrong."""
         merged = self.settings(key)
@@ -123,7 +135,7 @@ class VolumeBook:
                 merged[channel][name] = int(number) if name not in ("concurrency", "aht") and number == int(number) else number
             if merged[channel]["band_low"] >= merged[channel]["band_high"]:
                 raise ValueError("The OTF band starts below where it ends.")
-        self.store.set_volume_settings(key, merged, user_id)
+        self.store.set_volume_settings(key, {**merged, "zone": self.zone(key)}, user_id)
 
     def uses_erlang(self, key: str) -> bool:
         return self.measure_of(key) in ("sl", "volume")
@@ -139,10 +151,33 @@ class VolumeBook:
         weeks = sorted({(date.fromisoformat(d) - timedelta(days=(date.fromisoformat(d).weekday() + 1) % 7)).isoformat() for d in days})
         return {"days": len(days), "first": days[0], "last": days[-1], "weeks": weeks}
 
-    def save_actuals(self, key: str, parsed: ParsedVolumes, user_id: Optional[int]) -> Dict[str, Dict[str, int]]:
+    def save_actuals(self, key: str, parsed: ParsedVolumes, user_id: Optional[int], cells: bool = False) -> Dict[str, Dict[str, int]]:
+        """Keep checked rows. A day in the rows replaces that day as a whole, unless ``cells``: rows moved from another time zone replace only their own intervals."""
         if parsed.problems:
             raise ValueError("The table has problems; nothing was saved.")
-        return {channel: self.store.replace_volume_rows(key, channel, rows, user_id) for channel, rows in parsed.rows.items()}
+        save = self.store.upsert_volume_cells if cells else self.store.replace_volume_rows
+        return {channel: save(key, channel, rows, user_id) for channel, rows in parsed.rows.items()}
+
+    def convert_actuals(self, key: str, parsed: ParsedVolumes, from_zone: Any) -> ParsedVolumes:
+        """Checked rows read in ``from_zone`` as rows in the program's zone. Everything is converted or nothing is: a time the clocks cannot place refuses the lot, in words."""
+        to_zone = self.zone(key)
+        Z.check_zone(from_zone, "The zone the file is in")
+        if parsed.problems or from_zone == to_zone:
+            return parsed
+        out = ParsedVolumes(notes=list(parsed.notes))
+        for channel, rows in parsed.rows.items():
+            moved, problems = Z.convert_rows(rows, from_zone, to_zone, self.step(key))
+            out.problems += [f"{channel}: {p}" for p in problems]
+            if not problems:
+                out.rows[channel] = moved
+                days = sorted({r[0] for r in moved})
+                out.summary[channel] = {"rows": len(moved), "days": len(days), "first": days[0], "last": days[-1]}
+        if out.problems:
+            out.rows, out.summary = {}, {}
+        else:
+            out.notes.append(f"Read in {Z.NAMES[from_zone].split(' (')[0]} time and kept in {Z.NAMES[to_zone].split(' (')[0]} time, the program's; "
+                             "an evening there can be the next morning here, so the first and last days hold only part of a day until the next upload fills them.")
+        return out
 
     def _slots(self, key: str) -> int:
         return 1440 // self.step(key)
@@ -409,6 +444,23 @@ class VolumeBook:
         out.update(calls=calls, total=total_used, source=source, aht=aht, day_totals={d: sum(calls[d]) for d in range(7)})
         if self.uses_erlang(key):
             out["needs"], out["service"] = self._needs(key, channel, calls, aht, s)
+        return out
+
+    def view_in(self, key: str, f: Dict[str, Any], week_start: date, zone: Any) -> Dict[str, Any]:
+        """The forecast ``f`` with its grids read in ``zone`` (a copy; ``f`` itself is untouched). The program's own zone, or a forecast with no grid, comes back as it is."""
+        Z.check_zone(zone, "The zone to show")
+        own = self.zone(key)
+        if zone == own or not f.get("calls"):
+            return f
+        step = f["step"]
+        out = dict(f)
+        out["calls"] = Z.rotate_grid(f["calls"], week_start, own, zone, step, "sum")
+        if f.get("needs"):
+            out["needs"] = Z.rotate_grid(f["needs"], week_start, own, zone, step, "max")
+        if f.get("service"):
+            out["service"] = Z.rotate_grid(f["service"], week_start, own, zone, step, "first")
+        out["day_totals"] = {d: sum(out["calls"][d]) for d in range(7)}
+        out["show_zone"] = zone
         return out
 
     def _profile_note(self, p: F.Profile) -> Dict[str, Any]:

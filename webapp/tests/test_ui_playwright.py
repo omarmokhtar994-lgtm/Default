@@ -4109,6 +4109,24 @@ class TheVolumesInTheBrowser(unittest.TestCase):
         page.keyboard.press("Tab")
         self.assertEqual(page.evaluate("document.activeElement.textContent.trim()"), "Check")
 
+    def test_numbers_typed_in_new_york_time_are_checked_as_moved_and_the_forecast_can_be_shown_in_either_zone(self):
+        page, form = self._entry_page()
+        form.locator("select[name=source_tz]").select_option("America/New_York")
+        step = self.app.extensions["volumes"].step(self.key)
+        form.locator('table[data-entry-grid="offered"] input[data-i="%d"][data-d="2"]' % (9 * 60 // step)).fill("55")
+        form.get_by_role("button", name="Check").click()
+        page.wait_for_load_state("load")
+        expect(page.get_by_text("Read in New York time and kept in Cairo time")).to_be_visible()
+        expect(page.get_by_text("The table is good")).to_be_visible()
+        page.goto(self.url("forecast"))
+        page.fill("#total", "1000")
+        page.locator("select[name=show_tz]").select_option("America/New_York")
+        page.get_by_role("button", name="Work it out").click()
+        page.wait_for_load_state("load")
+        expect(page.get_by_text("Shown in New York time")).to_be_visible()
+        rows = page.evaluate("""() => [...document.querySelectorAll('#tbl-calls tbody td')].map(td => parseInt(td.textContent, 10) || 0).reduce((a, b) => a + b, 0)""")
+        self.assertEqual(rows, 1000)
+
     def test_clear_empties_the_grid_and_an_empty_grid_says_so(self):
         page, form = self._entry_page()
         form.locator('table[data-entry-grid="offered"] input[data-i="3"][data-d="2"]').fill("7")

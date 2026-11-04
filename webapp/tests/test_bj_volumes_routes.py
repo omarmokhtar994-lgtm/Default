@@ -9,6 +9,7 @@ from datetime import date, timedelta
 
 from openpyxl import load_workbook
 
+from webapp.clock import converted
 from webapp.programs import ProgramBook
 from webapp.tests.test_bi_volumes_routes import PASSWORD, TODAY, _Volumes
 from webapp.tests.test_runs import sign_in, token
@@ -471,6 +472,181 @@ class TheForecastPage(_Volumes):
         self.assertEqual(sum(c.value or 0 for row in ws.iter_rows(min_row=2, min_col=2) for c in row), 9000)
         link = re.search(r'href="([^"]*table\.xlsx[^"]*what=calls[^"]*)"', self.text(self.view(client))).group(1)
         self.assertNotIn("total=", link)                                    # a saved forecast is downloaded as saved, not worked out again
+
+
+class TheTimeZones(_Volumes):
+    """Owner, 2026-11-04: "I may add actuals in EST and request required associates in Egypt time"."""
+    NY, CAIRO = "America/New_York", "Africa/Cairo"
+
+    def setUp(self):
+        self.vb.set_zone(self.alpha, self.CAIRO, 1)
+        ProgramBook(self.store).set_measure(self.alpha_id, "sl")
+        self.sunday = last_sunday()
+        nxt = TODAY + timedelta(weeks=1)
+        self.week = (nxt - timedelta(days=(nxt.weekday() + 1) % 7)).isoformat()
+
+    def tearDown(self):
+        self.vb.set_zone(self.alpha, self.CAIRO, 1)
+        self.store.delete_volume_days(self.alpha, "Phone", "2000-01-01", "2100-01-01")
+        self.store.delete_volume_forecast(self.alpha, "Phone", self.week)
+        ProgramBook(self.store).set_measure(self.alpha_id, "interval")
+
+    def text(self, got):
+        return html.unescape(got.get_data(as_text=True))
+
+    def paste(self, monday_at_nine=77, only_monday=False):
+        """A whole week of the program's own intervals: zero everywhere, and 77 on Monday at 09:00 (or just Monday's column, the others left empty)."""
+        rows = []
+        for t in range(0, 1440, self.step):
+            row = [f"{t // 60:02d}:{t % 60:02d}"] + [monday_at_nine if (t == 9 * 60 and d == 1) else (0 if d == 1 or not only_monday else "") for d in range(7)]
+            rows.append("\t".join(str(x) for x in row))
+        return "Interval\tSun\tMon\tTue\tWed\tThu\tFri\tSat\n" + "\n".join(rows)
+
+    def check(self, client, **form):
+        return client.post("/volumes/actuals/check", data={"program": self.alpha, "csrf_token": token(client), "channel": "Phone",
+                                                          "week": self.sunday.isoformat(), "paste": self.paste(), **form})
+
+    # -- the program's zone
+    def test_the_programs_zone_is_set_on_the_settings_tab_and_every_tab_says_it(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        for tab in ("actuals", "forecast", "how", "settings"):
+            body = self.text(client.get("/volumes", query_string={"program": self.alpha, "tab": tab, "week": self.week}))
+            self.assertIn("kept in Cairo time", body, tab)
+        got = client.post("/volumes/settings", data={"program": self.alpha, "csrf_token": token(client), "zone": self.NY, "Phone.sl_target": "85"}, follow_redirects=True)
+        self.assertEqual(self.vb.zone(self.alpha), self.NY)
+        self.assertEqual(self.vb.settings(self.alpha)["Phone"]["sl_target"], 85)
+        body = self.text(got)
+        self.assertIn("kept in New York time", body)
+        self.assertRegex(body, r'<option value="America/New_York" selected>')
+
+    def test_a_bad_zone_changes_nothing_and_a_viewer_cannot_change_it(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        got = client.post("/volumes/settings", data={"program": self.alpha, "csrf_token": token(client), "zone": "Mars/Olympus"})
+        self.assertEqual(got.status_code, 200)
+        self.assertEqual(self.vb.zone(self.alpha), self.CAIRO)
+        tm = sign_in(self.app, "tm_a", PASSWORD)
+        self.assertEqual(tm.post("/volumes/settings", data={"program": self.alpha, "csrf_token": token(tm), "zone": self.NY}).status_code, 403)
+        self.assertEqual(self.vb.zone(self.alpha), self.CAIRO)
+
+    # -- actuals in another zone
+    def test_new_york_actuals_are_converted_checked_and_saved_cell_by_cell(self):
+        monday = self.sunday + timedelta(days=1)
+        self.store.replace_volume_rows(self.alpha, "Phone", [(d, t, 5.0, None) for d in (monday.isoformat(), (monday + timedelta(days=1)).isoformat())
+                                                             for t in range(0, 1440, self.step)], 1)
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        body = self.text(self.check(client, source_tz=self.NY, paste=self.paste(only_monday=True)))
+        self.assertIn("The table is good", body)
+        self.assertIn("Read in New York time and kept in Cairo time", body)
+        self.assertIn("updates", body)
+        tok = re.search(r'name="token" value="([^"]+)"', body).group(1)
+        client.post("/volumes/actuals/save", data={"program": self.alpha, "csrf_token": token(client), "token": tok})
+        there = converted(monday, 9 * 60, self.NY, self.CAIRO)
+        held = {(r["day"], r["minute"]): r["offered"] for r in self.store.volume_rows(self.alpha, "Phone", monday.isoformat(), (monday + timedelta(days=1)).isoformat())}
+        self.assertEqual(held[(there.date().isoformat(), there.hour * 60 + there.minute)], 77.0)
+        self.assertEqual(sum(1 for v in held.values() if v == 5.0) + 1 + sum(1 for v in held.values() if v == 0.0) + sum(1 for v in held.values() if v not in (5.0, 0.0, 77.0)),
+                         len(held))
+        self.assertGreater(sum(1 for v in held.values() if v == 5.0), 0)                  # intervals the upload did not touch are still as they were
+
+    def test_the_same_zone_is_the_old_whole_day_save(self):
+        monday = (self.sunday + timedelta(days=1)).isoformat()
+        self.store.replace_volume_rows(self.alpha, "Phone", [(monday, t, 5.0, None) for t in range(0, 1440, self.step)], 1)
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        body = self.text(self.check(client))
+        self.assertIn("replaces", body)
+        tok = re.search(r'name="token" value="([^"]+)"', body).group(1)
+        client.post("/volumes/actuals/save", data={"program": self.alpha, "csrf_token": token(client), "token": tok})
+        self.assertEqual({r["offered"] for r in self.store.volume_rows(self.alpha, "Phone", monday, monday)} - {0.0, 77.0}, set())
+
+    def test_a_zone_not_in_the_list_is_refused_in_words(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        for bad in ("Mars/Olympus", "EST5EDT", "<script>alert(1)</script>"):
+            raw = self.check(client, source_tz=bad).get_data(as_text=True)
+            self.assertIn("Nothing was saved", html.unescape(raw), bad)
+            self.assertIn("one of the zones in the list", html.unescape(raw), bad)
+            self.assertNotIn("<script>alert(1)</script>", raw)
+            self.assertNotIn('name="token"', raw)
+
+    def test_a_time_the_clocks_cannot_place_refuses_the_upload_naming_the_day(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        spring = date(2026, 3, 8)                                                           # 02:00 does not exist in New York that day (a past week, so it is not "future")
+        got = client.post("/volumes/actuals/check", data={"program": self.alpha, "csrf_token": token(client), "channel": "Phone", "week": spring.isoformat(),
+                                                          "source_tz": self.NY, "paste": self.paste()})
+        body = self.text(got)
+        self.assertIn("Nothing was saved", body)
+        self.assertIn("does not exist in New York time", body)
+
+    def test_a_draft_is_read_in_the_zone_picked(self):
+        import io
+        from openpyxl import load_workbook
+        from webapp.volumes_draft import draft_workbook
+        wb = load_workbook(io.BytesIO(draft_workbook(self.sunday, self.step)))
+        ws = wb["Phone"]
+        head = next(r for r in range(1, 15) if ws.cell(r, 1).value == "Interval")
+        ws.cell(head + 1 + 9 * 60 // self.step, 3).value = 41                              # Monday 09:00
+        out = io.BytesIO()
+        wb.save(out)
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        body = self.text(client.post("/volumes/actuals/check", data={"program": self.alpha, "csrf_token": token(client), "channel": "Phone", "source_tz": self.NY,
+                                                                      "file": (io.BytesIO(out.getvalue()), "d.xlsx")}, content_type="multipart/form-data"))
+        self.assertIn("the draft workbook", body)
+        self.assertIn("Read in New York time and kept in Cairo time", body)
+
+    def test_the_forms_that_take_actuals_ask_which_zone(self):
+        body = self.text(sign_in(self.app, "plan_a", PASSWORD).get("/volumes", query_string={"program": self.alpha, "tab": "actuals"}))
+        self.assertEqual(len(re.findall(r'<select name="source_tz">', body)), 2)               # the typed grid and the upload form
+        self.assertEqual(len(re.findall(r'<option value="Africa/Cairo" selected>', body)), 2)   # both start on the program's own zone
+
+    # -- the forecast in another zone
+    def view(self, client=None, **query):
+        client = client or sign_in(self.app, "plan_a", PASSWORD)
+        return client.get("/volumes", query_string={"program": self.alpha, "tab": "forecast", "channel": "Phone", "week": self.week, "total": "1000", **query})
+
+    def history_for_the_pattern(self):
+        self.history(self.alpha)
+
+    def test_the_forecast_can_be_shown_in_new_york_and_keeps_its_total(self):
+        self.history_for_the_pattern()
+        plain = self.text(self.view())
+        shown = self.text(self.view(show_tz=self.NY))
+        self.assertIn("Shown in New York time", shown)
+        self.assertNotIn("Shown in", plain)
+        for body in (plain, shown):
+            table = re.search(r'<table class="vol-grid" id="tbl-calls">(.*?)</table>', body, re.S).group(1)
+            self.assertEqual(sum(int(x) for x in re.findall(r"<td[^>]*>(\d+)</td>", table)), 1000)
+        self.assertNotIn("Type a day's contacts", shown)                                       # days are typed in the program's own zone
+        self.assertIn("Type a day's contacts", plain)
+
+    def test_an_unknown_zone_to_show_falls_back_to_the_programs_own(self):
+        self.history_for_the_pattern()
+        for bad in ("Mars/Olympus", "<script>alert(1)</script>", "x" * 500):
+            got = self.view(show_tz=bad)
+            self.assertEqual(got.status_code, 200)
+            self.assertNotIn("Shown in", self.text(got))
+            self.assertNotIn("<script>alert(1)</script>", got.get_data(as_text=True))
+
+    def test_the_downloads_follow_the_zone_shown_and_the_requirement_stays_in_the_programs(self):
+        self.history_for_the_pattern()
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        q = {"program": self.alpha, "week": self.week, "what": "calls", "total": "1000"}
+        a = load_workbook(io.BytesIO(client.get("/volumes/table.xlsx", query_string=q).data)).active
+        b = load_workbook(io.BytesIO(client.get("/volumes/table.xlsx", query_string={**q, "show_tz": self.NY}).data)).active
+        va = [[c.value for c in row] for row in a.iter_rows(min_row=2, min_col=2)]
+        vb_ = [[c.value for c in row] for row in b.iter_rows(min_row=2, min_col=2)]
+        self.assertEqual(sum(map(sum, va)), 1000)
+        self.assertEqual(sum(map(sum, vb_)), 1000)
+        self.assertNotEqual(va, vb_)
+        self.assertEqual(client.get("/volumes/table.xlsx", query_string={**q, "show_tz": "Mars/Olympus"}).status_code, 200)       # ignored, as on the page
+        got = client.get("/volumes/formulas.xlsx", query_string={"program": self.alpha, "week": self.week, "total": "1000", "show_tz": self.NY})
+        self.assertEqual(got.status_code, 200)
+        link = re.search(r'href="([^"]*table\.xlsx[^"]*what=calls[^"]*)"', self.text(self.view(show_tz=self.NY))).group(1)
+        self.assertIn("show_tz=America/New_York", link)
+
+    def test_a_form_on_the_page_keeps_the_zone_asked_for(self):
+        self.history_for_the_pattern()
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        body = self.text(client.post("/volumes/forecast", data={"program": self.alpha, "csrf_token": token(client), "channel": "Phone", "week": self.week,
+                                                                "action": "preview", "total": "1000", "show_tz": self.NY}))
+        self.assertIn("Shown in New York time", body)
 
 
 if __name__ == "__main__":

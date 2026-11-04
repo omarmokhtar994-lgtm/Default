@@ -118,7 +118,7 @@ class TheForecastAlwaysAddsUp(unittest.TestCase):
                     random_history(rng, store, ch)
             random_drivers(rng, vb)
             ch = rng.choice(CHANNELS)
-            kind = rng.choice(("typed", "typed_days", "suggestion", "last_year"))
+            kind = rng.choice(("typed", "typed_days", "suggestion", "last_year"))       # the last two give no grid: the total is the planner's
             kwargs = {}
             if kind == "typed":
                 kwargs["total"] = rng.randint(0, 20000)
@@ -131,6 +131,12 @@ class TheForecastAlwaysAddsUp(unittest.TestCase):
             except ValueError:
                 continue                                                                 # a refusal in words is allowed; a crash is not
             tag = (seed, kind, ch)
+            if kind in ("suggestion", "last_year") and not f["error"]:
+                self.assertEqual((f["calls"], f["total"], f["source"]), ([], None, None), tag)       # never made up from the suggestion
+                if f["suggestion"]:
+                    sug = f["suggestion"]
+                    self.assertEqual(sug["base"] + sum(x["delta"] for x in sug["steps"]), sug["final"], tag)
+                continue
             if f["error"]:
                 self.assertEqual(f["calls"], [], tag)
                 self.assertTrue(f["error"].strip(), tag)

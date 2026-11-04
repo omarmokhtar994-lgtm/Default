@@ -37,6 +37,11 @@ which period and if will increase in next period then to how much etc". Plan and
   targets at 1280, 768 and 360 px with every question open; an event added in the page becomes a step; the definitions copy to the clipboard; the workbook downloads.
 - Route map re-pinned for exactly three new routes (`/volumes/draft.xlsx`, `/volumes/drivers`, `/volumes/formulas.xlsx`); the Roles matrix and the audit-event labels know them.
 
+## The total is the planner's (owner, 2026-11-04, after delivery)
+"The weeks only set the pattern, the total is mine, I will give like 1000 calls expected and it should show everything based on that." Changed: `VolumeBook.forecast` never takes the suggestion as the total (`needs_total` instead); the page asks for a number and shows
+no grid until one is typed or saved; the weeks are labelled "Weeks for the pattern"; the suggestion, events, AI, growth and last year are one optional "Help with the number" block; the requirement workbook is written from saved forecasts only. Tests that pinned the old behaviour
+(`test_bi_volumes`, `test_bi_volumes_routes`, `test_bj_volumes_book`, `test_bj_invariants`) were re-pinned with the reason in them; new page tests: no number gives a prompt and no grid, 1000 gives the grids, the people needed, the tiles and the charts, and a grid that adds up to 1000.
+
 ## Review pass after the first full build (2026-11-04, owner asked "are you sure 100 %?")
 Skills used: verification-before-completion, security-and-hardening, web-interface-guidelines, better-accessibility, better-writing; outside checks: Microsoft Support pages for the LAMBDA steps (Name Manager, Refers to: matches the Read me),
 for SUMPRODUCT (an array function without Ctrl+Shift+Enter) and for POISSON (a compatibility function that still works; the modern name POISSON.DIST takes the same arguments: the Read me says what to change if a future Excel drops it).

@@ -304,6 +304,37 @@ class TheForecastPage(_Volumes):
         self.assertEqual(self.vb.drivers(self.alpha)["events"], [])
 
 
+
+    # -- the total is the planner's
+    def test_with_no_number_typed_the_page_asks_for_one_and_makes_nothing_up(self):
+        body = self.text(self.view())
+        self.assertIn("Type the contacts you expect for this week", body)
+        self.assertNotIn('id="tbl-calls"', body)
+        self.assertNotIn('id="tbl-needs"', body)
+        self.assertIn("Help with the number (optional)", body)
+        self.assertIn("It is never used unless you press Use the suggestion", body)
+
+    def test_a_number_typed_shows_everything_from_it(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        body = self.text(client.post("/volumes/forecast", data={"program": self.alpha, "csrf_token": token(client), "channel": "Phone", "week": self.week,
+                                                                "action": "preview", "total": "1000"}))
+        for part in ('id="tbl-calls"', 'id="tbl-needs"', "Contacts forecast", "Needed on the floor at the peak", "Contacts, like the input sheet", "interval by interval"):
+            self.assertIn(part, body, part)
+        table = re.search(r'<table class="vol-grid" id="tbl-calls">(.*?)</table>', body, re.S).group(1)
+        self.assertEqual(sum(int(x) for x in re.findall(r"<td[^>]*>(\d+)</td>", table)), 1000)
+        self.assertNotIn("Type the contacts you expect for this week", body)
+
+    def test_the_weeks_are_labelled_as_the_pattern(self):
+        body = self.text(self.view())
+        self.assertIn("Weeks for the pattern", body)
+        self.assertIn("The number is yours", body)
+        self.assertNotIn("Weeks of history", body)
+
+    def test_the_requirement_workbook_needs_a_saved_forecast(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        got = client.get("/volumes/requirements.xlsx", query_string={"program": self.alpha, "week": self.week}, follow_redirects=True)
+        self.assertIn("Save a forecast for at least one channel first", self.text(got))
+
     # -- the workbook with live formulas
     def test_the_formulas_workbook_is_this_channel_as_the_page_shows_it(self):
         client = sign_in(self.app, "plan_a", PASSWORD)

@@ -109,6 +109,7 @@ Load each with the Skill tool at the step it covers; following it from memory do
   is asked what the history cannot know (promotions and events, AI and automation with periods and moves between channels, year-over-year growth, last year) and sees each answer as a step of the suggestion, actuals can be typed per
   interval or filled in a downloaded draft, and the Erlang staffing is one Excel formula (`=AGENTS`) with a workbook of live formulas. Engine untouched. Plan with rulings and checks:
   `docs/superpowers/plans/2026-11-04-phase-bj-volumes-drivers-excel.md`, `evidence/phase_bj/CHECKS.md`.
+  Owner ruling after delivery: the last N weeks set only the pattern; the week's total is always typed by the planner (the suggestion is shown, never used unless they press Use).
 - **Lesson:** timed solver checks (QUICK, 300 s) fail when the machine is busy. `NMG_EN_AND_SP` failed twice while a browser crawl ran and passed twice alone, on the old and the new engine alike. Run engine checks alone.
 - **Lesson:** a worker restart kills background jobs; keep a foreground wait loop going and use the resumable `/tmp/chain3.sh`-style scripts (markers per unit).
 

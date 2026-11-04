@@ -95,17 +95,17 @@
   <div class="exp-row">
     <label>Week starting <select name="week">{% for w in weeks %}<option value="{{ w.iso }}"{% if w.iso == week.isoformat() %} selected{% endif %}>{{ w.text }}</option>{% endfor %}</select></label>
     <label>Contacts expected this week <input type="text" inputmode="numeric" id="total" name="total" value="{{ total_text }}" autocomplete="off"{% if f.suggestion %} aria-describedby="sug"{% endif %}></label>
-    <label>Weeks of history <input type="number" name="hist_weeks" min="3" max="26" step="1" value="{{ hist_weeks }}" aria-describedby="hw"></label>
-    <label>Start the suggestion from <select name="base"><option value="history"{% if base == 'history' %} selected{% endif %}>The history</option><option value="last_year"{% if base == 'last_year' %} selected{% endif %}>Last year's same week</option></select></label>
+    <label>Weeks for the pattern <input type="number" name="hist_weeks" min="3" max="26" step="1" value="{{ hist_weeks }}" aria-describedby="hw"></label>
+    <input type="hidden" name="base" value="{{ base }}">
   </div>
-  <p id="hw" class="dim">Every weekday is read from the same whole weeks: six weeks means six Sundays and six Saturdays. A week with a holiday, an outage, a missing day or an odd total is left out as a whole and the next older clean week takes its place.</p>
-  {% if f.weeks %}<details{% if skip %} open{% endif %}><summary>Weeks behind this forecast ({{ f.weeks.used|length }} used{% if f.weeks.skipped %}, {{ f.weeks.skipped|length }} left out{% endif %})</summary>
-    <div class="scroll" role="region" tabindex="0" aria-label="Weeks behind this forecast (scrolls sideways)"><table class="edgrid"><thead><tr><th scope="col">Week starting</th><th scope="col">Contacts</th><th scope="col">Leave out</th><th scope="col">Status</th></tr></thead><tbody>
+  <p id="hw" class="dim">The number is yours. The last weeks only set the pattern: what share of the week each day gets and what share of each day each interval gets. Every weekday is read from the same whole weeks, so six weeks means six Sundays and six Saturdays. A week with a holiday, an outage, a missing day or an odd total is left out as a whole and the next older clean week takes its place.</p>
+  {% if f.weeks %}<details{% if skip %} open{% endif %}><summary>Weeks behind the pattern ({{ f.weeks.used|length }} used{% if f.weeks.skipped %}, {{ f.weeks.skipped|length }} left out{% endif %})</summary>
+    <div class="scroll" role="region" tabindex="0" aria-label="Weeks behind the pattern (scrolls sideways)"><table class="edgrid"><thead><tr><th scope="col">Week starting</th><th scope="col">Contacts</th><th scope="col">Leave out</th><th scope="col">Status</th></tr></thead><tbody>
     {% for r in week_rows %}<tr><th scope="row">{{ r.iso }}</th><td>{% if r.total is not none %}{{ '{:,}'.format(r.total) }}{% else %}-{% endif %}</td>
       <td>{% if r.can_leave %}<label class="exp-kind"><input type="checkbox" name="skip" value="{{ r.iso }}"{% if r.iso in skip %} checked{% endif %}><span class="sr-only">Leave out the week starting {{ r.iso }}</span></label>{% else %}-{% endif %}</td>
       <td class="vol-why">{% if r.used %}Used{% else %}Not used: {{ r.reason }}{% endif %}</td></tr>{% endfor %}</tbody></table></div>
     {% if can('volumes_edit') %}<p><button type="submit" class="quiet" name="action" value="remember_weeks">Remember these left-out weeks for every forecast</button></p>{% endif %}</details>{% endif %}
-  {% if f.suggestion %}<p id="sug" class="dim">Suggested {{ '{:,}'.format(f.suggestion.final) }}{% if f.suggestion.low is not none %} ({{ '{:,}'.format(f.suggestion.low) }} to {{ '{:,}'.format(f.suggestion.high) }}){% endif %}, built below. A suggestion only. <button type="button" class="quiet" data-fill="#total" data-value="{{ '{:,}'.format(f.suggestion.final) }}">Use the suggestion</button></p>{% endif %}
+  {% if f.suggestion %}<p id="sug" class="dim">The history suggests {{ '{:,}'.format(f.suggestion.final) }}{% if f.suggestion.low is not none %} ({{ '{:,}'.format(f.suggestion.low) }} to {{ '{:,}'.format(f.suggestion.high) }}){% endif %}, worked out from the history in the optional help below. It is never used unless you press Use the suggestion. <button type="button" class="quiet" data-fill="#total" data-value="{{ '{:,}'.format(f.suggestion.final) }}">Use the suggestion</button></p>{% endif %}
   {% if f.calls %}
   <details{% if typed_days %} open{% endif %}><summary>Type a day's contacts to fix it (the rest share what is left)</summary>
     <div class="scroll" role="region" tabindex="0" aria-label="Type a day's contacts (scrolls sideways)"><table class="edgrid"><thead><tr><th scope="col">Day</th><th scope="col">Share of the week</th><th scope="col">Contacts</th><th scope="col">Your number</th></tr></thead><tbody>
@@ -116,8 +116,14 @@
     {% if can('volumes_edit') %}<button type="submit" name="action" value="save">Save this forecast</button>{% if saved %} <button type="submit" class="quiet" name="action" value="remove">Remove the saved one</button>{% endif %}{% endif %}</p>
   {% if saved %}<p class="dim">Saved: {{ '{:,}'.format(saved.total) }} contacts{% if saved.grid %}, kept with its own grid, so later changes to the history, events or settings do not move it{% endif %}. It is what the How we did tab measures this week against.</p>{% endif %}
 </form>
+{% if f.needs_total %}<p class="notice calm" role="status">Type the contacts you expect for this week and press Work it out. The days, the intervals, the people needed and the charts follow from your number and the pattern of the last {{ f.weeks.used|length }} weeks.</p>{% endif %}
 {% if f.notes %}<ul class="notice calm" role="status">{% for n in f.notes %}<li>{{ n }}</li>{% endfor %}</ul>{% endif %}
 
+{# ---- optional help with the number #}
+<details class="panel vol-help"{% if drivers.events or drivers.ai or drivers.growth.yoy or drivers.last_year %} open{% endif %}><summary><b>Help with the number (optional)</b></summary>
+  <p class="dim">Not needed if you know your number. This shows what the history suggests and lets you tell the forecast what the history cannot see. Nothing here changes your number; events and AI only shape how your number is spread over the days.</p>
+  {% set bq = {'tab': 'forecast', 'program': key, 'channel': channel, 'week': week.isoformat(), 'hist_weeks': hist_weeks, 'skip_sent': 1, 'skip': skip} %}{% if total_text %}{% set _ = bq.update({'total': total_text}) %}{% endif %}
+  <p class="dim">Start the suggestion from: {% if base == 'history' %}<b>the history</b>{% else %}<a href="{{ url_for('volumes_page', base='history', **bq) }}">the history</a>{% endif %} or {% if base == 'last_year' %}<b>last year's same week</b>{% else %}<a href="{{ url_for('volumes_page', base='last_year', **bq) }}">last year's same week</a>{% endif %}.</p>
 {# ---- how the suggestion is built #}
 {% if f.suggestion %}
 <section class="panel" aria-labelledby="wf-h"><h2 id="wf-h">How the suggestion is built</h2>
@@ -126,7 +132,7 @@
     {% for st in f.suggestion.steps %}<tr><th scope="row">{% if st.kind == 'event' %}{{ st.name }} ({{ '%+g' % st.change }}%{% if st.after_days %}, then {{ '%+g' % st.after_change }}% for {{ st.after_days }} day{{ 's' if st.after_days != 1 }}{% endif %}){% elif st.kind == 'ai' %}AI on {{ channel }} ({{ '%+g' % st.change }}%){% else %}{{ st.name }}{% endif %}
       <span class="vol-days">{% for i in st.days %}{{ day_names[i] }}{{ ', ' if not loop.last }}{% endfor %}</span></th><td>{{ '{:+,}'.format(st.delta) }}</td><td>{{ '{:,}'.format(st.total) }}</td></tr>{% endfor %}
     <tr><th scope="row">Suggested for the week</th><td>{{ '{:+,}'.format(f.suggestion.final - f.suggestion.base) }}</td><td><b>{{ '{:,}'.format(f.suggestion.final) }}</b></td></tr></tbody></table></div>
-  {% if f.last_year %}<p class="dim">Last year's same week (starting {{ f.last_year.week }}): {{ '{:,}'.format(f.last_year.total) }}{% if f.last_year.yoy is not none %}, grown by {{ '%g' % f.last_year.yoy }}% = {{ '{:,}'.format(f.last_year.grown) }}{% endif %}. {% if base != 'last_year' %}Choose "Last year's same week" above to start from it.{% endif %}</p>{% endif %}
+  {% if f.last_year %}<p class="dim">Last year's same week (starting {{ f.last_year.week }}): {{ '{:,}'.format(f.last_year.total) }}{% if f.last_year.yoy is not none %}, grown by {{ '%g' % f.last_year.yoy }}% = {{ '{:,}'.format(f.last_year.grown) }}{% endif %}. {% if base != 'last_year' %}Choose "last year's same week" above to start from it.{% endif %}</p>{% endif %}
   {% if f.source == 'typed' and f.day_factors|reject('equalto', 1.0)|list %}<p class="dim">Your number is used as typed. Events and AI only shape its days: {% for fct in f.day_factors %}{% if fct != 1.0 %}{{ day_names[loop.index0] }} x{{ '%.2f' % fct }}{{ '; ' if not loop.last }}{% endif %}{% endfor %}.</p>{% endif %}
   <p class="dim">The range comes from how far the weeks used sat from their line{% if f.suggestion.method == 'growth' %}, carried to the grown level{% elif f.suggestion.method == 'last_year' %}; last year has no range{% endif %}. Each step changes only its own days and channel; two on one day multiply.</p>
 </section>
@@ -198,6 +204,7 @@
       {% if can('volumes_edit') %}<p><button class="primary" type="submit">Save last year's totals</button></p>{% endif %}</form>
   </details>
 </section>
+</details>
 {% if f.calls %}
 {{ list_mode() }}
 <section class="tiles" aria-label="The week in numbers">
@@ -216,7 +223,7 @@
 <section class="panel" aria-labelledby="g2"><h2 id="g2">People needed on the floor, like FT Wise</h2>
   <p class="dim">{{ channel }}: {% if channel == 'Phone' %}Erlang C to a service level{% elif channel == 'Chat' %}Erlang C with chats at once{% else %}the workload method{% endif %}, handle time {{ f.aht|round|int }} s, highest occupancy and the rest from the Settings tab. Erlang C assumes nobody abandons, so it over-staffs where callers do. These are people on the floor; the engine adds the program's shrinkage when it builds the schedule.</p>
   {{ grid_table('tbl-needs', 'People needed on the floor', needs_grid, 'needs') }}
-  <p><a class="button" href="{{ url_for('volumes_requirements', program=key, week=week.isoformat()) }}">Download the requirement tabs (Excel)</a> <span class="dim">FT Wise and a tab per channel, from each channel's saved forecast (else its suggestion), laid out for the input workbook.</span></p>
+  <p><a class="button" href="{{ url_for('volumes_requirements', program=key, week=week.isoformat()) }}">Download the requirement tabs (Excel)</a> <span class="dim">FT Wise and a tab per channel, from each channel's saved forecast, laid out for the input workbook. Save a forecast for a channel first.</span></p>
   {% set fx = {'program': key, 'channel': channel, 'week': week.isoformat()} %}{% if f.source != 'saved' %}{% set _ = fx.update({'total': f.total}) %}{% endif %}{% set _ = fx.update({'hist_weeks': hist_weeks, 'base': base, 'skip_sent': 1, 'skip': skip}) %}
   <p><a class="button" href="{{ url_for('volumes_formulas', **fx) }}">Download with live =AGENTS formulas (Excel)</a> <span class="dim">This channel's contacts and the people needed worked out by Excel formulas you can change, with the site's figures beside them.</span></p>
   <details><summary>Use =AGENTS() in your own Excel</summary>

@@ -324,8 +324,7 @@ class VolumeBook:
                           "delta": move_total, "total": wf["total"] + move_total})
         ratio = wf["total"] / value if value else 1.0
         sug = {"base": value, "method": method, "final": wf["total"] + move_total, "value": wf["total"] + move_total, "steps": steps,
-               "low": None if low is None else int(round(low * ratio)) + move_total, "high": None if high is None else int(round(high * ratio)) + move_total,
-               "weights": [value * shares[d] * wf["factors"][d] + moved[d] for d in range(7)]}
+               "low": None if low is None else int(round(low * ratio)) + move_total, "high": None if high is None else int(round(high * ratio)) + move_total}
         return sug, last_year, ""
 
     def forecast(self, key: str, channel: str, week_start: date, total: Any = None, day_totals: Optional[Dict[int, Any]] = None,
@@ -348,7 +347,7 @@ class VolumeBook:
         typed_days = {int(d): _whole(v, "A day's calls") for d, v in (day_totals or {}).items() if v not in (None, "")}
         step, slots = self.step(key), self._slots(key)
         out: Dict[str, Any] = {"channel": channel, "week_start": week_start.isoformat(), "step": step, "days": list(DAY_NAMES), "calls": [],
-                               "needs": None, "service": None, "total": None, "source": None, "suggestion": None, "aht": None, "profile": None,
+                               "needs": None, "service": None, "total": None, "source": None, "needs_total": False, "suggestion": None, "aht": None, "profile": None,
                                "weeks": None, "last_year": None, "last_year_week": (week_start - timedelta(days=364)).isoformat(), "notes": [],
                                "day_factors": [1.0] * 7, "base": base, "error": ""}
         try:
@@ -374,7 +373,7 @@ class VolumeBook:
         if profile is not None:
             sug, out["last_year"], why_not = self._suggest(key, channel, week_start, profile, points, doc, skip, base, dates, out["notes"])
             if sug:
-                out["suggestion"] = {**{k: v for k, v in sug.items() if k != "weights"}, "weeks": [(d.isoformat(), t) for d, (_, t) in zip(choice.used, points)]}
+                out["suggestion"] = {**sug, "weeks": [(d.isoformat(), t) for d, (_, t) in zip(choice.used, points)]}
         if use_saved:
             basis = saved.get("basis") or {}
             calls, total_used, source = [list(map(int, r)) for r in grid], int(saved["total"]), "saved"
@@ -394,12 +393,11 @@ class VolumeBook:
             elif saved:
                 total_used, source, weights = int(saved["total"]), "saved", [profile.day_shares[py_day(d)] for d in range(7)]
                 typed_days = typed_days or {int(d): v for d, v in saved["days"].items()}
-            elif sug:
-                total_used, source, weights = sug["final"], "suggestion", sug["weights"]
-                out["day_factors"] = factors
-            else:
-                out["error"] = why_not
+            else:                                                  # the total is the planner's: the suggestion is only shown, never taken
+                out["needs_total"] = True
                 out["profile"] = self._profile_note(profile)
+                if why_not and sug is None and profile is not None and base == "last_year":
+                    out["notes"].append(why_not)
                 return out
             if sum(weights) <= 0:
                 weights = [profile.day_shares[py_day(d)] for d in range(7)]
@@ -456,7 +454,7 @@ class VolumeBook:
         step = self.step(key)
         chosen = {ch: f for ch, f in forecasts.items() if ch in CHANNELS and f and f.get("needs")}
         if not chosen:
-            raise ValueError("There is no forecast with people needed to write.")
+            raise ValueError("Save a forecast for at least one channel first: the requirement tabs are written from saved forecasts.")
         slots = 1440 // step
         wb = Workbook()
         wb.remove(wb.active)

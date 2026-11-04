@@ -238,7 +238,10 @@ class TheForecast(_Volumes):
         self.assertIn("more than", html.unescape(bad.get_data(as_text=True)))
 
     def test_the_requirement_workbook_downloads_and_is_laid_out_like_the_input_sheet(self):
+        # Re-pinned in Phase BJ (owner, 2026-11-04: "total is mine"): the workbook used to fall back to the suggestion for a channel with no saved forecast;
+        # it is now written from saved forecasts only, so this test saves one first.
         client = sign_in(self.app, "plan_a", PASSWORD)
+        self.work(client, total="9,100", action="save")
         got = client.get("/volumes/requirements.xlsx", query_string={"program": self.alpha, "week": self.week})
         self.assertEqual(got.status_code, 200)
         wb = load_workbook(io.BytesIO(got.data))

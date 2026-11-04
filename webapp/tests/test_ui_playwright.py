@@ -4150,6 +4150,7 @@ class TheVolumesInTheBrowser(unittest.TestCase):
 
     def test_an_event_added_in_the_browser_shows_up_as_a_step_of_the_suggestion(self):
         page = self._forecast_page(1280)
+        page.get_by_text("Help with the number (optional)").click()
         page.get_by_text("Promotions, launches, outages and holidays").click()
         form = page.locator("form[aria-label='Add a promotion or event']")
         week = page.locator("form[aria-label='Choose the week and type the calls'] select[name=week]").input_value()
@@ -4168,6 +4169,7 @@ class TheVolumesInTheBrowser(unittest.TestCase):
 
     def test_a_wrong_answer_is_refused_in_words_and_keeps_what_was_typed(self):
         page = self._forecast_page(1280)
+        page.get_by_text("Help with the number (optional)").click()
         page.get_by_text("Promotions, launches, outages and holidays").click()
         form = page.locator("form[aria-label='Add a promotion or event']")
         form.locator("input[name=name]").fill("Spring sale")
@@ -4203,8 +4205,8 @@ class TheVolumesInTheBrowser(unittest.TestCase):
         page.fill("#total", "8000")
         page.get_by_role("button", name="Work it out").click()
         page.wait_for_load_state("load")
-        expect(page.get_by_text("Weeks behind this forecast (4 used")).to_be_visible()
-        page.get_by_text("Weeks behind this forecast").click()
+        expect(page.get_by_text("Weeks behind the pattern (4 used")).to_be_visible()
+        page.get_by_text("Weeks behind the pattern").click()
         page.locator("input[name=skip]").first.check()
         page.get_by_role("button", name="Work it out").click()
         page.wait_for_load_state("load")

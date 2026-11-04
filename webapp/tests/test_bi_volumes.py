@@ -115,13 +115,15 @@ class TheForecast(unittest.TestCase):
         self.assertEqual(sum(f["calls"][1]), 1500)
         self.assertEqual(sum(sum(d) for d in f["calls"]), 8000)
 
-    def test_with_no_total_the_suggestion_is_used_and_said(self):
+    def test_with_no_total_nothing_is_made_up_and_the_suggestion_is_only_shown(self):
+        # Re-pinned in Phase BJ (owner, 2026-11-04: "weeks only set the pattern, total is mine"): this test used to expect the suggestion to become the week's
+        # total when none was typed. The total is now always the planner's; the suggestion is shown beside the page and taken only when they press Use.
         f = self.vb.forecast(KEY, "Phone", SUN)
-        self.assertEqual(f["source"], "suggestion")
-        self.assertAlmostEqual(f["total"], 7600, delta=60)  # 1000 a day, with Sunday and Monday at 1.3 times
+        self.assertEqual((f["source"], f["calls"], f["total"], f["needs_total"], f["error"]), (None, [], None, True, ""))
+        self.assertAlmostEqual(f["suggestion"]["final"], 7600, delta=60)  # 1000 a day, with Sunday and Monday at 1.3 times
         lo, hi = f["suggestion"]["low"], f["suggestion"]["high"]
-        self.assertLessEqual(lo, f["total"])
-        self.assertGreaterEqual(hi, f["total"])
+        self.assertLessEqual(lo, f["suggestion"]["final"])
+        self.assertGreaterEqual(hi, f["suggestion"]["final"])
 
     def test_a_saved_forecast_is_used_before_the_suggestion(self):
         self.vb.save_forecast(KEY, "Phone", SUN, 9100, {}, 1)

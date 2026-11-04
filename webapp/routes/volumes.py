@@ -472,7 +472,7 @@ def register(app, ctx) -> None:
     @app.route("/volumes/requirements.xlsx")
     @login_required
     def volumes_requirements():  # type: ignore[no-untyped-def]
-        """FT Wise and a tab per channel (people needed on the floor) from each channel's saved forecast, else its suggestion."""
+        """FT Wise and a tab per channel (people needed on the floor) from each channel's saved forecast (the total is the planner's, so nothing is made up)."""
         vb, key = _book(), _unit()
         week = _week(key, request.args.get("week", ""), _today() + timedelta(weeks=1))
         found = {}

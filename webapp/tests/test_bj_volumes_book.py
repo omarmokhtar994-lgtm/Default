@@ -194,7 +194,7 @@ class TheDriversInTheSuggestion(unittest.TestCase):
         s = f["suggestion"]
         self.assertEqual(s["base"], base)
         self.assertAlmostEqual(s["final"], base * (1 + 0.25 * SHARE_TUE_TO_THU), delta=base * 0.003)
-        self.assertEqual((f["source"], f["total"]), ("suggestion", s["final"]))
+        self.assertEqual((f["source"], f["calls"], f["needs_total"]), (None, [], True))        # shown, never taken as the total (owner, 2026-11-04)
         self.assertEqual([(x["kind"], x["name"], x["days"]) for x in s["steps"]], [("event", "Black Friday", [2, 3, 4])])   # Tue, Wed, Thu
 
     def test_the_steps_add_up_exactly(self):
@@ -265,11 +265,12 @@ class TheDriversInTheSuggestion(unittest.TestCase):
         self.assertEqual(f["last_year"], {"week": "2025-11-09", "total": 12000, "grown": 12960, "yoy": 8.0})
         self.assertEqual(f["suggestion"]["method"], "trend")                       # not used unless chosen
         g = self.vb.forecast(KEY, "Phone", SUN, base="last_year")
-        self.assertEqual((g["suggestion"]["method"], g["suggestion"]["base"], g["total"]), ("last_year", 12960, 12960))
+        self.assertEqual((g["suggestion"]["method"], g["suggestion"]["base"], g["total"]), ("last_year", 12960, None))
 
-    def test_choosing_last_year_without_a_figure_is_an_error_not_a_guess(self):
+    def test_choosing_last_year_without_a_figure_gives_no_suggestion_and_says_why(self):
         f = self.vb.forecast(KEY, "Phone", SUN, base="last_year")
-        self.assertIn("last year", f["error"].lower())
+        self.assertIsNone(f["suggestion"])
+        self.assertTrue(any("last year" in n.lower() for n in f["notes"]))
         self.assertEqual(f["calls"], [])
         self.assertEqual(self.vb.forecast(KEY, "Phone", SUN, total=8000, base="last_year")["total"], 8000)      # a typed total needs no suggestion
         with self.assertRaises(ValueError):

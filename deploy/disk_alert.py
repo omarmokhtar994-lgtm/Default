@@ -93,9 +93,17 @@ def main(argv: Optional[list] = None) -> int:
 
 def post(unit: str, data_dir: Path, title: str, text: str) -> bool:
     """Post to the LOB's saved group with the website's own sender. The link is read here and never printed."""
+    import sqlite3
     from webapp import notify as N
-    from webapp.store import Store
-    settings = Store(data_dir / "scheduler.db").get_notify(unit)
+    try:                                      # read only: opening the website's own store may write, and a full disk is when this has to work
+        db = sqlite3.connect(f"file:{data_dir / 'scheduler.db'}?mode=ro", uri=True)
+        db.row_factory = sqlite3.Row
+        row = db.execute("select * from notify_settings where unit = ?", (unit,)).fetchone()
+        db.close()
+    except sqlite3.Error as exc:
+        print(f"could not read the group settings ({exc.__class__.__name__}): nothing posted", flush=True)
+        return False
+    settings = dict(row) if row else None
     if not settings or not settings.get("link"):
         print(f"no group link is saved for '{unit}': nothing posted", flush=True)
         return False

@@ -57,6 +57,51 @@ class TheDecision(unittest.TestCase):
         self.assertIn("Free", A.words("rise", 95, 43.0, 45.0)[1])
 
 
+class ThePost(unittest.TestCase):
+    def folder(self, link="https://hooks.slack.com/services/T000/B000/XXXX", unit="Group A"):
+        import sqlite3
+        tmp = Path(tempfile.mkdtemp())
+        db = sqlite3.connect(tmp / "scheduler.db")
+        db.execute("create table notify_settings (unit text primary key, link text not null default '', service text not null default '')")
+        db.execute("insert into notify_settings (unit, link) values (?, ?)", (unit, link))
+        db.commit()
+        db.close()
+        return tmp
+
+    def test_it_posts_with_the_websites_sender_and_never_prints_the_link(self):
+        import io
+        from contextlib import redirect_stdout
+        out = io.StringIO()
+        with mock.patch("webapp.notify.post_json", return_value=(True, 200)) as sender, redirect_stdout(out):
+            self.assertTrue(A.post("Group A", self.folder(), "A title", "A text"))
+        self.assertEqual(sender.call_count, 1)
+        self.assertEqual(sender.call_args[0][0], "https://hooks.slack.com/services/T000/B000/XXXX")
+        self.assertNotIn("hooks.slack.com", out.getvalue())
+        self.assertNotIn("XXXX", out.getvalue())
+
+    def test_it_works_when_the_database_cannot_be_written(self):
+        import os
+        tmp = self.folder()
+        os.chmod(tmp / "scheduler.db", 0o444)
+        os.chmod(tmp, 0o555)
+        try:
+            with mock.patch("webapp.notify.post_json", return_value=(True, 200)):
+                self.assertTrue(A.post("Group A", tmp, "t", "x"))
+        finally:
+            os.chmod(tmp, 0o755)
+
+    def test_no_such_group_a_bad_link_or_no_database_post_nothing(self):
+        with mock.patch("webapp.notify.post_json", return_value=(True, 200)) as sender:
+            self.assertFalse(A.post("Nobody", self.folder(), "t", "x"))
+            self.assertFalse(A.post("Group A", self.folder(link="https://example.com/not-a-group"), "t", "x"))
+            self.assertFalse(A.post("Group A", Path(tempfile.mkdtemp()), "t", "x"))
+        sender.assert_not_called()
+
+    def test_a_refused_post_is_a_failure_so_it_is_tried_again(self):
+        with mock.patch("webapp.notify.post_json", return_value=(False, 500)):
+            self.assertFalse(A.post("Group A", self.folder(), "t", "x"))
+
+
 class TheRun(unittest.TestCase):
     def run_main(self, pct, state=None, unit="", post_ok=True, argv=()):
         tmp = Path(tempfile.mkdtemp())

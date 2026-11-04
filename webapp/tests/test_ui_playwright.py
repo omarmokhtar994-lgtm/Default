@@ -3987,3 +3987,104 @@ class TheVolumesInTheBrowser(unittest.TestCase):
             return (t.height < 24 - 0.5) && !(e.tagName === 'A' && getComputedStyle(e).display === 'inline'); }).length""")
         self.assertEqual(small, 0)
         page.close()
+
+    # Phase BJ (owner, 2026-11-04: "entry is manual on site per interval"): the grid to type a week into.
+    def _entry_page(self, width=1280, height=900):
+        self.seed()
+        page = self.page(width=width, height=height)
+        self.sign_in(page)
+        page.goto(self.url("actuals"))
+        page.wait_for_load_state("load")
+        form = page.locator("form[data-entry-form]")
+        form.locator("select[name=week]").select_option(index=form.locator("select[name=week] option").count() - 2)   # last week: this week still has days to come
+        return page, form
+
+    def _paste(self, page, text):
+        page.evaluate("""(text) => { const el = document.activeElement; const dt = new DataTransfer(); dt.setData('text', text);
+            el.dispatchEvent(new ClipboardEvent('paste', {clipboardData: dt, bubbles: true, cancelable: true})); }""", text)
+        return page.evaluate("""() => [...document.querySelectorAll('table[data-entry-grid="offered"] input')].filter(b => b.value !== '').map(b => [Number(b.dataset.i), Number(b.dataset.d), b.value])""")
+
+    def test_the_typed_grid_is_built_in_the_programs_interval(self):
+        page, form = self._entry_page()
+        slots = 1440 // self.app.extensions["volumes"].step(self.key)
+        self.assertEqual(form.locator('table[data-entry-grid="offered"] input').count(), 7 * slots)
+        self.assertEqual(form.locator('table[data-entry-grid="aht"] input').count(), 7 * slots)
+
+    def test_a_block_with_its_header_and_times_goes_where_they_say(self):
+        page, form = self._entry_page()
+        step = self.app.extensions["volumes"].step(self.key)
+        form.locator('table[data-entry-grid="offered"] input[data-i="0"][data-d="6"]').focus()          # pasted anywhere: the labels decide
+        got = self._paste(page, "Interval\tSun\tMon\n09:00\t1,5\t2\n10:00\t3\t4")
+        self.assertEqual(got, [[540 // step, 0, "15"], [540 // step, 1, "2"], [600 // step, 0, "3"], [600 // step, 1, "4"]])
+        expect(form.locator("[data-entry-note]")).to_contain_text("4 cells filled")
+
+    def test_a_bare_block_goes_down_and_across_from_its_cell(self):
+        page, form = self._entry_page()
+        form.locator('table[data-entry-grid="offered"] input[data-i="18"][data-d="3"]').focus()
+        self.assertEqual(self._paste(page, "5\t6\n7\t8"), [[18, 3, "5"], [18, 4, "6"], [19, 3, "7"], [19, 4, "8"]])
+
+    def test_numbers_that_do_not_fit_the_grid_are_left_out_and_said(self):
+        page, form = self._entry_page()
+        form.locator('table[data-entry-grid="offered"] input[data-i="0"][data-d="0"]').focus()
+        got = self._paste(page, "Interval\tSun\tMon\n09:07\t1\t2\n09:00\t3\t4")
+        step = self.app.extensions["volumes"].step(self.key)
+        self.assertEqual(got, [[540 // step, 0, "3"], [540 // step, 1, "4"]])
+        expect(form.locator("[data-entry-note]")).to_contain_text("2 pasted numbers did not fit")
+
+    def test_enter_and_the_arrow_keys_move_down_the_column(self):
+        page, form = self._entry_page()
+        box = form.locator('table[data-entry-grid="offered"] input[data-i="10"][data-d="3"]')
+        box.focus()
+        page.keyboard.type("5")
+        page.keyboard.press("Enter")
+        page.keyboard.type("6")
+        page.keyboard.press("ArrowUp")
+        self.assertEqual(page.evaluate("[document.activeElement.dataset.i, document.activeElement.dataset.d]"), ["10", "3"])
+        page.keyboard.press("ArrowDown")
+        page.keyboard.press("ArrowDown")
+        self.assertEqual(page.evaluate("[document.activeElement.dataset.i, document.activeElement.dataset.d]"), ["12", "3"])
+
+    def test_a_typed_week_is_checked_and_then_saved(self):
+        page, form = self._entry_page()
+        week_iso = form.locator("select[name=week]").input_value()
+        self.addCleanup(lambda: self.store.delete_volume_days(self.key, "Phone", "2000-01-01", "2100-01-01"))
+        step = self.app.extensions["volumes"].step(self.key)
+        per_hour = 60 // step
+        for hour, value, aht in ((9, "40", "300"), (10, "55", "320")):
+            form.locator('table[data-entry-grid="offered"] input[data-i="%d"][data-d="2"]' % (hour * per_hour)).fill(value)
+        form.locator("details summary").click()
+        form.locator('table[data-entry-grid="aht"] input[data-i="%d"][data-d="2"]' % (9 * per_hour)).fill("300")
+        form.get_by_role("button", name="Check").click()
+        page.wait_for_load_state("load")
+        expect(page.get_by_text("The table is good")).to_be_visible()
+        page.get_by_role("button", name="Save", exact=True).click()
+        page.wait_for_load_state("load")
+        from datetime import date, timedelta
+        week = date.fromisoformat(week_iso)
+        tuesday = next((week + timedelta(days=k)).isoformat() for k in range(7) if ((week + timedelta(days=k)).weekday() + 1) % 7 == 2)
+        held = {r["minute"]: (r["offered"], r["aht"]) for r in self.store.volume_rows(self.key, "Phone", tuesday, tuesday)}
+        self.assertEqual((held[9 * 60], held[10 * 60]), ((40, 300.0), (55, None)))             # the typed day replaced the seeded one as a whole
+
+    def test_a_mistake_is_refused_in_words_and_nothing_is_kept(self):
+        page, form = self._entry_page()
+        form.locator('table[data-entry-grid="offered"] input[data-i="3"][data-d="2"]').fill("lots")
+        before = len(self.store.volume_days(self.key, "Phone"))
+        form.get_by_role("button", name="Check").click()
+        page.wait_for_load_state("load")
+        expect(page.get_by_text("Nothing was saved")).to_be_visible()
+        self.assertEqual(len(self.store.volume_days(self.key, "Phone")), before)
+
+    def test_clear_empties_the_grid_and_an_empty_grid_says_so(self):
+        page, form = self._entry_page()
+        form.locator('table[data-entry-grid="offered"] input[data-i="3"][data-d="2"]').fill("7")
+        form.get_by_role("button", name="Clear the grid").click()
+        self.assertEqual(page.evaluate("[...document.querySelectorAll('table[data-entry-grid] input')].filter(b => b.value !== '').length"), 0)
+        form.get_by_role("button", name="Check").click()
+        page.wait_for_load_state("load")
+        expect(page.get_by_text("no numbers")).to_be_visible()
+
+    def test_the_typed_grid_works_on_a_phone_without_widening_the_page(self):
+        page, form = self._entry_page(width=360)
+        self.assertLessEqual(page.evaluate("document.scrollingElement.scrollWidth - window.innerWidth"), 1)
+        small = page.evaluate("""() => [...document.querySelectorAll('input[data-d]')].filter(e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.height < 23.5; }).length""")
+        self.assertEqual(small, 0)

@@ -1986,3 +1986,121 @@ document.addEventListener("change", function (e) {
   }
   if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", openAtFirstHour); } else { openAtFirstHour(); }
 })();
+
+// Phase BJ (owner, 2026-11-04: "entry is manual on site per interval"): a grid to type the week's contacts, and optionally the handle time, per interval
+// in the input sheet's layout (intervals down, Sun to Sat across). Cells are built with DOM calls only. Pasting a block copied from Excel fills down and
+// across from the cell it lands in (a header row or an interval column in the paste is skipped); on submit the grid is written into the two hidden fields
+// the check already reads, so typing, pasting and uploading are checked by the same code on the server.
+(function () {
+  "use strict";
+  var DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  var TIME = /^\d{1,2}:\d{2}(:\d{2})?\s*([ap]m)?$/i;
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  function build(table) {
+    var step = parseInt(table.getAttribute("data-entry-step"), 10) || 30;
+    var kind = table.getAttribute("data-entry-grid") === "aht" ? "handle time" : "contacts";
+    var head = document.createElement("tr"), corner = document.createElement("th");
+    corner.scope = "col"; corner.textContent = "Interval"; head.appendChild(corner);
+    DAYS.forEach(function (name) {
+      var th = document.createElement("th"); th.scope = "col"; th.textContent = name; head.appendChild(th);
+    });
+    var thead = document.createElement("thead"), tbody = document.createElement("tbody");
+    thead.appendChild(head);
+    for (var i = 0; i < 1440 / step; i += 1) {
+      var minute = i * step, label = pad(Math.floor(minute / 60)) + ":" + pad(minute % 60);
+      var tr = document.createElement("tr"), th = document.createElement("th");
+      th.scope = "row"; th.textContent = label; tr.appendChild(th);
+      for (var d = 0; d < 7; d += 1) {
+        var td = document.createElement("td"), box = document.createElement("input");
+        box.type = "text"; box.setAttribute("inputmode", "numeric"); box.autocomplete = "off"; box.spellcheck = false;
+        box.setAttribute("aria-label", DAYS[d] + " " + label + " " + kind);
+        box.setAttribute("data-d", String(d)); box.setAttribute("data-i", String(i));
+        td.appendChild(box); tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    }
+    table.appendChild(thead); table.appendChild(tbody);
+  }
+  function cell(table, i, d) { return table.querySelector('input[data-i="' + i + '"][data-d="' + d + '"]'); }
+  function dayOf(name) {
+    var t = (name || "").trim().slice(0, 3).toLowerCase();
+    for (var d = 0; d < 7; d += 1) { if (DAYS[d].toLowerCase() === t) { return d; } }
+    return -1;
+  }
+  function minuteOf(text) {
+    var m = /^(\d{1,2}):(\d{2})(?::\d{2})?\s*([ap]m)?$/i.exec((text || "").trim());
+    if (!m) { return null; }
+    var hour = parseInt(m[1], 10), minute = parseInt(m[2], 10), half = (m[3] || "").toLowerCase();
+    if (half) { hour = hour % 12 + (half === "pm" ? 12 : 0); }
+    return hour > 23 || minute > 59 ? null : hour * 60 + minute;
+  }
+  function parsePaste(text) {
+    var lines = text.replace(/\r\n?/g, "\n").replace(/\n+$/, "").split("\n").map(function (l) { return l.split("\t"); });
+    var days = null;
+    if (lines.length && /^interval$/i.test((lines[0][0] || "").trim())) { days = lines.shift().slice(1).map(dayOf); }
+    var timed = lines.length > 0 && lines.every(function (r) { return r.length > 1 && minuteOf(r[0]) !== null; });
+    return {days: days, timed: timed, rows: lines.map(function (r) { return {minute: timed ? minuteOf(r[0]) : null, cells: timed ? r.slice(1) : r}; })};
+  }
+  function clean(v) { return v.replace(/[,\s]/g, ""); }
+  function onPaste(e) {
+    var box = e.target;
+    if (!box.matches || !box.matches("input[data-d]")) { return; }
+    var text = (e.clipboardData || window.clipboardData).getData("text");
+    if (text.indexOf("\t") < 0 && text.indexOf("\n") < 0) { return; }
+    e.preventDefault();
+    var table = box.closest("table"), form = box.closest("form"), step = parseInt(table.getAttribute("data-entry-step"), 10) || 30;
+    var i0 = parseInt(box.getAttribute("data-i"), 10), d0 = parseInt(box.getAttribute("data-d"), 10), got = parsePaste(text), skipped = 0, put = 0;
+    got.rows.forEach(function (row, r) {
+      // a block with its interval column goes where its times say; a bare block goes down from the cell it was pasted into
+      var i = got.timed ? (row.minute % step === 0 ? row.minute / step : -1) : i0 + r;
+      row.cells.forEach(function (value, c) {
+        var d = got.days ? got.days[c] : d0 + c, target = i >= 0 && d >= 0 ? cell(table, i, d) : null;
+        if (target) { target.value = clean(value); put += 1; } else if (value.trim() !== "") { skipped += 1; }
+      });
+    });
+    var note = form.querySelector("[data-entry-note]");
+    if (note) {
+      note.textContent = skipped ? skipped + " pasted number" + (skipped === 1 ? "" : "s") + " did not fit this grid (its intervals are " + step + " minutes) and " + (skipped === 1 ? "was" : "were") + " left out." : put + " cells filled.";
+    }
+  }
+  function onKey(e) {
+    var box = e.target;
+    if (!box.matches || !box.matches("input[data-d]") || e.altKey || e.ctrlKey || e.metaKey) { return; }
+    var down = e.key === "Enter" || e.key === "ArrowDown", up = e.key === "ArrowUp";
+    if (!down && !up) { return; }
+    var next = cell(box.closest("table"), parseInt(box.getAttribute("data-i"), 10) + (down ? 1 : -1), parseInt(box.getAttribute("data-d"), 10));
+    if (next) { e.preventDefault(); next.focus(); next.select(); }
+  }
+  function text(table) {
+    var lines = ["Interval\t" + DAYS.join("\t")];
+    table.querySelectorAll("tbody tr").forEach(function (tr) {
+      var cells = [tr.firstElementChild.textContent];
+      tr.querySelectorAll("input").forEach(function (box) { cells.push(clean(box.value)); });
+      lines.push(cells.join("\t"));
+    });
+    return lines.join("\n");
+  }
+  function hasValue(table) {
+    return Array.prototype.some.call(table.querySelectorAll("input[data-d]"), function (box) { return clean(box.value) !== ""; });
+  }
+  function start() {
+    var forms = document.querySelectorAll("form[data-entry-form]");
+    forms.forEach(function (form) {
+      form.querySelectorAll("table[data-entry-grid]").forEach(build);
+      form.addEventListener("paste", onPaste);
+      form.addEventListener("keydown", onKey);
+      form.addEventListener("submit", function () {
+        var offered = form.querySelector('table[data-entry-grid="offered"]'), aht = form.querySelector('table[data-entry-grid="aht"]');
+        form.querySelector('[name="paste"]').value = offered ? text(offered) : "";
+        form.querySelector('[name="aht_paste"]').value = aht && hasValue(aht) ? text(aht) : "";
+      });
+      var clear = form.querySelector("[data-entry-clear]");
+      if (clear) {
+        clear.addEventListener("click", function () {
+          form.querySelectorAll("input[data-d]").forEach(function (box) { box.value = ""; });
+        });
+      }
+    });
+  }
+  if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", start); } else { start(); }
+})();

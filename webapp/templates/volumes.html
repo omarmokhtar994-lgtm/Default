@@ -28,14 +28,44 @@
   <tbody>{% for ch in channels %}{% set c = coverage[ch] %}<tr><th scope="row">{{ ch }}</th><td>{{ c.days }}</td><td>{{ c.first or '-' }}</td><td>{{ c.last or '-' }}</td><td>{{ c.weeks|length }}</td></tr>{% endfor %}</tbody></table>
   <p class="dim">Kept for two years. A day in an upload replaces that day for that channel as a whole. The program's interval is {{ step }} minutes (from its schedule in use); finer rows are added up to it.</p>
 </section>
+{% if check %}<section class="panel" aria-labelledby="check-h"><h2 id="check-h">The check</h2>
+  <div class="notice{% if not check.problems %} calm{% endif %}" role="{{ 'alert' if check.problems else 'status' }}">
+    {% if check.problems %}<b>Nothing was saved.</b> Fix these and check again:<ul>{% for p in check.problems %}<li>{{ p }}</li>{% endfor %}</ul>
+    {% else %}<b>The table is good</b> ({{ check.mode }}).
+      <ul>{% for ch, s in check.summary.items() %}<li>{{ ch }}: {{ '{:,}'.format(s.rows) }} rows over {{ s.days }} day{{ 's' if s.days != 1 }}, {{ s.first }} to {{ s.last }}{% if check.replaces and check.replaces[ch] %}; <b>replaces {{ check.replaces[ch] }} day{{ 's' if check.replaces[ch] != 1 }} already held</b>{% endif %}</li>{% endfor %}</ul>
+      <form method="post" action="{{ url_for('volumes_actuals_save') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="token" value="{{ check.token }}"><button class="primary" type="submit">Save</button></form>
+    {% endif %}
+    {% if check.notes %}<ul class="dim">{% for n in check.notes %}<li>{{ n }}</li>{% endfor %}</ul>{% endif %}</div>
+</section>{% endif %}
 {% if can('volumes_edit') %}
 <section class="panel" aria-labelledby="add-h"><h2 id="add-h">Add actual volumes</h2>
-  <p class="dim">Two layouts work. <b>One row per interval</b>: Date, Interval, Channel, Offered and, if you have it, AHT in seconds. <b>The input sheet's layout</b>: Interval down the side, Sun to Sat across, for one week and one channel; copy it from Excel and paste it. Nothing is saved until you have seen the check and pressed Save.
-  <a href="{{ url_for('volumes_template') }}">Download the template (Excel)</a>.</p>
+  <p class="dim">Three ways, all checked the same way. Nothing is saved until you have seen the check and pressed Save: one wrong cell and nothing is taken.</p>
+  <h3>1. Fill a draft in Excel</h3>
+  <form method="get" action="{{ url_for('volumes_draft') }}" class="ins-filter"><input type="hidden" name="program" value="{{ key }}">
+    <div class="exp-row"><label>Week starting <select name="week">{% for w in weeks %}<option value="{{ w.iso }}"{% if loop.last %} selected{% endif %}>{{ w.text }}</option>{% endfor %}</select></label></div>
+    <p class="dim">A sheet for each channel in the input sheet's layout, in the program's {{ step }}-minute intervals, with a place for the handle time. Fill it, then upload the file below.</p>
+    <p><button class="button" type="submit">Download the draft (Excel)</button></p></form>
+  <h3>2. Type it here</h3>
+  <p class="dim">One week and one channel. Paste a block copied from Excel into any cell and it fills down and across from there. Leave a day with no data empty; inside a day an empty cell counts as zero.</p>
+  <form method="post" action="{{ url_for('volumes_actuals_check') }}" class="ins-filter" data-entry-form>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}">
+    <textarea name="paste" hidden></textarea><textarea name="aht_paste" hidden></textarea>
+    <div class="exp-row">
+      <label>Channel <select name="channel">{% for ch in channels %}<option{% if ch == channel %} selected{% endif %}>{{ ch }}</option>{% endfor %}</select></label>
+      <label>Week starting <select name="week">{% for w in weeks %}<option value="{{ w.iso }}"{% if loop.last %} selected{% endif %}>{{ w.text }}</option>{% endfor %}</select></label>
+    </div>
+    <noscript><p class="notice" role="alert">Typing into the grid needs JavaScript. Fill the draft in Excel or paste the table instead.</p></noscript>
+    <div class="scroll panel-scroll" role="region" tabindex="0" aria-label="Contacts offered, intervals down, Sunday to Saturday across (scrolls)"><table class="vol-grid vol-entry" data-entry-grid="offered" data-entry-step="{{ step }}"><caption class="sr-only">Contacts offered per interval</caption></table></div>
+    <details><summary>Handle time per interval, in seconds (optional)</summary>
+      <div class="scroll panel-scroll" role="region" tabindex="0" aria-label="Handle time in seconds, intervals down, Sunday to Saturday across (scrolls)"><table class="vol-grid vol-entry" data-entry-grid="aht" data-entry-step="{{ step }}"><caption class="sr-only">Handle time in seconds per interval</caption></table></div></details>
+    <p><button class="primary" type="submit">Check</button> <button type="button" class="quiet" data-entry-clear>Clear the grid</button> <span class="dim" data-entry-note role="status" aria-live="polite"></span></p>
+  </form>
+  <h3>3. Upload or paste</h3>
+  <p class="dim">A filled draft, or a file in one of two layouts. <b>One row per interval</b>: Date, Interval, Channel, Offered and, if you have it, AHT in seconds. <b>The input sheet's layout</b>: Interval down the side, Sun to Sat across, for one week and one channel. <a href="{{ url_for('volumes_template') }}">Download the layout examples (Excel)</a>.</p>
   <form method="post" action="{{ url_for('volumes_actuals_check') }}" enctype="multipart/form-data" class="ins-filter">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}">
     <div class="exp-row">
-      <label>Channel <select name="channel">{% for ch in channels %}<option{% if ch == channel %} selected{% endif %}>{{ ch }}</option>{% endfor %}</select></label>
+      <label>Channel (not needed for a draft) <select name="channel">{% for ch in channels %}<option{% if ch == channel %} selected{% endif %}>{{ ch }}</option>{% endfor %}</select></label>
       <label>Week starting (input sheet layout only) <select name="week">{% for w in weeks %}<option value="{{ w.iso }}"{% if loop.last %} selected{% endif %}>{{ w.text }}</option>{% endfor %}</select></label>
       <label>A file (.xlsx or .csv) <input type="file" name="file" accept=".xlsx,.csv"></label>
     </div>
@@ -43,12 +73,6 @@
     <label>Handle time grid, if you have it (the same layout, seconds; input sheet layout only)<textarea name="aht_paste" rows="3" spellcheck="false"></textarea></label>
     <p><button class="primary" type="submit">Check</button></p>
   </form>
-  {% if check %}<div class="notice{% if not check.problems %} calm{% endif %}" role="{{ 'alert' if check.problems else 'status' }}">
-    {% if check.problems %}<b>Nothing was saved.</b> Fix these and check again:<ul>{% for p in check.problems %}<li>{{ p }}</li>{% endfor %}</ul>
-    {% else %}<b>The table is good</b> ({{ check.mode }}).
-      <ul>{% for ch, s in check.summary.items() %}<li>{{ ch }}: {{ '{:,}'.format(s.rows) }} rows over {{ s.days }} day{{ 's' if s.days != 1 }}, {{ s.first }} to {{ s.last }}{% if check.replaces and check.replaces[ch] %}; <b>replaces {{ check.replaces[ch] }} day{{ 's' if check.replaces[ch] != 1 }} already held</b>{% endif %}</li>{% endfor %}</ul>
-      <form method="post" action="{{ url_for('volumes_actuals_save') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="token" value="{{ check.token }}"><button class="primary" type="submit">Save</button></form>
-    {% endif %}</div>{% endif %}
 </section>
 <section class="panel" aria-labelledby="del-h"><h2 id="del-h">Delete days</h2>
   <form method="post" action="{{ url_for('volumes_actuals_delete') }}" class="ins-filter"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}">

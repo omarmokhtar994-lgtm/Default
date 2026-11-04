@@ -20,6 +20,7 @@ from ..auth import login_required
 from ..programs import ProgramBook
 from ..shrink_view import week_begin
 from ..volumes import DEFAULTS, LABELS, VolumeBook, _today
+from ..volumes_draft import draft_workbook, is_draft, parse_draft
 from ..volumes_io import CHANNELS, DAY_NAMES, parse_grid, parse_long, parse_pasted, read_table
 
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -225,29 +226,34 @@ def register(app, ctx) -> None:
         channel = _channel(request.form.get("channel", ""))
         today = _today()
         step = vb.step(key)
-        result: Dict[str, Any] = {"problems": [], "summary": None, "token": "", "mode": ""}
+        result: Dict[str, Any] = {"problems": [], "summary": None, "token": "", "mode": "", "notes": []}
         try:
             upload = request.files.get("file")
             pasted = request.form.get("paste", "")
             if len(pasted) > MAX_PASTE:
                 raise ValueError("That is too much to paste: upload it as a file.")
-            if upload is not None and upload.filename:
-                table = read_table(upload.read(), upload.filename)
-            elif pasted.strip():
-                table = parse_pasted(pasted)
+            data = upload.read() if upload is not None and upload.filename else b""
+            if data and is_draft(data, upload.filename):
+                parsed = parse_draft(data, upload.filename, step, today)
+                result["mode"] = "the draft workbook"
             else:
-                raise ValueError("Upload a file or paste the table.")
-            aht_text = request.form.get("aht_paste", "")
-            grid = any(str(row[0]).strip().lower() == "interval" and any(str(c).strip().title()[:3] in DAY_NAMES for c in row[1:])
-                       for row in table[:30] if row)
-            if grid:
-                week = _week(key, request.form.get("week", ""), today - timedelta(weeks=1))
-                parsed = parse_grid(table, week, channel, parse_pasted(aht_text) if aht_text.strip() else None, step, today)
-                result["mode"] = f"the input sheet's layout for the week of {week:%a %d %b %Y}, {channel}"
-            else:
-                parsed = parse_long(table, channel, step, today)
-                result["mode"] = "one row per date and interval"
-            result.update(problems=parsed.problems, summary=parsed.summary)
+                if upload is not None and upload.filename:
+                    table = read_table(data, upload.filename)
+                elif pasted.strip():
+                    table = parse_pasted(pasted)
+                else:
+                    raise ValueError("Upload a file or paste the table.")
+                aht_text = request.form.get("aht_paste", "")
+                grid = any(str(row[0]).strip().lower() == "interval" and any(str(c).strip().title()[:3] in DAY_NAMES for c in row[1:])
+                           for row in table[:30] if row)
+                if grid:
+                    week = _week(key, request.form.get("week", ""), today - timedelta(weeks=1))
+                    parsed = parse_grid(table, week, channel, parse_pasted(aht_text) if aht_text.strip() else None, step, today)
+                    result["mode"] = f"the input sheet's layout for the week of {week:%a %d %b %Y}, {channel}"
+                else:
+                    parsed = parse_long(table, channel, step, today)
+                    result["mode"] = "one row per date and interval"
+            result.update(problems=parsed.problems, summary=parsed.summary, notes=parsed.notes)
             if not parsed.problems:
                 token = secrets.token_urlsafe(16)
                 _held()[token] = {"user": g.user["id"], "key": key, "rows": parsed.rows, "expires": time.time() + 60 * HELD_MINUTES}
@@ -358,6 +364,16 @@ def register(app, ctx) -> None:
             return redirect(url_for("volumes_page", tab="forecast", program=key, week=week.isoformat()), code=303)
         ctx._record("downloaded", program=key, week_start=week.isoformat(), subject="Volumes requirement", detail=", ".join(sorted(found)))
         return send_file(io.BytesIO(data), as_attachment=True, download_name=f"Requirement_from_forecast_{week.isoformat()}.xlsx", mimetype=XLSX)
+
+    @app.route("/volumes/draft.xlsx")
+    @login_required
+    def volumes_draft():  # type: ignore[no-untyped-def]
+        """A draft to fill in Excel and upload: a sheet per channel in the input sheet's layout, at the program's interval."""
+        vb, key = _book(), _unit()
+        week = _week(key, request.args.get("week", ""), _today() - timedelta(weeks=1))
+        step = vb.step(key)
+        ctx._record("downloaded", program=key, week_start=week.isoformat(), subject="Volumes draft", detail=f"{step}-minute intervals")
+        return send_file(io.BytesIO(draft_workbook(week, step)), as_attachment=True, download_name=f"Volumes_draft_{week.isoformat()}.xlsx", mimetype=XLSX)
 
     @app.route("/volumes/template.xlsx")
     @login_required

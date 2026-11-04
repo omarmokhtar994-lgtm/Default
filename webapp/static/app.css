@@ -1896,3 +1896,8 @@ td > input[type="checkbox"]:only-child, td > input[type="radio"]:only-child { wi
 .vol-grid td.ot-under, td.ot-under { background: rgba(57, 135, 229, .18); }
 .edgrid td.ot-on, .edgrid td.ot-over, .edgrid td.ot-under { font-weight: 600; }
 .vol-grid td.zero { color: var(--dim); opacity: .55; }
+
+/* Phase BJ: the grid to type a week's contacts into (intervals down, Sun to Sat across). */
+.vol-entry input { width: 4.75rem; min-height: 24px; padding: 2px 6px; text-align: right; font: inherit; font-variant-numeric: tabular-nums; }
+.vol-entry td { padding: 1px; }
+.vol-entry td:focus-within { background: var(--covered-soft); }

@@ -184,3 +184,14 @@ def parse_draft(data: bytes, filename: str, step: int, today: date) -> ParsedVol
     if out.problems:
         out.rows, out.summary = {}, {}
     return out
+
+
+def is_draft(data: bytes, filename: str) -> bool:
+    """Whether an upload is a draft workbook (an .xlsx with a Read me sheet and a sheet for a channel); anything else is left to the other readers."""
+    if not filename.lower().endswith(".xlsx") or zip_problem(data):
+        return False
+    try:
+        names = {n.strip().lower() for n in load_workbook(io.BytesIO(data), read_only=True).sheetnames}
+    except (zipfile.BadZipFile, InvalidFileException, KeyError, IndexError, OSError, ValueError, TypeError):
+        return False
+    return READ_ME.lower() in names and any(c.lower() in names for c in CHANNELS)

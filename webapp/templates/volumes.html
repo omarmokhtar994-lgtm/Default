@@ -1,0 +1,299 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{% extends "base.html" %}
+{% from "_macros.html" import list_mode %}
+{% block title %}Volumes on Team Scheduler{% endblock %}
+{% macro grid_table(id, title, rows, what, bands=none, unit='') %}
+<div class="vol-copy"><button type="button" class="button" data-copy-table="#{{ id }}">Copy for Excel</button>
+  {% set dl = {'program': key, 'channel': channel, 'week': week.isoformat(), 'what': what} %}{% if what in ('calls', 'needs') and f is defined %}{% if f.source != 'saved' %}{% set _ = dl.update({'total': f.total}) %}{% endif %}{% set _ = dl.update({'hist_weeks': hist_weeks, 'base': base, 'skip_sent': 1, 'skip': skip}) %}{% if show_zone != zone %}{% set _ = dl.update({'show_tz': show_zone}) %}{% endif %}{% endif %}
+  <a class="button" href="{{ url_for('volumes_table', **dl) }}">Download (Excel)</a>
+  <span class="dim" data-copy-note role="status" aria-live="polite"></span></div>
+<div class="scroll panel-scroll" role="region" tabindex="0" aria-label="{{ title }} (scrolls)"><table class="vol-grid" id="{{ id }}">
+  <caption class="sr-only">{{ title }}: intervals down the side, Sunday to Saturday across, as on the input sheet.</caption>
+  <thead><tr>{% for h in rows[0] %}<th scope="col">{{ h }}</th>{% endfor %}</tr></thead>
+  <tbody>{% for row in rows[1:] %}{% set i = loop.index0 %}<tr><th scope="row">{{ row[0] }}</th>{% for v in row[1:] %}{% set d = loop.index0 %}
+    <td{% if bands and bands[d][i] != 'none' and v != '' %} class="ot-{{ bands[d][i] }}"{% elif v == 0 %} class="zero"{% endif %}>{% if v == '' %}{% elif v is number and unit == '%' %}{{ '%.0f' % v }}%{% else %}{{ v }}{% endif %}</td>{% endfor %}</tr>{% endfor %}</tbody>
+</table></div>
+{% endmacro %}
+{% block content %}
+<div class="phead"><div>
+  <h1>Volumes: {{ {'actuals': 'actuals', 'forecast': 'forecast and people needed', 'how': 'how did we do', 'settings': 'settings'}[tab] }}</h1>
+  <p class="byline">{{ label }}. Actual contacts per interval, a forecast of next week from a number you type, the people needed with Erlang for programs counted by service level, and how each week went.</p>
+</div></div>
+<p class="dim" id="zone-note">Volumes are kept in {{ zone_name }} time{% if tab != 'settings' and can('volumes_edit') %}; change the zone on the Settings tab{% endif %}.</p>
+<nav class="bp-days" aria-label="Volumes">{% for t, name in tabs %}<a href="{{ url_for('volumes_page', tab=t, program=key, channel=channel) }}"{% if t == tab %} class="on" aria-current="page"{% endif %}>{{ name }}</a>{% endfor %}</nav>
+{% if tab != 'actuals' and tab != 'settings' %}<p class="chan" role="group" aria-label="Channel">{% for ch in channels %}<a class="button{% if ch == channel %} primary{% endif %}" href="{{ url_for('volumes_page', tab=tab, program=key, channel=ch, week=week.isoformat() if week is defined else none) }}"{% if ch == channel %} aria-current="true"{% endif %}>{{ ch }}</a> {% endfor %}</p>{% endif %}
+
+{# ------------------------------------------------------------------ actuals #}
+{% if tab == 'actuals' %}
+<section class="panel" aria-labelledby="held-h"><h2 id="held-h">What is held</h2>
+  <table class="edgrid"><thead><tr><th scope="col">Channel</th><th scope="col">Days</th><th scope="col">First</th><th scope="col">Last</th><th scope="col">Weeks</th></tr></thead>
+  <tbody>{% for ch in channels %}{% set c = coverage[ch] %}<tr><th scope="row">{{ ch }}</th><td>{{ c.days }}</td><td>{{ c.first or '-' }}</td><td>{{ c.last or '-' }}</td><td>{{ c.weeks|length }}</td></tr>{% endfor %}</tbody></table>
+  <p class="dim">Kept for two years. A day in an upload replaces that day for that channel as a whole. The program's interval is {{ step }} minutes (from its schedule in use); finer rows are added up to it.</p>
+</section>
+{% if check %}<section class="panel" aria-labelledby="check-h"><h2 id="check-h">The check</h2>
+  <div class="notice{% if not check.problems %} calm{% endif %}" role="{{ 'alert' if check.problems else 'status' }}">
+    {% if check.problems %}<b>Nothing was saved.</b> Fix these and check again:<ul>{% for p in check.problems %}<li>{{ p }}</li>{% endfor %}</ul>
+    {% else %}<b>The table is good</b> ({{ check.mode }}).
+      <ul>{% for ch, s in check.summary.items() %}<li>{{ ch }}: {{ '{:,}'.format(s.rows) }} rows over {{ s.days }} day{{ 's' if s.days != 1 }}, {{ s.first }} to {{ s.last }}{% if check.replaces and check.replaces[ch] %}; <b>{% if check.cells %}updates{% else %}replaces{% endif %} {{ check.replaces[ch] }} day{{ 's' if check.replaces[ch] != 1 }} already held</b>{% if check.cells %} (only the intervals in the file change; the rest of each day stays){% endif %}{% endif %}</li>{% endfor %}</ul>
+      <form method="post" action="{{ url_for('volumes_actuals_save') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="token" value="{{ check.token }}"><button class="primary" type="submit">Save</button></form>
+    {% endif %}
+    {% if check.notes %}<ul class="dim">{% for n in check.notes %}<li>{{ n }}</li>{% endfor %}</ul>{% endif %}</div>
+</section>{% endif %}
+{% if can('volumes_edit') %}
+<section class="panel" aria-labelledby="add-h"><h2 id="add-h">Add actual volumes</h2>
+  <p class="dim">Three ways, all checked the same way. Nothing is saved until you have seen the check and pressed Save: one wrong cell and nothing is taken.</p>
+  <h3>1. Fill a draft in Excel</h3>
+  <form method="get" action="{{ url_for('volumes_draft') }}" class="ins-filter"><input type="hidden" name="program" value="{{ key }}">
+    <div class="exp-row"><label>Week starting <select name="week">{% for w in weeks %}<option value="{{ w.iso }}"{% if loop.last %} selected{% endif %}>{{ w.text }}</option>{% endfor %}</select></label></div>
+    <p class="dim">A sheet for each channel in the input sheet's layout, in the program's {{ step }}-minute intervals, with a place for the handle time. Fill it, then upload the file below. If the numbers are in another time zone than {{ zone_name }}, pick that zone under "Times in" when you upload: the site moves them into {{ zone_name }} time.</p>
+    <p><button class="button" type="submit">Download the draft (Excel)</button></p></form>
+  <h3>2. Type it here</h3>
+  <p class="dim">One week and one channel, in the zone under "Times in" (it is moved into {{ zone_name }} time when saved: an evening in New York can be the next morning in Cairo, so the first and last days hold only part of a day until the next upload fills them). Paste a block copied from Excel into any cell and it fills down and across from there. Leave a day with no data empty; inside a day an empty cell counts as zero.</p>
+  <form method="post" action="{{ url_for('volumes_actuals_check') }}" class="ins-filter" data-entry-form>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}">
+    <textarea name="paste" hidden></textarea><textarea name="aht_paste" hidden></textarea>
+    <div class="exp-row">
+      <label>Channel <select name="channel">{% for ch in channels %}<option{% if ch == channel %} selected{% endif %}>{{ ch }}</option>{% endfor %}</select></label>
+      <label>Week starting <select name="week">{% for w in weeks %}<option value="{{ w.iso }}"{% if loop.last %} selected{% endif %}>{{ w.text }}</option>{% endfor %}</select></label>
+      <label>Times in <select name="source_tz">{% for k, n in zones %}<option value="{{ k }}"{% if k == zone %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
+    </div>
+    <noscript><p class="notice" role="alert">Typing into the grid needs JavaScript. Fill the draft in Excel or paste the table instead.</p></noscript>
+    <a class="skip-in" href="#entry-check">Skip the grid to Check</a>
+    <div class="scroll panel-scroll" role="region" tabindex="0" aria-label="Contacts offered, intervals down, Sunday to Saturday across (scrolls)"><table class="vol-grid vol-entry" data-entry-grid="offered" data-entry-step="{{ step }}"><caption class="sr-only">Contacts offered per interval</caption></table></div>
+    <details><summary>Handle time per interval, in seconds (optional)</summary>
+      <div class="scroll panel-scroll" role="region" tabindex="0" aria-label="Handle time in seconds, intervals down, Sunday to Saturday across (scrolls)"><table class="vol-grid vol-entry" data-entry-grid="aht" data-entry-step="{{ step }}"><caption class="sr-only">Handle time in seconds per interval</caption></table></div></details>
+    <p id="entry-check" tabindex="-1"><button class="primary" type="submit">Check</button> <button type="button" class="quiet" data-entry-clear>Clear the grid</button> <span class="dim" data-entry-note role="status" aria-live="polite"></span></p>
+  </form>
+  <h3>3. Upload or paste</h3>
+  <p class="dim">A filled draft, or a file in one of two layouts. <b>One row per interval</b>: Date, Interval, Channel, Offered and, if you have it, AHT in seconds. <b>The input sheet's layout</b>: Interval down the side, Sun to Sat across, for one week and one channel. <a href="{{ url_for('volumes_template') }}">Download the layout examples (Excel)</a>.</p>
+  <form method="post" action="{{ url_for('volumes_actuals_check') }}" enctype="multipart/form-data" class="ins-filter">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}">
+    <div class="exp-row">
+      <label>Channel (not needed for a draft) <select name="channel">{% for ch in channels %}<option{% if ch == channel %} selected{% endif %}>{{ ch }}</option>{% endfor %}</select></label>
+      <label>Week starting (input sheet layout only) <select name="week">{% for w in weeks %}<option value="{{ w.iso }}"{% if loop.last %} selected{% endif %}>{{ w.text }}</option>{% endfor %}</select></label>
+      <label>Times in <select name="source_tz">{% for k, n in zones %}<option value="{{ k }}"{% if k == zone %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
+      <label>A file (.xlsx or .csv) <input type="file" name="file" accept=".xlsx,.csv"></label>
+    </div>
+    <label>Or paste the table from Excel (up to about 400 KB; use a file for more)<textarea name="paste" rows="8" spellcheck="false" placeholder="Interval&#9;Sun&#9;Mon&#9;Tue&#9;Wed&#9;Thu&#9;Fri&#9;Sat"></textarea></label>
+    <label>Handle time grid, if you have it (the same layout, seconds; input sheet layout only)<textarea name="aht_paste" rows="3" spellcheck="false"></textarea></label>
+    <p><button class="primary" type="submit">Check</button></p>
+  </form>
+</section>
+<section class="panel" aria-labelledby="del-h"><h2 id="del-h">Delete days</h2>
+  <form method="post" action="{{ url_for('volumes_actuals_delete') }}" class="ins-filter"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}">
+    <div class="exp-row"><label>Channel <select name="channel">{% for ch in channels %}<option{% if ch == channel %} selected{% endif %}>{{ ch }}</option>{% endfor %}</select></label>
+      <label>From <input type="date" name="first" required></label><label>To <input type="date" name="last" required></label></div>
+    <label class="exp-kind"><input type="checkbox" name="confirm" value="1"><span>Yes, delete these days</span></label>
+    <p><button class="quiet" type="submit">Delete</button></p></form>
+</section>
+{% else %}<p class="notice calm">You can look at volumes; a planner or supervisor adds them.</p>{% endif %}
+{% endif %}
+
+{# ------------------------------------------------------------------ forecast #}
+{% if tab == 'forecast' %}
+{% if error %}<p class="notice" role="alert">{{ error }}</p>{% endif %}
+{% macro carry() %}{% if show_zone != zone %}<input type="hidden" name="show_tz" value="{{ show_zone }}">{% endif %}<input type="hidden" name="hist_weeks" value="{{ hist_weeks }}"><input type="hidden" name="base" value="{{ base }}"><input type="hidden" name="skip_sent" value="1">{% for w in skip %}<input type="hidden" name="skip" value="{{ w }}">{% endfor %}{% if total_text %}<input type="hidden" name="total" value="{{ total_text }}">{% endif %}{% endmacro %}
+<form method="post" action="{{ url_for('volumes_forecast') }}" class="panel ins-filter" aria-label="Choose the week and type the calls">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="channel" value="{{ channel }}"><input type="hidden" name="day" value="{{ day_names[day] }}"><input type="hidden" name="skip_sent" value="1">
+  <div class="exp-row">
+    <label>Week starting <select name="week">{% for w in weeks %}<option value="{{ w.iso }}"{% if w.iso == week.isoformat() %} selected{% endif %}>{{ w.text }}</option>{% endfor %}</select></label>
+    <label>Contacts expected this week <input type="text" inputmode="numeric" id="total" name="total" value="{{ total_text }}" autocomplete="off"{% if f.suggestion %} aria-describedby="sug"{% endif %}></label>
+    <label>Weeks for the pattern <input type="number" name="hist_weeks" min="3" max="26" step="1" value="{{ hist_weeks }}" aria-describedby="hw"></label>
+    <input type="hidden" name="base" value="{{ base }}">
+    <label>Show times in <select name="show_tz">{% for k, n in zones %}<option value="{{ k }}"{% if k == show_zone %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
+  </div>
+  <p id="hw" class="dim">The number is yours. The last weeks only set the pattern: what share of the week each day gets and what share of each day each interval gets. Every weekday is read from the same whole weeks, so six weeks means six Sundays and six Saturdays. A week with a holiday, an outage, a missing day or an odd total is left out as a whole and the next older clean week takes its place.</p>
+  {% if f.weeks %}<details{% if skip %} open{% endif %}><summary>Weeks behind the pattern ({{ f.weeks.used|length }} used{% if f.weeks.skipped %}, {{ f.weeks.skipped|length }} left out{% endif %})</summary>
+    <div class="scroll" role="region" tabindex="0" aria-label="Weeks behind the pattern (scrolls sideways)"><table class="edgrid"><thead><tr><th scope="col">Week starting</th><th scope="col">Contacts</th><th scope="col">Leave out</th><th scope="col">Status</th></tr></thead><tbody>
+    {% for r in week_rows %}<tr><th scope="row">{{ r.iso }}</th><td>{% if r.total is not none %}{{ '{:,}'.format(r.total) }}{% else %}-{% endif %}</td>
+      <td>{% if r.can_leave %}<label class="exp-kind"><input type="checkbox" name="skip" value="{{ r.iso }}"{% if r.iso in skip %} checked{% endif %}><span class="sr-only">Leave out the week starting {{ r.iso }}</span></label>{% else %}-{% endif %}</td>
+      <td class="vol-why">{% if r.used %}Used{% else %}Not used: {{ r.reason }}{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+    {% if can('volumes_edit') %}<p><button type="submit" class="quiet" name="action" value="remember_weeks">Remember these left-out weeks for every forecast</button></p>{% endif %}</details>{% endif %}
+  {% if f.suggestion %}<p id="sug" class="dim">The history suggests {{ '{:,}'.format(f.suggestion.final) }}{% if f.suggestion.low is not none %} ({{ '{:,}'.format(f.suggestion.low) }} to {{ '{:,}'.format(f.suggestion.high) }}){% endif %}, worked out from the history in the optional help below. It is never used unless you press Use the suggestion. <button type="button" class="quiet" data-fill="#total" data-value="{{ '{:,}'.format(f.suggestion.final) }}">Use the suggestion</button></p>{% endif %}
+  {% if f.calls and show_zone == zone %}
+  <details{% if typed_days %} open{% endif %}><summary>Type a day's contacts to fix it (the rest share what is left)</summary>
+    <div class="scroll" role="region" tabindex="0" aria-label="Type a day's contacts (scrolls sideways)"><table class="edgrid"><thead><tr><th scope="col">Day</th><th scope="col">Share of the week</th><th scope="col">Contacts</th><th scope="col">Your number</th></tr></thead><tbody>
+    {% for d in range(7) %}<tr><th scope="row">{{ day_names[d] }}</th><td>{{ '%.1f' % (100 * f.day_totals[d] / f.total) if f.total else '-' }}%</td><td>{{ '{:,}'.format(f.day_totals[d]) }}</td>
+      <td><input type="text" inputmode="numeric" name="d{{ d }}" value="{{ typed_days.get(d, '') }}" placeholder="{{ '{:,}'.format(f.day_totals[d]) }}" aria-label="{{ day_names[d] }} contacts" autocomplete="off"></td></tr>{% endfor %}</tbody></table></div></details>
+  {% endif %}
+  <p><button class="primary" type="submit" name="action" value="preview">Work it out</button>
+    {% if can('volumes_edit') %}<button type="submit" name="action" value="save">Save this forecast</button>{% if saved %} <button type="submit" class="quiet" name="action" value="remove">Remove the saved one</button>{% endif %}{% endif %}</p>
+  {% if saved %}<p class="dim">Saved: {{ '{:,}'.format(saved.total) }} contacts{% if saved.grid %}, kept with its own grid, so later changes to the history, events or settings do not move it{% endif %}. It is what the How we did tab measures this week against.</p>{% endif %}
+</form>
+{% if show_zone != zone and f.calls %}<p class="notice calm" role="status">Shown in {{ show_name }} time. Your number and the pattern are in {{ zone_name }} time; the week is turned into {{ show_name }} time as a whole, so the hours that spill over the edge of the week go to the other end of the same week and the total stays yours. To fix a day's contacts by hand, switch back to {{ zone_name }} time.</p>{% endif %}
+{% if f.needs_total %}<p class="notice calm" role="status">Type the contacts you expect for this week and press Work it out. The days, the intervals, the people needed and the charts follow from your number and the pattern of the last {{ f.weeks.used|length }} weeks.</p>{% endif %}
+{% if f.notes %}<ul class="notice calm" role="status">{% for n in f.notes %}<li>{{ n }}</li>{% endfor %}</ul>{% endif %}
+
+{# ---- optional help with the number #}
+<details class="panel vol-help"{% if drivers.events or drivers.ai or drivers.growth.yoy or drivers.last_year %} open{% endif %}><summary><b>Help with the number (optional)</b></summary>
+  <p class="dim">Not needed if you know your number. This shows what the history suggests and lets you tell the forecast what the history cannot see. Nothing here changes your number; events and AI only shape how your number is spread over the days.</p>
+  {% set bq = {'tab': 'forecast', 'program': key, 'channel': channel, 'week': week.isoformat(), 'hist_weeks': hist_weeks, 'skip_sent': 1, 'skip': skip} %}{% if total_text %}{% set _ = bq.update({'total': total_text}) %}{% endif %}
+  <p class="dim">Start the suggestion from: {% if base == 'history' %}<b>the history</b>{% else %}<a href="{{ url_for('volumes_page', base='history', **bq) }}">the history</a>{% endif %} or {% if base == 'last_year' %}<b>last year's same week</b>{% else %}<a href="{{ url_for('volumes_page', base='last_year', **bq) }}">last year's same week</a>{% endif %}.</p>
+{# ---- how the suggestion is built #}
+{% if f.suggestion %}
+<section class="panel" aria-labelledby="wf-h"><h2 id="wf-h">How the suggestion is built</h2>
+  <div class="scroll" role="region" tabindex="0" aria-label="How the suggestion is built (scrolls sideways)"><table class="edgrid"><thead><tr><th scope="col">Step</th><th scope="col">Change in contacts</th><th scope="col">Week total</th></tr></thead><tbody>
+    <tr><th scope="row">{% if f.suggestion.method == 'growth' %}History brought forward at {{ '%g' % drivers.growth.yoy.get(channel, 0) }}% a year{% elif f.suggestion.method == 'last_year' %}Last year's same week, grown{% if f.last_year and f.last_year.yoy is not none %} by {{ '%g' % f.last_year.yoy }}%{% endif %}{% else %}The trend of the last {{ f.weeks.used|length }} weeks{% endif %}</th><td>-</td><td>{{ '{:,}'.format(f.suggestion.base) }}</td></tr>
+    {% for st in f.suggestion.steps %}<tr><th scope="row">{% if st.kind == 'event' %}{{ st.name }} ({{ '%+g' % st.change }}%{% if st.after_days %}, then {{ '%+g' % st.after_change }}% for {{ st.after_days }} day{{ 's' if st.after_days != 1 }}{% endif %}){% elif st.kind == 'ai' %}AI on {{ channel }} ({{ '%+g' % st.change }}%){% else %}{{ st.name }}{% endif %}
+      <span class="vol-days">{% for i in st.days %}{{ day_names[i] }}{{ ', ' if not loop.last }}{% endfor %}</span></th><td>{{ '{:+,}'.format(st.delta) }}</td><td>{{ '{:,}'.format(st.total) }}</td></tr>{% endfor %}
+    <tr><th scope="row">Suggested for the week</th><td>{{ '{:+,}'.format(f.suggestion.final - f.suggestion.base) }}</td><td><b>{{ '{:,}'.format(f.suggestion.final) }}</b></td></tr></tbody></table></div>
+  {% if f.last_year %}<p class="dim">Last year's same week (starting {{ f.last_year.week }}): {{ '{:,}'.format(f.last_year.total) }}{% if f.last_year.yoy is not none %}, grown by {{ '%g' % f.last_year.yoy }}% = {{ '{:,}'.format(f.last_year.grown) }}{% endif %}. {% if base != 'last_year' %}Choose "last year's same week" above to start from it.{% endif %}</p>{% endif %}
+  {% if f.source == 'typed' and f.day_factors|reject('equalto', 1.0)|list %}<p class="dim">Your number is used as typed. Events and AI only shape its days: {% for fct in f.day_factors %}{% if fct != 1.0 %}{{ day_names[loop.index0] }} x{{ '%.2f' % fct }}{{ '; ' if not loop.last }}{% endif %}{% endfor %}.</p>{% endif %}
+  <p class="dim">The range comes from how far the weeks used sat from their line{% if f.suggestion.method == 'growth' %}, carried to the grown level{% elif f.suggestion.method == 'last_year' %}; last year has no range{% endif %}. Each step changes only its own days and channel; two on one day multiply.</p>
+</section>
+{% endif %}
+
+{# ---- what else is known #}
+<section class="panel" aria-labelledby="q-h"><h2 id="q-h">What else do you know about this week?</h2>
+  <p class="dim">History cannot see a promotion that has not started, a growing customer base or an AI assistant that is about to take contacts away. Tell the forecast what you know; each answer shows as its own step above, and you can remove it later.</p>
+  {% if drivers.damaged %}<p class="notice" role="alert">The events and AI periods saved for this program could not be read. Ask for them to be cleared.</p>{% endif %}
+
+  <details{% if drivers.events or draft.get('action') == 'add_event' %} open{% endif %}><summary>Promotions, launches, outages and holidays ({{ drivers.events|length }})</summary>
+    <p class="dim">Is something coming that changes contacts? Which channels, from when to when, and by how many percent do you expect them to rise or fall? Add a dip or a lift for some days after it ends if you expect one (for example -20% for 2 days after a sale).</p>
+    {% if drivers.events %}<div class="scroll" role="region" tabindex="0" aria-label="Promotions and events (scrolls sideways)"><table class="edgrid"><thead><tr><th scope="col">Event</th><th scope="col">Channels</th><th scope="col">Dates</th><th scope="col">Change</th><th scope="col">Remove</th></tr></thead><tbody>
+    {% for e in drivers.events %}<tr><th scope="row">{{ e.name }}<span class="vol-days">{{ e.kind }}{% if e.this_week %}; in this week{% endif %}</span></th><td>{{ e.channels|join(', ') }}</td><td>{{ e.start }} to {{ e.end }}</td><td>{{ '%+g' % e.change }}%{% if e.after_days %}, then {{ '%+g' % e.after_change }}% for {{ e.after_days }} day{{ 's' if e.after_days != 1 }}{% endif %}</td>
+      <td>{% if can('volumes_edit') %}<form method="post" action="{{ url_for('volumes_drivers') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="channel" value="{{ channel }}"><input type="hidden" name="week" value="{{ week.isoformat() }}"><input type="hidden" name="day" value="{{ day_names[day] }}">{{ carry() }}<input type="hidden" name="action" value="remove"><input type="hidden" name="list" value="events"><input type="hidden" name="id" value="{{ e.id }}"><button type="submit" class="quiet">Remove<span class="sr-only"> {{ e.name }}</span></button></form>{% else %}-{% endif %}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+    {% if can('volumes_edit') %}<form method="post" action="{{ url_for('volumes_drivers') }}" class="ins-filter" aria-label="Add a promotion or event">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="channel" value="{{ channel }}"><input type="hidden" name="week" value="{{ week.isoformat() }}"><input type="hidden" name="day" value="{{ day_names[day] }}">{{ carry() }}<input type="hidden" name="action" value="add_event">
+      <div class="exp-row">
+        <label>Kind <select name="kind">{% for k in kinds %}<option{% if draft.get('kind') == k %} selected{% endif %}>{{ k }}</option>{% endfor %}</select></label>
+        <label>Name <input type="text" name="name" maxlength="80" value="{{ draft.get('name', '') }}" autocomplete="off" required></label>
+        <label>From <input type="date" name="start" value="{{ draft.get('start', week.isoformat()) }}" required></label>
+        <label>To <input type="date" name="end" value="{{ draft.get('end', week_end.isoformat()) }}" required></label>
+        <label>Change in contacts (%) <input type="text" inputmode="decimal" name="change" value="{{ draft.get('change', '') }}" placeholder="25 or -30" autocomplete="off" required></label>
+      </div>
+      <fieldset class="exp-kinds"><legend>Channels it touches</legend><div class="exp-row">{% for ch in channels %}<label class="exp-kind"><input type="checkbox" name="channels" value="{{ ch }}"{% if (draft.getlist('channels') if draft.getlist is defined else []) and ch in draft.getlist('channels') or (not draft and ch == channel) %} checked{% endif %}><span>{{ ch }}</span></label>{% endfor %}</div></fieldset>
+      <div class="exp-row">
+        <label>Days after it ends with a dip or lift (0 to 28) <input type="text" inputmode="numeric" name="after_days" value="{{ draft.get('after_days', '0') }}" autocomplete="off"></label>
+        <label>Change in those days (%) <input type="text" inputmode="decimal" name="after_change" value="{{ draft.get('after_change', '') }}" placeholder="-20" autocomplete="off"></label>
+      </div>
+      <p><button class="primary" type="submit">Add the event</button></p></form>{% endif %}
+  </details>
+
+  <details{% if drivers.ai or draft.get('action') == 'add_ai' %} open{% endif %}><summary>AI and automation ({{ drivers.ai|length }})</summary>
+    <p class="dim">Will AI or automation take contacts away from a channel (or add some)? Which channel, by how many percent, in which period? When the next period starts, add it on its own with its own percent: more, less, or an increase. Periods on one channel cannot overlap. If part of what AI removes comes back on another channel, say which and how much of it.</p>
+    {% if drivers.ai %}<div class="scroll" role="region" tabindex="0" aria-label="AI and automation periods (scrolls sideways)"><table class="edgrid"><thead><tr><th scope="col">Channel</th><th scope="col">Dates</th><th scope="col">Change</th><th scope="col">Remove</th></tr></thead><tbody>
+    {% for r in drivers.ai %}<tr><th scope="row">{{ r.channel }}{% if r.this_week %}<span class="vol-days">in this week</span>{% endif %}</th><td>{{ r.start }} to {{ r.end }}</td><td>{{ '%+g' % r.change }}%{% if r.move_to %}<span class="vol-days">{{ '%g' % r.move_share }}% of it moves to {{ r.move_to }}</span>{% endif %}</td>
+      <td>{% if can('volumes_edit') %}<form method="post" action="{{ url_for('volumes_drivers') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="channel" value="{{ channel }}"><input type="hidden" name="week" value="{{ week.isoformat() }}"><input type="hidden" name="day" value="{{ day_names[day] }}">{{ carry() }}<input type="hidden" name="action" value="remove"><input type="hidden" name="list" value="ai"><input type="hidden" name="id" value="{{ r.id }}"><button type="submit" class="quiet">Remove<span class="sr-only"> the {{ r.channel }} period from {{ r.start }}</span></button></form>{% else %}-{% endif %}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+    {% if can('volumes_edit') %}<form method="post" action="{{ url_for('volumes_drivers') }}" class="ins-filter" aria-label="Add an AI period">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="channel" value="{{ channel }}"><input type="hidden" name="week" value="{{ week.isoformat() }}"><input type="hidden" name="day" value="{{ day_names[day] }}">{{ carry() }}<input type="hidden" name="action" value="add_ai">
+      <div class="exp-row">
+        <label>Channel <select name="ai_channel">{% for ch in channels %}<option{% if (draft.get('ai_channel') or channel) == ch %} selected{% endif %}>{{ ch }}</option>{% endfor %}</select></label>
+        <label>From <input type="date" name="start" value="{{ draft.get('start', week.isoformat()) }}" required></label>
+        <label>To <input type="date" name="end" value="{{ draft.get('end', '') }}" required></label>
+        <label>Change in contacts (%) <input type="text" inputmode="decimal" name="change" value="{{ draft.get('change', '') }}" placeholder="-15 or 10" autocomplete="off" required></label>
+      </div>
+      <div class="exp-row">
+        <label>Part of it moves to <select name="move_to"><option value="">Nowhere</option>{% for ch in channels %}<option{% if draft.get('move_to') == ch %} selected{% endif %}>{{ ch }}</option>{% endfor %}</select></label>
+        <label>Share that moves (%) <input type="text" inputmode="decimal" name="move_share" value="{{ draft.get('move_share', '') }}" placeholder="50" autocomplete="off"></label>
+      </div>
+      <p><button class="primary" type="submit">Add the AI period</button></p></form>{% endif %}
+  </details>
+
+  <details{% if drivers.growth.yoy or drivers.growth.method == 'growth' or draft.get('action') == 'growth' %} open{% endif %}><summary>Customer growth year over year</summary>
+    <p class="dim">By how many percent are your customers (or their contacts) growing a year, by channel? Choose whether the suggestion uses the trend measured from the history or this rate. With the rate, every past week is brought forward to this week at the rate and the middle of those is the starting point.</p>
+    <form method="post" action="{{ url_for('volumes_drivers') }}" class="ins-filter" aria-label="Year-over-year growth">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="channel" value="{{ channel }}"><input type="hidden" name="week" value="{{ week.isoformat() }}"><input type="hidden" name="day" value="{{ day_names[day] }}">{{ carry() }}<input type="hidden" name="action" value="growth">
+      <div class="exp-row">{% for ch in channels %}<label>{{ ch }} (% a year) <input type="text" inputmode="decimal" name="yoy.{{ ch }}" value="{{ '%g' % drivers.growth.yoy[ch] if ch in drivers.growth.yoy else '' }}" placeholder="8"{% if not can('volumes_edit') %} readonly{% endif %} autocomplete="off"></label>{% endfor %}</div>
+      <fieldset class="exp-kinds"><legend>The suggestion uses</legend><div class="exp-row">
+        <label class="exp-kind"><input type="radio" name="method" value="measured"{% if drivers.growth.method == 'measured' %} checked{% endif %}{% if not can('volumes_edit') %} disabled{% endif %}><span>The trend measured from the history</span></label>
+        <label class="exp-kind"><input type="radio" name="method" value="growth"{% if drivers.growth.method == 'growth' %} checked{% endif %}{% if not can('volumes_edit') %} disabled{% endif %}><span>The year-over-year rate typed here</span></label></div></fieldset>
+      {% if can('volumes_edit') %}<p><button class="primary" type="submit">Save the growth</button></p>{% endif %}</form>
+  </details>
+
+  <details{% if drivers.last_year.get(f.last_year_week) or draft.get('action') == 'last_year' %} open{% endif %}><summary>Last year's same week</summary>
+    <p class="dim">What did each channel receive in the same week last year (the week starting {{ f.last_year_week }}, the same weekdays)? It is shown beside the suggestion, grown by the year-over-year rate, and you can start the suggestion from it.</p>
+    <form method="post" action="{{ url_for('volumes_drivers') }}" class="ins-filter" aria-label="Last year's same week">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="channel" value="{{ channel }}"><input type="hidden" name="week" value="{{ week.isoformat() }}"><input type="hidden" name="day" value="{{ day_names[day] }}">{{ carry() }}<input type="hidden" name="action" value="last_year">
+      <div class="exp-row">{% for ch in channels %}<label>{{ ch }} contacts <input type="text" inputmode="numeric" name="ly.{{ ch }}" value="{{ '{:,}'.format(drivers.last_year.get(f.last_year_week, {}).get(ch)) if drivers.last_year.get(f.last_year_week, {}).get(ch) is not none else '' }}"{% if not can('volumes_edit') %} readonly{% endif %} autocomplete="off"></label>{% endfor %}</div>
+      {% if can('volumes_edit') %}<p><button class="primary" type="submit">Save last year's totals</button></p>{% endif %}</form>
+  </details>
+</section>
+</details>
+{% if f.calls %}
+{{ list_mode() }}
+<section class="tiles" aria-label="The week in numbers">
+  <p class="tile"><span class="tile-label">Contacts forecast</span><b>{{ '{:,}'.format(f.total) }}</b><small>{{ week.strftime('%a %d') }} to {{ week_end.strftime('%a %d %b') }}</small></p>
+  <p class="tile"><span class="tile-label">Busiest interval</span><b>{{ busiest[0] }} {{ '%02d:%02d' % (busiest[1] // 60, busiest[1] % 60) }}</b><small>{{ busiest[2] }} contacts</small></p>
+  {% if erlang %}<p class="tile"><span class="tile-label">Needed on the floor at the peak</span><b>{{ peak_needed }}</b><small>the engine adds shrinkage itself</small></p>
+  <p class="tile"><span class="tile-label">Hours needed on the floor</span><b>{{ '{:,}'.format(hours_needed|round|int) }} h</b><small>over the week</small></p>
+  {% else %}<p class="tile"><span class="tile-label">Handle time used</span><b>{{ f.aht|round|int }} s</b><small>from the history</small></p>
+  <p class="tile"><span class="tile-label">History used</span><b>{{ f.weeks.used|length }} weeks</b><small>for the shape</small></p>{% endif %}
+</section>
+<section class="panel" aria-labelledby="g1"><h2 id="g1">Contacts, like the input sheet</h2>
+  <p class="dim">Intervals down the side, Sunday to Saturday across. Press Copy for Excel and paste into a sheet. {% if f.weeks %}Every weekday is read from the same {{ f.weeks.used|length }} whole weeks{% if f.weeks.short %} (fewer than the {{ f.weeks.wanted }} asked for: not enough clean weeks){% endif %}, so there are as many Saturdays as Sundays behind the shape.{% endif %}{% if f.profile and f.profile.closed %} Closed: {{ f.profile.closed|join(', ') }}.{% endif %}</p>
+  {{ grid_table('tbl-calls', 'Forecast contacts', calls_grid, 'calls') }}
+</section>
+{% if needs_grid %}
+<section class="panel" aria-labelledby="g2"><h2 id="g2">People needed on the floor, like FT Wise</h2>
+  <p class="dim">{{ channel }}: {% if channel == 'Phone' %}Erlang C to a service level{% elif channel == 'Chat' %}Erlang C with chats at once{% else %}the workload method{% endif %}, handle time {{ f.aht|round|int }} s, highest occupancy and the rest from the Settings tab. Erlang C assumes nobody abandons, so it over-staffs where callers do. These are people on the floor; the engine adds the program's shrinkage when it builds the schedule.</p>
+  {{ grid_table('tbl-needs', 'People needed on the floor', needs_grid, 'needs') }}
+  <p><a class="button" href="{{ url_for('volumes_requirements', program=key, week=week.isoformat()) }}">Download the requirement tabs (Excel)</a> <span class="dim">FT Wise and a tab per channel, from each channel's saved forecast, in {{ zone_name }} time, laid out for the input workbook. Save a forecast for a channel first.</span></p>
+  {% set fx = {'program': key, 'channel': channel, 'week': week.isoformat()} %}{% if f.source != 'saved' %}{% set _ = fx.update({'total': f.total}) %}{% endif %}{% set _ = fx.update({'hist_weeks': hist_weeks, 'base': base, 'skip_sent': 1, 'skip': skip}) %}{% if show_zone != zone %}{% set _ = fx.update({'show_tz': show_zone}) %}{% endif %}
+  <p><a class="button" href="{{ url_for('volumes_formulas', **fx) }}">Download with live =AGENTS formulas (Excel)</a> <span class="dim">This channel's contacts and the people needed worked out by Excel formulas you can change, with the site's figures beside them.</span></p>
+  <details><summary>Use =AGENTS() in your own Excel</summary>
+    <p class="dim">In Excel 365, add the function once: Formulas, Name Manager, New. Type the name (AGENTS), paste its definition into Refers to, press OK. Then =AGENTS(calls, handle time, interval seconds, target as a fraction, answer seconds, highest occupancy as a fraction). The workbook above has the same calculation as an ordinary formula that needs no setup and works in every Excel.</p>
+    <div class="vol-copy"><button type="button" class="button" data-copy-text="#agents-lambda">Copy the definitions</button><span class="dim" data-copy-note role="status" aria-live="polite"></span></div>
+    <pre id="agents-lambda" class="vol-pre" tabindex="0" role="region" aria-label="Definitions of AGENTS and SERVICELEVEL for Excel">{{ lambda_text }}</pre></details>
+</section>
+{% endif %}
+<section class="panel" aria-labelledby="g3"><h2 id="g3">{{ day_names[day] }}, interval by interval</h2>
+  <p class="dim">{% for n in day_names %}<a href="{{ url_for('volumes_page', tab='forecast', program=key, channel=channel, week=week.isoformat(), day=n, total=total_text or none) }}"{% if loop.index0 == day %} aria-current="true"{% endif %}>{{ n }}</a>{{ ' · ' if not loop.last }}{% endfor %}</p>
+  <h3>Contacts</h3>{{ chart_calls }}{% if chart_people %}<h3>People needed on the floor</h3>{{ chart_people }}{% endif %}
+</section>
+{% endif %}
+{% endif %}
+
+{# ------------------------------------------------------------------ how did we do #}
+{% if tab == 'how' %}
+<form method="get" action="{{ url_for('volumes_page') }}" class="panel ins-filter" aria-label="Choose the week">
+  <input type="hidden" name="tab" value="how"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="channel" value="{{ channel }}">
+  <div class="exp-row"><label>Week starting <select name="week">{% for w in weeks %}<option value="{{ w.iso }}"{% if w.iso == week.isoformat() %} selected{% endif %}>{{ w.text }}</option>{% endfor %}</select></label>
+    <label>Day <select name="on">{% for iso in r.dates %}<option value="{{ iso }}"{% if iso == on.isoformat() %} selected{% endif %}>{{ day_names[loop.index0] }} {{ iso[8:] }}</option>{% endfor %}</select></label></div>
+  <p><button class="primary" type="submit">Show</button></p></form>
+{% if r.note %}<p class="notice calm" role="status">{{ r.note }}</p>{% endif %}
+{% if r.actual_total %}
+{{ list_mode() }}
+<section class="tiles" aria-label="The week in numbers">
+  <p class="tile"><span class="tile-label">Offered over forecast</span><b>{% if r.week_otf is none %}-{% else %}{{ '%.0f' % r.week_otf }}%{% endif %}</b><small>{% if r.week_otf is none %}no forecast saved{% else %}{{ 'on target' if r.settings.band_low <= r.week_otf <= r.settings.band_high else ('more than forecast' if r.week_otf > r.settings.band_high else 'under the forecast') }} ({{ r.settings.band_low }} to {{ r.settings.band_high }}%){% endif %}</small></p>
+  <p class="tile"><span class="tile-label">Contacts offered</span><b>{{ '{:,}'.format(r.actual_total) }}</b><small>{% if r.forecast_total is not none %}forecast {{ '{:,}'.format(r.forecast_total) }}{% else %}no forecast{% endif %}</small></p>
+  {% if r.band %}{% set on_n = namespace(n=0, all=0) %}{% for row in r.band %}{% for b in row %}{% if b != 'none' %}{% set on_n.all = on_n.all + 1 %}{% if b == 'on' %}{% set on_n.n = on_n.n + 1 %}{% endif %}{% endif %}{% endfor %}{% endfor %}
+  <p class="tile"><span class="tile-label">Intervals on target</span><b>{{ (100 * on_n.n / on_n.all)|round|int if on_n.all else '-' }}%</b><small>of intervals with a forecast</small></p>{% else %}<p class="tile"><span class="tile-label">Intervals on target</span><b>-</b><small>no forecast</small></p>{% endif %}
+  <p class="tile"><span class="tile-label">Weeks over forecast</span><b>{{ r.trend|selectattr('otf', 'gt', 100)|list|length }} of {{ r.trend|length }}</b><small>weeks with a forecast and actuals</small></p>
+</section>
+{% if chart_otf is defined %}<section class="panel" aria-labelledby="t1"><h2 id="t1">Offered over forecast by week</h2>{{ chart_otf }}</section>{% endif %}
+{% if r.day_otf %}<section class="panel" aria-labelledby="t2"><h2 id="t2">Days</h2>
+  <table class="edgrid"><thead><tr><th scope="col">Day</th><th scope="col">Forecast</th><th scope="col">Offered</th><th scope="col">Offered over forecast</th><th scope="col">Reading</th></tr></thead><tbody>
+  {% for d in range(7) %}{% set o = r.day_otf[d] %}{% set fc = r.forecast[d]|sum %}<tr><th scope="row">{{ day_names[d] }}</th><td>{{ '{:,}'.format(fc) }}</td><td>{{ '{:,}'.format(r.actual[d]|sum) }}</td>
+    <td class="{% if o is not none %}ot-{{ 'under' if o < r.settings.band_low else ('over' if o > r.settings.band_high else 'on') }}{% endif %}">{% if o is none %}-{% else %}{{ '%.0f' % o }}%{% endif %}</td>
+    <td>{% if o is none %}no forecast{% elif o < r.settings.band_low %}under the forecast{% elif o > r.settings.band_high %}more than forecast{% else %}on target{% endif %}</td></tr>{% endfor %}</tbody></table></section>{% endif %}
+<section class="panel" aria-labelledby="t3"><h2 id="t3">{{ day_names[day] }} {{ on.strftime('%d %b') }}, interval by interval</h2>
+  <h3>Contacts</h3>{{ chart_calls }}
+  {% if chart_people %}<h3>People</h3><p class="dim">Needed in the system: the requirement tab of the schedule in use. {% if r.staffing.at_actual %}Needed at actual calls: Erlang C on the contacts and handle time that came. {% endif %}On shift: the schedule. On the floor: the RTA's day, after breaks, absences and aux.</p>{{ chart_people }}{% endif %}
+  {% if chart_sl %}<h3>Service level</h3><p class="dim">The ACD's own service level is not in the upload, so this is modelled with Erlang from the people on the floor and the contacts and handle time that came. It falls steeply wherever the floor is below the need.</p>{{ chart_sl }}{% endif %}
+  {% if r.staffing and r.staffing.note and not chart_people %}<p class="dim">{{ r.staffing.note }}</p>{% endif %}
+  {% if not r.uses_erlang %}<p class="dim">This program is counted by interval compliance, so there is no Erlang line or modelled service level: it shows contacts and the system's requirement against the floor.</p>{% endif %}
+</section>
+<section class="panel" aria-labelledby="t4"><h2 id="t4">The week as grids, like the input sheet</h2>
+  <h3>Offered</h3>{{ grid_table('tbl-actual', 'Offered contacts', actual_grid, 'actual') }}
+  {% if otf_grid %}<h3>Offered over forecast</h3><p class="dim">Blank where nothing was forecast. Colours: under the band, on target, over the band.</p>{{ grid_table('tbl-otf', 'Offered over forecast', otf_grid, 'otf', bands=band_grid, unit='%') }}
+  <h3>Forecast</h3>{{ grid_table('tbl-fc', 'Forecast contacts', forecast_grid, 'calls') }}{% endif %}
+</section>
+{% endif %}
+{% endif %}
+
+{# ------------------------------------------------------------------ settings #}
+{% if tab == 'settings' %}
+<form method="post" action="{{ url_for('volumes_settings') }}" class="panel ins-filter" aria-label="Volume settings"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}">
+  <p class="dim">Per channel. Handle time left empty comes from the actuals (volume-weighted); with no actuals 300 s for phone, 420 s for chat and 600 s for email are used. Erlang and the people needed apply when the program's measure is service level or volume weighted (it is {{ {'sl': 'service level', 'volume': 'volume weighted', 'interval': 'interval compliance'}[measure] }} here).</p>
+  <fieldset class="exp-kinds"><legend>Time zone</legend><div class="exp-row">
+    <label>The volumes are kept in <select name="zone"{% if not can('volumes_edit') %} disabled{% endif %}>{% for k, n in zones %}<option value="{{ k }}"{% if k == zone %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label></div>
+    <p class="dim">Use the zone your schedules are made in, so the people needed line up with the schedule. Volumes you add in another zone are moved into this one when you save them. Changing this does not move volumes already held: they stay as they were saved, so set it before adding any.</p></fieldset>
+  {% for ch in channels %}<fieldset class="exp-kinds"><legend>{{ ch }}</legend><div class="exp-row">
+    {% for name, label_ in labels.items() %}{% if ch != 'Phone' or name != 'concurrency' %}{% if ch == 'Chat' or name != 'concurrency' %}
+    <label>{{ label_ }} <input type="text" inputmode="decimal" name="{{ ch }}.{{ name }}" value="{{ '' if settings[ch][name] is none else settings[ch][name] }}"{% if not can('volumes_edit') %} readonly{% endif %} autocomplete="off"></label>{% endif %}{% endif %}{% endfor %}
+  </div></fieldset>{% endfor %}
+  {% if can('volumes_edit') %}<p><button class="primary" type="submit">Save the settings</button></p>{% endif %}
+</form>
+{% endif %}
+{% endblock %}

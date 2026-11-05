@@ -89,9 +89,16 @@ class TheFill(_Book):
         """Found in the browser check: the fill broke the validator's limit on people on break at once in 53
         quarter-hours. The limit is the engine's: the smallest of the people on shift less one, their share
         (max_concurrent_ratio) and the absolute cap; Suggest only knew the absolute cap."""
-        found = self.book.auto_breaks(self.version["id"], self.sara, use=False)
+        # re-pinned (Phase AY, owner, 2026-10-23: "ignore the cap"): the limit is kept first only when the workbook's Break Concurrency
+        # Gate Mode is Fail. In Warn, the engine's default, the fill lets the intervals and the usual shape decide, and the validator
+        # says an excess as a yellow warning, never a red failure (test_ay_cap_mode)
+        with mock.patch.object(self.book, "break_rules", return_value={**self.rules, "concurrency_mode": "fail"}):
+            found = self.book.auto_breaks(self.version["id"], self.sara, use=False)
         said = [p["text"] for p in self.book.view(found["id"])["problems"]]
         self.assertEqual([t for t in said if "more people on break than allowed" in t], [])
+        warned = self.book.auto_breaks(self.version["id"], self.sara, use=False)
+        found_warn = [p for p in self.book.view(warned["id"])["problems"] if "more people on break than allowed" in p["text"]]
+        self.assertEqual({p["severity"] for p in found_warn} - {"yellow"}, set())
 
     def test_an_edited_draft_is_left_as_it_is(self):
         week = json.loads(self.version["week"])

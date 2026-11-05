@@ -48,7 +48,7 @@ class TheDefaults(_Add):
         self.assertRegex(dialog, rf'<input type="radio" name="side" value="{side}" checked')
         minutes = int(re.search(r'<select name="minutes">.*?<option value="(\d+)" selected', dialog, re.S).group(1))
         reach = start - t if side == "before" else t + 60 - end
-        self.assertGreaterEqual(minutes, min(reach, 120))  # long enough to cover the hour (2 hours at most)
+        self.assertGreaterEqual(minutes, min(reach, 240))  # long enough to cover the hour (4 hours at most since Phase AJ: the owner raised the cap)
         self.assertIn("data-keep-minutes", dialog)
 
     def test_someone_on_shift_still_opens_on_break(self):

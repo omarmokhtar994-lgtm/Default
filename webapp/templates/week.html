@@ -1,18 +1,19 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
 {% extends "base.html" %}
-{% from "_auto_breaks.html" import auto_breaks with context %}
-{% block title %}{% if program %}{{ program|unit }}, week of {{ week|day_month }}{% elif run %}{{ run.workbook }}: the week{% else %}Week view{% endif %} on Team Scheduler{% endblock %}
+{% from "_auto_breaks.html" import auto_breaks with context %}{% from "_macros.html" import list_mode %}
+{% block title %}{% if merged %}{{ merged.name }}, week of {{ week|day_month }}{% elif program %}{{ program|unit }}, week of {{ week|day_month }}{% elif run %}{{ run.workbook }}: the week{% else %}Week view{% endif %} on Team Scheduler{% endblock %}
 {% block content %}
 {% set unit = 'hour' if view and view.step == 60 else (view.step ~ ' minutes' if view else '30 minutes') %}
 <div class="phead">
   <div>
-    <h1>{% if program and week %}{{ program|unit }}, week of {{ week|day_month }}{% elif run %}{{ run.workbook }}: the week{% else %}Week view{% endif %}</h1>
+    <h1>{% if merged %}{{ merged.name }}, week of {{ week|day_month }}{% elif program and week %}{{ program|unit }}, week of {{ week|day_month }}{% elif run %}{{ run.workbook }}: the week{% else %}Week view{% endif %}</h1>
     {% if week_note %}<p class="byline">{% if week_note.said %}{{ week_note.said }} <a href="{{ url_for('run_schedules', run_id=version.run_id, v=version.id) }}">{{ version.label }}</a>{% else %}From the schedule in use: <a href="{{ url_for('run_schedules', run_id=version.run_id, v=version.id) }}">{{ version.label }}</a>{% endif %}{% if week_note.workbook %}, workbook {{ week_note.workbook }}{% endif %}{% if week_note.set_by %}, {{ week_note.set_by }}{% endif %}.</p>
     {% if week_note.others and not switch %}<p class="byline">This week also has {% for o in week_note.others %}<a href="{{ url_for('run_schedules', run_id=o.run_id) }}">{{ o.workbook }}</a>{{ ', ' if not loop.last }}{% endfor %} (not in use). <a href="{{ url_for('run_schedules', run_id=version.run_id) }}#week-list">See {{ 'both' if week_note.others|length == 1 else 'all the' }} schedules</a></p>{% endif %}
     {% endif %}{% if version %}<div class="actions">{{ auto_breaks(version, (version.week|fromjson).breaks|length, may_set_in_use, 'week' if week_note else '') }}<a class="button" href="{{ url_for('run_schedules', run_id=version.run_id, v=version.id) }}">Open the schedules</a></div>{% endif %}
     {% if version and not week_note %}<p class="byline">Version: <a href="{{ url_for('run_schedules', run_id=version.run_id, v=version.id) }}">{{ version.label }}</a>{% if version.in_use %} (in use){% endif %}.</p>{% endif %}
     {% if switch %}<div class="wk-switch" role="group" aria-label="Schedule shown"><span>Schedule</span>{% for s in switch %}<a href="{{ s.url }}"{% if s.here %} aria-current="true"{% endif %}>{{ s.workbook }}<small>{{ 'in use' if s.in_use else 'not in use' }}</small></a>{% endfor %}<a href="{{ url_for('schedules_for', program=program, week=week) }}">Compare the week's schedules</a></div>{% endif %}
     {% if elsewhere %}<div class="wk-notice"><p>Not in use: the RTA, exports and analysis use {{ elsewhere.workbook }} for this week.{% if not switch %} <a href="{{ url_for('run_schedules', run_id=elsewhere.run_id) }}#week-list">See the week's schedules</a>{% endif %}</p>{% if may_set_in_use %}<form method="post" action="{{ url_for('schedule_in_use', schedule_id=version.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="primary" type="submit">Set {{ run.workbook if run else version.label }} in use</button></form>{% endif %}</div>{% endif %}
+    {% if merged %}<p class="byline">{% if merged.all %}Every LOB of the program together{% else %}{{ merged.units|length }} of the program's LOBs together{% endif %}: the requirement and the staff of {{ merged.units|length }} LOBs added up, on the clock picked. Target {{ merged.target }}%{% if merged.differs %} (the LOBs' own targets weighted by what each needs){% endif %}.{% if merged.missing %} No schedule this week for {{ merged.missing|join(', ') }}.{% endif %}</p>{% endif %}
     {% if run %}<p class="byline">From <a href="{{ url_for('run_detail', run_id=run.id) }}">{{ run.workbook }}</a> ({{ run.mode|lower }} run by {{ run.by_name }}, {{ label(run) }}).
       {% if view %}Every {{ unit }}, {{ 'before' if side == 'before' else 'after' }} breaks. Needed = associates on the floor for 100% of demand after shrinkage.{% endif %}</p>{% endif %}
   </div>
@@ -24,12 +25,16 @@
       <select name="week">{% for w in weeks %}<option value="{{ w }}"{% if w == week %} selected{% endif %}>{{ w|day_month }} {{ w[:4] }}</option>{% endfor %}</select></label>
     <label>Times in
       <select name="tz">{% for key, name in zones %}<option value="{{ key }}"{% if key == g.zone %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+    {% include "_lob_pick.html" %}
+    {% if pick and pick.rows %}<label>Version
+      <select name="v"><option value="">The one in use</option>{% for r in pick.rows %}<option value="{{ r.id }}"{% if r.id == pick.picked %} selected{% endif %}>{{ r.text }}</option>{% endfor %}</select></label>{% endif %}
     <input type="hidden" name="side" value="{{ side }}">
     <button class="quiet" type="submit">Show</button>
   </form>
   {% endif %}
 </div>
 
+{{ list_mode() }}
 {% if zone_note %}<p class="note panel">{{ zone_note }}</p>{% endif %}
 {% if target_panel %}{% set tp = target_panel %}
 <section class="panel" id="target" aria-labelledby="tgt-h">
@@ -37,11 +42,13 @@
   {% if tp.may_set %}<form class="tgt" method="post" action="{{ url_for('week_target') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="week" value="{{ week }}">
     <label>Each interval counts as achieved at
-      <select name="target" data-autosubmit>{% for c in tp.choices %}<option value="{{ c }}"{% if c == tp.current %} selected{% endif %}>{{ c }}%{% if c == tp.own %} (the workbook's own target){% endif %}</option>{% endfor %}</select></label>
+      <select name="target" data-autosubmit>{% for c in tp.choices %}<option value="{{ c }}"{% if c == tp.current %} selected{% endif %}>{{ c }}%{% if c == tp.base %} ({{ "the program's default" if tp.from_program else "the workbook's own target" }}){% endif %}</option>{% endfor %}</select></label>
     <button class="quiet" type="submit">Set</button>
   </form>
-  {% else %}<p>Each interval counts as achieved at <b>{{ tp.current }}%</b>{% if not tp.kept %} (the workbook's own target){% endif %}. Admins and supervisors can change it.</p>{% endif %}
+  {% else %}<p>Each interval counts as achieved at <b>{{ tp.current }}%</b>{% if not tp.kept %} ({{ "the program's default" if tp.from_program else "the workbook's own target" }}){% endif %}. Admins and supervisors can change it.</p>{% endif %}
   <p class="note">For this LOB and this week only{% if tp.kept %}; set by {{ tp.kept.by_name or 'someone' }}, {{ when(tp.kept.at) }}{% endif %}. The RTA counts each day's intervals against it; other weeks keep their own.</p>
+  {% set said = [] %}{% for d in tp.days %}{% set _ = said.append(d.label ~ (' ' ~ d.t.now ~ ' of ' ~ d.t.intervals if d.t and d.t.intervals else ' no demand')) %}{% endfor %}
+  <div class="blocks3d" role="img" aria-label="Intervals at the target, by day: {{ said|join(', ') }}">{% for d in tp.days %}{% set r = ((10 * d.t.now / d.t.intervals)|round|int) if d.t and d.t.intervals else 0 %}<span class="blkcol"><span class="blk hb{{ r }} {{ 'none' if not (d.t and d.t.intervals) else ('ok' if d.t.now >= d.t.intervals else 'miss') }}" aria-hidden="true"></span><small aria-hidden="true">{{ d.label }}</small></span>{% endfor %}</div>
   <div class="tgt-days">{% for d in tp.days %}<a href="{{ url_for('day_page', program=program, date=d.date.isoformat()) }}"{% if d.t and d.t.now < d.t.intervals %} class="miss"{% endif %}><small>{{ d.label }}</small>{% if d.t and d.t.intervals %}<b>{{ d.t.now }} of {{ d.t.intervals }}</b><small>plan {{ d.t.plan }} of {{ d.t.intervals }}</small>{% else %}<b>–</b><small>no intervals with demand</small>{% endif %}</a>{% endfor %}</div>
 </section>
 {% endif %}
@@ -50,15 +57,15 @@
 <section class="panel" id="needed" aria-labelledby="hn-h">
   <h2 id="hn-h">Hours needed</h2>
   <div class="hn-bar">
-    <nav class="view sidepick" aria-label="Recorded or planned">{% for key, label in (('recorded', 'As recorded on the RTA'), ('planned', 'As planned')) %}<a href="{{ url_for('week_page', program=program, week=week, basis=key, aim=nd.aim, show=nd.show) }}#needed"{% if needed.basis == key %} aria-current="true"{% endif %}>{{ label }}</a>{% endfor %}</nav>
+    <nav class="view sidepick" aria-label="Recorded or planned">{% for key, label in (('recorded', 'As recorded on the RTA'), ('planned', 'As planned')) %}<a href="{{ url_for('week_page', program=program, week=week, basis=key, aim=nd.aim, show=nd.show, v=pick.picked if pick else none) }}#needed"{% if needed.basis == key %} aria-current="true"{% endif %}>{{ label }}</a>{% endfor %}</nav>
     <form class="hn-aim" method="get" action="{{ url_for('week_page') }}#needed">
-      <input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="week" value="{{ week }}"><input type="hidden" name="basis" value="{{ needed.basis }}"><input type="hidden" name="show" value="{{ nd.show }}">
+      <input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="week" value="{{ week }}"><input type="hidden" name="basis" value="{{ needed.basis }}"><input type="hidden" name="show" value="{{ nd.show }}">{% if pick and pick.picked %}<input type="hidden" name="v" value="{{ pick.picked }}">{% endif %}
       <label>Hours needed to reach <select name="aim" data-autosubmit><option value="full"{% if nd.aim == 'full' %} selected{% endif %}>100%</option><option value="target"{% if nd.aim == 'target' %} selected{% endif %}>the target ({{ hpct }}%) plus 10 minutes</option></select></label>
       <button class="quiet" type="submit">Show</button>
     </form>
-    <a class="button" href="{{ url_for('week_hours_needed', program=program, week=week, basis=needed.basis, aim=nd.aim, show=nd.show) }}">Download this table</a>
+    <a class="button" href="{{ url_for('week_hours_needed', program=program, week=week, basis=needed.basis, aim=nd.aim, show=nd.show, v=pick.picked if pick else none) }}">Download this table</a>
   </div>
-  <nav class="view sidepick hn-show" aria-label="Which intervals">{% for key, label in (('all', 'All short intervals'), ('ot', 'Overtime needed'), ('dayoff', 'Cancel a day off')) %}<a href="{{ url_for('week_page', program=program, week=week, basis=needed.basis, aim=nd.aim, show=key) }}#needed"{% if nd.show == key %} aria-current="true"{% endif %}>{{ label }} ({{ nd.counts[key] }})</a>{% endfor %}</nav>
+  <nav class="view sidepick hn-show" aria-label="Which intervals">{% for key, label in (('all', 'All short intervals'), ('ot', 'Overtime needed'), ('dayoff', 'Cancel a day off')) %}<a href="{{ url_for('week_page', program=program, week=week, basis=needed.basis, aim=nd.aim, show=key, v=pick.picked if pick else none) }}#needed"{% if nd.show == key %} aria-current="true"{% endif %}>{{ label }} ({{ nd.counts[key] }})</a>{% endfor %}</nav>
   <p class="hn-legend"><span><i class="key covered"></i>100% or more</span><span><i class="key short"></i>{{ hpct }} to 99% (at the target)</span><span><i class="key short tight"></i>Tight: under 10 minutes over the target</span><span><i class="key gap"></i>Below {{ hpct }}%</span><span>Each cell: hours needed to reach {{ '100%' if nd.aim == 'full' else 'the target with 10 minutes over it' }}, and the share on the floor{{ ' as the RTA records it' if needed.basis == 'recorded' else ' in the plan' }}</span></p>
   <div class="scroll" role="region" tabindex="0" aria-label="Hours needed (scrolls sideways)">
   <table class="hours">
@@ -87,7 +94,7 @@
 
 {% include "_outlook.html" %}
 
-{% if not run %}
+{% if not run and not merged %}
 <p class="empty panel">No finished run for this program and week. Pick another week, or start a run with this program and week on the home page.</p>
 {% elif not view %}
 <p class="empty panel">No interval figures for this run: the independent validator's report was not produced (a rejected workbook, a readiness check, or a run that built no schedule).</p>
@@ -103,11 +110,11 @@
   <h2 id="grid-h">Achieved every {{ unit }}</h2>
   <p class="note">Percent of demand covered {{ side }} breaks; the small figures are on the floor / needed for 100%. Hover a cell for details.</p>
   <nav class="view sidepick" aria-label="Before or after breaks">
-    {% set base = url_for('run_week', run_id=run.id) if request.endpoint == 'run_week' else (url_for('schedule_week', schedule_id=version.id) if version else url_for('week_page', program=program, week=week)) %}
+    {% set base = url_for('run_week', run_id=run.id) if request.endpoint == 'run_week' else (url_for('schedule_week', schedule_id=version.id) if version else url_for('week_page', program=program, week=week, merge='1' if merged else none)) %}
     <a href="{{ base }}{{ '&' if '?' in base else '?' }}side=after"{% if side == 'after' %} aria-current="true"{% endif %}>After breaks (published)</a>
     <a href="{{ base }}{{ '&' if '?' in base else '?' }}side=before"{% if side == 'before' %} aria-current="true"{% endif %}>Before breaks</a>
   </nav>
-  <div class="scroll" role="region" tabindex="0" aria-label="Achieved every {{ unit }} (scrolls sideways)">
+  <div class="scroll panel-scroll" role="region" tabindex="0" aria-label="Achieved every {{ unit }} (scrolls)">
   <table class="wkgrid">
     <thead><tr><th scope="col"><span class="sr-only">Time</span></th>{% for d in view.days %}<th scope="col">{{ d }}</th>{% endfor %}</tr></thead>
     <tbody>
@@ -127,7 +134,7 @@
     <h2 id="ot-h">Where overtime is needed</h2>
     <p class="note">Intervals below 100% and how many more associates would reach it.</p>
     {% if view.short %}
-    <div class="scroll" role="region" tabindex="0" aria-label="Where overtime is needed (scrolls sideways)"><table class="runs small">
+    <div class="scroll panel-scroll" role="region" tabindex="0" aria-label="Where overtime is needed (scrolls)"><table class="runs small">
       <thead><tr><th>Day</th><th>Time</th><th>Needed for 100%</th><th>On the floor</th><th>Achieved</th><th>Associates needed</th><th>Overtime hours</th></tr></thead>
       <tbody>{% for r in view.short %}<tr><td>{{ r.day }}</td><td>{{ r.time }}</td><td>{{ r.need }}</td><td>{{ r.have }}</td><td>{{ r.pct }}%</td><td><b>{{ r.people }}</b></td><td>{{ r.hours|num }}</td></tr>{% endfor %}
         <tr class="tot"><td colspan="5">Total</td><td><b>{{ t.overtime_people }}</b></td><td><b>{{ t.overtime_hours|num }} h</b></td></tr></tbody>
@@ -138,7 +145,7 @@
     <h2 id="ex-h">Extra hours available</h2>
     <p class="note">Intervals with more associates than 100% needs: hours that could move to the short ones.</p>
     {% if view.extra %}
-    <div class="scroll" role="region" tabindex="0" aria-label="Extra hours available (scrolls sideways)"><table class="runs small">
+    <div class="scroll panel-scroll" role="region" tabindex="0" aria-label="Extra hours available (scrolls)"><table class="runs small">
       <thead><tr><th>Day</th><th>Time</th><th>Needed for 100%</th><th>On the floor</th><th>Achieved</th><th>Associates above need</th><th>Extra hours</th></tr></thead>
       <tbody>{% for r in view.extra %}<tr><td>{{ r.day }}</td><td>{{ r.time }}</td><td>{{ r.need }}</td><td>{{ r.have }}</td><td>{{ r.pct }}%</td><td><b>{{ r.people }}</b></td><td>{{ r.hours|num }}</td></tr>{% endfor %}
         <tr class="tot"><td colspan="5">Total</td><td><b>{{ t.extra_people }}</b></td><td><b>{{ t.extra_hours|num }} h</b></td></tr></tbody>

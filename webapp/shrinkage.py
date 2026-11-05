@@ -16,7 +16,7 @@ from .day import ABSENT, AUX, EXTRA_BREAKS
 
 # (key, label, the measures it can count for), in the order of the owner's formula
 ITEMS = (("breaks", "Breaks and lunch", ("in",)),
-         ("aux", "Aux, not billable (training, coaching, meeting, system issue, task)", ("in",)),
+         ("aux", "Aux, not billable (training, coaching, meeting, system issue, task, bio break)", ("in",)),
          ("aux_billable", "Aux, billable", ("in",)),
          ("unplanned", "Unplanned leave", ("sutherland", "client")),
          ("planned", "Planned leave (from the schedule)", ("sutherland", "client")),

@@ -219,6 +219,12 @@ def read_contract(path: Path) -> Contract:
                      else "REQUIRED_LANGUAGE_ONLY" if "required" in raw_mode or "exclusive" in raw_mode
                      else "MINIMUM_ROWS")
 
+    # Phase AQ: with WHOLE_SHIFT a shift must also end by the window's close (START, the default, checks the start only).
+    shift_rule = re.sub(r"[^a-z0-9]", "", n(get(im, "Language Working Window Shift Rule", "Language Window Shift Rule",
+                                               "Language Working Window Applies To")))
+    k.window_whole = shift_rule in ("wholeshift", "wholeshifts", "entireshift", "startandend", "wholeshiftstartandend",
+                                    "shiftstartandend", "bothends")
+
     # Roster: Schedule sheet, located by header text.
     ws = wb["Schedule"]
     hr = header_row(ws, ("language",))
@@ -529,7 +535,10 @@ def check(k: Contract, sched: Dict[str, List[str]], breaks, exceptions) -> Dict[
             v.append({"rule": "off_count", "who": nm, "offs": len(offs), "owed": owed})
         if not k.strict_off and len(offs) < min(2, room):
             v.append({"rule": "off_minimum", "who": nm, "offs": len(offs)})
-        if k.strict_off and not k.separate_off and owed >= 2 and not any((d + 1) % 7 in offs for d in offs):
+        # Phase BD (owner, 2026-10-29): hard OFF days the associate's own Preference row names, not next to each other, are accepted
+        wanted_off = {d for d in range(7) if (k.hard_off and n(pref[d]) in ("off", "day off", "rest day")) or (k.fixed_on and n(fix[d]) == "off")}
+        wanted_apart = len(wanted_off) >= 2 and any((d + 1) % 7 not in wanted_off and (d - 1) % 7 not in wanted_off for d in wanted_off)
+        if k.strict_off and not k.separate_off and owed >= 2 and not wanted_apart and not any((d + 1) % 7 in offs for d in offs):
             v.append({"rule": "off_not_consecutive", "who": nm})
         labels = {n(row[d]) for d in range(7) if ks[d] == "shift"}
         if len(labels) > k.max_diff:
@@ -552,7 +561,10 @@ def check(k: Contract, sched: Dict[str, List[str]], breaks, exceptions) -> Dict[
                 todays = [w for w in entries if d in w[3]]
                 if not todays:
                     continue  # no window opens this day: the engine reads that as unrestricted
-                if not any((ss[d][0] - w[0]) % 1440 < ((w[1] - w[0]) % 1440 or 1440) for w in todays):
+                if not any((ss[d][0] - w[0]) % 1440 < ((w[1] - w[0]) % 1440 or 1440)
+                           and (not k.window_whole or ((w[1] - w[0]) % 1440 or 1440) == 1440
+                                or (ss[d][0] - w[0]) % 1440 + ss[d][1] <= ((w[1] - w[0]) % 1440 or 1440))
+                           for w in todays):
                     v.append({"rule": "language_working_window", "who": nm, "day": DAYS[d], "shift": row[d]})
 
     # Breaks
@@ -658,7 +670,7 @@ def check(k: Contract, sched: Dict[str, List[str]], breaks, exceptions) -> Dict[
     for row in v:
         by_rule[row["rule"]] += 1
     return {"metrics": dict(m), "violation_count": len(v), "violations_by_rule": dict(by_rule),
-            "violations": v[:200], "language_window_mode": k.window_mode,
+            "violations": v[:200], "language_window_mode": k.window_mode, "language_window_whole_shift": k.window_whole,
             "language_rules": [{**r, "days": sorted(r["days"]), "eligible": sorted(r["eligible"])} for r in k.rules]}
 
 

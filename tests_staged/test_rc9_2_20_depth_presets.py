@@ -105,6 +105,23 @@ class ColabRunnerDepthPlan(unittest.TestCase):
         self.assertEqual(RUNNER.depth_plan(self.args(mode="OVERNIGHT", single_run=True), self.ROW), ("OVERNIGHT", 21600, 1))
         self.assertEqual(RUNNER.depth_plan(self.args(single_run=True), self.ROW), ("DEEP", 14400, 1))
 
+    def test_the_time_a_run_may_take_is_its_search_budget_plus_a_grace_of_50_minutes_per_round(self):
+        # Phase AY (owner, 2026-10-23): a real Quick run, 2 seeds side by side, was killed at its 5400 s cap (3600 s plus 1800 s of
+        # grace) while its slower seed had finished at 5146 s and the portfolio was still writing its summary. The grace for
+        # the stages after the search is 3000 s a round now. Still only a ceiling: a run that is done sooner ends sooner.
+        self.assertEqual(RUNNER.GRACE_SECONDS, 3000)
+        self.assertEqual(RUNNER.engine_timeout(3600), 6600)        # a Quick run, or one round of seeds
+        self.assertEqual(RUNNER.engine_timeout(3600, 2), 13200)    # Deep: 4 seeds, 2 at a time
+        self.assertEqual(RUNNER.engine_timeout(3600, 3), 19800)    # Overnight: 6 seeds, 2 at a time
+
+    def test_the_single_run_and_the_portfolio_both_use_it(self):
+        source = RUNNER_PATH.read_text()
+        self.assertIn("_run_engine(command, logfile, engine_timeout(budget))", source)
+        self.assertIn("_run_engine(cmd, logfile, engine_timeout(budget, rounds))", source)
+        code = "\n".join(line for line in source.splitlines() if not line.lstrip().startswith("#"))
+        self.assertNotIn("+ 1800", code)
+        self.assertNotIn("1800 * rounds", code)
+
     def test_quick_and_smoke_are_unchanged(self):
         self.assertEqual(RUNNER.depth_plan(self.args(mode="QUICK"), self.ROW), ("QUICK", 3600, 1))
         self.assertEqual(RUNNER.depth_plan(self.args(mode="QUICK", seeds=2), self.ROW), ("QUICK", 3600, 2))

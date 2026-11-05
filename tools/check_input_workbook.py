@@ -139,7 +139,11 @@ def language_hours_report(E, parsed) -> list:
         lines.append(f"   WARNING: MINIMUM_ROWS enforces only rows with Minimum Per Interval above 0; "
                      f"{unenforced_rows} language-day window(s) above have minimum 0 and are not enforced. "
                      "Use ALL_ROWS to enforce every row.")
-    lines.append("   A shift is inside a window when it STARTS inside it (it may run past the window's end).")
+    if getattr(parsed, "language_window_shift_rule", "START") == "WHOLE_SHIFT":  # Phase AY: say the rule the workbook sets
+        lines.append("   Language Working Window Shift Rule = WHOLE_SHIFT: a shift is inside a window only when it STARTS and "
+                     "ENDS inside it.")
+    else:
+        lines.append("   A shift is inside a window when it STARTS inside it (it may run past the window's end).")
     # A fixed request is a hard rule and so is an enforced window: one that
     # starts outside its associate's window makes the run infeasible, and the
     # engine only says "no schedule satisfies all hard rules". Name each one.

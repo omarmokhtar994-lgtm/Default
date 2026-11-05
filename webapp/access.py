@@ -3,7 +3,8 @@
 
 Admins see and manage everything. Everyone else sees the programs assigned to them (or every program, for
 people marked so, which is how people from before program assignments keep their access). Supervisors manage
-the planners of their own programs: their programs, passwords, switched on or off."""
+the planners, team managers and associates of their own programs: their programs, passwords, switched on or off,
+and (Phase AK) which team manager an associate belongs to."""
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Set
@@ -16,7 +17,9 @@ def role(user: Dict[str, Any]) -> str:
         return "Admin"
     if user.get("is_associate"):
         return "Associate"
-    return "Supervisor" if user.get("is_supervisor") else "Planner"
+    if user.get("is_supervisor"):
+        return "Supervisor"
+    return "Team manager" if user.get("is_team_manager") else "Planner"
 
 
 class Access:
@@ -48,13 +51,18 @@ class Access:
         keys = self.keys()
         return keys is None or key in keys
 
+    def manages_people(self) -> bool:
+        """Phase AK: the roles an admin allows People on Roles (supervisors by default)."""
+        from .permissions import allowed
+        return allowed(self.store, self.user, "people")
+
     def can_manage(self, target: Dict[str, Any]) -> bool:
         """Admins manage anyone else; supervisors the planners who share a program with them."""
         if target["id"] == self.user["id"]:
             return False
         if self.user.get("is_admin"):
             return True
-        if not self.user.get("is_supervisor") or target.get("is_admin") or target.get("is_supervisor"):
+        if not self.manages_people() or target.get("is_admin") or target.get("is_supervisor"):
             return False
         if self.everything():
             return True
@@ -62,8 +70,22 @@ class Access:
             return False
         return bool(self.program_ids() & set(self.store.user_program_ids(target["id"])))
 
+    def sees(self, target: Dict[str, Any]) -> bool:
+        """Phase AR (owner: nothing of another program is visible): whether ``target`` is someone this person may see in a
+        list: themselves, anyone when they have every program, an admin or anyone with every program (they have this
+        person's programs too), and anyone who shares a program with them."""
+        if target["id"] == self.user["id"] or self.everything() or target.get("is_admin") or target.get("all_programs"):
+            return True
+        return bool(self.program_ids() & set(self.store.user_program_ids(target["id"])))
+
+    def team_managers_for(self, associate: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Phase AK: the active team managers who share one of ``associate``'s programs (or have every program)."""
+        mine = set(self.store.user_program_ids(associate["id"]))
+        return [u for u in self.store.list_users() if u["is_team_manager"] and u["active"]
+                and (u["all_programs"] or mine & set(self.store.user_program_ids(u["id"])))]
+
     def grantable(self) -> List[Dict[str, Any]]:
         """The programs this person may give to others."""
         if self.user.get("is_admin"):
             return self.book.tree()
-        return self.programs() if self.user.get("is_supervisor") else []
+        return self.programs() if self.manages_people() else []

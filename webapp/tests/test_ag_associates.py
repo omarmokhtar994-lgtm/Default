@@ -77,7 +77,9 @@ class Associates(unittest.TestCase):
     def test_the_form_lists_the_names_on_the_schedule(self):
         page = self.admin.get("/admin/users").get_data(as_text=True)
         self.assertIn('<datalist id="roster-names">', page)
-        self.assertIn('<option value="Associate 013">', page)
+        # re-pinned (Phase AO): each name now carries the programs whose schedules hold it (data-programs), so the
+        # form can list only the ticked programs' names
+        self.assertRegex(page, r'<option value="Associate 013" data-programs="\d+( \d+)*">')
 
     def test_an_associate_reaches_only_their_own_pages(self):
         me = self.signed_in("assoc10", "Associate 010")
@@ -87,14 +89,16 @@ class Associates(unittest.TestCase):
             with self.subTest(url):
                 got = me.get(url)
                 self.assertEqual(got.status_code, 302)
-                self.assertTrue(got.headers["Location"].endswith("/me"), got.headers["Location"])
+                # Re-pinned in Phase AU (owner, 2026-10-21): an associate opens on Today, which is /me/breaks.
+                self.assertTrue(got.headers["Location"].endswith("/me/breaks"), got.headers["Location"])
         mine = TOKEN.search(me.get("/me").get_data(as_text=True)).group(1)  # their Home is My week
         refused = me.post("/admin/users", data={"csrf_token": mine, "username": "x", "password": "y" * 12})
         self.assertEqual(refused.status_code, 403)
         self.assertIsNone(self.user("x"))
         for url in ("/me", "/static/app.css", "/account/password"):
             with self.subTest(url):
-                self.assertEqual(me.get(url).status_code, 200)
+                # AN followup: close the static-file response after checking access.
+                self.assertEqual(me.get(url, buffered=True).status_code, 200)
 
     def test_their_menu_has_my_week_only(self):
         page = self.signed_in("assoc11", "Associate 011").get("/me").get_data(as_text=True)

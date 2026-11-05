@@ -1,11 +1,16 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
-{% extends "base.html" %}{% block title %}People on Team Scheduler{% endblock %}
+{% extends "base.html" %}{% from "_macros.html" import pager with context %}{% block title %}People on Team Scheduler{% endblock %}
 {% block content %}
 <div class="phead"><div>
   <h1>People</h1>
-  <p class="byline">{% if admin %}Admins manage everyone. Supervisors manage the planners of their own programs.{% else %}You manage the planners of your programs: their programs, passwords, switched on or off.{% endif %}</p>
+  <p class="byline">{% if admin %}Admins manage everyone. Supervisors manage the planners, team managers and associates of their own programs.{% else %}You manage the planners, team managers and associates of your programs: their programs, passwords, switched on or off, and each associate's team manager.{% endif %}</p>
 </div></div>
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+{% if made %}<section class="panel" aria-labelledby="made-h" role="status">
+  <h2 id="made-h">Temporary password</h2>
+  {% for username, password in made %}<p><b>{{ username }}</b>: <code data-password-of="{{ username }}">{{ password }}</code></p>{% endfor %}
+  <p class="note">Shown once. They choose their own password at first sign-in.</p>
+</section>{% endif %}
 {% macro program_boxes(chosen, everything) %}
   <fieldset class="exp-kinds"><legend>Programs</legend>
     {% if admin %}<label class="exp-kind"><input type="checkbox" name="all_programs" value="1"{% if everything %} checked{% endif %}> All programs</label>{% endif %}
@@ -14,11 +19,13 @@
 {% endmacro %}
 <section class="panel" aria-labelledby="add-h">
   <h2 id="add-h">Add a person</h2>
+  <p><a href="{{ url_for('admin_users_bulk') }}">Add many people from a file</a> · <a href="{{ url_for('admin_users_export') }}">Download the people list (.xlsx)</a></p>
   <form method="post" class="people-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Username <input name="username" required></label>
     <label>Name <input name="display_name"></label>
-    <label>Temporary password <input name="password" type="text" minlength="10" required></label>
+    <label>Temporary password <input name="password" type="text" autocomplete="off" placeholder="Leave blank to make one" aria-describedby="pw-hint"></label>
+    <p class="hint" id="pw-hint">At least 10 characters. Left blank, one is made up and shown once after you add them.</p>
     <label>Role <select name="role">{% for key, name in roles.items() %}<option value="{{ key }}">{{ name }}</option>{% endfor %}</select></label>
     <label>Name on the schedule <input name="roster_name" list="roster-names" autocomplete="off" aria-describedby="roster-hint"></label>
     <p class="hint" id="roster-hint">For associates only: their name as it is on the program's schedule. They see that person's week.</p>
@@ -26,17 +33,52 @@
     <button class="primary">Add person</button>
   </form>
 </section>
-<datalist id="roster-names">{% for n in roster_names %}<option value="{{ n }}">{% endfor %}</datalist>
-<table class="people"><thead><tr><th>Person</th><th>Role</th><th>Programs</th><th>State</th><th></th></tr></thead><tbody>
-{% for u in users %}<tr>
+{% set managed = users|selectattr('is_associate')|selectattr('manageable')|list %}
+{% set leaders = users|selectattr('is_team_manager')|selectattr('active')|list %}
+{% if managed and leaders %}<section class="panel" aria-labelledby="team-h">
+  <h2 id="team-h">Set the team manager of several associates</h2>
+  <p class="note">Their team manager gives the first approval of their leave and swaps. Admins and supervisors can approve in their place.</p>
+  <form method="post" action="{{ url_for('admin_users_team') }}" class="people-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Find an associate <input type="search" data-filter="team-list" autocomplete="off" placeholder="Type a name…"></label>
+    <fieldset class="exp-kinds pick-list" id="team-list"><legend>Associates <span class="hint" data-count-for="team-list" aria-live="polite"></span></legend>{% for u in managed %}<label class="exp-kind"><input type="checkbox" name="who" value="{{ u.id }}" data-programs="{{ u.program_ids|join(' ') }}"> {{ u.roster_name or u.display_name }}{% if u.team_manager %} <small>({{ u.team_manager }})</small>{% endif %}</label>{% endfor %}</fieldset>
+    <label>Team manager <select name="team_manager"><option value="">None</option>{% for t in leaders %}<option value="{{ t.id }}" data-programs="{{ 'all' if t.all_programs or t.is_admin else t.program_ids|join(' ') }}">{{ t.display_name }}</option>{% endfor %}</select></label>
+    <button class="primary">Set team manager</button>
+  </form>
+</section>{% endif %}
+{% set switchable = users|selectattr('manageable')|rejectattr('id', 'equalto', user.id)|list %}
+{% if switchable %}<section class="panel" aria-labelledby="switch-h">
+  <h2 id="switch-h">Switch several people off or on</h2>
+  <p class="note">A person switched off cannot sign in; their account and history stay. Switch them on again at any time.</p>
+  <form method="post" action="{{ url_for('admin_users_switch') }}" class="people-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Find a person <input type="search" data-filter="switch-list" autocomplete="off" placeholder="Type a name…"></label>
+    <fieldset class="exp-kinds pick-list" id="switch-list"><legend>People <span class="hint" data-count-for="switch-list" aria-live="polite"></span></legend>{% for u in switchable %}<label class="exp-kind"><input type="checkbox" name="who" value="{{ u.id }}"> {{ u.display_name }} <small>{{ u.username }}, {{ u.role }}{% if not u.active %}, switched off{% endif %}</small></label>{% endfor %}</fieldset>
+    <button class="quiet" name="decision" value="off">Switch off</button> <button class="quiet" name="decision" value="on">Switch on</button>
+  </form>
+</section>{% endif %}
+{% if held %}<section class="panel" aria-labelledby="held-h">
+  <h2 id="held-h">Addresses held after too many wrong sign-ins</h2>
+  <ul class="log">{% for address, n, until in held %}<li><b>{{ address }}</b>: {{ n }} wrong sign-ins in 15 minutes.
+    <form method="post" action="{{ url_for('admin_signins_release') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="address" value="{{ address }}"><button class="quiet">Let this address sign in again</button></form></li>{% endfor %}</ul>
+</section>{% endif %}
+<datalist id="roster-names">{% for n, ids in roster_names %}<option value="{{ n }}" data-programs="{{ ids|sort|join(' ') }}">{% endfor %}</datalist>
+<table class="people" id="people-h"><thead><tr><th>Person</th><th>Role</th><th>Programs</th><th>State</th><th></th></tr></thead><tbody>
+{% for u in users_page[0] %}<tr>
   <td><b>{{ u.display_name }}</b><br><small>{{ u.username }}</small></td>
-  <td><span class="role role-{{ u.role|lower }}">{{ u.role }}</span>{% if u.is_associate %}<br><small>{{ u.roster_name }}</small>{% endif %}</td>
+  <td><span class="role role-{{ u.role|lower|replace(' ', '-') }}">{{ u.role }}</span>{% if u.is_associate %}<br><small>{{ u.roster_name }}</small><br><small>Team manager: {{ u.team_manager or 'none' }}</small>{% endif %}</td>
   <td>{% if u.is_admin or u.all_programs %}All programs{% else %}{{ u.programs or 'None yet' }}{% endif %}</td>
   <td>{{ 'Active' if u.active else 'Switched off' }}</td>
   <td class="actions">{% if u.manageable %}
     {% for action, label in ([('disable','Switch off')] if u.active else [('enable','Switch on')]) + [('reset','Reset password')] %}
     <form method="post" action="{{ url_for('admin_user_action', user_id=u.id, action=action) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="quiet">{{ label }}</button></form>
     {% endfor %}
+    <details class="advanced"><summary>Delete</summary>
+      <form method="post" action="{{ url_for('admin_user_action', user_id=u.id, action='delete') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <p class="note">They cannot sign in again and the username is free for a new person. Their name stays in the history of what they did.</p>
+        <label><input type="checkbox" name="confirm" value="1" required> Yes, delete {{ u.username }}</label>
+        <button class="quiet">Delete person</button></form></details>
+    {% if u.is_associate %}<form method="post" action="{{ url_for('admin_user_action', user_id=u.id, action='team') }}" class="team-pick"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Team manager <select name="team_manager"><option value="">None</option>{% for t in u.team_choices %}<option value="{{ t.id }}"{% if t.id == u.team_manager_id %} selected{% endif %}>{{ t.display_name }}</option>{% endfor %}</select></label>
+      <button class="quiet">Save team manager</button></form>{% endif %}
     <details class="advanced"><summary>Programs{% if admin %} and role{% endif %}</summary>
       <form method="post" action="{{ url_for('admin_user_action', user_id=u.id, action='programs') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -48,4 +90,5 @@
     </details>
   {% endif %}</td></tr>{% endfor %}
 </tbody></table>
+{{ pager(users_page[1], "People") }}
 {% endblock %}

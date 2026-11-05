@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -19,6 +20,9 @@ ROOT = Path(__file__).resolve().parent.parent
 ENGINE = ROOT / "engine" / "_tools" / "l632_universal_scheduler.py"
 MANIFEST = ROOT / "packages" / "rc9_2_2_production" / "SCENARIOS.json"
 IDENTITY = ROOT / "engine" / "RELEASE_IDENTITY_RC9_2_2.json"
+
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 
 def main() -> int:
@@ -36,6 +40,9 @@ def main() -> int:
     identity["generated_utc"] = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     IDENTITY.write_text(json.dumps(identity, indent=2) + "\n")
     print(f"engine sha256 {digest}")
+    from engine_map import OUT, build  # Phase AZ: the map holds the engine's hash and line numbers, so it is written again here
+    OUT.write_text(build(), encoding="utf-8")
+    print(f"engine map written: {OUT}")
     return 0
 
 

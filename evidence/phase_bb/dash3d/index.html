@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<!-- © 2026 Omar Mokhtar. All rights reserved. -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboards in 3D, sample</title>
+<link rel="stylesheet" href="../../../webapp/static/app.css">
+<link rel="stylesheet" href="dash3d.css">
+</head>
+<body>
+<div class="sample">
+  <header><h1>Dashboards with a little depth</h1>
+    <p>Sample, CSS only: no library, no script, no animation except a small lift when the mouse is over a figure. Tables, the RTA and the wallboard stay flat.</p></header>
+
+  <section class="sec" aria-labelledby="a-h"><div><h2 id="a-h">A. Home figures as raised slabs</h2><p class="note">The edge is a shadow stack, so it adds no layers. On mouse hover the slab lifts 3 px. Touch screens get the slab without the lift.</p></div>
+    <div class="slabs">
+      <article class="slab"><h3>On the floor now</h3><b>38</b><small class="ok">2 over target</small></article>
+      <article class="slab"><h3>Short on Phone</h3><b>2</b><small class="warn">until 16:00</small></article>
+      <article class="slab"><h3>Waiting for you</h3><b>3</b><small>1 leave, 1 holiday, 1 swap</small></article>
+      <article class="slab"><h3>Adherence today</h3><b>94%</b><small class="ok">up 2 points</small></article>
+    </div></section>
+
+  <section class="sec" aria-labelledby="b-h"><div><h2 id="b-h">B. Insights column chart</h2><p class="note">Incidents by hour. Each column is one element with a lit top and a darker side; the orange one is the busiest hour. The number sits above it. The heat table underneath stays a flat table.</p></div>
+    <div class="cols-wrap"><div class="cols" role="img" aria-label="Incidents by hour: 3 at 08:00, 5 at 09:00, 9 at 10:00, 12 at 11:00, 8 at 12:00, 6 at 13:00, 10 at 14:00, 7 at 15:00">
+      <div class="col3 hb3"><span>3</span></div><div class="col3 hb5"><span>5</span></div><div class="col3 hb8"><span>9</span></div><div class="col3 o hb10"><span>12</span></div>
+      <div class="col3 hb7"><span>8</span></div><div class="col3 hb6"><span>6</span></div><div class="col3 hb9"><span>10</span></div><div class="col3 hb6"><span>7</span></div></div>
+    <div class="axis" aria-hidden="true"><i>08</i><i>09</i><i>10</i><i>11</i><i>12</i><i>13</i><i>14</i><i>15</i></div></div></section>
+
+  <section class="sec" aria-labelledby="c-h"><div><h2 id="c-h">C. Coverage against target</h2><p class="note">A bar for each channel. Colour still means the status (covered, short, below the floor, over), and the text says it too.</p></div>
+    <div class="tbars">
+      <div class="trow"><b>Phone</b><div class="track"><div class="bar3 s w8"></div></div><em>82%</em></div>
+      <div class="trow"><b>Chat</b><div class="track"><div class="bar3 w10"></div></div><em>100%</em></div>
+      <div class="trow"><b>Email</b><div class="track"><div class="bar3 g w4"></div></div><em>44%</em></div>
+      <div class="trow"><b>Back office</b><div class="track"><div class="bar3 v w9"></div></div><em>92%</em></div></div>
+    <p class="key"><span><i style="--k:var(--covered)"></i>Covered</span><span><i style="--k:var(--short)"></i>Short</span><span><i style="--k:var(--gap)"></i>Below the floor</span><span><i style="--k:var(--over)"></i>Over</span></p></section>
+</div>
+</body>
+</html>

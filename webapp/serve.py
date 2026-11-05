@@ -36,20 +36,27 @@ def config_from_env(env: Mapping[str, str]) -> Dict[str, Any]:
     }
 
 
+CONNECTION_LIMIT = 1000
+
+
 def main() -> None:
     from waitress import serve
     from werkzeug.middleware.proxy_fix import ProxyFix
 
     from .app import create_app
 
+    from openpyxl.xml import DEFUSEDXML
+    if not DEFUSEDXML:  # Phase AV: without it a workbook with an XML entity bomb could use up the server
+        sys.exit("defusedxml is not installed: run pip install -r deploy/requirements.txt (a workbook's XML is not safe to read without it).")
     config = config_from_env(os.environ)
     app = create_app(config)
     # Caddy (on this machine) tells the app the visitor's address and that it came in over HTTPS.
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)  # type: ignore[method-assign]
     print(f"Team Scheduler on http://{HOST}:{config['PORT']} (data {config['DATA_DIR']}, "
           f"package {config['PACKAGE_ROOT']})", flush=True)
+    # Phase AV: waitress refuses new connections past 100 open ones, and people waiting on a busy page each hold one
     serve(app, host=HOST, port=config["PORT"], threads=8, max_request_body_size=26 * 1024 * 1024,
-          ident="TeamScheduler")
+          connection_limit=CONNECTION_LIMIT, ident="TeamScheduler")
 
 
 if __name__ == "__main__":

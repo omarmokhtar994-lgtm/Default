@@ -11,10 +11,13 @@ managers, is shown to the approvers: it warns, it does not refuse.
 from __future__ import annotations
 
 import json
+import logging
 import time
 from datetime import date, timedelta
 from typing import Any, Dict, List, Optional
 
+from .approvals import may_approve_for, who_approves
+from .permissions import allowed
 from .attendance import day_index, hm
 from .versions import DAYS, shift_span
 
@@ -42,23 +45,18 @@ def span_text(first: date, last: date) -> str:
     return nice(first) if first == last else f"{nice(first)} to {nice(last)}"
 
 
-def is_staff_manager(user: Dict[str, Any]) -> bool:
-    return bool(user.get("is_admin") or user.get("is_supervisor"))
-
-
 class LeaveBook:
     def __init__(self, store, days):
         self.store, self.days = store, days  # days: the DayBook (its .book is the ScheduleBook)
 
     # ------------------------------------------------------------------ the schedule
     def names(self, program: str) -> List[str]:
-        """Names on the newest kept week's schedules of ``program``."""
-        weeks = self.days.book.kept_weeks(program)
-        if not weeks:
-            return []
+        """Names on the schedules of ``program``'s last four kept weeks (Phase AO: not only the newest, which may be
+        partly filled)."""
         found = set()
-        for v in self.store.list_schedules(program=program, week_start=weeks[-1]["week"]):
-            found |= {a["name"] for a in json.loads(v["week"] or "{}").get("associates", [])}
+        for week in self.days.book.kept_weeks(program)[-4:]:
+            for v in self.store.list_schedules(program=program, week_start=week["week"]):
+                found |= {a["name"] for a in json.loads(v["week"] or "{}").get("associates", [])}
         return sorted(found)
 
     def days_of(self, program: str, name: str, first: date, last: date) -> List[Dict[str, Any]]:
@@ -126,14 +124,34 @@ class LeaveBook:
         return f"This request was already decided: {'being applied' if status == 'applying' else status}."
 
     def decide(self, request_id: int, user: Dict[str, Any], approve: bool, reason: str = "") -> str:
-        """The TM's approval (the first) or the RTA's (the second, which changes the schedule); a refusal ends it."""
+        """The TM's approval (the first) or the RTA's (the second, which changes the schedule); a refusal ends it.
+        A final answer (approved or refused) is also posted to the LOB's group (Phase AU)."""
+        said = self._decide(request_id, user, approve, reason)
+        row = self._get(request_id)
+        if row["status"] in ("approved", "refused"):
+            self._tell_the_group(row, user)
+        return said
+
+    def _tell_the_group(self, row: Dict[str, Any], user: Dict[str, Any]) -> None:
+        notifier = getattr(self.days, "notifier", None)
+        if notifier is None:
+            return
+        label = f"{row['kind']}, {span_text(date.fromisoformat(row['first_day']), date.fromisoformat(row['last_day']))}"
+        text = f"{label}: {row['status']}" + (f" (“{row['reason']}”)" if row["status"] == "refused" and row["reason"] else "")
+        try:
+            notifier.queue(None, row["program"], row["first_day"], row["associate"], "request", text,
+                           user["display_name"], ref=f"leave:{row['id']}")
+        except Exception:  # noqa: BLE001 (the answer stands; the group post is what is lost, and logged)
+            logging.getLogger(__name__).exception("group posts: could not queue the answer to leave %s", row["id"])
+
+    def _decide(self, request_id: int, user: Dict[str, Any], approve: bool, reason: str = "") -> str:
         row = self._get(request_id)
         if row["status"] not in WAITING:
             raise ValueError(self._decided(request_id))
         reason, now = " ".join((reason or "").split())[:NOTE_MAX], time.time()
         if row["status"] == "waiting_tm":
-            if not is_staff_manager(user):
-                raise ValueError("The first approval is the TM's: a supervisor or an admin.")
+            if not may_approve_for(self.store, user, row["user_id"]):  # Phase AK: their team manager, or a backup
+                raise ValueError(f"{self.waiting_on(row)}.")
             moved = self.store.move_leave(request_id, "waiting_tm", status="waiting_rta" if approve else "refused",
                                           tm_id=user["id"], tm_at=now, reason="" if approve else reason)
             if not moved:
@@ -141,6 +159,8 @@ class LeaveBook:
             return "Approved by the TM: the RTA decides next." if approve else "Refused."
         if user["id"] == row["tm_id"]:
             raise ValueError("Someone other than the TM gives the RTA's approval.")
+        if not allowed(self.store, user, "approve_rta"):  # Phase AK: the roles an admin allows on Roles
+            raise ValueError("Your role does not give the RTA's approval.")
         if not approve:
             if not self.store.move_leave(request_id, "waiting_rta", status="refused", rta_id=user["id"], rta_at=now,
                                          reason=reason):
@@ -186,8 +206,78 @@ class LeaveBook:
             said.append(f"{joined([nice(d) for d in off])} {'is a day off' if len(off) == 1 else 'are days off'}.")
         if missing:
             said.append(f"{joined([nice(d) for d in missing])} {'has' if len(missing) == 1 else 'have'} no schedule "
-                        "yet: mark it when that week is planned.")
+                        "yet: it is kept, and marked Leave when that week's schedule is uploaded.")
         return " ".join(said)
+
+    # ------------------------------------------------------------------ leave for a week not yet planned (Phase AO)
+    def _applied_path(self, run_id: str):
+        return self.days.book.root / run_id / "leave_after_run.json"
+
+    def last_applied(self, run_id: str) -> Optional[Dict[str, Any]]:
+        """What the last run of ``apply_waiting`` did for this run's week, or None when it never had leave to apply."""
+        try:
+            return json.loads(self._applied_path(run_id).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+
+    def apply_waiting(self, run: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Leave the RTA approved while this run's week had no schedule: once the week's schedule is kept, each approved
+        day the person works is marked Leave in a new version set in use (the engine did not consider it when it built
+        the week). A name not on the schedule, or a day already off, is said and never stops anything. Safe to run
+        again: days already Leave are left alone. Nothing is done for a week with no approved leave."""
+        program = run.get("program") or ""
+        try:
+            first = date.fromisoformat(run.get("week_start") or "")
+        except ValueError:
+            return None
+        last = first + timedelta(days=6)
+        rows = [r for r in self.store.list_leave(program=program, statuses=["approved"])
+                if r["first_day"] <= last.isoformat() and r["last_day"] >= first.isoformat()]
+        version = self.days.version(program, first)[0] if rows else None
+        if version is None:
+            return None
+        names = {a["name"] for a in json.loads(version["week"] or "{}").get("associates", [])}
+        out: Dict[str, Any] = {"week": first.isoformat(), "applied": [], "skipped": [], "notes": []}
+        changes: List[Any] = []
+        by: Dict[str, Any] = {}
+        for row in rows:
+            name = row["associate"]
+            if name not in names:
+                out["skipped"].append({"name": name, "request": row["id"], "dates": [],
+                                       "why": f"{name} is not on the schedule uploaded for the week of {nice(first)}, "
+                                              "so the approved leave was not applied."})
+                continue
+            marked, off = [], []
+            for i in range(7):
+                on = first + timedelta(days=i)
+                if not row["first_day"] <= on.isoformat() <= row["last_day"]:
+                    continue
+                cell = dict(self.days.roster(program, on)).get(name, "")
+                if shift_span(cell):
+                    changes.append((name, DAYS[i], "Leave"))
+                    marked.append(on.isoformat())
+                elif cell.strip().casefold() != "leave":
+                    off.append(on.isoformat())
+            if marked:
+                out["applied"].append({"name": name, "request": row["id"], "dates": marked})
+                by[name] = row.get("rta_id") or row.get("tm_id") or row["user_id"]
+            if off:
+                out["notes"].append({"name": name, "request": row["id"], "dates": off,
+                                     "why": f"{', '.join(nice(date.fromisoformat(d)) for d in off)}: already a day off."})
+        if changes:
+            book = self.days.book
+            new_id = book.change_many(version["id"], next(iter(by.values())), changes,
+                                      reason="Leave approved before this week was planned",
+                                      label=f"Approved leave for {len(out['applied'])} "
+                                            f"{'person' if len(out['applied']) == 1 else 'people'}")
+            book.set_in_use(new_id, next(iter(by.values())))
+        before = self.last_applied(run["id"]) or {}
+        for kept in before.get("applied", []):  # a second run applies nothing new: what the first did stays said
+            if not any(a["request"] == kept["request"] and a["name"] == kept["name"] for a in out["applied"]):
+                out["applied"].append(kept)
+        if out["applied"] or out["skipped"] or out["notes"]:
+            self._applied_path(run["id"]).write_text(json.dumps(out), encoding="utf-8")
+        return out
 
     # ------------------------------------------------------------------ what it costs
     def impact(self, program: str, name: str, on: date, base: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -258,8 +348,17 @@ class LeaveBook:
     # ------------------------------------------------------------------ the inbox
     def may_decide(self, row: Dict[str, Any], user: Dict[str, Any]) -> bool:
         if row["status"] == "waiting_tm":
-            return is_staff_manager(user)
-        return row["status"] == "waiting_rta" and row["tm_id"] != user["id"]
+            return may_approve_for(self.store, user, row["user_id"])
+        return row["status"] == "waiting_rta" and row["tm_id"] != user["id"] and allowed(self.store, user, "approve_rta")
+
+    def waiting_on(self, row: Dict[str, Any]) -> str:
+        """Phase AK: where a request waits, in words."""
+        if row["status"] == "waiting_tm":
+            return "Waiting for " + who_approves(self.store, row["user_id"], row["associate"])
+        if row["status"] == "waiting_rta":
+            by = self.store.get_user(row["tm_id"]) if row["tm_id"] else None
+            return f"Approved by {by['display_name'] if by else 'the TM'}, waiting for the RTA"
+        return ""
 
     def waiting(self, program: str) -> List[Dict[str, Any]]:
         """Requests waiting for a decision, each day with its cell and what it costs, and the balance."""
@@ -281,7 +380,7 @@ class LeaveBook:
                 text = (f"No balance set for {first.year}." if balance is None else
                         f"Asks {asked} day{'s' if asked != 1 else ''}; {number(balance['days'] - balance['used'])} "
                         "left this year.")
-            out.append(dict(row, days=days, balance=balance, balance_text=text,
+            out.append(dict(row, days=days, balance=balance, balance_text=text, waiting_on=self.waiting_on(row),
                             label=f"{row['kind']}, {span_text(first, last)}", short=balance is not None
                             and balance["left"] < 0, step="tm" if row["status"] == "waiting_tm" else "rta"))
         return out
@@ -297,5 +396,5 @@ class LeaveBook:
         return sum(1 for r in self.store.list_leave(program=program, statuses=list(WAITING)) if self.may_decide(r, user))
 
     def mine(self, program: str, name: str) -> List[Dict[str, Any]]:
-        return [dict(r, label=f"{r['kind']}, {span_text(date.fromisoformat(r['first_day']), date.fromisoformat(r['last_day']))}")
+        return [dict(r, waiting_on=self.waiting_on(r), label=f"{r['kind']}, {span_text(date.fromisoformat(r['first_day']), date.fromisoformat(r['last_day']))}")
                 for r in self.store.list_leave(program=program, associate=name)]

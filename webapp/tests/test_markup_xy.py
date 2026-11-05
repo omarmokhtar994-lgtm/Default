@@ -69,18 +69,19 @@ class TheMarkup(unittest.TestCase):
 
     def test_scroll_boxes_are_named_regions(self):
         pages = [self.page(f"/week?program={self.q}&week={self.sunday.isoformat()}"), self.day("adherence")]
-        boxes = [box for page in pages for box in re.findall(r'<div class="scroll"[^>]*>', page)]
+        # Phase BA: the long tables are panels (class "scroll panel-scroll") that scroll both ways, so their label ends "(scrolls)"
+        boxes = [box for page in pages for box in re.findall(r'<div class="scroll[ "][^>]*>', page)]
         self.assertGreaterEqual(len(boxes), 3)
         for box in boxes:
             self.assertIn('role="region"', box)
             self.assertIn('tabindex="0"', box)
-            self.assertRegex(html.unescape(box), r'aria-label="[^"]+ \(scrolls sideways\)"')
+            self.assertRegex(html.unescape(box), r'aria-label="[^"]+ \(scrolls( sideways)?\)"')
 
     def test_every_scroll_box_in_the_templates_is_a_named_region(self):
         """The same box on every page: a keyboard reaches it and a screen reader names it."""
         templates = Path(__file__).resolve().parents[1] / "templates"
         unnamed = [f"{f.name}: {box}" for f in sorted(templates.glob("*.html"))
-                   for box in re.findall(r'<div class="scroll"[^>]*>', f.read_text())
+                   for box in re.findall(r'<div class="(?:scroll|tscroll)[ "][^>]*>', f.read_text())
                    if not ('role="region"' in box and 'tabindex="0"' in box and "aria-label=" in box)]
         self.assertEqual(unnamed, [])
 
@@ -94,14 +95,21 @@ CSS = Path(__file__).resolve().parents[1] / "static" / "app.css"
 # Phase Y proposal, approved by the owner (evidence/phase_y/proposal.css, measured in PALETTE.md). Re-pinned in
 # Phase AG: on 2026-10-15 the owner picked the Graphite surfaces (evidence/phase_ag/colours), so the ink, the edges,
 # the picked background and the text on status fills follow them; the status and channel colours are unchanged.
-NIGHT = {"--action": "#E7EBF0", "--action-hover": "#FFFFFF", "--on-action": "#111418", "--edge": "#68727F",
-         "--done": "#54749A", "--covered-text": "#2BC4B4", "--over-text": "#9086EE", "--on-covered": "#111418",
-         "--on-short": "#111418", "--on-gap": "#111418", "--on-over": "#111418", "--selected": "#20252D",
-         "--ch-email": "#4D7D8D"}
-DAY = {"--action": "#15191F", "--action-hover": "#2A313B", "--on-action": "#FFFFFF", "--edge": "#7A838F",
-       "--done": "#7692B4", "--covered-text": "#0B776C", "--over-text": "#715ED8", "--covered": "#06A496",
+# Re-pinned in Phase BA (owner, 2026-10-25: the three looks Tide, Night watch and Drafting table, evidence/phase_az/prototype):
+# the default night look is now Night watch (navy), so its ink, edges, picked background, text on status fills and
+# channel colours changed; the channels are brighter with dark text on Night watch, because the deeper set measured under 3:1 on navy.
+NIGHT = {"--action": "#E7EEFB", "--action-hover": "#FFFFFF", "--on-action": "#0A1426", "--edge": "#6C87B8",
+         "--done": "#54749A", "--covered-text": "#2BC4B4", "--over-text": "#9086EE", "--on-covered": "#080F1E",
+         "--on-short": "#080F1E", "--on-gap": "#080F1E", "--on-over": "#080F1E", "--selected": "#152340",
+         "--ch-email": "#3FAE81"}
+DAY = {"--action": "#12233A", "--action-hover": "#263B5A", "--on-action": "#FFFFFF", "--edge": "#6B7C96",
+       "--done": "#7692B4", "--covered-text": "#0B776C", "--over-text": "#5F4CCB", "--covered": "#06A496",
        "--short": "#C98304", "--gap": "#D53D38", "--over": "#7560E3", "--on-covered": "#0E1A2B",
-       "--on-short": "#0E1A2B", "--on-gap": "#FFFFFF", "--on-over": "#FFFFFF", "--selected": "#E8EBEF"}
+       "--on-short": "#0E1A2B", "--on-gap": "#FFFFFF", "--on-over": "#FFFFFF", "--selected": "#E1EAF4",
+       "--ch-chat": "#B4468F"}
+# Re-pinned in Phase BA: the day look is now Tide (navy ink, #12233A; edges and picked background follow it), and its
+# Chat colour is #B4468F because white text on the old #C2549F measured 4.1:1 (4.5:1 is needed).
+# Re-pinned in Phase AU: --over-text in the day look was #715ED8, which measured 4.37:1 as the supervisor chip on its tint (4.5:1 is needed); #5F4CCB meets it.
 
 
 def block(text, opener):

@@ -6,6 +6,7 @@ password change on first login, lockout after repeated failures, disabled
 users, admin-only user management, CSRF on every form, hashed passwords,
 cookie flags, and the copyright line on the login page.
 """
+from datetime import date
 import re
 import sqlite3
 import tempfile
@@ -21,7 +22,7 @@ TOKEN = re.compile(r'name="csrf_token" value="([^"]+)"')
 def make_app(**extra):
     data = Path(tempfile.mkdtemp())
     config = {"DATA_DIR": str(data), "SECRET_KEY": "test-secret", "TESTING": True, "HTTPS": False,
-              "START_WORKER": False}
+              "START_WORKER": False, "TODAY": date(2026, 10, 1)}  # Phase AY: Egypt's today, before the weeks the tests use
     config.update(extra)
     app = create_app(config)
     store = Store(data / "scheduler.db")

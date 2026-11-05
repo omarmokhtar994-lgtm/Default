@@ -384,11 +384,6 @@ def register(app, ctx) -> None:
             row_at = add_at - add_at % step
             t -= t % step
             own = [(l, x) for l in held["view"]["lanes"] for x in l["segments"] if x["offset"] == 0]
-            # Phase BK: after midnight, last night's shift that is still running here is the person's shift for this
-            # interval (taking the same name's shift that starts later today), so a record lands on its own day
-            last_night = {l["name"]: (l, x) for l in held["view"]["lanes"] for x in l["segments"]
-                          if x["offset"] == -1 and x["start"] < t + step and t < x["end"]}
-            own = [p for p in own if p[0]["name"] not in last_night] + list(last_night.values())
             # Phase AC: someone marked sick or on leave goes last, so + Add never opens on a person it would refuse
             own.sort(key=lambda p: (p[1]["status"] in ABSENT_STATES,
                                     not (p[1]["start"] < t + step and t < p[1]["end"]), p[1]["start"], p[0]["name"]))
@@ -401,6 +396,13 @@ def register(app, ctx) -> None:
                                         min(abs(p[1]["start"] - (t + step)), abs(t - p[1]["end"])), p[1]["start"],
                                         p[0]["name"]))
             first = own[0][1] if nobody else None
+            # Phase BK: after midnight, last night's shift that is still running here is the person's shift for this
+            # interval (instead of the same name's shift that starts later today), so a record lands on its own day.
+            # Who opens first and the Overtime default are decided above from today's shifts, as before.
+            last_night = [(l, x) for l in held["view"]["lanes"] for x in l["segments"]
+                          if x["offset"] == -1 and x["start"] < t + step and t < x["end"]]
+            kept = [p for p in own if p[0]["name"] not in {l["name"] for l, _ in last_night}]
+            own = last_night + kept if not nobody else kept + last_night
             side = "after" if first and first["start"] < t + step else "before"  # before, as always, unless it ended
             reach = (first["start"] - t if side == "before" else t + step - first["end"]) if first else 0
             minutes = min([m for m in ADD_LENGTHS if reach <= m <= OVERTIME_MAX] or [OVERTIME_MAX]) if first else None

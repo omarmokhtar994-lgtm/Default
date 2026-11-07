@@ -8,7 +8,7 @@
 
 **Tech Stack:** OR-Tools CP-SAT (engine), Flask, Jinja, SQLite, vanilla JS (website), unittest.
 
-**Spec:** the owner's request of 2026-11-07 (chat) and the answers to the three questions asked the same day: both sites are worked out, an associate is either an 8.5 h or a 9 h person for the whole week, and a year or more of day-by-day history exists.
+**Spec:** the owner's request of 2026-11-07 (chat) and the answers to the three questions asked the same day: both sites are worked out, an associate is either an 8.5 h or a 9 h person for the whole week, and a year or more of day-by-day history exists for some programs, 10 to 11 months for others (follow-up, same day).
 
 ## Global Constraints
 
@@ -32,6 +32,7 @@
 - A week where every associate is 8.5 h but the Shift Library has no 8.5 h shift: refuse, name the associate.
 - Site shares on a day that do not add up to 100 %: refuse, name the day and channel.
 - Open hours that cross midnight (an overnight operation) and daylight-saving days.
+- 10 to 11 months of history: the uncovered months are shown as trend only with a wider range, never as if learned.
 - History with gaps or a partial first and last week: use the existing "at least 5 days of data counts as a week" rule, say which weeks were left out.
 
 ---
@@ -132,9 +133,13 @@
 
 **Interfaces:**
 - Consumes: day-by-day history, `drivers` (YoY growth, events and promotions with start and end dates, AI periods).
-- Produces: `months_ahead(history, drivers, start, months) -> [{month, low, expected, high}]` from a weekly trend plus a week-of-year seasonal index, then growth and promotion uplift on top. Fewer than 52 weeks of data: trend only, with a plain note (the owner has a year or more, so this path is a guard).
-
-- [ ] **Step 1:** Tests on made-up series with a known answer: `test_flat_history_forecasts_flat`, `test_a_yearly_peak_repeats_next_year`, `test_yoy_growth_scales_the_months`, `test_a_promotion_adds_its_uplift_only_inside_its_dates`, `test_short_history_falls_back_to_trend_with_a_note`. FAIL first.
+- Produces: `months_ahead(history, drivers, start, months) -> [{month, low, expected, high, basis}]` from a weekly trend plus a week-of-year seasonal index, then growth and promotion uplift on top. `basis` says how each month was worked out, and the page shows it.
+- History length decides what can be learned (owner, 2026-11-07: some programs have only 10 to 11 months):
+  - 52 weeks or more: trend and seasonal index for every week of the year. Range 90 to 110 % of expected.
+  - 26 to 51 weeks: trend, day-of-week pattern, and a seasonal index only for the weeks of year the history covers. A month whose weeks are not covered is trend only, marked "no seasonal pattern yet" and given a wider range (80 to 120 %). With 10 to 11 months, the 1 to 2 missing months are the only trend-only ones.
+  - Under 26 weeks: trend and day-of-week only, for at most 8 weeks ahead; further months are not shown, with a note saying how much history is needed.
+  - The owner can type a seasonal index for a missing month (for example from a sister program) in the "Help with the number" block; it is used and marked "typed".
+- [ ] **Step 1:** Tests on made-up series with a known answer: `test_flat_history_forecasts_flat`, `test_a_yearly_peak_repeats_next_year`, `test_yoy_growth_scales_the_months`, `test_a_promotion_adds_its_uplift_only_inside_its_dates`, `test_eleven_months_of_history_marks_only_the_missing_month_trend_only`, `test_under_26_weeks_stops_at_8_weeks_ahead`, `test_a_typed_seasonal_index_fills_a_missing_month`. FAIL first.
 - [ ] **Step 2:** Implement with the standard library only (no new dependency); add a "Months ahead" table and a download. PASS.
 
 ### Task 8: Gate, package, handoff

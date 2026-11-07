@@ -35,3 +35,10 @@ Positive control: on the example workbook with `Shift Length` 8.5 on one associa
 column blank (`eda1b7bd…` against `8313f58b…`), so the check can detect a change.
 
 Task 3 (part-timers) re-runs this A/B with its own changes in; the final row of results is added below it.
+
+### Re-run after task 3 (part-timers: Off Days, Breaks, capacity estimates)
+
+Same nine workbooks, same helper, engine in the working tree after the part-timer changes. All nine hashes are again identical to arm A
+(`diff` of the two outputs is empty). With the new columns blank, the Stage 1 model is unchanged by all of Phase BL's engine work.
+Also run, all passing: `tests_staged` capacity, input-safety, shortfall, formula-audit and input-vocabulary suites with the three
+`webapp/tests/test_bl_engine_*` files (137 tests), and `webapp/tests/test_bl_validator_length.py` (2 tests) for the independent validator.

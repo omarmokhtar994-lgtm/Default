@@ -4815,7 +4815,7 @@ def validate_input_contract(parsed: ParsedInput, feasibility: Optional[Dict[str,
     if not parsed.shifts:
         failures.append({"code": "NO_LEGAL_SHIFTS", "detail": "No legal shifts were parsed from Shift Library."})
     for associate in parsed.associates:  # Phase BL: a named Shift Length needs a shift of that length
-        if associate.shift_minutes is not None and parsed.shifts and not any(
+        if getattr(associate, "shift_minutes", None) is not None and parsed.shifts and not any(
                 shift_length_allows(associate, shift) for shift in parsed.shifts):
             failures.append({
                 "code": "ASSOCIATE_SHIFT_LENGTH_NOT_IN_LIBRARY", "associate": associate.name,
@@ -5025,7 +5025,8 @@ def validate_input_contract(parsed: ParsedInput, feasibility: Optional[Dict[str,
         room = 7 - len(leave_days)
 
         def fits(long_mode: bool) -> bool:
-            owed = max(0, min(associate.off_days if associate.off_days is not None else (3 if long_mode else 2), room))
+            own = getattr(associate, "off_days", None)
+            owed = max(0, min(own if own is not None else (3 if long_mode else 2), room))
             if parsed.strict_off:
                 return len(off_days) <= owed and len(shift_days) + owed <= room
             return len(shift_days) + min(2, room) <= room
@@ -5033,8 +5034,8 @@ def validate_input_contract(parsed: ParsedInput, feasibility: Optional[Dict[str,
             week_conflicts.append({
                 "associate": associate.name, "leave_days": leave_days, "requested_off_days": off_days,
                 "fixed_shift_days": shift_days, "days_with_two_requests": clashes,
-                "off_days_owed": sorted({max(0, min(associate.off_days if associate.off_days is not None else (3 if m else 2), room))
-                                         for m in long_modes}),
+                "off_days_owed": sorted({max(0, min(getattr(associate, "off_days", None) if getattr(associate, "off_days", None) is not None
+                                                     else (3 if m else 2), room)) for m in long_modes}),
                 "strict_off": parsed.strict_off,
             })
     if week_conflicts:
@@ -5822,7 +5823,7 @@ def required_off_days(parsed: ParsedInput, associate: Associate, long_mode: bool
     days are affected; for everyone else this returns 2 or 3 exactly as before.
     """
     leave_days = pinned_leave_days(parsed, associate, honour_fixed, honour_leave)
-    if associate.off_days is not None:  # Phase BL: the Schedule sheet's own count for this person (a part-timer)
+    if getattr(associate, "off_days", None) is not None:  # Phase BL: the Schedule sheet's own count for this person (a part-timer)
         return max(0, min(associate.off_days, 7 - leave_days))
     return max(0, min(3 if long_mode else 2, 7 - leave_days))
 
@@ -8021,7 +8022,7 @@ def build_skeleton(
             pinned_leave_days(parsed, assoc, honour_fixed=hard.fixed, honour_leave=hard.leave),
             strict=bool(hard.strict_off and parsed.strict_off),
             consecutive_required=not (parsed.separate_off_days or separate_off_in_preference(parsed, assoc, hard)), name=f"stage1_{a}",
-            owed=assoc.off_days)
+            owed=getattr(assoc, "off_days", None))
         if hard.max_shift_variety:
             model.Add(sum(y[a, s] for s in range(S)) <= parsed.max_different_shifts)
         if profile["shift_variety"]:
@@ -11720,14 +11721,15 @@ def compact_metric_surface(metrics: Mapping[str, Any]) -> Dict[str, Any]:
 def shift_length_allows(associate: Associate, shift: Shift) -> bool:
     """Phase BL (owner, 2026-11-07): an associate whose Schedule row names a Shift Length may only work shifts of that length
     (within the library's 5 minute tolerance). No length named: every shift is allowed, as before."""
-    return associate.shift_minutes is None or abs(shift.duration_min - associate.shift_minutes) <= 5
+    minutes = getattr(associate, "shift_minutes", None)
+    return minutes is None or abs(shift.duration_min - minutes) <= 5
 
 
 def shift_length_failures(parsed: ParsedInput, skeleton: Any) -> List[Dict[str, Any]]:
     """Phase BL: scheduled shifts whose length is not the one the associate's row names."""
     failures: List[Dict[str, Any]] = []
     for a, assoc in enumerate(parsed.associates):
-        if assoc.shift_minutes is None:
+        if getattr(assoc, "shift_minutes", None) is None:
             continue
         for d in range(7):
             si = skeleton.selected_shift_index[a][d]
@@ -14260,7 +14262,8 @@ EXPORT_ROLE_ORDER: Tuple[str, ...] = (
 def associate_workdays(parsed: ParsedInput, associate: Associate) -> int:
     """Phase BL: days one associate works in a week for the capacity estimates: the usual week, or 7 minus the OFF days the Schedule
     sheet gives this person (a part-timer)."""
-    return default_workdays_per_week(parsed) if associate.off_days is None else 7 - associate.off_days
+    off_days = getattr(associate, "off_days", None)
+    return default_workdays_per_week(parsed) if off_days is None else 7 - off_days
 
 
 def default_workdays_per_week(parsed: ParsedInput) -> int:
@@ -16984,7 +16987,7 @@ def solve_joint_shift_off_language_break_refinement(
             pinned_leave_days(parsed, parsed.associates[a]),
             strict=bool(parsed.strict_off),
             consecutive_required=not (parsed.separate_off_days or separate_off_in_preference(parsed, parsed.associates[a])),
-            name=f"joint_{a}", owed=parsed.associates[a].off_days)
+            name=f"joint_{a}", owed=getattr(parsed.associates[a], "off_days", None))
         model.Add(sum(y[a, s_index] for s_index in range(S)) <= parsed.max_different_shifts)
         objective_terms.append(25 * sum(y[a, s_index] for s_index in range(S)))
         for shift in parsed.shifts:

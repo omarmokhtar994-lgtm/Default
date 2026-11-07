@@ -691,6 +691,11 @@ class Associate:
     previous_saturday: str = ""
     fixed_schedule: List[str] = field(default_factory=lambda: [""] * 7)
     nesting_group: str = ""
+    # Phase BL (owner, 2026-11-07): optional Schedule-sheet columns. None / False = the workbook's own default.
+    shift_minutes: Optional[int] = None
+    part_time: bool = False
+    off_days: Optional[int] = None
+    breaks_per_day: Optional[int] = None
 
 
 @dataclass
@@ -1686,6 +1691,41 @@ def _day_columns(ws: Any, header: int) -> List[int]:
     return []
 
 
+_PART_TIME_WORDS = {"parttime": True, "part": True, "pt": True, "fulltime": False, "full": False, "ft": False}
+
+
+def _roster_option(kind: str, value: Any) -> Tuple[bool, Any]:
+    """Phase BL: one optional Schedule-sheet cell. (True, value) when blank (None) or readable, (False, None) when it cannot be read.
+    ``kind``: "hours" (a shift length, 4 to 16 hours, returned in minutes), "type" (part time or full time),
+    "days" (off days, 0 to 6) or "count" (breaks a day, 0 to 6)."""
+    if value is None or str(value).strip() == "":
+        return True, None
+    text = str(value).strip()
+    if kind == "type":
+        word = re.sub(r"[^a-z]", "", text.casefold())
+        return (True, _PART_TIME_WORDS[word]) if word in _PART_TIME_WORDS else (False, None)
+    tokens = re.findall(r"\d+(?:\.\d+)?", text)
+    if isinstance(value, bool) or len(tokens) != 1 or re.search(r"[-+]", text):
+        return False, None
+    number = float(tokens[0])
+    if kind == "hours":
+        minutes = int(round(number * 60))
+        return (True, minutes) if 240 <= minutes <= 960 else (False, None)
+    if number != int(number) or re.search(r"[a-z]", text.casefold()):
+        return False, None
+    return (True, int(number)) if 0 <= int(number) <= 6 else (False, None)
+
+
+_ROSTER_OPTIONS = (("shift_minutes", "hours", ("shift length",), "HARD_INVALID_SHIFT_LENGTH",
+                    "use hours between 4 and 16, for example 8.5 or 9"),
+                   ("part_time", "type", ("type", "employment type"), "HARD_INVALID_ASSOCIATE_TYPE",
+                    "use Full time or Part time"),
+                   ("off_days", "days", ("off days",), "HARD_INVALID_OFF_DAYS",
+                    "use a whole number of off days from 0 to 6"),
+                   ("breaks_per_day", "count", ("breaks", "breaks per day"), "HARD_INVALID_BREAKS",
+                    "use a whole number of breaks a day from 0 to 6"))
+
+
 def _parse_roster(
     wb: Any,
     prefer_final: bool = False,
@@ -1755,13 +1795,23 @@ def _parse_roster(
             seen_emp_ids[employee_id] = r
         fixed = ([str(ws.cell(r, c).value or "").strip() for c in day_cols]
                  if len(day_cols) == 7 else [""] * 7)
+        options: Dict[str, Any] = {}
+        for attr, kind, names, code, advice in _ROSTER_OPTIONS:
+            col = next((headers[h] for h in names if h in headers), None)
+            if col is None:
+                continue
+            ok, parsed_value = _roster_option(kind, ws.cell(r, col).value)
+            if not ok and parser_warnings is not None:
+                parser_warnings.append(f"{code}:associate={name!r};row={r};value={ws.cell(r, col).value!r}; {advice}")
+            elif parsed_value is not None:
+                options[attr] = parsed_value
         associates.append(Associate(
             index=len(associates), row=r, slot=ws.cell(r, 1).value,
             emp_id=raw_emp_id,
             email=str(ws.cell(r, email_col).value or "").strip(),
             name=name, tl=str(ws.cell(r, tl_col).value or "").strip(),
             language=str(ws.cell(r, lang_col).value or "").strip(),
-            fixed_schedule=fixed,
+            fixed_schedule=fixed, **options,
         ))
     if not associates:
         raise ValueError("No roster rows found in Schedule")

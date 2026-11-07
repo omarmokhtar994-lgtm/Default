@@ -993,6 +993,10 @@ def validate(input_path: Path, output_path: Path, engine_path: Path,
             # only for OFF). The REQUIRED_LANGUAGE_ONLY exclusivity check used to
             # sit inside an ALL_ROWS/MINIMUM_ROWS branch and could never run, so
             # that mode's rules were not validated at all.
+            # Phase BL: a Shift Length named on the Schedule row is a hard rule (the engine's models, the polish and swap steps all keep it).
+            if kind=="shift" and not eng.shift_length_allows(assoc, shift_map[norm(value)]):
+                failures.append({"type":"SHIFT_LENGTH_VIOLATION","associate":assoc.name,"day":DAYS[d],"shift":value,
+                                 "expected_minutes":assoc.shift_minutes,"actual_minutes":shift_map[norm(value)].duration_min})
             if kind=="shift" and parsed.language_working_window_mode in {"ALL_ROWS", "MINIMUM_ROWS", "REQUIRED_LANGUAGE_ONLY"}:
                 entries = eng.associate_language_windows(parsed, assoc, day=d)
                 if entries and not any(

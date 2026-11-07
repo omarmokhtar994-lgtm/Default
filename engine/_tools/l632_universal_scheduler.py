@@ -2788,7 +2788,7 @@ def coverage_split_capacity_report(parsed: ParsedInput) -> Dict[str, Any]:
         # Everyone owes the roster its OFF days, so the pool that can be on the
         # floor at one instant is smaller than the headcount on the sheet.
         workdays = default_workdays_per_week(parsed)
-        concurrent_ceiling = int(math.floor(len(pool) * workdays / 7.0)) if pool else 0
+        concurrent_ceiling = int(math.floor(sum(associate_workdays(parsed, a) for a in pool) / 7.0)) if pool else 0
         # And a rostered person on a break is not covering. Sustaining `need`
         # through the break window costs need / (1 - break fraction) bodies.
         # Omitting this reported "8 eligible, peak need 4 - fits" on Cricut
@@ -3113,6 +3113,50 @@ def _parse_break_segments(
 
 
 BREAK_SET_ROW_PATTERN = re.compile(r"^break set for shifts of (\d+(?:\.\d+)?) hours? or more$")
+
+
+def _apply_associate_break_counts(
+    associates: Sequence[Associate], shifts: Sequence[Shift], global_segments: Tuple[Tuple[int, str], ...],
+    sets: Tuple[Tuple[int, Tuple[Tuple[int, str], ...]], ...], parser_warnings: List[str],
+) -> Tuple[Tuple[int, Tuple[Tuple[int, str], ...]], ...]:
+    """Phase BL (owner, 2026-11-07): a Schedule row's ``Breaks`` N gives the shift length on that row the first N breaks of the break set
+    it would have had. Break sets belong to a shift length, so everything downstream (the patterns, the capacity estimates, the checks)
+    follows. Refused by name: Breaks without a Shift Length, two rows with one Shift Length and different Breaks, and more Breaks than
+    the set has. Returns ``sets`` untouched when no row asks."""
+    def base(duration: int) -> Tuple[Tuple[int, str], ...]:
+        chosen = global_segments
+        for threshold, segments in sets:
+            if duration >= int(threshold):
+                chosen = segments
+        return chosen
+
+    wanted: Dict[int, List[Associate]] = {}
+    for associate in associates:
+        if associate.breaks_per_day is None:
+            continue
+        if associate.shift_minutes is None:
+            parser_warnings.append(f"HARD_BREAKS_NEED_SHIFT_LENGTH:associate={associate.name!r};row={associate.row}; Breaks is the "
+                                   "number of breaks on a shift of the Shift Length on the same row: fill in Shift Length too")
+            continue
+        wanted.setdefault(associate.shift_minutes, []).append(associate)
+    overrides: Dict[int, Tuple[Tuple[int, str], ...]] = {}
+    for minutes, people in sorted(wanted.items()):
+        counts = sorted({p.breaks_per_day for p in people})
+        names = [p.name for p in people]
+        if len(counts) > 1:
+            parser_warnings.append(f"HARD_BREAKS_CONFLICT:shift_length_hours={minutes / 60:g};associates={names!r};breaks={counts!r}; "
+                                   "rows with the same Shift Length must have the same Breaks, because break sets belong to a shift length")
+            continue
+        segments = base(minutes)
+        if counts[0] > len(segments):
+            parser_warnings.append(f"HARD_BREAKS_EXCEED_SET:shift_length_hours={minutes / 60:g};associates={names!r};breaks={counts[0]};"
+                                   f"set_has={len(segments)}; a shift of that length has {len(segments)} breaks in its break set")
+            continue
+        overrides[minutes] = segments[:counts[0]]
+    if not overrides:
+        return sets
+    durations = sorted({s.duration_min for s in shifts} | set(overrides))
+    return tuple(sorted((d, overrides.get(d, base(d))) for d in durations))
 
 
 def _parse_break_sets_by_shift_length(
@@ -3993,6 +4037,7 @@ def parse_input(
 
     break_segments = _parse_break_segments(im, parser_warnings)
     break_sets_by_length = _parse_break_sets_by_shift_length(im, parser_warnings)
+    break_sets_by_length = _apply_associate_break_counts(associates, shifts, break_segments, break_sets_by_length, parser_warnings)
     _weighting_raw = _instruction_get(im, ["Coverage Objective Weighting", "Coverage Weighting"], None)
     coverage_objective_weighting = "interval_count"
     coverage_objective_weighting_source = "default"
@@ -4980,7 +5025,7 @@ def validate_input_contract(parsed: ParsedInput, feasibility: Optional[Dict[str,
         room = 7 - len(leave_days)
 
         def fits(long_mode: bool) -> bool:
-            owed = max(0, min(3 if long_mode else 2, room))
+            owed = max(0, min(associate.off_days if associate.off_days is not None else (3 if long_mode else 2), room))
             if parsed.strict_off:
                 return len(off_days) <= owed and len(shift_days) + owed <= room
             return len(shift_days) + min(2, room) <= room
@@ -4988,7 +5033,8 @@ def validate_input_contract(parsed: ParsedInput, feasibility: Optional[Dict[str,
             week_conflicts.append({
                 "associate": associate.name, "leave_days": leave_days, "requested_off_days": off_days,
                 "fixed_shift_days": shift_days, "days_with_two_requests": clashes,
-                "off_days_owed": sorted({max(0, min(3 if m else 2, room)) for m in long_modes}),
+                "off_days_owed": sorted({max(0, min(associate.off_days if associate.off_days is not None else (3 if m else 2), room))
+                                         for m in long_modes}),
                 "strict_off": parsed.strict_off,
             })
     if week_conflicts:
@@ -5776,6 +5822,8 @@ def required_off_days(parsed: ParsedInput, associate: Associate, long_mode: bool
     days are affected; for everyone else this returns 2 or 3 exactly as before.
     """
     leave_days = pinned_leave_days(parsed, associate, honour_fixed, honour_leave)
+    if associate.off_days is not None:  # Phase BL: the Schedule sheet's own count for this person (a part-timer)
+        return max(0, min(associate.off_days, 7 - leave_days))
     return max(0, min(3 if long_mode else 2, 7 - leave_days))
 
 
@@ -5798,10 +5846,15 @@ def separate_off_in_preference(parsed: ParsedInput, associate: Associate, hard: 
     return len(days) >= 2 and any((d + 1) % 7 not in days and (d - 1) % 7 not in days for d in days)
 
 def add_weekly_off_rule(model: Any, off_vars: Sequence[Any], long_mode_var: Any, leave_days: int,
-                        strict: bool, consecutive_required: bool, name: str) -> None:
-    """The weekly OFF rule, shared by every model that decides OFF days."""
+                        strict: bool, consecutive_required: bool, name: str, owed: Optional[int] = None) -> None:
+    """The weekly OFF rule, shared by every model that decides OFF days. ``owed`` (Phase BL) is the Schedule sheet's own OFF count
+    for this person; without it the rule is the usual 2, or 3 on the 11H/3OFF pattern."""
     room = 7 - int(leave_days)
-    if strict:
+    if owed is not None:
+        owed = max(0, min(int(owed), room))
+        model.Add(sum(off_vars) == owed) if strict else model.Add(sum(off_vars) >= owed)
+        room = owed if strict else room
+    elif strict:
         if room >= 3:
             model.Add(sum(off_vars) == 2 + long_mode_var)
         else:
@@ -7967,7 +8020,8 @@ def build_skeleton(
             model, [off[a, d] for d in range(D)], long_mode[a],
             pinned_leave_days(parsed, assoc, honour_fixed=hard.fixed, honour_leave=hard.leave),
             strict=bool(hard.strict_off and parsed.strict_off),
-            consecutive_required=not (parsed.separate_off_days or separate_off_in_preference(parsed, assoc, hard)), name=f"stage1_{a}")
+            consecutive_required=not (parsed.separate_off_days or separate_off_in_preference(parsed, assoc, hard)), name=f"stage1_{a}",
+            owed=assoc.off_days)
         if hard.max_shift_variety:
             model.Add(sum(y[a, s] for s in range(S)) <= parsed.max_different_shifts)
         if profile["shift_variety"]:
@@ -11903,7 +11957,8 @@ def break_resilience_diagnostics(parsed: ParsedInput) -> Dict[str, Any]:
     weekly_rows: List[Dict[str, Any]] = []
     for summary in weekly_groups.values():
         eligible_count = len(summary["eligible_associates"])
-        available_worker_days = eligible_count * default_workdays
+        available_worker_days = sum(associate_workdays(parsed, a) for a in parsed.associates
+                                    if a.name in summary["eligible_associates"])
         required_worker_days = summary["active_days"] * (summary["minimum"] + 1)
         shortage = max(0, required_worker_days - available_worker_days)
         row = {
@@ -11946,7 +12001,7 @@ def capacity_diagnostics(parsed: ParsedInput) -> Dict[str, Any]:
     """
     leave_days = sum(1 for assoc in parsed.associates for value in assoc.preferences if preference_kind(value) == "leave")
     default_workdays = default_workdays_per_week(parsed)
-    working_shifts = max(0, len(parsed.associates) * default_workdays - leave_days)
+    working_shifts = max(0, sum(associate_workdays(parsed, assoc) for assoc in parsed.associates) - leave_days)
     avg_shift_hours = sum(s.duration_min for s in parsed.shifts) / max(1, len(parsed.shifts)) / 60.0
     break_hours = (sum(break_quarters_for(parsed, s.duration_min) for s in parsed.shifts)
                    / max(1, len(parsed.shifts))) * 0.25
@@ -14200,6 +14255,12 @@ EXPORT_ROLE_ORDER: Tuple[str, ...] = (
     "PREFERENCE_CANDIDATE",
     "BALANCED_CANDIDATE",
 )
+
+
+def associate_workdays(parsed: ParsedInput, associate: Associate) -> int:
+    """Phase BL: days one associate works in a week for the capacity estimates: the usual week, or 7 minus the OFF days the Schedule
+    sheet gives this person (a part-timer)."""
+    return default_workdays_per_week(parsed) if associate.off_days is None else 7 - associate.off_days
 
 
 def default_workdays_per_week(parsed: ParsedInput) -> int:
@@ -16923,7 +16984,7 @@ def solve_joint_shift_off_language_break_refinement(
             pinned_leave_days(parsed, parsed.associates[a]),
             strict=bool(parsed.strict_off),
             consecutive_required=not (parsed.separate_off_days or separate_off_in_preference(parsed, parsed.associates[a])),
-            name=f"joint_{a}")
+            name=f"joint_{a}", owed=parsed.associates[a].off_days)
         model.Add(sum(y[a, s_index] for s_index in range(S)) <= parsed.max_different_shifts)
         objective_terms.append(25 * sum(y[a, s_index] for s_index in range(S)))
         for shift in parsed.shifts:

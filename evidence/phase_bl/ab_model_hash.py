@@ -22,7 +22,7 @@ class Stop(Exception):
 
 
 def capture(self, model, *args, **kwargs):
-    raise Stop(hashlib.sha256(model.Proto().SerializeToString(deterministic=True)).hexdigest())
+    raise Stop(hashlib.sha256(str(model.Proto()).encode()).hexdigest())
 
 
 cp_model.CpSolver.Solve = capture

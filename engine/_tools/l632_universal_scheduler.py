@@ -4769,6 +4769,16 @@ def validate_input_contract(parsed: ParsedInput, feasibility: Optional[Dict[str,
             failures.append(row)
     if not parsed.shifts:
         failures.append({"code": "NO_LEGAL_SHIFTS", "detail": "No legal shifts were parsed from Shift Library."})
+    for associate in parsed.associates:  # Phase BL: a named Shift Length needs a shift of that length
+        if associate.shift_minutes is not None and parsed.shifts and not any(
+                shift_length_allows(associate, shift) for shift in parsed.shifts):
+            failures.append({
+                "code": "ASSOCIATE_SHIFT_LENGTH_NOT_IN_LIBRARY", "associate": associate.name,
+                "shift_length_hours": associate.shift_minutes / 60.0,
+                "detail": (f"{associate.name} is set to {associate.shift_minutes / 60.0:g} hour shifts, but the Shift Library has "
+                           f"none of that length. Add shifts of {associate.shift_minutes / 60.0:g} hours to Shift Library and "
+                           f"list {associate.shift_minutes / 60.0:g} in Allowed Shift Durations Hours."),
+            })
     # Every coverage function floors to 15-minute quarters (start_min // 15,
     # duration_min // 15), and _parse_shifts accepts any duration within 5
     # minutes of an allowed one. An off-grid shift would therefore be modelled
@@ -7917,6 +7927,10 @@ def build_skeleton(
                     if blocked_rule is not None:
                         model.Add(x[a, d, shift.index] == 0)
                         language_working_window_blocks += 1
+        for shift in parsed.shifts:  # Phase BL: a named Shift Length is a hard rule
+            if not shift_length_allows(assoc, shift):
+                for d in range(D):
+                    model.Add(x[a, d, shift.index] == 0)
         if assoc.nesting_group:
             fixed_group_members.setdefault(norm(assoc.nesting_group), []).append(a)
         for d in range(D):
@@ -11649,6 +11663,26 @@ def compact_metric_surface(metrics: Mapping[str, Any]) -> Dict[str, Any]:
     }
 
 
+def shift_length_allows(associate: Associate, shift: Shift) -> bool:
+    """Phase BL (owner, 2026-11-07): an associate whose Schedule row names a Shift Length may only work shifts of that length
+    (within the library's 5 minute tolerance). No length named: every shift is allowed, as before."""
+    return associate.shift_minutes is None or abs(shift.duration_min - associate.shift_minutes) <= 5
+
+
+def shift_length_failures(parsed: ParsedInput, skeleton: Any) -> List[Dict[str, Any]]:
+    """Phase BL: scheduled shifts whose length is not the one the associate's row names."""
+    failures: List[Dict[str, Any]] = []
+    for a, assoc in enumerate(parsed.associates):
+        if assoc.shift_minutes is None:
+            continue
+        for d in range(7):
+            si = skeleton.selected_shift_index[a][d]
+            if si is not None and not shift_length_allows(assoc, parsed.shifts[si]):
+                failures.append({"type": "shift_length", "associate": assoc.name, "day": DAY_NAMES[d],
+                                 "shift": parsed.shifts[si].label, "expected_minutes": assoc.shift_minutes})
+    return failures
+
+
 def associate_day_eligible_shifts(parsed: ParsedInput, associate: Associate, day: int) -> List[Shift]:
     """Return shifts that can possibly be used by one associate-day before weekly coupling.
 
@@ -11673,6 +11707,8 @@ def associate_day_eligible_shifts(parsed: ParsedInput, associate: Associate, day
         candidates = list(parsed.shifts)
     result: List[Shift] = []
     for shift in candidates:
+        if not shift_length_allows(associate, shift):
+            continue
         if day == 0 and not previous_saturday_compatible(associate.previous_saturday, shift, parsed.rest_gap_hours):
             continue
         windows = associate_language_windows(parsed, associate, day=day)
@@ -12487,6 +12523,7 @@ def validate_schedule(parsed: ParsedInput, skeleton: SkeletonSolution, breaks: B
             "blank_staffed_quarters": metrics.get("week_boundary_blank_staffed_quarters", 0),
             "floor_ratio": parsed.floor_ratio,
         })
+    failures.extend(shift_length_failures(parsed, skeleton))  # Phase BL
     structural = structural_schedule_audit(parsed, skeleton, breaks)
     failures.extend(structural.get("hard_failures", []))
     return {
@@ -16723,6 +16760,9 @@ def solve_joint_shift_off_language_break_refinement(
                     model.Add(x[a, d, s_index] == 0)
                     continue
                 shift = parsed.shifts[s_index]
+                if not shift_length_allows(parsed.associates[a], shift):  # Phase BL
+                    model.Add(x[a, d, s_index] == 0)
+                    continue
                 if shift_overlaps_required_language_for_noneligible(
                     parsed, parsed.associates[a], shift, d
                 ) is not None:
@@ -19856,6 +19896,8 @@ def shift_consistency_summary(parsed: ParsedInput, skeleton: SkeletonSolution) -
 
 def _consistency_cell_allowed(parsed: ParsedInput, a: int, d: int, shift: Shift) -> bool:
     assoc = parsed.associates[a]
+    if not shift_length_allows(assoc, shift):
+        return False
     if getattr(parsed, "demand_fit_guard_enabled", False) and demand_fit_blocked(parsed, d, shift)[0]:
         return False
     windows = associate_language_windows(parsed, assoc, day=d)

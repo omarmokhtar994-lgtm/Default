@@ -31,6 +31,7 @@
 - A part-timer with 0 off days or more off days than days in the week: refuse in words.
 - A week where every associate is 8.5 h but the Shift Library has no 8.5 h shift: refuse, name the associate.
 - Site shares on a day that do not add up to 100 %: refuse, name the day and channel.
+- A moving holiday (the date shifts each year) and a holiday that falls inside a promotion: both effects apply, shown separately.
 - Open hours that cross midnight (an overnight operation) and daylight-saving days.
 - 10 to 11 months of history: the uncovered months are shown as trend only with a wider range, never as if learned.
 - History with gaps or a partial first and last week: use the existing "at least 5 days of data counts as a week" rule, say which weeks were left out.
@@ -99,6 +100,23 @@
 - [ ] **Step 1:** Tests: `test_zero_volume_inside_open_hours_keeps_the_minimum_cover`, `test_outside_open_hours_needs_nothing`, `test_open_hours_past_midnight`, `test_email_has_no_minimum_cover`. FAIL first.
 - [ ] **Step 2:** Add the table and the two getters/setters, apply in the requirement calculation, add the settings form (hours per weekday per channel, minimum cover), sentence-case labels. PASS.
 
+### Task 4b: Holidays and special days
+
+**Files:**
+- Create: `webapp/special_days.py`
+- Modify: `webapp/store.py` (a `special_days` table), `webapp/routes/volumes.py`, `webapp/volumes.py`, `webapp/templates/volumes.html`
+- Test: `webapp/tests/test_bl_special_days.py`
+
+**Interfaces:**
+- Produces: `SpecialDays.add(key, name, first, last, site, volume_pct, hours)` and `SpecialDays.on(key, day, site) -> Optional[dict]`. `site` is blank (all sites) or one site. `volume_pct` is the change to the day's volume (for example 60 for 60 % of a normal day), typed or taken from the same holiday in last year's history when its date is entered for that year. `hours` is `normal`, `reduced` (own open hours for that day) or `closed`.
+- Dates are typed for each year, never repeated by calendar date, because moving holidays shift every year. Nothing is preloaded: no holiday dates are made up.
+- A holiday in the history is marked, left out of the weekday pattern, and listed on the forecast page, so it does not distort an ordinary Monday.
+
+- [ ] **Step 1:** Tests: `test_a_holiday_changes_only_its_dates_and_its_site`, `test_closed_means_no_requirement_and_no_minimum_cover`, `test_reduced_hours_use_their_own_open_hours`, `test_a_holiday_in_the_history_does_not_distort_the_weekday_pattern`, `test_last_years_holiday_gives_the_suggested_volume_change`, `test_overlapping_holidays_for_one_site_are_refused_by_name`. FAIL first.
+- [ ] **Step 2:** Implement the table, the settings list (add, edit, delete, with the year shown), the effect on the requirement calculation and on every forecast level (year, week, day), and a marker on the holiday's day in the week and day views. PASS.
+
+---
+
 ### Task 5: Email from daily history, worked out by volume
 
 **Files:**
@@ -133,7 +151,7 @@
 
 **Interfaces:**
 - Consumes: day-by-day history, `drivers` (YoY growth, events and promotions with start and end dates, AI periods).
-- Produces: the forecast page and its download show three levels (owner, 2026-11-07): **year** (each month and the total, with the range), **week** (each week of the horizon) and **day** (each day of a chosen week; Phone and Chat also by interval as today; Email by day only). Every level adds up to the one above it, checked by a test. `months_ahead(history, drivers, start, months) -> [{month, low, expected, high, basis}]` from a weekly trend plus a week-of-year seasonal index, then growth and promotion uplift on top. `basis` says how each month was worked out, and the page shows it.
+- Produces: the forecast page and its download show three levels (owner, 2026-11-07): **year** (each month and the total, with the range), **week** (each week of the horizon) and **day** (each day of a chosen week; Phone and Chat also by interval as today; Email by day only). Every level adds up to the one above it, checked by a test. `months_ahead(history, drivers, start, months) -> [{month, low, expected, high, basis}]` from a weekly trend plus a week-of-year seasonal index, then growth, promotion uplift and holidays on top. `basis` says how each month was worked out, and the page shows it.
 - History length decides what can be learned (owner, 2026-11-07: some programs have only 10 to 11 months):
   - 52 weeks or more: trend and seasonal index for every week of the year. Range 90 to 110 % of expected.
   - 26 to 51 weeks: trend, day-of-week pattern, and a seasonal index only for the weeks of year the history covers. A month whose weeks are not covered is trend only, marked "no seasonal pattern yet" and given a wider range (80 to 120 %). With 10 to 11 months, the 1 to 2 missing months are the only trend-only ones.

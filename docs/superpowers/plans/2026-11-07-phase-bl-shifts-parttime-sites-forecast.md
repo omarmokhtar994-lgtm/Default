@@ -24,7 +24,7 @@
 - Ruling: an 8.5 h associate gets the same break set as a 9 h associate, because the owner chose the "fixed per associate" option, which says nothing about breaks. The existing `break_sets_by_shift_length` input already lets the workbook state a different set for 510 minutes; cost if wrong: one workbook row.
 - Ruling: with no volume in an open interval, Phone and Chat keep 1 agent (a "minimum cover" setting, default 1, 0 allowed); Email has none. Cost if wrong: change the default.
 - Ruling: email work for a day is spread evenly over that day's open intervals, because the 24 hour email service level makes the timing inside the day unimportant. Cost if wrong: one function.
-- Ruling: the internal site is the one the scheduler plans; every other site is shown for information (its required agents), not scheduled.
+- Ruling (owner, 2026-11-07, overturns the first draft): every site is scheduled, not only the internal one. Each site gets its own requirement workbook, and its own runs and schedules, filed under the program or LOB and the site. Cost if wrong: the site tag on a run is one column.
 
 ## Review Focus
 
@@ -119,12 +119,12 @@
 - Test: `webapp/tests/test_bl_sites.py`
 
 **Interfaces:**
-- Produces: `SiteBook.rules(key)` rows `(channel, days, from_min, to_min, site, share_pct)`; `split(channel, weekday, minute) -> {site: share}` summing to 100 or raising `ValueError` naming the day and channel; `VolumeBook.requirement_by_site(...)`. The owner's example is a test: Phone 100 % Sutherland; Chat 100 % internal 09:00–16:00 and 100 % Sutherland 16:00–24:00; Email 60/40 on weekdays; everything 100 % Sutherland at weekends.
+- Produces: `SiteBook.rules(key)` rows `(channel, days, from_min, to_min, site, share_pct)`; `split(channel, weekday, minute) -> {site: share}` summing to 100 or raising `ValueError` naming the day and channel; `VolumeBook.requirement_by_site(...)`, and a nullable `site` column on runs (store migration, existing rows blank). The owner's example is a test: Phone 100 % Sutherland; Chat 100 % internal 09:00–16:00 and 100 % Sutherland 16:00–24:00; Email 60/40 on weekdays; everything 100 % Sutherland at weekends.
 
 - [ ] **Step 1:** Tests: `test_the_owners_example_splits_as_described`, `test_shares_that_do_not_add_to_100_are_refused_by_name`, `test_overlapping_rules_are_refused`, `test_requirement_by_site_sums_to_the_whole`. FAIL first.
-- [ ] **Step 2:** Implement rules, the split and the settings page; show required agents per site on the forecast page and in the requirement workbook (one sheet per site). PASS.
+- [ ] **Step 2:** Implement rules, the split and the settings page; show required agents per site on the forecast page; the requirement workbook is made per site (`requirement_workbook(key, week, forecasts, site)`), and a run, its schedule, the RTA day and the exports carry a `site` tag (blank = today's single site) so each site is planned and run on its own. Add `test_a_run_is_filed_under_its_site` and `test_blank_site_behaves_as_today`. PASS.
 
-### Task 7: Months-ahead forecast
+### Task 7: Forecast at year, week and day levels (with months ahead)
 
 **Files:**
 - Create: `webapp/months_ahead.py`
@@ -133,14 +133,14 @@
 
 **Interfaces:**
 - Consumes: day-by-day history, `drivers` (YoY growth, events and promotions with start and end dates, AI periods).
-- Produces: `months_ahead(history, drivers, start, months) -> [{month, low, expected, high, basis}]` from a weekly trend plus a week-of-year seasonal index, then growth and promotion uplift on top. `basis` says how each month was worked out, and the page shows it.
+- Produces: the forecast page and its download show three levels (owner, 2026-11-07): **year** (each month and the total, with the range), **week** (each week of the horizon) and **day** (each day of a chosen week; Phone and Chat also by interval as today; Email by day only). Every level adds up to the one above it, checked by a test. `months_ahead(history, drivers, start, months) -> [{month, low, expected, high, basis}]` from a weekly trend plus a week-of-year seasonal index, then growth and promotion uplift on top. `basis` says how each month was worked out, and the page shows it.
 - History length decides what can be learned (owner, 2026-11-07: some programs have only 10 to 11 months):
   - 52 weeks or more: trend and seasonal index for every week of the year. Range 90 to 110 % of expected.
   - 26 to 51 weeks: trend, day-of-week pattern, and a seasonal index only for the weeks of year the history covers. A month whose weeks are not covered is trend only, marked "no seasonal pattern yet" and given a wider range (80 to 120 %). With 10 to 11 months, the 1 to 2 missing months are the only trend-only ones.
   - Under 26 weeks: trend and day-of-week only, for at most 8 weeks ahead; further months are not shown, with a note saying how much history is needed.
   - The owner can type a seasonal index for a missing month (for example from a sister program) in the "Help with the number" block; it is used and marked "typed".
-- [ ] **Step 1:** Tests on made-up series with a known answer: `test_flat_history_forecasts_flat`, `test_a_yearly_peak_repeats_next_year`, `test_yoy_growth_scales_the_months`, `test_a_promotion_adds_its_uplift_only_inside_its_dates`, `test_eleven_months_of_history_marks_only_the_missing_month_trend_only`, `test_under_26_weeks_stops_at_8_weeks_ahead`, `test_a_typed_seasonal_index_fills_a_missing_month`. FAIL first.
-- [ ] **Step 2:** Implement with the standard library only (no new dependency); add a "Months ahead" table and a download. PASS.
+- [ ] **Step 1:** Tests on made-up series with a known answer: `test_flat_history_forecasts_flat`, `test_a_yearly_peak_repeats_next_year`, `test_yoy_growth_scales_the_months`, `test_a_promotion_adds_its_uplift_only_inside_its_dates`, `test_eleven_months_of_history_marks_only_the_missing_month_trend_only`, `test_under_26_weeks_stops_at_8_weeks_ahead`, `test_a_typed_seasonal_index_fills_a_missing_month`. `test_year_week_and_day_levels_add_up`, `test_each_level_is_per_site_and_per_channel`. FAIL first.
+- [ ] **Step 2:** Implement with the standard library only (no new dependency); add Year, Week and Day tabs (per channel, per site) and a download of each level. PASS.
 
 ### Task 8: Gate, package, handoff
 

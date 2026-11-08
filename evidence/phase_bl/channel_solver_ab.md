@@ -41,3 +41,17 @@ compare the mean of 8 runs per side, planned once for the class; claim and limit
 Estimated failure rate from the measured spread: below 1 in 300. Result: 7 of 7 runs green (1 module run, 6 repeats of the two tests).
 Mutation check (Balanced arm given both ticks off, so it must not be calmer): failed 3 of 4 runs, the fourth passed by chance (two equal sides).
 The "Known timing-sensitive tests" section in docs/HANDOFF.md is replaced by this fix.
+
+## Second look, 2026-11-08 evening (owner: "fix everything 100%")
+With `use_lns_only` the empty-breaks test still failed 3 of 20 single-test runs (Associate 014 or 016: Break 2 starts 225 to 300 minutes after Lunch
+ends; normal maximum 210). 16 more runs logging the solver's own objective: no problem in any, objective 22 to 116 (median 47). The rule is a cost
+(GAP = 2 a quarter hour, Phase AX: a normal, not an absolute); a run that misses it pays at least 6, and runs without a miss reach 22, so a miss is the
+search stopping on the clock far from the best plan, not the best plan choosing to miss. Root cause: the placing solve starts from nothing (an empty
+break has no hint), and 12 seconds on 4 workers does not always get close.
+
+**Candidate:** hint every empty break at the candidate start nearest to an even spread of the person's breaks over the shift
+(break k of n at start + (k + 1) * length / (n + 1) - its minutes / 2). A hint is only a starting point: the model, its costs and its limits are unchanged.
+
+**Rule for accepting it** (written before the runs): over 20 runs of the test's scenario, zero runs with a problem from `score_day`, AND the median
+objective no higher than the 16-run median above (47); the time limit unchanged. Then `test_channel_plan` passes 3 times in a row and every module that
+plans a channel day passes.

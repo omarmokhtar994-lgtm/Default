@@ -20,6 +20,7 @@ from ..auth import login_required
 from ..programs import ProgramBook
 from ..shrink_view import week_begin
 from .. import drivers as drivers_mod
+from .. import open_hours as open_hours_mod
 from ..volumes import DEFAULTS, LABELS, LAST_WEEK, VolumeBook, _today
 from ..excel_agents import lambda_definitions
 from ..volumes_zone import ZONES
@@ -192,6 +193,21 @@ def register(app, ctx) -> None:
         doc["damaged"] = False
         return doc
 
+    def _clock(minutes: int) -> str:
+        return "24:00" if minutes == 1440 else f"{(minutes % 1440) // 60:02d}:{minutes % 60:02d}"
+
+    def _hours_view(hours: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+        """Each channel's hours as the Settings form shows them: a row per weekday with the opening and closing time as typed."""
+        out: Dict[str, Dict[str, Any]] = {}
+        for ch, h in hours.items():
+            rows = []
+            for d in range(7):
+                window = h["days"].get(str(d), "unset")
+                rows.append({"i": d, "name": DAY_NAMES[d], "closed": window is None,
+                             "from": _clock(window[0]) if isinstance(window, list) else "", "to": _clock(window[1]) if isinstance(window, list) else ""})
+            out[ch] = {"min_cover": h["min_cover"], "rows": rows}
+        return out
+
     def _render(tab: str, **extra: Any):
         vb, key = _book(), _unit()
         store = app.extensions["store"]
@@ -255,7 +271,7 @@ def register(app, ctx) -> None:
                                                                                      for w in r["trend"]], unit="%",
                                                    label="Offered over forecast by week", y_max=max(120, max(w["otf"] or 0 for w in r["trend"]) * 1.1))
         elif tab == "settings":
-            ctxt.update(settings=vb.settings(key), labels=LABELS, defaults=DEFAULTS)
+            ctxt.update(settings=vb.settings(key), labels=LABELS, defaults=DEFAULTS, hours_view=_hours_view(vb.open_hours(key)))
         return render_template("volumes.html", **ctxt)
 
     @app.route("/volumes")
@@ -441,9 +457,13 @@ def register(app, ctx) -> None:
         vb, key = _book(), _unit()
         data = {ch: {name: request.form.get(f"{ch}.{name}", "") for name in DEFAULTS[ch] if f"{ch}.{name}" in request.form} for ch in CHANNELS}
         try:
+            hours = {ch: open_hours_mod.from_form({k[len(f"hours.{ch}."):]: v for k, v in request.form.items() if k.startswith(f"hours.{ch}.")}, ch)
+                     for ch in CHANNELS if any(k.startswith(f"hours.{ch}.") for k in request.form)}   # Phase BL: checked before anything is kept
             if "zone" in request.form and request.form["zone"] != vb.zone(key):
                 vb.set_zone(key, request.form["zone"], g.user["id"])
             vb.set_settings(key, data, g.user["id"])
+            if hours:
+                vb.set_open_hours(key, hours, g.user["id"])
         except ValueError as exc:
             flash(str(exc))
             return _render("settings")

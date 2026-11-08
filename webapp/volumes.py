@@ -25,6 +25,7 @@ from zoneinfo import ZoneInfo
 from openpyxl import Workbook
 
 from . import drivers as D, erlang, forecast as F, volumes_zone as Z
+from . import open_hours as H
 from .channel_template import _head, _title
 from .volumes_io import CHANNELS, DAY_NAMES, FIRST_DAY, ParsedVolumes
 
@@ -135,7 +136,22 @@ class VolumeBook:
                 merged[channel][name] = int(number) if name not in ("concurrency", "aht") and number == int(number) else number
             if merged[channel]["band_low"] >= merged[channel]["band_high"]:
                 raise ValueError("The OTF band starts below where it ends.")
-        self.store.set_volume_settings(key, {**merged, "zone": self.zone(key)}, user_id)
+        self.store.set_volume_settings(key, {**(self.store.volume_settings(key) or {}), **merged, "zone": self.zone(key)}, user_id)
+
+    def open_hours(self, key: str) -> Dict[str, Dict[str, Any]]:
+        """The hours each channel is worked and its minimum cover (Phase BL). Nothing set is ``{"min_cover": 1, "days": {}}``: open all day, as before."""
+        saved = (self.store.volume_settings(key) or {}).get("hours")
+        saved = saved if isinstance(saved, dict) else {}
+        return {ch: H.read(saved.get(ch)) for ch in CHANNELS}
+
+    def set_open_hours(self, key: str, data: Dict[str, Dict[str, Any]], user_id: Optional[int]) -> None:
+        """Save the hours of some channels (merged with what is kept). Everything is checked first: nothing is saved when anything is wrong."""
+        merged = self.open_hours(key)
+        for channel, hours in data.items():
+            if channel not in CHANNELS:
+                raise ValueError("The channel is Phone, Chat or Email.")
+            merged[channel] = H.read(hours)
+        self.store.set_volume_settings(key, {**(self.store.volume_settings(key) or {}), "hours": merged}, user_id)
 
     def uses_erlang(self, key: str) -> bool:
         return self.measure_of(key) in ("sl", "volume")
@@ -234,9 +250,10 @@ class VolumeBook:
     # ---------------------------------------------------------------- the forecast
     def _needs(self, key: str, channel: str, calls: List[List[int]], aht: float, s: Dict[str, Any]):
         step_s = self.step(key) * 60
+        hours = self.open_hours(key)[channel]
         needs: List[List[float]] = []
         service: List[List[Optional[float]]] = []
-        for day in calls:
+        for d, day in enumerate(calls):
             n_row, s_row = [], []
             for c in day:
                 if channel == "Phone":
@@ -251,6 +268,17 @@ class VolumeBook:
                     sl = None
                 n_row.append(n)
                 s_row.append(sl)
+            open_ranges = H.ranges(hours, d)  # Phase BL: nobody outside the hours, at least the minimum cover inside them
+            if open_ranges is not None:
+                kept = H.apply(n_row, open_ranges, self.step(key), 0 if channel == "Email" else hours["min_cover"])
+                for i, (was, now) in enumerate(zip(n_row, kept)):
+                    if now != was:
+                        c = day[i]
+                        if channel == "Phone":
+                            s_row[i] = round(erlang.service_level(now, c, aht, step_s, s["sl_seconds"]) * 100, 1) if (c and now) else None
+                        elif channel == "Chat":
+                            s_row[i] = round(erlang.service_level(now, c, aht / s["concurrency"], step_s, s["sl_seconds"]) * 100, 1) if (c and now) else None
+                n_row = kept
             needs.append(n_row)
             service.append(s_row)
         return needs, (None if channel == "Email" else service)

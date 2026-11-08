@@ -79,3 +79,8 @@ there the need is met by passing the maximum by 2 quarter hours, so 2 x GAP must
 **Candidate 3:** GAP = 14, the largest weight that keeps the need case (2 x 14 = 28 < 30); above KEEP, SHAPE, MOVE and DAY_MIX (3 to 8), below
 CONSISTENT, STRETCH_OVER and STRETCH_COST (20 to 22). **Rule** (written before the runs): as for candidate 2. If it fails, the trade-off goes to the
 owner and the weight stays 2.
+
+**Result of candidate 3 (GAP = 14):** rejected by its rule: `test_ax_channel_shape` fails the same way (the need case keeps the gap, 45 minutes inside
+it). The need case trades more than one cost, so no weight found between 2 and 14 keeps it. Three candidates (a hint, 25, 14) failed; the weight stays 2
+and the planner is unchanged. Under weight 2 the empty-breaks scenario misses the normal maximum gap in about 3 of 20 runs (by 15 to 90 minutes),
+which the page reports as a warning. How to settle it is the owner's decision (asked 2026-11-08).

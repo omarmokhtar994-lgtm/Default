@@ -32,4 +32,12 @@ failed only the two rotation tests below, which are not about placing breaks.
 Each run is limited by wall-clock time on 4 workers, so each score varies run to run (objective 5422 to 5524, short stretches 38 to 59 on the same
 input). Measured failure rate of the module: 1 of 10 runs on the commit before Phase BL, 2 of 10 on this one: the same phenomenon, within noise.
 A deterministic search made the result repeatable but 1.5 to 3.7 % worse on the objective, so it was not adopted: production quality comes first.
-The tests are unchanged. Policy: see "Known timing-sensitive tests" in docs/HANDOFF.md.
+
+**Fixed 2026-11-08 (owner: "I need to make this flaky stable").** Root cause: one run against one run. Measured, short stretches per run: Balanced 9 to 17
+(10 runs, median 12), both ticks off 14 to 19 (12 runs, median 15.5): overlapping ranges, so one pair said "Balanced is not calmer" about 1 time in 6.
+Moves are far apart (34 to 44 against 62 to 73 with the fair tick on; 33 to 40 with it off) and never failed. Deterministic single-worker solve tried:
+repeatable but Balanced 20 against off 19 (a worse plan, and it fails the test every time), 3.5 minutes for 5 plans, so rejected. Change: the two tests
+compare the mean of 8 runs per side, planned once for the class; claim and limits unchanged, re-pin reason written in the test.
+Estimated failure rate from the measured spread: below 1 in 300. Result: 7 of 7 runs green (1 module run, 6 repeats of the two tests).
+Mutation check (Balanced arm given both ticks off, so it must not be calmer): failed 3 of 4 runs, the fourth passed by chance (two equal sides).
+The "Known timing-sensitive tests" section in docs/HANDOFF.md is replaced by this fix.

@@ -16,14 +16,14 @@
 {% endmacro %}
 {% block content %}
 <div class="phead"><div>
-  <h1>Volumes: {{ {'actuals': 'actuals', 'forecast': 'forecast and people needed', 'how': 'how did we do', 'settings': 'settings'}[tab] }}</h1>
+  <h1>Volumes: {{ {'actuals': 'actuals', 'forecast': 'forecast and people needed', 'outlook': 'the months ahead', 'how': 'how did we do', 'settings': 'settings'}[tab] }}</h1>
   <p class="byline">{{ label }}. Actual contacts per interval, a forecast of next week from a number you type, the people needed with Erlang for programs counted by service level, and how each week went.</p>
 </div></div>
 <p class="dim" id="zone-note">Volumes are kept in {{ zone_name }} time{% if tab != 'settings' and can('volumes_edit') %}; change the zone on the Settings tab{% endif %}.</p>
 <nav class="bp-days" aria-label="Volumes">{% for t, name in tabs %}<a href="{{ url_for('volumes_page', tab=t, program=key, channel=channel) }}"{% if t == tab %} class="on" aria-current="page"{% endif %}>{{ name }}</a>{% endfor %}</nav>
 {% if tab != 'actuals' and tab != 'settings' %}<p class="chan" role="group" aria-label="Channel">{% for ch in channels %}<a class="button{% if ch == channel %} primary{% endif %}" href="{{ url_for('volumes_page', tab=tab, program=key, channel=ch, week=week.isoformat() if week is defined else none) }}"{% if ch == channel %} aria-current="true"{% endif %}>{{ ch }}</a> {% endfor %}</p>
-{% if tab == 'forecast' and site_names %}<p class="chan" role="group" aria-label="Site"><span class="dim">Site</span> <a class="button{% if not site %} primary{% endif %}" href="{{ url_for('volumes_page', tab='forecast', program=key, channel=channel, week=week.isoformat()) }}"{% if not site %} aria-current="true"{% endif %}>All sites</a>{% for n in site_names %} <a class="button{% if n == site %} primary{% endif %}" href="{{ url_for('volumes_page', tab='forecast', program=key, channel=channel, week=week.isoformat(), site=n) }}"{% if n == site %} aria-current="true"{% endif %}>{{ n }}</a>{% endfor %}</p>
-{% if site %}<p class="notice calm">This is {{ site }}'s share of the contacts and the people that share needs. The number you type is for the whole program, and the figures for the other sites add up to it.</p>{% endif %}{% endif %}{% endif %}
+{% if tab in ('forecast', 'outlook') and site_names %}{% set wk = week.isoformat() if week is defined else none %}<p class="chan" role="group" aria-label="Site"><span class="dim">Site</span> <a class="button{% if not site %} primary{% endif %}" href="{{ url_for('volumes_page', tab=tab, program=key, channel=channel, week=wk, months=months_text, level=level) }}"{% if not site %} aria-current="true"{% endif %}>All sites</a>{% for n in site_names %} <a class="button{% if n == site %} primary{% endif %}" href="{{ url_for('volumes_page', tab=tab, program=key, channel=channel, week=wk, site=n, months=months_text, level=level) }}"{% if n == site %} aria-current="true"{% endif %}>{{ n }}</a>{% endfor %}</p>
+{% if site and tab == 'forecast' %}<p class="notice calm">This is {{ site }}'s share of the contacts and the people that share needs. The number you type is for the whole program, and the figures for the other sites add up to it.</p>{% elif site %}<p class="notice calm">This is {{ site }}'s share of the contacts. The figures for the other sites add up to the whole program's.</p>{% endif %}{% endif %}{% endif %}
 
 {# ------------------------------------------------------------------ actuals #}
 {% if tab == 'actuals' %}
@@ -288,6 +288,42 @@
   <h3>Forecast</h3>{{ grid_table('tbl-fc', 'Forecast contacts', forecast_grid, 'calls') }}{% endif %}
 </section>
 {% endif %}
+{% endif %}
+
+{# ------------------------------------------------------------------ the months ahead #}
+{% if tab == 'outlook' %}
+{% set carry_q = {'program': key, 'channel': channel, 'site': site or none} %}
+<section class="panel" aria-labelledby="out-h"><h2 id="out-h">{{ channel }}: the months ahead</h2>
+  <p class="dim">From the {{ channel|lower }} history: its trend and the season of each week of the year the history has seen, with your year-over-year rate, events, promotions and holidays on the days they touch. The range is a guide either side, not a statistic: wider where the history has not seen that time of year.</p>
+  <p class="chan" role="group" aria-label="Months ahead"><span class="dim">Months ahead</span> {% for n in (3, 6, 12, 18, 24) %}<a class="button{% if months_text == n|string %} primary{% endif %}" href="{{ url_for('volumes_page', tab='outlook', level=level, months=n, **carry_q) }}">{{ n }}</a> {% endfor %}</p>
+  <p class="chan" role="group" aria-label="Level"><span class="dim">Show</span> {% for k, name in (('year', 'Year: the months'), ('week', 'Weeks'), ('day', 'Days')) %}<a class="button{% if level == k %} primary{% endif %}" href="{{ url_for('volumes_page', tab='outlook', level=k, months=months_text, **carry_q) }}">{{ name }}</a> {% endfor %}</p>
+  {% if o_error %}<p class="notice" role="alert">{{ o_error }}</p>{% endif %}
+  {% if o %}
+  {% for n in o.notes %}<p class="notice calm">{{ n }}</p>{% endfor %}
+  {% if level == 'year' %}
+  <div class="scroll" role="region" tabindex="0" aria-label="Months ahead (scrolls sideways)"><table class="edgrid"><thead><tr><th scope="col">Month</th><th scope="col">Days counted</th><th scope="col">Expected</th><th scope="col">Low</th><th scope="col">High</th><th scope="col">How it was worked out</th></tr></thead><tbody>
+    {% for m in o.months %}<tr><th scope="row">{{ m.label }}{% if m.partial %} <span class="vol-days">part of the month</span>{% endif %}</th><td>{{ m.days }}</td><td>{{ '{:,}'.format(m.expected) }}</td><td>{{ '{:,}'.format(m.low) }}</td><td>{{ '{:,}'.format(m.high) }}</td>
+      <td>{% for b, n in m.bases.items() %}{{ basis_words[b] }}{% if m.bases|length > 1 %} ({{ n }} week{{ 's' if n != 1 }}){% endif %}{% if not loop.last %}; {% endif %}{% endfor %}</td></tr>{% endfor %}
+    <tr><th scope="row">All {{ o.months|length }} months</th><td>-</td><td><b>{{ '{:,}'.format(o.total.expected) }}</b></td><td>{{ '{:,}'.format(o.total.low) }}</td><td>{{ '{:,}'.format(o.total.high) }}</td><td></td></tr></tbody></table></div>
+  {% elif level == 'week' %}
+  <div class="scroll" role="region" tabindex="0" aria-label="Weeks ahead (scrolls sideways)"><table class="edgrid"><thead><tr><th scope="col">Week starting</th><th scope="col">Expected</th><th scope="col">Low</th><th scope="col">High</th><th scope="col">How it was worked out</th><th scope="col">Forecast</th></tr></thead><tbody>
+    {% for w in o.weeks %}<tr><th scope="row">{{ w.week }}</th><td>{{ '{:,}'.format(w.expected) }}</td><td>{{ '{:,}'.format(w.low) }}</td><td>{{ '{:,}'.format(w.high) }}</td><td>{{ basis_words[w.basis] }}</td>
+      <td><a href="{{ url_for('volumes_page', tab='forecast', program=key, channel=channel, week=w.week, total=w.expected, site=site or none) }}">Open this week<span class="sr-only"> of {{ w.week }}</span></a></td></tr>{% endfor %}</tbody></table></div>
+  <p class="dim">Open this week puts the expected total into the Forecast tab, where the intervals and the people needed are worked out. Nothing is saved until you save it there.</p>
+  {% else %}
+  <p class="chan" role="group" aria-label="Week">{% for w in o.weeks[:30] %}<a class="button{% if owk and owk.week == w.week %} primary{% endif %}" href="{{ url_for('volumes_page', tab='outlook', level='day', months=months_text, owk=w.week, **carry_q) }}">{{ w.week[5:] }}</a> {% endfor %}</p>
+  {% if owk %}<div class="scroll" role="region" tabindex="0" aria-label="Days of the week (scrolls sideways)"><table class="edgrid"><caption>The week starting {{ owk.week }}: {{ '{:,}'.format(owk.expected) }} expected, {{ basis_words[owk.basis] }}</caption><thead><tr><th scope="col">Day</th><th scope="col">Date</th><th scope="col">Expected</th><th scope="col">Low</th><th scope="col">High</th><th scope="col">Events and holidays</th></tr></thead><tbody>
+    {% for d in owk.days %}<tr><th scope="row">{{ d.weekday }}</th><td>{{ d.date }}</td><td>{{ '{:,}'.format(d.expected) }}</td><td>{{ '{:,}'.format(d.low) }}</td><td>{{ '{:,}'.format(d.high) }}</td><td>{% if d.events %}{{ d.events|join(', ') }}: {{ '%+g' % ((d.factor - 1) * 100) }}%{% else %}-{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+  <p><a class="button" href="{{ url_for('volumes_page', tab='forecast', program=key, channel=channel, week=owk.week, total=owk.expected, site=site or none) }}">Open this week in the forecast</a> <span class="dim">for the intervals and the people needed.</span></p>{% endif %}
+  {% endif %}
+  <p><a class="button" href="{{ url_for('volumes_outlook_xlsx', months=months_text, **carry_q) }}">Download months, weeks and days (Excel)</a></p>
+  {% endif %}
+</section>
+{% if can('volumes_edit') %}<section class="panel" aria-labelledby="idx-h"><h2 id="idx-h">Seasonal index for months the history has not seen</h2>
+  <p class="dim">Only used for weeks of the year the history does not cover. Type a percent of the trend for a month, for example 120 for a month you expect to run 20% above the trend, from a sister program or last year's experience. Leave it empty to leave the month as the trend alone.</p>
+  <form method="post" action="{{ url_for('volumes_outlook_index') }}" class="ins-filter" aria-label="Seasonal index"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="channel" value="{{ channel }}">
+    <div class="exp-row">{% for m in range(1, 13) %}<label>{{ month_names[m - 1] }} <input type="text" inputmode="decimal" name="idx.{{ m }}" value="{{ '%g' % index[m] if m in index else '' }}" placeholder="100" autocomplete="off"></label>{% endfor %}</div>
+    <p><button class="primary" type="submit">Save the index</button></p></form></section>{% endif %}
 {% endif %}
 
 {# ------------------------------------------------------------------ settings #}

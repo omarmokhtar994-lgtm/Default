@@ -4,6 +4,7 @@ and how the week went. Pages: Actuals, Forecast and needs, How we did, Settings 
 (intervals down, Sun to Sat across) with a button that copies it for Excel."""
 from __future__ import annotations
 
+import calendar
 import io
 import re
 import secrets
@@ -30,8 +31,9 @@ from ..volumes_formulas import formulas_workbook
 from ..volumes_io import CHANNELS, DAY_NAMES, FIRST_DAY, ParsedVolumes, parse_grid, parse_long, parse_pasted, read_table
 
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-TABS = (("actuals", "Actuals"), ("forecast", "Forecast and needs"), ("how", "How we did"), ("settings", "Settings"))
+TABS = (("actuals", "Actuals"), ("forecast", "Forecast and needs"), ("outlook", "Months ahead"), ("how", "How we did"), ("settings", "Settings"))
 HELD_MINUTES = 20
+BASIS_WORDS = {"learned": "learned from the history", "unseen": "no seasonal pattern yet", "typed": "your typed index", "trend": "trend only"}
 MAX_PASTE = 400_000
 
 
@@ -289,6 +291,22 @@ def register(app, ctx) -> None:
                 ctxt["chart_otf"] = charts.columns([w["week"][5:] for w in r["trend"]], [round(w["otf"], 1) if w["otf"] is not None else None
                                                                                      for w in r["trend"]], unit="%",
                                                    label="Offered over forecast by week", y_max=max(120, max(w["otf"] or 0 for w in r["trend"]) * 1.1))
+        elif tab == "outlook":
+            names = [x["name"] for x in vb.sites(key)["sites"]]
+            site = request.values.get("site", "") if request.values.get("site", "") in names else ""
+            level = request.values.get("level", "year") if request.values.get("level", "year") in ("year", "week", "day") else "year"
+            months_text = request.values.get("months", "6").strip() or "6"
+            outlook, o_error = None, ""
+            try:
+                outlook = vb.outlook(key, channel, months=months_text, site=site or None)
+            except ValueError as exc:
+                o_error = str(exc)
+            picked = None
+            if outlook:
+                want = request.values.get("owk", "")
+                picked = next((w for w in outlook["weeks"] if w["week"] == want), outlook["weeks"][0] if outlook["weeks"] else None)
+            ctxt.update(o=outlook, o_error=o_error, level=level, months_text=months_text, site=site, site_names=names, owk=picked,
+                        index=vb.outlook_index(key, channel), basis_words=BASIS_WORDS, month_names=[calendar.month_name[m] for m in range(1, 13)])
         elif tab == "settings":
             ctxt.update(settings=vb.settings(key), labels=LABELS, defaults=DEFAULTS, hours_view=_hours_view(vb.open_hours(key)), sites_doc=vb.sites(key), site_gaps=_site_gaps(vb.sites(key)))
         return render_template("volumes.html", **ctxt)
@@ -537,6 +555,58 @@ def register(app, ctx) -> None:
         ctx._record("volumes_sites_saved", program=key, subject="Volumes", detail=said)
         flash(said)
         return redirect(url_for("volumes_page", tab="settings", program=key), code=303)
+
+    @app.route("/volumes/outlook-index", methods=["POST"])
+    @login_required
+    def volumes_outlook_index():  # type: ignore[no-untyped-def]
+        """The seasonal index (percent of the trend) typed for the months of a channel the history has not seen; all checked before any is kept."""
+        vb, key = _book(), _unit()
+        channel = _channel(request.form.get("channel", ""))
+        try:
+            vb.set_outlook_index(key, channel, {m: request.form.get(f"idx.{m}", "") for m in range(1, 13) if f"idx.{m}" in request.form}, g.user["id"])
+        except ValueError as exc:
+            flash(str(exc))
+            return _render("outlook")
+        ctx._record("volumes_outlook_saved", program=key, subject=channel, detail="seasonal index for the months ahead")
+        flash("Saved the seasonal index.")
+        return redirect(url_for("volumes_page", tab="outlook", program=key, channel=channel), code=303)
+
+    @app.route("/volumes/outlook.xlsx")
+    @login_required
+    def volumes_outlook_xlsx():  # type: ignore[no-untyped-def]
+        """The months, weeks and days ahead for a channel (and a site), one sheet each, with the range and how each figure was worked out."""
+        vb, key = _book(), _unit()
+        channel = _channel(request.args.get("channel", ""))
+        site = request.args.get("site", "")
+        try:
+            o = vb.outlook(key, channel, months=request.args.get("months", "6"), site=site or None)
+        except ValueError as exc:
+            flash(str(exc))
+            return redirect(url_for("volumes_page", tab="outlook", program=key, channel=channel), code=303)
+        wb = Workbook()
+        wb.active.title = "Months"
+        months, weeks, days = wb.active, wb.create_sheet("Weeks"), wb.create_sheet("Days")
+        months.append(["Month", "Days counted", "Expected", "Low", "High", "How it was worked out"])
+        for m in o["months"]:
+            months.append([m["label"], m["days"], m["expected"], m["low"], m["high"], ", ".join(f"{BASIS_WORDS[b]} ({n})" for b, n in m["bases"].items())])
+        weeks.append(["Week starting", "Basis", "Expected", "Low", "High"])
+        days.append(["Date", "Day", "Expected", "Low", "High", "Change from events", "Events"])
+        for w in o["weeks"]:
+            weeks.append([w["week"], BASIS_WORDS[w["basis"]], w["expected"], w["low"], w["high"]])
+            for d in w["days"]:
+                days.append([d["date"], d["weekday"], d["expected"], d["low"], d["high"], round((d["factor"] - 1) * 100, 1), ", ".join(d["events"])])
+        for ws in (months, weeks, days):
+            for cell in ws[1]:
+                cell.font = Font(bold=True)
+        for note in o["notes"]:
+            months.append([])
+            months.append([note])
+        out = io.BytesIO()
+        wb.save(out)
+        out.seek(0)
+        tag = ("_" + re.sub(r"[^A-Za-z0-9]+", "_", site).strip("_")) if site else ""
+        ctx._record("downloaded", program=key, subject="Volumes months ahead", detail=f"{channel}{' ' + site if site else ''}")
+        return send_file(out, as_attachment=True, download_name=f"Months_ahead_{channel}{tag}_{o['start']}.xlsx", mimetype=XLSX)
 
     # ------------------------------------------------------------------ downloads
     def _sheet(rows: List[List[Any]], title: str) -> io.BytesIO:

@@ -14,8 +14,16 @@ import math
 import unittest
 from datetime import date, timedelta
 
+import html
+import io
+
+from openpyxl import load_workbook
+
 from webapp import outlook as O
+from webapp.programs import ProgramBook
 from webapp.tests.test_bi_volumes import KEY, SUN, book, weights
+from webapp.tests.test_bi_volumes_routes import PASSWORD, TODAY, _Volumes
+from webapp.tests.test_runs import sign_in, token
 
 FIRST = date(2025, 1, 5)    # a Sunday
 
@@ -284,6 +292,95 @@ class TheOutlookInTheBook(unittest.TestCase):
         for bad in (0, 25, -1):
             with self.assertRaises(ValueError):
                 self.outlook(bad)
+
+
+class TheOutlookOnThePage(_Volumes):
+    THIS_SUNDAY = TODAY - timedelta(days=(TODAY.weekday() + 1) % 7)
+
+    def setUp(self):
+        self.store.set_volume_settings(self.alpha, {}, 1)
+        self.store.set_volume_drivers(self.alpha, {}, 1)
+        long_history(self.store, 60, key=self.alpha, last=self.THIS_SUNDAY)
+
+    def tearDown(self):
+        self.store.set_volume_settings(self.alpha, {}, 1)
+        self.store.set_volume_drivers(self.alpha, {}, 1)
+
+    def get(self, client=None, **q):
+        client = client or sign_in(self.app, "plan_a", PASSWORD)
+        return html.unescape(client.get("/volumes", query_string={"program": self.alpha, "tab": "outlook", "channel": "Phone", **q}).get_data(as_text=True))
+
+    def test_the_year_level_lists_the_months_with_a_range_and_a_basis(self):
+        page = self.get(months="6")
+        self.assertIn("Expected", page)
+        self.assertRegex(page, r"(Nov|Dec|Jan|Feb|Mar|Apr|May)\s+20\d\d")
+        self.assertIn("learned from the history", page)
+
+    def test_the_week_level_opens_a_week_in_the_forecast_with_its_total(self):
+        page = self.get(level="week", months="2")
+        self.assertRegex(page, r'href="/volumes\?[^"]*tab=forecast[^"]*total=\d+')
+
+    def test_the_day_level_shows_the_days_events_and_all(self):
+        week = (self.THIS_SUNDAY + timedelta(weeks=3)).isoformat()
+        self.vb.add_driver(self.alpha, "events", {"kind": "Holiday", "name": "Founders day", "channels": ["Phone"], "start": week, "end": week,
+                                                  "change": -30}, 1)
+        page = self.get(level="day", owk=week, months="3")
+        self.assertIn("Founders day", page)
+        self.assertIn("-30%", page)
+
+    def test_a_short_history_says_how_much_is_needed(self):
+        self.store.delete_volume_days(self.alpha, "Phone", "2015-01-01", "2099-12-31")
+        long_history(self.store, 20, key=self.alpha, last=self.THIS_SUNDAY)
+        self.assertIn("26 weeks", self.get(months="6"))
+
+    def test_a_site_is_picked_and_says_it_is_its_share(self):
+        doc = {"sites": [{"name": "Internal", "lob": ""}, {"name": "Sutherland", "lob": ""}],
+               "rules": [{"channel": "Phone", "days": list(range(7)), "from": 0, "to": 1440, "shares": {"Internal": 60, "Sutherland": 40}}]}
+        self.vb.set_sites(self.alpha, doc, 1)
+        try:
+            self.assertIn("Sutherland", self.get())
+            self.assertIn("Internal's share", self.get(site="Internal"))
+        finally:
+            self.vb.set_sites(self.alpha, {"sites": [], "rules": []}, 1)
+
+    def test_a_bad_request_is_a_word_not_a_crash(self):
+        for q in ({"months": "abc"}, {"months": "99"}, {"months": "0"}, {"level": "x"}, {"owk": "not-a-date"}, {"channel": "Fax"}, {"site": "Nowhere"}):
+            with self.subTest(q=q):
+                client = sign_in(self.app, "plan_a", PASSWORD)
+                self.assertEqual(client.get("/volumes", query_string={"program": self.alpha, "tab": "outlook", **q}).status_code, 200)
+        self.assertIn("1 to 24", self.get(months="99"))
+
+    def test_the_index_for_a_month_is_typed_saved_and_a_bad_one_saves_nothing(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        got = client.post("/volumes/outlook-index", data={"program": self.alpha, "csrf_token": token(client), "channel": "Phone", "idx.12": "130", "idx.1": ""},
+                          follow_redirects=True)
+        self.assertEqual(self.vb.outlook_index(self.alpha, "Phone"), {12: 130.0})
+        bad = client.post("/volumes/outlook-index", data={"program": self.alpha, "csrf_token": token(client), "channel": "Phone", "idx.2": "5", "idx.12": "200"},
+                          follow_redirects=True)
+        self.assertIn("February", html.unescape(bad.get_data(as_text=True)))
+        self.assertEqual(self.vb.outlook_index(self.alpha, "Phone"), {12: 130.0})
+
+    def test_a_team_manager_looks_but_cannot_change_and_the_token_is_needed(self):
+        tm = sign_in(self.app, "tm_a", PASSWORD)
+        self.assertEqual(tm.get("/volumes", query_string={"program": self.alpha, "tab": "outlook"}).status_code, 200)
+        self.assertEqual(tm.post("/volumes/outlook-index", data={"program": self.alpha, "csrf_token": token(tm), "channel": "Phone", "idx.1": "120"}).status_code, 403)
+        planner = sign_in(self.app, "plan_a", PASSWORD)
+        self.assertEqual(planner.post("/volumes/outlook-index", data={"program": self.alpha, "channel": "Phone", "idx.1": "120"}).status_code, 400)
+
+    def test_the_download_has_the_three_levels_and_they_agree(self):
+        got = sign_in(self.app, "plan_a", PASSWORD).get("/volumes/outlook.xlsx", query_string={"program": self.alpha, "channel": "Phone", "months": "3"})
+        self.assertEqual(got.status_code, 200)
+        wb = load_workbook(io.BytesIO(got.get_data()))
+        self.assertEqual(wb.sheetnames, ["Months", "Weeks", "Days"])
+        def total(name, col):
+            ws = wb[name]
+            return sum(r[col] for r in ws.iter_rows(min_row=2, values_only=True) if isinstance(r[col], (int, float)))
+        months, weeks = total("Months", 2), total("Weeks", 2)
+        self.assertGreater(months, 0)
+        self.assertAlmostEqual(months, weeks, delta=weeks * 0.12)    # the first and last weeks are cut by the month ends
+
+    def test_the_tab_is_in_the_menu_of_the_volumes_pages(self):
+        self.assertIn('tab=outlook', html.unescape(sign_in(self.app, "plan_a", PASSWORD).get("/volumes", query_string={"program": self.alpha, "tab": "settings"}).get_data(as_text=True)))
 
 
 if __name__ == "__main__":

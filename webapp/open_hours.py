@@ -75,7 +75,8 @@ def apply(needs: Sequence[float], open_ranges: Optional[Sequence[Tuple[int, int]
     return out
 
 
-def _time(text: str, label: str) -> int:
+def clock_minutes(text: str, label: str) -> int:
+    """A time typed as 09:00 (up to 24:00) as minutes from midnight; ValueError in words, starting with ``label``, otherwise."""
     found = TIME.match(text.strip())
     if not found:
         raise ValueError(f"{label}: type the time as 09:00 (24 hour clock).")
@@ -105,7 +106,7 @@ def from_form(form: Dict[str, Any], channel: str) -> Dict[str, Any]:
             continue
         if not opening or not closing:
             raise ValueError(f"{label}: type both the opening and the closing time, or tick closed.")
-        start, end = _time(opening, label), _time(closing, label)
+        start, end = clock_minutes(opening, label), clock_minutes(closing, label)
         if start >= 1440:
             raise ValueError(f"{label}: the opening time is before 24:00.")
         if end == start:

@@ -21,9 +21,11 @@ import statistics
 from datetime import date, timedelta
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
+from .open_hours import clock_minutes
 from .volumes_io import CHANNELS
 
 KINDS = ("Promotion", "Launch", "Outage", "Holiday", "Other")
+HOURS = ("normal", "closed", "reduced")   # Phase BL: the day is worked as usual, not at all, or only inside a window the planner types
 METHODS = ("measured", "growth")        # the trend the history shows, or the year-over-year rate the planner types
 MAX_ROWS = 40                           # events, and AI periods, per list
 MAX_EVENT_DAYS = 366
@@ -123,8 +125,28 @@ def clean_event(raw: Any) -> Dict[str, Any]:
         _channel(ch, "A channel")
     start, end = _date(raw.get("start"), "The start date"), _date(raw.get("end"), "The end date")
     _span(start, end, MAX_EVENT_DAYS)
-    change = _change(raw.get("change"), "The change")
-    if change == 0:
+    hours = raw.get("hours") or "normal"
+    if hours not in HOURS:
+        raise ValueError(f"The hours are {', '.join(HOURS)}.")
+    window = None
+    if hours == "reduced":
+        opening, closing = str(raw.get("open_from") or "").strip(), str(raw.get("open_to") or "").strip()
+        saved = raw.get("window")
+        if not opening and not closing and isinstance(saved, (list, tuple)) and len(saved) == 2 \
+                and all(isinstance(v, int) and not isinstance(v, bool) for v in saved) and 0 <= saved[0] < 1440 and saved[0] < saved[1] <= saved[0] + 1440:
+            window = [saved[0], saved[1]]            # an event kept earlier: its window is already minutes
+        else:
+            if not opening or not closing:
+                raise ValueError("Type the opening and the closing time for reduced hours, for example 10:00 and 14:00.")
+            begin, finish = clock_minutes(opening, "The opening time"), clock_minutes(closing, "The closing time")
+            if begin >= 1440:
+                raise ValueError("The opening time is before 24:00.")
+            if finish == begin:
+                raise ValueError("The opening and the closing time are the same. Type different times, or choose closed.")
+            window = [begin, finish if finish > begin else finish + 1440]
+    change_raw = raw.get("change")
+    change = 0.0 if hours != "normal" and (change_raw is None or str(change_raw).strip() == "") else _change(change_raw, "The change")
+    if change == 0 and hours == "normal":
         raise ValueError("The change is not zero: type a percent such as 25 or -10.")
     after_days_raw = raw.get("after_days", 0)
     after_days = 0 if after_days_raw in (None, "") else _number(after_days_raw, "The days after")
@@ -138,7 +160,39 @@ def clean_event(raw: Any) -> Dict[str, Any]:
     if after_days and after_change == 0:
         raise ValueError("Say the change in percent for the days after, or set the days to 0.")
     return {"kind": kind, "name": _name(raw.get("name")), "channels": [ch for ch in CHANNELS if ch in channels],
-            "start": start.isoformat(), "end": end.isoformat(), "change": change, "after_days": after_days, "after_change": after_change}
+            "start": start.isoformat(), "end": end.isoformat(), "change": change, "after_days": after_days, "after_change": after_change,
+            "hours": hours, "window": window}
+
+
+def event_hours(events: Iterable[Dict[str, Any]], channel: str, day: date) -> Optional[Dict[str, Any]]:
+    """The hours an event sets for ``channel`` on ``day`` (Phase BL): None when none does, else ``{"hours": "closed"}`` or
+    ``{"hours": "reduced", "window": [from, to]}``. Closed wins over reduced; the first reduced window wins over a later one."""
+    found: Optional[Dict[str, Any]] = None
+    for e in events:
+        if e.get("hours", "normal") == "normal" or channel not in e["channels"] or not _on(e["start"]) <= day <= _on(e["end"]):
+            continue
+        if e["hours"] == "closed":
+            return {"hours": "closed"}
+        found = found or {"hours": "reduced", "window": list(e["window"])}
+    return found
+
+
+def holiday_weeks(events: Iterable[Dict[str, Any]], channel: str, week_start: date) -> Dict[str, List[str]]:
+    """The weeks before ``week_start`` (Sunday starts, ISO text) that hold a Holiday event for ``channel``, with the holidays' names. Such a
+    week is not an ordinary one: the forecast leaves it out of the pattern the weekdays are learned from."""
+    out: Dict[str, List[str]] = {}
+    for e in events:
+        if e["kind"] != "Holiday" or channel not in e["channels"]:
+            continue
+        day, last = _on(e["start"]), _on(e["end"])
+        while day <= last:
+            start = day - timedelta(days=(day.weekday() + 1) % 7)
+            if start < week_start:
+                names = out.setdefault(start.isoformat(), [])
+                if e["name"] not in names:
+                    names.append(e["name"])
+            day += timedelta(days=1)
+    return dict(sorted(out.items()))
 
 
 def clean_ai(raw: Any) -> Dict[str, Any]:

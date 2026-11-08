@@ -248,7 +248,8 @@ class VolumeBook:
         return self._keep(key, D.with_skip_weeks(self.drivers(key), weeks), user_id)
 
     # ---------------------------------------------------------------- the forecast
-    def _needs(self, key: str, channel: str, calls: List[List[int]], aht: float, s: Dict[str, Any]):
+    def _needs(self, key: str, channel: str, calls: List[List[int]], aht: float, s: Dict[str, Any], dates: Sequence[date] = (),
+               events: Sequence[Dict[str, Any]] = ()):
         step_s = self.step(key) * 60
         hours = self.open_hours(key)[channel]
         needs: List[List[float]] = []
@@ -269,6 +270,9 @@ class VolumeBook:
                 n_row.append(n)
                 s_row.append(sl)
             open_ranges = H.ranges(hours, d)  # Phase BL: nobody outside the hours, at least the minimum cover inside them
+            special = D.event_hours(events, channel, dates[d]) if d < len(dates) else None
+            if special is not None:  # a holiday or event on this date sets the hours for the day: closed, or only inside its window
+                open_ranges = [] if special["hours"] == "closed" else H.ranges({"days": {str(d): special["window"]}}, d)
             if open_ranges is not None:
                 kept = H.apply(n_row, open_ranges, self.step(key), 0 if channel == "Email" else hours["min_cover"])
                 for i, (was, now) in enumerate(zip(n_row, kept)):
@@ -302,14 +306,15 @@ class VolumeBook:
             out[site_day(d.weekday())] = d
         return out  # type: ignore[return-value]
 
-    def _read(self, key: str, channel: str, week_start: date, wanted: int, skip: Sequence[str], out: Optional[Dict[str, Any]] = None):
+    def _read(self, key: str, channel: str, week_start: date, wanted: int, skip: Sequence[str], out: Optional[Dict[str, Any]] = None,
+              reasons: Optional[Dict[str, str]] = None):
         """The history, the weeks chosen from it, their shape and their weekly totals. ValueError in words when the history cannot carry a shape; the
         weeks chosen are put into ``out`` first, so they are shown even then."""
         step = self.step(key)
         hist = self.history(key, channel, week_start, wanted)
         if not hist:
             raise ValueError(f"There is no {channel} history in the weeks before this week. Add actual volumes first.")
-        choice = F.choose_weeks(hist, step, week_start, weeks=wanted, exclude_weeks=skip)
+        choice = F.choose_weeks(hist, step, week_start, weeks=wanted, exclude_weeks=skip, exclude_reasons=reasons)
         if out is not None:
             out["weeks"] = {"wanted": wanted, "used": [d.isoformat() for d in choice.used], "skipped": [list(x) for x in choice.skipped], "short": choice.short}
         profile = F.build_profile(hist, step, choice)
@@ -431,7 +436,13 @@ class VolumeBook:
         use_saved = typed is None and not typed_days and grid_ok
         problem, profile, choice, points = "", None, None, []
         try:
-            _, choice, profile, points = self._read(key, channel, week_start, wanted, skip, out)
+            held = D.holiday_weeks(doc["events"], channel, week_start)  # Phase BL: a week with a holiday is not an ordinary week
+            reasons = {w: "a holiday: " + ", ".join(names) for w, names in held.items()}
+            _, choice, profile, points = self._read(key, channel, week_start, wanted, sorted(set(skip) | set(held)), out, reasons)
+            left = [(w, r) for w, r in choice.skipped if w in held and w not in skip]
+            if left:
+                out["notes"].append("Left out of the weekday pattern because of a holiday: " + "; ".join(f"week of {w} ({', '.join(held[w])})" for w, _ in left[:5])
+                                    + (f" and {len(left) - 5} more" if len(left) > 5 else "") + ".")
         except ValueError as exc:
             problem = str(exc)
         sug, why_not = None, problem
@@ -473,7 +484,7 @@ class VolumeBook:
             out["profile"] = self._profile_note(profile)
         out.update(calls=calls, total=total_used, source=source, aht=aht, day_totals={d: sum(calls[d]) for d in range(7)})
         if self.uses_erlang(key):
-            out["needs"], out["service"] = self._needs(key, channel, calls, aht, s)
+            out["needs"], out["service"] = self._needs(key, channel, calls, aht, s, dates, doc["events"])
         return out
 
     def view_in(self, key: str, f: Dict[str, Any], week_start: date, zone: Any) -> Dict[str, Any]:

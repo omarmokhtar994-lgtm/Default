@@ -220,7 +220,7 @@ def register(app, ctx) -> None:
         ctxt: Dict[str, Any] = {"tab": tab, "tabs": TABS, "key": key, "label": ProgramBook(store).label(key), "channel": channel,
                                 "channels": CHANNELS, "coverage": coverage, "step": step, "erlang": vb.uses_erlang(key),
                                 "measure": vb.measure_of(key), "day_names": DAY_NAMES, "today": today.isoformat(), "grid_error": "", "draft": {}, "kinds": drivers_mod.KINDS, "lambda_text": lambda_definitions(), "zones": ZONES,
-                                "zone": vb.zone(key), "zone_name": dict(ZONES)[vb.zone(key)].split(" (")[0], **extra}
+                                "zone": vb.zone(key), "zone_name": dict(ZONES)[vb.zone(key)].split(" (")[0], "clock": _clock, **extra}
         if tab == "actuals":
             ctxt["weeks"] = _week_choices(key, today - timedelta(weeks=1), 10, 1)
         elif tab == "forecast":
@@ -334,7 +334,8 @@ def register(app, ctx) -> None:
             if action == "add_event":
                 row = {"kind": form.get("kind", ""), "name": form.get("name", ""), "channels": form.getlist("channels"), "start": form.get("start", ""),
                        "end": form.get("end", ""), "change": form.get("change", ""), "after_days": form.get("after_days", ""),
-                       "after_change": form.get("after_change", "")}
+                       "after_change": form.get("after_change", ""), "hours": form.get("hours", ""), "open_from": form.get("open_from", ""),
+                       "open_to": form.get("open_to", "")}
                 vb.add_driver(key, "events", row, uid)
                 said = f"Added the {row['kind'].lower()} {' '.join(row['name'].split())[:60]}."
             elif action == "add_ai":

@@ -63,7 +63,7 @@ _NAMES = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
 
 def choose_weeks(days: Dict[date, List[float]], step: int, week_start: date, weeks: int = 6, exclude_weeks: Iterable[str] = (),
-                 extra: int = EXTRA_LOOKBACK) -> WeekChoice:
+                 extra: int = EXTRA_LOOKBACK, exclude_reasons: Optional[Dict[str, str]] = None) -> WeekChoice:
     """The ``weeks`` most recent clean whole weeks before the week starting ``week_start``. A week is clean when every open weekday has its day, no day
     is far below or above its weekday's usual, no day holds only part of its data, the week's total is near the usual, and the planner has not left it
     out. A week that is not clean is left out as a whole (with its reason) and the next older clean week steps in, so every weekday is read from the
@@ -109,7 +109,7 @@ def choose_weeks(days: Dict[date, List[float]], step: int, week_start: date, wee
 
     def why_not(start: date, g: Dict[int, Tuple[date, List[float]]]) -> Optional[str]:
         if start.isoformat() in named:
-            return "left out by you"
+            return (exclude_reasons or {}).get(start.isoformat(), "left out by you")   # Phase BL: a holiday names itself
         missing = complete(g)
         if missing:
             return missing

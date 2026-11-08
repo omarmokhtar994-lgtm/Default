@@ -18,7 +18,7 @@ from openpyxl import load_workbook
 from webapp import break_plan as BP
 from webapp.break_rules_cli import rules as break_rules
 from webapp.ready import check_ready
-from webapp.tests.test_bl_engine_parttime import workbook
+from webapp.tests.test_bl_engine_parttime import EXAMPLE, workbook
 from webapp.tests.test_ready import make_ready
 
 REPO = Path(__file__).resolve().parents[2]
@@ -66,7 +66,8 @@ class TheBreakRulesTheWebsiteUses(unittest.TestCase):
 
     def test_without_the_columns_the_rules_are_the_workbooks(self):
         got = self.rules()
-        self.assertEqual(got["by_length"], [])
+        # The example workbook carries its own break set for long shifts; with no new columns the rules are exactly its own, nothing added.
+        self.assertEqual(got["by_length"], break_rules(EXAMPLE, ENGINE)["by_length"])
         self.assertEqual(BP.slots_for(got, 300), BP.slots_for(got, 540))
 
     def test_a_rows_breaks_per_day_is_the_break_set_of_its_shift_length(self):

@@ -24,6 +24,20 @@ class TheHoursOfOneChannel(unittest.TestCase):
         self.assertIsNone(H.ranges({}, 3))
         self.assertEqual(H.apply([0, 0, 2, 0], None, 360, 1), [0, 0, 2, 0])
 
+    def test_an_unset_day_after_an_overnight_day_keeps_its_volume_after_the_spill(self):
+        """Found by the fuzz test (audit, 2026-11-08): Monday 11:45 to Tuesday 09:30 with Tuesday unset zeroed the rest of Tuesday, as if
+        an unset day had become closed. The spill gets the minimum cover; the rest of the unset day is left alone, as an unset day always is."""
+        hours = H.read({"days": {"1": [705, 2011]}, "min_cover": 1})
+        ranges = H.ranges(hours, 2)
+        free = H.free_from(hours, 2)
+        self.assertEqual((ranges, free), ([(0, 571)], 571))
+        needs = [0.0] * 24
+        needs[3], needs[9], needs[14] = 0, 4, 2          # 03:00 inside the spill and quiet, 09:00 straddles its end, 14:00 after it
+        got = H.apply(needs, ranges, 60, 1, free)
+        self.assertEqual([got[3], got[9], got[14], got[20]], [1, 4, 2, 0])
+        self.assertIsNone(H.free_from(hours, 1))          # a day with its own hours has none
+        self.assertIsNone(H.free_from(H.read({"days": {"1": [705, 2011], "2": None}, "min_cover": 1}), 2))  # a closed day is closed
+
     def test_a_day_closed_needs_nobody(self):
         hours = H.read({"days": {"0": None}, "min_cover": 1})
         self.assertEqual(H.ranges(hours, 0), [])

@@ -468,10 +468,12 @@ class VolumeBook:
                 n_row.append(n)
                 s_row.append(sl)
             open_ranges = H.ranges(hours, d)  # Phase BL: nobody outside the hours, at least the minimum cover inside them
+            free = H.free_from(hours, d)  # an unset day that only holds yesterday's overnight spill keeps the rest of its day
             special = D.event_hours(events, channel, dates[d]) if d < len(dates) else None
             if special is not None:  # a holiday or event on this date sets the hours for the day: closed, or only inside its window
                 open_ranges = [] if special["hours"] == "closed" else H.ranges({"days": {str(d): special["window"]}}, d)
-            if channel == "Email" and open_ranges is not None:
+                free = None
+            if channel == "Email" and open_ranges is not None and free is None:
                 # email waits up to 24 hours, so the day's work is spread evenly over the open intervals and none is lost to the closed ones
                 step = self.step(key)
                 open_at = [i for i in range(len(day)) if any(i * step < hi and (i + 1) * step > lo for lo, hi in open_ranges)]
@@ -479,7 +481,7 @@ class VolumeBook:
                 n_row = [each if i in open_at else 0 for i in range(len(day))]
                 open_ranges = None
             if open_ranges is not None:
-                kept = H.apply(n_row, open_ranges, self.step(key), 0 if channel == "Email" else hours["min_cover"])
+                kept = H.apply(n_row, open_ranges, self.step(key), 0 if channel == "Email" else hours["min_cover"], free)
                 for i, (was, now) in enumerate(zip(n_row, kept)):
                     if now != was:
                         c = day[i]

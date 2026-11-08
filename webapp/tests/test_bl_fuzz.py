@@ -56,7 +56,7 @@ class TheOpenHoursAgainstAMinuteByMinuteModel(unittest.TestCase):
                 ranges = H.ranges(hours, d)
                 for step in (15, 30, 60):
                     needs = [r.choice([0, 0.4, 1, 3.7]) for _ in range(1440 // step)]
-                    got = H.apply(needs, ranges, step, hours["min_cover"])
+                    got = H.apply(needs, ranges, step, hours["min_cover"], H.free_from(hours, d))
                     for i, n in enumerate(needs):
                         # open at any minute of the interval?
                         flags = {self.model(days, d, m) for m in range(i * step, (i + 1) * step)}

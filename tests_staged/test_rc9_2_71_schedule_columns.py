@@ -25,8 +25,9 @@ import clean_room_check as C  # noqa: E402
 
 INPUTS = next(p for p in (ROOT / "inputs", REPO / "packages" / "rc9_2_2_production" / "inputs") if p.exists())
 BOOK = INPUTS / "NMG_SP_RC9_1_READY_FIXED.xlsx"
-LONG = [("06:00 - 14:30", "06:00", "14:30"), ("08:00 - 16:30", "08:00", "16:30"), ("10:00 - 18:30", "10:00", "18:30"), ("12:00 - 20:30", "12:00", "20:30")]
-SHORT = [("09:00 - 14:00", "09:00", "14:00"), ("12:00 - 17:00", "12:00", "17:00"), ("15:00 - 20:00", "15:00", "20:00")]
+# Inside the baseline's demand window (evenings), so the engine's demand-fit guard keeps them: a shift out of the window is dropped for everyone.
+LONG = [("17:00 - 01:30", "17:00", "01:30"), ("17:30 - 02:00", "17:30", "02:00")]
+SHORT = [("17:00 - 22:00", "17:00", "22:00"), ("21:00 - 02:00", "21:00", "02:00")]
 NEW = ("shift_minutes", "part_time", "off_days", "breaks_per_day")
 
 

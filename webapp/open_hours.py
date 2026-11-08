@@ -63,15 +63,29 @@ def ranges(hours: Dict[str, Any], day: int) -> Optional[List[Tuple[int, int]]]:
     return [] if own is None else None
 
 
-def apply(needs: Sequence[float], open_ranges: Optional[Sequence[Tuple[int, int]]], step: int, min_cover: int) -> List[float]:
-    """One day's people-needed row with the hours applied: nobody outside them, at least ``min_cover`` inside them."""
+def free_from(hours: Dict[str, Any], day: int) -> Optional[int]:
+    """The minute from which an unset day is left alone because yesterday's overnight hours only spill into its start; None otherwise.
+    A day with its own hours, or closed, has none: after the spill ends it is not open all day."""
+    if str(day) in (hours.get("days") or {}):
+        return None
+    spill = _window((hours.get("days") or {}).get(str((day - 1) % 7)))
+    return spill[1] - 1440 if spill is not None and spill[1] > 1440 else None
+
+
+def apply(needs: Sequence[float], open_ranges: Optional[Sequence[Tuple[int, int]]], step: int, min_cover: int,
+          free_from_minute: Optional[int] = None) -> List[float]:
+    """One day's people-needed row with the hours applied: nobody outside them, at least ``min_cover`` inside them. From
+    ``free_from_minute`` (an unset day after an overnight day) the intervals outside the spill keep what they were."""
     if open_ranges is None:
         return list(needs)
     out: List[float] = []
     for i, n in enumerate(needs):
         start, end = i * step, (i + 1) * step
         inside = any(start < hi and end > lo for lo, hi in open_ranges)
-        out.append(max(n, min_cover) if inside else 0)
+        if inside:
+            out.append(max(n, min_cover))
+        else:
+            out.append(n if free_from_minute is not None else 0)
     return out
 
 

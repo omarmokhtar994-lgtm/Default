@@ -273,6 +273,13 @@ class VolumeBook:
             special = D.event_hours(events, channel, dates[d]) if d < len(dates) else None
             if special is not None:  # a holiday or event on this date sets the hours for the day: closed, or only inside its window
                 open_ranges = [] if special["hours"] == "closed" else H.ranges({"days": {str(d): special["window"]}}, d)
+            if channel == "Email" and open_ranges is not None:
+                # email waits up to 24 hours, so the day's work is spread evenly over the open intervals and none is lost to the closed ones
+                step = self.step(key)
+                open_at = [i for i in range(len(day)) if any(i * step < hi and (i + 1) * step > lo for lo, hi in open_ranges)]
+                each = round(erlang.workload_agents(sum(day) / len(open_at), aht, step_s, s["occupancy"] / 100.0), 2) if open_at and sum(day) else 0
+                n_row = [each if i in open_at else 0 for i in range(len(day))]
+                open_ranges = None
             if open_ranges is not None:
                 kept = H.apply(n_row, open_ranges, self.step(key), 0 if channel == "Email" else hours["min_cover"])
                 for i, (was, now) in enumerate(zip(n_row, kept)):
@@ -485,6 +492,11 @@ class VolumeBook:
         out.update(calls=calls, total=total_used, source=source, aht=aht, day_totals={d: sum(calls[d]) for d in range(7)})
         if self.uses_erlang(key):
             out["needs"], out["service"] = self._needs(key, channel, calls, aht, s, dates, doc["events"])
+            if channel == "Email":
+                for d in range(7):
+                    if sum(calls[d]) > 0 and not any(out["needs"][d]):
+                        out["notes"].append(f"{DAY_NAMES[d]}: {sum(calls[d]):,} emails arrive on a day the channel is closed, so nobody is planned for "
+                                            "them. Open that day on the Settings tab, or move the volume.")
         return out
 
     def view_in(self, key: str, f: Dict[str, Any], week_start: date, zone: Any) -> Dict[str, Any]:

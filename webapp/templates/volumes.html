@@ -65,7 +65,7 @@
     <p id="entry-check" tabindex="-1"><button class="primary" type="submit">Check</button> <button type="button" class="quiet" data-entry-clear>Clear the grid</button> <span class="dim" data-entry-note role="status" aria-live="polite"></span></p>
   </form>
   <h3>3. Upload or paste</h3>
-  <p class="dim">A filled draft, or a file in one of two layouts. <b>One row per interval</b>: Date, Interval, Channel, Offered and, if you have it, AHT in seconds. <b>The input sheet's layout</b>: Interval down the side, Sun to Sat across, for one week and one channel. <a href="{{ url_for('volumes_template') }}">Download the layout examples (Excel)</a>.</p>
+  <p class="dim">A filled draft, or a file in one of two layouts. <b>One row per interval</b>: Date, Interval, Channel, Offered and, if you have it, AHT in seconds. <b>Email only</b> may instead be one row per day: Date, Emails and, if you have it, AHT in seconds. <b>The input sheet's layout</b>: Interval down the side, Sun to Sat across, for one week and one channel. <a href="{{ url_for('volumes_template') }}">Download the layout examples (Excel)</a>.</p>
   <form method="post" action="{{ url_for('volumes_actuals_check') }}" enctype="multipart/form-data" class="ins-filter">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}">
     <div class="exp-row">

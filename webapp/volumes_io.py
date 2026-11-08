@@ -209,8 +209,18 @@ def _header(table: Sequence[Sequence[Any]], want: Sequence[str]) -> Tuple[int, D
 
 
 def parse_long(table: Sequence[Sequence[Any]], channel: Optional[str], step: int, today: date) -> ParsedVolumes:
-    """A long table (a row per date and interval) as rows per channel; ``channel`` fills in for a table with no channel column."""
-    head, cols = _header(table, ("date", "interval", "offered"))
+    """A long table (a row per date and interval) as rows per channel; ``channel`` fills in for a table with no channel column.
+
+    Email may instead be a table of day totals (Date, Emails and an optional AHT; Phase BL, owner, 2026-11-07: "for emails I can share historical day by
+    day, not per interval, as it doesn't matter"). A day total is kept spread evenly over the day's intervals, every email counted."""
+    daily = False
+    try:
+        head, cols = _header(table, ("date", "interval", "offered"))
+    except ValueError:
+        head, cols = _header(table, ("date", "offered"))
+        if channel and _channel(channel) != "Email":
+            raise ValueError("A date and a count with no interval is only for email. Phone and chat need a row for each date and interval.") from None
+        daily = True
     problems: List[str] = []
     by_channel: Dict[str, Dict[Tuple[str, int], Tuple[float, Optional[float]]]] = {}
     default = _channel(channel) if channel else None
@@ -222,7 +232,7 @@ def parse_long(table: Sequence[Sequence[Any]], channel: Optional[str], step: int
             continue
         count += 1
         get = lambda key: row[cols[key]] if key in cols and cols[key] < len(row) else None  # noqa: E731
-        day, minute = date_of(get("date")), minute_of(get("interval"))
+        day, minute = date_of(get("date")), (0 if daily else minute_of(get("interval")))
         ch = _channel(get("channel")) if "channel" in cols else default
         offered, aht = _number(get("offered")), _number(get("aht"))
         why = []
@@ -234,6 +244,8 @@ def parse_long(table: Sequence[Sequence[Any]], channel: Optional[str], step: int
             why.append("the interval is not a time")
         if ch is None:
             why.append("the channel is not Phone, Chat or Email")
+        elif daily and ch != "Email":
+            why.append("a day total is only for email")
         if offered is None:
             why.append("the volume is not a number")
         elif offered < 0 or offered != int(offered) or offered > MAX_VOLUME:
@@ -246,12 +258,21 @@ def parse_long(table: Sequence[Sequence[Any]], channel: Optional[str], step: int
         key = (day.isoformat(), minute)
         cells = by_channel.setdefault(ch, {})
         if key in cells:
-            problems.append(f"Row {n}: {day.isoformat()} {minute // 60:02d}:{minute % 60:02d} {ch} is in the table twice.")
+            problems.append(f"Row {n}: {day.isoformat()} {ch} is in the table twice." if daily
+                            else f"Row {n}: {day.isoformat()} {minute // 60:02d}:{minute % 60:02d} {ch} is in the table twice.")
+            continue
+        if daily:                                           # spread the day evenly, whole emails, none lost
+            slots = 1440 // step
+            for k in range(slots):
+                cells[(day.isoformat(), k * step)] = (float(round((k + 1) * offered / slots) - round(k * offered / slots)), aht)
             continue
         cells[key] = (offered, aht)
     if not count and not problems:
         problems.append("The table has no rows under its header.")
-    return _finish(by_channel, step, problems)
+    parsed = _finish(by_channel, step, problems)
+    if daily and parsed.rows:
+        parsed.notes.append("These are day totals: each day's emails were spread evenly over its intervals, with every email kept.")
+    return parsed
 
 
 def _date_for(week_start: date, day_name: str) -> date:

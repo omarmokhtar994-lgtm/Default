@@ -4305,6 +4305,8 @@ class TheBlScreensInTheBrowser(unittest.TestCase):
         page.goto(self.url("forecast"))
         form = page.locator("form[aria-label='Add a promotion or event']")
         if not form.is_visible():
+            if not page.get_by_text("Promotions, launches, outages and holidays").is_visible():
+                page.get_by_text("Help with the number (optional)").click()
             page.get_by_text("Promotions, launches, outages and holidays").click()
         form.get_by_label("Kind").select_option("Holiday")
         form.get_by_label("Name").fill("Founders day")
@@ -4329,11 +4331,12 @@ class TheBlScreensInTheBrowser(unittest.TestCase):
             expect(page.get_by_role("columnheader", name="Expected")).to_be_visible()
             self.assertLessEqual(self.sideways(page), 1, f"year {name}")
             page.screenshot(path=str(BL_SCREENS / f"months_year_{name}.png"), full_page=True)
-            page.get_by_role("link", name="Weeks", exact=True).click()
+            level = page.locator("p[aria-label='Level']")
+            level.get_by_role("link", name="Weeks", exact=True).click()
             expect(page.get_by_role("link", name="Open this week").first).to_be_visible()
             self.assertLessEqual(self.sideways(page), 1, f"weeks {name}")
             page.screenshot(path=str(BL_SCREENS / f"months_weeks_{name}.png"), full_page=True)
-            page.get_by_role("link", name="Days", exact=True).click()
+            page.locator("p[aria-label='Level']").get_by_role("link", name="Days", exact=True).click()
             expect(page.get_by_role("columnheader", name="Events and holidays")).to_be_visible()
             self.assertLessEqual(self.sideways(page), 1, f"days {name}")
             self.assertEqual(self.small_targets(page, ".chan a.button"), 0, name)

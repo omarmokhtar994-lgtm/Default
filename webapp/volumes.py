@@ -344,7 +344,8 @@ class VolumeBook:
             notes.append("Weeks with a holiday are left out of the trend: " + ", ".join(sorted(held)[:6]) + (" and more" if len(held) > 6 else "") + ".")
         gap = (start - model.last).days // 7 - 1
         if gap > 0:
-            notes.append(f"The history ends the week of {model.last.isoformat()}; the {gap} week{'s' if gap != 1 else ''} since then are projected too.")
+            notes.append(f"The history ends the week of {model.last.isoformat()}; the {gap} week{'s' if gap != 1 else ''} since then "
+                         f"{'are' if gap != 1 else 'is'} projected too.")
         return {"channel": channel, "site": site or "", "start": start.isoformat(), "end": end.isoformat(), "months": month_rows, "weeks": weeks_out,
                 "total": {"expected": sum(m["expected"] for m in month_rows), "low": sum(m["low"] for m in month_rows), "high": sum(m["high"] for m in month_rows)},
                 "notes": notes, "unreached_weeks": unreached, "growth_rate": yoy,

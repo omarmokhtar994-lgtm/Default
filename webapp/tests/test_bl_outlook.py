@@ -254,6 +254,14 @@ class TheOutlookInTheBook(unittest.TestCase):
         self.assertLessEqual(len(got["weeks"]), 9)
         self.assertTrue([n for n in got["notes"] if "26 weeks" in n], got["notes"])
 
+    def test_the_note_about_the_weeks_since_the_history_ended_agrees_in_number(self):
+        long_history(self.store, 60)
+        notes = " ".join(self.outlook(3)["notes"])
+        self.assertIn("the 1 week since then is projected", notes)
+        self.assertNotIn("1 week since then are", notes)
+        got = self.vb.outlook(KEY, "Phone", start=self.NEXT + timedelta(weeks=3), months=3)
+        self.assertIn("the 4 weeks since then are projected", " ".join(got["notes"]))
+
     def test_too_little_history_is_refused_in_words(self):
         long_history(self.store, 2)
         with self.assertRaises(ValueError) as caught:

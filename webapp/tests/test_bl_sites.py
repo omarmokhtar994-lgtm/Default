@@ -238,6 +238,14 @@ class TheSitesOnThePage(_Volumes):
         self.assertIn("Sutherland", page)
         self.assertIn("goes to Internal", page)       # the time no rule covers is listed, with where it goes
 
+    def test_a_rule_lists_only_the_sites_that_take_a_share_without_a_trailing_comma(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        self.post(client, action="add_site", name="Internal")
+        self.post(client, action="add_site", name="Sutherland")
+        self.post(client, action="add_rule", channel="Chat", days=["1"], start="09:00", end="16:00", **{"share.Internal": "100", "share.Sutherland": "0"})
+        page = self.text(client.get("/volumes", query_string={"program": self.alpha, "tab": "settings"}))
+        self.assertRegex(page, r"<td>Internal 100%</td>")
+
     def test_a_bad_rule_saves_nothing_and_says_why(self):
         client = sign_in(self.app, "plan_a", PASSWORD)
         self.post(client, action="add_site", name="A")

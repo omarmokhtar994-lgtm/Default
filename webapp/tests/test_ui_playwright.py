@@ -4229,3 +4229,116 @@ class TheVolumesInTheBrowser(unittest.TestCase):
         page.get_by_role("button", name="Work it out").click()
         page.wait_for_load_state("load")
         expect(page.get_by_text("left out by you")).to_be_visible()
+
+
+BL_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_bl" / "screens"
+
+
+class TheBlScreensInTheBrowser(unittest.TestCase):
+    """Phase BL (owner, 2026-11-07): the new volumes screens in a real browser, on a desktop and on a phone: the hours worked and the sites on the
+    Settings tab, a holiday that closes a day in the event form, and the months ahead at its three levels. Each is used by typing and clicking, none
+    scrolls the page sideways, and the controls are a 24 px target."""
+
+    setUpClass = classmethod(ThePhaseVInTheBrowser.setUpClass.__func__)
+    tearDownClass = classmethod(ThePhaseVInTheBrowser.tearDownClass.__func__)
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+    seed = TheVolumesInTheBrowser.seed
+    url = TheVolumesInTheBrowser.url
+
+    def sideways(self, page):
+        return page.evaluate("document.documentElement.scrollWidth - window.innerWidth")
+
+    def small_targets(self, page, selector):
+        return page.evaluate("""(sel) => [...document.querySelectorAll(sel)].map(e => e.getBoundingClientRect())
+                                  .filter(r => r.width > 0 && r.height > 0 && r.height < 24 - 0.5).length""", selector)
+
+    def clean_up(self):
+        vb = self.app.extensions["volumes"]
+        self.store.set_volume_settings(self.key, {}, 1)
+        self.store.set_volume_drivers(self.key, {}, 1)
+        vb.store.set_volume_settings(self.key, {}, 1)
+
+    def test_hours_and_sites_are_typed_on_the_settings_tab(self):
+        self.seed()
+        self.addCleanup(self.clean_up)
+        BL_SCREENS.mkdir(parents=True, exist_ok=True)
+        for width, name in ((1280, "desktop"), (390, "phone")):
+            page = self.page(width=width, height=900)
+            self.sign_in(page)
+            page.goto(self.url("settings"))
+            page.get_by_label("Phone Mon opens").fill("09:00")
+            page.get_by_label("Phone Mon closes").fill("21:00")
+            page.get_by_label("Phone Sun closed").check()
+            page.get_by_role("button", name="Save the settings").click()
+            expect(page.locator("p.flash").first).to_contain_text("Saved the settings")
+            expect(page.get_by_label("Phone Mon opens")).to_have_value("09:00")
+            expect(page.get_by_label("Phone Sun closed")).to_be_checked()
+            if name == "desktop":
+                page.get_by_label("Site name").fill("Internal")
+                page.get_by_role("button", name="Add the site").click()
+                page.get_by_label("Site name").fill("Sutherland")
+                page.get_by_role("button", name="Add the site").click()
+                expect(page.locator("p.flash").first).to_contain_text("Added the site Sutherland")
+                rule = page.locator("form[aria-label='Add a rule']")
+                rule.get_by_label("Channel").select_option("Email")
+                for day in ("Mon", "Tue", "Wed", "Thu", "Fri"):
+                    rule.get_by_label(day, exact=True).check()
+                rule.get_by_label("From").fill("00:00")
+                rule.get_by_label("To").fill("24:00")
+                rule.get_by_label("Internal").fill("60")
+                rule.get_by_label("Sutherland").fill("40")
+                rule.get_by_role("button", name="Add the rule").click()
+                expect(page.locator("p.flash").first).to_contain_text("Added the rule")
+                expect(page.get_by_role("cell", name="Internal 60%, Sutherland 40%")).to_be_visible()
+                expect(page.get_by_text("has no rule, so it goes to Internal").first).to_be_visible()
+            self.assertLessEqual(self.sideways(page), 1, name)
+            self.assertEqual(self.small_targets(page, "button, a.button"), 0, name)
+            page.screenshot(path=str(BL_SCREENS / f"settings_hours_sites_{name}.png"), full_page=True)
+            page.close()
+
+    def test_a_holiday_that_closes_a_day_is_added_in_the_event_form(self):
+        self.seed()
+        self.addCleanup(self.clean_up)
+        page = self.page(width=1280, height=900)
+        self.sign_in(page)
+        page.goto(self.url("forecast"))
+        form = page.locator("form[aria-label='Add a promotion or event']")
+        if not form.is_visible():
+            page.get_by_text("Promotions, launches, outages and holidays").click()
+        form.get_by_label("Kind").select_option("Holiday")
+        form.get_by_label("Name").fill("Founders day")
+        form.get_by_label("Worked").select_option("closed")
+        form.get_by_role("button", name="Add the event").click()
+        expect(page.locator("p.flash").first).to_contain_text("Added the holiday Founders day")
+        expect(page.get_by_role("cell", name="Closed").first).to_be_visible()
+        self.assertLessEqual(self.sideways(page), 1)
+        BL_SCREENS.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(BL_SCREENS / "holiday_closed_desktop.png"), full_page=True)
+
+    def test_the_months_ahead_at_its_three_levels_on_a_desktop_and_a_phone(self):
+        self.seed()
+        self.addCleanup(self.clean_up)
+        BL_SCREENS.mkdir(parents=True, exist_ok=True)
+        for width, name in ((1280, "desktop"), (390, "phone")):
+            page = self.page(width=width, height=900)
+            self.sign_in(page)
+            page.goto(self.url("outlook"))
+            expect(page.get_by_role("heading", name="Phone: the months ahead")).to_be_visible()
+            expect(page.get_by_text("26 weeks").first).to_be_visible()        # eight weeks of history: the trend alone, and it says so
+            expect(page.get_by_role("columnheader", name="Expected")).to_be_visible()
+            self.assertLessEqual(self.sideways(page), 1, f"year {name}")
+            page.screenshot(path=str(BL_SCREENS / f"months_year_{name}.png"), full_page=True)
+            page.get_by_role("link", name="Weeks", exact=True).click()
+            expect(page.get_by_role("link", name="Open this week").first).to_be_visible()
+            self.assertLessEqual(self.sideways(page), 1, f"weeks {name}")
+            page.screenshot(path=str(BL_SCREENS / f"months_weeks_{name}.png"), full_page=True)
+            page.get_by_role("link", name="Days", exact=True).click()
+            expect(page.get_by_role("columnheader", name="Events and holidays")).to_be_visible()
+            self.assertLessEqual(self.sideways(page), 1, f"days {name}")
+            self.assertEqual(self.small_targets(page, ".chan a.button"), 0, name)
+            page.screenshot(path=str(BL_SCREENS / f"months_days_{name}.png"), full_page=True)
+            page.get_by_role("link", name="Open this week in the forecast").click()
+            page.wait_for_load_state("load")
+            self.assertRegex(page.locator("#total").input_value(), r"^[\d,]+$")
+            page.close()

@@ -84,3 +84,10 @@ owner and the weight stays 2.
 it). The need case trades more than one cost, so no weight found between 2 and 14 keeps it. Three candidates (a hint, 25, 14) failed; the weight stays 2
 and the planner is unchanged. Under weight 2 the empty-breaks scenario misses the normal maximum gap in about 3 of 20 runs (by 15 to 90 minutes),
 which the page reports as a warning. How to settle it is the owner's decision (asked 2026-11-08).
+
+## Owner's decision, 2026-11-08: more solve time for placing blank breaks
+Asked with three choices (more time; a hard gap for blank breaks; keep the warning and re-pin the test); the owner chose more time.
+**Candidate 4:** `PLACING` gets 25 seconds instead of 12 (the solve that places breaks with no time yet; typed breaks keep `KEPT`, moving keeps
+`MOVING`). No rule or weight changes. Cost: Plan channels with blank breaks waits up to about 13 seconds longer per day (the proxy allows 10 minutes).
+**Rule** (written before the runs): over 20 runs of the empty-breaks scenario, zero runs with a problem; then every module that plans a channel day
+passes twice in a row with the change.

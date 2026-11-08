@@ -1123,6 +1123,22 @@
    []
   ],
   [
+   "/volumes/outlook-index",
+   "volumes_outlook_index",
+   [
+    "POST"
+   ],
+   []
+  ],
+  [
+   "/volumes/outlook.xlsx",
+   "volumes_outlook_xlsx",
+   [
+    "GET"
+   ],
+   []
+  ],
+  [
    "/volumes/requirements.xlsx",
    "volumes_requirements",
    [
@@ -1133,6 +1149,14 @@
   [
    "/volumes/settings",
    "volumes_settings",
+   [
+    "POST"
+   ],
+   []
+  ],
+  [
+   "/volumes/sites",
+   "volumes_sites",
    [
     "POST"
    ],

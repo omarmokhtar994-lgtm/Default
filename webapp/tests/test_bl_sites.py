@@ -112,6 +112,12 @@ class TheEntryIsStrict(unittest.TestCase):
         self.refused({"sites": sites("x" * 41), "rules": []}, "40")
         self.refused({"sites": sites(*[f"S{i}" for i in range(7)]), "rules": []}, "6")
 
+    def test_a_name_that_could_be_read_as_a_formula_is_refused(self):
+        for bad in ("=cmd", "+1", "-1", "@x"):
+            with self.subTest(name=bad):
+                self.refused({"sites": sites(bad), "rules": []}, "with a letter or a number")
+        self.refused({"sites": [{"name": "Okay", "lob": "=1+1"}], "rules": []}, "LOB")
+
     def test_rule_fields_are_checked(self):
         self.refused({"sites": sites("A"), "rules": [rule("Fax", EVERY, 0, 1440, A=100)]}, "channel")
         self.refused({"sites": sites("A"), "rules": [rule("Phone", [], 0, 1440, A=100)]}, "day")

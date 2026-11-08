@@ -16,6 +16,7 @@ MAX_SITES = 6
 MAX_NAME = 40
 MAX_LOB = 80
 MAX_RULES = 60
+FORMULA_STARTS = ("=", "+", "-", "@")      # a spreadsheet would read a name starting with one of these as a formula
 
 
 def _empty() -> Dict[str, Any]:
@@ -61,10 +62,14 @@ def clean(raw: Any) -> Dict[str, Any]:
             raise ValueError("Give each site a name.")
         if len(name) > MAX_NAME:
             raise ValueError(f"A site name is at most {MAX_NAME} characters.")
+        if name.startswith(FORMULA_STARTS):
+            raise ValueError("Start the name with a letter or a number (not = + - or @).")
         if name.casefold() in seen:
             raise ValueError(f"{name} is in the list twice.")
         seen.add(name.casefold())
         lob = " ".join(str(row.get("lob", "") or "").split())[:MAX_LOB]
+        if lob.startswith(FORMULA_STARTS):
+            raise ValueError("Start the LOB with a letter or a number (not = + - or @).")
         sites.append({"name": name, "lob": lob})
     names = [s["name"] for s in sites]
     if rules_raw and not names:

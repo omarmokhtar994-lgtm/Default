@@ -508,6 +508,19 @@ read the real clock break when their date passes, so stop the clock with `mock.p
 - AN: ChatGPT's reviewed fixes: time-zone dates and clock-change safety, channel coverage, solver in a child process, Go-to permissions.
 - AP to AS: merged LOBs and channel hours; WHOLE_SHIFT language window; program walls, delete user, bulk users; break change and coaching requests.
 - AO: My week picker, week swap, swap warnings, leave for later weeks, name lists by program, overtime after 00:00.
+- BL: an 8.5 hour shift and part-timers in the engine; hours worked, sites, email by day, holidays that close a day and the months ahead on the Volumes pages.
+
+## Phase BL (owner, 2026-11-07): 8.5 hour shift, part-timers, hours worked, sites, email by day, holidays, months ahead
+
+Plan: `docs/superpowers/plans/2026-11-07-phase-bl-shifts-parttime-sites-forecast.md`. Evidence: `evidence/phase_bl/` (the A/B for the engine columns, screenshots). How to use it: `docs/howto/SCHEDULE_COLUMNS_AND_VOLUMES.md`.
+
+**Engine** (`engine/_tools/l632_universal_scheduler.py`; identity and map refreshed with `tools/refresh_engine_identity.py`): optional Schedule columns `Shift Length`, `Employment Type`/`Type`, `Off Days`, `Breaks` read into `Associate`; `shift_length_allows` is checked in Stage 1, the joint refinement, the consistency polish and swaps, the finished-schedule check and the contract; `required_off_days` and `add_weekly_off_rule` take the sheet's count; capacity estimates use `associate_workdays`; `_apply_associate_break_counts` turns a row's `Breaks` into the break set of its shift length. The independent validator checks the length. With the columns blank the Stage 1 model hash is identical on all nine ready inputs.
+
+**Website**: `webapp/open_hours.py` (hours and minimum cover), `webapp/sites.py` (sites and share rules), `webapp/outlook.py` (the months-ahead model), the new methods in `webapp/volumes.py` (`open_hours`, `sites`, `for_site`, `outlook`, `set_outlook_index`), events with Hours (`webapp/drivers.py`), email day totals (`webapp/volumes_io.py`), and the Settings, Forecast and Months ahead screens (`webapp/routes/volumes.py`, `webapp/templates/volumes.html`). Tests: `webapp/tests/test_bl_*.py` and `TheBlScreensInTheBrowser` in `test_ui_playwright.py`.
+
+**Rulings the owner can overturn** are in the plan and in the final report of the phase: an 8.5 hour associate has the break set of a 9 hour one; email work is spread evenly over open intervals only when hours are set; each site is its own forecast and requirement workbook (filed by LOB, no run tag); time no site rule covers goes to the first site; `Breaks` is per shift length, not per person; with 56 weeks of history or more the trend is the median change from the same week a year earlier.
+
+**Not done**: a holiday's volume change is not suggested from last year; the part-time `Type` is recorded but does not change the rules by itself; daylight-saving days are not tested for hours worked (the hours are in the program's own zone, as the grids are).
 
 ## Phase AZ (owner, 2026-10-24: "make sure all our code, engine and website, is fully organized")
 

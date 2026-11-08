@@ -87,6 +87,44 @@ class TheOffDays(_Base):
         self.assertEqual([E.associate_workdays(parsed, x) for x in (a, b, c)], [3, 6, E.default_workdays_per_week(parsed)])
 
 
+class TheShiftsAPartTimerClaims(_Base):
+    """A shift length a part-time row names is for part-timers: someone with no length of their own is not given it (a full-timer working a 5 hour
+    shift was seen in a real run). A part-timer with no length may work anything, and an explicit Shift Length is always honoured."""
+
+    def eligible(self, E, parsed, row):
+        a = parsed.associates[row - 1]
+        return {s.duration_min for d in range(7) for s in E.associate_day_eligible_shifts(parsed, a, d)}
+
+    def test_others_are_not_given_the_part_time_length(self):
+        E, parsed = self.parse(columns={"Shift Length": {1: 5, 2: 5}, "Employment Type": {1: "Part time", 2: "Part time"}})
+        self.assertEqual(self.eligible(E, parsed, 1), {300})                  # the part-timer: their length only
+        self.assertEqual(self.eligible(E, parsed, 3), {540})                  # everyone else: not the 5 hour shifts
+        self.assertTrue(all(s.part_time_only for s in parsed.shifts if s.duration_min == 300))
+        self.assertFalse(any(s.part_time_only for s in parsed.shifts if s.duration_min == 540))
+
+    def test_a_part_timer_with_no_length_may_work_anything_and_an_explicit_length_is_honoured(self):
+        E, parsed = self.parse(columns={"Shift Length": {1: 5, 3: 5}, "Employment Type": {1: "Part time", 2: "Part time"}})
+        self.assertEqual(self.eligible(E, parsed, 2), {300, 540})             # part time, no length of their own
+        self.assertEqual(self.eligible(E, parsed, 3), {300})                  # a length on the row is theirs, whatever their type
+
+    def test_a_full_time_row_with_a_length_does_not_reserve_it(self):
+        E, parsed = self.parse(columns={"Shift Length": {1: 5}, "Employment Type": {1: "Full time"}})
+        self.assertFalse(any(s.part_time_only for s in parsed.shifts))
+        self.assertEqual(self.eligible(E, parsed, 2), {300, 540})
+
+    def test_nothing_changes_without_part_time_rows(self):
+        E, parsed = self.parse(columns={"Shift Length": {1: 5}})
+        self.assertFalse(any(s.part_time_only for s in parsed.shifts))
+
+    def test_stage_1_keeps_the_others_off_the_part_time_shifts(self):
+        E, parsed = self.parse(columns={"Shift Length": {1: 5, 2: 5, 3: 5}, "Employment Type": {1: "Part time", 2: "Part time", 3: "Part time"},
+                                        "Off Days": {1: 3, 2: 3, 3: 3}})
+        sk = E.build_skeleton(parsed, None, E.HardConfig(), 30.0, 2, io.StringIO(), random_seed=9000)
+        self.assertIn(sk.cp_status, {"OPTIMAL", "FEASIBLE"})
+        others = {parsed.shifts[si].duration_min for a in range(3, len(parsed.associates)) for si in sk.selected_shift_index[a] if si is not None}
+        self.assertEqual(others, {540})
+
+
 class TheBreaks(_Base):
     def test_the_shift_length_on_the_row_gets_the_first_n_breaks_of_its_set(self):
         E, parsed = self.parse(columns={"Shift Length": {1: 5}, "Type": {1: "Part time"}, "Breaks": {1: 1}})

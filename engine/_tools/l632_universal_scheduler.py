@@ -707,6 +707,8 @@ class Shift:
     duration_min: int
     # Phase F: a :30 twin added by "Allow Half-Hour Starts" (a marked fallback).
     half_hour_fallback: bool = False
+    # Phase BL: a shift length some Part time row names; others with no Shift Length of their own are not given it
+    part_time_only: bool = False
 
     @property
     def start_hour(self) -> int:
@@ -4038,6 +4040,9 @@ def parse_input(
     break_segments = _parse_break_segments(im, parser_warnings)
     break_sets_by_length = _parse_break_sets_by_shift_length(im, parser_warnings)
     break_sets_by_length = _apply_associate_break_counts(associates, shifts, break_segments, break_sets_by_length, parser_warnings)
+    part_time_lengths = [a.shift_minutes for a in associates if getattr(a, "part_time", False) and a.shift_minutes is not None]
+    for shift in shifts:   # Phase BL: after the half-hour twins, so a twin is reserved with its shift
+        shift.part_time_only = any(abs(shift.duration_min - m) <= 5 for m in part_time_lengths)
     _weighting_raw = _instruction_get(im, ["Coverage Objective Weighting", "Coverage Weighting"], None)
     coverage_objective_weighting = "interval_count"
     coverage_objective_weighting_source = "default"
@@ -11722,7 +11727,9 @@ def shift_length_allows(associate: Associate, shift: Shift) -> bool:
     """Phase BL (owner, 2026-11-07): an associate whose Schedule row names a Shift Length may only work shifts of that length
     (within the library's 5 minute tolerance). No length named: every shift is allowed, as before."""
     minutes = getattr(associate, "shift_minutes", None)
-    return minutes is None or abs(shift.duration_min - minutes) <= 5
+    if minutes is None:
+        return not (getattr(shift, "part_time_only", False) and not getattr(associate, "part_time", False))
+    return abs(shift.duration_min - minutes) <= 5
 
 
 def shift_length_failures(parsed: ParsedInput, skeleton: Any) -> List[Dict[str, Any]]:

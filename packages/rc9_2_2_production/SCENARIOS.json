@@ -1,7 +1,7 @@
 {
   "package": "RC9_2_2_PRODUCTION_PACKAGE",
   "engine_release": "L6.3.2.8-RC9.2.2-PRODUCTION-HARDENED-RC6",
-  "engine_sha256": "d6610b3bed2b90d8d93abafbe11d11d222163ffeadc71ee31bf976d1067a4b0d",
+  "engine_sha256": "01bb7484de2b1a3151fa094dfe10df3e57b108c2dc9988bbf35d361ab808b692",
   "purpose": "RC9.2.2 production package (S2-PAR parallel break solve + DNBS day-neighbourhood break search + multi-seed runner + memory-isolated joint refinement for DEEP/OVERNIGHT). Seven scenarios plus your own workbooks. Hashes describe the workbooks shipped in inputs/ and are verified before any run.",
   "generated_by": "tools/build_production_package.py",
   "scenarios": [

@@ -64,7 +64,9 @@ ALONE, ALONE_LANGUAGE, FIRST_BY = 50, 10, 240
 # Two stages, measured on a 16- and a 40-person day (Phase V task 5's ledger): the breaks kept (the best plan is
 # proven in 4 to 11 s), then the breaks free to move, starting from that plan, for 10 s. A deterministic search
 # (interleaved, or one worker) gave the same plan twice but worse plans, or none in time once breaks may move.
-KEPT = {"num_workers": 4, "max_time_in_seconds": 12.0, "random_seed": 9000}
+# Phase BL audit: the first solve takes large-neighbourhood search only. The default portfolio stopped FEASIBLE at the time limit with an objective that swung from
+# 54 to 300 between identical runs, so a rule was sometimes missed; measured over 12 runs, this one had no problem in 12 of 12 (evidence/phase_bl/channel_solver_ab.md).
+KEPT = {"num_workers": 4, "max_time_in_seconds": 12.0, "random_seed": 9000, "use_lns_only": True}
 MOVING = {"num_workers": 4, "max_time_in_seconds": 10.0, "random_seed": 9000}
 
 
@@ -482,8 +484,12 @@ def _solve(people, setup, rules, day, carry, move_breaks, locked, before, hint=N
         for (name, t, c), v in x.items():
             m.AddHint(v, int(given.get((name, t)) == c))
     m.Minimize(sum(cost))
+    settings = solver_settings or MOVING
     try:
-        solver = solve_channels(m, solver_settings or MOVING)
+        solver = solve_channels(m, settings)
+        if solver.status not in (cp_model.OPTIMAL, cp_model.FEASIBLE, cp_model.INFEASIBLE, cp_model.MODEL_INVALID) and settings.get("use_lns_only"):
+            # large-neighbourhood search needs a first plan to start from; where it finds none, the old settings get their try, so a day that planned still plans
+            solver = solve_channels(m, {k: v for k, v in settings.items() if k != "use_lns_only"})
     except SolverStopped as exc:
         raise NoPlan(str(exc)) from exc
     status = solver.status

@@ -1,11 +1,12 @@
 # © 2026 Omar Mokhtar. All rights reserved.
-"""Phase BL audit: the channel planner's first solve (breaks kept as typed) uses large-neighbourhood search only.
+"""Phase BL audit: the channel planner's first solve, when it has breaks to place, uses large-neighbourhood search only.
 
 ``test_channel_plan`` failed intermittently, on the commit before Phase BL too: the planner stops FEASIBLE at its wall-clock limit, and with the default
 portfolio the objective it reached swung from 54 to 300 between identical runs, the high ones leaving a "normal maximum gap" rule missed. Measured on the
 test's own scenario, 12 runs each (evidence/phase_bl/channel_solver_ab.md): ``use_lns_only`` had no rule problem in 12 of 12 with a median objective of
 about 36; today's setting had a problem in 4 of 12 with a median of about 158, at the same wall time.
-Only the first solve takes it (the second, which may move breaks, starts from the first's plan and was not measured). If it ever finds no plan at all,
+Only the solve that places empty breaks takes it: the measurement was of that case, and plans of typed breaks (test_bc_channel_rotation, test_bc_two_ticks
+compare them against each other) keep exactly their old settings, as does the second solve, which may move breaks and starts from the first's plan. If it ever finds no plan at all,
 the old settings are tried before the planner gives up, so a day that planned before still plans."""
 import unittest
 from unittest import mock
@@ -18,11 +19,24 @@ from webapp.tests.test_channel_plan import RULES, WED, day_people, setup
 
 
 class TheFirstSolveSetting(unittest.TestCase):
-    def test_only_the_first_solve_uses_large_neighbourhood_search_only(self):
-        self.assertIs(CP.KEPT.get("use_lns_only"), True)
-        self.assertNotIn("use_lns_only", CP.MOVING)
-        self.assertEqual({k: v for k, v in CP.KEPT.items() if k != "use_lns_only"}, {"num_workers": 4, "max_time_in_seconds": 12.0, "random_seed": 9000})
+    def test_only_the_solve_that_places_breaks_uses_large_neighbourhood_search_only(self):
+        self.assertEqual(CP.KEPT, {"num_workers": 4, "max_time_in_seconds": 12.0, "random_seed": 9000})
         self.assertEqual(CP.MOVING, {"num_workers": 4, "max_time_in_seconds": 10.0, "random_seed": 9000})
+        self.assertEqual(CP.PLACING, {**CP.KEPT, "use_lns_only": True})
+
+    def test_typed_breaks_keep_their_old_settings_and_empty_ones_get_the_new(self):
+        seen = []
+        real = CP._solve
+
+        def spy(*args, **kwargs):
+            seen.append(kwargs.get("solver_settings"))
+            raise CP.NoPlan("stop here")
+
+        with mock.patch.object(CP, "_solve", spy):
+            for with_breaks, want in ((True, CP.KEPT), (False, CP.PLACING)):
+                with self.assertRaises(CP.NoPlan):
+                    CP.plan_day(day_people(with_breaks=with_breaks), setup(), RULES, WED, move_breaks=False)
+                self.assertEqual(seen[-1], want, with_breaks)
 
     def test_when_it_finds_no_plan_the_old_settings_are_tried(self):
         real = CP.solve_channels

@@ -64,9 +64,11 @@ ALONE, ALONE_LANGUAGE, FIRST_BY = 50, 10, 240
 # Two stages, measured on a 16- and a 40-person day (Phase V task 5's ledger): the breaks kept (the best plan is
 # proven in 4 to 11 s), then the breaks free to move, starting from that plan, for 10 s. A deterministic search
 # (interleaved, or one worker) gave the same plan twice but worse plans, or none in time once breaks may move.
-# Phase BL audit: the first solve takes large-neighbourhood search only. The default portfolio stopped FEASIBLE at the time limit with an objective that swung from
-# 54 to 300 between identical runs, so a rule was sometimes missed; measured over 12 runs, this one had no problem in 12 of 12 (evidence/phase_bl/channel_solver_ab.md).
-KEPT = {"num_workers": 4, "max_time_in_seconds": 12.0, "random_seed": 9000, "use_lns_only": True}
+KEPT = {"num_workers": 4, "max_time_in_seconds": 12.0, "random_seed": 9000}
+# Phase BL audit: the solve that has breaks to place takes large-neighbourhood search only. With the default portfolio it stopped FEASIBLE at the time limit with an
+# objective that swung from 54 to 300 between identical runs, so a rule was sometimes missed; measured over 12 runs of that case, this setting missed none in 12 of 12
+# (evidence/phase_bl/channel_solver_ab.md). Plans of breaks already typed keep KEPT exactly as before.
+PLACING = {**KEPT, "use_lns_only": True}
 MOVING = {"num_workers": 4, "max_time_in_seconds": 10.0, "random_seed": 9000}
 
 
@@ -161,7 +163,8 @@ def plan_day(people: List[Dict[str, Any]], setup: Dict[str, Any], rules: Dict[st
     is a change of channel. ``keep`` ((name, slot) -> channel, Phase AM): the channel each person is on now; each
     quarter hour on another costs KEEP. Without either the model is as before."""
     started = time.time()
-    first = _solve(people, setup, rules, day, carry or {}, False, locked, before or {}, solver_settings=KEPT,
+    placing = any(start is None for p in people for _, start, _ in p["breaks"])
+    first = _solve(people, setup, rules, day, carry or {}, False, locked, before or {}, solver_settings=PLACING if placing else KEPT,
                    carry_in=carry_in or {}, keep=keep or {}, horizon=horizon)
     first["note"] = ""
     movable = any(start is not None and (p["name"], k) not in locked

@@ -22,7 +22,9 @@ class TheFirstSolveSetting(unittest.TestCase):
     def test_only_the_solve_that_places_breaks_uses_large_neighbourhood_search_only(self):
         self.assertEqual(CP.KEPT, {"num_workers": 4, "max_time_in_seconds": 12.0, "random_seed": 9000})
         self.assertEqual(CP.MOVING, {"num_workers": 4, "max_time_in_seconds": 10.0, "random_seed": 9000})
-        self.assertEqual(CP.PLACING, {**CP.KEPT, "use_lns_only": True})
+        # re-pinned 2026-11-08 (owner's decision): placing blank breaks gets 25 s; at 12 s it passed the normal maximum gap in 3 of 20 runs, at 25 s in
+        # none of 20 (evidence/phase_bl/channel_solver_ab.md)
+        self.assertEqual(CP.PLACING, {**CP.KEPT, "use_lns_only": True, "max_time_in_seconds": 25.0})
 
     def test_typed_breaks_keep_their_old_settings_and_empty_ones_get_the_new(self):
         seen = []

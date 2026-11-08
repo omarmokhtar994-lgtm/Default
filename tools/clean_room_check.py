@@ -265,8 +265,8 @@ def read_contract(path: Path) -> Contract:
     k.person: Dict[str, Dict[str, Any]] = {}
     len_c = next((c for h, c in heads.items() if h == "shift length"), None)
     off_c = next((c for h, c in heads.items() if h == "off days"), None)
-    brk_c = next((c for h, c in heads.items() if h in ("breaks", "breaks per day")), None)
-    typ_c = next((c for h, c in heads.items() if h in ("employment type", "type")), None)
+    brk_c = next((c for h, c in heads.items() if h == "breaks per day"), None)
+    typ_c = next((c for h, c in heads.items() if h == "employment type"), None)
     for r in range(hr + 1, ws.max_row + 1):
         nm = str(ws.cell(r, name_c).value or "").strip()
         if nm and n(nm) not in ("total", "staffed hc", "required hc"):

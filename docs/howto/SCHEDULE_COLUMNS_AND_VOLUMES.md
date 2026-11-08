@@ -6,14 +6,14 @@ Phase BL (owner, 2026-11-07). Everything here is optional: leave a column or a s
 
 ## In the input workbook (the Schedule sheet)
 
-Add any of these four columns to the roster, next to the names. Headers are not case sensitive.
+Add any of these four columns to the roster, next to the names. Headers are not case sensitive. Only these exact names count: a column of yours that is simply called `Type` or `Breaks` (about something else) is left alone and cannot stop a workbook.
 
 | Column | What it means |
 |---|---|
 | `Shift Length` | Hours, for example `8.5` or `9` or `5`. That person is only given shifts of that length, every day, in every step of the engine. The Shift Library must hold shifts of that length, and `Allowed Shift Durations Hours` must list it (for example `9, 8.5`). If not, the check says so by name before anything is solved. |
-| `Employment Type` (or `Type`) | `Full time` or `Part time`. A part-timer's `Shift Length` is reserved for part-timers (see below); the other rules come from the other three columns. |
+| `Employment Type` | `Full time` or `Part time`. A part-timer's `Shift Length` is reserved for part-timers (see below); the other rules come from the other three columns. |
 | `Off Days` | How many days off that person has in the week, 0 to 6, instead of the usual 2 (3 on the 11H/3OFF pattern). Days of leave still come out of the same seven days. |
-| `Breaks` | How many breaks on a shift of that person's `Shift Length`: the first N breaks of the break set that length would have had. It needs `Shift Length` on the same row. Two rows with the same `Shift Length` must have the same `Breaks`, because break sets belong to a shift length (anyone else who works a shift of that length gets the same set). The break set for a length can also be written as an instruction row, as before. |
+| `Breaks Per Day` | How many breaks on a shift of that person's `Shift Length`: the first N breaks of the break set that length would have had. It needs `Shift Length` on the same row (`Breaks Per Day` with no `Shift Length` is refused by name). Two rows with the same `Shift Length` must have the same `Breaks`, because break sets belong to a shift length (anyone else who works a shift of that length gets the same set). The break set for a length can also be written as an instruction row, as before. |
 
 Two things to know when you mix lengths. A shift length that a `Part time` row names is reserved for part-timers: someone with no `Shift Length` of their own is not given it. Someone with no `Shift Length` may be given any other length the library holds, so to keep a full-timer to 9 hours (and not 8.5) give them `Shift Length` 9.
 

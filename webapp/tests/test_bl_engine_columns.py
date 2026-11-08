@@ -43,9 +43,17 @@ class TheOptionalColumns(unittest.TestCase):
         self.assertEqual(warnings, [])
 
     def test_blank_cells_read_as_the_default(self):
-        people, warnings = read(roster(("Shift Length", "Type", "Off Days", "Breaks"), [["", "", "", ""]]))
+        people, warnings = read(roster(("Shift Length", "Employment Type", "Off Days", "Breaks Per Day"), [["", "", "", ""]]))
         self.assertEqual((people[0].shift_minutes, people[0].part_time, people[0].off_days, people[0].breaks_per_day),
                          (None, False, None, None))
+        self.assertEqual(warnings, [])
+
+    def test_a_column_that_is_only_called_type_or_breaks_or_off_is_not_ours(self):
+        """A roster that already has a column named Type or Breaks (about something else) is read exactly as before: only the unambiguous
+        headers Employment Type and Breaks Per Day mean what this phase says."""
+        wb = roster(("Type", "Breaks", "Contract"), [["contractor", "08:00 and 12:00", "FTE"], ["", "x", "?"]])
+        people, warnings = read(wb)
+        self.assertEqual([(a.shift_minutes, a.part_time, a.off_days, a.breaks_per_day) for a in people], [(None, False, None, None)] * 2)
         self.assertEqual(warnings, [])
 
     def test_the_columns_are_read_when_present(self):
@@ -58,10 +66,10 @@ class TheOptionalColumns(unittest.TestCase):
 
     def test_a_value_that_cannot_be_read_is_refused_by_name(self):
         cases = [("Shift Length", "banana", "HARD_INVALID_SHIFT_LENGTH"), ("Shift Length", 2, "HARD_INVALID_SHIFT_LENGTH"),
-                 ("Shift Length", 17, "HARD_INVALID_SHIFT_LENGTH"), ("Type", "contractor", "HARD_INVALID_ASSOCIATE_TYPE"),
+                 ("Shift Length", 17, "HARD_INVALID_SHIFT_LENGTH"), ("Employment Type", "contractor", "HARD_INVALID_ASSOCIATE_TYPE"),
                  ("Off Days", "x", "HARD_INVALID_OFF_DAYS"), ("Off Days", 7, "HARD_INVALID_OFF_DAYS"),
-                 ("Off Days", 2.5, "HARD_INVALID_OFF_DAYS"), ("Breaks", -1, "HARD_INVALID_BREAKS"),
-                 ("Breaks", "many", "HARD_INVALID_BREAKS"), ("Breaks", 9, "HARD_INVALID_BREAKS")]
+                 ("Off Days", 2.5, "HARD_INVALID_OFF_DAYS"), ("Breaks Per Day", -1, "HARD_INVALID_BREAKS"),
+                 ("Breaks Per Day", "many", "HARD_INVALID_BREAKS"), ("Breaks Per Day", 9, "HARD_INVALID_BREAKS")]
         for header, value, code in cases:
             with self.subTest(header=header, value=value):
                 _, warnings = read(roster((header,), [[value]]))

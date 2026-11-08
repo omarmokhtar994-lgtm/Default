@@ -127,13 +127,13 @@ class TheShiftsAPartTimerClaims(_Base):
 
 class TheBreaks(_Base):
     def test_the_shift_length_on_the_row_gets_the_first_n_breaks_of_its_set(self):
-        E, parsed = self.parse(columns={"Shift Length": {1: 5}, "Type": {1: "Part time"}, "Breaks": {1: 1}})
+        E, parsed = self.parse(columns={"Shift Length": {1: 5}, "Employment Type": {1: "Part time"}, "Breaks Per Day": {1: 1}})
         before = E.break_segments_for(E.parse_input(workbook(self.dir)), 300)
         self.assertEqual(E.break_segments_for(parsed, 300), before[:1])
         self.assertEqual(len(E.break_segments_for(parsed, 300)), 1)
 
     def test_other_shift_lengths_keep_their_own_break_set(self):
-        E, parsed = self.parse(columns={"Shift Length": {1: 5}, "Breaks": {1: 1}})
+        E, parsed = self.parse(columns={"Shift Length": {1: 5}, "Breaks Per Day": {1: 1}})
         plain = E.parse_input(workbook(self.dir))
         for minutes in (300, 540):
             if minutes != 300:
@@ -141,22 +141,22 @@ class TheBreaks(_Base):
         self.assertEqual(parsed.break_segments_q, plain.break_segments_q)
 
     def test_two_rows_with_one_shift_length_and_different_breaks_are_refused_by_name(self):
-        E, parsed = self.parse(columns={"Shift Length": {1: 5, 2: 5}, "Breaks": {1: 1, 2: 2}})
+        E, parsed = self.parse(columns={"Shift Length": {1: 5, 2: 5}, "Breaks Per Day": {1: 1, 2: 2}})
         self.assertTrue([w for w in parsed.parser_warnings if str(w).startswith("HARD_BREAKS_CONFLICT")
                          and "Synth Agent 001" in str(w) and "Synth Agent 002" in str(w)], parsed.parser_warnings)
 
     def test_breaks_without_a_shift_length_are_refused_by_name(self):
-        E, parsed = self.parse(columns={"Breaks": {1: 1}})
+        E, parsed = self.parse(columns={"Breaks Per Day": {1: 1}})
         self.assertTrue([w for w in parsed.parser_warnings if str(w).startswith("HARD_BREAKS_NEED_SHIFT_LENGTH")
                          and "Synth Agent 001" in str(w)], parsed.parser_warnings)
 
     def test_more_breaks_than_the_break_set_has_is_refused_by_name(self):
-        E, parsed = self.parse(columns={"Shift Length": {1: 5}, "Breaks": {1: 6}})
+        E, parsed = self.parse(columns={"Shift Length": {1: 5}, "Breaks Per Day": {1: 6}})
         self.assertTrue([w for w in parsed.parser_warnings if str(w).startswith("HARD_BREAKS_EXCEED_SET")
                          and "Synth Agent 001" in str(w)], parsed.parser_warnings)
 
     def test_a_part_timer_with_one_break_is_planned_one_break_end_to_end(self):
-        E, parsed = self.parse(columns={"Shift Length": {1: 5}, "Type": {1: "Part time"}, "Breaks": {1: 1}, "Off Days": {1: 3}})
+        E, parsed = self.parse(columns={"Shift Length": {1: 5}, "Employment Type": {1: "Part time"}, "Breaks Per Day": {1: 1}, "Off Days": {1: 3}})
         sk = E.build_skeleton(parsed, None, E.HardConfig(), 30.0, 2, io.StringIO(), random_seed=9000)
         self.assertIn(sk.cp_status, {"OPTIMAL", "FEASIBLE"})
         worked = [parsed.shifts[si] for si in sk.selected_shift_index[0] if si is not None]

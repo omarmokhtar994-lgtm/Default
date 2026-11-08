@@ -43,14 +43,20 @@ class TheCleanRoomKnowsTheColumns(unittest.TestCase):
     def test_breaks_give_that_shift_length_the_first_n_breaks_in_shift_order(self):
         for n_breaks, want in ((1, [15]), (2, [15, 30]), (3, [15, 15, 30])):
             with self.subTest(breaks=n_breaks):
-                k = contract(self.dir, **{"Shift Length": {1: 5}, "Breaks": {1: n_breaks}})
+                k = contract(self.dir, **{"Shift Length": {1: 5}, "Breaks Per Day": {1: n_breaks}})
                 self.assertEqual(C.break_lengths_for(k, 300), want)
                 self.assertEqual(C.break_lengths_for(k, 540), [15, 15, 30])   # other lengths keep their own set
 
     def test_a_typed_break_set_for_long_shifts_is_cut_in_the_order_it_was_typed(self):
-        k = contract(self.dir, **{"Shift Length": {1: 5}, "Breaks": {1: 2}})
+        k = contract(self.dir, **{"Shift Length": {1: 5}, "Breaks Per Day": {1: 2}})
         k.break_sets, k.break_sets_ordered = [(300, [15, 15, 15, 30])], [(300, [15, 30, 15, 15])]
         self.assertEqual(C.break_lengths_for(k, 300), [15, 30])
+
+    def test_a_column_that_is_only_called_type_or_breaks_is_not_ours(self):
+        k = contract(self.dir, **{"Type": {1: "contractor", 2: "Part time"}, "Breaks": {1: 1, 2: 1}, "Shift Length": {1: 5, 2: 5}})
+        self.assertEqual(k.person[C.n(k.names[0])], {"len": 300, "off": None, "breaks": None, "part_time": False})
+        self.assertEqual(k.part_time_lengths, set())
+        self.assertEqual(k.length_breaks, {})
 
     def test_a_length_a_part_timer_claims_is_not_for_others(self):
         k = contract(self.dir, **{"Shift Length": {1: 5}, "Employment Type": {1: "Part time"}})

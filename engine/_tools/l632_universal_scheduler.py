@@ -1720,11 +1720,11 @@ def _roster_option(kind: str, value: Any) -> Tuple[bool, Any]:
 
 _ROSTER_OPTIONS = (("shift_minutes", "hours", ("shift length",), "HARD_INVALID_SHIFT_LENGTH",
                     "use hours between 4 and 16, for example 8.5 or 9"),
-                   ("part_time", "type", ("type", "employment type"), "HARD_INVALID_ASSOCIATE_TYPE",
+                   ("part_time", "type", ("employment type",), "HARD_INVALID_ASSOCIATE_TYPE",
                     "use Full time or Part time"),
                    ("off_days", "days", ("off days",), "HARD_INVALID_OFF_DAYS",
                     "use a whole number of off days from 0 to 6"),
-                   ("breaks_per_day", "count", ("breaks", "breaks per day"), "HARD_INVALID_BREAKS",
+                   ("breaks_per_day", "count", ("breaks per day",), "HARD_INVALID_BREAKS",
                     "use a whole number of breaks a day from 0 to 6"))
 
 

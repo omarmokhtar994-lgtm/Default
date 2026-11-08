@@ -25,7 +25,10 @@ from zoneinfo import ZoneInfo
 from openpyxl import Workbook
 
 from . import drivers as D, erlang, forecast as F, volumes_zone as Z
-from . import open_hours as H, sites as SITES
+import calendar
+from collections import Counter
+
+from . import open_hours as H, outlook as O, sites as SITES
 from .channel_template import _head, _title
 from .volumes_io import CHANNELS, DAY_NAMES, FIRST_DAY, ParsedVolumes
 
@@ -77,6 +80,10 @@ def _check_week(week_start: date) -> None:
     """A week between 2015 and 2100; outside that the calendar arithmetic runs off the end of Python's dates, so it is refused in words instead."""
     if not FIRST_DAY <= week_start < LAST_WEEK:
         raise ValueError(f"Pick a week between {FIRST_DAY.year} and {LAST_WEEK.year}.")
+
+
+def _iso(text: str) -> date:
+    return date.fromisoformat(text)
 
 
 def site_day(weekday: int) -> int:
@@ -194,6 +201,154 @@ class VolumeBook:
                             service[d][i] = None
             out["needs"], out["service"] = needs, service
         return out
+
+    # ---------------------------------------------------------------- the months ahead (Phase BL)
+    def outlook_index(self, key: str, channel: str) -> Dict[int, float]:
+        """The seasonal index (percent of the trend) the planner typed per month for a channel, for months the history has not seen."""
+        saved = (((self.store.volume_settings(key) or {}).get("outlook") or {}).get(channel)) or {}
+        return {int(m): float(v) for m, v in saved.items() if str(m).isdigit() and 1 <= int(m) <= 12 and isinstance(v, (int, float))}
+
+    def set_outlook_index(self, key: str, channel: str, months: Dict[int, Any], user_id: Optional[int]) -> None:
+        """Save the typed index of some months (a blank removes it). Everything is checked first; nothing is kept when anything is wrong."""
+        if channel not in CHANNELS:
+            raise ValueError("The channel is Phone, Chat or Email.")
+        merged = {str(m): v for m, v in self.outlook_index(key, channel).items()}
+        for month, raw in months.items():
+            if not isinstance(month, int) or not 1 <= month <= 12:
+                raise ValueError("A month is 1 to 12.")
+            if raw is None or str(raw).strip() == "":
+                merged.pop(str(month), None)
+                continue
+            try:
+                number = float(str(raw).replace(",", "").rstrip("% "))
+            except ValueError:
+                raise ValueError(f"{calendar.month_name[month]}: the index is a percent of the trend, such as 120.") from None
+            if not math.isfinite(number) or not 10 <= number <= 400:
+                raise ValueError(f"{calendar.month_name[month]}: the index is 10 to 400 percent of the trend.")
+            merged[str(month)] = number
+        saved = self.store.volume_settings(key) or {}
+        self.store.set_volume_settings(key, {**saved, "outlook": {**(saved.get("outlook") or {}), channel: merged}}, user_id)
+
+    def outlook(self, key: str, channel: str, start: Optional[date] = None, months: Any = 6, site: Optional[str] = None) -> Dict[str, Any]:
+        """The weeks and months ahead from the history: months (the last may be partial at the front), weeks and their days, each with a range
+        and how it was worked out. ``start`` is the Sunday it begins (the week after this one); ``site`` gives one site's share. Events and AI periods
+        multiply the days they touch, holidays in the past are left out of the line, and a typed year-over-year rate replaces the measured trend."""
+        if channel not in CHANNELS:
+            raise ValueError("The channel is Phone, Chat or Email.")
+        try:
+            n_months = int(months)
+        except (TypeError, ValueError):
+            raise ValueError("The months ahead are a whole number from 1 to 24.") from None
+        if not 1 <= n_months <= 24:
+            raise ValueError("The months ahead are a whole number from 1 to 24.")
+        start = start or (_today() + timedelta(days=7 - (_today().weekday() + 1) % 7))
+        start = start - timedelta(days=(start.weekday() + 1) % 7)
+        _check_week(start)
+        try:
+            doc = self.drivers(key)
+        except ValueError:
+            raise ValueError("The events and AI periods saved for this program could not be read. Ask for them to be cleared and enter them again.") from None
+        sites_doc = self.sites(key)
+        names = [x["name"] for x in sites_doc["sites"]]
+        if site and site not in names:
+            raise ValueError("That site does not exist.")
+        days_held = self.store.volume_days(key, channel)
+        if not days_held:
+            raise ValueError(f"There is no {channel} history. Add actual volumes first.")
+        first = max(date.fromisoformat(days_held[0]), start - timedelta(weeks=O.LOOK_BACK_WEEKS + 8))
+        daily: Dict[date, float] = {}
+        for r in self.store.volume_rows(key, channel, first.isoformat(), (start - timedelta(days=1)).isoformat()):
+            day = date.fromisoformat(r["day"])
+            daily[day] = daily.get(day, 0.0) + r["offered"]
+        # the whole weeks: every weekday most weeks have, with volume
+        by_week: Dict[date, Dict[int, float]] = {}
+        for day, total in daily.items():
+            by_week.setdefault(day - timedelta(days=(day.weekday() + 1) % 7), {})[site_day(day.weekday())] = total
+        usual = [d for d in range(7) if sum(1 for w in by_week.values() if w.get(d, 0) > 0) * 2 >= max(1, len(by_week))]
+        whole = {w: sum(v.values()) for w, v in by_week.items() if usual and all(v.get(d, 0) > 0 for d in usual) and w + timedelta(days=7) <= start}
+        held = D.holiday_weeks(doc["events"], channel, start)
+        left_out = {date.fromisoformat(w) for w in list(doc["skip_weeks"]) + list(held)}
+        model = O.fit(sorted(whole.items()), left_out)
+        # the weekdays' shares of the week, from the newest weeks kept; the intervals' shape only matters to a site's share
+        recent = [w for w in sorted(whole) if w not in left_out][-8:]
+        share = [sum(by_week[w].get(d, 0) / whole[w] for w in recent) / len(recent) if d in usual else 0.0 for d in range(7)]
+        total_share = sum(share) or 1.0
+        share = [x / total_share for x in share]
+        site_share = [1.0] * 7
+        if site:
+            step = self.step(key)
+            table = SITES.table(sites_doc, channel, step)
+            try:
+                _, _, profile, _ = self._read(key, channel, model.last + timedelta(days=7), self._weeks_wanted(self.settings(key)[channel], None),
+                                              sorted({str(w) for w in left_out}))
+                shape = [profile.shares.get(py_day(d)) or [1.0 / (1440 // step)] * (1440 // step) for d in range(7)]
+            except ValueError:
+                shape = [[1.0 / (1440 // step)] * (1440 // step) for _ in range(7)]
+            site_share = [sum(shape[d][i] * table[d][i].get(site, 0.0) / 100.0 for i in range(len(shape[d]))) for d in range(7)]
+        growth = doc["growth"]
+        yoy = growth["yoy"].get(channel) if growth["method"] == "growth" else None
+        typed = self.outlook_index(key, channel)
+        m0 = start.month - 1 + n_months
+        end = date(start.year + m0 // 12, m0 % 12 + 1, 1) - timedelta(days=1) if True else start
+        if end < start:
+            end = start
+        weeks_out: List[Dict[str, Any]] = []
+        months_out: Dict[str, Dict[str, Any]] = {}
+        unreached = 0
+        w = start
+        while w <= end:
+            p = O.project(model, w, yoy=yoy, typed=typed)
+            if p is None:
+                unreached += 1
+                w += timedelta(days=7)
+                continue
+            dates = [w + timedelta(days=k) for k in range(7)]
+            factors = D.day_factors(doc["events"], doc["ai"], channel, dates)
+            week_days = []
+            for k, day in enumerate(dates):
+                base = p["expected"] * share[k] * factors[k] * site_share[k]
+                low, high = p["low"] * share[k] * factors[k] * site_share[k], p["high"] * share[k] * factors[k] * site_share[k]
+                week_days.append({"date": day.isoformat(), "weekday": DAY_NAMES[k], "expected": int(round(base)), "low": int(round(low)), "high": int(round(high)),
+                                  "factor": round(factors[k], 4), "events": [e["name"] for e in doc["events"] if channel in e["channels"]
+                                                                                and _iso(e["start"]) <= day <= _iso(e["end"])]})
+            weeks_out.append({"week": w.isoformat(), "basis": p["basis"], "expected": sum(d["expected"] for d in week_days),
+                              "low": sum(d["low"] for d in week_days), "high": sum(d["high"] for d in week_days), "days": week_days})
+            touched = set()
+            for day, row in zip(dates, week_days):
+                if start <= day <= end:
+                    label = f"{day.year}-{day.month:02d}"
+                    m = months_out.setdefault(label, {"month": label, "label": f"{calendar.month_abbr[day.month]} {day.year}", "days": 0, "expected": 0, "low": 0,
+                                                      "high": 0, "weeks": 0, "bases": Counter(),
+                                                      "in_month": calendar.monthrange(day.year, day.month)[1]})
+                    m["days"] += 1
+                    m["expected"] += row["expected"]
+                    m["low"] += row["low"]
+                    m["high"] += row["high"]
+                    if label not in touched:
+                        touched.add(label)
+                        m["weeks"] += 1
+                        m["bases"][p["basis"]] += 1
+            w += timedelta(days=7)
+        month_rows = []
+        for label in sorted(months_out):
+            m = months_out[label]
+            month_rows.append({**m, "bases": dict(m["bases"]), "partial": m["days"] < m.pop("in_month")})
+        notes: List[str] = []
+        if model.kind == "trend":
+            notes.append(f"Only {O.TREND_REACH} weeks ahead are shown: there are {model.weeks} weeks of history. The months ahead need 26 weeks, and a forecast that follows "
+                         "the seasons needs a year.")
+        elif model.kind == "partial" or any(wk["basis"] == "unseen" for wk in weeks_out):
+            notes.append("The history does not cover every week of the year, so the weeks it has not seen are the trend alone, marked no seasonal pattern yet, with a wider "
+                         "range. If you know the pattern of a month, type its index below.")
+        if held:
+            notes.append("Weeks with a holiday are left out of the trend: " + ", ".join(sorted(held)[:6]) + (" and more" if len(held) > 6 else "") + ".")
+        gap = (start - model.last).days // 7 - 1
+        if gap > 0:
+            notes.append(f"The history ends the week of {model.last.isoformat()}; the {gap} week{'s' if gap != 1 else ''} since then are projected too.")
+        return {"channel": channel, "site": site or "", "start": start.isoformat(), "end": end.isoformat(), "months": month_rows, "weeks": weeks_out,
+                "total": {"expected": sum(m["expected"] for m in month_rows), "low": sum(m["low"] for m in month_rows), "high": sum(m["high"] for m in month_rows)},
+                "notes": notes, "unreached_weeks": unreached, "growth_rate": yoy,
+                "model": {"kind": model.kind, "weeks": model.weeks, "last": model.last.isoformat()}}
 
     def uses_erlang(self, key: str) -> bool:
         return self.measure_of(key) in ("sl", "volume")

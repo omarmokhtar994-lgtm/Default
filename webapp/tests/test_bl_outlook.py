@@ -15,6 +15,7 @@ import unittest
 from datetime import date, timedelta
 
 from webapp import outlook as O
+from webapp.tests.test_bi_volumes import KEY, SUN, book, weights
 
 FIRST = date(2025, 1, 5)    # a Sunday
 
@@ -142,6 +143,147 @@ class TheProjection(unittest.TestCase):
     def test_a_projection_is_never_negative(self):
         model = O.fit(series(60, base=1000, slope=-15))
         self.assertGreaterEqual(self.week(model, 100)["expected"], 0.0)
+
+
+def long_history(store, weeks, base=7000.0, slope=0.0, season=lambda w: 1.0, channel="Phone", aht=300.0, key=KEY, last=SUN, skip=()):
+    """``weeks`` whole weeks ending the Saturday before ``last`` (a Sunday): week k (0 = oldest) totals (base + slope k) times the season of its week of
+    the year, spread over the weekdays and hours by the shape the other volume tests use."""
+    rows = []
+    for k in range(weeks):
+        sunday = last - timedelta(weeks=weeks - k)
+        if k in skip:
+            continue
+        total = (base + slope * k) * season(O.woy(sunday))
+        for off in range(7):
+            day = sunday + timedelta(days=off)
+            wts = weights(day.weekday())
+            day_total = total / 7 * (1.3 if day.weekday() in (6, 0) else 1.0) / (1 + 0.6 / 7)
+            s = sum(wts.values())
+            rows += [(day.isoformat(), h * 60, round(day_total * v / s), aht) for h, v in wts.items()]
+    store.replace_volume_rows(key, channel, rows, 1)
+
+
+def event(**kw):
+    return {"kind": "Promotion", "name": "Big sale", "channels": ["Phone"], "start": "2027-03-01", "end": "2027-03-10", "change": 25, **kw}
+
+
+class TheOutlookInTheBook(unittest.TestCase):
+    NEXT = SUN + timedelta(weeks=1)
+
+    def setUp(self):
+        self.store, self.vb = book()
+
+    def outlook(self, months=6, **kw):
+        return self.vb.outlook(KEY, "Phone", start=self.NEXT, months=months, **kw)
+
+    def test_a_year_of_months_each_with_a_range_and_a_basis(self):
+        long_history(self.store, 60, season=yearly)
+        got = self.outlook(12)
+        self.assertEqual([m["month"] for m in got["months"]][:2] + [got["months"][-1]["month"]], ["2026-11", "2026-12", "2027-10"])   # 12 calendar months, the first partial
+        self.assertTrue(got["months"][0]["partial"])
+        self.assertFalse(got["months"][-1]["partial"])
+        self.assertTrue(all(m["low"] < m["expected"] < m["high"] for m in got["months"]))
+        self.assertEqual({m["bases"].get("learned", 0) > 0 for m in got["months"]}, {True})
+        self.assertEqual(got["total"]["expected"], sum(m["expected"] for m in got["months"]))
+        self.assertEqual(got["model"]["kind"], "seasonal")
+
+    def test_the_levels_add_up_months_weeks_days(self):
+        long_history(self.store, 60)
+        got = self.outlook(3)
+        days = [d for w in got["weeks"] for d in w["days"] if got["start"] <= d["date"] <= got["end"]]
+        self.assertAlmostEqual(sum(d["expected"] for d in days), got["total"]["expected"], delta=len(days))
+        self.assertAlmostEqual(sum(m["expected"] for m in got["months"]), got["total"]["expected"], delta=len(got["months"]))
+        for w in got["weeks"]:
+            self.assertAlmostEqual(sum(d["expected"] for d in w["days"]), w["expected"], delta=7)
+
+    def test_a_flat_history_gives_the_weeks_total_spread_by_weekday(self):
+        long_history(self.store, 60)
+        got = self.outlook(2)
+        self.assertAlmostEqual(got["weeks"][2]["expected"], 7000, delta=300)
+
+    def test_a_promotion_lifts_only_its_days(self):
+        long_history(self.store, 60)
+        plain = self.outlook(6)
+        self.vb.add_driver(KEY, "events", event(), 1)
+        lifted = self.outlook(6)
+        march = lambda g: next(m for m in g["months"] if m["month"] == "2027-03")  # noqa: E731
+        gain = march(lifted)["expected"] - march(plain)["expected"]
+        self.assertGreater(gain, 0)
+        self.assertEqual(next(m for m in lifted["months"] if m["month"] == "2027-02")["expected"], next(m for m in plain["months"] if m["month"] == "2027-02")["expected"])
+        day = next(d for w in lifted["weeks"] for d in w["days"] if d["date"] == "2027-03-02")
+        self.assertAlmostEqual(day["factor"], 1.25)
+        self.assertIn("Big sale", day["events"])
+
+    def test_a_typed_year_over_year_rate_replaces_the_measured_trend(self):
+        long_history(self.store, 60)
+        flat = self.outlook(12)
+        self.vb.set_growth(KEY, {"Phone": "20", "Chat": "", "Email": ""}, "growth", 1)
+        grown = self.outlook(12)
+        self.assertGreater(grown["months"][-1]["expected"] / flat["months"][-1]["expected"], 1.12)
+        self.assertLess(grown["months"][1]["expected"] / flat["months"][1]["expected"], 1.08)
+
+    def test_eleven_months_say_what_they_have_not_seen(self):
+        long_history(self.store, 48, season=yearly)
+        got = self.outlook(12)
+        self.assertEqual(got["model"]["kind"], "partial")
+        self.assertTrue([m for m in got["months"] if m["bases"].get("unseen", 0)])
+        self.assertTrue([n for n in got["notes"] if "seasonal pattern" in n], got["notes"])
+
+    def test_a_typed_index_fills_a_month_the_history_lacks(self):
+        long_history(self.store, 48, season=yearly)
+        before = self.outlook(12)
+        gap = next(m["month"] for m in before["months"] if m["bases"].get("unseen", 0) == m["weeks"])
+        self.vb.set_outlook_index(KEY, "Phone", {int(gap[5:]): "130"}, 1)
+        after = self.outlook(12)
+        one = lambda g: next(m for m in g["months"] if m["month"] == gap)  # noqa: E731
+        self.assertGreater(one(after)["bases"].get("typed", 0), 0)
+        self.assertAlmostEqual(one(after)["expected"] / one(before)["expected"], 1.3, delta=0.05)
+
+    def test_under_26_weeks_stop_at_8_weeks_and_say_how_much_history_is_needed(self):
+        long_history(self.store, 20)
+        got = self.outlook(6)
+        self.assertEqual(got["model"]["kind"], "trend")
+        self.assertLessEqual(len(got["weeks"]), 9)
+        self.assertTrue([n for n in got["notes"] if "26 weeks" in n], got["notes"])
+
+    def test_too_little_history_is_refused_in_words(self):
+        long_history(self.store, 2)
+        with self.assertRaises(ValueError) as caught:
+            self.outlook(3)
+        self.assertIn("3", str(caught.exception))
+        _, empty = book()
+        with self.assertRaises(ValueError):
+            empty.outlook(KEY, "Phone", start=self.NEXT, months=3)
+
+    def test_a_holiday_week_in_the_past_does_not_bend_the_line(self):
+        long_history(self.store, 60, skip=())
+        base = self.outlook(3)["weeks"][2]["expected"]
+        # a week of very low volume, marked as a holiday: left out, so the forecast stays where it was
+        long_history(self.store, 60, last=SUN)
+        quiet = SUN - timedelta(weeks=5)
+        rows = [(r["day"], r["minute"], r["offered"] * (0.3 if quiet.isoformat() <= r["day"] < (quiet + timedelta(days=7)).isoformat() else 1.0), 300.0)
+                for r in self.store.volume_rows(KEY, "Phone", (SUN - timedelta(weeks=60)).isoformat(), (SUN - timedelta(days=1)).isoformat())]
+        self.store.replace_volume_rows(KEY, "Phone", [(d, m, round(o), a) for d, m, o, a in rows], 1)
+        hol = {"kind": "Holiday", "name": "Long holiday", "channels": ["Phone"], "start": quiet.isoformat(), "end": (quiet + timedelta(days=6)).isoformat(), "change": -70}
+        self.vb.add_driver(KEY, "events", hol, 1)
+        self.assertAlmostEqual(self.outlook(3)["weeks"][2]["expected"], base, delta=base * 0.04)
+
+    def test_each_site_gets_its_share_and_they_add_up(self):
+        long_history(self.store, 60)
+        doc = {"sites": [{"name": "Internal", "lob": ""}, {"name": "Sutherland", "lob": ""}],
+               "rules": [{"channel": "Phone", "days": list(range(7)), "from": 0, "to": 1440, "shares": {"Internal": 60, "Sutherland": 40}}]}
+        self.vb.set_sites(KEY, doc, 1)
+        whole, a, b = self.outlook(3), self.outlook(3, site="Internal"), self.outlook(3, site="Sutherland")
+        self.assertAlmostEqual(a["total"]["expected"] / whole["total"]["expected"], 0.6, delta=0.01)
+        self.assertAlmostEqual(a["total"]["expected"] + b["total"]["expected"], whole["total"]["expected"], delta=3)
+        with self.assertRaises(ValueError):
+            self.outlook(3, site="Nowhere")
+
+    def test_the_months_asked_for_are_one_to_twenty_four(self):
+        long_history(self.store, 60)
+        for bad in (0, 25, -1):
+            with self.assertRaises(ValueError):
+                self.outlook(bad)
 
 
 if __name__ == "__main__":

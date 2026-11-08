@@ -5,6 +5,7 @@ and how the week went. Pages: Actuals, Forecast and needs, How we did, Settings 
 from __future__ import annotations
 
 import io
+import re
 import secrets
 import time
 from datetime import date, datetime, timedelta
@@ -20,7 +21,7 @@ from ..auth import login_required
 from ..programs import ProgramBook
 from ..shrink_view import week_begin
 from .. import drivers as drivers_mod
-from .. import open_hours as open_hours_mod
+from .. import open_hours as open_hours_mod, sites as sites_mod
 from ..volumes import DEFAULTS, LABELS, LAST_WEEK, VolumeBook, _today
 from ..excel_agents import lambda_definitions
 from ..volumes_zone import ZONES
@@ -116,7 +117,7 @@ def register(app, ctx) -> None:
 
     def _carry() -> Dict[str, Any]:
         """What a page asks for, kept when a form on it sends the person back to it."""
-        out: Dict[str, Any] = {k: request.form[k] for k in ("total", "hist_weeks", "base", "day", "show_tz") if request.form.get(k)}
+        out: Dict[str, Any] = {k: request.form[k] for k in ("total", "hist_weeks", "base", "day", "show_tz", "site") if request.form.get(k)}
         if "skip_sent" in request.form:
             out["skip_sent"] = "1"
             out["skip"] = request.form.getlist("skip")[:80]
@@ -208,6 +209,20 @@ def register(app, ctx) -> None:
             out[ch] = {"min_cover": h["min_cover"], "rows": rows}
         return out
 
+    def _site_gaps(doc: Dict[str, Any]) -> List[str]:
+        """Where the time no rule covers goes, in words, one line per channel and run of weekdays that share the same gaps."""
+        lines: List[str] = []
+        first = doc["sites"][0]["name"] if doc["sites"] else ""
+        for ch in CHANNELS:
+            by_day = sites_mod.gaps(doc, ch)
+            groups: Dict[Tuple[Tuple[int, int], ...], List[int]] = {}
+            for d, runs in by_day.items():
+                groups.setdefault(tuple(runs), []).append(d)
+            for runs, days in groups.items():
+                times = ", ".join(f"{_clock(a)} to {_clock(b)}" for a, b in runs)
+                lines.append(f"{ch}, {', '.join(DAY_NAMES[d] for d in sorted(days))}: {times} has no rule, so it goes to {first}.")
+        return lines
+
     def _render(tab: str, **extra: Any):
         vb, key = _book(), _unit()
         store = app.extensions["store"]
@@ -235,11 +250,15 @@ def register(app, ctx) -> None:
                 error, f = str(exc), vb.forecast(key, channel, week)
             if f["error"]:
                 error = error or f["error"]
+            site_names = [x["name"] for x in vb.sites(key)["sites"]]
+            site = request.values.get("site", "") if request.values.get("site", "") in site_names else ""
+            whole_total = f.get("total")                                # the number typed is the whole program's, whichever site is shown
+            f = vb.for_site(key, f, site or None)
             show_zone = _show_zone(vb, key)
             f = vb.view_in(key, f, week, show_zone)                    # the grids read in the zone asked for (the program's own unless the person picked another)
             day = DAY_NAMES.index(request.values.get("day", "Mon")) if request.values.get("day", "Mon") in DAY_NAMES else 1
             ctxt.update(week=week, week_end=week + timedelta(days=6), weeks=_week_choices(key, today + timedelta(weeks=1), 2, 6), f=f, error=error, day=day,
-                        total_text=typed_total or (f"{f['total']:,}" if f.get("total") is not None else ""), typed_days=typed_days,
+                        total_text=typed_total or (f"{whole_total:,}" if whole_total is not None else ""), site=site, site_names=site_names, typed_days=typed_days,
                         calls_grid=vb.grid(f["calls"], step) if f["calls"] else None,
                         needs_grid=vb.grid(f["needs"], step) if f.get("needs") else None,
                         saved=store.volume_forecast(key, channel, week.isoformat()), show_zone=show_zone, show_name=dict(ZONES)[show_zone].split(" (")[0], hist_weeks=hist if hist is not None else (f.get("weeks") or {}).get("wanted") or
@@ -271,7 +290,7 @@ def register(app, ctx) -> None:
                                                                                      for w in r["trend"]], unit="%",
                                                    label="Offered over forecast by week", y_max=max(120, max(w["otf"] or 0 for w in r["trend"]) * 1.1))
         elif tab == "settings":
-            ctxt.update(settings=vb.settings(key), labels=LABELS, defaults=DEFAULTS, hours_view=_hours_view(vb.open_hours(key)))
+            ctxt.update(settings=vb.settings(key), labels=LABELS, defaults=DEFAULTS, hours_view=_hours_view(vb.open_hours(key)), sites_doc=vb.sites(key), site_gaps=_site_gaps(vb.sites(key)))
         return render_template("volumes.html", **ctxt)
 
     @app.route("/volumes")
@@ -472,6 +491,53 @@ def register(app, ctx) -> None:
         flash("Saved the settings.")
         return redirect(url_for("volumes_page", tab="settings", program=key), code=303)
 
+    @app.route("/volumes/sites", methods=["POST"])
+    @login_required
+    def volumes_sites():  # type: ignore[no-untyped-def]
+        """Sites and who takes which contacts: add or remove a site, add or remove a rule. The whole document is checked before anything is kept."""
+        vb, key = _book(), _unit()
+        form = request.form
+        doc = vb.sites(key)
+        action = form.get("action", "")
+        try:
+            if action == "add_site":
+                doc["sites"].append({"name": form.get("name", ""), "lob": form.get("lob", "")})
+                said = f"Added the site {' '.join(form.get('name', '').split())[:40]}."
+            elif action == "remove_site":
+                name = form.get("name", "")
+                if any(r["shares"].get(name, 0) > 0 for r in doc["rules"]):
+                    raise ValueError(f"Remove the rules that give {name} a share first.")
+                doc["sites"] = [x for x in doc["sites"] if x["name"] != name]
+                for r in doc["rules"]:
+                    r["shares"].pop(name, None)
+                said = f"Removed the site {name}."
+            elif action == "add_rule":
+                channel = form.get("channel", "")
+                start = open_hours_mod.clock_minutes(form.get("start", ""), f"{channel}, the start")
+                end = open_hours_mod.clock_minutes(form.get("end", ""), f"{channel}, the end")
+                if start < end <= start + 1440 or end == start:
+                    pass
+                elif end < start:
+                    end += 1440
+                doc["rules"].append({"channel": channel, "days": [int(d) for d in form.getlist("days") if d.isdigit()], "from": start, "to": end,
+                                     "shares": {x["name"]: form.get(f"share.{x['name']}", "0") for x in doc["sites"]}})
+                said = "Added the rule."
+            elif action == "remove_rule":
+                index = int(form.get("index", "-1")) if form.get("index", "").isdigit() else -1
+                if not 0 <= index < len(doc["rules"]):
+                    raise ValueError("That rule was already removed.")
+                doc["rules"].pop(index)
+                said = "Removed the rule."
+            else:
+                raise ValueError("Choose what to change.")
+            vb.set_sites(key, doc, g.user["id"])
+        except ValueError as exc:
+            flash(str(exc))
+            return _render("settings")
+        ctx._record("volumes_sites_saved", program=key, subject="Volumes", detail=said)
+        flash(said)
+        return redirect(url_for("volumes_page", tab="settings", program=key), code=303)
+
     # ------------------------------------------------------------------ downloads
     def _sheet(rows: List[List[Any]], title: str) -> io.BytesIO:
         wb = Workbook()
@@ -514,18 +580,22 @@ def register(app, ctx) -> None:
         """FT Wise and a tab per channel (people needed on the floor) from each channel's saved forecast (the total is the planner's, so nothing is made up)."""
         vb, key = _book(), _unit()
         week = _week(key, request.args.get("week", ""), _today() + timedelta(weeks=1))
+        site = request.args.get("site", "")
         found = {}
         for ch in CHANNELS:
             f = vb.forecast(key, ch, week)
             if not f["error"] and f.get("needs"):
                 found[ch] = f
         try:
-            data = vb.requirement_workbook(key, week, found)
+            if site and site not in [x["name"] for x in vb.sites(key)["sites"]]:
+                raise ValueError("That site does not exist.")
+            data = vb.requirement_workbook(key, week, found, site=site or None)
         except ValueError as exc:
             flash(str(exc))
             return redirect(url_for("volumes_page", tab="forecast", program=key, week=week.isoformat()), code=303)
-        ctx._record("downloaded", program=key, week_start=week.isoformat(), subject="Volumes requirement", detail=", ".join(sorted(found)))
-        return send_file(io.BytesIO(data), as_attachment=True, download_name=f"Requirement_from_forecast_{week.isoformat()}.xlsx", mimetype=XLSX)
+        tag = re.sub(r"[^A-Za-z0-9]+", "_", site).strip("_") + "_" if site else ""
+        ctx._record("downloaded", program=key, week_start=week.isoformat(), subject="Volumes requirement", detail=", ".join(sorted(found)) + (f" for {site}" if site else ""))
+        return send_file(io.BytesIO(data), as_attachment=True, download_name=f"Requirement_from_forecast_{tag}{week.isoformat()}.xlsx", mimetype=XLSX)
 
     @app.route("/volumes/formulas.xlsx")
     @login_required

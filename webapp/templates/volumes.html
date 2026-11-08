@@ -21,7 +21,9 @@
 </div></div>
 <p class="dim" id="zone-note">Volumes are kept in {{ zone_name }} time{% if tab != 'settings' and can('volumes_edit') %}; change the zone on the Settings tab{% endif %}.</p>
 <nav class="bp-days" aria-label="Volumes">{% for t, name in tabs %}<a href="{{ url_for('volumes_page', tab=t, program=key, channel=channel) }}"{% if t == tab %} class="on" aria-current="page"{% endif %}>{{ name }}</a>{% endfor %}</nav>
-{% if tab != 'actuals' and tab != 'settings' %}<p class="chan" role="group" aria-label="Channel">{% for ch in channels %}<a class="button{% if ch == channel %} primary{% endif %}" href="{{ url_for('volumes_page', tab=tab, program=key, channel=ch, week=week.isoformat() if week is defined else none) }}"{% if ch == channel %} aria-current="true"{% endif %}>{{ ch }}</a> {% endfor %}</p>{% endif %}
+{% if tab != 'actuals' and tab != 'settings' %}<p class="chan" role="group" aria-label="Channel">{% for ch in channels %}<a class="button{% if ch == channel %} primary{% endif %}" href="{{ url_for('volumes_page', tab=tab, program=key, channel=ch, week=week.isoformat() if week is defined else none) }}"{% if ch == channel %} aria-current="true"{% endif %}>{{ ch }}</a> {% endfor %}</p>
+{% if tab == 'forecast' and site_names %}<p class="chan" role="group" aria-label="Site"><span class="dim">Site</span> <a class="button{% if not site %} primary{% endif %}" href="{{ url_for('volumes_page', tab='forecast', program=key, channel=channel, week=week.isoformat()) }}"{% if not site %} aria-current="true"{% endif %}>All sites</a>{% for n in site_names %} <a class="button{% if n == site %} primary{% endif %}" href="{{ url_for('volumes_page', tab='forecast', program=key, channel=channel, week=week.isoformat(), site=n) }}"{% if n == site %} aria-current="true"{% endif %}>{{ n }}</a>{% endfor %}</p>
+{% if site %}<p class="notice calm">This is {{ site }}'s share of the contacts and the people that share needs. The number you type is for the whole program, and the figures for the other sites add up to it.</p>{% endif %}{% endif %}{% endif %}
 
 {# ------------------------------------------------------------------ actuals #}
 {% if tab == 'actuals' %}
@@ -92,7 +94,7 @@
 {# ------------------------------------------------------------------ forecast #}
 {% if tab == 'forecast' %}
 {% if error %}<p class="notice" role="alert">{{ error }}</p>{% endif %}
-{% macro carry() %}{% if show_zone != zone %}<input type="hidden" name="show_tz" value="{{ show_zone }}">{% endif %}<input type="hidden" name="hist_weeks" value="{{ hist_weeks }}"><input type="hidden" name="base" value="{{ base }}"><input type="hidden" name="skip_sent" value="1">{% for w in skip %}<input type="hidden" name="skip" value="{{ w }}">{% endfor %}{% if total_text %}<input type="hidden" name="total" value="{{ total_text }}">{% endif %}{% endmacro %}
+{% macro carry() %}{% if site %}<input type="hidden" name="site" value="{{ site }}">{% endif %}{% if show_zone != zone %}<input type="hidden" name="show_tz" value="{{ show_zone }}">{% endif %}<input type="hidden" name="hist_weeks" value="{{ hist_weeks }}"><input type="hidden" name="base" value="{{ base }}"><input type="hidden" name="skip_sent" value="1">{% for w in skip %}<input type="hidden" name="skip" value="{{ w }}">{% endfor %}{% if total_text %}<input type="hidden" name="total" value="{{ total_text }}">{% endif %}{% endmacro %}
 <form method="post" action="{{ url_for('volumes_forecast') }}" class="panel ins-filter" aria-label="Choose the week and type the calls">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="channel" value="{{ channel }}"><input type="hidden" name="day" value="{{ day_names[day] }}"><input type="hidden" name="skip_sent" value="1">
   <div class="exp-row">
@@ -233,7 +235,8 @@
 <section class="panel" aria-labelledby="g2"><h2 id="g2">People needed on the floor, like FT Wise</h2>
   <p class="dim">{{ channel }}: {% if channel == 'Phone' %}Erlang C to a service level{% elif channel == 'Chat' %}Erlang C with chats at once{% else %}the workload method{% endif %}, handle time {{ f.aht|round|int }} s, highest occupancy and the rest from the Settings tab. Erlang C assumes nobody abandons, so it over-staffs where callers do. These are people on the floor; the engine adds the program's shrinkage when it builds the schedule.</p>
   {{ grid_table('tbl-needs', 'People needed on the floor', needs_grid, 'needs') }}
-  <p><a class="button" href="{{ url_for('volumes_requirements', program=key, week=week.isoformat()) }}">Download the requirement tabs (Excel)</a> <span class="dim">FT Wise and a tab per channel, from each channel's saved forecast, in {{ zone_name }} time, laid out for the input workbook. Save a forecast for a channel first.</span></p>
+  {% if site_names %}<p>{% for n in site_names %}<a class="button" href="{{ url_for('volumes_requirements', program=key, week=week.isoformat(), site=n) }}">Download {{ n }}'s requirement tabs (Excel)</a> {% endfor %}</p>{% endif %}
+  <p><a class="button" href="{{ url_for('volumes_requirements', program=key, week=week.isoformat()) }}">Download the requirement tabs (Excel){% if site_names %} for all sites{% endif %}</a> <span class="dim">FT Wise and a tab per channel, from each channel's saved forecast, in {{ zone_name }} time, laid out for the input workbook. Save a forecast for a channel first.</span></p>
   {% set fx = {'program': key, 'channel': channel, 'week': week.isoformat()} %}{% if f.source != 'saved' %}{% set _ = fx.update({'total': f.total}) %}{% endif %}{% set _ = fx.update({'hist_weeks': hist_weeks, 'base': base, 'skip_sent': 1, 'skip': skip}) %}{% if show_zone != zone %}{% set _ = fx.update({'show_tz': show_zone}) %}{% endif %}
   <p><a class="button" href="{{ url_for('volumes_formulas', **fx) }}">Download with live =AGENTS formulas (Excel)</a> <span class="dim">This channel's contacts and the people needed worked out by Excel formulas you can change, with the site's figures beside them.</span></p>
   <details><summary>Use =AGENTS() in your own Excel</summary>
@@ -310,5 +313,26 @@
   </tbody></table></fieldset>{% endfor %}
   {% if can('volumes_edit') %}<p><button class="primary" type="submit">Save the settings</button></p>{% endif %}
 </form>
+<section class="panel" aria-labelledby="sites-h"><h2 id="sites-h">Sites</h2>
+  <p class="dim">Who takes which contacts. Add the sites (and the LOB each is scheduled in), then say, for a channel on some days between two times, what share each site takes. Each site then gets its own forecast, people needed and requirement tabs on the Forecast tab. Time no rule covers goes to the first site.</p>
+  {% set sd = sites_doc %}
+  {% if sd.sites %}<table class="edgrid"><thead><tr><th scope="col">Site</th><th scope="col">Scheduled in (LOB)</th><th scope="col">Remove</th></tr></thead><tbody>
+    {% for x in sd.sites %}<tr><th scope="row">{{ x.name }}{% if loop.first %} <span class="vol-days">first: takes what no rule covers</span>{% endif %}</th><td>{{ x.lob or '-' }}</td>
+      <td>{% if can('volumes_edit') %}<form method="post" action="{{ url_for('volumes_sites') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="action" value="remove_site"><input type="hidden" name="name" value="{{ x.name }}"><button type="submit" class="quiet">Remove<span class="sr-only"> {{ x.name }}</span></button></form>{% else %}-{% endif %}</td></tr>{% endfor %}</tbody></table>{% else %}<p class="empty">No sites yet: the forecast is for the whole program.</p>{% endif %}
+  {% if can('volumes_edit') %}<form method="post" action="{{ url_for('volumes_sites') }}" class="ins-filter" aria-label="Add a site"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="action" value="add_site">
+    <div class="exp-row"><label>Site name <input type="text" name="name" maxlength="40" autocomplete="off" required></label><label>Scheduled in (LOB, optional) <input type="text" name="lob" maxlength="80" autocomplete="off"></label><button class="primary" type="submit">Add the site</button></div></form>{% endif %}
+  {% if sd.sites %}
+  <h3 class="sub">Rules</h3>
+  {% if sd.rules %}<div class="scroll" role="region" tabindex="0" aria-label="Site rules (scrolls sideways)"><table class="edgrid"><thead><tr><th scope="col">Channel</th><th scope="col">Days</th><th scope="col">Times</th><th scope="col">Shares</th><th scope="col">Remove</th></tr></thead><tbody>
+    {% for r in sd.rules %}<tr><th scope="row">{{ r.channel }}</th><td>{% for d in r.days %}{{ day_names[d] }}{% if not loop.last %}, {% endif %}{% endfor %}</td><td>{{ clock(r['from']) }} to {{ clock(r.to) }}</td><td>{% for n, v in r.shares.items() %}{% if v %}{{ n }} {{ '%g' % v }}%{% if not loop.last %}, {% endif %}{% endif %}{% endfor %}</td>
+      <td>{% if can('volumes_edit') %}<form method="post" action="{{ url_for('volumes_sites') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="action" value="remove_rule"><input type="hidden" name="index" value="{{ loop.index0 }}"><button type="submit" class="quiet">Remove<span class="sr-only"> the {{ r.channel }} rule {{ loop.index }}</span></button></form>{% else %}-{% endif %}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+  {% for line in site_gaps %}<p class="dim">{{ line }}</p>{% endfor %}
+  {% if can('volumes_edit') %}<form method="post" action="{{ url_for('volumes_sites') }}" class="ins-filter" aria-label="Add a rule"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="action" value="add_rule">
+    <div class="exp-row"><label>Channel <select name="channel">{% for ch in channels %}<option>{{ ch }}</option>{% endfor %}</select></label><label>From <input type="text" inputmode="numeric" name="start" placeholder="00:00" autocomplete="off" required></label><label>To <input type="text" inputmode="numeric" name="end" placeholder="24:00" autocomplete="off" required></label></div>
+    <fieldset class="exp-kinds"><legend>Days</legend><div class="exp-row">{% for d in range(7) %}<label class="exp-kind"><input type="checkbox" name="days" value="{{ d }}"><span>{{ day_names[d] }}</span></label>{% endfor %}</div></fieldset>
+    <fieldset class="exp-kinds"><legend>Share of the contacts (%), adding up to 100</legend><div class="exp-row">{% for x in sd.sites %}<label>{{ x.name }} <input type="text" inputmode="decimal" name="share.{{ x.name }}" value="0" autocomplete="off"></label>{% endfor %}</div></fieldset>
+    <p><button class="primary" type="submit">Add the rule</button></p></form>{% endif %}
+  {% endif %}
+</section>
 {% endif %}
 {% endblock %}

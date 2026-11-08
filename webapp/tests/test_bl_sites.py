@@ -9,12 +9,19 @@ A program has sites (a name, and the LOB the site is scheduled in) and rules: fo
 the contacts each site takes. Rules for one channel may not overlap, every rule's shares add to 100, and time no rule covers goes to the first
 site (and is listed on the page, so it is a choice and not a surprise). Each site gets its own forecast, people needed and requirement workbook
 from its share of every interval's contacts, the whole number of contacts kept. Made-up names only."""
+import html
+import io
 import unittest
 from datetime import timedelta
 
+from openpyxl import load_workbook
+
 from webapp import sites as S
+from webapp.programs import ProgramBook
 from webapp.tests.test_bi_volumes import KEY, SUN, book
+from webapp.tests.test_bi_volumes_routes import PASSWORD, TODAY, _Volumes
 from webapp.tests.test_bj_volumes_book import scaled
+from webapp.tests.test_runs import sign_in, token
 
 SUN_, MON, TUE, WED, THU, FRI, SAT = range(7)
 WEEKDAYS, WEEKEND = [MON, TUE, WED, THU, FRI], [SAT, SUN_]
@@ -200,6 +207,95 @@ class TheSitesInTheBook(unittest.TestCase):
         self.assertGreater(total(books["Sutherland"], "Phone 60 Min"), 0)
         self.assertGreater(total(books["Internal"], "Chat 60 Min"), 0)
         self.assertIn("Sutherland", books["Sutherland"]["Phone 60 Min"]["A1"].value + books["Sutherland"]["Phone 60 Min"]["A2"].value)
+
+
+class TheSitesOnThePage(_Volumes):
+    def setUp(self):
+        self.store.set_volume_settings(self.alpha, {}, 1)
+        ProgramBook(self.store).set_measure(self.alpha_id, "sl")   # the people needed are worked out for a service-level program
+
+    def tearDown(self):
+        ProgramBook(self.store).set_measure(self.alpha_id, "interval")
+
+    def post(self, client, **fields):
+        return client.post("/volumes/sites", data={"program": self.alpha, "csrf_token": token(client), **fields}, follow_redirects=True)
+
+    def text(self, got):
+        return html.unescape(got.get_data(as_text=True))
+
+    def test_sites_and_rules_are_added_from_the_page_and_listed(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        self.post(client, action="add_site", name="Internal", lob="Voice team")
+        got = self.text(self.post(client, action="add_site", name="Sutherland", lob=""))
+        self.assertIn("Added the site Sutherland", got)
+        got = self.text(self.post(client, action="add_rule", channel="Email", days=["1", "2", "3"], start="00:00", end="24:00",
+                                  **{"share.Internal": "60", "share.Sutherland": "40"}))
+        self.assertIn("Added the rule", got)
+        doc = self.vb.sites(self.alpha)
+        self.assertEqual([(s["name"], s["lob"]) for s in doc["sites"]], [("Internal", "Voice team"), ("Sutherland", "")])
+        self.assertEqual((doc["rules"][0]["days"], doc["rules"][0]["shares"]), ([1, 2, 3], {"Internal": 60.0, "Sutherland": 40.0}))
+        page = self.text(client.get("/volumes", query_string={"program": self.alpha, "tab": "settings"}))
+        self.assertIn("Sutherland", page)
+        self.assertIn("goes to Internal", page)       # the time no rule covers is listed, with where it goes
+
+    def test_a_bad_rule_saves_nothing_and_says_why(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        self.post(client, action="add_site", name="A")
+        self.post(client, action="add_site", name="B")
+        got = self.text(self.post(client, action="add_rule", channel="Phone", days=["1"], start="00:00", end="24:00", **{"share.A": "60", "share.B": "30"}))
+        self.assertIn("add up to 90", got)
+        self.assertEqual(self.vb.sites(self.alpha)["rules"], [])
+        got = self.text(self.post(client, action="add_rule", channel="Phone", days=["1"], start="9am", end="24:00", **{"share.A": "100", "share.B": "0"}))
+        self.assertIn("Phone", got)
+        self.assertEqual(self.vb.sites(self.alpha)["rules"], [])
+
+    def test_a_site_a_rule_uses_cannot_be_removed(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        self.post(client, action="add_site", name="A")
+        self.post(client, action="add_site", name="B")
+        self.post(client, action="add_rule", channel="Phone", days=["1"], start="00:00", end="24:00", **{"share.A": "60", "share.B": "40"})
+        got = self.text(self.post(client, action="remove_site", name="B"))
+        self.assertIn("rule", got)
+        self.assertEqual(len(self.vb.sites(self.alpha)["sites"]), 2)
+        self.post(client, action="remove_rule", index="0")
+        self.post(client, action="remove_site", name="B")
+        self.assertEqual([s["name"] for s in self.vb.sites(self.alpha)["sites"]], ["A"])
+
+    def test_a_team_manager_looks_but_cannot_change_and_the_token_is_needed(self):
+        client = sign_in(self.app, "tm_a", PASSWORD)
+        self.assertEqual(client.post("/volumes/sites", data={"program": self.alpha, "csrf_token": token(client), "action": "add_site", "name": "X"}).status_code, 403)
+        planner = sign_in(self.app, "plan_a", PASSWORD)
+        self.assertEqual(planner.post("/volumes/sites", data={"program": self.alpha, "action": "add_site", "name": "X"}).status_code, 400)
+
+    def test_the_forecast_shows_a_sites_share_and_downloads_its_workbook(self):
+        self.history(self.alpha, channel="Phone")
+        self.history(self.alpha, channel="Chat")
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        self.post(client, action="add_site", name="Internal")
+        self.post(client, action="add_site", name="Sutherland")
+        self.post(client, action="add_rule", channel="Phone", days=[str(d) for d in range(7)], start="00:00", end="24:00",
+                  **{"share.Internal": "0", "share.Sutherland": "100"})
+        week = (TODAY - timedelta(days=(TODAY.weekday() + 1) % 7) + timedelta(weeks=1)).isoformat()
+        client.post("/volumes/forecast", data={"program": self.alpha, "csrf_token": token(client), "channel": "Phone", "week": week, "total": "7000", "action": "save"})
+        base = {"program": self.alpha, "tab": "forecast", "channel": "Phone", "week": week}
+        whole = self.text(client.get("/volumes", query_string=base))
+        self.assertIn("Sutherland", whole)             # the site picker
+        mine = self.text(client.get("/volumes", query_string={**base, "site": "Internal"}))
+        self.assertIn("share of the contacts", mine)
+        self.assertIn('value="7,000"', mine)           # the number is the whole program's, though Internal has none of the phone
+        for site, nonzero in (("Internal", False), ("Sutherland", True)):
+            got = client.get("/volumes/requirements.xlsx", query_string={"program": self.alpha, "week": week, "site": site})
+            self.assertEqual(got.status_code, 200, site)
+            self.assertIn(site, got.headers["Content-Disposition"])
+            wb = load_workbook(io.BytesIO(got.get_data()))
+            total = sum(c.value or 0 for row in wb[f"Phone {self.step} Min"].iter_rows(min_row=5, min_col=2) for c in row if isinstance(c.value, (int, float)))
+            self.assertEqual(total > 0, nonzero, site)
+
+    def test_an_unknown_site_in_the_address_is_ignored_on_the_page_and_refused_for_the_download(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        self.assertEqual(client.get("/volumes", query_string={"program": self.alpha, "tab": "forecast", "site": "Nowhere"}).status_code, 200)
+        got = client.get("/volumes/requirements.xlsx", query_string={"program": self.alpha, "site": "Nowhere"})
+        self.assertIn(got.status_code, (302, 303))
 
 
 if __name__ == "__main__":

@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfo
 from openpyxl import Workbook
 
 from . import drivers as D, erlang, forecast as F, volumes_zone as Z
-from . import open_hours as H
+from . import open_hours as H, sites as SITES
 from .channel_template import _head, _title
 from .volumes_io import CHANNELS, DAY_NAMES, FIRST_DAY, ParsedVolumes
 
@@ -152,6 +152,48 @@ class VolumeBook:
                 raise ValueError("The channel is Phone, Chat or Email.")
             merged[channel] = H.read(hours)
         self.store.set_volume_settings(key, {**(self.store.volume_settings(key) or {}), "hours": merged}, user_id)
+
+    # ---------------------------------------------------------------- sites (Phase BL)
+    def sites(self, key: str) -> Dict[str, Any]:
+        """The program's sites and who takes which contacts; no sites until some are entered."""
+        return SITES.read((self.store.volume_settings(key) or {}).get("sites"))
+
+    def set_sites(self, key: str, doc: Any, user_id: Optional[int]) -> None:
+        """Save the sites and rules, checked whole first (nothing is kept when anything is wrong); the settings, hours and zone stay."""
+        self.store.set_volume_settings(key, {**(self.store.volume_settings(key) or {}), "sites": SITES.clean(doc)}, user_id)
+
+    def for_site(self, key: str, f: Dict[str, Any], site: Optional[str]) -> Dict[str, Any]:
+        """The forecast ``f`` as one site sees it: its share of every interval's contacts (every contact with exactly one site) and the people
+        that share needs, worked out for that site alone. No site, or no grid, comes back as it is."""
+        if not site:
+            return f
+        doc = self.sites(key)
+        names = [s["name"] for s in doc["sites"]]
+        if site not in names:
+            raise ValueError("That site does not exist.")
+        if not f.get("calls") or f.get("error"):
+            return f
+        step, channel = f["step"], f["channel"]
+        shares = SITES.table(doc, channel, step)
+        pick = names.index(site)
+        calls = [[F.distribute(int(c), [shares[d][i].get(n, 0.0) for n in names])[pick] if c else 0 for i, c in enumerate(row)]
+                 for d, row in enumerate(f["calls"])]
+        out = dict(f)
+        out.update(calls=calls, day_totals={d: sum(calls[d]) for d in range(7)}, site=site, total=sum(sum(r) for r in calls))
+        if f.get("needs") is not None:
+            try:
+                events = self.drivers(key)["events"]
+            except ValueError:
+                events = []
+            needs, service = self._needs(key, channel, calls, f["aht"], self.settings(key)[channel], self._dates(date.fromisoformat(f["week_start"])), events)
+            for d in range(7):   # a site with no share of an interval needs nobody there, not even the minimum cover
+                for i in range(len(needs[d])):
+                    if shares[d][i].get(site, 0.0) <= 0:
+                        needs[d][i] = 0
+                        if service is not None:
+                            service[d][i] = None
+            out["needs"], out["service"] = needs, service
+        return out
 
     def uses_erlang(self, key: str) -> bool:
         return self.measure_of(key) in ("sl", "volume")
@@ -552,11 +594,14 @@ class VolumeBook:
             rows.append(row)
         return rows
 
-    def requirement_workbook(self, key: str, week_start: date, forecasts: Dict[str, Dict[str, Any]]) -> bytes:
+    def requirement_workbook(self, key: str, week_start: date, forecasts: Dict[str, Dict[str, Any]], site: Optional[str] = None) -> bytes:
         """``FT Wise {n} Min`` (the channels added up: people needed on the floor) and a ``{Channel} {n} Min`` tab each, in the input sheet's layout."""
         if not self.uses_erlang(key):
             raise ValueError("This program is counted by interval compliance, so there is no Erlang requirement to write.")
         step = self.step(key)
+        if site:   # Phase BL: this site's share of the contacts, and the people that share needs
+            forecasts = {ch: self.for_site(key, f, site) for ch, f in forecasts.items() if f}
+        where = f" For the site {site}." if site else ""
         chosen = {ch: f for ch, f in forecasts.items() if ch in CHANNELS and f and f.get("needs")}
         if not chosen:
             raise ValueError("Save a forecast for at least one channel first: the requirement tabs are written from saved forecasts.")
@@ -578,9 +623,9 @@ class VolumeBook:
             ws.freeze_panes = "B5"
 
         tab(f"FT Wise {step} Min", f"People needed on the floor per interval for the week of {week_start.isoformat()}, from the forecast with "
-            "Erlang; the schedule engine adds the program's shrinkage itself.", total)
+            "Erlang; the schedule engine adds the program's shrinkage itself." + where, total)
         for ch in sorted(chosen):
-            tab(f"{ch} {step} Min", f"{ch}: people needed on the floor per interval, from {chosen[ch]['total']:,} forecast contacts.", chosen[ch]["needs"])
+            tab(f"{ch} {step} Min", f"{ch}: people needed on the floor per interval, from {chosen[ch]['total']:,} forecast contacts." + where, chosen[ch]["needs"])
         out = io.BytesIO()
         wb.save(out)
         return out.getvalue()

@@ -42,3 +42,11 @@ Same nine workbooks, same helper, engine in the working tree after the part-time
 (`diff` of the two outputs is empty). With the new columns blank, the Stage 1 model is unchanged by all of Phase BL's engine work.
 Also run, all passing: `tests_staged` capacity, input-safety, shortfall, formula-audit and input-vocabulary suites with the three
 `webapp/tests/test_bl_engine_*` files (137 tests), and `webapp/tests/test_bl_validator_length.py` (2 tests) for the independent validator.
+
+### Re-run after the part-time reservation and the clean-room change
+
+A full run of a workbook with an 8.5 hour associate and part-timers passed the independent validator but was blocked by the clean-room
+check, which did not know the new columns; it was fixed, and shifts a Part time row claims were reserved for part-timers (a full-timer
+without a length was seen working a 5 hour shift). The same nine workbooks and helper were run again against the engine after both changes:
+all nine model hashes are again identical to arm A. The three mixed-run outputs (the best schedule and the two candidates) pass the
+clean-room check with 0 violations, where before the change they showed `break_set` x52 and `off_count` x3.

@@ -55,3 +55,18 @@ break has no hint), and 12 seconds on 4 workers does not always get close.
 **Rule for accepting it** (written before the runs): over 20 runs of the test's scenario, zero runs with a problem from `score_day`, AND the median
 objective no higher than the 16-run median above (47); the time limit unchanged. Then `test_channel_plan` passes 3 times in a row and every module that
 plans a channel day passes.
+
+**Result of the hint:** rejected by its rule. 20 runs: 1 with a problem (Associate 014, 225 minutes against 210, objective 42) and median objective
+about 88 against 47. Reverted.
+
+**What the miss in a good plan shows.** That run reached 42 and still missed by one quarter hour, which costs GAP = 2. Every preference in the model
+costs more than that per quarter hour (KEEP 3, SHAPE 3, MOVE 5, DAY_MIX 8, CONSISTENT 20, STRETCH_OVER 20, STRETCH_COST 22), so the planner
+gives up the maximum gap for a preference. The owner-facing rule (docs/howto/RTA.md, Phase AX) says the opposite: "Plan channels passes it only when a
+channel's need asks for it", and the cost's own comment says "so it is passed only for a channel's need". The weight does not do what the rule says.
+That is the root cause; the clock only decides which of the cheap misses a run lands on.
+
+**Candidate 2:** GAP = 25: above every preference (the largest is 22) and below every need (the smallest is a channel's shortfall, 30 a quarter hour;
+a long run 40, alone 50, a language 200), so a need still wins and a preference no longer does.
+
+**Rule for accepting it** (written before the runs): over 20 runs of the empty-breaks scenario, zero runs with a problem; `test_ax_channel_shape`
+passes (a need still passes the maximum, by the least); every module that plans a channel day passes twice in a row with the change.

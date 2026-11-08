@@ -2,6 +2,7 @@
 """Phase BC (owner, 2026-10-26: "keep each person on the same channel ... didn't change the channel ... my request was to balance, keep it
 for 2-3 hours and avoid a lot of changes in and out from channels"). With the tick on, a person who can work several channels spends a couple
 of hours on one, then another, instead of one channel for most of the day. Rule and acceptance: evidence/phase_bc/REQUESTS.md."""
+import statistics
 import unittest
 
 from webapp.channel_plan import plan_day, score_day
@@ -51,20 +52,40 @@ class TheRotation(unittest.TestCase):
         self.assertGreater(fixed, balanced * 1.05)
         self.assertGreater(fixed / 60, 4.5)
 
+    # Re-pinned 2026-11-08 (audit; the contract is unchanged, the way it is measured is not). Each plan is one CP-SAT run that stops on a
+    # wall-clock limit, so its score varies from run to run. Measured on this day, 10 runs of Balanced and 12 of both ticks off, short stretches:
+    # Balanced 9 to 17 (median 12), off 14 to 19 (median 15.5). The ranges overlap, so one run against one run said "Balanced is not calmer"
+    # in about 1 run in 6 (and these two tests failed that often) although the effect is real. Comparing the mean of RUNS runs per side
+    # puts the means about three standard errors apart (estimated failure rate below 1 in 300) and measures the same claim. The deterministic
+    # single-worker solve was tried and rejected: repeatable, but it gives Balanced 20 against off 19, a worse plan than production finds.
+    RUNS = 8
+    _samples = None
+
+    @classmethod
+    def sampled(cls):
+        """Short stretches and moves of RUNS plans with Balanced on and of RUNS plans with both ticks off, planned once for the class."""
+        if cls._samples is None:
+            off = dict(cls.config, rules=dict(cls.config["rules"], balanced=False, consistent=False))
+            def runs(config):
+                scores = [score_day(cls.people, plan_day(cls.people, config, RULES, WED, move_breaks=False), config, WED, RULES)
+                          for _ in range(cls.RUNS)]
+                return {key: statistics.mean(score[key] for score in scores) for key in ("short_stretches", "moves")}
+            cls._samples = {"balanced": runs(cls.config), "off": runs(off)}
+        return cls._samples
+
     def test_both_ticks_off_charges_nothing(self):
         off = dict(self.config, rules=dict(self.config["rules"], balanced=False, consistent=False))
         self.assertFalse(off["rules"].get("consistent") or off["rules"].get("balanced"))
-        got = score_day(self.people, plan_day(self.people, off, RULES, WED, move_breaks=False), off, WED, RULES)
-        self.assertGreaterEqual(got["short_stretches"], self.score["short_stretches"])  # off has at least as many hour-here-hour-there stretches
+        got = self.sampled()
+        self.assertGreaterEqual(got["off"]["short_stretches"], got["balanced"]["short_stretches"])  # off has at least as many hour-here-hour-there stretches
 
     def test_balanced_still_has_fewer_short_stretches_than_off_and_does_not_change_far_more_often(self):
         # re-pinned (second time, same phase): the Balanced tick now also limits a stretch past three hours for people with two channels, so on
         # this one day (three of the 16 have two channels) it makes about a quarter more changes than off (39 against 31); over the GDI week
         # the same rule is below off (2.28 against 2.65 per person-day, REQUESTS.md). The calm shows in the short stretches
-        off = dict(self.config, rules=dict(self.config["rules"], balanced=False, consistent=False))
-        base = score_day(self.people, plan_day(self.people, off, RULES, WED, move_breaks=False), off, WED, RULES)
-        self.assertLessEqual(self.score["moves"], base["moves"] * 1.4)
-        self.assertLess(self.score["short_stretches"], base["short_stretches"])
+        got = self.sampled()
+        self.assertLessEqual(got["balanced"]["moves"], got["off"]["moves"] * 1.4)
+        self.assertLess(got["balanced"]["short_stretches"], got["off"]["short_stretches"])
 
     def test_coverage_comes_first(self):
         self.assertEqual(self.score["problems"], [])

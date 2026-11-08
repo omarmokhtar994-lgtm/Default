@@ -70,3 +70,12 @@ a long run 40, alone 50, a language 200), so a need still wins and a preference 
 
 **Rule for accepting it** (written before the runs): over 20 runs of the empty-breaks scenario, zero runs with a problem; `test_ax_channel_shape`
 passes (a need still passes the maximum, by the least); every module that plans a channel day passes twice in a row with the change.
+
+**Result of candidate 2 (GAP = 25):** rejected by its rule. The 20 empty-breaks runs had no problem, but `test_ax_channel_shape`
+(a need that forces a longer gap gets it, by the least) failed: with 25 a quarter hour the planner kept the gap and gave the need up. The arithmetic:
+there the need is met by passing the maximum by 2 quarter hours, so 2 x GAP must stay below one quarter hour of a channel's need (30), so GAP < 15.
+"Above every preference" (22) and "below every need" cannot both hold with one weight a quarter hour.
+
+**Candidate 3:** GAP = 14, the largest weight that keeps the need case (2 x 14 = 28 < 30); above KEEP, SHAPE, MOVE and DAY_MIX (3 to 8), below
+CONSISTENT, STRETCH_OVER and STRETCH_COST (20 to 22). **Rule** (written before the runs): as for candidate 2. If it fails, the trade-off goes to the
+owner and the weight stays 2.

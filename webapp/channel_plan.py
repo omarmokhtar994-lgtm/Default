@@ -68,7 +68,9 @@ KEPT = {"num_workers": 4, "max_time_in_seconds": 12.0, "random_seed": 9000}
 # Phase BL audit: the solve that has breaks to place takes large-neighbourhood search only. With the default portfolio it stopped FEASIBLE at the time limit with an
 # objective that swung from 54 to 300 between identical runs, so a rule was sometimes missed; measured over 12 runs of that case, this setting missed none in 12 of 12
 # (evidence/phase_bl/channel_solver_ab.md). Plans of breaks already typed keep KEPT exactly as before.
-PLACING = {**KEPT, "use_lns_only": True}
+# Owner's decision (2026-11-08): placing blank breaks gets 25 s, not 12, because at 12 s the search sometimes stopped on a plan that passed the normal
+# maximum gap with no need asking for it (3 of 20 runs); the rules and weights are unchanged (evidence/phase_bl/channel_solver_ab.md)
+PLACING = {**KEPT, "use_lns_only": True, "max_time_in_seconds": 25.0}
 MOVING = {"num_workers": 4, "max_time_in_seconds": 10.0, "random_seed": 9000}
 
 

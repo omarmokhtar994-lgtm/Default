@@ -22,3 +22,9 @@ What this run found, and was fixed before the package:
 
 The input and outputs of the run are not kept in the repository (they are made-up and large); the run is repeated by `/tmp/bl/mixed.py` style
 steps in `docs/howto/SCHEDULE_COLUMNS_AND_VOLUMES.md`: build the workbook with the columns, then run the wrapper.
+
+## Breaks 0
+
+The same workbook with `Breaks` 0 for the three part-timers (a 5 hour shift with no break) was run the same way: PASS_WITH_QUALITY_WARNINGS, production
+eligible, independent validation PASS, clean-room check 0 violations; the part-timers have no breaks on their shift days. Two part-time rows with the
+same `Shift Length` and different `Breaks` (0 and 1) were refused by name before any solving (`HARD_BREAKS_CONFLICT`).

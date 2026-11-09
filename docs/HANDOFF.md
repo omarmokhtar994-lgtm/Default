@@ -531,7 +531,8 @@ Plan: `docs/superpowers/plans/2026-11-07-phase-bl-shifts-parttime-sites-forecast
 ## Rotation tests made stable (audit, 2026-11-08)
 `webapp/tests/test_bc_channel_rotation.py` used to compare one planner run against one run, and the two sides overlap, so it failed about 1 run in 6
 with nothing wrong. Both comparisons now use the mean of 8 runs per side (the module takes about 4 minutes); the claim and limits are unchanged.
-Measurement, mutation check and the rejected deterministic solve: `evidence/phase_bl/channel_solver_ab.md`. There is no known timing-sensitive test left;
+Measurement, mutation check and the rejected deterministic solve: `evidence/phase_bl/channel_solver_ab.md`. The channel planner's placing of blank breaks also missed the normal maximum gap in 3 of 20 runs at 12 s; by the owner's decision
+(2026-11-08) it gets 25 s and missed none of 20 (same file). There is no known timing-sensitive test left;
 a failure of this module is real until shown otherwise.
 
 ## Phase AZ (owner, 2026-10-24: "make sure all our code, engine and website, is fully organized")

@@ -91,3 +91,7 @@ Asked with three choices (more time; a hard gap for blank breaks; keep the warni
 `MOVING`). No rule or weight changes. Cost: Plan channels with blank breaks waits up to about 13 seconds longer per day (the proxy allows 10 minutes).
 **Rule** (written before the runs): over 20 runs of the empty-breaks scenario, zero runs with a problem; then every module that plans a channel day
 passes twice in a row with the change.
+
+**Result of candidate 4 (25 s):** accepted by its rule. 20 of 20 runs without a problem; median objective about 38 (14 to 118) against 47 at 12 s.
+The 25 modules that plan a channel day passed twice in a row (one pin in `test_bl_channel_solver` named the old 12 s; re-pinned with the reason,
+then two clean runs). The empty-breaks test is no longer timing-sensitive on this evidence.

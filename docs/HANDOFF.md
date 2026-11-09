@@ -531,6 +531,11 @@ Plan: `docs/superpowers/plans/2026-11-07-phase-bl-shifts-parttime-sites-forecast
 - *Gate.* `tests_staged/test_rc9_2_71_schedule_columns.py` is in the release gate: the columns, the refusals by name, the shift-length rule, the part-time reservation, off days, break counts, and a check that the engine and the clean-room check (`tools/clean_room_check.py`, no shared code) agree on random columns. `webapp/tests/test_bl_fuzz.py` fuzzes the new web modules against brute-force models with fixed seeds; `test_bl_gaps.py` covers a clock-change week, Chat and Email, interval-compliance programs, settings saved before the phase and the largest inputs; `test_bl_website_readers.py` the ready-schedule upload and the break rules the website reads.
 - *Channel planner.* `test_channel_plan` failed intermittently before Phase BL too: the planner stops FEASIBLE at its wall-clock limit and the objective it reached swung from 54 to 300 between identical runs. `PLACING` (`webapp/channel_plan.py`) uses large-neighbourhood search only, and only for a solve that has breaks to place (typed breaks keep `KEPT` exactly: `test_bc_channel_rotation` and `test_bc_two_ticks` compare them). Measured in `evidence/phase_bl/channel_solver_ab.md`; if it finds no plan the old settings get their try.
 
+## Installed (2026-11-09)
+The owner installed the audited package (sha256 `75e973f4b4f5d4a7dfb1564cedcd6223875514cd7014b28e49664410c044e8cf`, built from 5470611) with
+`deploy/update.sh`; the website reported `active`. The server's address comes from Cloud Shell's history (the address in
+`deploy/ORACLE_SETUP_GUIDE.md` is an example: it timed out).
+
 ## Rotation tests made stable (audit, 2026-11-08)
 `webapp/tests/test_bc_channel_rotation.py` used to compare one planner run against one run, and the two sides overlap, so it failed about 1 run in 6
 with nothing wrong. Both comparisons now use the mean of 8 runs per side (the module takes about 4 minutes); the claim and limits are unchanged.

@@ -95,3 +95,10 @@ passes twice in a row with the change.
 **Result of candidate 4 (25 s):** accepted by its rule. 20 of 20 runs without a problem; median objective about 38 (14 to 118) against 47 at 12 s.
 The 25 modules that plan a channel day passed twice in a row (one pin in `test_bl_channel_solver` named the old 12 s; re-pinned with the reason,
 then two clean runs). The empty-breaks test is no longer timing-sensitive on this evidence.
+
+## The scenario test under load, 2026-11-09
+The full chain failed `test_ay_channel_scenarios` (spread 40 h, limit 36.6 h, measured 14.5 to 29 h). It plans typed breaks (`KEPT`), so the 25 s
+change does not reach it. Measured on the same machine, same commit: alone, 3 runs, spread 22.25, 15 and 29.5 h (all inside); two copies at once,
+2 pairs, 35, 38.25, 47.75 and 29 h (3 of 4 over). Root cause: the test runners ran two solver modules at the same time on 4 cores, and each solve stops
+on the clock with about half its search. Fix (the tests unchanged): `webapp/tests/solver_modules.txt` lists the 26 modules that run the channel solver;
+`suite_half.sh` leaves them out of its two halves and `solver_serial.sh` runs them one at a time, alone. The chain used for this audit does the same.

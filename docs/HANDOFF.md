@@ -467,6 +467,9 @@ export PY=/tmp/webvenv/bin/python   # Chromium is at /opt/pw-browsers/chromium; 
 bash evidence/phase_ai/tools/suite_half.sh 0 2 /tmp/half0.log &
 bash evidence/phase_ai/tools/suite_half.sh 1 2 /tmp/half1.log &
 bash evidence/phase_ai/tools/browser_tests.sh /tmp/browser.log & wait
+# then, alone: the modules that run the channel solver on a clock (webapp/tests/solver_modules.txt), one at a time (about 25 minutes);
+# beside other work they get half the processors and their measured limits fail (2026-11-09, evidence/phase_bl/channel_solver_ab.md)
+bash evidence/phase_ai/tools/solver_serial.sh /tmp/solver.log
 # the browser tests rewrite older phases' screenshots: put them back
 git status --short | grep "evidence/" | grep -v phase_ai | awk '{print $2}' | xargs -r git checkout --
 

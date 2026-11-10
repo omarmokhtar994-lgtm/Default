@@ -146,10 +146,14 @@ class TheUpload(unittest.TestCase):
             self.assertEqual(p.rows, {}, value)
             self.assertTrue(any("B2" in x for x in p.problems), (value, p.problems))
 
-    def test_intervals_coarser_than_the_program_are_refused(self):
+    def test_an_hourly_draft_in_a_half_hour_program_is_shared_over_the_half_hours(self):
+        # re-pinned 2026-11-10 (Phase BM, owner: the history "is hourly"): this used to be refused ("60-minute ... Upload the finer data"); an
+        # hour is now shared evenly over the program's intervals and the summary says so
         p = V.parse_draft(filled(step=60, cells={(1, 9): 5}), "draft.xlsx", 30, TODAY)
-        self.assertEqual(p.rows, {})
-        self.assertTrue(any("60-minute" in x for x in p.problems))
+        self.assertEqual(p.problems, [])
+        self.assertEqual(sum(r[2] for r in p.rows["Phone"]), 5)
+        self.assertEqual(sorted({r[1] % 60 for r in p.rows["Phone"]}), [0, 30])
+        self.assertTrue(any("hourly" in x for x in p.notes), p.notes)
 
     def test_a_sheet_that_is_not_a_channel_is_refused(self):
         wb = load_workbook(io.BytesIO(filled(cells={(1, 9): 5})))

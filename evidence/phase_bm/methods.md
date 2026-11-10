@@ -16,4 +16,25 @@ three of the four histories, and never more than 2 percentage points higher on t
 shown as information only. Either way the total stays the planner's: the suggestion is never used unless they press "Use the suggestion".
 
 ## Result
+Run 2026-11-10 (`methods_rule.py`, seeds 11 to 14):
+
+| history | picked by the back-test | picked, error | trend, error |
+|---|---|---|---|
+| flat | recent x4 | 1.93 % | 1.74 % |
+| rise | recent x3, blend | 6.10 % | 4.25 % |
+| season | seasonal x4 | 2.17 % | 6.53 % |
+| shift | last_week x3, recent | 9.25 % | 8.65 % |
+
+No higher than the trend on 1 of 4 (largest excess 1.85 points): **the rule is not met.** Always taking the picked method is rejected: on plain
+histories it swaps the trend for a method that was a hair better in the back-test and is a little worse afterwards.
+
+## Candidate 2 (pre-registered 2026-11-10, before its runs)
+Take the picked method only when its back-test error is at least 20 % lower than the trend's own back-test error (relative: picked <= 0.8 x trend);
+otherwise the trend. A clear win in the back-test (the season) is taken, a hair's breadth is not.
+
+**Test.** The same four kinds of history on fresh seeds (21 to 24), so the margin is not fitted to the runs above; and the first four seeds again as a
+second look. **Rule:** on each set of four, the error is no higher than the trend's on at least three histories and never more than 2 points higher
+on the fourth. Both sets must meet it; otherwise the suggestion stays the trend and the back-test is information only.
+
+## Result of candidate 2
 (filled in after the runs)

@@ -24,7 +24,7 @@ from zoneinfo import ZoneInfo
 
 from openpyxl import Workbook
 
-from . import drivers as D, erlang, forecast as F, volumes_grain as G, volumes_zone as Z
+from . import drivers as D, erlang, forecast as F, forecast_methods as M, volumes_grain as G, volumes_zone as Z
 import calendar
 from collections import Counter
 
@@ -673,6 +673,30 @@ class VolumeBook:
                "low": None if low is None else int(round(low * ratio)) + move_total, "high": None if high is None else int(round(high * ratio)) + move_total}
         return sug, last_year, ""
 
+    def _accuracy(self, key: str, channel: str, week_start: date, left_out: Sequence[str], reasons: Dict[str, str]) -> Optional[Dict[str, Any]]:
+        """Phase BM: how each way of working out the week's contacts did on this program's own last weeks (``forecast_methods.backtest``), what each
+        says for this week, and the weeks left out of the test as unusual. Information only: the suggestion is not changed by it
+        (evidence/phase_bm/methods.md). None when there is no clean week to test."""
+        step = self.step(key)
+        hist = self.history(key, channel, week_start, M.YEAR.days // 7 + 12)
+        if not hist:
+            return None
+        choice = F.choose_weeks(hist, step, week_start, weeks=M.YEAR.days // 7 + 12, exclude_weeks=left_out, exclude_reasons=reasons)
+        series = sorted((start, float(sum(sum(hist[start + timedelta(days=o)]) for o in range(7) if start + timedelta(days=o) in hist)))
+                        for start in choice.used)
+        if not series:
+            return None
+        odd = M.unusual(series)
+        clean = [w for w in series if w[0] not in odd]
+        out = M.backtest(clean, week_start)
+        for name in M.METHODS:
+            value = M.predict(name, clean, week_start)
+            row = out["methods"].setdefault(name, {"wape": None, "bias": None, "tested": 0})
+            row.update(value=None if value is None else int(round(value)), words=M.WORDS[name])
+        out["unusual"] = {d.isoformat(): why for d, why in sorted(odd.items())}
+        out["clean_weeks"] = len(clean)
+        return out
+
     def forecast(self, key: str, channel: str, week_start: date, total: Any = None, day_totals: Optional[Dict[int, Any]] = None,
                  weeks: Any = None, skip_weeks: Optional[Sequence[str]] = None, base: str = "history") -> Dict[str, Any]:
         """The week starting ``week_start`` for one channel: calls per day (Sun to Sat) and interval, from the typed total (else the saved forecast, else the
@@ -695,7 +719,7 @@ class VolumeBook:
         out: Dict[str, Any] = {"channel": channel, "week_start": week_start.isoformat(), "step": step, "days": list(DAY_NAMES), "calls": [],
                                "needs": None, "service": None, "total": None, "source": None, "needs_total": False, "suggestion": None, "aht": None, "profile": None,
                                "weeks": None, "last_year": None, "last_year_week": (week_start - timedelta(days=364)).isoformat(), "notes": [],
-                               "day_factors": [1.0] * 7, "base": base, "error": ""}
+                               "day_factors": [1.0] * 7, "base": base, "error": "", "accuracy": None}
         try:
             doc = self.drivers(key)
         except ValueError:
@@ -726,6 +750,12 @@ class VolumeBook:
             sug, out["last_year"], why_not = self._suggest(key, channel, week_start, profile, points, doc, skip, base, dates, out["notes"])
             if sug:
                 out["suggestion"] = {**sug, "weeks": [(d.isoformat(), t) for d, (_, t) in zip(choice.used, points)]}
+            acc = self._accuracy(key, channel, week_start, sorted(set(skip) | set(held)), reasons)
+            if acc is not None:
+                acc["used"] = sug["method"] if sug else None
+                if sug and sug["method"] == "trend":                   # the trend row is the suggestion's own starting number, so the page agrees with itself
+                    acc["methods"]["trend"]["value"] = sug["base"]
+                out["accuracy"] = acc
         if use_saved:
             basis = saved.get("basis") or {}
             calls, total_used, source = [list(map(int, r)) for r in grid], int(saved["total"]), "saved"

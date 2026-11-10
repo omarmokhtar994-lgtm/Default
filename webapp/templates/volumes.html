@@ -136,6 +136,19 @@
   <p class="dim">Not needed if you know your number. This shows what the history suggests and lets you tell the forecast what the history cannot see. Nothing here changes your number; events and AI only shape how your number is spread over the days.</p>
   {% set bq = {'tab': 'forecast', 'program': key, 'channel': channel, 'week': week.isoformat(), 'hist_weeks': hist_weeks, 'skip_sent': 1, 'skip': skip} %}{% if total_text %}{% set _ = bq.update({'total': total_text}) %}{% endif %}
   <p class="dim">Start the suggestion from: {% if base == 'history' %}<b>the history</b>{% else %}<a href="{{ url_for('volumes_page', base='history', **bq) }}">the history</a>{% endif %} or {% if base == 'last_year' %}<b>last year's same week</b>{% else %}<a href="{{ url_for('volumes_page', base='last_year', **bq) }}">last year's same week</a>{% endif %}.</p>
+{# ---- Phase BM: how each method did on this program's own weeks #}
+{% if f.accuracy and f.accuracy.tested %}{% set acc = f.accuracy %}
+<section class="panel" aria-labelledby="acc-h"><h2 id="acc-h">How well each method did on your own weeks</h2>
+  <p class="dim">Each of the last {{ acc.tested }} clean week{{ 's' if acc.tested != 1 }} was worked out from the weeks before it only, then compared with what really came. The lower the miss, the more that method has earned on this {{ channel|lower }} history.{% if acc.best %} Lowest so far: <b>{{ acc.methods[acc.best].words }}</b>, off by {{ '%.1f' % (100 * acc.methods[acc.best].wape) }}% on average.{% else %} Four tested weeks are needed before one is named.{% endif %} The suggestion above stays the trend; any of these numbers is yours to take.</p>
+  <div class="scroll" role="region" tabindex="0" aria-label="How well each method did (scrolls sideways)"><table class="edgrid"><thead><tr><th scope="col">Method</th><th scope="col">Says for this week</th><th scope="col">Average miss</th><th scope="col">Leans</th><th scope="col">Take it</th></tr></thead><tbody>
+  {% for name, m in acc.methods.items() %}<tr><th scope="row">{{ m.words|capitalize }}{% if name == acc.best %} <span class="dim">(lowest miss)</span>{% endif %}</th>
+    <td>{% if m.value is not none %}{{ '{:,}'.format(m.value) }}{% else %}-{% endif %}</td>
+    <td>{% if m.wape is not none %}{{ '%.1f' % (100 * m.wape) }}%{% else %}<span class="dim">not enough history</span>{% endif %}</td>
+    <td>{% if m.bias is none %}-{% elif m.bias > 0.01 %}high by {{ '%.1f' % (100 * m.bias) }}%{% elif m.bias < -0.01 %}low by {{ '%.1f' % (-100 * m.bias) }}%{% else %}neither way{% endif %}</td>
+    <td>{% if m.value is not none %}<button type="button" class="quiet" data-fill="#total" data-value="{{ '{:,}'.format(m.value) }}">Use this number<span class="sr-only">: {{ m.words }}</span></button>{% else %}-{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+  {% if acc.unusual %}<p class="dim">Left out of this test as unusual: {% for wk, why in acc.unusual.items() %}week of {{ wk }} ({{ why }}){{ '; ' if not loop.last }}{% endfor %}. To leave one out of the weekday pattern too, tick it under "Weeks behind the pattern".</p>{% endif %}
+  <p class="dim">These numbers are the history alone, before events and AI periods; the steps below add those to the suggestion.</p>
+</section>{% endif %}
 {# ---- how the suggestion is built #}
 {% if f.suggestion %}
 <section class="panel" aria-labelledby="wf-h"><h2 id="wf-h">How the suggestion is built</h2>
